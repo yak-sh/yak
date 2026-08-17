@@ -1679,7 +1679,15 @@ export let clearResolved = () => {
 // would drown any hot feed; cards/folds/shelves/clients are presence,
 // not content), comments surface through their targets (the lately
 // digest's rule), and a board is not news to itself.
-let CHROME = new Set(['card', 'camera', 'fold', 'shelf', 'client', 'comment'])
+let CHROME = new Set([
+  'card',
+  'camera',
+  'fold',
+  'shelf',
+  'cursor',
+  'client',
+  'comment',
+])
 let chrome = (r: Comps) => [...CHROME].some((name) => r[name as keyof Comps])
 export let boardPost = (
   e: Ent,
@@ -2044,6 +2052,19 @@ export let myCamera = (client: string, canvas: string) =>
   queryEids([eq('camera', 'client', client), eq('camera', 'canvas', canvas)])
     .value
     .map((eid) => cache.peek()[eid]?.camera)
+    .find((c) => !!c)
+
+// This client's cursor — WHERE it's looking, one row per client (T-12788).
+// Resolved through the query door (the client column anchors the derived unique
+// index), never a whole-cache scan, so reading it in nav.tsx's follow effect
+// stays O(1) and the hot render path never pays (M-17862). Reactive on BOTH the
+// eid set (queryEids) AND the row's content (the per-row signal, not a peek), so
+// an agent moving THIS cursor's target re-fires the follow — a peek would miss a
+// same-eid target change, the whole point of "show you something".
+export let myCursor = (client: string) =>
+  queryEids([eq('cursor', 'client', client)])
+    .value
+    .map((eid) => row(eid).value?.cursor)
     .find((c) => !!c)
 
 // Who this browser is: a client entity, its uuid minted into localStorage on

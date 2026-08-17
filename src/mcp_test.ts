@@ -520,6 +520,7 @@ let bases: Record<string, Record<string, unknown>> = {
   card_open: { target: 'T-1' },
   card_move: { id: 'C-1' },
   card_close: { id: 'C-1' },
+  show: { target: 'T-1' },
   page_put: { title: 'Page', html: '<h1>Page</h1>' },
   code_run: { js: 'return 1' },
   task_show: { id: 'T-1' },

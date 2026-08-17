@@ -383,6 +383,24 @@ export let comps: Record<string, Record<string, PropType>> = {
   // survives as a plain canvas — the binding was the client's, the
   // contents aren't.
   shelf: { client: { eid: 'client', death: 'release' } },
+  // WHERE a client is LOOKING — navigation as graph data (T-12788), the last
+  // piece of screen state that wasn't. One row per client (indexes below),
+  // written by nav.tsx on navigate the way camera writes on pan, and cascading
+  // with the client the same way. `target` is the entity fullscreened (the URL
+  // is still the position; this mirrors it into the graph), `view` its ?v= tab.
+  // Two directions ride one row: the browser WRITES it to publish where it is,
+  // and an AGENT writes it to MOVE the human's open tab — the "show you
+  // something" the knock's first consumer wants, the same door camera/card_*
+  // prove the UI is data. death 'keep' on target on purpose: a cursor aimed at
+  // a dead entity keeps the tombstone and the reader derives a nearest-live
+  // fallback at READ time — never a self-healing repair write (the reviewer's
+  // #1 correction). Movement is not membership: back-navigation MOVES the
+  // cursor, it never removes it.
+  cursor: {
+    client: { eid: 'client', death: 'cascade' },
+    target: { eid: 'entity', death: 'keep' },
+    view: 'text',
+  },
   // Shared navigation is a graph fact, not one client's chrome. A favorite
   // remains whatever kind it already was, so this tag stays out of kindOrder.
   favorite: {},
@@ -866,6 +884,7 @@ export let indexes: Record<string, Idx[]> = {
   camera: [{ cols: ['client', 'canvas'], unique: true }],
   fold: [{ cols: ['client', 'board'], unique: true }],
   shelf: [{ cols: ['client'], unique: true }],
+  cursor: [{ cols: ['client'], unique: true }],
   entry: [{ cols: ['session', 'seq'], unique: true }],
   generation: [{ cols: ['through'], unique: true }],
   output: [{ cols: ['source', 'key'], unique: true, where: 'key is not null' }],
@@ -1220,6 +1239,7 @@ export let kindOrder = [
   'client',
   'camera',
   'fold',
+  'cursor',
   'role',
   'session',
   'entry',
@@ -1526,6 +1546,17 @@ export type Fold = {
 // like repo — it binds a client to their one shelf without naming the
 // entity (the entity stays a canvas), so it stays out of kindOrder.
 export type Shelf = { eid: string; client: string }
+
+// A cursor joins a client to where it is LOOKING — one row per client, the
+// per-client twin of camera (which is per client+canvas). target is the
+// fullscreened entity, view its ?v= tab. Navigation as graph data: the
+// browser writes it on navigate, an agent writes it to move the human's tab.
+export type Cursor = {
+  eid: string
+  client: string
+  target?: string | null
+  view?: string | null
+}
 
 export type Favorite = { eid: string }
 export type Setting = {
@@ -2048,6 +2079,7 @@ export type Ent = {
   camera?: Camera
   fold?: Fold
   shelf?: Shelf
+  cursor?: Cursor
   favorite?: Favorite
   setting?: Setting
   subscription?: {

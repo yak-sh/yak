@@ -1,7 +1,7 @@
 import { render } from 'preact'
 import { agreementProbe, boot, cache, clientId, config, ent } from './live.ts'
 import { idOf, slugsOf } from './types.ts'
-import { restore, route } from './components/nav.tsx'
+import { follows, restore, route } from './components/nav.tsx'
 import { App } from './components/App.tsx'
 
 // Tell the server when this page breaks (the rows land in telemetry) — a
@@ -56,6 +56,11 @@ if (legacy) {
 // seeded under it for the back gesture. Here because the cache is full
 // (a remembered entity that died falls back) and nothing has painted yet.
 restore()
+
+// Follow this client's cursor from here on — after restore() has published
+// where the device landed, so the graph cursor only DRIVES live moves (an
+// agent showing you something), never overrides the per-device boot position.
+follows()
 
 render(<App />, document.body)
 

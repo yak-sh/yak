@@ -1,12 +1,15 @@
-import { signal } from '@preact/signals'
+import { effect, signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import { block, copy, setFollow } from './ui.tsx'
 import { usePlaceAt } from './overlay.tsx'
 import {
   cache,
   census,
+  clientId,
   ent,
   findEid,
+  mutate,
+  myCursor,
   peek,
   resolvingId,
   rootCanvas,
@@ -14,7 +17,7 @@ import {
   trail,
 } from '../live.ts'
 import { type Action, actionsFor, resolve } from './registry.ts'
-import { type Ent, idOf, SHORT } from '../types.ts'
+import { type Change, type Ent, idOf, SHORT, uuid } from '../types.ts'
 import { dragData } from './drag.ts'
 
 export { peek, trail }
@@ -33,6 +36,7 @@ globalThis.addEventListener?.('popstate', () => {
   route.value = loc!.pathname + loc!.search
   track(was)
   keep()
+  mark()
 })
 
 export let navigate = (to: string) => {
@@ -43,6 +47,7 @@ export let navigate = (to: string) => {
   route.value = to
   track(was)
   keep()
+  mark()
 }
 
 let linkAt = (ev: MouseEvent) => {
@@ -276,6 +281,84 @@ export let restore = () => {
   if (at != home) his.pushState(null, '', at)
   route.value = at
   keep()
+}
+
+// The cursor's twin of keep(): publish WHERE this client now looks into the
+// GRAPH (T-12788), so the fleet can see it — and, through follows() below, so
+// an agent can MOVE it ("show you something"). One row per client, minted
+// lazily beside the client entity the way the camera mints on first pan.
+// Written on navigation only, never mid-gesture (the same gesture-end rule
+// keep() uses), and IDEMPOTENT: a write naming where the cursor already points
+// is skipped, so the follow effect's own navigate never loops back into a
+// write. Guarded for the TUI (no client, no localStorage) via loc/his.
+let mark = () => {
+  if (!loc || !his) return
+  let t = screenTarget()
+  if (!t) return // chrome and dead ends are not places (keep()'s rule)
+  let client = clientId()
+  let cur = myCursor(client)
+  if (cur?.target == t.eid && (cur.view ?? null) == (t.view ?? null)) return
+  let eid = cur?.eid ?? uuid()
+  let batch: Change[] = []
+  // Mint the client entity when a cursor beats the canvas to it — a deep link
+  // never mounts the Canvas that otherwise mints it, so the reference would
+  // name a bare spine. Idempotent: skipped once the client row exists.
+  if (!cache.peek()[client]?.client) {
+    batch.push({
+      eid: client,
+      name: 'client',
+      comp: { eid: client, user_agent: navigator.userAgent },
+    })
+  }
+  batch.push({
+    eid,
+    name: 'cursor',
+    comp: { eid, client, target: t.eid, view: t.view ?? null },
+  })
+  // Publishing the cursor is a nicety, never a failure — the graph twin of
+  // keep()'s guarded localStorage write. A cursor write must never break the
+  // navigation that triggered it, so a bad graph state swallows here rather
+  // than throwing out of navigate().
+  try {
+    mutate(...batch)
+  } catch { /* the position is published best-effort, like keep() */ }
+}
+
+// Arm the receiving half of "an agent can show you something": whenever the
+// graph moves THIS client's cursor somewhere other than where this tab is, go
+// there — navigation driven as data, the knock's hand-on-your-shoulder.
+// main.tsx calls this AFTER restore(), so the device's own boot position
+// (localStorage, deliberately per-device) wins the cold launch and the cursor
+// only DRIVES live moves after: the effect's first run records the baseline
+// and never navigates, so a cursor already in the boot snapshot can't yank the
+// tab. A cursor aimed at a dead-or-unloaded entity is left alone — the fallback
+// is read-time and WRITE-FREE (no repair storm). My own mark() writes name
+// where I already am, so they no-op here and the loop closes. queryEids anchors
+// on the client index, so this reads O(1), never a per-change scan (M-17862).
+export let follows = () => {
+  if (!loc || !his) return
+  let last: string | undefined
+  let first = true
+  effect(() => {
+    let cur = myCursor(clientId())
+    let key = cur ? `${cur.target ?? ''}|${cur.view ?? ''}` : ''
+    if (first) {
+      first = false
+      last = key
+      return
+    }
+    if (key == last) return
+    last = key
+    let target = cur?.target
+    if (!target) return
+    if (!cache.peek()[target]?.entity) return // dead/unloaded → stay put
+    if (screenTarget()?.eid == target) return
+    navigate(
+      `/${idOf(ent(target))}${
+        cur?.view ? `?v=${encodeURIComponent(cur.view)}` : ''
+      }`,
+    )
+  })
 }
 
 // The entity context menu: navigation first ("open here" is the

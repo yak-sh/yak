@@ -268,6 +268,7 @@ let HINTS: Record<string, ToolAnnotations> = {
   task_claim: { idempotentHint: true },
   task_release: { idempotentHint: true },
   card_move: { idempotentHint: true },
+  show: { idempotentHint: true },
   graph_apply: { destructiveHint: true },
   card_close: { destructiveHint: true },
   command: { destructiveHint: true },
@@ -1498,10 +1499,12 @@ back and retry. ${BUS}`,
 
   tool(
     'ui_state',
-    `What's on screen right now: every client's camera (viewport rect in
-plane coords) and every pinned card (position, size, view, target),
-with which viewports can see it. Card heights of 0 are auto — treated
-as ~240px for visibility.`,
+    `What's on screen right now: every client's cursor (WHERE it is
+looking — its fullscreened entity + view, navigation as data), every
+client's camera (viewport rect in plane coords), and every pinned card
+(position, size, view, target), with which viewports can see it. Card
+heights of 0 are auto — treated as ~240px for visibility. Move a
+client's cursor — navigate its open tab — with the show tool.`,
     {},
     async () => {
       let all = rows(await io.read())
@@ -1510,6 +1513,21 @@ as ~240px for visibility.`,
         let t = byEid.get(eid)
         return t ? `${idOf(t)} ${t.comps.doc?.title ?? t.kind}` : eid
       }
+      let cursors = all.filter((r) => r.comps.cursor).map((r) => {
+        let c = r.comps.cursor as Record<string, string>
+        return {
+          cursor: idOf(r),
+          client: String(c.client),
+          // WHO this cursor is: the client's browser, and when it last moved
+          // — a live human reads recent, a ghost stale.
+          agent: String(
+            byEid.get(String(c.client))?.comps.client?.user_agent ?? '?',
+          ),
+          moved_at: r.comps.updated?.at ?? r.comps.created?.at ?? null,
+          looking_at: c.target ? title(String(c.target)) : null,
+          view: c.view ?? null,
+        }
+      })
       let cams = all.filter((r) => r.comps.camera).map((r) => {
         let c = r.comps.camera as Record<string, number>
         let hw = (Number(c.w) || 0) / 2 / (Number(c.zoom) || 1)
@@ -1553,7 +1571,7 @@ as ~240px for visibility.`,
           visible_in: seen,
         }
       })
-      return text(JSON.stringify({ cameras: cams, cards }, null, 2))
+      return text(JSON.stringify({ cursors, cameras: cams, cards }, null, 2))
     },
   )
 
@@ -1670,6 +1688,68 @@ card id (close it with card_close, move it with card_move).`,
       if (!row?.comps.card) return err(`no card: ${id}`)
       await io.write([{ eid: row.eid, name: 'entity', comp: null }])
       return text(`closed ${idOf(row)}`)
+    },
+  )
+
+  tool(
+    'show',
+    `Show an entity to a client — MOVE their open tab there, navigation as
+data (T-12788). The graph carries where each client is looking (its
+cursor, in ui_state); writing it points their fullscreen at 'target'
+through an optional view, and their browser follows. Omit 'client' to
+nudge the liveliest one — whoever moved most recently. This is the
+hand-on-your-shoulder a knock wants: not "look at T-3", the tab already
+there. Back-navigation still returns them — moving a cursor never traps.`,
+    {
+      target: z.string(),
+      client: z.string().optional(),
+      view: z.string().optional(),
+      session: z.string().optional(),
+    },
+    async (
+      { target, client, view, session }: {
+        target: string
+        client?: string
+        view?: string
+        session?: string
+      },
+    ) => {
+      let all = rows(await io.read())
+      let row = find(all, target)
+      if (!row) return err(`no entity: ${target}`)
+      // WHOSE tab: the named client, or the liveliest — the client that most
+      // recently moved a cursor or camera, the same "who's looking now" rule
+      // card_open uses to place a card.
+      let moved = (r: Row) =>
+        String(r.comps.updated?.at ?? r.comps.created?.at ?? '')
+      let clientEid: string
+      if (client) {
+        let c = find(all, client)
+        if (!c) return err(`no client: ${client}`)
+        clientEid = c.eid
+      } else {
+        let live = all
+          .filter((r) => r.comps.cursor || r.comps.camera)
+          .sort((a, b) => moved(b).localeCompare(moved(a)))[0]
+        let id = String(
+          live?.comps.cursor?.client ?? live?.comps.camera?.client ?? '',
+        )
+        if (!id) return err('no client is looking — open the app first')
+        clientEid = id
+      }
+      // One cursor row per client (unique): patch the existing one, or mint.
+      let cur = all.find((r) => r.comps.cursor?.client == clientEid)
+      let eid = cur?.eid ?? uuid()
+      await io.write([{
+        eid,
+        name: 'cursor',
+        comp: { client: clientEid, target: row.eid, view: view ?? null },
+      }], session)
+      let who = all.find((r) => r.eid == clientEid)
+      return bus(
+        `showing ${idOf(row)} to ${who ? idOf(who) : clientEid}`,
+        session,
+      )
     },
   )
 

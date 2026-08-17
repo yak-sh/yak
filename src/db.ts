@@ -299,6 +299,13 @@ let schema = `
     client text not null references entity(eid),
     unique (client)
   );
+  create table if not exists cursor (
+    eid    text primary key references entity(eid),
+    client text not null references entity(eid),
+    target text references entity(eid),
+    view   text,
+    unique (client)
+  );
   create table if not exists session (
     eid text primary key references entity(eid),
     id  text not null unique,

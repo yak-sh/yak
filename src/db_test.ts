@@ -251,6 +251,7 @@ let contracts = [
     client: tag(d, 'client'),
   })),
   contract('shelf', 'client', 'client'),
+  contract('cursor', 'client', 'client'),
   contract(
     'claim',
     'session',

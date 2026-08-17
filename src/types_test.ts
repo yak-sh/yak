@@ -96,6 +96,8 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'camera.canvas',
       'fold.client',
       'fold.board',
+      // a cursor dies with the client whose looking it records (T-12788)
+      'cursor.client',
       // the lazy partition has no life after its owning Session
       'entry.session',
     ]),
@@ -141,6 +143,9 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'result.call',
       'checkpoint.through',
       'cancel.target',
+      // a cursor aimed at a dead entity keeps the tombstone; nav derives a
+      // nearest-live fallback at read time, never a repair write (T-12788)
+      'cursor.target',
       // A recall floater keeps naming its source message and memories after
       // either dies — the dedup ledger and provenance survive.
       'recalled.source',
