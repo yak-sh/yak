@@ -198,13 +198,21 @@ Deno.test('manual validation rejects loss-shaped arguments', () => {
       [],
       'needs <text> or --body=<text, @file, - or @->',
     ],
-    // A KNOWN value option given BARE — the space form `--body foo`, the habit
-    // the exception flood came from — names the value it needs and the `=`
-    // spelling, not "does not take", which reads as an unknown flag (T-18396).
+    // The space form is warm only when body is TRAILING (accepts test below).
+    // A bare body option FOLLOWED by another option is not trailing, so it can
+    // not safely swallow the rest — it names the value and the `=` spelling
+    // rather than eating `--verdict` (T-18566/T-18481).
     [
       'comment',
-      ['T-1', '--body', 'some prose'],
+      ['T-1', '--body', 'a note', '--verdict', 'approved'],
       '--body needs text, @file, - or @- — use --body=…',
+    ],
+    // A NON-body value option given bare keeps the `=` requirement — its value
+    // is one token, never trailing, so the space form does not apply to it.
+    [
+      'comment',
+      ['T-1', '--verdict', 'approved'],
+      '--verdict needs verdict — use --verdict=…',
     ],
     ['telemetry', ['-n', '--errors'], '-n needs a positive number'],
     ['wrap', ['sid', '--body=@x'], 'task session brief --body=…'],
@@ -240,6 +248,21 @@ Deno.test('manual validation accepts each supported option shape', () => {
   // and it is a VALUE, so the id is still the one word the verb needs.
   check('comment', ['T-1', '.body=@notes.md'])()
   check('comment', ['T-1', '--body=@-'])()
+  // The SPACE form of a trailing body option — `--body words…` — is the warm
+  // path agents reach for; it binds the remaining words exactly as `--body=…`
+  // would (T-18566/T-18481). Valid wherever body is the last thing on the line.
+  check('comment', ['T-1', '--body', 'some', 'prose', 'here'])()
+  check('remember', ['a', 'fact', '--body', 'the', 'lesson'])()
+  check('set', [
+    'T-1',
+    '.status=done',
+    '--comment',
+    'verified',
+    'end',
+    'to',
+    'end',
+  ])()
+  check('mail send', ['jeff', 'Subject', '--body', 'the', 'letter'])()
   check('role stop', ['R-1'])()
   check('role stop', ['--all'])()
   check('role start', ['R-1', 'R-2'])()
@@ -275,6 +298,58 @@ Deno.test('parse names positionals, resolves options, and applies defaults', () 
     parse('spawn', manuals.spawn, ['T-3', '.provider=codex']).opts,
     { '--effort': 'high', '--provider': 'codex' },
   )
+})
+
+Deno.test('a trailing body option binds its space form as the body', () => {
+  // The habit the exception flood came from — `--body words…` without an `=` —
+  // now WORKS, equivalent to `--body="words…"` (T-18566/T-18481).
+  let comment = parse('comment', manuals.comment, [
+    'T-3',
+    '--body',
+    'some',
+    'text',
+    'here',
+  ])
+  assertEquals(comment.args.id, 'T-3')
+  assertEquals(comment.body, 'some text here')
+  assertEquals(
+    comment.body,
+    parse('comment', manuals.comment, ['T-3', '--body=some text here']).body,
+  )
+
+  // remember keeps its title; the trailing words after --body are the body.
+  let remember = parse('remember', manuals.remember, [
+    'a',
+    'fact',
+    '--body',
+    'the',
+    'lesson',
+  ])
+  assertEquals(remember.args.title, 'a fact')
+  assertEquals(remember.body, 'the lesson')
+
+  // set's --comment (a body-type option) takes the same space form.
+  assertEquals(
+    parse('set', manuals.set, [
+      'T-3',
+      '--comment',
+      'verified',
+      'end',
+      'to',
+      'end',
+    ]).opts['--comment'],
+    'verified end to end',
+  )
+})
+
+Deno.test('complete answers help and passes its completion line through', () => {
+  // T-18630: `complete` is a real verb (alias), so `--help` renders its manual
+  // instead of failing arg parse, and the `-- <line>` completion contract the
+  // shell wrappers use parses as a passthrough rather than a subject.
+  assertMatch(requestedHelp(['complete', '--help']) ?? '', /^task complete/)
+  assertMatch(requestedHelp(['complete', '-h']) ?? '', /^task complete/)
+  let got = parse('complete', manuals.complete, ['--', 'cl'])
+  assertEquals(got.words, ['--', 'cl'])
 })
 
 Deno.test('parse preserves filter tokens and routes write params', () => {

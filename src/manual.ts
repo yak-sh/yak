@@ -1294,11 +1294,30 @@ let parsed = (
       if (gone) throw usageError(name, manual, gone)
       // A KNOWN value option given bare (`--body foo`, not `--body=foo`):
       // match() only accepts the `=` spelling for a non-separate value, so it
-      // falls through here. Name the real fault — it needs a value at the `=`
-      // spelling — rather than "does not take", which reads as unknown flag and
-      // sends authors in circles (T-18396: agents kept reaching for `--body …`).
+      // falls through here.
       let bare = manual.opts?.find((o) => o.kind && o.name == optionName(arg))
       if (bare) {
+        // Warm path: a body option in its SPACE form, as the LAST option on the
+        // line, binds the trailing words as the body — exactly as `--body=…`
+        // would (T-18566/T-18481: agents keep reaching for `--body …` and won't
+        // change habits from an error, so make the habit WORK). Unambiguous only
+        // when body is genuinely trailing: every remaining token must be a plain
+        // word, so nothing after it (an option, a `--` fold, a dot-param) is
+        // swallowed. Body-type only (kind.read); other value options keep the
+        // `=` requirement, since their value is a single token, not trailing.
+        let trailing = argv.slice(i + 1)
+        if (
+          bare.kind!.read && trailing.length &&
+          trailing.every((a) => a != '--' && !option(a) && !dotted(a))
+        ) {
+          let raw = trailing.join(' ')
+          present.add(bare.name)
+          value(bare, raw, `${bare.name}=${raw}`)
+          break
+        }
+        // Name the real fault — it needs a value at the `=` spelling — rather
+        // than "does not take", which reads as unknown flag and sends authors
+        // in circles (T-18396: agents kept reaching for `--body …`).
         throw usageError(
           name,
           manual,
