@@ -313,6 +313,11 @@ let WhoAmI = () => {
 export let Status = () => {
   let input = useRef<HTMLTextAreaElement>(null)
   let complete = useComplete()
+  // The DOM owns active typing. State mirrors it for hints, and begins from
+  // the durable draft so opening the command line never needs a later value
+  // rewrite that would move the caret.
+  let [line, setLine] = useState(() => peek('cmd')?.v ?? '')
+  let [pick, setPick] = useState(0)
 
   useEffect(() => {
     let key = (e: KeyboardEvent) => {
@@ -370,29 +375,23 @@ export let Status = () => {
     }
   }, [])
 
-  // The command line grabs focus the moment it appears — a thumb's the
-  // exception (see above) — and if a draft outlived a swap, the late-
-  // mounting input catches up to the line.
+  // Seed only when the command input APPEARS. Rewriting an uncontrolled
+  // textarea after every repaint races its native input event and moves a
+  // mid-line caret to the end; while mounted, the DOM remains the owner.
   useEffect(() => {
     if (mode.value != 'command') return
     let i = input.current
     if (!i) return
     if (i.value != line) i.value = line
     if (!thumb()) i.focus()
-  })
+  }, [mode.value])
 
   // The typed line, mirrored for the ghost and the hints (the DOM input
   // stays the owner); which hint is picked (0 = the best match).
-  let [line, setLine] = useState('')
-  let [pick, setPick] = useState(0)
   // A half-typed : line survives any reload — restore it and reopen the
   // command line; running or Escaping the line is what spends the draft.
   useEffect(() => {
-    let d = peek('cmd')
-    if (d?.v) {
-      setLine(d.v)
-      mode.value = 'command'
-    }
+    if (line) mode.value = 'command'
   }, [])
   let hints = mode.value == 'command' ? suggest(line, all) : []
   let [, pre, verb, rest] = line.match(/^(\s*)(\S+)(.*)$/s) ?? []
