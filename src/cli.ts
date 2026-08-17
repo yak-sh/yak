@@ -71,13 +71,14 @@ import {
   scopeFor,
   search,
   send,
+  serverCaps,
   sessionFor,
   sessionMeta,
   sessionRow,
   showMd,
   similarHint,
   spawnChanges,
-  spawnDefaults,
+  spawnPlan,
   subChanges,
   taskBlock,
   taskChanges,
@@ -126,7 +127,6 @@ import { anchorPaths, type Freshness, freshness } from './anchor.ts'
 import { commit } from './git.ts'
 import { land as landTree } from './land.ts'
 import { request } from './http.ts'
-import { spawnDefault } from './providers.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
 import { seqRange, type Sift, transcribe } from './log_text.ts'
 import { type EntryRow, graphLog, pageEntries } from './entry_log.ts'
@@ -1139,41 +1139,42 @@ let launch = async (
   },
 ) => {
   let by = me()
-  let [task, caller, persona] = await Promise.all([
+  let [task, caller, table, caps] = await Promise.all([
     id ? needed(id) : undefined,
     by ? sessionRow(by) : undefined,
-    flags.persona ? around(flags.persona) : undefined,
+    (await request(`http://${host()}/providers`)).json(),
+    serverCaps(),
   ])
-  let all = [
-    ...(task ? [task] : []),
-    ...(caller ? [caller] : []),
-    ...(persona?.all ?? []),
-  ]
-  // Unnamed provider/model inherit: the calling session's own (a spawn
-  // begets its own kind), then the shared anonymous default.
-  let mine = spawnDefaults(all, by)
-  let provider = flags.provider ?? mine.provider
-  let model = flags.model ?? (flags.provider ? undefined : mine.model)
-  if (!provider || !model) {
-    let table = await (await request(`http://${host()}/providers`)).json() as {
-      name: string
-      models: string[]
-    }[]
-    let fallback = spawnDefault(table, { provider, model })
-    provider = fallback.provider
-    model = fallback.model
-    if (!provider || !model) throw new Error('no provider to default to')
+  let base = [...(task ? [task] : []), ...(caller ? [caller] : [])]
+  // One precedence: explicit flags > the task's spawn hint > the calling
+  // session's own spec > the provider-table default.
+  let plan = spawnPlan(base, table, {
+    task: id,
+    session: by,
+    ask: {
+      provider: flags.provider,
+      model: flags.model,
+      effort: flags.effort,
+      persona: flags.persona,
+    },
+  })
+  if (!plan.provider || !plan.model) {
+    throw new Error('no provider to default to')
   }
+  // The chosen persona's neighborhood carries the ownership edges spawnChanges
+  // reads for the actor — fetch it whether it came from a flag or the hint.
+  let persona = plan.persona ? await around(plan.persona) : undefined
+  let all = [...base, ...(persona?.all ?? [])]
   let made = spawnChanges(all, {
     task: id,
     prompt: flags.prompt,
-    provider,
-    model,
-    effort: flags.effort,
-    persona: flags.persona,
+    provider: plan.provider,
+    model: plan.model,
+    effort: plan.effort,
+    persona: plan.persona,
     by,
     deps: persona?.deps,
-  })
+  }, caps)
   await send(made.changes)
   let onto = id ? find(all, id) : undefined
   print(`${await minted(made.eid)} spawned${onto ? ` onto ${idOf(onto)}` : ''}`)

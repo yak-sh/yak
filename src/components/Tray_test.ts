@@ -72,6 +72,9 @@ let session = (standing?: string): Ent => ({
     id: 'run',
     origin: 'managed',
     standing,
+    // ent() merges the spawn facet over the session aliases (sessionOf), so the
+    // live Ent reads provider on session — spawn-preferred, legacy-fallback.
+    provider: 'codex',
   },
   spawn: { eid: 'session', provider: 'codex' },
   refs: [],
@@ -90,6 +93,15 @@ Deno.test('graph-native status follows work, final answers, and wakes', () => {
   assertEquals(graphStanding(session('terminal'), true), 'idle')
 })
 
+Deno.test('graph-native reads an OLD snapshot with no spawn facet', () => {
+  // The reader prefers spawn and falls back to the legacy session.provider —
+  // an old snapshot carries provider on session alone and must still read
+  // native, not lose its codex-ness.
+  let e = session('busy')
+  delete (e as { spawn?: unknown }).spawn
+  assertEquals(graphStanding(e), 'running')
+})
+
 // finished_at is authoritative — an ENDED native session reads completed (or
 // failed on error), NEVER idle, whatever the log-derived facet says. Guards the
 // regression the O(1) facet introduced: a finished session with a null/idle
@@ -105,6 +117,7 @@ let finished = (standing?: string, failure?: 'error' | 'exception'): Ent => ({
     origin: 'managed',
     standing,
     finished_at: '2026-07-01T00:00:00Z',
+    provider: 'codex',
   },
   ...(failure == 'error'
     ? { error: { eid: 'session', at: '2026-07-01T00:00:00Z', message: 'x' } }

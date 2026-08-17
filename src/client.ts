@@ -36,6 +36,7 @@ import {
   route,
 } from './query.ts'
 import { FLOOR } from './embed.ts'
+import { type Provider, spawnDefault } from './providers.ts'
 import { request } from './http.ts'
 import { unmime } from './rfc2047.ts'
 import {
@@ -101,6 +102,23 @@ export let snapshot = async () => {
   let res = await request(`http://${host()}/snapshot`)
   if (!res.ok) throw new Error(`server said ${res.status}`)
   return res.json() as Promise<Snapshot>
+}
+
+// The server's advertised capabilities, cheaply — a spawn door checks this
+// before speaking canonical `spawn` (see facetsFor/spawnChanges). Cached per
+// process: capabilities move only when the server does, and a spawn is rare
+// enough that one small GET is free. A server too old to answer this route
+// (404) has no capabilities by definition, so treat any failure as [].
+let caps: string[] | undefined
+export let serverCaps = async (): Promise<string[]> => {
+  if (caps) return caps
+  try {
+    let res = await request(`http://${host()}/capabilities`)
+    caps = res.ok ? (await res.json() as string[]) : []
+  } catch {
+    caps = []
+  }
+  return caps
 }
 
 export let query = async (
@@ -1200,14 +1218,30 @@ export let rootFirst = (hits: Row[], deps: Dep[]): Row[] => {
   )
 }
 
+// Which canonical session facets a server with THESE capabilities accepts.
+// `spawn` gates the spawn facet; `session-facets` gates worktree/runtime.
+// Absence of a token means "send legacy only, omit the unknown component"
+// (the stage-1 contract). Undefined caps mean we haven't asked — stay
+// optimistic and speak every facet, since the deployed server advertises
+// them and an old server silently drops what it doesn't know anyway.
+export let facetsFor = (caps?: string[]): string[] =>
+  caps === undefined
+    ? [...sessionFacetNames]
+    : sessionFacetNames.filter((f) =>
+      f == 'spawn' ? caps.includes('spawn') : caps.includes('session-facets')
+    )
+
 // A rolling client speaks both homes in one batch: an older server keeps the
-// session aliases, while a current server makes the canonical facet win.
-let sessionFrames = (
+// session aliases, while a current server makes the canonical facet win. The
+// legacy `session` frame always rides; canonical facets ride only when the
+// server advertises them (default: all — see facetsFor).
+export let sessionFrames = (
   eid: string,
   comp: Record<string, unknown>,
+  facets: string[] = sessionFacetNames as unknown as string[],
 ): Change[] => [
   { eid, name: 'session', comp },
-  ...sessionFacetNames.flatMap((name) => {
+  ...facets.flatMap((name) => {
     let facet = Object.fromEntries(
       Object.keys(comps[name]).filter((key) => key in comp)
         .map((key) => [key, comp[key]]),
@@ -1321,11 +1355,21 @@ export let claimChanges = (
   ]
 }
 
-// What a spawn inherits when the caller doesn't say: the CALLING
-// session's own provider and model — a managed caller always has both,
-// an external one has whatever it announced. The provider-table default
-// lives at the doors (they can reach /providers; this builder can't).
-export let spawnDefaults = (all: Row[], session?: string) => {
+// One launch spec, however it is spelled: the four fields a spawn carries,
+// worn by an explicit ask, a task's hint, and a caller session alike.
+export type SpawnAsk = {
+  provider?: string
+  model?: string
+  effort?: string
+  persona?: string
+}
+
+// What a spawn inherits when the caller doesn't say: the CALLING session's
+// own spec — all four fields, spawn-preferred (projectSession merged the
+// canonical facet over the legacy aliases). A managed caller always has a
+// provider/model; an external one has whatever it announced. The
+// provider-table default lives beyond this — spawnPlan folds it in.
+export let spawnDefaults = (all: Row[], session?: string): SpawnAsk => {
   let s = session
     ? all.find((r) => r.comps.session && String(r.comps.session.id) == session)
       ?.comps.session
@@ -1333,6 +1377,84 @@ export let spawnDefaults = (all: Row[], session?: string) => {
   return {
     provider: s?.provider ? String(s.provider) : undefined,
     model: s?.model ? String(s.model) : undefined,
+    effort: s?.effort ? String(s.effort) : undefined,
+    persona: s?.persona ? String(s.persona) : undefined,
+  }
+}
+
+// THE precedence helper every spawn door shares, so the CLI, MCP, :fix,
+// knock, browser, and TUI can never resolve a launch differently. Highest
+// precedence first: the explicit ask (a CLI flag, a :fix dot-param), the
+// target TASK's stored hint, then the CALLING session's own spec — each a
+// full SpawnAsk. What no tier names, the provider table defaults, model→
+// provider inference and readiness both. model and effort ride WITH their
+// provider: a lower tier's model is dropped when a higher tier pins a
+// DIFFERENT provider, unless the table says that provider can also run it —
+// so a codex caller's model never rides an explicit --provider=claude. An
+// explicit model implies its provider where the table names exactly one host.
+export let spawnPlan = (
+  all: Row[],
+  ps: Provider[],
+  o: {
+    task?: string
+    session?: string
+    ask?: SpawnAsk
+    blocked?: (name: string) => boolean
+  },
+): SpawnAsk => {
+  let asSpec = (x?: Record<string, unknown>): SpawnAsk =>
+    x
+      ? {
+        provider: x.provider ? String(x.provider) : undefined,
+        model: x.model ? String(x.model) : undefined,
+        effort: x.effort ? String(x.effort) : undefined,
+        persona: x.persona ? String(x.persona) : undefined,
+      }
+      : {}
+  // The provider a model implies, but only when the table names exactly one
+  // host — an ambiguous model leaves inference to the lower tier and the table.
+  let host = (model?: string): string | undefined => {
+    if (!model) return undefined
+    let hosts = ps.filter((p) => p.models.includes(model)).map((p) => p.name)
+    return hosts.length == 1 ? hosts[0] : undefined
+  }
+  // A model this provider can run — the tie-break's "advertises them".
+  let runs = (provider?: string, model?: string) =>
+    !!provider && !!model &&
+    ps.some((p) => p.name == provider && p.models.includes(model))
+  // Each tier's provider is its explicit one, else the one its explicit model
+  // implies — so an explicit model authoritatively carries its provider.
+  let norm = (t: SpawnAsk): SpawnAsk => ({
+    ...t,
+    provider: t.provider ?? host(t.model),
+  })
+  let hint = o.task ? find(all, o.task)?.comps.spawn : undefined
+  let tiers = [o.ask ?? {}, asSpec(hint), spawnDefaults(all, o.session)]
+    .map(norm)
+  // Fold low→high: the higher tier's provider wins and carries its own
+  // model/effort; a lower tier's model/effort survive only when they still
+  // fit the winning provider (same provider, or one that advertises the model).
+  let spec = tiers.reduceRight<SpawnAsk>((lo, hi) => {
+    let provider = hi.provider ?? lo.provider
+    let same = !hi.provider || !lo.provider || hi.provider == lo.provider
+    let keep = same || runs(provider, lo.model)
+    return {
+      provider,
+      model: hi.model ?? (keep ? lo.model : undefined),
+      effort: hi.effort ?? (keep ? lo.effort : undefined),
+      persona: hi.persona ?? lo.persona,
+    }
+  }, {})
+  // The last resort: the table's own default (model→provider inference and
+  // readiness), filling only what no tier named.
+  let d = spawnDefault(ps, {
+    provider: spec.provider,
+    model: spec.model,
+  }, o.blocked)
+  return {
+    ...spec,
+    provider: spec.provider ?? d.provider,
+    model: spec.model ?? d.model,
   }
 }
 
@@ -1340,7 +1462,10 @@ export let spawnDefaults = (all: Row[], session?: string) => {
 // the server's created(session) effect validates and launches it, and
 // every way it can fail lands as a failed Session on the board, not an
 // error here. The task (and persona) resolve through find(), so human
-// ids work everywhere.
+// ids work everywhere. `caps` gates the canonical `spawn` frame: against an
+// old server (no `spawn` capability) only the legacy session request rides,
+// with no unknown component (facetsFor); the four fields still land as the
+// dormant legacy aliases. Omit caps to speak every facet (the default).
 export let spawnChanges = (
   all: Row[],
   s: {
@@ -1353,6 +1478,7 @@ export let spawnChanges = (
     by?: string
     deps?: Dep[]
   },
+  caps?: string[],
 ) => {
   let task = s.task ? find(all, s.task) : undefined
   if (s.task && !task?.comps.task) throw new Error(`no task: ${s.task}`)
@@ -1389,7 +1515,7 @@ export let spawnChanges = (
     ...(task ? { requested_task: task.eid } : {}),
     ...(persona ? { persona: persona.eid } : {}),
     ...(actor ? { actor: actor } : {}),
-  })
+  }, caps === undefined ? undefined : facetsFor(caps))
   if (s.prompt) {
     changes.push({ eid, name: 'doc', comp: { title: '', body: s.prompt } })
   }

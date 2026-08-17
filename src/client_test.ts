@@ -11,6 +11,7 @@ import {
   derefParams,
   designChanges,
   edgesOf,
+  facetsFor,
   find,
   hookClaim,
   inboxItem,
@@ -44,6 +45,7 @@ import {
   showMd,
   spawnChanges,
   spawnDefaults,
+  spawnPlan,
   spec,
   STUB,
   subChanges,
@@ -994,22 +996,182 @@ Deno.test('wrap brief: the final message IS the brief when captured', () => {
   assertEquals(wrapChanges(rows(idle), 'sess-x', AT, [], 'captured'), [])
 })
 
-Deno.test('spawnDefaults: the caller session lends its provider/model', () => {
+Deno.test('spawnDefaults: the caller session lends all four fields', () => {
   let mine = structuredClone(snap)
   mine.changes.find((c) => c.eid == S && c.name == 'session')!.comp = {
     id: 'sess-x',
     provider: 'claude',
     model: 'claude-opus-4-8',
+    effort: 'high',
+    persona: T2,
   }
   assertEquals(spawnDefaults(rows(mine), 'sess-x'), {
     provider: 'claude',
     model: 'claude-opus-4-8',
+    effort: 'high',
+    persona: T2,
   })
   // a row with neither, an unknown session, no session: all default to none
-  let none = { provider: undefined, model: undefined }
+  let none = {
+    provider: undefined,
+    model: undefined,
+    effort: undefined,
+    persona: undefined,
+  }
   assertEquals(spawnDefaults(all, 'sess-x'), none)
   assertEquals(spawnDefaults(all, 'sess-unknown'), none)
   assertEquals(spawnDefaults(all), none)
+})
+
+// A provider table for the precedence helper: codex (with a `sol` default and
+// an effort axis), claude, and one model both providers host (the ambiguity).
+let table = [
+  {
+    name: 'codex',
+    models: ['gpt-5.6-sol', 'gpt-5.6-med', 'shared'],
+    efforts: ['low', 'medium', 'high'],
+  },
+  { name: 'claude', models: ['claude-opus-4-8', 'claude-fable-5', 'shared'] },
+]
+// A caller session (codex/sol/high, wearing persona T2) and a task carrying a
+// spawn HINT (claude/opus/low). rows() merges the canonical facet over the
+// session aliases, so the caller reads spawn-preferred.
+let planRows = () =>
+  rows({
+    changes: [
+      { eid: S, name: 'entity', comp: { eid: S, num: 1 } },
+      {
+        eid: S,
+        name: 'session',
+        comp: {
+          id: 'caller',
+          provider: 'codex',
+          model: 'gpt-5.6-sol',
+          effort: 'high',
+          persona: T2,
+        },
+      },
+      { eid: T1, name: 'entity', comp: { eid: T1, num: 2 } },
+      { eid: T1, name: 'task', comp: { status: 'open', priority: 0 } },
+      {
+        eid: T1,
+        name: 'spawn',
+        comp: { provider: 'claude', model: 'claude-opus-4-8', effort: 'low' },
+      },
+      { eid: T2, name: 'entity', comp: { eid: T2, num: 3 } },
+    ],
+  })
+
+Deno.test('spawnPlan: the caller session lends its whole spec', () => {
+  assertEquals(spawnPlan(planRows(), table, { session: 'caller' }), {
+    provider: 'codex',
+    model: 'gpt-5.6-sol',
+    effort: 'high',
+    persona: T2,
+  })
+})
+
+Deno.test('spawnPlan: the task hint outranks the caller', () => {
+  let plan = spawnPlan(planRows(), table, { task: 'T-2', session: 'caller' })
+  assertEquals(plan.provider, 'claude')
+  assertEquals(plan.model, 'claude-opus-4-8')
+  assertEquals(plan.effort, 'low')
+  // persona rides precedence independent of provider: the hint names none, so
+  // the caller's still carries.
+  assertEquals(plan.persona, T2)
+})
+
+Deno.test('spawnPlan: an explicit ask outranks hint and caller', () => {
+  let plan = spawnPlan(planRows(), table, {
+    task: 'T-2',
+    session: 'caller',
+    ask: { provider: 'codex', model: 'gpt-5.6-med', effort: 'medium' },
+  })
+  assertEquals(plan.provider, 'codex')
+  assertEquals(plan.model, 'gpt-5.6-med')
+  assertEquals(plan.effort, 'medium')
+})
+
+Deno.test('spawnPlan: an explicit provider sheds a model/effort from another tier', () => {
+  // Only a provider is asked; the caller's codex model/effort belong to codex,
+  // never claude, so they drop and the table defaults claude's model.
+  let plan = spawnPlan(planRows(), table, {
+    session: 'caller',
+    ask: { provider: 'claude' },
+  })
+  assertEquals(plan.provider, 'claude')
+  assertEquals(plan.model, 'claude-opus-4-8')
+  assertEquals(plan.effort, undefined)
+  assertEquals(plan.persona, T2) // persona is not provider-coupled
+})
+
+Deno.test('spawnPlan: an explicit model infers its provider when unambiguous', () => {
+  let plan = spawnPlan(planRows(), table, {
+    session: 'caller',
+    ask: { model: 'claude-opus-4-8' },
+  })
+  assertEquals(plan.provider, 'claude') // inferred, codex caller shed
+  assertEquals(plan.model, 'claude-opus-4-8')
+})
+
+Deno.test('spawnPlan: an ambiguous model keeps the lower tier provider', () => {
+  // `shared` runs on both, so no inference — the caller's codex disambiguates.
+  let plan = spawnPlan(planRows(), table, {
+    session: 'caller',
+    ask: { model: 'shared' },
+  })
+  assertEquals(plan.provider, 'codex')
+  assertEquals(plan.model, 'shared')
+})
+
+Deno.test('spawnPlan: nothing named falls to the provider-table default', () => {
+  let plan = spawnPlan(planRows(), table, {})
+  assertEquals(plan.provider, 'codex') // gpt-5.6-sol's host
+  assertEquals(plan.model, 'gpt-5.6-sol')
+})
+
+Deno.test('spawnPlan: readiness routes the default around a blocked provider', () => {
+  // sol is only on codex here; blocking codex forces the fallback host.
+  let solo = [
+    { name: 'codex', models: ['gpt-5.6-sol'] },
+    { name: 'codex-cli', models: ['gpt-5.6-sol'], fallback: true },
+  ]
+  let plan = spawnPlan(planRows(), solo, {
+    ask: { model: 'gpt-5.6-sol' },
+    blocked: (name) => name == 'codex',
+  })
+  assertEquals(plan.model, 'gpt-5.6-sol')
+  assertEquals(plan.provider, 'codex-cli')
+})
+
+Deno.test('facetsFor: capability tokens gate the canonical facets', () => {
+  assertEquals(facetsFor(undefined), ['spawn', 'worktree', 'runtime'])
+  assertEquals(facetsFor(['spawn', 'session-facets']), [
+    'spawn',
+    'worktree',
+    'runtime',
+  ])
+  assertEquals(facetsFor(['spawn']), ['spawn'])
+  assertEquals(facetsFor(['session-facets']), ['worktree', 'runtime'])
+  assertEquals(facetsFor([]), [])
+})
+
+Deno.test('spawnChanges: an old server gets the legacy request, no unknown component', () => {
+  let now = planRows()
+  let ask = { task: 'T-2', provider: 'claude', model: 'claude-opus-4-8' }
+  // A capable server: session + canonical spawn frames both ride.
+  let neu = spawnChanges(now, ask, ['spawn', 'session-facets'])
+  assertEquals(neu.changes.filter((c) => c.name == 'spawn').length, 1)
+  // An old server (no spawn capability): only the legacy session frame, and
+  // the four fields still land as its dormant aliases.
+  let old = spawnChanges(now, ask, [])
+  assertEquals(old.changes.some((c) => c.name == 'spawn'), false)
+  let session = old.changes.find((c) => c.name == 'session')!
+  assertEquals(session.comp?.provider, 'claude')
+  assertEquals(session.comp?.model, 'claude-opus-4-8')
+  // Omitted caps stay optimistic — every facet, today's behavior.
+  let dflt = spawnChanges(now, ask)
+  assertEquals(dflt.changes.some((c) => c.name == 'spawn'), true)
 })
 
 Deno.test('contextDigest: claimed set with gates, or open board', () => {

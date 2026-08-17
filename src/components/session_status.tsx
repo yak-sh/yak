@@ -64,8 +64,11 @@ export let graphStanding = (
 ) => {
   let s = e.session!
   if (e.error || e.exception) return 'failed'
+  // s is the spawn-preferred view (sessionOf merges the canonical facet over
+  // the legacy aliases), so this reads `spawn` and falls back to an old
+  // snapshot's session.provider without a second lookup.
   let native = s.origin == 'managed' && s.status == null &&
-    e.spawn?.provider == 'codex'
+    s.provider == 'codex'
   if (!native) return standing(s)
   if (s.finished_at) return 'completed'
   if (s.standing == 'busy') return 'running'

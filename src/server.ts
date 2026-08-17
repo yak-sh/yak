@@ -10,7 +10,7 @@ import { transform } from 'sucrase'
 import { bound, guard, type Serving } from './bind.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
-import { type Change, type Dep, idOf, kindOf } from './types.ts'
+import { capabilities, type Change, type Dep, idOf, kindOf } from './types.ts'
 import {
   apply,
   bodies,
@@ -959,6 +959,10 @@ let http = Deno.serve(
     }
     if (path == '/ws') return ws(req)
     if (path == '/snapshot') return Response.json(snapshot(db))
+    // The advertised capability tokens, cheaply — a headless spawn door
+    // (client.ts serverCaps) reads this to decide whether to speak canonical
+    // `spawn` without paying for a whole snapshot. Same array snapshot() rides.
+    if (path == '/capabilities') return Response.json(capabilities)
     // The admin census's graph-true counts: one COUNT per component table,
     // authoritative for eager AND entry-partition components the cache omits.
     if (path == '/census') return Response.json(componentCounts(db))

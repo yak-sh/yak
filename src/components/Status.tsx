@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { signal } from '@preact/signals'
 import {
   camera,
+  capable,
   clientId,
   ent,
   mode,
@@ -11,6 +12,7 @@ import {
   rows,
   uuid,
 } from '../live.ts'
+import { sessionFrames, spawnPlan } from '../client.ts'
 import { type Change, idOf } from '../types.ts'
 import {
   type Command,
@@ -25,8 +27,8 @@ import {
 import { num, slotsOf } from '../verb.ts'
 import { navigate, screenTarget } from './nav.tsx'
 import { drop, peek, save } from './drafts.ts'
-import { choose, load, providers } from './Run.tsx'
-import { catalog, offer } from '../providers.ts'
+import { liveBlocked, load, providers } from './Run.tsx'
+import { catalog } from '../providers.ts'
 import { Tray } from './Tray.tsx'
 import { block } from './ui.tsx'
 import { Id } from './views/Inline.tsx'
@@ -199,27 +201,39 @@ let scene = (task: string): Change[] => {
 let launch = async (intent: string | SpawnIntent) => {
   if (!providers.value.length) await load()
   let wanted = typeof intent == 'string' ? {} : intent
-  let m = offer(catalog(providers.value), wanted)
-  if (!m) throw new Error('no matching provider/model')
-  let provider = wanted.provider ?? await choose(m)
+  let task = spawnTask(intent)
+  // The one precedence every door shares (spawnPlan): explicit ask > the
+  // task's spawn hint > table default. No caller session on the web, so the
+  // hint is what lets a board :fix launch the right agent. Transports are
+  // judged by the live account readiness, exactly as the Run form's choose.
+  let plan = spawnPlan(rows(), providers.value, {
+    task,
+    ask: wanted,
+    blocked: await liveBlocked(),
+  })
+  if (!plan.provider || !plan.model) {
+    throw new Error('no matching provider/model')
+  }
+  // Medium effort by default when the model has the axis — the Run form's rule.
+  let axis = catalog(providers.value).find((p) => p.model == plan.model)
+    ?.efforts ?? []
+  let effort = plan.effort ??
+    (axis.length ? (axis.includes('medium') ? 'medium' : axis[0]) : undefined)
   let eid = uuid()
+  let comp = {
+    id: uuid(),
+    provider: plan.provider,
+    model: plan.model,
+    ...(effort ? { effort } : {}),
+    ...(task ? { requested_task: task } : {}),
+    ...(plan.persona ? { persona: plan.persona } : {}),
+  }
+  // Canonical `spawn` rides only when the server advertises it; otherwise the
+  // legacy session frame alone, which the server materializes into spawn.
   mutate(
-    {
-      eid,
-      name: 'session',
-      comp: {
-        id: uuid(),
-        provider,
-        model: wanted.model ?? m.model,
-        ...(wanted.effort
-          ? { effort: wanted.effort }
-          : m.efforts.length
-          ? { effort: m.efforts.includes('medium') ? 'medium' : m.efforts[0] }
-          : {}),
-        ...(spawnTask(intent) ? { requested_task: spawnTask(intent) } : {}),
-        ...(wanted.persona ? { persona: wanted.persona } : {}),
-      },
-    },
+    ...(capable('spawn')
+      ? sessionFrames(eid, comp)
+      : [{ eid, name: 'session', comp }]),
     ...(wanted.prompt
       ? [{ eid, name: 'doc', comp: { title: '', body: wanted.prompt } }]
       : []),

@@ -10,8 +10,8 @@ import { reachable } from './door.ts'
 import { delivered, errored, excepted, toOf } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, uuid } from './types.ts'
-import { isOperator, rows, spawnChanges } from './client.ts'
-import { adapters } from './adapters.ts'
+import { isOperator, rows, spawnChanges, spawnPlan } from './client.ts'
+import { providers } from './adapters.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -129,12 +129,23 @@ export let knocked =
         if (!isTask) {
           return fail(`nobody awake and ${human(db, target)} is not spawnable`)
         }
-        let provider = Object.keys(adapters).find((k) => k != 'fake') ?? 'fake'
-        let made = spawnChanges(rows(snapshot(db)), {
+        // The same precedence every door shares: the target task's spawn
+        // hint decides the agent (no caller session at this rung), the
+        // provider table defaulting the rest.
+        let snap = snapshot(db)
+        let plan = spawnPlan(rows(snap), providers(), { task: target })
+        if (!plan.provider || !plan.model) {
+          return fail(
+            `nobody awake and no provider to spawn ${human(db, target)}`,
+          )
+        }
+        let made = spawnChanges(rows(snap), {
           task: target,
-          provider,
-          model: adapters[provider].models[0],
-        })
+          provider: plan.provider,
+          model: plan.model,
+          effort: plan.effort,
+          persona: plan.persona,
+        }, snap.capabilities)
         let t = trace()
         let out = apply(db, made.changes, t)
         cast(out)

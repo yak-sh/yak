@@ -24,19 +24,19 @@ import { openAccount } from './Account.tsx'
 
 type Ask = { eid: string; x: number; y: number }
 
-// The live transport for a picked model: graph-native Codex only when its
-// account is signed in, else the permanent CLI fallback. Reads the account
-// first when the pick could use graph-native Codex, so an unread status never
-// forces the fallback on a signed-in owner.
-export let choose = async (pick: Pick): Promise<string> => {
-  if (pick.transports.includes('codex') && !codexAccount.view.peek().status) {
-    await codexAccount.read()
-  }
-  return transport(
-    pick,
-    (name) => name == 'codex' && !codexAccount.view.peek().status?.ready,
-  )
+// The live readiness predicate every spawn door judges transports by:
+// graph-native Codex is blocked unless its account is signed in. Reads the
+// account first so an unread status never forces the fallback on a signed-in
+// owner. Shared by choose() here and the :fix doors (Status/TUI via spawnPlan).
+export let liveBlocked = async (): Promise<(name: string) => boolean> => {
+  if (!codexAccount.view.peek().status) await codexAccount.read()
+  return (name) => name == 'codex' && !codexAccount.view.peek().status?.ready
 }
+
+// The live transport for a picked model: graph-native Codex only when its
+// account is signed in, else the permanent CLI fallback.
+export let choose = async (pick: Pick): Promise<string> =>
+  transport(pick, await liveBlocked())
 
 let Frame = block('div', 'Run', {
   Row: 'label',

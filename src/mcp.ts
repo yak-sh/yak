@@ -69,7 +69,7 @@ import {
   similarHint,
   snapshot,
   spawnChanges,
-  spawnDefaults,
+  spawnPlan,
   taskChanges,
   undo,
 } from './client.ts'
@@ -96,7 +96,6 @@ import {
   pageEntries,
 } from './entry_log.ts'
 import { request } from './http.ts'
-import { spawnDefault } from './providers.ts'
 import { entityUrl } from './url.ts'
 import { wakeList } from './title.ts'
 
@@ -685,36 +684,37 @@ then the shared anonymous default. persona names the persona entity
     ) => {
       let snap = await io.read()
       let all = rows(snap)
-      // A spawn begets its own kind: unnamed provider/model inherit the
-      // CALLER's (its session row), then the shared anonymous default.
-      // A caller's model never rides a different explicit provider.
-      let mine = spawnDefaults(all, session)
-      provider ??= mine.provider
-      model ??= provider == mine.provider ? mine.model : undefined
-      if (!provider || !model) {
-        let table = await io.providers()
-        let fallback = spawnDefault(table, { provider, model })
-        provider = fallback.provider
-        model = fallback.model
-        if (!provider || !model) return err('no provider to default to')
+      // One precedence for every door: explicit args > the task's spawn hint
+      // > the CALLER's own spec (its session row) > the provider-table default.
+      let plan = spawnPlan(all, await io.providers(), {
+        task: id,
+        session,
+        ask: { provider, model, effort, persona },
+      })
+      if (!plan.provider || !plan.model) {
+        return err('no provider to default to')
       }
       // Pre-flight the allowlist here, at the tool boundary: a bad model is
       // a clear error to the caller, not a doomed husk on the board (the
       // raw wire still husks — that contract is the created(session)
       // effect's, for graph_apply).
-      let bad = trouble({ provider, model, effort })
+      let bad = trouble({
+        provider: plan.provider,
+        model: plan.model,
+        effort: plan.effort,
+      })
       if (bad) return err(bad)
       let made
       try {
         made = spawnChanges(all, {
           task: id,
-          provider,
-          model,
-          effort,
-          persona,
+          provider: plan.provider,
+          model: plan.model,
+          effort: plan.effort,
+          persona: plan.persona,
           by: session,
           deps: snap.deps,
-        })
+        }, snap.capabilities)
       } catch (e) {
         return err((e as Error).message)
       }
@@ -782,29 +782,32 @@ ${
       if (out.spawn) {
         let want = spawnSpec(out.spawn)
         // A spawn on defaults — a fresh read sees the task the line may
-        // have just filed; task_spawn is the door for overrides.
+        // have just filed; task_spawn is the door for overrides. One
+        // precedence: the line's own spec > the task hint > the caller > table.
         let snap = await io.read()
         let now = rows(snap)
-        let mine = spawnDefaults(now, session)
-        let provider = want.provider ?? mine.provider
-        let model = want.model ?? (want.provider ? undefined : mine.model)
-        if (!provider || !model) {
-          let table = await io.providers()
-          let fallback = spawnDefault(table, {
-            provider: want.provider ?? provider,
-            model: want.model ?? model,
-          })
-          provider = fallback.provider
-          model = fallback.model
-          if (!provider || !model) return err('no provider to default to')
+        let plan = spawnPlan(now, await io.providers(), {
+          task: want.task,
+          session,
+          ask: {
+            provider: want.provider,
+            model: want.model,
+            effort: want.effort,
+            persona: want.persona,
+          },
+        })
+        if (!plan.provider || !plan.model) {
+          return err('no provider to default to')
         }
         let made = spawnChanges(now, {
           ...want,
-          provider,
-          model,
+          provider: plan.provider,
+          model: plan.model,
+          effort: plan.effort,
+          persona: plan.persona,
           by: session,
           deps: snap.deps,
-        })
+        }, snap.capabilities)
         await io.write(made.changes, session)
         let after = find(rows(await io.read()), made.eid)
         let onto = want.task ? find(now, want.task) : undefined
