@@ -1,7 +1,7 @@
 /* Tasks v2 — hand-written per the product CSS DNA: three-separator names
    (Block / Block_Element / Block-modifier), custom properties as the variant
    mechanism, modern CSS, no build step, no Tailwind.
-   Palette + canvas vibe carried over from the harness web UI (Everforest);
+   Blue canvas surfaces carry the harness web UI's Everforest accents;
    one deliberate fix over it: scroll padding lives INSIDE the scroller, so
    the scrollbar touches the card border and padding scrolls with content. */
 
@@ -21,11 +21,11 @@
   --font: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --bg: #232a2e; /* app background */
-  --surface: #2d353b; /* panels / card chrome */
-  --card: #343f44; /* raised card body */
-  --border: #3d484d;
-  --border2: #475258;
+  --bg: #172435; /* app background */
+  --surface: #20344b; /* panels / card chrome */
+  --card: #29415a; /* raised card body */
+  --border: #36536f;
+  --border2: #456581;
 
   --text: #d3c6aa; /* foreground */
   --muted: #9da9a0;
@@ -51,20 +51,17 @@
   --cancelled: var(--dim); /* settled, but not a success — stays muted */
 }
 
-/* A light system asks, Everforest light (medium) answers: the SAME vars
-   re-pointed at the mirror palette — every rule below stays untouched.
-   Each value sits at the dark one's position (bg_dim/bg0/bg1, grey2/
-   grey0, fg, the six accents); borders step up to bg3/bg4 because light
-   bg2 IS bg_dim — a border the same color as the floor isn't one. */
+/* A light system gets the same blue surface ramp with Everforest light
+   accents — every rule below stays untouched. */
 @media (prefers-color-scheme: light) {
   :root {
     color-scheme: light;
 
-    --bg: #efebd4;
-    --surface: #fdf6e3;
-    --card: #f4f0d9;
-    --border: #e6e2cc;
-    --border2: #e0dcc7;
+    --bg: #e6f0f7;
+    --surface: #f4f9fc;
+    --card: #edf5fa;
+    --border: #cfdee9;
+    --border2: #bfd3e1;
 
     --text: #5c6a72;
     --muted: #829181;
@@ -109,7 +106,7 @@
 html {
   /* The phone's notch band (and any overscroll reveal) shows the ROOT
      background — paint it titlebar-surface so the bar reads as running
-     under the clock to the glass. Loads after the inline #232a2e splash
+     under the clock to the glass. Loads after the inline #172435 splash
      matcher in index.html, deliberately: splash seam first, then this. */
   background: var(--surface);
 }
