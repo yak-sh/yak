@@ -59,7 +59,13 @@ import {
 import { graphSession, runnerSessions } from './managed_codex.ts'
 import { dispatch, trace } from './effects.ts'
 import { legacyWorktreesDir, worktreesDir } from './ground.ts'
-import { hookClaim, rows, wrapChanges } from './client.ts'
+import {
+  hookClaim,
+  lapseChanges,
+  releaseChange,
+  rows,
+  wrapChanges,
+} from './client.ts'
 import { type Unlanded, unlanded } from './land.ts'
 import { composeWorn, GLOBAL_BASE, wornPersona } from './persona.ts'
 import {
@@ -67,7 +73,13 @@ import {
   sessionRows as storedSessions,
   writeSession,
 } from './session_store.ts'
-import { type Change, sessionActive, uuid } from './types.ts'
+import {
+  awake,
+  type Change,
+  type Session,
+  sessionActive,
+  uuid,
+} from './types.ts'
 
 type Cast = (changes: Change[]) => void
 type Row = Record<string, unknown>
@@ -2486,4 +2498,50 @@ export let recover = (cast: Cast) => {
     )
   ) watched(cast)(s.eid, s)
   return rows.map((r) => r.eid)
+}
+
+// The other leak a restart heals: a stale LEASE. A claim is a session's lease
+// on an entity, released at a graceful end through lapseChanges (client.ts, the
+// one release truth that both `task wrap` and the managed-session settle above
+// speak). A session that ends ABNORMALLY — killed, crashed, or dropped by a
+// deno --watch reload — never runs its SessionEnd wrap, so its lease outlives it
+// and the board lies about who is working (M-3715). death:'release' is no help:
+// it fires only on the session ENTITY's deletion, and an ended session is not a
+// dead entity — it persists with a terminal status. So reap in recover()'s
+// spirit: for every lease whose session has ENDED (awake() is false — the same
+// predicate the doctor's claim check reads), release it exactly as its wrap
+// would have, lapse notices for unfinished work and all; an orphan lease whose
+// session entity vanished entirely just drops (there is no session to speak
+// for it). One apply()+cast()+dispatch() batch, so no client cache keeps a
+// ghost claim. Idempotent by construction — a released lease is gone, so the
+// next boot finds nothing to do.
+export let reapLeases = (cast: Cast) => {
+  let all = rows(snapshot(db))
+  let sessions = new Map(
+    all.filter((r) => r.comps.session).map((r) => [r.eid, r]),
+  )
+  // Only sessions that HOLD a lease are worth examining — the reap set is tiny
+  // beside the session count, so this stays O(claims·rows), never O(sessions²).
+  let held = new Map<string, typeof all>()
+  for (let r of all) {
+    let sid = r.comps.claim?.session
+    if (!sid) continue
+    let list = held.get(String(sid)) ?? []
+    list.push(r)
+    held.set(String(sid), list)
+  }
+  let changes: Change[] = []
+  for (let [sid, claims] of held) {
+    let sess = sessions.get(sid)
+    if (sess && awake(sess.comps.session as Session)) continue // live, untouched
+    changes.push(
+      ...(sess ? lapseChanges(all, sess) : claims.map(releaseChange)),
+    )
+  }
+  if (!changes.length) return []
+  let t = trace()
+  let out = apply(db, changes, t)
+  cast(out)
+  dispatch(out, t, (comp, e) => console.warn(`reap effect ${comp} —`, e))
+  return out
 }

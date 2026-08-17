@@ -49,6 +49,7 @@ let {
   graphCodex,
   landSpawnClaim,
   prepareWorktree,
+  reapLeases,
   recover,
   recoverWorktree,
   running,
@@ -2175,3 +2176,41 @@ slow(
     assertEquals(refusals(eid), [])
   },
 )
+
+// The boot lease-reap (T-18651): a session that ended abnormally never ran its
+// wrap, so its claim leaked. reapLeases releases every lease held by an ENDED
+// session and spares every live one — the same awake() predicate the doctor
+// reads. In-process, so it is fast, not slow().
+Deno.test('reapLeases frees an ended session lease, spares a live one', () => {
+  let claimed = (task: string) => {
+    let s = uid()
+    apply(db, [{ eid: s, name: 'session', comp: { id: uid() } }])
+    apply(db, [
+      { eid: task, name: 'entity', comp: { eid: task } },
+      { eid: task, name: 'doc', comp: { title: 'leased', body: '' } },
+      { eid: task, name: 'task', comp: { status: 'open' } },
+      { eid: task, name: 'claim', comp: { session: s } },
+    ])
+    return s
+  }
+  let live = uid(), dead = uid()
+  writeSession(db, claimed(live), { status: 'running' }) // awake
+  writeSession(db, claimed(dead), {
+    status: 'completed',
+    finished_at: '2026-01-01T00:00:00Z',
+  }) // ended
+  let leaseOf = (t: string) =>
+    rows(snapshot(db)).find((r) => r.eid == t)?.comps.claim
+  assert(leaseOf(live) && leaseOf(dead), 'both leased before the reap')
+
+  let out = reapLeases(cast)
+  assert(leaseOf(live), 'the live session keeps its lease')
+  assertEquals(leaseOf(dead), undefined, 'the ended session lease is released')
+  // The release rode apply()+cast — clients heard the claim-null, not a stamp.
+  assert(
+    out.some((c) => c.eid == dead && c.name == 'claim' && c.comp == null),
+    'the release is graph data on the cast',
+  )
+  // Idempotent: a released lease is gone, so a second boot finds nothing.
+  assertEquals(reapLeases(cast), [])
+})

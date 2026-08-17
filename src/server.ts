@@ -79,6 +79,7 @@ import {
   deleted,
   maintainStandingFor,
   prepareWorktree,
+  reapLeases,
   recover,
   recoverWorktree,
   spawned,
@@ -1797,6 +1798,12 @@ syncSoon()
 // still alive, finalize the ones that died while we were away. Nothing here
 // reaps a child; the watcher below must never learn how.
 recover(cast)
+
+// The lease half of the same reconcile: a session that ended abnormally never
+// ran its wrap, so its claim leaked and the board lies about who is working.
+// Release every lease whose session has ended, the same way its wrap would have
+// (sessions.ts). Idempotent, so it self-heals on every boot.
+reapLeases(cast)
 
 // Backfill the native-session `standing` facet (T-17855): existing sessions
 // have logs but no facet stamped until their next transition, so their dots
