@@ -104,6 +104,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       wake: 'wake <who> [when…] [target] [--body=BODY] [--gone]',
       ':': ':<command> … | <id> :<command> …',
       help: 'help [verb|grammar|:] [nested verb]',
+      complete: 'complete [words…]',
       ls: 'ls [filters…] [--json]',
       context: 'context [sid] [--hook] [--subagent]',
       wrap: 'wrap [sid] [--hook]',

@@ -892,6 +892,19 @@ export let manuals = declare({
       arg('nested verb', text, false, false),
     ],
   },
+  complete: {
+    about: 'shell completion candidates for a partial line (used by the ' +
+      'bash/zsh scripts, not typed by hand)',
+    detail: 'The wrapper passes the words after `task` past a `--` sentinel, ' +
+      'the last being the word under the cursor; this prints one candidate ' +
+      'per line. Reads the same declaration table as help and validation, so ' +
+      'what completes is what runs.',
+    // A machine verb: alias keeps it out of root help while marking it a real
+    // top-level verb, so subject-first parsing doesn't read it as an entity id.
+    alias: true,
+    passthrough: true,
+    args: [arg('words', text, true, false)],
+  },
   ls: {
     dots: 'filters',
     about: 'list tasks (filter grammar)',

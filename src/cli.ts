@@ -149,6 +149,7 @@ import {
   validateCommand,
 } from './manual.ts'
 import { type Got, type Run, type Verb } from './verb.ts'
+import { complete } from './tabcomplete.ts'
 import { safe } from './terminal.ts'
 export { subjectUsage } from './manual.ts'
 
@@ -2862,6 +2863,28 @@ let tui = async () => {
   }
 }
 
+// Tab-completion for the shell wrappers (bash/zsh). The words after `task`
+// arrive past a `--` sentinel the wrapper inserts, so a `--help` mid-line never
+// trips the help intercept. The one graph-fed slot — an id positional — is
+// filled from a bounded snapshot of the work most likely to be named (open and
+// in-progress tasks); a down server just drops the ids, leaving verb, option
+// and enum completion offline. One candidate per line, for `compgen -W`.
+let openTaskIds = async (): Promise<string[]> => {
+  try {
+    let hits = await query(['.kind=task', '.status=open,wip'], { limit: 200 })
+    return hits.map(idOf)
+  } catch {
+    return []
+  }
+}
+
+let completeCmd = async (got: Got) => {
+  let words = got.words[0] == '--' ? got.words.slice(1) : got.words
+  let ids = await openTaskIds()
+  let out = complete(words, () => ids)
+  if (out.length) print(out.join('\n'))
+}
+
 // The declaration and its handler become one table before anything can route
 // to it. Router-only syntax (`subject` and `:`) stays in front of this table;
 // every ordinary declaration must have a run or module loading fails loudly.
@@ -2967,6 +2990,7 @@ export let verbs = bind({
       ...(got.body != null ? ['--', got.body] : []),
     ]),
   help: (got) => print(help(got.words)),
+  complete: completeCmd,
   ls: list,
   context,
   wrap,
