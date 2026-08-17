@@ -85,6 +85,7 @@ import {
 } from './sessions.ts'
 import { codexIssuer, codexStore } from './codex_auth.ts'
 import { accountHttp, accountService } from './accounts.ts'
+import { credentialHttp, credentialService } from './credentials.ts'
 import { combineTools, localTools, tasksTools } from './harness_tools.ts'
 import { managedCodex } from './managed_codex.ts'
 import { sessionRow as storedSession } from './session_store.ts'
@@ -670,6 +671,11 @@ let graphIO: IO = {
 
 let codexAccount = accountService(codexStore(), codexIssuer())
 
+// The server-only credential store (T-18302): the secret plane of the config
+// catalog. Its bytes never enter the graph, the wire, or a child environment;
+// the HTTP surface below returns only state, never a value.
+let credentials = credentialService()
+
 // The adapter table stamped with live readiness: the graph-native Codex
 // transport is ready only when its account is signed in, so every server-side
 // spawn default (obey, MCP, CLI) routes graph-native → CLI fallback off this
@@ -862,6 +868,9 @@ let http = Deno.serve(
     await boot
     if (path.startsWith('/accounts/codex')) {
       return accountHttp(codexAccount, req, path)
+    }
+    if (path.startsWith('/config/credentials')) {
+      return credentialHttp(credentials, req, path)
     }
     if (path == '/ws') return ws(req)
     if (path == '/snapshot') return Response.json(snapshot(db))
