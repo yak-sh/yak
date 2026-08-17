@@ -854,9 +854,13 @@ Deno.test('facet reads wake only their own membership', () => {
   }
 })
 
-// Backlinks read the SCHEMA — every declared association points back at
-// its target, whoever is allowed to write the column.
-Deno.test('backlinks: stamped associations count', () => {
+// backlinks now read `.refs=target` — the multi-column reverse-union — through
+// the query door (T-18101): every entity referencing this eid across ALL {eid}
+// columns of the SCHEMA, whoever may write the column (a session's stamped
+// requested_task counts). Parity: the set equals who points here, each with its
+// via label; the face wakes only when a referrer starts or stops pointing here —
+// never on an unrelated row — and stays correct through a retarget.
+Deno.test('backlinks: reverse-union set + via, awake only for its own target', () => {
   cache.value = {
     t1: {
       entity: { eid: 't1', num: 1 },
@@ -870,12 +874,47 @@ Deno.test('backlinks: stamped associations count', () => {
       entity: { eid: 'c1', num: 3 },
       claim: { eid: 'c1', session: 's1' },
     },
+    other: {
+      entity: { eid: 'other', num: 4 },
+      doc: { eid: 'other', title: 'o', body: '' },
+    },
   }
-  assertEquals(backlinks('t1'), [{
-    from: 's1',
-    via: 'session.requested_task',
-  }])
+  deps.value = []
+  resetSignals()
+  // a server-stamped association (session.requested_task) counts like any other
+  assertEquals(backlinks('t1'), [{ from: 's1', via: 'session.requested_task' }])
   assertEquals(backlinks('s1'), [{ from: 'c1', via: 'claim.session' }])
+
+  let byFrom = <T extends { from: string }>(b: T[]) =>
+    b.toSorted((a, z) => (a.from < z.from ? -1 : 1))
+  let runs = 0
+  let stop = effect(() => {
+    backlinks('t1')
+    runs++
+  })
+  try {
+    // an unrelated doc edit leaves the target's backlinks asleep
+    applyLocal([{ eid: 'other', name: 'doc', comp: { title: 'changed' } }])
+    assertEquals(runs, 1)
+
+    // a new referrer through ANY {eid} column wakes it and joins the union
+    applyLocal([
+      { eid: 'c2', name: 'entity', comp: { eid: 'c2', num: 5 } },
+      { eid: 'c2', name: 'comment', comp: { target: 't1' } },
+    ])
+    assertEquals(runs, 2)
+    assertEquals(byFrom(backlinks('t1')), [
+      { from: 'c2', via: 'comment.target' },
+      { from: 's1', via: 'session.requested_task' },
+    ])
+
+    // retargeting the session away wakes it and drops it — correct through the patch
+    applyLocal([{ eid: 's1', name: 'session', comp: { requested_task: null } }])
+    assertEquals(runs, 3)
+    assertEquals(backlinks('t1'), [{ from: 'c2', via: 'comment.target' }])
+  } finally {
+    stop()
+  }
 })
 
 // jobOf reads the claim.session reverse index rather than scanning the cache;

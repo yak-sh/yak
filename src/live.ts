@@ -11,7 +11,6 @@ import {
 import {
   awake,
   type Change,
-  comps as vocab,
   type Dep,
   type Ent,
   type Live,
@@ -22,7 +21,6 @@ import {
   SHORT,
   slugsOf,
   type Snapshot,
-  stamped,
 } from './types.ts'
 import { inboxItem, isUnread, readerAt, type Row } from './client.ts'
 import {
@@ -41,6 +39,7 @@ import {
   children,
   emptyIndex,
   indexAll,
+  refCols,
   reindex,
   reindexEdge,
 } from './index.ts'
@@ -91,7 +90,6 @@ let canvasVersion = signal(0)
 let noRelations: Dep[] = []
 let refreshBoards = (_ids: Set<string>) => {}
 let refreshPins = (_ids: Set<string>) => {}
-let refreshBacklinks = (_ids: Set<string>) => {}
 let refreshJobs = (_ids: Set<string>) => {}
 let refreshFacets = (_ids: Set<string>) => {}
 
@@ -243,6 +241,17 @@ let contains = (comp: string, prop: string, value: string): Pred => ({
   prop,
   op: '~',
   value,
+})
+// The multi-column reverse-union (query.ts): every entity referencing `value`
+// through SOME {eid} column — the backlinks of one eid, across the whole `refCols`
+// vocabulary at once. `value` is already an eid the caller holds, so no
+// ref-resolution pass is needed.
+let refsTo = (value: string): Pred => ({
+  comp: '',
+  prop: '',
+  op: '',
+  value,
+  refs: true,
 })
 
 // Open and populate the durable query store, then make it the query surface.
@@ -401,7 +410,6 @@ export let resetSignals = () =>
     resetQueries()
     refreshBoards(touched)
     refreshPins(touched)
-    refreshBacklinks(touched)
     refreshJobs(touched)
     refreshFacets(touched)
   })
@@ -709,7 +717,6 @@ export let applyLocal = (changes: Change[]) => {
     publish(changedRows, changedParents, changedChildren)
     refreshBoards(changedRows)
     refreshPins(changedPins)
-    refreshBacklinks(changedRows)
     refreshJobs(changedRows)
     refreshQueries(changedRows)
     refreshFacets(changedRows)
@@ -997,7 +1004,6 @@ let evict = (eids: string[]) => {
       publish(gone, new Set(), new Set())
       refreshBoards(gone)
       refreshPins(gone)
-      refreshBacklinks(gone)
       refreshJobs(gone)
       refreshQueries(gone)
       refreshFacets(gone)
@@ -1837,58 +1843,28 @@ export let pinned = (canvas: string): Pinned[] =>
     }))
     .sort((a, b) => (a.z - b.z) || (a.eid < b.eid ? -1 : 1))
 
-// Who points HERE, and via what: every eid-typed prop in the SCHEMA —
-// the wire-writable vocabulary UNION the server-stamped columns (a
-// session's requested_task is an edge even though no client may
-// write it) — scanned over the cache. A new association shows up in
-// backlinks with no second edit: this is how a task finds its sessions
-// and Debug lists whatever holds a reference to the entity on screen.
-let eidProps = [...new Set([...Object.keys(vocab), ...Object.keys(stamped)])]
-  .flatMap((c) =>
-    Object.entries({ ...vocab[c], ...stamped[c] })
-      .filter(([, t]) => typeof t == 'object' && 'eid' in t)
-      .map(([p]) => [c, p] as [string, string])
-  )
+// Who points HERE, and via what: `.refs=target` is the multi-column reverse-
+// union the vocabulary implies (refsTo above) — every entity referencing this
+// eid through SOME {eid} column, resolved through the one query door. So a
+// referrer OUTSIDE the working set still counts (T-18094), where the old
+// whole-cache scan silently under-reported, and the face wakes only when its
+// referrer set changes — never on an unrelated patch. The `via` label — WHICH
+// column points here — is read per referrer off its OWN row signal (linksVia
+// over the same refCols the union spans), so a referrer retargeting a pointer
+// wakes the face too. A new association shows up with no second edit: this is
+// how a task finds its sessions and Debug lists whatever holds a reference to
+// the entity on screen.
 type Backlink = { from: string; via: string }
-type BacklinkSet = {
-  graph: Record<string, Comps>
-  value: Signal<Backlink[]>
-}
-let backlinkSets = new Map<string, BacklinkSet>()
-let linksFrom = (from: string, r: Comps | undefined, target: string) =>
-  !r ? [] : eidProps
+let linksVia = (from: string, target: string): Backlink[] => {
+  let r = row(from).value
+  return !r ? [] : refCols
     .filter(([c, p]) =>
       (r[c as keyof typeof r] as Record<string, unknown>)?.[p] == target
     )
     .map(([c, p]) => ({ from, via: `${c}.${p}` }))
-let scanBacklinks = (target: string) =>
-  Object.entries(cache.value).flatMap(([from, r]) => linksFrom(from, r, target))
-
-export let backlinks = (target: string) => {
-  let found = backlinkSets.get(target)
-  if (!found) {
-    found = {
-      graph: cache.peek(),
-      value: signal(untracked(() => scanBacklinks(target))),
-    }
-    backlinkSets.set(target, found)
-  } else if (found.graph != cache.peek()) {
-    found.graph = cache.peek()
-    found.value.value = untracked(() => scanBacklinks(target))
-  }
-  return found.value.value
 }
-
-refreshBacklinks = (eids: Set<string>) => {
-  for (let [target, set] of backlinkSets) {
-    let changed = [...eids].some((eid) =>
-      JSON.stringify(linksFrom(eid, set.graph[eid], target)) !=
-        JSON.stringify(linksFrom(eid, cache.peek()[eid], target))
-    )
-    set.graph = cache.peek()
-    if (changed) set.value.value = scanBacklinks(target)
-  }
-}
+export let backlinks = (target: string): Backlink[] =>
+  queryEids([refsTo(target)]).value.flatMap((from) => linksVia(from, target))
 
 // The claims aimed at a session ARE its reverse-ref set, so read them off the
 // derived index (index.ts `children`) instead of scanning the whole cache.
