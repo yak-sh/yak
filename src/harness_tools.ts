@@ -6,7 +6,6 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js'
 import { resolve } from 'node:path'
 import { childEnv } from './agent_env.ts'
-import { rows } from './client.ts'
 import { type IO, mcpServer } from './mcp.ts'
 
 export type ToolDefinition = {
@@ -356,8 +355,10 @@ let taskDefinitions = (listed: Tool[]): ToolDefinition[] => {
 // D-15656. MCP sugar remains available through native doors; every hosted call
 // here has a typed entry facet from which crash recovery can redispatch it.
 export let tasksTools = async (io: IO, session: string): Promise<ToolHost> => {
+  // This runs before every generation and hosted call. Identity is one entity;
+  // taking a root snapshot here made each tool boundary walk the whole graph.
   let identity = String(
-    rows(await io.read()).find((row) => row.eid == session)?.comps.session
+    (await io.get([session])).find((row) => row.eid == session)?.comps.session
       ?.id ?? session,
   )
   let [mine, theirs] = InMemoryTransport.createLinkedPair()

@@ -159,10 +159,17 @@ slow(
   'Tasks tools expose typed primitives and inject Session identity',
   async () => {
     let writes: { changes: Change[]; via?: string }[] = []
+    let reads = 0, gets = 0
     let io: IO = {
-      read: () => Promise.resolve(empty),
+      read: () => {
+        reads++
+        return Promise.resolve(empty)
+      },
       query: () => Promise.resolve([]),
-      get: () => Promise.resolve([]),
+      get: () => {
+        gets++
+        return Promise.resolve([])
+      },
       write: (changes, via) => {
         writes.push({ changes, via })
         return Promise.resolve(changes)
@@ -176,6 +183,7 @@ slow(
     }
     let tasks = await tasksTools(io, 'managed-session-1')
     try {
+      assertEquals({ reads, gets }, { reads: 0, gets: 1 })
       assertEquals(tasks.tools.map((tool) => tool.name), [
         'task_context',
         'graph_query',
