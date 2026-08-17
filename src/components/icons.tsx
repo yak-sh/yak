@@ -25,6 +25,7 @@ import {
   Menu,
   MessageCircle,
   Search,
+  Settings,
   Shapes,
   SquareCheck,
   Stamp,
@@ -59,6 +60,7 @@ let glyphs: Record<string, LucideIcon> = {
   shapes: Shapes,
   'ellipsis-vertical': EllipsisVertical,
   bot: Bot,
+  settings: Settings,
 }
 
 export let Icon = (

@@ -5,6 +5,7 @@ import { signal } from '@preact/signals'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import {
   type AccountControl,
+  type AccountView,
   type Ceremony,
   codexAccount,
 } from '../account_client.ts'
@@ -164,32 +165,30 @@ let Ceremony = ({ ceremony }: { ceremony?: Ceremony }) => {
   )
 }
 
-export let Account = (
-  { control = codexAccount }: { control?: AccountControl },
+// The Codex ceremony as a standalone section: state, the redacted detail, any
+// error, the browser/device ceremony, the callback paste, and the login/logout/
+// cancel/refresh actions. It owns only its callback draft and reads status on
+// mount, so it drops unchanged into the modal below OR into the Configuration
+// panel's Codex section — one ceremony, two containers. The `view` is passed in
+// by the subscribing parent (the signals integration only re-renders a child
+// when a prop changes), so a status update reaches this section through it.
+export let CodexSection = (
+  { control = codexAccount, view }: {
+    control?: AccountControl
+    view: AccountView
+  },
 ) => {
-  let box = useRef<HTMLElement>(null)
   let [callback, setCallback] = useState('')
-  let view = control.view.value
   let status = view.status
   let busy = view.busy
 
   useEffect(() => {
     if (status?.state != 'pending' || status.login != 'browser') setCallback('')
   }, [status?.state, status?.login])
-
   useEffect(() => {
-    if (!accountOpen.value) return
     control.read()
-  }, [accountOpen.value])
-  useEffect(() => {
-    if (!accountOpen.value) return
-    let key = (event: KeyboardEvent) => accountKey(event, control)
-    addEventListener('keydown', key, true)
-    box.current?.focus()
-    return () => removeEventListener('keydown', key, true)
-  }, [accountOpen.value])
+  }, [])
 
-  if (!accountOpen.value) return null
   let error = view.error ?? status?.error
   let ready = status?.ready ? status : undefined
   let pending = status?.state == 'pending' ? status : undefined
@@ -210,6 +209,103 @@ export let Account = (
     : status?.state == 'error'
     ? 'last login failed'
     : status?.state.replace('_', ' ') ?? 'not checked'
+  return (
+    <>
+      <Body>
+        <State mod={status?.state}>{state}</State>
+        {ready && (
+          <Detail>
+            {ready.auth == 'chatgpt' ? 'ChatGPT' : 'API key'}
+            {ready.plan && ` · ${ready.plan}`}
+          </Detail>
+        )}
+        {error && <ErrorText>{error.code} — {error.message}</ErrorText>}
+        <Ceremony ceremony={view.ceremony} />
+        {pending?.login == 'browser' && (
+          <Callback
+            onSubmit={(event: SubmitEvent) => {
+              event.preventDefault()
+              finishLogin(control, callback, () => setCallback(''))
+            }}
+          >
+            <Hint>
+              If the browser cannot reach this daemon, paste the full localhost
+              callback URL from its address bar.
+            </Hint>
+            <Input
+              type='url'
+              name='callback'
+              value={callback}
+              required
+              autocomplete='off'
+              spellcheck={false}
+              placeholder='http://localhost:…/auth/callback?code=…&state=…'
+              aria-label='Codex callback URL'
+              onInput={(event: InputEvent) =>
+                setCallback((event.currentTarget as HTMLInputElement).value)}
+            />
+            <Action type='submit' disabled={!!busy || !callback}>
+              finish login
+            </Action>
+          </Callback>
+        )}
+        {pending && !view.ceremony && (
+          <Hint>This login began in another Tasks client.</Hint>
+        )}
+      </Body>
+      <Actions>
+        {pending
+          ? (
+            <Action type='button' disabled={!!busy} onClick={control.cancel}>
+              cancel login
+            </Action>
+          )
+          : ready
+          ? (
+            <Action type='button' disabled={!!busy} onClick={control.logout}>
+              log out
+            </Action>
+          )
+          : (
+            <>
+              <Action
+                type='button'
+                disabled={!!busy}
+                onClick={() => browserLogin(control)}
+              >
+                log in with ChatGPT
+              </Action>
+              <Action
+                type='button'
+                disabled={!!busy}
+                onClick={() => control.login('device')}
+              >
+                use a device code
+              </Action>
+            </>
+          )}
+        <Action type='button' disabled={!!busy} onClick={control.read}>
+          refresh
+        </Action>
+      </Actions>
+    </>
+  )
+}
+
+export let Account = (
+  { control = codexAccount }: { control?: AccountControl },
+) => {
+  let box = useRef<HTMLElement>(null)
+  let view = control.view.value
+  useEffect(() => {
+    if (!accountOpen.value) return
+    let key = (event: KeyboardEvent) => accountKey(event, control)
+    addEventListener('keydown', key, true)
+    box.current?.focus()
+    return () => removeEventListener('keydown', key, true)
+  }, [accountOpen.value])
+
+  if (!accountOpen.value) return null
   return (
     <Frame
       onMouseDown={(event: MouseEvent) =>
@@ -233,83 +329,7 @@ export let Account = (
             ×
           </Close>
         </Head>
-        <Body>
-          <State mod={status?.state}>{state}</State>
-          {ready && (
-            <Detail>
-              {ready.auth == 'chatgpt' ? 'ChatGPT' : 'API key'}
-              {ready.plan && ` · ${ready.plan}`}
-            </Detail>
-          )}
-          {error && <ErrorText>{error.code} — {error.message}</ErrorText>}
-          <Ceremony ceremony={view.ceremony} />
-          {pending?.login == 'browser' && (
-            <Callback
-              onSubmit={(event: SubmitEvent) => {
-                event.preventDefault()
-                finishLogin(control, callback, () => setCallback(''))
-              }}
-            >
-              <Hint>
-                If the browser cannot reach this daemon, paste the full
-                localhost callback URL from its address bar.
-              </Hint>
-              <Input
-                type='url'
-                name='callback'
-                value={callback}
-                required
-                autocomplete='off'
-                spellcheck={false}
-                placeholder='http://localhost:…/auth/callback?code=…&state=…'
-                aria-label='Codex callback URL'
-                onInput={(event: InputEvent) =>
-                  setCallback((event.currentTarget as HTMLInputElement).value)}
-              />
-              <Action type='submit' disabled={!!busy || !callback}>
-                finish login
-              </Action>
-            </Callback>
-          )}
-          {pending && !view.ceremony && (
-            <Hint>This login began in another Tasks client.</Hint>
-          )}
-        </Body>
-        <Actions>
-          {pending
-            ? (
-              <Action type='button' disabled={!!busy} onClick={control.cancel}>
-                cancel login
-              </Action>
-            )
-            : ready
-            ? (
-              <Action type='button' disabled={!!busy} onClick={control.logout}>
-                log out
-              </Action>
-            )
-            : (
-              <>
-                <Action
-                  type='button'
-                  disabled={!!busy}
-                  onClick={() => browserLogin(control)}
-                >
-                  log in with ChatGPT
-                </Action>
-                <Action
-                  type='button'
-                  disabled={!!busy}
-                  onClick={() => control.login('device')}
-                >
-                  use a device code
-                </Action>
-              </>
-            )}
-          <Action type='button' disabled={!!busy} onClick={control.read}>
-            refresh
-          </Action>
-        </Actions>
+        <CodexSection control={control} view={view} />
       </Box>
     </Frame>
   )

@@ -24,6 +24,7 @@ import { Entity } from './Entity.tsx'
 import { tips } from './overlay.tsx'
 import { Keybindings } from './Keybindings.tsx'
 import { Account } from './Account.tsx'
+import { Config } from './Config.tsx'
 import { Navigation, NavigationToggle } from './Navigation.tsx'
 
 tips() // mount the one delegated [data-tip] tooltip (idempotent)
@@ -140,6 +141,7 @@ export let App = () => {
         <Peek />
         <Search open={goto} />
         <Account />
+        <Config />
         <Keybindings />
       </Frame>
     )
@@ -167,6 +169,7 @@ export let App = () => {
         <Peek />
         <Search open={goto} />
         <Account />
+        <Config />
         <Keybindings />
       </Frame>
     )
@@ -261,6 +264,7 @@ export let App = () => {
       <Run />
       <Search open={goto} />
       <Account />
+      <Config />
       <Keybindings />
     </Frame>
   )

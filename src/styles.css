@@ -343,7 +343,8 @@ html {
   padding: var(--half-gap);
   border-top: 1px solid var(--border);
 }
-.Navigation_Foot .AccountTab {
+.Navigation_Foot .AccountTab,
+.Navigation_Foot .ConfigTab {
   width: 100%;
   display: flex;
   justify-content: flex-start;
@@ -2373,6 +2374,154 @@ html {
 }
 .AccountTab {
   margin-left: auto;
+}
+
+/* The Configuration panel (Config.tsx): the same modal shell as the account
+   dialog, its body a scroll of catalog groups — each a stack of setting and
+   credential rows — with the Codex ceremony (an embedded .Account_Body /
+   .Account_Actions) as its last group. */
+.Config {
+  position: fixed;
+  inset: 0;
+  z-index: 115;
+  display: grid;
+  place-items: start center;
+  padding-top: 8vh;
+  background: color-mix(in srgb, var(--bg) 45%, transparent);
+}
+.Config_Box {
+  width: min(560px, 94vw);
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px color-mix(in srgb, #000 45%, transparent);
+  overflow: hidden;
+  outline: 0;
+}
+.Config_Head {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  padding: var(--half-gap) var(--gap);
+  border-bottom: 1px solid var(--border);
+}
+.Config_Title {
+  flex: 1;
+  margin: 0;
+  font-size: 1rem;
+}
+.Config_Close {
+  padding: 0 var(--half-gap);
+  color: var(--dim);
+  background: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.Config_Body {
+  display: grid;
+  gap: var(--gap);
+  padding: var(--gap);
+  overflow-y: auto;
+}
+.Config_Group {
+  display: grid;
+  gap: var(--half-gap);
+}
+.Config_GroupTitle {
+  margin: 0;
+  color: var(--dim);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.Config_Group .Account_Body,
+.Config_Group .Account_Actions {
+  padding: 0;
+  border: 0;
+}
+.Config_Row {
+  display: grid;
+  gap: 4px;
+  padding: var(--half-gap);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.Config_Label {
+  font-weight: 600;
+}
+.Config_Help {
+  margin: 0;
+  color: var(--dim);
+  font-size: 12px;
+}
+.Config_Field {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  flex-wrap: wrap;
+}
+.Config_Input {
+  flex: 1;
+  min-width: 12rem;
+  min-height: var(--tap);
+  padding: var(--half-gap);
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  font: inherit;
+}
+.Config_Select {
+  min-height: var(--tap);
+  padding: 3px var(--half-gap);
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  font: inherit;
+}
+.Config_Source,
+.Config_State {
+  color: var(--muted);
+  font-size: 12px;
+}
+.Config_Source-graph,
+.Config_State-configured {
+  color: var(--accent);
+}
+.Config_State-unavailable {
+  color: var(--red);
+}
+.Config_Error {
+  margin: 0;
+  color: var(--red);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.Config_Actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--half-gap);
+}
+.Config_Action {
+  min-height: var(--tap);
+  padding: 3px var(--half-gap);
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  font: inherit;
+  cursor: pointer;
+}
+.Config_Action:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* The completion dropdown (Complete.tsx): the grammar's own candidates

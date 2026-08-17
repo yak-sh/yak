@@ -4,7 +4,7 @@ import { favoritePin, navigationQuery, navigationView } from '../navigation.ts'
 import { cache, ent, mode, mutate } from '../live.ts'
 import { block } from './ui.tsx'
 import { useQuery } from './useQuery.ts'
-import { AccountTab } from './Account.tsx'
+import { ConfigTab } from './Config.tsx'
 import { Entity } from './Entity.tsx'
 import { Icon } from './icons.tsx'
 import { CARD_DATA, cardData } from './drag.ts'
@@ -131,7 +131,7 @@ export let Navigation = () => {
           )}
         </Items>
         <Foot>
-          <AccountTab text />
+          <ConfigTab text />
         </Foot>
       </Frame>
     </>
