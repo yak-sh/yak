@@ -2284,20 +2284,38 @@ let columnsOf = (table: string): Set<string> =>
 //   stored nowhere       → THROWS. `task.statuss` has no compatibility
 //     story: the wire used to take it, write the DEFAULT status, and
 //     answer 200, so a caller asking for `done` got `open` and success.
+// Components the wire may not create, patch, or DELETE, whoever the caller —
+// their whole data lives in `stamped` and is written ONLY by trusted server
+// code that writes the row by direct SQL and BROADCASTS the change, never
+// crossing apply()'s wire path: the runner's `lease`/`usage`, the
+// interrupted-work `resume` stack, the ingest `imported` coordinate (D-16704),
+// and the deliver outcome/health facets `delivered`/`error`/`exception`
+// (D-14945/D-17077 — deliver.ts, entries.ts, managed_codex.ts). Their empty
+// writable declarations keep them in the generic read/delete machinery; this
+// door is what denies the wire the AUTHORITY to mint a false fleet-health
+// `error` or ERASE an effect-stamped diagnosis with a bare component-delete
+// (T-15457). Refused BEFORE the comp==null branch, so a delete is refused too.
+//
+// A curated list on purpose, not a vocabulary derivation: the boundary is the
+// write PATH, which `comps`/`stamped` cannot express — `hook` and the
+// notification stamps have the same empty-writable shape yet legitimately
+// write their presence THROUGH apply(), so a shape rule would wrongly refuse
+// them. The lease/usage pair this grew from was already such a list.
+let serverOwned = new Set([
+  'lease',
+  'usage',
+  'imported',
+  'resume',
+  'delivered',
+  'error',
+  'exception',
+])
+
 let admitted = (change: Change): Change | undefined => {
   let table = change.name
   let cols = table == 'dependency' ? edgeCols : cmps[table]
   if (!cols) return
-  // These component rows are outcomes minted by the runner. Empty writable
-  // declarations keep them in generic read/delete machinery, but never grant
-  // the wire authority to create, patch, or remove one. `imported` is the
-  // ingest coordinate — server-stamped through apply()'s `imports` path in
-  // the same transaction as its entry (D-16704), refused here so no wire
-  // client can pre-stamp a coordinate and poison the ingester's dedup.
-  if (
-    table == 'lease' || table == 'usage' || table == 'imported' ||
-    table == 'resume'
-  ) return
+  if (serverOwned.has(table)) return
   if (change.comp == null) return change
   let sent = Object.entries(change.comp)
   let real = columnsOf(table)

@@ -328,6 +328,26 @@ Deno.test('entity delete tombstones; nothing resurrects the eid', () => {
   assertEquals(comp(t, 'doc'), undefined)
 })
 
+Deno.test('server-owned facets: the wire cannot mint or erase them (T-15457)', () => {
+  let t = uid()
+  apply(db, [{ eid: t, name: 'task', comp: { status: 'open' } }])
+  // A bare presence create is dropped, not admitted — no false fleet-health
+  // error, no forged delivery receipt. The effective batch omits it too.
+  for (let name of ['error', 'delivered', 'exception']) {
+    let out = apply(db, [{ eid: t, name, comp: {} }])
+    assertEquals(comp(t, name), undefined)
+    assertEquals(out.some((c) => c.name == name), false)
+  }
+  // An effect stamps a real error by DIRECT SQL (deliver.ts's path). The wire
+  // then tries to erase the diagnosis with a component-delete — refused, so the
+  // stamp stands.
+  db.prepare(`insert into error (eid, at, message) values (?, 'now', 'boom')`)
+    .run(t)
+  let out = apply(db, [{ eid: t, name: 'error', comp: null }])
+  assertEquals(comp(t, 'error')?.message, 'boom')
+  assertEquals(out.some((c) => c.name == 'error'), false)
+})
+
 Deno.test('review: a comment carries one canonical verdict', () => {
   let t = uid(), c = uid()
   apply(db, [
