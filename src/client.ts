@@ -2787,8 +2787,11 @@ export let contextSnapshot = async (
     inboxRows(session, cwd),
     claims.length ? query([`.comment.target=${claims.join(',')}`]) : [],
   ])
-  let actorClaims = sessions.length
-    ? await query([`.claim.session=${sessions.map((r) => r.eid).join(',')}`])
+  // Only the CURRENT session's claims are ever read (mine, below), so query
+  // that one session — never the actor's whole session history, which for a
+  // dogfooding actor overflows the request URL past the server cap (T-19393).
+  let actorClaims = who.session
+    ? await query([`.claim.session=${who.session}`])
     : []
   let preliminary = uniq([
     ...seed,

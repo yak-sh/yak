@@ -8,6 +8,7 @@ import {
   claimChanges,
   commentChanges,
   contextDigest,
+  contextSnapshot,
   derefParams,
   designChanges,
   edgesOf,
@@ -3730,4 +3731,71 @@ Deno.test('contextDigest: golden — every section, frozen assembly', () => {
     'claim: `task claim <id> sess-x` · comment: `task comment <id> "…"` · release when done or handing off',
   ].join('\n')
   assertEquals(contextDigest({ changes, deps: [] }, 'sess-x', NOW), golden)
+})
+
+// The claim read a boot digest makes must be O(1) in the actor's session
+// history — it may name only the CURRENT session, never enumerate every session
+// the actor ever spawned into one `.claim.session=` list (that overflowed the
+// request URL past the server cap and 400'd every boot for a dogfooding actor,
+// T-19393). Stub the graph door and assert every claim query names one session,
+// no matter how deep the actor's history is.
+Deno.test('contextSnapshot: claim read names only the current session', async () => {
+  let CUR = 'aaaaaaaa-0000-4000-8000-0000000009c0' // current session entity
+  let CLAIM = 'aaaaaaaa-0000-4000-8000-0000000009c1'
+  let ACTOR = 'aaaaaaaa-0000-4000-8000-0000000009c2'
+  let SID = 'boot-sid'
+  // A deep history: many sessions for the same actor. The old enumeration
+  // built a claim URL proportional to this; the fix must not.
+  let history = Array.from({ length: 40 }, (_, i) => ({
+    kind: 'session',
+    entity: { eid: `aaaaaaaa-0000-4000-8000-${String(i).padStart(12, '3')}` },
+    session: { id: `hist-${i}`, actor: ACTOR },
+  }))
+  let current = {
+    kind: 'session',
+    entity: { eid: CUR, num: 1 },
+    session: { id: SID, actor: ACTOR, cwd: '/w' },
+  }
+  let claim = {
+    kind: 'claim',
+    entity: { eid: CLAIM, num: 2 },
+    claim: { session: CUR },
+  }
+  let claimReads: string[] = []
+  let real = globalThis.fetch
+  let json = (rows: unknown[]) =>
+    new Response(JSON.stringify(rows), { status: 200 })
+  globalThis.fetch = ((input: string | URL) => {
+    let u = String(input)
+    let filters = (u.split('?')[1] ?? '').split('&').filter(Boolean).map(
+      decodeURIComponent,
+    )
+    let claimF = filters.find((f) => f.startsWith('.claim.session='))
+    if (claimF) {
+      let val = claimF.slice('.claim.session='.length)
+      claimReads.push(val)
+      return Promise.resolve(json(val.split(',').includes(CUR) ? [claim] : []))
+    }
+    if (filters.some((f) => f.startsWith('.session.id='))) {
+      return Promise.resolve(json([current]))
+    }
+    if (
+      filters.includes('.kind=session') &&
+      filters.some((f) => f.startsWith('.session.actor='))
+    ) return Promise.resolve(json([current, ...history]))
+    return Promise.resolve(json([]))
+  }) as typeof fetch
+  try {
+    let snap = await contextSnapshot(SID, '/w')
+    // No claim read enumerated the history — each names exactly one session.
+    assertEquals(claimReads.length > 0, true)
+    for (let v of claimReads) assertEquals(v, CUR)
+    // mine still resolves: the current session's claim rode into the snapshot.
+    assertEquals(
+      snap.changes.some((c) => c.name == 'claim' && c.comp?.session == CUR),
+      true,
+    )
+  } finally {
+    globalThis.fetch = real
+  }
 })
