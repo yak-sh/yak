@@ -471,6 +471,20 @@ let tallies = (e: Ent): [string, number, number][] => [
   ],
 ]
 
+let depIcons: Record<string, string> = {
+  requires: 'workflow',
+  contains: 'box',
+  reads: 'book-open',
+}
+
+let tally = (type: string, open: number, done: number) =>
+  `${type} ${
+    [
+      done && `${done} done`,
+      open && `${open}${done ? ' open' : ''}`,
+    ].filter(Boolean).join(' · ')
+  }`
+
 let ProposalState = ({ e }: { e: Ent }) => {
   if (!e.proposed) return null
   let approved = !!e.decided
@@ -523,15 +537,15 @@ export let Meta = (
       )}
       {edges.map(([t, open, done]) =>
         (open > 0 || done > 0) && (
-          <Deps key={t} mod={t}>
-            {t}
-            {done > 0 && (
-              <>
-                {' '}
-                <Done>{done}</Done>
-              </>
-            )}
-            {open > 0 && ` ${open}`}
+          <Deps
+            key={t}
+            mod={t}
+            aria-label={tally(t, open, done)}
+            data-tip={tally(t, open, done)}
+          >
+            <Icon name={depIcons[t]} size={12} />
+            {done > 0 && <Done>{done}</Done>}
+            {open > 0 && <span>{open}</span>}
           </Deps>
         )
       )}
@@ -558,8 +572,11 @@ export let Meta = (
         </Superseded>
       ))}
       {talk > 0 && (
-        <Talk>
-          <Icon name='message-circle' />
+        <Talk
+          aria-label={`${talk} ${talk == 1 ? 'comment' : 'comments'}`}
+          data-tip={`${talk} ${talk == 1 ? 'comment' : 'comments'}`}
+        >
+          <Icon name='message-circle' size={12} />
           {talk}
         </Talk>
       )}

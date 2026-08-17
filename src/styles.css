@@ -228,7 +228,7 @@ html {
 /* The mono keepers: ids, chips, badges, edge verbs, timestamps, code,
    and every command/inspector/log surface. Prose everywhere else is
    var(--font) via body. :where keeps this overridable. */
-:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Show_Deps, .Show_Mail, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Entry_Turn, .Entry_Raw, .Session_When, .Session_Err) {
+:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Show_Mail, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Entry_Turn, .Entry_Raw, .Session_When, .Session_Err) {
   font-family: var(--mono);
 }
 
@@ -1728,11 +1728,19 @@ html {
 .Show_Comments {
   display: inline-flex;
   align-items: center;
-  gap: 0.35em;
+  align-self: center;
+  gap: 0.3em;
+  line-height: 1;
   white-space: nowrap;
 }
 /* Edge tallies wear their edge colors, dimmed to meta-line volume. */
 .Show_Deps {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: 0.3em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 /* the done share of a tally: struck and faded, the open count stands */

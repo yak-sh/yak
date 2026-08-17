@@ -193,15 +193,32 @@ Deno.test('task meta carries both full facts and compact edge tallies', () => {
       comments.querySelector('svg')?.getAttribute('class'),
       'lucide lucide-message-circle Icon',
     )
+    assertEquals(comments.getAttribute('data-tip'), '1 comment')
     assertEquals(
       root.querySelector('.Show_Deps-requires')?.textContent,
-      'requires 1 1',
+      '11',
     )
     assertEquals(
       root.querySelector('.Show_Deps-contains')?.textContent,
+      '1',
+    )
+    assertEquals(root.querySelector('.Show_Deps-reads')?.textContent, '1')
+    assertEquals(
+      root.querySelector('.Show_Deps-requires')?.getAttribute('data-tip'),
+      'requires 1 done · 1 open',
+    )
+    assertEquals(
+      root.querySelector('.Show_Deps-contains svg')?.getAttribute('class'),
+      'lucide lucide-box Icon',
+    )
+    assertEquals(
+      root.querySelector('.Show_Deps-contains')?.getAttribute('aria-label'),
       'contains 1',
     )
-    assertEquals(root.querySelector('.Show_Deps-reads')?.textContent, 'reads 1')
+    assertEquals(
+      root.querySelector('.Show_Deps-reads svg')?.getAttribute('class'),
+      'lucide lucide-book-open Icon',
+    )
     assertEquals(root.querySelector('.Show_Done')?.textContent, '1')
     assertEquals(root.querySelector('.Show_Claim')?.textContent, '⚑ S-4')
     assertEquals(

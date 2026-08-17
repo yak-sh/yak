@@ -2,7 +2,9 @@
 // entity views data-driven and gives unknown views the document face.
 import {
   AlarmClock,
+  BookOpen,
   Bot,
+  Box,
   Braces,
   Bug,
   CircleAlert,
@@ -31,6 +33,7 @@ import {
   SquareCheck,
   Stamp,
   Table,
+  Workflow,
 } from 'lucide-preact'
 
 let glyphs: Record<string, LucideIcon> = {
@@ -62,6 +65,9 @@ let glyphs: Record<string, LucideIcon> = {
   shapes: Shapes,
   'ellipsis-vertical': EllipsisVertical,
   bot: Bot,
+  'book-open': BookOpen,
+  box: Box,
+  workflow: Workflow,
   settings: Settings,
 }
 
