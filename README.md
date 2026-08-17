@@ -180,7 +180,6 @@ to live on a private tailnet.
 
 - `CLAUDE.md` — the contributor guide: the data model in one page, the file map,
   the invariants, the recipes. Start there to change anything.
-- `docs/STYLE.md` — normative style for every line here.
 - `docs/ADAPTERS.md` — native TUIs, managed sessions, persistent roles, and the
   compatibility contract for future harnesses.
 - `channels/README.md` — the channel plugin: mechanism, identity, enablement.
