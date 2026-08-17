@@ -52,7 +52,13 @@ import { freeze, serveFrozen, store } from './freeze.ts'
 import { landBlob, serveBlob } from './blob.ts'
 import { filed } from './page.ts'
 import { excepted, PENDING } from './deliver.ts'
-import { ensureFixer, fileBug, FIXER_PENDING, HEAL_PENDING } from './heal.ts'
+import {
+  cliFault,
+  ensureFixer,
+  fileBug,
+  FIXER_PENDING,
+  HEAL_PENDING,
+} from './heal.ts'
 import { recallEntry } from './recall.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { native } from './mailer.ts'
@@ -854,7 +860,8 @@ let cliUsage = async (req: Request) => {
     let args = Array.isArray(b.args) ? b.args.map(String) : []
     let session = b.session == null ? null : String(b.session)
     let error = String(b.error ?? 'invalid CLI usage')
-    let command = `task ${args.join(' ')}`.trim()
+    // The full invocation is telemetry (detail), never the fault MESSAGE: the
+    // command line carries the payload that would splinter the dedup key.
     record(db, {
       source: 'cli',
       name: 'usage',
@@ -873,12 +880,7 @@ let cliUsage = async (req: Request) => {
        where e.num = 19`,
     ).get() as { eid: string } | undefined)?.eid
     if (target) {
-      excepted(
-        target,
-        `CLI usage failure: ${error}\nCommand: ${command}`,
-        null,
-        cast,
-      )
+      excepted(target, cliFault(error, args), null, cast)
     }
   } catch (e) {
     console.warn('CLI usage report dropped —', e)

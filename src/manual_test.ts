@@ -198,6 +198,14 @@ Deno.test('manual validation rejects loss-shaped arguments', () => {
       [],
       'needs <text> or --body=<text, @file, - or @->',
     ],
+    // A KNOWN value option given BARE — the space form `--body foo`, the habit
+    // the exception flood came from — names the value it needs and the `=`
+    // spelling, not "does not take", which reads as an unknown flag (T-18396).
+    [
+      'comment',
+      ['T-1', '--body', 'some prose'],
+      '--body needs text, @file, - or @- — use --body=…',
+    ],
     ['telemetry', ['-n', '--errors'], '-n needs a positive number'],
     ['wrap', ['sid', '--body=@x'], 'task session brief --body=…'],
     // A RETIRED flag names its replacement instead of "does not take": the

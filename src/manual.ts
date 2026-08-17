@@ -1292,6 +1292,19 @@ let parsed = (
       }
       let gone = manual.retired?.[optionName(arg)]
       if (gone) throw usageError(name, manual, gone)
+      // A KNOWN value option given bare (`--body foo`, not `--body=foo`):
+      // match() only accepts the `=` spelling for a non-separate value, so it
+      // falls through here. Name the real fault — it needs a value at the `=`
+      // spelling — rather than "does not take", which reads as unknown flag and
+      // sends authors in circles (T-18396: agents kept reaching for `--body …`).
+      let bare = manual.opts?.find((o) => o.kind && o.name == optionName(arg))
+      if (bare) {
+        throw usageError(
+          name,
+          manual,
+          `${bare.name} needs ${wanted(bare.kind!)} — use ${bare.name}=…`,
+        )
+      }
       throw usageError(name, manual, `does not take ${optionName(arg)}`)
     }
     present.add(opt.name)
