@@ -15,8 +15,8 @@
 import { apply, db, human } from './db.ts'
 import { delivered, errored, settled, toOf } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
-import { canon, type Letter, logOut, native, send } from './mailer.ts'
-import { atFleet, fleetAddress, fleetLocal } from './mailaddr.ts'
+import { type Letter, logOut, native, send } from './mailer.ts'
+import { atFleet, canon, fleetAddress, fleetLocal } from './mailaddr.ts'
 import { type Change } from './types.ts'
 import { entityUrl } from './url.ts'
 

@@ -7,7 +7,8 @@ let { apply, db, open } = await import('./db.ts')
 let { addressOf, FANOUT_PENDING, fanout, mailed, named, rfcId } = await import(
   './mail.ts'
 )
-let { canon, payload } = await import('./mailer.ts')
+let { payload } = await import('./mailer.ts')
+let { canon } = await import('./mailaddr.ts')
 let { channelEvents } = await import('./channel.ts')
 let { comps } = await import('./types.ts')
 let { assertEquals, assertMatch, assertStringIncludes, assertThrows } =
@@ -492,6 +493,23 @@ Deno.test('canon: the fleet domain sheds underscores; other domains pass', () =>
   assertEquals(canon('under_score@gmail.com'), 'under_score@gmail.com')
   assertEquals(canon('under_score@sub.bot.test'), 'under_score@sub.bot.test')
   assertEquals(canon('under_score@bot.test@'), 'under_score@bot.test@')
+})
+
+Deno.test('apply stores only the deliverable fleet address (T-5958)', () => {
+  // The write path canonicalizes: the underscore spelling Cloudflare bounces
+  // at RCPT can never land in the book — what's stored is the canonical form.
+  let cafe = somebody('cafecar', 'cafe_car@bot.test')
+  assertEquals(addressOf(cafe), 'cafecar@bot.test')
+  // An off-domain address is another namespace's business — stored verbatim.
+  let vendor = somebody('vendor', 'a_b@vendor.test')
+  assertEquals(addressOf(vendor), 'a_b@vendor.test')
+  // A later patch of the same entity's address is canonicalized too.
+  apply(db, [{
+    eid: cafe,
+    name: 'email',
+    comp: { address: 'CafE_Car@Bot.Test' },
+  }])
+  assertEquals(addressOf(cafe), 'cafecar@bot.test')
 })
 
 Deno.test('payload: text and rendered markdown, threading headers on mid', () => {

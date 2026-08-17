@@ -15,7 +15,7 @@ import {
   STATIC_RULES,
   stuckSessions,
 } from './doctor.ts'
-import { canon } from './mailer.ts'
+import { canon } from './mailaddr.ts'
 import type { Querier, Row } from './client.ts'
 import { assertEquals } from '@std/assert'
 

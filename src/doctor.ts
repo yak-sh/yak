@@ -12,8 +12,8 @@
 // drift hid. The static snapshot below is the degrade seam for when no token
 // can read Email Routing, and it says so loudly. CLIENT-SAFE: the checks read
 // through the Querier (HTTP) and env + fetch only, never the db directly.
-import { base, canon } from './mailer.ts'
-import { atFleet } from './mailaddr.ts'
+import { base } from './mailer.ts'
+import { atFleet, canon } from './mailaddr.ts'
 import { idOf, sessionActive } from './types.ts'
 import { parseQuery } from './query.ts'
 import type { Querier, Row } from './client.ts'

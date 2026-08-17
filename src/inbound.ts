@@ -12,8 +12,7 @@
 import { apply, db } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { named, rfcId } from './mail.ts'
-import { canon } from './mailer.ts'
-import { fleetAddress } from './mailaddr.ts'
+import { canon, fleetAddress } from './mailaddr.ts'
 import { record } from './telemetry.ts'
 import { type Change, uuid } from './types.ts'
 

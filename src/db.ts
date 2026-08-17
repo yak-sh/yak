@@ -60,7 +60,7 @@ import {
   propAt,
   propOwners,
 } from './props.ts'
-import { fleetLocal } from './mailaddr.ts'
+import { canon, fleetLocal } from './mailaddr.ts'
 import {
   compsOf,
   hasSources,
@@ -1645,6 +1645,11 @@ let addressed = (db: DatabaseSync, addr: string): string | undefined => {
 // (not apply()), for the migration and for a probe that never boots effects;
 // the apply() door mints THROUGH a change so a send gets provenance.
 export let addressEntity = (db: DatabaseSync, addr: string): string => {
+  // Store the canonical, deliverable spelling — a fleet address minted here
+  // rides the same underscore-shedding rule as the wire write path, so the
+  // direct-SQL door (migrations, probes) can never seed an undeliverable book
+  // entry either. canon() leaves an external address untouched.
+  addr = canon(addr)
   let found = addressed(db, addr)
   if (found) return found
   let a = addr.trim()
@@ -1817,7 +1822,10 @@ let mintAddresses = (db: DatabaseSync, changes: Change[]): Change[] => {
   let mints: Change[] = []
   let seen = new Map<string, string>()
   let resolve = (addr: string): string => {
-    let a = addr.trim()
+    // Canonicalize a fleet address before the dedup lookup AND the mint, so
+    // an underscore spelling finds the canonical book entry (not a shadow of
+    // it) and a fresh mint is born deliverable (canon() no-ops off-domain).
+    let a = canon(addr.trim())
     let key = a.toLowerCase()
     let hit = seen.get(key)
     if (hit) return hit
@@ -1837,6 +1845,20 @@ let mintAddresses = (db: DatabaseSync, changes: Change[]): Change[] => {
   )
   return mints.length ? [...mints, ...out] : out
 }
+
+// A pre-normalize apply() rule: the address book stores only the DELIVERABLE
+// spelling of a fleet address. An `email.address` write is canonicalized here
+// (lowercase, underscores shed) so a book entry Cloudflare would bounce at
+// RCPT can never be stored in the first place — the doctor's mail check then
+// has nothing to find. Off-domain addresses (the owner's own, a customer's)
+// pass untouched. Complements mintAddresses, which canons the addresses it
+// mints; this one covers the direct address-book write (a venture, a person).
+let canonEmail = (changes: Change[]): Change[] =>
+  changes.map((c) =>
+    c.name == 'email' && c.comp && typeof c.comp.address == 'string'
+      ? { ...c, comp: { ...c.comp, address: canon(c.comp.address) } }
+      : c
+  )
 
 let sqlName = (name: string) => `"${name.replaceAll('"', '""')}"`
 
@@ -3140,6 +3162,10 @@ export let apply = (
   // A raw @-address in `deliver.to` names no eid the parser could resolve —
   // fold it into its address-book entity (find-or-mint) before normalize.
   changes = mintAddresses(db, changes)
+  // The address book stores only the deliverable spelling of a fleet address —
+  // an illegal local-part is canonicalized before it can land (also covers the
+  // email entities mintAddresses just prepended).
+  changes = canonEmail(changes)
   changes = normalizeChanges(changes, {
     now: Date.now(),
     resolve: (id) => ident(db, id),
