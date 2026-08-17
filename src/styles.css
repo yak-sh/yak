@@ -5,6 +5,12 @@
    one deliberate fix over it: scroll padding lives INSIDE the scroller, so
    the scrollbar touches the card border and padding scrolls with content. */
 
+/* THE THEME CONTRACT (T-12778). This :root block is the stable surface a
+   theme targets — re-point a variable from ~/.tasks/theme.css (loaded after
+   this sheet) and the app re-skins with no fork of this file. The Obsidian
+   lesson: names are the promise, values are not, so a theme sets these names
+   and leaves everything below untouched — every selector past this block is
+   internals that may move. Sixty-odd names, one place; that is the whole API. */
 :root {
   color-scheme: dark; /* native widgets/scrollbars match the palette */
   --gap: 0.75rem;

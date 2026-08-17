@@ -1465,6 +1465,18 @@ let http = Deno.serve(
       }
     }
     if (path.startsWith('/blob/')) return serveBlob(path.slice(6))
+    // The user's theme: a stylesheet in their vault, not this repo, so
+    // re-skinning is a file beside your data — never a fork of styles.css
+    // (T-12778). Loaded after styles.css, it overrides the :root theme
+    // contract. Absent is the normal case: an empty stylesheet, not a 404
+    // the log would cry about. themeWatch (below) hot-swaps it on save.
+    if (path == '/theme.css') {
+      let theme = `${Deno.env.get('HOME')}/.tasks/theme.css`
+      let css = await Deno.readTextFile(theme).catch(() => '')
+      return new Response(css, {
+        headers: { 'content-type': mime.css, 'cache-control': 'no-cache' },
+      })
+    }
     // An extensionless path is a ROUTE (/T-123): the app boots and reads
     // the URL — same shell, different root card.
     return file(src.slice(0, -1), path.includes('.') ? path : '/index.html')
@@ -2020,6 +2032,31 @@ let watch = async () => {
   }
 }
 watch()
+
+// The user's theme (~/.tasks/theme.css, T-12778) lives outside src/, so it
+// gets its own watch: a save broadcasts {css} like any other stylesheet edit,
+// re-fetching the sheet with no reload. Non-recursive keeps this off the
+// vault's worktrees/ and logs/ churn; a top-level db write wakes the loop but
+// goes nowhere, since we act only on theme.css — which also catches a theme
+// created (or removed) while the server runs, where watching the file itself
+// could not. No vault dir (a bare probe) means nothing to watch.
+let themeWatch = async () => {
+  let dir = `${Deno.env.get('HOME')}/.tasks`
+  let w
+  try {
+    w = Deno.watchFs(dir, { recursive: false })
+  } catch {
+    return
+  }
+  for await (let e of w) {
+    if (!e.paths.some((p) => p.endsWith('/theme.css'))) continue
+    let msg = JSON.stringify({ css: ++gen })
+    for (let c of clients) {
+      if (c.readyState == WebSocket.OPEN) c.send(msg)
+    }
+  }
+}
+themeWatch()
 
 // The supervisor's private rendezvous port arrives on ARGV, never the
 // environment: an env var is inherited by every descendant, so a shell started
