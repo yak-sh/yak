@@ -1,12 +1,13 @@
 // TUI-only renderers keep the shared scalar language in their visible labels.
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
-import { type Ent } from '../types.ts'
-import { config, mode } from '../live.ts'
+import { type Change, type Ent } from '../types.ts'
+import { config as liveConfig, mode } from '../live.ts'
 import {
   accountCallback,
-  accountKey,
-  accountOpen,
+  configKey,
+  configOpen,
+  configSel,
   fit,
   help,
   key,
@@ -17,6 +18,7 @@ import {
   spot,
   spots,
   TAccount,
+  TConfig,
   TKeys,
   trail,
   TStatus,
@@ -24,6 +26,7 @@ import {
 import { TElement } from './dom.ts'
 import { ansi, pane } from './paint.ts'
 import { account, type AccountDoor } from '../account_client.ts'
+import { config, type CredStatus, type SettingRow } from '../config_client.ts'
 import type { AccountStatus } from '../accounts.ts'
 
 let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -61,7 +64,7 @@ Deno.test('the TUI task heading formats priority through its type', () => {
 Deno.test('the TUI paints the wait for a body it does not have', () => {
   let prior = globalThis.fetch
   globalThis.fetch = () => Promise.reject(new Error('no server')) // pending() asks
-  config.host = '127.0.0.1:0' // and nothing it queues may reach a real one
+  liveConfig.host = '127.0.0.1:0' // and nothing it queues may reach a real one
   try {
     assertEquals(paint(task('')).includes('…'), false)
     assertEquals(paint(task(undefined)).includes('…'), true)
@@ -171,7 +174,153 @@ let signedOut = (): AccountStatus => ({
   auth: null,
 })
 
-Deno.test('the TUI account keys are device-first and capture the panel', async () => {
+// One catalog setting the panel can paint and edit; overrides tweak one field.
+let ollamaSetting = (over: Partial<SettingRow> = {}): SettingRow => ({
+  key: 'OLLAMA_BASE_URL',
+  label: 'Ollama base URL',
+  group: 'ollama',
+  type: 'url',
+  help: 'Base URL for the Ollama-compatible API.',
+  default: 'https://ollama.yak.sh/',
+  value: 'https://ollama.yak.sh/',
+  source: 'default',
+  ...over,
+})
+
+let apiKeyCred = (over: Partial<CredStatus> = {}): CredStatus => ({
+  key: 'OLLAMA_API_KEY',
+  state: 'missing',
+  source: null,
+  ...over,
+})
+
+// A config controller over stubbed doors: settle runs once with an immediate
+// clock so a save never schedules a real timer, and every graph write is
+// captured instead of broadcast.
+let makeConfig = (settings: SettingRow[] = [], creds: CredStatus[] = []) => {
+  let writes: Change[] = []
+  let control = config(
+    { list: () => Promise.resolve(settings) },
+    {
+      list: () => Promise.resolve(creds),
+      save: (key) =>
+        Promise.resolve({ key, state: 'configured', source: 'local' }),
+      bind: (key) =>
+        Promise.resolve({ key, state: 'configured', source: 'op' }),
+      reset: (key) => Promise.resolve({ key, state: 'missing', source: null }),
+      refresh: (key) =>
+        Promise.resolve({ key, state: 'missing', source: null }),
+      test: (key) => Promise.resolve({ key, state: 'missing', source: null }),
+    },
+    (...cs: Change[]) => writes.push(...cs),
+    () => 'minted-eid',
+    (run) => {
+      run()
+      return 0 as unknown as ReturnType<typeof setTimeout>
+    },
+    0,
+    1,
+  )
+  return { control, writes }
+}
+
+// A Codex controller that stays put — the config render/edit tests never touch
+// its ceremony, they only need it to paint the section.
+let quietCodex = () =>
+  account({
+    status: () => Promise.resolve(signedOut()),
+    login: () => Promise.resolve(signedOut()),
+    complete: () => Promise.resolve(signedOut()),
+    cancel: () => Promise.resolve(signedOut()),
+    logout: () => Promise.resolve(signedOut()),
+  })
+
+let paintConfig = (
+  control: Parameters<typeof TConfig>[0]['control'],
+  codex: Parameters<typeof TConfig>[0]['codex'],
+) => {
+  let root = new TElement('root')
+  let target = root as unknown as Parameters<typeof render>[1]
+  render(
+    h('div', null, h(TConfig, { control, codex }), h('footer', null, 'x')),
+    target,
+  )
+  let lines = pane(root).lines
+  let out = {
+    text: lines.flat().map((p) => p.text).join('\n'),
+    ansi: lines.map(ansi).join('\n'),
+  }
+  render(null, target)
+  return out
+}
+
+Deno.test('the config panel paints a setting with its value and source', () => {
+  let { control } = makeConfig()
+  control.view.value = {
+    settings: [
+      ollamaSetting({ value: 'https://ollama.example', source: 'environment' }),
+    ],
+    creds: [],
+    rowError: {},
+  }
+  let codex = quietCodex()
+  let { text } = paintConfig(control, codex)
+  assertEquals(text.includes('Configuration'), true)
+  assertEquals(text.includes('Ollama base URL'), true)
+  assertEquals(text.includes('https://ollama.example'), true)
+  assertEquals(text.includes('from environment'), true)
+  control.close()
+  codex.close()
+})
+
+Deno.test('the config panel shows a credential state and never paints the secret', () => {
+  let { control } = makeConfig()
+  control.view.value = { settings: [], creds: [apiKeyCred()], rowError: {} }
+  let codex = quietCodex()
+  configOpen.value = true
+  configSel.value = 0
+  let secret = 'sk-super-secret-value'
+  configKey('i', control, codex) // enter the secret value
+  for (let c of secret) configKey(c, control, codex)
+  let { text } = paintConfig(control, codex)
+  assertEquals(text.includes('not configured'), true) // state, not a value
+  assertEquals(text.includes(secret), false) // the bytes are never painted
+  assertEquals(text.includes('•'), true) // masked while typed
+  configKey('\x1b', control, codex) // cancel the edit
+  configKey('q', control, codex) // close
+  control.close()
+  codex.close()
+})
+
+Deno.test('a config setting save writes a setting change to the row eid', async () => {
+  let row = ollamaSetting({
+    eid: 'set-eid-1',
+    value: undefined,
+    source: 'environment',
+  })
+  let { control, writes } = makeConfig([row])
+  control.view.value = { settings: [row], creds: [], rowError: {} }
+  let codex = quietCodex()
+  configOpen.value = true
+  configSel.value = 0
+  configKey('i', control, codex) // edit (draft empty, the value is unset)
+  for (let c of 'https://ollama.example') configKey(c, control, codex)
+  configKey('\r', control, codex) // commit
+  await Promise.resolve()
+  await Promise.resolve()
+  assertEquals(writes.length, 1)
+  assertEquals(writes[0].eid, 'set-eid-1') // targets the existing setting eid
+  assertEquals(writes[0].name, 'setting')
+  assertEquals(writes[0].comp, {
+    key: 'OLLAMA_BASE_URL',
+    value: 'https://ollama.example',
+  })
+  configKey('q', control, codex)
+  control.close()
+  codex.close()
+})
+
+Deno.test('the config Codex section is device-first and captures the panel', async () => {
   let calls: string[] = []
   let status = signedOut()
   let door: AccountDoor = {
@@ -210,23 +359,25 @@ Deno.test('the TUI account keys are device-first and capture the panel', async (
       return Promise.resolve(status)
     },
   }
-  let control = account(door)
-  accountOpen.value = false
+  let codex = account(door)
+  let { control } = makeConfig() // no settings/creds → Codex is the only row
+  configOpen.value = false
   navigationOpen.value = false
   mode.value = 'normal'
-  assertEquals(navigationKey('n', control), true)
-  assertEquals(navigationKey('\r', control), true)
+  assertEquals(navigationKey('n', codex, control), true)
+  assertEquals(navigationKey('\r', codex, control), true) // opens Configuration
   await Promise.resolve()
-  assertEquals(calls, ['read'])
-  accountKey('l', control)
-  accountKey('l', control) // a repeated key cannot start a second ceremony
+  assertEquals(calls, ['read']) // opening reads the Codex account
+  assertEquals(configOpen.value, true)
+  configKey('l', control, codex)
+  configKey('l', control, codex) // a repeated key cannot start a second ceremony
   await Promise.resolve()
   await Promise.resolve()
   assertEquals(calls, ['read', 'device', 'read'])
-  accountKey('c', control)
+  configKey('c', control, codex)
   await Promise.resolve()
   assertEquals(calls, ['read', 'device', 'read', 'cancel'])
-  control.view.value = {
+  codex.view.value = {
     status: {
       provider: 'codex',
       state: 'ready',
@@ -234,24 +385,27 @@ Deno.test('the TUI account keys are device-first and capture the panel', async (
       auth: 'chatgpt',
     },
   }
-  accountKey('o', control)
+  configKey('o', control, codex)
   await Promise.resolve()
   assertEquals(calls, ['read', 'device', 'read', 'cancel', 'logout'])
 
+  // The panel owns the keyboard: j moves its own cursor, not the pane's, and q
+  // closes the panel rather than quitting.
   trail.value = ['one']
   spots.value = { one: 2 }
   key('j')
   assertEquals(spot(), 2)
   key('q')
-  assertEquals({ open: accountOpen.value, quit: quit.value }, {
+  assertEquals({ open: configOpen.value, quit: quit.value }, {
     open: false,
     quit: false,
   })
   control.close()
+  codex.close()
   trail.value = []
 })
 
-Deno.test('the TUI paste mode clears callback input before submission', async () => {
+Deno.test('the config Codex paste clears the callback before it submits', async () => {
   let callback = ''
   let browser: AccountStatus = {
     provider: 'codex',
@@ -261,7 +415,7 @@ Deno.test('the TUI paste mode clears callback input before submission', async ()
     login: 'browser',
   }
   let status = browser
-  let control = account({
+  let codex = account({
     status: () => Promise.resolve(status),
     login: () => Promise.resolve(status),
     complete: (value) => {
@@ -277,31 +431,32 @@ Deno.test('the TUI paste mode clears callback input before submission', async ()
     cancel: () => Promise.resolve(signedOut()),
     logout: () => Promise.resolve(signedOut()),
   })
-  control.view.value = { status }
-  accountOpen.value = true
+  codex.view.value = { status }
+  let { control } = makeConfig() // Codex is the only (and selected) row
+  configOpen.value = true
+  configSel.value = 0
   accountCallback.value = null
-  accountKey('p', control)
+  configKey('p', control, codex)
   let value = 'http://localhost/callback?code=grant&state=opaque'
-  for (let char of value) {
-    accountKey(char, control)
-  }
+  for (let char of value) configKey(char, control, codex)
   assertEquals(accountCallback.peek(), value)
-  accountKey('\r', control)
+  configKey('\r', control, codex)
   assertEquals(accountCallback.value, null)
   assertEquals(callback, value)
   await Promise.resolve()
 
-  control.view.value = { status: browser }
-  accountKey('p', control)
-  accountKey('x', control)
-  accountKey('\x1b', control)
+  codex.view.value = { status: browser }
+  configKey('p', control, codex)
+  configKey('x', control, codex)
+  configKey('\x1b', control, codex)
   assertEquals(accountCallback.value, null)
-  assertEquals(accountOpen.value, true)
-  accountOpen.value = false
+  assertEquals(configOpen.value, true)
+  configOpen.value = false
   control.close()
+  codex.close()
 })
 
-Deno.test('closing the TUI account cancels only its own ceremony', async () => {
+Deno.test('closing config cancels an owned Codex ceremony, not a mere observer', async () => {
   let status: AccountStatus = {
     provider: 'codex',
     state: 'pending',
@@ -329,17 +484,20 @@ Deno.test('closing the TUI account cancels only its own ceremony', async () => {
       userCode: 'ABCD-1234',
     },
   }
-  accountOpen.value = true
-  accountKey('q', owner)
-  await Promise.resolve()
+  let cfg = makeConfig()
+  configOpen.value = true
+  configKey('q', cfg.control, owner)
+  for (let i = 0; i < 5; i++) await Promise.resolve()
   assertEquals(cancels, 1)
+  assertEquals(configOpen.value, false)
 
   let observer = account(door)
   observer.view.value = { status }
-  accountOpen.value = true
-  accountKey('q', observer)
-  await Promise.resolve()
+  configOpen.value = true
+  configKey('q', cfg.control, observer)
+  for (let i = 0; i < 5; i++) await Promise.resolve()
   assertEquals(cancels, 1)
+  cfg.control.close()
   owner.close()
   observer.close()
 })
