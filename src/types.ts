@@ -405,7 +405,9 @@ export let comps: Record<string, Record<string, PropType>> = {
     view: 'text',
   },
   // Shared navigation is a graph fact, not one client's chrome. A favorite
-  // remains whatever kind it already was, so this tag stays out of kindOrder.
+  // remains whatever kind it already was, so this facet stays out of
+  // kindOrder. Its server-frozen `at` below records when it joined navigation;
+  // removing and re-adding it starts a new tenure.
   favorite: {},
   // A non-secret runtime override, keyed by a catalog entry (config.ts). The
   // code catalog owns what a setting IS — label, type, default, validation,
@@ -951,6 +953,9 @@ export let stamped: Record<string, Record<string, PropType>> = {
     by: { eid: 'entity', death: 'keep' },
     via: { eid: 'entity', death: 'keep' },
   },
+  // A favorite's one clock is enough to order shared navigation by when each
+  // entity joined it. The wire requests presence; apply() freezes the time.
+  favorite: { at: 'time' },
   // `decided`'s server half is the instrument ALONE — its `at` and `by` ride
   // the wire (comps above), which is why this stamp is the one that is split.
   // A caller may say when a decision was taken and who took it; nothing may
@@ -1561,7 +1566,7 @@ export type Cursor = {
   view?: string | null
 }
 
-export type Favorite = { eid: string }
+export type Favorite = { eid: string; at?: string | null }
 export type Setting = {
   eid: string
   key?: string | null

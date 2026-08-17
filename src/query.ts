@@ -164,6 +164,7 @@ let routes: Record<string, readonly string[]> = {
   proposed: [...Object.keys(comps.proposed), ...Object.keys(stamped.proposed)],
   archived: Object.keys(stamped.archived),
   quarantined: Object.keys(stamped.quarantined),
+  favorite: Object.keys(stamped.favorite),
 }
 
 // A name a column or component already routes — the real props pred() resolves

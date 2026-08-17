@@ -459,6 +459,20 @@ Deno.test('every stored column is declared in comps or stamped', () => {
   d.close()
 })
 
+Deno.test('favorite: presence freezes when it joined navigation', () => {
+  let eid = uid()
+  apply(db, [{ eid, name: 'doc', comp: { title: 'favorite' } }])
+  let made = apply(db, [{ eid, name: 'favorite', comp: {} }])
+  let at = made.findLast((c) => c.name == 'favorite')?.comp?.at
+  assertMatch(String(at), /^\d{4}-/)
+  assertEquals(readComp(db, eid, 'favorite')?.at, at)
+
+  // The clock is server-owned and frozen for one continuous tenure.
+  let patched = apply(db, [{ eid, name: 'favorite', comp: { at: 'FAKE' } }])
+  assertEquals(patched, [])
+  assertEquals(readComp(db, eid, 'favorite')?.at, at)
+})
+
 Deno.test('declared booleans bind as SQLite integers', () => {
   let s = uid()
   apply(db, [{

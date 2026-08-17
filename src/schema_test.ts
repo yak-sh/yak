@@ -27,6 +27,7 @@ Deno.test('schema(): stamped marked, death words carried, tags empty', () => {
   assertEquals(rows.claim.find((c) => c.col == 'claimed_at')?.stamped, true)
   assertEquals(rows.entity.every((c) => c.stamped), true) // spine: all server's
   assertEquals(rows.canvas, []) // a tag — the row is the statement
+  assertEquals(rows.favorite, [{ col: 'at', type: 'time', stamped: true }])
   // The venture's window colour is its one project-specific value.
   assertEquals(rows.project, [{ col: 'color', type: 'text', stamped: false }])
   // wire-writable and stamped columns of one comp land in one place

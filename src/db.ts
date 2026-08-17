@@ -2024,6 +2024,15 @@ export let open = (path = file) => {
     for (let comp of derived) {
       for (let { prop, ddl } of derivedCols(comp)) addCol(comp, prop, ddl)
     }
+    // Favorite predates its clock. The insertion moment is unavailable for
+    // rows already standing, so preserve their relative age with the entity's
+    // creation stamp; anonymous legacy rows fall back to migration time.
+    db.exec(
+      `update favorite set at = coalesce(
+        (select at from created where created.eid = favorite.eid),
+        strftime('%Y-%m-%dT%H:%M:%fZ','now')
+      ) where at is null`,
+    )
     // num is a UI label, not identity (T-3684): a cheap/bulk entity (T-3683)
     // needs none, so the spine's num goes NULLABLE. One in-place ALTER on SQLite
     // 3.53+ (ALTER COLUMN landed in 3.53.0), guarded on the notnull flag so it
@@ -2717,6 +2726,14 @@ let stamps = Object.keys(comps).filter((c) => {
     !comps[c].via && stamped[c]?.via && all.at && all.by &&
     Object.keys(all).length == 3
 })
+
+// A clocked presence (favorite today) is the smaller stamp family: the wire
+// asks for a bare facet and the server freezes its sole `at`. Derive the family
+// from its shape so the schema vocabulary remains the only component list.
+let clocked = Object.keys(comps).filter((c) =>
+  !Object.keys(comps[c]).length &&
+  Object.keys(stamped[c] ?? {}).length == 1 && stamped[c]?.at
+)
 
 // The reaper's worklists, derived from the death word each reference
 // declares in the vocabulary (types.ts Death says what each word means).
@@ -3930,6 +3947,21 @@ export let apply = (
         .get(eid) as Change['comp'] | undefined
       if (row) extra.push({ eid, name, comp: row })
     }
+    // Clocked presence facets freeze their insertion time. Re-reading on every
+    // effective presence write keeps an optimistic cache complete, while only
+    // a delete followed by a fresh insert can move the clock.
+    for (let { eid, name, comp } of changes) {
+      if (comp == null || !clocked.includes(name) || !alive.get(eid)) continue
+      if (createdComps.has(`${name} ${eid}`)) {
+        prep(db, `update ${name} set at = ? where eid = ?`).run(now, eid)
+      }
+      let row = prep(db, `select eid, at from ${name} where eid = ?`).get(
+        eid,
+      ) as
+        | Change['comp']
+        | undefined
+      if (row) extra.push({ eid, name, comp: row })
+    }
     // The mail SENDER, derived. `from` is off the wire (types.ts), so this
     // is its only writer: a letter speaks as the actor that WROTE it, the
     // same resolution behind created.by. No caller can sign as anyone else
@@ -4004,7 +4036,7 @@ export let apply = (
       // repeat the ts + actor + via the journal row keeps. The wire's own
       // write (the bare presence, an authorship `by`) rides in `changes` and
       // stays audited.
-      let echoed = new Set(['created', 'updated', ...stamps])
+      let echoed = new Set(['created', 'updated', ...stamps, ...clocked])
       let logged = [...changes, ...extra.filter((c) => !echoed.has(c.name))]
       if (logged.length) {
         let jrow = Number(
