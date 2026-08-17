@@ -462,7 +462,7 @@ export let Menu = () => {
               close()
             }}
           >
-            copy id
+            copy {idOf(ent(m.eid))}
           </Item>
         </>
       )}
