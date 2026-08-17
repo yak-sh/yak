@@ -18,6 +18,7 @@ import {
   SessionObservation,
   SessionReferences,
   SessionSummary,
+  SessionTime,
   threadMentions,
 } from './Session.tsx'
 
@@ -190,6 +191,46 @@ Deno.test('uncached graph entries keep their normalized session face', () => {
   assertEquals(root.querySelector('.Entry_Name')?.textContent, 'Read')
   assertEquals(root.querySelector('.Json'), null)
   free()
+})
+
+Deno.test('session timestamps link to graph entries', () => {
+  let eid = '12345678-0000-4000-8000-000000000001'
+  cache.value = {
+    [eid]: {
+      entity: { eid, num: 0 },
+      entry: { eid, session: 'session', seq: 1 },
+    },
+  }
+  let x = {
+    eid,
+    seq: 1,
+    line: '{}',
+    row: {
+      kind: 'say' as const,
+      role: 'agent' as const,
+      text: 'done',
+      at: '2026-08-17T12:00:00Z',
+    },
+  }
+  let shown = mount(
+    <div>
+      <SessionTime x={x} />
+      <SessionTime x={{ ...x, eid: undefined }} />
+    </div>,
+  )
+  try {
+    let [linked, plain] = shown.root.querySelectorAll('.Session_When')
+    assertEquals(linked.tagName, 'A')
+    assertEquals(
+      linked.getAttribute('href'),
+      '/12345678',
+    )
+    assertEquals(plain.tagName, 'TIME')
+    assertEquals(plain.getAttribute('href'), null)
+  } finally {
+    shown.free()
+    cache.value = {}
+  }
 })
 
 Deno.test('session context renders compactly for the sticky head', () => {

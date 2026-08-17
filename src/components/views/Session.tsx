@@ -25,6 +25,7 @@ import {
 import { contextOf, graphLog } from '../../entry_log.ts'
 import { type ObservationState } from '../../observations.ts'
 import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
+import { linkProps } from '../nav.tsx'
 import { ago, block, pretty, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Composer, Note } from '../Comments.tsx'
@@ -441,9 +442,21 @@ export let SessionEntry = (
     : <face.Render e={e} onOpen={onOpen} />
 }
 
+export let SessionTime = ({ x }: { x: Entry }) => {
+  let at = x.row?.at
+  if (!at) return null
+  return (
+    <When
+      data-tip={pretty(at)}
+      {...(x.eid ? linkProps(ent(x.eid)) : {})}
+    >
+      {ago(at)}
+    </When>
+  )
+}
+
 let Row = ({ x, repo }: { x: Entry; repo?: string }) => {
   let [open, setOpen] = useState(false)
-  let at = x.row?.at
   return (
     <Line mod={open && 'open'}>
       <Seq
@@ -455,7 +468,7 @@ let Row = ({ x, repo }: { x: Entry; repo?: string }) => {
         {x.seq}
       </Seq>
       <Content>
-        {at && <When data-tip={pretty(at)}>{ago(at)}</When>}
+        <SessionTime x={x} />
         <SessionEntry x={x} repo={repo} onOpen={() => setOpen(true)} />
       </Content>
       {open &&
