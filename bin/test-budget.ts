@@ -1,21 +1,23 @@
 #!/usr/bin/env -S deno run -A
 // test-budget — the fast tier's 1ms guard.
 //
-// The owner's rule: no NORMAL test may run slower than 1ms (`deno task test`,
-// TASKS_SLOW unset). deno's reporter prints each test's duration — sub-ms as
-// `(NNNµs)`, then `(Nms)` once it rounds to a whole millisecond. So an offender
-// is any test line reporting `(Nms)` with N >= 2: a µs line is always < 1ms, and
-// `(1ms)` is the boundary the rule allows. (deno rounds to the nearest ms, so a
-// `(1ms)` line can hide up to ~1.4ms — accepted slack until the trim phase under
-// T-16989 closes it.)
+// The rule: no NORMAL test may run slower than 1ms (`deno task test`, TASKS_SLOW
+// unset). deno's reporter prints each test's duration — sub-ms as `(NNNµs)`,
+// then `(Nms)` once it rounds to a whole millisecond. So an offender is any test
+// line reporting `(Nms)` with N >= 2: a µs line is always < 1ms, and `(1ms)` is
+// the boundary the rule allows. (deno rounds to the nearest ms, so a `(1ms)`
+// line can hide up to ~1.4ms — the slack that lets one freshDb + one apply pass.)
 //
-// INERT BY DEFAULT so it can land while 484 tests still breach the bar: it runs
-// the normal suite, prints the offenders slowest-first, and exits 0 on the
-// budget alone. Set TASKS_FAST_STRICT=1 to make the budget FATAL (exit 1 on any
-// offender). The capstone of T-16989 flips that default — or wires
-// `deno task test:budget` into `deno task gate` — once the trim tasks bring the
-// offender count to zero. A real test FAILURE always propagates, strict or not:
-// this guards timing, it never hides a red suite.
+// ADVISORY BY DESIGN, not just for now (T-17785, reading A): the remaining
+// offenders are db-backed tests whose 2–9ms is production freshDb + apply()
+// cost, not trimmable setup — sub-1ms for those needs a server perf pass, not a
+// test rewrite. So the guard's job is to flag ACCIDENTAL cost (real I/O, a
+// missing slow()), not to gate that band. It runs the normal suite, prints the
+// offenders slowest-first, and exits 0 on the budget alone. Set
+// TASKS_FAST_STRICT=1 to make the budget FATAL (exit 1 on any offender) — the
+// opt-in a targeted trim or a perf-pass branch runs to hold a line locally. A
+// real test FAILURE always propagates, strict or not: this guards timing, it
+// never hides a red suite.
 //
 // It reuses `deno task test` verbatim (no flag duplication that could drift from
 // deno.json), teeing the child's stdout so the run still streams live while the
@@ -59,7 +61,7 @@ for (let o of offenders) {
 }
 if (offenders.length && !strict) {
   console.log(
-    '(advisory — set TASKS_FAST_STRICT=1 to make this a hard gate once the trim phase lands)',
+    '(advisory — db-backed tests carry production freshDb + apply() cost; set TASKS_FAST_STRICT=1 to gate locally)',
   )
 }
 

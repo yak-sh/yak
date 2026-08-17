@@ -8,6 +8,17 @@
 // process it waits on is the point. The migrated-db clone (freshDb) lives in
 // testdb.ts, not here, so importing these primitives never pulls in db.ts —
 // this module stays free of the DB_PATH import-order discipline db.ts carries.
+//
+// The speed bar (bin/test-budget.ts) is ADVISORY, not a wall (T-17785): it lists
+// tests over 1ms slowest-first but exits 0 on the budget alone, turning fatal
+// only under TASKS_FAST_STRICT=1. deno rounds durations, so a `(1ms)` line hides
+// up to ~1.4ms — one freshDb + one apply clears it. The 2–9ms multi-apply band
+// that does show up is production freshDb + apply() cost, not trimmable test
+// setup: don't chase it by rewriting the test. Chase it by picking the cheaper
+// db primitive (both in testdb.ts): reach for bareDb() — an UNSEEDED clone that
+// snapshots in ~0.09ms — and read back the rows the test writes itself;
+// freshDb()'s ~1.5ms is the 180-row demo seed, so spend it only when the test
+// actually asserts on that seed (its tasks, boards, or people).
 
 // A heavy test: skipped unless TASKS_SLOW opts in. Takes the same two shapes
 // Deno.test does — (name, fn) and (name, opts, fn) — and folds in the ignore.
