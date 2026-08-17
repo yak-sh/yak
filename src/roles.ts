@@ -167,7 +167,7 @@ let nativeEnv = (eid: string) => {
   let home = Deno.env.get('HOME') ?? ''
   let term = Deno.env.get('TERM')
   return {
-    PATH: childPath(home, Deno.env.get('PATH') ?? ''),
+    PATH: childPath(home),
     HOME: home,
     // A daemon commonly inherits TERM=dumb even though the process it opens
     // is an interactive TUI. Codex exits at startup under that terminal.

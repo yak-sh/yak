@@ -248,20 +248,34 @@ let INIT = '{"type":"init","session_id":"sid-1","model":"fake-fast"}'
 let RESULT =
   '{"type":"result","final_text":"first","usage":{"output_tokens":7}}'
 
-slow('child PATH leads with the task CLI and preserves the service', () => {
-  let bin = '/home/agent/.deno/bin'
-  assertEquals(
-    childPath('/home/agent', '/usr/bin:/opt/bin'),
-    `${bin}:/usr/bin:/opt/bin`,
-  )
-  assertEquals(childPath('/home/agent', `${bin}:/usr/bin`), `${bin}:/usr/bin`)
-  assertEquals(
-    childPath('/home/agent', `/usr/bin:${bin}:${bin}`),
-    `${bin}:/usr/bin`,
-  )
-  assertEquals(childPath('/home/agent', ''), bin)
-  assertEquals(childPath('', '/usr/bin'), '/usr/bin')
-})
+slow(
+  'child PATH is the tracked contract, task CLI leading, home expanded',
+  () => {
+    let bin = '/home/agent/.deno/bin'
+    let path = childPath('/home/agent')
+    // The task CLI leads (M-17876: the child speaks as its own session).
+    assertEquals(path.startsWith(`${bin}:`), true)
+    // The contract's provider + system dirs are all present, %h resolved.
+    for (
+      let dir of [
+        '/home/agent/.local/bin',
+        '/home/agent/bin',
+        '/home/agent/sbin',
+        '/home/linuxbrew/.linuxbrew/bin',
+        '/home/linuxbrew/.linuxbrew/sbin',
+        '/usr/bin',
+      ]
+    ) assertEquals(path.split(':').includes(dir), true)
+    // No unexpanded specifier survives, and every entry is deduped.
+    assertEquals(path.includes('%h'), false)
+    let parts = path.split(':')
+    assertEquals(parts.length, new Set(parts).size)
+    // With no home, the home-relative entries drop rather than resolve to `/…`.
+    let rootless = childPath('')
+    assertEquals(rootless.includes('.deno/bin'), false)
+    assertEquals(rootless.split(':').includes('/usr/bin'), true)
+  },
+)
 
 slow('managed child environment excludes provider credentials', () => {
   let marker = `credential-${uid()}`
