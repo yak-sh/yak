@@ -6,6 +6,7 @@ import {
   complete,
   distinctValues,
   EXISTS,
+  fieldsOf,
   hot,
   kidsOf,
   kindPreds,
@@ -16,6 +17,7 @@ import {
   parseQuery,
   pred,
   preds,
+  PROJECT,
   resolution,
   resolveRefs,
   reverseAssocs,
@@ -447,6 +449,51 @@ Deno.test('an aggregate rides the pred list without filtering, read via aggOf', 
   assertEquals(distinctValues(rows, agg.at), ['Eng', 'Ops'])
   assertEquals(tally(rows, agg.at).get('Ops'), 2)
   assertEquals(tally(rows, agg.at).has(''), false)
+})
+
+// ---- projection (.fields) ----
+
+Deno.test('.fields parses to a PROJECT projection with per-field wake', () => {
+  assertEquals(preds('.fields=pin.x,pin.y,pin.z~'), [
+    {
+      comp: '',
+      prop: '',
+      op: PROJECT,
+      value: '',
+      fields: [
+        { comp: 'pin', prop: 'x', wake: true },
+        { comp: 'pin', prop: 'y', wake: true },
+        { comp: 'pin', prop: 'z', wake: false }, // ~ marks it volatile
+      ],
+    },
+  ])
+  // a bare column routes by name when it is unique to one component (z → pin)
+  assertEquals(preds('.fields=z')![0].fields, [
+    { comp: 'pin', prop: 'z', wake: true },
+  ])
+  // a path or a bare component is refused — a projection reads one own column
+  assertThrows(() => preds('.fields=assignee.title'), Error)
+  assertThrows(() => preds('.fields=pin'), Error)
+  assertThrows(() => preds('.fields='), Error)
+})
+
+Deno.test('a projection rides the pred list without filtering, read via fieldsOf', () => {
+  let ps = parseQuery('.pin.canvas=C1&.fields=pin.x,pin.y,pin.z~')
+  // only the .pin.canvas pred screens; the projection filters nothing
+  let onC1 = { pin: { canvas: 'C1', x: 5, y: 6, z: 9 } }
+  let onC2 = { pin: { canvas: 'C2', x: 1, y: 2, z: 3 } }
+  assert(matchQuery(onC1, ps))
+  assert(!matchQuery(onC2, ps))
+  let fields = fieldsOf(ps)!
+  assertEquals(fields, [
+    { comp: 'pin', prop: 'x', wake: true },
+    { comp: 'pin', prop: 'y', wake: true },
+    { comp: 'pin', prop: 'z', wake: false },
+  ])
+  // the waking subset excludes the volatile z — a z-bump won't re-fire
+  assertEquals(fields.filter((f) => f.wake).map((f) => f.prop), ['x', 'y'])
+  // a query naming no projection has none
+  assertEquals(fieldsOf(parseQuery('.status=open')), undefined)
 })
 
 Deno.test('query: pred routes and normalizes ops', () => {

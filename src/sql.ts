@@ -20,7 +20,16 @@
 // spelling (`comp: ''`, which reads whichever component happens to carry the
 // column), and a substring too short for a trigram (see `grams`).
 import { propAt } from './props.ts'
-import { AGG, EXISTS, ORDER, type Pred, refCols, TEXT } from './query.ts'
+import {
+  AGG,
+  EXISTS,
+  fieldsOf,
+  ORDER,
+  type Pred,
+  PROJECT,
+  refCols,
+  TEXT,
+} from './query.ts'
 import { comps, stamped } from './types.ts'
 
 // Bound values are only ever text or numbers — the grammar has no other
@@ -207,6 +216,7 @@ let CMP: Record<string, string> = { '<': '<', '<=': '<=', '>': '>', '>=': '>=' }
 let one = (p: Pred): Sql | null => {
   if (p.op == ORDER) return { sql: '1', params: [] } // a ranking, not a filter
   if (p.op == AGG) return { sql: '1', params: [] } // a projection; see aggregateSql
+  if (p.op == PROJECT) return { sql: '1', params: [] } // fields; see select()
   if (p.op == TEXT) return text(p.value)
   if (p.refs) return refsSql(p) // multi-column reverse-union: an eid IN union
   if (p.rev) return revSql(p) // a reverse hop: a correlated EXISTS/count
@@ -261,6 +271,7 @@ let one = (p: Pred): Sql | null => {
 let build = (
   preds: Pred[],
   base: string,
+  also: string[] = [],
 ): { joins: string; cond: string; params: Bind[] } | null => {
   let parts: Sql[] = []
   for (let p of preds) {
@@ -274,6 +285,9 @@ let build = (
     if (p.op == TEXT) tables.add('doc')
     else if (p.comp && !p.at) tables.add(p.comp)
   }
+  // `also` carries the projected columns' components (select()): a projection may
+  // name a table no filter joined, and it must still be LEFT JOINed to be read.
+  for (let t of also) if (t) tables.add(t)
   tables.delete(base)
   if (base != 'entity' && tables.has('entity')) return null
   let eid = col(base, 'eid')
@@ -376,6 +390,29 @@ export let where = (preds: Pred[]): Sql | null => {
   return {
     sql: `select "entity"."eid" as eid from "entity"${built.joins}` +
       ` where ${built.cond}`,
+    params: built.params,
+  }
+}
+
+// A PROJECTED membership query: the eids `where()` selects, PLUS the columns each
+// row carries beyond its eid (`.fields=pin.x,pin.z`). The projected columns'
+// components are LEFT JOINed like a filter's and selected aliased `comp.prop`; a
+// `~`-volatile field is projected identically — volatility is a change-signal
+// concern the caller reads off fieldsOf(), invisible to SQL. A query naming no
+// projection IS `where()` (eid only). null if a projected column is unknown or
+// any filter declined — the exactness contract, unbroken.
+export let select = (preds: Pred[]): Sql | null => {
+  let fields = fieldsOf(preds)
+  if (!fields) return where(preds)
+  for (let f of fields) if (!known(f.comp, f.prop)) return null
+  let built = build(preds, 'entity', fields.map((f) => f.comp))
+  if (!built) return null
+  let cols = fields.map((f) =>
+    `${col(f.comp, f.prop)} as "${f.comp}.${f.prop}"`
+  )
+  return {
+    sql: `select "entity"."eid" as eid, ${cols.join(', ')} from "entity"` +
+      `${built.joins} where ${built.cond}`,
     params: built.params,
   }
 }

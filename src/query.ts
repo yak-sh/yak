@@ -92,7 +92,22 @@ export type Pred = {
   // value's count. op is AGG, so matchQuery passes it through (the filter part
   // selects the universe); aggOf()/tally()/aggregateSql() read the projection.
   agg?: 'distinct' | 'tally'
+  // A FIELD PROJECTION rather than a filter: the columns each result row carries
+  // beyond its eid (`.fields=pin.x,pin.z~`), so a partial-cache subscription
+  // reads live values without holding the whole graph. op is PROJECT, matchQuery
+  // passes it through; fieldsOf() reads it and select() (sql.ts) selects the
+  // columns. comp/prop stay empty — the columns live in `fields`, each carrying
+  // its own `wake` (a `~`-marked column is projected but excluded from the
+  // change-signal, so a churny value like a pin's z delivers yet never re-fires).
+  fields?: Field[]
 }
+
+// One projected column: which component column a result row carries, and whether
+// a change to it WAKES the subscription. `wake: false` (a `~`-suffixed field) is
+// VOLATILE — its value still rides in the row, but a live layer excludes it from
+// the change-signal it wakes on. Membership always wakes; volatility only mutes
+// this one column's own edits.
+export type Field = { comp: string; prop: string; wake: boolean }
 
 // A reverse hop resolved: the child component + ref column whose value the
 // parent's eid must equal, and how the many children collapse to a yes/no.
@@ -205,11 +220,11 @@ for (let name of reverseAssocs.keys()) {
 }
 
 // The reserved query WORDS — directives that are neither a column nor an
-// association: `.refs` (the multi-column reverse-union) and the `.distinct` /
-// `.tally` aggregates. Guarded here the way scopes and reverse assocs are, so a
-// vocabulary that ever grows one of these as a real prop is a load error rather
-// than a silently dead directive.
-export let reserved = ['refs', 'distinct', 'tally']
+// association: `.refs` (the multi-column reverse-union), the `.distinct` /
+// `.tally` aggregates, and `.fields` (the projection). Guarded here the way
+// scopes and reverse assocs are, so a vocabulary that ever grows one of these as
+// a real prop is a load error rather than a silently dead directive.
+export let reserved = ['refs', 'distinct', 'tally', 'fields']
 for (let name of reserved) {
   if (owned(name)) {
     throw new Error(`reserved query word .${name} shadows a prop`)
@@ -349,6 +364,18 @@ export let tally = (
 // The census in one line: the sorted distinct values of a column over `rows`.
 export let distinctValues = (rows: Iterable<Comps>, at: Hop): string[] =>
   [...tally(rows, at).keys()].sort()
+
+// A FIELD PROJECTION directive rides the pred list like AGG/ORDER —
+// `.fields=pin.x,pin.z~`. matchQuery passes PROJECT through (true), so the OTHER
+// preds select the membership; fieldsOf() reads which columns each row carries
+// (and which are volatile), and select() (sql.ts) selects them.
+export let PROJECT = 'project'
+
+// The projected columns of a query, or undefined when it names none — a plain
+// membership query. The waking subset is `f.wake`; a caller that only cares which
+// changes should re-fire reads `fields.filter((f) => f.wake)`.
+export let fieldsOf = (preds: Pred[]): Field[] | undefined =>
+  preds.find((p) => p.op == PROJECT)?.fields
 
 // A query addresses the LAZY entry partition when it names any session-log
 // component (sessionComps) — `.entry.session`, `.generation.provider`,
@@ -647,6 +674,29 @@ export let preds = (token: string): Pred[] | null => {
       )
     }
     return [{ comp: at.comp, prop: at.prop, op: AGG, value: '', agg: path }]
+  }
+  // `.fields=pin.x,pin.y,pin.z~` — a PROJECTION, not a filter: the columns each
+  // result row carries beyond its eid, so a partial-cache subscription reads live
+  // values without holding the whole graph. A trailing `~` marks a column
+  // VOLATILE — projected but EXCLUDED from the change-signal, so a churny field (a
+  // pin's z, bumped on every toFront) delivers its value yet never re-fires the
+  // query. Each column routes like a bare prop (or its explicit `pin.x`); a path
+  // is refused — a projection reads one entity's own columns. Guarded so a future
+  // `fields` column would win. fieldsOf()/select() read the PROJECT pred.
+  if (path == 'fields' && !owned('fields')) {
+    if (op != '=' || !value) {
+      throw new Error('.fields names columns: .fields=pin.x,pin.y')
+    }
+    let fields = value.split(',').map((seg): Field => {
+      let wake = !seg.endsWith('~')
+      let groups = groupsOf((wake ? seg : seg.slice(0, -1)).split('.'))
+      let at = groups[groups.length - 1]
+      if (groups.length > 1 || !at.prop) {
+        throw new Error(`.fields projects columns, not paths: .fields=${seg}`)
+      }
+      return { comp: at.comp, prop: at.prop, wake }
+    })
+    return [{ comp: '', prop: '', op: PROJECT, value: '', fields }]
   }
   // A SCOPE resolves a virtual prop to the Pred[] it splices into the AND-list.
   // Real props win: `owned` names a prop a column/component already routes, so
@@ -991,7 +1041,7 @@ export let matchQuery = (
   kids?: Kids,
 ) =>
   preds.every((p) => {
-    if (p.op == ORDER || p.op == AGG) return true
+    if (p.op == ORDER || p.op == AGG || p.op == PROJECT) return true
     if (p.refs) {
       // The multi-column reverse-union: read every {eid} column this bag
       // carries. `.refs=X` holds when any equals X; `.refs!` when any is set;

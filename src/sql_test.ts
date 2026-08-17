@@ -18,9 +18,10 @@ import {
   kindPreds,
   matchQuery,
   parseQuery,
+  PROJECT,
   tally,
 } from './query.ts'
-import { aggregateSql, where } from './sql.ts'
+import { aggregateSql, select, where } from './sql.ts'
 import { open } from './db.ts'
 import { kindOf, kindOrder } from './types.ts'
 
@@ -396,6 +397,95 @@ Deno.test('aggregate: tally SQL is the matcher tally over a column', () => {
 
 Deno.test('aggregate: a numeric column declines rather than mis-cast', () => {
   assertEquals(aggregateSql(parseQuery('.distinct=priority')), null)
+})
+
+// A PROJECTED query answers rows (eid + named columns), not just eids, so it runs
+// its own two-sided parity: the eids it returns are EXACTLY the membership
+// `where()` returns over the same filter, and each row's projected values are
+// what the column holds. A ~-volatile field projects identically — volatility is
+// the caller's change-signal concern, invisible to SQL. This runs on its OWN
+// in-memory db so the pins (and the canvas/target entities their {eid} FKs need)
+// never enter the shared graph the agreement and kind= tests read.
+Deno.test('projection: select carries the named columns beside the eid', () => {
+  let pdb = open(':memory:')
+  let m = Number(
+    (pdb.prepare('select max(num) as n from entity').get() as { n: number })
+      .n ??
+      0,
+  )
+  let add = (eid: string, rows: Record<string, Record<string, Cell>>) => {
+    pdb.prepare('insert into entity (eid, num) values (?, ?)').run(eid, ++m)
+    for (let [comp, cols] of Object.entries(rows)) {
+      let keys = ['eid', ...Object.keys(cols)]
+      pdb.prepare(
+        `insert into "${comp}" (${
+          keys.map((k) => `"${k}"`).join(',')
+        }) values (${keys.map(() => '?').join(',')})`,
+      ).run(eid, ...Object.values(cols))
+    }
+  }
+  // bare entities — just the spine row the {eid} FKs (pin.canvas, card.target) need
+  for (let e of ['cv', 'other', 't1', 't2', 't3']) add(e, {})
+  // a pinned card is card + pin on one eid, and pin.eid references card(eid), so
+  // card must be inserted before pin (the object key order the inserter walks).
+  add('pinA', {
+    card: { target: 't1', view: 'card' },
+    pin: { canvas: 'cv', x: 5, y: 6, w: 7, h: 8, z: 9 },
+  })
+  add('pinB', {
+    card: { target: 't2', view: 'card' },
+    pin: { canvas: 'cv', x: 1, y: 2, w: 3, h: 4, z: 2 },
+  })
+  add('pinC', {
+    card: { target: 't3', view: 'card' },
+    pin: { canvas: 'other', x: 0, y: 0, w: 1, h: 1, z: 1 },
+  })
+  let q = '.pin.canvas=cv&.card!&.fields=pin.x,pin.y,pin.w,pin.h,pin.z~'
+  let built = select(parseQuery(q))!
+  let rows = pdb.prepare(built.sql).all(...built.params) as Record<
+    string,
+    unknown
+  >[]
+  // membership: the two cards pinned to canvas cv, and only those
+  assertEquals(rows.map((r) => r.eid).sort(), ['pinA', 'pinB'])
+  // and it is EXACTLY the eid-only membership where() gives the same filter
+  let w = where(parseQuery(q))!
+  assertEquals(
+    (pdb.prepare(w.sql).all(...w.params) as { eid: string }[])
+      .map((r) => r.eid).sort(),
+    rows.map((r) => r.eid).sort(),
+  )
+  // each projected column rides in aliased comp.prop; z is present though volatile
+  let a = rows.find((r) => r.eid == 'pinA')!
+  assertEquals(
+    [a['pin.x'], a['pin.y'], a['pin.w'], a['pin.h'], a['pin.z']],
+    [5, 6, 7, 8, 9],
+  )
+  pdb.close()
+})
+
+// No projection: select IS where — eid only, byte-identical, so the migration can
+// route every membership query through the one door without a special case.
+Deno.test('projection: no .fields makes select the plain membership where', () => {
+  let ps = parseQuery('.task.status=open')
+  assertEquals(select(ps), where(ps))
+})
+
+// Exactness across the projection: an unknown projected column, and a filter
+// beside the projection that itself declines (a moving span), both decline the
+// whole thing rather than answer an almost-right question.
+Deno.test('projection: an unknown column or a declining filter declines', () => {
+  assertEquals(
+    select([{
+      comp: '',
+      prop: '',
+      op: PROJECT,
+      value: '',
+      fields: [{ comp: 'pin', prop: 'nope', wake: true }],
+    }]),
+    null,
+  )
+  assertEquals(select(parseQuery('.created.at=today&.fields=pin.x')), null)
 })
 
 // kind=K is not a filter STRING but a synthetic Pred[] (query.ts kindPreds):
