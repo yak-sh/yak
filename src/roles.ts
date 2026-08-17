@@ -995,12 +995,19 @@ let reconcileManaged = async (
       startManaged(c, hash, cast, deps)
       return
     }
-    if (session.status == 'failed') {
-      stamp(
-        c.eid,
-        { error: String(session.error_message ?? 'managed launch failed') },
-        cast,
-      )
+    // The operator I applied has DIED in a terminal abnormal state — crashed,
+    // was killed, or was stopped by something we did not ask for (reconcile
+    // only stops non-running roles, and a stopped/held role never reaches this
+    // branch). A running role's `always` pin means bring it back: re-pin with a
+    // fresh operator, bounded by the crash-loop breaker above (a healthy run is
+    // nowhere near it). Without this a managed role sits with applied_hash set,
+    // refusing to respawn — only native roles get the liveness poller, and the
+    // session-death stamp bypasses effect dispatch, so nothing re-drives it
+    // (T-19477). A still-booting session (null status) is NOT dead — the
+    // `starting()` idempotency guard in reconcile() owns that window — so it
+    // falls through to the completed checks below and returns untouched.
+    if (['failed', 'interrupted', 'lost'].includes(String(session.status))) {
+      startManaged(c, hash, cast, deps)
       return
     }
     if (session.status != 'completed' || !session.provider_session_id) return

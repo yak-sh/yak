@@ -542,6 +542,25 @@ let settled = (eid: string, status: string, cast: Cast) => {
       console.warn('settle batch dropped —', e)
     }
   }
+  // Re-drive the owning role. A managed role has no liveness poller — only
+  // native roles get the 2s deadline/roleSoon reconcile (roles.ts) — so its
+  // operator session ENDING is the one event that can re-pin a fresh operator
+  // after a crash/kill. The on('session',{changed:{status}}) effect (server.ts)
+  // is registered for exactly this, but a lifecycle stamp bypasses
+  // apply()/dispatch (see stamp() above), so the handler never hears the death:
+  // deliver the ending to it here. Without this a crashed managed operator sits
+  // with applied_hash set, refusing to respawn until an unrelated role event
+  // pokes it (T-19477). Isolated like any effect — a throw is telemetry, never
+  // a break in this settle; reconcileManaged decides whether to re-pin, so a
+  // clean completion still idles rather than churning.
+  if (row.role) {
+    let t = trace()
+    dispatch(
+      [{ eid, name: 'session', comp: { status } }],
+      t,
+      (comp, e) => console.warn(`settle role ${comp} —`, e),
+    )
+  }
   // Words that landed mid-turn were nobody's to take: created(comment)
   // rightly stays out of a busy session, the bus only serves a tool call,
   // and a print-mode claude renders no channel (T-7420) — so the settle

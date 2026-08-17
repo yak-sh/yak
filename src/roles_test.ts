@@ -490,6 +490,47 @@ Deno.test('managed role mints one operator session and stops through the graph',
   assertEquals(stop, { target: runEid })
 })
 
+Deno.test('a running managed role respawns when its operator dies async, but not while it boots', async () => {
+  commands = []
+  sessions.clear()
+  let { role } = seed('managed')
+  await rolesSweep(cast, deps)
+  assertEquals(mspawns(role), 1)
+  let first = String(
+    (db.prepare('select eid from session where role = ?').get(role) as {
+      eid: string
+    }).eid,
+  )
+  // Pinned: the reconciler recorded the hash it launched under.
+  assert(
+    (db.prepare('select applied_hash from role where eid = ?').get(role) as {
+      applied_hash: string | null
+    }).applied_hash != null,
+  )
+  // A freshly minted session has a null status — still booting, NOT dead. The
+  // `starting()`/idempotency guard owns that window, so another sweep must NOT
+  // mint a racer.
+  await rolesSweep(cast, deps)
+  assertEquals(mspawns(role), 1)
+
+  // Async death: the operator crashed (killed → 'failed'), long-lived so the
+  // crash-loop breaker does not count it. Nothing else pokes the role.
+  db.prepare(
+    `update session set status = 'failed', started_at = ?, finished_at = ?
+     where eid = ?`,
+  ).run('2026-07-26T23:50:00.000Z', '2026-07-27T00:00:00.000Z', first)
+
+  // A single reconcile re-pins a fresh operator — no stop, no role command.
+  await rolesSweep(cast, deps)
+  assertEquals(mspawns(role), 2)
+  let latest = db.prepare(
+    `select s.eid, s.operator from session s join entity e on e.eid = s.eid
+     where s.role = ? order by e.num desc limit 1`,
+  ).get(role) as { eid: string; operator: number }
+  assert(latest.eid != first)
+  assertEquals(latest.operator, 1)
+})
+
 Deno.test('a role comp on a project is its own operator: scope defaults to self, actor = the project', async () => {
   commands = []
   sessions.clear()
