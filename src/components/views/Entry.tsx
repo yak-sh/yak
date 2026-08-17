@@ -29,6 +29,8 @@ let Frame = block('div', 'Entry', {
   SysTag: 'span',
   SysText: 'span',
   SysCount: 'span',
+  Part: 'section',
+  PartName: 'div',
 })
 let {
   Lens,
@@ -49,6 +51,8 @@ let {
   SysTag,
   SysText,
   SysCount,
+  Part,
+  PartName,
 } = Frame
 let Tab = el('button', 'Tab')
 
@@ -60,7 +64,9 @@ let more = (show: (() => void) | undefined, text: string) =>
     <More type='button' onClick={show} aria-label='show full entry'>…</More>
   )
 let body = (e: Ent) => e.content?.body ?? ''
-let failed = (e: Ent) => e.exit?.code != null && e.exit.code != 0
+let failed = (e: Ent) =>
+  (e.exit?.code != null && e.exit.code != 0) || !!e.error || !!e.exception ||
+  (e.response?.status != null && e.response.status >= 400)
 let result = (e: Ent) => {
   let eid = backlinks(e.eid).find((x) => x.via == 'result.call')?.from
   return eid ? ent(eid) : undefined
@@ -68,10 +74,41 @@ let result = (e: Ent) => {
 
 export type EntryLine = {
   eid?: string
+  call?: string
+  result?: string
   seq: number
   line: string
   row?: LogRow
   n?: number
+}
+
+let settled = (row: LogRow | undefined, out: Ent): LogRow | undefined => {
+  if (row?.kind == 'tool') return { ...row, ok: !failed(out) }
+  if (row?.kind == 'exec') {
+    let code = out.exit?.code
+    return code == null
+      ? { ...row, status: failed(out) ? '✗ failed' : '✓ done' }
+      : { ...row, exit: code }
+  }
+  return row
+}
+
+// A result completes an earlier call; transcript order stays on that call so
+// parallel tools settle in place rather than adding a second narration row.
+// Both durable entities remain named on the merged line for its lens.
+export let mergeTools = (entries: EntryLine[]) => {
+  let calls = new Set(entries.flatMap((x) => x.eid && !x.call ? [x.eid] : []))
+  let results = new Map<string, EntryLine>()
+  for (let x of entries) {
+    if (x.call && calls.has(x.call)) results.set(x.call, x)
+  }
+  return entries.flatMap((x) => {
+    if (x.call && calls.has(x.call)) return []
+    let out = x.eid ? results.get(x.eid) : undefined
+    return out?.eid
+      ? [{ ...x, result: out.eid, row: settled(x.row, ent(out.eid)) }]
+      : [x]
+  })
 }
 
 let span = (ms: number) => {
@@ -115,14 +152,17 @@ export let ToolSummary = ({
   status?: string | null
   error?: string
   failed?: boolean
-}) => (
-  <Frame mod={failed && 'fail'}>
-    <Name>{name}</Name>
-    {detail && <Line>{detail}</Line>}
-    {status && <Status>{status}</Status>}
-    {error && <Error>{error}</Error>}
-  </Frame>
-)
+}) => {
+  let state = failed ? 'fail' : status?.startsWith('✓') ? 'success' : 'pending'
+  return (
+    <Frame mod={state}>
+      <Name>{name}</Name>
+      {detail && <Line>{detail}</Line>}
+      {status && <Status>{status}</Status>}
+      {error && <Error>{error}</Error>}
+    </Frame>
+  )
+}
 
 // Process logs and graph entries meet at this normalized face. The Session
 // owns ordering and inspection; an individual transcript item belongs here.
@@ -153,18 +193,22 @@ export let EntryBody = ({ x, repo }: { x: EntryLine; repo?: string }) => {
         <ToolSummary
           name={r.name}
           detail={r.detail}
-          status={r.ok == null ? null : r.ok ? '✓ done' : '✗ failed'}
+          status={r.ok == null ? '… pending' : r.ok ? '✓ done' : '✗ failed'}
           error={r.error}
           failed={r.ok === false}
         />
       )
     case 'exec': {
-      let fail = r.exit != null ? r.exit != 0 : r.status == 'failed'
+      let fail = r.exit != null
+        ? r.exit != 0
+        : r.status == 'failed' || r.status?.startsWith('✗')
       let status = r.exit != null
         ? `${fail ? '✗' : '✓'} exit ${r.exit}`
-        : r.status
+        : r.status ?? '… pending'
       return (
-        <Frame mod={fail && 'fail'}>
+        <Frame
+          mod={fail ? 'fail' : status.startsWith('✓') ? 'success' : 'pending'}
+        >
           <Name>$</Name>
           <Line mod='command'>{first(r.command)}</Line>
           {r.desc && r.desc != 'Command' && <Line>{r.desc}</Line>}
@@ -217,10 +261,14 @@ export let CommandSummary = (
 ) => {
   let out = result(e)
   let text = body(out ?? e) || out?.stderr?.text || ''
+  let state = out ? failed(out) ? 'fail' : 'success' : 'pending'
   return (
-    <Frame mod={out && failed(out) && 'fail'}>
+    <Frame mod={state}>
       <Name>$</Name> <Line mod='command'>{first(e.bash?.command)}</Line>
       {text && <Line>{first(text)}</Line>}
+      <Status>
+        {out ? failed(out) ? '✗ failed' : '✓ done' : '… pending'}
+      </Status>
       {more(
         onOpen,
         [e.bash?.command, body(out ?? e), out?.stderr?.text]
@@ -249,24 +297,12 @@ export let MessageSummary = ({ e }: { e: Ent }) => (
 )
 
 export let CommandFull = ({ e }: { e: Ent }) => {
-  let out = result(e)
   return (
-    <Frame mod={out && failed(out) && 'fail'}>
+    <Frame>
       <Name>command</Name>
       <Code>
         $ <Ansi text={e.bash?.command ?? ''} />
       </Code>
-      {out?.exit?.code != null && <Status>exit {out.exit.code}</Status>}
-      {body(out ?? e) && (
-        <Output>
-          <Ansi text={body(out ?? e)} />
-        </Output>
-      )}
-      {out?.stderr?.text && (
-        <Err mod={failed(out) && 'fail'}>
-          <Ansi text={out.stderr.text} />
-        </Err>
-      )}
     </Frame>
   )
 }
@@ -306,6 +342,9 @@ let icon = (view: string) =>
 // top-right edge. Qualifying the ask keeps this lens in the entry vocabulary.
 export let EntryLens = ({ eid }: { eid: string }) => {
   let e = ent(eid)
+  let out = e.call ? result(e) : undefined
+  let call = e.result ? ent(e.result.call) : undefined
+  let pair = call ? [call, e] : out ? [e, out] : [e]
   let full = resolve(e, 'Entry.Full').view != 'JSON'
   let markdown = resolve(e, 'Entry.Markdown').view != 'JSON'
   let views = [full && 'Full', markdown && 'Markdown', 'JSON', 'Debug']
@@ -327,7 +366,14 @@ export let EntryLens = ({ eid }: { eid: string }) => {
           </Tab>
         ))}
       </Tabs>
-      <Entity eid={eid} view={`Entry.${view}`} />
+      {pair.map((item) => (
+        <Part key={item.eid}>
+          {pair.length > 1 && (
+            <PartName>{item.result ? 'result' : 'call'}</PartName>
+          )}
+          <Entity eid={item.eid} view={`Entry.${view}`} />
+        </Part>
+      ))}
     </Lens>
   )
 }

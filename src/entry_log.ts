@@ -11,6 +11,7 @@ export type EntryRow = {
 
 export type GraphLogEntry = {
   eid: string
+  call?: string
   seq: number
   line: string
   row?: LogRow
@@ -254,6 +255,9 @@ export let graphLog = (source: EntryRow[]): GraphLog => {
     }
     return {
       eid: source.eid,
+      ...(source.comps.result?.call
+        ? { call: text(source.comps.result.call) }
+        : {}),
       seq: source.seq,
       line: raw(source),
       ...(row ? { row } : {}),

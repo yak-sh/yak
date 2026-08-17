@@ -12,6 +12,7 @@ import {
   EntryBody,
   EntryLens,
   EntrySummary,
+  mergeTools,
   MessageSummary,
   ResultFull,
   ResultSummary,
@@ -127,6 +128,7 @@ Deno.test('normalized tools and shell calls share compact entry rows', () =>
     )
     assertEquals(root.querySelector('.Entry_Name')?.textContent, 'Read')
     assertEquals(root.querySelector('.Entry_Line')?.textContent, 'src/query.ts')
+    assertEquals(root.querySelector('.Entry-pending') != null, true)
 
     render(
       <EntryBody
@@ -143,7 +145,36 @@ Deno.test('normalized tools and shell calls share compact entry rows', () =>
       root.querySelector('.Entry_Line-command')?.textContent,
       'deno task check',
     )
+    assertEquals(root.querySelector('.Entry-pending') != null, true)
   }))
+
+Deno.test('tool results settle their call row instead of adding a row', () => {
+  rows()
+  let [call, answer] = Object.keys(cache.value)
+  let merged = mergeTools([
+    {
+      eid: call,
+      seq: 1,
+      line: '{}',
+      row: { kind: 'exec', command: 'printf one' },
+    },
+    {
+      eid: answer,
+      call,
+      seq: 2,
+      line: '{}',
+      row: { kind: 'tool', name: '↳ shell', ok: true },
+    },
+  ])
+  assertEquals(merged, [{
+    eid: call,
+    result: answer,
+    seq: 1,
+    line: '{}',
+    row: { kind: 'exec', command: 'printf one', exit: 0 },
+  }])
+  cache.value = {}
+})
 
 Deno.test('normalized user messages render as entry markdown', () =>
   withDom((root) => {
@@ -172,6 +203,10 @@ Deno.test('expanded entries offer only specifically rendered faces', () =>
       'Debug',
     ])
     assertEquals(root.querySelector('.Entry_Output')?.textContent, 'one\ntwo')
+    assertEquals(
+      [...root.querySelectorAll('.Entry_PartName')].map((x) => x.textContent),
+      ['call', 'result'],
+    )
     assertEquals(root.querySelector('.Entry_Err-fail'), null)
     let result = ent(answer)
     render(h(resolve(result, 'Entry.JSON').Render, { e: result }), root)

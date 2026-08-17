@@ -3594,6 +3594,14 @@ a[data-ref]:hover {
   color: var(--accent);
   font-family: var(--mono);
 }
+.Entry-pending .Entry_Name,
+.Entry-pending .Entry_Status {
+  color: var(--yellow);
+}
+.Entry-success .Entry_Name,
+.Entry-success .Entry_Status {
+  color: var(--green);
+}
 .Entry-fail .Entry_Name,
 .Entry-fail .Entry_Status,
 .Entry_Error {
@@ -3637,6 +3645,15 @@ a[data-ref]:hover {
 }
 .Entry_Err-fail {
   color: var(--red);
+}
+.Entry_Part {
+  min-width: 0;
+}
+.Entry_PartName {
+  margin-bottom: var(--half-gap);
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 11px;
 }
 /* The model thinking out loud — dim, skippable. */
 .Entry_Reason {

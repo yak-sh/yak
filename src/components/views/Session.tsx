@@ -41,6 +41,7 @@ import {
   type EntryLine,
   EntrySummary,
   entryVisible,
+  mergeTools,
   ToolSummary,
 } from './Entry.tsx'
 import { entityUrl } from '../../url.ts'
@@ -605,7 +606,7 @@ export let Session = ({ e }: { e: Ent }) => {
   let said = log.entries.some(
     (x) => x.row?.kind == 'say' && x.row.role == 'agent',
   )
-  let rows = squeeze(log.entries.filter(entryVisible))
+  let rows = squeeze(mergeTools(log.entries.filter(entryVisible)))
   // The facts fold behind the one lifecycle fact worth keeping in the bar.
   let gist = live
     ? s.started_at ? `started ${ago(s.started_at)}` : 'starting'

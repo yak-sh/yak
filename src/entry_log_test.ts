@@ -78,6 +78,7 @@ Deno.test('graph log renders ordered calls, results, model, and usage', () => {
     detail: 'yes',
     ok: true,
   })
+  assertEquals(log.entries[3].call, 'call')
   assertMatch(log.entries[4].line, /"message":\{"role":"agent"\}/)
 })
 
