@@ -17,6 +17,7 @@ Deno.test('the catalog offers each model once, Sol first, fallback as a transpor
     [
       ['gpt-5.6-sol', 'GPT-5.6 Sol', ['codex', 'codex-cli']],
       ['claude-opus-4-8', 'Opus', ['claude']],
+      ['claude-opus-4-8[1m]', 'Opus 1M', ['claude']],
       ['fable', 'Fable', ['claude']],
       ['sonnet', 'Sonnet', ['claude']],
       ['haiku', 'Haiku', ['claude']],

@@ -384,10 +384,14 @@ export let adapters: Record<string, Adapter> = {
     // barred, so opus is pinned to claude-opus-4-8 — the bare `opus` alias
     // is neither offered nor accepted, and a request for `opus` or
     // `claude-opus-5` is refused outright, never silently downgraded.
+    // claude-opus-4-8[1m] is the same pinned 4-8, served with the 1M-token
+    // context window — a first-party variant the CLI accepts, so it rides
+    // the same pin (opus-5 stays barred either way).
     // claude-opus-4-8 leads, so it is the default when a caller explicitly
     // names Claude without a model. Probed live against the CLI.
     models: [
       'claude-opus-4-8',
+      'claude-opus-4-8[1m]',
       'sonnet',
       'haiku',
       'fable',
@@ -405,6 +409,7 @@ export let adapters: Record<string, Adapter> = {
     // non-opus line ships a new latest.
     labels: {
       'claude-opus-4-8': 'Opus',
+      'claude-opus-4-8[1m]': 'Opus 1M',
       fable: 'Fable',
       sonnet: 'Sonnet',
       haiku: 'Haiku',

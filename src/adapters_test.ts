@@ -158,6 +158,11 @@ Deno.test('claude: opus-5 and the bare opus alias are barred; 4-8 is the default
   // A non-opus line rides its alias (latest is wanted); opus does not.
   assertEquals(trouble({ provider: 'claude', model: 'sonnet' }), null)
   assertEquals(trouble({ provider: 'claude', model: 'claude-opus-4-8' }), null)
+  // The 1M-context variant is the same pin, accepted alongside the base.
+  assertEquals(
+    trouble({ provider: 'claude', model: 'claude-opus-4-8[1m]' }),
+    null,
+  )
   // The ban is a rejection, never a silent downgrade — both spellings that
   // reach claude-opus-5 are refused: the pinned id and the alias that
   // resolves to it.
