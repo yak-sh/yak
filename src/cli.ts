@@ -99,12 +99,14 @@ import {
 } from './query.ts'
 import { checks, mailCheck, type Result, run as runChecks } from './doctor.ts'
 import {
+  awake,
   type Change,
   type Edge,
   edges,
   kindWord,
   plural,
   plurals,
+  type Session,
   sessionOf,
   type Snapshot,
   statuses,
@@ -1429,8 +1431,8 @@ let roleLine = (all: Row[], r: Row) => {
       : '')
 }
 
-let roleState = async (sub: string, got: Got) => {
-  let want = sub == 'start' || sub == 'resume'
+let wantState = (sub: string) =>
+  sub == 'start' || sub == 'resume' || sub == 'cycle'
     ? 'running'
     : sub == 'stop'
     ? 'stopped'
@@ -1439,18 +1441,25 @@ let roleState = async (sub: string, got: Got) => {
     : sub == 'disable'
     ? 'disabled'
     : 'retired'
+
+// The roles a state verb aims at: named ids, or every role under `--all`.
+// `.role.state!`, not `.role!` — bare `.role` is session.role, which would
+// list sessions. state is NOT NULL on every role, so its presence IS the
+// component's.
+let roleTargets = async (sub: string, got: Got) => {
   let ids = got.many.ids ?? []
-  // `.role.state!`, not `.role!` — bare `.role` is session.role, which would
-  // list sessions. state
-  // is NOT NULL on every role, so its presence IS the component's.
   let targets = got.flags.has('--all')
     ? (await query(['.role.state!'])).sort((a, b) => a.num - b.num)
     : await Promise.all(ids.map(neededRole))
   if (!targets.length) {
-    throw new Error(
-      got.flags.has('--all') ? 'no roles' : help(['role', sub]),
-    )
+    throw new Error(got.flags.has('--all') ? 'no roles' : help(['role', sub]))
   }
+  return targets
+}
+
+// Patch the desired state onto a set of roles and report each. Shared by the
+// simple state verbs and by `cycle`, which drives stopped→running itself.
+let moveRoles = async (targets: Row[], want: string) => {
   let moved = targets.filter((r) => r.comps.role.state != want)
   // Start is the owner's "try again now": it also fences the crash-loop
   // breaker (retry_at) so deaths before this instant no longer count. The
@@ -1463,6 +1472,78 @@ let roleState = async (sub: string, got: Got) => {
     let already = !moved.includes(r) ? ' (already)' : ''
     print(`${idOf(r)} ${want}${already}  ${r.comps.doc?.title ?? ''}`)
   }
+}
+
+let roleState = async (sub: string, got: Got) =>
+  moveRoles(await roleTargets(sub, got), wantState(sub))
+
+// A role's sessions still holding a live process. The reconciler ADOPTS any
+// live session for a role (dedup), so it refuses to spawn a fresh one while one
+// lives. Reads wire-visible liveness (awake): a session we spawned says it in
+// its status, an external one while it holds a process the server hasn't watched
+// shut. Pure, so cli_test drives the decision without a server.
+export let liveRoleSessions = (sessions: Row[]) =>
+  sessions.filter((r) => r.comps.session && awake(r.comps.session as Session))
+
+// A role's stop is FULLY reconciled — safe to restart — when its live session
+// is gone AND the reconciler has cleared the role's applied_hash. That hash is
+// the respawn idempotency key (roles.ts reconcileManaged): while it still
+// matches, a settled session is adopted, not replaced. reconcileStopped clears
+// it only once the session is inactive, so waiting on the dead session alone
+// races that bookkeeping — a restart that wins the race finds a matching hash
+// and declines to spawn. `role stop; role start` works by hand only because
+// seconds pass between them; cycle closes that window. Pure and exported so the
+// whole restart decision is tested without a server.
+export let restartReady = (role: Row | undefined, sessions: Row[]) =>
+  !!role && role.comps.role?.applied_hash == null &&
+  !liveRoleSessions(sessions).length
+
+// Wait for a role's stop to fully settle before the restart. A managed role has
+// no periodic reconcile (only native roles get the liveness poller), so once its
+// session dies asynchronously nothing re-drives the role to clear applied_hash
+// on its own. Re-asserting the stop is that trigger: reconcileStopped, run again
+// with the session now inactive, nulls the hash — idiomatic desired-state
+// convergence, the same patch `role stop` casts. Bounded: a wedged stop reports
+// rather than hanging the verb forever.
+let settledDown = async (eid: string, timeoutMs = 60_000) => {
+  let start = Date.now()
+  while (true) {
+    let [role] = await fetched([eid])
+    let sessions = await query([`.session.role=${eid}`])
+    if (restartReady(role, sessions)) return
+    if (role && !liveRoleSessions(sessions).length) {
+      // Session gone, hash still set — nudge the reconciler to settle it.
+      await send([{ eid, name: 'role', comp: { state: 'stopped' } }])
+    }
+    if (Date.now() - start > timeoutMs) {
+      let live = liveRoleSessions(sessions)[0]
+      throw new Error(
+        live
+          ? `${idOf(live)} did not stop within ${timeoutMs / 1000}s`
+          : `${role ? idOf(role) : eid} stop did not settle within ${
+            timeoutMs / 1000
+          }s`,
+      )
+    }
+    await new Promise((ok) => setTimeout(ok, 250))
+  }
+}
+
+// `task role cycle <entity>` — a deliberate clean handoff PAST the adopt/dedup
+// guard. Stop reuses `role stop`'s state patch, so the reconciler kills the live
+// session and its wrapper stamps final_text; the predecessor's brief (T-19460)
+// or that final_text is what briefOf hands the successor. Then wait for the stop
+// to fully settle, and reuse `role start` to spawn fresh. This authors no brief
+// — a session writes its own during its life; cycle only preserves and hands it
+// off.
+let roleCycle = async (got: Got) => {
+  let targets = await roleTargets('cycle', got)
+  await moveRoles(targets, 'stopped')
+  for (let r of targets) await settledDown(r.eid)
+  // Re-resolve before starting: the first targets carry their PRE-stop state,
+  // and moveRoles skips a role already in the wanted state — so a stale
+  // 'running' would make the restart a no-op. A fresh read sees 'stopped'.
+  await moveRoles(await roleTargets('cycle', got), 'running')
 }
 
 let role = async (got: Got) => {
@@ -2961,6 +3042,7 @@ export let verbs = bind({
   role,
   'role stop': (got) => roleState('stop', got),
   'role start': (got) => roleState('start', got),
+  'role cycle': roleCycle,
   'role pause': (got) => roleState('pause', got),
   'role resume': (got) => roleState('resume', got),
   'role disable': (got) => roleState('disable', got),

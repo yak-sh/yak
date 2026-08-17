@@ -742,6 +742,7 @@ export let manuals = declare({
       'task role stop R-12',
       'task role stop --all',
       'task role start R-12',
+      'task role cycle R-12',
       'task role pause R-12',
       'task role resume R-12',
     ],
@@ -765,6 +766,19 @@ export let manuals = declare({
   'role start': {
     about: 'set roles to running — the reconciler launches them',
     examples: ['task role start R-12', 'task role start --all'],
+    args: [arg('ids', id, true, false)],
+    opts: [flag('--all')],
+    some: ['ids', '--all'],
+  },
+  'role cycle': {
+    about: 'deliberate clean handoff: stop the live session, then spawn fresh',
+    detail:
+      'The reconciler ADOPTS any live session for a role, so it refuses to ' +
+      'spawn a fresh one while the old lives — a manual `role start` cannot ' +
+      'hand off. `role cycle` stops the current session (its brief and ' +
+      'final_text are preserved for the successor), waits for it to leave, ' +
+      'and starts a fresh one that inherits the handoff.',
+    examples: ['task role cycle R-12', 'task role cycle P-19'],
     args: [arg('ids', id, true, false)],
     opts: [flag('--all')],
     some: ['ids', '--all'],

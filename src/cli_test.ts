@@ -26,10 +26,12 @@ import {
   leadPrio,
   lifecycleHooks,
   listing,
+  liveRoleSessions,
   operatorHook,
   place,
   printer,
   reportUsage,
+  restartReady,
   roleEid,
   strayFile,
   strayFlag,
@@ -662,6 +664,77 @@ Deno.test('role binding accepts only a live role entity', () => {
   assertEquals(roleEid([role, task], 'R-7'), role.eid)
   assertEquals(roleEid([role, task], task.eid), undefined)
   assertEquals(roleEid([role, task], 'missing'), undefined)
+})
+
+// The drain decision `role cycle` waits on: a fresh spawn is refused while any
+// wire-live session for the role exists (the adopt guard), so only genuinely
+// live rows may hold the cycle. Active status OR an unwatched process is live;
+// a completed row, and one whose process the server has watched shut, are not.
+Deno.test('liveRoleSessions: only wire-live sessions gate a cycle restart', () => {
+  let role = 'cccccccc-0000-4000-8000-000000000001'
+  let sess = (
+    eid: string,
+    num: number,
+    session: Record<string, unknown>,
+  ): Snapshot['changes'] => [
+    { eid, name: 'entity', comp: { eid, num, created_at: '' } },
+    { eid, name: 'session', comp: { role, ...session } },
+  ]
+  let e = (n: number) => `cccccccc-0000-4000-8000-00000000010${n}`
+  let all = rows({
+    changes: [
+      ...sess(e(1), 1, { id: 's1', status: 'running' }),
+      ...sess(e(2), 2, { id: 's2', status: 'completed' }),
+      ...sess(e(3), 3, { id: 's3', status: 'completed', pid: 999 }),
+      ...sess(e(4), 4, {
+        id: 's4',
+        status: 'completed',
+        pid: 999,
+        finished_at: '2026-08-17T00:00:00Z',
+      }),
+      ...sess(e(5), 5, { id: 's5', status: 'stopping' }),
+    ],
+  })
+  assertEquals(
+    liveRoleSessions(all).map((r) => r.comps.session!.id).sort(),
+    ['s1', 's3', 's5'],
+  )
+})
+
+// `role cycle` restarts only once the stop is FULLY reconciled: the live session
+// gone AND the reconciler's applied_hash cleared. A cleared hash with a session
+// still alive, or a dead session while the hash still matches (the race cycle
+// exists to close), must both hold the restart back.
+Deno.test('restartReady: cleared applied_hash AND no live session', () => {
+  let role = (applied_hash: string | null) =>
+    rows({
+      changes: [
+        {
+          eid: 'r',
+          name: 'entity',
+          comp: { eid: 'r', num: 9, created_at: '' },
+        },
+        { eid: 'r', name: 'role', comp: { state: 'stopped', applied_hash } },
+      ],
+    })[0]
+  let sess = (status: string) =>
+    rows({
+      changes: [
+        {
+          eid: 's',
+          name: 'entity',
+          comp: { eid: 's', num: 8, created_at: '' },
+        },
+        { eid: 's', name: 'session', comp: { role: 'r', id: 's1', status } },
+      ],
+    })
+  let dead = sess('interrupted')
+  let live = sess('running')
+  assertEquals(restartReady(role(null), dead), true) // settled: go
+  assertEquals(restartReady(role('abc'), dead), false) // hash still matches: wait
+  assertEquals(restartReady(role(null), live), false) // session still up: wait
+  assertEquals(restartReady(role(null), []), true) // never spawned: go
+  assertEquals(restartReady(undefined, dead), false) // role vanished: wait
 })
 
 Deno.test('a bound role carries operator capability without a launcher marker', () => {
