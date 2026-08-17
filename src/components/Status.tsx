@@ -151,12 +151,14 @@ let local: Record<string, Command> = {
 }
 let all = { ...commands, ...local }
 
-// What the typist was looking at when the words were typed, said as a
-// comment on the task: the url, the root entity, the camera, and the
-// cards in view — enough for a fix agent to find the pixel the words
-// point at. Each platform attaches its own scene (a TUI would say its
-// screen); this is the web's. The instrument is this browser's client
-// entity, whose row carries the full user agent for anyone who digs.
+// What the typist was looking at when the words were typed, EMITTED as a
+// `scene` notice on the task (D-13858): the url, the root entity, the camera,
+// and the cards in view — enough for a fix agent to find the pixel the words
+// point at. A capture is machinery, not conversation, so it is a notice, not
+// a comment — it reaches the fix agent's inbox and the bus but stays out of
+// the task's thread and off the mail relay. Each platform attaches its own
+// scene (a TUI would say its screen); this is the web's. The instrument is
+// this browser's client entity, whose row carries the full user agent.
 let scene = (task: string): Change[] => {
   let root = screenTarget()?.eid
   let r = root ? ent(root) : null
@@ -184,7 +186,7 @@ let scene = (task: string): Change[] => {
   let c = uuid()
   return [
     { eid: c, name: 'doc', comp: { title: '', body } },
-    { eid: c, name: 'comment', comp: { target: task } },
+    { eid: c, name: 'notice', comp: { target: task, event: 'scene' } },
   ]
 }
 

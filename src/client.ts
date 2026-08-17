@@ -1436,6 +1436,33 @@ export let commentChanges = (
   ]
 }
 
+// A notice: a doc EMITTED about its target (D-13858), not said. The twin of
+// commentChanges for machinery — same doc + optional session reification (so
+// apply() stamps the instrument), but the entity wears `notice{target, event}`
+// instead of `comment`. That one difference is the whole point: it is out of
+// the conversation thread and off the mail relay (fanout only ever looks at
+// comments), yet the bus and the inbox deliver it where a comment on the same
+// target would land. `event` is one of noticeKinds — what happened.
+export let noticeChanges = (
+  all: Row[],
+  target: string,
+  event: string,
+  body: string,
+  session?: string,
+): Change[] => {
+  let s = session
+    ? sessionFor(all, session, undefined, undefined, {
+      actor: taskActor(all, target),
+    })
+    : undefined
+  let eid = uuid()
+  return [
+    ...(s?.changes ?? []),
+    { eid, name: 'doc', comp: { title: '', body } },
+    { eid, name: 'notice', comp: { target, event } },
+  ]
+}
+
 // The operator loop is the session that TRIAGES a project — the only door that
 // receives project-wide mail and actor knocks. Every session still participates
 // in the graph and hears what is aimed at it or its claimed tasks. No session
@@ -2721,21 +2748,25 @@ export let releaseChange = (row: Row): Change => ({
 })
 
 // The one release truth: a session ended — every claim it holds drops,
-// and tasks it did NOT finish get a comment saying so (the simple audit:
+// and tasks it did NOT finish get a NOTICE saying so (the simple audit:
 // no timers, no heartbeats, just "ended before done" on the record).
-// Finished work releases silently. Interactive wraps (task wrap) and the
-// server's managed-session settle both speak through this.
+// A lease lapse is machinery, not speech (D-13858), so it is a notice, not
+// a comment: it reaches the inbox and the bus but stays out of the task's
+// conversation thread and off the mail relay. Finished work releases
+// silently. Interactive wraps (task wrap) and the server's managed-session
+// settle both speak through this.
 export let lapseChanges = (all: Row[], sess: Row): Change[] => {
   let id = String(sess.comps.session?.id ?? '')
   let name = idOf(sess)
   return all.filter((r) => r.comps.claim?.session == sess.eid)
     .flatMap((r): Change[] => [
-      ...(settled(String(r.comps.task?.status)) ? [] : commentChanges(
+      ...(settled(String(r.comps.task?.status)) ? [] : noticeChanges(
         all,
         r.eid,
+        'lapse',
         `⚑ lease lapsed: session ${name} ended before this was done`,
         id,
-      ).slice(-2)), // the session exists — skip the mint, keep doc + comment
+      ).slice(-2)), // the session exists — skip the mint, keep doc + notice
       releaseChange(r),
     ])
 }

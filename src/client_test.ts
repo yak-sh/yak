@@ -922,21 +922,26 @@ Deno.test('claimant resolves through the session entity', () => {
 })
 
 Deno.test('wrapChanges: unfinished gets the trail, done goes quiet', () => {
-  let cs = wrapChanges(all, 'sess-x') // T1 is wip → comment + release
+  let cs = wrapChanges(all, 'sess-x') // T1 is wip → notice + release
   assertEquals(cs.filter((c) => c.name == 'claim').length, 1)
-  assertEquals(cs.filter((c) => c.name == 'comment').length, 1)
+  // A lease lapse is machinery, not speech (D-13858): a NOTICE, never a comment.
+  assertEquals(cs.filter((c) => c.name == 'comment').length, 0)
+  assertEquals(cs.filter((c) => c.name == 'notice').length, 1)
   assertEquals(
     cs.find((c) => c.name == 'doc')?.comp?.body,
     '⚑ lease lapsed: session S-1 ended before this was done',
   )
-  assertEquals(cs.find((c) => c.name == 'comment')?.comp, { target: T1 })
+  assertEquals(cs.find((c) => c.name == 'notice')?.comp, {
+    target: T1,
+    event: 'lapse',
+  })
   let done = structuredClone(snap)
   done.changes.find((c) => c.eid == T1 && c.name == 'task')!.comp!.status =
     'done'
   let quiet = wrapChanges(rows(done), 'sess-x')
-  // finished work releases without a comment — only the brief rides along
+  // finished work releases without a notice — only the brief rides along
   // (fixture S is docless and held a claim, so it earns the stub)
-  assertEquals(quiet.filter((c) => c.name == 'comment'), [])
+  assertEquals(quiet.filter((c) => c.name == 'notice'), [])
   assertEquals(quiet[0], { eid: T1, name: 'claim', comp: null })
   assertEquals(wrapChanges(all, 'sess-unknown'), [])
 })
