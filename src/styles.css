@@ -860,7 +860,8 @@ html {
 }
 /* The card's remove button — deletes the card entity, not its target.
    Padded well past the glyph: a close button earns its hit area. */
-.Card_X {
+.Card_X,
+.Card_Min {
   font: 14px/1 var(--mono);
   color: var(--dim);
   background: none;
@@ -873,6 +874,9 @@ html {
   min-height: var(--tap);
   display: grid;
   place-items: center;
+}
+.Card_Min:hover {
+  color: var(--accent);
 }
 .Card_X:hover {
   color: var(--red);
@@ -3992,7 +3996,8 @@ a[data-ref]:hover {
   white-space: nowrap;
 }
 
-/* The live-session tray: status dots sit in the bar; full rows open above. */
+/* The tray: live sessions and minimized Shelf cards sit in the bar. A live
+   digest or one full Card opens above it, anchored to the bottom-right. */
 .Tray {
   position: relative;
   display: flex;
@@ -4001,6 +4006,24 @@ a[data-ref]:hover {
   align-items: center;
   font-size: 12px;
   color: var(--text);
+}
+.Tray_Pop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--half-gap));
+  z-index: 21;
+  width: min(34rem, calc(100vw - 2 * var(--gap)));
+  max-height: min(70dvh, 48rem);
+}
+.Tray_Pop > .Pin-docked {
+  position: static;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  padding: 0;
+}
+.Tray_Pop .Card {
+  max-height: min(70dvh, 48rem);
 }
 .Tray_Panel {
   position: absolute;
@@ -4088,6 +4111,34 @@ a[data-ref]:hover {
   color: inherit;
   font: inherit;
   cursor: pointer;
+}
+.Tray_Live,
+.Tray_Item {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  padding: 0 var(--half-gap);
+  min-width: 1.5rem;
+  min-height: var(--tap);
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.Tray_Items {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+}
+.Tray_Item {
+  color: var(--muted);
+  padding-inline: 4px;
+}
+.Tray_Item-open,
+.Tray_Item:hover {
+  color: var(--text);
+  background: var(--soft);
 }
 .Tray_Dots {
   display: flex;

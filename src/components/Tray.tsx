@@ -1,14 +1,18 @@
-import { useEffect } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { signal } from '@preact/signals'
-import { ent, mode, sessionRows } from '../live.ts'
+import { clientId, ent, mode, pinned, sessionRows, shelfFor } from '../live.ts'
 import { awake, type Session } from '../types.ts'
 import { block } from './ui.tsx'
 import { dragData } from './drag.ts'
 import { Entity } from './Entity.tsx'
 import { SessionDot } from './session_status.tsx'
+import { Card, icons } from './Card.tsx'
+import { Icon } from './icons.tsx'
+import { shelfHost, shelfOpen, shelve } from './shelf.ts'
 
-// The Tray is the statusbar's live-session digest. Durable places belong in
-// graph-backed Navigation; this transient strip only says who wants attention.
+// The Tray is bottom-right screen chrome: live-session attention plus a
+// per-client Shelf. A shelved entity is a normal Card while open and one icon
+// while minimized; navigation remains the durable place-finding surface.
 
 // Collapsed vs expanded, remembered across visits (default collapsed).
 export let trayOpen = signal(
@@ -69,20 +73,54 @@ let live = () =>
   traySessions(sessionRows().filter(([eid, session]) => shown(eid, session)))
 
 let Frame = block('div', 'Tray', {
-  Strip: 'button',
+  Strip: 'div',
+  Live: 'button',
+  Items: 'span',
+  Item: 'button',
   Dots: 'span',
   Chevron: 'span',
   Panel: 'div',
+  Pop: 'div',
   Group: 'section',
   Label: 'span',
   Row: 'div',
   X: 'button',
   Hint: 'div',
 })
-let { Strip, Dots, Chevron, Panel, Group, Label, Row, X, Hint } = Frame
+let {
+  Strip,
+  Live,
+  Items,
+  Item,
+  Dots,
+  Chevron,
+  Panel,
+  Pop,
+  Group,
+  Label,
+  Row,
+  X,
+  Hint,
+} = Frame
+
+let over = (e: DragEvent) => {
+  if (e.dataTransfer?.types.includes('application/x-tasks-card')) {
+    e.preventDefault()
+  }
+}
+
+let drop = (e: DragEvent) => {
+  let data = e.dataTransfer?.getData('application/x-tasks-card')
+  if (!data) return
+  e.preventDefault()
+  let { target, view, pin } = JSON.parse(data)
+  shelve(target, view, pin)
+}
 
 export let Tray = () => {
+  let root = useRef<HTMLDivElement>(null)
   useEffect(() => {
+    shelfHost(root.current)
     let key = (e: KeyboardEvent) => {
       let typing = e.target instanceof HTMLElement &&
         e.target.matches('input, textarea, select, [contenteditable]')
@@ -91,23 +129,54 @@ export let Tray = () => {
     }
     addEventListener('keydown', key)
     return () => {
+      shelfHost(null)
       removeEventListener('keydown', key)
     }
   }, [])
 
   let ls = live()
+  let shelf = shelfFor(clientId())
+  let ps = shelf ? pinned(shelf).toSorted((a, b) => b.z - a.z) : []
+  let open = ps.find((p) => p.eid == shelfOpen.value)
 
   return (
-    <Frame>
-      <Strip
-        type='button'
-        aria-label={trayOpen.value ? 'close tray' : 'open tray'}
-        onClick={() => toggle(!trayOpen.value)}
-      >
-        <Dots>
-          {ls.map(([eid]) => <SessionDot key={eid} e={ent(eid)} />)}
-        </Dots>
-        <Chevron>{trayOpen.value ? '⌄' : '⌃'}</Chevron>
+    <Frame elRef={root} onDragOver={over} onDrop={drop}>
+      {open && (
+        <Pop>
+          <Card
+            p={open}
+            docked
+            onMinimize={() => shelfOpen.value = null}
+          />
+        </Pop>
+      )}
+      <Strip>
+        <Live
+          type='button'
+          aria-label={trayOpen.value ? 'close tray' : 'open tray'}
+          onClick={() => toggle(!trayOpen.value)}
+        >
+          <Dots>
+            {ls.map(([eid]) => <SessionDot key={eid} e={ent(eid)} />)}
+          </Dots>
+          <Chevron>{trayOpen.value ? '⌄' : '⌃'}</Chevron>
+        </Live>
+        <Items>
+          {ps.map((p) => (
+            <Item
+              key={p.eid}
+              type='button'
+              mod={p.eid == open?.eid && 'open'}
+              aria-label={`open ${
+                ent(p.target).doc?.title ?? ent(p.target).kind
+              }`}
+              onClick={() =>
+                shelfOpen.value = p.eid == open?.eid ? null : p.eid}
+            >
+              <Icon name={icons[p.view] ?? 'file-text'} />
+            </Item>
+          ))}
+        </Items>
       </Strip>
       {trayOpen.value && (
         <Panel>

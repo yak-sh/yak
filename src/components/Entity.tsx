@@ -1,6 +1,7 @@
 import { subChanges } from '../client.ts'
 import { ent, mutate, myActor, myMode, reveal, rows, shown } from '../live.ts'
 import { type Action, define, defineActions, has, resolve } from './registry.ts'
+import { shelve } from './shelf.ts'
 import { memo } from './memo.ts'
 import {
   Boards,
@@ -281,6 +282,15 @@ define([
 // it, a live claim offers release, and anything at all can be deleted
 // (the red row at the end).
 defineActions([
+  {
+    // The Shelf is universal screen chrome: any entity may become the
+    // bottom-right popover, not only the chats that choose it by default.
+    match: () => true,
+    acts: (e) => [{
+      label: 'open in tray',
+      run: () => shelve(e.eid, resolve(e).view),
+    }],
+  },
   {
     match: () => true,
     acts: (e) => [{

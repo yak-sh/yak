@@ -15,6 +15,7 @@ import { Entity } from './Entity.tsx'
 import { filterable, FilterInput } from './Filter.tsx'
 import { Icon } from './icons.tsx'
 import { cardMenuAt } from './nav.tsx'
+import { overShelf, shelve } from './shelf.ts'
 
 // Each tab view wears an icon; the name moves into an anchored tooltip.
 // Exported: the fullscreen Screen bar (App.tsx) draws the same tabs.
@@ -62,10 +63,11 @@ let Handle = el('div', 'Handle')
 
 let Frame = block('section', 'Card', {
   Tabs: 'header',
+  Min: 'button',
   X: 'button',
   Scroll: 'div',
 })
-let { Tabs, X, Scroll } = Frame
+let { Tabs, Min, X, Scroll } = Frame
 
 export let pinStyle = (live: Signal<Pinned>) => {
   let p = live.value
@@ -83,15 +85,22 @@ export let pinStyle = (live: Signal<Pinned>) => {
 // nested under Debug use the same drag contract).
 // The scroller (not the card) owns the padding, so the scrollbar rides the
 // card border and the padding scrolls away with the content.
-export let Card = ({ p }: { p: Pinned }) => {
+export let Card = (
+  { p, docked = false, onMinimize }: {
+    p: Pinned
+    docked?: boolean
+    onMinimize?: () => void
+  },
+) => {
   // Plain props do not invalidate a computed signal. Mirror the latest pin
   // into one so moves update the style while z-only raises still bind
   // straight to the attribute without rerendering the card body.
   let live = useSignal(p)
   live.value = p
-  let style = useComputed(() => pinStyle(live))
+  let style = useComputed(() => docked ? '' : pinStyle(live))
   let down = (e: PointerEvent & { currentTarget: HTMLDivElement }) => {
     if (!(e.target instanceof Element)) return
+    if (docked) return
     toFront(p.eid) // ANY touch raises the card — the drag gate is below
     if (e.button != 0) return // right/middle click is a menu, never a drag
     if (
@@ -107,8 +116,15 @@ export let Card = ({ p }: { p: Pinned }) => {
       el,
       () => camera.value.zoom,
       () => {},
-      (dx, dy) => {
-        mutate({ eid: p.eid, name: 'pin', comp: moved(from.x, from.y, dx, dy) })
+      (dx, dy, x, y) => {
+        if (overShelf(x, y)) shelve(p.target, p.view, p.eid)
+        else {
+          mutate({
+            eid: p.eid,
+            name: 'pin',
+            comp: moved(from.x, from.y, dx, dy),
+          })
+        }
       },
     )
   }
@@ -160,7 +176,7 @@ export let Card = ({ p }: { p: Pinned }) => {
 
   return (
     <Pin
-      mod={[p.h ? 'sized' : false, !p.w && 'auto']}
+      mod={[p.h ? 'sized' : false, !p.w && 'auto', docked && 'docked']}
       data-eid={p.eid}
       style={style}
       onPointerDown={down}
@@ -189,6 +205,11 @@ export let Card = ({ p }: { p: Pinned }) => {
               <TabFace view={v} eid={p.target} />
             </Tab>
           ))}
+          {onMinimize && (
+            <Min type='button' aria-label='minimize' onClick={onMinimize}>
+              −
+            </Min>
+          )}
           <X
             type='button'
             onClick={() => mutate({ eid: p.eid, name: 'entity', comp: null })}
@@ -205,7 +226,7 @@ export let Card = ({ p }: { p: Pinned }) => {
           <Entity eid={p.target} view={`Card.${p.view}`} />
         </Scroll>
       </Frame>
-      {resizeDirs.map((d) => (
+      {!docked && resizeDirs.map((d) => (
         <Handle
           key={d}
           mod={d}

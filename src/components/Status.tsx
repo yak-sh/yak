@@ -30,6 +30,7 @@ import { drop, peek, save } from './drafts.ts'
 import { liveBlocked, load, providers } from './Run.tsx'
 import { catalog } from '../providers.ts'
 import { Tray } from './Tray.tsx'
+import { shelve } from './shelf.ts'
 import { block } from './ui.tsx'
 import { Id } from './views/Inline.tsx'
 import { title } from './title.tsx'
@@ -264,6 +265,7 @@ let exec = async (line: string) => {
       msg.value = r.msg ?? ''
       let session = await launch(r.spawn)
       if (task) msg.value = { task, session }
+      else shelve(session, 'Session')
     } else {
       msg.value = r.msg ?? ''
     }
