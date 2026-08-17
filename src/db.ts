@@ -7,7 +7,7 @@
 //
 // Ids: `eid` is a UUID so ANY side (client included) can mint entities;
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
-import { DatabaseSync, type StatementSync } from 'node:sqlite'
+import { DatabaseSync, type StatementSync } from './sqlite.ts'
 import { dirname, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { sha } from './sha.ts'
@@ -69,7 +69,7 @@ import {
   sourceResolve,
 } from './source.ts'
 
-// Prepared-statement cache, per db handle. node:sqlite recompiles the SQL on
+// Prepared-statement cache, per db handle. SQLite recompiles the SQL on
 // every prepare(); apply() alone recompiles ~35 statements per call (~318µs
 // measured), which is the bulk of its cost. Caching per handle means each
 // distinct SQL string compiles ONCE and the whole cache dies with the handle
@@ -3308,7 +3308,7 @@ export let apply = (
         if (!comp || dead.get(eid) || dead.get(String(comp.child))) {
           continue
         }
-        // Both spines checked HERE for the friendlier message (node:sqlite
+        // Both spines checked HERE for the friendlier message (the driver
         // enforces FKs by default, but its bounce names no column): an
         // edge may only join entities that exist.
         let spines = prep(

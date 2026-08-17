@@ -1,7 +1,7 @@
 // Server-owned persistence for a Session's split components. It keeps the
 // canonical facets and rolling aliases in one transaction owned by its caller,
 // and gives SQL consumers the same canonical-first projection as graph clients.
-import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
+import type { DatabaseSync, SQLInputValue } from './sqlite.ts'
 import {
   type Change,
   comps,

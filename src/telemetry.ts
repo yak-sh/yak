@@ -11,7 +11,7 @@
 //
 // Recording is best-effort BY CONTRACT — a telemetry failure must never
 // break the thing it watches, so record() swallows and warns. SERVER-ONLY.
-import { type DatabaseSync } from 'node:sqlite'
+import { type DatabaseSync } from './sqlite.ts'
 
 // What a caller reports. `ok` is the only judgement: a tool that answered
 // with an error is a call that happened AND failed — both facts matter.

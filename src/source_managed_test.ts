@@ -49,10 +49,10 @@ let { registerManagedSource, forgetManagedIndex, sniff } = await import(
 )
 let { assertEquals } = await import('@std/assert')
 
-let count = (db: import('node:sqlite').DatabaseSync) =>
+let count = (db: import('./sqlite.ts').DatabaseSync) =>
   (db.prepare('select count(*) as n from entity').get() as { n: number }).n
 
-let withSource = (fn: (db: import('node:sqlite').DatabaseSync) => void) => {
+let withSource = (fn: (db: import('./sqlite.ts').DatabaseSync) => void) => {
   let db = freshDb()
   let before = count(db)
   forgetManagedIndex()

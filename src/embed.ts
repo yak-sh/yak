@@ -9,7 +9,7 @@
 // O(relevant-subset) restriction is T-18121's next layer), and a box
 // without the model just has no hints — the embedder dies once, quietly,
 // and every door degrades to silence. apply() never waits on any of this.
-import type { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync } from './sqlite.ts'
 
 export let MODEL = 'Xenova/bge-small-en-v1.5'
 

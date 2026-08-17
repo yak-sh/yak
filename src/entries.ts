@@ -2,7 +2,7 @@
 // entities, read one ordered partition, and lease one bounded runner action.
 // Model projection and tool execution live in runner.ts; process-backed JSONL
 // sessions stay in sessions.ts.
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync } from './sqlite.ts'
 import { apply, entriesOf, entryOf, record } from './db.ts'
 import { trace } from './effects.ts'
 import { checkpointValid, type EntryRow } from './replay.ts'

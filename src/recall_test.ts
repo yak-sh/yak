@@ -11,7 +11,7 @@ let { hash, MODEL } = await import('./embed.ts')
 let { recallEntry, recallFrom } = await import('./recall.ts')
 let { freshDb } = await import('./testdb.ts')
 let { assertEquals } = await import('@std/assert')
-import type { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync } from './sqlite.ts'
 
 let uid = (): string => crypto.randomUUID()
 // A unit vector — cosine against another unit vector is their dot product, so a

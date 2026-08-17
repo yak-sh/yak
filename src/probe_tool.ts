@@ -12,7 +12,7 @@
 // server (a different, long-held pid) can never be the target. Pid-only is the
 // ONE door; there is no pattern to get wrong.
 
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync } from './sqlite.ts'
 import { commOf } from './proc.ts'
 
 let root = new URL('..', import.meta.url).pathname

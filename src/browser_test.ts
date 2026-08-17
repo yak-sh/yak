@@ -18,7 +18,7 @@
 import { assert } from '@std/assert'
 
 // Every module specifier, with the leading `type` if the whole clause is one.
-// `import type { X } from 'node:sqlite'` is ERASED by sucrase before the file
+// `import type { X } from './sqlite.ts'` is ERASED by sucrase before the file
 // is served, so it never reaches the browser and must not fail here — only a
 // VALUE import survives compilation. A mixed `import { type A, b }` keeps the
 // import for `b`, so its head is a bare `import {…` (no leading `type`) and is

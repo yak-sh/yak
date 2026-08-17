@@ -5,7 +5,7 @@
 // Codex; a bounded `claude -p` is a sibling entry. Everything else — entry
 // readiness, leases, hosted calls, worktree preparation, attention, and stop —
 // is provider-agnostic. Process-backed compatibility remains in sessions.ts.
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync } from './sqlite.ts'
 import { apply, record } from './db.ts'
 import {
   append,

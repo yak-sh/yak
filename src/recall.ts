@@ -12,7 +12,7 @@
 // effect resolves the scope. WHO delivers the floaters (the tasks channel's
 // kind=recall item, replayed into a native session's transcript) lives in
 // channel.ts and imports only this.
-import { type DatabaseSync } from 'node:sqlite'
+import { type DatabaseSync } from './sqlite.ts'
 import { embed, similar } from './embed.ts'
 import { apply, db, human, rowsOf } from './db.ts'
 import { belongs, type Scoped, scopeFor } from './client.ts'

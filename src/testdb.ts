@@ -12,14 +12,14 @@
 // discipline — set DB_PATH before importing it. testing.ts (slow/tick/until)
 // stays db-free so the ~40 files that want only those primitives never trip it.
 
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync } from './sqlite.ts'
 import { open } from './db.ts'
 
-// Connection pragmas live on the handle, not in the serialized bytes, so
-// re-apply the two open() sets after deserialize: busy_timeout, and synchronous
-// when TASKS_SYNC is set. open() registers no custom SQL functions or
-// collations, so nothing else needs re-applying. The snapshot is built lazily
-// and shared, so the DDL cost is paid once per test process, not once per db.
+// The clones are isolated :memory: handles: busy_timeout has no peer to wait
+// for, and synchronous has no disk to flush. Avoiding those no-op pragmas also
+// keeps SQLite from parsing the cloned schema before the test asks for it. The
+// snapshot is built lazily and shared, so the DDL cost is paid once per test
+// process, not once per db.
 //
 // Each deserialized handle owns a private copy of the ~1.1MB migrated image,
 // and a db-heavy file calls freshDb() dozens of times. Handing out a handle
@@ -51,9 +51,6 @@ let clone = (bytes: Uint8Array) => {
   }
   let db = new DatabaseSync(':memory:')
   db.deserialize(bytes)
-  db.exec('pragma busy_timeout = 5000')
-  let sync = Deno.env.get('TASKS_SYNC')
-  if (sync) db.exec(`pragma synchronous = ${sync}`)
   prev = db
   return db
 }

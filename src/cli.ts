@@ -111,7 +111,7 @@ import {
 } from './types.ts'
 import { cost, type Dim, group, report, roll, type Use, use } from './usage.ts'
 // `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
-// reaches for node:sqlite, and the CLI has no business loading a db driver.
+// reaches for the SQLite driver, and the CLI has no business loading a db.
 import type { Log, Stat } from './telemetry.ts'
 import type { JournalEntry } from './client.ts'
 import { local } from './time.ts'

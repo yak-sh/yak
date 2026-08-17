@@ -11,7 +11,7 @@
 // booting the server (server.ts owns the one live db and closes over it at each
 // call site). sql_test.ts holds the index and the matcher against each other,
 // entry predicates included, so the fast path cannot silently disagree.
-import type { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync } from './sqlite.ts'
 import { kindOf, sessionOf } from './types.ts'
 import { find, type Querier, type Row, rows } from './client.ts'
 import {
