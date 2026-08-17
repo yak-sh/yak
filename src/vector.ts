@@ -44,8 +44,7 @@ let load = (): Binary => {
   return binary = (m.default ?? m) as Binary
 }
 
-export let loadVector = (db: DatabaseSync) =>
-  db.loadExtension(load().path)
+export let loadVector = (db: DatabaseSync) => db.loadExtension(load().path)
 
 let count = (db: DatabaseSync) =>
   (db.prepare('select count(*) n from embedding').get() as { n: number }).n
