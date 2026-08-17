@@ -41,7 +41,19 @@ export let delivered = (eid: string, via: string, cast: Cast) => {
     `insert into delivered (eid, at, via) values (?, ?, ?)
      on conflict(eid) do update set at = excluded.at, via = excluded.via`,
   ).run(eid, at, via || null)
-  cast([{ eid, name: 'delivered', comp: { eid, at, via: via || null } }])
+  let changes: Change[] = [
+    { eid, name: 'delivered', comp: { eid, at, via: via || null } },
+  ]
+  // One outcome at a time (the D-14945 tri-state): a success clears any prior
+  // failure, so a pending query (neither facet) and the `.error` health query
+  // can never disagree about the same deliverable.
+  if (db.prepare('delete from error where eid = ?').run(eid).changes) {
+    changes.push({ eid, name: 'error', comp: null })
+  }
+  // publish, not a bare cast: record() journals the outcome so a catch-up
+  // client replays it. `delivered` alone skipped the journal while `error`
+  // (through publish) did not — the replayability gap this closes.
+  publish(changes, cast)
 }
 
 // Stamp the shared failure facet. It is broader than delivery: roles,
@@ -61,7 +73,15 @@ export let errored = (
   at = now(),
 ) => {
   let change = errorChange(eid, message, at)
-  if (change) publish([change], cast)
+  let changes = change ? [change] : []
+  // The tri-state's other edge: a failure clears any prior delivered. Run
+  // unconditionally — even when errorChange dedups an unchanged error, a stray
+  // `delivered` beside it must still go — and guarded on `.changes`, so a plain
+  // unchanged error with no delivered publishes nothing (the no-storm rule).
+  if (db.prepare('delete from delivered where eid = ?').run(eid).changes) {
+    changes.push({ eid, name: 'delivered', comp: null })
+  }
+  publish(changes, cast)
 }
 
 // The data half is exported for writers that atomically move their own
