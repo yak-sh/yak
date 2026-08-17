@@ -1,11 +1,16 @@
 // Persistent roles: reconcile graph-declared fleet capacity onto either a
 // native provider TUI in tmux or the existing managed session runner.
 //
-// The role row is desired state. A deterministic tmux session prevents native
-// duplicates across daemon restarts; session.role is the durable history
-// and membership fact for both surfaces. No notification words cross this
-// module: a settled managed thread receives only a fixed instruction to call
-// task_context, whose atomic inbox owns retrieval and acknowledgement.
+// The role row is desired state. A native role lands as a WINDOW in the owner's
+// ONE tmux session (T-14297) — the owner attaches once and walks windows, the
+// way bin/holdco run has always placed operators — never a session of its own.
+// Its pane carries a deterministic `@role` marker (the eid); that marker, not a
+// window name, is the duplicate guard across daemon restarts, and is what a roll
+// or stop kills — the PANE, so the owner's own shells in a shared window are
+// left alone. session.role is the durable history and membership fact for both
+// surfaces. No notification words cross this module: a settled managed thread
+// receives only a fixed instruction to call task_context, whose atomic inbox
+// owns retrieval and acknowledgement.
 import { createHash } from 'node:crypto'
 import { childPath } from './agent_env.ts'
 import { trouble } from './adapters.ts'
@@ -84,7 +89,18 @@ let defaults: RoleDeps = {
   },
 }
 
-export let roleTmux = (eid: string) => `task-role-${eid}`
+// The owner's ONE tmux session. Every native role lands as a WINDOW here, so
+// the owner attaches once and walks windows rather than hunting a session per
+// role (T-14297). It is the SAME session bin/holdco run uses, read from the
+// same env, so a role's window sits beside the operator windows holdco opens
+// and the two orchestrators share one attach and cooperate on one server.
+export let ownerSession = () =>
+  (Deno.env.get('HOLDCO_TMUX_SESSION') ?? '').trim() || 'holdco'
+
+// The pane user-option that marks a role's pane. Its value is the role eid, so
+// the reconciler always knows which pane in the owner session is which role's —
+// deterministic, and it survives a daemon restart with no per-role session.
+let ROLE_OPT = '@role'
 
 let instructionPath = (eid: string) => {
   let home = Deno.env.get('HOME')
@@ -225,23 +241,25 @@ export let colorOf = (c: RoleConfig) =>
   (c.color ?? '').trim() || roleColor(ventureOf(c))
 
 // Window chrome plus the pane's identity — holdco's exact set, so an adopted
-// role pane is indistinguishable from an operator's. `@operator` is the
-// option holdco's own tooling reads to find a live operator pane, so a role
-// that omits it is invisible to every reader that already exists.
+// role window is indistinguishable from an operator's. Targeted BY PANE: a pane
+// id resolves to its window for the window-scoped options, so the chrome lands
+// on whichever window in the owner session this role's pane opened in, with no
+// window name to target. `@operator` is the option holdco's own tooling reads
+// to find a live operator pane, so a role that omits it is invisible to every
+// reader that already exists.
 export let styleArgs = (c: RoleConfig, pane: string): string[][] => {
   let name = ventureOf(c)
-  let win = `=${roleTmux(c.eid)}:`
   let colour = colorOf(c)
   let label = ' #W#{?window_bell_flag, !,} '
   return [
-    ['set-window-option', '-t', win, 'automatic-rename', 'off'],
-    ['set-window-option', '-t', win, 'window-status-format', label],
-    ['set-window-option', '-t', win, 'window-status-current-format', label],
-    ['set-window-option', '-t', win, 'window-status-style', `fg=${colour}`],
+    ['set-window-option', '-t', pane, 'automatic-rename', 'off'],
+    ['set-window-option', '-t', pane, 'window-status-format', label],
+    ['set-window-option', '-t', pane, 'window-status-current-format', label],
+    ['set-window-option', '-t', pane, 'window-status-style', `fg=${colour}`],
     [
       'set-window-option',
       '-t',
-      win,
+      pane,
       'window-status-current-style',
       `fg=${colour},reverse`,
     ],
@@ -250,14 +268,18 @@ export let styleArgs = (c: RoleConfig, pane: string): string[][] => {
   ]
 }
 
-export let nativeTmuxArgs = (c: RoleConfig) => [
-  'new-session',
+// A role's pane as a new WINDOW in the owner session, named for its venture and
+// coloured by its hash (holdco's convention, so it reads like an operator's).
+// `-t ownerSession()` targets the session, new-window opens there, and -P prints
+// the pane it made. The env rides the window's first pane.
+export let nativeWindowArgs = (c: RoleConfig) => [
+  'new-window',
   '-d',
   '-P',
   '-F',
   '#{pane_id}',
-  '-s',
-  roleTmux(c.eid),
+  '-t',
+  `=${ownerSession()}`,
   '-n',
   windowOf(c),
   '-c',
@@ -271,7 +293,7 @@ export let nativeTmuxArgs = (c: RoleConfig) => [
 export let nativeRespawnArgs = (
   c: RoleConfig,
   file: string,
-  pane = `=${roleTmux(c.eid)}:`,
+  pane: string,
 ) => [
   'respawn-pane',
   '-k',
@@ -292,42 +314,92 @@ export let nativeRespawnArgs = (
   ),
 ]
 
-let tmuxHas = async (eid: string, deps: RoleDeps) =>
-  (await deps.command(['has-session', '-t', `=${roleTmux(eid)}`])).success
-
-let tmuxKill = async (eid: string, deps: RoleDeps) => {
-  if (!await tmuxHas(eid, deps)) return false
-  await deps.command(['kill-session', '-t', `=${roleTmux(eid)}`])
-  return true
-}
-
 let tmuxText = (out: CommandOutput) =>
   new TextDecoder().decode(out.stdout).trim()
+
+// The role's panes in the owner session, found by the @role marker. holdco
+// proved the window is the wrong grain: the owner keeps his own shells in these
+// windows, so a window is alive while the operator is dead, and kill-window
+// would take his shells. The PANE is the operator — we mark ours and read (and
+// kill) only that. `-s` lists every pane in the session, not just the current
+// window's. No server (or no session) is simply no panes.
+let rolePanes = async (
+  eid: string,
+  deps: RoleDeps,
+): Promise<{ pane: string; dead: boolean }[]> => {
+  let out = await deps.command([
+    'list-panes',
+    '-s',
+    '-t',
+    `=${ownerSession()}`,
+    '-F',
+    `#{${ROLE_OPT}}\t#{pane_id}\t#{pane_dead}`,
+  ])
+  if (!out.success) return []
+  return tmuxText(out).split('\n').filter(Boolean)
+    .map((line) => line.split('\t'))
+    .filter(([role]) => role == eid)
+    .map(([, pane, dead]) => ({ pane, dead: dead == '1' }))
+}
+
+let tmuxHas = async (eid: string, deps: RoleDeps) =>
+  (await rolePanes(eid, deps)).some((p) => !p.dead)
+
+// Kill only the role's own pane(s): an empty window closes itself, and the
+// owner's shells in a shared window are left alone. Returns whether any existed.
+let tmuxKill = async (eid: string, deps: RoleDeps) => {
+  let panes = await rolePanes(eid, deps)
+  for (let p of panes) await deps.command(['kill-pane', '-t', p.pane])
+  return panes.length > 0
+}
+
+// The owner session must exist before a window can open in it. bin/holdco run
+// creates it too, so this only fills the gap when a role reconciles first; when
+// no tmux SERVER is up, new-session fails through tmux.ts's door with the
+// systemctl hint, which becomes the role's error — never a started server here.
+let ensureSession = async (deps: RoleDeps) => {
+  if (
+    (await deps.command(['has-session', '-t', `=${ownerSession()}`])).success
+  ) return
+  let made = await deps.command(['new-session', '-d', '-s', ownerSession()])
+  if (!made.success) {
+    throw new Error(
+      new TextDecoder().decode(made.stderr).trim() ||
+        'tmux refused the owner session',
+    )
+  }
+}
 
 // Keep an early-dead pane around just long enough to read its error. tmux
 // accepting new-session only proves that tmux started a process, not that the
 // provider parsed its config or reached its hooks.
 let tmuxStart = async (c: RoleConfig, file: string, deps: RoleDeps) => {
-  let made = await deps.command(nativeTmuxArgs(c))
+  await ensureSession(deps)
+  // A stale pane from a crashed launch (remain-on-exit kept it) wears the same
+  // marker as the one we are about to open; sweep any before the fresh window.
+  await tmuxKill(c.eid, deps)
+  let made = await deps.command(nativeWindowArgs(c))
   if (!made.success) {
     throw new Error(
       new TextDecoder().decode(made.stderr).trim() ||
-        'tmux refused the role session',
+        'tmux refused the role window',
     )
   }
-  let session = `=${roleTmux(c.eid)}`
-  let window = `${session}:`
   let pane = tmuxText(made)
   if (!/^%\d+$/.test(pane)) {
-    await tmuxKill(c.eid, deps)
+    if (pane) await deps.command(['kill-pane', '-t', pane])
     throw new Error('tmux did not report the role pane')
   }
+  // Mark the pane BEFORE the launch guard: the marker is the reconciler's only
+  // handle on this pane, so a daemon restart mid-launch must still find (and be
+  // able to kill) it rather than leak a window into the owner's session.
+  await deps.command(['set-option', '-p', '-t', pane, ROLE_OPT, c.eid])
   try {
     let kept = await deps.command([
       'set-option',
       '-w',
       '-t',
-      window,
+      pane,
       'remain-on-exit',
       'on',
     ])
@@ -368,7 +440,7 @@ let tmuxStart = async (c: RoleConfig, file: string, deps: RoleDeps) => {
       'set-option',
       '-w',
       '-t',
-      window,
+      pane,
       'remain-on-exit',
       'off',
     ])

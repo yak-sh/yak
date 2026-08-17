@@ -10,6 +10,10 @@ Deno.env.set('DB_PATH', ':memory:')
 // through unless it is dumb, so an unpinned TERM makes these assertions depend
 // on whose shell ran the suite. dumb exercises the documented fallback.
 Deno.env.set('TERM', 'dumb')
+// Pin the owner session too — a native role opens its window here (T-14297), so
+// leaving it to the ambient HOLDCO_TMUX_SESSION would make the target depend on
+// whose shell ran the suite.
+Deno.env.set('HOLDCO_TMUX_SESSION', 'owner-test')
 let tasksHome = Deno.makeTempDirSync({ prefix: 'tasks-roles-home-' })
 Deno.env.set('HOME', tasksHome)
 Deno.mkdirSync(`${tasksHome}/.deno/bin`, { recursive: true })
@@ -20,7 +24,7 @@ let { apply, db, journalOf } = await import('./db.ts')
 let { append, readEntries } = await import('./entries.ts')
 let {
   nativeProviderArgs,
-  nativeTmuxArgs,
+  nativeWindowArgs,
   colorOf,
   looping,
   roleColor,
@@ -30,7 +34,7 @@ let {
   roleHash,
   roleRemoved,
   rolesSweep,
-  roleTmux,
+  ownerSession,
   starting,
   styleArgs,
   windowOf,
@@ -41,7 +45,13 @@ let uid = () => crypto.randomUUID()
 let heard: Change[] = []
 let cast = (changes: Change[]) => heard.push(...changes)
 let dir = Deno.makeTempDirSync({ prefix: 'tasks-role-repo-' })
+// A fake tmux server: named sessions, and panes keyed by id carrying the @role
+// marker the reconciler reads (T-14297). A role's window IS its pane here — one
+// pane per role window — so list-panes/kill-pane over the owner session is all
+// the reconciler's guard needs to model.
 let sessions = new Set<string>()
+let panes = new Map<string, { role: string | null; dead: boolean }>()
+let nextPane = 99
 let commands: string[][] = []
 let files = new Map<string, string>()
 let removed = new Set<string>()
@@ -51,6 +61,12 @@ let ok = () => ({
   stdout: new Uint8Array(),
   stderr: new Uint8Array(),
 })
+// The panes a role owns in the owner session — the test's view of the marker.
+let panesOf = (role: string) =>
+  [...panes].filter(([, p]) => p.role == role).map(([id]) => id)
+let killPanesOf = (role: string) => {
+  for (let id of panesOf(role)) panes.delete(id)
+}
 let deps = {
   now: () => `2026-07-27T00:00:0${clock++}.000Z`,
   remove: (path: string) => removed.add(path),
@@ -65,11 +81,27 @@ let deps = {
       )
     }
     if (args[0] == 'kill-session') sessions.delete(target)
-    if (args[0] == 'new-session') {
-      sessions.add(args[args.indexOf('-s') + 1])
+    if (args[0] == 'new-session') sessions.add(args[args.indexOf('-s') + 1])
+    if (args[0] == 'new-window') {
+      let id = `%${nextPane++}`
+      panes.set(id, { role: null, dead: false })
       return Promise.resolve({
         ...ok(),
-        stdout: new TextEncoder().encode('%99\n'),
+        stdout: new TextEncoder().encode(`${id}\n`),
+      })
+    }
+    if (args[0] == 'kill-pane') panes.delete(target)
+    if (args[0] == 'set-option' && args.at(-2) == '@role') {
+      let p = panes.get(target)
+      if (p) p.role = args.at(-1)!
+    }
+    if (args[0] == 'list-panes') {
+      let rows = [...panes].map(([id, p]) =>
+        `${p.role ?? ''}\t${id}\t${p.dead ? 1 : 0}`
+      ).join('\n')
+      return Promise.resolve({
+        ...ok(),
+        stdout: new TextEncoder().encode(rows),
       })
     }
     if (args[0] == 'display-message') {
@@ -144,11 +176,12 @@ let launch = (role: string, endAgo: number | null, life = 1_300) => {
 }
 
 // Spawns FOR one role — the shared db means rolesSweep also reconciles every
-// other test's role, so a bare new-session count would mix them. The tmux
-// session name (`-s`) carries the role eid, so filter on it.
+// other test's role, so a bare new-window count would mix them. Each launch
+// stamps its pane with the role eid (@role), so counting that marker command
+// isolates one role's launches from the rest.
 let spawns = (role: string) =>
   commands.filter((a) =>
-    a[0] == 'new-session' && a[a.indexOf('-s') + 1] == roleTmux(role)
+    a[0] == 'set-option' && a.at(-2) == '@role' && a.at(-1) == role
   ).length
 
 slow(
@@ -174,7 +207,7 @@ slow(
     apply(db, [{ eid: role, name: 'role', comp: { state: 'stopped' } }])
     roleConfig(cast, deps)(role)
     await until(
-      () => !sessions.has(roleTmux(role)),
+      () => panesOf(role).length == 0,
       { label: 'the role state effect' },
     )
 
@@ -257,17 +290,23 @@ Deno.test('native role argv carries only fixed bootstrap content', () => {
 Deno.test('native role dedupes, rolls drift, heals death, and stops exactly', async () => {
   commands = []
   sessions.clear()
+  panes.clear()
   files.clear()
   let { role } = seed('native')
-  let name = roleTmux(role)
 
+  // First launch: the owner session is created once, the role opens ONE window
+  // in it, and its pane is marked with the role eid.
   await rolesSweep(cast, deps)
-  assertEquals(count('new-session'), 1)
-  assert(sessions.has(name))
+  assertEquals(count('new-window'), 1)
+  assert(sessions.has(ownerSession()))
+  assertEquals(panesOf(role).length, 1)
+  let pane = panesOf(role)[0]
   assertEquals(files.size, 1)
   assert(commands.some((args) => args[0] == 'set-option' && args[1] == '-w'))
-  let respawn = commands.find((args) => args[0] == 'respawn-pane')!
-  assertEquals(respawn[respawn.indexOf('-t') + 1], '%99')
+  let respawn = commands.find((args) =>
+    args[0] == 'respawn-pane' && args[args.indexOf('-t') + 1] == pane
+  )!
+  assert(respawn)
   assert(respawn.includes(`TASKS_ROLE=${role}`))
   assert(respawn.includes('TERM=xterm-256color'))
   assert(respawn.includes(`${tasksHome}/.deno/bin/task`))
@@ -276,22 +315,25 @@ Deno.test('native role dedupes, rolls drift, heals death, and stops exactly', as
   ).get(role) as { applied_hash: string }
   assertEquals(first.applied_hash.length, 64)
 
+  // Idempotent: a matching pane is adopted, no second window, no kill.
   await rolesSweep(cast, deps)
-  assertEquals(count('new-session'), 1)
-  assertEquals(count('kill-session'), 0)
+  assertEquals(count('new-window'), 1)
+  assertEquals(count('kill-pane'), 0)
 
+  // Drift rolls the pane: kill the old, open a new window.
   apply(db, [{
     eid: role,
     name: 'doc',
     comp: { body: 'A changed role contract.' },
   }])
   await rolesSweep(cast, deps)
-  assertEquals(count('kill-session'), 1)
-  assertEquals(count('new-session'), 2)
+  assertEquals(count('kill-pane'), 1)
+  assertEquals(count('new-window'), 2)
 
-  sessions.delete(name)
+  // Death heals: the pane vanished, so the next sweep relaunches.
+  killPanesOf(role)
   await rolesSweep(cast, deps)
-  assertEquals(count('new-session'), 3)
+  assertEquals(count('new-window'), 3)
 
   apply(db, [{
     eid: role,
@@ -299,8 +341,8 @@ Deno.test('native role dedupes, rolls drift, heals death, and stops exactly', as
     comp: { state: 'stopped' },
   }])
   await rolesSweep(cast, deps)
-  assertEquals(count('kill-session'), 2)
-  assert(!sessions.has(name))
+  assertEquals(count('kill-pane'), 2)
+  assertEquals(panesOf(role).length, 0)
   let stopped = db.prepare(
     'select applied_hash, stopped_at from role where eid = ?',
   ).get(role) as { applied_hash: string | null; stopped_at: string | null }
@@ -342,7 +384,7 @@ Deno.test('invalid native drift closes the stale door and stamps the cause', asy
     comp: { provider: 'fake', model: 'fake-fast', effort: null },
   }])
   await rolesSweep(cast, deps)
-  assert(!sessions.has(roleTmux(role)))
+  assertEquals(panesOf(role).length, 0)
   assertMatch(failure(role) ?? '', /native roles require claude or codex/)
 })
 
@@ -373,7 +415,7 @@ Deno.test('an early-dead native provider is captured, not marked applied', async
     },
   }
   await rolesSweep(cast, dying)
-  assert(!sessions.has(roleTmux(role)))
+  assertEquals(panesOf(role).length, 0)
   assertEquals(
     db.prepare('select applied_hash from role where eid = ?').get(role),
     { applied_hash: null },
@@ -589,11 +631,14 @@ Deno.test('role window styling matches holdco, keyed on the venture', () => {
     assertEquals(roleColor(v), holdco(v), `${v} must match holdco`)
   }
 
-  // The window carries the venture name, and automatic-rename is off — the
-  // one guards the other, so assert them together. With no venture title the
-  // tab reads as the id; with one it takes its first word, which is holdco's
-  // rule (`title: Trading Desk` → window `Trading`).
-  let argv = nativeTmuxArgs(base)
+  // A native role opens a WINDOW in the owner session (T-14297): new-window
+  // targeting that session, carrying the venture name, and automatic-rename is
+  // off — the name guards the tab, so assert them together. With no venture
+  // title the tab reads as the id; with one it takes its first word, which is
+  // holdco's rule (`title: Trading Desk` → window `Trading`).
+  let argv = nativeWindowArgs(base)
+  assertEquals(argv[0], 'new-window')
+  assertEquals(argv[argv.indexOf('-t') + 1], `=${ownerSession()}`)
   assertEquals(argv[argv.indexOf('-n') + 1], 'trading')
   assertEquals(windowOf(base), 'trading')
   assertEquals(windowOf({ ...base, venture: 'Trading Desk' }), 'Trading')
@@ -620,7 +665,6 @@ Deno.test('role window styling matches holdco, keyed on the venture', () => {
   assertEquals(set.at(-1), 'fg=colour208')
 
   let style = styleArgs(base, '%7')
-  let win = `=${roleTmux(base.eid)}:`
   let colour = roleColor('trading')
   assertEquals(
     style.filter((a) => a[0] == 'set-window-option').map((a) => a.slice(3)),
@@ -632,7 +676,9 @@ Deno.test('role window styling matches holdco, keyed on the venture', () => {
       ['window-status-current-style', `fg=${colour},reverse`],
     ],
   )
-  assert(style.every((a) => a.includes(win) || a.includes('%7')))
+  // Every command targets the PANE — a pane id resolves to its window for the
+  // window-scoped options, so nothing needs a window name to target (T-14297).
+  assert(style.every((a) => a.includes('%7')))
   // `@operator` is what holdco's tooling reads to find a live operator pane.
   assertEquals(style.at(-2), [
     'set-option',
