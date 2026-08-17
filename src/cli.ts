@@ -96,13 +96,7 @@ import {
   pred,
   resolution,
 } from './query.ts'
-import {
-  bookOf,
-  diagnose,
-  liveRules,
-  type Rules,
-  STATIC_RULES,
-} from './doctor.ts'
+import { checks, mailCheck, type Result, run as runChecks } from './doctor.ts'
 import {
   type Change,
   type Edge,
@@ -133,7 +127,6 @@ import { commit } from './git.ts'
 import { land as landTree } from './land.ts'
 import { request } from './http.ts'
 import { spawnDefault } from './providers.ts'
-import { atFleet, mailDomain } from './mailaddr.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
 import { seqRange, type Sift, transcribe } from './log_text.ts'
 import { type EntryRow, graphLog, pageEntries } from './entry_log.ts'
@@ -924,48 +917,35 @@ let mailFiles = async (got: Got) => {
   }
 }
 
-// The doctor: every book address must be Cloudflare-deliverable. Live
-// rules when a token can read them; the checked-in snapshot (loudly
-// non-authoritative) when none can — and a token that fails to read is
-// its own loud line, never a silent degrade. Exit 1 on any gap: the
-// disease is sends that report success while mail vanishes (ufos@).
-let mailDoctor = async () => {
-  let book = bookOf(await query(['.email.address!']))
-  let rules: Rules | null = null
-  try {
-    rules = await liveRules()
-  } catch (e) {
-    warn(`⚠ live rule read failed — ${(e as Error).message}`)
-  }
-  if (!rules) {
-    rules = STATIC_RULES
-    warn(
-      '⚠ STATIC rule snapshot (src/doctor.ts) — NOT authoritative, it can\n' +
-        '  drift from Cloudflare silently, and has. Rule verdicts below are\n' +
-        '  marked ? and are NOT measurements. Email Routing scope on this\n' +
-        '  box belongs to the MCP Cloudflare server (OAuth), not to any\n' +
-        '  bearer token — so a live read is an agent errand: read the rules\n' +
-        '  and refresh STATIC_RULES. Set CLOUDFLARE_ROUTING_READ_TOKEN if a\n' +
-        '  read-only routing token is ever minted.',
-    )
-  }
-  let bots = book.filter((e) => atFleet(e.address))
-  let bad = diagnose(book, rules)
-  // '?' where the verdict came from the snapshot rather than Cloudflare.
-  // A '✗' asserts a measurement, and one read off a stale constant was
-  // filed as a production defect (T-10480) — the marker is what stops
-  // that, since the ⚠ banner above is read as advisory and this is not.
-  for (let f of bad) {
-    let mark = f.fromRules && !rules.live ? '?' : '✗'
-    print(`${mark} ${f.address} (${f.owner}) — ${f.problem}`)
+// Render a check run: one line per finding (✗ hard, ⚠ soft), a ✓ for a check
+// that found nothing, then a one-line tally. Exit 1 on any hard finding — the
+// disease is a system that is wrong and looks fine, so a red line must move
+// the exit code, not just the eye.
+let printChecks = (results: Result[]) => {
+  let fails = 0
+  let warns = 0
+  for (let { name, reports } of results) {
+    if (!reports.length) {
+      print(`✓ ${name}`)
+      continue
+    }
+    for (let r of reports) {
+      if (r.level == 'fail') fails++
+      else warns++
+      print(`${r.level == 'fail' ? '✗' : '⚠'} ${name}: ${r.text}`)
+    }
   }
   print(
-    `${bots.length - bad.length}/${bots.length} ${mailDomain()} addresses ` +
-      `deliverable (${book.length} in the book; rules: ` +
-      `${rules.live ? 'live' : 'static'})`,
+    `${results.length} check${results.length == 1 ? '' : 's'} — ` +
+      `${fails} failing, ${warns} warning${warns == 1 ? '' : 's'}`,
   )
-  if (bad.length) Deno.exit(1)
+  if (fails) Deno.exit(1)
 }
+
+// The doctor: run every check over the live graph. `task mail doctor` keeps
+// its own door but is now just the mail check, so the two share one renderer.
+let doctor = async () => printChecks(await runChecks(checks, query))
+let mailDoctor = async () => printChecks(await runChecks([mailCheck], query))
 
 // FTS, screened to mail — the one search surface, one more door.
 let mailSeek = async (got: Got) => {
@@ -2943,6 +2923,7 @@ export let verbs = bind({
   undo: unwind,
   transcript,
   search: seek,
+  doctor: () => doctor(),
   mail: () => print(help(['mail'])),
   'mail show': mailShow,
   'mail send': mailSend,

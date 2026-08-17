@@ -53,6 +53,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       transcript:
         'transcript <id> [--prose] [--seq=RANGE] [--after=N] [--limit=N] [--since=ISO] [--until=ISO] [--json]',
       search: 'search [words…] [--json]',
+      doctor: 'doctor',
       mail: 'mail [filters…] [--json] [--all] [--sent]',
       'mail show': 'mail show <id> [--json]',
       'mail send': 'mail send <to> <subject…> --body=BODY',

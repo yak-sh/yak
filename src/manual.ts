@@ -310,6 +310,20 @@ export let manuals = declare({
     args: [arg('words', text, true, false)],
     opts: [json],
   },
+  doctor: {
+    about: 'run every health check over the live graph; exit 1 on a failure',
+    detail:
+      'A registry of checks (src/doctor.ts `checks`) that read the live ' +
+      'graph and make the impossible states we can already see LOUD — a ' +
+      'claim held by a session that ended, a board whose query no longer ' +
+      'parses, an arrived letter with no sender, a session stuck starting. ' +
+      'One line per finding (✗ hard, ⚠ soft), a ✓ for a clean check, then a ' +
+      'tally; exit 1 on any hard finding. `task mail doctor` is the mail ' +
+      'check on its own. A new check is one row in the registry.',
+    examples: ['task doctor', 'task mail doctor'],
+    root: true,
+    args: [],
+  },
   mail: {
     dots: 'filters',
     about: 'the mail-only slice of your items',

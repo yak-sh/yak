@@ -1,15 +1,22 @@
-// The mail doctor: every address the graph can mint mail for must be
-// Cloudflare-deliverable. The failure it exists for is SILENT — an
-// address with no routing rule and the catch-all off is accepted at
-// send and dropped at Cloudflare with no bounce (ufos@, T-6262) — so
-// the check must read the LIVE rule set; a hand-maintained expected
-// list is exactly how the drift hid. The static snapshot below is the
-// degrade seam for when no token can read Email Routing, and it says
-// so loudly. CLIENT-SAFE: env + fetch only, no db.
+// The doctor: a registry of checks that read the live graph and make the
+// impossible states we can already see LOUD — a claim held by a session
+// that ended, a board whose query no longer parses, an arrived letter with
+// no sender. Each check is one ROW (name + about + a run() over the graph),
+// so the next one is a row, not a verb (see `checks` below and M-4066).
+//
+// The mail check is the first and oldest entry: every address the graph can
+// mint mail for must be Cloudflare-deliverable. The failure it exists for is
+// SILENT — an address with no routing rule and the catch-all off is accepted
+// at send and dropped at Cloudflare with no bounce (ufos@, T-6262) — so it
+// reads the LIVE rule set; a hand-maintained expected list is exactly how the
+// drift hid. The static snapshot below is the degrade seam for when no token
+// can read Email Routing, and it says so loudly. CLIENT-SAFE: the checks read
+// through the Querier (HTTP) and env + fetch only, never the db directly.
 import { base, canon } from './mailer.ts'
 import { atFleet } from './mailaddr.ts'
-import { idOf } from './types.ts'
-import type { Row } from './client.ts'
+import { idOf, sessionActive } from './types.ts'
+import { parseQuery } from './query.ts'
+import type { Querier, Row } from './client.ts'
 
 // The yak.sh zone — an identifier, not a secret (useless without a
 // token); CLOUDFLARE_ZONE_ID re-aims the doctor at another zone.
@@ -158,3 +165,210 @@ export let liveRules = async (): Promise<Rules | null> => {
     !(ca.actions ?? []).some((a) => a.type == 'drop')
   return { live: true, catchall, rules }
 }
+
+// ---- The check registry -------------------------------------------------
+//
+// A finding is `fail` (a measured contract violation — `task doctor` exits
+// non-zero) or `warn` (a soft leak, or an UNVERIFIED verdict read off the
+// static snapshot). A check that itself throws is turned into a `fail` by the
+// runner — a doctor that swallows its own breakage is the exact disease it
+// treats ("a surface that discards its evidence is the bug").
+export type Level = 'fail' | 'warn'
+export type Report = { level: Level; text: string }
+export type Check = {
+  name: string
+  about: string
+  run: (q: Querier, now: number) => Promise<Report[]>
+}
+
+// The mail check, as the first registry entry: the deliverability diagnosis
+// above, rendered as findings. A rule-dependent verdict read from the static
+// snapshot is only a `warn` (UNVERIFIED); an illegal local-part or a
+// live-confirmed drop is a `fail`. The snapshot caveat rides along only when
+// a verdict actually leaned on it — a clean book needs no disclaimer.
+export let mailCheck: Check = {
+  name: 'mail',
+  about: 'every book address is Cloudflare-deliverable',
+  run: async (q) => {
+    let book = bookOf(await q(['.email.address!']))
+    let out: Report[] = []
+    let rules: Rules | null = null
+    try {
+      rules = await liveRules()
+    } catch (e) {
+      // A token that cannot read throws — a misminted token is a loud fact,
+      // worth surfacing whether or not it changes a verdict.
+      out.push({
+        level: 'warn',
+        text: `live routing read failed (${(e as Error).message}) — ` +
+          `falling back to the static snapshot`,
+      })
+    }
+    let live = rules?.live ?? false
+    rules ??= STATIC_RULES
+    let bad = diagnose(book, rules)
+    for (let f of bad) {
+      out.push({
+        level: f.fromRules && !live ? 'warn' : 'fail',
+        text: `${f.address} (${f.owner}) — ${f.problem}`,
+      })
+    }
+    if (!live && bad.some((f) => f.fromRules)) {
+      out.push({
+        level: 'warn',
+        text: 'the rule-dependent verdicts above come from the STATIC ' +
+          'snapshot (not authoritative) — read the live rules to confirm',
+      })
+    }
+    return out
+  },
+}
+
+// An arrived letter (message_id or received_at set) with no `from` is the
+// exact silent bug we memorialized: mail.from sat in neither comps nor
+// stamped and every reply misrouted (M-17876). `from` is server-stamped now,
+// so its absence on an arrived letter means the stamp broke — a reply with
+// nowhere to go, which is why this is a `fail`.
+export let mailWithoutFrom = (rows: Row[]): Report[] =>
+  rows.flatMap((r): Report[] => {
+    let m = r.comps.mail
+    if (!m || !(m.message_id || m.received_at) || m.from) return []
+    return [{
+      level: 'fail',
+      text: `${idOf(r)} arrived with no sender — a reply has nowhere to go ` +
+        `(mail.from is server-stamped; its absence means the stamp broke)`,
+    }]
+  })
+
+// A board is a saved query; if it stops parsing, opening the board errors
+// instead of listing. An empty query means every task (valid), so only a
+// non-empty one that throws is a finding.
+export let brokenBoards = (rows: Row[]): Report[] =>
+  rows.flatMap((r): Report[] => {
+    let query = r.comps.board?.query
+    if (typeof query != 'string' || !query.trim()) return []
+    try {
+      parseQuery(query)
+      return []
+    } catch (e) {
+      return [{
+        level: 'fail',
+        text: `${idOf(r)} query no longer parses ` +
+          `(${(e as Error).message}): ${query}`,
+      }]
+    }
+  })
+
+// Mirrors types.ts awake() over a row's raw session facet, sharing the one
+// sessionActive list: a session is ended when it is not active AND not
+// holding an open external door (a live pid with no finish stamp).
+let facet = (r: Row) => r.comps.session ?? {}
+let ended = (f: Record<string, unknown>) =>
+  !sessionActive.includes(String(f.status)) && !(f.pid && !f.finished_at)
+
+// A task still leased by a session that has ended: death:'release' should
+// have detached the claim when the session died, and wrap releases it on a
+// graceful end — so a live lease held by an ended (or vanished) session is a
+// leak that makes the board lie about who is working. A `warn`: stale, not
+// corrupt.
+export let staleClaims = (claimed: Row[], sessions: Row[]): Report[] => {
+  let byEid = new Map(sessions.map((s) => [s.eid, s]))
+  return claimed.flatMap((r): Report[] => {
+    let sid = r.comps.claim?.session
+    if (!sid) return []
+    let s = byEid.get(String(sid))
+    if (s && !ended(facet(s))) return []
+    return [{
+      level: 'warn',
+      text: `${idOf(r)} is claimed by ${s ? idOf(s) : String(sid)}, which ` +
+        `has ended — the lease should have been released`,
+    }]
+  })
+}
+
+// A session stuck between states: 'starting' should be brief, and a stop that
+// was requested long ago with no finish means the signal went unheard. A
+// long-RUNNING session is healthy work, never a finding — only the stalled
+// transitions are. `warn`: a stuck process, not corrupt data.
+export let stuckSessions = (rows: Row[], now: number, hours = 2): Report[] => {
+  let old = (t: unknown) => {
+    let at = Date.parse(String(t ?? ''))
+    return !isNaN(at) && now - at > hours * 3_600_000
+  }
+  return rows.flatMap((r): Report[] => {
+    let s = facet(r)
+    if (s.finished_at) return []
+    if (String(s.status) == 'starting' && old(s.started_at)) {
+      return [{
+        level: 'warn',
+        text: `${idOf(r)} has been starting for over ${hours}h with no ` +
+          `finish — the launch stalled or its finish stamp was lost`,
+      }]
+    }
+    if (s.stop_requested_at && old(s.stop_requested_at)) {
+      return [{
+        level: 'warn',
+        text: `${idOf(r)} was asked to stop over ${hours}h ago but never ` +
+          `finished — the stop signal went unheard`,
+      }]
+    }
+    return []
+  })
+}
+
+// The registry. A new check is one more row here — its verdict a pure
+// function above, its run() a thin read through the Querier.
+export let checks: Check[] = [
+  mailCheck,
+  {
+    name: 'mail-from',
+    about: 'every arrived letter carries a sender',
+    run: async (q) => mailWithoutFrom(await q(['.kind=mail'])),
+  },
+  {
+    name: 'board',
+    about: 'every saved board query still parses',
+    run: async (q) => brokenBoards(await q(['.kind=board'])),
+  },
+  {
+    name: 'claim',
+    about: 'no entity is leased by a session that has ended',
+    run: async (q) =>
+      staleClaims(await q(['.claim.session!']), await q(['.kind=session'])),
+  },
+  {
+    name: 'session',
+    about: 'no session is stuck starting or stuck stopping',
+    run: async (q, now) => stuckSessions(await q(['.kind=session']), now),
+  },
+]
+// Future rows, each one entry once its signal exists: a managed session
+// 'running' with a dead pid (needs a /proc probe), a derived sweep that
+// stopped moving (personas, embed, inbound, backup — needs a last-run
+// cadence to compare against), an {eid} reference pointing at a tombstone.
+
+// Run a set of checks, turning a crash into a loud `fail` rather than a lost
+// diagnosis. `now` is injectable so the time-based checks are testable.
+export type Result = { name: string; about: string; reports: Report[] }
+export let run = (
+  list: Check[],
+  q: Querier,
+  now = Date.now(),
+): Promise<Result[]> =>
+  Promise.all(list.map(async (c): Promise<Result> => {
+    // try/catch, not `.catch`: a check that throws SYNCHRONOUSLY never returns
+    // a promise to hang a handler on, and swallowing its own breakage is the
+    // exact disease the doctor treats.
+    try {
+      return { name: c.name, about: c.about, reports: await c.run(q, now) }
+    } catch (e) {
+      return {
+        name: c.name,
+        about: c.about,
+        reports: [{
+          level: 'fail',
+          text: `the check itself crashed — ${(e as Error).message}`,
+        }],
+      }
+    }
+  }))
