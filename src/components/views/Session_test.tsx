@@ -44,7 +44,7 @@ Deno.test('session activity explains transcript and transient waits', () => {
   )
 })
 
-Deno.test('live session Tile omits its chip and lists every worked task', () => {
+Deno.test('session Tile omits its chip and lists every worked task', () => {
   let prior = globalThis.fetch
   let fetched = 0
   globalThis.fetch = (() => {
@@ -127,7 +127,7 @@ Deno.test('live session Tile omits its chip and lists every worked task', () => 
   }
 })
 
-Deno.test('session list Tile keeps its chip and falls back to its actor', () => {
+Deno.test('session list Tile omits its chip and falls back to its actor', () => {
   cache.value = {
     actor: {
       entity: { eid: 'actor', num: 1 },
@@ -146,7 +146,7 @@ Deno.test('session list Tile keeps its chip and falls back to its actor', () => 
       mounted.root.querySelector('.SessionRow_Identity')?.textContent,
       'Acme',
     )
-    assertEquals(mounted.root.querySelector('.Id')?.textContent, 'S-2')
+    assertEquals(mounted.root.querySelector('.Id'), null)
   } finally {
     mounted.free()
     cache.value = {}

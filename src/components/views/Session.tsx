@@ -28,7 +28,6 @@ import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
 import { ago, block, pretty, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Composer, Note } from '../Comments.tsx'
-import { Id } from './Inline.tsx'
 import { Entity, resolve } from '../Entity.tsx'
 import { Markdown } from '../Markdown.tsx'
 import { mdMentions, type Mention } from '../../md.ts'
@@ -754,9 +753,7 @@ let RowLine = block('div', 'SessionRow', {
   Task: 'span',
 })
 
-let SessionTile = (
-  { e, slots, onOpen, chip = true }: TileProps & { chip?: boolean },
-) => {
+export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
   let s = e.session!
   let tasks = e.refs.filter((r) => r.type == 'worked').map((r) => ent(r.child))
     .filter((x) => x.task)
@@ -780,7 +777,6 @@ let SessionTile = (
             {s.effort && <RowLine.Effort>{s.effort}</RowLine.Effort>}
           </>
         )}
-        {chip && <Id e={e} />}
         {slot(slots, 'after')}
         <Stamp at={e.created?.at} />
       </RowLine.Head>
@@ -797,9 +793,3 @@ let SessionTile = (
     </RowLine>
   )
 }
-
-export let SessionRow = (props: TileProps) => <SessionTile {...props} />
-
-export let SessionLiveRow = (props: TileProps) => (
-  <SessionTile {...props} chip={false} />
-)

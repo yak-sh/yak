@@ -50,7 +50,7 @@ import { Schema } from './views/Schema.tsx'
 import { Json } from './views/Json.tsx'
 import { Md, mdText } from './views/Md.tsx'
 import { Web } from './views/Web.tsx'
-import { Session, SessionLiveRow, SessionRow } from './views/Session.tsx'
+import { Session, SessionRow } from './views/Session.tsx'
 import {
   CommandFull,
   CommandSummary,
@@ -99,7 +99,7 @@ define([
     Render: (props) => <TaskTile {...props} />,
   },
   { view: 'Tile', match: has('doc', 'board'), Render: BoardTile },
-  { view: 'Tray.List.Tile', match: has('session'), Render: SessionLiveRow },
+  { view: 'Tray.List.Tile', match: has('session'), Render: SessionRow },
   { view: 'Tile', match: has('session'), Render: SessionRow },
   { view: 'Tile', match: () => true, Render: ListTile },
   { view: 'Wake', match: has('wake'), Render: Wake },
