@@ -1138,6 +1138,32 @@ Deno.test("complete: wells are the caller's lists", () => {
   assertEquals(complete('.domain='), []) // pure: no lists passed, none invented
 })
 
+Deno.test("complete: {eid} params offer the caller's entities by kind", () => {
+  let ents = [
+    { id: 'P-19', kind: 'project' },
+    { id: 'P-30', kind: 'project' },
+    { id: 'T-3', kind: 'task' },
+    { id: 'U-7', kind: 'person' },
+  ]
+  // .project points at kind project — only projects; the task/person drop out
+  let proj = Object.fromEntries(
+    complete('.project=', undefined, ents).map((c) => [c.text, c.kind]),
+  )
+  assertEquals(proj['.project=P-19'], 'project')
+  assertEquals(proj['.project=P-30'], 'project')
+  assertEquals(proj['.project=T-3'], undefined)
+  // .assignee points at any entity — everything is offered
+  let any = complete('.assignee=', undefined, ents).map((c) => c.text)
+  assertEquals(any.includes('.assignee=T-3'), true)
+  assertEquals(any.includes('.assignee=U-7'), true)
+  // prefix-filtered like every value, and pure without the list
+  assertEquals(
+    complete('.project=P-3', undefined, ents).map((c) => c.text),
+    ['.project=P-30'],
+  )
+  assertEquals(complete('.project='), [])
+})
+
 Deno.test('complete: unknowns and non-tokens teach nothing', () => {
   assertEquals(complete('.hovercraft.'), [])
   assertEquals(complete('.hovercraft=x'), [])

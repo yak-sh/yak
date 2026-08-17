@@ -1293,21 +1293,33 @@ let aimPath = (path: string): Hop | null => {
   }
 }
 
-// value candidates for one column: enums spell themselves, wells are the
-// caller's lists, *_at columns get the time grammar. Only the last
-// comma-part completes — any-of lists finish one part at a time.
+// An entity a reference could name: its human id and kind. The caller's list
+// (the resident graph), so a `{eid}` param completes to real entities filtered
+// by the kind the declaration points at — the same "caller's lists" contract
+// wells already use, one door over (T-12779).
+export type EntId = { id: string; kind: string }
+
+// value candidates for one column: enums spell themselves, references offer the
+// caller's entities of the pointed-at kind, wells are the caller's lists, *_at
+// columns get the time grammar. Only the last comma-part completes — any-of
+// lists finish one part at a time.
 let values = (
   base: string,
   op: string,
   at: Hop,
   value: string,
   wells?: Record<string, string[]>,
+  ents?: EntId[],
 ): Cand[] => {
   let cut = value.lastIndexOf(',') + 1
   let tail = value.slice(0, cut), pre = value.slice(cut)
   let t = typeOf(at.comp, at.prop)
   let list: [string, string][] = t && typeof t == 'object' && 'enum' in t
     ? t.enum.map((v) => [v, at.prop] as [string, string])
+    : t && typeof t == 'object' && 'eid' in t
+    ? (ents ?? [])
+      .filter((e) => t.eid == 'entity' || e.kind == t.eid)
+      .map((e) => [e.id, e.kind] as [string, string])
     : t && typeof t == 'object' && 'text' in t
     ? (wells?.[t.text] ?? []).map((v) => [v, t.text] as [string, string])
     : t == 'bool'
@@ -1322,6 +1334,7 @@ let values = (
 export let complete = (
   token: string,
   wells?: Record<string, string[]>,
+  ents?: EntId[],
 ): Cand[] => {
   // a half-typed op ('.p!', '.p~') wants its '='
   let half = token.match(/^(\.[A-Za-z_]+(?:\.[A-Za-z_]+)*)([!~])$/)
@@ -1342,7 +1355,7 @@ export let complete = (
         : []
     }
     let at = aimPath(path)
-    return at ? values(`.${path}`, op, at, value, wells) : []
+    return at ? values(`.${path}`, op, at, value, wells, ents) : []
   }
 
   // an Nth segment: walk the settled prefix; a trailing lone component dangles

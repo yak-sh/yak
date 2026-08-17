@@ -4,11 +4,14 @@
 // dot-token under the caret), selection, and acceptance (splice the
 // token, re-fire input so the host reacts); the host input keeps its own
 // handlers — call key() FIRST in onKeyDown and stop when it returns true
-// (the dropdown consumed the press), track() from onInput. Wells are
-// read here, at the browser boundary, so complete() itself stays pure.
-import { useRef, useState } from 'preact/hooks'
-import { type Cand, complete } from '../query.ts'
-import { domains } from '../live.ts'
+// (the dropdown consumed the press), track() from onInput. Wells and the
+// resident entities (for `{eid}` params) are read here, at the browser
+// boundary, so complete() itself stays pure. Resident-only, like wells: a
+// picker that must reach non-loaded entities asks the server (suggest.ts).
+import { useMemo, useRef, useState } from 'preact/hooks'
+import { type Cand, complete, type EntId } from '../query.ts'
+import { cache, domains } from '../live.ts'
+import { idOf, kindOf } from '../types.ts'
 import { block } from './ui.tsx'
 import { Overlay } from './overlay.tsx'
 
@@ -34,6 +37,17 @@ export let useComplete = () => {
   let at = useRef({ el: null as Box | null, start: 0, end: 0 })
   let anchor = useRef<Box | null>(null)
 
+  // The resident graph as reference candidates, rebuilt only when the cache
+  // turns over (not per keystroke) — one human id + kind per loaded entity.
+  let ents = useMemo<EntId[]>(
+    () =>
+      Object.entries(cache.value).map(([eid, comps]) => ({
+        id: idOf({ eid, kind: kindOf(comps), num: comps.entity?.num }),
+        kind: kindOf(comps),
+      })),
+    [cache.value],
+  )
+
   let close = () => {
     setCands([])
     setSel(0)
@@ -44,7 +58,7 @@ export let useComplete = () => {
     let hit = tokenAt(el.value, caret)
     if (!hit) return close()
     at.current = { el, start: hit.start, end: caret }
-    let list = complete(hit.tok, { domains: domains.value }).slice(0, CAP)
+    let list = complete(hit.tok, { domains: domains.value }, ents).slice(0, CAP)
     setCands(list)
     setSel(0)
   }
