@@ -2,25 +2,28 @@
 // vector — per-kind budgets + floors, the scope split (memories fleet-wide,
 // tasks scoped to the actor's project), dedup against what a session has seen.
 // Precomputed vectors only; the embedder never loads (a test that downloads a
-// model isn't one), mirroring embed_test. The selection tests run on an isolated
-// freshDb() so no other test's vectors crowd a per-kind budget; the effect tests
-// use the module db with an injected recall fn, so the embedder stays out.
+// model isn't one), mirroring embed_test. The selection tests rank through the
+// real vector extension, so they run on an isolated vectorDb() (no other test's
+// vectors crowd a per-kind budget) and are slow() — the extension's quantize is
+// heavy. The effect tests use the module db with an injected recall fn, so no
+// embedder and no KNN, and stay in the fast tier.
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db } = await import('./db.ts')
 let { hash, MODEL } = await import('./embed.ts')
 let { recallEntry, recallFrom } = await import('./recall.ts')
-let { freshDb } = await import('./testdb.ts')
+let { vectorDb } = await import('./testdb.ts')
+let { axes } = await import('./testvec.ts')
+let { slow } = await import('./testing.ts')
 let { assertEquals } = await import('@std/assert')
 import type { DatabaseSync } from './sqlite.ts'
 
 let uid = (): string => crypto.randomUUID()
 // A unit vector — cosine against another unit vector is their dot product, so a
 // test places a candidate at a KNOWN score: same direction scores 1.0, and
-// vec(c, √(1−c²)) scores exactly c against vec(1, 0).
-let vec = (...xs: number[]) => {
-  let n = Math.hypot(...xs)
-  return Float32Array.from(xs.map((x) => x / n))
-}
+// vec(c, √(1−c²)) scores exactly c against vec(1, 0). The coordinates ride a
+// dense basis (testvec.ts) at full dimensionality, so the vector extension's
+// ANN index ranks them like real embeddings (cosines preserved to ~0.005).
+let vec = (...xs: number[]) => axes(...xs)
 let put = (d: DatabaseSync, eid: string, text: string, v: Float32Array) =>
   d.prepare('insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)')
     .run(eid, MODEL, hash(text), new Uint8Array(v.buffer))
@@ -64,8 +67,8 @@ let plain = (d: DatabaseSync, title: string, v: Float32Array) => {
   return e
 }
 
-Deno.test('recallFrom: a memory, an in-scope task, and a doc each float', () => {
-  let d = freshDb()
+slow('recallFrom: a memory, an in-scope task, and a doc each float', () => {
+  let d = vectorDb()
   let p = proj(d)
   let m = mem(d, 'a memory due east', vec(1, 0))
   let t = taskIn(d, 'a task due east', vec(1, 0), p)
@@ -76,8 +79,8 @@ Deno.test('recallFrom: a memory, an in-scope task, and a doc each float', () => 
   assertEquals(ids.includes(doc), true)
 })
 
-Deno.test('recallFrom: an out-of-scope task never floats', () => {
-  let d = freshDb()
+slow('recallFrom: an out-of-scope task never floats', () => {
+  let d = vectorDb()
   let mine = proj(d)
   let other = proj(d)
   let m = mem(d, 'my fleet memory', vec(1, 0))
@@ -87,8 +90,8 @@ Deno.test('recallFrom: an out-of-scope task never floats', () => {
   assertEquals(ids.includes(t), false) // but the foreign ticket stays down
 })
 
-Deno.test('recallFrom: each kind screens at its own floor', () => {
-  let d = freshDb()
+slow('recallFrom: each kind screens at its own floor', () => {
+  let d = vectorDb()
   let p = proj(d)
   // Both sit at cosine 0.65 to the query — above the memory floor (0.55),
   // below the task floor (0.70). Same score, different verdict.
@@ -100,8 +103,8 @@ Deno.test('recallFrom: each kind screens at its own floor', () => {
   assertEquals(ids.includes(t), false) // below the task floor — token noise
 })
 
-Deno.test('recallFrom: a per-kind budget caps that kind', () => {
-  let d = freshDb()
+slow('recallFrom: a per-kind budget caps that kind', () => {
+  let d = vectorDb()
   // Three near memories, one direction; the memory budget is 2, so one is left.
   let ms = [
     mem(d, 'budget a', vec(1, 0)),
@@ -113,15 +116,15 @@ Deno.test('recallFrom: a per-kind budget caps that kind', () => {
   assertEquals(got.every((f) => ms.includes(f.eid)), true)
 })
 
-Deno.test('recallFrom: a seen thought does not float again', () => {
-  let d = freshDb()
+slow('recallFrom: a seen thought does not float again', () => {
+  let d = vectorDb()
   let m = mem(d, 'already surfaced this session', vec(1, 0))
   let ids = recallFrom(d, vec(1, 0), undefined, new Set([m])).map((f) => f.eid)
   assertEquals(ids.includes(m), false)
 })
 
-Deno.test('recallFrom: an unplaced session floats globals only', () => {
-  let d = freshDb()
+slow('recallFrom: an unplaced session floats globals only', () => {
+  let d = vectorDb()
   let p = proj(d)
   let m = mem(d, 'a fleet-wide principle', vec(1, 0)) // unscoped memory
   let t = taskIn(d, 'an in-project ticket', vec(1, 0), p)
@@ -130,8 +133,8 @@ Deno.test('recallFrom: an unplaced session floats globals only', () => {
   assertEquals(ids.includes(t), false) // no project → no scoped ticket
 })
 
-Deno.test('recallFrom: a scoped memory floats only in its own project', () => {
-  let d = freshDb()
+slow('recallFrom: a scoped memory floats only in its own project', () => {
+  let d = vectorDb()
   let mine = proj(d)
   let other = proj(d)
   let m = mem(d, 'a lesson learned elsewhere', vec(1, 0), other)
@@ -145,8 +148,8 @@ Deno.test('recallFrom: a scoped memory floats only in its own project', () => {
   )
 })
 
-Deno.test('recallFrom: a floater names its id and title', () => {
-  let d = freshDb()
+slow('recallFrom: a floater names its id and title', () => {
+  let d = vectorDb()
   let m = mem(d, 'the graph is your mind', vec(1, 0))
   let f = recallFrom(d, vec(1, 0)).find((f) => f.eid == m)!
   assertEquals(f.title, 'the graph is your mind')

@@ -4,25 +4,24 @@
 // rowsOf() over it, per-kind budget + floor + scope — as a regression guard, not
 // model inference (the embedder never loads; precomputed vectors).
 //
-// It sits at ~1ms, and that floor is rowsOf()'s: it fans out one indexed query
-// per component table (~20) regardless of head size, so shrinking the corpus
-// can't push it below that. Two costs it does NOT measure, both bigger and both
-// separate concerns: similar()'s O(all-embeddings) scan (PRE-EXISTING — v1
-// fetches+dots every vector too; <1ms answer is the ANN/kind-restricted index,
-// T-18121), and embed()'s model inference. recall is a background post-commit
-// effect dominated by embed(), so this ~1ms is throughput, not user latency —
-// the ratchet's job here is catching a selection-logic regression (a 2x is far
-// past the band), not chasing sub-ms on shared hydration machinery.
+// The floor is rowsOf()'s: it fans out one indexed query per component table
+// (~20) regardless of head size, so shrinking the corpus can't push it below
+// that. Two costs it does NOT isolate, both separate concerns: similar()'s KNN
+// (now the vector extension's ANN index, T-18957 — one quantize on the first
+// call, then a clean scan) and embed()'s model inference. recall is a background
+// post-commit effect dominated by embed(), so this is throughput, not user
+// latency — the ratchet's job here is catching a selection-logic regression (a
+// 2x is far past the band), not chasing sub-ms on shared hydration machinery.
 // `deno task bench`; gated by bin/bench-gate.ts.
 Deno.env.set('DB_PATH', ':memory:')
 let { apply } = await import('./db.ts')
 let { MODEL, hash } = await import('./embed.ts')
-let { freshDb } = await import('./testdb.ts')
+let { vectorDb } = await import('./testdb.ts')
+let { DIM } = await import('./vector.ts')
 let { recallFrom } = await import('./recall.ts')
 
-let d = freshDb()
+let d = vectorDb()
 let uid = (): string => crypto.randomUUID()
-let DIM = 8
 // A deterministic spread of unit vectors — index-seeded so the graph is stable
 // across runs and the min metric stays comparable.
 let vecAt = (i: number) => {

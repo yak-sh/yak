@@ -4,13 +4,13 @@
 // can say "this already exists" (the dupe hint) and search can one day
 // bridge vocabulary. Everything here is DERIVED data: the sweep
 // (re)embeds docs whose text hash moved and prunes the dead, similar()
-// is a cosine over the model's vectors packed into one contiguous cache
-// (rebuilt only when the table changes — a full brute-force scan still,
-// O(relevant-subset) restriction is T-18121's next layer), and a box
-// without the model just has no hints — the embedder dies once, quietly,
-// and every door degrades to silence. apply() never waits on any of this.
+// ranks neighbours with an indexed SQL KNN over the vector extension's
+// persisted ANN index (vector.ts knn) — no JS cosine scan, no per-handle
+// cache — and a box without the model just has no hints: the embedder dies
+// once, quietly, and every door degrades to silence. apply() never waits on
+// any of this.
 import type { DatabaseSync } from './sqlite.ts'
-import { DIM, refreshVector } from './vector.ts'
+import { DIM, knn, refreshVector } from './vector.ts'
 // textOf and FLOOR live in twin.ts so the client may share them without pulling
 // this server-only module (and its vector.ts extension loader) into the browser
 // bundle. Re-exported here because embed.ts uses textOf internally and is the
@@ -117,34 +117,23 @@ export let stale = (db: DatabaseSync) =>
     .map((r) => ({ ...r, text: textOf(r.title, r.body) }))
     .filter((r) => r.text && hash(r.text) != r.had)
 
-// Bumped on every in-place write this module makes to the table. An upsert
-// re-embed (put) keeps the eid's rowid AND the row count, so similar()'s cache
-// signature can't see it by counting rows; this generation can. Deletes already
-// move the count, but bumping here too keeps one rule. A stale cache costs
-// recall, never correctness — similar() still screens its head through lives().
-let writes = 0
-
 // Rows for the ineligible: an entity deleted, a doc emptied, a doc that
 // became a comment. Pruning reads the SAME rule stale() embeds by, so the
 // table can never keep a vector the sweep would never refresh.
-export let prune = (db: DatabaseSync) => {
-  writes++
-  return db.prepare(
+export let prune = (db: DatabaseSync) =>
+  db.prepare(
     `delete from embedding
      where eid not in (select eid from doc where ${ELIGIBLE})`,
   ).run(WS)
-}
 
-let put = (db: DatabaseSync, eid: string, text: string, vec: Float32Array) => {
-  writes++
-  return db.prepare(
+let put = (db: DatabaseSync, eid: string, text: string, vec: Float32Array) =>
+  db.prepare(
     `insert into embedding (eid, model, hash, vec)
      values (?, ?, ?, vector_as_f32(?, ?))
      on conflict (eid) do update set
        model = excluded.model, hash = excluded.hash, vec = excluded.vec,
        at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
   ).run(eid, MODEL, hash(text), new Uint8Array(vec.buffer), DIM)
-}
 
 // The sweep: prune, then embed what's owed, one at a time — each await
 // yields the event loop, so a 2k-doc backfill never starves the server.
@@ -172,74 +161,28 @@ export let embedSweep = async (db: DatabaseSync) => {
   return n
 }
 
-// The model's vectors packed once into one contiguous Float32Array, held per db
-// handle. The dot below then streams cache-friendly memory instead of what cost
-// ~90% of similar()'s time (22ms → 3.5ms over the live 7.6k-vector corpus):
-// re-fetching ~12MB of blobs and allocating a fresh Float32Array view per row,
-// on every call. Rebuilt only when the signature moves.
-type VecCache = { sig: string; eids: string[]; mat: Float32Array; dim: number }
-let caches = new WeakMap<DatabaseSync, VecCache>()
+// A dead vector outlives its entity until the next sweep prunes it, so the ANN
+// head can carry rows for entities already gone or turned ineligible, which
+// lives() screens out below. knn() returns a fixed window, so over-fetch this
+// many past `limit` to backfill the screened — dead rows are rare (bounded by
+// deletions since the last sweep), and recall degrades gracefully if a
+// pathological burst ever exhausts the slack.
+let STALE_SLACK = 16
 
-// Cheap staleness signature: the row count (any insert or delete moves it — one
-// covering btree count, ~0.01ms) plus the write generation (an upsert re-embed
-// keeps count and rowid, so only this catches it). max(at) would catch it too
-// but reads every row's timestamp (~5ms), defeating the point.
-let sigOf = (db: DatabaseSync): string => {
-  let r = db.prepare('select count(*) c from embedding where model = ?')
-    .get(MODEL) as { c: number }
-  return `${r.c}:${writes}`
-}
-
-let matrix = (db: DatabaseSync): VecCache => {
-  let sig = sigOf(db)
-  let hit = caches.get(db)
-  if (hit && hit.sig == sig) return hit
-  let rows = db.prepare('select eid, vec from embedding where model = ?')
-    .all(MODEL) as { eid: string; vec: Uint8Array }[]
-  let n = rows.length
-  let dim = n ? rows[0].vec.length / 4 : 0
-  let mat = new Float32Array(n * dim)
-  let eids = new Array<string>(n)
-  for (let i = 0; i < n; i++) {
-    eids[i] = rows[i].eid
-    // slice() re-homes the blob on a fresh, 4-aligned buffer — a view straight
-    // over sqlite's bytes throws when the offset is odd. Paid once per build.
-    mat.set(new Float32Array(rows[i].vec.slice().buffer, 0, dim), i * dim)
-  }
-  let fresh = { sig, eids, mat, dim }
-  caches.set(db, fresh)
-  return fresh
-}
-
-// Nearest stored vectors to a query vector — normalized both sides, so cosine
-// is a dot product. Streams the cached matrix (row order preserved, so ties
-// resolve exactly as the old per-row scan did); floor screens the noise before
-// the caller ever sees it.
+// Nearest stored vectors to a query vector, cosine-ranked, floored, and screened
+// to the living — the vector extension's indexed KNN (vector.ts) does the rank
+// in SQL, replacing the old JS cosine scan over a per-handle matrix cache. knn
+// returns nearest-first, so the floor is a single break, and the head is
+// screened through lives() exactly as the scan's was.
 export let similar = (
   db: DatabaseSync,
   q: Float32Array,
   limit = 8,
   floor = 0,
 ) => {
-  let { eids, mat, dim } = matrix(db)
-  if (!dim) return []
-  let L = Math.min(q.length, dim)
-  let hits: { eid: string; score: number }[] = []
-  for (let i = 0; i < eids.length; i++) {
-    let base = i * dim
-    let s = 0
-    for (let k = 0; k < L; k++) s += q[k] * mat[base + k]
-    if (s >= floor) hits.push({ eid: eids[i], score: s })
-  }
-  hits.sort((a, b) => b.score - a.score)
-  // Screen the ranked HEAD, not the table: a vector outlives its entity
-  // until the next sweep and must never answer (the web's Similar section
-  // filters hits through the live cache, but the dupe hint has no cache to
-  // filter through — it saw bare UUIDs for entities already gone). Dead
-  // rows are rare, so this costs ~limit point lookups; folding the rule
-  // into the fetch instead cost +75% on every call to screen out nothing.
-  let live: typeof hits = []
-  for (let h of hits) {
+  let live: { eid: string; score: number }[] = []
+  for (let h of knn(db, q, limit + STALE_SLACK)) {
+    if (h.score < floor) break
     if (live.length == limit) break
     if (lives(db, h.eid)) live.push(h)
   }

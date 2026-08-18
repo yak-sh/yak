@@ -1,11 +1,16 @@
 // embed.ts's pure seams against an in-memory db: what counts as stale,
 // how neighbors rank, and the hash that names an embedding. The model
 // itself never loads here — a test suite that downloads 30MB isn't one.
+// Ranking rides the real vector extension: `vec(1, 0)` fixtures ride a dense
+// basis (testvec.ts) so the ANN index quantizes them like real embeddings.
 Deno.env.set('DB_PATH', ':memory:')
 let { db } = await import('./db.ts')
-let { freshDb } = await import('./testdb.ts')
-let { MODEL, hash, prune, similar, similarTo, stale, stored, textOf } =
-  await import('./embed.ts')
+let { vectorDb } = await import('./testdb.ts')
+let { hash, prune, similar, similarTo, stale, stored, textOf } = await import(
+  './embed.ts'
+)
+let { axes } = await import('./testvec.ts')
+let { slow } = await import('./testing.ts')
 let { assertEquals } = await import('@std/assert')
 
 let uid = (): string => crypto.randomUUID()
@@ -19,10 +24,7 @@ let doc = (eid: string, title: string, body = '') => {
     body,
   )
 }
-let vec = (...xs: number[]) => {
-  let n = Math.hypot(...xs)
-  return Float32Array.from(xs.map((x) => x / n))
-}
+let vec = (...xs: number[]) => axes(...xs)
 let put = (eid: string, text: string, v: Float32Array) =>
   db.prepare(
     'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
@@ -105,7 +107,7 @@ Deno.test('prune: every route out of eligibility takes its vector along', () => 
 // A vector outlives its entity until the next sweep. The web's Similar
 // section screens hits through the live cache; the dupe hint cannot, so it
 // saw bare UUIDs for entities that were already gone.
-Deno.test('similar: an ineligible row never answers, swept or not', () => {
+slow('similar: an ineligible row never answers, swept or not', () => {
   let [alive, gone, quarantined] = [uid(), uid(), uid()]
   doc(alive, 'a living neighbour')
   doc(gone, 'a doomed neighbour')
@@ -135,7 +137,7 @@ Deno.test('stored: exact text reuses a doc vector; edits and misses do not', () 
   assertEquals(stored(db, eid, text), null)
 })
 
-Deno.test('similarTo: a matching doc row needs no embedder', async () => {
+slow('similarTo: a matching doc row needs no embedder', async () => {
   let eid = uid()
   let text = 'stored query'
   doc(eid, text)
@@ -144,7 +146,7 @@ Deno.test('similarTo: a matching doc row needs no embedder', async () => {
   assertEquals(hits?.some((h) => h.eid == eid), true)
 })
 
-Deno.test('similar: dot-ranked, floored, limited', () => {
+slow('similar: dot-ranked, floored, limited', () => {
   let [x, y, z] = [uid(), uid(), uid()]
   doc(x, 'east')
   doc(y, 'northeast')
@@ -166,32 +168,11 @@ Deno.test('similar: dot-ranked, floored, limited', () => {
   assertEquals(top[0].eid, x)
 })
 
-// similar() answers from a per-handle contiguous cache of the model's vectors,
-// rebuilt only when a cheap signature moves. These two guard the signature: a
-// stale cache would silently return the wrong neighbours.
-
-Deno.test('similar: the vector cache rebuilds when rows are added or removed', () => {
-  let [a, b] = [uid(), uid()]
-  doc(a, 'cache probe one')
-  put(a, 'cache probe one', vec(1, 0))
-  let mine = () =>
-    similar(db, vec(1, 0), 99, 0).map((h) => h.eid)
-      .filter((id) => id == a || id == b)
-  assertEquals(mine(), [a]) // builds the cache
-  doc(b, 'cache probe two')
-  put(b, 'cache probe two', vec(1, 0)) // count moved — a stale cache misses b
-  assertEquals(mine().sort(), [a, b].sort())
-  db.prepare('delete from embedding where eid = ?').run(a) // count moved again
-  assertEquals(mine(), [b])
-})
-
-Deno.test('similar: a re-embed (same rowid, same count) is seen after a module write', () => {
-  // An isolated graph so prune() below deletes nothing: the row count and
-  // max(rowid) then stay fixed across the whole test, so the ONLY thing that
-  // can move the cache signature is the write generation. If that generation
-  // were dropped from the signature, the final assertion fails — this is the
-  // guard for the upsert-in-place case a row count alone cannot see.
-  let d = freshDb()
+// A re-embed writes in place (same rowid) and must answer with the NEW vector:
+// the vector extension's dirty trigger marks the write, and knn() refreshes the
+// ANN index before it reads, so no stale neighbour can survive an upsert.
+slow('similar: an in-place re-embed answers with the new vector', () => {
+  let d = vectorDb()
   let e = uid()
   d.prepare('insert into entity (eid, num) values (?, ?)')
     .run(e, Math.floor(Math.random() * 1e9))
@@ -201,14 +182,77 @@ Deno.test('similar: a re-embed (same rowid, same count) is seen after a module w
     d.prepare(
       `insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)
        on conflict (eid) do update set vec = excluded.vec`,
-    ).run(e, MODEL, hash('generation probe'), new Uint8Array(v.buffer))
+    ).run(
+      e,
+      'Xenova/bge-small-en-v1.5',
+      hash('generation probe'),
+      new Uint8Array(v.buffer),
+    )
   let score = () =>
     Math.round(
       (similar(d, vec(1, 0), 9, -2).find((h) => h.eid == e)?.score ?? -9) * 100,
     )
   store(vec(1, 0))
-  assertEquals(score(), 100) // builds the cache: query IS the stored vector
-  store(vec(0, 1)) // in-place re-embed — invisible to a row-count signature, and
-  prune(d) // a real module write bumps the generation, forcing the rebuild
-  assertEquals(score(), 0) // rebuilt: the query is now orthogonal to the new vec
+  assertEquals(score(), 100) // query IS the stored vector → cosine 1.0
+  store(vec(0, 1)) // re-embed in place, orthogonal to the query
+  assertEquals(score(), 0) // the index rebuilt: the new vector answers
+})
+
+// PARITY: the SQL KNN must return the neighbours the deleted JS cosine scan
+// would have. `jsScan` is that removed algorithm, kept here as the reference —
+// read every vector, dot against the query, sort, screen the living head. On an
+// isolated corpus of well-separated directions the ANN order matches it
+// exactly, and each score matches the exact cosine to a few thousandths.
+slow('similar: SQL KNN ranks the same neighbours the JS scan did', () => {
+  let d = vectorDb()
+  let store = (title: string, v: Float32Array) => {
+    let e = uid()
+    d.prepare('insert into entity (eid, num) values (?, ?)')
+      .run(e, Math.floor(Math.random() * 1e9))
+    d.prepare('insert into doc (eid, title, body) values (?, ?, ?)')
+      .run(e, title, '')
+    d.prepare(
+      'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
+    )
+      .run(e, 'Xenova/bge-small-en-v1.5', hash(title), new Uint8Array(v.buffer))
+    return e
+  }
+  // Distinct cosines to axes(1, 0), well separated so no near-tie can flip.
+  let want: [string, number][] = [
+    ['a', 0.95],
+    ['b', 0.8],
+    ['c', 0.6],
+    ['d', 0.4],
+    ['e', 0.15],
+  ]
+  let mine = new Set(
+    want.map(([t, c]) => store(t, vec(c, Math.sqrt(1 - c * c)))),
+  )
+
+  // The deleted JS scan, verbatim in spirit: exact cosine over every stored
+  // vector, sorted, living head.
+  let jsScan = (q: Float32Array, k: number) =>
+    (d.prepare('select eid, vec from embedding').all() as {
+      eid: string
+      vec: Uint8Array
+    }[])
+      .map((r) => {
+        let m = new Float32Array(r.vec.slice().buffer)
+        let s = 0
+        for (let i = 0; i < q.length; i++) s += q[i] * m[i]
+        return { eid: r.eid, score: s }
+      })
+      .filter((h) => mine.has(h.eid))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, k)
+
+  let q = vec(1, 0)
+  let sql = similar(d, q, 5, 0).filter((h) => mine.has(h.eid))
+  let js = jsScan(q, 5)
+  // Same neighbours, same order.
+  assertEquals(sql.map((h) => h.eid), js.map((h) => h.eid))
+  // Same scores: the ANN quantization tracks the exact cosine to ~0.005.
+  for (let i = 0; i < js.length; i++) {
+    assertEquals(Math.abs(sql[i].score - js[i].score) < 0.02, true)
+  }
 })

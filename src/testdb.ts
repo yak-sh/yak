@@ -14,6 +14,7 @@
 
 import { DatabaseSync } from './sqlite.ts'
 import { open } from './db.ts'
+import { initVector, loadVector } from './vector.ts'
 
 // The clones are isolated :memory: handles: busy_timeout has no peer to wait
 // for, and synchronous has no disk to flush. Avoiding those no-op pragmas also
@@ -56,6 +57,19 @@ let clone = (bytes: Uint8Array) => {
 }
 
 export let freshDb = () => clone(snap ??= open(':memory:').serialize())
+
+// A freshDb clone with the vector extension loaded onto its connection. The
+// extension's functions (vector_quantize, vector_quantize_scan) are per-
+// CONNECTION and don't ride the serialized image, so a KNN test's clone must
+// load them itself — kept OFF the default clone so the many extension-free
+// freshDb tests never pay the ~3ms load. KNN tests are slow() anyway: the
+// extension's first quantize is a ~10ms cold build.
+export let vectorDb = () => {
+  let db = freshDb()
+  loadVector(db)
+  initVector(db)
+  return db
+}
 
 // An UNSEEDED migrated clone: same schema as freshDb, but the ~180-row demo
 // seed stripped. snapshot() walks only the rows a test writes itself (~0.09ms)

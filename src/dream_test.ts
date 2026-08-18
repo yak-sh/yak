@@ -17,6 +17,8 @@ let {
   unwoken,
 } = await import('./dream.ts')
 let { hash, MODEL } = await import('./embed.ts')
+let { axes } = await import('./testvec.ts')
+let { slow } = await import('./testing.ts')
 let { assertEquals } = await import('@std/assert')
 
 let uid = () => crypto.randomUUID()
@@ -81,12 +83,11 @@ let task = (title: string, status: string) => {
   return { eid, num }
 }
 // Precomputed vectors for the semantic gate, the embed_test/recall_test way —
-// the embedder never loads. A distinctive negative-y direction keeps these
-// clear of every other test's first-quadrant vectors above the 0.78 dupe floor.
-let vec = (...xs: number[]) => {
-  let n = Math.hypot(...xs)
-  return Float32Array.from(xs.map((x) => x / n))
-}
+// the embedder never loads. A distinctive negative direction keeps these clear
+// of every other test's first-quadrant vectors above the 0.78 dupe floor. The
+// coordinates ride a dense basis (testvec.ts) at full dimensionality so the
+// ANN index ranks them like real embeddings.
+let vec = (...xs: number[]) => axes(...xs)
 let putVec = (eid: string, v: Float32Array) =>
   db.prepare(
     'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
@@ -180,49 +181,54 @@ Deno.test('unwoken/seedWake: a dream with no pending wake is seeded once, then l
   assertEquals(seedWake(d).length, 0)
 })
 
-Deno.test('dreamComb: a dream knock combs the venture, files a consider task, advances the floor, re-arms', async () => {
-  let p = proj('Dream test venture')
-  let d = dreamEnt(p, ago(30))
-  let s = sess(p, ago(2))
-  msg(s.eid, 'reached for a delete verb that did not exist')
-  let k = knock(d)
-  let fake = says(
-    JSON.stringify({
-      kind: 'gap',
-      title: 'add a delete verb',
-      body: 'no warm path to remove',
-      priority: 2,
-    }),
-  )
-  await dreamComb(noop, fake as never)(k)
+slow(
+  'dreamComb: a dream knock combs the venture, files a consider task, advances the floor, re-arms',
+  async () => {
+    let p = proj('Dream test venture')
+    let d = dreamEnt(p, ago(30))
+    let s = sess(p, ago(2))
+    msg(s.eid, 'reached for a delete verb that did not exist')
+    let k = knock(d)
+    let fake = says(
+      JSON.stringify({
+        kind: 'gap',
+        title: 'add a delete verb',
+        body: 'no warm path to remove',
+        priority: 2,
+      }),
+    )
+    await dreamComb(noop, fake as never)(k)
 
-  // The knock settled DELIVERED — dreamComb owns its own stamp.
-  assertEquals(
-    !!db.prepare('select 1 from delivered where eid = ?').get(k),
-    true,
-  )
-  // A consider task, about the combed session, in the venture.
-  let task = db.prepare(
-    `select t.status, t.project, doc.title from task t
+    // The knock settled DELIVERED — dreamComb owns its own stamp.
+    assertEquals(
+      !!db.prepare('select 1 from delivered where eid = ?').get(k),
+      true,
+    )
+    // A consider task, about the combed session, in the venture.
+    let task = db.prepare(
+      `select t.status, t.project, doc.title from task t
        join doc on doc.eid = t.eid
        join dependency dep on dep.parent = t.eid
       where dep.type = 'about' and dep.child = ?`,
-  ).get(s.eid) as { status: string; project: string; title: string } | undefined
-  assertEquals(task?.status, 'open')
-  assertEquals(task?.project, p)
-  assertEquals(task?.title.startsWith('consider:'), true)
-  // The floor advanced past its start.
-  let floor = (db.prepare('select floor from dream where eid = ?').get(d) as {
-    floor: string
-  }).floor
-  assertEquals(floor > ago(30), true)
-  // Re-armed: an untargeted cadence wake aimed back at the dream.
-  let wake = db.prepare(
-    `select 1 from wake w join deliver dv on dv.eid = w.eid
+    ).get(s.eid) as
+      | { status: string; project: string; title: string }
+      | undefined
+    assertEquals(task?.status, 'open')
+    assertEquals(task?.project, p)
+    assertEquals(task?.title.startsWith('consider:'), true)
+    // The floor advanced past its start.
+    let floor = (db.prepare('select floor from dream where eid = ?').get(d) as {
+      floor: string
+    }).floor
+    assertEquals(floor > ago(30), true)
+    // Re-armed: an untargeted cadence wake aimed back at the dream.
+    let wake = db.prepare(
+      `select 1 from wake w join deliver dv on dv.eid = w.eid
       where dv."to" = ? and w.target is null`,
-  ).get(d)
-  assertEquals(!!wake, true)
-})
+    ).get(d)
+    assertEquals(!!wake, true)
+  },
+)
 
 Deno.test('dreamComb: a non-dream knock is ignored — no comb, no delivered', async () => {
   let p = proj('Not a dream')
@@ -241,30 +247,33 @@ Deno.test('dreamComb: a non-dream knock is ignored — no comb, no delivered', a
   )
 })
 
-Deno.test('dreamComb: a decision finding is captured as a memory, dated when taken', async () => {
-  let p = proj('Decision venture')
-  let d = dreamEnt(p, ago(30))
-  let s = sess(p, ago(2))
-  msg(s.eid, 'the owner decided to ADAPT complete() over a batch API')
-  let k = knock(d)
-  let fake = says(
-    JSON.stringify({
-      kind: 'decision',
-      title: 'ADAPT complete() over batch',
-      body: 'reuse the runner; batch is a later optimization',
-      decided: '2026-08-10',
-    }),
-  )
-  await dreamComb(noop, fake as never)(k)
-  let mem = db.prepare(
-    `select dc.at as decided from memory m
+slow(
+  'dreamComb: a decision finding is captured as a memory, dated when taken',
+  async () => {
+    let p = proj('Decision venture')
+    let d = dreamEnt(p, ago(30))
+    let s = sess(p, ago(2))
+    msg(s.eid, 'the owner decided to ADAPT complete() over a batch API')
+    let k = knock(d)
+    let fake = says(
+      JSON.stringify({
+        kind: 'decision',
+        title: 'ADAPT complete() over batch',
+        body: 'reuse the runner; batch is a later optimization',
+        decided: '2026-08-10',
+      }),
+    )
+    await dreamComb(noop, fake as never)(k)
+    let mem = db.prepare(
+      `select dc.at as decided from memory m
        join doc on doc.eid = m.eid
        join decided dc on dc.eid = m.eid
       where doc.title = ?`,
-  ).get('ADAPT complete() over batch') as { decided: string } | undefined
-  assertEquals(!!mem, true)
-  assertEquals(mem!.decided.startsWith('2026-08-10'), true)
-})
+    ).get('ADAPT complete() over batch') as { decided: string } | undefined
+    assertEquals(!!mem, true)
+    assertEquals(mem!.decided.startsWith('2026-08-10'), true)
+  },
+)
 
 Deno.test('findingKey: kind + normalized title — ids/nums fold, kind splits', () => {
   let a = findingKey({
@@ -298,154 +307,178 @@ Deno.test('namesResolved: true only when a finding names a closed task', () => {
   assertEquals(namesResolved(f('no ids in this body at all')), false)
 })
 
-Deno.test('dreamComb: dedup — a recurring finding hit-counts, never re-files', async () => {
-  let p = proj('Dedup venture')
-  let d = dreamEnt(p, ago(30))
-  let s = sess(p, ago(2))
-  msg(s.eid, 'reached for a frobnicate verb that did not exist')
-  let reply = says(JSON.stringify({
-    kind: 'gap',
-    title: 'add a frobnicate verb',
-    body: 'no warm path',
-    priority: 3,
-  }))
-  // Two runs re-comb the same session (the floor clamps back inside 7 days).
-  await dreamComb(noop, reply as never)(knock(d))
-  await dreamComb(noop, reply as never)(knock(d))
-  // Exactly ONE consider task about this session, its finding hit-counted to 2.
-  let hits = db.prepare(
-    `select fd.hits as hits from finding fd
+slow(
+  'dreamComb: dedup — a recurring finding hit-counts, never re-files',
+  async () => {
+    let p = proj('Dedup venture')
+    let d = dreamEnt(p, ago(30))
+    let s = sess(p, ago(2))
+    msg(s.eid, 'reached for a frobnicate verb that did not exist')
+    let reply = says(JSON.stringify({
+      kind: 'gap',
+      title: 'add a frobnicate verb',
+      body: 'no warm path',
+      priority: 3,
+    }))
+    // Two runs re-comb the same session (the floor clamps back inside 7 days).
+    await dreamComb(noop, reply as never)(knock(d))
+    await dreamComb(noop, reply as never)(knock(d))
+    // Exactly ONE consider task about this session, its finding hit-counted to 2.
+    let hits = db.prepare(
+      `select fd.hits as hits from finding fd
        join dependency dep on dep.parent = fd.eid
       where dep.type = 'about' and dep.child = ?`,
-  ).all(s.eid) as { hits: number }[]
-  assertEquals(hits.length, 1)
-  assertEquals(hits[0].hits, 2)
-})
+    ).all(s.eid) as { hits: number }[]
+    assertEquals(hits.length, 1)
+    assertEquals(hits[0].hits, 2)
+  },
+)
 
-Deno.test('dreamComb: skip — a finding naming a resolved task is not filed', async () => {
-  let p = proj('Skip venture')
-  let d = dreamEnt(p, ago(30))
-  let s = sess(p, ago(2))
-  let done = task('the work this finding restates', 'done')
-  msg(s.eid, 'we should verify through the production door')
-  let reply = says(JSON.stringify({
-    kind: 'gap',
-    title: 'verify through the production door',
-    body: `already tracked as T-${done.num}`,
-    priority: 3,
-  }))
-  await dreamComb(noop, reply as never)(knock(d))
-  // No consider task filed about this session — the finding named closed work.
-  let n = db.prepare(
-    `select count(*) as n from dependency dep
+slow(
+  'dreamComb: skip — a finding naming a resolved task is not filed',
+  async () => {
+    let p = proj('Skip venture')
+    let d = dreamEnt(p, ago(30))
+    let s = sess(p, ago(2))
+    let done = task('the work this finding restates', 'done')
+    msg(s.eid, 'we should verify through the production door')
+    let reply = says(JSON.stringify({
+      kind: 'gap',
+      title: 'verify through the production door',
+      body: `already tracked as T-${done.num}`,
+      priority: 3,
+    }))
+    await dreamComb(noop, reply as never)(knock(d))
+    // No consider task filed about this session — the finding named closed work.
+    let n = db.prepare(
+      `select count(*) as n from dependency dep
       where dep.type = 'about' and dep.child = ?
         and exists (select 1 from task t where t.eid = dep.parent)`,
-  ).get(s.eid) as { n: number }
-  assertEquals(n.n, 0)
-})
+    ).get(s.eid) as { n: number }
+    assertEquals(n.n, 0)
+  },
+)
 
-Deno.test('dreamComb: a reflex finding becomes a venture memory, not a consider task', async () => {
-  let p = proj('Reflex venture')
-  let d = dreamEnt(p, ago(30))
-  let s = sess(p, ago(2))
-  msg(s.eid, 'escalated a decidable question again')
-  let title = 'stop escalating reversible decisions'
-  let reply = says(JSON.stringify({
-    kind: 'reflex',
-    title,
-    body: 'a reversible call parked is costlier than a wrong one corrected',
-    priority: 2,
-  }))
-  await dreamComb(noop, reply as never)(knock(d))
-  // A memory, scoped to the venture; no "consider:" task with that title.
-  let mem = db.prepare(
-    `select m.scope as scope from memory m join doc on doc.eid = m.eid
+slow(
+  'dreamComb: a reflex finding becomes a venture memory, not a consider task',
+  async () => {
+    let p = proj('Reflex venture')
+    let d = dreamEnt(p, ago(30))
+    let s = sess(p, ago(2))
+    msg(s.eid, 'escalated a decidable question again')
+    let title = 'stop escalating reversible decisions'
+    let reply = says(JSON.stringify({
+      kind: 'reflex',
+      title,
+      body: 'a reversible call parked is costlier than a wrong one corrected',
+      priority: 2,
+    }))
+    await dreamComb(noop, reply as never)(knock(d))
+    // A memory, scoped to the venture; no "consider:" task with that title.
+    let mem = db.prepare(
+      `select m.scope as scope from memory m join doc on doc.eid = m.eid
       where doc.title = ?`,
-  ).get(title) as { scope: string } | undefined
-  assertEquals(!!mem, true)
-  assertEquals(mem!.scope, p)
-  let considers = db.prepare('select count(*) as n from doc where title = ?')
-    .get(`consider: ${title}`) as { n: number }
-  assertEquals(considers.n, 0)
-})
+    ).get(title) as { scope: string } | undefined
+    assertEquals(!!mem, true)
+    assertEquals(mem!.scope, p)
+    let considers = db.prepare('select count(*) as n from doc where title = ?')
+      .get(`consider: ${title}`) as { n: number }
+    assertEquals(considers.n, 0)
+  },
+)
 
-Deno.test('dreamComb: two sessions, one shared finding — filed once (batch + within-run dedup)', async () => {
-  let p = proj('Batch venture')
-  let d = dreamEnt(p, ago(30))
-  let s1 = sess(p, ago(3))
-  msg(s1.eid, 'first session touched the widget path')
-  let s2 = sess(p, ago(2))
-  msg(s2.eid, 'second session touched the widget path')
-  let reply = says(JSON.stringify({
-    kind: 'gap',
-    title: 'unify the widget path',
-    body: 'both sessions reinvented it',
-    priority: 3,
-  }))
-  await dreamComb(noop, reply as never)(knock(d))
-  // Both sessions combed, but the shared finding lands ONE task, not two.
-  let considers = db.prepare('select count(*) as n from doc where title = ?')
-    .get('consider: unify the widget path') as { n: number }
-  assertEquals(considers.n, 1)
-})
+slow(
+  'dreamComb: two sessions, one shared finding — filed once (batch + within-run dedup)',
+  async () => {
+    let p = proj('Batch venture')
+    let d = dreamEnt(p, ago(30))
+    let s1 = sess(p, ago(3))
+    msg(s1.eid, 'first session touched the widget path')
+    let s2 = sess(p, ago(2))
+    msg(s2.eid, 'second session touched the widget path')
+    let reply = says(JSON.stringify({
+      kind: 'gap',
+      title: 'unify the widget path',
+      body: 'both sessions reinvented it',
+      priority: 3,
+    }))
+    await dreamComb(noop, reply as never)(knock(d))
+    // Both sessions combed, but the shared finding lands ONE task, not two.
+    let considers = db.prepare('select count(*) as n from doc where title = ?')
+      .get('consider: unify the widget path') as { n: number }
+    assertEquals(considers.n, 1)
+  },
+)
 
-Deno.test('nearestMemory: the nearest MEMORY above the dupe floor, never a plain task', () => {
-  let m = memWithVec('a documented principle', vec(-1, 0))
-  let t = docWithVec('a task in the same words', vec(-1, 0)) // near, not a memory
-  // The query direction returns the MEMORY, skipping the equally-near task.
-  assertEquals(nearestMemory(vec(-1, 0)), m)
-  assertEquals(nearestMemory(vec(-1, 0)) == t, false)
-  // A query far from every memory returns nothing — no reinforcement to make.
-  assertEquals(nearestMemory(vec(-1, -1)), undefined)
-})
+slow(
+  'nearestMemory: the nearest MEMORY above the dupe floor, never a plain task',
+  () => {
+    let m = memWithVec('a documented principle', vec(-1, 0))
+    let t = docWithVec('a task in the same words', vec(-1, 0)) // near, not a memory
+    // The query direction returns the MEMORY, skipping the equally-near task.
+    assertEquals(nearestMemory(vec(-1, 0)), m)
+    assertEquals(nearestMemory(vec(-1, 0)) == t, false)
+    // A query far from every memory returns nothing — no reinforcement to make.
+    assertEquals(nearestMemory(vec(-1, -1)), undefined)
+  },
+)
 
-Deno.test('dreamComb: a finding restating a memory in new words reinforces it, files nothing', async () => {
-  let p = proj('Reinforce venture')
-  let d = dreamEnt(p, ago(30))
-  let s = sess(p, ago(2))
-  msg(s.eid, 'leaned on a principle the fleet already wrote down')
-  let m = memWithVec('escalate only the irreversible', vec(0, -1))
-  // The WORDS differ (key-dedup slides past), but embedFn maps the finding onto
-  // the memory's vector — a semantic twin the title-key can never catch.
-  let title = 'decide reversible calls yourself, escalate what cannot be undone'
-  let reply = says(JSON.stringify({
-    kind: 'reflex',
-    title,
-    body: 'a reversible call parked costs more than a wrong one corrected',
-    priority: 2,
-  }))
-  let near = () => Promise.resolve(vec(0, -1))
-  await dreamComb(noop, reply as never, near as never)(knock(d))
-  // Nothing new filed under the finding's title — no twin memory, no task.
-  let filed = db.prepare('select count(*) as n from doc where title = ?')
-    .get(title) as { n: number }
-  assertEquals(filed.n, 0)
-  // The matched memory was reinforced: recall bumped, last_confirmed_at stamped.
-  let rc = db.prepare('select count from recall where eid = ?').get(m) as
-    | { count: number }
-    | undefined
-  assertEquals(rc?.count, 1)
-  let mm = db.prepare('select last_confirmed_at as c from memory where eid = ?')
-    .get(m) as { c: string | null }
-  assertEquals(!!mm.c, true)
-})
+slow(
+  'dreamComb: a finding restating a memory in new words reinforces it, files nothing',
+  async () => {
+    let p = proj('Reinforce venture')
+    let d = dreamEnt(p, ago(30))
+    let s = sess(p, ago(2))
+    msg(s.eid, 'leaned on a principle the fleet already wrote down')
+    let m = memWithVec('escalate only the irreversible', vec(0, -1))
+    // The WORDS differ (key-dedup slides past), but embedFn maps the finding onto
+    // the memory's vector — a semantic twin the title-key can never catch.
+    let title =
+      'decide reversible calls yourself, escalate what cannot be undone'
+    let reply = says(JSON.stringify({
+      kind: 'reflex',
+      title,
+      body: 'a reversible call parked costs more than a wrong one corrected',
+      priority: 2,
+    }))
+    let near = () => Promise.resolve(vec(0, -1))
+    await dreamComb(noop, reply as never, near as never)(knock(d))
+    // Nothing new filed under the finding's title — no twin memory, no task.
+    let filed = db.prepare('select count(*) as n from doc where title = ?')
+      .get(title) as { n: number }
+    assertEquals(filed.n, 0)
+    // The matched memory was reinforced: recall bumped, last_confirmed_at stamped.
+    let rc = db.prepare('select count from recall where eid = ?').get(m) as
+      | { count: number }
+      | undefined
+    assertEquals(rc?.count, 1)
+    let mm = db.prepare(
+      'select last_confirmed_at as c from memory where eid = ?',
+    )
+      .get(m) as { c: string | null }
+    assertEquals(!!mm.c, true)
+  },
+)
 
-Deno.test('dreamComb: a genuinely novel finding still files despite the semantic gate', async () => {
-  let p = proj('Novel venture')
-  let d = dreamEnt(p, ago(30))
-  let s = sess(p, ago(2))
-  msg(s.eid, 'hit a wall nobody had written down')
-  memWithVec('an unrelated documented lesson', vec(-1, 0))
-  let reply = says(JSON.stringify({
-    kind: 'gap',
-    title: 'add a widget-purge verb',
-    body: 'no warm path to purge widgets',
-    priority: 3,
-  }))
-  let far = () => Promise.resolve(vec(-1, -1)) // near no memory
-  await dreamComb(noop, reply as never, far as never)(knock(d))
-  // The gate let it through: a consider task filed, exactly one.
-  let considers = db.prepare('select count(*) as n from doc where title = ?')
-    .get('consider: add a widget-purge verb') as { n: number }
-  assertEquals(considers.n, 1)
-})
+slow(
+  'dreamComb: a genuinely novel finding still files despite the semantic gate',
+  async () => {
+    let p = proj('Novel venture')
+    let d = dreamEnt(p, ago(30))
+    let s = sess(p, ago(2))
+    msg(s.eid, 'hit a wall nobody had written down')
+    memWithVec('an unrelated documented lesson', vec(-1, 0))
+    let reply = says(JSON.stringify({
+      kind: 'gap',
+      title: 'add a widget-purge verb',
+      body: 'no warm path to purge widgets',
+      priority: 3,
+    }))
+    let far = () => Promise.resolve(vec(-1, -1)) // near no memory
+    await dreamComb(noop, reply as never, far as never)(knock(d))
+    // The gate let it through: a consider task filed, exactly one.
+    let considers = db.prepare('select count(*) as n from doc where title = ?')
+      .get('consider: add a widget-purge verb') as { n: number }
+    assertEquals(considers.n, 1)
+  },
+)

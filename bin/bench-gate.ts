@@ -41,7 +41,7 @@
 // ratio as the new baseline, regressions INCLUDED — the explicit, logged path
 // for a justified speed-for-correctness tradeoff. Loud on purpose.
 
-let VERSION = 2 // bump when the metric or the control op changes -> re-baseline
+let VERSION = 3 // bump when the metric or the control op changes -> re-baseline
 let CONTROL = 'control: fixed reference (LCG)' // src/control_bench.ts
 let TOL = +(Deno.env.get('BENCH_TOL') ?? '0.25') // the box's measurement noise floor
 //   is ~15-20% (shared, virtualized; sub-µs benches jitter hardest as ratios), so a

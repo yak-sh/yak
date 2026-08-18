@@ -64,6 +64,28 @@ export let refreshVector = (db: DatabaseSync) => {
   return n
 }
 
+// K nearest stored vectors to a query, ranked by the persisted ANN index —
+// the SQL that replaces embed.ts's hand-rolled cosine scan. `score` is cosine
+// similarity (1 − the COSINE distance the extension reports), nearest first.
+// refreshVector first so a write that dirtied the index is quantized before we
+// read it (a no-op on the hot path, where the sweep already refreshed); an
+// empty corpus has no quantization table to scan, so it answers empty.
+export let knn = (
+  db: DatabaseSync,
+  q: Float32Array,
+  k: number,
+): { eid: string; score: number }[] => {
+  refreshVector(db)
+  if (!count(db)) return []
+  let bytes = new Uint8Array(q.buffer, q.byteOffset, q.byteLength)
+  return (db.prepare(
+    `select e.eid as eid, v.distance as distance
+       from vector_quantize_scan('embedding', 'vec', ?, ?) v
+       join embedding e on e.rowid = v.id`,
+  ).all(bytes, k) as { eid: string; distance: number }[])
+    .map((r) => ({ eid: r.eid, score: 1 - r.distance }))
+}
+
 export let initVector = (db: DatabaseSync) => {
   db.prepare(
     `select vector_init(
