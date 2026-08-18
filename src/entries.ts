@@ -22,6 +22,15 @@ export type LeaseToken = {
   until: string
 }
 
+// The eid→id storage seam (D-18866): component tables are keyed by the owner's
+// internal int id and reference columns store int ids, while this module's
+// callers speak EIDs. `OWNED` matches a component row by its owner eid; `idOf`
+// resolves an eid to its id inline (for a reference filter); `refEid` projects a
+// stored ref id back to its eid inside a SELECT. Each keeps its bound eid param.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
+
 export type UsageValue = {
   input: number
   cached: number
@@ -81,8 +90,8 @@ export let importedLines = (
 ): Set<number> =>
   new Set(
     (db.prepare(
-      `select i.line from entry e join imported i on i.eid = e.eid
-       where e.session = ? and i.source = ?`,
+      `select i.line from entry e join imported i on i.entity = e.entity
+       where e.session = ${idOf} and i.source = ?`,
     ).all(session, source) as { line: number }[]).map((r) => r.line),
   )
 
@@ -96,8 +105,10 @@ export let callKeys = (
 ): Map<string, string> =>
   new Map(
     (db.prepare(
-      `select c.eid, c.key from entry e join call c on c.eid = e.eid
-       where e.session = ? and c.key is not null`,
+      `select o.eid as eid, c.key from entry e
+         join entity o on o.id = e.entity
+         join call c on c.entity = e.entity
+       where e.session = ${idOf} and c.key is not null`,
     ).all(session) as { eid: string; key: string }[]).map(
       (r) => [r.key, r.eid],
     ),
@@ -133,14 +144,16 @@ let checkpoint = (
   provider: string,
 ) => {
   let rows = db.prepare(`
-    select e.eid, e.seq, o.source, g.provider, p.format, p.data
+    select oe.eid as eid, e.seq, ${refEid('o.source')} as source,
+           g.provider, p.format, p.data
     from entry e
-    join checkpoint c on c.eid = e.eid
-    join output o on o.eid = e.eid
-    join entry s on s.eid = o.source and s.session = e.session
-    join generation g on g.eid = o.source
-    join opaque p on p.eid = e.eid
-    where e.session = ? and e.seq <= ? and g.provider = ?
+    join entity oe on oe.id = e.entity
+    join checkpoint c on c.entity = e.entity
+    join output o on o.entity = e.entity
+    join entry s on s.entity = o.source and s.session = e.session
+    join generation g on g.entity = o.source
+    join opaque p on p.entity = e.entity
+    where e.session = ${idOf} and e.seq <= ? and g.provider = ?
     order by e.seq desc
   `).all(session, through, provider) as CheckpointRow[]
   return rows.find((value) => {
@@ -173,7 +186,7 @@ export let readReplay = (db: DatabaseSync, generation: string) => {
   let session = String(current.comps.entry.session)
   let through = String(current.comps.generation.through)
   let target = db.prepare(
-    'select seq from entry where eid = ? and session = ?',
+    `select seq from entry where ${OWNED} and session = ${idOf}`,
   ).get(through, session) as { seq: number } | undefined
   if (!target) throw new Error('generation prefix is missing')
   let point = checkpoint(db, session, target.seq, provider)
@@ -197,20 +210,21 @@ export let readReplay = (db: DatabaseSync, generation: string) => {
 // touch. Excluding it on both arms is defense-in-depth — a mis-scheduled
 // imported generation or call can never be leased, run, advanced, or settled.
 let readySql = `
-  select e.eid, e.seq from entry e
-  where e.session = ?
-    and not exists (select 1 from lease l where l.eid = e.eid)
-    and not exists (select 1 from error x where x.eid = e.eid)
-    and not exists (select 1 from cancel c where c.target = e.eid)
+  select o.eid as eid, e.seq from entry e
+  join entity o on o.id = e.entity
+  where e.session = ${idOf}
+    and not exists (select 1 from lease l where l.entity = e.entity)
+    and not exists (select 1 from error x where x.entity = e.entity)
+    and not exists (select 1 from cancel c where c.target = e.entity)
     and (
-      (exists (select 1 from generation g where g.eid = e.eid)
-       and not exists (select 1 from imported i where i.eid = e.eid)
-       and not exists (select 1 from delivered d where d.eid = e.eid)
-       and not exists (select 1 from output o where o.source = e.eid))
+      (exists (select 1 from generation g where g.entity = e.entity)
+       and not exists (select 1 from imported i where i.entity = e.entity)
+       and not exists (select 1 from delivered d where d.entity = e.entity)
+       and not exists (select 1 from output o2 where o2.source = e.entity))
       or
-      (exists (select 1 from call c where c.eid = e.eid)
-       and not exists (select 1 from imported i where i.eid = e.eid)
-       and not exists (select 1 from result r where r.call = e.eid))
+      (exists (select 1 from call c where c.entity = e.entity)
+       and not exists (select 1 from imported i where i.entity = e.entity)
+       and not exists (select 1 from result r where r.call = e.entity))
     )
   order by e.seq`
 
@@ -222,14 +236,17 @@ export let readyEntries = (db: DatabaseSync, session: string) =>
 
 export let expiredLeases = (db: DatabaseSync, at = new Date().toISOString()) =>
   db.prepare(
-    `select l.eid, l.holder, l.at, l.until, e.session, e.seq
-     from lease l join entry e on e.eid = l.eid
+    `select lo.eid as eid, ${refEid('l.holder')} as holder, l.at, l.until,
+            ${refEid('e.session')} as session, e.seq
+     from lease l
+     join entity lo on lo.id = l.entity
+     join entry e on e.entity = l.entity
      where l.until <= ? order by l.until`,
   ).all(at) as (LeaseToken & { session: string; seq: number })[]
 
 let owns = (db: DatabaseSync, token: LeaseToken) =>
   db.prepare(
-    'select 1 from lease where eid = ? and holder = ? and at = ?',
+    `select 1 from lease where ${OWNED} and holder = ${idOf} and at = ?`,
   ).get(token.eid, token.holder, token.at)
 
 // One absent lease wins. Reclaim is deliberate: the caller must first settle
@@ -251,7 +268,9 @@ export let takeEntry = (
   let change: Change = { eid, name: 'lease', comp: { ...token } }
   db.exec('begin immediate')
   try {
-    let row = db.prepare('select session from entry where eid = ?').get(eid) as
+    let row = db.prepare(
+      `select ${refEid('session')} as session from entry where ${OWNED}`,
+    ).get(eid) as
       | { session: string }
       | undefined
     if (!row) {
@@ -263,13 +282,14 @@ export let takeEntry = (
     ).get(row.session, eid)
     if (
       !runnable ||
-      !db.prepare('select 1 from runner where eid = ?').get(holder)
+      !db.prepare(`select 1 from runner where ${OWNED}`).get(holder)
     ) {
       db.exec('rollback')
       return undefined
     }
     db.prepare(
-      'insert into lease (eid, holder, at, until) values (?, ?, ?, ?)',
+      `insert into lease (entity, holder, at, until)
+         values (${idOf}, ${idOf}, ?, ?)`,
     ).run(eid, holder, token.at, token.until)
     record(db, [change], holder)
     db.exec('commit')
@@ -305,34 +325,34 @@ export let reclaimEntry = (
   try {
     let safe = db.prepare(
       `select case
-         when exists (select 1 from generation g where g.eid = l.eid)
+         when exists (select 1 from generation g where g.entity = l.entity)
            then 'generation'
          else 'call'
        end as kind
        from lease l
-       where l.eid = ? and l.holder = ? and l.at = ? and l.until = ?
+       where l.${OWNED} and l.holder = ${idOf} and l.at = ? and l.until = ?
          and l.until <= ?
-         and not exists (select 1 from error x where x.eid = l.eid)
-         and not exists (select 1 from cancel c where c.target = l.eid)
+         and not exists (select 1 from error x where x.entity = l.entity)
+         and not exists (select 1 from cancel c where c.target = l.entity)
          and (
-           (exists (select 1 from generation g where g.eid = l.eid)
-             and not exists (select 1 from output o where o.source = l.eid)
-             and not exists (select 1 from delivered d where d.eid = l.eid))
+           (exists (select 1 from generation g where g.entity = l.entity)
+             and not exists (select 1 from output o where o.source = l.entity)
+             and not exists (select 1 from delivered d where d.entity = l.entity))
            or
-           (exists (select 1 from call c join graph_query q on q.eid = c.eid
-             where c.eid = l.eid)
-             and not exists (select 1 from result r where r.call = l.eid))
+           (exists (select 1 from call c join graph_query q on q.entity = c.entity
+             where c.entity = l.entity)
+             and not exists (select 1 from result r where r.call = l.entity))
          )`,
     ).get(stale.eid, stale.holder, stale.at, stale.until, token.at) as
       | { kind: 'generation' | 'call' }
       | undefined
-    let runner = db.prepare('select 1 from runner where eid = ?').get(holder)
+    let runner = db.prepare(`select 1 from runner where ${OWNED}`).get(holder)
     if (!safe || !runner) {
       db.exec('rollback')
       return undefined
     }
     db.prepare(
-      'update lease set holder = ?, at = ?, until = ? where eid = ?',
+      `update lease set holder = ${idOf}, at = ?, until = ? where ${OWNED}`,
     ).run(holder, token.at, token.until, token.eid)
     record(db, [change], holder)
     db.exec('commit')
@@ -362,8 +382,8 @@ export let renewEntry = (
   db.exec('begin immediate')
   try {
     let n = db.prepare(
-      `update lease set until = ? where eid = ? and holder = ? and at = ?
-       and not exists (select 1 from cancel c where c.target = lease.eid)`,
+      `update lease set until = ? where ${OWNED} and holder = ${idOf} and at = ?
+       and not exists (select 1 from cancel c where c.target = lease.entity)`,
     ).run(until, token.eid, token.holder, token.at).changes
     if (!n) {
       db.exec('rollback')
@@ -386,7 +406,7 @@ let normalizedUsage = (value: UsageValue) => ({
 })
 
 let runnerName = (db: DatabaseSync, eid: string) =>
-  (db.prepare('select name from runner where eid = ?').get(eid) as {
+  (db.prepare(`select name from runner where ${OWNED}`).get(eid) as {
     name: string
   }).name
 
@@ -428,15 +448,15 @@ export let settleGeneration = (
   try {
     if (
       !owns(db, token) ||
-      db.prepare('select 1 from cancel where target = ?').get(token.eid)
+      db.prepare(`select 1 from cancel where target = ${idOf}`).get(token.eid)
     ) {
       db.exec('rollback')
       return []
     }
     if (usage) {
       db.prepare(
-        `insert into usage (eid, input, cached, output, reasoning)
-         values (?, ?, ?, ?, ?)`,
+        `insert into usage (entity, input, cached, output, reasoning)
+         values (${idOf}, ?, ?, ?, ?)`,
       ).run(
         token.eid,
         usage.input,
@@ -446,13 +466,13 @@ export let settleGeneration = (
       )
     }
     if (model) {
-      db.prepare('update generation set serving_model = ? where eid = ?')
+      db.prepare(`update generation set serving_model = ? where ${OWNED}`)
         .run(model, token.eid)
     }
     db.prepare(
-      'insert into delivered (eid, at, via) values (?, ?, ?)',
+      `insert into delivered (entity, at, via) values (${idOf}, ?, ?)`,
     ).run(token.eid, at, via)
-    db.prepare('delete from lease where eid = ?').run(token.eid)
+    db.prepare(`delete from lease where ${OWNED}`).run(token.eid)
     record(db, changes, token.holder)
     db.exec('commit')
     return changes
@@ -474,12 +494,12 @@ export let cancelEntry = (
   try {
     if (
       !owns(db, token) ||
-      !db.prepare('select 1 from cancel where target = ?').get(token.eid)
+      !db.prepare(`select 1 from cancel where target = ${idOf}`).get(token.eid)
     ) {
       db.exec('rollback')
       return []
     }
-    db.prepare('delete from lease where eid = ?').run(token.eid)
+    db.prepare(`delete from lease where ${OWNED}`).run(token.eid)
     record(db, [change], token.holder)
     db.exec('commit')
     return [change]
@@ -497,13 +517,13 @@ export let settleCall = (db: DatabaseSync, token: LeaseToken): Change[] => {
   try {
     if (
       !owns(db, token) ||
-      !db.prepare('select 1 from result where call = ?').get(token.eid) ||
-      db.prepare('select 1 from cancel where target = ?').get(token.eid)
+      !db.prepare(`select 1 from result where call = ${idOf}`).get(token.eid) ||
+      db.prepare(`select 1 from cancel where target = ${idOf}`).get(token.eid)
     ) {
       db.exec('rollback')
       return []
     }
-    db.prepare('delete from lease where eid = ?').run(token.eid)
+    db.prepare(`delete from lease where ${OWNED}`).run(token.eid)
     record(db, [change], token.holder)
     db.exec('commit')
     return [change]
@@ -532,9 +552,11 @@ export let failEntry = (
       db.exec('rollback')
       return []
     }
-    db.prepare('insert into error (eid, at, message) values (?, ?, ?)')
+    db.prepare(
+      `insert into error (entity, at, message) values (${idOf}, ?, ?)`,
+    )
       .run(token.eid, comp.at, message)
-    db.prepare('delete from lease where eid = ?').run(token.eid)
+    db.prepare(`delete from lease where ${OWNED}`).run(token.eid)
     record(db, changes, token.holder)
     db.exec('commit')
     return changes

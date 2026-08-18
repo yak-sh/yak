@@ -38,6 +38,11 @@ import { type Change, uuid } from './types.ts'
 
 type Cast = (changes: Change[]) => void
 
+// A component row is keyed by its owner's internal int id (D-18866); a consumer
+// that matched by owner eid uses this correlated lookup, its bound eid param
+// unchanged. `entity` here is the component table's owner column.
+let OWNED = `entity = (select id from entity where eid = ?)`
+
 export type ManagedJob = {
   instruction: string
   session_id: string
@@ -87,8 +92,9 @@ let now = () => new Date()
 // would flip it to graph-native and route its liveness down the runner's path.
 export let graphSession = (db: DatabaseSync, eid: string) =>
   !!db.prepare(
-    `select 1 from entry e where e.session = ?
-       and not exists (select 1 from imported i where i.eid = e.eid)
+    `select 1 from entry e
+     where e.session = (select id from entity where eid = ?)
+       and not exists (select 1 from imported i where i.entity = e.entity)
      limit 1`,
   ).get(eid)
 
@@ -99,19 +105,19 @@ export let graphSession = (db: DatabaseSync, eid: string) =>
 export let graphBusy = (db: DatabaseSync, eid: string) =>
   !!db.prepare(
     `select 1 from entry e
-     where e.session = ? and (
-       exists (select 1 from lease l where l.eid = e.eid)
+     where e.session = (select id from entity where eid = ?) and (
+       exists (select 1 from lease l where l.entity = e.entity)
        or (
-         not exists (select 1 from imported i where i.eid = e.eid)
-         and not exists (select 1 from error x where x.eid = e.eid)
-         and not exists (select 1 from cancel z where z.target = e.eid)
+         not exists (select 1 from imported i where i.entity = e.entity)
+         and not exists (select 1 from error x where x.entity = e.entity)
+         and not exists (select 1 from cancel z where z.target = e.entity)
          and (
-           (exists (select 1 from generation g where g.eid = e.eid)
-            and not exists (select 1 from delivered d where d.eid = e.eid)
-            and not exists (select 1 from output o where o.source = e.eid))
+           (exists (select 1 from generation g where g.entity = e.entity)
+            and not exists (select 1 from delivered d where d.entity = e.entity)
+            and not exists (select 1 from output o where o.source = e.entity))
            or
-           (exists (select 1 from call c where c.eid = e.eid)
-            and not exists (select 1 from result r where r.call = e.eid))
+           (exists (select 1 from call c where c.entity = e.entity)
+            and not exists (select 1 from result r where r.call = e.entity))
          )
        )
      ) limit 1`,
@@ -119,10 +125,10 @@ export let graphBusy = (db: DatabaseSync, eid: string) =>
 
 let pendingAttention = (db: DatabaseSync, session: string) =>
   !!db.prepare(
-    `select 1 from entry a join attention n on n.eid = a.eid
-     where a.session = ? and not exists (
-       select 1 from entry e join generation g on g.eid = e.eid
-       join entry t on t.eid = g.through
+    `select 1 from entry a join attention n on n.entity = a.entity
+     where a.session = (select id from entity where eid = ?) and not exists (
+       select 1 from entry e join generation g on g.entity = e.entity
+       join entry t on t.entity = g.through
        where e.session = a.session and t.seq >= a.seq
      ) limit 1`,
   ).get(session)
@@ -137,7 +143,8 @@ export let attention = (
 ) => {
   if (!graphSession(db, session) || pendingAttention(db, session)) return []
   let source = writer ?? (db.prepare(
-    "select eid from runner where name = 'tasksd' order by rowid limit 1",
+    `select o.eid as eid from runner r join entity o on o.id = r.entity
+     where r.name = 'tasksd' order by r.rowid limit 1`,
   ).get() as { eid: string } | undefined)?.eid
   if (!source) throw new Error('managed session runner unavailable')
   let out = append(db, session, [{ attention: {} }], source).changes
@@ -155,8 +162,9 @@ let delivered = (
   let at = clock().toISOString()
   let comp = { eid, at, via }
   db.prepare(
-    `insert into delivered (eid, at, via) values (?, ?, ?)
-     on conflict(eid) do update set at = excluded.at, via = excluded.via`,
+    `insert into delivered (entity, at, via)
+       values ((select id from entity where eid = ?), ?, ?)
+     on conflict(entity) do update set at = excluded.at, via = excluded.via`,
   ).run(eid, at, via)
   let change: Change = { eid, name: 'delivered', comp }
   record(db, [change])
@@ -182,21 +190,26 @@ let sessionFault = (
 ) => {
   let changes: Change[] = []
   if (fault == null) {
-    if (db.prepare('delete from error where eid = ?').run(eid).changes) {
+    if (
+      db.prepare(`delete from error where ${OWNED}`).run(eid).changes
+    ) {
       changes.push({ eid, name: 'error', comp: null })
     }
-    if (db.prepare('delete from exception where eid = ?').run(eid).changes) {
+    if (
+      db.prepare(`delete from exception where ${OWNED}`).run(eid).changes
+    ) {
       changes.push({ eid, name: 'exception', comp: null })
     }
   } else {
-    let old = db.prepare('select message from exception where eid = ?').get(
+    let old = db.prepare(`select message from exception where ${OWNED}`).get(
       eid,
     ) as { message: string } | undefined
     if (old?.message == fault) return
     let comp = { eid, at: clock().toISOString(), message: fault, stack: null }
     db.prepare(
-      `insert into exception (eid, at, message, stack) values (?, ?, ?, null)
-       on conflict(eid) do update set at = excluded.at,
+      `insert into exception (entity, at, message, stack)
+         values ((select id from entity where eid = ?), ?, ?, null)
+       on conflict(entity) do update set at = excluded.at,
          message = excluded.message`,
     ).run(eid, comp.at, fault)
     changes.push({ eid, name: 'exception', comp })
@@ -214,10 +227,10 @@ let sessionFault = (
 // historical Session even though none can produce a runnable operation.
 export let runnerSessions = (db: DatabaseSync) =>
   (db.prepare(
-    `select distinct e.session
+    `select distinct (select eid from entity where id = e.session) as session
      from generation g cross join entry e
-     left join imported i on i.eid = g.eid
-     where e.eid = g.eid and i.eid is null
+     left join imported i on i.entity = g.entity
+     where e.entity = g.entity and i.entity is null
      order by e.session`,
   ).all() as { session: string }[]).map((row) => row.session)
 
@@ -226,55 +239,57 @@ export let advanceable = (db: DatabaseSync) =>
     with latest as (
       select e.session, max(e.seq) as seq
       from generation g cross join entry e
-      left join imported i on i.eid = g.eid
-      where e.eid = g.eid and i.eid is null
+      left join imported i on i.entity = g.entity
+      where e.entity = g.entity and i.entity is null
       group by e.session
     ), current as (
-      select e.session, e.eid, e.seq, g.through,
+      select e.session, e.entity as entity, e.seq, g.through,
              g.provider, g.model, g.effort
       from latest l
       join entry e on e.session = l.session and e.seq = l.seq
-      join generation g on g.eid = e.eid
+      join generation g on g.entity = e.entity
     )
-    select c.session, c.provider, c.model, c.effort,
-           (select z.eid from entry z where z.session = c.session
+    select (select eid from entity where id = c.session) as session,
+           c.provider, c.model, c.effort,
+           (select ee.eid from entry z join entity ee on ee.id = z.entity
+            where z.session = c.session
             order by z.seq desc limit 1) as through
     from current c
-    where not exists (select 1 from lease l where l.eid = c.eid)
+    where not exists (select 1 from lease l where l.entity = c.entity)
       and (
-        exists (select 1 from delivered d where d.eid = c.eid)
-        or exists (select 1 from error x where x.eid = c.eid)
-        or exists (select 1 from cancel z where z.target = c.eid)
+        exists (select 1 from delivered d where d.entity = c.entity)
+        or exists (select 1 from error x where x.entity = c.entity)
+        or exists (select 1 from cancel z where z.target = c.entity)
       )
       and not exists (
-        select 1 from output o join call k on k.eid = o.eid
-        where o.source = c.eid
-          and not exists (select 1 from result r where r.call = k.eid)
-          and not exists (select 1 from error x where x.eid = k.eid)
-          and not exists (select 1 from cancel z where z.target = k.eid)
+        select 1 from output o join call k on k.entity = o.entity
+        where o.source = c.entity
+          and not exists (select 1 from result r where r.call = k.entity)
+          and not exists (select 1 from error x where x.entity = k.entity)
+          and not exists (select 1 from cancel z where z.target = k.entity)
       )
       and (
         exists (
           select 1 from entry n
           where n.session = c.session
             and n.seq > coalesce(
-              (select t.seq from entry t where t.eid = c.through), c.seq
+              (select t.seq from entry t where t.entity = c.through), c.seq
             )
             and (
-              exists (select 1 from attention a where a.eid = n.eid)
+              exists (select 1 from attention a where a.entity = n.entity)
               or (
                 exists (select 1 from message m
-                        where m.eid = n.eid and m.role = 'user')
-                and not exists (select 1 from output o where o.eid = n.eid)
+                        where m.entity = n.entity and m.role = 'user')
+                and not exists (select 1 from output o where o.entity = n.entity)
               )
             )
         )
         or (
-          not exists (select 1 from error x where x.eid = c.eid)
-          and not exists (select 1 from cancel z where z.target = c.eid)
+          not exists (select 1 from error x where x.entity = c.entity)
+          and not exists (select 1 from cancel z where z.target = c.entity)
           and exists (
-            select 1 from output o join call k on k.eid = o.eid
-            where o.source = c.eid
+            select 1 from output o join call k on k.entity = o.entity
+            where o.source = c.entity
           )
         )
       )
@@ -310,8 +325,11 @@ let advance = (
 
 let valid = (db: DatabaseSync, token: LeaseToken) =>
   !!db.prepare(
-    `select 1 from lease l where l.eid = ? and l.holder = ? and l.at = ?
-     and not exists (select 1 from cancel c where c.target = l.eid)`,
+    `select 1 from lease l
+     where l.entity = (select id from entity where eid = ?)
+       and l.holder = (select id from entity where eid = ?)
+       and l.at = ?
+       and not exists (select 1 from cancel c where c.target = l.entity)`,
   ).get(token.eid, token.holder, token.at)
 
 export let managedCodex = (options: ManagedCodexOptions) => {
@@ -320,7 +338,10 @@ export let managedCodex = (options: ManagedCodexOptions) => {
   let clock = options.clock ?? now
   let leaseMs = Math.max(100, options.leaseMs ?? 60_000)
   let runner = options.runner ?? String(
-    (db.prepare("select eid from runner where name = 'tasksd' limit 1").get() as
+    (db.prepare(
+      `select o.eid as eid from runner r join entity o on o.id = r.entity
+       where r.name = 'tasksd' limit 1`,
+    ).get() as
       | { eid: string }
       | undefined)?.eid ?? uuid(),
   )
@@ -365,7 +386,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     }
   }
 
-  if (!db.prepare('select 1 from runner where eid = ?').get(runner)) {
+  if (!db.prepare(`select 1 from runner where ${OWNED}`).get(runner)) {
     cast(apply(db, [{
       eid: runner,
       name: 'runner',
@@ -475,8 +496,11 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     for (let lease of expiredLeases(db, clock().toISOString())) {
       if (flights.has(lease.eid)) continue
       if (
-        db.prepare('select 1 from generation where eid = ?').get(lease.eid) &&
-        db.prepare('select 1 from output where source = ? limit 1').get(
+        db.prepare(`select 1 from generation where ${OWNED}`).get(lease.eid) &&
+        db.prepare(
+          `select 1 from output
+           where source = (select id from entity where eid = ?) limit 1`,
+        ).get(
           lease.eid,
         )
       ) {
@@ -488,8 +512,11 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         }
       }
       if (
-        db.prepare('select 1 from call where eid = ?').get(lease.eid) &&
-        db.prepare('select 1 from result where call = ? limit 1').get(
+        db.prepare(`select 1 from call where ${OWNED}`).get(lease.eid) &&
+        db.prepare(
+          `select 1 from result
+           where call = (select id from entity where eid = ?) limit 1`,
+        ).get(
           lease.eid,
         )
       ) {
@@ -533,7 +560,10 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     clearTimeout(expiry)
     expiry = undefined
     if (draining || !db.isOpen) return
-    let leases = db.prepare('select eid, until from lease order by until')
+    let leases = db.prepare(
+      `select o.eid as eid, l.until from lease l
+       join entity o on o.id = l.entity order by l.until`,
+    )
       .all() as { eid: string; until: string }[]
     let next = leases.find((row) => !flights.has(row.eid))
     if (!next) return
@@ -574,7 +604,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       let won = takeEntry(db, eid, runner, leaseMs, clock)
       if (!won) return []
       cast(won.changes)
-      let kind = db.prepare('select 1 from generation where eid = ?').get(eid)
+      let kind = db.prepare(`select 1 from generation where ${OWNED}`).get(eid)
       return [kind ? generation(won.token, session) : call(won.token, session)]
     }))
     await Promise.all(jobs)
@@ -713,12 +743,16 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     )
     for (
       let row of db.prepare(
-        `select e.eid from entry e join lease l on l.eid = e.eid
-         where e.session = ?`,
+        `select o.eid as eid from entry e
+         join entity o on o.id = e.entity
+         join lease l on l.entity = e.entity
+         where e.session = (select id from entity where eid = ?)`,
       ).all(session) as { eid: string }[]
     ) work.set(row.eid, row)
     let targets = [...work.values()].filter((row) =>
-      !db.prepare('select 1 from cancel where target = ?').get(row.eid)
+      !db.prepare(
+        `select 1 from cancel where target = (select id from entity where eid = ?)`,
+      ).get(row.eid)
     )
     if (targets.length) {
       cast(
@@ -732,7 +766,13 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     }
     for (let row of targets) flights.get(row.eid)?.control.abort()
     for (let row of targets) {
-      let lease = db.prepare('select * from lease where eid = ?').get(
+      let lease = db.prepare(
+        `select o.eid as eid,
+                (select eid from entity where id = l.holder) as holder,
+                l.at, l.until
+         from lease l join entity o on o.id = l.entity
+         where l.entity = (select id from entity where eid = ?)`,
+      ).get(
         row.eid,
       ) as LeaseToken | undefined
       if (lease) {
@@ -740,7 +780,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         cast(cancelled)
         if (
           cancelled.length &&
-          db.prepare('select 1 from generation where eid = ?').get(row.eid)
+          db.prepare(`select 1 from generation where ${OWNED}`).get(row.eid)
         ) observe({ session, generation: row.eid, kind: 'clear' })
       }
     }
@@ -749,16 +789,25 @@ export let managedCodex = (options: ManagedCodexOptions) => {
   }
 
   let comment = (target: string, ceid: string) => {
-    let held = db.prepare('select session from claim where eid = ?').get(
+    let held = db.prepare(
+      `select (select eid from entity where id = c.session) as session
+       from claim c where c.${OWNED}`,
+    ).get(
       target,
     ) as { session: string } | undefined
     let eid = graphSession(db, target) ? target : held?.session
     if (!eid || !graphSession(db, eid)) return false
-    let made = db.prepare('select via from created where eid = ?').get(ceid) as
+    let made = db.prepare(
+      `select (select eid from entity where id = cr.via) as via
+       from created cr where cr.${OWNED}`,
+    ).get(ceid) as
       | { via: string | null }
       | undefined
     if (made?.via == eid) return true
-    let row = db.prepare('select role from session where eid = ?').get(eid) as
+    let row = db.prepare(
+      `select (select eid from entity where id = s.role) as role
+       from session s where s.${OWNED}`,
+    ).get(eid) as
       | { role: string | null }
       | undefined
     // Role reconciliation owns direct role inbox wake-ups. Claimed work is
