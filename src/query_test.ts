@@ -882,6 +882,19 @@ Deno.test('session compatibility fields filter across both homes', () => {
   let pid = parseQuery('.pid=42')
   assert(matchQuery({ session: { pid: 42 } }, pid))
   assert(matchQuery({ runtime: { pid: 42 } }, pid))
+  let providerId = parseQuery('.runtime.provider_session_id=thread-1')
+  assertEquals(providerId[0], {
+    comp: 'runtime',
+    prop: 'provider_session_id',
+    op: '',
+    value: 'thread-1',
+  })
+  assert(
+    matchQuery({ runtime: { provider_session_id: 'thread-1' } }, providerId),
+  )
+  assert(
+    !matchQuery({ runtime: { provider_session_id: 'thread-2' } }, providerId),
+  )
 })
 
 Deno.test('paths: a component first segment stays the explicit spelling', () => {

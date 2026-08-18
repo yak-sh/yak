@@ -151,6 +151,11 @@ let routes: Record<string, readonly string[]> = {
   memory: [...Object.keys(comps.memory), ...Object.keys(stamped.memory)],
   recall: Object.keys(stamped.recall),
   mail: [...Object.keys(comps.mail), ...Object.keys(stamped.mail)],
+  // Runtime identity is learned from the provider, so its useful lookup
+  // columns are stamped rather than wire-writable. They still belong to the
+  // facet's read vocabulary: `.runtime.provider_session_id=…` must reach the
+  // same column snapshot() exposes.
+  runtime: [...Object.keys(comps.runtime), ...Object.keys(stamped.runtime)],
   // Provenance carries a wire-writable `by` and a stamped `at` (T-6670);
   // both share those names, so bare `.at`/`.by` are ambiguous — spell out
   // `.created.at`, `.updated.by`, the pin/camera precedent.
