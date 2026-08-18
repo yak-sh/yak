@@ -12,7 +12,7 @@
 // native send was assigned). The comment relay mints mails for comments on
 // an addressed project's tasks — the graph's replacement for holdco's
 // delivery.js. SERVER-ONLY (imports db).
-import { apply, db, human } from './db.ts'
+import { apply, db, human, readComp } from './db.ts'
 import { delivered, errored, settled, toOf } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Letter, logOut, native, send } from './mailer.ts'
@@ -24,6 +24,14 @@ type Cast = (changes: Change[]) => void
 type Row = Record<string, string | number | null>
 
 let now = () => new Date().toISOString()
+
+// The eid→id storage seam (D-18866): component tables key by the owner int id
+// and store refs as int ids; this module speaks EIDs. OWNED matches a row by
+// owner eid, idOf resolves a ref filter's eid operand, refEid projects a stored
+// ref id back to its eid on read. `entity` keeps its real eid/num columns.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
 
 // Settle a delivery: write the resolved envelope DATA to the mail row and
 // record the OUTCOME as the shared component (D-14945) — error {at, message}
@@ -43,9 +51,9 @@ let settle = (
   if (cols.length) {
     db.prepare(
       `update mail set ${cols.map((c) => `"${c}" = ?`).join(', ')}
-       where eid = ?`,
+       where ${OWNED}`,
     ).run(...cols.map((c) => data[c]), eid)
-    let row = db.prepare('select * from mail where eid = ?').get(eid)
+    let row = readComp(db, eid, 'mail')
     if (row) cast([{ eid, name: 'mail', comp: row as Record<string, unknown> }])
   }
   if (outcome.error) errored(eid, outcome.error, cast)
@@ -65,7 +73,8 @@ let eidOf = (ref: string): string | undefined => {
   // Any of the entity's handles resolve, not just the primary — a whole-token
   // membership over the space-delimited `slugs` set (db.ts resolveId).
   return (db.prepare(
-    `select eid from alias where slug = ?
+    `select o.eid as eid from alias join entity o on o.id = alias.entity
+     where slug = ?
        or instr(' ' || coalesce(slugs, '') || ' ', ' ' || ? || ' ') > 0`,
   ).get(ref, ref) as { eid: string } | undefined)?.eid
 }
@@ -77,7 +86,7 @@ export let addressOf = (to: string): string => {
   if (to.includes('@')) return to
   let eid = eidOf(to)
   if (!eid) throw new Error(`no entity: ${to}`)
-  let e = db.prepare('select address from email where eid = ?').get(eid) as
+  let e = db.prepare(`select address from email where ${OWNED}`).get(eid) as
     | { address: string }
     | undefined
   if (e) return e.address
@@ -85,7 +94,7 @@ export let addressOf = (to: string): string => {
   // id-address (named() resolves it back for local delivery) — the fallback
   // for entities too short-lived to carry an `email` comp. Anything else
   // genuinely has no address, and guessing one would misdeliver.
-  if (db.prepare('select 1 from session where eid = ?').get(eid)) {
+  if (db.prepare(`select 1 from session where ${OWNED}`).get(eid)) {
     return fleetAddress(human(db, eid))
   }
   throw new Error(`no address on file for ${to} — give it an email comp`)
@@ -122,7 +131,10 @@ export let named = (to: string): string | null => {
 let homeOf = (addr: string, to: string): string | null => {
   if (!atFleet(to)) return null
   let hit = (a: string) =>
-    (db.prepare('select eid from email where address = ? collate nocase')
+    (db.prepare(
+      `select o.eid as eid from email join entity o on o.id = email.entity
+       where address = ? collate nocase`,
+    )
       .get(a) as { eid: string } | undefined)?.eid
   return hit(to) ?? hit(addr) ?? named(to) ?? named(addr)
 }
@@ -142,7 +154,7 @@ export let rfcId = (stored: string) =>
 // unthreaded — the reply_to edge still records the intent in the
 // graph, and a lost thread is not a lost letter.
 let threadId = (eid: string) => {
-  let r = db.prepare('select message_id, sent_id from mail where eid = ?')
+  let r = db.prepare(`select message_id, sent_id from mail where ${OWNED}`)
     .get(eid) as
       | { message_id: string | null; sent_id: string | null }
       | undefined
@@ -153,8 +165,8 @@ let threadId = (eid: string) => {
 let repoUrl = (target: string | null) =>
   target
     ? (db.prepare(
-      `select repo.url from task join repo on repo.eid = task.project
-       where task.eid = ?`,
+      `select repo.url from task join repo on repo.entity = task.project
+       where task.entity = ${idOf}`,
     ).get(target) as { url: string | null } | undefined)?.url ?? undefined
     : undefined
 
@@ -175,9 +187,7 @@ let flying = new Set<string>()
 
 export let mailed =
   (cast: Cast) => async (eid: string, _comp: Record<string, unknown>) => {
-    let row = db.prepare('select * from mail where eid = ?').get(
-      eid,
-    ) as Row | undefined
+    let row = readComp(db, eid, 'mail') as Row | undefined
     if (!row || settled(eid)) return // gone, or a sweep replaying a done one
     // Inbound mail is a RECORD of arrival, never an ask to send — the
     // message_id mark (inbound.ts stamps it) is what keeps what arrived
@@ -185,7 +195,7 @@ export let mailed =
     if (row.message_id) return
     if (flying.has(eid)) return // a concurrent fire is already delivering
     flying.add(eid)
-    let doc = db.prepare('select title, body from doc where eid = ?').get(
+    let doc = db.prepare(`select title, body from doc where ${OWNED}`).get(
       eid,
     ) as { title: string; body: string } | undefined
     // WHERE it goes rides the shared `deliver {to}` facet now, resolved to an
@@ -330,14 +340,14 @@ export let mailed =
 let BORN_WITH_TARGET = `
   exists (
     select 1 from created c, created t
-    where c.eid = comment.eid
-      and t.eid = comment.target
+    where c.entity = comment.entity
+      and t.entity = comment.target
       and c.at >= t.at
       and c.at <= strftime('%Y-%m-%dT%H:%M:%fZ', t.at, '+1 second'))
 `.trim()
 
 let bornWithTarget = (eid: string) =>
-  !!db.prepare(`select 1 from comment where eid = ? and ${BORN_WITH_TARGET}`)
+  !!db.prepare(`select 1 from comment where ${OWNED} and ${BORN_WITH_TARGET}`)
     .get(eid)
 
 // created(comment): a comment on an ADDRESSED project's task fans out as
@@ -351,30 +361,34 @@ export let fanout =
   (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
     if (bornWithTarget(eid)) return
     let target = String(comp.target ?? '')
-    let t = db.prepare('select project from task where eid = ?').get(
+    let t = db.prepare(
+      `select ${refEid('project')} as project from task where ${OWNED}`,
+    ).get(
       target,
     ) as { project: string | null } | undefined
     if (!t?.project) return
     if (
-      !db.prepare('select 1 from email where eid = ?').get(t.project)
+      !db.prepare(`select 1 from email where ${OWNED}`).get(t.project)
     ) return
-    let actor = db.prepare('select "by" from created where eid = ?').get(
+    let actor = db.prepare(
+      `select ${refEid('"by"')} as "by" from created where ${OWNED}`,
+    ).get(
       eid,
     ) as { by: string | null } | undefined
     if (String(actor?.by ?? '') == t.project) return
     if (
       db.prepare(`
-      select 1 from dependency d join mail s on s.eid = d.parent
-      where d.type = 'about' and d.child = ?
+      select 1 from dependency d join mail s on s.entity = d.parent
+      where d.type = 'about' and d.child = ${idOf}
     `).get(eid)
     ) return
     let num = (db.prepare('select num from entity where eid = ?').get(
       target,
     ) as { num: number } | undefined)?.num
-    let title = (db.prepare('select title from doc where eid = ?').get(
+    let title = (db.prepare(`select title from doc where ${OWNED}`).get(
       target,
     ) as { title: string } | undefined)?.title ?? ''
-    let said = (db.prepare('select body from doc where eid = ?').get(eid) as
+    let said = (db.prepare(`select body from doc where ${OWNED}`).get(eid) as
       | { body: string }
       | undefined)?.body ?? ''
     let sid = crypto.randomUUID()
@@ -427,13 +441,13 @@ export let fanout =
 // SEARCHes comment by eid. Tying it back to `comment` makes the window
 // advisory and hands the row count to the planner.
 export let FANOUT_PENDING = `
-  comment.eid in (
-    select cr.eid from created cr
+  comment.entity in (
+    select cr.entity from created cr
     where cr.at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'))
   and
   not exists (
-    select 1 from dependency d join mail s on s.eid = d.parent
-    where d.type = 'about' and d.child = comment.eid)
+    select 1 from dependency d join mail s on s.entity = d.parent
+    where d.type = 'about' and d.child = comment.entity)
   and
   not ${BORN_WITH_TARGET}
 `.trim()

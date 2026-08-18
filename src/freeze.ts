@@ -17,6 +17,11 @@ import { errored, healthy } from './deliver.ts'
 // page <title> becomes the entity's doc, and everyone hears over the ws.
 let frozen = `${Deno.env.get('HOME')}/.tasks/frozen`
 
+// Component tables key by the owner int id since D-18866; a consumer matching by
+// owner eid uses this correlated lookup, its bound eid param unchanged.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+
 type Archive = (url: string, out: string) => Promise<{
   success: boolean
   stderr: Uint8Array
@@ -92,11 +97,12 @@ let land = (
   let changes: Change[] = [
     { eid, name: 'web', comp: { frozen_at: new Date().toISOString() } },
   ]
-  db.prepare('update web set frozen_at = ? where eid = ?')
+  db.prepare(`update web set frozen_at = ? where ${OWNED}`)
     .run(changes[0].comp!.frozen_at as string, eid)
-  let hasDoc = db.prepare('select 1 from doc where eid = ?').get(eid)
+  let hasDoc = db.prepare(`select 1 from doc where ${OWNED}`).get(eid)
   if (title && !hasDoc) {
-    db.prepare('insert into doc (eid, title) values (?, ?)').run(eid, title)
+    db.prepare(`insert into doc (entity, title) values (${idOf}, ?)`)
+      .run(eid, title)
     changes.push({ eid, name: 'doc', comp: { title } })
   }
   // The stamp must reach the journal as well as the sockets: a tab that
@@ -108,7 +114,7 @@ let land = (
 }
 
 let webRow = (eid: string) =>
-  db.prepare('select url, frozen_at from web where eid = ?').get(eid) as
+  db.prepare(`select url, frozen_at from web where ${OWNED}`).get(eid) as
     | { url: string; frozen_at: string | null }
     | undefined
 

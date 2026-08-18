@@ -95,8 +95,15 @@ export let order = (
 // journal wants whatever the writer wrote as. A comment typed in a browser
 // has a client, not a session — its orders still run, minus the verbs that
 // need a lease to speak of.
+// Component tables key by the owner int id since D-18866; OWNED matches a row by
+// owner eid, refEid projects a stored ref id back to its eid on read.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
+
 let speaker = (via: string) =>
-  (db.prepare('select id from session where eid = ? or id = ?')
+  (db.prepare(
+    `select id from session where ${OWNED} or id = ?`,
+  )
     .get(via, via) as { id: string } | undefined)?.id
 
 export let obeyed =
@@ -104,13 +111,14 @@ export let obeyed =
   async (ceid: string, comp: Record<string, unknown>) => {
     let target = String(comp.target ?? '')
     if (!target) return
-    let doc = db.prepare('select body from doc where eid = ?').get(ceid) as
+    let doc = db.prepare(`select body from doc where ${OWNED}`).get(ceid) as
       | { body: string | null }
       | undefined
     let line = orderIn(String(doc?.body ?? ''))
     if (!line) return
     let via = String(
-      (db.prepare('select via from created where eid = ?').get(ceid) as
+      (db.prepare(`select ${refEid('via')} as via from created where ${OWNED}`)
+        .get(ceid) as
         | { via: string | null }
         | undefined)?.via ?? '',
     )
