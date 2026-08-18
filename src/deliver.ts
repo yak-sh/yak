@@ -26,6 +26,14 @@ import { type Change } from './types.ts'
 
 type Cast = (changes: Change[]) => void
 let now = () => new Date().toISOString()
+
+// The eid→id storage seam (D-18866): these facet tables key by the owner int id
+// and store refs as int ids; the module speaks EIDs. OWNED matches a row by
+// owner eid, idOf resolves a ref filter's eid operand, refEid projects a stored
+// ref id back to its eid on read.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
 let publish = (changes: Change[], cast: Cast) => {
   if (!changes.length) return
   record(db, changes)
@@ -38,8 +46,8 @@ let publish = (changes: Change[], cast: Cast) => {
 export let delivered = (eid: string, via: string, cast: Cast) => {
   let at = now()
   db.prepare(
-    `insert into delivered (eid, at, via) values (?, ?, ?)
-     on conflict(eid) do update set at = excluded.at, via = excluded.via`,
+    `insert into delivered (entity, at, via) values (${idOf}, ?, ?)
+     on conflict(entity) do update set at = excluded.at, via = excluded.via`,
   ).run(eid, at, via || null)
   let changes: Change[] = [
     { eid, name: 'delivered', comp: { eid, at, via: via || null } },
@@ -47,7 +55,7 @@ export let delivered = (eid: string, via: string, cast: Cast) => {
   // One outcome at a time (the D-14945 tri-state): a success clears any prior
   // failure, so a pending query (neither facet) and the `.error` health query
   // can never disagree about the same deliverable.
-  if (db.prepare('delete from error where eid = ?').run(eid).changes) {
+  if (db.prepare(`delete from error where ${OWNED}`).run(eid).changes) {
     changes.push({ eid, name: 'error', comp: null })
   }
   // publish, not a bare cast: record() journals the outcome so a catch-up
@@ -78,7 +86,7 @@ export let errored = (
   // unconditionally — even when errorChange dedups an unchanged error, a stray
   // `delivered` beside it must still go — and guarded on `.changes`, so a plain
   // unchanged error with no delivered publishes nothing (the no-storm rule).
-  if (db.prepare('delete from delivered where eid = ?').run(eid).changes) {
+  if (db.prepare(`delete from delivered where ${OWNED}`).run(eid).changes) {
     changes.push({ eid, name: 'delivered', comp: null })
   }
   publish(changes, cast)
@@ -92,15 +100,15 @@ export let errorChange = (
   message: string,
   at = now(),
 ): Change | undefined => {
-  let prior = db.prepare('select at, message from error where eid = ?').get(
+  let prior = db.prepare(`select at, message from error where ${OWNED}`).get(
     eid,
   ) as
     | { at: string | null; message: string | null }
     | undefined
   if (prior?.message == message && prior.at) return
   db.prepare(
-    `insert into error (eid, at, message) values (?, ?, ?)
-     on conflict(eid) do update set at = excluded.at, message = excluded.message`,
+    `insert into error (entity, at, message) values (${idOf}, ?, ?)
+     on conflict(entity) do update set at = excluded.at, message = excluded.message`,
   ).run(eid, at, message)
   return { eid, name: 'error', comp: { eid, at, message } }
 }
@@ -120,15 +128,15 @@ export let exceptionChange = (
   at = now(),
 ): Change | undefined => {
   let prior = db.prepare(
-    'select at, message, stack from exception where eid = ?',
+    `select at, message, stack from exception where ${OWNED}`,
   )
     .get(eid) as
       | { at: string | null; message: string | null; stack: string | null }
       | undefined
   if (prior?.message == message && prior.stack == stack && prior.at) return
   db.prepare(
-    `insert into exception (eid, at, message, stack) values (?, ?, ?, ?)
-     on conflict(eid) do update set
+    `insert into exception (entity, at, message, stack) values (${idOf}, ?, ?, ?)
+     on conflict(entity) do update set
        at = excluded.at, message = excluded.message, stack = excluded.stack`,
   ).run(eid, at, message, stack)
   return { eid, name: 'exception', comp: { eid, at, message, stack } }
@@ -170,8 +178,8 @@ export let healthy = (eid: string, cast: Cast) => {
 }
 
 export let healthChange = (eid: string): Change | undefined => {
-  if (!db.prepare('select 1 from error where eid = ?').get(eid)) return
-  db.prepare('delete from error where eid = ?').run(eid)
+  if (!db.prepare(`select 1 from error where ${OWNED}`).get(eid)) return
+  db.prepare(`delete from error where ${OWNED}`).run(eid)
   return { eid, name: 'error', comp: null }
 }
 
@@ -180,8 +188,8 @@ export let healthChange = (eid: string): Change | undefined => {
 // read as component presence.
 export let settled = (eid: string): boolean =>
   !!db.prepare(
-    `select 1 from delivered where eid = ?
-     union all select 1 from error where eid = ?`,
+    `select 1 from delivered where ${OWNED}
+     union all select 1 from error where ${OWNED}`,
   ).get(eid, eid)
 
 // WHERE this deliverable goes — the recipient off the shared `deliver {to}`
@@ -191,7 +199,9 @@ export let settled = (eid: string): boolean =>
 // resolver stamps that as its error rather than crashing.
 export let toOf = (eid: string): string =>
   String(
-    (db.prepare('select "to" from deliver where eid = ?').get(eid) as
+    (db.prepare(
+      `select ${refEid('"to"')} as "to" from deliver where ${OWNED}`,
+    ).get(eid) as
       | { to?: string }
       | undefined)?.to ?? '',
   )
@@ -201,5 +211,5 @@ export let toOf = (eid: string): string =>
 // readers (wake.ts pending) share this one shape, so "unacted" means the
 // same thing everywhere it is asked.
 export let PENDING = (table: string) =>
-  `not exists (select 1 from delivered where delivered.eid = ${table}.eid)
-   and not exists (select 1 from error where error.eid = ${table}.eid)`
+  `not exists (select 1 from delivered where delivered.entity = ${table}.entity)
+   and not exists (select 1 from error where error.entity = ${table}.entity)`

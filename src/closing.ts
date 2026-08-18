@@ -22,6 +22,12 @@ import { type Change } from './types.ts'
 
 type Cast = (changes: Change[]) => void
 
+// The eid→id storage seam (D-18866): component tables key by the owner int id
+// and store refs as int ids; this module speaks EIDs. OWNED matches a row by
+// owner eid, refEid projects a stored ref id back to its eid on read.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
+
 // The statuses that END a task. Closing is an ACT, not a state, so
 // closing an already-closed task closes its correspondence again —
 // sweeping up whatever arrived since. That is the honest reading of
@@ -34,11 +40,15 @@ let terminal = new Set(['done', 'cancelled'])
 // this is `archived`, the one stamp that hides, and nothing else.
 let waiting = (task: string): string[] =>
   (db.prepare(
-    `select eid from comment where target = ?1
-       and eid not in (select eid from archived)
+    `select co.eid as eid from comment c
+        join entity co on co.id = c.entity
+       where c.target = (select id from entity where eid = ?1)
+         and c.entity not in (select entity from archived)
      union
-     select eid from mail where target = ?1
-       and eid not in (select eid from archived)`,
+     select mo.eid as eid from mail m
+        join entity mo on mo.id = m.entity
+       where m.target = (select id from entity where eid = ?1)
+         and m.entity not in (select entity from archived)`,
   ).all(task) as { eid: string }[]).map((r) => r.eid)
 
 export let closingTask =
@@ -48,7 +58,9 @@ export let closingTask =
     if (!items.length) return
     // Attributed to whoever closed it: they archived this mail by
     // closing the task, which is the truth the stamp should carry.
-    let by = (db.prepare('select "by" from updated where eid = ?')
+    let by = (db.prepare(
+      `select ${refEid('"by"')} as "by" from updated where ${OWNED}`,
+    )
       .get(eid) as { by: string | null } | undefined)?.by ?? null
     let t = trace()
     let out = apply(

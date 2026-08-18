@@ -2478,8 +2478,8 @@ export let recover = (cast: Cast) => {
     `where origin = 'managed'
       and status in ('starting', 'running', 'stopping')
       and not exists (
-        select 1 from entry e where e.session = session.eid
-          and not exists (select 1 from imported i where i.eid = e.eid)
+        select 1 from entry e where e.session = s.entity
+          and not exists (select 1 from imported i where i.entity = e.entity)
       )
     `,
   )

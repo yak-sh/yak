@@ -29,6 +29,14 @@ import { embed, FLOOR, similar, textOf } from './embed.ts'
 
 type Cast = (changes: Change[]) => void
 
+// The eid→id storage seam (D-18866): component tables key by the owner int id
+// and store refs as int ids; this module speaks EIDs. OWNED matches a row by
+// owner eid, idOf resolves a ref filter's eid operand, refEid projects a stored
+// ref id back to its eid on read. Sibling joins move to the int owner key.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
+
 let DAY = 86_400_000
 let iso = (ms: number) => new Date(ms).toISOString()
 
@@ -82,14 +90,16 @@ id) to ground truth, never a restatement of it.`
 
 // The dream cursor, read from its own table.
 let dreamOf = (eid: string) =>
-  db.prepare('select scope, floor from dream where eid = ?').get(eid) as
+  db.prepare(
+    `select ${refEid('scope')} as scope, floor from dream where ${OWNED}`,
+  ).get(eid) as
     | { scope: string | null; floor: string | null }
     | undefined
 
 // The venture's checkout, so the model runs where its code lives. Absent is
 // fine — complete() falls back to the server's cwd.
 let pathOf = (project: string): string | undefined =>
-  (db.prepare('select path from repo where eid = ?').get(project) as
+  (db.prepare(`select path from repo where ${OWNED}`).get(project) as
     | { path?: string }
     | undefined)?.path ?? undefined
 
@@ -99,8 +109,9 @@ let pathOf = (project: string): string | undefined =>
 // them. Finished in (floor, ceil], oldest first.
 let sessionsSince = (project: string, floor: string, ceil: string) =>
   db.prepare(
-    `select s.eid, s.id from session s
-     where s.actor = ? and s.finished_at is not null
+    `select o.eid as eid, s.id from session s
+     join entity o on o.id = s.entity
+     where s.actor = ${idOf} and s.finished_at is not null
        and s.finished_at > ? and s.finished_at <= ?
      order by s.finished_at`,
   ).all(project, floor, ceil) as { eid: string; id: string | null }[]
@@ -111,9 +122,9 @@ let sessionsSince = (project: string, floor: string, ceil: string) =>
 let twentiethAt = (project: string): string | undefined =>
   (db.prepare(
     `select c.at as at from entry e
-       join session s on s.eid = e.session
-       join created c on c.eid = e.eid
-      where s.actor = ? order by c.at desc limit 1 offset 19`,
+       join session s on s.entity = e.session
+       join created c on c.entity = e.entity
+      where s.actor = ${idOf} order by c.at desc limit 1 offset 19`,
   ).get(project) as { at?: string } | undefined)?.at ?? undefined
 
 // One calendar day forward, held back so the re-read window is never smaller
@@ -231,8 +242,10 @@ export let findingKey = (f: Finding) => `${f.kind}:${normalize(f.title)}`
 // (heal.ts openBug). One row per key.
 let filed = (key: string) =>
   db.prepare(
-    `select fd.eid as eid, fd.hits as hits, t.status as status
-       from finding fd left join task t on t.eid = fd.eid
+    `select o.eid as eid, fd.hits as hits, t.status as status
+       from finding fd
+       join entity o on o.id = fd.entity
+       left join task t on t.entity = fd.entity
       where fd.key = ? limit 1`,
   ).get(key) as
     | { eid: string; hits: number | null; status: string | null }
@@ -249,7 +262,7 @@ export let namesResolved = (f: Finding): boolean => {
   if (!ids) return false
   for (let id of new Set(ids)) {
     let row = db.prepare(
-      `select t.status as status from task t join entity e on e.eid = t.eid
+      `select t.status as status from task t join entity e on e.id = t.entity
         where e.num = ?`,
     ).get(Number(id.slice(2))) as { status: string } | undefined
     if (row && CLOSED.has(row.status)) return true
@@ -272,7 +285,7 @@ export let nearestMemory = (
   floor = FLOOR,
 ): string | undefined => {
   for (let h of similar(db, q, NET, floor)) {
-    if (db.prepare('select 1 from memory where eid = ?').get(h.eid)) {
+    if (db.prepare(`select 1 from memory where ${OWNED}`).get(h.eid)) {
       return h.eid
     }
   }
@@ -486,8 +499,8 @@ export let dreamComb =
 // any effect's outbox, so a dream that missed its beat while the server was
 // down combs on startup.
 export let DREAM_PENDING =
-  `exists (select 1 from deliver dv join dream dr on dr.eid = dv."to"
-     where dv.eid = knock.eid)
+  `exists (select 1 from deliver dv join dream dr on dr.entity = dv."to"
+     where dv.entity = knock.entity)
    and ${PENDING('knock')}`
 
 // Seed a dream that has no pending cadence wake — the boot reconcile (a fresh
@@ -495,11 +508,11 @@ export let DREAM_PENDING =
 // `task dream` verb's first arm. One near-term wake; replaceWakes keeps it from
 // stacking. Returns the changes so the caller lands them on its own clock.
 export let seedWake = (to: string, at = iso(Date.now() + 1000)): Change[] => {
-  // wake is UNaliased on purpose: PENDING('wake') names `wake.eid`, which an
+  // wake is UNaliased on purpose: PENDING('wake') names `wake.entity`, which an
   // alias would not resolve (the boot-crash that shipped once).
   let has = db.prepare(
-    `select 1 from wake join deliver dv on dv.eid = wake.eid
-     where dv."to" = ? and ${PENDING('wake')}`,
+    `select 1 from wake join deliver dv on dv.entity = wake.entity
+     where dv."to" = ${idOf} and ${PENDING('wake')}`,
   ).get(to)
   if (has) return []
   let w = uuid()
@@ -514,7 +527,7 @@ export let seedWake = (to: string, at = iso(Date.now() + 1000)): Change[] => {
 // brand-new dream, or one whose wake fired-and-consumed during downtime.
 export let unwoken = (): string[] =>
   (db.prepare(
-    `select dr.eid from dream dr
-     where not exists (select 1 from wake join deliver dv on dv.eid = wake.eid
-       where dv."to" = dr.eid and ${PENDING('wake')})`,
+    `select o.eid as eid from dream dr join entity o on o.id = dr.entity
+     where not exists (select 1 from wake join deliver dv on dv.entity = wake.entity
+       where dv."to" = dr.entity and ${PENDING('wake')})`,
   ).all() as { eid: string }[]).map((r) => r.eid)
