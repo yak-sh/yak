@@ -105,11 +105,20 @@ dump_data() {
 # things that refill the index — with them kept, loading the doc rows below
 # rebuilds both indexes on the way in.
 # glob, not like: `_` is a wildcard in LIKE and would also match doc_fts.
+# sqlite_stat1/sqlite_stat4 are the ANALYZE tables PRAGMA optimize (above)
+# materializes — same kind as the FTS/vector shadows: derived, and rebuilt by
+# ANALYZE, so they carry no information to keep. They MUST be dropped from the
+# dump because they are reserved names sqlite refuses on load ('object name
+# reserved for internal use'), which fails the round-trip gate below. Targeted
+# glob 'sqlite_stat*', not a blanket 'sqlite_%': sqlite_autoindex_* already
+# fall out on `sql is not null`, and were AUTOINCREMENT ever added its
+# sqlite_sequence counters would matter for restore — leave that door shut.
 sqlite3 -batch -init /dev/null snap/tasks.db \
   "select sql || ';' from sqlite_master
    where sql is not null and not (type = 'table'
      and (name glob 'doc_fts_*' or name glob 'doc_gram_*'
-       or name glob 'vector0_embedding*' or name = '_sqliteai_vector'))
+       or name glob 'vector0_embedding*' or name = '_sqliteai_vector'
+       or name glob 'sqlite_stat*'))
    order by rowid" > snap/schema.sql.tmp
 dump_data "name = 'journal'" > snap/journal.sql.tmp
 dump_data "name != 'journal'" > snap/graph.sql.tmp
