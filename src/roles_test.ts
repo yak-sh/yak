@@ -26,7 +26,10 @@ let {
   nativeProviderArgs,
   nativeWindowArgs,
   colorOf,
+  foreignHolder,
   looping,
+  operatorRole,
+  roleClaim,
   roleColor,
   roleAttention,
   roleConfig,
@@ -529,6 +532,118 @@ Deno.test('a running managed role respawns when its operator dies async, but not
   ).get(role) as { eid: string; operator: number }
   assert(latest.eid != first)
   assertEquals(latest.operator, 1)
+})
+
+Deno.test('foreignHolder adopts a live unlinked operator, ignores our own leases and dead ones', () => {
+  let role = 'R'
+  // The unlinked interactive operator (role null) alive → adopt it.
+  assertEquals(
+    foreignHolder(role, [{ eid: 'S1', role: null, live: true }]),
+    'S1',
+  )
+  // Our own managed lease (role == the role) never trips the gate.
+  assertEquals(
+    foreignHolder(role, [{ eid: 'S2', role, live: true }]),
+    undefined,
+  )
+  // A dead holder frees the role — not adopted.
+  assertEquals(
+    foreignHolder(role, [{ eid: 'S3', role: null, live: false }]),
+    undefined,
+  )
+  // A live lease linked to a different role is still foreign here — defer
+  // rather than duplicate is the safe default.
+  assertEquals(
+    foreignHolder(role, [{ eid: 'S4', role: 'R-other', live: true }]),
+    'S4',
+  )
+  assertEquals(foreignHolder(role, []), undefined)
+})
+
+Deno.test('operatorRole resolves the role: session.role wins, else actor matches scope, non-operator none', () => {
+  let { project, role } = seed('managed') // role.scope == project
+  // A managed spawn names its role directly.
+  assertEquals(operatorRole({ operator: 1, role: 'R-direct' }), 'R-direct')
+  // An interactive operator is matched by actor to the role scoped to it.
+  assertEquals(operatorRole({ operator: 1, actor: project }), role)
+  // A non-operator claims nothing; an operator whose actor has no role, nothing.
+  assertEquals(operatorRole({ operator: 0, actor: project }), undefined)
+  assertEquals(operatorRole({ operator: 1, actor: uid() }), undefined)
+})
+
+Deno.test('roleClaim places an operators lease on its role and reaps a dead holders stale claim', () => {
+  let { project, role } = seed('managed')
+  let op = uid()
+  apply(db, [{
+    eid: op,
+    name: 'session',
+    comp: { id: uid(), operator: 1, actor: project, pid: 999999 },
+  }])
+  roleClaim(cast)(op)
+  assertEquals(
+    (db.prepare('select session from claim where eid = ?').get(role) as {
+      session: string
+    }).session,
+    op,
+  )
+  // Idempotent: re-running does not disturb the existing lease.
+  roleClaim(cast)(op)
+  assertEquals(
+    (db.prepare('select session from claim where eid = ?').get(role) as {
+      session: string
+    }).session,
+    op,
+  )
+
+  // A DEAD prior holder's stale claim is reaped so the live operator takes it.
+  let { project: p2, role: r2 } = seed('managed')
+  let dead = uid()
+  apply(db, [{
+    eid: dead,
+    name: 'session',
+    comp: { id: uid(), operator: 1, actor: p2, status: 'completed' },
+  }])
+  db.prepare('update session set finished_at = ? where eid = ?')
+    .run(new Date().toISOString(), dead)
+  apply(db, [{ eid: r2, name: 'claim', comp: { session: dead } }])
+  let live = uid()
+  apply(db, [{
+    eid: live,
+    name: 'session',
+    comp: { id: uid(), operator: 1, actor: p2, pid: 999999 },
+  }])
+  roleClaim(cast)(live)
+  assertEquals(
+    (db.prepare('select session from claim where eid = ?').get(r2) as {
+      session: string
+    }).session,
+    live,
+  )
+})
+
+Deno.test('the reconciler adopts a live unlinked operator via its role claim, and respawns exactly one when it dies', async () => {
+  commands = []
+  sessions.clear()
+  let { project, role } = seed('managed')
+  // A live interactive operator for this project: operator, actor = project,
+  // NOT linked (no session.role), holding the role's claim (what roleClaim
+  // places on boot). A truthy pid with no finished_at makes it live.
+  let op = uid()
+  apply(db, [{
+    eid: op,
+    name: 'session',
+    comp: { id: uid(), operator: 1, actor: project, pid: 999999 },
+  }])
+  apply(db, [{ eid: role, name: 'claim', comp: { session: op } }])
+  await rolesSweep(cast, deps)
+  await rolesSweep(cast, deps)
+  assertEquals(mspawns(role), 0) // adopted the live operator — no duplicate
+
+  // The operator dies: pid cleared, finished_at set → its lease is not live.
+  db.prepare('update session set pid = null, finished_at = ? where eid = ?')
+    .run(new Date().toISOString(), op)
+  await rolesSweep(cast, deps)
+  assertEquals(mspawns(role), 1) // exactly one respawn
 })
 
 Deno.test('a role comp on a project is its own operator: scope defaults to self, actor = the project', async () => {

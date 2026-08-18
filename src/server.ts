@@ -146,6 +146,7 @@ import { nativeSoon, nativeSweep, noticeAccepted } from './tmux.ts'
 import {
   roleAttention,
   roleBoot,
+  roleClaim,
   roleConfig,
   roleDoc,
   rolePersona,
@@ -1652,6 +1653,13 @@ on('session', {
     notice_at: roleSession(cast),
   },
   doc: 'a persistent role run changing re-drives only its owning role',
+})
+on('session', {
+  created: roleClaim(cast),
+  doc:
+    'an operator claims its role on boot (T-19453): whoever holds the live ' +
+    'claim IS the operator, so the reconciler defers to it and never spawns a ' +
+    'duplicate — managed spawns and interactive operators alike, no hook needed',
 })
 on('comment', {
   created: commented(cast),

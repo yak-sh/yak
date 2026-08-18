@@ -792,6 +792,60 @@ let startManaged = (
   }, cast)
 }
 
+// The role entity an operator session serves — what it CLAIMS on boot to
+// become the one live operator (T-19453/D-19459). A managed spawn names it
+// directly (session.role). An interactive operator (operator:true, unlinked)
+// is matched by its actor to the role whose scope resolves to that actor:
+// post-D-19459 scope defaults to self, so a project carrying a role comp is
+// matched by actor == project; a standalone role sets scope explicitly. Only a
+// documented role qualifies — an operator whose actor carries no role has
+// nothing to claim (an ordinary interactive session).
+export let operatorRole = (
+  s: { operator?: unknown; role?: string | null; actor?: string | null },
+): string | undefined => {
+  if (!s.operator) return
+  if (s.role) return String(s.role)
+  if (!s.actor) return
+  let r = db.prepare(
+    'select eid from role where eid = ? or scope = ? limit 1',
+  ).get(s.actor, s.actor) as { eid: string } | undefined
+  return r?.eid
+}
+
+// Claim-on-boot: the created(session) effect that makes an operator hold its
+// role's lease, so the reconciler defers to it instead of spawning a duplicate
+// (the foreignOperator gate below). Both surfaces flow through here — a managed
+// spawn and an interactive operator alike. A stale claim left by a DEAD prior
+// operator is reaped first (the same release reapLeases would do at boot), so
+// the live operator actually takes the lease rather than bouncing off a ghost.
+// A bounce against a LIVE holder is the dedup working: swallow it — the first
+// operator keeps the role, this one simply runs unclaimed.
+export let roleClaim = (cast: Cast) => (eid: string) => {
+  let s = db.prepare(
+    'select operator, role, actor from session where eid = ?',
+  ).get(eid) as
+    | { operator: unknown; role: string | null; actor: string | null }
+    | undefined
+  if (!s) return
+  let role = operatorRole(s)
+  if (!role) return
+  let held = db.prepare(
+    `select s.eid, s.status, s.pid, s.finished_at from claim c
+       join session s on s.eid = c.session where c.eid = ?`,
+  ).get(role) as DbRow | undefined
+  if (held && String(held.eid) == eid) return // already ours — idempotent
+  let changes: Change[] = []
+  if (held && !active(held)) {
+    changes.push({ eid: role, name: 'claim', comp: null })
+  }
+  changes.push({ eid: role, name: 'claim', comp: { session: eid } })
+  try {
+    applyGraph(changes, cast)
+  } catch (e) {
+    console.warn(`role claim ${role} —`, e)
+  }
+}
+
 // A held role stays down until an owner `task role start`. The trip already
 // recorded state + the reason, so this only keeps the process from coming
 // back and never stamps — the error survives every tick unclouded.
@@ -958,6 +1012,52 @@ let serveAttention = (
   }
 }
 
+// The pure decision behind the dedup gate (T-19453): among the sessions
+// holding a role's claim, the first LIVE one that is not a session we spawned
+// for this role (role != the role eid). That is the unlinked interactive
+// operator (operator:true, actor=role) — the live operator latest() misses
+// because it carries no session.role link. Adopt it instead of duplicating. A
+// session we spawned carries session.role == the role, so its own lease never
+// trips the gate; its lifecycle is the reconciler's other branches.
+export let foreignHolder = (
+  roleEid: string,
+  holders: { eid: string; role: string | null; live: boolean }[],
+): string | undefined => holders.find((h) => h.live && h.role != roleEid)?.eid
+
+// The db read wrapping foreignHolder: the role's claim-holders, liveness judged
+// by the module's own active() (status/pid/graphBusy), so a dead holder's stale
+// lease frees the role NOW rather than waiting for reapLeases at boot.
+let foreignOperator = (roleEid: string): string | undefined =>
+  foreignHolder(
+    roleEid,
+    (db.prepare(
+      `select s.eid, s.role, s.status, s.pid, s.finished_at
+         from claim c join session s on s.eid = c.session
+        where c.eid = ?`,
+    ).all(roleEid) as DbRow[]).map((h) => ({
+      eid: String(h.eid),
+      role: h.role == null ? null : String(h.role),
+      live: active(h),
+    })),
+  )
+
+// Adopt a live operator that already holds the role's claim: record the
+// decision and do not spawn. Idempotent-quiet — stamp() drops decided_at when
+// decision/reason/observed are unchanged, so a held role does not churn.
+let adoptForeign = (
+  eid: string,
+  holder: string,
+  cast: Cast,
+  deps: RoleDeps,
+) =>
+  stamp(eid, {
+    decision: 'adopt',
+    reason: 'a live operator holds the role claim',
+    observed: holder,
+    decided_at: deps.now(),
+    error: null,
+  }, cast)
+
 let reconcileManaged = async (
   c: RoleConfig,
   hash: string,
@@ -967,6 +1067,12 @@ let reconcileManaged = async (
   let killed = await tmuxKill(c.eid, deps)
   let session = latest(c.eid)
   if (killed || (active(session) && session?.origin != 'managed')) return
+  // Whoever holds the live claim IS the operator (T-19453). A live operator we
+  // did NOT spawn for this role — the unlinked interactive operator latest()
+  // misses — makes a spawn a duplicate; adopt it and defer. Its lease frees on
+  // death (settle/wrap, or reapLeases at boot), and the branches below resume.
+  let foreign = foreignOperator(c.eid)
+  if (foreign) return adoptForeign(c.eid, foreign, cast, deps)
   let row = db.prepare('select applied_hash from role where eid = ?').get(
     c.eid,
   ) as { applied_hash: string | null }
@@ -1048,6 +1154,10 @@ let reconcileWake = async (
   let killed = await tmuxKill(c.eid, deps)
   let session = latest(c.eid)
   if (killed || (active(session) && session?.origin != 'managed')) return
+  // A live operator already holds the role's claim (see reconcileManaged): a
+  // cold spawn beside it would duplicate the operator. Adopt and defer.
+  let foreign = foreignOperator(c.eid)
+  if (foreign) return adoptForeign(c.eid, foreign, cast, deps)
   if (session) {
     if (!graphSession(db, String(session.eid))) {
       if (active(session)) return
