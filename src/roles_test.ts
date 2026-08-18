@@ -182,14 +182,20 @@ let seedUnified = (provider = 'fake') => {
 
 // Managed launches FOR one role: startManaged mints a session carrying role,
 // so counting those rows isolates one role's spawns from the shared db.
+// The eid→id storage seam (D-18866): these test reads resolve eids to the
+// stored int owner/ref ids. R() filters a component row by its owner eid; ROLE
+// filters session.role (a reference) by a role eid.
+let R = `(select id from entity where eid = ?)`
 let mspawns = (role: string) =>
-  (db.prepare('select count(*) as n from session where role = ?').get(role) as {
+  (db.prepare(`select count(*) as n from session where role = ${R}`).get(
+    role,
+  ) as {
     n: number
   }).n
 
 let count = (name: string) => commands.filter((args) => args[0] == name).length
 let failure = (eid: string) =>
-  (db.prepare('select message from error where eid = ?').get(eid) as
+  (db.prepare(`select message from error where entity = ${R}`).get(eid) as
     | { message: string }
     | undefined)?.message
 
@@ -202,7 +208,7 @@ let launch = (role: string, endAgo: number | null, life = 1_300) => {
   let e = uid()
   apply(db, [{ eid: e, name: 'session', comp: { id: uid(), role: role } }])
   let t = Date.now()
-  db.prepare('update session set started_at = ?, finished_at = ? where eid = ?')
+  db.prepare(`update session set started_at = ?, finished_at = ? where entity = ${R}`)
     .run(
       new Date(t - (endAgo ?? 0) - life).toISOString(),
       endAgo == null ? null : new Date(t - endAgo).toISOString(),
@@ -347,7 +353,7 @@ Deno.test('native role dedupes, rolls drift, heals death, and stops exactly', as
   assert(respawn.includes('TERM=xterm-256color'))
   assert(respawn.includes(`${tasksHome}/.deno/bin/task`))
   let first = db.prepare(
-    'select applied_hash from role where eid = ?',
+    `select applied_hash from role where entity = ${R}`,
   ).get(role) as { applied_hash: string }
   assertEquals(first.applied_hash.length, 64)
 
@@ -380,14 +386,14 @@ Deno.test('native role dedupes, rolls drift, heals death, and stops exactly', as
   assertEquals(count('kill-pane'), 2)
   assertEquals(panesOf(role).length, 0)
   let stopped = db.prepare(
-    'select applied_hash, stopped_at from role where eid = ?',
+    `select applied_hash, stopped_at from role where entity = ${R}`,
   ).get(role) as { applied_hash: string | null; stopped_at: string | null }
   assertEquals(stopped.applied_hash, null)
   assert(stopped.stopped_at)
   let at = stopped.stopped_at
   await rolesSweep(cast, deps)
   assertEquals(
-    db.prepare('select stopped_at from role where eid = ?').get(role),
+    db.prepare(`select stopped_at from role where entity = ${R}`).get(role),
     { stopped_at: at },
   )
 })
@@ -402,7 +408,7 @@ Deno.test('paused disabled and retired roles stay down with a receipt', async ()
     assertEquals(spawns(role), 0)
     assertEquals(
       db.prepare(
-        'select decision, reason from role where eid = ?',
+        `select decision, reason from role where entity = ${R}`,
       ).get(role),
       { decision: 'stop', reason: 'desired state is not running' },
     )
@@ -453,7 +459,7 @@ Deno.test('an early-dead native provider is captured, not marked applied', async
   await rolesSweep(cast, dying)
   assertEquals(panesOf(role).length, 0)
   assertEquals(
-    db.prepare('select applied_hash from role where eid = ?').get(role),
+    db.prepare(`select applied_hash from role where entity = ${R}`).get(role),
     { applied_hash: null },
   )
   assertEquals(
@@ -469,19 +475,21 @@ Deno.test('managed role mints one operator session and stops through the graph',
   await rolesSweep(cast, deps)
   await rolesSweep(cast, deps)
   let runs = db.prepare(
-    'select * from session where role = ?',
+    `select o.eid as eid, s.operator,
+       (select eid from entity where id = s.actor) as actor
+     from session s join entity o on o.id = s.entity where s.role = ${R}`,
   ).all(role) as Record<string, unknown>[]
   assertEquals(runs.length, 1)
   assertEquals(runs[0].operator, 1)
   assertEquals(runs[0].actor, project)
   let runEid = String(runs[0].eid)
   assertEquals(
-    db.prepare('select provider from spawn where eid = ?').get(runEid),
+    db.prepare(`select provider from spawn where entity = ${R}`).get(runEid),
     { provider: 'fake' },
   )
 
   db.prepare(
-    `update session set origin = 'managed', status = 'running' where eid = ?`,
+    `update session set origin = 'managed', status = 'running' where entity = ${R}`,
   ).run(runEid)
   apply(db, [{
     eid: role,
@@ -490,7 +498,7 @@ Deno.test('managed role mints one operator session and stops through the graph',
   }])
   await rolesSweep(cast, deps)
   let stop = db.prepare(
-    'select target from stop_request order by rowid desc limit 1',
+    `select (select eid from entity where id = target) as target from stop_request order by rowid desc limit 1`,
   ).get()
   assertEquals(stop, { target: runEid })
 })
@@ -502,13 +510,13 @@ Deno.test('a running managed role respawns when its operator dies async, but not
   await rolesSweep(cast, deps)
   assertEquals(mspawns(role), 1)
   let first = String(
-    (db.prepare('select eid from session where role = ?').get(role) as {
+    (db.prepare(`select o.eid as eid from session s join entity o on o.id = s.entity where s.role = ${R}`).get(role) as {
       eid: string
     }).eid,
   )
   // Pinned: the reconciler recorded the hash it launched under.
   assert(
-    (db.prepare('select applied_hash from role where eid = ?').get(role) as {
+    (db.prepare(`select applied_hash from role where entity = ${R}`).get(role) as {
       applied_hash: string | null
     }).applied_hash != null,
   )
@@ -522,15 +530,15 @@ Deno.test('a running managed role respawns when its operator dies async, but not
   // crash-loop breaker does not count it. Nothing else pokes the role.
   db.prepare(
     `update session set status = 'failed', started_at = ?, finished_at = ?
-     where eid = ?`,
+     where entity = ${R}`,
   ).run('2026-07-26T23:50:00.000Z', '2026-07-27T00:00:00.000Z', first)
 
   // A single reconcile re-pins a fresh operator — no stop, no role command.
   await rolesSweep(cast, deps)
   assertEquals(mspawns(role), 2)
   let latest = db.prepare(
-    `select s.eid, s.operator from session s join entity e on e.eid = s.eid
-     where s.role = ? order by e.num desc limit 1`,
+    `select e.eid as eid, s.operator from session s join entity e on e.id = s.entity
+     where s.role = ${R} order by e.num desc limit 1`,
   ).get(role) as { eid: string; operator: number }
   assert(latest.eid != first)
   assertEquals(latest.operator, 1)
@@ -599,27 +607,27 @@ Deno.test('working() reads the db: a live session with a fresh turn is working; 
     comp: { id: uid(), operator: 1, pid: 999999 },
   }])
   // No turn yet → not working (seq 0).
-  assert(!working(db.prepare('select * from session where eid = ?').get(s)))
+  assert(!working(db.prepare(`select o.eid as eid, s.* from session s join entity o on o.id = s.entity where s.entity = ${R}`).get(s)))
   // A fresh turn → working.
   let entry = append(db, s, [{ message: { role: 'agent' } }]).eids[0]
-  let row = () => db.prepare('select * from session where eid = ?').get(s)
+  let row = () => db.prepare(`select o.eid as eid, s.* from session s join entity o on o.id = s.entity where s.entity = ${R}`).get(s)
   assert(working(row()))
   // A stale turn → stuck, not working.
-  db.prepare('update created set at = ? where eid = ?')
+  db.prepare(`update created set at = ? where entity = ${R}`)
     .run(new Date(Date.now() - 60 * 60_000).toISOString(), entry)
   assert(!working(row()))
   // Fresh again, but an open exception → broken, not working.
-  db.prepare('update created set at = ? where eid = ?')
+  db.prepare(`update created set at = ? where entity = ${R}`)
     .run(new Date().toISOString(), entry)
   assert(working(row()))
   db.prepare(
-    'insert into exception (eid, at, message, stack) values (?, ?, ?, null)',
+    `insert into exception (entity, at, message, stack) values (${R}, ?, ?, null)`,
   )
     .run(s, new Date().toISOString(), 'wedged')
   assert(!working(row()))
-  db.prepare('delete from exception where eid = ?').run(s)
+  db.prepare(`delete from exception where entity = ${R}`).run(s)
   // Dead pid, no status → not active, so not working however fresh the turn.
-  db.prepare('update session set pid = null, finished_at = ? where eid = ?')
+  db.prepare(`update session set pid = null, finished_at = ? where entity = ${R}`)
     .run(new Date().toISOString(), s)
   assert(!working(row()))
 })
@@ -645,7 +653,7 @@ Deno.test('roleClaim places an operators lease on its role and reaps a dead hold
   }])
   roleClaim(cast)(op)
   assertEquals(
-    (db.prepare('select session from claim where eid = ?').get(role) as {
+    (db.prepare(`select (select eid from entity where id = session) as session from claim where entity = ${R}`).get(role) as {
       session: string
     }).session,
     op,
@@ -653,7 +661,7 @@ Deno.test('roleClaim places an operators lease on its role and reaps a dead hold
   // Idempotent: re-running does not disturb the existing lease.
   roleClaim(cast)(op)
   assertEquals(
-    (db.prepare('select session from claim where eid = ?').get(role) as {
+    (db.prepare(`select (select eid from entity where id = session) as session from claim where entity = ${R}`).get(role) as {
       session: string
     }).session,
     op,
@@ -667,7 +675,7 @@ Deno.test('roleClaim places an operators lease on its role and reaps a dead hold
     name: 'session',
     comp: { id: uid(), operator: 1, actor: p2, status: 'completed' },
   }])
-  db.prepare('update session set finished_at = ? where eid = ?')
+  db.prepare(`update session set finished_at = ? where entity = ${R}`)
     .run(new Date().toISOString(), dead)
   apply(db, [{ eid: r2, name: 'claim', comp: { session: dead } }])
   let live = uid()
@@ -678,7 +686,7 @@ Deno.test('roleClaim places an operators lease on its role and reaps a dead hold
   }])
   roleClaim(cast)(live)
   assertEquals(
-    (db.prepare('select session from claim where eid = ?').get(r2) as {
+    (db.prepare(`select (select eid from entity where id = session) as session from claim where entity = ${R}`).get(r2) as {
       session: string
     }).session,
     live,
@@ -706,7 +714,7 @@ Deno.test('the reconciler adopts a WORKING unlinked operator via its role claim,
   assertEquals(mspawns(role), 0) // adopted the working operator — no duplicate
 
   // The operator dies: pid cleared, finished_at set → its lease is not working.
-  db.prepare('update session set pid = null, finished_at = ? where eid = ?')
+  db.prepare(`update session set pid = null, finished_at = ? where entity = ${R}`)
     .run(new Date().toISOString(), op)
   await rolesSweep(cast, deps)
   assertEquals(mspawns(role), 1) // exactly one respawn
@@ -727,7 +735,7 @@ Deno.test('the reconciler respawns past a STUCK operator (pid alive, seq stale) 
   }])
   let entry = append(db, stuck, [{ message: { role: 'agent' } }]).eids[0]
   // Backdate the turn well past the working window.
-  db.prepare('update created set at = ? where eid = ?')
+  db.prepare(`update created set at = ? where entity = ${R}`)
     .run(new Date(Date.now() - 60 * 60_000).toISOString(), entry)
   apply(db, [{ eid: role, name: 'claim', comp: { session: stuck } }])
   await rolesSweep(cast, deps)
@@ -744,7 +752,7 @@ Deno.test('the reconciler respawns past a STUCK operator (pid alive, seq stale) 
   }])
   append(db, broke, [{ message: { role: 'agent' } }])
   db.prepare(
-    `insert into exception (eid, at, message, stack) values (?, ?, ?, null)`,
+    `insert into exception (entity, at, message, stack) values (${R}, ?, ?, null)`,
   ).run(broke, new Date().toISOString(), 'wedged')
   apply(db, [{ eid: r2, name: 'claim', comp: { session: broke } }])
   await rolesSweep(cast, deps)
@@ -760,7 +768,10 @@ Deno.test('a role comp on a project is its own operator: scope defaults to self,
   await rolesSweep(cast, deps)
   await rolesSweep(cast, deps)
   let runs = db.prepare(
-    'select * from session where role = ?',
+    `select s.operator,
+       (select eid from entity where id = s.role) as role,
+       (select eid from entity where id = s.actor) as actor
+     from session s where s.role = ${R}`,
   ).all(project) as Record<string, unknown>[]
   // config() succeeded (no "role has no scope" throw) and startManaged minted
   // exactly one operator whose actor is the project itself — one entity.
@@ -786,11 +797,11 @@ Deno.test('a role comp on a project is its own operator: scope defaults to self,
 //     gesture), then moves the comps. The operator runs these as graph_apply
 //     batches; this task does not touch the live db.
 let enumerated = () =>
-  (db.prepare('select eid from role order by eid').all() as { eid: string }[])
+  (db.prepare(`select o.eid as eid from role join entity o on o.id = role.entity order by o.eid`).all() as { eid: string }[])
     .map((r) => r.eid)
 let stop = (role: string) => {
   for (
-    let s of db.prepare('select eid from session where role = ?').all(role) as {
+    let s of db.prepare(`select o.eid as eid from session s join entity o on o.id = s.entity where s.role = ${R}`).all(role) as {
       eid: string
     }[]
   ) apply(db, [{ eid: s.eid, name: 'entity', comp: null }])
@@ -804,7 +815,7 @@ Deno.test('unify migration is reversible: comps move onto the project and back, 
   assert(enumerated().includes(role))
   assert(!enumerated().includes(project))
   assertEquals(
-    (db.prepare('select count(*) as n from session where role = ?').get(
+    (db.prepare(`select count(*) as n from session where role = ${R}`).get(
       role,
     ) as { n: number }).n,
     1,
@@ -830,10 +841,10 @@ Deno.test('unify migration is reversible: comps move onto the project and back, 
   ])
   assert(enumerated().includes(project))
   assert(!enumerated().includes(role)) // no longer a role, but NOT tombstoned
-  assert(db.prepare('select eid from doc where eid = ?').get(role)) // doc lives
+  assert(db.prepare(`select 1 from doc where entity = ${R}`).get(role)) // doc lives
   await rolesSweep(cast, deps)
   await rolesSweep(cast, deps)
-  let unified = db.prepare('select actor from session where role = ?')
+  let unified = db.prepare(`select (select eid from entity where id = actor) as actor from session where role = ${R}`)
     .all(project) as { actor: string }[]
   assertEquals(unified.length, 1)
   assertEquals(unified[0].actor, project) // actor = role = project, one entity
@@ -864,7 +875,7 @@ Deno.test('unify migration is reversible: comps move onto the project and back, 
   assert(!enumerated().includes(project))
   await rolesSweep(cast, deps)
   assertEquals(
-    (db.prepare('select actor from session where role = ?').get(role) as {
+    (db.prepare(`select (select eid from entity where id = actor) as actor from session where role = ${R}`).get(role) as {
       actor: string
     }).actor,
     project, // standalone operator restored, actor = its explicit scope again
@@ -875,20 +886,20 @@ Deno.test('deleting a managed role keeps history and requests a stop', async () 
   let { role } = seed('managed')
   await rolesSweep(cast, deps)
   let run = db.prepare(
-    'select eid from session where role = ? order by rowid desc limit 1',
+    `select o.eid as eid from session s join entity o on o.id = s.entity where s.role = ${R} order by s.rowid desc limit 1`,
   ).get(role) as { eid: string }
   db.prepare(
-    `update session set origin = 'managed', status = 'running' where eid = ?`,
+    `update session set origin = 'managed', status = 'running' where entity = ${R}`,
   ).run(run.eid)
   apply(db, [{ eid: role, name: 'entity', comp: null }])
   await roleRemoved(cast, deps)(role)
   assertEquals(
-    db.prepare('select role from session where eid = ?').get(run.eid),
+    db.prepare(`select (select eid from entity where id = role) as role from session where entity = ${R}`).get(run.eid),
     { role: role },
   )
   assertEquals(
     db.prepare(
-      'select target from stop_request order by rowid desc limit 1',
+      `select (select eid from entity where id = target) as target from stop_request order by rowid desc limit 1`,
     ).get(),
     { target: run.eid },
   )
@@ -899,12 +910,12 @@ slow('managed attention resumes once with no graph content', async () => {
   let { role } = seed('managed')
   await rolesSweep(cast, deps)
   let run = db.prepare(
-    'select eid, id from session where role = ? order by rowid desc limit 1',
+    `select o.eid as eid, s.id from session s join entity o on o.id = s.entity where s.role = ${R} order by s.rowid desc limit 1`,
   ).get(role) as { eid: string; id: string }
   db.prepare(`
     update session set origin = 'managed', status = 'completed',
       provider_session_id = 'fake-thread', cwd = ?, finished_at = ?
-    where eid = ?
+    where entity = ${R}
   `).run(dir, new Date().toISOString(), run.eid)
   let message = uid()
   apply(db, [
@@ -923,13 +934,13 @@ slow('managed attention resumes once with no graph content', async () => {
   await rolesSweep(cast, wakeDeps)
   await until(
     () =>
-      (db.prepare('select status from session where eid = ?').get(
+      (db.prepare(`select status from session where entity = ${R}`).get(
         run.eid,
       ) as { status: string }).status == 'completed',
     { label: 'the native role session to complete' },
   )
   assertEquals(
-    db.prepare('select status from session where eid = ?').get(run.eid),
+    db.prepare(`select status from session where entity = ${R}`).get(run.eid),
     { status: 'completed' },
   )
   let path = `${Deno.env.get('HOME')}/.tasks/logs/${run.eid}.jsonl`
@@ -937,7 +948,7 @@ slow('managed attention resumes once with no graph content', async () => {
   assertMatch(text, /You have pending Tasks messages\. Call task_context now\./)
   assert(!text.includes('SECRET GRAPH WORDS'))
   assertEquals(
-    db.prepare('select 1 from notified where eid = ?').get(message),
+    db.prepare(`select 1 from notified where entity = ${R}`).get(message),
     undefined,
   )
   let inputs = text.match(/"type":"session.input"/g)?.length
@@ -963,7 +974,7 @@ let settled = (role: string, project: string) => {
   db.prepare(`
     update session set origin = 'managed', status = 'completed',
       provider_session_id = 'fake-thread', cwd = ?, finished_at = ?
-    where eid = ?
+    where entity = ${R}
   `).run(dir, new Date().toISOString(), run)
   return run
 }
@@ -1008,11 +1019,11 @@ Deno.test('wake_policy attention cold-spawns on pending scope attention, then sl
   // The fresh session consumes the attention (what task_context's serve does),
   // so the trigger clears and the role sleeps: no second spawn.
   let run = db.prepare(
-    'select eid from session where role = ? order by rowid desc limit 1',
+    `select o.eid as eid from session s join entity o on o.id = s.entity where s.role = ${R} order by s.rowid desc limit 1`,
   ).get(role) as { eid: string }
   db.prepare(`
     update session set origin = 'managed', status = 'completed',
-      provider_session_id = 't', cwd = ?, finished_at = ? where eid = ?
+      provider_session_id = 't', cwd = ?, finished_at = ? where entity = ${R}
   `).run(dir, new Date().toISOString(), run.eid)
   apply(db, [{ eid: msg, name: 'notified', comp: {} }])
   await rolesSweep(cast, { ...deps, now: () => new Date().toISOString() })
@@ -1030,7 +1041,7 @@ Deno.test('wake_policy attention advances an existing settled session when atten
   await rolesSweep(cast, { ...deps, now: () => new Date().toISOString() })
   // Advanced in place, not re-spawned: the same door got the wake stamp.
   assertEquals(mspawns(role), 1)
-  let woken = db.prepare('select notice_at from session where eid = ?').get(
+  let woken = db.prepare(`select notice_at from session where entity = ${R}`).get(
     run,
   ) as { notice_at: string | null }
   assert(woken.notice_at)
@@ -1059,7 +1070,7 @@ Deno.test('wake_policy manual never auto-wakes: no cold spawn, no advance, no te
   ping(run)
   await rolesSweep(cast, { ...deps, now: () => new Date().toISOString() })
   let s = db.prepare(
-    'select status, notice_at from session where eid = ?',
+    `select status, notice_at from session where entity = ${R}`,
   ).get(run) as { status: string; notice_at: string | null }
   assertEquals(s.notice_at, null) // not advanced
   assertEquals(s.status, 'completed') // not stopped
@@ -1081,9 +1092,9 @@ Deno.test('graph-native role attention is content-free and coalesced', async () 
   apply(db, [{ eid: runner, name: 'runner', comp: { name: 'tasksd' } }])
   await rolesSweep(cast, deps)
   let run = db.prepare(
-    'select eid from session where role = ? order by rowid desc limit 1',
+    `select o.eid as eid from session s join entity o on o.id = s.entity where s.role = ${R} order by s.rowid desc limit 1`,
   ).get(role) as { eid: string }
-  db.prepare("update session set origin = 'managed' where eid = ?")
+  db.prepare(`update session set origin = 'managed' where entity = ${R}`)
     .run(run.eid)
   let input = append(db, run.eid, [{ message: { role: 'user' } }]).eids[0]
   let generation = append(db, run.eid, [{
@@ -1094,7 +1105,7 @@ Deno.test('graph-native role attention is content-free and coalesced', async () 
     },
   }]).eids[0]
   db.prepare(
-    "insert into delivered (eid, at, via) values (?, datetime('now'), 'test')",
+    `insert into delivered (entity, at, via) values (${R}, datetime('now'), 'test')`,
   ).run(generation)
   let message = uid()
   apply(db, [
@@ -1115,7 +1126,7 @@ Deno.test('graph-native role attention is content-free and coalesced', async () 
     false,
   )
   assertEquals(
-    db.prepare('select 1 from notified where eid = ?').get(message),
+    db.prepare(`select 1 from notified where entity = ${R}`).get(message),
     undefined,
   )
   let wake = entries.find((row) => row.comps.attention)!
@@ -1274,7 +1285,7 @@ Deno.test('a crash-looping native role is held after N deaths, stops spawning, a
   let { role } = seed('native')
   for (let i = 0; i < 5; i++) launch(role, (i + 1) * 5_000)
   await rolesSweep(cast, live)
-  let held = db.prepare('select state from role where eid = ?').get(role) as {
+  let held = db.prepare(`select state from role where entity = ${R}`).get(role) as {
     state: string
   }
   assertEquals(held.state, 'held')
@@ -1294,7 +1305,7 @@ Deno.test('a crash-looping native role is held after N deaths, stops spawning, a
     comp: { state: 'running', retry_at: new Date().toISOString() },
   }])
   await rolesSweep(cast, live)
-  assertEquals(db.prepare('select state from role where eid = ?').get(role), {
+  assertEquals(db.prepare(`select state from role where entity = ${R}`).get(role), {
     state: 'running',
   })
   assertEquals(failure(role), undefined)
@@ -1309,10 +1320,10 @@ Deno.test('a still-starting native run gets no second spawn; a dead one is relau
   await rolesSweep(cast, live)
   assertEquals(spawns(role), 0) // idempotent: no racer for a booting run
   assertEquals(
-    db.prepare('select decision, observed from role where eid = ?').get(role),
+    db.prepare(`select decision, (select eid from entity where id = observed) as observed from role where entity = ${R}`).get(role),
     { decision: 'refuse duplicate', observed: s },
   )
-  db.prepare('update session set finished_at = ? where eid = ?')
+  db.prepare(`update session set finished_at = ? where entity = ${R}`)
     .run(new Date().toISOString(), s) // it died
   await rolesSweep(cast, live)
   assertEquals(spawns(role), 1) // now a relaunch is due
@@ -1339,7 +1350,7 @@ Deno.test('config drift defers under a live native operator, lands on restart', 
   let s = uid()
   apply(db, [{ eid: s, name: 'session', comp: { id: uid(), role } }])
   db.prepare(
-    'update session set pid = 4242, started_at = ?, finished_at = null where eid = ?',
+    `update session set pid = 4242, started_at = ?, finished_at = null where entity = ${R}`,
   ).run(new Date(Date.now() - 900_000).toISOString(), s)
 
   // A genuine, hash-affecting config change (the role's contract body).
@@ -1347,13 +1358,13 @@ Deno.test('config drift defers under a live native operator, lands on restart', 
   await rolesSweep(cast, live)
   assertEquals(panesOf(role), [pane0]) // the healthy pane SURVIVES — no kill
   let after = db.prepare(
-    'select decision, reason from role where eid = ?',
+    `select decision, reason from role where entity = ${R}`,
   ).get(role) as { decision: string; reason: string }
   assertEquals(after.decision, 'defer')
   assertMatch(after.reason, /config changed \(body\)/) // names the diffed field
 
   // The operator's process exits; the deferred config lands on the relaunch.
-  db.prepare('update session set finished_at = ? where eid = ?')
+  db.prepare(`update session set finished_at = ? where entity = ${R}`)
     .run(new Date().toISOString(), s)
   await rolesSweep(cast, live)
   let now = panesOf(role)
