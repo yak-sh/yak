@@ -49,7 +49,7 @@ export let graph = (
 ): Set<string> => {
   let queue = [new URL(entry, root)]
   let seen = new Set<string>()
-  let names = new Set<string>([entry])
+  let names = new Set<string>()
   while (queue.length) {
     let file = queue.shift()!
     if (seen.has(file.href)) continue
@@ -60,13 +60,16 @@ export let graph = (
     } catch {
       continue // a specifier the walk can't read is not a source file we own
     }
+    // Name a file only once it has READ — a specifier lifted from a comment or
+    // string (imports() is a text scanner, not a parser) points at no file and
+    // must never join the graph, or serverFile would claim a phantom module.
+    names.add(file.pathname.slice(root.pathname.length))
     for (let spec of imports(source)) {
       if (!isRelative(spec)) continue
       let child = new URL(spec, file)
       child.search = ''
       if (!child.href.startsWith(root.href)) continue
       if (!/\.[jt]sx?$/.test(child.pathname)) continue
-      names.add(child.pathname.slice(root.pathname.length))
       queue.push(child)
     }
   }

@@ -52,12 +52,20 @@ Deno.test('imports: every import form yields its specifier', () => {
 let walk = async (entry: string, root: URL): Promise<Set<string>> => {
   let queue = [new URL(entry, root)]
   let seen = new Set<string>()
-  let paths = new Set<string>([new URL(entry, root).pathname])
+  let paths = new Set<string>()
   while (queue.length) {
     let file = queue.shift()!
     if (seen.has(file.href)) continue
     seen.add(file.href)
-    let source = await Deno.readTextFile(file)
+    // Same rule graph() honors: a specifier that names no readable file (one
+    // lifted from a comment or string) is not a module — skip it, don't abort.
+    let source: string
+    try {
+      source = await Deno.readTextFile(file)
+    } catch {
+      continue
+    }
+    paths.add(file.pathname)
     for (let match of source.matchAll(specifiers)) {
       if (match[1]) continue // import type … — erased by sucrase
       let spec = match[3]
@@ -66,7 +74,6 @@ let walk = async (entry: string, root: URL): Promise<Set<string>> => {
       child.search = ''
       if (!child.href.startsWith(root.href)) continue
       if (!/\.[jt]sx?$/.test(child.pathname)) continue
-      paths.add(child.pathname)
       queue.push(child)
     }
   }
