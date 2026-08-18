@@ -809,11 +809,21 @@ slow('a fake session runs end to end', async () => {
   assertEquals(s.provider, 'fake') // dormant old-reader alias
   assertEquals(s.model, 'fake-fast')
   assertMatch(String(s.final_text), /^done: /)
+  // The self-authored handoff lands on the first-class `brief` component, not
+  // doc.body — the wrap auto-capture decoupled the two (T-19460 / ded8019), so
+  // doc.body stays free for the scribe's narrative.
   assertEquals(
-    (db.prepare('select body from doc where eid = ?').get(eid) as {
-      body: string
-    }).body,
+    (db.prepare('select text from brief where eid = ?').get(eid) as {
+      text: string
+    })?.text,
     s.final_text,
+  )
+  // The decoupling holds the other way too: the final text never clobbers
+  // doc.body (no doc row here, so the body is simply absent).
+  assert(
+    (db.prepare('select body from doc where eid = ?').get(eid) as {
+      body?: string
+    })?.body !== s.final_text,
   )
   assertEquals(JSON.parse(String(s.usage_json)).output_tokens, 34)
   assertEquals(failure(eid), undefined)
