@@ -67,7 +67,9 @@ Deno.test('landBlob stores content-addressed bytes and returns blob metadata', a
   assertEquals(c.comp?.h, 80)
 
   // the metadata landed in the graph, queryable like anything else
-  let row = db.prepare('select mime, sha, w from blob where eid = ?').get(eid)
+  let row = db.prepare(
+    'select mime, sha, w from blob where entity = (select id from entity where eid = ?)',
+  ).get(eid)
   assertEquals((row as { mime: string }).mime, 'image/png')
 
   // the bytes live at ~/.tasks/blobs/<sha>, NOT in the row

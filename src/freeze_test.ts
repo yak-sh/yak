@@ -60,7 +60,9 @@ Deno.test('freeze: failures stamp shared health and successful storage clears it
     }))
   assertEquals(res.status, 502)
   assertEquals(
-    db.prepare('select message from error where eid = ?').get(eid),
+    db.prepare(
+      'select message from error where entity = (select id from entity where eid = ?)',
+    ).get(eid),
     { message: 'Error: network refused' },
   )
   assert(heard.some((c) => c.eid == eid && c.name == 'error'))
@@ -72,7 +74,9 @@ Deno.test('freeze: failures stamp shared health and successful storage clears it
   heard = []
   await store(eid, PAGE, (c) => heard.push(...c))
   assertEquals(
-    db.prepare('select 1 from error where eid = ?').get(eid),
+    db.prepare(
+      'select 1 from error where entity = (select id from entity where eid = ?)',
+    ).get(eid),
     undefined,
   )
   assert(heard.some((c) => c.eid == eid && c.name == 'error' && !c.comp))

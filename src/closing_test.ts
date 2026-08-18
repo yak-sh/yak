@@ -13,7 +13,9 @@ let cast = (cs: Change[]) => sent.push(...cs)
 let close = closingTask(cast)
 
 let hidden = (eid: string) =>
-  !!db.prepare('select 1 from archived where eid = ?').get(eid)
+  !!db.prepare(
+    'select 1 from archived where entity = (select id from entity where eid = ?)',
+  ).get(eid)
 
 let task = (status = 'open') => {
   let eid = uid()

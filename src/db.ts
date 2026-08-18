@@ -3474,7 +3474,10 @@ export let settingEid = (
   db: DatabaseSync,
   key: string,
 ): string | undefined =>
-  (prep(db, 'select eid from setting where key = ?').get(key) as {
+  (prep(
+    db,
+    'select o.eid as eid from setting join entity o on o.id = setting.entity where key = ?',
+  ).get(key) as {
     eid?: string
   } | undefined)?.eid ?? undefined
 

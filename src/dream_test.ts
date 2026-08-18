@@ -50,7 +50,9 @@ let sess = (actor: string, finished: string) => {
     Math.floor(Math.random() * 1e9),
   )
   db.prepare(
-    'insert into session (eid, id, actor, finished_at) values (?, ?, ?, ?)',
+    `insert into session (entity, id, actor, finished_at)
+     values ((select id from entity where eid = ?), ?,
+             (select id from entity where eid = ?), ?)`,
   ).run(eid, id, actor, finished)
   return { eid, id }
 }
@@ -201,15 +203,18 @@ slow(
 
     // The knock settled DELIVERED — dreamComb owns its own stamp.
     assertEquals(
-      !!db.prepare('select 1 from delivered where eid = ?').get(k),
+      !!db.prepare(
+        'select 1 from delivered where entity = (select id from entity where eid = ?)',
+      ).get(k),
       true,
     )
     // A consider task, about the combed session, in the venture.
     let task = db.prepare(
-      `select t.status, t.project, doc.title from task t
-       join doc on doc.eid = t.eid
-       join dependency dep on dep.parent = t.eid
-      where dep.type = 'about' and dep.child = ?`,
+      `select t.status, (select eid from entity where id = t.project) as project,
+              doc.title from task t
+       join doc on doc.entity = t.entity
+       join dependency dep on dep.parent = t.entity
+      where dep.type = 'about' and dep.child = (select id from entity where eid = ?)`,
     ).get(s.eid) as
       | { status: string; project: string; title: string }
       | undefined
@@ -217,14 +222,16 @@ slow(
     assertEquals(task?.project, p)
     assertEquals(task?.title.startsWith('consider:'), true)
     // The floor advanced past its start.
-    let floor = (db.prepare('select floor from dream where eid = ?').get(d) as {
+    let floor = (db.prepare(
+      'select floor from dream where entity = (select id from entity where eid = ?)',
+    ).get(d) as {
       floor: string
     }).floor
     assertEquals(floor > ago(30), true)
     // Re-armed: an untargeted cadence wake aimed back at the dream.
     let wake = db.prepare(
-      `select 1 from wake w join deliver dv on dv.eid = w.eid
-      where dv."to" = ? and w.target is null`,
+      `select 1 from wake w join deliver dv on dv.entity = w.entity
+      where dv."to" = (select id from entity where eid = ?) and w.target is null`,
     ).get(d)
     assertEquals(!!wake, true)
   },
@@ -242,7 +249,9 @@ Deno.test('dreamComb: a non-dream knock is ignored — no comb, no delivered', a
   await dreamComb(noop, fake as never)(k)
   assertEquals(called, false)
   assertEquals(
-    !!db.prepare('select 1 from delivered where eid = ?').get(k),
+    !!db.prepare(
+      'select 1 from delivered where entity = (select id from entity where eid = ?)',
+    ).get(k),
     false,
   )
 })
@@ -266,8 +275,8 @@ slow(
     await dreamComb(noop, fake as never)(k)
     let mem = db.prepare(
       `select dc.at as decided from memory m
-       join doc on doc.eid = m.eid
-       join decided dc on dc.eid = m.eid
+       join doc on doc.entity = m.entity
+       join decided dc on dc.entity = m.entity
       where doc.title = ?`,
     ).get('ADAPT complete() over batch') as { decided: string } | undefined
     assertEquals(!!mem, true)
@@ -326,8 +335,8 @@ slow(
     // Exactly ONE consider task about this session, its finding hit-counted to 2.
     let hits = db.prepare(
       `select fd.hits as hits from finding fd
-       join dependency dep on dep.parent = fd.eid
-      where dep.type = 'about' and dep.child = ?`,
+       join dependency dep on dep.parent = fd.entity
+      where dep.type = 'about' and dep.child = (select id from entity where eid = ?)`,
     ).all(s.eid) as { hits: number }[]
     assertEquals(hits.length, 1)
     assertEquals(hits[0].hits, 2)
@@ -352,8 +361,8 @@ slow(
     // No consider task filed about this session — the finding named closed work.
     let n = db.prepare(
       `select count(*) as n from dependency dep
-      where dep.type = 'about' and dep.child = ?
-        and exists (select 1 from task t where t.eid = dep.parent)`,
+      where dep.type = 'about' and dep.child = (select id from entity where eid = ?)
+        and exists (select 1 from task t where t.entity = dep.parent)`,
     ).get(s.eid) as { n: number }
     assertEquals(n.n, 0)
   },
@@ -376,7 +385,8 @@ slow(
     await dreamComb(noop, reply as never)(knock(d))
     // A memory, scoped to the venture; no "consider:" task with that title.
     let mem = db.prepare(
-      `select m.scope as scope from memory m join doc on doc.eid = m.eid
+      `select (select eid from entity where id = m.scope) as scope
+       from memory m join doc on doc.entity = m.entity
       where doc.title = ?`,
     ).get(title) as { scope: string } | undefined
     assertEquals(!!mem, true)
@@ -448,12 +458,14 @@ slow(
       .get(title) as { n: number }
     assertEquals(filed.n, 0)
     // The matched memory was reinforced: recall bumped, last_confirmed_at stamped.
-    let rc = db.prepare('select count from recall where eid = ?').get(m) as
+    let rc = db.prepare(
+      'select count from recall where entity = (select id from entity where eid = ?)',
+    ).get(m) as
       | { count: number }
       | undefined
     assertEquals(rc?.count, 1)
     let mm = db.prepare(
-      'select last_confirmed_at as c from memory where eid = ?',
+      'select last_confirmed_at as c from memory where entity = (select id from entity where eid = ?)',
     )
       .get(m) as { c: string | null }
     assertEquals(!!mm.c, true)

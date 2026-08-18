@@ -23,7 +23,7 @@ let session = (
   if (cols.length) {
     db.prepare(
       `update session set ${cols.map((c) => `${c} = ?`).join(', ')}
-       where eid = ?`,
+       where entity = (select id from entity where eid = ?)`,
     ).run(...cols.map((c) => own[c] as string), eid)
   }
   return eid

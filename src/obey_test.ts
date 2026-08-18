@@ -41,7 +41,9 @@ let task = (title = 'A thing to do') => {
 }
 
 let status = (eid: string) =>
-  (db.prepare('select status from task where eid = ?').get(eid) as
+  (db.prepare(
+    'select status from task where entity = (select id from entity where eid = ?)',
+  ).get(eid) as
     | { status: string }
     | undefined)?.status
 
@@ -49,8 +51,8 @@ let status = (eid: string) =>
 // here, and nothing else should be.
 let replies = (target: string) =>
   db.prepare(
-    `select d.body from comment c join doc d on d.eid = c.eid
-     where c.target = ? order by c.rowid`,
+    `select d.body from comment c join doc d on d.entity = c.entity
+     where c.target = (select id from entity where eid = ?) order by c.rowid`,
   ).all(target) as { body: string }[]
 
 Deno.test('a comment that says :done closes the task it was said on', () => {
@@ -126,7 +128,8 @@ Deno.test('the order is attributed to whoever gave it', () => {
   say(t, ':done', s)
   assertEquals(status(t), 'done')
   let by = db.prepare(
-    `select u.via from updated u where u.eid = ?`,
+    `select (select eid from entity where id = u.via) as via from updated u
+     where u.entity = (select id from entity where eid = ?)`,
   ).get(t) as { via: string | null } | undefined
   assertEquals(by?.via, s)
 })
@@ -143,7 +146,8 @@ Deno.test('a sessionless :fix comment uses the shared Sol default', () => {
   let t = task()
   say(t, ':fix')
   let spawned = db.prepare(
-    `select provider, model from session where requested_task = ?`,
+    `select provider, model from session
+     where requested_task = (select id from entity where eid = ?)`,
   ).get(t) as { provider: string; model: string }
   assertEquals(spawned, { provider: 'codex', model: 'gpt-5.6-sol' })
 })
@@ -157,12 +161,14 @@ Deno.test('a worded :fix files its task and spawns onto it', () => {
   say(t, ':fix the toolbar clips at small widths')
   // The task landed…
   let filed = db.prepare(
-    `select k.eid from task k join doc d on d.eid = k.eid where d.title = ?`,
+    `select o.eid as eid from task k join doc d on d.entity = k.entity
+     join entity o on o.id = k.entity where d.title = ?`,
   ).get('the toolbar clips at small widths') as { eid: string } | undefined
   assertEquals(!!filed, true)
   // …a managed Session requests it…
   let req = db.prepare(
-    `select requested_task from session where requested_task = ?`,
+    `select (select eid from entity where id = requested_task) as requested_task
+     from session where requested_task = (select id from entity where eid = ?)`,
   ).get(filed!.eid) as { requested_task: string } | undefined
   assertEquals(req?.requested_task, filed!.eid)
   // …and the receipt confirms the spawn rather than a `no task` UUID error.

@@ -16,7 +16,9 @@ let mint = () => {
   return eid
 }
 let has = (eid: string, table: string) =>
-  !!db.prepare(`select 1 from ${table} where eid = ?`).get(eid)
+  !!db.prepare(
+    `select 1 from ${table} where entity = (select id from entity where eid = ?)`,
+  ).get(eid)
 
 Deno.test('delivered is journaled, so a catch-up client can replay it', () => {
   let eid = mint()
