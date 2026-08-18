@@ -675,6 +675,62 @@ let active = (s?: DbRow) =>
   (sessionActive.includes(String(s.status)) ||
     (!!s.pid && !s.finished_at) || graphBusy(db, String(s.eid)))
 
+// Working, not merely running (T-19456). active() answers "is a pid/lease alive
+// NOW?" — but a wedged operator keeps its pid and reads active() while advancing
+// nothing. An operator is WORKING when it is active() AND advancing turns — a
+// fresh entry landed within the window, so latest_seq is genuinely moving — AND
+// carries no open `exception` (an unresolved break). Pid-alive + stale seq =
+// STUCK: a bricked operator a respawn must be free to replace, which is why the
+// adopt gate (foreignHolder) now defers only to a working operator. Reuses the
+// seq/entry machinery T-19149 leans on — no new component.
+//
+// The window is the one tuning knob: generous enough not to clobber an operator
+// idle a few minutes between turns, tight enough to replace a genuinely hung
+// one. Turns keep a live operator fresh continuously; only a real stall crosses.
+let workingWindowMs = 15 * 60_000
+
+// The pure decision, so roles_test drives every arm with literal facts (no db,
+// no wall clock). `turnAt` is the created.at of the freshest entry — server-
+// stamped at mint (db.ts), i.e. WHEN the turn landed in the graph; null when the
+// session has taken no turn yet (a seq-0 operator, T-19149's extreme not-working
+// case). `broken` is an open exception.
+export let workingNow = (
+  live: boolean,
+  turnAt: string | null,
+  broken: boolean,
+  now: number,
+  windowMs = workingWindowMs,
+): boolean =>
+  live && !broken && turnAt != null &&
+  now - Date.parse(turnAt) <= windowMs
+
+// The freshest turn's wall clock: the created.at of the highest-seq entry — the
+// per-turn timestamp apply() already stamps at mint, so no new column. Null when
+// the session owns no entry yet. The unique(session, seq) index keys this read,
+// so it is O(1), never a scan (M-17862).
+let latestTurnAt = (eid: string): string | null =>
+  (db.prepare(
+    `select c.at from entry e join created c on c.eid = e.eid
+      where e.session = ? order by e.seq desc limit 1`,
+  ).get(eid) as { at: string } | undefined)?.at ?? null
+
+// An OPEN exception is a break no recovery cleared: managed_codex's sessionFault
+// deletes the row on a clean turn, so a surviving row means the operator is
+// broken — not working, even with a live pid.
+let hasException = (eid: string): boolean =>
+  !!db.prepare('select 1 from exception where eid = ?').get(eid)
+
+// working(session): the db-backed judgment the reconciler asks. Liveness from
+// active(), freshness from the newest turn, health from the exception facet.
+export let working = (s?: DbRow, now = Date.now()): boolean =>
+  !!s &&
+  workingNow(
+    active(s),
+    latestTurnAt(String(s.eid)),
+    hasException(String(s.eid)),
+    now,
+  )
+
 // ---- the crash-loop breaker + spawn idempotency (pure, so roles_test can
 // drive the whole decision without a db or a tmux). ----
 //
@@ -1012,21 +1068,28 @@ let serveAttention = (
   }
 }
 
-// The pure decision behind the dedup gate (T-19453): among the sessions
-// holding a role's claim, the first LIVE one that is not a session we spawned
+// The pure decision behind the dedup gate (T-19453/T-19456): among the sessions
+// holding a role's claim, the first WORKING one that is not a session we spawned
 // for this role (role != the role eid). That is the unlinked interactive
-// operator (operator:true, actor=role) — the live operator latest() misses
+// operator (operator:true, actor=role) — the working operator latest() misses
 // because it carries no session.role link. Adopt it instead of duplicating. A
 // session we spawned carries session.role == the role, so its own lease never
 // trips the gate; its lifecycle is the reconciler's other branches.
+//
+// working, not merely live (T-19456): a stuck-but-alive holder (pid up, seq
+// stale, or an open exception) does NOT suppress the respawn it needs — the gate
+// ignores it exactly as it ignores a dead one, and the reconciler mints a fresh
+// operator.
 export let foreignHolder = (
   roleEid: string,
-  holders: { eid: string; role: string | null; live: boolean }[],
-): string | undefined => holders.find((h) => h.live && h.role != roleEid)?.eid
+  holders: { eid: string; role: string | null; working: boolean }[],
+): string | undefined =>
+  holders.find((h) => h.working && h.role != roleEid)?.eid
 
-// The db read wrapping foreignHolder: the role's claim-holders, liveness judged
-// by the module's own active() (status/pid/graphBusy), so a dead holder's stale
-// lease frees the role NOW rather than waiting for reapLeases at boot.
+// The db read wrapping foreignHolder: the role's claim-holders, health judged by
+// the module's own working() (active + a fresh turn + no open exception), so a
+// dead OR wedged holder frees the role NOW rather than suppressing a respawn or
+// waiting for reapLeases at boot.
 let foreignOperator = (roleEid: string): string | undefined =>
   foreignHolder(
     roleEid,
@@ -1037,7 +1100,7 @@ let foreignOperator = (roleEid: string): string | undefined =>
     ).all(roleEid) as DbRow[]).map((h) => ({
       eid: String(h.eid),
       role: h.role == null ? null : String(h.role),
-      live: active(h),
+      working: working(h),
     })),
   )
 

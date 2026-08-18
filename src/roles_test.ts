@@ -42,6 +42,8 @@ let {
   styleArgs,
   windowOf,
   ventureOf,
+  working,
+  workingNow,
 } = await import('./roles.ts')
 
 let uid = () => crypto.randomUUID()
@@ -534,30 +536,92 @@ Deno.test('a running managed role respawns when its operator dies async, but not
   assertEquals(latest.operator, 1)
 })
 
-Deno.test('foreignHolder adopts a live unlinked operator, ignores our own leases and dead ones', () => {
+Deno.test('foreignHolder adopts a working unlinked operator, ignores our own leases, dead and stuck ones', () => {
   let role = 'R'
-  // The unlinked interactive operator (role null) alive → adopt it.
+  // The unlinked interactive operator (role null) working → adopt it.
   assertEquals(
-    foreignHolder(role, [{ eid: 'S1', role: null, live: true }]),
+    foreignHolder(role, [{ eid: 'S1', role: null, working: true }]),
     'S1',
   )
   // Our own managed lease (role == the role) never trips the gate.
   assertEquals(
-    foreignHolder(role, [{ eid: 'S2', role, live: true }]),
+    foreignHolder(role, [{ eid: 'S2', role, working: true }]),
     undefined,
   )
-  // A dead holder frees the role — not adopted.
+  // A not-working holder (dead OR stuck: pid up but seq stale / open exception)
+  // frees the role — not adopted, so the needed respawn is not suppressed.
   assertEquals(
-    foreignHolder(role, [{ eid: 'S3', role: null, live: false }]),
+    foreignHolder(role, [{ eid: 'S3', role: null, working: false }]),
     undefined,
   )
-  // A live lease linked to a different role is still foreign here — defer
+  // A working lease linked to a different role is still foreign here — defer
   // rather than duplicate is the safe default.
   assertEquals(
-    foreignHolder(role, [{ eid: 'S4', role: 'R-other', live: true }]),
+    foreignHolder(role, [{ eid: 'S4', role: 'R-other', working: true }]),
     'S4',
   )
   assertEquals(foreignHolder(role, []), undefined)
+})
+
+Deno.test('workingNow: live + a fresh turn + no break; each of stale / dead / broken / turnless is not working', () => {
+  let now = Date.parse('2026-08-17T12:00:00.000Z')
+  let fresh = '2026-08-17T11:58:00.000Z' // 2min ago, inside the 15min window
+  let stale = '2026-08-17T11:40:00.000Z' // 20min ago, past it
+  // Alive, advancing turns, no break → working.
+  assert(workingNow(true, fresh, false, now))
+  // Pid alive but the seq is stale — the STUCK case a respawn must replace.
+  assert(!workingNow(true, stale, false, now))
+  // Not alive at all → not working, however fresh the last turn.
+  assert(!workingNow(false, fresh, false, now))
+  // Alive and fresh but an open exception → broken, not working.
+  assert(!workingNow(true, fresh, true, now))
+  // No turn taken yet (seq 0) → not working — the extreme stuck case.
+  assert(!workingNow(true, null, false, now))
+  // The window edge is inclusive.
+  assert(
+    workingNow(true, new Date(now - 15 * 60_000).toISOString(), false, now),
+  )
+  assert(
+    !workingNow(
+      true,
+      new Date(now - 15 * 60_000 - 1).toISOString(),
+      false,
+      now,
+    ),
+  )
+})
+
+Deno.test('working() reads the db: a live session with a fresh turn is working; a stale turn, an open exception, or a dead pid is not', () => {
+  let s = uid()
+  apply(db, [{
+    eid: s,
+    name: 'session',
+    comp: { id: uid(), operator: 1, pid: 999999 },
+  }])
+  // No turn yet → not working (seq 0).
+  assert(!working(db.prepare('select * from session where eid = ?').get(s)))
+  // A fresh turn → working.
+  let entry = append(db, s, [{ message: { role: 'agent' } }]).eids[0]
+  let row = () => db.prepare('select * from session where eid = ?').get(s)
+  assert(working(row()))
+  // A stale turn → stuck, not working.
+  db.prepare('update created set at = ? where eid = ?')
+    .run(new Date(Date.now() - 60 * 60_000).toISOString(), entry)
+  assert(!working(row()))
+  // Fresh again, but an open exception → broken, not working.
+  db.prepare('update created set at = ? where eid = ?')
+    .run(new Date().toISOString(), entry)
+  assert(working(row()))
+  db.prepare(
+    'insert into exception (eid, at, message, stack) values (?, ?, ?, null)',
+  )
+    .run(s, new Date().toISOString(), 'wedged')
+  assert(!working(row()))
+  db.prepare('delete from exception where eid = ?').run(s)
+  // Dead pid, no status → not active, so not working however fresh the turn.
+  db.prepare('update session set pid = null, finished_at = ? where eid = ?')
+    .run(new Date().toISOString(), s)
+  assert(!working(row()))
 })
 
 Deno.test('operatorRole resolves the role: session.role wins, else actor matches scope, non-operator none', () => {
@@ -621,29 +685,70 @@ Deno.test('roleClaim places an operators lease on its role and reaps a dead hold
   )
 })
 
-Deno.test('the reconciler adopts a live unlinked operator via its role claim, and respawns exactly one when it dies', async () => {
+Deno.test('the reconciler adopts a WORKING unlinked operator via its role claim, and respawns exactly one when it dies', async () => {
   commands = []
   sessions.clear()
   let { project, role } = seed('managed')
-  // A live interactive operator for this project: operator, actor = project,
+  // A working interactive operator for this project: operator, actor = project,
   // NOT linked (no session.role), holding the role's claim (what roleClaim
-  // places on boot). A truthy pid with no finished_at makes it live.
+  // places on boot). A truthy pid with no finished_at makes it live, and a fresh
+  // entry (created.at = now) makes it working — advancing turns (T-19456).
   let op = uid()
   apply(db, [{
     eid: op,
     name: 'session',
     comp: { id: uid(), operator: 1, actor: project, pid: 999999 },
   }])
+  append(db, op, [{ message: { role: 'agent' } }])
   apply(db, [{ eid: role, name: 'claim', comp: { session: op } }])
   await rolesSweep(cast, deps)
   await rolesSweep(cast, deps)
-  assertEquals(mspawns(role), 0) // adopted the live operator — no duplicate
+  assertEquals(mspawns(role), 0) // adopted the working operator — no duplicate
 
-  // The operator dies: pid cleared, finished_at set → its lease is not live.
+  // The operator dies: pid cleared, finished_at set → its lease is not working.
   db.prepare('update session set pid = null, finished_at = ? where eid = ?')
     .run(new Date().toISOString(), op)
   await rolesSweep(cast, deps)
   assertEquals(mspawns(role), 1) // exactly one respawn
+})
+
+Deno.test('the reconciler respawns past a STUCK operator (pid alive, seq stale) and one carrying an open exception (T-19456)', async () => {
+  commands = []
+  sessions.clear()
+  let { project, role } = seed('managed')
+  // A stuck operator: alive (pid, no finished_at) but its only turn is stale —
+  // seq is not advancing. Adopt-on-liveness would suppress a needed respawn;
+  // adopt-on-working must not.
+  let stuck = uid()
+  apply(db, [{
+    eid: stuck,
+    name: 'session',
+    comp: { id: uid(), operator: 1, actor: project, pid: 999999 },
+  }])
+  let entry = append(db, stuck, [{ message: { role: 'agent' } }]).eids[0]
+  // Backdate the turn well past the working window.
+  db.prepare('update created set at = ? where eid = ?')
+    .run(new Date(Date.now() - 60 * 60_000).toISOString(), entry)
+  apply(db, [{ eid: role, name: 'claim', comp: { session: stuck } }])
+  await rolesSweep(cast, deps)
+  assertEquals(mspawns(role), 1) // stuck operator did not suppress the respawn
+
+  // A second role: alive with a FRESH turn but an open exception → broken, not
+  // working, so it is respawned past too.
+  let { project: p2, role: r2 } = seed('managed')
+  let broke = uid()
+  apply(db, [{
+    eid: broke,
+    name: 'session',
+    comp: { id: uid(), operator: 1, actor: p2, pid: 999999 },
+  }])
+  append(db, broke, [{ message: { role: 'agent' } }])
+  db.prepare(
+    `insert into exception (eid, at, message, stack) values (?, ?, ?, null)`,
+  ).run(broke, new Date().toISOString(), 'wedged')
+  apply(db, [{ eid: r2, name: 'claim', comp: { session: broke } }])
+  await rolesSweep(cast, deps)
+  assertEquals(mspawns(r2), 1) // broken operator did not suppress the respawn
 })
 
 Deno.test('a role comp on a project is its own operator: scope defaults to self, actor = the project', async () => {
