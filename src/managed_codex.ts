@@ -517,9 +517,14 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     return retries
   }
 
-  let runnable = (session: string) =>
-    prepared.has(session) ||
-    !!sessionRow(db, session)?.base_revision
+  let runnable = (session: string) => {
+    let row = sessionRow(db, session)
+    // A no-code Session has nothing to prepare, so the absence of a cwd is
+    // its durable ready fact. `prepared` only bridges workspace preparation
+    // until base_revision is stamped; neither in-memory state may strand a
+    // projectless conversation after a server restart.
+    return prepared.has(session) || !!row?.base_revision || !row?.cwd
+  }
 
   // Writes drive the runner immediately. Time only matters for abandoned
   // leases, so arm one deadline for the next lease this process does not own

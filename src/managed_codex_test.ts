@@ -658,10 +658,23 @@ slow(
     assertEquals(entries.at(-1)?.comps.content.body, 'triaged')
 
     let restarted = managedCodex(options())
-    await restarted.start(sid, noCodeJob())
-    assertEquals(readEntries(db, sid).length, entries.length)
+    let input = append(db, sid, [{
+      message: { role: 'user' },
+      content: { body: 'continue after restart' },
+    }]).eids[0]
+    await restarted.sweep()
+    let resumed = readEntries(db, sid)
+    assertEquals(
+      resumed.filter((row) => row.comps.generation).length,
+      2,
+    )
+    assertEquals(
+      resumed.find((row) => row.eid == input)?.comps.content?.body,
+      'continue after restart',
+    )
     assertEquals(prepares, 0)
-    assertEquals(requests, 1)
+    assertEquals(requests, 2)
+    assertEquals(trees, [undefined, undefined])
     db.close()
   },
 )
