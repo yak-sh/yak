@@ -18,6 +18,7 @@ import {
   takeEntry,
 } from './entries.ts'
 import { uuid } from './types.ts'
+import { graphLog, standingOf } from './entry_log.ts'
 import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -503,5 +504,42 @@ Deno.test('deleting a Session cascades its lazy entries', () => {
   append(db, sid, [{ message: { role: 'user' } }, { attention: {} }])
   apply(db, [{ eid: sid, name: 'entity', comp: null }])
   assertEquals(readEntries(db, sid), [])
+  db.close()
+})
+
+// A spine-less entry row is inert, never a landmine (T-19261). A partial
+// ingest left two live sessions with an `entry`(+`content`) row whose entity
+// spine never persisted; readEntries hands that to standingOf/graphLog, whose
+// `row.comps.x` reads threw on the undefined comps a bare `!` produced —
+// aborting the whole unattended sweep once per cycle. The fix gives such a row
+// `{}` comps at the sole construction site, so the sweep's own seam completes.
+Deno.test('a spine-less entry row reads as inert comps, not a throw', () => {
+  let db = freshDb()
+  let sid = session(db)
+  append(db, sid, [
+    { message: { role: 'user' }, content: { body: 'one' } },
+    { message: { role: 'agent' }, content: { body: 'two' } },
+  ])
+  // Reproduce the live shape: an entry (with content) whose spine is gone. FK
+  // enforcement forbids orphaning a spine through the normal path, so plant the
+  // shape directly with the constraint off — the corruption, not its cause.
+  let ghost = uuid()
+  db.exec('pragma foreign_keys = off')
+  db.prepare('insert into entry (eid, session, seq) values (?, ?, ?)')
+    .run(ghost, sid, 99)
+  db.prepare('insert into content (eid, body) values (?, ?)')
+    .run(ghost, 'orphaned tail')
+  db.exec('pragma foreign_keys = on')
+
+  let rows = readEntries(db, sid)
+  // The row is still returned (dropping it would miscount the caller's paging),
+  // but its comps are an empty object — never undefined.
+  assertEquals(rows.length, 3)
+  assertEquals(rows.find((r) => r.seq == 99)!.comps, {})
+  // The sweep's own read (server.ts resumable): standingOf + graphLog over the
+  // full log, including the ghost — completes rather than throwing. A pending
+  // user turn with no agent generation is 'idle' (not busy, not terminal).
+  assertEquals(standingOf(rows), 'idle')
+  assertEquals(typeof graphLog(rows).terminal, 'boolean')
   db.close()
 })

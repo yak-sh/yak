@@ -5078,7 +5078,19 @@ let entryRows = (
   if (!index.length) return []
   stage(db, index.map((e) => e.eid))
   let byEid = new Map(staged(db).map((e) => [e.eid, e.comps]))
-  return index.map(({ eid, seq }) => ({ eid, seq, comps: byEid.get(eid)! }))
+  // staged() keys off the entity SPINE, so an index row whose spine is gone —
+  // a legacy partial ingest left `entry`+`imported` without minting the spine
+  // (T-19261) — has no comps here. Give it `{}` so it stays an inert,
+  // contentless entry: EntryRow.comps is non-optional, and every consumer
+  // (standingOf, graphLog, activityOf) reads `row.comps.x` trusting that. A
+  // bare `!` handed them `undefined` and the first `.x` threw — aborting the
+  // whole read (the unattended sweep, once per cycle). Keeping the row (over
+  // dropping it) preserves the seq count the caller's paging relies on.
+  return index.map(({ eid, seq }) => ({
+    eid,
+    seq,
+    comps: byEid.get(eid) ?? {},
+  }))
 }
 
 // One entry by identity. Hosted work names its call directly; its Session
@@ -5144,7 +5156,13 @@ export let entriesScan = (db: DatabaseSync, after = 0, limit = 500) => {
   if (!index.length) return []
   stage(db, index.map((e) => e.eid))
   let byEid = new Map(staged(db).map((e) => [e.eid, e.comps]))
-  return index.map(({ eid, seq }) => ({ eid, seq, comps: byEid.get(eid)! }))
+  // Same spine-less guard as entryRows (T-19261): a dangling index row gets
+  // `{}`, never undefined, so a cross-session scan can't throw on it either.
+  return index.map(({ eid, seq }) => ({
+    eid,
+    seq,
+    comps: byEid.get(eid) ?? {},
+  }))
 }
 
 // Every edge touching these entities, both directions — the narrow reading of
