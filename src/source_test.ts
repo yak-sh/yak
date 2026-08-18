@@ -9,6 +9,9 @@ let { addSource, clearSources } = await import('./source.ts')
 let { freshDb } = await import('./testdb.ts')
 let { assertEquals } = await import('@std/assert')
 
+let OWNED = `entity = (select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
+
 let eid = '00000000-0000-4000-8000-0000000aaaaa'
 let ghost = () => [
   { eid, name: 'entity', comp: { eid, num: null } },
@@ -108,7 +111,11 @@ Deno.test('source: no source, no cost — a normal miss still returns undefined/
 // pass-through, already-persisted → not re-hydrated, non-source eid → untouched.
 
 let has = (db: import('./sqlite.ts').DatabaseSync, table: string, id: string) =>
-  db.prepare(`select 1 from ${table} where eid = ?`).get(id) != undefined
+  db.prepare(
+    table == 'entity' || table == 'tombstone'
+      ? `select 1 from ${table} where eid = ?`
+      : `select 1 from ${table} where ${OWNED}`,
+  ).get(id) != undefined
 
 // A source shaped EXACTLY like the file-backed one (source_file.ts resolve):
 // session {id, provider} + doc {title}, no entity spine, no FK-bearing fields —
@@ -148,20 +155,22 @@ Deno.test('graduation: a write to an ephemeral entity persists it, eid stable', 
       | undefined
     assertEquals(typeof e?.num, 'number')
     assertEquals(
-      (db.prepare('select id, provider from session where eid = ?').get(
+      (db.prepare(`select id, provider from session where ${OWNED}`).get(
         gid,
       ) as { id: string; provider: string }).id,
       'grad-sid',
     )
     assertEquals(
-      (db.prepare('select title from doc where eid = ?').get(gid) as {
+      (db.prepare(`select title from doc where ${OWNED}`).get(gid) as {
         title: string
       }).title,
       'Session grad-sid',
     )
     // The comment persisted too, still aimed at the same eid.
     assertEquals(
-      (db.prepare('select target from comment where eid = ?').get(cid) as {
+      (db.prepare(
+        `select ${refEid('target')} as target from comment where ${OWNED}`,
+      ).get(cid) as {
         target: string
       }).target,
       gid,
@@ -193,7 +202,7 @@ Deno.test('graduation: a second write does not re-hydrate a persisted entity', (
     }])
     assertEquals(count(db), n + 1) // exactly one new entity (the comment)
     assertEquals(
-      (db.prepare('select count(*) as n from session where eid = ?').get(
+      (db.prepare(`select count(*) as n from session where ${OWNED}`).get(
         gid,
       ) as { n: number }).n,
       1,

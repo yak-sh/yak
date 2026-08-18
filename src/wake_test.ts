@@ -15,22 +15,39 @@ let sent: Change[] = []
 let landed: Change[] = []
 let cast = (cs: Change[]) => sent.push(...cs)
 
+// Component/edge tables are keyed by the integer `entity` spine id now, so
+// a raw statement translates at the eid boundary: OWNED matches a component
+// row by its owner eid, idOf resolves an eid VALUE to the id a ref column
+// stores, and refEid projects a ref column back to its eid for a JS
+// assertion. The `entity` spine keeps text `eid` and is never rewritten.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
+
 let wrow = (eid: string) =>
-  db.prepare('select * from wake where eid = ?').get(eid) as Record<
+  db.prepare(
+    `select at, ${refEid('target')} as target from wake where ${OWNED}`,
+  ).get(eid) as Record<
     string,
     string | null
   >
 // The wake's outcome is the shared delivered facet now (D-14945): a fired
 // wake wears `delivered`, a pending one wears neither.
 let drow = (eid: string) =>
-  db.prepare('select * from delivered where eid = ?').get(eid) as
+  db.prepare(`select * from delivered where ${OWNED}`).get(eid) as
     | Record<string, string | null>
     | undefined
 let knocks = () =>
-  db.prepare('select * from knock').all() as Record<string, string>[]
+  db.prepare(
+    `select o.eid as eid, ${
+      refEid('c.target')
+    } as target from knock c join entity o on o.id = c.entity`,
+  ).all() as Record<string, string>[]
 // WHO a knock is for rides the shared deliver.to now (D-14945).
 let toOf = (eid: string) =>
-  (db.prepare('select "to" from deliver where eid = ?').get(eid) as
+  (db.prepare(
+    `select ${refEid('"to"')} as "to" from deliver where ${OWNED}`,
+  ).get(eid) as
     | { to: string }
     | undefined)?.to
 
@@ -88,14 +105,14 @@ let wake = (
 // The archived facet on a knock — the mark that keeps a self-cadence alarm
 // out of the inbox (T-12480).
 let knockArchived = (eid: string) =>
-  !!db.prepare('select 1 from archived where eid = ?').get(eid)
+  !!db.prepare(`select 1 from archived where ${OWNED}`).get(eid)
 
 // The words on the target — the comment a note relays into, the same seam a
 // :knock's words use (knock.ts wordsFor, channel.ts commentOn).
 let saidOn = (target: string) =>
   db.prepare(
-    `select d.body from comment c join doc d on d.eid = c.eid
-     where c.target = ? order by d.body`,
+    `select d.body from comment c join doc d on d.entity = c.entity
+     where c.target = ${idOf} order by d.body`,
   ).all(target) as { body: string }[]
 
 Deno.test('an hour already past fires, and mints the knock', () => {
@@ -114,7 +131,7 @@ Deno.test('a wake still owed waits, and fires once when it comes', () => {
   assertEquals(drow(w), undefined)
   assertEquals(knocks().filter((k) => k.target == carol).length, 0)
   // the hour arrives (the row is the clock, so move the row)
-  db.prepare('update wake set at = ? where eid = ?')
+  db.prepare(`update wake set at = ? where ${OWNED}`)
     .run(new Date(Date.now() - 1000).toISOString(), w)
   arm(cast)
   assertEquals(knocks().filter((k) => k.target == carol).length, 1)
@@ -205,7 +222,7 @@ Deno.test('a phrase off the raw wire lands absolute, at MINT', () => {
   arm(cast)
   let mint = Date.parse(
     String(
-      (db.prepare('select at from created where eid = ?').get(w) as {
+      (db.prepare(`select at from created where ${OWNED}`).get(w) as {
         at: string
       }).at,
     ),

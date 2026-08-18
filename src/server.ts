@@ -873,12 +873,15 @@ let cliUsage = async (req: Request) => {
       detail: JSON.stringify(args),
     })
     let target = session
-      ? (db.prepare('select eid from session where id = ?').get(session) as
+      ? (db.prepare(
+        `select o.eid from session s join entity o on o.id = s.entity
+         where s.id = ?`,
+      ).get(session) as
         | { eid: string }
         | undefined)?.eid
       : undefined
     target ??= (db.prepare(
-      `select p.eid from project p join entity e on e.eid = p.eid
+      `select e.eid from project p join entity e on e.id = p.entity
        where e.num = 19`,
     ).get() as { eid: string } | undefined)?.eid
     if (target) {
@@ -1815,9 +1818,11 @@ let syncSoon = () => {
 let personaish = (...eids: (string | undefined)[]) =>
   eids.some((e) =>
     e && db.prepare(
-      `select 1 from persona where eid = :e
+      `select 1 from persona
+         where entity = (select id from entity where eid = :e)
        union select 1 from dependency d
-         join persona p on p.eid = d.parent where d.child = :e`,
+         join persona p on p.entity = d.parent
+         where d.child = (select id from entity where eid = :e)`,
     ).get({ e })
   )
 on('persona', {
@@ -1932,7 +1937,10 @@ if (mayStamp() && Deno.env.get('TASKS_SWEEP') == '1') {
   let repo = Deno.cwd()
   repeat(async () => {
     try {
-      let sessions = db.prepare('select eid, id, cwd, pid from session')
+      let sessions = db.prepare(
+        `select o.eid as eid, s.id, s.cwd, s.pid from session s
+         join entity o on o.id = s.entity`,
+      )
         .all() as {
           eid: string
           id: string
@@ -1982,7 +1990,10 @@ if (mayStamp() && Deno.env.get('TASKS_SWEEP') == '1') {
 // effect (a crash in the post-commit gap) re-fire now — strictly AFTER
 // recover(), so a re-driven stop finds the adopted pid to signal.
 relay((comp, pending) =>
-  db.prepare(`select * from ${comp} where ${pending}`).all() as Record<
+  db.prepare(
+    `select ${comp}.*, o.eid as eid from ${comp}
+     join entity o on o.id = ${comp}.entity where ${pending}`,
+  ).all() as Record<
     string,
     unknown
   >[]

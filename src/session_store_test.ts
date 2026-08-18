@@ -6,6 +6,7 @@ let { freshDb } = await import('./testdb.ts')
 let { assertEquals } = await import('@std/assert')
 
 let uid = () => crypto.randomUUID()
+let OWNED = `entity = (select id from entity where eid = ?)`
 
 Deno.test('sessionRow overlays canonical nulls on stale aliases', () => {
   let db = freshDb()
@@ -15,10 +16,10 @@ Deno.test('sessionRow overlays canonical nulls on stale aliases', () => {
     name: 'session',
     comp: { id: uid(), cwd: '/old', pid: 7, provider: 'claude' },
   }])
-  db.prepare("update session set cwd = '/stale', pid = 9 where eid = ?")
+  db.prepare(`update session set cwd = '/stale', pid = 9 where ${OWNED}`)
     .run(eid)
-  db.prepare('update worktree set cwd = null where eid = ?').run(eid)
-  db.prepare('update runtime set pid = null where eid = ?').run(eid)
+  db.prepare(`update worktree set cwd = null where ${OWNED}`).run(eid)
+  db.prepare(`update runtime set pid = null where ${OWNED}`).run(eid)
   assertEquals(sessionRow(db, eid)?.cwd, null)
   assertEquals(sessionRow(db, eid)?.pid, null)
   db.close()
@@ -44,19 +45,19 @@ Deno.test('writeSession moves one patch through canonical and alias homes', () =
     'runtime',
   ])
   assertEquals(
-    db.prepare('select cwd, branch from worktree where eid = ?')
+    db.prepare(`select cwd, branch from worktree where ${OWNED}`)
       .get(eid),
     { cwd: '/tree', branch: 'session/S-1' },
   )
   assertEquals(
     db.prepare(
-      'select pid, provider_session_id from runtime where eid = ?',
+      `select pid, provider_session_id from runtime where ${OWNED}`,
     ).get(eid),
     { pid: 42, provider_session_id: 'thread' },
   )
   assertEquals(
     db.prepare(
-      'select cwd, branch, pid, provider_session_id, provider from session where eid = ?',
+      `select cwd, branch, pid, provider_session_id, provider from session where ${OWNED}`,
     ).get(eid),
     {
       cwd: '/tree',

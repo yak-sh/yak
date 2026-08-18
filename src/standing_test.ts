@@ -23,6 +23,11 @@ import { sessionRow } from './session_store.ts'
 
 let uid = () => crypto.randomUUID()
 
+// Component/edge tables are keyed by the integer `entity` spine id now; eids stay
+// the wire identity, so raw SQL translates at the boundary.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+
 // Mirror the server's cast: it maintains the facet on every broadcast batch, and
 // maintainStandingFor's stamp casts back through this same cast (as a `session`
 // change, never a turn-edge comp — so it cannot recurse).
@@ -42,7 +47,7 @@ let native = () => {
     name: 'session',
     comp: { id: uid(), provider: 'codex' },
   }])
-  db.prepare("update session set origin = 'managed' where eid = ?").run(eid)
+  db.prepare(`update session set origin = 'managed' where ${OWNED}`).run(eid)
   return eid
 }
 
@@ -318,7 +323,10 @@ Deno.test('a delivered wake lets a still-terminal operator finish', () => {
   assertEquals(finishedAt(eid), null)
   // The wake fires: the server stamps `delivered` (at/via are server-owned, not
   // wire-writable) — mirror that with a direct insert.
-  db.prepare('insert into delivered (eid, at) values (?, ?)').run(w, 'now')
+  db.prepare(`insert into delivered (entity, at) values (${idOf}, ?)`).run(
+    w,
+    'now',
+  )
   maintainStanding(eid, cast)
   assert(finishedAt(eid) != null)
 })

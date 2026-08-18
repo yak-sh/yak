@@ -30,14 +30,25 @@ let uid = () => crypto.randomUUID()
 let sent: Change[] = []
 let cast = (cs: Change[]) => sent.push(...cs)
 
+// Component/edge tables are keyed by INTEGER entity id now; eids stay the
+// wire/test identity, so the SQL translates at the boundary.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
+// The mail row read back with its owner eid and ref columns (target,
+// reply_to) projected back to eids, so every assertion still holds.
+let MAIL = `o.eid as eid, m."from" as "from", ${refEid('m.target')} as target,
+   ${refEid('m.reply_to')} as reply_to, m.to_addr, m.message_id,
+   m.received_at, m.verified, m.sent_id, m.in_reply_to, m.headers`
+
 let mailRow = (eid: string) =>
-  db.prepare('select * from mail where eid = ?').get(eid) as Record<
-    string,
-    string | number | null
-  >
+  db.prepare(
+    `select ${MAIL} from mail m join entity o on o.id = m.entity
+     where o.eid = ?`,
+  ).get(eid) as Record<string, string | number | null>
 // A mail's send outcome is the shared delivered facet now (D-14945).
 let deliveredRow = (eid: string) =>
-  db.prepare('select * from delivered where eid = ?').get(eid) as
+  db.prepare(`select * from delivered where ${OWNED}`).get(eid) as
     | Record<string, string | null>
     | undefined
 
@@ -249,7 +260,7 @@ Deno.test('mailChanges: the kept headers ride the stamp, land readable', () => {
   assertEquals(mailChanges(msg(), operator).stamp.headers, null)
   // and it lands in the mail row's readable column
   apply(db, wire)
-  db.prepare('update mail set headers = ? where eid = ?').run(
+  db.prepare(`update mail set headers = ? where ${OWNED}`).run(
     stamp.headers,
     eid,
   )
@@ -329,7 +340,7 @@ let mailCount = () =>
 
 // Read-state is the stamp, not a mail column (T-7006).
 let opened = (eid: string) =>
-  (db.prepare('select count(*) as n from opened where eid = ?')
+  (db.prepare(`select count(*) as n from opened where ${OWNED}`)
     .get(eid) as { n: number }).n
 
 Deno.test('the sweep: mints once, stamps back, and dir=out never lands', async () => {
@@ -347,15 +358,19 @@ Deno.test('the sweep: mints once, stamps back, and dir=out never lands', async (
   )
   await inboundSweep(cast, api)
   assertEquals(mailCount(), 1) // the outbound archive row stayed out
-  let minted = db.prepare('select * from mail where message_id = ?')
-    .get('msg:1752000000000:abc') as Record<string, string | null>
+  let minted = db.prepare(
+    `select ${MAIL} from mail m join entity o on o.id = m.entity
+     where m.message_id = ?`,
+  ).get('msg:1752000000000:abc') as Record<string, string | null>
   assertEquals(minted.target, operator) // routed through the address book
   assertEquals(minted.verified as unknown as number, 1)
   // only the ingested id stamps back: the sweep never writes facts
   // about rows it refused (.dir=in should keep them out upstream anyway)
   assertEquals(notified, [['msg:1752000000000:abc']])
   assertEquals(processed, [['r9']])
-  let hooks = db.prepare('select * from hook').all() as Record<
+  let hooks = db.prepare(
+    'select o.eid as eid, h.* from hook h join entity o on o.id = h.entity',
+  ).all() as Record<
     string,
     string | number | null
   >[]
@@ -367,8 +382,8 @@ Deno.test('the sweep: mints once, stamps back, and dir=out never lands', async (
   assertEquals(hooks[0].payload, '{"action":"ping"}')
   assertEquals(hooks[0].sig_ok, 1)
   let aimed = db.prepare(
-    `select child from dependency
-     where parent = ? and type = 'about'`,
+    `select ${refEid('child')} as child from dependency
+     where parent = ${idOf} and type = 'about'`,
   ).get(hooks[0].eid) as { child: string }
   assertEquals(aimed.child, cafecar)
   // sweep again: idempotent on the provenance keys, stamps still answer
@@ -390,7 +405,8 @@ Deno.test('the sweep: mints once, stamps back, and dir=out never lands', async (
 Deno.test('the sweep: an arriving letter is authored by its sender', async () => {
   let by = (id: string) =>
     (db.prepare(
-      'select c."by" as by from created c join mail m using(eid) where m.message_id = ?',
+      `select ${refEid('c."by"')} as by from created c
+       join mail m on m.entity = c.entity where m.message_id = ?`,
     ).get(id) as { by: string | null } | undefined)?.by ?? null
 
   // Positive control FIRST: a sender the book knows lands attributed, so the
@@ -419,11 +435,12 @@ Deno.test('the sweep: an echo arrives on the sent entity, once', async () => {
     { eid: letter, name: 'mail', comp: {} },
     { eid: letter, name: 'deliver', comp: { to: 'venture@bot.test' } },
   ])
-  db.prepare('update mail set sent_id = ? where eid = ?')
+  db.prepare(`update mail set sent_id = ? where ${OWNED}`)
     .run('echo-1@bot.test', letter)
   // Sent = the shared delivered facet now (D-14945), via the Message-ID.
-  db.prepare('insert into delivered (eid, at, via) values (?, ?, ?)')
-    .run(letter, '2025-07-08T18:39:00.000Z', 'echo-1@bot.test')
+  db.prepare(
+    `insert into delivered (entity, at, via) values (${idOf}, ?, ?)`,
+  ).run(letter, '2025-07-08T18:39:00.000Z', 'echo-1@bot.test')
   let echo = msg({
     id: 'msg:1752000000001:echo-1@bot.test',
     from: 'bounces@cf-bounce.bot.test',
@@ -468,7 +485,7 @@ Deno.test('the echo keeps an aimed target and a stamped from', async () => {
   ])
   // `from` is server-stamped now (apply derives it from the author), so a
   // fixture standing in for an already-sent letter writes it the same way.
-  db.prepare('update mail set sent_id = ?, "from" = ? where eid = ?')
+  db.prepare(`update mail set sent_id = ?, "from" = ? where ${OWNED}`)
     .run('echo-2@bot.test', 'me@bot.test', letter)
   await inboundSweep(
     cast,
@@ -494,8 +511,10 @@ Deno.test('inbound mail never delivers: arrival is a record, not an ask', async 
   Deno.writeTextFileSync(sh, `#!/bin/sh\necho "$@" >> ${dir}/out.txt\n`)
   Deno.chmodSync(sh, 0o755)
   Deno.env.set('TASKS_MAIL_CMD', sh)
-  let eid = (db.prepare('select eid from mail where message_id is not null')
-    .get() as { eid: string }).eid
+  let eid = (db.prepare(
+    `select o.eid as eid from mail m join entity o on o.id = m.entity
+     where m.message_id is not null`,
+  ).get() as { eid: string }).eid
   await mailed(cast)(eid, {}) // the live path: created(mail) fires on mints
   assertEquals(deliveredRow(eid), undefined)
   try {
@@ -506,9 +525,10 @@ Deno.test('inbound mail never delivers: arrival is a record, not an ask', async 
   }
   // and the boot sweep's predicate screens it the same way
   let pending = db.prepare(
-    `select eid from mail where message_id is null
-       and not exists (select 1 from delivered where delivered.eid = mail.eid)
-       and not exists (select 1 from error where error.eid = mail.eid)`,
+    `select o.eid as eid from mail m join entity o on o.id = m.entity
+       where m.message_id is null
+       and not exists (select 1 from delivered d where d.entity = m.entity)
+       and not exists (select 1 from error e where e.entity = m.entity)`,
   ).all() as { eid: string }[]
   assertEquals(pending.some((p) => p.eid == eid), false)
   Deno.env.delete('TASKS_MAIL_CMD')
@@ -584,7 +604,8 @@ Deno.test('stamp-back arrives in bites: D1 binds one variable per id', async () 
 
 Deno.test('mailIdOf: E-num, bare num, and eid all land; the misses differ', () => {
   let { eid } = db.prepare(
-    'select eid from mail where message_id is not null',
+    `select o.eid as eid from mail m join entity o on o.id = m.entity
+     where m.message_id is not null`,
   ).get() as { eid: string }
   let { num } = db.prepare('select num from entity where eid = ?').get(eid) as {
     num: number
@@ -615,7 +636,7 @@ Deno.test('the sweep preserves In-Reply-To and links its graph mail', async () =
     { eid: orig, name: 'mail', comp: {} },
     { eid: orig, name: 'deliver', comp: { to: 'sender@x.test' } },
   ])
-  db.prepare('update mail set sent_id = ? where eid = ?')
+  db.prepare(`update mail set sent_id = ? where ${OWNED}`)
     .run('opener@bot.test', orig)
   let reply = msg({
     id: 'msg:1752000000010:reply@x.test',
@@ -624,8 +645,10 @@ Deno.test('the sweep preserves In-Reply-To and links its graph mail', async () =
 
   await inboundSweep(cast, fakeApi([reply], null).api)
 
-  let row = db.prepare('select * from mail where message_id = ?')
-    .get(reply.id) as Record<string, string | null>
+  let row = db.prepare(
+    `select ${MAIL} from mail m join entity o on o.id = m.entity
+     where m.message_id = ?`,
+  ).get(reply.id) as Record<string, string | null>
   assertEquals(row.in_reply_to, 'opener@bot.test')
   assertEquals(row.reply_to, orig)
 })
@@ -637,7 +660,7 @@ Deno.test('mailChanges links an earlier inbound RFC id when present', () => {
     { eid: orig, name: 'mail', comp: {} },
     { eid: orig, name: 'deliver', comp: { to: 'venture@bot.test' } },
   ])
-  db.prepare('update mail set message_id = ? where eid = ?')
+  db.prepare(`update mail set message_id = ? where ${OWNED}`)
     .run('msg:1752000000020:first@x.test', orig)
   let { wire, stamp } = mailChanges(
     msg({ in_reply_to: 'first@x.test' }),

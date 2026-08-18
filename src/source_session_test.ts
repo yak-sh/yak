@@ -32,6 +32,9 @@ let { assertEquals } = await import('@std/assert')
 
 let eid = sidEid(sid)
 
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+
 let count = (db: import('./sqlite.ts').DatabaseSync) =>
   (db.prepare('select count(*) as n from entity').get() as { n: number }).n
 
@@ -119,20 +122,21 @@ Deno.test('session source: a write graduates the session; the log stays file-bac
       | undefined
     assertEquals(typeof e?.num, 'number')
     assertEquals(
-      (db.prepare('select id from session where eid = ?').get(eid) as {
+      (db.prepare(`select id from session where ${OWNED}`).get(eid) as {
         id: string
       }).id,
       sid,
     )
     assertEquals(
-      db.prepare('select origin from session where eid = ?').get(eid),
+      db.prepare(`select origin from session where ${OWNED}`).get(eid),
       { origin: 'external' },
     )
     // No entry row was persisted — the transcript still streams from the file.
     assertEquals(
-      (db.prepare('select count(*) as n from entry where session = ?').get(
-        eid,
-      ) as { n: number }).n,
+      (db.prepare(`select count(*) as n from entry where session = ${idOf}`)
+        .get(
+          eid,
+        ) as { n: number }).n,
       0,
     )
     let tail = entriesOf(db, eid, 0, 500)

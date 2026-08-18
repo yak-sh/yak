@@ -59,9 +59,10 @@ let coords = (eid: string): [unknown, unknown][] =>
   )
 // The durable diagnostic lands on the session's error FACET (a separate row),
 // not a session column — that is what makes it visible to user and operator.
+let OWNED = `entity = (select id from entity where eid = ?)`
 let errorOf = (eid: string) =>
   String(
-    (db.prepare('select message from error where eid = ?').get(eid) as
+    (db.prepare(`select message from error where ${OWNED}`).get(eid) as
       | { message: string | null }
       | undefined)?.message ?? '',
   )

@@ -18,6 +18,11 @@ let { assertEquals } = await import('@std/assert')
 import type { DatabaseSync } from './sqlite.ts'
 
 let uid = (): string => crypto.randomUUID()
+// Component/edge tables are keyed by the integer `entity` spine id now; eids stay
+// the wire identity, so raw SQL translates at the boundary.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
 // A unit vector — cosine against another unit vector is their dot product, so a
 // test places a candidate at a KNOWN score: same direction scores 1.0, and
 // vec(c, √(1−c²)) scores exactly c against vec(1, 0). The coordinates ride a
@@ -165,7 +170,10 @@ let sess = () => {
     eid,
     Math.floor(Math.random() * 1e9),
   )
-  db.prepare('insert into session (eid, id) values (?, ?)').run(eid, uid())
+  db.prepare(`insert into session (entity, id) values (${idOf}, ?)`).run(
+    eid,
+    uid(),
+  )
   return eid
 }
 let msgEntry = (session: string, text: string, role = 'user') => {
@@ -188,17 +196,19 @@ Deno.test('recallEntry: a message writes a recall entry into its session, linked
   await recallEntry(noop, saysM(m, 'M-42', 'escalation is a bug report'))(msg)
 
   let rec = db.prepare(
-    `select r.eid, r.source, c.body, e.session from recalled r
-       join content c on c.eid = r.eid
-       join entry e on e.eid = r.eid
-      where r.source = ?`,
+    `select o.eid as eid, c.body as body, ${refEid('e.session')} as session
+       from recalled r
+       join entity o on o.id = r.entity
+       join content c on c.entity = r.entity
+       join entry e on e.entity = r.entity
+      where r.source = ${idOf}`,
   ).get(msg) as { eid: string; body: string; session: string } | undefined
   assertEquals(rec?.session, s) // in the message's session partition
   assertEquals(rec!.body.includes('M-42'), true)
   assertEquals(rec!.body.includes('escalation is a bug report'), true)
   // a `recalled` edge to the surfaced memory — the dedup ledger
   let edge = db.prepare(
-    "select 1 from dependency where parent = ? and type = 'recalled' and child = ?",
+    `select 1 from dependency where parent = ${idOf} and type = 'recalled' and child = ${idOf}`,
   ).get(rec!.eid, m)
   assertEquals(!!edge, true)
 })
@@ -208,12 +218,15 @@ Deno.test('recallEntry: recall cannot recall itself — a recall entry carries n
   let m = mem(db, 'a floating thought', vec(0.5, 0.5))
   let msg = msgEntry(s, 'a thought that floats')
   await recallEntry(noop, saysM(m, 'M-7', 'a floating thought'))(msg)
-  let rec = db.prepare('select eid from recalled where source = ?').get(msg) as
+  let rec = db.prepare(
+    `select o.eid as eid from recalled r join entity o on o.id = r.entity
+      where r.source = ${idOf}`,
+  ).get(msg) as
     | { eid: string }
     | undefined
   // no `message` row on the recall entry → on('message') never fires on it
   assertEquals(
-    !!db.prepare('select 1 from message where eid = ?').get(rec!.eid),
+    !!db.prepare(`select 1 from message where ${OWNED}`).get(rec!.eid),
     false,
   )
 })
@@ -225,7 +238,9 @@ Deno.test('recallEntry: idempotent — a message already recalled is not doubled
   let fn = saysM(m, 'M-9', 'do not double me')
   await recallEntry(noop, fn)(msg)
   await recallEntry(noop, fn)(msg) // second fire (a sweep, a re-dispatch)
-  let n = db.prepare('select count(*) as n from recalled where source = ?')
+  let n = db.prepare(
+    `select count(*) as n from recalled where source = ${idOf}`,
+  )
     .get(msg) as { n: number }
   assertEquals(n.n, 1)
 })

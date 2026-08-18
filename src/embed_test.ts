@@ -14,15 +14,21 @@ let { slow } = await import('./testing.ts')
 let { assertEquals } = await import('@std/assert')
 
 let uid = (): string => crypto.randomUUID()
+// Component tables are keyed by the integer `entity` spine id now; eids stay the
+// wire identity, so raw SQL translates at the boundary. (`embedding` is derived
+// data, still keyed by its own `eid` — left untouched.)
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
 let doc = (eid: string, title: string, body = '') => {
   db.prepare(
     'insert into entity (eid, num) values (?, ?)',
   ).run(eid, Math.floor(Math.random() * 1e9))
-  db.prepare('insert into doc (eid, title, body) values (?, ?, ?)').run(
-    eid,
-    title,
-    body,
-  )
+  db.prepare(`insert into doc (entity, title, body) values (${idOf}, ?, ?)`)
+    .run(
+      eid,
+      title,
+      body,
+    )
 }
 let vec = (...xs: number[]) => axes(...xs)
 let put = (eid: string, text: string, v: Float32Array) =>
@@ -58,10 +64,11 @@ Deno.test('stale: unembedded and text-moved docs owe; fresh do not', () => {
 Deno.test('stale: comments, empty docs, and quarantine never owe', () => {
   let [c, e, q] = [uid(), uid(), uid()]
   doc(c, 'a comment body')
-  db.prepare('insert into comment (eid, target) values (?, ?)').run(c, c)
+  db.prepare(`insert into comment (entity, target) values (${idOf}, ${idOf})`)
+    .run(c, c)
   doc(e, '', '')
   doc(q, 'unsafe')
-  db.prepare('insert into quarantined (eid) values (?)').run(q)
+  db.prepare(`insert into quarantined (entity) values (${idOf})`).run(q)
   let owed = stale(db).map((r) => r.eid)
   assertEquals(owed.includes(c), false)
   assertEquals(owed.includes(e), false)
@@ -86,12 +93,13 @@ Deno.test('prune: every route out of eligibility takes its vector along', () => 
     ]
   ) put(eid, text, vec(1, 0))
 
-  db.prepare("update doc set title = '', body = '' where eid = ?").run(emptied)
-  db.prepare('insert into comment (eid, target) values (?, ?)').run(
-    spoke,
-    spoke,
-  )
-  db.prepare('delete from doc where eid = ?').run(dead)
+  db.prepare(`update doc set title = '', body = '' where ${OWNED}`).run(emptied)
+  db.prepare(`insert into comment (entity, target) values (${idOf}, ${idOf})`)
+    .run(
+      spoke,
+      spoke,
+    )
+  db.prepare(`delete from doc where ${OWNED}`).run(dead)
 
   prune(db)
   let held = (eid: string) =>
@@ -115,8 +123,10 @@ slow('similar: an ineligible row never answers, swept or not', () => {
   put(alive, 'a living neighbour', vec(1, 0))
   put(gone, 'a doomed neighbour', vec(1, 0))
   put(quarantined, 'an unsafe neighbour', vec(1, 0))
-  db.prepare('delete from doc where eid = ?').run(gone)
-  db.prepare('insert into quarantined (eid) values (?)').run(quarantined)
+  db.prepare(`delete from doc where ${OWNED}`).run(gone)
+  db.prepare(`insert into quarantined (entity) values (${idOf})`).run(
+    quarantined,
+  )
 
   let hits = similar(db, vec(1, 0), 99, 0.5).map((h) => h.eid)
   assertEquals(
@@ -176,7 +186,7 @@ slow('similar: an in-place re-embed answers with the new vector', () => {
   let e = uid()
   d.prepare('insert into entity (eid, num) values (?, ?)')
     .run(e, Math.floor(Math.random() * 1e9))
-  d.prepare('insert into doc (eid, title, body) values (?, ?, ?)')
+  d.prepare(`insert into doc (entity, title, body) values (${idOf}, ?, ?)`)
     .run(e, 'generation probe', '')
   let store = (v: Float32Array) =>
     d.prepare(
@@ -209,7 +219,7 @@ slow('similar: SQL KNN ranks the same neighbours the JS scan did', () => {
     let e = uid()
     d.prepare('insert into entity (eid, num) values (?, ?)')
       .run(e, Math.floor(Math.random() * 1e9))
-    d.prepare('insert into doc (eid, title, body) values (?, ?, ?)')
+    d.prepare(`insert into doc (entity, title, body) values (${idOf}, ?, ?)`)
       .run(e, title, '')
     d.prepare(
       'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',

@@ -14,14 +14,21 @@ let uid = () => crypto.randomUUID()
 let sent: Change[] = []
 let cast = (cs: Change[]) => sent.push(...cs)
 
+// Component/edge tables are keyed by the integer `entity` spine id now, so
+// a raw statement translates at the eid boundary: OWNED matches a component
+// row by its owner eid, idOf resolves an eid VALUE to the id a ref column
+// stores. The `entity` spine keeps text `eid` and is never rewritten.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+
 // The delivery outcome is the shared delivered/error facet (D-14945): via
 // carries what the ladder did, message why it couldn't, neither = pending.
 let drow = (eid: string) =>
-  db.prepare('select * from delivered where eid = ?').get(eid) as
+  db.prepare(`select * from delivered where ${OWNED}`).get(eid) as
     | Record<string, string | null>
     | undefined
 let erow = (eid: string) =>
-  db.prepare('select * from error where eid = ?').get(eid) as
+  db.prepare(`select * from error where ${OWNED}`).get(eid) as
     | Record<string, string | null>
     | undefined
 
@@ -67,12 +74,12 @@ Deno.test('awake operator actor: the cast is the delivery', () => {
     },
   ])
   db.prepare(
-    "update session set origin = 'managed', status = 'running' where eid = ?",
+    `update session set origin = 'managed', status = 'running' where ${OWNED}`,
   ).run(s)
   let k = knock(task, project)
   assertMatch(String(drow(k)?.via), /^cast S-\d+$/)
   assertEquals(erow(k), undefined)
-  db.prepare("update session set status = 'completed' where eid = ?").run(s)
+  db.prepare(`update session set status = 'completed' where ${OWNED}`).run(s)
 })
 
 // The T-15147 hijack: a managed spawn wearing the actor is NOT the
@@ -88,11 +95,11 @@ Deno.test('a managed spawn wearing the actor does not take the cast', () => {
   }])
   db.prepare(
     `update session set origin = 'managed', status = 'running',
-     requested_task = ? where eid = ?`,
+     requested_task = ${idOf} where ${OWNED}`,
   ).run(task, s)
   let k = knock(task, project)
   assertMatch(String(drow(k)?.via), /^spawned S-\d+$/)
-  db.prepare("update session set status = 'completed' where eid = ?").run(s)
+  db.prepare(`update session set status = 'completed' where ${OWNED}`).run(s)
 })
 
 Deno.test('nobody awake at a project: spawn onto the target task', () => {
@@ -100,7 +107,7 @@ Deno.test('nobody awake at a project: spawn onto the target task', () => {
   assertMatch(String(drow(k)?.via), /^spawned S-\d+$/)
   // the spawn request rides the graph: a session asking for the task
   let s = db.prepare(
-    'select * from session where requested_task = ? order by rowid desc',
+    `select * from session where requested_task = ${idOf} order by rowid desc`,
   ).get(task) as Record<string, string>
   assertEquals(Boolean(s.provider && s.model), true)
   // a knock about something unspawnable says so
@@ -123,7 +130,7 @@ Deno.test('an addressed person: the knock rides mail, words and all', () => {
   let k = knock(task, jeff)
   assertMatch(String(drow(k)?.via), /^mailed U-\d+$/)
   let m = db.prepare(
-    'select d.title, d.body from mail m join doc d on d.eid = m.eid',
+    'select d.title, d.body from mail m join doc d on d.entity = m.entity',
   ).get() as { title: string; body: string }
   assertMatch(m.title, /^knock: T-\d+/)
   assertEquals(m.body, 'need this today')
@@ -157,7 +164,7 @@ Deno.test('an operator is a door: external claude hears it, its child does not',
   }])
   db.prepare(
     `update session set origin = 'managed', status = 'running',
-     requested_task = ? where eid = ?`,
+     requested_task = ${idOf} where ${OWNED}`,
   ).run(task, spawn)
   let k = knock(task, project)
   let { num } = db.prepare('select num from entity where eid = ?').get(op) as {
@@ -170,7 +177,9 @@ Deno.test('an operator is a door: external claude hears it, its child does not',
   // the door shuts with the process: the ladder descends again — past
   // the still-running managed spawn, which is not a door for the actor
   assertMatch(String(drow(knock(task, project))?.via), /^spawned S-\d+$/)
-  db.prepare("update session set status = 'completed' where eid = ?").run(spawn)
+  db.prepare(`update session set status = 'completed' where ${OWNED}`).run(
+    spawn,
+  )
 })
 
 // The operator loop outranks recency: a delegated worktree agent is its OWN
@@ -211,7 +220,7 @@ Deno.test('a settled managed session: the knock rides its input door', () => {
   let sess = uid()
   apply(db, [{ eid: sess, name: 'session', comp: { id: uid() } }])
   db.prepare(
-    `update session set origin = 'managed', status = 'completed' where eid = ?`,
+    `update session set origin = 'managed', status = 'completed' where ${OWNED}`,
   ).run(sess)
   // The knocker's words, said on the target a moment before the knock —
   // the same window rung 3's letter reads.
@@ -230,8 +239,8 @@ Deno.test('a settled managed session: the knock rides its input door', () => {
   assertMatch(String(drow(k)?.via), /^commented S-/)
   // The comment landed ON the session — that IS the input.
   let input = db.prepare(
-    `select d.body from comment c join doc d on d.eid = c.eid
-     where c.target = ? order by c.rowid desc limit 1`,
+    `select d.body from comment c join doc d on d.entity = c.entity
+     where c.target = ${idOf} order by c.rowid desc limit 1`,
   ).get(sess) as { body: string }
   assertMatch(input.body, /^knock: T-\d+ — the key expires today$/)
 })
@@ -241,7 +250,7 @@ Deno.test('a settled managed session: the knock rides its input door', () => {
 Deno.test('a settled external session is not a door', () => {
   let sess = uid()
   apply(db, [{ eid: sess, name: 'session', comp: { id: uid() } }])
-  db.prepare(`update session set status = 'completed' where eid = ?`).run(sess)
+  db.prepare(`update session set status = 'completed' where ${OWNED}`).run(sess)
   let k = knock(task, sess)
   assertMatch(String(erow(k)?.message), /no door/)
 })

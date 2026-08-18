@@ -80,7 +80,9 @@ export let knocked =
     // Who asked. The knock's own provenance is the author of anything it
     // sends on their behalf.
     let knocker = () =>
-      (db.prepare(`select ${refEid('"by"')} as "by" from created where ${OWNED}`)
+      (db.prepare(
+        `select ${refEid('"by"')} as "by" from created where ${OWNED}`,
+      )
         .get(eid) as { by: string | null } | undefined)?.by ?? null
     try {
       // 1: someone with that identity is reachable — the cast already

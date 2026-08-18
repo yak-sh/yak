@@ -119,8 +119,8 @@ export let obeyed =
     let via = String(
       (db.prepare(`select ${refEid('via')} as via from created where ${OWNED}`)
         .get(ceid) as
-        | { via: string | null }
-        | undefined)?.via ?? '',
+          | { via: string | null }
+          | undefined)?.via ?? '',
     )
     let session = via ? speaker(via) : undefined
 

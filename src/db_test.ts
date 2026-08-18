@@ -62,6 +62,15 @@ let { slow } = await import('./testing.ts')
 let fresh = () => bareDb()
 let uid = () => crypto.randomUUID()
 
+// Component/edge tables are keyed by the integer `entity` (→ entity.id) now,
+// not a text eid; reference columns store those ids too. Tests still speak
+// eids, so raw SQL translates at the boundary: OWNED filters a component row by
+// its owner eid, idOf resolves an eid to its id (for a WHERE or an INSERT), and
+// refEid projects an id column back to its eid so an assertion still reads one.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
+
 // Build the migrated snapshot once at load rather than lazily inside whichever
 // test clones first — that one-time ~40ms serialize is setup, not the per-test
 // work the 1ms budget measures, so it belongs off the test lines.
@@ -94,13 +103,13 @@ slow('snapshot shares a walk until either database handle writes', () => {
   let first = snapshot(one)
   assertEquals(snapshot(one) === first, true)
 
-  one.prepare('update doc set title = ? where eid = ?').run('two', eid)
+  one.prepare(`update doc set title = ? where ${OWNED}`).run('two', eid)
   let local = snapshot(one)
   assertEquals(local === first, false)
   assertEquals(compOf(one, eid, 'doc')?.title, 'two')
 
   let two = open(path)
-  two.prepare('update doc set title = ? where eid = ?').run('three', eid)
+  two.prepare(`update doc set title = ? where ${OWNED}`).run('three', eid)
   let remote = snapshot(one)
   assertEquals(remote === local, false)
   assertEquals(compOf(one, eid, 'doc')?.title, 'three')
@@ -343,8 +352,9 @@ Deno.test('server-owned facets: the wire cannot mint or erase them (T-15457)', (
   // An effect stamps a real error by DIRECT SQL (deliver.ts's path). The wire
   // then tries to erase the diagnosis with a component-delete — refused, so the
   // stamp stands.
-  db.prepare(`insert into error (eid, at, message) values (?, 'now', 'boom')`)
-    .run(t)
+  db.prepare(
+    `insert into error (entity, at, message) values (${idOf}, 'now', 'boom')`,
+  ).run(t)
   let out = apply(db, [{ eid: t, name: 'error', comp: null }])
   assertEquals(comp(t, 'error')?.message, 'boom')
   assertEquals(out.some((c) => c.name == 'error'), false)
@@ -398,7 +408,7 @@ Deno.test('graph-out carries declared columns only', () => {
   d.exec('alter table web add column dormant text')
   apply(d, [{ eid, name: 'web', comp: { url: 'https://example.test/' } }])
   d.prepare(
-    'update web set frozen_at = ?, dormant = ? where eid = ?',
+    `update web set frozen_at = ?, dormant = ? where ${OWNED}`,
   ).run('2026-07-26T00:00:00Z', 'migration input', eid)
   let expected = {
     eid,
@@ -447,11 +457,17 @@ Deno.test('every stored column is declared in comps or stamped', () => {
   let undeclared: string[] = []
   for (let t of tables) {
     if (outsideVocabulary[t] || derivedShadow(t)) continue
-    // eid is the universal join key, present on every component table and
-    // never in comps/stamped. A table nobody declared and nobody exempted
-    // lands here with allow = {eid} alone, so its columns show as drift too —
-    // a new table is a decision, same as a new column.
-    let allow = new Set(['eid', ...Object.keys({ ...comps[t], ...stamped[t] })])
+    // The structural identity columns are never in comps/stamped: `entity` is
+    // the join key every component table hangs off, and the spine itself carries
+    // its integer `id` and text `eid`. A table nobody declared and nobody
+    // exempted lands here with allow = these alone, so its columns show as drift
+    // too — a new table is a decision, same as a new column.
+    let allow = new Set([
+      'entity',
+      'id',
+      'eid',
+      ...Object.keys({ ...comps[t], ...stamped[t] }),
+    ])
     let cols = (d.prepare(
       'select name from pragma_table_info(?)',
     ).all(t) as { name: string }[]).map((c) => c.name)
@@ -855,7 +871,7 @@ Deno.test('session lifecycle columns are server-owned', () => {
   // but once the server stamps it (a steer yielding a managed turn) it rides
   // graph-out so a client can see the session is yielding (T-14205).
   assertEquals(comp(s, 'session')?.input_at, null) // rides out, wire left it unset
-  db.prepare('update session set input_at = ? where eid = ?')
+  db.prepare(`update session set input_at = ? where ${OWNED}`)
     .run('2026-08-06T00:00:00Z', s)
   assertEquals(comp(s, 'session')?.input_at, '2026-08-06T00:00:00Z')
   // A lifecycle column aimed at the wrong facet names nothing at all —
@@ -1930,18 +1946,19 @@ slow('retireMemoryType: feedback becomes a tag, the column goes', () => {
   let says = mk('a correction'), holds = mk('a fact'), points = mk('a pointer')
   // The pre-migration shape: the enum column, still carrying all of it.
   d.exec(`alter table memory add column type text not null default 'project'`)
-  let typed = d.prepare('update memory set type = ? where eid = ?')
+  let typed = d.prepare(`update memory set type = ? where ${OWNED}`)
   typed.run('feedback', says)
   typed.run('project', holds)
   typed.run('reference', points)
   let tagged = () =>
-    (d.prepare('select eid from feedback').all() as { eid: string }[])
-      .map((r) => r.eid)
+    (d.prepare(
+      'select o.eid as eid from feedback c join entity o on o.id = c.entity',
+    ).all() as { eid: string }[]).map((r) => r.eid)
 
   retireMemoryType(d)
   assertEquals(tagged(), [says]) // one value carried a fact; three did not
   assertEquals(
-    d.prepare('select "by" from feedback where eid = ?').get(says),
+    d.prepare(`select "by" from feedback where ${OWNED}`).get(says),
     { by: null }, // never inferred from created.by
   )
   assertEquals(hasCol(d, 'memory', 'type'), false) // the drop makes it true
@@ -1966,17 +1983,17 @@ slow('backfill: mail.read_at seeds opened, idempotently', () => {
     { eid: m, name: 'deliver', comp: { to: 'jeff@x.test' } },
   ])
   d.exec('alter table mail add column read_at text')
-  d.prepare('update mail set read_at = ? where eid = ?')
+  d.prepare(`update mail set read_at = ? where ${OWNED}`)
     .run('2026-07-01T00:00:00Z', m)
   let openedAt = () =>
-    (d.prepare('select at from opened where eid = ?').get(m) as
+    (d.prepare(`select at from opened where ${OWNED}`).get(m) as
       | { at: string }
       | undefined)?.at
   assertEquals(openedAt(), undefined) // the legacy column alone stamps nothing
   backfillOpened(d)
   assertEquals(openedAt(), '2026-07-01T00:00:00Z')
   // idempotent: a re-run never moves an existing stamp
-  d.prepare('update opened set at = ? where eid = ?').run('MOVED', m)
+  d.prepare(`update opened set at = ? where ${OWNED}`).run('MOVED', m)
   backfillOpened(d)
   assertEquals(openedAt(), 'MOVED')
   // and once the column is dropped the pass is a quiet no-op, not a crash
@@ -1995,19 +2012,19 @@ slow('migrateErrors: carries every diagnosis, verifies, then contracts', () => {
   d.exec('alter table role add column error text')
   d.exec('alter table session add column error text')
   let finished = '2026-08-07T12:00:00Z'
-  d.prepare('update role set error = ? where eid = ?').run('bad role', role)
+  d.prepare(`update role set error = ? where ${OWNED}`).run('bad role', role)
   d.prepare(
     `update session set status = 'failed', finished_at = ?, error = ?
-     where eid = ?`,
+     where ${OWNED}`,
   ).run(finished, 'bad session', session)
 
   migrateErrors(d)
   assertEquals(
-    d.prepare('select at, message from error where eid = ?').get(role),
+    d.prepare(`select at, message from error where ${OWNED}`).get(role),
     { at: null, message: 'bad role' },
   )
   assertEquals(
-    d.prepare('select at, message from error where eid = ?').get(session),
+    d.prepare(`select at, message from error where ${OWNED}`).get(session),
     { at: finished, message: 'bad session' },
   )
   assertEquals(hasCol(d, 'role', 'error'), false)
@@ -2043,7 +2060,7 @@ slow('open backfills every pre-spawn session, once', () => {
   assertEquals(compOf(d, legacy, 'spawn')?.model, 'fake-fast')
   assertEquals(compOf(d, external, 'spawn')?.provider, null)
   d.prepare(
-    "update spawn set provider = null, model = 'canonical' where eid = ?",
+    `update spawn set provider = null, model = 'canonical' where ${OWNED}`,
   ).run(legacy)
   d.close()
 
@@ -2080,30 +2097,43 @@ slow('open backfills optional session facets without reviving nulls', () => {
     update session set cwd = '/old', branch = 'session/old',
       base_revision = 'abc', pid = 17, pane = '%17',
       transcript = '/tmp/old.jsonl', provider_session_id = 'thread-old',
-      serving_model = 'model-old' where eid = ?
+      serving_model = 'model-old' where ${OWNED}
   `).run(legacy)
   d.close()
 
   d = open(path)
-  assertEquals(d.prepare('select * from worktree where eid = ?').get(legacy), {
-    eid: legacy,
-    cwd: '/old',
-    branch: 'session/old',
-    base_revision: 'abc',
-  })
-  assertEquals(d.prepare('select * from runtime where eid = ?').get(legacy), {
-    eid: legacy,
-    pid: 17,
-    pane: '%17',
-    transcript: '/tmp/old.jsonl',
-    provider_session_id: 'thread-old',
-    serving_model: 'model-old',
-  })
+  assertEquals(
+    d.prepare(
+      `select o.eid as eid, w.cwd, w.branch, w.base_revision
+       from worktree w join entity o on o.id = w.entity where o.eid = ?`,
+    ).get(legacy),
+    {
+      eid: legacy,
+      cwd: '/old',
+      branch: 'session/old',
+      base_revision: 'abc',
+    },
+  )
+  assertEquals(
+    d.prepare(
+      `select o.eid as eid, r.pid, r.pane, r.transcript,
+              r.provider_session_id, r.serving_model
+       from runtime r join entity o on o.id = r.entity where o.eid = ?`,
+    ).get(legacy),
+    {
+      eid: legacy,
+      pid: 17,
+      pane: '%17',
+      transcript: '/tmp/old.jsonl',
+      provider_session_id: 'thread-old',
+      serving_model: 'model-old',
+    },
+  )
   d.prepare(
-    `insert into worktree (eid, cwd, branch, base_revision)
-     values (?, null, null, null)`,
+    `insert into worktree (entity, cwd, branch, base_revision)
+     values (${idOf}, null, null, null)`,
   ).run(canonical)
-  d.prepare("update session set cwd = '/stale' where eid = ?").run(canonical)
+  d.prepare(`update session set cwd = '/stale' where ${OWNED}`).run(canonical)
   d.close()
 
   d = open(path)
@@ -2120,7 +2150,7 @@ slow('open drops a retired acked_at, and keeps the session', () => {
   apply(d, [{ eid: sess, name: 'session', comp: { id: 'probe', cwd: '/tmp' } }])
   // A database written before the stamp replaced the cursor.
   d.exec('alter table session add column acked_at text')
-  d.prepare('update session set acked_at = ? where eid = ?')
+  d.prepare(`update session set acked_at = ? where ${OWNED}`)
     .run('2026-01-01T00:00:00.000Z', sess)
   d.close()
 
@@ -2149,14 +2179,14 @@ slow('backfill: comment instruments move into created.via', () => {
   ])
   // a pre-migration graph: the retired column, still naming the author
   d.exec('alter table comment add column author_eid text')
-  d.prepare('update comment set author_eid = ? where eid = ?')
+  d.prepare(`update comment set author_eid = ? where ${OWNED}`)
     .run(author, comment)
   assertEquals(
     snapshot(d).changes.find((c) => c.eid == comment && c.name == 'comment')
       ?.comp,
     { eid: comment, target: target },
   ) // dormant migration input never rides graph-out
-  d.prepare('update created set via = null where eid = ?').run(comment)
+  d.prepare(`update created set via = null where ${OWNED}`).run(comment)
   backfillVia(d)
   let via = snapshot(d).changes.find((c) =>
     c.eid == comment && c.name == 'created'
@@ -2180,9 +2210,9 @@ slow('backfill: memory instruments move into created.via', () => {
   ])
   // a pre-migration graph: the retired column, still naming the source
   d.exec('alter table memory add column source_eid text')
-  d.prepare('update memory set source_eid = ? where eid = ?')
+  d.prepare(`update memory set source_eid = ? where ${OWNED}`)
     .run(source, memory)
-  d.prepare('update created set via = null where eid = ?').run(memory)
+  d.prepare(`update created set via = null where ${OWNED}`).run(memory)
   assertEquals(
     snapshot(d).changes.find((c) => c.eid == memory && c.name == 'memory')
       ?.comp,
@@ -2193,7 +2223,7 @@ slow('backfill: memory instruments move into created.via', () => {
     c.eid == memory && c.name == 'created'
   )?.comp?.via
   assertEquals(via, source)
-  d.prepare('update memory set source_eid = ? where eid = ?')
+  d.prepare(`update memory set source_eid = ? where ${OWNED}`)
     .run(uid(), memory)
   backfillVia(d)
   assertEquals(
@@ -2338,7 +2368,9 @@ slow('mendMail: rebuilds the FK-era table, no-ops when healed', () => {
   assertThrows(() => apply(d, [{ eid: t, name: 'entity', comp: null }])) // the bug
   mendMail(d)
   apply(d, [{ eid: t, name: 'entity', comp: null }]) // healed
-  let row = () => d.prepare('select target from mail where eid = ?').get(m)
+  let row = () =>
+    d.prepare(`select ${refEid('target')} as target from mail where ${OWNED}`)
+      .get(m)
   assertEquals(row(), { target: t }) // rows copied whole, ref kept
   let ddl = () =>
     d.prepare(`select sql from sqlite_master where name = 'mail'`).get()
@@ -2769,7 +2801,7 @@ slow('open renames every reference key, its filters, and its history', () => {
       comp: { type: 'about', child: task },
     },
   ])
-  legacy.prepare('update board set query = ? where eid = ?').run(
+  legacy.prepare(`update board set query = ? where ${OWNED}`).run(
     `.project_eid=${project}&.task.assignee_eid=` +
       `&.title~="literal .project_eid=value"`,
     board,
@@ -2830,31 +2862,35 @@ slow('open renames every reference key, its filters, and its history', () => {
     assertEquals(hasCol(healed, table, old), false, `${table}.${old}`)
   }
   assertEquals(
-    healed.prepare('select project from task where eid = ?').get(task),
+    healed.prepare(
+      `select ${refEid('project')} as project from task where ${OWNED}`,
+    ).get(task),
     { project },
   )
   assertEquals(
-    healed.prepare('select target, reply_to from mail where eid = ?').get(
-      reply,
-    ),
+    healed.prepare(
+      `select ${refEid('target')} as target, ${
+        refEid('reply_to')
+      } as reply_to from mail where ${OWNED}`,
+    ).get(reply),
     { target: task, reply_to: first },
   )
   assertEquals(
-    healed.prepare('select query from board where eid = ?').get(board),
+    healed.prepare(`select query from board where ${OWNED}`).get(board),
     {
       query: `.project=${project}&.task.assignee=` +
         `&.title~="literal .project_eid=value"`,
     },
   )
   assertEquals(
-    healed.prepare('select title, body from doc where eid = ?').get(memory),
+    healed.prepare(`select title, body from doc where ${OWNED}`).get(memory),
     {
       title: 'memory.scope guide',
       body: 'Use session.parent and envelope.to.',
     },
   )
   assertEquals(
-    healed.prepare('select title, body from doc where eid = ?').get(persona),
+    healed.prepare(`select title, body from doc where ${OWNED}`).get(persona),
     {
       title: 'persona',
       body:
@@ -2892,7 +2928,9 @@ slow('open renames every reference key, its filters, and its history', () => {
 
   let reopened = open(path)
   assertEquals(
-    reopened.prepare('select project from task where eid = ?').get(task),
+    reopened.prepare(
+      `select ${refEid('project')} as project from task where ${OWNED}`,
+    ).get(task),
     { project },
   )
   reopened.close()
@@ -2954,10 +2992,10 @@ slow('open retires proposal into a stamp and rewrites stale boards', () => {
   ])
   let filed = compOf(legacy, idea, 'created')!
   legacy.exec('alter table task add column proposal integer')
-  legacy.prepare('update task set proposal = ? where eid = ?').run(1, idea)
-  legacy.prepare('update task set proposal = ? where eid = ?')
+  legacy.prepare(`update task set proposal = ? where ${OWNED}`).run(1, idea)
+  legacy.prepare(`update task set proposal = ? where ${OWNED}`)
     .run(0, declined)
-  legacy.prepare('update board set query = ? where eid = ?').run(
+  legacy.prepare(`update board set query = ? where ${OWNED}`).run(
     '.status=open&.proposal=true&.domain=Eng',
     board,
   )
@@ -2979,7 +3017,7 @@ slow('open retires proposal into a stamp and rewrites stale boards', () => {
   )
   // A partially migrated database may have lost the column before its saved
   // query changed. The rewrite is independently idempotent.
-  healed.prepare('update board set query = ? where eid = ?')
+  healed.prepare(`update board set query = ? where ${OWNED}`)
     .run('.proposal=true', board)
   healed.close()
   let again = open(path)
@@ -3004,13 +3042,13 @@ slow('open retires project timestamps into the archived stamp', () => {
     { eid: board, name: 'board', comp: { query: '' } },
   ])
   legacy.exec('alter table project add column retired_at text')
-  legacy.prepare('update project set retired_at = ? where eid = ?')
+  legacy.prepare(`update project set retired_at = ? where ${OWNED}`)
     .run('2026-07-01T00:00:00.000Z', retired)
-  legacy.prepare('update project set retired_at = ? where eid = ?')
+  legacy.prepare(`update project set retired_at = ? where ${OWNED}`)
     .run('2026-06-01T00:00:00.000Z', both)
-  legacy.prepare('update archived set at = ? where eid = ?')
+  legacy.prepare(`update archived set at = ? where ${OWNED}`)
     .run('2026-06-15T00:00:00.000Z', both)
-  legacy.prepare('update board set query = ? where eid = ?').run(
+  legacy.prepare(`update board set query = ? where ${OWNED}`).run(
     '.project.retired_at=&.retired_at>=2026-01-01 ' +
       '"literal .retired_at=value"',
     board,
@@ -3031,7 +3069,7 @@ slow('open retires project timestamps into the archived stamp', () => {
     compOf(healed, board, 'board')?.query,
     '.archived.at=&.archived.at>=2026-01-01 "literal .retired_at=value"',
   )
-  healed.prepare('update board set query = ? where eid = ?')
+  healed.prepare(`update board set query = ? where ${OWNED}`)
     .run('.retired_at=', board)
   healed.close()
 
@@ -3060,19 +3098,19 @@ slow('open heals canonical stored values once and preserves failures', () => {
       comp: { id: 'legacy-session', operator: 1 },
     },
   ])
-  legacy.prepare(`update session set pid = '' where eid = ?`).run(session)
-  legacy.prepare(`update created set at = ? where eid = ?`)
+  legacy.prepare(`update session set pid = '' where ${OWNED}`).run(session)
+  legacy.prepare(`update created set at = ? where ${OWNED}`)
     .run('2026-07-26T12:34:56Z', task)
-  legacy.prepare(`update task set status = 'gone' where eid = ?`).run(bad)
+  legacy.prepare(`update task set status = 'gone' where ${OWNED}`).run(bad)
   legacy.exec('alter table project add column retired_at text')
-  legacy.prepare(`update project set retired_at = 'never' where eid = ?`)
+  legacy.prepare(`update project set retired_at = 'never' where ${OWNED}`)
     .run(project)
   let stable = legacy.prepare(
     `select quote(status) as status, typeof(status) as status_type,
             quote(priority) as priority, typeof(priority) as priority_type,
             quote(project) as project,
             typeof(project) as project_type
-     from task where eid = ?`,
+     from task where ${OWNED}`,
   ).get(task)
   legacy.close()
 
@@ -3082,13 +3120,13 @@ slow('open heals canonical stored values once and preserves failures', () => {
   try {
     let first = open(path)
     assertEquals(
-      first.prepare('select pid, operator from session where eid = ?')
+      first.prepare(`select pid, operator from session where ${OWNED}`)
         .get(session),
       { pid: null, operator: 1 },
     )
     assertEquals(
       first.prepare(
-        'select at from created where eid = ?',
+        `select at from created where ${OWNED}`,
       ).get(task),
       { at: '2026-07-26T12:34:56.000Z' },
     )
@@ -3099,16 +3137,16 @@ slow('open heals canonical stored values once and preserves failures', () => {
                 typeof(priority) as priority_type,
                 quote(project) as project,
                 typeof(project) as project_type
-         from task where eid = ?`,
+         from task where ${OWNED}`,
       ).get(task),
       stable,
     )
     assertEquals(
-      first.prepare('select status from task where eid = ?').get(bad),
+      first.prepare(`select status from task where ${OWNED}`).get(bad),
       { status: 'gone' },
     )
     assertEquals(
-      first.prepare('select at from archived where eid = ?')
+      first.prepare(`select at from archived where ${OWNED}`)
         .get(project),
       { at: 'never' },
     )
@@ -3118,7 +3156,8 @@ slow('open heals canonical stored values once and preserves failures', () => {
     let second = open(path)
     assertEquals(
       second.prepare(
-        `select status, priority, project from task where eid = ?`,
+        `select status, priority, ${refEid('project')} as project
+         from task where ${OWNED}`,
       ).get(task),
       { status: 'open', priority: 2, project: project },
     )
@@ -3165,12 +3204,12 @@ Deno.test('search: component filters select before limiting', () => {
     { eid: settled, name: 'doc', comp: { title: 'A settled choice' } },
     { eid: settled, name: 'decided', comp: { at: '2026-01-01' } },
   ])
-  db.prepare('update created set at = ? where eid = ?')
+  db.prepare(`update created set at = ? where ${OWNED}`)
     .run('2026-01-01T00:00:00.000Z', settled)
   for (let i = 0; i < 11; i++) {
     let eid = uid()
     apply(db, [{ eid, name: 'doc', comp: { title: `Newer choice ${i}` } }])
-    db.prepare('update created set at = ? where eid = ?')
+    db.prepare(`update created set at = ? where ${OWNED}`)
       .run(`2026-02-${String(i + 1).padStart(2, '0')}T00:00:00.000Z`, eid)
   }
   assertEquals(search(db, '.decided!', 1).map((h) => h.eid), [settled])
@@ -3400,7 +3439,7 @@ Deno.test('historical worked edges materialize explicitly and idempotently', () 
   apply(db, [{ eid: task, name: 'claim', comp: null }])
   db.prepare(`
     delete from dependency
-    where parent = ? and type = 'worked' and child = ?
+    where parent = ${idOf} and type = 'worked' and child = ${idOf}
   `).run(session, task)
 
   let missing = historicalWorked(db)
@@ -3858,7 +3897,7 @@ slow('nobody writes in the owner name but the owner keyboard', () => {
     { eid: m, name: 'mail', comp: {} },
     { eid: m, name: 'deliver', comp: { to: 'x@y.test' } },
   ])
-  let signed = d.prepare('select "from" as f from mail where eid = ?')
+  let signed = d.prepare(`select "from" as f from mail where ${OWNED}`)
     .get(m) as { f: string | null }
   assertEquals(signed.f, null) // unsigned, so mail.ts will refuse to send it
   d.close()
@@ -4076,8 +4115,9 @@ slow(
       { eid: inb, name: 'mail', comp: {} },
       { eid: inb, name: 'deliver', comp: { to: venue } },
     ])
-    db.prepare('update mail set received_at = ?, message_id = ? where eid = ?')
-      .run('2026-01-01T00:00:00Z', 'm-in', inb)
+    db.prepare(
+      `update mail set received_at = ?, message_id = ? where ${OWNED}`,
+    ).run('2026-01-01T00:00:00Z', 'm-in', inb)
     // An OUTBOUND letter legitimately carries deliver{to}: sent_id set excludes
     // it from the heal even though it too came home (received_at set).
     let out = uid()
@@ -4086,37 +4126,38 @@ slow(
       { eid: out, name: 'mail', comp: {} },
       { eid: out, name: 'deliver', comp: { to: venue } },
     ])
-    db.prepare('update mail set sent_id = ?, received_at = ? where eid = ?')
-      .run('sent-out', '2026-01-02T00:00:00Z', out)
+    db.prepare(
+      `update mail set sent_id = ?, received_at = ? where ${OWNED}`,
+    ).run('sent-out', '2026-01-02T00:00:00Z', out)
 
     healInboundDeliver(db)
 
     // The inbound letter now names its venue by address, and sheds the deliver.
     assertEquals(
-      (db.prepare('select to_addr from mail where eid = ?').get(inb) as {
+      (db.prepare(`select to_addr from mail where ${OWNED}`).get(inb) as {
         to_addr: string
       }).to_addr,
       'cafecar@bot.test',
     )
     assertEquals(
-      db.prepare('select count(*) c from deliver where eid = ?').get(inb),
+      db.prepare(`select count(*) c from deliver where ${OWNED}`).get(inb),
       { c: 0 },
     )
     // The outbound letter is untouched.
     assertEquals(
-      db.prepare('select count(*) c from deliver where eid = ?').get(out),
+      db.prepare(`select count(*) c from deliver where ${OWNED}`).get(out),
       { c: 1 },
     )
     // Idempotent: a second pass finds nothing to mend.
     healInboundDeliver(db)
     assertEquals(
-      (db.prepare('select to_addr from mail where eid = ?').get(inb) as {
+      (db.prepare(`select to_addr from mail where ${OWNED}`).get(inb) as {
         to_addr: string
       }).to_addr,
       'cafecar@bot.test',
     )
     assertEquals(
-      db.prepare('select count(*) c from deliver where eid = ?').get(out),
+      db.prepare(`select count(*) c from deliver where ${OWNED}`).get(out),
       { c: 1 },
     )
   },
@@ -4163,7 +4204,8 @@ Deno.test('a deleted number is never reused — remint is strictly higher', () =
 Deno.test('a num-less entity: short-eid handle renders and resolves', () => {
   let e = 'dead1234-0000-4000-8000-00000000cafe'
   db.prepare('insert into entity (eid) values (?)').run(e)
-  db.prepare('insert into doc (eid, title) values (?, ?)').run(e, 'cheap')
+  db.prepare(`insert into doc (entity, title) values (${idOf}, ?)`)
+    .run(e, 'cheap')
   assertEquals(human(db, e), 'dead1234') // the 8-hex handle, never T-0
   assertEquals(human(db, e), shortId(e))
   // the handle round-trips through the shared resolver and its doors

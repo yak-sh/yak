@@ -33,9 +33,12 @@ import { refOf } from './props.ts'
 /// sqlType({ eid: 'project', death: 'detach' }) -> 'integer'
 /// sqlType({ text: 'domains' }) -> 'text'
 export let sqlType = (t: PropType): string =>
-  t == 'number' || t == 'priority' ? 'real'
-    : t == 'bool' ? 'integer'
-    : typeof t == 'object' && 'eid' in t ? 'integer'
+  t == 'number' || t == 'priority'
+    ? 'real'
+    : t == 'bool'
+    ? 'integer'
+    : typeof t == 'object' && 'eid' in t
+    ? 'integer'
     : 'text'
 
 let quote = (name: string) => `"${name.replaceAll('"', '""')}"`

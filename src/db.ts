@@ -1673,14 +1673,13 @@ export let human = (db: DatabaseSync, eid: string): string => {
     | { num: number }
     | undefined
   if (!row?.num) return shortId(eid)
-  let kind =
-    kindOrder.find((k) =>
-      prep(
-        db,
-        `select 1 from ${sqlName(k)}
+  let kind = kindOrder.find((k) =>
+    prep(
+      db,
+      `select 1 from ${sqlName(k)}
          where entity = (select id from entity where eid = ?)`,
-      ).get(eid)
-    ) ?? 'entity'
+    ).get(eid)
+  ) ?? 'entity'
   return idOf({ eid, kind, num: row.num })
 }
 
@@ -1762,7 +1761,10 @@ export let migrateDeliver = (db: DatabaseSync) => {
     db.exec(`alter table ${table} drop column to_eid`)
   }
   if (hasCol(db, 'mail', 'to')) {
-    let ins = prep(db, 'insert or ignore into deliver (eid, "to") values (?, ?)')
+    let ins = prep(
+      db,
+      'insert or ignore into deliver (eid, "to") values (?, ?)',
+    )
     let rows = prep(
       db,
       `select eid, "to", to_addr, received_at, sent_id from mail
@@ -2048,12 +2050,38 @@ let toId = (db: DatabaseSync, eid: string): number | null =>
   (prep(db, 'select id from entity where eid = ?').get(eid) as
     | { id: number }
     | undefined)?.id ?? null
-let toEid = (db: DatabaseSync, id: number): string | undefined =>
-  (prep(db, 'select eid from entity where id = ?').get(id) as
-    | { eid: string }
-    | undefined)?.eid
 let refId = (db: DatabaseSync, v: unknown): number | null =>
   v == null ? null : toId(db, String(v))
+
+// Resolve a wire reference's eid to the target's stored int id, REFUSING a write
+// to a target that isn't there. A null passes through (a detached/absent ref).
+// A non-null eid must name a LIVE entity: apply()'s pre-mint pass has already
+// minted every entity this batch writes, so an eid that still has no spine is a
+// genuine ghost, and a retained tombstone spine (D-18866 never deletes the row)
+// is a dead target a new reference must not point at — either is the refusal the
+// old entity(eid) FK gave before an unknown eid could collapse to null and land
+// unnoticed. Death-time cascades (detach/release/keep) still let an EXISTING
+// reference outlive its target; this guards the write, not the grave.
+let refToId = (
+  db: DatabaseSync,
+  name: string,
+  owner: string,
+  col: string,
+  v: unknown,
+): number | null => {
+  if (v == null) return null
+  let eid = String(v)
+  let id = toId(db, eid)
+  let gone = prep(db, 'select 1 from tombstone where eid = ?').get(eid)
+  if (id == null || gone) {
+    throw new Error(
+      `${name} ${human(db, owner)} refused: ${col} → ${human(db, eid)} (${
+        gone ? 'tombstoned' : 'no such entity'
+      })`,
+    )
+  }
+  return id
+}
 
 // The WHERE fragment that matches a component row by its OWNER's eid. A
 // component table is keyed by the owner's internal int id now (D-18866), so a
@@ -3203,7 +3231,10 @@ let worktreeGitdir = (cwd: string): string | null => {
 // operator-scoped door shares (client.ts repoAt is its cache-side twin).
 let ventureAt = (db: DatabaseSync, cwd?: string | null): string | null => {
   if (!cwd) return null
-  let repos = prep(db, 'select eid, path from repo').all() as {
+  let repos = prep(
+    db,
+    'select o.eid as eid, r.path from repo r join entity o on o.id = r.entity',
+  ).all() as {
     eid: string
     path: string
   }[]
@@ -3249,7 +3280,10 @@ let actorFor = (
       | { cwd: string | null; actor: string | null }
       | undefined
   if (s) return s.actor ?? ventureAt(db, s.cwd) ?? null
-  let c = prep(db, `select ${refEid('actor')} as actor from client where ${byEid}`)
+  let c = prep(
+    db,
+    `select ${refEid('actor')} as actor from client where ${byEid}`,
+  )
     .get(writer) as { actor: string | null } | undefined
   if (c) return c.actor ?? (human ? ownerActor(db) : null)
   // A writer naming an actor entity (person or project) directly stands
@@ -3291,10 +3325,16 @@ export let writerVia = (
   )
     .get(writer, writer) as { eid: string } | undefined
   if (s) return s.eid
-  let c = prep(db, `select ${refEid('client.entity')} as eid from client where ${byEid}`)
+  let c = prep(
+    db,
+    `select ${refEid('client.entity')} as eid from client where ${byEid}`,
+  )
     .get(writer) as { eid: string } | undefined
   if (c) return c.eid
-  let r = prep(db, `select ${refEid('runner.entity')} as eid from runner where ${byEid}`)
+  let r = prep(
+    db,
+    `select ${refEid('runner.entity')} as eid from runner where ${byEid}`,
+  )
     .get(writer) as { eid: string } | undefined
   return r?.eid ?? null
 }
@@ -3986,8 +4026,11 @@ export let apply = (
                join entity o on o.id = r.entity
                where r.${sqlName(col)} = ?`,
             ).all(did) as { eid: string }[]
-            prep(db, `update ${sqlName(t)} set ${sqlName(col)} = null
-                      where ${sqlName(col)} = ?`).run(did)
+            prep(
+              db,
+              `update ${sqlName(t)} set ${sqlName(col)} = null
+                      where ${sqlName(col)} = ?`,
+            ).run(did)
             for (let { eid: orphan } of homed) {
               if (doomed.includes(orphan)) continue
               touched.add(orphan)
@@ -4031,12 +4074,14 @@ export let apply = (
       }
       let sent = cols.filter((c) => c in comp)
       // A reference column stores the target's int id; resolve the sent eid to
-      // it (null passes through; an unknown target resolves to null, which a
-      // NOT NULL / FK ref bounces the same way a missing eid used to). Plain
-      // scalars keep their bound value.
+      // it (null passes through). refToId REFUSES a non-null eid that names no
+      // live entity — the pre-mint pass above already minted every in-batch
+      // referent's spine, so an unresolved eid is a genuine ghost (or a
+      // tombstone), exactly what the old entity(eid) FK bounced. Plain scalars
+      // keep their bound value.
       let vals = sent.map((c) =>
         isRef(name, c)
-          ? (comp[c] == null ? null : toId(db, String(comp[c])))
+          ? refToId(db, name, eid, c, comp[c])
           : bound(name, c, comp[c])
       )
       // Update first (a patch can't re-satisfy not-null columns an insert
@@ -4113,13 +4158,12 @@ export let apply = (
           t?.created.add(`${name} ${eid}`)
         } else {
           // A bare {} touch: create with defaults if possible, else no-op.
-          let made =
-            prep(
-              db,
-              `insert or ignore into ${sqlName(name)} (entity)
+          let made = prep(
+            db,
+            `insert or ignore into ${sqlName(name)} (entity)
                values ((select id from entity where eid = ?))`,
-            )
-              .run(eid).changes
+          )
+            .run(eid).changes
           if (made) {
             createdComps.add(`${name} ${eid}`)
             t?.created.add(`${name} ${eid}`)
@@ -4815,13 +4859,14 @@ export let historicalWorked = (db: DatabaseSync): Change[] =>
       json_extract(je.value, '$.comp.session') as parent,
       json_extract(je.value, '$.eid') as child
     from journal j, json_each(j.batch) je
-    join session s
-      on s.eid = json_extract(je.value, '$.comp.session')
-    join task t on t.eid = json_extract(je.value, '$.eid')
+    join entity se on se.eid = json_extract(je.value, '$.comp.session')
+    join session s on s.entity = se.id
+    join entity te on te.eid = json_extract(je.value, '$.eid')
+    join task t on t.entity = te.id
     left join dependency d
-      on d.parent = json_extract(je.value, '$.comp.session')
+      on d.parent = se.id
      and d.type = 'worked'
-     and d.child = json_extract(je.value, '$.eid')
+     and d.child = te.id
     where json_extract(je.value, '$.name') = 'claim'
       and json_extract(je.value, '$.comp.session') is not null
       and d.parent is null
@@ -4951,7 +4996,16 @@ export let touch = (
   let now = new Date().toISOString()
   let out: Change[] = []
   for (let eid of eids) {
-    if (!prep(db, 'select 1 from entity where eid = ?').get(eid)) continue
+    // A LIVE spine only: D-18866 retains a tombstoned entity's row (its id never
+    // recycles), so existence in `entity` no longer proves liveness — a dead eid
+    // is excluded by the tombstone, or touch would revive a recall row on it.
+    if (
+      !prep(
+        db,
+        `select 1 from entity where eid = ?
+         and eid not in (select eid from tombstone)`,
+      ).get(eid)
+    ) continue
     prep(
       db,
       `
@@ -5255,8 +5309,10 @@ export let bodies = (db: DatabaseSync, eids: string[]): Change[] => {
     // off the base row; only the owner eid needs projecting through the spine.
     let rows = prep(
       db,
-      `select o.eid as eid, ${cut.map((c) => `t.${sqlName(c)} as ${sqlName(c)}`)
-        .join(', ')} from ${sqlName(name)} t
+      `select o.eid as eid, ${
+        cut.map((c) => `t.${sqlName(c)} as ${sqlName(c)}`)
+          .join(', ')
+      } from ${sqlName(name)} t
        join entity o on o.id = t.entity
        where o.eid in (${holes})`,
     ).all(...eids) as Record<string, unknown>[]
@@ -5514,7 +5570,9 @@ let entryRows = (
   index: { eid: string; seq: number }[],
 ) => {
   if (!index.length) return []
-  stage(db, index.map((e) => e.eid))
+  // A spine-less index row (entriesOf's left join) has a null eid — skip it in
+  // the stage; byEid.get(undefined) ?? {} below already gives it inert comps.
+  stage(db, index.map((e) => e.eid).filter((e): e is string => e != null))
   let byEid = new Map(staged(db).map((e) => [e.eid, e.comps]))
   // staged() keys off the entity SPINE, so an index row whose spine is gone —
   // a legacy partial ingest left `entry`+`imported` without minting the spine
@@ -5557,9 +5615,13 @@ export let entriesOf = (
 ) => {
   let cap = Math.max(1, Math.min(limit, 5000))
   // entry.session is an int id; join the spine so the caller keeps passing a
-  // session EID and the projected owner eid rides back out.
+  // session EID and the projected owner eid rides back out. The entry's OWN
+  // spine is LEFT-joined: a spine-less entry (a legacy partial ingest whose
+  // entity never persisted, T-19261) still surfaces — with a null eid, which
+  // entryRows turns into an inert `{}`-comps row rather than dropping it and
+  // miscounting the caller's paging.
   let base = `select o.eid as eid, t.seq as seq from entry t
-       join entity o on o.id = t.entity
+       left join entity o on o.id = t.entity
        join entity s on s.id = t.session`
   let index = (through == null
     ? prep(
@@ -5595,7 +5657,7 @@ export let entriesScan = (db: DatabaseSync, after = 0, limit = 500) => {
   let index = prep(
     db,
     `select o.eid as eid, t.seq as seq from entry t
-     join entity o on o.id = t.entity
+     left join entity o on o.id = t.entity
      where t.seq > ?
      order by t.session, t.seq limit ?`,
   ).all(after, Math.max(1, Math.min(limit, 5000))) as {
@@ -5603,7 +5665,7 @@ export let entriesScan = (db: DatabaseSync, after = 0, limit = 500) => {
     seq: number
   }[]
   if (!index.length) return []
-  stage(db, index.map((e) => e.eid))
+  stage(db, index.map((e) => e.eid).filter((e): e is string => e != null))
   let byEid = new Map(staged(db).map((e) => [e.eid, e.comps]))
   // Same spine-less guard as entryRows (T-19261): a dangling index row gets
   // `{}`, never undefined, so a cross-session scan can't throw on it either.

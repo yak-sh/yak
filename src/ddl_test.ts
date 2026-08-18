@@ -11,8 +11,9 @@ import { derivedCols, sqlType } from './ddl.ts'
 import { comps, type PropType, stamped } from './types.ts'
 import { assert, assertEquals } from '@std/assert'
 
-// Numbers store real, bools integer; everything else — enum, time, url, body,
-// {eid}, {text} — is text.
+// Numbers store real, bools integer, an {eid} reference integer — it stores the
+// target's internal id now (D-18866); everything else — enum, time, url, body,
+// {text} — is text.
 Deno.test('sqlType maps every PropType to its column affinity', () => {
   let cases: [PropType, string][] = [
     ['number', 'real'],
@@ -24,7 +25,7 @@ Deno.test('sqlType maps every PropType to its column affinity', () => {
     ['time', 'text'],
     ['url', 'text'],
     [{ enum: ['a', 'b'] }, 'text'],
-    [{ eid: 'project', death: 'detach' }, 'text'],
+    [{ eid: 'project', death: 'detach' }, 'integer'],
     [{ text: 'domains' }, 'text'],
   ]
   for (let [t, want] of cases) assertEquals(sqlType(t), want)
@@ -41,15 +42,16 @@ let infoOf = (db: ReturnType<typeof open>, t: string) =>
   db.prepare(`pragma table_info("${t}")`).all() as Info[]
 
 // A derived table is the entity-keyed spine plus its vocabulary columns, in
-// declaration order, every one nullable and default-free. If a derived comp
-// grew a NOT NULL / default / integer-affine column the derivation can't voice,
-// this catches it — that comp belongs in the hand-written `schema`, not `derived`.
+// declaration order, every one nullable and default-free. The spine key is now
+// the `entity` integer id (D-18866). If a derived comp grew a NOT NULL / default
+// column the derivation can't voice, this catches it — that comp belongs in the
+// hand-written `schema`, not `derived`.
 Deno.test('a derived table equals its vocabulary columns exactly', () => {
   let db = open(':memory:')
   for (let comp of derived) {
     // pragma reports the affinity uppercased, whatever case the DDL declared.
     let want = [
-      { name: 'eid', type: 'TEXT', notnull: 0, dflt_value: null, pk: 1 },
+      { name: 'entity', type: 'INTEGER', notnull: 0, dflt_value: null, pk: 1 },
       ...derivedCols(comp).map(({ prop }) => ({
         name: prop,
         type: sqlType({ ...comps[comp], ...stamped[comp] }[prop]).toUpperCase(),
@@ -83,7 +85,7 @@ Deno.test('every component table carries every vocabulary column', () => {
     .filter((n) => n != 'entity')
   for (let comp of names) {
     let cols = new Set(infoOf(db, comp).map((c) => c.name))
-    assert(cols.has('eid'), `${comp} has no eid column`)
+    assert(cols.has('entity'), `${comp} has no entity column`)
     for (let p of Object.keys({ ...comps[comp], ...stamped[comp] })) {
       assert(cols.has(p), `${comp}.${p} is declared but has no table column`)
     }

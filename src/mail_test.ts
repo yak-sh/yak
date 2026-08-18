@@ -34,8 +34,23 @@ let uid = () => crypto.randomUUID()
 let sent: { eid: string; name: string; comp: unknown }[] = []
 let cast = (cs: typeof sent) => sent.push(...cs)
 
+// The id-keyed storage boundary: component/edge tables key by integer
+// `entity` (not text `eid`), and reference columns store integer ids. EIDs
+// remain the wire/test identity, so raw SQL translates at the boundary —
+// OWNED filters a component row by owner eid, idOf resolves an eid operand to
+// an id, refEid projects a stored ref id back to its eid for assertions.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
+
 let row = (eid: string) =>
-  db.prepare('select * from mail where eid = ?').get(eid) as Record<
+  db.prepare(
+    // target is a ref column: stored as the target's int id, projected back to
+    // its eid here (both apply() and settle() store the int id).
+    `select "from", to_addr, message_id, received_at, verified, sent_id,
+      ${refEid('target')} as target
+     from mail where ${OWNED}`,
+  ).get(eid) as Record<
     string,
     string | null
   >
@@ -43,11 +58,11 @@ let row = (eid: string) =>
 // delivered mail wears `delivered` (via = how it went out), a failed one
 // wears `error` (message = why), a pending one wears neither.
 let drow = (eid: string) =>
-  db.prepare('select * from delivered where eid = ?').get(eid) as
+  db.prepare(`select * from delivered where ${OWNED}`).get(eid) as
     | Record<string, string | null>
     | undefined
 let erow = (eid: string) =>
-  db.prepare('select * from error where eid = ?').get(eid) as
+  db.prepare(`select * from error where ${OWNED}`).get(eid) as
     | Record<string, string | null>
     | undefined
 
@@ -232,7 +247,7 @@ let fixture = () => {
   // target, so only these tests need the age.
   db.prepare(`
     update created set at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 hour')
-    where eid = ?
+    where ${OWNED}
   `).run(task)
   return { proj, task }
 }
@@ -251,10 +266,13 @@ let comment = (target: string, writer?: string) => {
 }
 let mintedFor = (c: string) =>
   db.prepare(`
-    select s.*, dl."to" as deliver_to from dependency d
-    join mail s on s.eid = d.parent
-    left join deliver dl on dl.eid = s.eid
-    where d.type = 'about' and d.child = ?
+    select o.eid as eid, s."from" as "from",
+      ${refEid('s.target')} as target, ${refEid('dl."to"')} as deliver_to
+    from dependency d
+    join mail s on s.entity = d.parent
+    join entity o on o.id = s.entity
+    left join deliver dl on dl.entity = s.entity
+    where d.type = 'about' and d.child = ${idOf}
   `).all(c) as Record<string, string>[]
 
 Deno.test('fanout: mints to the project REFERENCE, once, with the receipt', () => {
@@ -268,7 +286,7 @@ Deno.test('fanout: mints to the project REFERENCE, once, with the receipt', () =
   let num = (db.prepare('select num from entity where eid = ?').get(task) as {
     num: number
   }).num
-  let doc = db.prepare('select title, body from doc where eid = ?').get(
+  let doc = db.prepare(`select title, body from doc where ${OWNED}`).get(
     made[0].eid,
   ) as { title: string; body: string }
   assertMatch(doc.title, new RegExp(`\\[T-${num}\\] the work`))
@@ -317,7 +335,10 @@ Deno.test('fanout: commentary born with a task stays in its filing event', () =>
   fanout(cast)(c, { target: filed })
   assertEquals(mintedFor(c).length, 0)
 
-  let pending = db.prepare(`select eid from comment where ${FANOUT_PENDING}`)
+  let pending = db.prepare(
+    `select o.eid as eid from comment join entity o on o.id = comment.entity
+     where ${FANOUT_PENDING}`,
+  )
     .all() as { eid: string }[]
   assertEquals(pending.some((r) => r.eid == c), false)
 
@@ -325,7 +346,7 @@ Deno.test('fanout: commentary born with a task stays in its filing event', () =>
   // the filing and the same task is news again.
   db.prepare(`
     update created set at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 hour')
-    where eid = ?
+    where ${OWNED}
   `).run(filed)
   let later = uid()
   apply(db, [
@@ -355,7 +376,7 @@ Deno.test('fanout: the birth window is one second, either side of it', () => {
   // window nothing sits between one second and it.
   db.prepare(`
     update created set at = strftime('%Y-%m-%dT%H:%M:%fZ', at, '+2 seconds')
-    where eid = ?
+    where ${OWNED}
   `).run(outside)
 
   fanout(cast)(inside, { target: target })
@@ -373,9 +394,12 @@ Deno.test('the sweep predicate finds unreceipted recent comments only', () => {
   let old = comment(task)
   db.prepare(`
     update created set at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-2 hours')
-    where eid = ?
+    where ${OWNED}
   `).run(old)
-  let pending = db.prepare(`select eid from comment where ${FANOUT_PENDING}`)
+  let pending = db.prepare(
+    `select o.eid as eid from comment join entity o on o.id = comment.entity
+     where ${FANOUT_PENDING}`,
+  )
     .all() as { eid: string }[]
   let eids = pending.map((p) => p.eid)
   assertEquals(eids.includes(missed), true)
@@ -412,7 +436,7 @@ Deno.test('mailed: reply_to resolves to --in-reply-to at delivery', async () => 
     author,
   )
   // inbound provenance is server-stamped (the inbound.ts idiom)
-  db.prepare('update mail set message_id = ? where eid = ?')
+  db.prepare(`update mail set message_id = ? where ${OWNED}`)
     .run('msg:123:<orig-id@y.test>', orig)
   let reply = uid()
   apply(
@@ -447,7 +471,7 @@ Deno.test('mailed: reply_to resolves to --in-reply-to at delivery', async () => 
     author,
   )
   await mailed(cast)(sent, {})
-  db.prepare('update mail set sent_id = ? where eid = ?')
+  db.prepare(`update mail set sent_id = ? where ${OWNED}`)
     .run('cf-abc@sender', sent)
   let follow = uid()
   apply(
@@ -478,7 +502,7 @@ Deno.test('mailed: reply_to resolves to --in-reply-to at delivery', async () => 
     undefined,
     author,
   )
-  db.prepare('update mail set sent_id = null where eid = ?').run(sent)
+  db.prepare(`update mail set sent_id = null where ${OWNED}`).run(sent)
   await mailed(cast)(dark, {})
   let last = mails(dir).at(-1)!
   assertMatch(last, /unthreadable/)
@@ -611,7 +635,7 @@ Deno.test('mailed: native send stamps sent_id, threads, logs dir=out', async () 
       undefined,
       author,
     )
-    db.prepare('update mail set message_id = ? where eid = ?')
+    db.prepare(`update mail set message_id = ? where ${OWNED}`)
       .run('msg:9:<orig@y.test>', orig)
     let m = uid()
     apply(

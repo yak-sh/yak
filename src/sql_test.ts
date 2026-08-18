@@ -24,6 +24,7 @@ import {
 import { aggregateSql, select, where } from './sql.ts'
 import { open } from './db.ts'
 import { kindOf, kindOrder } from './types.ts'
+import { isRef } from './props.ts'
 
 let db = open(':memory:')
 
@@ -44,13 +45,20 @@ let put = (eid: string, rows: Record<string, Record<string, Cell>>) => {
   db.prepare('insert into entity (eid, num) values (?, ?)')
     .run(eid, base + ++n)
   for (let [comp, cols] of Object.entries(rows)) {
-    let keys = ['eid', ...Object.keys(cols)]
-
-    db.prepare(
-      `insert into "${comp}" (${keys.map((k) => `"${k}"`).join(',')}) values (${
-        keys.map(() => '?').join(',')
-      })`,
-    ).run(eid, ...Object.values(cols))
+    // Component tables are id-keyed now (owner `entity` int → entity(id)), and a
+    // reference column stores the referent's int id. Resolve the owner eid and
+    // each ref value eid→id in SQL; plain scalars bind straight (a null ref value
+    // still resolves to null — the subquery over a null eid yields null).
+    let names = Object.keys(cols)
+    let colSql = ['entity', ...names.map((k) => `"${k}"`)].join(',')
+    let valSql = [
+      '(select id from entity where eid = ?)',
+      ...names.map((k) =>
+        isRef(comp, k) ? '(select id from entity where eid = ?)' : '?'
+      ),
+    ].join(',')
+    db.prepare(`insert into "${comp}" (${colSql}) values (${valSql})`)
+      .run(eid, ...names.map((k) => cols[k]))
   }
 }
 
@@ -156,12 +164,25 @@ let graph = () => {
     'response',
     'created',
   ]
+  // Component tables are id-keyed now: read each row the way the SQL matcher's
+  // select() projects it — the owner's eid as `eid`, every reference column back
+  // to the referent's eid — so the JS world mirrors stored truth in eid terms and
+  // the two matchers still compare like for like.
+  let colsOf = (t: string) =>
+    (db.prepare('select name from pragma_table_info(?)').all(t) as {
+      name: string
+    }[]).map((r) => r.name).filter((c) => c != 'entity')
   for (let comp of [...new Set([...kindOrder, 'proposed', ...facets])]) {
+    let proj = colsOf(comp).map((c) =>
+      isRef(comp, c)
+        ? `(select __r.eid from entity __r where __r.id = "${comp}"."${c}") as "${c}"`
+        : `"${comp}"."${c}" as "${c}"`
+    )
     for (
-      let r of db.prepare(`select * from "${comp}"`).all() as Record<
-        string,
-        unknown
-      >[]
+      let r of db.prepare(
+        `select o.eid as eid${proj.length ? ', ' + proj.join(', ') : ''}
+         from "${comp}" join entity o on o.id = "${comp}".entity`,
+      ).all() as Record<string, unknown>[]
     ) {
       out[String(r.eid)][comp] = r
     }
@@ -416,12 +437,17 @@ Deno.test('projection: select carries the named columns beside the eid', () => {
   let add = (eid: string, rows: Record<string, Record<string, Cell>>) => {
     pdb.prepare('insert into entity (eid, num) values (?, ?)').run(eid, ++m)
     for (let [comp, cols] of Object.entries(rows)) {
-      let keys = ['eid', ...Object.keys(cols)]
-      pdb.prepare(
-        `insert into "${comp}" (${
-          keys.map((k) => `"${k}"`).join(',')
-        }) values (${keys.map(() => '?').join(',')})`,
-      ).run(eid, ...Object.values(cols))
+      // id-keyed owner + eid→id ref resolution, as in put() above.
+      let names = Object.keys(cols)
+      let colSql = ['entity', ...names.map((k) => `"${k}"`)].join(',')
+      let valSql = [
+        '(select id from entity where eid = ?)',
+        ...names.map((k) =>
+          isRef(comp, k) ? '(select id from entity where eid = ?)' : '?'
+        ),
+      ].join(',')
+      pdb.prepare(`insert into "${comp}" (${colSql}) values (${valSql})`)
+        .run(eid, ...names.map((k) => cols[k]))
     }
   }
   // bare entities — just the spine row the {eid} FKs (pin.canvas, card.target) need

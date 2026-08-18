@@ -30,6 +30,11 @@ let { watched } = await import('./sessions.ts')
 let { writeSession } = await import('./session_store.ts')
 
 let uid = () => crypto.randomUUID()
+// Component/edge tables are id-keyed (entity int → entity(id)); the spine keeps
+// text eid. OWNED locates a component row by its owner eid; idOf resolves an eid
+// to the internal id a reference column now stores.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
 let casts: Change[][] = []
 let cast = (c: Change[]) => casts.push(c)
 // The real self-healing effect, wired exactly as server.ts wires it: a stamped
@@ -42,17 +47,17 @@ on('exception', { created: fileBug(cast) })
 let ghostPid = 2_147_483_646
 
 let broke = (eid: string) =>
-  (db.prepare('select message from exception where eid = ?').get(eid) as
+  (db.prepare(`select message from exception where ${OWNED}`).get(eid) as
     | { message: string }
     | undefined)?.message
 let finishedAt = (eid: string) =>
-  (db.prepare('select finished_at from session where eid = ?').get(eid) as
+  (db.prepare(`select finished_at from session where ${OWNED}`).get(eid) as
     | { finished_at: string | null }
     | undefined)?.finished_at
 let filedBugAbout = (eid: string) =>
   !!db.prepare(
-    `select 1 from dependency d join bug b on b.eid = d.parent
-     where d.type = 'about' and d.child = ?`,
+    `select 1 from dependency d join bug b on b.entity = d.parent
+     where d.type = 'about' and d.child = ${idOf}`,
   ).get(eid)
 
 // A reified external session with a ghost provider pid (present() false), dead
@@ -73,7 +78,11 @@ let STILLBORN =
   'operator died before its first turn (no diagnostic; process not owned)'
 
 Deno.test('a role operator dead at seq 0 stamps an exception and heal fires', () => {
-  let eid = stillborn({ role: uid() })
+  // A real role entity: session.role is a reference resolved to its int id on
+  // write now (D-18866), so a ghost uuid would store null and read as roleless.
+  let role = uid()
+  apply(db, [{ eid: role, name: 'role', comp: { state: 'stopped' } }])
+  let eid = stillborn({ role })
   watched(cast)(eid, { pid: ghostPid })
   assert(finishedAt(eid), 'the door is stamped shut')
   assertEquals(broke(eid), STILLBORN)
@@ -96,7 +105,9 @@ Deno.test('a free interactive external session dead at seq 0 stays silent', () =
 })
 
 Deno.test('a role operator that produced a turn is a normal end, not a break', () => {
-  let eid = stillborn({ role: uid(), latest_seq: 1 })
+  let role = uid()
+  apply(db, [{ eid: role, name: 'role', comp: { state: 'stopped' } }])
+  let eid = stillborn({ role, latest_seq: 1 })
   watched(cast)(eid, { pid: ghostPid })
   assert(finishedAt(eid), 'the ending is stamped')
   assertEquals(broke(eid), undefined, 'seq 1 means it ran — no break')

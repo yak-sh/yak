@@ -148,7 +148,8 @@ let world = () => {
   // will not take them off the wire — an arrived letter is minted by the edge.
   // Land the inbound mark straight on the row, the way inbound.ts does.
   db.prepare(
-    'update mail set message_id = ?, to_addr = ?, received_at = ? where eid = ?',
+    `update mail set message_id = ?, to_addr = ?, received_at = ?
+     where entity = (select id from entity where eid = ?)`,
   ).run('mid-1', 'v@fleet', '2026-01-04T00:00:00Z', Min)
   return db
 }

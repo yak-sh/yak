@@ -25,6 +25,8 @@ Deno.env.set('DB_PATH', ':memory:')
 let { apply, delta, numbered, open, snapshot } = await import('./db.ts')
 let { freshDb } = await import('./testdb.ts')
 
+let OWNED = `entity = (select id from entity where eid = ?)`
+
 let session = (db: ReturnType<typeof open>, id = uuid()) => {
   let eid = uuid()
   apply(db, [{ eid, name: 'session', comp: { id } }])
@@ -121,7 +123,7 @@ Deno.test('lease and usage facets are server-owned and one runner wins', () => {
     { eid: generation, name: 'usage', comp: {} },
   ])
   assertEquals(
-    db.prepare('select 1 from lease where eid = ?').get(generation),
+    db.prepare(`select 1 from lease where ${OWNED}`).get(generation),
     undefined,
   )
   assertEquals(readyEntries(db, sid).map((e) => e.eid), [generation])
@@ -525,10 +527,22 @@ Deno.test('a spine-less entry row reads as inert comps, not a throw', () => {
   // shape directly with the constraint off — the corruption, not its cause.
   let ghost = uuid()
   db.exec('pragma foreign_keys = off')
-  db.prepare('insert into entry (eid, session, seq) values (?, ?, ?)')
-    .run(ghost, sid, 99)
-  db.prepare('insert into content (eid, body) values (?, ?)')
-    .run(ghost, 'orphaned tail')
+  // Give ghost a spine to obtain its integer id, wire entry+content to it, then
+  // drop the spine — the partial-ingest shape under the id-keyed schema: an
+  // `entry`(+`content`) whose entity spine no longer exists.
+  db.prepare('insert into entity (eid) values (?)').run(ghost)
+  let ghostId =
+    (db.prepare('select id from entity where eid = ?').get(ghost) as {
+      id: number
+    }).id
+  let sidId = (db.prepare('select id from entity where eid = ?').get(sid) as {
+    id: number
+  }).id
+  db.prepare('insert into entry (entity, session, seq) values (?, ?, ?)')
+    .run(ghostId, sidId, 99)
+  db.prepare('insert into content (entity, body) values (?, ?)')
+    .run(ghostId, 'orphaned tail')
+  db.prepare('delete from entity where id = ?').run(ghostId)
   db.exec('pragma foreign_keys = on')
 
   let rows = readEntries(db, sid)

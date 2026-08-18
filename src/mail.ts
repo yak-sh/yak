@@ -18,6 +18,7 @@ import { dispatch, trace } from './effects.ts'
 import { type Letter, logOut, native, send } from './mailer.ts'
 import { atFleet, canon, fleetAddress, fleetLocal } from './mailaddr.ts'
 import { type Change } from './types.ts'
+import { isRef } from './props.ts'
 import { entityUrl } from './url.ts'
 
 type Cast = (changes: Change[]) => void
@@ -49,8 +50,14 @@ let settle = (
   flying.delete(eid)
   let cols = Object.keys(data)
   if (cols.length) {
+    // A reference column stores the target's int id, not its eid — so translate
+    // any ref value eid→id in the bind, exactly as apply() does on the wire path.
+    // Without this the raw update lands an eid TEXT in an INTEGER ref column and
+    // the row never resolves (readComp's spine join can't match id against text).
     db.prepare(
-      `update mail set ${cols.map((c) => `"${c}" = ?`).join(', ')}
+      `update mail set ${
+        cols.map((c) => `"${c}" = ${isRef('mail', c) ? idOf : '?'}`).join(', ')
+      }
        where ${OWNED}`,
     ).run(...cols.map((c) => data[c]), eid)
     let row = readComp(db, eid, 'mail')

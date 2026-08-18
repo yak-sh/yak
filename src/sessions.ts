@@ -84,6 +84,16 @@ import {
 type Cast = (changes: Change[]) => void
 type Row = Record<string, unknown>
 
+// The eid→id storage seam (D-18866): component and edge tables key by the
+// owner's integer `entity` id and store references as int ids, while the code
+// here speaks EIDs. These fragments bridge the two in raw SQL: OWNED filters a
+// component table by its owner eid, idOf turns a bound eid into the stored id,
+// and refEid projects a reference column's stored id back to its eid for code
+// that reads it as one.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
+
 // Dirs are read per call, not at import: tests point them at a temp dir.
 export let logsDir = () => Deno.env.get('LOGS_DIR') ?? home('logs')
 let home = (d: string) => `${Deno.env.get('HOME')}/.tasks/${d}`
@@ -321,10 +331,10 @@ export let maintainStanding = (eid: string, cast: Cast) => {
 let pendingWake = (eid: string) =>
   !!db.prepare(
     `select 1 from deliver d
-       join wake w on w.eid = d.eid
-       left join delivered v on v.eid = d.eid
-       left join error x on x.eid = d.eid
-     where d."to" = ? and v.eid is null and x.eid is null
+       join wake w on w.entity = d.entity
+       left join delivered v on v.entity = d.entity
+       left join error x on x.entity = d.entity
+     where d."to" = ${idOf} and v.entity is null and x.entity is null
      limit 1`,
   ).get(eid)
 
@@ -373,7 +383,9 @@ export let maintainStandingFor = (changes: Change[], cast: Cast) => {
   }
   if (!eids.size && !sessions.size) return
   for (let eid of eids) {
-    let row = db.prepare('select session from entry where eid = ?').get(eid) as
+    let row = db.prepare(
+      `select ${refEid('session')} as session from entry where ${OWNED}`,
+    ).get(eid) as
       | { session: string }
       | undefined
     if (row?.session) sessions.add(row.session)
@@ -451,11 +463,13 @@ let report = (
 ): Change[] => {
   let task = String(row.requested_task ?? '')
   let spawner = db.prepare(`
-    select s.eid from created c join session s on s.eid = c.via
-    where c.eid = ?
+    select o.eid as eid from created c
+    join session s on s.entity = c.via
+    join entity o on o.id = s.entity
+    where c.entity = ${idOf}
   `).get(eid) as { eid: string } | undefined
   let targets = new Set<string>()
-  if (task && db.prepare('select 1 from task where eid = ?').get(task)) {
+  if (task && db.prepare(`select 1 from task where ${OWNED}`).get(task)) {
     targets.add(task)
   }
   if (spawner && spawner.eid != eid) targets.add(spawner.eid)
@@ -595,7 +609,7 @@ export let tidy = async (cast: Cast) => {
 let repoOf = (row: Row) =>
   db.prepare(
     `select r.path, r.base_branch from repo r
-     join task t on t.project = r.eid where t.eid = ?`,
+     join task t on t.project = r.entity where t.entity = ${idOf}`,
   ).get(String(row.requested_task)) as
     | { path: string; base_branch: string }
     | undefined
@@ -638,7 +652,7 @@ let commitShas = (row: Row): string[] => {
 }
 
 let failureOf = (row: Row) =>
-  (db.prepare('select message from error where eid = ?')
+  (db.prepare(`select message from error where ${OWNED}`)
     .get(String(row.eid)) as { message: string | null } | undefined)?.message ??
     ''
 
@@ -768,7 +782,11 @@ export let recoverWorktree = async (
   eid: string,
   cast: Cast,
 ): Promise<{ cwd: string; branch: string } | undefined> => {
-  let row = db.prepare('select * from session where eid = ?').get(eid) as
+  let row = db.prepare(
+    `select o.eid as eid, s.cwd as cwd,
+            ${refEid('s.requested_task')} as requested_task
+     from session s join entity o on o.id = s.entity where s.${OWNED}`,
+  ).get(eid) as
     | Row
     | undefined
   if (!row?.cwd || directory(row.cwd)) return
@@ -1186,9 +1204,9 @@ let lastHeard = (eid: string) =>
       coalesce(s.started_at, ''), coalesce(u.at, ''), coalesce(c.at, '')
     ) as at
     from session s
-    left join updated u on u.eid = s.eid
-    left join created c on c.eid = s.eid
-    where s.eid = ?
+    left join updated u on u.entity = s.entity
+    left join created c on c.entity = s.entity
+    where s.${OWNED}
   `).get(eid) as { at: string } | undefined)?.at || now()
 
 // A between-turns lull is not an ending. Codex's provider process is
@@ -1201,7 +1219,7 @@ let lastHeard = (eid: string) =>
 // (T-16360). The log-native path (D-15656) removes the guess by deriving
 // state from a seq-ordered entry log.
 let betweenTurns = (eid: string) => {
-  let s = db.prepare('select provider, turn from session where eid = ?')
+  let s = db.prepare(`select provider, turn from session where ${OWNED}`)
     .get(eid) as { provider: string | null; turn: string | null } | undefined
   return s?.provider == 'codex' && s.turn == 'idle'
 }
@@ -1233,7 +1251,7 @@ let stillbornPatch = (
   if (seq) return {} // it produced a turn — a real run, not a stillbirth
   let s = storedSession(db, eid)
   if (!s || !(s.role || s.operator)) return {} // free interactive — a normal close
-  if (db.prepare('select 1 from delivered where eid = ?').get(eid)) return {}
+  if (db.prepare(`select 1 from delivered where ${OWNED}`).get(eid)) return {}
   return { exception: { message: STILLBORN } }
 }
 
@@ -1625,8 +1643,9 @@ claim or create a task unless asked.`
 let runRow = (eid: string) => {
   let row = db.prepare(
     `select s.*, p.provider as spawn_provider, p.model as spawn_model,
-            p.effort as spawn_effort, p.persona as spawn_persona
-     from session s left join spawn p on p.eid = s.eid where s.eid = ?`,
+            p.effort as spawn_effort, ${refEid('p.persona')} as spawn_persona
+     from session s left join spawn p on p.entity = s.entity
+     where s.${OWNED}`,
   ).get(eid) as Row | undefined
   let session = storedSession(db, eid)
   return row && session ? { ...row, ...session } : row
@@ -1651,7 +1670,9 @@ export let landSpawnClaim = (
         change.comp?.session == session
       )
     let held = target
-      ? db.prepare('select session from claim where eid = ?').get(target) as
+      ? db.prepare(
+        `select ${refEid('session')} as session from claim where ${OWNED}`,
+      ).get(target) as
         | { session: string }
         | undefined
       : undefined
@@ -1667,15 +1688,15 @@ export let codexPending = `
   status is null and pid is null
   and (requested_task is not null or role is not null)
   and exists (
-    select 1 from spawn where spawn.eid = session.eid
+    select 1 from spawn where spawn.entity = session.entity
       and spawn.provider in ('codex', 'codex-cli', 'ollama')
   )
-  and not exists (select 1 from error where error.eid = session.eid)
+  and not exists (select 1 from error where error.entity = session.entity)
   and (
     base_revision is null
     or not exists (
-      select 1 from entry e where e.session = session.eid
-        and not exists (select 1 from imported i where i.eid = e.eid)
+      select 1 from entry e where e.session = session.entity
+        and not exists (select 1 from imported i where i.entity = e.entity)
     )
   )`
 
@@ -1722,10 +1743,11 @@ export let spawned =
     }
     let task = row.requested_task
       ? db.prepare(`
-      select t.project, e.num, d.title, d.body from task t
-      join entity e on e.eid = t.eid
-      left join doc d on d.eid = t.eid
-      where t.eid = ?
+      select ${refEid('t.project')} as project, e.num, d.title, d.body
+      from task t
+      join entity e on e.id = t.entity
+      left join doc d on d.entity = t.entity
+      where t.${OWNED}
     `).get(String(row.requested_task)) as
         | {
           project: string | null
@@ -1737,10 +1759,11 @@ export let spawned =
       : undefined
     let role = row.role
       ? db.prepare(`
-        select r.scope, e.num, d.title, d.body from role r
-        join entity e on e.eid = r.eid
-        left join doc d on d.eid = r.eid
-        where r.eid = ?
+        select ${refEid('r.scope')} as scope, e.num, d.title, d.body
+        from role r
+        join entity e on e.id = r.entity
+        left join doc d on d.entity = r.entity
+        where r.${OWNED}
       `).get(String(row.role)) as
         | { scope: string | null; num: number; title: string; body: string }
         | undefined
@@ -1765,7 +1788,7 @@ export let spawned =
     // or role's project says which checkout. A graph-native no-code run is the
     // one worktree-less composition; process providers still need a checkout.
     let repo = project
-      ? db.prepare('select path, base_branch from repo where eid = ?')
+      ? db.prepare(`select path, base_branch from repo where ${OWNED}`)
         .get(project) as
           | { path: string; base_branch: string }
           | undefined
@@ -1817,7 +1840,7 @@ export let spawned =
         worn,
         !task && !role ? CHAT : repo ? undefined : NO_CODE,
         !task && !role
-          ? (db.prepare('select body from doc where eid = ?').get(eid) as
+          ? (db.prepare(`select body from doc where ${OWNED}`).get(eid) as
             | { body: string }
             | undefined)?.body
           : undefined,
@@ -2107,10 +2130,10 @@ export let stopped =
     let stop_requested_at = now()
     let hit = db.prepare(`
       update session set status = 'stopping', stop_requested_at = ?
-      where eid = ? and status in ('starting', 'running')
+      where ${OWNED} and status in ('starting', 'running')
     `).run(stop_requested_at, target).changes
     if (!hit) {
-      let s = db.prepare('select status from session where eid = ?')
+      let s = db.prepare(`select status from session where ${OWNED}`)
         .get(target) as { status: string | null } | undefined
       if (!sessionActive.includes(String(s?.status))) return acted()
     } else {
@@ -2191,12 +2214,13 @@ let refuse = (eid: string, why: string, cast: Cast) => {
 // session reads its backlog in the order it was said.
 let unheard = (eid: string) =>
   db.prepare(
-    `select c.eid, d.body from comment c
-     join doc d on d.eid = c.eid
-     join created b on b.eid = c.eid
-     left join notified n on n.eid = c.eid
-     where c.target = ? and n.eid is null
-       and b.via is not ? and trim(d.body) != ''
+    `select o.eid as eid, d.body from comment c
+     join entity o on o.id = c.entity
+     join doc d on d.entity = c.entity
+     join created b on b.entity = c.entity
+     left join notified n on n.entity = c.entity
+     where c.target = ${idOf} and n.entity is null
+       and b.via is not ${idOf} and trim(d.body) != ''
      order by b.at`,
   ).all(eid, eid) as { eid: string; body: string }[]
 
@@ -2424,7 +2448,9 @@ export let commented =
     // managed session whose transcript was ingested still steers/resumes
     // through this process door. graphSession excludes imported.
     if (graphSession(db, eid)) return
-    let stamp = db.prepare('select via from created where eid = ?').get(
+    let stamp = db.prepare(
+      `select ${refEid('via')} as via from created where ${OWNED}`,
+    ).get(
       ceid,
     ) as { via: string | null } | undefined
     if (stamp?.via == eid) return // the session talking about itself

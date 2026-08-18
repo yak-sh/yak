@@ -31,6 +31,12 @@ let {
 let uid = () => crypto.randomUUID()
 let now = () => new Date().toISOString()
 
+// Component/edge tables are id-keyed (entity int → entity(id)); the spine keeps
+// text eid. OWNED locates a component row by its owner eid; idOf resolves an eid
+// to the internal id a reference column now stores.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+
 // A no-op collector: fileBug's apply() has already persisted before cast, so a
 // test only needs to swallow the broadcast.
 let casts: Change[][] = []
@@ -45,7 +51,10 @@ let session = () => {
   return eid
 }
 let bugsFor = (key: string) =>
-  db.prepare('select * from bug where fault = ?').all(key) as {
+  db.prepare(
+    `select o.eid as eid, b.hits as hits from bug b
+     join entity o on o.id = b.entity where b.fault = ?`,
+  ).all(key) as {
     eid: string
     hits: number
   }[]
@@ -61,17 +70,17 @@ Deno.test('a single break files one keyed, pointed, open ticket', () => {
   assertEquals(mine.length, 1)
   assertEquals(mine[0].hits, 1)
 
-  let task = db.prepare('select status, priority from task where eid = ?')
+  let task = db.prepare(`select status, priority from task where ${OWNED}`)
     .get(mine[0].eid) as { status: string; priority: number }
   assertEquals(task.status, 'open')
   assertEquals(task.priority, 1) // "cannot" reads fatal → jumps the queue
 
   // the pointer: an about edge to the broken entity, and its id in the body
   let edge = db.prepare(
-    `select 1 from dependency where parent = ? and type = 'about' and child = ?`,
+    `select 1 from dependency where parent = ${idOf} and type = 'about' and child = ${idOf}`,
   ).get(mine[0].eid, eid)
   assert(edge, 'bug points at the broken entity')
-  let body = (db.prepare('select body from doc where eid = ?')
+  let body = (db.prepare(`select body from doc where ${OWNED}`)
     .get(mine[0].eid) as { body: string }).body
   assert(body.includes(msg), 'body carries the message')
 })
@@ -100,7 +109,7 @@ Deno.test('a storm — identical and volatile-differing — files ONE ticket', (
   assertEquals(mine[0].hits, 2 * N) // the recurrence tally
 
   // the footer records the recurrence, refreshed in place (one line, not 2N)
-  let body = (db.prepare('select body from doc where eid = ?')
+  let body = (db.prepare(`select body from doc where ${OWNED}`)
     .get(mine[0].eid) as { body: string }).body
   assertEquals(body.match(/recurred/g)?.length, 1)
   assert(body.includes(`recurred ${2 * N}×`))
@@ -136,7 +145,7 @@ Deno.test('a recovered break files nothing (the tri-state guard)', () => {
   let e1 = session()
   let m1 = 'transient-looking but cleared before heal'
   exceptionChange(e1, m1)
-  db.prepare('delete from exception where eid = ?').run(e1) // recovery clears it
+  db.prepare(`delete from exception where ${OWNED}`).run(e1) // recovery clears it
   file(e1, {})
   assertEquals(bugsFor(faultKey('session', m1, null)).length, 0)
 
@@ -156,8 +165,10 @@ Deno.test('the boot sweep re-drives only unfiled breaks', () => {
   let raw = session()
   exceptionChange(raw, 'swept but never filed') // no file()
 
-  let pending = (db.prepare(`select eid from exception where ${HEAL_PENDING}`)
-    .all() as { eid: string }[]).map((r) => r.eid)
+  let pending = (db.prepare(
+    `select o.eid as eid from exception join entity o on o.id = exception.entity
+     where ${HEAL_PENDING}`,
+  ).all() as { eid: string }[]).map((r) => r.eid)
   assert(!pending.includes(filed), 'a filed break drops out of the sweep')
   assert(pending.includes(raw), 'an unfiled break stays pending')
 })
@@ -181,7 +192,7 @@ Deno.test('a throwing effect never rolls back the break that carried it', () => 
   // excepted() commits the exception row, THEN dispatches — a handler that
   // throws is isolated into telemetry, so it returns normally either way.
   excepted(eid, msg, null, cast)
-  let row = db.prepare('select message from exception where eid = ?')
+  let row = db.prepare(`select message from exception where ${OWNED}`)
     .get(eid) as { message: string } | undefined
   assert(row?.message === msg, 'the break persisted despite the throw')
 })
@@ -207,8 +218,9 @@ Deno.test('faultKey folds the stack head and strips volatile bits', () => {
 // a guardrail suppressed the spawn.
 let fixersFor = (bug: string) =>
   db.prepare(
-    `select s.eid as eid from session s join fixer f on f.eid = s.eid
-     where s.requested_task = ?`,
+    `select o.eid as eid from session s join fixer f on f.entity = s.entity
+     join entity o on o.id = s.entity
+     where s.requested_task = ${idOf}`,
   ).all(bug) as { eid: string }[]
 
 // A minimal OPEN bug ticket carrying a fault key — the spawn's subject.
@@ -234,7 +246,7 @@ let makeFixer = (bug: string, status = 'running') => {
     { eid, name: 'session', comp: { id: uid(), requested_task: bug } },
     { eid, name: 'fixer', comp: {} },
   ])
-  db.prepare('update session set status = ? where eid = ?').run(status, eid)
+  db.prepare(`update session set status = ? where ${OWNED}`).run(status, eid)
   return eid
 }
 
@@ -271,14 +283,17 @@ Deno.test('a new break files a ticket AND mints exactly one fixer', () => {
   file(eid, {})
 
   let key = faultKey('session', msg, null)
-  let bug = (db.prepare('select eid from bug where fault = ?').get(key) as {
+  let bug = (db.prepare(
+    `select o.eid as eid from bug b join entity o on o.id = b.entity
+     where b.fault = ?`,
+  ).get(key) as {
     eid: string
   }).eid
   let fixers = fixersFor(bug)
   assertEquals(fixers.length, 1) // exactly one, not zero and not many
 
   // it is a managed fixer running the configured provider (fake here)
-  let sp = db.prepare('select provider, model from spawn where eid = ?')
+  let sp = db.prepare(`select provider, model from spawn where ${OWNED}`)
     .get(fixers[0].eid) as { provider: string; model: string }
   assertEquals(sp.provider, 'fake')
   assertEquals(sp.model, 'fake-fast')
@@ -293,7 +308,10 @@ Deno.test('a storm files ONE ticket and mints ONE fixer', () => {
     file(e, {})
   }
   let key = faultKey('session', line(0), null)
-  let bugs = db.prepare('select eid from bug where fault = ?').all(key) as {
+  let bugs = db.prepare(
+    `select o.eid as eid from bug b join entity o on o.id = b.entity
+     where b.fault = ?`,
+  ).all(key) as {
     eid: string
   }[]
   assertEquals(bugs.length, 1) // dedup: one ticket
@@ -312,7 +330,10 @@ Deno.test('at the concurrency cap the ticket files but no fixer spawns', () => {
   file(eid, {})
 
   let key = faultKey('session', msg, null)
-  let bug = (db.prepare('select eid from bug where fault = ?').get(key) as {
+  let bug = (db.prepare(
+    `select o.eid as eid from bug b join entity o on o.id = b.entity
+     where b.fault = ?`,
+  ).get(key) as {
     eid: string
   }).eid
   assert(bug, 'the ticket still files at the cap')
@@ -322,7 +343,7 @@ Deno.test('at the concurrency cap the ticket files but no fixer spawns', () => {
 Deno.test('a per-venture mute suppresses the spawn, ticket still files', () => {
   reset()
   let project = makeProject()
-  db.prepare('insert into nofix (eid) values (?)').run(project)
+  db.prepare(`insert into nofix (entity) values (${idOf})`).run(project)
   assertEquals(fixerBlocked(project, 'k'), 'muted')
 
   let bug = makeBug('venture-muted-key', project)
@@ -333,7 +354,7 @@ Deno.test('a per-venture mute suppresses the spawn, ticket still files', () => {
 Deno.test('a global mute (nofix on P-19) suppresses every venture', () => {
   reset()
   let hp = makeProject(19) // the self-healing home
-  db.prepare('insert into nofix (eid) values (?)').run(hp)
+  db.prepare(`insert into nofix (entity) values (${idOf})`).run(hp)
   let other = makeProject()
   assertEquals(fixerBlocked(other, 'k'), 'muted') // a different venture too
 
@@ -353,7 +374,7 @@ Deno.test('a per-fault cooldown suppresses a re-spawn for the same key', () => {
   assertEquals(fixerBlocked(undefined, 'a-cold-key'), null)
 
   // the fault recurs after its ticket closed: a new ticket, but no new fixer
-  db.prepare("update task set status = 'done' where eid = ?").run(bug1)
+  db.prepare(`update task set status = 'done' where ${OWNED}`).run(bug1)
   let bug2 = makeBug(key)
   ensureFixer(cast)(bug2)
   assertEquals(fixersFor(bug2).length, 0)
@@ -373,10 +394,12 @@ Deno.test('the boot sweep re-drives only open, un-spawned tickets', () => {
   let spawned = makeBug('sweep-spawned')
   makeFixer(spawned) // already has a fixer
   let closed = makeBug('sweep-closed')
-  db.prepare("update task set status = 'cancelled' where eid = ?").run(closed)
+  db.prepare(`update task set status = 'cancelled' where ${OWNED}`).run(closed)
 
-  let pending = (db.prepare(`select eid from bug where ${FIXER_PENDING}`)
-    .all() as { eid: string }[]).map((r) => r.eid)
+  let pending = (db.prepare(
+    `select o.eid as eid from bug join entity o on o.id = bug.entity
+     where ${FIXER_PENDING}`,
+  ).all() as { eid: string }[]).map((r) => r.eid)
   assert(pending.includes(unspawned), 'an un-spawned open bug is pending')
   assert(!pending.includes(spawned), 'a bug with a fixer drops out')
   assert(!pending.includes(closed), 'a closed bug drops out')
