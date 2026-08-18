@@ -30,7 +30,21 @@ let native = Deno.dlopen(path, {
   sqlite3_malloc64: { parameters: ['u64'], result: 'pointer' },
   sqlite3_free: { parameters: ['pointer'], result: 'void' },
   sqlite3_extended_errcode: { parameters: ['pointer'], result: 'i32' },
+  sqlite3_reset: { parameters: ['pointer'], result: 'i32' },
 })
+
+// node:sqlite's driver steps a statement and only resets it AFTER, so a step
+// that returns SQLITE_BUSY throws before the reset ever runs and leaves the
+// statement in progress on the connection — enough that a later COMMIT on the
+// same handle fails with "cannot commit transaction - SQL statements in
+// progress". Reset the failed statement ourselves so the wrapper always keeps
+// db.ts's stated invariant — every use steps to completion and resets — even on
+// error, for prep()'s cached statements and throwaway ones alike. Reset ignores
+// its own return (it repeats the step's error code); it clears the VM either way.
+let reset = (statement: DriverStatement) => {
+  let handle = statement.unsafeHandle
+  if (handle) native.symbols.sqlite3_reset(handle)
+}
 
 let MAIN = new TextEncoder().encode('main\0')
 let bytesAt = (pointer: Deno.PointerObject, size: number) =>
@@ -58,7 +72,7 @@ export class StatementSync {
     try {
       return this.#statement.get<T>(...args)
     } catch (error) {
-      throw this.#db.error(error)
+      throw this.#failed(error)
     }
   }
 
@@ -66,7 +80,7 @@ export class StatementSync {
     try {
       return this.#statement.all<T>(...args)
     } catch (error) {
-      throw this.#db.error(error)
+      throw this.#failed(error)
     }
   }
 
@@ -75,8 +89,16 @@ export class StatementSync {
       let changes = this.#statement.run(...args)
       return { changes, lastInsertRowid: this.#db.lastInsertRowId }
     } catch (error) {
-      throw this.#db.error(error)
+      throw this.#failed(error)
     }
+  }
+
+  // A failed step leaves the statement in progress (see reset() above); reset it
+  // before surfacing the error so the connection is left clean for a later
+  // commit, then hand back the errcode-tagged error.
+  #failed(error: unknown) {
+    reset(this.#statement)
+    return this.#db.error(error)
   }
 }
 
