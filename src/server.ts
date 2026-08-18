@@ -155,6 +155,7 @@ import {
 } from './roles.ts'
 import { prune as pruneTree, reap as reapProbes, sweep } from './probes.ts'
 import { loadPlugins, pluginSpecifiers } from './plugins.ts'
+import { repeat, stop as stopTimers } from './timers.ts'
 
 // The last line of defence. A rejection nobody handled ends a Deno process,
 // and this process dying costs every operator (T-11139) — so an escaped one
@@ -1901,7 +1902,7 @@ let tick = (name: string, sweep: () => unknown, ms: number, boot = true) => {
     }
   }
   if (boot) run()
-  setInterval(run, ms)
+  repeat(run, ms)
   return run
 }
 
@@ -1929,7 +1930,7 @@ tick('native', () => nativeSweep(cast), 2_000)
 // one watching; the flag is what makes turning it on a decision.
 if (mayStamp() && Deno.env.get('TASKS_SWEEP') == '1') {
   let repo = Deno.cwd()
-  setInterval(async () => {
+  repeat(async () => {
     try {
       let sessions = db.prepare('select eid, id, cwd, pid from session')
         .all() as {
@@ -2141,6 +2142,12 @@ let draining = false
 let drain = async () => {
   if (draining) return
   draining = true
+  // Silence the recurring reconcilers FIRST — before any await below. We have
+  // decided to cede the port, so no sweep may fire another write while drain
+  // settles in-flight work: past this synchronous line the event loop hands no
+  // interval another turn, so a hung drain can no longer leak stale-code writes
+  // at the live db (T-19494).
+  stopTimers()
   for (let c of clients) c.close(1012, 'server restart')
   await http.shutdown()
   // Let in-flight graph-native generations/calls finish and settle before we
