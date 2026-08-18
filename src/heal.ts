@@ -14,7 +14,7 @@
 // between the stamp and here heals at the next boot. Both paths run the SAME
 // handler, and the handler re-reads the graph, so it is idempotent: dedup and
 // the tri-state recovery check hold whoever calls it.
-import { apply, db, human, snapshot } from './db.ts'
+import { apply, db, human, readComp, snapshot } from './db.ts'
 import { type Change, kindOf, sessionActive } from './types.ts'
 import { rows, spawnChanges } from './client.ts'
 import { dispatch, trace } from './effects.ts'
@@ -22,6 +22,14 @@ import { record as telemetry } from './telemetry.ts'
 
 type Cast = (changes: Change[]) => void
 let now = () => new Date().toISOString()
+
+// The eid→id storage seam (D-18866): component tables key by the owner int id
+// and store refs as int ids; this module speaks EIDs. OWNED matches a row by
+// owner eid, idOf resolves a ref filter's eid operand, refEid projects a stored
+// ref id back to its eid on read. Sibling joins move to the int owner key.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
 
 // The volatile tokens a storm varies while the fault stays the same: uuids,
 // human ids (T-3, S-45), iso timestamps, absolute paths, :line:col, hex blobs,
@@ -106,9 +114,7 @@ let has = (eid: string): Record<string, Record<string, unknown>> => {
       'comment',
     ]
   ) {
-    let row = db.prepare(`select * from ${name} where eid = ?`).get(eid) as
-      | Record<string, unknown>
-      | undefined
+    let row = readComp(db, eid, name) as Record<string, unknown> | undefined
     if (row) out[name] = row
   }
   return out
@@ -121,8 +127,8 @@ let has = (eid: string): Record<string, Record<string, unknown>> => {
 // project, which is legal.
 let home = (): string | undefined =>
   (db.prepare(
-    `select p.eid as eid from project p
-     join entity e on e.eid = p.eid where e.num = 19`,
+    `select e.eid as eid from project p
+     join entity e on e.id = p.entity where e.num = 19`,
   ).get() as { eid: string } | undefined)?.eid
 
 // Where the bug belongs: the broken entity's own project, else the project of
@@ -133,7 +139,9 @@ let projectFor = (comps: Record<string, Record<string, unknown>>) => {
   if (p) return p
   let req = comps.session?.requested_task as string | undefined
   if (req) {
-    let t = db.prepare('select project from task where eid = ?').get(req) as
+    let t = db.prepare(
+      `select ${refEid('project')} as project from task where ${OWNED}`,
+    ).get(req) as
       | { project?: string }
       | undefined
     if (t?.project) return t.project
@@ -163,8 +171,11 @@ let footer = (body: string, count: number, at: string) => {
 // buys, so dedup is a lookup and never a scan.
 let openBug = (key: string) =>
   db.prepare(
-    `select b.eid as eid, b.hits as hits, d.body as body
-     from bug b join task t on t.eid = b.eid join doc d on d.eid = b.eid
+    `select o.eid as eid, b.hits as hits, d.body as body
+     from bug b
+     join entity o on o.id = b.entity
+     join task t on t.entity = b.entity
+     join doc d on d.entity = b.entity
      where b.fault = ? and t.status in ('open', 'wip') limit 1`,
   ).get(key) as { eid: string; hits: number; body: string } | undefined
 
@@ -203,7 +214,7 @@ export let FIXER_COOLDOWN_MS = 30 * 60 * 1000
 // Auto-spawn muted for this scope? `nofix` on the bug's project mutes that
 // venture; `nofix` on the self-healing home (P-19) is the global switch.
 let hasNofix = (eid: string) =>
-  !!db.prepare('select 1 from nofix where eid = ?').get(eid)
+  !!db.prepare(`select 1 from nofix where ${OWNED}`).get(eid)
 let muted = (project?: string): boolean => {
   let h = home()
   if (h && hasNofix(h)) return true // global
@@ -214,7 +225,7 @@ let muted = (project?: string): boolean => {
 // or finished fixer has freed its slot, so it does not count against the cap.
 let activeFixers = (): number =>
   (db.prepare(
-    `select count(*) as n from fixer f join session s on s.eid = f.eid
+    `select count(*) as n from fixer f join session s on s.entity = f.entity
      where s.status in (${sessionActive.map(() => '?').join(',')})`,
   ).get(...sessionActive) as { n: number }).n
 
@@ -224,9 +235,9 @@ let activeFixers = (): number =>
 let coolingDown = (key: string): boolean =>
   !!db.prepare(
     `select 1 from fixer f
-       join session s on s.eid = f.eid
-       join bug b on b.eid = s.requested_task
-       join created c on c.eid = f.eid
+       join session s on s.entity = f.entity
+       join bug b on b.entity = s.requested_task
+       join created c on c.entity = f.entity
      where b.fault = ? and c.at >= ? limit 1`,
   ).get(key, new Date(Date.now() - FIXER_COOLDOWN_MS).toISOString())
 
@@ -250,8 +261,8 @@ export let fixerBlocked = (
 // a second, whatever became of the first.
 let hasFixer = (bug: string): boolean =>
   !!db.prepare(
-    `select 1 from fixer f join session s on s.eid = f.eid
-     where s.requested_task = ? limit 1`,
+    `select 1 from fixer f join session s on s.entity = f.entity
+     where s.requested_task = ${idOf} limit 1`,
   ).get(bug)
 
 // Mint one managed fixer session aimed at a bug ticket, if the guardrails
@@ -264,8 +275,9 @@ let hasFixer = (bug: string): boolean =>
 export let ensureFixer =
   (cast: Cast) => (bug: string, _comp?: Record<string, unknown>) => {
     let task = db.prepare(
-      `select t.project as project, t.status as status, b.fault as fault
-       from task t join bug b on b.eid = t.eid where t.eid = ?`,
+      `select ${refEid('t.project')} as project, t.status as status,
+              b.fault as fault
+       from task t join bug b on b.entity = t.entity where t.${OWNED}`,
     ).get(bug) as
       | { project: string | null; status: string; fault: string | null }
       | undefined
@@ -308,9 +320,9 @@ export let ensureFixer =
 // doubles one that launched. This is the reconcile that eventually spawns a
 // bug the cap or a mute suppressed live, once the pressure clears.
 export let FIXER_PENDING = `exists (select 1 from task t
-     where t.eid = bug.eid and t.status in ('open', 'wip'))
-   and not exists (select 1 from session s join fixer f on f.eid = s.eid
-     where s.requested_task = bug.eid)`
+     where t.entity = bug.entity and t.status in ('open', 'wip'))
+   and not exists (select 1 from session s join fixer f on f.entity = s.entity
+     where s.requested_task = bug.entity)`
 
 // The created() handler, curried over cast like every effect. Re-reads the
 // graph each call: if the exception was already cleared (healed) or the
@@ -321,10 +333,12 @@ export let fileBug =
   (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
     // Recovery wins over the stamp: a break cleared before this ran, or a
     // deliverable that also succeeded, is resolved — do not file it.
-    let live = db.prepare('select message, stack from exception where eid = ?')
+    let live = db.prepare(
+      `select message, stack from exception where ${OWNED}`,
+    )
       .get(eid) as { message: string | null; stack: string | null } | undefined
     if (!live) return
-    if (db.prepare('select 1 from delivered where eid = ?').get(eid)) return
+    if (db.prepare(`select 1 from delivered where ${OWNED}`).get(eid)) return
 
     let message = String(live.message ?? comp.message ?? '').trim()
     if (!message) return
@@ -388,5 +402,5 @@ export let fileBug =
 // re-drive — the handler dedups by key regardless — so this only spares the
 // already-ticketed from a needless re-check.
 export let HEAL_PENDING =
-  `not exists (select 1 from dependency d join bug b on b.eid = d.parent
-     where d.type = 'about' and d.child = exception.eid)`
+  `not exists (select 1 from dependency d join bug b on b.entity = d.parent
+     where d.type = 'about' and d.child = exception.entity)`

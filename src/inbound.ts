@@ -9,12 +9,22 @@
 // here. Everything lands as DATA: unverified mail arrives verbatim with
 // its verdict on the row; nothing executes on content. SERVER-ONLY
 // (imports db).
-import { apply, db } from './db.ts'
+import { apply, db, readComp } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { named, rfcId } from './mail.ts'
 import { canon, fleetAddress } from './mailaddr.ts'
 import { record } from './telemetry.ts'
 import { type Change, uuid } from './types.ts'
+import { isRef } from './props.ts'
+
+// The eid→id storage seam (D-18866): component tables key by the owner int id
+// and store refs as int ids; this module speaks EIDs. OWNED matches a row by
+// owner eid, refEid projects a stored ref id back to its eid on read, and a
+// write binds a reference column through bindOf (its eid resolved to an id).
+let OWNED = `entity = (select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
+let bindOf = (comp: string, col: string) =>
+  isRef(comp, col) ? `(select id from entity where eid = ?)` : '?'
 
 type Cast = (changes: Change[]) => void
 type Row = Record<string, string | number | null>
@@ -142,9 +152,9 @@ export let mailIdOf = (ref: string): { message_id: string | null } | null => {
   let row = m
     ? db.prepare(
       `select m.message_id from mail m
-       join entity e on e.eid = m.eid where e.num = ?`,
+       join entity e on e.id = m.entity where e.num = ?`,
     ).get(+m[1])
-    : db.prepare('select message_id from mail where eid = ?').get(ref)
+    : db.prepare(`select message_id from mail where ${OWNED}`).get(ref)
   return (row ?? null) as { message_id: string | null } | null
 }
 
@@ -166,7 +176,10 @@ export let fleetRaw = (path: string): Promise<Response> | null => {
 // rather than to whatever the routing fallback would have picked (T-9934).
 export let wearer = (addr: string | null | undefined): string | null =>
   (addr
-    ? db.prepare('select eid from email where address = ? collate nocase')
+    ? db.prepare(
+      `select o.eid as eid from email join entity o on o.id = email.entity
+       where address = ? collate nocase`,
+    )
       .get(String(addr)) as { eid: string } | undefined
     : undefined)?.eid ?? null
 
@@ -180,7 +193,7 @@ export let routeTo = (addr: string | null | undefined): string | null => {
   let hit = wearer(addr) ?? (addr ? named(String(addr)) : null)
   if (hit) return hit
   let fallback = db.prepare(
-    'select e.eid from entity e join project p on p.eid = e.eid where e.num = 20',
+    'select e.eid from entity e join project p on p.entity = e.id where e.num = 20',
   ).get() as { eid: string } | undefined
   return fallback?.eid ?? null
 }
@@ -193,8 +206,9 @@ export let hookTo = (path: string | null | undefined): string | null => {
   let address = venture ? canon(fleetAddress(venture)) : null
   let project = address
     ? db.prepare(
-      `select email.eid from email
-       join project on project.eid = email.eid
+      `select o.eid as eid from email
+       join project on project.entity = email.entity
+       join entity o on o.id = email.entity
        where email.address = ? collate nocase`,
     ).get(address) as { eid: string } | undefined
     : undefined
@@ -261,7 +275,7 @@ let replyOf = (mid: string | null | undefined): string | null => {
   let ref = rfcId(mid)
   let suffix = `%:${ref.replace(/[\\%_]/g, '\\$&')}`
   let row = db.prepare(
-    `select eid from mail
+    `select o.eid as eid from mail join entity o on o.id = mail.entity
      where sent_id = ? or message_id = ?
         or message_id like ? escape '\\'
      limit 1`,
@@ -376,11 +390,16 @@ export let hookChanges = (r: SpoolReq, target: string | null) => {
 // idiom) or client caches hold a mail that never says where it came from.
 let stamp = (table: string, eid: string, patch: Row, cast: Cast) => {
   let cols = Object.keys(patch)
+  // A reference column (mail.target/reply_to) binds an eid this correlated
+  // lookup resolves to the stored int id; the owner-key WHERE does the same for
+  // the row itself. The read-back rides readComp so the cast carries eids.
   db.prepare(
-    `update ${table} set ${cols.map((c) => `"${c}" = ?`).join(', ')}
-     where eid = ?`,
+    `update ${table} set ${
+      cols.map((c) => `"${c}" = ${bindOf(table, c)}`).join(', ')
+    }
+     where ${OWNED}`,
   ).run(...cols.map((c) => patch[c]), eid)
-  let row = db.prepare(`select * from ${table} where eid = ?`).get(eid)
+  let row = readComp(db, eid, table)
   if (row) cast([{ eid, name: table, comp: row as Record<string, unknown> }])
 }
 
@@ -417,8 +436,9 @@ let mint = (
 // duplicate delivery, recorded once and never twice.
 let arrive = (m: FleetMsg, cast: Cast): boolean => {
   let r = db.prepare(
-    `select eid, message_id, target, reply_to, "from" author
-     from mail where sent_id = ?`,
+    `select o.eid as eid, m.message_id, ${refEid('m.target')} as target,
+            ${refEid('m.reply_to')} as reply_to, m."from" author
+     from mail m join entity o on o.id = m.entity where m.sent_id = ?`,
   ).get(rfcId(m.id)) as
     | {
       eid: string
