@@ -19,7 +19,7 @@
 // path predicates (`.assignee.title~=j`, a second join), the shared-ref
 // spelling (`comp: ''`, which reads whichever component happens to carry the
 // column), and a substring too short for a trigram (see `grams`).
-import { propAt } from './props.ts'
+import { isRef, propAt } from './props.ts'
 import {
   AGG,
   EXISTS,
@@ -37,9 +37,28 @@ import { comps, stamped } from './types.ts'
 export type Bind = string | number
 export type Sql = { sql: string; params: Bind[] }
 
-// A column reference, quoted. The table is the component's own table, joined
-// on eid, so `.task.status` is `"task"."status"`.
-let col = (comp: string, prop: string) => `"${comp}"."${prop}"`
+// A tombstoned entity keeps its spine row so its int id can never recycle
+// (D-18866), but it is DEAD — snapshot() drops it and the JS matcher never sees
+// it. So every membership query over the spine excludes the graves, or it would
+// return dead eids the fallback never would (a break of the exactness contract).
+let LIVE = ` and "entity"."eid" not in (select eid from tombstone)`
+
+// A column reference, quoted. The table is the component's own table, joined on
+// the int owner key (D-18866), so `.task.status` is `"task"."status"`. Two
+// columns need translation from the id-keyed storage back to the eids the
+// grammar compares against: `eid` (the identity) reads off the owner key
+// `entity`, and a `{eid}` REFERENCE column is an int id, so it is projected to
+// its referent's eid through a correlated spine lookup — every predicate below
+// (=, ~=, presence) then compares eids to eids exactly as the JS matcher does.
+// The `entity` spine keeps its real `eid`/`id`/`num` columns.
+let col = (comp: string, prop: string): string =>
+  comp == 'entity'
+    ? `"entity"."${prop}"`
+    : prop == 'eid'
+    ? `"${comp}"."entity"`
+    : isRef(comp, prop)
+    ? `(select __re.eid from entity __re where __re.id = "${comp}"."${prop}")`
+    : `"${comp}"."${prop}"`
 
 // Is this a column the graph actually has? A pred naming an unknown column
 // would compile to broken SQL rather than to `false`, so it is refused.
@@ -189,7 +208,7 @@ let narrow = (cols: string[], needle: string, exact: Sql | null): Sql | null =>
 // pred with two columns. JS reads a missing doc as no match at all — which is
 // the only thing an empty needle can turn on, since it is true of every string.
 let text = (value: string): Sql | null => {
-  if (value == '') return { sql: `"doc"."eid" is not null`, params: [] }
+  if (value == '') return { sql: `"doc"."entity" is not null`, params: [] }
   let cols = ['title', 'body']
   let [t, b] = cols.map((p) => has(col('doc', p), value))
   return t && b
@@ -290,10 +309,13 @@ let build = (
   for (let t of also) if (t) tables.add(t)
   tables.delete(base)
   if (base != 'entity' && tables.has('entity')) return null
-  let eid = col(base, 'eid')
+  // Sibling component tables share one entity, so they join on the int owner
+  // key: the spine's `id` when the base IS the spine, else the base table's own
+  // `entity` owner.
+  let key = base == 'entity' ? `"entity"."id"` : `"${base}"."entity"`
   let joins = [...tables]
     .filter((t) => t != 'entity')
-    .map((t) => ` left join "${t}" on "${t}"."eid" = ${eid}`)
+    .map((t) => ` left join "${t}" on "${t}"."entity" = ${key}`)
     .join('')
   let cond = parts.length ? parts.map((p) => p.sql).join(' and ') : '1'
   return { joins, cond, params: parts.flatMap((p) => p.params) }
@@ -318,7 +340,9 @@ let COUNT_OPS: Record<string, string> = {
 let revSql = (p: Pred): Sql | null => {
   let r = p.rev!
   let base = r.comp
-  let corr = `${col(base, r.prop)} = "entity"."eid"`
+  // The child's int reference equals the parent spine's int id (both id-keyed),
+  // so the correlation is a plain integer comparison — no eid projection.
+  let corr = `"${base}"."${r.prop}" = "entity"."id"`
   if (r.count) {
     let op = COUNT_OPS[p.op]
     if (op == null || !/^\d+$/.test(p.value)) return null
@@ -344,11 +368,15 @@ let revSql = (p: Pred): Sql | null => {
 // absence admit rows in no reverse map, so they decline and the matcher answers.
 let refsSql = (p: Pred): Sql | null => {
   if (p.op != '' || !p.value) return null
+  // Each backlink is an int-id search: the child rows whose ref column equals
+  // the target's id, yielding their owner ids, unioned — the parent matches if
+  // its id is among them.
   let subs = refCols.map(([c, pr]) =>
-    `select "${c}"."eid" from "${c}" where ${asText(col(c, pr))} = ?`
+    `select "${c}"."entity" from "${c}"
+       where "${c}"."${pr}" = (select id from entity where eid = ?)`
   )
   return {
-    sql: `"entity"."eid" in (${subs.join(' union ')})`,
+    sql: `"entity"."id" in (${subs.join(' union ')})`,
     params: refCols.map(() => p.value),
   }
 }
@@ -372,7 +400,7 @@ export let aggregateSql = (preds: Pred[]): Sql | null => {
     ? `select ${asText(c)} as value, count(*) as n`
     : `select distinct ${asText(c)} as value`
   return {
-    sql: `${sel} from "entity"${built.joins} where ${cond}` +
+    sql: `${sel} from "entity"${built.joins} where ${cond}${LIVE}` +
       (agg.agg == 'tally' ? ' group by value' : '') + ' order by value',
     params: built.params,
   }
@@ -389,7 +417,7 @@ export let where = (preds: Pred[]): Sql | null => {
   if (!built) return null
   return {
     sql: `select "entity"."eid" as eid from "entity"${built.joins}` +
-      ` where ${built.cond}`,
+      ` where ${built.cond}${LIVE}`,
     params: built.params,
   }
 }
@@ -412,7 +440,7 @@ export let select = (preds: Pred[]): Sql | null => {
   )
   return {
     sql: `select "entity"."eid" as eid, ${cols.join(', ')} from "entity"` +
-      `${built.joins} where ${built.cond}`,
+      `${built.joins} where ${built.cond}${LIVE}`,
     params: built.params,
   }
 }

@@ -2055,6 +2055,19 @@ let toEid = (db: DatabaseSync, id: number): string | undefined =>
 let refId = (db: DatabaseSync, v: unknown): number | null =>
   v == null ? null : toId(db, String(v))
 
+// The WHERE fragment that matches a component row by its OWNER's eid. A
+// component table is keyed by the owner's internal int id now (D-18866), so a
+// consumer that used `where eid = ?` becomes `where ${byEid}`, its bound eid
+// param unchanged — the correlated lookup does the eid→id hop in SQL. Only for
+// the per-component tables; the `entity` spine keeps its real `eid` column.
+let byEid = `entity = (select id from entity where eid = ?)`
+
+// Project a stored REFERENCE column (an int id since D-18866) back to the eid
+// its reader expects, inside a raw SELECT that can't ride select()'s projection:
+// `select ${refEid('client.actor')} as actor from client`. A null id (detached
+// ref) projects to null, the same absence the eid column used to carry.
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
+
 let tableExists = (db: DatabaseSync, t: string) =>
   !!prep(db, `select 1 from sqlite_master where type = 'table' and name = ?`)
     .get(t)
@@ -2708,7 +2721,7 @@ let dualSpawn = (db: DatabaseSync, changes: Change[]): Change[] => {
   )
   let sessions = new Set(
     [...eids].filter((eid) =>
-      prep(db, 'select 1 from session where eid = ?').get(eid)
+      prep(db, `select 1 from session where ${byEid}`).get(eid)
     ),
   )
   let killed = new Set<string>()
@@ -2789,7 +2802,7 @@ let dualFacet = (
   )
   let sessions = new Set(
     [...eids].filter((eid) =>
-      prep(db, 'select 1 from session where eid = ?').get(eid)
+      prep(db, `select 1 from session where ${byEid}`).get(eid)
     ),
   )
   let killed = new Set<string>()
@@ -2806,7 +2819,7 @@ let dualFacet = (
     let current = prep(
       db,
       `select ${cols.map(sqlName).join(', ')} from ${sqlName(name)}
-       where eid = ?`,
+       where ${byEid}`,
     ).get(eid) as Record<string, unknown> | undefined
     let si: number[] = [], fi: number[] = []
     let legacy: Record<string, unknown> = {}
@@ -2873,11 +2886,11 @@ let syncFacetAliases = (
       changes.filter((c) => c.name == name).map((c) => c.eid),
     )
     for (let eid of eids) {
-      if (!prep(db, 'select 1 from session where eid = ?').get(eid)) continue
+      if (!prep(db, `select 1 from session where ${byEid}`).get(eid)) continue
       let row = prep(
         db,
         `select ${cols.map(sqlName).join(', ')} from ${sqlName(name)}
-         where eid = ?`,
+         where ${byEid}`,
       ).get(eid) as Record<string, unknown> | undefined
       let spec = row ?? Object.fromEntries(cols.map((col) => [col, null]))
       prep(
@@ -2885,7 +2898,7 @@ let syncFacetAliases = (
         `update session set ${
           cols.map((col) => `${sqlName(col)} = ?`).join(', ')
         }
-         where eid = ?`,
+         where ${byEid}`,
       ).run(
         ...cols.map((col) => spec[col] as string | number | null ?? null),
         eid,
@@ -3227,20 +3240,24 @@ let actorFor = (
   human: boolean,
 ): string | null => {
   if (!writer) return null
-  let s = prep(db, 'select cwd, actor from session where id = ? or eid = ?')
+  let s = prep(
+    db,
+    `select cwd, ${refEid('actor')} as actor from session
+     where id = ? or ${byEid}`,
+  )
     .get(writer, writer) as
       | { cwd: string | null; actor: string | null }
       | undefined
   if (s) return s.actor ?? ventureAt(db, s.cwd) ?? null
-  let c = prep(db, 'select actor from client where eid = ?')
+  let c = prep(db, `select ${refEid('actor')} as actor from client where ${byEid}`)
     .get(writer) as { actor: string | null } | undefined
   if (c) return c.actor ?? (human ? ownerActor(db) : null)
   // A writer naming an actor entity (person or project) directly stands
   // for itself — the CLI's own operator eid, or a hand-set x-via.
   let a = prep(
     db,
-    'select eid from person where eid = ? union select eid from project where eid = ?',
-  ).get(writer, writer) as { eid: string } | undefined
+    `select 1 from person where ${byEid} union select 1 from project where ${byEid}`,
+  ).get(writer, writer) as { 1: number } | undefined
   return a ? writer : null
 }
 
@@ -3267,13 +3284,17 @@ export let writerVia = (
   writer?: string | null,
 ): string | null => {
   if (!writer) return null
-  let s = prep(db, 'select eid from session where id = ? or eid = ?')
+  let s = prep(
+    db,
+    `select ${refEid('session.entity')} as eid from session
+     where id = ? or ${byEid}`,
+  )
     .get(writer, writer) as { eid: string } | undefined
   if (s) return s.eid
-  let c = prep(db, 'select eid from client where eid = ?')
+  let c = prep(db, `select ${refEid('client.entity')} as eid from client where ${byEid}`)
     .get(writer) as { eid: string } | undefined
   if (c) return c.eid
-  let r = prep(db, 'select eid from runner where eid = ?')
+  let r = prep(db, `select ${refEid('runner.entity')} as eid from runner where ${byEid}`)
     .get(writer) as { eid: string } | undefined
   return r?.eid ?? null
 }
@@ -4514,8 +4535,9 @@ export let vocabularyDoc = (db: DatabaseSync, body: string): void => {
   let cur = prep(
     db,
     `
-    select a.eid, d.body from alias a
-    left join doc d on d.eid = a.eid
+    select ae.eid as eid, d.body from alias a
+    join entity ae on ae.id = a.entity
+    left join doc d on d.entity = a.entity
     where a.slug = 'vocabulary'
   `,
   ).get() as { eid: string; body: string | null } | undefined
@@ -4817,7 +4839,7 @@ export let rootChanges = (db: DatabaseSync, changes: Change[]): Change[] => {
   let hidden = new Set(
     changes.filter((c) => c.name == 'entry' && c.comp).map((c) => c.eid),
   )
-  let isEntry = prep(db, 'select 1 from entry where eid = ?')
+  let isEntry = prep(db, `select 1 from entry where ${byEid}`)
   for (let eid of new Set(changes.map((c) => c.eid))) {
     if (isEntry.get(eid)) hidden.add(eid)
   }
@@ -4930,26 +4952,27 @@ export let touch = (
     prep(
       db,
       `
-      insert into recall (eid, first_at, last_at) values (?, ?, ?)
-      on conflict (eid) do update
+      insert into recall (entity, first_at, last_at)
+        values ((select id from entity where eid = ?), ?, ?)
+      on conflict (entity) do update
       set count = count + 1, last_at = excluded.last_at
     `,
     ).run(eid, now, now)
     out.push({
       eid,
       name: 'recall',
-      comp: prep(db, 'select * from recall where eid = ?')
+      comp: prep(db, `${select('recall')} where eid = ?`)
         .get(eid) as Change['comp'],
     })
     if (
       confirm &&
-      prep(db, 'update memory set last_confirmed_at = ? where eid = ?')
+      prep(db, `update memory set last_confirmed_at = ? where ${byEid}`)
         .run(now, eid).changes
     ) {
       out.push({
         eid,
         name: 'memory',
-        comp: prep(db, 'select * from memory where eid = ?')
+        comp: prep(db, `${select('memory')} where eid = ?`)
           .get(eid) as Change['comp'],
       })
     }
@@ -4997,14 +5020,14 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
   // A sparse facet may sit outside any fixed candidate window. Compile the
   // filter into the selection when possible; an exactness decline reads every
   // candidate so the JS definition below still decides before the result cap.
-  let screen = built ? `and d.eid in (${built.sql})` : ''
+  let screen = built ? `and e.eid in (${built.sql})` : ''
   // A visible comment aimed at quarantined content is another route into the
   // same content. Keep it out before LIMIT so hidden hits cannot displace
   // visible ones.
   if (!reveal) {
     screen += ` and not exists (
-      select 1 from comment c join quarantined q on q.eid = c.target
-      where c.eid = d.eid
+      select 1 from comment c join quarantined q on q.entity = c.target
+      where c.entity = e.id
     )`
   }
   let cap = built ? 'limit ?' : ''
@@ -5021,15 +5044,15 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
     ? prep(
       db,
       `
-      select d.eid, d.title,
+      select e.eid, d.title,
         highlight(doc_fts, 0, char(1), char(2)) as title_hit,
         snippet(doc_fts, 1, char(1), char(2), '…', 10) as snip,
         e.num
       from doc_fts
       join doc d on d.rowid = doc_fts.rowid
-      join entity e on e.eid = d.eid
-      left join updated up on up.eid = e.eid
-      left join created cr on cr.eid = e.eid
+      join entity e on e.id = d.entity
+      left join updated up on up.entity = e.id
+      left join created cr on cr.entity = e.id
       where doc_fts match ? ${screen}
       order by bm25(doc_fts, 8.0, 1.0)
         - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at)))
@@ -5042,11 +5065,11 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
     : prep(
       db,
       `
-      select d.eid, d.title, d.title as title_hit, '' as snip, e.num
+      select e.eid, d.title, d.title as title_hit, '' as snip, e.num
       from doc d
-      join entity e on e.eid = d.eid
-      left join updated up on up.eid = e.eid
-      left join created cr on cr.eid = e.eid
+      join entity e on e.id = d.entity
+      left join updated up on up.entity = e.id
+      left join created cr on cr.entity = e.id
       where 1 ${screen}
       order by coalesce(up.at, cr.at) desc ${cap}
     `,
@@ -5060,10 +5083,10 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
     let direct = prep(
       db,
       `
-      select d.eid, d.title, d.title as title_hit, '' as snip, e.num
+      select e.eid, d.title, d.title as title_hit, '' as snip, e.num
       from doc d
-      join entity e on e.eid = d.eid
-      where d.eid = ? ${screen}
+      join entity e on e.id = d.entity
+      where e.eid = ? ${screen}
     `,
     ).get(addressed, ...params) as
       | Omit<Hit, 'kind' | 'open' | 'retired'>
@@ -5091,7 +5114,7 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       ]
     let names = [...new Set(filters.flatMap(predComps))]
     let get = new Map(
-      names.map((c) => [c, prep(db, `select * from ${c} where eid = ?`)]),
+      names.map((c) => [c, prep(db, `${select(c)} where eid = ?`)]),
     )
     let compsOf = (eid: string) => {
       let comps: Record<string, Record<string, unknown> | undefined> = {}
@@ -5115,14 +5138,15 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       .slice(0, limit)
   }
   let is = kindOrder.map((k) =>
-    [k, prep(db, `select 1 from ${k} where eid = ?`)] as const
+    [k, prep(db, `select 1 from ${k} where ${byEid}`)] as const
   )
   let aim = prep(
     db,
     `
-    select c.target, d.title from comment c
-    left join doc d on d.eid = c.target
-    where c.eid = ?
+    select ${refEid('c.target')} as target, td.title from comment c
+    join entity ce on ce.id = c.entity
+    left join doc td on td.entity = c.target
+    where ce.eid = ?
   `,
   )
   // Retirement sinks a hit, never hides it: a hit that IS a retired
@@ -5133,9 +5157,9 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
     db,
     `
     select 1 from project p
-    join archived a on a.eid = p.eid
-    left join task t on t.eid = ?1
-    where p.eid in (?1, t.project)
+    join archived a on a.entity = p.entity
+    left join task t on t.entity = (select id from entity where eid = ?1)
+    where p.entity in ((select id from entity where eid = ?1), t.project)
   `,
   )
   let hits = rows.map((r) => {
