@@ -91,23 +91,36 @@ let WS = ' \t\n\r\v\f'
 // Correlated on purpose: `not exists` probes the comment index for the one
 // row at hand, so the same clause is cheap swept over every doc AND asked of
 // a single eid — one rule, never a second phrasing to fall out of step.
-let ELIGIBLE = `not exists (select 1 from comment where comment.eid = doc.eid)
+// The `embedding` table is DERIVED and stays keyed by the doc's EID (D-18866
+// reshapes only graph tables; embedding refills from the sweep). `doc`, though,
+// is now keyed by the owner int id, so every doc↔embedding bridge joins the
+// spine to speak the eid the embedding rows hold. ELIGIBLE is correlated on the
+// unaliased `doc` table, so it uses doc.entity for its sibling probes.
+let ELIGIBLE =
+  `not exists (select 1 from comment where comment.entity = doc.entity)
        and not exists (
-         select 1 from quarantined where quarantined.eid = doc.eid
+         select 1 from quarantined where quarantined.entity = doc.entity
        )
        and trim(coalesce(doc.title,'') || coalesce(doc.body,''), ?) != ''`
 
 let lives = (db: DatabaseSync, eid: string) =>
-  !!db.prepare(`select eid from doc where eid = ? and ${ELIGIBLE}`)
+  !!db.prepare(
+    `select o.eid as eid from doc join entity o on o.id = doc.entity
+     where o.eid = ? and ${ELIGIBLE}`,
+  )
     .get(eid, WS)
 
 // The docs owed a (re)embedding: eligible, and whose stored hash no longer
 // names their text. Pure SQL + hash — the testable half of the sweep.
 export let stale = (db: DatabaseSync) =>
   (db.prepare(
-    `select d.eid, d.title, d.body, e.hash as had from doc d
-     left join embedding e on e.eid = d.eid
-     where d.eid in (select eid from doc where ${ELIGIBLE})`,
+    `select o.eid as eid, d.title, d.body, e.hash as had from doc d
+     join entity o on o.id = d.entity
+     left join embedding e on e.eid = o.eid
+     where o.eid in (
+       select o2.eid from doc join entity o2 on o2.id = doc.entity
+       where ${ELIGIBLE}
+     )`,
   ).all(WS) as {
     eid: string
     title: string
@@ -123,7 +136,10 @@ export let stale = (db: DatabaseSync) =>
 export let prune = (db: DatabaseSync) =>
   db.prepare(
     `delete from embedding
-     where eid not in (select eid from doc where ${ELIGIBLE})`,
+     where eid not in (
+       select o.eid from doc join entity o on o.id = doc.entity
+       where ${ELIGIBLE}
+     )`,
   ).run(WS)
 
 let put = (db: DatabaseSync, eid: string, text: string, vec: Float32Array) =>

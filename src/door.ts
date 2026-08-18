@@ -27,8 +27,8 @@ export type Delivery = {
 let seat = (pid: number) =>
   served(
     db.prepare(
-      `select s.eid, e.num, s.pid, s.id
-       from session s join entity e on e.eid = s.eid
+      `select e.eid as eid, e.num, s.pid, s.id
+       from session s join entity e on e.id = s.entity
        where s.pid = ?`,
     ).all(pid) as Seat[],
     pid,
@@ -36,7 +36,8 @@ let seat = (pid: number) =>
 
 let state = (eid: string) =>
   db.prepare(
-    'select eid, pid, pane, status from session where eid = ?',
+    `select o.eid as eid, s.pid, s.pane, s.status from session s
+     join entity o on o.id = s.entity where o.eid = ?`,
   ).get(eid) as Row | undefined
 
 let terminal = (s?: Row) => {

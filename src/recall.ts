@@ -20,6 +20,14 @@ import { type Change } from './types.ts'
 
 export type Floater = { id: string; eid: string; title: string; score: number }
 
+// The eid→id storage seam (D-18866): component tables key by the owner int id
+// and store refs (and edge endpoints) as int ids; this module speaks EIDs.
+// OWNED matches a row by owner eid, idOf resolves a ref filter's eid operand,
+// refEid projects a stored ref id back to its eid on read.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
+
 // Which kinds float, and for each: how many a message may surface (budget) and
 // the cosine floor below which a hit is noise, not a related thought. Budgets
 // are PER KIND so a flood of near tasks can never consume a memory's slots —
@@ -153,7 +161,9 @@ let scopeOf = (sessionEid: string): string | undefined => {
   let sess = (rowsOf(db, [sessionEid]) as Scoped[])[0]
   if (!sess) return undefined
   let s = sess.comps.session ?? {}
-  let repos = (db.prepare('select eid from repo').all() as { eid: string }[])
+  let repos = (db.prepare(
+    'select o.eid as eid from repo r join entity o on o.id = r.entity',
+  ).all() as { eid: string }[])
     .map((r) => r.eid)
   let kin = [String(s.persona ?? ''), String(s.actor ?? '')].filter(Boolean)
   let all = rowsOf(db, [...new Set([sessionEid, ...repos, ...kin])]) as Scoped[]
@@ -179,22 +189,26 @@ let scopeOf = (sessionEid: string): string | undefined => {
 // the `recalled` edges let this session's earlier floaters screen the next.
 export let recallEntry =
   (cast: (c: Change[]) => void, recallFn = recall) => async (eid: string) => {
-    let src = db.prepare('select session from entry where eid = ?').get(eid) as
+    let src = db.prepare(
+      `select ${refEid('session')} as session from entry where ${OWNED}`,
+    ).get(eid) as
       | { session?: string }
       | undefined
     let session = src?.session
     if (!session) return
-    if (db.prepare('select 1 from recalled where source = ?').get(eid)) return
-    let row = db.prepare('select body from content where eid = ?').get(eid) as
+    if (db.prepare(`select 1 from recalled where source = ${idOf}`).get(eid)) {
+      return
+    }
+    let row = db.prepare(`select body from content where ${OWNED}`).get(eid) as
       | { body?: string }
       | undefined
     let text = String(row?.body ?? '').trim()
     if (!text) return
     let seen = new Set(
       (db.prepare(
-        `select distinct d.child as child from dependency d
-           join entry e on e.eid = d.parent
-          where e.session = ? and d.type = 'recalled'`,
+        `select distinct ${refEid('d.child')} as child from dependency d
+           join entry e on e.entity = d.parent
+          where e.session = ${idOf} and d.type = 'recalled'`,
       ).all(session) as { child: string }[]).map((r) => r.child),
     )
     let floaters = await recallFn(db, text, scopeOf(session), seen)

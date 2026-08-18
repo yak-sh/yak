@@ -2,7 +2,7 @@
 // empty Codex composer; graph content stays in task_context and is never
 // copied through tmux. Every guard fails closed.
 // SERVER-ONLY (imports db).
-import { cursorOf, db, snapshot } from './db.ts'
+import { cursorOf, db, readComp, snapshot } from './db.ts'
 import { delivery } from './door.ts'
 import { noticesFor } from './client.ts'
 import { descends } from './proc.ts'
@@ -331,11 +331,14 @@ let stamp = (
   cast: Cast,
 ) => {
   let cols = Object.keys(patch)
+  // These are notice_* columns only (never a reference), so the write needs
+  // just the owner-key hop (D-18866); the read-back rides readComp so the cast
+  // carries eids for any reference the row projects, exactly like graph-out.
   db.prepare(
     `update session set ${cols.map((col) => `"${col}" = ?`).join(', ')}
-     where eid = ?`,
+     where entity = (select id from entity where eid = ?)`,
   ).run(...cols.map((col) => patch[col]), eid)
-  let row = db.prepare('select * from session where eid = ?').get(eid)
+  let row = readComp(db, eid, 'session')
   if (row) {
     cast([{ eid, name: 'session', comp: row as Record<string, unknown> }])
   }
@@ -389,10 +392,10 @@ export let nativeSweep = (cast: Cast): Promise<void> => {
     // native session — or finds none past notify()'s gates — never builds a
     // snapshot at all: the walk is owed to work, never to the tick.
     let sessions = db.prepare(`
-      select eid, id, pid, pane, turn, notice_at,
-             notice_accepted_at
-      from session
-      where pane is not null and finished_at is null
+      select o.eid as eid, s.id, s.pid, s.pane, s.turn, s.notice_at,
+             s.notice_accepted_at
+      from session s join entity o on o.id = s.entity
+      where s.pane is not null and s.finished_at is null
     `).all() as NativeSession[]
     if (!sessions.length) return
     let deps = systemDeps(graph, cast)
@@ -420,7 +423,8 @@ export let noticeAccepted =
   (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
     if (comp.turn != 'busy') return
     let row = db.prepare(
-      `select notice_at, notice_accepted_at from session where eid = ?`,
+      `select notice_at, notice_accepted_at from session
+       where entity = (select id from entity where eid = ?)`,
     ).get(eid) as {
       notice_at: string | null
       notice_accepted_at: string | null

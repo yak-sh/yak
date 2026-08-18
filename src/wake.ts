@@ -27,6 +27,10 @@ type Row = {
 
 let iso = (t: number) => new Date(t).toISOString()
 
+// Project a stored reference (an int id since D-18866) back to the eid this
+// module speaks, inside a SELECT.
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
+
 // setTimeout's ceiling is 32 bits (~24 days) and a suspended box lets a
 // long sleep drift; an hour's re-arm costs one query and makes both
 // harmless. The timer still names the earliest wake — it just wakes up
@@ -39,10 +43,13 @@ let timer: ReturnType<typeof setTimeout> | undefined
 // neither delivered nor error present (D-14945).
 let pending = () =>
   db.prepare(
-    `select wake.eid, wake.at, deliver."to" as "to", wake.target, wake.note,
-       c.at as minted, c."by" as "by"
-     from wake join deliver on deliver.eid = wake.eid
-     left join created c on c.eid = wake.eid
+    `select o.eid as eid, wake.at, ${refEid('deliver."to"')} as "to",
+       ${refEid('wake.target')} as target, wake.note,
+       c.at as minted, ${refEid('c."by"')} as "by"
+     from wake
+     join entity o on o.id = wake.entity
+     join deliver on deliver.entity = wake.entity
+     left join created c on c.entity = wake.entity
      where ${PENDING('wake')} order by wake.at`,
   ).all() as Row[]
 

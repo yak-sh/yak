@@ -15,14 +15,22 @@ import { providers } from './adapters.ts'
 
 type Cast = (changes: Change[]) => void
 
+// The eid→id storage seam (D-18866): component tables key by the owner int id
+// and store refs as int ids; this module speaks EIDs. OWNED matches a row by
+// owner eid, idOf resolves a ref filter's eid operand, refEid projects a stored
+// ref id back to its eid on read. Sibling joins move to the int owner key.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
+
 // The most recent comment on the target — the words that rode the
 // knock's batch (or the latest ask); a minute is the batch's horizon.
 let wordsFor = (target: string): string => {
   let r = db.prepare(
     `select d.body from comment c
-     join doc d on d.eid = c.eid
-     join created cr on cr.eid = c.eid
-     where c.target = ?
+     join doc d on d.entity = c.entity
+     join created cr on cr.entity = c.entity
+     where c.target = ${idOf}
      and cr.at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 minute')
      order by cr.at desc limit 1`,
   ).get(target) as { body: string } | undefined
@@ -43,10 +51,11 @@ let wordsFor = (target: string): string => {
 // /clear leaves the old row behind and the higher num is the live one.
 let awake = (to: string): { eid: string; num: number } | undefined =>
   (db.prepare(
-    `select s.eid, e.num, s.operator, s.requested_task, s.origin,
-            s.role
-     from session s join entity e on e.eid = s.eid
-     where s.eid = ? or s.actor = ?
+    `select e.eid as eid, e.num, s.operator,
+            ${refEid('s.requested_task')} as requested_task, s.origin,
+            ${refEid('s.role')} as role
+     from session s join entity e on e.id = s.entity
+     where e.eid = ? or s.actor = ${idOf}
      order by e.num desc`,
   ).all(to, to) as ({ eid: string; num: number } & Record<string, unknown>)[])
     .filter((s) => s.eid == to || isOperator(s))
@@ -67,11 +76,11 @@ export let knocked =
     // A dream knock is combed by dreamComb (dream.ts), which owns its own
     // delivered stamp — this ladder has no door for it, so abstain rather than
     // descend to rung 4 and stamp a spurious "no door" error every cadence.
-    if (db.prepare('select 1 from dream where eid = ?').get(to)) return
+    if (db.prepare(`select 1 from dream where ${OWNED}`).get(to)) return
     // Who asked. The knock's own provenance is the author of anything it
     // sends on their behalf.
     let knocker = () =>
-      (db.prepare('select "by" from created where eid = ?')
+      (db.prepare(`select ${refEid('"by"')} as "by" from created where ${OWNED}`)
         .get(eid) as { by: string | null } | undefined)?.by ?? null
     try {
       // 1: someone with that identity is reachable — the cast already
@@ -86,7 +95,7 @@ export let knocked =
       // Only a MANAGED session: an external one has no run to continue,
       // and rung 1 already caught every session that was reachable.
       let managed = db.prepare(
-        `select 1 from session where eid = ? and origin = 'managed'`,
+        `select 1 from session where ${OWNED} and origin = 'managed'`,
       ).get(to)
       if (managed) {
         let c = uuid()
@@ -122,10 +131,10 @@ export let knocked =
       // 2: an actor with a repo and nobody awake — spawn onto the
       // target task; the session boots holding the ask.
       let project = db.prepare(
-        'select 1 from project where eid = ?',
+        `select 1 from project where ${OWNED}`,
       ).get(to)
       if (project) {
-        let isTask = db.prepare('select 1 from task where eid = ?').get(target)
+        let isTask = db.prepare(`select 1 from task where ${OWNED}`).get(target)
         if (!isTask) {
           return fail(`nobody awake and ${human(db, target)} is not spawnable`)
         }
@@ -154,7 +163,7 @@ export let knocked =
       }
       // 3: a person (or anything addressed) — the knock rides mail; the
       // mail effect owns delivery and its own audit trail.
-      let addressed = db.prepare('select 1 from email where eid = ?').get(to)
+      let addressed = db.prepare(`select 1 from email where ${OWNED}`).get(to)
       if (addressed) {
         let words = wordsFor(target)
         let m = uuid()
