@@ -134,43 +134,15 @@ export let leafOf = (p: Pred): Hop => p.at ? p.at[p.at.length - 1] : p
 // shape of both a live-cache row and a client Row's `.comps`.
 type Comps = Record<string, Record<string, unknown> | undefined>
 
-// The routing table: every component's columns, plus the spine's.
-// Server-stamped columns join HERE from the `stamped` declaration, not
-// comps — filterable ('.count>=5') without ever joining the write
-// allowlist (cols() reads comps alone). Only selected stamped comps join:
-// stamped.session's status would make bare `.status`
-// ambiguous with task's, so widening is a routing question (does the
-// wire-writable column win a tie?), not a list edit. Mail joined for the
-// mail door — its filters live on arrival columns ('.verified=0',
-// '.received_at>=today').
-let routes: Record<string, readonly string[]> = {
-  ...Object.fromEntries(
-    Object.entries(comps).map(([name, props]) => [name, Object.keys(props)]),
-  ),
-  entity: Object.keys(stamped.entity),
-  memory: [...Object.keys(comps.memory), ...Object.keys(stamped.memory)],
-  recall: Object.keys(stamped.recall),
-  mail: [...Object.keys(comps.mail), ...Object.keys(stamped.mail)],
-  // Runtime identity is learned from the provider, so its useful lookup
-  // columns are stamped rather than wire-writable. They still belong to the
-  // facet's read vocabulary: `.runtime.provider_session_id=…` must reach the
-  // same column snapshot() exposes.
-  runtime: [...Object.keys(comps.runtime), ...Object.keys(stamped.runtime)],
-  // Provenance carries a wire-writable `by` and a stamped `at` (T-6670);
-  // both share those names, so bare `.at`/`.by` are ambiguous — spell out
-  // `.created.at`, `.updated.by`, the pin/camera precedent.
-  created: [...Object.keys(comps.created), ...Object.keys(stamped.created)],
-  updated: [...Object.keys(comps.updated), ...Object.keys(stamped.updated)],
-  resume: Object.keys(stamped.resume),
-  // `decided` splits the same stamp the other way — `at`/`by` on the wire,
-  // `via` stamped — so its routes are the same union, and `.decided.at` is
-  // the spelling `## decided` and `task decided` both answer.
-  decided: [...Object.keys(comps.decided), ...Object.keys(stamped.decided)],
-  proposed: [...Object.keys(comps.proposed), ...Object.keys(stamped.proposed)],
-  archived: Object.keys(stamped.archived),
-  quarantined: Object.keys(stamped.quarantined),
-  favorite: Object.keys(stamped.favorite),
-}
+// The readable routing table is the union of the wire and server vocabularies.
+// Keeping it derived means every column snapshot() exposes is immediately
+// filterable through `.component.prop`, without making that column writable.
+let routes: Record<string, readonly string[]> = Object.fromEntries(
+  [...new Set([...Object.keys(comps), ...Object.keys(stamped)])].map((name) => [
+    name,
+    Object.keys({ ...comps[name], ...stamped[name] }),
+  ]),
+)
 
 // A name a column or component already routes — the real props pred() resolves
 // before any scope. A scope may not shadow one, so this is how the pred seam
@@ -303,6 +275,13 @@ export let route = (prop: string): { comp: string; prop: string } => {
       // `.response.status`, `.content.body`, `.generation.provider`, etc.
       .filter((name) => !(name in sessionComps))
   let own = hits(prop)
+  // A stamped lifecycle field may share a name with an established writable
+  // filter (`session.status` and `task.status`). Qualified reads reach both;
+  // bare routing keeps the writable spelling instead of manufacturing a new
+  // ambiguity. When every owner is stamped, the normal ambiguity/twin rules
+  // below still apply.
+  let writable = own.filter((name) => prop in (comps[name] ?? {}))
+  if (writable.length) own = writable
   // Parent/child words are the dependency vocabulary. Their component refs
   // remain available through `.pane.parent` / `.session.parent`; bare keeps
   // teaching the edge door instead of silently changing an old mistake.
@@ -1282,12 +1261,16 @@ let bares = (): Cand[] => {
   let out: Cand[] = []
   for (let [p, cs] of owners) {
     if (edgeish.test(p)) continue
-    if (cs.length == 1 || sessionTwin(cs) || sharedRef(p, cs)) {
+    let writable = cs.filter((c) => p in (comps[c] ?? {}))
+    let routed = writable.length ? writable : cs
+    if (
+      routed.length == 1 || sessionTwin(routed) || sharedRef(p, routed)
+    ) {
       out.push({
         text: `.${p}`,
         kind: isRef('', p)
-          ? cs.length == 1 ? `${cs[0]} · ref` : 'ref'
-          : mark(cs[0], p),
+          ? routed.length == 1 ? `${routed[0]} · ref` : 'ref'
+          : mark(routed[0], p),
       })
     }
   }

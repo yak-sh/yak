@@ -30,6 +30,7 @@ import {
   warm as rank, // the test file's own `warm` fixture predates the export
 } from './query.ts'
 import { instant, span } from './time.ts'
+import { stamped } from './types.ts'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 
 // A task-shaped entity to filter against.
@@ -797,6 +798,17 @@ Deno.test('server-stamped recall columns filter without being writable', () => {
     matchQuery({ recall: { count: 1 } }, parseQuery('.count>=2')),
     false,
   )
+})
+
+Deno.test('every server-stamped column routes through its component', () => {
+  for (let [comp, props] of Object.entries(stamped)) {
+    for (let prop of Object.keys(props)) {
+      let p = pred(`.${comp}.${prop}!`)
+      assert(p)
+      assertEquals(p.comp, comp)
+      assertEquals(p.prop, prop)
+    }
+  }
 })
 
 Deno.test('mail arrival columns route bare and filter (the mail door)', () => {
