@@ -21,28 +21,35 @@ import { indexesFor } from './index.ts'
 import { refOf } from './props.ts'
 
 // PropType → the SQL column affinity it stores as. Text is the catch-all: an
-// enum, a time, a url, a body, a well-backed text and an {eid} reference all
-// live as text; only numbers and bools diverge.
+// enum, a time, a url, a body and a well-backed text live as text; numbers and
+// bools diverge; and an `{eid}` reference now stores the target's INTERNAL
+// integer id (D-18866) — the eid stays the wire identity, resolved at the
+// apply()/snapshot() boundary — so a reference is integer-affine.
 /// sqlType('number') -> 'real'
 /// sqlType('priority') -> 'real'
 /// sqlType('bool') -> 'integer'
 /// sqlType('body') -> 'text'
 /// sqlType({ enum: ['a', 'b'] }) -> 'text'
-/// sqlType({ eid: 'project', death: 'detach' }) -> 'text'
+/// sqlType({ eid: 'project', death: 'detach' }) -> 'integer'
 /// sqlType({ text: 'domains' }) -> 'text'
 export let sqlType = (t: PropType): string =>
-  t == 'number' || t == 'priority' ? 'real' : t == 'bool' ? 'integer' : 'text'
+  t == 'number' || t == 'priority' ? 'real'
+    : t == 'bool' ? 'integer'
+    : typeof t == 'object' && 'eid' in t ? 'integer'
+    : 'text'
 
 let quote = (name: string) => `"${name.replaceAll('"', '""')}"`
 
-// One column's DDL: `"<name>" <affinity>[ references entity(eid)]`. A reference
-// carries the FK UNLESS its death word is 'keep' — a kept reference outlives its
-// target's tombstone, and the tombstone deletes the spine row, so an FK would
-// veto that delete (types.ts, mail.target).
+// One column's DDL: `"<name>" <affinity>[ references entity(id)]`. A reference
+// stores the target's internal integer id and carries the FK to entity(id)
+// UNLESS its death word is 'keep' — a kept reference outlives its target's
+// tombstone (types.ts, mail.target), and a kept FK would keep the reference
+// pointing at a spine row that survives deletion anyway, so it stays FK-free the
+// way it always did.
 export let columnDdl = (comp: string, prop: string, t: PropType): string => {
   let ref = refOf(comp, prop)
   let fk = ref && (typeof t != 'object' || !('eid' in t) || t.death != 'keep')
-    ? ' references entity(eid)'
+    ? ' references entity(id)'
     : ''
   return `${quote(prop)} ${sqlType(t)}${fk}`
 }
@@ -57,13 +64,16 @@ export let derivedCols = (comp: string): { prop: string; ddl: string }[] =>
   ].map(([prop, t]) => ({ prop, ddl: columnDdl(comp, prop, t) }))
 
 // One component's `create table`: the entity-keyed spine reference plus its
-// columns. `if not exists` keeps it idempotent — a fresh db gets the table, a
-// live db that already has it is untouched (db.ts's addDerivedCols fills any
-// column a later vocabulary edit adds).
+// columns. The owner key is `entity` — the target's INTERNAL integer id
+// (D-18866), one row per entity — referencing entity(id); its eid is projected
+// back at the read boundary (db.ts select()). `if not exists` keeps it
+// idempotent — a fresh db gets the table, a live db that already has it is
+// untouched (db.ts's addDerivedCols fills any column a later vocabulary edit
+// adds; the legacy eid→id migration reshapes an eid-keyed table in place).
 export let tableDdl = (comp: string): string =>
   `create table if not exists ${quote(comp)} (\n` +
   [
-    `    eid text primary key references entity(eid)`,
+    `    entity integer primary key references entity(id)`,
     ...derivedCols(comp).map(({ ddl }) => `    ${ddl}`),
   ].join(',\n') +
   `\n  )`

@@ -120,11 +120,11 @@ export let file = Deno.env.get('DB_PATH') ?? liveDb()
 // from `schema` because open() also needs it to REBUILD a live table
 // whose baked check has fallen behind — a check can't be widened in place.
 let depDdl = `create table if not exists dependency (
-    parent text not null references entity(eid),
+    parent integer not null references entity(id),
     type       text not null check (type in (${
   edges.map((e) => `'${e}'`).join(',')
 })),
-    child  text not null references entity(eid),
+    child  integer not null references entity(id),
     ord    integer,
     primary key (parent, type, child)
   )`
@@ -157,14 +157,14 @@ let shedOrd = (d: Dep): Dep =>
 // column added here (or dropped by migrateDelivery()/migrateDeliver()) no
 // longer has to line up positionally (T-18475).
 let mailDdl = `create table if not exists mail (
-    eid         text primary key references entity(eid),
+    entity         integer primary key references entity(id),
     "from"      text,
-    target  text,
+    target  integer,
     to_addr     text,
     message_id  text,
     received_at text,
     verified    integer,
-    reply_to text,
+    reply_to integer,
     sent_id     text,
     in_reply_to text,
     headers text
@@ -196,21 +196,22 @@ let callDdl = `create table if not exists tool_call (
 // `derived` below, generated in open() beside this string.
 let schema = `
   create table if not exists entity (
-    eid         text primary key,
-    num         integer not null unique
+    id          integer primary key,
+    eid         text not null unique,
+    num         integer unique
   );
   create table if not exists doc (
-    eid   text primary key references entity(eid),
+    entity   integer primary key references entity(id),
     title text not null,
     body  text not null default ''
   );
   create table if not exists task (
-    eid    text primary key references entity(eid),
+    entity    integer primary key references entity(id),
     status text not null default 'open',
     priority real not null default 0
   );
   create table if not exists repo (
-    eid  text primary key references entity(eid),
+    entity  integer primary key references entity(id),
     path text not null,
     url text,
     base_branch text not null default 'main',
@@ -218,14 +219,14 @@ let schema = `
     push integer not null default 0
   );
   create table if not exists role (
-    eid          text primary key references entity(eid),
+    entity          integer primary key references entity(id),
     state        text not null default 'stopped',
     surface      text not null default 'native',
-    scope    text references entity(eid),
-    checkout text references entity(eid),
+    scope    integer references entity(id),
+    checkout integer references entity(id),
     schedule text,
     wake_policy text not null default 'always',
-    wake_target text references entity(eid),
+    wake_target integer references entity(id),
     applied_hash text,
     applied_at   text,
     stopped_at   text,
@@ -238,17 +239,17 @@ let schema = `
   -- One pane: container (dir) or leaf (content/view). size is a
   -- weight among siblings; "order" quoted — an SQL keyword, like "to".
   create table if not exists pane (
-    eid         text primary key references entity(eid),
-    layout  text references entity(eid),
-    parent  text references entity(eid),
+    entity         integer primary key references entity(id),
+    layout  integer references entity(id),
+    parent  integer references entity(id),
     size        real not null default 1,
     "order"     real not null default 0,
     dir         text,
-    content text references entity(eid),
+    content integer references entity(id),
     view        text
   );
   create table if not exists web (
-    eid text primary key references entity(eid),
+    entity integer primary key references entity(id),
     url text not null,
     frozen_at text
   );
@@ -258,7 +259,7 @@ let schema = `
   -- indexes the reverse lookup serveBlob does (sha -> mime/name) so the
   -- byte-serving path never scans (M-17862).
   create table if not exists blob (
-    eid   text primary key references entity(eid),
+    entity   integer primary key references entity(id),
     mime  text,
     name  text,
     sha   text,
@@ -268,13 +269,13 @@ let schema = `
   );
   create index if not exists blob_sha on blob(sha);
   create table if not exists card (
-    eid        text primary key references entity(eid),
-    target text not null references entity(eid),
+    entity        integer primary key references entity(id),
+    target integer not null references entity(id),
     view       text not null
   );
   create table if not exists pin (
-    eid        text primary key references card(eid),
-    canvas text not null references entity(eid),
+    entity        integer primary key references card(entity),
+    canvas integer not null references entity(id),
     x integer not null,
     y integer not null,
     w integer not null,
@@ -282,14 +283,14 @@ let schema = `
     z integer not null default 0
   );
   create table if not exists client (
-    eid        text primary key references entity(eid),
+    entity        integer primary key references entity(id),
     user_agent text not null default '',
     ip         text not null default ''
   );
   create table if not exists camera (
-    eid        text primary key references entity(eid),
-    client text not null references entity(eid),
-    canvas text not null references entity(eid),
+    entity        integer primary key references entity(id),
+    client integer not null references entity(id),
+    canvas integer not null references entity(id),
     x    real not null default 0,
     y    real not null default 0,
     zoom real not null default 1,
@@ -298,37 +299,37 @@ let schema = `
     unique (client, canvas)
   );
   create table if not exists fold (
-    eid        text primary key references entity(eid),
-    client text not null references entity(eid),
-    board  text not null references entity(eid),
+    entity        integer primary key references entity(id),
+    client integer not null references entity(id),
+    board  integer not null references entity(id),
     statuses   text not null default '',
     unique (client, board)
   );
   create table if not exists shelf (
-    eid        text primary key references entity(eid),
-    client text not null references entity(eid),
+    entity        integer primary key references entity(id),
+    client integer not null references entity(id),
     unique (client)
   );
   create table if not exists cursor (
-    eid    text primary key references entity(eid),
-    client text not null references entity(eid),
-    target text references entity(eid),
+    entity    integer primary key references entity(id),
+    client integer not null references entity(id),
+    target integer references entity(id),
     view   text,
     unique (client)
   );
   create table if not exists session (
-    eid text primary key references entity(eid),
+    entity integer primary key references entity(id),
     id  text not null unique,
     cwd text
   );
   -- The handoff a session leaves for its successor (D-19459), its own
   -- component so it never contends with the session doc's narrative.
   create table if not exists brief (
-    eid  text primary key references entity(eid),
+    entity  integer primary key references entity(id),
     text text not null
   );
   create table if not exists runtime (
-    eid                 text primary key references entity(eid),
+    entity                 integer primary key references entity(id),
     pid                 integer,
     pane                text,
     transcript          text,
@@ -339,8 +340,8 @@ let schema = `
   -- apply()'s write transaction; every other table below is an independent
   -- facet worn by the same entry entity.
   create table if not exists entry (
-    eid     text primary key references entity(eid),
-    session text not null references entity(eid),
+    entity     integer primary key references entity(id),
+    session integer not null references entity(id),
     seq     integer not null,
     unique (session, seq)
   );
@@ -352,48 +353,48 @@ let schema = `
   -- line) present IS the durable ingest cursor — no mutable cursor row. A
   -- wholly new table, so create-if-not-exists is the additive add.
   create table if not exists imported (
-    eid    text primary key references entity(eid),
+    entity    integer primary key references entity(id),
     source text not null,
     line   integer not null
   );
   create table if not exists content (
-    eid  text primary key references entity(eid),
+    entity  integer primary key references entity(id),
     body text not null default ''
   );
   create table if not exists message (
-    eid  text primary key references entity(eid),
+    entity  integer primary key references entity(id),
     role text not null
   );
   create table if not exists generation (
-    eid      text primary key references entity(eid),
-    through  text not null,
+    entity      integer primary key references entity(id),
+    through  integer not null,
     provider text not null,
     model    text not null,
     effort   text,
     serving_model text
   );
   create table if not exists output (
-    eid    text primary key references entity(eid),
-    source text not null,
+    entity    integer primary key references entity(id),
+    source integer not null,
     key    text,
     phase  text
   );
   create table if not exists call (
-    eid text primary key references entity(eid),
+    entity integer primary key references entity(id),
     key text not null
   );
   create table if not exists bash (
-    eid     text primary key references entity(eid),
+    entity     integer primary key references entity(id),
     command text not null,
     cwd     text
   );
   create table if not exists fetch (
-    eid    text primary key references entity(eid),
+    entity    integer primary key references entity(id),
     url    text not null,
     method text not null
   );
   create table if not exists patch (
-    eid  text primary key references entity(eid),
+    entity  integer primary key references entity(id),
     path text not null,
     diff text not null
   );
@@ -402,78 +403,78 @@ let schema = `
   -- its real name and a one-line arg detail here. Wire-writable like the
   -- other tool facets; a wholly new table = create-if-not-exists.
   create table if not exists tool (
-    eid    text primary key references entity(eid),
+    entity    integer primary key references entity(id),
     name   text not null,
     detail text
   );
   create table if not exists graph_query (
-    eid   text primary key references entity(eid),
+    entity   integer primary key references entity(id),
     query text not null default ''
   );
   create table if not exists "apply" (
-    eid     text primary key references entity(eid),
+    entity     integer primary key references entity(id),
     changes text not null
   );
   create table if not exists result (
-    eid  text primary key references entity(eid),
-    call text not null
+    entity  integer primary key references entity(id),
+    call integer not null
   );
   create table if not exists exit (
-    eid  text primary key references entity(eid),
+    entity  integer primary key references entity(id),
     code integer not null
   );
   create table if not exists response (
-    eid    text primary key references entity(eid),
+    entity    integer primary key references entity(id),
     status integer not null
   );
   create table if not exists headers (
-    eid  text primary key references entity(eid),
+    entity  integer primary key references entity(id),
     data text not null
   );
   create table if not exists stderr (
-    eid  text primary key references entity(eid),
+    entity  integer primary key references entity(id),
     text text not null
   );
   create table if not exists timeout (
-    eid text primary key references entity(eid),
+    entity integer primary key references entity(id),
     ms  integer not null
   );
   create table if not exists checkpoint (
-    eid     text primary key references entity(eid),
-    through text not null
+    entity     integer primary key references entity(id),
+    through integer not null
   );
   create table if not exists cancel (
-    eid    text primary key references entity(eid),
-    target text not null
+    entity    integer primary key references entity(id),
+    target integer not null
   );
   create table if not exists opaque (
-    eid    text primary key references entity(eid),
+    entity    integer primary key references entity(id),
     format text not null,
     data   text not null
   );
   create table if not exists runner (
-    eid  text primary key references entity(eid),
+    entity  integer primary key references entity(id),
     name text not null
   );
   -- Runtime ownership and usage are server-only outcome facets. Their refs
   -- deliberately carry no FK: runner/generation history survives a target's
   -- tombstone, like every death:'keep' association.
   create table if not exists lease (
-    eid    text primary key references entity(eid),
-    holder text not null,
+    entity    integer primary key references entity(id),
+    holder integer not null,
     at     text not null,
     until  text not null
   );
   create table if not exists usage (
-    eid       text primary key references entity(eid),
+    entity       integer primary key references entity(id),
     input     integer not null,
     cached    integer not null,
     output    integer not null,
     reasoning integer not null
   );
   create table if not exists claim (
-    eid         text primary key references entity(eid),
-    session text not null references entity(eid),
+    entity         integer primary key references entity(id),
+    session integer not null references entity(id),
     claimed_at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
   -- An actor's standing instruction about one entity (watch / mute).
@@ -481,21 +482,21 @@ let schema = `
   -- (subscription_actor_target, from the indexes map in types.ts) is what
   -- makes setting it twice idempotent rather than a pile.
   create table if not exists subscription (
-    eid        text primary key references entity(eid),
-    actor  text not null references entity(eid),
-    target text not null references entity(eid),
+    entity        integer primary key references entity(id),
+    actor  integer not null references entity(id),
+    target integer not null references entity(id),
     mode       text not null
   );
   create table if not exists stop_request (
-    eid        text primary key references entity(eid),
-    target text not null references entity(eid)
+    entity        integer primary key references entity(id),
+    target integer not null references entity(id)
   );
   -- A knock: bring target to the recipient's attention now (knock.ts
   -- resolves; WHO looks is the shared deliver.to below, the outcome the
   -- shared delivered/error facet — neither a column here).
   create table if not exists knock (
-    eid        text primary key references entity(eid),
-    target text not null references entity(eid)
+    entity        integer primary key references entity(id),
+    target integer not null references entity(id)
   );
   -- A wake: mint that knock at 'at' (absolute, resolved at mint).
   -- wake.ts arms one timer at the earliest UNACTED row (no delivered/error)
@@ -503,9 +504,9 @@ let schema = `
   -- the shared facet. target is nullable — absent means the wake is its
   -- own subject.
   create table if not exists wake (
-    eid        text primary key references entity(eid),
+    entity        integer primary key references entity(id),
     at         text not null,
-    target text references entity(eid),
+    target integer references entity(id),
     note   text
   );
   -- Self-healing's diagnosis facet (D-17077, heal.ts): a task auto-filed
@@ -514,7 +515,7 @@ let schema = `
   -- are unique so dot-param routing stays unambiguous. Wire-writable, so it
   -- rides the ordinary apply() insert path like task/doc.
   create table if not exists bug (
-    eid   text primary key references entity(eid),
+    entity   integer primary key references entity(id),
     fault text,
     hits  integer,
     last  text
@@ -523,7 +524,7 @@ let schema = `
   -- finding's shape key + recurrence, riding on the consider-task or memory it
   -- became so one keyed lookup dedups across both.
   create table if not exists finding (
-    eid  text primary key references entity(eid),
+    entity  integer primary key references entity(id),
     key  text,
     hits integer,
     last text
@@ -535,32 +536,32 @@ let schema = `
   -- reads as when the block began. A wholly new table = create-if-not-exists
   -- is the additive add; the entity-death cascade takes the row.
   create table if not exists blocked (
-    eid    text primary key references entity(eid),
+    entity    integer primary key references entity(id),
     "on"   text,
     since  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
   ${mailDdl};
   create table if not exists email (
-    eid     text primary key references entity(eid),
+    entity     integer primary key references entity(id),
     address text not null
   );
   create table if not exists conflict (
-    eid        text primary key references entity(eid),
-    target text not null,
+    entity        integer primary key references entity(id),
+    target integer not null,
     loser      text not null,
     holder     text not null,
     at         text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
   create table if not exists comment (
-    eid        text primary key references entity(eid),
-    target text not null references entity(eid)
+    entity        integer primary key references entity(id),
+    target integer not null references entity(id)
   );
   create table if not exists review (
-    eid     text primary key references entity(eid),
+    entity     integer primary key references entity(id),
     verdict text not null
   );
   create table if not exists alias (
-    eid   text primary key references entity(eid),
+    entity   integer primary key references entity(id),
     slug  text not null unique,
     slugs text
   );
@@ -571,14 +572,14 @@ let schema = `
   -- column is what keeps this table out of the derived set. apply() validates
   -- the value against the catalog and refuses an unknown key. No secrets here.
   create table if not exists setting (
-    eid   text primary key references entity(eid),
+    entity   integer primary key references entity(id),
     key   text not null unique,
     value text
   );
   -- recall's not-null columns have no defaults ON PURPOSE: they refuse
   -- even apply()'s bare {} touch, so touch() below stays the one writer.
   create table if not exists recall (
-    eid      text primary key references entity(eid),
+    entity      integer primary key references entity(id),
     count    integer not null default 1,
     first_at text not null,
     last_at  text not null
@@ -591,16 +592,16 @@ let schema = `
   -- BY is a SQLite keyword. created is set once at birth; updated appears
   -- on the first edit after it.
   create table if not exists created (
-    eid text primary key references entity(eid),
+    entity integer primary key references entity(id),
     at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    "by" text,
-    via text
+    "by" integer,
+    via integer
   );
   create table if not exists updated (
-    eid text primary key references entity(eid),
+    entity integer primary key references entity(id),
     at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    "by" text,
-    via text
+    "by" integer,
+    via integer
   );
   -- Notification lifecycle (T-7006): presence IS the fact. Same shape as
   -- created/updated — "at" default-stamped then frozen, "by" the writing
@@ -608,45 +609,45 @@ let schema = `
   -- are server-only (out of comps): the wire writes a bare row and apply()'s
   -- stampedPresence loop fills and returns the stamp.
   create table if not exists notified (
-    eid text primary key references entity(eid),
+    entity integer primary key references entity(id),
     at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    "by" text,
-    via text
+    "by" integer,
+    via integer
   );
   create table if not exists opened (
-    eid text primary key references entity(eid),
+    entity integer primary key references entity(id),
     at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    "by" text,
-    via text
+    "by" integer,
+    via integer
   );
   create table if not exists archived (
-    eid text primary key references entity(eid),
+    entity integer primary key references entity(id),
     at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    "by" text,
-    via text
+    "by" integer,
+    via integer
   );
   create table if not exists quarantined (
-    eid text primary key references entity(eid),
+    entity integer primary key references entity(id),
     at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    "by" text,
-    via text
+    "by" integer,
+    via integer
   );
   -- A fleet proposal awaiting a decision: like decided, its authored time
   -- and byline ride the wire while the server alone names the instrument.
   create table if not exists proposed (
-    eid text primary key references entity(eid),
+    entity integer primary key references entity(id),
     at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    "by" text,
-    via text
+    "by" integer,
+    via integer
   );
   -- A decision taken (T-12574): the same three columns, but "at" and "by"
   -- arrive on the WIRE — a decision is often written up after the fact, so
   -- the default clock is only the fallback. Only "via" is stamped.
   create table if not exists decided (
-    eid text primary key references entity(eid),
+    entity integer primary key references entity(id),
     at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    "by" text,
-    via text
+    "by" integer,
+    via integer
   );
   create table if not exists tombstone (
     eid        text primary key,
@@ -826,7 +827,11 @@ export let numbered = (kind: string) => !unnumbered.has(kind)
 let mintNum = (db: DatabaseSync, eid: string) => {
   if (unnumbered.size) {
     let kind = kindOrder.find((k) =>
-      prep(db, `select 1 from ${k} where eid = ?`).get(eid)
+      prep(
+        db,
+        `select 1 from ${sqlName(k)}
+         where entity = (select id from entity where eid = ?)`,
+      ).get(eid)
     ) ?? 'entity'
     if (!numbered(kind)) {
       return
@@ -848,35 +853,40 @@ let ent = (db: DatabaseSync) => {
   return eid
 }
 
+// Seed writes go straight to SQL (bypassing apply()), so they resolve their
+// own eids to the int owner/reference keys the reshaped tables use (D-18866):
+// `(select id from entity where eid = ?)` for every owner and every reference.
+let ID = '(select id from entity where eid = ?)'
 let doc = (db: DatabaseSync, eid: string, title: string, body = '') =>
-  prep(db, 'insert into doc (eid, title, body) values (?, ?, ?)')
+  prep(db, `insert into doc (entity, title, body) values (${ID}, ?, ?)`)
     .run(eid, title, body)
 
 let addTask = (db: DatabaseSync, title: string, status: string, body = '') => {
   let eid = ent(db)
   doc(db, eid, title, body)
-  prep(db, 'insert into task (eid, status) values (?, ?)').run(eid, status)
+  prep(db, `insert into task (entity, status) values (${ID}, ?)`)
+    .run(eid, status)
   return eid
 }
 
 let addProject = (db: DatabaseSync, title: string) => {
   let eid = ent(db)
   doc(db, eid, title)
-  prep(db, 'insert into project (eid) values (?)').run(eid)
+  prep(db, `insert into project (entity) values (${ID})`).run(eid)
   return eid
 }
 
 let addBoard = (db: DatabaseSync, title: string) => {
   let eid = ent(db)
   doc(db, eid, title)
-  prep(db, 'insert into board (eid) values (?)').run(eid)
+  prep(db, `insert into board (entity) values (${ID})`).run(eid)
   return eid
 }
 
 // A card views one entity through one lens; pinning places it on a canvas.
 let addCard = (db: DatabaseSync, target: string, view: string) => {
   let eid = ent(db)
-  prep(db, 'insert into card (eid, target, view) values (?, ?, ?)')
+  prep(db, `insert into card (entity, target, view) values (${ID}, ${ID}, ?)`)
     .run(eid, target, view)
   return eid
 }
@@ -892,15 +902,15 @@ let pin = (
 ) =>
   prep(
     db,
-    'insert into pin (eid, canvas, x, y, w, h) values (?, ?, ?, ?, ?, ?)',
+    `insert into pin (entity, canvas, x, y, w, h)
+     values (${ID}, ${ID}, ?, ?, ?, ?)`,
   ).run(card, canvas, x, y, w, h)
 
 let link = (db: DatabaseSync, parent: string, type: string, child: string) =>
-  prep(db, 'insert into dependency (parent, type, child) values (?, ?, ?)').run(
-    parent,
-    type,
-    child,
-  )
+  prep(
+    db,
+    `insert into dependency (parent, type, child) values (${ID}, ?, ${ID})`,
+  ).run(parent, type, child)
 
 // A handful of neutral demo rows — a board containing tasks, one edge of
 // each type, and a root canvas showing it as a Board plus one task
@@ -938,10 +948,10 @@ let seed = (db: DatabaseSync) => {
   for (let t of [schema, view, keys, readme]) link(db, board, 'contains', t)
 
   let proj = addProject(db, 'Demo project')
-  prep(db, 'update task set project = ?').run(proj)
+  prep(db, `update task set project = ${ID}`).run(proj)
 
   let canvas = ent(db)
-  prep(db, 'insert into canvas (eid) values (?)').run(canvas)
+  prep(db, `insert into canvas (entity) values (${ID})`).run(canvas)
   pin(db, canvas, addCard(db, board, 'Board'), 0, 0, 640, 0)
   pin(db, canvas, addCard(db, view, 'Full'), 664, 0, 320, 0)
   // These direct inserts bypass apply()'s late mint pass, so number the demo
@@ -1059,7 +1069,11 @@ let renameTeaching = (text: string) =>
 export let migrateRefs = (db: DatabaseSync) => {
   let renames = refRenames.filter((r) => hasCol(db, r.table, r.old))
   let boards = hasCol(db, 'board', 'query')
-    ? prep(db, 'select eid, query from board where query is not null')
+    ? prep(
+      db,
+      `select o.eid as eid, query from board b join entity o on o.id = b.entity
+       where query is not null`,
+    )
       .all() as {
         eid: string
         query: string
@@ -1098,9 +1112,16 @@ export let migrateRefs = (db: DatabaseSync) => {
         }`,
       )
     }
-    let writeBoard = prep(db, 'update board set query = ? where eid = ?')
+    let writeBoard = prep(
+      db,
+      'update board set query = ? where entity = (select id from entity where eid = ?)',
+    )
     for (let r of staleBoards) writeBoard.run(r.next, r.eid)
-    let writeDoc = prep(db, 'update doc set title = ?, body = ? where eid = ?')
+    let writeDoc = prep(
+      db,
+      `update doc set title = ?, body = ?
+       where entity = (select id from entity where eid = ?)`,
+    )
     for (let r of staleDocs) writeDoc.run(r.nextTitle, r.nextBody, r.eid)
     db.exec('commit')
   } catch (e) {
@@ -1326,7 +1347,11 @@ let retireFilter = (query: string) => {
 
 export let retireProjectRetiredAt = (db: DatabaseSync) => {
   let legacy = hasCol(db, 'project', 'retired_at')
-  let boards = prep(db, 'select eid, query from board where query is not null')
+  let boards = prep(
+    db,
+    `select o.eid as eid, query from board b join entity o on o.id = b.entity
+     where query is not null`,
+  )
     .all() as { eid: string; query: string }[]
   let stale = boards.map((r) => ({ ...r, next: retireFilter(r.query) }))
     .filter((r) => r.next != r.query)
@@ -1334,10 +1359,13 @@ export let retireProjectRetiredAt = (db: DatabaseSync) => {
   db.exec('begin')
   try {
     if (legacy) {
-      db.exec(`insert or ignore into archived (eid, at)
-        select eid, retired_at from project where retired_at is not null`)
+      db.exec(`insert or ignore into archived (entity, at)
+        select entity, retired_at from project where retired_at is not null`)
     }
-    let write = prep(db, 'update board set query = ? where eid = ?')
+    let write = prep(
+      db,
+      'update board set query = ? where entity = (select id from entity where eid = ?)',
+    )
     for (let r of stale) write.run(r.next, r.eid)
     if (legacy) db.exec('alter table project drop column retired_at')
     db.exec('commit')
@@ -1355,8 +1383,8 @@ export let backfillSpawn = (db: DatabaseSync) => {
   db.exec('begin')
   try {
     db.exec(
-      `insert or ignore into spawn (eid, provider, model, effort, persona)
-         select eid, provider, model, effort, persona from session`,
+      `insert or ignore into spawn (entity, provider, model, effort, persona)
+         select entity, provider, model, effort, persona from session`,
     )
     // Only the sessions that actually DIFFER from their spawn row — so once the
     // backfill has settled, this update matches nothing and writes nothing.
@@ -1371,10 +1399,10 @@ export let backfillSpawn = (db: DatabaseSync) => {
       `update session set ${
         cols.map((col) =>
           `${sqlName(col)} = (select ${sqlName(col)} from spawn
-            where spawn.eid = session.eid)`
+            where spawn.entity = session.entity)`
         ).join(', ')
       } where exists (
-        select 1 from spawn where spawn.eid = session.eid and (${differ})
+        select 1 from spawn where spawn.entity = session.entity and (${differ})
       )`,
     )
     let different = cols.map((col) =>
@@ -1383,7 +1411,7 @@ export let backfillSpawn = (db: DatabaseSync) => {
     let missed = prep(
       db,
       `
-      select 1 from session s join spawn p on p.eid = s.eid
+      select 1 from session s join spawn p on p.entity = s.entity
       where ${different} limit 1
     `,
     ).get()
@@ -1402,15 +1430,15 @@ export let backfillSessionFacets = (db: DatabaseSync) => {
   db.exec('begin')
   try {
     db.exec(`
-      insert or ignore into worktree (eid, cwd, branch, base_revision)
-      select eid, cwd, branch, base_revision from session
+      insert or ignore into worktree (entity, cwd, branch, base_revision)
+      select entity, cwd, branch, base_revision from session
       where cwd is not null or branch is not null or base_revision is not null
     `)
     db.exec(`
       insert or ignore into runtime (
-        eid, pid, pane, transcript, provider_session_id, serving_model
+        entity, pid, pane, transcript, provider_session_id, serving_model
       )
-      select eid, pid, pane, transcript, provider_session_id, serving_model
+      select entity, pid, pane, transcript, provider_session_id, serving_model
       from session
       where pid is not null or pane is not null or transcript is not null
         or provider_session_id is not null or serving_model is not null
@@ -1437,11 +1465,11 @@ export let backfillSessionFacets = (db: DatabaseSync) => {
         `update session set ${
           cols.map((col) =>
             `${sqlName(col)} = (select ${sqlName(col)} from ${table}
-            where ${table}.eid = session.eid)`
+            where ${table}.entity = session.entity)`
           ).join(', ')
         } where exists (
           select 1 from ${table}
-          where ${table}.eid = session.eid and (${differ})
+          where ${table}.entity = session.entity and (${differ})
         )`,
       )
       let different = cols.map((col) =>
@@ -1450,7 +1478,7 @@ export let backfillSessionFacets = (db: DatabaseSync) => {
       let missed = prep(
         db,
         `
-        select 1 from session s join ${table} f on f.eid = s.eid
+        select 1 from session s join ${table} f on f.entity = s.entity
         where ${different} limit 1
       `,
       ).get()
@@ -1614,8 +1642,9 @@ export let resolveId = (
   // so the scan is free.
   let alias = (prep(
     db,
-    `select eid from alias where slug = ?
-       or instr(' ' || coalesce(slugs, '') || ' ', ' ' || ? || ' ') > 0`,
+    `select o.eid as eid from alias a join entity o on o.id = a.entity
+     where a.slug = ?
+       or instr(' ' || coalesce(a.slugs, '') || ' ', ' ' || ? || ' ') > 0`,
   ).get(id, id) as
     | { eid: string }
     | undefined)?.eid
@@ -1646,7 +1675,11 @@ export let human = (db: DatabaseSync, eid: string): string => {
   if (!row?.num) return shortId(eid)
   let kind =
     kindOrder.find((k) =>
-      prep(db, `select 1 from ${k} where eid = ?`).get(eid)
+      prep(
+        db,
+        `select 1 from ${sqlName(k)}
+         where entity = (select id from entity where eid = ?)`,
+      ).get(eid)
     ) ?? 'entity'
   return idOf({ eid, kind, num: row.num })
 }
@@ -1662,7 +1695,11 @@ let UUIDRE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // SHADOW the real one in homeOf).
 let addressed = (db: DatabaseSync, addr: string): string | undefined => {
   let a = addr.trim()
-  let worn = (prep(db, 'select eid from email where address = ? collate nocase')
+  let worn = (prep(
+    db,
+    `select o.eid as eid from email e join entity o on o.id = e.entity
+     where e.address = ? collate nocase`,
+  )
     .get(a) as { eid: string } | undefined)?.eid
   if (worn) return worn
   let m = /^([A-Za-z]+-(\d+))$/i.exec(fleetLocal(a) ?? '')
@@ -1692,7 +1729,10 @@ export let addressEntity = (db: DatabaseSync, addr: string): string => {
   let a = addr.trim()
   let eid = uuid()
   spine(db, eid)
-  prep(db, 'insert into email (eid, address) values (?, ?)').run(eid, a)
+  prep(
+    db,
+    'insert into email (entity, address) values ((select id from entity where eid = ?), ?)',
+  ).run(eid, a)
   mintNum(db, eid) // spine no longer numbers at birth (T-3684); email is numbered
   return eid
 }
@@ -1708,7 +1748,11 @@ export let addressEntity = (db: DatabaseSync, addr: string): string => {
 // mail rebuild sees the trimmed shape; idempotent (insert-or-ignore on the
 // deliver pk, each source column guarded by hasCol, dedup by address on mint).
 export let migrateDeliver = (db: DatabaseSync) => {
-  let ins = prep(db, 'insert or ignore into deliver (eid, "to") values (?, ?)')
+  // The knock/wake/mail bodies below run ONLY on a legacy db that still carries
+  // the pre-facet columns (to_eid / mail.to); after the eid→id reshape those
+  // columns are long gone, so every hasCol guard is false and none of this SQL
+  // compiles. The eid-shaped statements are correct for that legacy shape and
+  // stay as they are.
   for (let table of ['knock', 'wake']) {
     if (!hasCol(db, table, 'to_eid')) continue
     db.exec(
@@ -1718,6 +1762,7 @@ export let migrateDeliver = (db: DatabaseSync) => {
     db.exec(`alter table ${table} drop column to_eid`)
   }
   if (hasCol(db, 'mail', 'to')) {
+    let ins = prep(db, 'insert or ignore into deliver (eid, "to") values (?, ?)')
     let rows = prep(
       db,
       `select eid, "to", to_addr, received_at, sent_id from mail
@@ -1769,7 +1814,10 @@ export let migrateDeliver = (db: DatabaseSync) => {
 // skipped, so once every mirror is folded in a re-run finds nothing (this also
 // skips P-19, already board+project via `.project=<own eid>`).
 export let migrateBoardsToProjects = (db: DatabaseSync) => {
-  let boards = prep(db, 'select eid, query from board').all() as {
+  let boards = prep(
+    db,
+    'select o.eid as eid, query from board b join entity o on o.id = b.entity',
+  ).all() as {
     eid: string
     query: string | null
   }[]
@@ -1793,29 +1841,34 @@ export let migrateBoardsToProjects = (db: DatabaseSync) => {
       }
       if (p.at || p.value.includes(',')) continue
       let project = p.value
-      if (!prep(db, 'select 1 from project where eid = ?').get(project)) {
+      let pid = toId(db, project)
+      let bid = toId(db, eid)
+      if (
+        !pid ||
+        !prep(db, 'select 1 from project where entity = ?').get(pid)
+      ) {
         continue
       }
-      if (prep(db, 'select 1 from board where eid = ?').get(project)) continue
+      if (prep(db, 'select 1 from board where entity = ?').get(pid)) continue
       // (1) the project becomes the board
-      prep(db, 'insert into board (eid, query) values (?, ?)')
-        .run(project, query)
+      prep(db, 'insert into board (entity, query) values (?, ?)')
+        .run(pid, query)
       // (2) repoint every view BEFORE the bury, so nothing cascades
       prep(db, 'update card set target = ? where target = ?')
-        .run(project, eid)
-      prep(db, 'update fold set board = ? where board = ?').run(project, eid)
-      // (3) bury the now-unreferenced board — the reaper's shape
+        .run(pid, bid)
+      prep(db, 'update fold set board = ? where board = ?').run(pid, bid)
+      // (3) bury the now-unreferenced board — the reaper's shape, spine
+      // RETAINED (D-18866): a tombstone marks it dead, the id never recycles.
       for (let c of Object.keys(comps)) {
-        prep(db, `delete from ${c} where eid = ?`).run(eid)
+        prep(db, `delete from ${sqlName(c)} where entity = ?`).run(bid)
       }
       prep(db, 'delete from dependency where parent = ? or child = ?')
-        .run(eid, eid)
+        .run(bid, bid)
       prep(
         db,
         `insert or ignore into tombstone (eid, num, deleted_at)
          values (?, (select num from entity where eid = ?), ?)`,
       ).run(eid, eid, now)
-      prep(db, 'delete from entity where eid = ?').run(eid)
     }
     db.exec('commit')
   } catch (e) {
@@ -1837,15 +1890,22 @@ export let migrateBoardsToProjects = (db: DatabaseSync) => {
 export let healInboundDeliver = (db: DatabaseSync) => {
   let rows = prep(
     db,
-    `select m.eid, em.address from mail m
-       join deliver d on d.eid = m.eid
-       join email em on em.eid = d."to"
+    `select mo.eid as eid, em.address as address from mail m
+       join deliver d on d.entity = m.entity
+       join email em on em.entity = d."to"
+       join entity mo on mo.id = m.entity
      where m.received_at is not null and m.sent_id is null
        and (m.to_addr is null or m.to_addr = '')`,
   ).all() as { eid: string; address: string }[]
   for (let { eid, address } of rows) {
-    prep(db, 'update mail set to_addr = ? where eid = ?').run(address, eid)
-    prep(db, 'delete from deliver where eid = ?').run(eid)
+    prep(
+      db,
+      'update mail set to_addr = ? where entity = (select id from entity where eid = ?)',
+    ).run(address, eid)
+    prep(
+      db,
+      'delete from deliver where entity = (select id from entity where eid = ?)',
+    ).run(eid)
   }
 }
 
@@ -1922,10 +1982,23 @@ export let healStored = (db: DatabaseSync) => {
       if (!prop || required == null) {
         throw new Error(`declared column missing: ${table}.${col}`)
       }
+      // A reference column stores an int id that is FK-valid by construction —
+      // there is nothing malformed to heal, and validating an int against the
+      // eid grammar would wrongly flag it. Skip references; heal only the
+      // scalar vocabulary (enums, times, numbers, urls).
+      if (isRef(table, col)) continue
+      // The `entity` spine is eid-native (eid, num are real columns); every
+      // other table owns through the int `entity` key and projects its eid.
       let rows = prep(
         db,
-        `select eid, ${sqlName(col)} as value from ${sqlName(table)}
-         where ${sqlName(col)} is not null`,
+        table == 'entity'
+          ? `select eid, ${sqlName(col)} as value from entity
+             where ${sqlName(col)} is not null`
+          : `select o.eid as eid, t.${sqlName(col)} as value from ${
+            sqlName(table)
+          } t
+           join entity o on o.id = t.entity
+           where t.${sqlName(col)} is not null`,
       ).all() as { eid: string; value: unknown }[]
       for (let { eid, value } of rows) {
         try {
@@ -1949,9 +2022,11 @@ export let healStored = (db: DatabaseSync) => {
     for (let fix of fixes) {
       prep(
         db,
-        `update ${sqlName(fix.table)} set ${
-          sqlName(fix.col)
-        } = ? where eid = ?`,
+        fix.table == 'entity'
+          ? `update entity set ${sqlName(fix.col)} = ? where eid = ?`
+          : `update ${sqlName(fix.table)} set ${
+            sqlName(fix.col)
+          } = ? where entity = (select id from entity where eid = ?)`,
       ).run(fix.value, fix.eid)
     }
     db.exec('commit')
@@ -1960,6 +2035,115 @@ export let healStored = (db: DatabaseSync) => {
     throw e
   }
   return { changed: fixes.length, invalid }
+}
+
+// The eid↔id boundary (D-18866). Storage keys every entity by an internal
+// integer `id`; the wire, snapshot(), apply() and every reader speak permanent
+// EIDs. These resolve across the seam: an inbound eid to its spine id (null when
+// unknown — a reference to an entity this graph never minted), an id back to its
+// eid, and a reference VALUE (eid or null) to the int id stored for it — an
+// unknown target resolves to null, which a NOT NULL / FK reference bounces on
+// the same way a missing eid bounced the old text FK.
+let toId = (db: DatabaseSync, eid: string): number | null =>
+  (prep(db, 'select id from entity where eid = ?').get(eid) as
+    | { id: number }
+    | undefined)?.id ?? null
+let toEid = (db: DatabaseSync, id: number): string | undefined =>
+  (prep(db, 'select eid from entity where id = ?').get(id) as
+    | { eid: string }
+    | undefined)?.eid
+let refId = (db: DatabaseSync, v: unknown): number | null =>
+  v == null ? null : toId(db, String(v))
+
+let tableExists = (db: DatabaseSync, t: string) =>
+  !!prep(db, `select 1 from sqlite_master where type = 'table' and name = ?`)
+    .get(t)
+
+// The graph tables the eid→id reshape reshapes (D-18866): the spine, the edge
+// table, and every component table. The eid-keyed log/derived tables (journal,
+// journal_touch, tool_call, embedding, the FTS shadows) and the eid-keyed
+// tombstone stay as they are — D-18866 keeps the journal on eids (T-18878), and
+// the rest are non-graph or rebuild themselves.
+let graphTables = () => ['entity', 'dependency', ...Object.keys(comps)]
+
+// Copy one renamed-aside legacy table's rows into its fresh id-keyed twin,
+// resolving every eid to its int id: the owner `eid`→`entity`, each `{eid}`
+// reference (and dependency's parent/child) to the referent's id, plain scalars
+// straight across. A fresh column the legacy table predates takes its default.
+let copyLegacyTable = (db: DatabaseSync, t: string, old: string) => {
+  let oldCols = new Set(colNames(db, old))
+  let dst: string[] = []
+  let src: string[] = []
+  for (let c of colNames(db, t)) {
+    let depRef = t == 'dependency' && (c == 'parent' || c == 'child')
+    if (c == 'entity') {
+      if (!oldCols.has('eid')) continue
+      dst.push('entity')
+      src.push('(select id from entity where eid = o.eid)')
+    } else if (!oldCols.has(c)) {
+      continue
+    } else if (isRef(t, c) || depRef) {
+      dst.push(sqlName(c))
+      src.push(`(select id from entity where eid = o.${sqlName(c)})`)
+    } else {
+      dst.push(sqlName(c))
+      src.push(`o.${sqlName(c)}`)
+    }
+  }
+  db.exec(
+    `insert into ${sqlName(t)} (${dst.join(', ')})
+     select ${src.join(', ')} from ${sqlName(old)} o`,
+  )
+}
+
+// The legacy eid→id migration (D-18866; the boot step the T-18883 cutover
+// rehearses). A db is legacy when its spine is still keyed by eid — no `id`
+// column. Reshape every graph table to the CANONICAL id-keyed shape (owner
+// `entity` int, references int), preserving the wire exactly: each entity keeps
+// its eid and takes a stable int id (its former rowid), every stored reference
+// resolves through those eids. A fresh scratch db hands us the exact target DDL
+// for each table (constraints and all), so the reshape reuses the one schema
+// definition rather than reconstructing it. One transaction, FK-deferred until
+// the whole graph is remapped, then foreign_key_check proves no reference was
+// left dangling. Idempotent: an id-keyed (or brand-new) db returns at the door.
+let migrateToIdKeys = (db: DatabaseSync) => {
+  if (!tableExists(db, 'entity') || hasCol(db, 'entity', 'id')) return
+  let scratch = open(':memory:')
+  let ddlOf = (t: string) =>
+    (scratch.prepare(
+      `select sql from sqlite_master where type = 'table' and name = ?`,
+    ).get(t) as { sql: string }).sql
+  db.exec('pragma foreign_keys = off')
+  db.exec('begin')
+  try {
+    // The spine first, so every reference below resolves against real ids.
+    db.exec('alter table entity rename to __mig_entity')
+    db.exec(ddlOf('entity'))
+    db.exec(
+      'insert into entity (id, eid, num) select rowid, eid, num from __mig_entity',
+    )
+    db.exec('drop table __mig_entity')
+    for (let t of graphTables()) {
+      if (t == 'entity' || !tableExists(db, t)) continue
+      db.exec(`alter table ${sqlName(t)} rename to __mig_${t}`)
+      db.exec(ddlOf(t))
+      copyLegacyTable(db, t, `__mig_${t}`)
+      db.exec(`drop table __mig_${t}`)
+    }
+    db.exec('commit')
+  } catch (e) {
+    rollback(db)
+    scratch.close()
+    throw e
+  }
+  scratch.close()
+  let orphans = db.prepare('pragma foreign_key_check').all()
+  if (orphans.length) {
+    throw new Error(
+      `eid→id migration left ${orphans.length} dangling reference(s)`,
+    )
+  }
+  db.exec('pragma foreign_keys = on')
 }
 
 // Open the file, migrate it in place, plant missing schema, and seed once if
@@ -2019,6 +2203,11 @@ export let open = (path = file) => {
         console.warn(`TASKS_WAL set but journal_mode is ${got}, not wal`)
       } else if (!sync) db.exec('pragma synchronous = normal')
     }
+    // The eid→id storage reshape (D-18866) runs FIRST: it reshapes an
+    // eid-keyed legacy graph to the canonical id-keyed spine every statement
+    // below assumes, so migrateRefs/schema/the backfills all see id-keyed
+    // tables. A no-op on an already-id-keyed or brand-new db.
+    migrateToIdKeys(db)
     // This must precede schema: an old table may not yet have the canonical
     // columns named by a newly added index in the current DDL.
     migrateRefs(db)
@@ -2059,7 +2248,7 @@ export let open = (path = file) => {
     // creation stamp; anonymous legacy rows fall back to migration time.
     db.exec(
       `update favorite set at = coalesce(
-        (select at from created where created.eid = favorite.eid),
+        (select at from created where created.entity = favorite.entity),
         strftime('%Y-%m-%dT%H:%M:%fZ','now')
       ) where at is null`,
     )
@@ -2079,8 +2268,8 @@ export let open = (path = file) => {
     // Retired by the per-comment `notified` stamp, which is per item and so
     // cannot advance past an unserved sibling the way a cursor could.
     dropCol('session', 'acked_at')
-    addCol('task', 'project', 'project text references entity(eid)')
-    addCol('task', 'assignee', 'assignee text references entity(eid)')
+    addCol('task', 'project', 'project integer references entity(id)')
+    addCol('task', 'assignee', 'assignee integer references entity(id)')
     addCol('task', 'domain', 'domain text')
     addCol('repo', 'url', 'url text')
     // Off for every checkout the graph already knows: the permission to push
@@ -2098,13 +2287,13 @@ export let open = (path = file) => {
     addCol('wake', 'note', 'note text')
     // The crash-loop breaker's fresh-start fence (types.ts, src/roles.ts).
     addCol('role', 'retry_at', 'retry_at text')
-    addCol('role', 'checkout', 'checkout text references entity(eid)')
+    addCol('role', 'checkout', 'checkout integer references entity(id)')
     addCol('role', 'schedule', 'schedule text')
     addCol('role', 'wake_policy', "wake_policy text not null default 'always'")
-    addCol('role', 'wake_target', 'wake_target text references entity(eid)')
+    addCol('role', 'wake_target', 'wake_target integer references entity(id)')
     addCol('role', 'decision', 'decision text')
     addCol('role', 'reason', 'reason text')
-    addCol('role', 'observed', 'observed text')
+    addCol('role', 'observed', 'observed integer')
     addCol('role', 'decided_at', 'decided_at text')
     addCol('generation', 'serving_model', 'serving_model text')
     addCol('session', 'cwd', 'cwd text')
@@ -2122,11 +2311,11 @@ export let open = (path = file) => {
     addCol('session', 'operator', 'operator integer')
     // The operator session a delegated agent descends from (types.ts): a child
     // reifies as its own row rather than a second writer on the operator's.
-    addCol('session', 'parent', 'parent text references entity(eid)')
+    addCol('session', 'parent', 'parent integer references entity(id)')
     for (
       let table of ['created', 'updated', 'notified', 'opened', 'archived']
     ) {
-      addCol(table, 'via', 'via text')
+      addCol(table, 'via', 'via integer')
     }
     addCol('journal', 'via', 'via text')
     // The managed-session lifecycle (src/sessions.ts): what it is doing and
@@ -2140,9 +2329,9 @@ export let open = (path = file) => {
         'provider text',
         'model text',
         'effort text',
-        'persona text',
-        'requested_task text',
-        'role text',
+        'persona integer',
+        'requested_task integer',
+        'role integer',
         'branch text',
         'base_revision text',
         'status text',
@@ -2167,16 +2356,16 @@ export let open = (path = file) => {
     // Managed prompts have always occupied seq 1. Materialize the facet for
     // existing logs so deploy-time UI behavior matches newly appended runs.
     db.exec(`
-      insert or ignore into instruction (eid)
-      select e.eid from entry e
-      join message m on m.eid = e.eid
-      join session s on s.eid = e.session
+      insert or ignore into instruction (entity)
+      select e.entity from entry e
+      join message m on m.entity = e.entity
+      join session s on s.entity = e.session
       where e.seq = 1 and m.role = 'user' and s.origin = 'managed'
     `)
     backfillSpawn(db)
     backfillSessionFacets(db)
     // The identity chain (types.ts): instruments point at who they act for.
-    addCol('client', 'actor', 'actor text references entity(eid)')
+    addCol('client', 'actor', 'actor integer references entity(id)')
     // Inbound provenance (inbound.ts): the fleet sweep's idempotency key
     // (and the never-send mark), arrival time, and the edge's DKIM verdict
     // — see stamped.mail in types.ts.
@@ -2186,14 +2375,14 @@ export let open = (path = file) => {
     // Threading (mail.ts): the mail this one answers — no FK, like
     // target (death 'keep' + tombstoned spines veto FK'd deletes,
     // T-4593). sent_id is the sender-assigned Message-ID, server-stamped.
-    addCol('mail', 'reply_to', 'reply_to text')
+    addCol('mail', 'reply_to', 'reply_to integer')
     addCol('mail', 'sent_id', 'sent_id text')
     addCol('mail', 'in_reply_to', 'in_reply_to text')
     // The narrow routing-header set (T-14133) — last mail column, so it lands
     // at the tail in both a fresh mailDdl and a live db, keeping mendMail's
     // positional `insert select *` aligned. See stamped.mail in types.ts.
     addCol('mail', 'headers', 'headers text')
-    addCol('session', 'actor', 'actor text references entity(eid)')
+    addCol('session', 'actor', 'actor integer references entity(id)')
     // board.query, project.color and the hook request columns (method/path/
     // headers/sig_ok) were planted here before their tables were derived
     // (T-12764); the addDerivedCols pass above now fills them from the vocabulary.
@@ -2477,7 +2666,11 @@ let admitted = (change: Change): Change | undefined => {
   if (!cols) return
   if (serverOwned.has(table)) return
   if (change.comp == null) return change
-  let sent = Object.entries(change.comp)
+  // `eid` is the entity's identity, projected into every snapshot row by
+  // select(); it is never a writable column (the owner key is the int `entity`
+  // now), so ignore it here rather than reading it as an unknown column when a
+  // snapshot is replayed back through apply().
+  let sent = Object.entries(change.comp).filter(([n]) => n != 'eid')
   let real = columnsOf(table)
   let alien = sent.filter(([n]) => !cols.includes(n) && !real.has(n))
   if (alien.length) {
@@ -2717,17 +2910,45 @@ let readable: Record<string, string[]> = Object.fromEntries(
   ]),
 )
 
-let select = (name: string) =>
-  `select ${readable[name].map(sqlName).join(', ')} from ${sqlName(name)}`
+// Graph-out projected back to EIDs. The owner column is `entity` (an int id),
+// so join the spine for its eid under the alias `eid`, and each `{eid}`
+// REFERENCE column joins the spine again for ITS target's eid under the
+// reference's own name; a plain scalar reads straight off the base row `t`. The
+// projection is WRAPPED in a subquery so the only `eid` a caller's appended
+// `where eid = ?` can bind is the single projected output column — every joined
+// spine also carries an `eid` column, so the bare name would otherwise be
+// ambiguous. The `entity` spine is eid-native (eid is a real column), so it
+// projects itself.
+let select = (name: string): string => {
+  if (name == 'entity') {
+    return `select ${readable.entity.map(sqlName).join(', ')} from entity`
+  }
+  let joins: string[] = []
+  let cols = readable[name].map((c) => {
+    if (c == 'eid') return `__o.eid as eid`
+    if (isRef(name, c)) {
+      let a = `__r_${c.replace(/[^A-Za-z0-9]/g, '_')}`
+      joins.push(`left join entity ${a} on ${a}.id = t.${sqlName(c)}`)
+      return `${a}.eid as ${sqlName(c)}`
+    }
+    return `t.${sqlName(c)} as ${sqlName(c)}`
+  })
+  return `select * from (select ${cols.join(', ')} from ${sqlName(name)} t ` +
+    `join entity __o on __o.id = t.entity${
+      joins.length ? ' ' + joins.join(' ') : ''
+    }) __s`
+}
 
 // The boot snapshot omits every entity carrying a LAZY-partition comp
 // (types.ts `partition`) — the whole entity, so a lazy entity's eager comps
 // (a session's `recalled`) leave with it too. This subquery is the UNION of
-// the lazy tables' eids, derived from the one-list so a new lazy comp joins
-// the omission with zero further edits. Today lazy = {entry}, so it reads
-// `select eid from entry`, byte-identical to the former hardcoded clause.
+// the lazy tables' owner EIDs (projected through the spine, since the owner key
+// is now an int id), derived from the one-list so a new lazy comp joins the
+// omission with zero further edits. Today lazy = {entry}.
 let lazyEids = Object.keys(readable).filter(lazy)
-  .map((name) => `select eid from ${sqlName(name)}`).join(' union ')
+  .map((name) =>
+    `select o.eid from ${sqlName(name)} lz join entity o on o.id = lz.entity`
+  ).join(' union ')
 
 let bound = (
   name: string,
@@ -2787,16 +3008,25 @@ let refused = (
 ) => {
   if ((e as { errcode?: number })?.errcode != 787) return null
   let given: Record<string, unknown> = { eid, ...comp }
+  // The sent reference values are still EIDS here (refused runs on the original
+  // comp, before id resolution). Every FK now targets an int key, so resolve
+  // the eid through the spine to test existence: an entity(id) FK checks the
+  // spine by eid, a component-owner FK (pin→card(entity)) checks that table.
   let bad = (prep(
     db,
-    `select "from" as col, "table" as t, coalesce("to", 'eid') as pk
+    `select "from" as col, "table" as t, coalesce("to", 'id') as pk
      from pragma_foreign_key_list(?)`,
   ).all(name) as { col: string; t: string; pk: string }[])
     .filter((f) =>
       given[f.col] != null &&
-      !prep(db, `select 1 from ${f.t} where ${f.pk} = ?`).get(
-        given[f.col] as string,
-      )
+      !(f.pk == 'id'
+        ? prep(db, 'select 1 from entity where eid = ?').get(
+          given[f.col] as string,
+        )
+        : prep(
+          db,
+          `select 1 from ${f.t} where ${f.pk} = (select id from entity where eid = ?)`,
+        ).get(given[f.col] as string))
     )
     .map((f) =>
       `${f.col} → ${human(db, given[f.col] as string)} (${
@@ -2891,18 +3121,24 @@ let refRefused = (
   target?: string,
 ) => {
   let to = ref.target // always a specific component table (refs excludes 'entity')
+  let col = sqlName(ref.col)
   let args: string[] = []
   if (eid) args.push(eid)
   if (target) args.push(target)
+  // The reference is an int id; `tt` is the target COMPONENT row (owner
+  // `entity`), absent when the id names no such KIND. `o`/`rr` project the
+  // referrer's and referent's eids for the message and the filters.
   let bad = prep(
     db,
     `
-    select r.eid, r."${ref.col}" as target
-    from ${ref.name} r
-    left join ${to} t on t.eid = r."${ref.col}"
-    where r."${ref.col}" is not null and t.eid is null
-      ${eid ? 'and r.eid = ?' : ''}
-      ${target ? `and r."${ref.col}" = ?` : ''}
+    select o.eid as eid, rr.eid as target
+    from ${sqlName(ref.name)} r
+    join entity o on o.id = r.entity
+    left join entity rr on rr.id = r.${col}
+    left join ${sqlName(to)} tt on tt.entity = r.${col}
+    where r.${col} is not null and tt.entity is null
+      ${eid ? 'and o.eid = ?' : ''}
+      ${target ? `and rr.eid = ?` : ''}
     limit 1
   `,
   ).get(...args) as
@@ -3116,18 +3352,25 @@ export class Stale extends Error {
 // one another. The rule lives at apply(), where concurrent doors serialize;
 // command-side replacement would let two stale snapshots both survive.
 let replaceWakes = (db: DatabaseSync, changes: Change[]): Change[] => {
-  let exists = prep(db, 'select 1 from wake where eid = ?')
+  let exists = prep(
+    db,
+    'select 1 from wake where entity = (select id from entity where eid = ?)',
+  )
   // Unacted = neither outcome component present (D-14945); the wake's own
   // receipt columns moved to the shared delivered/error tables. The recipient
   // moved too — to the `deliver {to}` facet, joined here and named in the same
-  // batch, since a fresh self-wake always mints its deliver alongside.
+  // batch, since a fresh self-wake always mints its deliver alongside. Owner
+  // and `to` are int ids; the projected owner eid rides back out.
   let pending = prep(
     db,
     `
-    select wake.eid from wake join deliver on deliver.eid = wake.eid
-    where deliver."to" = ? and wake.target is null and wake.eid != ?
-      and not exists (select 1 from delivered where delivered.eid = wake.eid)
-      and not exists (select 1 from error where error.eid = wake.eid)
+    select o.eid as eid from wake w
+    join entity o on o.id = w.entity
+    join deliver dl on dl.entity = w.entity
+    where dl."to" = (select id from entity where eid = ?)
+      and w.target is null and o.eid != ?
+      and not exists (select 1 from delivered d where d.entity = w.entity)
+      and not exists (select 1 from error e where e.entity = w.entity)
   `,
   )
   let toOf = new Map<string, string>()
@@ -3160,7 +3403,10 @@ let replaceWakes = (db: DatabaseSync, changes: Change[]): Change[] => {
 // existing row; a key-only or bare touch is refused unless the key is catalogued.
 // The value is normalized IN PLACE so storage and the echoed batch are canonical.
 let guardSettings = (db: DatabaseSync, changes: Change[]): Change[] => {
-  let keyOf = prep(db, 'select key from setting where eid = ?')
+  let keyOf = prep(
+    db,
+    'select key from setting where entity = (select id from entity where eid = ?)',
+  )
   for (let c of changes) {
     if (c.name != 'setting' || !c.comp) continue
     let comp = c.comp
@@ -3267,8 +3513,12 @@ export let apply = (
     let priorClaims = prep(
       db,
       `
-      select c.eid, c.claimed_at, c.rowid as claim_order, s.actor, s.cwd
-      from claim c left join session s on s.eid = c.session
+      select co.eid as eid, c.claimed_at, c.rowid as claim_order,
+             act.eid as actor, s.cwd as cwd
+      from claim c
+      join entity co on co.id = c.entity
+      left join session s on s.entity = c.session
+      left join entity act on act.id = s.actor
     `,
     ).all() as {
       eid: string
@@ -3300,7 +3550,10 @@ export let apply = (
       changes.filter((c) => c.name == 'entry' && c.comp?.session)
         .map((c) => c.eid),
     )
-    let existed = prep(db, 'select 1 from entry where eid = ?')
+    let existed = prep(
+      db,
+      'select 1 from entry where entity = (select id from entity where eid = ?)',
+    )
     for (let { eid, name, comp } of changes) {
       if (!facts.has(name)) continue
       if (existed.get(eid)) {
@@ -3350,6 +3603,9 @@ export let apply = (
           console.warn(`sync: edge for ${eid} dropped — missing endpoint`)
           continue
         }
+        // Endpoints are int ids in storage; both spines exist (checked above).
+        let pid = toId(db, eid)
+        let cid = toId(db, String(comp.child))
         db.exec('savepoint change')
         try {
           if (comp.gone) {
@@ -3359,7 +3615,7 @@ export let apply = (
               delete from dependency
               where parent = ? and type = ? and child = ?
             `,
-            ).run(eid, String(comp.type), String(comp.child))
+            ).run(pid, String(comp.type), cid)
           } else if ('ord' in comp) {
             // An edge carrying a listing order create-or-PATCHes its ord:
             // re-linking the same sentence with a new ord sets it (an
@@ -3373,9 +3629,9 @@ export let apply = (
               on conflict(parent, type, child) do update set ord = excluded.ord
             `,
             ).run(
-              eid,
+              pid,
               String(comp.type),
-              String(comp.child),
+              cid,
               (comp.ord ?? null) as number | null,
             )
           } else {
@@ -3385,7 +3641,7 @@ export let apply = (
               insert or ignore into dependency (parent, type, child)
               values (?, ?, ?)
             `,
-            ).run(eid, String(comp.type), String(comp.child))
+            ).run(pid, String(comp.type), cid)
           }
           db.exec('release change')
           touched.add(eid) // a moved edge is news at both ends
@@ -3430,12 +3686,15 @@ export let apply = (
       // keeps NEITHER: partial application is how you end up with a body
       // from one writer and a title from another.
       if (was) {
-        let row = prep(db, `select * from ${sqlName(name)} where eid = ?`).get(
+        // Read through the PROJECTION (select()), so a reference column reads
+        // back as the eid the caller named in `was` — not the int id it is
+        // stored as. The guard columns are readable names (`eid`, refs, scalars).
+        let row = prep(db, `${select(name)} where eid = ?`).get(
           eid,
         ) as
           | Record<string, unknown>
           | undefined
-        let real = columnsOf(name)
+        let real = new Set(readable[name])
         for (let [col, want] of Object.entries(was)) {
           // A guard on a column that doesn't exist would read undefined,
           // compare equal to null, and protect nothing — the precondition
@@ -3452,17 +3711,24 @@ export let apply = (
       // session re-claiming is a no-op refresh. apply() runs serially on
       // the one db handle, so check-then-write here IS the atomic take.
       if (name == 'claim' && comp) {
+        // claim.session and the owner are int ids; project the current
+        // holder's session eid (for the != comp.session eid compare) and its
+        // label. `eid` is the claimed entity's eid (claim is keyed by it).
         let cur = prep(
           db,
           `
-          select c.session, s.id from claim c
-          left join session s on s.eid = c.session
-          where c.eid = ?
+          select cs.eid as session, s.id as id from claim c
+          left join session s on s.entity = c.session
+          left join entity cs on cs.id = c.session
+          where c.entity = (select id from entity where eid = ?)
         `,
         ).get(eid) as { session: string; id: string | null } | undefined
         if (cur && cur.session != comp.session) {
-          let loser = prep(db, 'select id from session where eid = ?')
-            .get(String(comp.session)) as { id: string } | undefined
+          let loser = prep(
+            db,
+            `select s.id as id from session s
+             join entity o on o.id = s.entity where o.eid = ?`,
+          ).get(String(comp.session)) as { id: string } | undefined
           bounced = {
             target: eid,
             loser: loser?.id ?? String(comp.session),
@@ -3489,7 +3755,7 @@ export let apply = (
             insert or ignore into dependency (parent, type, child)
             values (?, 'worked', ?)
           `,
-          ).run(session, eid).changes
+          ).run(toId(db, session), toId(db, eid)).changes
         ) {
           touched.add(session)
           touched.add(eid)
@@ -3506,10 +3772,17 @@ export let apply = (
         // can claim-without-wip. Only open→wip; a stray claim never reopens a
         // done/cancelled task. The synthesized `task` change rides `extra` so
         // every client cache hears the status move.
-        let tk = prep(db, 'select status from task where eid = ?')
+        let tk = prep(
+          db,
+          'select status from task where entity = (select id from entity where eid = ?)',
+        )
           .get(eid) as { status: string } | undefined
         if (tk?.status == 'open') {
-          prep(db, "update task set status = 'wip' where eid = ?").run(eid)
+          prep(
+            db,
+            `update task set status = 'wip'
+             where entity = (select id from entity where eid = ?)`,
+          ).run(eid)
           touched.add(eid)
           extra.push({ eid, name: 'task', comp: { status: 'wip' } })
         }
@@ -3519,32 +3792,43 @@ export let apply = (
       // loudly, like a bounced claim. (The stop itself is an EFFECT,
       // post-commit; this gate is the rule half.)
       if (name == 'stop_request' && comp?.target) {
-        let s = prep(db, 'select origin, status from session where eid = ?')
-          .get(String(comp.target)) as
+        // session facets are int-keyed now: the target session's own eid names
+        // its row, and every entry-borne facet joins the entry by its owner
+        // int (e.entity), the id that was formerly e.eid.
+        let target = String(comp.target)
+        let s = prep(
+          db,
+          `select s.origin as origin, s.status as status from session s
+           join entity o on o.id = s.entity where o.eid = ?`,
+        )
+          .get(target) as
             | { origin: string; status: string | null }
             | undefined
         let graph = !!prep(
           db,
-          `select 1 from entry e where e.session = ? and (
-             exists (select 1 from lease l where l.eid = e.eid)
+          `select 1 from entry e
+           where e.session = (select id from entity where eid = ?) and (
+             exists (select 1 from lease l where l.entity = e.entity)
              or (
-               not exists (select 1 from imported i where i.eid = e.eid)
-               and not exists (select 1 from error x where x.eid = e.eid)
-               and not exists (select 1 from cancel z where z.target = e.eid)
+               not exists (select 1 from imported i where i.entity = e.entity)
+               and not exists (select 1 from error x where x.entity = e.entity)
+               and not exists (
+                 select 1 from cancel z where z.target = e.entity
+               )
                and (
-                 (exists (select 1 from generation g where g.eid = e.eid)
+                 (exists (select 1 from generation g where g.entity = e.entity)
                   and not exists (
-                    select 1 from delivered d where d.eid = e.eid
+                    select 1 from delivered d where d.entity = e.entity
                   ))
                  or
-                 (exists (select 1 from call c where c.eid = e.eid)
+                 (exists (select 1 from call c where c.entity = e.entity)
                   and not exists (
-                    select 1 from result r where r.call = e.eid
+                    select 1 from result r where r.call = e.entity
                   ))
                )
              )
            ) limit 1`,
-        ).get(String(comp.target))
+        ).get(target)
         if (
           !s || s.origin != 'managed' ||
           (!sessionActive.includes(String(s.status)) && !graph)
@@ -3564,7 +3848,11 @@ export let apply = (
       // the whole set; a slug already worn by another entity bounces the batch,
       // the way a taken claim does.
       if (name == 'alias' && comp) {
-        let cur = prep(db, 'select slug, slugs from alias where eid = ?')
+        let cur = prep(
+          db,
+          `select slug, slugs from alias
+           where entity = (select id from entity where eid = ?)`,
+        )
           .get(eid) as { slug: string; slugs: string | null } | undefined
         let slug = (comp.slug ?? cur?.slug ?? null) as string | null
         let extra = (comp.slugs !== undefined ? comp.slugs : cur?.slugs) as
@@ -3576,8 +3864,9 @@ export let apply = (
           seen.add(s)
           let owner = prep(
             db,
-            `select eid from alias where eid != ? and (slug = ?
-               or instr(' ' || coalesce(slugs, '') || ' ', ' ' || ? || ' ') > 0)`,
+            `select o.eid as eid from alias a join entity o on o.id = a.entity
+             where o.eid != ? and (a.slug = ?
+               or instr(' ' || coalesce(a.slugs, '') || ' ', ' ' || ? || ' ') > 0)`,
           ).get(eid, s, s) as { eid: string } | undefined
           if (owner) {
             throw new Error(`alias ${s} already names ${human(db, owner.eid)}`)
@@ -3601,8 +3890,11 @@ export let apply = (
       if (comp == null) {
         if (name != 'entity') {
           if (
-            prep(db, `delete from ${sqlName(name)} where eid = ?`).run(eid)
-              .changes
+            prep(
+              db,
+              `delete from ${sqlName(name)}
+               where entity = (select id from entity where eid = ?)`,
+            ).run(eid).changes
           ) {
             took(eid, name)
           }
@@ -3614,19 +3906,30 @@ export let apply = (
         // soft references let go (claims by a dead session, tasks of a
         // dead project); then every component row goes in reverse
         // declaration order (dependents before their referents), and only
-        // then the spines — a spine can't drop while any row still aims
-        // at it. Every casualty is tombstoned: nothing resurrects.
+        // then the spines are TOMBSTONED — the identity row is retained
+        // forever (D-18866) so its integer id can never recycle into a new
+        // entity (C-19754#2), it just leaves the wire. Reference columns are
+        // int ids, so every cascade walk resolves the doomed eid to its id
+        // first and projects the owner eid back out.
         let doomed = [eid]
         for (let i = 0; i < doomed.length; i++) {
+          let did = toId(db, doomed[i])
+          if (did == null) continue
           for (let [t, col] of AIMED) {
-            let rows = prep(db, `select eid from ${t} where ${col} = ?`)
-              .all(doomed[i]) as { eid: string }[]
+            let rows = prep(
+              db,
+              `select o.eid as eid from ${sqlName(t)} r
+               join entity o on o.id = r.entity
+               where r.${sqlName(col)} = ?`,
+            ).all(did) as { eid: string }[]
             for (let r of rows) {
               if (!doomed.includes(r.eid)) doomed.push(r.eid)
             }
           }
         }
         for (let d of doomed) {
+          let did = toId(db, d)
+          if (did == null) continue
           // Soft references let go — and the wire HEARS them let go, or
           // every client cache keeps a ghost (a lease whose holder died,
           // a task pointing at a gone project or assignee) until reload.
@@ -3637,9 +3940,14 @@ export let apply = (
           // own entity-null already says everything, so only SURVIVORS
           // get a change.
           for (let [t, col] of RELEASED) {
-            let freed = prep(db, `select eid from ${t} where ${col} = ?`)
-              .all(d) as { eid: string }[]
-            prep(db, `delete from ${t} where ${col} = ?`).run(d)
+            let freed = prep(
+              db,
+              `select o.eid as eid from ${sqlName(t)} r
+               join entity o on o.id = r.entity
+               where r.${sqlName(col)} = ?`,
+            ).all(did) as { eid: string }[]
+            prep(db, `delete from ${sqlName(t)} where ${sqlName(col)} = ?`)
+              .run(did)
             for (let { eid: held } of freed) {
               if (doomed.includes(held)) continue
               took(held, t)
@@ -3648,9 +3956,14 @@ export let apply = (
             }
           }
           for (let [t, col] of DETACHED) {
-            let homed = prep(db, `select eid from ${t} where ${col} = ?`)
-              .all(d) as { eid: string }[]
-            prep(db, `update ${t} set ${col} = null where ${col} = ?`).run(d)
+            let homed = prep(
+              db,
+              `select o.eid as eid from ${sqlName(t)} r
+               join entity o on o.id = r.entity
+               where r.${sqlName(col)} = ?`,
+            ).all(did) as { eid: string }[]
+            prep(db, `update ${sqlName(t)} set ${sqlName(col)} = null
+                      where ${sqlName(col)} = ?`).run(did)
             for (let { eid: orphan } of homed) {
               if (doomed.includes(orphan)) continue
               touched.add(orphan)
@@ -3659,25 +3972,30 @@ export let apply = (
           }
           for (let c of Object.keys(cmps).toReversed()) {
             if (c != 'entity') {
-              if (prep(db, `delete from ${c} where eid = ?`).run(d).changes) {
+              if (
+                prep(db, `delete from ${sqlName(c)} where entity = ?`).run(did)
+                  .changes
+              ) {
                 took(d, c)
               }
             }
           }
           prep(db, 'delete from dependency where parent = ? or child = ?').run(
-            d,
-            d,
+            did,
+            did,
           )
         }
         for (let d of doomed) {
+          // The num rides into the grave: a dead entity keeps its name
+          // answerable, and the allocator's high-water mark survives it. The
+          // spine row is RETAINED (never `delete from entity`) so its id is
+          // never reissued; the tombstone is the liveness marker every read
+          // excludes on.
           prep(
             db,
-            // The num rides into the grave: a dead entity keeps its name
-            // answerable, and the allocator's high-water mark survives it.
             `insert or ignore into tombstone (eid, num, deleted_at)
              values (?, (select num from entity where eid = ?), ?)`,
           ).run(d, d, new Date().toISOString())
-          prep(db, 'delete from entity where eid = ?').run(d)
           if (d != eid) extra.push({ eid: d, name: 'entity', comp: null })
         }
         continue
@@ -3688,7 +4006,15 @@ export let apply = (
         continue
       }
       let sent = cols.filter((c) => c in comp)
-      let vals = sent.map((c) => bound(name, c, comp[c]))
+      // A reference column stores the target's int id; resolve the sent eid to
+      // it (null passes through; an unknown target resolves to null, which a
+      // NOT NULL / FK ref bounces the same way a missing eid used to). Plain
+      // scalars keep their bound value.
+      let vals = sent.map((c) =>
+        isRef(name, c)
+          ? (comp[c] == null ? null : toId(db, String(comp[c])))
+          : bound(name, c, comp[c])
+      )
       // Update first (a patch can't re-satisfy not-null columns an insert
       // would demand). An existing row implies an existing spine. An FK
       // bounce here fails the batch with its offender named — the outer
@@ -3701,7 +4027,7 @@ export let apply = (
             `update ${sqlName(name)} set ${
               sent.map((c) => `${sqlName(c)} = ?`).join(', ')
             }
-             where eid = ?`,
+             where entity = (select id from entity where eid = ?)`,
           ).run(...vals, eid).changes
         } catch (e) {
           throw refused(db, name, eid, comp, e) ?? e
@@ -3729,37 +4055,46 @@ export let apply = (
         if (spine(db, eid).changes) minted.add(eid)
         if (name == 'entry' && sent.length) {
           let session = String(comp.session)
+          let sid = toId(db, session)
           let { seq } = prep(
             db,
             `select coalesce(max(seq), 0) + 1 as seq from entry
              where session = ?`,
-          ).get(session) as { seq: number }
-          prep(db, 'insert into entry (eid, session, seq) values (?, ?, ?)')
-            .run(eid, session, seq)
+          ).get(sid) as { seq: number }
+          // entry owner and session are int ids; the owner spine was minted
+          // above, the session must already exist for the entry to append.
+          prep(db, 'insert into entry (entity, session, seq) values (?, ?, ?)')
+            .run(toId(db, eid), sid, seq)
           // A graph-native session has no log FILE to tail, so its summary
           // is advanced here at the single door that assigns seq — same
           // transaction, so entry.seq and session.latest_seq cannot drift.
           // Not cast (like the JSONL tail, T-7063): it rides the snapshot's
           // whole-row select, not a per-entry broadcast.
-          prep(db, 'update session set latest_seq = ? where eid = ?')
-            .run(seq, session)
+          prep(db, 'update session set latest_seq = ? where entity = ?')
+            .run(seq, sid)
           createdComps.add(`${name} ${eid}`)
           t?.created.add(`${name} ${eid}`)
           extra.push({ eid, name: 'entry', comp: { eid, seq } })
         } else if (sent.length) {
           prep(
             db,
-            `insert into ${sqlName(name)} (eid${
+            `insert into ${sqlName(name)} (entity${
               sent.map((c) => `, ${sqlName(c)}`).join('')
             })
-             values (?${', ?'.repeat(sent.length)})`,
+             values ((select id from entity where eid = ?)${
+              ', ?'.repeat(sent.length)
+            })`,
           ).run(eid, ...vals)
           createdComps.add(`${name} ${eid}`)
           t?.created.add(`${name} ${eid}`)
         } else {
           // A bare {} touch: create with defaults if possible, else no-op.
           let made =
-            prep(db, `insert or ignore into ${sqlName(name)} (eid) values (?)`)
+            prep(
+              db,
+              `insert or ignore into ${sqlName(name)} (entity)
+               values ((select id from entity where eid = ?))`,
+            )
               .run(eid).changes
           if (made) {
             createdComps.add(`${name} ${eid}`)
@@ -3798,13 +4133,19 @@ export let apply = (
     // every write so deciding and spawning in one batch works, and before
     // commit so every door — including a raw session request — gets the same
     // refusal.
-    let request = prep(db, 'select requested_task from session where eid = ?')
+    let request = prep(
+      db,
+      `select rt.eid as requested_task from session s
+       join entity o on o.id = s.entity
+       left join entity rt on rt.id = s.requested_task
+       where o.eid = ?`,
+    )
     let pending = prep(
       db,
       `
       select 1 from proposed p
-      left join decided d on d.eid = p.eid
-      where p.eid = ? and d.eid is null
+      left join decided d on d.entity = p.entity
+      where p.entity = (select id from entity where eid = ?) and d.entity is null
     `,
     )
     for (let key of createdComps) {
@@ -3830,10 +4171,16 @@ export let apply = (
     // claims in one batch, so claimed_at supplies their nested order and rank
     // preserves it after those lease rows are gone.
     let finalClaims = new Set(
-      (prep(db, 'select eid from claim').all() as { eid: string }[])
+      (prep(
+        db,
+        'select o.eid as eid from claim c join entity o on o.id = c.entity',
+      ).all() as { eid: string }[])
         .map((r) => r.eid),
     )
-    let status = prep(db, 'select status from task where eid = ?')
+    let status = prep(
+      db,
+      'select status from task where entity = (select id from entity where eid = ?)',
+    )
     let clear = new Set(
       changes.filter((c) => c.name == 'claim' || c.name == 'task')
         .map((c) => c.eid),
@@ -3841,7 +4188,12 @@ export let apply = (
     for (let eid of clear) {
       let task = status.get(eid) as { status: string } | undefined
       if (!finalClaims.has(eid) && task && !settled(task.status)) continue
-      if (prep(db, 'delete from resume where eid = ?').run(eid).changes) {
+      if (
+        prep(
+          db,
+          'delete from resume where entity = (select id from entity where eid = ?)',
+        ).run(eid).changes
+      ) {
         took(eid, 'resume')
         extra.push({ eid, name: 'resume', comp: null })
       }
@@ -3867,14 +4219,15 @@ export let apply = (
     let push = prep(
       db,
       `
-      insert into resume (eid, actor, at, rank) values (?, ?, ?, ?)
-      on conflict(eid) do update set actor = excluded.actor,
+      insert into resume (entity, actor, at, rank)
+      values ((select id from entity where eid = ?), ?, ?, ?)
+      on conflict(entity) do update set actor = excluded.actor,
         at = excluded.at, rank = excluded.rank
     `,
     )
     for (let item of released) {
       let comp = { actor: String(item.actor), at: now, rank: ++top }
-      push.run(item.eid, comp.actor, comp.at, comp.rank)
+      push.run(item.eid, toId(db, comp.actor), comp.at, comp.rank)
       extra.push({ eid: item.eid, name: 'resume', comp })
     }
     // A session that RAN somewhere but names no actor gets one from where
@@ -3886,8 +4239,17 @@ export let apply = (
     // the server only fills the gap, and only for a session with a cwd (a
     // real run, never an abstract fixture), so the fill heals old blanks on
     // their next touch. It rides the return so caches hear it.
-    let fill = prep(db, 'update session set actor = ? where eid = ?')
-    let has = prep(db, 'select cwd, actor from session where eid = ?')
+    let fill = prep(
+      db,
+      'update session set actor = ? where entity = (select id from entity where eid = ?)',
+    )
+    let has = prep(
+      db,
+      `select s.cwd as cwd, act.eid as actor from session s
+       join entity o on o.id = s.entity
+       left join entity act on act.id = s.actor
+       where o.eid = ?`,
+    )
     for (let eid of touched) {
       let s = has.get(eid) as
         | { cwd: string | null; actor: string | null }
@@ -3895,7 +4257,7 @@ export let apply = (
       if (!s || s.actor || !s.cwd) continue
       let a = ventureAt(db, s.cwd)
       if (a) {
-        fill.run(a, eid)
+        fill.run(refId(db, a), eid)
         extra.push({ eid, name: 'session', comp: { actor: a } })
       }
     }
@@ -3908,34 +4270,49 @@ export let apply = (
     let actor = writerActor(db, writer)
     let via = writerVia(db, writer)
     // An entity minted then deleted in the same batch (or rolled back by its
-    // savepoint) has no spine — the guard, like the births select below.
-    let alive = prep(db, 'select 1 from entity where eid = ?')
+    // savepoint) has no LIVE spine — a tombstoned entity keeps its row but is
+    // dead, so the guard is presence AND not tombstoned. `by`/`via` are int
+    // ids now; resolve them on write and re-read through the projection
+    // (readComp) so the echoed change carries eids.
+    let actorId = refId(db, actor)
+    let viaId = refId(db, via)
+    let alive = prep(
+      db,
+      `select 1 from entity e where e.eid = ?
+       and not exists (select 1 from tombstone t where t.eid = e.eid)`,
+    )
     let cNew = prep(
       db,
-      'insert or ignore into created (eid, at, "by", via) values (?, ?, ?, ?)',
+      `insert or ignore into created (entity, at, "by", via)
+       values ((select id from entity where eid = ?), ?, ?, ?)`,
     )
-    let cVia = prep(db, 'update created set at = ?, via = ? where eid = ?')
-    let cRow = prep(db, 'select eid, at, "by", via from created where eid = ?')
+    let cVia = prep(
+      db,
+      'update created set at = ?, via = ? where entity = (select id from entity where eid = ?)',
+    )
     for (let eid of minted) {
       if (!alive.get(eid)) continue
-      if (saidCreator.has(eid)) cVia.run(now, via, eid)
-      else cNew.run(eid, now, actor, via)
-      let row = cRow.get(eid) as Change['comp'] | undefined
+      if (saidCreator.has(eid)) cVia.run(now, viaId, eid)
+      else cNew.run(eid, now, actorId, viaId)
+      let row = readComp(db, eid, 'created')
       if (row) extra.push({ eid, name: 'created', comp: row })
     }
     let uSet = prep(
       db,
-      `insert into updated (eid, at, "by", via) values (?, ?, ?, ?)
-       on conflict(eid) do update set at = excluded.at, "by" = excluded."by",
+      `insert into updated (entity, at, "by", via)
+       values ((select id from entity where eid = ?), ?, ?, ?)
+       on conflict(entity) do update set at = excluded.at, "by" = excluded."by",
        via = excluded.via`,
     )
-    let uAt = prep(db, 'update updated set at = ?, via = ? where eid = ?')
-    let uRow = prep(db, 'select eid, at, "by", via from updated where eid = ?')
+    let uAt = prep(
+      db,
+      'update updated set at = ?, via = ? where entity = (select id from entity where eid = ?)',
+    )
     for (let eid of touched) {
       if (minted.has(eid) || !alive.get(eid)) continue // birth writes created
-      if (saidEditor.has(eid)) uAt.run(now, via, eid)
-      else uSet.run(eid, now, actor, via)
-      let row = uRow.get(eid) as Change['comp'] | undefined
+      if (saidEditor.has(eid)) uAt.run(now, viaId, eid)
+      else uSet.run(eid, now, actorId, viaId)
+      let row = readComp(db, eid, 'updated')
       if (row) extra.push({ eid, name: 'updated', comp: row })
     }
     // The ingest coordinate (D-16704), stamped beside the entry it marks so
@@ -3946,7 +4323,8 @@ export let apply = (
     if (imports) {
       let stampImported = prep(
         db,
-        'insert into imported (eid, source, line) values (?, ?, ?)',
+        `insert into imported (entity, source, line)
+         values ((select id from entity where eid = ?), ?, ?)`,
       )
       for (let [eid, coord] of imports) {
         if (!alive.get(eid)) continue
@@ -3971,11 +4349,11 @@ export let apply = (
       if (createdComps.has(`${name} ${eid}`)) {
         prep(
           db,
-          `update ${name} set "by" = coalesce("by", ?), via = ? where eid = ?`,
-        ).run(actor, via, eid)
+          `update ${sqlName(name)} set "by" = coalesce("by", ?), via = ?
+           where entity = (select id from entity where eid = ?)`,
+        ).run(actorId, viaId, eid)
       }
-      let row = prep(db, `select eid, at, "by", via from ${name} where eid = ?`)
-        .get(eid) as Change['comp'] | undefined
+      let row = readComp(db, eid, name)
       if (row) extra.push({ eid, name, comp: row })
     }
     // Clocked presence facets freeze their insertion time. Re-reading on every
@@ -3984,13 +4362,13 @@ export let apply = (
     for (let { eid, name, comp } of changes) {
       if (comp == null || !clocked.includes(name) || !alive.get(eid)) continue
       if (createdComps.has(`${name} ${eid}`)) {
-        prep(db, `update ${name} set at = ? where eid = ?`).run(now, eid)
+        prep(
+          db,
+          `update ${sqlName(name)} set at = ?
+           where entity = (select id from entity where eid = ?)`,
+        ).run(now, eid)
       }
-      let row = prep(db, `select eid, at from ${name} where eid = ?`).get(
-        eid,
-      ) as
-        | Change['comp']
-        | undefined
+      let row = readComp(db, eid, name)
       if (row) extra.push({ eid, name, comp: row })
     }
     // The mail SENDER, derived. `from` is off the wire (types.ts), so this
@@ -4008,8 +4386,14 @@ export let apply = (
     // swept row is stamped here as well and corrected a moment later by that
     // same stamp, before dispatch hands anything to delivery. Only the
     // intermediate cast ever carries the derived value.
-    let addrOf = prep(db, 'select address from email where eid = ?')
-    let sender = prep(db, 'update mail set "from" = ? where eid = ?')
+    let addrOf = prep(
+      db,
+      'select address from email where entity = (select id from entity where eid = ?)',
+    )
+    let sender = prep(
+      db,
+      'update mail set "from" = ? where entity = (select id from entity where eid = ?)',
+    )
     for (let key of createdComps) {
       if (!key.startsWith('mail ')) continue
       let eid = key.slice(5)
@@ -4034,11 +4418,14 @@ export let apply = (
       let eid = key.slice(cut + 1)
       let cols = cmps[name]
       if (!cols.length) continue
-      let row = prep(
-        db,
-        `select ${cols.map(sqlName).join(', ')} from ${sqlName(name)}
-         where eid = ?`,
-      ).get(eid) as Change['comp'] | undefined
+      // Project through select() so reference columns read back as eids, then
+      // keep only the wire-writable cmps columns (server-owned stamped columns
+      // ride their own explicit echoes, never this client-writable shape).
+      let full = readComp(db, eid, name)
+      let row = full &&
+        Object.fromEntries(
+          cols.filter((c) => c in full).map((c) => [c, full[c]]),
+        ) as Change['comp']
       if (!row) continue
       let i = changes.findLastIndex((change) =>
         change.eid == eid && change.name == name && change.comp != null
@@ -4049,7 +4436,11 @@ export let apply = (
     // A mint rolled back by its savepoint (or deleted later in the batch)
     // has no row — the select is the guard. entity === eid: only identity
     // rides now (T-6670), the timestamps travel as their components above.
-    let born = prep(db, 'select eid, num from entity where eid = ?')
+    let born = prep(
+      db,
+      `select eid, num from entity e where e.eid = ?
+       and not exists (select 1 from tombstone t where t.eid = e.eid)`,
+    )
     for (let eid of minted) {
       let row = born.get(eid) as Change['comp'] | undefined
       if (row) extra.push({ eid, name: 'entity', comp: row })
@@ -4098,9 +4489,9 @@ export let apply = (
         spine(db, ceid)
         prep(
           db,
-          `insert into conflict (eid, target, loser, holder)
-           values (?, ?, ?, ?)`,
-        ).run(ceid, bounced.target, bounced.loser, bounced.holder)
+          `insert into conflict (entity, target, loser, holder)
+           values ((select id from entity where eid = ?), ?, ?, ?)`,
+        ).run(ceid, refId(db, bounced.target), bounced.loser, bounced.holder)
         mintNum(db, ceid) // spine no longer numbers at birth (T-3684)
         db.exec('commit')
       } catch (audit) {
@@ -4833,10 +5224,14 @@ export let bodies = (db: DatabaseSync, eids: string[]): Change[] => {
   for (let name of Object.keys(readable)) {
     let cut = bodyCols(name).filter((c) => readable[name].includes(c))
     if (!cut.length) continue
+    // Body columns are never references (long markdown), so they read straight
+    // off the base row; only the owner eid needs projecting through the spine.
     let rows = prep(
       db,
-      `select eid, ${cut.map(sqlName).join(', ')} from ${sqlName(name)}
-       where eid in (${holes})`,
+      `select o.eid as eid, ${cut.map((c) => `t.${sqlName(c)} as ${sqlName(c)}`)
+        .join(', ')} from ${sqlName(name)} t
+       join entity o on o.id = t.entity
+       where o.eid in (${holes})`,
     ).all(...eids) as Record<string, unknown>[]
     for (let row of rows) out.push({ eid: String(row.eid), name, comp: row })
   }
@@ -4845,10 +5240,17 @@ export let bodies = (db: DatabaseSync, eids: string[]): Change[] => {
 
 // The home each persona names — homeReads' whole input, twenty-odd rows off
 // its own table, where reading it out of a materialized graph costs the graph.
-// `only` is a where clause, so the narrow door asks the same question keyed.
+// Owner and `home` are int ids in storage, so project both back to eids: `o` is
+// the persona's spine, `h` its home's. `only` is a where clause written against
+// those aliases (`o.eid`, `h.eid`), so the narrow door asks the same question
+// keyed without tripping the ref-column binding landmine (C-19763).
 let homes = (db: DatabaseSync, only = '') =>
-  prep(db, `select eid, home as home from persona ${only}`)
-    .all() as { eid: string; home: unknown }[]
+  prep(
+    db,
+    `select o.eid as eid, h.eid as home from persona t
+     join entity o on o.id = t.entity
+     left join entity h on h.id = t.home ${only}`,
+  ).all() as { eid: string; home: unknown }[]
 
 // The whole graph as one batch (plus edges) — what a fresh client cache eats.
 // entity === eid: only identity (eid, num) rides in the spine comp now —
@@ -4885,18 +5287,27 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
     for (
       let row of prep(
         db,
-        `${select(name)} where eid not in (${lazyEids})`,
+        // A tombstoned entity keeps its spine row (so its int id can never
+        // recycle, C-19754#2) but leaves the wire: exclude it from the entity
+        // walk. Component tables never hold a dead entity's row (the delete
+        // cascades them), so the clause only ever bites the spine.
+        `${select(name)} where eid not in (${lazyEids})
+           and eid not in (select eid from tombstone)`,
       ).all() as Record<string, unknown>[]
     ) {
       changes.push({ eid: row.eid as string, name, comp: row })
     }
   }
+  // Edge endpoints are int ids in storage; project both back to their eids.
   let deps = (prep(
     db,
-    `select parent as parent, type, child as child, ord from dependency
-     where parent not in (${lazyEids})
-       and child not in (${lazyEids})
-     order by parent, type, ord, child`,
+    `select p.eid as parent, d.type as type, c.eid as child, d.ord as ord
+     from dependency d
+     join entity p on p.id = d.parent
+     join entity c on c.id = d.child
+     where p.eid not in (${lazyEids})
+       and c.eid not in (${lazyEids})
+     order by p.eid, d.type, d.ord, c.eid`,
   ).all() as Dep[]).map(shedOrd)
   // A project's specialist personas ride derived `reads` edges (homeReads):
   // home is the one truth, so these compute here on the graph-out door
@@ -5096,7 +5507,11 @@ let entryRows = (
 // One entry by identity. Hosted work names its call directly; its Session
 // partition is unrelated to locating or hydrating that immutable row.
 export let entryOf = (db: DatabaseSync, eid: string) => {
-  let row = prep(db, 'select eid, seq from entry where eid = ?').get(eid) as
+  let row = prep(
+    db,
+    `select o.eid as eid, t.seq as seq from entry t
+     join entity o on o.id = t.entity where o.eid = ?`,
+  ).get(eid) as
     | { eid: string; seq: number }
     | undefined
   return row ? entryRows(db, [row])[0] : undefined
@@ -5114,17 +5529,22 @@ export let entriesOf = (
   through?: number,
 ) => {
   let cap = Math.max(1, Math.min(limit, 5000))
+  // entry.session is an int id; join the spine so the caller keeps passing a
+  // session EID and the projected owner eid rides back out.
+  let base = `select o.eid as eid, t.seq as seq from entry t
+       join entity o on o.id = t.entity
+       join entity s on s.id = t.session`
   let index = (through == null
     ? prep(
       db,
-      `select eid, seq from entry where session = ? and seq > ?
-       order by seq limit ?`,
+      `${base} where s.eid = ? and t.seq > ?
+       order by t.seq limit ?`,
     ).all(session, after, cap)
     : prep(
       db,
-      `select eid, seq from entry
-       where session = ? and seq > ? and seq <= ?
-       order by seq limit ?`,
+      `${base}
+       where s.eid = ? and t.seq > ? and t.seq <= ?
+       order by t.seq limit ?`,
     ).all(session, after, through, cap)) as {
       eid: string
       seq: number
@@ -5147,8 +5567,10 @@ export let entriesOf = (
 export let entriesScan = (db: DatabaseSync, after = 0, limit = 500) => {
   let index = prep(
     db,
-    `select eid, seq from entry where seq > ?
-     order by session, seq limit ?`,
+    `select o.eid as eid, t.seq as seq from entry t
+     join entity o on o.id = t.entity
+     where t.seq > ?
+     order by t.session, t.seq limit ?`,
   ).all(after, Math.max(1, Math.min(limit, 5000))) as {
     eid: string
     seq: number
@@ -5174,15 +5596,20 @@ export let depsOf = (db: DatabaseSync, eids: string[]): Dep[] => {
   if (!eids.length) return []
   stage(db, eids)
   let mine = `in (select eid from hit)`
+  // Endpoints are int ids; project both to eids and filter on the projected
+  // eids (never the base int, C-19763).
   let deps = (prep(
     db,
-    `select parent as parent, type, child as child, ord from dependency
-      where parent ${mine} or child ${mine}
-      order by parent, type, ord, child`,
+    `select p.eid as parent, d.type as type, c.eid as child, d.ord as ord
+      from dependency d
+      join entity p on p.id = d.parent
+      join entity c on c.id = d.child
+      where p.eid ${mine} or c.eid ${mine}
+      order by p.eid, d.type, d.ord, c.eid`,
   ).all() as Dep[]).map(shedOrd)
   return [
     ...deps,
-    ...homeReads(homes(db, `where home ${mine} or eid ${mine}`), deps),
+    ...homeReads(homes(db, `where h.eid ${mine} or o.eid ${mine}`), deps),
   ]
 }
 
@@ -5198,10 +5625,14 @@ export let refsOf = (db: DatabaseSync, eids: string[]) => {
   let out: { from: string; via: string; to: string }[] = []
   for (let [name, cols] of Object.entries(readable)) {
     for (let col of cols.filter((c) => isRef(name, c))) {
+      // Owner and the reference are int ids; join the spine for both eids and
+      // filter on the referenced eid (not the base int, C-19763).
       let rows = prep(
         db,
-        `select eid, ${sqlName(col)} as at from ${sqlName(name)}
-          where ${sqlName(col)} in (select eid from hit)`,
+        `select o.eid as eid, r.eid as at from ${sqlName(name)} t
+          join entity o on o.id = t.entity
+          join entity r on r.id = t.${sqlName(col)}
+          where r.eid in (select eid from hit)`,
       ).all() as { eid: string; at: string }[]
       for (let r of rows) {
         out.push({ from: r.eid, via: `${name}.${col}`, to: r.at })
@@ -5229,8 +5660,10 @@ export let referrersOf = (
   for (let name of names) {
     let rows = prep(
       db,
-      `select eid from ${sqlName(name)}
-        where ${sqlName(prop)} in (select eid from hit)`,
+      `select o.eid as eid from ${sqlName(name)} t
+        join entity o on o.id = t.entity
+        join entity r on r.id = t.${sqlName(prop)}
+        where r.eid in (select eid from hit)`,
     ).all() as { eid: string }[]
     for (let row of rows) out.add(row.eid)
   }
@@ -5248,10 +5681,14 @@ export let refValuesOf = (
 ): string[] => {
   if (!eids.length || !readable[comp]?.includes(prop)) return []
   stage(db, eids)
+  // The named column is a reference (a reverse-hop parent); project its int id
+  // to the target's eid, filtering by the owners staged in `hit`.
   let rows = prep(
     db,
-    `select ${sqlName(prop)} as v from ${sqlName(comp)}
-      where eid in (select eid from hit) and ${sqlName(prop)} is not null`,
+    `select r.eid as v from ${sqlName(comp)} t
+      join entity o on o.id = t.entity
+      join entity r on r.id = t.${sqlName(prop)}
+      where o.eid in (select eid from hit) and t.${sqlName(prop)} is not null`,
   ).all() as { v: string }[]
   return [...new Set(rows.map((r) => String(r.v)))]
 }
