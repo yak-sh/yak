@@ -14,7 +14,8 @@
 import { createHash } from 'node:crypto'
 import { childPath } from './agent_env.ts'
 import { trouble } from './adapters.ts'
-import { apply, cursorOf, db, record, snapshot } from './db.ts'
+import { apply, cursorOf, db, readComp, record, snapshot } from './db.ts'
+import { isRef } from './props.ts'
 import { errorChange, healthChange } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { notices, noticesFor, readerAt, rows } from './client.ts'
@@ -30,6 +31,17 @@ import { type Change, sessionActive, uuid } from './types.ts'
 
 type Cast = (changes: Change[]) => void
 type DbRow = Record<string, unknown>
+
+// The eid→id storage seam (D-18866): component tables key by the owner int id
+// and store refs as int ids; this module speaks EIDs. OWNED matches a row by
+// owner eid, idOf resolves a ref filter's eid operand, refEid projects a stored
+// ref id back to its eid on read, and bindOf binds a reference column on write.
+// Sibling joins move to the int owner key.
+let OWNED = `entity = (select id from entity where eid = ?)`
+let idOf = `(select id from entity where eid = ?)`
+let refEid = (col: string) => `(select eid from entity where id = ${col})`
+let bindOf = (comp: string, col: string) =>
+  isRef(comp, col) ? `(select id from entity where eid = ?)` : '?'
 
 export type RoleConfig = {
   eid: string
@@ -549,16 +561,21 @@ let config = (eid: string): RoleConfig => {
   // resolve against the defaulted scope, so a project carrying role + spawn +
   // repo comps configs off itself with no scope column at all.
   let row = db.prepare(`
-    select r.*, d.title, d.body, p.provider, p.model, p.effort,
-           p.persona, repo.path, repo.base_branch,
+    select r.state, r.surface,
+           ${refEid('r.scope')} as scope, ${refEid('r.checkout')} as checkout,
+           r.schedule, r.wake_policy, ${refEid('r.wake_target')} as wake_target,
+           r.retry_at, r.applied_hash, r.applied_at, r.stopped_at,
+           r.decision, r.reason, r.decided_at,
+           d.title, d.body, p.provider, p.model, p.effort,
+           ${refEid('p.persona')} as persona, repo.path, repo.base_branch,
            scope.title as venture_title, venture.color as venture_color
     from role r
-    left join doc d on d.eid = r.eid
-    left join doc scope on scope.eid = coalesce(r.scope, r.eid)
-    left join project venture on venture.eid = coalesce(r.scope, r.eid)
-    left join spawn p on p.eid = r.eid
-    left join repo on repo.eid = coalesce(r.checkout, r.scope, r.eid)
-    where r.eid = ?
+    left join doc d on d.entity = r.entity
+    left join doc scope on scope.entity = coalesce(r.scope, r.entity)
+    left join project venture on venture.entity = coalesce(r.scope, r.entity)
+    left join spawn p on p.entity = r.entity
+    left join repo on repo.entity = coalesce(r.checkout, r.scope, r.entity)
+    where r.entity = ${idOf}
   `).get(eid) as DbRow | undefined
   if (!row) throw new Error('role no longer exists')
   if (!row.path) throw new Error("the role's checkout has no repo")
@@ -602,9 +619,7 @@ let config = (eid: string): RoleConfig => {
 }
 
 let stamp = (eid: string, patch: DbRow, cast: Cast) => {
-  let prior = db.prepare('select * from role where eid = ?').get(eid) as
-    | DbRow
-    | undefined
+  let prior = readComp(db, eid, 'role') as DbRow | undefined
   if (!prior) return
   if (
     patch.decision === prior.decision && patch.reason === prior.reason &&
@@ -623,8 +638,10 @@ let stamp = (eid: string, patch: DbRow, cast: Cast) => {
   try {
     if (cols.length) {
       db.prepare(
-        `update role set ${cols.map((c) => `"${c}" = ?`).join(', ')}
-         where eid = ?`,
+        `update role set ${
+          cols.map((c) => `"${c}" = ${bindOf('role', c)}`).join(', ')
+        }
+         where ${OWNED}`,
       ).run(...cols.map((c) => moved[c] as string | number | null), eid)
       changes.push({ eid, name: 'role', comp: moved })
     }
@@ -644,9 +661,7 @@ let stamp = (eid: string, patch: DbRow, cast: Cast) => {
 }
 
 let stampSession = (eid: string, patch: DbRow, cast: Cast) => {
-  let prior = db.prepare('select * from session where eid = ?').get(eid) as
-    | DbRow
-    | undefined
+  let prior = readComp(db, eid, 'session') as DbRow | undefined
   if (!prior) return
   let moved = Object.fromEntries(
     Object.entries(patch).filter(([key, value]) => prior[key] !== value),
@@ -654,8 +669,10 @@ let stampSession = (eid: string, patch: DbRow, cast: Cast) => {
   let cols = Object.keys(moved)
   if (!cols.length) return
   db.prepare(
-    `update session set ${cols.map((c) => `"${c}" = ?`).join(', ')}
-     where eid = ?`,
+    `update session set ${
+      cols.map((c) => `"${c}" = ${bindOf('session', c)}`).join(', ')
+    }
+     where ${OWNED}`,
   ).run(...cols.map((c) => moved[c] as string | number | null), eid)
   let change = { eid, name: 'session', comp: moved }
   record(db, [change])
@@ -664,10 +681,10 @@ let stampSession = (eid: string, patch: DbRow, cast: Cast) => {
 
 let latest = (eid: string) =>
   db.prepare(`
-    select s.*, x.message as error_message from session s
-    join entity e on e.eid = s.eid
-    left join error x on x.eid = s.eid
-    where s.role = ? order by e.num desc limit 1
+    select s.*, e.eid as eid, x.message as error_message from session s
+    join entity e on e.id = s.entity
+    left join error x on x.entity = s.entity
+    where s.role = ${idOf} order by e.num desc limit 1
   `).get(eid) as DbRow | undefined
 
 let active = (s?: DbRow) =>
@@ -710,15 +727,15 @@ export let workingNow = (
 // so it is O(1), never a scan (M-17862).
 let latestTurnAt = (eid: string): string | null =>
   (db.prepare(
-    `select c.at from entry e join created c on c.eid = e.eid
-      where e.session = ? order by e.seq desc limit 1`,
+    `select c.at from entry e join created c on c.entity = e.entity
+      where e.session = ${idOf} order by e.seq desc limit 1`,
   ).get(eid) as { at: string } | undefined)?.at ?? null
 
 // An OPEN exception is a break no recovery cleared: managed_codex's sessionFault
 // deletes the row on a clean turn, so a surviving row means the operator is
 // broken — not working, even with a live pid.
 let hasException = (eid: string): boolean =>
-  !!db.prepare('select 1 from exception where eid = ?').get(eid)
+  !!db.prepare(`select 1 from exception where ${OWNED}`).get(eid)
 
 // working(session): the db-backed judgment the reconciler asks. Liveness from
 // active(), freshness from the newest turn, health from the exception facet.
@@ -788,8 +805,8 @@ export let starting = (l: Launch | undefined, now: number) =>
 let livesOf = (eid: string): Launch[] =>
   db.prepare(`
     select s.started_at, s.finished_at from session s
-    join entity e on e.eid = s.eid
-    where s.role = ? order by e.num desc limit 20
+    join entity e on e.id = s.entity
+    where s.role = ${idOf} order by e.num desc limit 20
   `).all(eid) as Launch[]
 
 // What the owner sees on a held role, and how to revive it.
@@ -863,7 +880,8 @@ export let operatorRole = (
   if (s.role) return String(s.role)
   if (!s.actor) return
   let r = db.prepare(
-    'select eid from role where eid = ? or scope = ? limit 1',
+    `select o.eid as eid from role r join entity o on o.id = r.entity
+     where r.entity = ${idOf} or r.scope = ${idOf} limit 1`,
   ).get(s.actor, s.actor) as { eid: string } | undefined
   return r?.eid
 }
@@ -878,7 +896,8 @@ export let operatorRole = (
 // operator keeps the role, this one simply runs unclaimed.
 export let roleClaim = (cast: Cast) => (eid: string) => {
   let s = db.prepare(
-    'select operator, role, actor from session where eid = ?',
+    `select operator, ${refEid('role')} as role, ${refEid('actor')} as actor
+     from session where ${OWNED}`,
   ).get(eid) as
     | { operator: unknown; role: string | null; actor: string | null }
     | undefined
@@ -886,8 +905,9 @@ export let roleClaim = (cast: Cast) => (eid: string) => {
   let role = operatorRole(s)
   if (!role) return
   let held = db.prepare(
-    `select s.eid, s.status, s.pid, s.finished_at from claim c
-       join session s on s.eid = c.session where c.eid = ?`,
+    `select o.eid as eid, s.status, s.pid, s.finished_at from claim c
+       join session s on s.entity = c.session
+       join entity o on o.id = s.entity where c.${OWNED}`,
   ).get(role) as DbRow | undefined
   if (held && String(held.eid) == eid) return // already ours — idempotent
   let changes: Change[] = []
@@ -926,7 +946,7 @@ let reconcileStopped = async (eid: string, cast: Cast, deps: RoleDeps) => {
     return
   }
   let row = db.prepare(
-    'select applied_hash, stopped_at from role where eid = ?',
+    `select applied_hash, stopped_at from role where ${OWNED}`,
   ).get(eid) as {
     applied_hash: string | null
     stopped_at: string | null
@@ -957,7 +977,7 @@ let reconcileNative = async (
     return
   }
   let has = await tmuxHas(c.eid, deps)
-  let row = db.prepare('select applied_hash from role where eid = ?').get(
+  let row = db.prepare(`select applied_hash from role where ${OWNED}`).get(
     c.eid,
   ) as { applied_hash: string | null }
   if (has && row.applied_hash == hash) {
@@ -982,7 +1002,7 @@ let reconcileNative = async (
     let reason = `config changed (${driftFields(c)}); operator live, ` +
       `applying on next restart`
     if (
-      (db.prepare('select decision from role where eid = ?').get(c.eid) as
+      (db.prepare(`select decision from role where ${OWNED}`).get(c.eid) as
         | { decision: string | null }
         | undefined)?.decision != 'defer'
     ) console.warn(`role ${c.eid}: deferring restart — ${reason}`)
@@ -1035,7 +1055,7 @@ let serveAttention = (
   if (!pending.lines.length) return
   let newest =
     pending.ack.map((change) =>
-      (db.prepare('select at from created where eid = ?').get(change.eid) as
+      (db.prepare(`select at from created where ${OWNED}`).get(change.eid) as
         | { at: string }
         | undefined)?.at ?? ''
     ).sort().at(-1) ?? ''
@@ -1044,7 +1064,7 @@ let serveAttention = (
   // the serving session as `via`, so the newest such stamp is the answer,
   // per item and exact.
   let served = String(
-    (db.prepare('select max(at) as at from notified where via = ?')
+    (db.prepare(`select max(at) as at from notified where via = ${idOf}`)
       .get(String(session.eid)) as { at: string | null } | undefined)?.at ?? '',
   )
   // One wake per pending horizon. A task_context after the attempt consumes
@@ -1094,9 +1114,11 @@ let foreignOperator = (roleEid: string): string | undefined =>
   foreignHolder(
     roleEid,
     (db.prepare(
-      `select s.eid, s.role, s.status, s.pid, s.finished_at
-         from claim c join session s on s.eid = c.session
-        where c.eid = ?`,
+      `select o.eid as eid, ${refEid('s.role')} as role, s.status, s.pid,
+              s.finished_at
+         from claim c join session s on s.entity = c.session
+         join entity o on o.id = s.entity
+        where c.${OWNED}`,
     ).all(roleEid) as DbRow[]).map((h) => ({
       eid: String(h.eid),
       role: h.role == null ? null : String(h.role),
@@ -1136,7 +1158,7 @@ let reconcileManaged = async (
   // death (settle/wrap, or reapLeases at boot), and the branches below resume.
   let foreign = foreignOperator(c.eid)
   if (foreign) return adoptForeign(c.eid, foreign, cast, deps)
-  let row = db.prepare('select applied_hash from role where eid = ?').get(
+  let row = db.prepare(`select applied_hash from role where ${OWNED}`).get(
     c.eid,
   ) as { applied_hash: string | null }
   let graph = !!session && graphSession(db, String(session.eid))
@@ -1246,7 +1268,7 @@ let reconcile = async (eid: string, cast: Cast, deps: RoleDeps) => {
   if (flights.has(eid)) return
   flights.add(eid)
   try {
-    let wanted = db.prepare('select state, retry_at from role where eid = ?')
+    let wanted = db.prepare(`select state, retry_at from role where ${OWNED}`)
       .get(eid) as { state: string; retry_at: string | null } | undefined
     if (!wanted) {
       await tmuxKill(eid, deps)
@@ -1322,7 +1344,10 @@ let reconcile = async (eid: string, cast: Cast, deps: RoleDeps) => {
 }
 
 export let rolesSweep = async (cast: Cast, deps: RoleDeps = defaults) => {
-  let roles = db.prepare('select eid from role order by eid').all() as {
+  let roles = db.prepare(
+    `select o.eid as eid from role join entity o on o.id = role.entity
+     order by o.eid`,
+  ).all() as {
     eid: string
   }[]
   await Promise.all(roles.map((r) => reconcile(r.eid, cast, deps)))
@@ -1357,7 +1382,7 @@ export let roleSoon = (eid: string, cast: Cast, deps: RoleDeps = defaults) => {
 
 let deadline = (eid: string, cast: Cast) => {
   clear(deadlines, eid)
-  let role = db.prepare('select state, surface from role where eid = ?')
+  let role = db.prepare(`select state, surface from role where ${OWNED}`)
     .get(eid) as { state: string; surface: string } | undefined
   if (!role || role.state != 'running' || role.surface != 'native') return
   deadlines.set(
@@ -1392,8 +1417,9 @@ let roleNow = (eid: string, cast: Cast) =>
 export let roleConfig =
   (cast: Cast, deps: RoleDeps = defaults) => (eid: string) =>
     rolesFor(
-      `select eid from role
-       where eid = ? or scope = ? or checkout = ? order by eid`,
+      `select o.eid as eid from role r join entity o on o.id = r.entity
+       where r.entity = ${idOf} or r.scope = ${idOf} or r.checkout = ${idOf}
+       order by o.eid`,
       [eid, eid, eid],
       cast,
       deps,
@@ -1406,8 +1432,9 @@ export let roleBoot = (cast: Cast) => (eid: string) => roleNow(eid, cast)
 export let rolePersona =
   (cast: Cast, deps: RoleDeps = defaults) => (eid: string) =>
     rolesFor(
-      `select r.eid from role r join spawn s on s.eid = r.eid
-     where s.persona = ? order by r.eid`,
+      `select o.eid as eid from role r join spawn s on s.entity = r.entity
+       join entity o on o.id = r.entity
+     where s.persona = ${idOf} order by o.eid`,
       [eid],
       cast,
       deps,
@@ -1422,7 +1449,8 @@ export let roleDoc =
 export let roleSession =
   (cast: Cast, deps: RoleDeps = defaults) => (eid: string) =>
     rolesFor(
-      'select role as eid from session where eid = ? and role is not null',
+      `select ${refEid('role')} as eid from session
+       where ${OWNED} and role is not null`,
       [eid],
       cast,
       deps,
@@ -1434,12 +1462,15 @@ export let roleAttention = (
 ) =>
 (eid: string) =>
   rolesFor(
-    `select eid from role where eid = ? or scope = ?
+    `select o.eid as eid from role r join entity o on o.id = r.entity
+       where r.entity = ${idOf} or r.scope = ${idOf}
      union
-     select r.eid from role r join task t on t.project = r.scope
-     where t.eid = ?
+     select o.eid as eid from role r join task t on t.project = r.scope
+       join entity o on o.id = r.entity
+       where t.entity = ${idOf}
      union
-     select role as eid from session where eid = ? and role is not null
+     select ${refEid('role')} as eid from session
+       where ${OWNED} and role is not null
      order by eid`,
     [eid, eid, eid, eid],
     cast,
