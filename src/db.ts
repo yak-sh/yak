@@ -3140,14 +3140,15 @@ export let sweepSelect = (name: string, pending: string): string => {
 
 // The boot snapshot omits every entity carrying a LAZY-partition comp
 // (types.ts `partition`) — the whole entity, so a lazy entity's eager comps
-// (a session's `recalled`) leave with it too. This subquery is the UNION of
-// the lazy tables' owner EIDs (projected through the spine, since the owner key
-// is now an int id), derived from the one-list so a new lazy comp joins the
-// omission with zero further edits. Today lazy = {entry}.
-let lazyEids = Object.keys(readable).filter(lazy)
-  .map((name) =>
-    `select o.eid from ${sqlName(name)} lz join entity o on o.id = lz.entity`
-  ).join(' union ')
+// (a session's `recalled`) leave with it too. These are the lazy tables whose
+// owner EIDs form the omit-set; snapshot() materializes them ONCE into an
+// indexed temp table (`_omit`) before its per-table loop rather than
+// re-running a spine-join UNION subquery inside every one of the 89 component
+// scans (the eid→id migration turned that subquery into a ~36k-row
+// spine-join, ~50ms per table even on empty ones — T-18874). Derived from the
+// one-list so a new lazy comp joins the omission with zero further edits.
+// Today lazy = {entry}.
+let lazyTables = Object.keys(readable).filter(lazy)
 
 let bound = (
   name: string,
@@ -5554,6 +5555,27 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
   let key = snapKey(db)
   let hit = snapCache.get(db)
   if (hit?.local == key.local && hit.remote == key.remote) return hit.snap
+  // Materialize the lazy omit-set ONCE into an indexed temp table, then read it
+  // as the `not in` source per component table, instead of re-materializing a
+  // ~36k-row spine-join UNION subquery inside each of the 89 per-table scans
+  // (T-18874: that subquery cost ~50ms per table even on empty ones). The outer
+  // query keeps its EXACT prior shape — only the `not in (…)` source changes —
+  // so the planner's scan order is untouched and the wire stays byte-identical;
+  // an anti-join instead would reorder rows. `if not exists` + `delete from`
+  // keeps `_omit` safe across snapshot()'s repeated calls and lets the cached
+  // statements that read it stay valid — the temp table lives for the
+  // connection. `insert or ignore` folds the lazy tables the way `union` did;
+  // every eid is non-null (entity.eid), so `not in` carries no NULL footgun.
+  db.exec('create temp table if not exists _omit(eid text primary key)')
+  db.exec('delete from _omit')
+  for (let name of lazyTables) {
+    db.exec(
+      `insert or ignore into _omit
+         select o.eid from ${
+        sqlName(name)
+      } lz join entity o on o.id = lz.entity`,
+    )
+  }
   let changes: Change[] = []
   for (let name of Object.keys(readable)) {
     for (
@@ -5562,23 +5584,26 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
         // A tombstoned entity keeps its spine row (so its int id can never
         // recycle, C-19754#2) but leaves the wire: exclude it from the entity
         // walk. Component tables never hold a dead entity's row (the delete
-        // cascades them), so the clause only ever bites the spine.
-        `${select(name)} where eid not in (${lazyEids})
-           and eid not in (select eid from tombstone)`,
+        // cascades them), so the tombstone clause only ever bites the spine —
+        // it rides the `entity` walk alone, a no-op scan lifted off 88 tables.
+        `${select(name)} where eid not in (select eid from _omit)${
+          name == 'entity' ? ' and eid not in (select eid from tombstone)' : ''
+        }`,
       ).all() as Record<string, unknown>[]
     ) {
       changes.push({ eid: row.eid as string, name, comp: row })
     }
   }
   // Edge endpoints are int ids in storage; project both back to their eids.
+  // Both endpoints read the same `_omit` set the component walk used.
   let deps = (prep(
     db,
     `select p.eid as parent, d.type as type, c.eid as child, d.ord as ord
      from dependency d
      join entity p on p.id = d.parent
      join entity c on c.id = d.child
-     where p.eid not in (${lazyEids})
-       and c.eid not in (${lazyEids})
+     where p.eid not in (select eid from _omit)
+       and c.eid not in (select eid from _omit)
      order by p.eid, d.type, d.ord, c.eid`,
   ).all() as Dep[]).map(shedOrd)
   // A project's specialist personas ride derived `reads` edges (homeReads):
