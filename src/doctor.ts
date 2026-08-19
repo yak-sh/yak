@@ -16,7 +16,9 @@ import { base } from './mailer.ts'
 import { atFleet, canon } from './mailaddr.ts'
 import { idOf, sessionActive } from './types.ts'
 import { parseQuery } from './query.ts'
+import { integrity } from './client.ts'
 import type { Querier, Row } from './client.ts'
+import type { Anomalies } from './db.ts'
 
 // The yak.sh zone — an identifier, not a secret (useless without a
 // token); CLOUDFLARE_ZONE_ID re-aims the doctor at another zone.
@@ -316,6 +318,39 @@ export let stuckSessions = (rows: Row[], now: number, hours = 2): Report[] => {
   })
 }
 
+// Storage-integrity anomalies (D-18866, T-18874), read from the raw db scan the
+// wire cannot expose (orphaned component rows and dangling {eid} references are
+// invisible to snapshot()/query by construction — the exact reason they hid).
+// Each is corruption the id-keyed schema rejects outright, so a `fail`; a server
+// too old to carry the /integrity route answers null, reported as an unverified
+// `warn` rather than a false all-clear. Pre-cutover this is the gate; afterward
+// it is ongoing drift monitoring — the reshape cleaned the graph, so it stays 0.
+export let integrityReport = (a: Anomalies | null): Report[] => {
+  if (!a) {
+    return [{
+      level: 'warn',
+      text: 'this server has no /integrity route — the storage-anomaly scan ' +
+        'is UNVERIFIED (upgrade the server to run it)',
+    }]
+  }
+  let out: Report[] = []
+  for (let [table, n] of Object.entries(a.orphans)) {
+    out.push({
+      level: 'fail',
+      text: `${table}: ${n} orphaned row(s) — the owner entity has no spine ` +
+        `(dead data the id-keyed schema rejects)`,
+    })
+  }
+  for (let [col, n] of Object.entries(a.dangling)) {
+    out.push({
+      level: 'fail',
+      text: `${col}: ${n} reference(s) to a missing entity (a dangling ` +
+        `{eid} ref the id-keyed schema rejects)`,
+    })
+  }
+  return out
+}
+
 // The registry. A new check is one more row here — its verdict a pure
 // function above, its run() a thin read through the Querier.
 export let checks: Check[] = [
@@ -340,6 +375,11 @@ export let checks: Check[] = [
     name: 'session',
     about: 'no session is stuck starting or stuck stopping',
     run: async (q, now) => stuckSessions(await q(['.kind=session']), now),
+  },
+  {
+    name: 'storage',
+    about: 'no orphaned component rows or dangling entity references',
+    run: async () => integrityReport(await integrity()),
   },
 ]
 // Future rows, each one entry once its signal exists: a managed session

@@ -16,7 +16,7 @@
 // slow() tier — it writes real db files, VACUUMs, and re-opens (no 1ms budget).
 // Run under TASKS_SLOW via `deno task test:all`.
 import { slow } from './testing.ts'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertStringIncludes } from '@std/assert'
 
 // open() the LIVE graph is refused under `deno test`; every db here is a fresh
 // temp file or :memory:, so the guard never fires. DB_PATH must be set before
@@ -237,9 +237,15 @@ let idKeyed = () => {
 }
 
 // Today's pre-flip schema shape, HARDCODED (not read from db.ts's `schema`, which
-// flips) — a representative subset: the spine; four component owner keys; two
-// {eid} reference columns (comment.target, card.target); a dependency edge; and
-// the separate tombstone table a pre-flip delete leaves behind.
+// flips) — a representative subset: the spine; the component owner keys; {eid}
+// reference columns (comment.target, card.target, conflict.target, result.call,
+// created.by); a dependency edge; and the separate tombstone table a pre-flip
+// delete leaves behind. conflict/result/created are here to carry the REAL-DATA
+// anomaly cases (T-18874): a NOT NULL ref to a deleted entity (dropped), a
+// NULLABLE ref to one (nulled), and an orphaned component row (skipped). NOTE the
+// legacy ref columns carry no `references` clause on purpose — a live graph's
+// pointers to a since-deleted entity are exactly the dangling values the reshape
+// must tolerate, so the fixture must be free to hold them.
 let LEGACY_DDL = `
   create table entity (eid text primary key, num integer not null unique);
   create table doc (eid text primary key references entity(eid),
@@ -250,6 +256,13 @@ let LEGACY_DDL = `
     target text references entity(eid));
   create table card (eid text primary key references entity(eid),
     target text not null references entity(eid), view text not null);
+  create table conflict (eid text primary key references entity(eid),
+    target text not null, loser text not null, holder text not null,
+    at text not null);
+  create table result (eid text primary key references entity(eid),
+    call text not null);
+  create table created (eid text primary key references entity(eid),
+    at text not null, "by" text, via text);
   create table dependency (parent text not null references entity(eid),
     type text not null, child text not null references entity(eid),
     ord integer, primary key (parent, type, child));
@@ -258,30 +271,51 @@ let LEGACY_DDL = `
 
 // A representative eid-keyed legacy graph written straight to the file with a
 // plain connection — NEVER through open() (the code under test). Returns the
-// eids so the assertions can name them.
+// eids so the assertions can name them. Beyond the clean shapes it carries the
+// three real-data anomaly classes (T-18874): rows referencing `dead` (tombstoned,
+// so absent from the spine) and an orphaned component row absent from the spine.
 let legacyGraph = (path: string) => {
   let raw = new DatabaseSync(path)
-  raw.exec('pragma foreign_keys = on')
+  // foreign_keys OFF: the anomaly rows POINT at a since-deleted entity — the very
+  // condition a live graph reaches by deletion and the reshape must tolerate — so
+  // the fixture writes them straight, exactly as the eid-keyed readers left them.
+  raw.exec('pragma foreign_keys = off')
   raw.exec(LEGACY_DDL)
   let task = uid(), note = uid(), card = uid(), dead = uid()
+  let conf = uid(), res = uid(), orphan = uid()
   // A live task; a comment aimed at it ({eid} ref); a card aimed at it ({eid}
   // ref) that also `requires` it (an edge); and a tombstoned entity holding the
-  // HIGHEST num (5, above the live 1..3) so the no-recycle check has teeth.
+  // HIGHEST num (5, above the live 1..4/6) so the no-recycle check has teeth.
+  //
+  // The anomalies, each pointing at `dead` (a deleted entity absent from the
+  // spine): a conflict whose NOT NULL target dangles (row DROPPED), a result
+  // whose NOT NULL call dangles (row DROPPED), a created whose NULLABLE `by`
+  // dangles (ref NULLED, row kept), and an `orphan` doc+task pair with no spine
+  // row at all (rows SKIPPED). conf/res own real spine rows so they are NOT
+  // orphans — only their references dangle.
   raw.exec(
     `insert into entity (eid, num) values ` +
-      `('${task}', 1), ('${note}', 2), ('${card}', 3);` +
+      `('${task}', 1), ('${note}', 2), ('${card}', 3), ` +
+      `('${conf}', 4), ('${res}', 6);` +
       `insert into doc (eid, title, body) values ` +
-      `('${task}', 'legacy task', 'body one'), ('${note}', '', 'a comment');` +
-      `insert into task (eid, status, priority) values ('${task}', 'wip', 2);` +
+      `('${task}', 'legacy task', 'body one'), ('${note}', '', 'a comment'), ` +
+      `('${orphan}', 'orphan doc', 'no spine');` +
+      `insert into task (eid, status, priority) values ` +
+      `('${task}', 'wip', 2), ('${orphan}', 'open', 0);` +
       `insert into comment (eid, target) values ('${note}', '${task}');` +
       `insert into card (eid, target, view) values ('${card}', '${task}', 'Show');` +
+      `insert into conflict (eid, target, loser, holder, at) values ` +
+      `('${conf}', '${dead}', 'S-1', 'S-2', '2026-01-01T00:00:00Z');` +
+      `insert into result (eid, call) values ('${res}', '${dead}');` +
+      `insert into created (eid, at, "by", via) values ` +
+      `('${task}', '2026-01-01T00:00:00Z', '${dead}', null);` +
       `insert into dependency (parent, type, child, ord) values ` +
       `('${card}', 'requires', '${task}', null);` +
       `insert into tombstone (eid, num, deleted_at) values ` +
       `('${dead}', 5, '2026-01-01T00:00:00Z');`,
   )
   raw.close()
-  return { task, note, card, dead }
+  return { task, note, card, dead, conf, res, orphan }
 }
 
 // Development toggle (see the header). Committed false so the branch stays green.
@@ -300,8 +334,19 @@ slow(
     }
     let path = tmp()
     try {
-      let { task, note, card, dead } = legacyGraph(path)
-      let db = open(path) // pre-flip: a no-op reopen; post-flip: THE migration
+      let { task, note, card, dead, conf, res, orphan } = legacyGraph(path)
+      // The reshape REPORTS what it cleaned to stderr (M-16612); capture it so
+      // the counts are asserted, not just the surviving rows.
+      let logs: string[] = []
+      let origErr = console.error
+      console.error = (...a: unknown[]) => void logs.push(a.join(' '))
+      let db: ReturnType<typeof open>
+      try {
+        db = open(path) // pre-flip: a no-op reopen; post-flip: THE migration
+      } finally {
+        console.error = origErr
+      }
+      let report = logs.join('\n')
 
       // 1. The spine flipped: an integer id ALONGSIDE the permanent eid.
       let spine = cols(db, 'entity')
@@ -414,6 +459,77 @@ slow(
         freshId > maxBefore,
         true,
         'a fresh id did not exceed the max — a rowid recycled',
+      )
+
+      // 7. REAL-DATA ANOMALIES (T-18874): the class the clean fixtures missed.
+      //    open() must COMPLETE (it did — we are here) and clean each anomaly per
+      //    policy, never crash on the constraint-tight schema.
+      let n = (sql: string, ...args: (string | number)[]) =>
+        (db.prepare(sql).get(...args) as { n: number }).n
+
+      // 7a. Orphaned component rows (owner eid has no spine) are SKIPPED — gone
+      //     from their tables and never on the wire. The live doc/task counts
+      //     (asserted whole in #2) already exclude them; this pins the orphan eid.
+      assertEquals(
+        snap.changes.some((c) => c.eid == orphan),
+        false,
+        'an orphaned component row rode the wire',
+      )
+      assertEquals(
+        n(
+          `select count(*) as n from doc t join entity e on e.id = t.entity
+           where e.eid = ?`,
+          orphan,
+        ),
+        0,
+        'the orphan doc row survived the reshape',
+      )
+
+      // 7b. A NOT NULL reference to a deleted entity → the whole row DROPPED (it
+      //     is about a corpse and has no valid id). conflict/result held only
+      //     their one dangling row, so both tables are empty; the OWNER entities
+      //     survive as bare spine rows (only the component row is dead data).
+      assertEquals(
+        n('select count(*) as n from conflict'),
+        0,
+        'conflict row not dropped',
+      )
+      assertEquals(
+        n('select count(*) as n from result'),
+        0,
+        'result row not dropped',
+      )
+      assertEquals(
+        n('select count(*) as n from entity where eid in (?, ?)', conf, res),
+        2,
+        'a dropped-component owner lost its spine row',
+      )
+
+      // 7c. A NULLABLE reference to a deleted entity → the ref is NULLED and the
+      //     row KEPT. The created row for the task stands, with `by` cleared.
+      assertEquals(
+        n(
+          `select count(*) as n from created c join entity e on e.id = c.entity
+           where e.eid = ? and c."by" is null`,
+          task,
+        ),
+        1,
+        'created.by was not nulled (or the row was dropped)',
+      )
+
+      // 7d. The reshape REPORTED exactly what it cleaned (M-16612) — counts, not
+      //     silence. Per-class lines plus the one-line summary.
+      assertStringIncludes(report, 'doc — skipped 1 orphan row(s)')
+      assertStringIncludes(report, 'task — skipped 1 orphan row(s)')
+      assertStringIncludes(report, 'conflict.target — dropped 1 row(s)')
+      assertStringIncludes(report, 'result.call — dropped 1 row(s)')
+      assertStringIncludes(
+        report,
+        'created.by — nulled 1 dangling reference(s)',
+      )
+      assertStringIncludes(
+        report,
+        'cleaned 2 orphan row(s), 2 dropped row(s), 1 nulled reference(s)',
       )
 
       db.close()

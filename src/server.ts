@@ -35,6 +35,7 @@ import {
   resolveId,
   rootChanges,
   rowsOf,
+  scanAnomalies,
   search,
   settingEid,
   settingValue,
@@ -975,6 +976,10 @@ let http = Deno.serve(
     // The admin census's graph-true counts: one COUNT per component table,
     // authoritative for eager AND entry-partition components the cache omits.
     if (path == '/census') return Response.json(componentCounts(db))
+    // The graph's storage-integrity anomalies (D-18866): orphaned component rows
+    // and dangling {eid} references — both wire-invisible, so the doctor cannot
+    // see them through /query and reads this raw db scan instead. Read-only.
+    if (path == '/integrity') return Response.json(scanAnomalies(db))
     if (path == '/resolve') {
       // The id-resolve fallback door (T-18102): a client whose working-set
       // cache can't name a token resolves it here — the same resolveId every

@@ -2107,23 +2107,60 @@ let tableExists = (db: DatabaseSync, t: string) =>
 // the rest are non-graph or rebuild themselves.
 let graphTables = () => ['entity', 'dependency', ...Object.keys(comps)]
 
+// What one table's copy CLEANED — the anomalies a real legacy graph carries
+// that the eid-keyed readers tolerated but the constraint-tight id-keyed schema
+// rejects (D-18866, T-18874). Each is dead or detached data, handled
+// deterministically and REPORTED (never silent — M-16612):
+//  - orphans: component rows whose owner eid has no spine row — already
+//    unreachable, so skipped.
+//  - dropped: rows with a NOT NULL reference to a deleted entity (conflict.target,
+//    result.call, a dangling dependency edge) — the row is ABOUT a corpse and has
+//    no valid id to carry, so the whole row goes.
+//  - nulled: NULLABLE references to a deleted entity — detached to null, the same
+//    absence an eid-keyed reader already saw through the missing join.
+type CopyReport = {
+  table: string
+  orphans: number
+  dropped: Record<string, number>
+  nulled: Record<string, number>
+}
+
+// Does an eid-bearing legacy column resolve to a live spine id? Parenthesized so
+// `not resolves(c)` reads as "does not resolve" regardless of operator precedence.
+let resolves = (col: string) =>
+  `((select id from entity where eid = o.${sqlName(col)}) is not null)`
+
 // Copy one renamed-aside legacy table's rows into its fresh id-keyed twin,
 // resolving every eid to its int id: the owner `eid`→`entity`, each `{eid}`
 // reference (and dependency's parent/child) to the referent's id, plain scalars
 // straight across. A fresh column the legacy table predates takes its default.
-let copyLegacyTable = (db: DatabaseSync, t: string, old: string) => {
+// Real-data anomalies are cleaned per the policy above and returned as counts;
+// the INSERT only carries rows whose owner and every NOT NULL reference resolve.
+let copyLegacyTable = (
+  db: DatabaseSync,
+  t: string,
+  old: string,
+): CopyReport => {
   let oldCols = new Set(colNames(db, old))
+  let notnull = new Map(
+    (prep(db, 'select name, "notnull" as nn from pragma_table_info(?)')
+      .all(t) as { name: string; nn: number }[]).map((r) => [r.name, !!r.nn]),
+  )
   let dst: string[] = []
   let src: string[] = []
+  let hasOwner = false
+  let refs: { col: string; required: boolean }[] = []
   for (let c of colNames(db, t)) {
     let depRef = t == 'dependency' && (c == 'parent' || c == 'child')
     if (c == 'entity') {
       if (!oldCols.has('eid')) continue
+      hasOwner = true
       dst.push('entity')
       src.push('(select id from entity where eid = o.eid)')
     } else if (!oldCols.has(c)) {
       continue
     } else if (isRef(t, c) || depRef) {
+      refs.push({ col: c, required: !!notnull.get(c) })
       dst.push(sqlName(c))
       src.push(`(select id from entity where eid = o.${sqlName(c)})`)
     } else {
@@ -2131,10 +2168,74 @@ let copyLegacyTable = (db: DatabaseSync, t: string, old: string) => {
       src.push(`o.${sqlName(c)}`)
     }
   }
+  let count = (where: string) =>
+    (prep(db, `select count(*) as n from ${sqlName(old)} o where ${where}`)
+      .get() as { n: number }).n
+  let report: CopyReport = { table: t, orphans: 0, dropped: {}, nulled: {} }
+  // A row survives when its owner resolves AND every NOT NULL reference resolves;
+  // `keep` accumulates those predicates and the INSERT filters by their AND.
+  let keep: string[] = []
+  if (hasOwner) {
+    report.orphans = count(`not ${resolves('eid')}`)
+    keep.push(resolves('eid'))
+  }
+  let ownerOk = hasOwner ? `${resolves('eid')} and ` : ''
+  for (let { col } of refs.filter((r) => r.required)) {
+    // Among owner-resolved rows (orphans already counted), a NOT NULL ref that
+    // points at a corpse — drop the row.
+    report.dropped[col] = count(`${ownerOk}not ${resolves(col)}`)
+    keep.push(resolves(col))
+  }
+  for (let { col } of refs.filter((r) => !r.required)) {
+    // Among rows that survive, a present nullable ref that doesn't resolve is
+    // detached to null.
+    let kept = keep.length ? `${keep.join(' and ')} and ` : ''
+    report.nulled[col] = count(
+      `${kept}o.${sqlName(col)} is not null and not ${resolves(col)}`,
+    )
+  }
+  let where = keep.length ? ` where ${keep.join(' and ')}` : ''
   db.exec(
     `insert into ${sqlName(t)} (${dst.join(', ')})
-     select ${src.join(', ')} from ${sqlName(old)} o`,
+     select ${src.join(', ')} from ${sqlName(old)} o${where}`,
   )
+  return report
+}
+
+// Announce what the reshape cleaned — one stderr line per non-zero anomaly class
+// per table, so the cutover operator (and the session row's stderr tail) sees
+// exactly which dead or detached rows the migration removed or nulled. A clean
+// graph prints nothing; silence here would be the opaque migration M-16612 forbids.
+let reportMigration = (reports: CopyReport[]) => {
+  let orphans = 0, dropped = 0, nulled = 0
+  for (let r of reports) {
+    if (r.orphans) {
+      orphans += r.orphans
+      console.error(
+        `migrate: ${r.table} — skipped ${r.orphans} orphan row(s) (owner eid has no spine)`,
+      )
+    }
+    for (let [col, n] of Object.entries(r.dropped)) {
+      if (!n) continue
+      dropped += n
+      console.error(
+        `migrate: ${r.table}.${col} — dropped ${n} row(s) referencing a deleted entity (NOT NULL)`,
+      )
+    }
+    for (let [col, n] of Object.entries(r.nulled)) {
+      if (!n) continue
+      nulled += n
+      console.error(
+        `migrate: ${r.table}.${col} — nulled ${n} dangling reference(s)`,
+      )
+    }
+  }
+  if (orphans || dropped || nulled) {
+    console.error(
+      `migrate: eid→id reshape cleaned ${orphans} orphan row(s), ` +
+        `${dropped} dropped row(s), ${nulled} nulled reference(s)`,
+    )
+  }
 }
 
 // The legacy eid→id migration (D-18866; the boot step the T-18883 cutover
@@ -2164,14 +2265,18 @@ let migrateToIdKeys = (db: DatabaseSync) => {
       'insert into entity (id, eid, num) select rowid, eid, num from __mig_entity',
     )
     db.exec('drop table __mig_entity')
+    let reports: CopyReport[] = []
     for (let t of graphTables()) {
       if (t == 'entity' || !tableExists(db, t)) continue
       db.exec(`alter table ${sqlName(t)} rename to __mig_${t}`)
       db.exec(ddlOf(t))
-      copyLegacyTable(db, t, `__mig_${t}`)
+      reports.push(copyLegacyTable(db, t, `__mig_${t}`))
       db.exec(`drop table __mig_${t}`)
     }
     db.exec('commit')
+    // Reported only after the reshape commits — never announce a clean that a
+    // later rollback would undo.
+    reportMigration(reports)
   } catch (e) {
     rollback(db)
     scratch.close()
@@ -5490,6 +5595,59 @@ export let componentCounts = (db: DatabaseSync): Record<string, number> => {
     for (let name of named) out[name] = Number(row[name])
   }
   return out
+}
+
+// The two integrity anomalies the eid→id reshape (D-18866, T-18874) must clean,
+// and the doctor watches for afterward. Both are INVISIBLE to the wire by
+// construction — which is exactly why the eid-keyed readers tolerated them and a
+// clean-fixture test missed the class:
+//  - orphans: a component row whose OWNER has no spine. snapshot() joins each
+//    component to `entity`, so the row never rode a query — but the id-keyed
+//    schema resolves its owner to NULL and collides on the integer PK.
+//  - dangling: a stored {eid} reference to an entity that no longer exists. An
+//    eid-keyed reader's missing join silently read it as absent; the id-keyed
+//    NOT NULL columns reject it and the nullable ones must be counted, not nulled
+//    in silence.
+// Counted over the RAW tables. Shape-agnostic so the SAME scan reads the
+// pre-cutover eid-keyed live graph (owner/refs are eids, spine key `eid`) and the
+// post-cutover id-keyed graph (ints, spine key `id`): it reads directly and never
+// calls open(), so a read-only snapshot connection is a valid argument — this is
+// the cutover rehearsal's pre-count and the doctor's ongoing gate.
+export type Anomalies = {
+  orphans: Record<string, number> // component table → rows with no owner spine
+  dangling: Record<string, number> // `table.column` → refs to a missing entity
+}
+export let scanAnomalies = (db: DatabaseSync): Anomalies => {
+  let idKeyed = hasCol(db, 'entity', 'id')
+  let spineKey = idKeyed ? 'id' : 'eid'
+  let ownerCol = idKeyed ? 'entity' : 'eid'
+  let orphans: Record<string, number> = {}
+  let dangling: Record<string, number> = {}
+  // A cell that names an entity the spine does not hold — null cells are legal
+  // absence, so only a non-null value with no matching spine row is an anomaly.
+  let missing = (col: string) =>
+    `${col} is not null and not exists ` +
+    `(select 1 from entity e where e.${spineKey} = t.${col})`
+  let count = (t: string, where: string) =>
+    (prep(db, `select count(*) as n from ${sqlName(t)} t where ${where}`)
+      .get() as { n: number }).n
+  for (let t of graphTables()) {
+    if (t == 'entity' || !tableExists(db, t)) continue
+    let cols = new Set(colNames(db, t))
+    // Orphaned component rows — dependency has no owner key, only its endpoints.
+    if (t != 'dependency' && cols.has(ownerCol)) {
+      let n = count(t, missing(ownerCol))
+      if (n) orphans[t] = n
+    }
+    // Dangling references — every {eid} column, plus dependency's parent/child.
+    for (let c of cols) {
+      let depRef = t == 'dependency' && (c == 'parent' || c == 'child')
+      if (c == ownerCol || !(isRef(t, c) || depRef)) continue
+      let n = count(t, missing(sqlName(c)))
+      if (n) dangling[`${t}.${c}`] = n
+    }
+  }
+  return { orphans, dangling }
 }
 
 // One entity's one component, projected exactly as snapshot() would (same

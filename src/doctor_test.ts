@@ -7,6 +7,7 @@ import {
   brokenBoards,
   type Check,
   diagnose,
+  integrityReport,
   mailCheck,
   mailWithoutFrom,
   type Rules,
@@ -259,4 +260,33 @@ Deno.test('run: a crashing check becomes a hard finding, not a silent skip', asy
   assertEquals(result.reports.length, 1)
   assertEquals(result.reports[0].level, 'fail')
   assertEquals(result.reports[0].text.includes('kaboom'), true)
+})
+
+// Storage integrity (D-18866): orphaned component rows and dangling {eid}
+// references are corruption the id-keyed schema rejects — each a hard fail. A
+// clean scan says nothing; a server too old to carry /integrity answers null,
+// reported as an UNVERIFIED warn rather than a false all-clear.
+Deno.test('integrityReport: orphans and dangling refs are hard finds', () => {
+  let out = integrityReport({
+    orphans: { entry: 2, content: 1 },
+    dangling: { 'conflict.target': 1, 'recalled.source': 465 },
+  })
+  assertEquals(out.length, 4)
+  assertEquals(out.every((r) => r.level == 'fail'), true)
+  assertEquals(out.some((r) => r.text.includes('entry: 2 orphaned')), true)
+  assertEquals(
+    out.some((r) => r.text.includes('recalled.source: 465 reference(s)')),
+    true,
+  )
+})
+
+Deno.test('integrityReport: a clean scan is silent', () => {
+  assertEquals(integrityReport({ orphans: {}, dangling: {} }), [])
+})
+
+Deno.test('integrityReport: no /integrity route is an unverified warn', () => {
+  let out = integrityReport(null)
+  assertEquals(out.length, 1)
+  assertEquals(out[0].level, 'warn')
+  assertEquals(out[0].text.includes('UNVERIFIED'), true)
 })

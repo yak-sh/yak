@@ -38,6 +38,7 @@ import {
 import { FLOOR } from './twin.ts'
 import { type Provider, spawnDefault } from './providers.ts'
 import { request } from './http.ts'
+import type { Anomalies } from './db.ts'
 import { unmime } from './rfc2047.ts'
 import {
   channelEvents,
@@ -119,6 +120,25 @@ export let serverCaps = async (): Promise<string[]> => {
     caps = []
   }
   return caps
+}
+
+// The graph's storage-integrity scan (D-18866), read from /integrity: orphaned
+// component rows and dangling {eid} references, both wire-invisible so /query
+// cannot see them. null when the route is absent — a server too old to carry the
+// scan, the same "no capability" degrade serverCaps takes — which the doctor
+// renders as an unverified skip rather than a false all-clear. A server that
+// predates the route serves index.html for the extensionless path (200 text/html,
+// not a 404), so an unexpected non-JSON body is treated as "absent" too, never a
+// crash — the JSON content-type is the proof the route actually answered.
+export let integrity = async (): Promise<Anomalies | null> => {
+  let res = await request(`http://${host()}/integrity`)
+  if (
+    !res.ok || !res.headers.get('content-type')?.includes('application/json')
+  ) {
+    await res.body?.cancel()
+    return null
+  }
+  return res.json() as Promise<Anomalies>
 }
 
 export let query = async (
