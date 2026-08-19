@@ -2956,20 +2956,35 @@ export let releaseChange = (row: Row): Change => ({
 // conversation thread and off the mail relay. Finished work releases
 // silently. Interactive wraps (task wrap) and the server's managed-session
 // settle both speak through this.
+//
+// One lapse, one notice — deduped at mint (T-20056). reapLeases releases a
+// stale claim as it lapses it, so its "idempotent" promise holds only while
+// the session stays reaped; a managed session that keeps losing and
+// re-claiming its lease across --watch reloads is reaped afresh each cycle,
+// and each reap minted ANOTHER identical "session S-N ended" notice (S-18894
+// stacked 9 on one task). The session ends ONCE, so the notice is minted
+// once: skip a target that already wears this exact lapse notice. Keyed by
+// (target, event=lapse, body) — the body names the lapsing session, so a
+// DIFFERENT session lapsing on the same task still rings, and the served-once
+// `notified` machinery downstream is untouched (it was never the bug).
 export let lapseChanges = (all: Row[], sess: Row): Change[] => {
   let id = String(sess.comps.session?.id ?? '')
   let name = idOf(sess)
+  let lapsed = (target: string, body: string) =>
+    all.some((r) =>
+      r.comps.notice?.event == 'lapse' && r.comps.notice?.target == target &&
+      r.comps.doc?.body == body
+    )
   return all.filter((r) => r.comps.claim?.session == sess.eid)
-    .flatMap((r): Change[] => [
-      ...(settled(String(r.comps.task?.status)) ? [] : noticeChanges(
-        all,
-        r.eid,
-        'lapse',
-        `⚑ lease lapsed: session ${name} ended before this was done`,
-        id,
-      ).slice(-2)), // the session exists — skip the mint, keep doc + notice
-      releaseChange(r),
-    ])
+    .flatMap((r): Change[] => {
+      let body = `⚑ lease lapsed: session ${name} ended before this was done`
+      let mint = !settled(String(r.comps.task?.status)) && !lapsed(r.eid, body)
+      return [
+        // the session exists — skip the mint, keep doc + notice
+        ...(mint ? noticeChanges(all, r.eid, 'lapse', body, id).slice(-2) : []),
+        releaseChange(r),
+      ]
+    })
 }
 
 // The wrap batch: the release above, plus the session's brief.

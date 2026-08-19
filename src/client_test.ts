@@ -21,6 +21,7 @@ import {
   isUnread,
   jsonAuthored,
   jsonOf,
+  lapseChanges,
   ledger,
   mailAt,
   mailChanges,
@@ -947,6 +948,54 @@ Deno.test('wrapChanges: unfinished gets the trail, done goes quiet', () => {
   assertEquals(quiet.filter((c) => c.name == 'notice'), [])
   assertEquals(quiet[0], { eid: T1, name: 'claim', comp: null })
   assertEquals(wrapChanges(all, 'sess-unknown'), [])
+})
+
+// The 9× re-lapse (T-20056): a managed session that keeps losing and
+// re-claiming its lease is reaped afresh each cycle, so reapLeases called
+// lapseChanges again over a re-created claim and minted ANOTHER identical
+// "session S-1 ended" notice each time. The session ends once, so the notice
+// is minted once — a target already wearing this exact lapse is skipped, while
+// the claim still releases.
+Deno.test('lapseChanges: one lapse notice per session, never a re-mint', () => {
+  let body = '⚑ lease lapsed: session S-1 ended before this was done'
+  // First lapse mints the notice and releases the claim.
+  let first = lapseChanges(all, by(S))
+  assertEquals(first.filter((c) => c.name == 'notice').length, 1)
+  assertEquals(first.find((c) => c.name == 'doc')?.comp?.body, body)
+  assertEquals(first.filter((c) => c.name == 'claim' && !c.comp).length, 1)
+
+  // The session reclaims T1 and lapses again while its FIRST notice still
+  // stands in the graph. The reap must release but mint no second notice.
+  let N = 'aaaaaaaa-0000-4000-8000-000000000090'
+  let notice: Change[] = [
+    { eid: N, name: 'entity', comp: { eid: N, num: 9 } },
+    { eid: N, name: 'doc', comp: { title: '', body } },
+    { eid: N, name: 'notice', comp: { target: T1, event: 'lapse' } },
+  ]
+  let relapsed = rows({ changes: [...snap.changes, ...notice] })
+  let again = lapseChanges(relapsed, relapsed.find((r) => r.eid == S)!)
+  assertEquals(again.filter((c) => c.name == 'notice'), [])
+  assertEquals(again.filter((c) => c.name == 'doc'), [])
+  assertEquals(again, [{ eid: T1, name: 'claim', comp: null }])
+
+  // A DIFFERENT session lapsing on the same task is a distinct message and
+  // still rings — the dedup is keyed by the body that names the session.
+  let other = 'aaaaaaaa-0000-4000-8000-000000000042'
+  let two = rows({
+    changes: [
+      ...snap.changes,
+      ...notice,
+      { eid: other, name: 'entity', comp: { eid: other, num: 42 } },
+      { eid: other, name: 'session', comp: { id: 'sess-y' } },
+      { eid: T1, name: 'claim', comp: { session: other } },
+    ],
+  })
+  let dist = lapseChanges(two, two.find((r) => r.eid == other)!)
+  assertEquals(dist.filter((c) => c.name == 'notice').length, 1)
+  assertEquals(
+    dist.find((c) => c.name == 'doc')?.comp?.body,
+    '⚑ lease lapsed: session S-42 ended before this was done',
+  )
 })
 
 Deno.test('wrap brief: a docless working session gets the stub', () => {
