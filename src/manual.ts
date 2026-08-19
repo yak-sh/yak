@@ -49,6 +49,9 @@ let value = (name: string, kind = text, separate = false): Opt => ({
 
 let json = flag('--json')
 let quarantined = flag('--quarantined')
+// `show` already renders comments; --comments affirms that default so the
+// warm reach for it never errors (T-18416).
+let comments = flag('--comments')
 let body = value('--body', bodyKind)
 let bodyText = { ...bodyKind, name: 'text' }
 // Retired flags whose habit outlives them, said once each (Manual.retired).
@@ -242,15 +245,16 @@ export let manuals = declare({
     opts: [flag('--all')],
   },
   show: {
-    about: 'one entity as a document (--quarantined explicitly reveals)',
+    about: 'one entity as a document (comments render by default)',
     examples: [
       'task show T-3',
+      'task show T-3 --comments',
       'task show T-3 --json',
       'task show T-3 --quarantined',
     ],
     root: true,
     args: [arg('id', id)],
-    opts: [json, quarantined],
+    opts: [json, quarantined, comments],
   },
   history: {
     about: "the entity's write history (journal)",

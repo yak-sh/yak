@@ -47,7 +47,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       new: 'new [title…]',
       set: 'set <id> [--comment=TEXT]',
       edit: 'edit <id> <old> [new] [--all]',
-      show: 'show <id> [--json] [--quarantined]',
+      show: 'show <id> [--json] [--quarantined] [--comments]',
       history: 'history <id> [-n=50] [--json]',
       undo: 'undo <id>',
       transcript:
@@ -281,6 +281,10 @@ Deno.test('manual validation accepts each supported option shape', () => {
     '.feedback=jeff',
   ])()
   check('mail send', ['jeff', 'Subject', '.body=@letter.md'])()
+  // `show` renders comments by default; --comments affirms that default and
+  // must be accepted (not error) since agents keep reaching for it (T-18416).
+  check('show', ['T-1', '--comments'])()
+  check('show', ['T-1', '--comments', '--json'])()
   check('spawn', ['T-1', '.provider=codex'])()
   // A verb whose grammar IS the filter/write params keeps every one of them.
   check('list', ['.status=open', '.priority<=1'])()

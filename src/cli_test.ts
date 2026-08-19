@@ -173,6 +173,15 @@ Deno.test('subject: sentences route through the existing CLI verbs', () => {
     cmd: 'show',
     args: ['T-3', '--json', '--quarantined'],
   })
+  // --comments affirms the default (comments always render), never errors.
+  assertEquals(route('T-3 --comments'), {
+    cmd: 'show',
+    args: ['T-3', '--comments'],
+  })
+  assertEquals(route('T-3 show --comments'), {
+    cmd: 'show',
+    args: ['T-3', '--comments'],
+  })
   assertEquals(route('T-3 as markdown'), { cmd: 'show', args: ['T-3'] })
   assertEquals(route('T-3 as json'), {
     cmd: 'show',
@@ -243,7 +252,7 @@ Deno.test('subject: malformed sentences teach the contextual grammar', () => {
   assertThrows(
     () => subject('T-3', ['show', 'T-9']),
     Error,
-    '[show] [--json]',
+    '[show] --json --quarantined --comments',
   )
   assertThrows(() => subject('T-3', ['is', 'blocked']), Error, 'status is one')
   assertThrows(() => subject('T-3', ['as', 'yaml']), Error, 'format is one')

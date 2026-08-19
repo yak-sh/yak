@@ -1915,16 +1915,21 @@ in milliseconds (default 10000, maximum 30000).`,
     `One entity, whole: {kind, entity:{eid,num}, ...components}, plus its
 created/proposed/decided stamps whose via value describes the instrument,
 edges (refs out, backrefs in) and comments in the same entity shape. id:
-T-3, bare num, or eid. Quarantined content requires quarantined: true. ${BUS}`,
+T-3, bare num, or eid. Comments are always included (comments: true only
+affirms that). Quarantined content requires quarantined: true. ${BUS}`,
     {
       id: z.string(),
       quarantined: z.boolean().optional(),
+      // Comments render by default; accept the opt-in agents reach for as a
+      // no-op affirmation rather than rejecting the key (T-18416).
+      comments: z.boolean().optional(),
       session: z.string().optional(),
     },
     async (
       { id, quarantined, session }: {
         id: string
         quarantined?: boolean
+        comments?: boolean
         session?: string
       },
     ) => {

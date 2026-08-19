@@ -219,6 +219,11 @@ export let listing = (cmd: string | undefined, args: string[]) =>
     ? { cmd: 'list', args: [cmd, ...args] }
     : undefined
 
+// The display flags `show` accepts (comments render by default; --comments
+// only affirms that so the warm reach for it never errors, T-18416).
+let SHOW_FLAGS = ['--json', '--quarantined', '--comments']
+let isShowFlag = (x: string) => SHOW_FLAGS.includes(x)
+
 // Subject-first is syntax sugar only. The returned route enters the same
 // handlers as the canonical subcommands, so graph behavior has one owner.
 export let subject = (id: string | undefined, args: string[]) => {
@@ -231,21 +236,15 @@ export let subject = (id: string | undefined, args: string[]) => {
   if (args.includes('--help') || args.includes('-h')) {
     return { cmd: 'help', args: ['subject', id] }
   }
-  if (verb == '--json' || verb == '--quarantined') {
-    if (
-      objects.length > 1 ||
-      objects.some((x) => x != '--json' && x != '--quarantined')
-    ) {
-      throw new UsageError(`task ${id} [show] [--json] [--quarantined]`)
+  if (isShowFlag(verb)) {
+    if (objects.length > 2 || objects.some((x) => !isShowFlag(x))) {
+      throw new UsageError(`task ${id} [show] ${SHOW_FLAGS.join(' ')}`)
     }
     return { cmd: 'show', args: [id, verb, ...objects] }
   }
   if (verb == 'show') {
-    if (
-      objects.length > 2 ||
-      objects.some((x) => x != '--json' && x != '--quarantined')
-    ) {
-      throw new UsageError(`task ${id} [show] [--json] [--quarantined]`)
+    if (objects.length > 3 || objects.some((x) => !isShowFlag(x))) {
+      throw new UsageError(`task ${id} [show] ${SHOW_FLAGS.join(' ')}`)
     }
     return { cmd: 'show', args: [id, ...objects] }
   }
