@@ -164,6 +164,26 @@ mv snap/schema.sql.tmp snap/schema.sql
 rm -f snap/graph.sql snap/journal.sql snap/graph.sql.tmp snap/journal.sql.tmp
 
 git add -A
+
+# Size guard, by BYTES not by name (T-20007). GitHub hard-rejects any file over
+# 100 MiB, and the T-19375 push failed a second time on ~800MB stray db copies
+# whose names .gitignore never anticipated — a name-based ignore can only stop
+# the large files we already named. So refuse here, before the commit, if any
+# staged blob exceeds the limit: catch it as a loud failed backup the deadman
+# sees, not as a push rejected off-box after a broken commit already landed.
+# cat-file -s reads the staged blob's own size, so deletions and working-tree
+# churn can't confuse the measure.
+limit=104857600 # 100 MiB — GitHub's hard per-file limit
+over=$(git diff --cached --raw --diff-filter=ACM | while read -r _ _ _ sha _ path; do
+  size=$(git cat-file -s "$sha") || continue
+  if [ "$size" -gt "$limit" ]; then printf '  %s (%s bytes)\n' "$path" "$size"; fi
+done)
+if [ -n "$over" ]; then
+  echo "backup: staged file(s) exceed GitHub's 100 MiB limit — refusing to commit:" >&2
+  echo "$over" >&2
+  exit 1
+fi
+
 # Nothing to commit is only healthy if everything already committed got out.
 # Otherwise a quiet run launders the failure of a noisy one: an earlier push
 # was rejected, this run finds no change, exits 0, and the deadman stamps the
