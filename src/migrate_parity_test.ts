@@ -23,7 +23,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 // db.ts is imported (its module-init opens the default graph) — a throwaway
 // :memory: keeps that import off any real file.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, open, snapshot } = await import('./db.ts')
+let { apply, open, snapshot, human } = await import('./db.ts')
 import type { Change, Snapshot } from './types.ts'
 // DatabaseSync as a VALUE — test #4 below writes a raw eid-keyed legacy fixture
 // through a plain connection (never open(), the code under test) and needs the
@@ -272,8 +272,12 @@ let LEGACY_DDL = `
 // A representative eid-keyed legacy graph written straight to the file with a
 // plain connection — NEVER through open() (the code under test). Returns the
 // eids so the assertions can name them. Beyond the clean shapes it carries the
-// three real-data anomaly classes (T-18874): rows referencing `dead` (tombstoned,
-// so absent from the spine) and an orphaned component row absent from the spine.
+// real-data reference classes (T-18874) split by their two targets: `dead`, a
+// pre-existing TOMBSTONE (in the tombstone table, absent from the old entity
+// table), whose inbound refs the reshape CARRIES FORWARD (D-18866) by minting a
+// retained spine row; and `ghost`, a genuine ghost referenced by nothing on the
+// spine and NOT tombstoned, whose inbound refs the reshape cleans. Plus an
+// orphaned component row absent from the spine.
 let legacyGraph = (path: string) => {
   let raw = new DatabaseSync(path)
   // foreign_keys OFF: the anomaly rows POINT at a since-deleted entity — the very
@@ -282,17 +286,21 @@ let legacyGraph = (path: string) => {
   raw.exec('pragma foreign_keys = off')
   raw.exec(LEGACY_DDL)
   let task = uid(), note = uid(), card = uid(), dead = uid()
-  let conf = uid(), res = uid(), orphan = uid()
+  let conf = uid(), res = uid(), orphan = uid(), ghost = uid()
   // A live task; a comment aimed at it ({eid} ref); a card aimed at it ({eid}
-  // ref) that also `requires` it (an edge); and a tombstoned entity holding the
-  // HIGHEST num (5, above the live 1..4/6) so the no-recycle check has teeth.
+  // ref) that also `requires` it (an edge); and a tombstoned entity (`dead`)
+  // holding num 5 so the no-recycle check has teeth.
   //
-  // The anomalies, each pointing at `dead` (a deleted entity absent from the
-  // spine): a conflict whose NOT NULL target dangles (row DROPPED), a result
-  // whose NOT NULL call dangles (row DROPPED), a created whose NULLABLE `by`
-  // dangles (ref NULLED, row kept), and an `orphan` doc+task pair with no spine
-  // row at all (rows SKIPPED). conf/res own real spine rows so they are NOT
-  // orphans — only their references dangle.
+  // The reference cases:
+  //   - KEEP-REFS to `dead` (a pre-existing tombstone): a result whose NOT NULL
+  //     `call` and a created whose NULLABLE `via` both point at it. The reshape
+  //     carries `dead` into the spine, so BOTH rows survive and RESOLVE — the
+  //     fidelity D-18866 requires, not a drop/null.
+  //   - DANGLING refs to `ghost` (a genuine ghost, no spine + no tombstone): a
+  //     conflict whose NOT NULL `target` dangles (row DROPPED) and a created
+  //     whose NULLABLE `by` dangles (ref NULLED, row kept).
+  //   - an `orphan` doc+task pair with no spine row at all (rows SKIPPED).
+  // conf/res own real spine rows so they are NOT orphans — only their refs vary.
   raw.exec(
     `insert into entity (eid, num) values ` +
       `('${task}', 1), ('${note}', 2), ('${card}', 3), ` +
@@ -305,17 +313,17 @@ let legacyGraph = (path: string) => {
       `insert into comment (eid, target) values ('${note}', '${task}');` +
       `insert into card (eid, target, view) values ('${card}', '${task}', 'Show');` +
       `insert into conflict (eid, target, loser, holder, at) values ` +
-      `('${conf}', '${dead}', 'S-1', 'S-2', '2026-01-01T00:00:00Z');` +
+      `('${conf}', '${ghost}', 'S-1', 'S-2', '2026-01-01T00:00:00Z');` +
       `insert into result (eid, call) values ('${res}', '${dead}');` +
       `insert into created (eid, at, "by", via) values ` +
-      `('${task}', '2026-01-01T00:00:00Z', '${dead}', null);` +
+      `('${task}', '2026-01-01T00:00:00Z', '${ghost}', '${dead}');` +
       `insert into dependency (parent, type, child, ord) values ` +
       `('${card}', 'requires', '${task}', null);` +
       `insert into tombstone (eid, num, deleted_at) values ` +
       `('${dead}', 5, '2026-01-01T00:00:00Z');`,
   )
   raw.close()
-  return { task, note, card, dead, conf, res, orphan }
+  return { task, note, card, dead, conf, res, orphan, ghost }
 }
 
 // Development toggle (see the header). Committed false so the branch stays green.
@@ -334,7 +342,9 @@ slow(
     }
     let path = tmp()
     try {
-      let { task, note, card, dead, conf, res, orphan } = legacyGraph(path)
+      let { task, note, card, dead, conf, res, orphan, ghost } = legacyGraph(
+        path,
+      )
       // The reshape REPORTS what it cleaned to stderr (M-16612); capture it so
       // the counts are asserted, not just the surviving rows.
       let logs: string[] = []
@@ -485,27 +495,28 @@ slow(
         'the orphan doc row survived the reshape',
       )
 
-      // 7b. A NOT NULL reference to a deleted entity → the whole row DROPPED (it
-      //     is about a corpse and has no valid id). conflict/result held only
-      //     their one dangling row, so both tables are empty; the OWNER entities
-      //     survive as bare spine rows (only the component row is dead data).
+      // 7b. A NOT NULL reference to a GENUINE GHOST (no spine, no tombstone) →
+      //     the whole row DROPPED (it is about a corpse and has no valid id).
+      //     conflict.target → ghost was the only conflict row, so the table is
+      //     empty; its OWNER `conf` survives as a bare spine row (only the
+      //     component row is dead data). `ghost` itself never gains a spine row.
       assertEquals(
         n('select count(*) as n from conflict'),
         0,
         'conflict row not dropped',
       )
       assertEquals(
-        n('select count(*) as n from result'),
-        0,
-        'result row not dropped',
-      )
-      assertEquals(
-        n('select count(*) as n from entity where eid in (?, ?)', conf, res),
-        2,
+        n('select count(*) as n from entity where eid = ?', conf),
+        1,
         'a dropped-component owner lost its spine row',
       )
+      assertEquals(
+        n('select count(*) as n from entity where eid = ?', ghost),
+        0,
+        'a genuine ghost gained a spine row',
+      )
 
-      // 7c. A NULLABLE reference to a deleted entity → the ref is NULLED and the
+      // 7c. A NULLABLE reference to a genuine ghost → the ref is NULLED and the
       //     row KEPT. The created row for the task stands, with `by` cleared.
       assertEquals(
         n(
@@ -517,19 +528,74 @@ slow(
         'created.by was not nulled (or the row was dropped)',
       )
 
-      // 7d. The reshape REPORTED exactly what it cleaned (M-16612) — counts, not
-      //     silence. Per-class lines plus the one-line summary.
+      // 7d. D-18866 FIDELITY: a KEEP-REF to a PRE-EXISTING TOMBSTONE resolves
+      //     rather than dropping or nulling. `dead` lived only in the tombstone
+      //     table (no old entity row); the reshape carries it into the spine as
+      //     a retained row keeping its grave num, so every reference history
+      //     holds to it stays valid.
+      //     - `dead` is now a spine row carrying its num (5), still tombstoned
+      //       (off the wire, asserted in #5).
+      assertEquals(
+        n('select count(*) as n from entity where eid = ? and num = 5', dead),
+        1,
+        'a pre-existing tombstone was not carried into the spine with its num',
+      )
+      //     - its id is STRICTLY ABOVE the max seeded from the old entity table
+      //       — a carried grave never collides with a live id. (Excludes the
+      //       post-migration `fresh` mint, whose id is higher still.)
+      assertEquals(
+        (db.prepare(
+          `select case when (select id from entity where eid = ?)
+                          > (select max(id) from entity where eid not in (?, ?))
+                       then 1 else 0 end as n`,
+        ).get(dead, dead, fresh) as { n: number }).n,
+        1,
+        'a carried tombstone id did not exceed the live spine max',
+      )
+      //     - the NOT NULL keep-ref (result.call → dead) SURVIVES and resolves.
+      assertEquals(
+        n(
+          `select count(*) as n from result r join entity e on e.id = r.call
+           where e.eid = ?`,
+          dead,
+        ),
+        1,
+        'a NOT NULL keep-ref to a tombstone was dropped instead of resolving',
+      )
+      assertEquals(comp(res, 'result')?.call, dead, 'result.call lost its eid')
+      //     - the NULLABLE keep-ref (created.via → dead) SURVIVES and resolves.
+      assertEquals(
+        comp(task, 'created')?.via,
+        dead,
+        'created.via to a tombstone was nulled instead of resolving',
+      )
+      //     - human() names the carried grave by its full id (num-based), not
+      //       the short-eid fallback a spine-less tombstone would force — the
+      //       unification across pre- and post-cutover deaths.
+      assertStringIncludes(
+        human(db, dead),
+        '-5',
+        'human() did not name the carried tombstone by its num',
+      )
+
+      // 7e. The reshape REPORTED exactly what it cleaned (M-16612) — counts, not
+      //     silence. Only the genuine-ghost refs are cleaned now; the keep-refs
+      //     to `dead` resolve and appear NOWHERE in the report.
       assertStringIncludes(report, 'doc — skipped 1 orphan row(s)')
       assertStringIncludes(report, 'task — skipped 1 orphan row(s)')
       assertStringIncludes(report, 'conflict.target — dropped 1 row(s)')
-      assertStringIncludes(report, 'result.call — dropped 1 row(s)')
       assertStringIncludes(
         report,
         'created.by — nulled 1 dangling reference(s)',
       )
+      assertEquals(
+        report.includes('result.call'),
+        false,
+        'a resolved keep-ref was reported as an anomaly',
+      )
       assertStringIncludes(
         report,
-        'cleaned 2 orphan row(s), 2 dropped row(s), 1 nulled reference(s)',
+        'cleaned 2 orphan row(s), 1 dropped row(s), 1 nulled reference(s)',
       )
 
       db.close()

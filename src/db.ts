@@ -1665,9 +1665,12 @@ let ident = resolveId
 // this. Inputs accept both spellings; outputs speak human, or a caller
 // that typed `M-10276` is handed back an identifier it has no index for,
 // at the one moment (a refusal) it most wants to open the entity.
-// A tombstone keeps its num but not its components, so its kind — and
-// with it the prefix — died with them: it stays the raw eid rather than
-// wear a guessed one.
+// A tombstone keeps its num on its retained spine row (D-18866 — the id
+// never recycles), so it is still named BY that num; only its components
+// died, so kindOrder finds none and it wears the generic prefix rather
+// than a kind-specific one. The raw-eid fallback is for an entity with no
+// num at all (a numless cheap/bulk entity, or a numless old grave), never
+// a demotion a death itself imposes.
 export let human = (db: DatabaseSync, eid: string): string => {
   let row = prep(db, 'select num from entity where eid = ?').get(eid) as
     | { num: number }
@@ -2265,6 +2268,32 @@ let migrateToIdKeys = (db: DatabaseSync) => {
       'insert into entity (id, eid, num) select rowid, eid, num from __mig_entity',
     )
     db.exec('drop table __mig_entity')
+    // D-18866 fidelity: a pre-flip death lives ONLY in `tombstone` — deletion
+    // removed its `entity` row — so seeding the spine from the old entity table
+    // alone leaves every old-tombstoned eid with no id. copyLegacyTable would
+    // then NULL each nullable reference history still holds to such an eid, and
+    // DROP the whole row for a NOT NULL one — losing journal/provenance/contention
+    // records D-18866 keeps valid, and baking a two-representation split (old
+    // deaths eid-only, post-cutover deaths spine-retained). Carry every tombstone
+    // eid into the spine as a RETAINED row instead: a fresh id STRICTLY above the
+    // live max (num never recycles, so no id collision), its grave `num` kept.
+    // A dead entity now has BOTH a spine row and a tombstone row — exactly the
+    // go-forward representation apply() maintains (T-18878). The `tombstone` table
+    // is untouched (never in graphTables, so the copy loop below skips it), so
+    // refToId still refuses writes AT these graves by reading it directly — history
+    // resolves without any grave becoming writable. Guarded for a legacy db that
+    // predates the tombstone table or its num column.
+    if (tableExists(db, 'tombstone')) {
+      let tnum = hasCol(db, 'tombstone', 'num') ? 'num' : 'null'
+      db.exec(
+        `insert into entity (id, eid, num)
+           select (select coalesce(max(id), 0) from entity)
+                    + row_number() over (order by eid),
+                  eid, ${tnum}
+             from tombstone
+            where eid not in (select eid from entity)`,
+      )
+    }
     let reports: CopyReport[] = []
     for (let t of graphTables()) {
       if (t == 'entity' || !tableExists(db, t)) continue
