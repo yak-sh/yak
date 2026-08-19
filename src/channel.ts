@@ -478,6 +478,18 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
   for (let c of changes) {
     if (!c.comp) continue
 
+    // A session's own write is never a message back to itself. This skip lived
+    // as a post-filter inside notices() (client.ts), so the live channel push
+    // path (channels/tasks/server.ts feed()) — the selector's other consumer —
+    // echoed a session its own comments. Moved into the shared selector, both
+    // consumers inherit one implementation and cannot drift (T-20163).
+    // `created.via` is the instrument that wrote the entity; == the reading
+    // session means the session authored it. Self-directed floaters stay safe:
+    // a recall and a cadence self-knock are server/actor-minted with via ==
+    // null (wake's knock is stamped for the wake's author, an actor eid that
+    // resolves to no instrument), never == the reading session.
+    if (created.get(c.eid)?.via == ctx.sessionEid) continue
+
     if (c.name == 'comment') {
       let at = str(c.comp.target)
       let mine = at == ctx.sessionEid || !!ctx.claimedEids?.has(at)

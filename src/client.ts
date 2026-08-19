@@ -2550,8 +2550,8 @@ export let notices = (all: Row[], who: Reader) => {
     // path drops a floater that missed its beat, matching busRows' query bound.
     now: Date.now(),
   })
-    // A session's own write is not a message back to itself.
-    .filter((ev) => byEid.get(ev.eid)?.comps.created?.via != sessEid)
+    // Own-write skip now lives in the shared channelEvents() selector
+    // (channel.ts), so the live channel push path inherits it too (T-20163).
     // A TOTAL order: bornAt, then eid. bus() gathers its rows from parallel
     // keyed queries and concatenates them, while noticesFor() reads a whole
     // snapshot — so the two feed notices() in different input orders. bornAt

@@ -124,3 +124,50 @@ Deno.test('channelEvents: notices serve beside comments', () => {
   assertEquals(evs[1].content, 'sweep found it')
   assertEquals(evs[1].meta.on, 'T-9')
 })
+
+// A session's OWN write is never a message back to itself (T-20163). The skip
+// lived only in notices() (client.ts), so the live channel push path echoed a
+// session its own comments. It now lives in the shared selector, so BOTH
+// consumers filter identically. The edge case the blanket guard must NOT harm:
+// a self-directed cadence knock ("your pass resumes"), which a wake mints on
+// the actor's behalf with created.via == null — never the reading session.
+Deno.test('channelEvents: own writes skipped, cadence self-knock kept', () => {
+  // The unified operator: its actor IS its home project (D-19459), so a knock
+  // delivered to the home board passes the recipient gate as the actor knock.
+  let opIds: Record<string, string> = { S: 'S-31', T: 'T-9', P: 'P-19' }
+  let op: Ctx = {
+    sessionEid: 'S',
+    actorEid: 'P',
+    homeEid: 'P',
+    operator: true,
+    claimedEids: new Set(['T']),
+    idOf: (e) => opIds[e] ?? null,
+  }
+  let batch: Change[] = [
+    // the session's OWN comment on its claimed task — created.via == S, so
+    // this is the write it just made; it must NOT be served back to itself.
+    { eid: 'mine', name: 'comment', comp: { target: 'T' } },
+    { eid: 'mine', name: 'doc', comp: { title: '', body: 'my own note' } },
+    { eid: 'mine', name: 'created', comp: { by: 'P', via: 'S' } },
+    // a DIFFERENT session's comment on the same claimed task — a message to the
+    // claimant; via is that other session, so it IS served.
+    { eid: 'them', name: 'comment', comp: { target: 'T' } },
+    { eid: 'them', name: 'doc', comp: { title: '', body: 'someone else' } },
+    { eid: 'them', name: 'created', comp: { by: 'P', via: 'S2' } },
+    // a cadence self-resume knock: wake-minted for the actor (via == null),
+    // aimed at the home board and delivered there — the pass resuming. The
+    // blanket own-write guard must leave it untouched.
+    { eid: 'wake', name: 'knock', comp: { target: 'P' } },
+    { eid: 'wake', name: 'deliver', comp: { to: 'P' } },
+    { eid: 'wake', name: 'created', comp: { by: 'P', via: null } },
+  ]
+
+  let evs = channelEvents(batch, op)
+
+  // own comment ('mine') is gone; the other session's comment and the
+  // self-knock both survive.
+  assertEquals(evs.map((e) => e.meta.kind), ['comment', 'knock'])
+  assertEquals(evs[0].content, 'someone else')
+  assertEquals(evs[0].meta.on, 'T-9')
+  assertEquals(evs[1].content, 'your pass resumes on P-19')
+})
