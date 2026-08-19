@@ -479,7 +479,16 @@ let tmuxStart = async (c: RoleConfig, file: string, deps: RoleDeps) => {
 
 let roleText = (c: RoleConfig) =>
   [
-    c.personaText,
+    // Materialized HERE, on the launch path, not eagerly in config(): personaFor
+    // runs a full-graph snapshot()+materialize(), and config() is called on
+    // EVERY reconcile pass while roleText() is called only when a role actually
+    // launches. Eager materialization put that whole-graph snapshot in the
+    // reconciler's hot loop — with a per-pass stamp advancing the journal
+    // cursor, personaFor's cursor-keyed cache missed every time and re-snapshot
+    // the graph continuously, burning a core at idle post eid→id migration
+    // (T-13950). personaText is excluded from roleHash (T-19381), so nothing in
+    // the reconcile decision path needed it; only the file we write does.
+    c.personaText ?? (c.persona ? personaFor(c.persona) : undefined),
     `# ${c.title || 'Persistent role'}`,
     c.body,
     'This role is persistent fleet capacity managed by Tasks. The graph is ' +
@@ -592,7 +601,6 @@ let config = (eid: string): RoleConfig => {
   let bad = trouble({ provider, model, effort })
   if (bad) throw new Error(bad)
   let persona = String(row.persona ?? '') || undefined
-  let personaText = persona ? personaFor(persona) : undefined
   return {
     eid,
     state: String(row.state),
@@ -614,7 +622,6 @@ let config = (eid: string): RoleConfig => {
     model,
     effort,
     persona,
-    personaText,
   }
 }
 
