@@ -18,7 +18,9 @@ let uid = () => crypto.randomUUID()
 let heard: Change[] = []
 let cast = (changes: Change[]) => heard.push(...changes)
 let row = (eid: string) =>
-  db.prepare('select * from session where eid = ?').get(eid) as
+  db.prepare(
+    'select s.* from session s join entity o on o.id = s.entity where o.eid = ?',
+  ).get(eid) as
     | Record<string, string | number | null>
     | undefined
 let log = (eid: string) => `${logsDir()}/${eid}.jsonl`
@@ -72,7 +74,9 @@ slow('a graph mutation waits out a handoff writer', async () => {
   }
   assert(Date.now() - began >= 40)
   assertEquals(
-    db.prepare('select title from doc where eid = ?').get(eid),
+    db.prepare(
+      'select d.title from doc d join entity o on o.id = d.entity where o.eid = ?',
+    ).get(eid),
     { title: 'waited' },
   )
   apply(db, [{ eid, name: 'entity', comp: null }])

@@ -15,6 +15,7 @@ import type { DatabaseSync } from './sqlite.ts'
 import { kindOf, sessionOf } from './types.ts'
 import { find, type Querier, type Row, rows } from './client.ts'
 import {
+  buried,
   eager,
   entriesOf,
   entriesScan,
@@ -203,7 +204,11 @@ async (filters, opts) => {
     .flatMap((s) => s.slice(3).split(',')).filter(Boolean)
   let q = filters.filter((s) => !s.startsWith('id=')).join('&')
   if (!named.length) return evalGraph(db, q, opts).hits
-  let only = named.map((i) => locate(db, i)).filter(Boolean) as string[]
+  // A tombstoned entity still resolves by name but has left the graph, and its
+  // spine row now survives the delete (D-18866) — exclude it so `id=` addresses
+  // live entities only, matching the /query door and snapshot().
+  let only = (named.map((i) => locate(db, i)).filter(Boolean) as string[])
+    .filter((eid) => !buried(db, eid))
   let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
   let read = (e: string) => eager(db, e)
   let kids = (eid: string, comp: string, prop: string) =>

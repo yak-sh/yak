@@ -90,7 +90,9 @@ let session = (db: ReturnType<typeof open>, cwd?: string) => {
       ...cwd ? { cwd } : {},
     },
   }])
-  db.prepare("update session set origin = 'managed' where eid = ?").run(eid)
+  db.prepare(
+    "update session set origin = 'managed' where entity = (select id from entity where eid = ?)",
+  ).run(eid)
   return eid
 }
 
@@ -114,7 +116,9 @@ let noCodeJob = () => ({
 let delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 let leaseUntil = (db: ReturnType<typeof open>, eid: string) =>
-  (db.prepare('select until from lease where eid = ?').get(eid) as
+  (db.prepare(
+    'select until from lease where entity = (select id from entity where eid = ?)',
+  ).get(eid) as
     | { until: string }
     | undefined)?.until
 
@@ -219,7 +223,9 @@ slow(
       assertEquals(journalOf(db, row.eid)[0].via, service.runner)
     }
     assertEquals(
-      db.prepare('select status from session where eid = ?').get(sid),
+      db.prepare(
+        'select status from session where entity = (select id from entity where eid = ?)',
+      ).get(sid),
       { status: null },
     )
     assert(heard.some((change) => change.name == 'result'))
@@ -260,7 +266,9 @@ slow('the generation dispatcher routes by provider to its runner', async () => {
     name: 'session',
     comp: { id: uuid(), provider: 'gemini', model: 'flash' },
   }])
-  db.prepare("update session set origin = 'managed' where eid = ?").run(cid)
+  db.prepare(
+    "update session set origin = 'managed' where entity = (select id from entity where eid = ?)",
+  ).run(cid)
   let reached = 0
   let scheduler = managedCodex({
     db,
@@ -277,7 +285,9 @@ slow('the generation dispatcher routes by provider to its runner', async () => {
   await scheduler.start(cid, { ...noCodeJob(), model: 'flash' })
   assertEquals(reached, 0)
   let generation = readEntries(db, cid).find((row) => row.comps.generation)!
-  let error = db.prepare('select message from error where eid = ?').get(
+  let error = db.prepare(
+    'select message from error where entity = (select id from entity where eid = ?)',
+  ).get(
     generation.eid,
   ) as { message: string } | undefined
   assertMatch(String(error?.message), /no managed runner for provider 'gemini'/)
@@ -291,7 +301,9 @@ slow('the generation dispatcher routes by provider to its runner', async () => {
     name: 'session',
     comp: { id: uuid(), provider: 'claude', model: 'sonnet' },
   }])
-  db.prepare("update session set origin = 'managed' where eid = ?").run(clid)
+  db.prepare(
+    "update session set origin = 'managed' where entity = (select id from entity where eid = ?)",
+  ).run(clid)
   let claudeSaw: string[] = []
   let claude = managedCodex({
     db,
@@ -371,7 +383,9 @@ slow('a Session past one entry page still runs its next turn', async () => {
   assertEquals(rows.at(-1)!.comps.content?.body, 'fresh answer')
   assert(!rows.some((row) => row.comps.error))
   assertEquals(
-    db.prepare('select message from error where eid = ?').get(sid),
+    db.prepare(
+      'select message from error where entity = (select id from entity where eid = ?)',
+    ).get(sid),
     undefined,
   )
   db.close()
@@ -958,11 +972,15 @@ slow('a failed generation consumes its wake and accepts the next', async () => {
   // The break stamped an `exception` (T-17081); recovering the next turn shed
   // it, so a healed Session carries neither health facet.
   assertEquals(
-    db.prepare('select 1 from error where eid = ?').get(sid),
+    db.prepare(
+      'select 1 from error where entity = (select id from entity where eid = ?)',
+    ).get(sid),
     undefined,
   )
   assertEquals(
-    db.prepare('select 1 from exception where eid = ?').get(sid),
+    db.prepare(
+      'select 1 from exception where entity = (select id from entity where eid = ?)',
+    ).get(sid),
     undefined,
   )
   db.close()
@@ -1001,7 +1019,9 @@ slow(
       prepare: () => Promise.resolve(),
     })
     await service.start(sid, noCodeJob())
-    let broke = db.prepare('select message from exception where eid = ?').get(
+    let broke = db.prepare(
+      'select message from exception where entity = (select id from entity where eid = ?)',
+    ).get(
       sid,
     ) as { message: string } | undefined
     assertEquals(
@@ -1010,7 +1030,9 @@ slow(
     )
     // A break, not a known error: it wears `exception`, not `error`.
     assertEquals(
-      db.prepare('select 1 from error where eid = ?').get(sid),
+      db.prepare(
+        'select 1 from error where entity = (select id from entity where eid = ?)',
+      ).get(sid),
       undefined,
     )
     db.close()
@@ -1063,12 +1085,16 @@ slow(
     // is screened by valid() before sessionFault, so neither the Session nor its
     // cancelled entry wears an `exception` — nothing for self-healing to fix.
     assertEquals(
-      db.prepare('select 1 from exception where eid = ?').get(sid),
+      db.prepare(
+        'select 1 from exception where entity = (select id from entity where eid = ?)',
+      ).get(sid),
       undefined,
     )
     assertEquals(rows.some((row) => row.comps.exception), false)
     assertEquals(
-      !!db.prepare('select 1 from delivered where eid = ?').get(request),
+      !!db.prepare(
+        'select 1 from delivered where entity = (select id from entity where eid = ?)',
+      ).get(request),
       true,
     )
     let comment = uuid()
@@ -1399,7 +1425,9 @@ slow(
     // The session recovered end to end, with no lingering error.
     assertEquals(rows.at(-1)?.comps.content?.body, 'recovered and landed')
     assertEquals(
-      db.prepare('select 1 from error where eid = ?').get(sid),
+      db.prepare(
+        'select 1 from error where entity = (select id from entity where eid = ?)',
+      ).get(sid),
       undefined,
     )
     db.close()
@@ -1458,11 +1486,15 @@ slow('restart settles durable generation and call evidence', async () => {
   })
   await service.sweep()
   assertEquals(
-    !!db.prepare('select 1 from delivered where eid = ?').get(generation),
+    !!db.prepare(
+      'select 1 from delivered where entity = (select id from entity where eid = ?)',
+    ).get(generation),
     true,
   )
   assertEquals(
-    db.prepare('select 1 from error where eid = ?').get(generation),
+    db.prepare(
+      'select 1 from error where entity = (select id from entity where eid = ?)',
+    ).get(generation),
     undefined,
   )
   assertEquals(generationLease.token.eid, generation)

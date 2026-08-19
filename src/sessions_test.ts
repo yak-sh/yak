@@ -34,7 +34,9 @@ Deno.env.set('CODEX_HOME', `${tmp}/codex`)
 Deno.env.set('POLL_MS', '10') // tests wait on facts, never on the clock
 Deno.env.set('STOP_GRACE_MS', '1000')
 
-let { apply, db, delta, journalOf, snapshot } = await import('./db.ts')
+let { apply, db, delta, journalOf, snapshot, sweepSelect } = await import(
+  './db.ts'
+)
 let { hookClaim, noticesFor, rows } = await import('./client.ts')
 let { childEnv, childPath } = await import('./agent_env.ts')
 let { readEntries } = await import('./entries.ts')
@@ -77,17 +79,23 @@ let logOf = (
 let sayText = (e?: { row?: unknown }) =>
   String((e?.row as { text?: unknown } | undefined)?.text ?? '')
 let failure = (eid: string) =>
-  (db.prepare('select message from error where eid = ?').get(eid) as
+  (db.prepare(
+    'select message from error where entity = (select id from entity where eid = ?)',
+  ).get(eid) as
     | { message: string }
     | undefined)?.message
 // The break facet's message: a failed run wears `exception`, not `error`
 // (T-17081), so a genuine crash/failed-launch reads here, not through failure().
 let broke = (eid: string) =>
-  (db.prepare('select message from exception where eid = ?').get(eid) as
+  (db.prepare(
+    'select message from exception where entity = (select id from entity where eid = ?)',
+  ).get(eid) as
     | { message: string }
     | undefined)?.message
 let spawnRow = (eid: string) =>
-  db.prepare('select * from spawn where eid = ?').get(eid) as
+  db.prepare(
+    'select * from spawn where entity = (select id from entity where eid = ?)',
+  ).get(eid) as
     | Record<string, string | number | null>
     | undefined
 
@@ -99,15 +107,19 @@ on('stop_request', {
 })
 on('comment', { created: commented(cast) })
 
-// The relay's row fetch, as server.ts performs it at boot.
+// The relay's row fetch, as server.ts performs it at boot — one door
+// (sweepSelect), so the swept row carries eids for the owner and every
+// reference, matching the wire comp the created() effect expects (D-18866).
 let pending = (comp: string, cond: string) =>
-  db.prepare(`select * from ${comp} where ${cond}`).all() as Record<
+  db.prepare(sweepSelect(comp, cond)).all() as Record<
     string,
     unknown
   >[]
 // A stop_request settles into the shared delivered facet now (D-14945).
 let acted = (sr: string) =>
-  (db.prepare('select at from delivered where eid = ?').get(sr) as
+  (db.prepare(
+    'select at from delivered where entity = (select id from entity where eid = ?)',
+  ).get(sr) as
     | { at: string | null }
     | undefined)?.at ?? null
 
@@ -209,14 +221,17 @@ let say = (target: string, body: string) => {
 // from re-entering commented() and refusing forever.
 let refusals = (target: string) =>
   (db.prepare(
-    `select d.body from comment c join doc d on d.eid = c.eid
-     join created cr on cr.eid = c.eid
-     where c.target = ? and cr.via = ?`,
+    `select d.body from comment c join doc d on d.entity = c.entity
+     join created cr on cr.entity = c.entity
+     where c.target = (select id from entity where eid = ?)
+       and cr.via = (select id from entity where eid = ?)`,
   ).all(target, target) as { body: string }[]).map((c) => c.body)
 
 // The delivery ledger: a comment wears `notified` once some ear took it.
 let told = (eid: string) =>
-  !!db.prepare('select 1 from notified where eid = ?').get(eid)
+  !!db.prepare(
+    'select 1 from notified where entity = (select id from entity where eid = ?)',
+  ).get(eid)
 
 // A session row + log file exactly as a dead child would have left them.
 let plant = (lines: string[], provider = 'fake') => {
@@ -362,7 +377,9 @@ slow('a new Codex spawn routes to the graph-native lifecycle', async () => {
     },
   }])
   let pending = () =>
-    !!db.prepare(`select 1 from session where eid = ? and ${codexPending}`)
+    !!db.prepare(
+      `select 1 from session where entity = (select id from entity where eid = ?) and ${codexPending}`,
+    )
       .get(eid)
   assertEquals(pending(), true)
   await spawned(cast, (got, launch) => {
@@ -402,7 +419,9 @@ slow('a new Codex spawn routes to the graph-native lifecycle', async () => {
   assertEquals(running.has(eid), false)
   assertEquals(pending(), false)
   assertEquals(
-    db.prepare('select session from claim where eid = ?').get(t),
+    db.prepare(
+      'select (select eid from entity where id = c.session) as session from claim c where c.entity = (select id from entity where eid = ?)',
+    ).get(t),
     { session: eid },
   )
 
@@ -423,7 +442,9 @@ slow('a new Codex spawn routes to the graph-native lifecycle', async () => {
     pid: 123,
   })
   assertEquals(
-    !!db.prepare(`select 1 from session where eid = ? and ${codexPending}`)
+    !!db.prepare(
+      `select 1 from session where entity = (select id from entity where eid = ?) and ${codexPending}`,
+    )
       .get(legacy),
     false,
   )
@@ -485,7 +506,9 @@ slow('a projectless Codex task starts as a no-code graph session', async () => {
   assertEquals(row(eid)?.branch, null)
   assertEquals(failure(eid), undefined)
   assertEquals(
-    db.prepare('select session from claim where eid = ?').get(task),
+    db.prepare(
+      'select (select eid from entity where id = c.session) as session from claim c where c.entity = (select id from entity where eid = ?)',
+    ).get(task),
     { session: eid },
   )
 })
@@ -525,7 +548,9 @@ slow('a stale spawn claim preserves the session that won', () => {
   apply(db, [{ eid: t, name: 'claim', comp: { session: other } }])
   landSpawnClaim(mine, t, planned, cast)
   assertEquals(
-    db.prepare('select session from claim where eid = ?').get(t),
+    db.prepare(
+      'select (select eid from entity where id = c.session) as session from claim c where c.entity = (select id from entity where eid = ?)',
+    ).get(t),
     { session: other },
   )
   assertThrows(
@@ -671,7 +696,9 @@ slow(
       name: 'session',
       comp: { id, requested_task: t, cwd: tree, branch },
     }])
-    db.prepare("update session set origin = 'managed' where eid = ?").run(eid)
+    db.prepare(
+      "update session set origin = 'managed' where entity = (select id from entity where eid = ?)",
+    ).run(eid)
 
     // The provider: each turn asks for one shell call, then answers. `printf %s
     // "$PWD"` proves WHERE the tool ran — the regrown checkout, not a stray cwd.
@@ -813,7 +840,9 @@ slow('a fake session runs end to end', async () => {
   // doc.body — the wrap auto-capture decoupled the two (T-19460 / ded8019), so
   // doc.body stays free for the scribe's narrative.
   assertEquals(
-    (db.prepare('select text from brief where eid = ?').get(eid) as {
+    (db.prepare(
+      'select text from brief where entity = (select id from entity where eid = ?)',
+    ).get(eid) as {
       text: string
     })?.text,
     s.final_text,
@@ -821,7 +850,9 @@ slow('a fake session runs end to end', async () => {
   // The decoupling holds the other way too: the final text never clobbers
   // doc.body (no doc row here, so the body is simply absent).
   assert(
-    (db.prepare('select body from doc where eid = ?').get(eid) as {
+    (db.prepare(
+      'select body from doc where entity = (select id from entity where eid = ?)',
+    ).get(eid) as {
       body?: string
     })?.body !== s.final_text,
   )
@@ -883,9 +914,10 @@ slow('both Codex rollback names run through process JSONL', async () => {
       // session stays process-backed: no runner-minted entry, never handed to
       // the graph runner, and its log still reads from the file.
       let ents = db.prepare(
-        `select i.eid as imported from entry e
-         left join imported i on i.eid = e.eid where e.session = ?`,
-      ).all(eid) as { imported: string | null }[]
+        `select i.entity as imported from entry e
+         left join imported i on i.entity = e.entity
+         where e.session = (select id from entity where eid = ?)`,
+      ).all(eid) as { imported: number | null }[]
       assert(ents.length > 0) // the transcript was ingested
       assertEquals(ents.filter((e) => !e.imported).length, 0) // all imported
       assertEquals(logOf(eid).entries.length > 1, true)
@@ -1010,11 +1042,15 @@ slow('a canonical fake session dual-materializes and runs', async () => {
   assertEquals(spawnRow(eid)?.model, 'fake-fast')
   assertEquals(spawnRow(eid)?.effort, 'high')
   assertEquals(
-    db.prepare('select cwd from worktree where eid = ?').get(eid),
+    db.prepare(
+      'select cwd from worktree where entity = (select id from entity where eid = ?)',
+    ).get(eid),
     { cwd: String(row(eid)?.cwd) },
   )
   assertEquals(
-    db.prepare('select provider_session_id from runtime where eid = ?')
+    db.prepare(
+      'select provider_session_id from runtime where entity = (select id from entity where eid = ?)',
+    )
       .get(eid),
     { provider_session_id: String(row(eid)?.id) },
   )
@@ -1162,18 +1198,20 @@ slow(
 // session — cast like any wire write, exactly once per settle.
 let settleComments = (task: string, via: string) =>
   (db.prepare(
-    `select d.body from comment c join doc d on d.eid = c.eid
-     join created b on b.eid = c.eid
-     where c.target = ? and b.via = ?`,
+    `select d.body from comment c join doc d on d.entity = c.entity
+     join created b on b.entity = c.entity
+     where c.target = (select id from entity where eid = ?)
+       and b.via = (select id from entity where eid = ?)`,
   ).all(task, via) as { body: string }[]).map((c) => c.body)
 
 // A lease lapse is machinery, not speech (D-13858): it lands as a NOTICE on
 // the task, not a comment — same target, same instrument, off the thread.
 let settleNotices = (task: string, via: string) =>
   (db.prepare(
-    `select d.body from notice n join doc d on d.eid = n.eid
-     join created b on b.eid = n.eid
-     where n.target = ? and b.via = ?`,
+    `select d.body from notice n join doc d on d.entity = n.entity
+     join created b on b.entity = n.entity
+     where n.target = (select id from entity where eid = ?)
+       and b.via = (select id from entity where eid = ?)`,
   ).all(task, via) as { body: string }[]).map((c) => c.body)
 
 slow('a settled session says so on its task', async () => {
@@ -1258,7 +1296,9 @@ slow(
     assertMatch(said[0], /unknown model/)
     assertEquals(settleComments(spawner, eid), said)
     assertEquals(
-      (db.prepare('select via from created where eid = ?').get(eid) as {
+      (db.prepare(
+        'select (select eid from entity where id = cr.via) as via from created cr where cr.entity = (select id from entity where eid = ?)',
+      ).get(eid) as {
         via: string
       }).via,
       spawner,
@@ -1286,7 +1326,9 @@ slow('a client-launched session reports only on its task', async () => {
   let { eid, done } = begin(t, { model: 'no-such-model' }, client)
   await done
   assertEquals(
-    (db.prepare('select via from created where eid = ?').get(eid) as {
+    (db.prepare(
+      'select (select eid from entity where id = cr.via) as via from created cr where cr.entity = (select id from entity where eid = ?)',
+    ).get(eid) as {
       via: string
     }).via,
     client,
@@ -1314,7 +1356,9 @@ slow(
     // The dead session's lease is gone and the lapse is a NOTICE on the task's
     // trail (D-13858) — the same words task wrap leaves for an interactive end.
     assertEquals(
-      db.prepare('select 1 from claim where eid = ?').get(t),
+      db.prepare(
+        'select 1 from claim where entity = (select id from entity where eid = ?)',
+      ).get(t),
       undefined,
     )
     let said = settleNotices(t, eid)
@@ -1323,7 +1367,11 @@ slow(
     // The release rode the CAST — no client cache keeps the ghost claim.
     assert(heard.some((c) => c.eid == t && c.name == 'claim' && c.comp == null))
     // The bystander's lease is not ours to lapse.
-    assert(db.prepare('select 1 from claim where eid = ?').get(kept))
+    assert(
+      db.prepare(
+        'select 1 from claim where entity = (select id from entity where eid = ?)',
+      ).get(kept),
+    )
   },
 )
 
@@ -1480,8 +1528,10 @@ slow(
 slow('an unavailable land verdict preserves the source refusal', async () => {
   let eid = plant([INIT, RESULT])
   let message = 'UNLANDED: 1 commit on lost-branch not in main — gate red'
-  db.prepare('insert into error (eid, at, message) values (?, ?, ?)')
-    .run(eid, new Date().toISOString(), message)
+  db.prepare(
+    `insert into error (entity, at, message)
+     values ((select id from entity where eid = ?), ?, ?)`,
+  ).run(eid, new Date().toISOString(), message)
   recover(cast)
   await running.get(eid)!.done
   assertEquals(row(eid)?.status, 'completed')
@@ -1505,7 +1555,9 @@ slow('boot: external transcripts restore model facts missed at startup', () => {
     name: 'session',
     comp: { id: uid(), cwd: scratch, transcript: path },
   }])
-  db.prepare('update session set finished_at = ? where eid = ?')
+  db.prepare(
+    'update session set finished_at = ? where entity = (select id from entity where eid = ?)',
+  )
     .run('2026-07-27T16:07:22.782Z', eid)
 
   heard = []
@@ -1751,7 +1803,9 @@ slow('a comment resumes nothing it should not', async () => {
   assertEquals(refusals(active), []) // delivery, not a failure to say
   // settled but never announced a provider thread: refused OUT LOUD
   let bare = plant([INIT])
-  db.prepare("update session set status = 'completed' where eid = ?")
+  db.prepare(
+    "update session set status = 'completed' where entity = (select id from entity where eid = ?)",
+  )
     .run(bare)
   await write(say(bare, 'hi'))
   assertEquals(row(bare)?.status, 'completed')
@@ -1764,8 +1818,10 @@ slow('a comment resumes nothing it should not', async () => {
   assertEquals(refusals(bare).length, 1) // the line above is the control
   assertEquals(
     (db.prepare(
-      `select cr.via from comment c join created cr on cr.eid = c.eid
-       where c.target = ? order by c.rowid desc limit 1`,
+      `select (select eid from entity where id = cr.via) as via
+       from comment c join created cr on cr.entity = c.entity
+       where c.target = (select id from entity where eid = ?)
+       order by c.rowid desc limit 1`,
     ).get(bare) as { via: string | null }).via,
     bare,
   )
@@ -1780,7 +1836,9 @@ slow('a comment resumes nothing it should not', async () => {
     },
     { eid: roleRun, name: 'session', comp: { role: role } },
   ])
-  db.prepare("update session set status = 'completed' where eid = ?")
+  db.prepare(
+    "update session set status = 'completed' where entity = (select id from entity where eid = ?)",
+  )
     .run(roleRun)
   let pending = say(roleRun, 'graph words stay in the graph')
   await write(pending)
@@ -1892,7 +1950,9 @@ slow('a failed run stays down until the next word resumes it', async () => {
 
 slow('refused words stay owed, never marked told', async () => {
   let bare = plant([INIT])
-  db.prepare("update session set status = 'completed' where eid = ?").run(bare)
+  db.prepare(
+    "update session set status = 'completed' where entity = (select id from entity where eid = ?)",
+  ).run(bare)
   let s = say(bare, 'hello?')
   await write(s)
   assertMatch(refusals(bare)[0], /never announced a provider thread/)
@@ -1992,7 +2052,9 @@ slow('a comment after the sweep regrows the worktree and resumes', async () => {
 
   // and when the graph can't place a tree, the refusal is said
   writeSession(db, eid, { cwd: null })
-  db.prepare('delete from repo where eid = ?').run(p)
+  db.prepare(
+    'delete from repo where entity = (select id from entity where eid = ?)',
+  ).run(p)
   await write(say(eid, 'hello?'))
   assertEquals(row(eid)?.status, 'completed')
   assertMatch(refusals(eid)[0], /no worktree to resume in/)
@@ -2136,7 +2198,9 @@ slow(
   async () => {
     let c = await fakeCodex()
     let { eid } = announce(c.pid, undefined, '', 'codex')
-    db.prepare("update session set turn = 'idle' where eid = ?").run(eid)
+    db.prepare(
+      "update session set turn = 'idle' where entity = (select id from entity where eid = ?)",
+    ).run(eid)
     c.kill('SIGKILL')
     await c.status
     watched(cast)(eid, { pid: c.pid })
@@ -2150,7 +2214,9 @@ slow(
 slow('a Codex that left mid-turn ends like any other door', async () => {
   let c = await fakeCodex()
   let { eid } = announce(c.pid, undefined, '', 'codex')
-  db.prepare("update session set turn = 'busy' where eid = ?").run(eid)
+  db.prepare(
+    "update session set turn = 'busy' where entity = (select id from entity where eid = ?)",
+  ).run(eid)
   c.kill('SIGKILL')
   await c.status
   watched(cast)(eid, { pid: c.pid })
@@ -2203,7 +2269,9 @@ slow('a ghost row ends when it was last heard from, unwatched', async () => {
   c.kill('SIGKILL')
   await c.status
   watched(cast)(eid, { pid: c.pid })
-  let born = db.prepare('select at from created where eid = ?').get(eid) as {
+  let born = db.prepare(
+    'select at from created where entity = (select id from entity where eid = ?)',
+  ).get(eid) as {
     at: string
   }
   assertEquals(row(eid)?.finished_at, born.at)

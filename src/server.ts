@@ -14,6 +14,7 @@ import { capabilities, type Change, type Dep, idOf, kindOf } from './types.ts'
 import {
   apply,
   bodies,
+  buried,
   componentCounts,
   cursorOf,
   db,
@@ -38,6 +39,7 @@ import {
   settingEid,
   settingValue,
   snapshot,
+  sweepSelect,
   touch,
   vocabHash,
   vocabularyDoc,
@@ -1120,7 +1122,8 @@ let http = Deno.serve(
           .flatMap((s) => s.slice(3).split(',')).filter(Boolean)
         let only = named.length
           ? new Set(
-            named.map((i) => locate(db, i)).filter(Boolean) as string[],
+            (named.map((i) => locate(db, i)).filter(Boolean) as string[])
+              .filter((eid) => !buried(db, eid)),
           )
           : null
         segs = segs.filter((s) =>
@@ -1203,10 +1206,11 @@ let http = Deno.serve(
         // Named entities are read one eager() each — a handful of keyed reads,
         // against a filter that would otherwise select everything and drag the
         // whole graph in behind it.
-        // A dead entity is gone before this: every arm of locate() reads a
-        // table whose row dies with it — the spine by num or by eid, and an
-        // alias, which is a component of the entity it names — so `only`
-        // holds live eids only and eager() always finds a spine.
+        // A dead entity is gone before this: `only` was built above with the
+        // tombstone excluded (buried), so it holds live eids only and eager()
+        // always finds a spine with components. Since the D-18866 flip retains a
+        // tombstoned spine row, that exclusion is explicit rather than a side
+        // effect of delete removing the row.
         if (only) {
           let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
           let hits = [...only].map((eid) =>
@@ -1990,10 +1994,7 @@ if (mayStamp() && Deno.env.get('TASKS_SWEEP') == '1') {
 // effect (a crash in the post-commit gap) re-fire now — strictly AFTER
 // recover(), so a re-driven stop finds the adopted pid to signal.
 relay((comp, pending) =>
-  db.prepare(
-    `select ${comp}.*, o.eid as eid from ${comp}
-     join entity o on o.id = ${comp}.entity where ${pending}`,
-  ).all() as Record<
+  db.prepare(sweepSelect(comp, pending)).all() as Record<
     string,
     unknown
   >[]

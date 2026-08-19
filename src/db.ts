@@ -2980,6 +2980,30 @@ let select = (name: string): string => {
     }) __s`
 }
 
+// A boot sweep replays a deliverable's created() effect as if its row were a
+// fresh wire write, so the row must read back the way the wire delivered it:
+// the owner eid under `eid`, and every {eid} REFERENCE projected to its target's
+// eid — not the int id it is stored as (D-18866), which is what a handler like
+// stopped() binds as `comp.target`. Unlike select(), this is NOT wrapped in a
+// subquery: the base table stays in FROM under its own name so the sweep's
+// pending predicate (deliver.ts PENDING) can still filter on `${comp}.entity`.
+export let sweepSelect = (name: string, pending: string): string => {
+  let base = sqlName(name)
+  let joins: string[] = []
+  let cols = readable[name].map((c) => {
+    if (c == 'eid') return `__o.eid as eid`
+    if (isRef(name, c)) {
+      let a = `__r_${c.replace(/[^A-Za-z0-9]/g, '_')}`
+      joins.push(`left join entity ${a} on ${a}.id = ${base}.${sqlName(c)}`)
+      return `${a}.eid as ${sqlName(c)}`
+    }
+    return `${base}.${sqlName(c)} as ${sqlName(c)}`
+  })
+  return `select ${cols.join(', ')} from ${base} ` +
+    `join entity __o on __o.id = ${base}.entity` +
+    `${joins.length ? ' ' + joins.join(' ') : ''} where ${pending}`
+}
+
 // The boot snapshot omits every entity carrying a LAZY-partition comp
 // (types.ts `partition`) — the whole entity, so a lazy entity's eager comps
 // (a session's `recalled`) leave with it too. This subquery is the UNION of
@@ -3118,6 +3142,18 @@ let eidCols: [string, string][] = Object.entries(comps).flatMap(
     ),
 )
 
+// The SPAWN-REQUEST references the created(session) effect validates by failing
+// the session on the board — never a 400 (M-17876): creating a session with a
+// requested_task IS the ask, and a name that resolves to no task is reported by
+// the effect as "no such task", not refused at apply. Under the old eid-text
+// storage the dangling eid simply sat in the column; under id storage (D-18866)
+// the value is an int id, so an absent target has nothing to point at. apply()
+// mints a bare placeholder spine for it (see the pre-mint pass) so the reference
+// stays storable and the eid round-trips to the effect. Everything else stays
+// strict — session.actor, a comment's or card's target, a task's project:
+// refToId refuses a name that resolves to nothing.
+let trustedRefs: [string, string][] = [['session', 'requested_task']]
+
 // Graduation on interaction (D-17790): a write that attaches to a source-
 // materialized (ephemeral) entity hydrates that entity's source components into
 // THIS batch, so it persists and mints its num alongside the write. The engaged
@@ -3202,7 +3238,10 @@ let refRefused = (
 // Nothing else may reach for this: an agent is not its owner and the
 // server's own machinery is nobody, so both resolve blank instead (T-9934).
 let ownerActor = (db: DatabaseSync): string | null => {
-  let people = prep(db, 'select eid from person').all() as { eid: string }[]
+  let people = prep(
+    db,
+    'select o.eid as eid from person p join entity o on o.id = p.entity',
+  ).all() as { eid: string }[]
   return people.length == 1 ? people[0].eid : null
 }
 
@@ -3644,6 +3683,22 @@ export let apply = (
         killed.has(eid) || dead.get(eid)
       ) continue
       if (spine(db, eid).changes) minted.add(eid)
+    }
+    // A trusted spawn-request reference (trustedRefs) may name a target this
+    // batch neither writes nor has on file — a requested_task naming a task that
+    // never existed, which the created(session) effect reports rather than a
+    // 400. Its stored value is an int id (D-18866), so mint a bare placeholder
+    // spine for the target now, keeping the eid answerable through the ref. A
+    // tombstoned target is left for refToId to refuse — a new reference must not
+    // point at a grave — and a killed-in-batch one is already void.
+    for (let { name, comp } of changes) {
+      if (!comp) continue
+      for (let [n, col] of trustedRefs) {
+        if (n != name || comp[col] == null) continue
+        let t = String(comp[col])
+        if (killed.has(t) || dead.get(t)) continue
+        if (spine(db, t).changes) minted.add(t)
+      }
     }
     for (let { eid, name, comp, was } of changes) {
       // An edge is a TRIPLE, not a row keyed by eid: the comp names the
@@ -5471,6 +5526,15 @@ if (import.meta.main) {
 // reading (T-3684).
 export let locate = (db: DatabaseSync, id: string): string | undefined =>
   resolveId(db, id)
+
+// A tombstoned entity keeps its spine row and its name (C-19754#2), so locate
+// still resolves it — naming a dead entity must keep working (human(), history).
+// But it has LEFT the graph: the addressing doors (id=) exclude it, so a dead
+// name reads as absent rather than as a spine with no components. Before the
+// D-18866 flip, delete removed the spine and locate simply missed; the spine now
+// survives, so the exclusion is explicit.
+export let buried = (db: DatabaseSync, eid: string): boolean =>
+  !!prep(db, 'select 1 from tombstone where eid = ?').get(eid)
 
 let clear = (db: DatabaseSync) => {
   db.exec('create temp table if not exists hit (eid text primary key)')

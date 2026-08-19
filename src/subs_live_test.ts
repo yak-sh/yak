@@ -90,8 +90,12 @@ slow(
       name: 'session',
       comp: { id: uid(), cwd: '/canonical' },
     }])
-    db.prepare("update session set cwd = '/stale' where eid = ?").run(eid)
-    db.prepare('update worktree set cwd = null where eid = ?').run(eid)
+    db.prepare(
+      "update session set cwd = '/stale' where entity = (select id from entity where eid = ?)",
+    ).run(eid)
+    db.prepare(
+      'update worktree set cwd = null where entity = (select id from entity where eid = ?)',
+    ).run(eid)
     try {
       let res = await fetch(`http://${U}/query?id=${eid}`)
       if (!res.ok) throw new Error(`query refused: ${await res.text()}`)

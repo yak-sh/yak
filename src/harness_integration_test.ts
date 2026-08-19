@@ -140,12 +140,16 @@ slow(
         base_revision: 'base',
       })
       assertEquals(
-        db.prepare('select cwd, base_revision from worktree where eid = ?')
+        db.prepare(
+          'select cwd, base_revision from worktree where entity = (select id from entity where eid = ?)',
+        )
           .get(session),
         { cwd: tree, base_revision: 'base' },
       )
       assertEquals(
-        db.prepare('select 1 from runtime where eid = ?').get(session),
+        db.prepare(
+          'select 1 from runtime where entity = (select id from entity where eid = ?)',
+        ).get(session),
         undefined,
       )
 
@@ -315,15 +319,22 @@ slow(
         1,
       )
       assertEquals(
-        db.prepare('select session from claim where eid = ?').get(task),
+        db.prepare(
+          `select (select eid from entity where id = c.session) as session
+           from claim c where c.entity = (select id from entity where eid = ?)`,
+        ).get(task),
         { session },
       )
       assertEquals(
-        !!db.prepare('select 1 from notified where eid = ?').get(comment),
+        !!db.prepare(
+          'select 1 from notified where entity = (select id from entity where eid = ?)',
+        ).get(comment),
         true,
       )
       assertEquals(
-        db.prepare('select 1 from notified where eid = ?').get(untouched),
+        db.prepare(
+          'select 1 from notified where entity = (select id from entity where eid = ?)',
+        ).get(untouched),
         undefined,
       )
       assertEquals(await Deno.readTextFile(`${tree}/note.txt`), 'after\n')
@@ -343,7 +354,9 @@ slow(
       )
       assertEquals(bodies.every((body) => body.store === false), true)
       assertEquals(
-        db.prepare('select 1 from runtime where eid = ?').get(session),
+        db.prepare(
+          'select 1 from runtime where entity = (select id from entity where eid = ?)',
+        ).get(session),
         undefined,
       )
 
@@ -354,7 +367,9 @@ slow(
         entries,
         journal,
         providerRequests: bodies,
-        session: db.prepare('select * from session where eid = ?').get(session),
+        session: db.prepare(
+          'select * from session where entity = (select id from entity where eid = ?)',
+        ).get(session),
         worktree: {
           note: await Deno.readTextFile(`${tree}/note.txt`),
           env: await Deno.readTextFile(`${tree}/env.txt`),
