@@ -155,20 +155,7 @@ let put = (db: DatabaseSync, eid: string, text: string, vec: Float32Array) =>
 // yields the event loop, so a 2k-doc backfill never starves the server.
 // Interval-safe like the others: one sweep in flight, failures warn.
 let sweeping = false
-// TEMPORARY hotfix — post-cutover outage. Observed: after the eid→id storage
-// migration (T-18874) this sweep runs continuous ONNX inference without
-// committing progress (embeddings frozen at ~8634/57894), saturating the
-// embedder thread pool and starving the event loop, so a booting server can't
-// dial the supervisor's readiness port inside its 60s deadline and the whole
-// server respawn-loops — the graph outage. Suspected cause: the migration
-// reshaped component ownership to the integer entity id, but the embedding
-// table and stale()/put()/stored() still key by eid TEXT, so a written vector
-// never satisfies the staleness test and the same docs recompute every pass.
-// Off until the write path is repaired; on-demand search still embeds and
-// stored vectors still answer. Flip to false once stale()/put() agree.
-const SWEEP_OFF = true
 export let embedSweep = async (db: DatabaseSync) => {
-  if (SWEEP_OFF) return 0
   if (sweeping || dead) return 0
   sweeping = true
   let n = 0
