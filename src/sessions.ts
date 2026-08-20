@@ -698,6 +698,20 @@ let landStateOf = (row: Row): Unlanded | null | undefined => {
   }
 }
 
+// `merge-base --is-ancestor` answers mergedness by EXIT CODE, so "not merged"
+// is a routine disposition — keep the tree for inspection — never an error:
+// exit 0 means the branch is an ancestor of the base (merged) and the worktree
+// earned removal; any nonzero means not proven merged — an unmerged branch, or
+// a stale/dangling worktree whose ref merge-base can't resolve — so the tree is
+// left alone. Only a nonzero carrying stderr is an unexpected git fault worth a
+// terse line; the ordinary empty-stderr "not an ancestor" answer (and the
+// dangling worktrees a boot sweep meets) stays silent so it can't bury the log.
+export let mergeDisposition = (
+  code: number,
+  stderr: string,
+): { remove: boolean; warn?: string } =>
+  code == 0 ? { remove: true } : { remove: false, warn: stderr || undefined }
+
 // One worktree, considered and (maybe) removed. Every refusal is a
 // warning, never a throw. The row sheds its branch afterwards, but keeps cwd:
 // a provider's thread is tied to that exact path, including across a root
@@ -717,13 +731,20 @@ let cleanup = async (row: Row, cast: Cast) => {
     let repo = repoOf(row)
     if (!repo) return
     if (await git(tree, ['status', '--porcelain'])) return // dirty: keep
-    // merged? --is-ancestor exits nonzero when not — git() throws, we keep
-    await git(repo.path, [
+    let merged = gitResult(repo.path, [
       'merge-base',
       '--is-ancestor',
       branch,
       repo.base_branch,
     ])
+    let d = mergeDisposition(
+      merged.code,
+      new TextDecoder().decode(merged.stderr).trim(),
+    )
+    if (!d.remove) { // unmerged or unresolvable: keep for inspection
+      if (d.warn) console.warn(`worktree ${tree} kept — merge-base: ${d.warn}`)
+      return
+    }
     await git(repo.path, ['worktree', 'remove', tree])
     await git(repo.path, ['branch', '-d', branch])
     stamp(String(row.eid), { branch: null }, cast)

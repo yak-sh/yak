@@ -50,6 +50,7 @@ let {
   logsDir,
   graphCodex,
   landSpawnClaim,
+  mergeDisposition,
   prepareWorktree,
   reapLeases,
   recover,
@@ -1963,6 +1964,24 @@ slow('refused words stay owed, never marked told', async () => {
 let inTree = (cwd: string, ...args: string[]) =>
   new Deno.Command('git', { args, cwd, stdout: 'null', stderr: 'null' })
     .outputSync()
+
+// The disposition a stale worktree's `merge-base --is-ancestor` exit code maps
+// to. Exit 0 alone is "merged, remove"; every other code keeps the tree, and
+// only a nonzero WITH stderr earns a terse line — the common empty-stderr "not
+// an ancestor" (and the dangling refs a boot sweep meets) stays silent, so a
+// sweep of stale trees can't bury the log in stacks (T-7764).
+Deno.test('mergeDisposition: only exit 0 removes; a bare nonzero is silent', () => {
+  assertEquals(mergeDisposition(0, ''), { remove: true })
+  assertEquals(mergeDisposition(0, 'noise'), { remove: true })
+  // unmerged / dangling — kept, no warning to log
+  assertEquals(mergeDisposition(1, ''), { remove: false, warn: undefined })
+  assertEquals(mergeDisposition(128, ''), { remove: false, warn: undefined })
+  // an unexpected git fault carries stderr — kept, one terse line
+  assertEquals(mergeDisposition(128, 'fatal: bad revision'), {
+    remove: false,
+    warn: 'fatal: bad revision',
+  })
+})
 
 slow(
   'tidy: a merged clean tree goes at boot, unmerged work stays',
