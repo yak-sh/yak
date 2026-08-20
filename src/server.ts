@@ -18,11 +18,12 @@ import {
   buried,
   componentCounts,
   cursorOf,
+  cursorStale,
   db,
   delta,
   depsOf,
   eager,
-  epoch,
+  epochOf,
   file as graph,
   historicalWorked,
   inverseBatch,
@@ -44,7 +45,6 @@ import {
   snapshot,
   sweepSelect,
   touch,
-  vocabHash,
   vocabularyDoc,
 } from './db.ts'
 import { bodied, bodyless, gaps, spread, type Step, step } from './subs.ts'
@@ -591,7 +591,7 @@ let join = (
 ) => {
   if (f.live == 1) envelopes.add(sock)
   else envelopes.delete(sock)
-  if (f.since == null || f.epoch != epoch || f.vocab != vocabHash) {
+  if (f.since == null || cursorStale(db, f.epoch, f.vocab, f.since)) {
     sock.send(JSON.stringify({ reset: true, snapshot: snapshot(db) }))
   } else {
     let d = delta(db, f.since)
@@ -908,7 +908,7 @@ let port = Number(Deno.env.get('PORT') ?? 5173)
 // — a stranger's graph makes every reader a coin flip, and even our own file
 // twice over is a probe writing to the owner's board — unless `--join` says
 // a supervisor meant this process to succeed the one already there.
-let serving: Serving = { db: graph, epoch, pid: Deno.pid }
+let serving: Serving = { db: graph, epoch: epochOf(db), pid: Deno.pid }
 // A --join successor of a live deploy; everyone else (first boot, revive, test,
 // probe) is a sole boot. This one flag steers both the port guard (bind.ts) and
 // the single-writer handoff (becomeWriter below).
@@ -1058,13 +1058,21 @@ let http = Deno.serve(
       return Response.json({ changes: bodies(db, eids) })
     }
     if (path == '/delta') {
-      // The returning client's catch-up: changes since its cursor. A cursor
-      // is only valid against the epoch and vocabulary that issued it — a
-      // mismatch means the journal was reset (restore) or the shape moved,
-      // so 409 tells the client to full-resnapshot rather than serve a
-      // misleading delta.
+      // The returning client's catch-up: changes since its cursor. A cursor is
+      // only valid against the epoch and vocabulary that issued it, and only up
+      // to the journal's current tip — a mismatch means a different graph
+      // lineage, a shape change, or a rewind past the client's frontier, so 409
+      // tells the client to full-resnapshot rather than serve a misleading
+      // delta (cursorStale, db.ts).
       let p = url.searchParams
-      if (p.get('epoch') != epoch || p.get('vocab') != vocabHash) {
+      if (
+        cursorStale(
+          db,
+          p.get('epoch'),
+          p.get('vocab'),
+          Number(p.get('since') ?? 0),
+        )
+      ) {
         return new Response('stale', { status: 409 })
       }
       return Response.json(delta(db, Number(p.get('since') ?? 0)))

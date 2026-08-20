@@ -679,6 +679,21 @@ let schema = `
     jrow integer not null,
     eid  text not null
   );
+  -- Server-local key/value, not graph: no eid, no components, so snapshot()
+  -- (which walks the comps vocabulary) never carries it, and apply() never
+  -- writes it. Holds the durable sync epoch (epochOf): the cursor-lineage
+  -- identity a delta client checks, minted ONCE per graph and stable across
+  -- process restarts, so a plain restart/deploy/listener-handoff lets a
+  -- returning client resume via a small delta instead of a full resnapshot
+  -- (T-20299). A restore that rewinds this graph's own journal keeps the same
+  -- epoch -- the since-past-tip guard in the join handshake reseeds any client
+  -- whose frontier is now beyond the journal -- while a different graph carries
+  -- its own epoch, so its rows can never be replayed against a stale cursor.
+  -- (Named server_meta, not meta -- meta is already a component table.)
+  create table if not exists server_meta (
+    k text primary key,
+    v text not null
+  );
   -- Log data, not graph: no eid, no components, so snapshot() (which walks
   -- the comps vocabulary) never carries it. telemetry.ts owns the rows.
   ${callDdl};
@@ -2366,6 +2381,17 @@ export let connect = (path = file) => {
   return db
 }
 
+// Mint the durable sync epoch (T-20299) if absent — the cursor-lineage identity
+// a delta client checks (epochOf). This is a WRITE, so it runs ONCE in migrate()
+// under the writer baton, never on a read path: a --join successor's connect()
+// must leave the file byte-identical, so the epoch must already exist before any
+// read reaches it. `insert or ignore` makes it idempotent — a no-op on a graph
+// that already carries the row, so a re-open writes nothing.
+export let mintEpoch = (db: DatabaseSync) =>
+  db.exec(
+    `insert or ignore into server_meta (k, v) values ('epoch', '${crypto.randomUUID()}')`,
+  )
+
 // Migrate a connected handle in place: the eid→id reshape, ref migration, the
 // hand + derived schema, the additive column/index fills, and the vector index.
 // This is the WRITE phase — the caller MUST already hold the writer baton
@@ -2740,6 +2766,11 @@ export let migrate = (db: DatabaseSync) => {
     // the legacy name once — the derived unique index above already holds the
     // (actor,target) uniqueness the drop would otherwise lose.
     dropIdx('subscription_one')
+    // Mint the durable sync epoch (T-20299) if the graph lacks it — a WRITE, so
+    // it belongs HERE in the write phase under the baton, never on a read path.
+    // After first boot the row stands, so every later epochOf() (snapshot, the
+    // successor's connect()) is a pure SELECT and a re-open writes nothing.
+    mintEpoch(db)
     initVector(db)
     return db
   } finally {
@@ -3179,14 +3210,15 @@ export let sweepSelect = (name: string, pending: string): string => {
 
 // The boot snapshot omits every entity carrying a LAZY-partition comp
 // (types.ts `partition`) — the whole entity, so a lazy entity's eager comps
-// (a session's `recalled`) leave with it too. This subquery is the UNION of
-// the lazy tables' owner EIDs (projected through the spine, since the owner key
-// is now an int id), derived from the one-list so a new lazy comp joins the
-// omission with zero further edits. Today lazy = {entry}.
-let lazyEids = Object.keys(readable).filter(lazy)
-  .map((name) =>
-    `select o.eid from ${sqlName(name)} lz join entity o on o.id = lz.entity`
-  ).join(' union ')
+// (a session's `recalled`) leave with it too. These are the lazy tables whose
+// owner EIDs form the omit-set; snapshot() materializes them ONCE into an
+// indexed temp table (`_omit`) before its per-table loop rather than
+// re-running a spine-join UNION subquery inside every one of the 89 component
+// scans (the eid→id migration turned that subquery into a ~36k-row
+// spine-join, ~50ms per table even on empty ones — T-18874). Derived from the
+// one-list so a new lazy comp joins the omission with zero further edits.
+// Today lazy = {entry}.
+let lazyTables = Object.keys(readable).filter(lazy)
 
 let bound = (
   name: string,
@@ -5467,14 +5499,43 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
 }
 
 // Cursor invalidation stamps a delta client checks before trusting its
-// `since`. `epoch` is minted once at process start: a db restore/reseed
-// restarts the journal rowids, so a fresh epoch forces every stale cursor to
-// full-resnapshot. `vocabHash` fingerprints graph-out's writable and stamped
-// declarations — a shape change (new component, renamed column) shifts it,
-// so a delta derived against the old shape is refused and the client reseeds.
-// Both declarations are insertion-ordered, so their JSON (and the hash) is
-// stable across boots of the same code.
-export let epoch = crypto.randomUUID()
+// `since`. The epoch is the GRAPH's cursor-lineage identity: minted once and
+// persisted in `server_meta`, so it survives a process restart, a deploy, and
+// the two-process listener handoff — a returning client with a matching epoch
+// resumes via a small delta instead of a full resnapshot. It changes only when
+// the journal lineage does: a DIFFERENT graph carries its own persisted epoch,
+// so its rows can never replay against a stale cursor. A restore that rewinds
+// THIS graph's own journal keeps the same epoch — the `since > cursor` guard in
+// the join handshake (server.ts) reseeds any client whose frontier now sits
+// beyond the shortened journal, which is the only cursor a rewind can strand.
+// `vocabHash` fingerprints graph-out's writable and stamped declarations — a
+// shape change (new component, renamed column) shifts it, so a delta derived
+// against the old shape is refused and the client reseeds. Both declarations
+// are insertion-ordered, so their JSON (and the hash) is stable across boots.
+// mintEpoch (the WRITE) lives up by migrate(), its only caller — a read path
+// must never write. epochOf is the READ — a pure SELECT (cached per handle), so
+// every read and snapshot path, including a successor's write-free connect(),
+// only reads. The row is present on any migrated graph; an un-minted graph
+// (never migrated, or a test that stripped server_meta) reads '' — distinct from
+// any real client's held epoch, so those clients reseed, the safe answer.
+let epochs = new WeakMap<DatabaseSync, string>()
+export let epochOf = (db: DatabaseSync): string => {
+  let hit = epochs.get(db)
+  if (hit) return hit
+  // The table itself may not exist yet: on the FIRST deploy of this code a
+  // --join successor connect()s to a graph the predecessor (older code) never
+  // migrated, so `server_meta` arrives only when this successor migrates under
+  // the baton. Absent table or absent row both read '' — never a throw on the
+  // write-free connect() path — and the row lands the moment migrate() runs.
+  let got = !tableExists(db, 'server_meta') ? '' : (prep(
+    db,
+    `select v from server_meta where k = 'epoch'`,
+  ).get() as { v: string } | undefined)?.v ?? ''
+  // Cache only a real value — never the '' of an un-minted graph, so a read that
+  // preceded migrate()'s mint is not pinned to empty.
+  if (got) epochs.set(db, got)
+  return got
+}
 export let vocabHashOf = (
   writable: Record<string, Record<string, unknown>>,
   stamped: Record<string, Record<string, unknown>>,
@@ -5491,6 +5552,30 @@ export let vocabHash = vocabHashOf(comps, stamped)
 export let cursorOf = (db: DatabaseSync): number =>
   (prep(db, 'select max(rowid) as m from journal')
     .get() as { m: number | null }).m ?? 0
+
+// Whether a returning client's held cursor can NO LONGER be trusted for a
+// delta, so the server must full-resnapshot instead. Three ways it goes stale,
+// each answering a distinct question the client cannot answer for itself:
+//  - `epoch` mismatch: the cursor was issued by a DIFFERENT graph lineage
+//    (a restore from an unrelated dump, a swapped db), whose rowids mean
+//    something else — replaying them would splice alien history into the cache.
+//  - `vocab` mismatch: the graph's SHAPE moved (new/renamed component) since
+//    the cursor issued, so a delta in the old shape would mis-key rows.
+//  - `since > cursor`: the client's frontier sits BEYOND the server's journal —
+//    only a rewind (a restore of this same graph to an earlier point) can do
+//    that, and the rows it saw past the new tip are gone; a delta would return
+//    nothing and leave those rolled-back rows stranded in its cache. This is
+//    the guard that lets `epoch` stay durable across restarts (T-20299): the
+//    epoch no longer rotates on every boot to catch a rewind, this does.
+// Never fires in normal append-only operation: a live client's `since` is a
+// rowid the server issued, and cursorOf only grows within a lineage.
+export let cursorStale = (
+  db: DatabaseSync,
+  epochHeld: string | null | undefined,
+  vocabHeld: string | null | undefined,
+  since: number,
+): boolean =>
+  epochHeld != epochOf(db) || vocabHeld != vocabHash || since > cursorOf(db)
 
 // One entity's current components, keyed read — what subscription maintenance
 // tests a touched eid against (design §2). Shaped like a snapshot row's comps
@@ -5593,6 +5678,27 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
   let key = snapKey(db)
   let hit = snapCache.get(db)
   if (hit?.local == key.local && hit.remote == key.remote) return hit.snap
+  // Materialize the lazy omit-set ONCE into an indexed temp table, then read it
+  // as the `not in` source per component table, instead of re-materializing a
+  // ~36k-row spine-join UNION subquery inside each of the 89 per-table scans
+  // (T-18874: that subquery cost ~50ms per table even on empty ones). The outer
+  // query keeps its EXACT prior shape — only the `not in (…)` source changes —
+  // so the planner's scan order is untouched and the wire stays byte-identical;
+  // an anti-join instead would reorder rows. `if not exists` + `delete from`
+  // keeps `_omit` safe across snapshot()'s repeated calls and lets the cached
+  // statements that read it stay valid — the temp table lives for the
+  // connection. `insert or ignore` folds the lazy tables the way `union` did;
+  // every eid is non-null (entity.eid), so `not in` carries no NULL footgun.
+  db.exec('create temp table if not exists _omit(eid text primary key)')
+  db.exec('delete from _omit')
+  for (let name of lazyTables) {
+    db.exec(
+      `insert or ignore into _omit
+         select o.eid from ${
+        sqlName(name)
+      } lz join entity o on o.id = lz.entity`,
+    )
+  }
   let changes: Change[] = []
   for (let name of Object.keys(readable)) {
     for (
@@ -5601,8 +5707,17 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
         // A tombstoned entity keeps its spine row (so its int id can never
         // recycle, C-19754#2) but leaves the wire: exclude it from the entity
         // walk. Component tables never hold a dead entity's row (the delete
-        // cascades them), so the clause only ever bites the spine.
-        `${select(name)} where eid not in (${lazyEids})
+        // cascades them), so the tombstone clause is a no-op on the 88
+        // component tables — but it stays on EVERY table, exactly as the
+        // pre-opt query had it: this whole change swaps only the omit-set
+        // SOURCE (the ~36k-row spine-join UNION → the indexed `_omit` temp),
+        // leaving the WHERE shape untouched so the planner's per-table scan
+        // order — and thus the wire — is byte-for-byte unchanged. Dropping the
+        // clause from the 88 tables reorders their rows (a no-op `not in`
+        // still shifts the plan), and tombstone is a tiny indexed scan, so the
+        // saving is nil and the wire-order cost is real. Verified byte-identical
+        // on a live-size copy (T-20299).
+        `${select(name)} where eid not in (select eid from _omit)
            and eid not in (select eid from tombstone)`,
       ).all() as Record<string, unknown>[]
     ) {
@@ -5610,14 +5725,15 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
     }
   }
   // Edge endpoints are int ids in storage; project both back to their eids.
+  // Both endpoints read the same `_omit` set the component walk used.
   let deps = (prep(
     db,
     `select p.eid as parent, d.type as type, c.eid as child, d.ord as ord
      from dependency d
      join entity p on p.id = d.parent
      join entity c on c.id = d.child
-     where p.eid not in (${lazyEids})
-       and c.eid not in (${lazyEids})
+     where p.eid not in (select eid from _omit)
+       and c.eid not in (select eid from _omit)
      order by p.eid, d.type, d.ord, c.eid`,
   ).all() as Dep[]).map(shedOrd)
   // A project's specialist personas ride derived `reads` edges (homeReads):
@@ -5627,7 +5743,7 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
     changes,
     deps: [...deps, ...homeReads(homes(db), deps)],
     cursor,
-    epoch,
+    epoch: epochOf(db),
     vocabHash,
     capabilities,
   }

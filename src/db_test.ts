@@ -7,9 +7,13 @@ let {
   backfillOpened,
   backfillVia,
   componentCounts,
+  connect,
+  cursorOf,
+  cursorStale,
   db,
   delta,
   eager,
+  epochOf,
   hasCol,
   healInboundDeliver,
   historicalWorked,
@@ -23,6 +27,7 @@ let {
   mendMail,
   migrateBoardsToProjects,
   migrateErrors,
+  mintEpoch,
   numbered,
   open,
   readComp,
@@ -36,6 +41,7 @@ let {
   snapshot,
   Stale,
   touch,
+  vocabHash,
   vocabHashOf,
   vocabularyDoc,
   writerActor,
@@ -93,6 +99,68 @@ Deno.test('vocabHash: writable declarations still invalidate a cache', () => {
     vocabHashOf(vocab({ body: 'body' }), {}),
     vocabHashOf(vocab({ title: 'text' }), {}),
   )
+})
+
+Deno.test('cursorStale: a matching cursor within the journal tip resumes', () => {
+  let d = fresh()
+  mintEpoch(d) // fresh() strips server_meta; mint a real epoch like migrate() does
+  apply(d, [{ eid: uid(), name: 'doc', comp: { title: 'a', body: '' } }])
+  let cur = cursorOf(d)
+  // The one legitimate resume: same lineage, same shape, frontier at/under tip.
+  assertEquals(cursorStale(d, epochOf(d), vocabHash, cur), false)
+  assertEquals(cursorStale(d, epochOf(d), vocabHash, cur - 1), false)
+})
+
+Deno.test('cursorStale: epoch, vocab, or a frontier past the tip all reseed', () => {
+  let d = fresh()
+  mintEpoch(d)
+  apply(d, [{ eid: uid(), name: 'doc', comp: { title: 'a', body: '' } }])
+  let cur = cursorOf(d)
+  // A cursor from a different graph lineage.
+  assertEquals(cursorStale(d, 'other-epoch', vocabHash, cur), true)
+  // A cursor issued against an older graph shape.
+  assertEquals(cursorStale(d, epochOf(d), 'other-vocab', cur), true)
+  // A frontier BEYOND the server's journal — only a rewind (restore) strands a
+  // client here, and a delta would leave its rolled-back rows behind.
+  assertEquals(cursorStale(d, epochOf(d), vocabHash, cur + 1), true)
+  // A void epoch/vocab (a client that has no stamp yet) is never a valid resume.
+  assertEquals(cursorStale(d, null, null, cur), true)
+})
+
+slow('epochOf: durable across re-open, distinct per graph', () => {
+  let a = Deno.makeTempFileSync({ suffix: '.db' })
+  let b = Deno.makeTempFileSync({ suffix: '.db' })
+  let one = open(a)
+  let minted = epochOf(one)
+  one.close()
+  // A plain restart re-opens the SAME file: the persisted epoch survives, so a
+  // returning client resumes via a delta instead of a full resnapshot.
+  let again = open(a)
+  assertEquals(epochOf(again), minted)
+  again.close()
+  // A different graph carries its own epoch, so its cursors can never be
+  // replayed against this one.
+  let other = open(b)
+  assertNotEquals(epochOf(other), minted)
+  other.close()
+  Deno.removeSync(a)
+  Deno.removeSync(b)
+})
+
+slow('connect() + snapshot on a migrated graph write NOTHING (T-20223)', () => {
+  let path = Deno.makeTempFileSync({ suffix: '.db' })
+  open(path).close() // migrate mints the epoch row; the file now stands
+  let before = Deno.readFileSync(path)
+  // A --join successor's path: connect() is write-free, and every read on it —
+  // epochOf (a pure SELECT now, not a mint) and snapshot — must leave the file
+  // byte-identical, or it reopens the two-writer window the baton closes.
+  let reader = connect(path)
+  epochOf(reader)
+  snapshot(reader)
+  epochOf(reader)
+  reader.close()
+  assertEquals(Deno.readFileSync(path), before)
+  Deno.removeSync(path)
 })
 
 slow('snapshot shares a walk until either database handle writes', () => {
@@ -435,6 +503,7 @@ let outsideVocabulary: Record<string, string> = {
   tool_call: 'telemetry: no eid, no components — read at /telemetry',
   embedding: 'semantic vectors: rebuilt from doc on the sweep, never synced',
   embedding_index: 'dirty state for the derived vector index, never synced',
+  server_meta: 'server-local key/value (the durable sync epoch): never synced',
 }
 // FTS5 and SQLite Vector generate physical tables for their derived indexes;
 // they refill from source rows and hold no vocabulary.
