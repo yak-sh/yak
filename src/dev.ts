@@ -79,13 +79,45 @@ let signal = async (listener: Deno.TcpListener) => {
   }
 }
 
+// A single-shot deadline; `beat` names what the child never reached, so a
+// wedged bind reads differently from a wedged migrate. The message says the
+// child is STILL RUNNING: a wedged boot is a different diagnosis from one that
+// exited (the `died` arm), and a silent kill-and-retry is the outage T-14046
+// was filed against.
+let deadline = (pid: number, ms: number, beat: string) => {
+  let timer: ReturnType<typeof setTimeout>
+  let p = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new Error(
+            `server pid ${pid} still not ${beat} ${
+              Math.round(ms / 1000)
+            }s after spawn — killing it`,
+          ),
+        ),
+      ms,
+    )
+  })
+  return { p, clear: () => clearTimeout(timer) }
+}
+
 // Spawns the child with `--ready=<port>` appended and resolves once it has
 // dialed that port back. The port rides argv so the address dies with the
 // child; in the environment it would outlive this supervisor in every
 // descendant shell.
+//
+// `onBound` turns this into the TWO-beat single-writer handoff (T-20223). A
+// --join successor signals TWICE: beat 1 "bound" (listening, DB connected
+// read-capable, NOT yet migrated), then beat 2 "ready" (migrated under the
+// writer baton, fully up). onBound fires between them — it stops the
+// predecessor, whose exit releases the baton the successor is waiting on — so
+// the successor never migrates or writes beside a live predecessor. Without
+// onBound (a sole boot) the child signals once and this resolves on it.
 export let launch = async (
   path = deno,
   run = args,
+  onBound?: () => void,
 ) => {
   using listener = Deno.listen({ hostname: '127.0.0.1', port: 0 })
   let port = (listener.addr as Deno.NetAddr).port
@@ -99,34 +131,38 @@ export let launch = async (
   // Drain and durably record the child's stderr for its whole life. Piped
   // stderr MUST be consumed or a chatty child blocks on a full pipe.
   let recorded = record(child.stderr, child.pid)
-  // Sized to measured boot time with headroom for a loaded box. A child past
-  // this is wedged rather than slow, so replacing it is the cure — but the
-  // deadline only holds while boot stays bounded, so it moves when that does.
-  // The message names the pid and that the child is STILL RUNNING: a wedged
-  // boot is a different diagnosis from one that exited (the child.status arm),
-  // and a silent kill-and-retry is the outage this ticket was filed against.
-  let timer: ReturnType<typeof setTimeout> | undefined
-  let late = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () =>
-        reject(
-          new Error(
-            `server pid ${child.pid} still not ready 60s after spawn — killing it`,
-          ),
-        ),
-      60_000,
+  // Shared across both beats: an exit before the beat we await is a failure.
+  // Promise.race keeps a handler on it for each race, so its later (normal)
+  // rejection when the child eventually exits is never unhandled.
+  let died = child.status.then((status) => {
+    throw new Error(
+      `server pid ${child.pid} exited before ready (code ${status.code})`,
     )
   })
+  // Await one ready beat under a deadline, or the child's death. Sized to
+  // measured time with headroom for a loaded box; past it the child is wedged
+  // rather than slow, so replacing it is the cure.
+  let beat = async (ms: number, name: string) => {
+    let d = deadline(child.pid, ms, name)
+    try {
+      await Promise.race([signal(listener), d.p, died])
+    } finally {
+      d.clear()
+    }
+  }
   try {
-    await Promise.race([
-      signal(listener),
-      late,
-      child.status.then((status) => {
-        throw new Error(
-          `server pid ${child.pid} exited before ready (code ${status.code})`,
-        )
-      }),
-    ])
+    if (onBound) {
+      // Beat 1: BOUND — fast (connect + bind), so the sole-boot deadline.
+      await beat(60_000, 'bound')
+      // Stop the predecessor; its exit frees the writer baton the successor is
+      // now waiting on. Reads/writes queue on the successor through the gap.
+      onBound()
+      // Beat 2: READY — the successor migrated under the baton. Bounded by the
+      // predecessor's drain (managed.settle caps at 300s), so a roomier wait.
+      await beat(330_000, 'ready')
+    } else {
+      await beat(60_000, 'ready')
+    }
     // Boot duration on every success, so a creeping regression (2s → 10s → 60s)
     // is visible in the log LONG before it crosses the deadline and turns into
     // an unbounded respawn loop. Surfacing the slowdown early is what the
@@ -143,8 +179,6 @@ export let launch = async (
     // the reason it died is on disk before this rejection propagates.
     await recorded
     throw e
-  } finally {
-    clearTimeout(timer)
   }
 }
 
@@ -249,26 +283,39 @@ let stop = async (child: Deno.ChildProcess) => {
   await child.status
 }
 
-// Condemn the predecessor BEFORE the successor boots. It stays on the port
-// and keeps serving, but it is already being replaced — and the successor's
-// boot runs migrations against the graph they briefly share, so old code
-// meeting a schema that moved under it is expected, not news. Left until
-// after `launch()` resolved, that window classified a doomed process's death
-// as unexpected and took the supervisor down with it (T-11139).
+// The single-writer handoff (T-20223). The successor is spawned to bind BESIDE
+// the predecessor and serve reads, but it must NOT migrate or write until the
+// predecessor has released the DB. So the beats are ordered: launch() waits for
+// the successor to report BOUND, then `onBound` here stops the predecessor;
+// its exit releases the writer baton; the successor migrates under the baton
+// and reports READY, which is when launch() resolves. There is never a moment
+// when two processes write the one file.
+//
+// The predecessor is condemned only at "bound", never before — so a successor
+// that fails to even start (a bad commit's import/bind error, before "bound")
+// leaves the predecessor untouched and serving old code, and insist() retries
+// on backoff (a bad commit idles the box, T-14046). A successor that fails
+// AFTER we condemned the predecessor is healed by a fresh boot, which claims
+// the now-free baton — a brief outage, not a two-writer window.
 let swap = async () => {
   let old = current!
-  stopping.add(old)
+  let stopped: Promise<void> | undefined
   try {
-    current = watch(await launch(deno, succeeding))
-    await stop(old)
+    current = watch(
+      await launch(deno, succeeding, () => {
+        stopped = stop(old)
+      }),
+    )
+    await stopped // the predecessor is fully gone before we call the swap done
     return true
   } catch (e) {
     console.error('server handoff failed —', e)
-    // No successor, so the predecessor is still ours: lift the condemnation.
-    stopping.delete(old)
     current = old
-    // Unless the reprieve came too late — nothing watches a child whose
-    // status already settled, so heal here or sit holding a dead handle.
+    // If we condemned the predecessor, wait for it to go; a child whose status
+    // already settled is watched by nothing, so heal it here or hold a dead
+    // handle. If we never reached "bound", the predecessor is alive and stays
+    // ours — current = old keeps it serving and revive() is skipped.
+    if (stopped) await stopped.catch(() => {})
     if (dead.has(old)) await revive(old)
     return false
   }

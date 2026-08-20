@@ -2321,9 +2321,12 @@ let migrateToIdKeys = (db: DatabaseSync) => {
   db.exec('pragma foreign_keys = on')
 }
 
-// Open the file, migrate it in place, plant missing schema, and seed once if
-// the graph is empty. Returns a live handle held for the process lifetime.
-export let open = (path = file) => {
+// Connect only — enough to READ the graph, taking NO write to it. The migrate
+// phase (which DOES write) is split out below so a --join deploy successor can
+// serve reads while it waits for the predecessor to release the writer baton,
+// then migrate() alone once it holds it (T-20223, becomeWriter in server.ts).
+// Every sole-writer boot goes through open(), which is connect() + migrate().
+export let connect = (path = file) => {
   // A test must NEVER open the owner's live graph. Under `deno test` the main
   // module is always a *_test.ts file; reaching the live path there means a
   // caller forgot DB_PATH (the `test` task sets :memory:). Refuse before we
@@ -2341,22 +2344,39 @@ export let open = (path = file) => {
   Deno.mkdirSync(dirname(path), { recursive: true })
   let db = new DatabaseSync(path)
   loadVector(db)
-  // Migrations below ALTER tables; a cached statement would strand against an
+  // Connection-local settings ONLY — nothing here writes shared data, so this
+  // is safe to run beside a predecessor that still holds the writer baton.
+  // busy_timeout and synchronous both live in the connection, never the file;
+  // the ONE persistent write that used to sit here — the journal_mode = wal
+  // header flip — moved into migrate() under the baton (T-20223), because a
+  // --join successor's connect() must leave the on-disk file byte-identical.
+  //
+  // Listener handoff overlaps two server processes. SQLite serializes their
+  // brief boot/write collision; waiting keeps a mutation on its accepting
+  // process instead of making the caller guess whether to replay it.
+  db.exec('pragma busy_timeout = 5000')
+  // Durability is tunable for throwaway graphs (TASKS_SYNC, like TASKS_BACKOFF):
+  // the default (unset) leaves SQLite's own `full`, which fsyncs every DDL
+  // statement — and migrate() runs ~200 of them (schema + migrations), so a
+  // fresh file on real disk costs ~2s. A test graph is ephemeral and never
+  // survives a crash, so the test task sets `off` and every file-backed open
+  // drops from ~2s to ~10ms. Production never sets it and stays fully durable.
+  let sync = Deno.env.get('TASKS_SYNC')
+  if (sync) db.exec(`pragma synchronous = ${sync}`)
+  return db
+}
+
+// Migrate a connected handle in place: the eid→id reshape, ref migration, the
+// hand + derived schema, the additive column/index fills, and the vector index.
+// This is the WRITE phase — the caller MUST already hold the writer baton
+// (baton.ts), so a deploy successor never migrates beside its live predecessor
+// (T-20223). Idempotent: a no-op on an already-current graph. Returns the same
+// handle for the one-line open() below.
+export let migrate = (db: DatabaseSync) => {
+  // Migrations ALTER tables; a cached statement would strand against an
   // intermediate schema. Compile raw until the schema is final, then restore.
   caching = false
   try {
-    // Listener handoff overlaps two server processes. SQLite serializes their
-    // brief boot/write collision; waiting keeps a mutation on its accepting
-    // process instead of making the caller guess whether to replay it.
-    db.exec('pragma busy_timeout = 5000')
-    // Durability is tunable for throwaway graphs (TASKS_SYNC, like TASKS_BACKOFF):
-    // the default (unset) leaves SQLite's own `full`, which fsyncs every DDL
-    // statement — and open() runs ~200 of them (schema + migrations), so a
-    // fresh file on real disk costs ~2s. A test graph is ephemeral and never
-    // survives a crash, so the test task sets `off` and every file-backed open
-    // drops from ~2s to ~10ms. Production never sets it and stays fully durable.
-    let sync = Deno.env.get('TASKS_SYNC')
-    if (sync) db.exec(`pragma synchronous = ${sync}`)
     // WAL lets readers proceed during a write, removing the reader/writer
     // blocking of the default rollback journal (journal_mode = delete) — the
     // fleet runs many concurrent `task` readers against one writer (T-13905).
@@ -2370,7 +2390,14 @@ export let open = (path = file) => {
     // and bin/backup's VACUUM INTO reads a consistent snapshot under WAL
     // unchanged. Setting synchronous = normal is WAL's crash-safe pairing (a
     // checkpoint still fsyncs), unless TASKS_SYNC already named a mode.
+    //
+    // This is a PERSISTENT SHARED WRITE — it stamps the file header — so it
+    // lives HERE in the write phase, never in connect(): a --join successor
+    // must never flip the header beside its live predecessor, which is the very
+    // two-writer mode confusion the baton exists to kill (T-20223). It runs
+    // under the baton, on the sole writer, so no peer has the file open.
     if (Deno.env.get('TASKS_WAL')) {
+      let sync = Deno.env.get('TASKS_SYNC')
       let got = (db.prepare('pragma journal_mode = wal').get() as
         | { journal_mode: string }
         | undefined)?.journal_mode
@@ -2721,8 +2748,20 @@ export let open = (path = file) => {
   }
 }
 
-// The one live handle — the server shares it for the process lifetime.
-export let db = open()
+// Open the file, migrate it in place, plant missing schema, and seed once if
+// the graph is empty. Returns a live handle held for the process lifetime. The
+// sole-writer door: connect() then migrate() with no window between, safe only
+// because the caller is the one writer (first boot, revive, test, probe).
+export let open = (path = file) => migrate(connect(path))
+
+// The one live handle — the server shares it for the process lifetime. A --join
+// deploy successor must NOT migrate at import: its predecessor still holds the
+// graph, and migrating beside it is the two-writer write that corrupted the WAL
+// (T-20223). It connects read-capable now and migrates later — under the writer
+// baton, once server.ts has bound the port and the predecessor has released the
+// DB (becomeWriter in server.ts). Every other boot is the sole writer and opens
+// (connect + migrate) inline as before.
+export let db = Deno.args.includes('--join') ? connect() : open()
 
 // The sync allowlist: the shared vocabulary plus the spine (which has no
 // writable columns — num is server-owned, kind doesn't exist, and the

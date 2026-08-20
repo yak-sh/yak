@@ -98,6 +98,56 @@ slow(
   },
 )
 
+slow('launch: a join handoff is two beats, onBound between them', async () => {
+  // The single-writer contract (T-20223): a --join successor signals BOUND,
+  // the supervisor stops the predecessor (onBound), THEN the successor signals
+  // READY. launch() must fire onBound after beat 1 and resolve only on beat 2.
+  await withLogs(async () => {
+    let js = `
+      let arg = Deno.args.find((a) => a.startsWith('--ready='))
+      let port = Number(arg.split('=')[1])
+      let dial = async () => {
+        using conn = await Deno.connect({ hostname: '127.0.0.1', port })
+        await conn.write(new Uint8Array([1]))
+      }
+      await dial()                                    // beat 1: bound
+      await new Promise((r) => setTimeout(r, 30))     // let onBound run
+      await dial()                                    // beat 2: ready
+    `
+    let bound = false
+    let child = await launch(Deno.execPath(), ['eval', js, '--'], () => {
+      bound = true
+    })
+    assertEquals(bound, true) // onBound fired during the handshake
+    assertEquals((await child.status).success, true)
+  })
+})
+
+slow(
+  'launch: a successor that dies AFTER bound is a failed handoff',
+  async () => {
+    // Beat 1 arrives (predecessor gets stopped), then the successor dies before
+    // beat 2 — a migrate-time failure. launch() must reject so swap() heals with
+    // a fresh boot, but onBound still fired, so the predecessor is condemned.
+    await withLogs(async () => {
+      let js = `
+      let arg = Deno.args.find((a) => a.startsWith('--ready='))
+      let port = Number(arg.split('=')[1])
+      using conn = await Deno.connect({ hostname: '127.0.0.1', port })
+      await conn.write(new Uint8Array([1]))           // beat 1 only
+      Deno.exit(5)                                    // died before beat 2
+    `
+      let bound = false
+      await assertRejects(() =>
+        launch(Deno.execPath(), ['eval', js, '--'], () => {
+          bound = true
+        })
+      )
+      assertEquals(bound, true) // we DID condemn the predecessor
+    })
+  },
+)
+
 slow('insist: a handoff that failed comes back until it takes', async () => {
   let tries = 0
   insist(() => Promise.resolve(++tries == 3), [0], 0)()

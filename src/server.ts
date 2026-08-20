@@ -8,6 +8,7 @@
 // stylesheet, and only shell/server edits still cost a real reload.
 import { transform } from 'sucrase'
 import { bound, guard, type Serving } from './bind.ts'
+import { takeBaton } from './baton.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
 import { capabilities, type Change, type Dep, idOf, kindOf } from './types.ts'
@@ -29,6 +30,7 @@ import {
   journalOf,
   lastBatch,
   locate,
+  migrate,
   referrersOf,
   refsOf,
   refValuesOf,
@@ -907,12 +909,57 @@ let port = Number(Deno.env.get('PORT') ?? 5173)
 // twice over is a probe writing to the owner's board — unless `--join` says
 // a supervisor meant this process to succeed the one already there.
 let serving: Serving = { db: graph, epoch, pid: Deno.pid }
+// A --join successor of a live deploy; everyone else (first boot, revive, test,
+// probe) is a sole boot. This one flag steers both the port guard (bind.ts) and
+// the single-writer handoff (becomeWriter below).
+let joining = Deno.args.includes('--join')
 let ownership: Deno.FsFile
 try {
-  ownership = await guard(port, graph, Deno.args.includes('--join'))
+  ownership = await guard(port, graph, joining)
 } catch (e) {
   console.error(`tasks: ${(e as Error).message}`)
   Deno.exit(1)
+}
+
+// Dial the supervisor's private --ready port and write one byte. The port
+// arrives on ARGV, never the environment: an env var is inherited by every
+// descendant, so a shell under `deno task dev` would hand the address to every
+// probe server an agent spawns hours later — long after that supervisor is
+// gone, and after the port may belong to a stranger. Argv is scoped to the one
+// process meant to answer. Best effort: nobody listening (a hand-run server) is
+// normal, not a reason to die. Reused for BOTH beats of a --join handoff —
+// "bound" then "fully ready" — and for the single "ready" of a sole boot; the
+// supervisor (dev.ts) reads one or two by whether it launched us to join.
+let signalReady = async () => {
+  let arg = Deno.args.find((a) => a.startsWith('--ready='))
+  if (!arg) return
+  try {
+    let port = Number(arg.split('=')[1])
+    using conn = await Deno.connect({ hostname: '127.0.0.1', port })
+    await conn.write(new Uint8Array([1]))
+  } catch (e) {
+    console.warn('ready signal not delivered —', e)
+  }
+}
+
+// The writer baton, held for this process's whole life (baton.ts): the kernel
+// releases it when we exit, however we exit, so a successor's wait can never
+// hang on a lock we forgot to drop. Parked in a module binding (never read,
+// never closed by hand) purely so its fd is not GC-finalized out from under us.
+let _writerBaton: Deno.FsFile | undefined
+// Become the graph's sole WRITER before any migration or write runs (T-20223).
+// A sole boot already migrated at import (db.ts) and only claims the baton —
+// free now — to hold the writer role for its life. A --join successor connected
+// the DB read-capable at import but has NOT migrated: it tells the supervisor it
+// is BOUND (so the predecessor is stopped and, on its exit, releases the baton),
+// waits for the baton, then migrates as the now-sole writer. The port is already
+// listening, so requests are HELD on `boot` (below) through this window rather
+// than refused — reads and writes alike wait out the brief handoff instead of
+// racing the predecessor over the file.
+let becomeWriter = async () => {
+  if (joining) await signalReady() // beat 1: bound — release the DB to me
+  _writerBaton = await takeBaton(graph, { wait: joining })
+  if (joining) migrate(db)
 }
 
 // Load configured plugins into THIS process before serving, so a plugin's
@@ -1856,6 +1903,15 @@ on('doc', {
   },
   doc: 'a doc edit on a persona or a tiered memory re-renders its files',
 })
+// The single-writer gate. Everything below WRITES the graph — migrations (on a
+// --join successor), the reconcilers, the boot sweeps — so nothing below may run
+// until this process holds the writer baton and, if it is a successor, has
+// migrated (T-20223). The port has been listening since Deno.serve above, so
+// requests queue on `boot` through the brief wait rather than being refused; a
+// failure here rejects this top-level await, the process exits, and the
+// supervisor heals it with a fresh boot.
+await becomeWriter()
+
 // Boot migrations may reshape those graph-owned teachings without an apply
 // trace. Reconcile once here too, or the source migrates while its generated
 // persona files keep teaching the retired vocabulary.
@@ -2136,25 +2192,6 @@ let themeWatch = async () => {
 }
 themeWatch()
 
-// The supervisor's private rendezvous port arrives on ARGV, never the
-// environment: an env var is inherited by every descendant, so a shell started
-// under `deno task dev` hands the address to every probe server an agent spawns
-// hours later — long after that supervisor is gone, and after the port may
-// belong to a stranger. Argv is scoped to the one process meant to answer.
-// And the signal is best effort: nobody listening is a normal condition, not
-// something to serve requests and then die of.
-let ready = async () => {
-  let arg = Deno.args.find((a) => a.startsWith('--ready='))
-  if (!arg) return
-  try {
-    let port = Number(arg.split('=')[1])
-    using conn = await Deno.connect({ hostname: '127.0.0.1', port })
-    await conn.write(new Uint8Array([1]))
-  } catch (e) {
-    console.warn('ready signal not delivered —', e)
-  }
-}
-
 let draining = false
 let drain = async () => {
   if (draining) return
@@ -2190,4 +2227,7 @@ let drain = async () => {
 Deno.addSignalListener('SIGINT', drain)
 Deno.addSignalListener('SIGTERM', drain)
 booted()
-await ready()
+// Beat 2 (or the sole "ready" of a non-join boot): fully up, migrated, serving.
+// A --join successor already sent beat 1 ("bound") from becomeWriter; this is
+// what tells the supervisor the handoff is COMPLETE and it may return.
+await signalReady()
