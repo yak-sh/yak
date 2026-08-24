@@ -995,6 +995,31 @@ export let pending = (e: Ent) => {
 let outbox = new Map<string, { changes: Change[]; at: number }>()
 export let unsent = () => [...outbox.keys()]
 
+// The durable outbox's disk door (T-21440). The map above is lost on a tab
+// crash or a manual reload, so — before either can discard an unacked write —
+// every entry is mirrored to IndexedDB (idb.ts) under the SAME delivery id it
+// carries in memory, and replayed at boot. This seam is the mirror: park on
+// deliver, unpark on ack, read what a prior life left at boot. Defaults to the
+// IDB store; the TUI and the fast tier — neither has IndexedDB — swap an
+// in-memory double via useOutboxStore. Every op is best-effort, so a failure
+// degrades to the in-memory-only outbox, never a broken frame.
+type Parked = { changes: Change[]; at: number }
+type OutboxStore = {
+  park: (id: string, o: Parked) => void
+  unpark: (id: string) => void
+  parked: () => Promise<[string, Parked][]>
+}
+let outboxStore: OutboxStore = {
+  park: (id, o) => void idb.parkWrite(id, o),
+  unpark: (id) => void idb.unparkWrite(id),
+  parked: () => idb.parkedWrites(),
+}
+export let useOutboxStore = (s: OutboxStore): OutboxStore => {
+  let prev = outboxStore
+  outboxStore = s
+  return prev
+}
+
 // Redelivery: an unacked write is re-routed until the server confirms it.
 // Re-applying the same patch is harmless (apply() is a merge of the same
 // values); the id is stable across retries so the transport dedups, and the
@@ -1014,19 +1039,47 @@ export let redeliverNow = (force = false) => {
     route({ apply: o.changes, id }, id)
   }
 }
+let armRedeliver = () => {
+  if (redeliver !== undefined) return
+  redeliver = setInterval(redeliverNow, RESEND) // Headless (TUI, tests): an armed retry must never hold the process open.
+  ;(globalThis as { Deno?: { unrefTimer?: (id: number) => void } })
+    .Deno?.unrefTimer?.(redeliver as unknown as number)
+}
 let deliver = (changes: Change[]) => {
   let id = crypto.randomUUID()
-  outbox.set(id, { changes, at: Date.now() })
-  if (redeliver === undefined) {
-    redeliver = setInterval(redeliverNow, RESEND) // Headless (TUI, tests): an armed retry must never hold the process open.
-    ;(globalThis as { Deno?: { unrefTimer?: (id: number) => void } })
-      .Deno?.unrefTimer?.(redeliver as unknown as number)
-  }
+  let o = { changes, at: Date.now() }
+  outbox.set(id, o)
+  outboxStore.park(id, o) // durable: outlive a crash/reload before the ack
+  armRedeliver()
   route({ apply: changes, id }, id)
 }
 export let acked = (id: string) => {
   outbox.delete(id)
+  outboxStore.unpark(id) // the durable copy leaves with the in-memory one
   if (!outbox.size) redeliverNow()
+}
+
+// Replay a crashed or reloaded tab's undelivered writes (T-21440). A prior
+// life may have parked writes it never saw acked; load them back under their
+// ORIGINAL delivery ids and route them once. The id is stable, so redelivery
+// dedups (leader.ts route) and a re-apply is the same harmless value-merge —
+// so replaying from more than one hydrating tab is safe: whichever boots first
+// owns them, the rest re-add nothing (the outbox.has guard) and their sends
+// collapse on that id. A write whose entity was since tombstoned is refused by
+// apply() and settles the id like any rejection (land()'s error arm), never
+// crashing boot. Runs inside once(), BEFORE the socket opens, so no ack can
+// outrun the entry it clears.
+export let replayOutbox = async () => {
+  let woke = false
+  for (let [id, o] of await outboxStore.parked()) {
+    if (outbox.has(id)) continue
+    outbox.set(id, o)
+    woke = true
+  }
+  if (woke) {
+    armRedeliver()
+    redeliverNow(true)
+  }
 }
 
 // A reload discards this tab's memory — outbox included — so undelivered
@@ -1651,6 +1704,9 @@ let booted = false
 let once = async (write: boolean) => {
   if (booted) return
   await local(write)
+  // Requeue any write a prior life left undelivered, BEFORE the socket opens —
+  // so a crash or manual reload can no longer silently lose it (T-21440).
+  await replayOutbox()
   booted = true
 }
 

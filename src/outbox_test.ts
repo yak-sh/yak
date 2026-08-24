@@ -11,6 +11,7 @@
 
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from './testing.ts'
+import { type Change } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { sha } = await import('./db.ts')
@@ -171,6 +172,93 @@ Deno.test('an empty mutate ships nothing', async () => {
     mutate()
     assertEquals(unsent().length, before)
   } finally {
+    restore()
+  }
+})
+
+// ——— the durable half (T-21440): the outbox survives a crash/reload ———
+
+// An in-memory double for the IDB outbox store: a real reload throws the map
+// away, so the DURABLE copy is what a fresh boot replays. Keyed by delivery id,
+// exactly as idb.ts keys the OUTBOX store — so park/unpark/parked mirror the
+// browser without an IndexedDB.
+type Parked = { changes: Change[]; at: number }
+let fakeStore = () => {
+  let disk = new Map<string, Parked>()
+  return {
+    disk,
+    park: (id: string, o: Parked) => void disk.set(id, o),
+    unpark: (id: string) => void disk.delete(id),
+    parked: () =>
+      Promise.resolve([...disk].map(([id, o]) => [id, o] as [string, Parked])),
+  }
+}
+
+Deno.test('deliver parks the write durably; ack unparks it', async () => {
+  let restore = stubSockets()
+  let live = await import('./live.ts')
+  let store = fakeStore()
+  let prev = live.useOutboxStore(store)
+  try {
+    live.mutate({ eid: uid(), name: 'doc', comp: { title: 'durable' } })
+    // The parked copy is keyed by the SAME id the in-memory outbox holds.
+    let ids = live.unsent()
+    assertEquals(store.disk.size, 1)
+    assertEquals([...store.disk.keys()], ids)
+    // The ack removes both halves together — no orphaned durable entry.
+    for (let id of ids) live.acked(id)
+    assertEquals(live.unsent().length, 0)
+    assertEquals(store.disk.size, 0)
+  } finally {
+    live.useOutboxStore(prev)
+    restore()
+  }
+})
+
+Deno.test("boot replays a prior life's parked writes", async () => {
+  let restore = stubSockets()
+  let live = await import('./live.ts')
+  let store = fakeStore()
+  // A write the last tab parked but a dying socket never saw acked.
+  let id = uid()
+  store.disk.set(id, {
+    changes: [{ eid: uid(), name: 'doc', comp: { title: 'survived' } }],
+    at: 0,
+  })
+  let prev = live.useOutboxStore(store)
+  try {
+    assertEquals(live.unsent().includes(id), false)
+    await live.replayOutbox()
+    // The stored write is back in the outbox under its ORIGINAL id, queued for
+    // redelivery — nothing was lost across the reload.
+    assertEquals(live.unsent().includes(id), true)
+  } finally {
+    for (let x of live.unsent()) live.acked(x) // drain → disarm the timer
+    live.useOutboxStore(prev)
+    restore()
+  }
+})
+
+Deno.test('replay is idempotent across two hydrators', async () => {
+  let restore = stubSockets()
+  let live = await import('./live.ts')
+  let store = fakeStore()
+  let id = uid()
+  store.disk.set(id, {
+    changes: [{ eid: uid(), name: 'doc', comp: { title: 'once' } }],
+    at: 0,
+  })
+  let prev = live.useOutboxStore(store)
+  try {
+    // Two tabs race to hydrate the same durable outbox. The stable id means the
+    // second replay re-adds nothing: exactly ONE queued entry, not a duplicate.
+    await live.replayOutbox()
+    await live.replayOutbox()
+    let here = live.unsent().filter((x) => x == id)
+    assertEquals(here.length, 1)
+  } finally {
+    for (let x of live.unsent()) live.acked(x)
+    live.useOutboxStore(prev)
     restore()
   }
 })

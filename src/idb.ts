@@ -15,17 +15,18 @@
 // commit remains forward-only, so disabling leadership cleanly restores the
 // multi-writer 2.1 behavior.
 import { type Comps } from './live.ts'
-import { type Dep } from './types.ts'
+import { type Change, type Dep } from './types.ts'
 
 // Bump when the store LAYOUT changes: onupgradeneeded drops and recreates
 // the stores, so a returning client on an old layout cleanly reseeds rather
-// than reading a stale shape.
-let SCHEMA = 1
+// than reading a stale shape. v2 adds the durable outbox store (T-21440).
+let SCHEMA = 2
 
 let DB = 'tasks'
 let ENTS = 'ents'
 let DEPS = 'deps'
 let META = 'meta'
+let OUTBOX = 'outbox'
 
 // The invalidation + cursor record, one row per fixed key in `meta`.
 // `cursor` present ⇒ this tab has seeded ⇒ a returning visit; absent ⇒
@@ -94,12 +95,13 @@ export let open = (): Promise<IDBDatabase | null> => {
       let db = r.result
       // A layout bump clears the old stores — delete then recreate, so an
       // old client reseeds instead of reading a mismatched shape.
-      for (let name of [ENTS, DEPS, META]) {
+      for (let name of [ENTS, DEPS, META, OUTBOX]) {
         if (db.objectStoreNames.contains(name)) db.deleteObjectStore(name)
       }
       db.createObjectStore(ENTS) // out-of-line key = eid
       db.createObjectStore(DEPS) // out-of-line key = parent|type|child
       db.createObjectStore(META) // fixed keys
+      db.createObjectStore(OUTBOX) // out-of-line key = delivery id (T-21440)
     }
     r.onsuccess = () => resolve(idb = r.result)
     r.onerror = () => resolve(null)
@@ -285,3 +287,55 @@ export let persist = (
       }
     }
   })
+
+// The durable outbox (T-21440): the stores above shadow the graph; this one
+// shadows a tab's UNDELIVERED intent. live.ts parks every local write here
+// under its stable delivery id the instant it is sent, and unparks it the
+// instant the server acks it — so a tab crash or a manual reload while the
+// server is unreachable no longer discards writes the optimistic cache already
+// showed as landed (the T-21413 outbox was in-memory only). Unlike the cache
+// this is per-tab, append-and-forget intent: no epoch, no cursor, no
+// forward-only guard, nothing to regress. A failed op is a no-op (no
+// IndexedDB, a private-mode throw) — the write still lives in memory and
+// redelivery still runs; only the crash-survival guarantee degrades.
+export type Parked = { changes: Change[]; at: number }
+
+// One short write on the outbox store, resolving when the txn commits (or
+// silently on any failure) — the same graceful-degrade the cache path uses.
+let writeOutbox = (run: (s: IDBObjectStore) => void): Promise<void> =>
+  open().then((db) =>
+    !db ? undefined : new Promise<void>((resolve) => {
+      try {
+        let tx = db.transaction(OUTBOX, 'readwrite')
+        run(tx.objectStore(OUTBOX))
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => resolve()
+        tx.onabort = () => resolve()
+      } catch {
+        resolve()
+      }
+    })
+  )
+
+export let parkWrite = (id: string, o: Parked): Promise<void> =>
+  writeOutbox((s) => void s.put(o, id))
+
+export let unparkWrite = (id: string): Promise<void> =>
+  writeOutbox((s) => void s.delete(id))
+
+// Everything a prior life parked but never saw acked — read at boot and
+// replayed. A failure reads as an empty outbox, so boot proceeds either way.
+export let parkedWrites = async (): Promise<[string, Parked][]> => {
+  let db = await open()
+  if (!db) return []
+  try {
+    let tx = db.transaction(OUTBOX, 'readonly')
+    let s = tx.objectStore(OUTBOX)
+    let keys = ask(s.getAllKeys(), [] as IDBValidKey[])
+    let vals = ask(s.getAll(), [] as Parked[])
+    let [ks, vs] = await Promise.all([keys, vals])
+    return ks.map((k, i) => [String(k), vs[i]] as [string, Parked])
+  } catch {
+    return []
+  }
+}
