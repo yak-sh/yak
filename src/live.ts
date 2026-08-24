@@ -1820,8 +1820,8 @@ export let ent = (eid: string): Ent => {
 
 // Markdown belongs to the project its entity speaks for. Follow only the
 // graph's explicit ownership/reference columns: task/memory/role → project,
-// comment → target, session → requested task or its actor. A seen set makes
-// malformed cycles inert.
+// comment → target, session → requested task or its actor, entry → its
+// session. A seen set makes malformed cycles inert.
 export let repoUrl = (start: Ent): string | undefined => {
   let seen = new Set<string>()
   let todo = [start]
@@ -1837,6 +1837,7 @@ export let repoUrl = (start: Ent): string | undefined => {
       e.session?.actor,
       e.role?.scope,
       e.memory?.scope,
+      e.entry?.session,
     ].filter((eid): eid is string => !!eid)
     todo.push(...next.map(ent))
   }

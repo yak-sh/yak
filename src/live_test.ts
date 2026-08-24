@@ -428,6 +428,37 @@ Deno.test('repoUrl follows a session actor when its task is not loaded', () => {
   assertEquals(repoUrl(ent('session')), 'https://github.com/acme/widget')
 })
 
+// A transcript entry speaks for its session's project, so a commit hash in
+// its body links (T-19155): the entry itself carries no project column, only
+// entry.session.
+Deno.test('repoUrl follows an entry through its session', () => {
+  cache.value = {
+    project: {
+      entity: { eid: 'project', num: 1 },
+      project: { eid: 'project' },
+      repo: {
+        eid: 'project',
+        path: '/tmp/widget',
+        url: 'https://github.com/acme/widget',
+        base_branch: 'main',
+      },
+    },
+    session: {
+      entity: { eid: 'session', num: 2 },
+      session: { eid: 'session', id: 'run', requested_task: 'task' },
+    },
+    task: {
+      entity: { eid: 'task', num: 3 },
+      task: { eid: 'task', status: 'open', priority: 1, project: 'project' },
+    },
+    entry: {
+      entity: { eid: 'entry', num: 4 },
+      entry: { eid: 'entry', session: 'session', seq: 1 },
+    },
+  }
+  assertEquals(repoUrl(ent('entry')), 'https://github.com/acme/widget')
+})
+
 Deno.test('ent projects canonical Session facets over aliases', () => {
   cache.value = {
     session: {
