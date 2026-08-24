@@ -7,8 +7,11 @@ import { type Provider } from './providers.ts'
 import {
   approved,
   asked,
+  authorized,
+  backlog,
   dispatchSpawn,
   inFlight,
+  on,
   ready,
   slots,
   wanted,
@@ -181,6 +184,126 @@ Deno.test('dispatchSpawn: a held or asked-for task is skipped', () => {
   assertEquals(out, [T2])
   // an empty provider table spawns nothing rather than half a request
   assertEquals(dispatchSpawn(rows(graph()), [], [], 2), [])
+})
+
+// --- recursive descent: approval inherits down `requires` (T-21452) ---
+// U is an approved umbrella gated by B1 + B2; none of the B* is individually
+// decided, so approval reaches them only through U. B2 is itself gated by the
+// deeper B3, so the unblocked frontier is B1 and B3.
+let [U, B1, B2, B3] = [10, 11, 12, 13].map(id)
+let tree = (approvedRoot = true) =>
+  rows({
+    changes: [
+      ...mk(P, 1, ago(9999), { doc: { title: 'Task Graph' }, project: {} }),
+      ...mk(U, 10, ago(100), {
+        doc: { title: 'umbrella' },
+        task: { status: 'open', priority: 1, project: P },
+        ...(approvedRoot ? { decided: { at: ago(5) } } : {}),
+      }),
+      ...mk(B1, 11, ago(90), {
+        doc: { title: 'unblocked blocker' },
+        task: { status: 'open', priority: 1, project: P },
+      }),
+      ...mk(B2, 12, ago(90), {
+        doc: { title: 'gated blocker' },
+        task: { status: 'open', priority: 3, project: P },
+      }),
+      ...mk(B3, 13, ago(90), {
+        doc: { title: 'deep blocker' },
+        task: { status: 'open', priority: 2, project: P },
+      }),
+    ],
+  })
+let subtree = [
+  { parent: U, type: 'requires' as const, child: B1 },
+  { parent: U, type: 'requires' as const, child: B2 },
+  { parent: B2, type: 'requires' as const, child: B3 },
+]
+
+Deno.test('authorized: an approved open task authorizes its whole requires subtree', () => {
+  assertEquals([...authorized(tree(), subtree)].sort(), [B1, B2, B3].sort())
+  // an UNapproved gated root seeds nothing — no inheritance without a yes
+  assertEquals([...authorized(tree(false), subtree)], [])
+})
+
+Deno.test('authorized: a requires cycle terminates', () => {
+  let cyclic = [...subtree, {
+    parent: B3,
+    type: 'requires' as const,
+    child: B1,
+  }]
+  // U→B1, U→B2→B3→B1 is a cycle among the blockers; the seen guard stops it
+  assertEquals([...authorized(tree(), cyclic)].sort(), [B1, B2, B3].sort())
+})
+
+Deno.test('backlog: recursive spawns the unblocked frontier; non-recursive stays root-only', () => {
+  // recursive: B1 (ungated, P1) then B3 (ungated, P2); B2 gated by B3 and U
+  // gated by both are excluded
+  assertEquals(backlog(tree(), subtree, true).map((r) => r.eid), [B1, B3])
+  // non-recursive: none individually approved, U gated → nothing (and ready()
+  // is exactly the non-recursive backlog — unchanged)
+  assertEquals(backlog(tree(), subtree, false).map((r) => r.eid), [])
+  assertEquals(ready(tree(), subtree).map((r) => r.eid), [])
+  // recursion off a NON-approved root yields nothing
+  assertEquals(backlog(tree(false), subtree, true).map((r) => r.eid), [])
+})
+
+Deno.test('dispatchSpawn: recursive descent spawns the frontier, non-recursive does not', () => {
+  let spawned = (cs: ReturnType<typeof dispatchSpawn>) =>
+    cs.filter((c) => c.name == 'session').map((c) => c.comp!.requested_task)
+  assertEquals(spawned(dispatchSpawn(tree(), subtree, ps, 5, true)), [B1, B3])
+  // the flag is the whole switch: off, an approved-gated umbrella spawns nothing
+  assertEquals(dispatchSpawn(tree(), subtree, ps, 5, false), [])
+  // slot cap bounds the descent like any backlog
+  assertEquals(spawned(dispatchSpawn(tree(), subtree, ps, 1, true)), [B1])
+  // an un-decided gated root contributes nothing even recursively
+  assertEquals(dispatchSpawn(tree(false), subtree, ps, 5, true), [])
+})
+
+Deno.test('dispatchSpawn: recursive descent leaves a claimed or asked blocker alone', () => {
+  let spawned = (cs: ReturnType<typeof dispatchSpawn>) =>
+    cs.filter((c) => c.name == 'session').map((c) => c.comp!.requested_task)
+  // U approved, gated by two unblocked blockers B1 (P1) and B3 (P2)
+  let flat = (extra: Snapshot['changes']) =>
+    rows({
+      changes: [
+        ...mk(P, 1, ago(9999), { doc: { title: 'g' }, project: {} }),
+        ...mk(U, 10, ago(100), {
+          task: { status: 'open', priority: 1, project: P },
+          decided: { at: ago(5) },
+        }),
+        ...mk(B1, 11, ago(90), {
+          task: { status: 'open', priority: 1, project: P },
+        }),
+        ...mk(B3, 13, ago(90), {
+          task: { status: 'open', priority: 2, project: P },
+        }),
+        ...extra,
+      ],
+    })
+  let deps = [
+    { parent: U, type: 'requires' as const, child: B1 },
+    { parent: U, type: 'requires' as const, child: B3 },
+  ]
+  // B1 claimed → left alone; only B3 spawns
+  let held = flat([{ eid: B1, name: 'claim', comp: { session: S1 } }])
+  assertEquals(spawned(dispatchSpawn(held, deps, ps, 5, true)), [B3])
+  // a prior (even failed) ask on B3 leaves it alone too — only B1 spawns
+  let askedB3 = flat([
+    ...mk(S2, 7, ago(60), {
+      session: { id: 's2', requested_task: B3, status: 'failed' },
+    }),
+  ])
+  assertEquals(spawned(dispatchSpawn(askedB3, deps, ps, 5, true)), [B1])
+})
+
+Deno.test('on: 1/true/on/yes enable; empty and anything else are off', () => {
+  for (let v of ['1', 'true', 'on', 'yes', 'On', 'YES', ' true ']) {
+    assertEquals(on(v), true)
+  }
+  for (let v of ['', undefined, '0', 'false', 'off', '2', 'no']) {
+    assertEquals(on(v), false)
+  }
 })
 
 // --- the spawn-rule queue: `wants` marks drain first, under the same cap ---

@@ -35,12 +35,39 @@ let born = (r: Row) => {
 let rank = (r: Row) =>
   typeof r.comps.task?.priority == 'number' ? r.comps.task.priority : Infinity
 
-// Ready = open + unclaimed + approved + not externally blocked (D-17094) +
-// no open `requires` edge. A blocker the caller didn't fetch counts as
-// open — the safe reading for a sweep that spends money on yes. Most
-// urgent first: priority, then age, then num.
-export let ready = (all: Row[], deps: Dep[]) => {
+// Approval inherits down `requires` (T-21452, D-21448 Piece 3): an approved
+// OPEN task authorizes its whole requires-subtree, so the sweep may spawn its
+// unblocked blockers even ones never individually decided — an approved umbrella
+// greenlights the work that unblocks it. Returns the authorized CHILD eids (not
+// the approved roots — ready() already covers those). A `seen` guard makes a
+// requires cycle terminate. Only open approved tasks seed the descent: a settled
+// one needs nothing spawned.
+export let authorized = (all: Row[], deps: Dep[]) => {
+  let kids = (eid: string) =>
+    deps.filter((d) => d.type == 'requires' && d.parent == eid).map((d) =>
+      d.child
+    )
+  let seen = new Set<string>()
+  let stack = all
+    .filter((r) => r.comps.task?.status == 'open' && approved(r))
+    .flatMap((r) => kids(r.eid))
+  while (stack.length) {
+    let eid = stack.pop()!
+    if (seen.has(eid)) continue
+    seen.add(eid)
+    stack.push(...kids(eid))
+  }
+  return seen
+}
+
+// The runnable backlog: open + unclaimed + not externally blocked (D-17094) +
+// no open `requires` edge, and greenlit — either individually approved OR, when
+// `recursive`, authorized by an approved ancestor (approval inherits, above). A
+// blocker the caller didn't fetch counts as open — the safe reading for a sweep
+// that spends money on yes. Most urgent first: priority, then age, then num.
+export let backlog = (all: Row[], deps: Dep[], recursive = false) => {
   let by = new Map(all.map((r) => [r.eid, r]))
+  let auth = recursive ? authorized(all, deps) : new Set<string>()
   let gated = (eid: string) =>
     deps.some((d) =>
       d.type == 'requires' && d.parent == eid &&
@@ -49,10 +76,14 @@ export let ready = (all: Row[], deps: Dep[]) => {
   return all
     .filter((r) =>
       r.comps.task?.status == 'open' && !r.comps.claim && !r.comps.blocked &&
-      approved(r) && !gated(r.eid)
+      (approved(r) || auth.has(r.eid)) && !gated(r.eid)
     )
     .sort((a, b) => rank(a) - rank(b) || born(a) - born(b) || a.num - b.num)
 }
+
+// Ready = the non-recursive backlog: individually approved, runnable now. The
+// name every caller and test knows; recursive descent is opt-in via backlog().
+export let ready = (all: Row[], deps: Dep[]) => backlog(all, deps, false)
 
 // The sessions the dispatcher is paying for: live (a session holds its slot
 // until a terminal status — including the moment before the launch effect
@@ -86,6 +117,11 @@ export let slots = (value: string | undefined) => {
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 2
 }
 
+// A flag setting read as a boolean: any of 1/true/on/yes (case-insensitive)
+// enables it; anything else — including the empty default — is off.
+export let on = (value: string | undefined) =>
+  ['1', 'true', 'on', 'yes'].includes((value ?? '').trim().toLowerCase())
+
 // The pending spawn marks, most urgent target first: `wants` edges a
 // persona's watch match minted (spawnrule.ts). Only a persona parent and a
 // task child count — anything else is a stale mark the sweep leaves alone
@@ -105,7 +141,9 @@ export let wanted = (all: Row[], deps: Dep[]) => {
 
 // The batch the sweep would mint: one spawn per free slot, marks first (an
 // event is an attention ask; the ready backlog waits behind it), then the
-// approved backlog — pure over the rows the sweep read, the testable half.
+// greenlit backlog — approved roots, plus (when `recursive`) the unblocked
+// blockers an approved umbrella authorizes — pure over the rows the sweep read,
+// the testable half.
 // A mark spawns its persona onto its target (the watcher outranks the
 // task's own spawn hint) and clears its edge in the same batch; a mark
 // whose target a live run of the persona already attends, or that settled
@@ -119,6 +157,7 @@ export let dispatchSpawn = (
   deps: Dep[],
   ps: Provider[],
   cap: number,
+  recursive = false,
 ) => {
   let by = new Map(all.map((r) => [r.eid, r]))
   let free = cap - inFlight(all).length
@@ -153,7 +192,7 @@ export let dispatchSpawn = (
     spawned.add(t.eid)
     free--
   }
-  for (let t of ready(all, deps)) {
+  for (let t of backlog(all, deps, recursive)) {
     if (free <= 0) break
     if (spawned.has(t.eid) || asked(all, t.eid)) continue
     let plan = spawnPlan(all, ps, { task: t.eid })
@@ -223,7 +262,10 @@ export let dispatchSweep = async (
       ...rowsFor(db, [...new Set(extra)].filter((e) => !seen.has(e))),
     ]
     let cap = slots(resolve('DISPATCH_SLOTS', (k) => settingValue(db, k)).value)
-    let changes = dispatchSpawn(all, deps, await providers(), cap)
+    let recursive = on(
+      resolve('DISPATCH_RECURSIVE', (k) => settingValue(db, k)).value,
+    )
+    let changes = dispatchSpawn(all, deps, await providers(), cap, recursive)
     if (changes.length) {
       let t = trace()
       let out = apply(db, changes, t)

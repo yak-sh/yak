@@ -124,6 +124,21 @@ export let catalog: Spec[] = [
       'dispatch sweep spawns one session per approved, unblocked open task ' +
       'while live dispatched sessions number fewer than this.',
   },
+  {
+    key: 'DISPATCH_RECURSIVE',
+    label: 'Recursive dispatch',
+    group: 'dispatch',
+    type: 'text',
+    sensitive: false,
+    default: '',
+    help: 'When on, the dispatch sweep descends an APPROVED but gated open ' +
+      'task into its unblocked, unclaimed requires-children and spawns them ' +
+      'too — approval inherits down the requires tree, so an approved umbrella ' +
+      'authorizes its blockers (T-21452, D-21448 Piece 3). Off by default: it ' +
+      'expands autonomous token spend, so it stays a deliberate opt-in until ' +
+      'the whole park→wake loop is verified end to end (T-21453). Any of ' +
+      "'1'/'true'/'on'/'yes' enables it.",
+  },
 ]
 
 export let byKey: Map<string, Spec> = new Map(catalog.map((s) => [s.key, s]))
