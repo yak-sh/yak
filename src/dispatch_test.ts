@@ -11,6 +11,7 @@ import {
   inFlight,
   ready,
   slots,
+  wanted,
 } from './dispatch.ts'
 import { assertEquals } from '@std/assert'
 
@@ -180,4 +181,82 @@ Deno.test('dispatchSpawn: a held or asked-for task is skipped', () => {
   assertEquals(out, [T2])
   // an empty provider table spawns nothing rather than half a request
   assertEquals(dispatchSpawn(rows(graph()), [], [], 2), [])
+})
+
+// --- the spawn-rule queue: `wants` marks drain first, under the same cap ---
+
+let N = id(8)
+let persona = () => mk(N, 8, ago(9999), { doc: { title: 'desk' }, persona: {} })
+let mark = { parent: N, type: 'wants' as const, child: T3 }
+let gone = {
+  eid: N,
+  name: 'dependency',
+  comp: { type: 'wants', child: T3, gone: true },
+}
+
+Deno.test('wanted: persona parent + task child, most urgent target first', () => {
+  let all = rows(graph([...persona()]))
+  let deps = [
+    { parent: N, type: 'wants' as const, child: T2 },
+    mark,
+    // not a persona / not a task — stale marks the sweep leaves alone
+    { parent: P, type: 'wants' as const, child: T1 },
+    { parent: N, type: 'wants' as const, child: P },
+    { parent: N, type: 'requires' as const, child: T1 },
+  ]
+  // T3 is priority 0, T2 priority 2
+  assertEquals(wanted(all, deps).map((d) => d.child), [T3, T2])
+})
+
+Deno.test('dispatchSpawn: a mark spawns its persona onto the target and clears the edge', () => {
+  let all = rows(graph([...persona()]))
+  let out = dispatchSpawn(all, [mark], ps, 1)
+  let s = out.find((c) => c.name == 'session')!.comp!
+  // T3 is unapproved — the watch is the standing yes — and the mark
+  // outranks the ready backlog (which waits: cap 1 is spent)
+  assertEquals([s.requested_task, s.persona], [T3, N])
+  assertEquals(out.filter((c) => c.name == 'dependency'), [gone])
+  // a prior failed ask never blocks a mark — events re-instantiate
+  let again = rows(graph([
+    ...persona(),
+    ...mk(S1, 6, ago(60), {
+      session: { id: 's1', requested_task: T3, status: 'failed' },
+    }),
+  ]))
+  let re = dispatchSpawn(again, [mark], ps, 1)
+  assertEquals(re.some((c) => c.name == 'session'), true)
+})
+
+Deno.test('dispatchSpawn: a hot or settled mark clears unspent; a capped one waits', () => {
+  let hot = rows(graph([
+    ...persona(),
+    ...mk(S1, 6, ago(5), {
+      session: { id: 's1', persona: N, requested_task: T3, status: 'running' },
+    }),
+  ]))
+  // the event already reached the hot run — the edge clears, nothing spawns
+  // (the persona run holds a slot, so the ready backlog gets the other)
+  let out = dispatchSpawn(hot, [mark], ps, 2)
+  assertEquals(out.filter((c) => c.name == 'dependency'), [gone])
+  assertEquals(
+    out.filter((c) => c.name == 'session').map((c) => c.comp!.requested_task),
+    [T1],
+  )
+  let done = rows(graph([
+    ...persona(),
+    { eid: T3, name: 'task', comp: { status: 'done', project: P } },
+  ]))
+  assertEquals(dispatchSpawn(done, [mark], ps, 0), [gone])
+  // no free slot: the mark stays pending for the next sweep
+  assertEquals(dispatchSpawn(rows(graph([...persona()])), [mark], ps, 0), [])
+})
+
+Deno.test('inFlight: a live persona run holds a slot even on an unapproved task', () => {
+  let all = rows(graph([
+    ...persona(),
+    ...mk(S1, 6, ago(5), {
+      session: { id: 's1', persona: N, requested_task: T3, status: 'running' },
+    }),
+  ]))
+  assertEquals(inFlight(all).map((r) => r.eid), [S1])
 })

@@ -83,6 +83,7 @@ import {
 } from './inbound.ts'
 import { scribeSweep } from './scribe.ts'
 import { dispatchSweep } from './dispatch.ts'
+import { ruled } from './spawnrule.ts'
 import { embedSweep, similarTo } from './embed.ts'
 import { type IO, mcpServer } from './mcp.ts'
 import { drain as drainTurns } from './turn.ts'
@@ -1887,6 +1888,29 @@ on('comment', {
   doc: "a comment on an addressed project's task fans out as a " +
     'mail to that project (the about edge is the receipt)',
 })
+// A persona's watch is a spawn rule (D-21239, spawnrule.ts): an event about
+// the watched target marks it wanted (a `wants` edge) for the dispatch sweep
+// to spawn under the slot cap; a human's watch stays a delivery subscription.
+// The four event doors below are the inbox item classes (client.ts aboutOf).
+on('comment', {
+  created: ruled(cast),
+  doc: 'a comment about a persona-watched target marks it wanted — the ' +
+    'dispatch sweep instantiates the persona (D-21239)',
+})
+on('notice', {
+  created: ruled(cast),
+  doc: 'a notice about a persona-watched target marks it wanted (D-21239)',
+})
+on('knock', {
+  created: ruled(cast),
+  doc: 'a knock about a persona-watched target marks it wanted (D-21239)',
+})
+on('mail', {
+  // Only an ARRIVAL is an event — message_id is the inbound mark; an
+  // outbound letter about the target is the fleet's own doing.
+  created: (eid, comp) => comp.message_id ? ruled(cast)(eid, comp) : undefined,
+  doc: 'arrived mail about a persona-watched target marks it wanted (D-21239)',
+})
 on('exception', {
   created: fileBug(cast),
   // Boot reconcile: every exception no bug yet points at re-drives the filer,
@@ -2248,6 +2272,10 @@ if (isLive()) {
   on('claim', {
     removed: dispatchSoon,
     doc: 'a released claim can return a ready task — dispatch sweeps soon',
+  })
+  on('dependency', {
+    created: (_eid, comp) => comp.type == 'wants' && dispatchSoon(),
+    doc: 'a spawn-rule mark wants a persona run — dispatch sweeps soon',
   })
 } else {
   console.log('dispatch sweep dormant — not the live instance')

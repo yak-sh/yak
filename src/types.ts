@@ -1452,6 +1452,9 @@ export let friendly = (model?: string | null) => {
 // parent referenced child (an entry's mechanical citation — the entity ids and
 // page urls its text names, minted post-commit by referenced.ts; distinct from
 // recalled, which is deliberate surfacing; never gates).
+// parent wants child (a persona's pending spawn mark — an event matched its
+// watch (spawnrule.ts) and the dispatch sweep clears the edge by spawning the
+// persona onto the target; never gates).
 export let edges = [
   'requires',
   'contains',
@@ -1463,6 +1466,7 @@ export let edges = [
   'supersedes',
   'worked',
   'referenced',
+  'wants',
 ] as const
 export type Edge = (typeof edges)[number]
 
