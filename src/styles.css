@@ -1695,6 +1695,9 @@ html {
 .Show_Proposal-cancelled {
   color: var(--red);
 }
+.Show_Proposal-declined {
+  color: var(--red);
+}
 .Show_Meta .Prio {
   background: transparent;
   font-size: 11px;

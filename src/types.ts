@@ -844,7 +844,17 @@ export let comps: Record<string, Record<string, PropType>> = {
   // Deliberately NOT decay-exempt: recall is keyed by eid for any entity, so
   // heat and decidedness are two facts about one row. The hot index and the
   // ordered `## decided` digest section are two queries, not a special case.
-  decided: { at: 'time', by: { eid: 'entity', death: 'keep' } },
+  //
+  // `verdict` (D-21212): which way it went. A declined thing is decided-
+  // against, not un-decided — the verdict rides ON the stamp so the two
+  // outcomes can never be worn at once. Tri-state: no component = still
+  // proposed; present = settled either way. Absent verdict reads as
+  // approved — what every row stamped before the column meant.
+  decided: {
+    at: 'time',
+    by: { eid: 'entity', death: 'keep' },
+    verdict: { enum: ['approved', 'declined'] },
+  },
   // An idea from the fleet awaiting acceptance. It mirrors `decided`: the
   // proposer and proposal date may be recorded after the fact, while the
   // instrument stays server-owned. Absence is self-authorizing work.
@@ -2074,6 +2084,10 @@ export type Updated = Created
 // self-authorizing work). Read as pure Row-predicates, like unreadMail today.
 export type Stamp = Created
 
+// `decided` alone carries which way it went; absent verdict reads as
+// approved (what pre-verdict rows meant when stamped).
+export type Decided = Stamp & { verdict?: string | null }
+
 // A full-text search hit. snip marks matches with \x01…\x02 (renderers
 // highlight without trusting HTML); open is what to OPEN — the entity
 // itself, or a comment's target.
@@ -2209,7 +2223,7 @@ export type EntCore = {
   opened?: Stamp
   archived?: Stamp
   quarantined?: Stamp
-  decided?: Stamp
+  decided?: Decided
   proposed?: Stamp
   delivered?: Delivered
   error?: Failure

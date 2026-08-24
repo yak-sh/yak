@@ -643,11 +643,14 @@ let schema = `
   -- A decision taken (T-12574): the same three columns, but "at" and "by"
   -- arrive on the WIRE — a decision is often written up after the fact, so
   -- the default clock is only the fallback. Only "via" is stamped.
+  -- verdict (D-21212): approved | declined; null reads as approved — what
+  -- every row stamped before the column meant.
   create table if not exists decided (
     entity integer primary key references entity(id),
     at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     "by" integer,
-    via integer
+    via integer,
+    verdict text
   );
   create table if not exists tombstone (
     eid        text primary key,
@@ -2541,6 +2544,8 @@ export let migrate = (db: DatabaseSync) => {
     // The operator session a delegated agent descends from (types.ts): a child
     // reifies as its own row rather than a second writer on the operator's.
     addCol('session', 'parent', 'parent integer references entity(id)')
+    // Which way the decision went (D-21212); null reads as approved.
+    addCol('decided', 'verdict', 'verdict text')
     for (
       let table of ['created', 'updated', 'notified', 'opened', 'archived']
     ) {
@@ -3232,10 +3237,12 @@ let bound = (
 
 // The stamp family (notified/opened/archived/decided/proposed): a
 // client-requested act
-// the server signs, whose WHOLE component is one {at, by, via} stamp. That
-// shape is the discriminator — derived, not hand-listed, so a new stamp joins
-// with zero edits — and `recall` (stamped {count…}, no at) and `conflict` (no
-// by: a server-minted audit, never wire-created) fall out on it.
+// the server signs, whose component carries the whole {at, by, via} stamp.
+// That shape is the discriminator — derived, not hand-listed, so a new stamp
+// joins with zero edits — and `recall` (stamped {count…}, no at) and
+// `conflict` (no by: a server-minted audit, never wire-created) fall out on
+// it. Containment, not exactness: a payload column may ride beside the stamp
+// (`decided.verdict`) without costing the component its signature.
 //
 // Which HALF the wire owns varies and doesn't matter here: the notification
 // three write a bare presence and the server dates them; `decided` and
@@ -3246,8 +3253,7 @@ let bound = (
 let stamps = Object.keys(comps).filter((c) => {
   let all = { ...comps[c], ...stamped[c] }
   return c != 'created' && c != 'updated' &&
-    !comps[c].via && stamped[c]?.via && all.at && all.by &&
-    Object.keys(all).length == 3
+    !comps[c].via && stamped[c]?.via && all.at && all.by
 })
 
 // A clocked presence (favorite today) is the smaller stamp family: the wire

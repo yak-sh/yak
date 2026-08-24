@@ -54,10 +54,31 @@ let graph = (extra: Snapshot['changes'] = []): Snapshot => ({
 
 let ps: Provider[] = [{ name: 'claude', models: ['sonnet'] }]
 
-Deno.test('approved: bare decided is the mark until T-21319', () => {
+Deno.test('approved: decided passes unless declined; absent verdict reads approved', () => {
   let all = rows(graph())
   assertEquals(approved(all.find((r) => r.eid == T1)!), true)
   assertEquals(approved(all.find((r) => r.eid == T3)!), false)
+  let verdicts = rows(graph([
+    ...mk(T4, 5, ago(50), {
+      task: { status: 'open', project: P },
+      decided: { at: ago(5), verdict: 'declined' },
+    }),
+  ]))
+  assertEquals(approved(verdicts.find((r) => r.eid == T4)!), false)
+  let yes = rows(graph([
+    ...mk(T4, 5, ago(50), {
+      task: { status: 'open', project: P },
+      decided: { at: ago(5), verdict: 'approved' },
+    }),
+  ]))
+  assertEquals(approved(yes.find((r) => r.eid == T4)!), true)
+})
+
+Deno.test('ready: a declined task never dispatches', () => {
+  let all = rows(graph([
+    { eid: T1, name: 'decided', comp: { at: ago(10), verdict: 'declined' } },
+  ]))
+  assertEquals(ready(all, []).map((r) => r.eid), [T2])
 })
 
 Deno.test('ready: open + unclaimed + approved + unblocked, urgent first', () => {

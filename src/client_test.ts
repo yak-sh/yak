@@ -575,7 +575,8 @@ Deno.test('rows filter through the query grammar + byBoard', () => {
   assertEquals(
     matchQuery(
       review,
-      parseQuery(`.comment.target=${T1}&.verdict=approved`),
+      // bare .verdict went ambiguous when decided grew one (T-21319)
+      parseQuery(`.comment.target=${T1}&.review.verdict=approved`),
     ),
     true,
   )

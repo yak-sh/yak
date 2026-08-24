@@ -192,6 +192,19 @@ Deno.test('query: trailing bang tests property presence', () => {
   assertEquals(matchQuery({ proposed: { at: '2026-08-01' } }, [p]), true)
 })
 
+Deno.test('query: .decided.verdict routes through the one grammar', () => {
+  let matches = (q: string, r: ReturnType<typeof row>) =>
+    matchQuery(r, parseQuery(q))
+  let no = row({}, { decided: { at: '2026-08-01', verdict: 'declined' } })
+  let yes = row({}, { decided: { at: '2026-08-01', verdict: 'approved' } })
+  let bare = row({}, { decided: { at: '2026-08-01' } })
+  assertEquals(matches('.decided.verdict=declined', no), true)
+  assertEquals(matches('.decided.verdict=declined', yes), false)
+  // `=` empty screens the pre-verdict rows (absent reads as approved)
+  assertEquals(matches('.decided.verdict=', bare), true)
+  assertEquals(matches('.decided.verdict=declined', bare), false)
+})
+
 Deno.test('query: component names test facet absence and presence', () => {
   let fix = row({})
   let idea = row({}, { proposed: { at: '2026-08-01T00:00:00.000Z' } })

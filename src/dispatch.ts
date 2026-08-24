@@ -18,10 +18,11 @@ import { resolve } from './config.ts'
 
 type Cast = (changes: Change[]) => void
 
-// Greenlit for autonomous dispatch: the task wears `decided`.
-// TODO(T-21319): when `decided` grows its verdict enum, require
-// verdict == 'approved' — until then bare presence is the approval.
-export let approved = (r: Row) => !!r.comps.decided
+// Greenlit for autonomous dispatch: the task wears `decided` and was not
+// decided AGAINST. Absent verdict reads as approved — what every row
+// stamped before the column meant (D-21212).
+export let approved = (r: Row) =>
+  !!r.comps.decided && r.comps.decided.verdict != 'declined'
 
 let settled = (status: unknown) => status == 'done' || status == 'cancelled'
 
