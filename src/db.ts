@@ -5792,22 +5792,19 @@ let snapKey = (db: DatabaseSync) => ({
   ),
 })
 
-export let snapshot = (db: DatabaseSync): Snapshot => {
-  let cursor = cursorOf(db)
-  let key = snapKey(db)
-  let hit = snapCache.get(db)
-  if (hit?.local == key.local && hit.remote == key.remote) return hit.snap
-  // Materialize the lazy omit-set ONCE into an indexed temp table, then read it
-  // as the `not in` source per component table, instead of re-materializing a
-  // ~36k-row spine-join UNION subquery inside each of the 89 per-table scans
-  // (T-18874: that subquery cost ~50ms per table even on empty ones). The outer
-  // query keeps its EXACT prior shape — only the `not in (…)` source changes —
-  // so the planner's scan order is untouched and the wire stays byte-identical;
-  // an anti-join instead would reorder rows. `if not exists` + `delete from`
-  // keeps `_omit` safe across snapshot()'s repeated calls and lets the cached
-  // statements that read it stay valid — the temp table lives for the
-  // connection. `insert or ignore` folds the lazy tables the way `union` did;
-  // every eid is non-null (entity.eid), so `not in` carries no NULL footgun.
+// Materialize the lazy omit-set ONCE into an indexed temp table, then read it
+// as the `not in` source per component table, instead of re-materializing a
+// ~36k-row spine-join UNION subquery inside each of the 89 per-table scans
+// (T-18874: that subquery cost ~50ms per table even on empty ones). The outer
+// query keeps its EXACT prior shape — only the `not in (…)` source changes —
+// so the planner's scan order is untouched and the wire stays byte-identical;
+// an anti-join instead would reorder rows. `if not exists` + `delete from`
+// keeps `_omit` safe across repeated calls and lets the cached statements that
+// read it stay valid — the temp table lives for the connection. `insert or
+// ignore` folds the lazy tables the way `union` did; every eid is non-null
+// (entity.eid), so `not in` carries no NULL footgun. snapshot() AND allDeps()
+// share it, so an edge omitted from the components is omitted from the deps too.
+let fillOmit = (db: DatabaseSync) => {
   db.exec('create temp table if not exists _omit(eid text primary key)')
   db.exec('delete from _omit')
   for (let name of lazyTables) {
@@ -5818,6 +5815,14 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
       } lz join entity o on o.id = lz.entity`,
     )
   }
+}
+
+export let snapshot = (db: DatabaseSync): Snapshot => {
+  let cursor = cursorOf(db)
+  let key = snapKey(db)
+  let hit = snapCache.get(db)
+  if (hit?.local == key.local && hit.remote == key.remote) return hit.snap
+  fillOmit(db)
   let changes: Change[] = []
   for (let name of Object.keys(readable)) {
     for (
@@ -6235,6 +6240,29 @@ export let depsOf = (db: DatabaseSync, eids: string[]): Dep[] => {
     ...deps,
     ...homeReads(homes(db, `where h.eid ${mine} or o.eid ${mine}`), deps),
   ]
+}
+
+// Every edge the snapshot would carry — the working-set boot (server.ts) ships
+// these wholesale (~0.4MB, measured), so an entity streamed later by a
+// subscription already has its edges in the client and `relations()` never
+// under-reports (edges are cheap enough to ship whole rather than stream
+// per-sub). The projection, the `_omit` filter, and the homeReads fold are
+// snapshot()'s deps verbatim — an edge touching an omitted entity (a lazy entry,
+// an embedding) is dropped here exactly as there, so the two agree and no
+// dangling edge to an entity no client will ever hold rides the boot.
+export let allDeps = (db: DatabaseSync): Dep[] => {
+  fillOmit(db)
+  let deps = (prep(
+    db,
+    `select p.eid as parent, d.type as type, c.eid as child, d.ord as ord
+      from dependency d
+      join entity p on p.id = d.parent
+      join entity c on c.id = d.child
+      where p.eid not in (select eid from _omit)
+        and c.eid not in (select eid from _omit)
+      order by p.eid, d.type, d.ord, c.eid`,
+  ).all() as Dep[]).map(shedOrd)
+  return [...deps, ...homeReads(homes(db), deps)]
 }
 
 // Who points AT these entities through a typed eid column — one keyed

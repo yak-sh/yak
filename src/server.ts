@@ -150,6 +150,7 @@ import {
   evalQuery,
   localQuery,
   rowed,
+  workingSet,
 } from './graph_query.ts'
 import { liveFrame } from './wire.ts'
 import { nativeSoon, nativeSweep, noticeAccepted } from './tmux.ts'
@@ -592,12 +593,24 @@ let effect = (out: Change[], t: ReturnType<typeof trace>) => {
 // broadcasts live — no gap, no non-idempotent dup.
 let join = (
   sock: WebSocket,
-  f: { since?: number; epoch?: string; vocab?: string; live?: number },
+  f: {
+    since?: number
+    epoch?: string
+    vocab?: string
+    live?: number
+    ws?: number
+  },
 ) => {
   if (f.live == 1) envelopes.add(sock)
   else envelopes.delete(sock)
   if (f.since == null || cursorStale(db, f.epoch, f.vocab, f.since)) {
-    sock.send(JSON.stringify({ reset: true, snapshot: snapshot(db) }))
+    // A serverQuery client (ws:1) seeds the working set, not the whole graph.
+    sock.send(
+      JSON.stringify({
+        reset: true,
+        snapshot: f.ws == 1 ? workingSet(db) : snapshot(db),
+      }),
+    )
   } else {
     let d = delta(db, f.since)
     sock.send(JSON.stringify({ catchup: d.changes, cursor: d.cursor }))

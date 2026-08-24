@@ -1074,6 +1074,9 @@ let connect = () => {
       epoch: held.epoch,
       vocab: held.vocabHash,
       live: 1,
+      // ws:1 asks a cold boot to seed the WORKING SET, not the whole graph
+      // (M-21143) — safe only because serverQuery keeps membership complete.
+      ws: config.serverQuery ? 1 : undefined,
     }))
   socket.onmessage = (m) => {
     let data = JSON.parse(String(m.data)) as unknown
@@ -1509,8 +1512,14 @@ let land = async (data: unknown, mode: Land) => {
 let local = async (write: boolean) => {
   let stored = await idb.hydrate()
   if (stored.meta.cursor === undefined) {
-    mark('snapshot')
-    await fromSnapshot(write)
+    // serverQuery boots EMPTY (M-21143): the socket's ws:1 handshake seeds the
+    // working set as its reset, so we skip the whole-graph HTTP /snapshot — the
+    // dominant 44MB. A legacy client still fills from the full snapshot here.
+    if (config.serverQuery) mark('working-set')
+    else {
+      mark('snapshot')
+      await fromSnapshot(write)
+    }
   } else {
     mark('hydrate+delta')
     pinZs.clear()

@@ -12,18 +12,30 @@
 // call site). sql_test.ts holds the index and the matcher against each other,
 // entry predicates included, so the fast path cannot silently disagree.
 import type { DatabaseSync } from './sqlite.ts'
-import { deaths, type Dep, kindOf, sessionOf } from './types.ts'
+import {
+  capabilities,
+  type Change,
+  deaths,
+  type Dep,
+  kindOf,
+  sessionOf,
+  type Snapshot,
+} from './types.ts'
 import { find, need, type Querier, type Row } from './client.ts'
 import type { Reader } from './commands.ts'
 import {
+  allDeps,
   buried,
+  cursorOf,
   depsOf,
   eager,
   entriesOf,
   entriesScan,
+  epochOf,
   locate,
   matching,
   referrersOf,
+  vocabHash,
 } from './db.ts'
 import { where, whereSome } from './sql.ts'
 import {
@@ -224,6 +236,62 @@ export let evalGraph = (
     )
   } else if (namesLazy(preds)) hits = orderedEntries(hits, after, limit)
   return { preds, hits }
+}
+
+// The DEFINING sets a working-set boot seeds — the canvas chrome and the nav's
+// own queries (a serverQuery client subscribes to exactly these on mount, and a
+// board/card streams the rest). Each is bounded by a chrome-sized kind (canvases,
+// projects, this client's UI state), never the graph. `.session!` is DELIBERATELY
+// absent: sessions are the one unbounded kind (thousands, ~86% of a naive working
+// set) and no boot-time chrome reads them — the Dashboard/Usage views open their
+// own `.session!` sub on mount, so sessions stream when a view that needs them
+// opens, not at every boot.
+export let WS_SETS = [
+  '.canvas!',
+  '.pin!',
+  '.card!',
+  '.project!',
+  '.favorite!',
+  '.cursor!',
+  '.camera!',
+  '.fold!',
+  '.shelf!',
+  '.client!',
+]
+
+// The working-set boot (M-21143 / T-18059): a joining serverQuery client seeds
+// the DEFINING sets it will subscribe to plus the entities its cards point at,
+// and ALL edges (allDeps) — NOT the long tail (old tasks, entries, memories,
+// comments, mail: the bulk of a whole-graph snapshot), which streams as views
+// mount. Same Snapshot shape as snapshot(), so the client's seedFrom seeds it
+// unchanged — a PARTIAL cache by construction, kept complete for membership by
+// the server subscriptions queryEids opens. queryEids resolving server-side
+// (T-17126) and subs bounded to defining queries (T-21283) are what make this
+// safe. A cold boot serves this instead of the 44MB whole-graph snapshot() —
+// measured 1.62MB vs 42MB on a live-size copy, a 96% cut in the per-connect cost
+// that starved the event loop.
+export let workingSet = (db: DatabaseSync): Snapshot => {
+  let ids = new Set<string>()
+  for (let q of WS_SETS) for (let r of evalGraph(db, q).hits) ids.add(r.eid)
+  // The entities the cards point at — one hop, so a pinned card paints.
+  for (let eid of [...ids]) {
+    let t = eager(db, eid).card?.target as string | undefined
+    if (t) ids.add(t)
+  }
+  let changes: Change[] = []
+  for (let eid of ids) {
+    for (let [name, comp] of Object.entries(eager(db, eid))) {
+      changes.push({ eid, name, comp: comp as Change['comp'] })
+    }
+  }
+  return {
+    changes,
+    deps: allDeps(db),
+    cursor: cursorOf(db),
+    epoch: epochOf(db),
+    vocabHash,
+    capabilities,
+  }
 }
 
 // The /query door as a Querier bound to a db — the same id=+evalGraph
