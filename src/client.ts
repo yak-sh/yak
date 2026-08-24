@@ -1,5 +1,5 @@
 // The headless client half — what the CLI and the MCP server share. Talks
-// to a running tasks server over HTTP (/snapshot + /query to read, /apply
+// to a running tasks server over HTTP (/query to read, /apply
 // to write; writes broadcast to every live client), assembles entities
 // the same way live.ts does, and owns the dot-param grammar:
 //   .title=Hello        routes by prop — title lives only in doc
@@ -97,12 +97,6 @@ export let rowOf = (r: Record<string, unknown>): Row => {
     kind: String(kind),
     comps: projectSession(comps as Record<string, Record<string, unknown>>),
   }
-}
-
-export let snapshot = async () => {
-  let res = await request(`http://${host()}/snapshot`)
-  if (!res.ok) throw new Error(`server said ${res.status}`)
-  return res.json() as Promise<Snapshot>
 }
 
 // The server's advertised capabilities, cheaply — a spawn door checks this

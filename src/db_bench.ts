@@ -1,10 +1,11 @@
-// Write-path baselines: SINGLE-op apply() and snapshot()/read paths against a
+// Write-path baselines: SINGLE-op apply() and keyed read paths against a
 // resident 2k-task graph. Every bench measures one operation so it clears the
 // sub-1ms bar the gate holds (a batch bench measures N ops at once — split into
 // the single-op cost instead). `deno task bench`.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, componentCounts, db, journalOf, resolveId, snapshot } =
-  await import('./db.ts')
+let { apply, componentCounts, db, eager, journalOf, resolveId } = await import(
+  './db.ts'
+)
 let { freshDb } = await import('./testdb.ts')
 
 let uid = () => crypto.randomUUID()
@@ -25,8 +26,11 @@ Deno.bench('apply: patch one column', () => {
   apply(db, [{ eid: eids[7], name: 'task', comp: { priority: 2 } }])
 })
 
-Deno.bench('snapshot: full graph', () => {
-  snapshot(db)
+// The read path that replaced the whole-graph snapshot (M-21143): one entity's
+// components by eid — the O(1) keyed read /query and every client bootstrap now
+// lean on instead of serializing the whole graph.
+Deno.bench('eager: one entity by eid (keyed read)', () => {
+  eager(db, eids[500])
 })
 
 Deno.bench('resolveId: num -> eid', () => {

@@ -17,6 +17,7 @@ import type {
 import { z } from 'zod'
 import {
   type Change,
+  type Dep,
   edges,
   type Hit,
   sessionOf,
@@ -66,8 +67,8 @@ import {
   scopeFor,
   search,
   send,
+  serverCaps,
   similarHint,
-  snapshot,
   spawnChanges,
   spawnPlan,
   taskChanges,
@@ -1957,10 +1958,54 @@ affirms that). Quarantined content requires quarantined: true. ${BUS}`,
   return server
 }
 
+// The stdio read, off the banned whole-graph /snapshot (M-21143): assemble the
+// eager Snapshot from the /query pipeline (evalGraph), which never calls
+// snapshot(db). code_run's worker sandbox reads the whole eager graph
+// (graph.rows), so this read stays whole — but sourced through the door every
+// other reader now uses, so the /snapshot endpoint and the client snapshot()
+// helper are gone. Two pulls dedupe into one graph: the default query screens
+// quarantined rows, so `.quarantined!` opts them back in to match snapshot(db)'s
+// full content; deps=1 rides each hit and quarantined=1 keeps its edges. The
+// lazy entry partition stays omitted, exactly as snapshot(db)'s eager slice did
+// (a tool reaches it through io.query/entryLog, not this read).
+let readGraph = async (): Promise<Snapshot> => {
+  let pull = (line = '') =>
+    request(
+      `http://${host()}/query?deps=1&quarantined=1${line ? `&${line}` : ''}`,
+    ).then(async (res) => {
+      if (!res.ok) throw new Error(`server said ${res.status}`)
+      return await res.json() as (Record<string, unknown> & { deps?: Dep[] })[]
+    })
+  let [live, held, capabilities] = await Promise.all([
+    pull(),
+    pull(encodeURIComponent('.quarantined!')),
+    serverCaps(),
+  ])
+  let byEid = new Map<string, Record<string, unknown>>()
+  let deps = new Map<string, Dep>()
+  for (let hit of [...live, ...held]) {
+    let { deps: hitDeps, ...rest } = hit
+    let eid = String((rest.entity as { eid?: unknown })?.eid ?? '')
+    if (!eid) continue
+    byEid.set(eid, rest)
+    for (let d of hitDeps ?? []) {
+      deps.set(`${d.type} ${d.parent} ${d.child}`, d)
+    }
+  }
+  let changes: Change[] = []
+  for (let [eid, comps] of byEid) {
+    for (let [name, comp] of Object.entries(comps)) {
+      if (name == 'kind') continue // the derived display name, never a component
+      changes.push({ eid, name, comp: comp as Record<string, unknown> })
+    }
+  }
+  return { changes, deps: [...deps.values()], capabilities }
+}
+
 // stdio entry: same tools, reaching the graph over HTTP like any client.
 if (import.meta.main) {
   await mcpServer({
-    read: snapshot,
+    read: readGraph,
     // The authoritative filter-query is the /query GET, which runs the same
     // evalGraph the in-process mount does — so the lazy entry partition is
     // reachable over stdio too. A filter LINE splits into its `&` tokens, the
