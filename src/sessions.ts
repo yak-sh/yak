@@ -1948,6 +1948,27 @@ export let spawned =
     }, cast)
   }
 
+// A launch-spec correction is a retry only while the first attempt never
+// crossed the launch boundary. Once a provider or workspace started, changing
+// the historical request cannot safely reuse its Session identity. The status
+// reset also makes repeated columns in one spawn patch idempotent: the first
+// handler claims the retry synchronously and every sibling sees a non-failure.
+export let reconfigured =
+  (cast: Cast, native?: (eid: string, job: Launch) => Promise<void>) =>
+  (eid: string, _comp: Record<string, unknown>) => {
+    let row = runRow(eid)
+    if (
+      row?.status != 'failed' || row.started_at || row.pid ||
+      row.provider_session_id
+    ) return
+    stamp(eid, {
+      status: null,
+      finished_at: null,
+      error: null,
+    }, cast)
+    return spawned(cast, native)(eid, {})
+  }
+
 export type Launch = {
   instruction: string
   session_id: string

@@ -52,6 +52,7 @@ let {
   landSpawnClaim,
   mergeDisposition,
   prepareWorktree,
+  reconfigured,
   reapLeases,
   recover,
   recoverWorktree,
@@ -473,6 +474,33 @@ slow(
     assertEquals(row(eid)?.requested_task, null)
   },
 )
+
+slow('correcting a preflight-failed chat retries its launch', async () => {
+  let eid = uid(), routed = 0
+  apply(db, [
+    { eid, name: 'doc', comp: { title: '', body: 'Try again.' } },
+    {
+      eid,
+      name: 'session',
+      comp: { id: uid(), provider: 'codex-cli', model: 'gpt-5.6-sol' },
+    },
+  ])
+  let native = (_eid: string, _launch: unknown) => {
+    routed++
+    return Promise.resolve()
+  }
+  await spawned(cast, native)(eid, {})
+  assertEquals(row(eid)?.status, 'failed')
+  assertMatch(failure(eid) ?? '', /taskless chat requires/)
+
+  apply(db, [{ eid, name: 'spawn', comp: { provider: 'codex' } }])
+  await reconfigured(cast, native)(eid, { provider: 'codex' })
+
+  assertEquals(routed, 1)
+  assertEquals(row(eid)?.status, null)
+  assertEquals(row(eid)?.finished_at, null)
+  assertEquals(failure(eid), undefined)
+})
 
 slow('a projectless Codex task starts as a no-code graph session', async () => {
   let task = uid(), eid = uid(), routed = 0

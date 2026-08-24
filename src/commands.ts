@@ -525,6 +525,10 @@ export let commands: Record<string, Command> = {
       }
       return {
         spawn: {
+          // A taskless run has no checkout for a process-backed fallback.
+          // Keep an explicit model free to infer its own provider, but make
+          // the bare chat's default execution path graph-native.
+          ...(!launch.provider && !launch.model ? { provider: 'codex' } : {}),
           ...(prompt ? { prompt } : {}),
           ...launch,
         },

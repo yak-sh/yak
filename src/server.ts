@@ -96,6 +96,7 @@ import {
   maintainStandingFor,
   prepareWorktree,
   reapLeases,
+  reconfigured,
   recover,
   recoverWorktree,
   spawned,
@@ -1755,6 +1756,16 @@ on('session', {
   sweep: { pending: codexPending },
   doc: 'a session created with a spawn spec is a launch request — validate, ' +
     'launch the agent; a deleted session stops its runner or process',
+})
+on('spawn', {
+  changed: {
+    provider: reconfigured(cast, managed.start),
+    model: reconfigured(cast, managed.start),
+    effort: reconfigured(cast, managed.start),
+    persona: reconfigured(cast, managed.start),
+  },
+  doc: 'correcting the launch spec retries a Session that failed before its ' +
+    'provider or workspace started',
 })
 on('session', {
   created: watched(cast),

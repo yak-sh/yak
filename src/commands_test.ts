@@ -259,11 +259,15 @@ Deno.test('status moves land on the focused task', () => {
 
 Deno.test('chat starts a taskless model with an optional multiline prompt', () => {
   assertEquals(run('chat', ctx()), {
-    spawn: {},
+    spawn: { provider: 'codex' },
     msg: 'chat → agent',
   })
   assertEquals(run('chat Explain this\nwith examples', ctx()), {
-    spawn: { prompt: 'Explain this\nwith examples' },
+    spawn: { provider: 'codex', prompt: 'Explain this\nwith examples' },
+    msg: 'chat → agent',
+  })
+  assertEquals(run('chat .model=kimi-k2.7-code Why?', ctx()), {
+    spawn: { prompt: 'Why?', model: 'kimi-k2.7-code' },
     msg: 'chat → agent',
   })
   assertEquals(
