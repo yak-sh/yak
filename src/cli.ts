@@ -2725,7 +2725,7 @@ let commandHook = (command: string, timeout?: number): Hook => ({
 
 let hookCommand = (provider: Provider, verb: string) =>
   `PATH="$HOME/.deno/bin:$PATH" TASKS_PROVIDER=${provider} ` +
-  `task session ${verb} --hook || true`
+  `${verb == 'turn' ? 'task-turn' : `task session ${verb} --hook`} || true`
 
 // TODO(T-3906): replace this compatibility call with Tasks-owned self-clear
 // state and gates. Until then, task-launched Claude preserves a project's

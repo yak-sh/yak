@@ -82,6 +82,7 @@ import {
 import { scribeSweep } from './scribe.ts'
 import { embedSweep, similarTo } from './embed.ts'
 import { type IO, mcpServer } from './mcp.ts'
+import { drain as drainTurns } from './turn.ts'
 import { materialize, projection, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
 import {
@@ -1920,6 +1921,10 @@ on('doc', {
 // supervisor heals it with a fresh boot.
 await becomeWriter()
 
+// A restart may occur after a hook queued its boundary but before the file
+// watcher observed it. Boot consumes that durable remainder.
+turnSweep()
+
 // Boot migrations may reshape those graph-owned teachings without an apply
 // trace. Reconcile once here too, or the source migrates while its generated
 // persona files keep teaching the retired vocabulary.
@@ -2175,6 +2180,37 @@ let watch = async () => {
 }
 watch()
 
+// Turn hooks append to a durable local spool and return without waiting for a
+// loaded event loop. The server resolves the provider id through its unique
+// index and sends the ordinary graph change once it gets a turn.
+function turnSweep() {
+  if (Deno.env.get('DB_PATH')) return
+  try {
+    drainTurns(({ sid, turn }) => {
+      let row = db.prepare(
+        `select e.eid as eid from session s
+         join entity e on e.id = s.entity where s.id = ?`,
+      ).get(sid) as { eid: string } | undefined
+      if (!row) return
+      let t = trace()
+      let out = apply(
+        db,
+        [{
+          eid: row.eid,
+          name: 'session',
+          comp: { turn },
+        }],
+        t,
+        sid,
+      )
+      cast(out)
+      effect(out, t)
+    })
+  } catch (e) {
+    console.warn('turn spool retained —', e)
+  }
+}
+
 // The user's theme (~/.tasks/theme.css, T-12778) lives outside src/, so it
 // gets its own watch: a save broadcasts {css} like any other stylesheet edit,
 // re-fetching the sheet with no reload. Non-recursive keeps this off the
@@ -2191,6 +2227,7 @@ let themeWatch = async () => {
     return
   }
   for await (let e of w) {
+    if (e.paths.some((p) => p.endsWith('/turns.jsonl'))) turnSweep()
     if (!e.paths.some((p) => p.endsWith('/theme.css'))) continue
     let msg = JSON.stringify({ css: ++gen })
     for (let c of clients) {

@@ -974,11 +974,11 @@ Deno.test('launchers scope lifecycle hooks to their provider invocation', () => 
   )
   assertMatch(
     codex.UserPromptSubmit[0].hooks[0].command,
-    /task session turn --hook/,
+    /task-turn/,
   )
   assertMatch(
     codex.Stop[0].hooks[0].command,
-    /task session turn --hook/,
+    /task-turn/,
   )
   assertEquals(codex.UserPromptSubmit[0].hooks[0].timeout, 3)
   assertEquals(codex.Stop[0].hooks[0].timeout, 3)
@@ -1001,9 +1001,9 @@ Deno.test('launchers scope lifecycle hooks to their provider invocation', () => 
   // stamp so the cheap fact never queues behind the expensive check.
   assertMatch(
     claude.UserPromptSubmit[0].hooks[0].command,
-    /TASKS_PROVIDER=claude task session turn --hook/,
+    /TASKS_PROVIDER=claude task-turn/,
   )
-  assertMatch(claude.Stop[0].hooks[0].command, /task session turn --hook/)
+  assertMatch(claude.Stop[0].hooks[0].command, /task-turn/)
   assertEquals(claude.Stop[0].hooks[0].timeout, 3)
   assertMatch(claude.Stop[1].hooks[0].command, /self-clear-stop\.sh/)
   assertEquals(claude.Stop[1].hooks[0].timeout, 20)
