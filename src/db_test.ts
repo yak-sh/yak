@@ -8,6 +8,7 @@ let {
   backfillVia,
   componentCounts,
   connect,
+  correct,
   cursorOf,
   cursorStale,
   db,
@@ -125,6 +126,83 @@ Deno.test('cursorStale: epoch, vocab, or a frontier past the tip all reseed', ()
   assertEquals(cursorStale(d, epochOf(d), vocabHash, cur + 1), true)
   // A void epoch/vocab (a client that has no stamp yet) is never a valid resume.
   assertEquals(cursorStale(d, null, null, cur), true)
+})
+
+// correct(): the scoped re-sync a rejected batch gets back (server.ts) instead
+// of a whole-graph snapshot — the authoritative pre-batch state of exactly the
+// eids the batch touched, so the client's optimistic apply is undone precisely.
+let reverted = (
+  changes: ReturnType<typeof correct>,
+  eid: string,
+  name: string,
+) => changes.find((c) => c.eid == eid && c.name == name)
+
+Deno.test('correct: an optimistic comp change is reverted to the stored value', () => {
+  let d = fresh()
+  let t = uid()
+  apply(d, [
+    { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
+    { eid: t, name: 'task', comp: { status: 'open', priority: 'P2' } },
+  ])
+  // The sender optimistically moved it to wip; the server rejected the batch.
+  let out = correct(d, [{ eid: t, name: 'task', comp: { status: 'wip' } }])
+  assertEquals(reverted(out, t, 'task')!.comp!.status, 'open')
+  // Every stored component rides back whole (a delete-revert needs them all).
+  assertEquals(!!reverted(out, t, 'doc'), true)
+  assertEquals(!!reverted(out, t, 'entity'), true)
+})
+
+Deno.test('correct: an optimistically-added component is nulled', () => {
+  let d = fresh()
+  let t = uid()
+  apply(d, [{ eid: t, name: 'doc', comp: { title: 'a', body: '' } }])
+  // The graph holds no board component, so the optimistic add is undone.
+  let out = correct(d, [{ eid: t, name: 'board', comp: { query: '.x' } }])
+  assertEquals(reverted(out, t, 'board')!.comp, null)
+})
+
+Deno.test('correct: a never-committed create comes back as an entity-null', () => {
+  let d = fresh()
+  let ghost = uid()
+  let out = correct(d, [{
+    eid: ghost,
+    name: 'doc',
+    comp: { title: 'x', body: '' },
+  }])
+  assertEquals(out, [{ eid: ghost, name: 'entity', comp: null }])
+})
+
+Deno.test('correct: optimistic edge add/removal each snap back to the stored set', () => {
+  let d = fresh()
+  let p = uid()
+  let c = uid()
+  apply(d, [
+    { eid: p, name: 'doc', comp: { title: 'p', body: '' } },
+    { eid: c, name: 'doc', comp: { title: 'c', body: '' } },
+    { eid: p, name: 'dependency', comp: { type: 'contains', child: c } },
+  ])
+  // An optimistic UNLINK of the stored edge is reverted — re-asserted present.
+  let unlink = correct(d, [
+    {
+      eid: p,
+      name: 'dependency',
+      comp: { type: 'contains', child: c, gone: true },
+    },
+  ])
+  let re = unlink.find((x) =>
+    x.name == 'dependency' && (x.comp as { child?: string })?.child == c
+  )
+  assertEquals((re!.comp as { gone?: boolean }).gone, undefined)
+  // An optimistic LINK of an absent edge is reverted — sent back gone.
+  let ghost = uid()
+  apply(d, [{ eid: ghost, name: 'doc', comp: { title: 'g', body: '' } }])
+  let link = correct(d, [
+    { eid: p, name: 'dependency', comp: { type: 'contains', child: ghost } },
+  ])
+  let dropped = link.find((x) =>
+    x.name == 'dependency' && (x.comp as { child?: string })?.child == ghost
+  )
+  assertEquals((dropped!.comp as { gone?: boolean }).gone, true)
 })
 
 slow('epochOf: durable across re-open, distinct per graph', () => {

@@ -1361,7 +1361,14 @@ let land = async (data: unknown, mode: Land) => {
   }
   if (!data || typeof data != 'object') return
   let frame = data as Partial<Live & Catchup & Reset & Sub>
-  if (frame.error) problem.value = String(frame.error)
+  if (frame.error) {
+    problem.value = String(frame.error)
+    // A rejected batch comes back with the authoritative state of the eids it
+    // touched (server.ts correct()) — apply it to undo the optimistic write.
+    // Its cursor is unchanged (nothing committed), so this only heals the cache.
+    if (Array.isArray(frame.changes)) applyLocal(frame.changes)
+    return
+  }
   if (frame.catchup !== undefined) {
     let touched = applyLocal(frame.catchup)
     if (frame.cursor !== undefined) {

@@ -173,6 +173,33 @@ slow('/ws without a precondition still writes', alone, async () => {
   assertEquals(await stored(eid), 'CLOBBER')
 })
 
+// A refused batch comes back with a SCOPED re-sync of just the eids it touched
+// (server.ts correct()), never the whole-graph snapshot the reject once carried
+// (M-21143). The correction re-asserts the authoritative doc, so the client
+// applying it undoes its optimistic CLOBBER back to the stored TWO.
+slow(
+  '/ws refusal returns a scoped correction, not a snapshot',
+  alone,
+  async () => {
+    let { eid, was } = await stale()
+    let frame = await sync([{
+      eid,
+      name: 'doc',
+      comp: { body: 'CLOBBER' },
+      was,
+    }])
+    assertStringIncludes(String(frame.error), 'has moved')
+    assertEquals(frame.snapshot, undefined)
+    let changes = frame.changes as {
+      eid: string
+      name: string
+      comp: Record<string, unknown> | null
+    }[]
+    let doc = changes.find((c) => c.eid == eid && c.name == 'doc')
+    assertEquals(doc?.comp?.body, 'TWO')
+  },
+)
+
 // The in-process hops, named one by one so a failure says WHICH rebuilt the
 // change rather than only that the doors stopped refusing.
 slow('normalizeChanges keeps a precondition', () => {

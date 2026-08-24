@@ -5634,6 +5634,61 @@ export let bodies = (db: DatabaseSync, eids: string[]): Change[] => {
   return out
 }
 
+// The authoritative state of exactly what a REJECTED batch touched — the scoped
+// re-sync that reverts a sender's optimistic writes without reseeding the whole
+// graph (M-21143: no door pulls the whole graph into memory). A rejected batch
+// commits nothing, so "authoritative" is simply the pre-batch state: per touched
+// eid, send back what the graph actually holds — every component whole (a
+// delete-revert needs them all, not just the columns named), a null for any
+// component the batch ADDED that the graph lacks, an entity-null for an eid that
+// never existed (an optimistic create), and each touched edge re-asserted or
+// dropped to match the stored set. Applied through the client's ordinary
+// applyLocal, it undoes the optimistic apply precisely, cursor untouched (the
+// batch never committed, so the client's frontier has not moved).
+export let correct = (db: DatabaseSync, sent: Change[]): Change[] => {
+  let out: Change[] = []
+  for (let eid of new Set(sent.map((c) => c.eid))) {
+    let comps = eager(db, eid)
+    let mine = sent.filter((c) => c.eid == eid)
+    if (!comps.entity) {
+      // Never committed — drop the phantom the optimistic create left behind.
+      out.push({ eid, name: 'entity', comp: null })
+      continue
+    }
+    for (let [name, comp] of Object.entries(comps)) {
+      out.push({ eid, name, comp: comp as Change['comp'] })
+    }
+    // A component the batch touched that the graph does not hold: the loop above
+    // only re-asserts what exists, so null it to undo an optimistic add.
+    for (let c of mine) {
+      if (c.name != 'entity' && c.name != 'dependency' && !(c.name in comps)) {
+        out.push({ eid, name: c.name, comp: null })
+      }
+    }
+    // Each edge the batch touched, re-asserted or dropped to match the stored
+    // set, so an optimistic link/unlink is undone the same way a comp add is.
+    let live = depsOf(db, [eid])
+    for (let c of mine) {
+      if (c.name != 'dependency' || !c.comp) continue
+      let type = c.comp.type
+      let child = c.comp.child
+      let d = live.find((d) =>
+        d.parent == eid && d.type == type && d.child == child
+      )
+      out.push(
+        d
+          ? {
+            eid,
+            name: 'dependency',
+            comp: { type, child, ...(d.ord != null ? { ord: d.ord } : {}) },
+          }
+          : { eid, name: 'dependency', comp: { type, child, gone: true } },
+      )
+    }
+  }
+  return out
+}
+
 // The home each persona names — homeReads' whole input, twenty-odd rows off
 // its own table, where reading it out of a materialized graph costs the graph.
 // Owner and `home` are int ids in storage, so project both back to eids: `o` is

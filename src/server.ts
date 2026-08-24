@@ -17,6 +17,7 @@ import {
   bodies,
   buried,
   componentCounts,
+  correct,
   cursorOf,
   cursorStale,
   db,
@@ -633,9 +634,12 @@ let ws = (req: Request) => {
       out = apply(db, sent, t, writer)
     } catch (e) {
       console.error('sync: bad batch dropped —', e)
+      // Revert the sender's optimistic apply with a SCOPED re-sync of just the
+      // eids it touched — the authoritative pre-batch state (M-21143), never a
+      // whole-graph snapshot the rejected write does not need.
       socket.send(JSON.stringify({
         error: e instanceof Error ? e.message : String(e),
-        snapshot: snapshot(db),
+        changes: correct(db, sent),
       }))
       return
     }
