@@ -4051,6 +4051,57 @@ slow('nobody writes in the owner name but the owner keyboard', () => {
   Deno.removeSync(path)
 })
 
+// The attribution cascade (D-21308): a session's `by` names degrees of
+// configuration — persona → project (explicit actor / cwd venture / the work
+// it holds) → model — never a human fallback. Each rung is proven by
+// clearing the rung above it.
+Deno.test('attribution cascade: persona, then project, then model', () => {
+  let d = fresh()
+  let persona = uid(), project = uid(), model = uid(), t = uid(), s = uid()
+  apply(d, [
+    { eid: persona, name: 'doc', comp: { title: 'scribe' } },
+    { eid: persona, name: 'persona', comp: {} },
+    { eid: project, name: 'doc', comp: { title: 'venture' } },
+    { eid: project, name: 'project', comp: {} },
+    { eid: model, name: 'doc', comp: { title: 'Fable 5' } },
+    { eid: model, name: 'model', comp: { name: 'claude-fable-5' } },
+    { eid: t, name: 'doc', comp: { title: 'work' } },
+    { eid: t, name: 'task', comp: { project } },
+    {
+      eid: s,
+      name: 'session',
+      comp: { id: 'sess-c', model: 'claude-fable-5' },
+    },
+    { eid: s, name: 'spawn', comp: { persona } },
+  ])
+  // The most specific persona in force wins, and the stamp path carries it.
+  assertEquals(writerActor(d, 'sess-c'), persona)
+  let m = uid()
+  apply(
+    d,
+    [{ eid: m, name: 'doc', comp: { title: 'note' } }],
+    undefined,
+    'sess-c',
+  )
+  assertEquals(readComp(d, m, 'created')?.by, persona)
+  // Without one, the project of the work the session claims.
+  apply(d, [{ eid: s, name: 'spawn', comp: { persona: null } }])
+  apply(d, [{ eid: t, name: 'claim', comp: { session: s } }])
+  assertEquals(writerActor(d, 'sess-c'), project)
+  // Released, the task it was spawned for still names the scope it serves.
+  apply(d, [
+    { eid: t, name: 'claim', comp: null },
+    { eid: s, name: 'session', comp: { requested_task: t } },
+  ])
+  assertEquals(writerActor(d, 'sess-c'), project)
+  // No work at all: the model entity matching the session's model string.
+  apply(d, [{ eid: s, name: 'session', comp: { requested_task: null } }])
+  assertEquals(writerActor(d, 'sess-c'), model)
+  // An unknown spelling stays null — a legible gap, never a guess.
+  apply(d, [{ eid: s, name: 'session', comp: { model: 'gpt-imaginary' } }])
+  assertEquals(writerActor(d, 'sess-c'), null)
+})
+
 // Unwritable and unreadable are different words. A signature the wire
 // cannot forge must still be one the wire can SEE — a letter whose sender
 // no client can read is a letter nobody can answer (`reply` aims at it).

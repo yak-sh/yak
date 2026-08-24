@@ -3501,10 +3501,51 @@ let ventureAt = (db: DatabaseSync, cwd?: string | null): string | null => {
     null
 }
 
+// The project a session's WORK names when its cwd doesn't (D-21308): the
+// project of a task it claims (newest lease first), else of the task it was
+// spawned for. Reaches through claim/requested_task so a run outside any
+// repo still attributes to the scope it serves.
+let workProject = (db: DatabaseSync, sid: number): string | null => {
+  let c = prep(
+    db,
+    `select ${refEid('t.project')} as eid
+     from claim c join task t on t.entity = c.entity
+     where c.session = ? and t.project is not null
+     order by c.rowid desc limit 1`,
+  ).get(sid) as { eid: string } | undefined
+  if (c) return c.eid
+  let r = prep(
+    db,
+    `select ${refEid('t.project')} as eid
+     from session s join task t on t.entity = s.requested_task
+     where s.entity = ? and t.project is not null`,
+  ).get(sid) as { eid: string } | undefined
+  return r?.eid ?? null
+}
+
+// The cascade's terminal (D-21308): the model ENTITY whose name matches the
+// wire spelling a session's model columns speak. A lookup, never a mint — an
+// unknown spelling leaves attribution null, the doctor-countable
+// configuration gap, rather than guessing.
+let modelActor = (db: DatabaseSync, name?: string | null): string | null =>
+  name
+    ? (prep(
+      db,
+      `select ${refEid('m.entity')} as eid from model m
+       where m.name = ? order by m.entity limit 1`,
+    ).get(name) as { eid: string } | undefined)?.eid ?? null
+    : null
+
 // The actor a write acts FOR, resolved from the writer the door named — a
 // session id (the CLI's x-via, a reified agent), a client eid (a browser
-// tab), or nothing. A session speaks as its own actor, else the venture it
-// stands in; a client as its person. Never the raw label the journal used
+// tab), or nothing. A session speaks as the attribution cascade (D-21308)
+// resolves: DEGREES OF CONFIGURATION of the program that ran — the most
+// specific persona in force, else the project it stands in (its explicit
+// actor, its cwd's venture, or the project of the work it holds), else the
+// model that ran. Never a human fallback — the human is the substrate's
+// motive force always, so a human default carries zero information; a human
+// is `by` only through direct authorship (their client or a wire-named by).
+// A client speaks as its person. Never the raw label the journal used
 // to keep — the audit trail is actor eids, each resolvable to a name.
 //
 // A write that resolves to nobody stays BLANK. It used to fall back to the
@@ -3524,13 +3565,29 @@ let actorFor = (
   if (!writer) return null
   let s = prep(
     db,
-    `select cwd, ${refEid('actor')} as actor from session
-     where id = ? or ${byEid}`,
+    `select s.entity as sid, s.cwd as cwd,
+            ${refEid('s.actor')} as actor,
+            ${refEid('coalesce(s.persona, sp.persona)')} as persona,
+            s.serving_model as served,
+            coalesce(s.model, sp.model) as model
+     from session s left join spawn sp on sp.entity = s.entity
+     where s.id = ? or s.entity = (select id from entity where eid = ?)`,
   )
     .get(writer, writer) as
-      | { cwd: string | null; actor: string | null }
+      | {
+        sid: number
+        cwd: string | null
+        actor: string | null
+        persona: string | null
+        served: string | null
+        model: string | null
+      }
       | undefined
-  if (s) return s.actor ?? ventureAt(db, s.cwd) ?? null
+  if (s) {
+    return s.persona ?? s.actor ?? ventureAt(db, s.cwd) ??
+      workProject(db, s.sid) ?? modelActor(db, s.served) ??
+      modelActor(db, s.model)
+  }
   let c = prep(
     db,
     `select ${refEid('actor')} as actor from client where ${byEid}`,

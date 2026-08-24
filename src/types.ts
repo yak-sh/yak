@@ -710,7 +710,8 @@ export let comps: Record<string, Record<string, PropType>> = {
   // problem, and the Stamp's edited-check is component presence). `at` is
   // server-stamped/frozen (in `stamped` below, like the spine timestamps
   // it replaced); `by` is wire-writable — the server defaults it to the
-  // writing instrument's actor (db.ts writerActor), and the wire may
+  // writing instrument's actor (db.ts writerActor: the D-21308 cascade,
+  // persona → project → model, never a human fallback), and the wire may
   // override it (an agent stamping Jeff as the author). `via` is the
   // server-stamped instrument: claiming another instrument is only spoofing.
   // Both are death 'keep' — provenance outlives the actor's or instrument's
