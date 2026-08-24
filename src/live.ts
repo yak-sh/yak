@@ -313,6 +313,16 @@ export let dropQuery = (preds: Pred[]) => {
   dropBoard(s.sub)
 }
 
+// A query that is evaluated PER RENDERED ROW — a reverse-lookup keyed by the
+// row's own eid (a tile's comment count on every entity in a list or tree) —
+// must NEVER open a server sub, even with serverQuery on: that scales with rows
+// on screen, not views, and a page of them floods the leader (1363 subs / a
+// stalled serial chain, measured under ?ws-sub — T-21283). These resolve LOCALLY
+// over the working set the DEFINING subs (boards/projects/sessions/canvases)
+// stream in — a tile badge is best-effort, and an OPEN card's own view keeps its
+// bounded sub for the complete, correct list. `mem` always, never the server.
+let localEids = (preds: Pred[]): Signal<string[]> => mem.subscribe(preds)
+
 // The reverse-reference reads phrased as the queries the vocabulary already
 // answers: an eid EQUALITY anchors on the derived refs index (index.ts), a
 // component PRESENCE on byComp, a CONTAINS over a text column's pool. Each helper
@@ -1610,6 +1620,8 @@ let probe = globalThis as {
     held: (line: string) => number
     served: (line: string) => boolean
     subN: () => number
+    subShapes: () => Record<string, number>
+    subMembersOf: (line: string) => number
   }
 }
 probe.__probe = {
@@ -1631,6 +1643,25 @@ probe.__probe = {
   // many are open across the tab.
   served: (line) => queryUses.has(qkey(resolveRefs(parseQuery(line), findEid))),
   subN: () => queryUses.size,
+  // A histogram of open query subs by SHAPE (`comp.prop op`) — to see what a
+  // page actually subscribes and prove the flip's sub count is bounded.
+  subShapes: () => {
+    let h: Record<string, number> = {}
+    for (let s of queryUses.values()) {
+      let p = s.preds[0]
+      let key = !p
+        ? 'empty'
+        : p.refs
+        ? '.refs'
+        : `.${p.comp}${p.prop ? '.' + p.prop : ''}${
+          p.op == EXISTS ? '!' : p.op ? p.op : '='
+        }`
+      h[key] = (h[key] ?? 0) + 1
+    }
+    return h
+  },
+  subMembersOf: (line) =>
+    subEids(`q:${qkey(resolveRefs(parseQuery(line), findEid))}`)?.size ?? -1,
 }
 
 // The whole entity, assembled for a renderer: spine, components present,
@@ -1975,8 +2006,11 @@ export let commentsOn = (target: string): Ent[] =>
   queryEids([eq('comment', 'target', target)]).value
     .map(ent)
     .sort((a, b) => a.num - b.num)
+// A per-tile badge on every rendered entity — LOCAL, never a per-entity server
+// sub (T-21283). The open card's Comments view (commentsOn, bounded) owns the
+// complete list; this count is best-effort over the working set.
 export let commentCount = (target: string): Signal<number> =>
-  computed(() => queryEids([eq('comment', 'target', target)]).value.length)
+  computed(() => localEids([eq('comment', 'target', target)]).value.length)
 
 type Folded = { eid: string; statuses: string }
 // The fold row for a (client, board) — a unique (client, board) pair, so the two

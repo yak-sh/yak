@@ -2225,3 +2225,43 @@ Deno.test('serverQuery: a held membership query tracks its subscription', () => 
     ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
   }
 })
+
+// T-21283: a per-rendered-row reverse-lookup (commentCount on every tile) must
+// NEVER open a per-entity server sub — that scales with rows on screen and
+// floods the leader (1363 subs measured). It stays LOCAL even with serverQuery
+// on, while a DEFINING query still opens its bounded sub.
+Deno.test('commentCount opens no server sub; a defining query does (T-21283)', () => {
+  let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
+  ;(globalThis as { WebSocket: unknown }).WebSocket = class {
+    readyState = 0
+    onopen: unknown = null
+    onmessage: unknown = null
+    onclose: unknown = null
+    send() {}
+    addEventListener() {}
+    close() {}
+  }
+  let probe =
+    (globalThis as unknown as { __probe: { subN: () => number } }).__probe
+  let X = 'cccc0000-0000-4000-8000-000000000001'
+  config.serverQuery = true
+  try {
+    cache.value = {
+      [X]: { entity: { eid: X, num: 1 }, canvas: { eid: X } },
+      c1: { entity: { eid: 'c1', num: 2 }, comment: { eid: 'c1', target: X } },
+      c2: { entity: { eid: 'c2', num: 3 }, comment: { eid: 'c2', target: X } },
+    }
+    let n0 = probe.subN()
+    // The per-tile count resolves locally — two comments — and opens NO sub.
+    assertEquals(commentCount(X).value, 2)
+    assertEquals(probe.subN(), n0)
+    // A defining presence query DOES open its (bounded) server sub.
+    let preds = resolveRefs(parseQuery('.canvas!'), findEid)
+    holdQuery(preds)
+    assertEquals(probe.subN(), n0 + 1)
+    dropQuery(preds)
+  } finally {
+    config.serverQuery = false
+    ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
+  }
+})
