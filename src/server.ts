@@ -265,6 +265,13 @@ type Sub = {
   moving: boolean
   bodies: boolean
   details: boolean
+  // A ROUTE sub (`route:<eid>`) names one entity by id, not a query — the
+  // fullscreen root a client reaches by direct URL, which the query grammar
+  // can't express (`.eid=` is refused, query.ts) and which no defining set
+  // holds. `only` short-circuits the matcher to this fixed id: membership is
+  // "this eid, while it's alive", so the entity loads whole (details), updates
+  // live, and dies with the row. Empty/absent for every query sub.
+  only?: Set<string>
 }
 let subs = new Map<WebSocket, Map<string, Sub>>()
 let filtered = new Set<WebSocket>()
@@ -404,8 +411,10 @@ export let maintain = (batch: Change[]) => {
       for (let eid of candidates) {
         let c = gone.has(eid) ? {} : comps(eid)
         let alive = !gone.has(eid) && !!c.entity
-        let hit = alive && listed(c, sub.preds) &&
-          matchQuery(c, sub.preds, comps, undefined, dbKids(comps))
+        // A route sub matches its fixed id; a query sub runs the matcher.
+        let hit = alive &&
+          (sub.only ? sub.only.has(eid) : listed(c, sub.preds) &&
+            matchQuery(c, sub.preds, comps, undefined, dbKids(comps)))
         let s: Step = step(sub.members, eid, alive, hit)
         if (s == 'add') changes.push(...payload(sub, eid, c))
         // A standing match tells a shadow sub nothing: membership did not
@@ -482,6 +491,17 @@ export let aged = (now = Date.now()) => {
     }
   }
 }
+// One entity as a subscription hit — its eager comps, or nothing if the id
+// names no live entity yet (a route sub opened before its target is minted, or
+// on a tombstone). Shaped like an evalFast/evalQuery hit so control() ships it
+// through the one payload path.
+let rowsFor = (
+  eid: string,
+): { eid: string; comps: Record<string, Record<string, unknown>> }[] => {
+  let comps = eager(db, eid)
+  return comps.entity ? [{ eid, comps }] : []
+}
+
 // A socket's control frame (design §1): `{sub, q}` subscribes or replaces (the
 // initial frame is the query's current matches as one batch, and seeds the
 // member set, marked `replace` for the client); `{unsub}` forgets one. A
@@ -499,18 +519,25 @@ let control = (
   if (typeof f.unsub == 'string') return void map.delete(f.unsub)
   if (typeof f.sub != 'string') return
   try {
-    let details = f.sub.startsWith('entries:')
-    let { preds, hits } = evalFast(db, f.q ?? '', details) ??
-      evalQuery(db, f.q ?? '')
+    // A route sub names one entity by id in its own name — no query to eval; its
+    // hits are that entity's current comps (empty if it isn't minted yet, so a
+    // later create ADDs it). A query sub evaluates its filter as before.
+    let route = f.sub.startsWith('route:') ? f.sub.slice('route:'.length) : null
+    let details = route != null || f.sub.startsWith('entries:')
+    let { preds, hits } = route != null
+      ? { preds: [], hits: rowsFor(route) }
+      : evalFast(db, f.q ?? '', details) ?? evalQuery(db, f.q ?? '')
     map.set(f.sub, {
       preds,
       members: new Set(hits.map((r) => r.eid)),
       shadow: !!f.shadow,
       moving: gaps(preds).includes('moving-time'),
       bodies: bodied(f.sub),
-      // Entry partitions are absent from both the root snapshot and root live
-      // stream, so their shadow owns bodies and standing-match updates too.
+      // Entry partitions and route entities are absent from both the root
+      // snapshot and root live stream, so their shadow owns bodies and
+      // standing-match updates too.
       details,
+      ...(route != null ? { only: new Set([route]) } : {}),
     })
     let sub = map.get(f.sub)!
     let changes = hits.flatMap((r) => payload(sub, r.eid, r.comps))

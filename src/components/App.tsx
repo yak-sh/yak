@@ -1,6 +1,6 @@
 import { useEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
-import { census, ent, mode, serverName } from '../live.ts'
+import { census, ent, mode, routeSub, serverName } from '../live.ts'
 import { Admin } from './Admin.tsx'
 import { block, Chip, el } from './ui.tsx'
 import { filterable, FilterInput } from './Filter.tsx'
@@ -139,6 +139,14 @@ export let App = () => {
     addEventListener('keydown', key)
     return () => removeEventListener('keydown', key)
   }, [])
+  // Hold a route sub for the fullscreen root while it's this one — under a
+  // partial cache (serverQuery) an entity reached by direct URL is in no
+  // defining set, so this is what loads it; a no-op under a whole-graph cache.
+  // Computed before the /admin early return so the hook order stays stable.
+  let rootEid = route.value.startsWith('/admin')
+    ? undefined
+    : screenTarget()?.eid
+  useEffect(() => rootEid ? routeSub(rootEid) : undefined, [rootEid])
   let goto = (t: string) => navigate(`/${idOf(ent(t))}`)
 
   // The census rides beside the canvas: /admin* swaps the body wholesale;

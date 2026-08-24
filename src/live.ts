@@ -1362,6 +1362,28 @@ export let entrySub = (session: string) => {
   }
 }
 
+// The fullscreen root a client reaches by direct URL (or a peek) is one entity
+// that no defining set holds and the query grammar can't name (`.eid=` is
+// refused) — so a partial cache has nothing to render and the view blanks. A
+// route sub loads it whole by id: `route:<eid>` streams that entity's comps and
+// keeps them live (server derives the target from the sub name). Ref-counted so
+// several views of one entity share a sub; a no-op under a whole-graph cache,
+// where the entity is already loaded. Same ownership path as entrySub.
+let routeUses = new Map<string, number>()
+export let routeSub = (eid: string) => {
+  if (!config.serverQuery) return () => {}
+  let sub = `route:${eid}`
+  let n = routeUses.get(sub) ?? 0
+  routeUses.set(sub, n + 1)
+  if (!n) ownBoard(sub, '')
+  return () => {
+    let held = (routeUses.get(sub) ?? 1) - 1
+    if (held > 0) return void routeUses.set(sub, held)
+    routeUses.delete(sub)
+    dropBoard(sub)
+  }
+}
+
 // Bring a lazy board's scoped-session entry subscriptions into line with its
 // query `q` (`''` closes them all). Reuses the ref-counted entrySub, so a board
 // and an open Session view of the same session share one subscription. Sessions

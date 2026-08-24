@@ -966,3 +966,73 @@ slow(
     assertEquals(await backs(proj), ['persona.home', 'persona.home'])
   },
 )
+
+// A ROUTE sub names one entity by id in its own name (`route:<eid>`) — the
+// fullscreen root a partial-cache client reaches by direct URL, which no
+// defining set holds and the query grammar can't name. It must load the entity
+// WHOLE (bodies included, unlike a board's spine), update it live, add it if it
+// is minted after the subscribe, and drop it on death.
+slow(
+  'a route sub loads one entity whole, updates it live, dies with it',
+  alone,
+  async () => {
+    let eid = uid()
+    await post([
+      {
+        eid,
+        name: 'doc',
+        comp: { title: 'route target', body: 'the whole body' },
+      },
+      { eid, name: 'task', comp: { status: 'open', priority: 1 } },
+    ])
+    let s = await subscriber()
+    try {
+      await s.open(`route:${eid}`, '')
+      assertEquals(s.members(`route:${eid}`), [eid])
+      // Bodied: the initial frame carries the doc body, not just the spine.
+      let names = s.carried(`route:${eid}`).map((c) => c.name).sort()
+      assertEquals(names.includes('doc'), true)
+      assertEquals(names.includes('task'), true)
+      let doc = s.carried(`route:${eid}`).find((c) => c.name == 'doc')
+      assertEquals((doc!.comp as { body?: string }).body, 'the whole body')
+
+      // A live update streams a standing-match frame (details), even though the
+      // sub is not a query.
+      await post([{ eid, name: 'task', comp: { status: 'done' } }])
+      await s.settle()
+      let last = s.carried(`route:${eid}`).filter((c) => c.name == 'task').at(
+        -1,
+      )
+      assertEquals((last!.comp as { status?: string }).status, 'done')
+
+      // Death drops it from the set.
+      await post([{ eid, name: 'entity', comp: null }])
+      await s.settle()
+      assertEquals(s.members(`route:${eid}`), [])
+    } finally {
+      s.close()
+    }
+  },
+)
+
+// A route sub opened BEFORE its target exists starts empty and ADDs the entity
+// when it is minted — the direct-URL race where navigation resolves the id
+// before the row is in the cache.
+slow(
+  'a route sub adds its target when it is minted after subscribe',
+  alone,
+  async () => {
+    let eid = uid()
+    let s = await subscriber()
+    try {
+      await s.open(`route:${eid}`, '')
+      assertEquals(s.members(`route:${eid}`), [])
+      await post([{ eid, name: 'doc', comp: { title: 'born late', body: '' } }])
+      await s.settle()
+      assertEquals(s.members(`route:${eid}`), [eid])
+    } finally {
+      s.close()
+      await post([{ eid, name: 'entity', comp: null }])
+    }
+  },
+)
