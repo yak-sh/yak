@@ -2154,13 +2154,12 @@ if (isLive()) {
 }
 
 // Dispatch (dispatch.ts): approved+ready tasks spawn their own sessions
-// under the slot cap (T-21323, D-21287 Phase 1). Spawning agents unattended
-// is OPT-IN like the probe sweep (TASKS_DISPATCH=1) — bare `decided` still
-// stands in for approval until T-21319's verdict lands, so the flag is what
-// makes arming the spender a decision. Only the live instance dispatches: a
-// probe on a scratch copy must not launch agents. The minute tick owns slot
-// frees (session ends); the hooks answer the acts themselves within seconds.
-if (isLive() && Deno.env.get('TASKS_DISPATCH') == '1') {
+// under the slot cap (T-21323, D-21287 Phase 1). On by default — approval
+// (`decided` on an open task) is the owner's arming act, so a mark IS the
+// decision to spend. Only the live instance dispatches: a probe on a
+// scratch copy must not launch agents. The minute tick owns slot frees
+// (session ends); the hooks answer the acts themselves within seconds.
+if (isLive()) {
   let dispatching = tick(
     'dispatch',
     () => dispatchSweep(cast, readyProviders),
@@ -2186,7 +2185,7 @@ if (isLive() && Deno.env.get('TASKS_DISPATCH') == '1') {
     doc: 'a released claim can return a ready task — dispatch sweeps soon',
   })
 } else {
-  console.log('dispatch sweep dormant — TASKS_DISPATCH=1 opts in')
+  console.log('dispatch sweep dormant — not the live instance')
 }
 
 // Last, the worktree sweep: completed sessions whose merged, clean trees
