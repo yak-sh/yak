@@ -113,6 +113,17 @@ export let catalog: Spec[] = [
       'Bearer token for the hosted Ollama API. Optional for an unauthenticated ' +
       'endpoint. Stored by the server-only credential store, never in the graph.',
   },
+  {
+    key: 'DISPATCH_SLOTS',
+    label: 'Dispatch slots',
+    group: 'dispatch',
+    type: 'text',
+    sensitive: false,
+    default: '2',
+    help: 'How many auto-dispatched sessions may run at once (T-21323). The ' +
+      'dispatch sweep spawns one session per approved, unblocked open task ' +
+      'while live dispatched sessions number fewer than this.',
+  },
 ]
 
 export let byKey: Map<string, Spec> = new Map(catalog.map((s) => [s.key, s]))

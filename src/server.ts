@@ -81,6 +81,7 @@ import {
   mayStamp,
 } from './inbound.ts'
 import { scribeSweep } from './scribe.ts'
+import { dispatchSweep } from './dispatch.ts'
 import { embedSweep, similarTo } from './embed.ts'
 import { type IO, mcpServer } from './mcp.ts'
 import { drain as drainTurns } from './turn.ts'
@@ -2140,6 +2141,42 @@ if (isLive()) {
     changed: { title: embedSoon, body: embedSoon },
     doc: 'docs keep a semantic vector — the embed sweep refreshes what moved',
   })
+}
+
+// Dispatch (dispatch.ts): approved+ready tasks spawn their own sessions
+// under the slot cap (T-21323, D-21287 Phase 1). Spawning agents unattended
+// is OPT-IN like the probe sweep (TASKS_DISPATCH=1) — bare `decided` still
+// stands in for approval until T-21319's verdict lands, so the flag is what
+// makes arming the spender a decision. Only the live instance dispatches: a
+// probe on a scratch copy must not launch agents. The minute tick owns slot
+// frees (session ends); the hooks answer the acts themselves within seconds.
+if (isLive() && Deno.env.get('TASKS_DISPATCH') == '1') {
+  let dispatching = tick(
+    'dispatch',
+    () => dispatchSweep(cast, readyProviders),
+    60_000,
+  )
+  let dispatchSoon = (() => {
+    let t: ReturnType<typeof setTimeout> | undefined
+    return () => {
+      clearTimeout(t)
+      t = setTimeout(dispatching, 3_000)
+    }
+  })()
+  on('decided', {
+    created: dispatchSoon,
+    doc: 'an approval may make its task ready — dispatch sweeps soon',
+  })
+  on('task', {
+    changed: { status: dispatchSoon },
+    doc: 'a status move can open a requires gate — dispatch sweeps soon',
+  })
+  on('claim', {
+    removed: dispatchSoon,
+    doc: 'a released claim can return a ready task — dispatch sweeps soon',
+  })
+} else {
+  console.log('dispatch sweep dormant — TASKS_DISPATCH=1 opts in')
 }
 
 // Last, the worktree sweep: completed sessions whose merged, clean trees

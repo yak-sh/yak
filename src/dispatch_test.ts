@@ -1,0 +1,162 @@
+// The dispatcher's pure half: what counts as ready, who holds a slot,
+// the no-retry rule, and the batch a sweep would mint. The sweep itself
+// is the same apply/dispatch machinery every other sweep rides.
+import { type Snapshot } from './types.ts'
+import { rows } from './client.ts'
+import { type Provider } from './providers.ts'
+import {
+  approved,
+  asked,
+  dispatchSpawn,
+  inFlight,
+  ready,
+  slots,
+} from './dispatch.ts'
+import { assertEquals } from '@std/assert'
+
+let NOW = Date.parse('2026-08-24T12:00:00Z')
+let ago = (m: number) => new Date(NOW - m * 60_000).toISOString()
+let id = (n: number) => `dddddddd-0000-4000-8000-${String(n).padStart(12, '0')}`
+let [P, T1, T2, T3, T4, S1, S2] = [1, 2, 3, 4, 5, 6, 7].map(id)
+
+let mk = (
+  eid: string,
+  num: number,
+  at: string,
+  parts: Record<string, Record<string, unknown>>,
+) => [
+  { eid, name: 'entity', comp: { eid, num } },
+  { eid, name: 'created', comp: { at } },
+  ...Object.entries(parts).map(([name, comp]) => ({ eid, name, comp })),
+]
+
+let graph = (extra: Snapshot['changes'] = []): Snapshot => ({
+  changes: [
+    ...mk(P, 1, ago(9999), { doc: { title: 'Task Graph' }, project: {} }),
+    ...mk(T1, 2, ago(500), {
+      doc: { title: 'approved and ready' },
+      task: { status: 'open', priority: 1, project: P },
+      decided: { at: ago(10) },
+    }),
+    ...mk(T2, 3, ago(100), {
+      doc: { title: 'approved, lower priority' },
+      task: { status: 'open', priority: 2, project: P },
+      decided: { at: ago(10) },
+    }),
+    ...mk(T3, 4, ago(300), {
+      doc: { title: 'open but never approved' },
+      task: { status: 'open', priority: 0, project: P },
+    }),
+    ...extra,
+  ],
+  deps: [],
+})
+
+let ps: Provider[] = [{ name: 'claude', models: ['sonnet'] }]
+
+Deno.test('approved: bare decided is the mark until T-21319', () => {
+  let all = rows(graph())
+  assertEquals(approved(all.find((r) => r.eid == T1)!), true)
+  assertEquals(approved(all.find((r) => r.eid == T3)!), false)
+})
+
+Deno.test('ready: open + unclaimed + approved + unblocked, urgent first', () => {
+  // T1 (P1) outranks T2 (P2) despite T2's younger birth
+  assertEquals(ready(rows(graph()), []).map((r) => r.eid), [T1, T2])
+  let all = rows(graph([
+    ...mk(T4, 5, ago(50), {
+      doc: { title: 'approved twin of T1' },
+      task: { status: 'open', priority: 1, project: P },
+      decided: { at: ago(5) },
+    }),
+  ]))
+  // equal priority: T1's older birth wins
+  assertEquals(ready(all, []).map((r) => r.eid), [T1, T4, T2])
+  // a claim, an external block, or a non-open status screens out
+  let held = rows(graph([
+    { eid: T1, name: 'claim', comp: { session: S1 } },
+    { eid: T2, name: 'blocked', comp: { on: 'vendor' } },
+  ]))
+  assertEquals(ready(held, []).map((r) => r.eid), [])
+})
+
+Deno.test('ready: an open requires edge gates; a settled one does not', () => {
+  let all = rows(graph())
+  let dep = (child: string) => [
+    { parent: T1, type: 'requires' as const, child },
+  ]
+  assertEquals(ready(all, dep(T3)).map((r) => r.eid), [T2]) // T3 open → gated
+  let done = rows(graph([
+    ...mk(T4, 5, ago(50), { task: { status: 'done', project: P } }),
+  ]))
+  assertEquals(ready(done, dep(T4)).map((r) => r.eid), [T1, T2])
+  // a blocker the caller never fetched counts as open — spend on yes only
+  assertEquals(ready(all, dep(id(99))).map((r) => r.eid), [T2])
+})
+
+Deno.test('inFlight: live sessions on approved tasks hold slots', () => {
+  let all = rows(graph([
+    // unstamped status = the pre-launch moment: still a slot
+    ...mk(S1, 6, ago(5), { session: { id: 's1', requested_task: T1 } }),
+    // settled runs free theirs
+    ...mk(S2, 7, ago(60), {
+      session: { id: 's2', requested_task: T2, status: 'failed' },
+    }),
+  ]))
+  assertEquals(inFlight(all).map((r) => r.eid), [S1])
+  let running = rows(graph([
+    ...mk(S1, 6, ago(5), {
+      session: { id: 's1', requested_task: T1, status: 'running' },
+    }),
+    // a live run on an UNapproved task is not the dispatcher's spend
+    ...mk(S2, 7, ago(5), {
+      session: { id: 's2', requested_task: T3, status: 'running' },
+    }),
+  ]))
+  assertEquals(inFlight(running).map((r) => r.eid), [S1])
+})
+
+Deno.test('asked: one ask per task, ever — a failed Session is the record', () => {
+  let all = rows(graph([
+    ...mk(S1, 6, ago(60), {
+      session: { id: 's1', requested_task: T1, status: 'failed' },
+    }),
+  ]))
+  assertEquals(asked(all, T1), true)
+  assertEquals(asked(all, T2), false)
+})
+
+Deno.test('slots: a count parses, anything else is the default', () => {
+  assertEquals(slots('3'), 3)
+  assertEquals(slots('0'), 0)
+  assertEquals(slots(undefined), 2)
+  assertEquals(slots('many'), 2)
+  assertEquals(slots('-1'), 2)
+})
+
+Deno.test('dispatchSpawn: fills free slots, most urgent first', () => {
+  let all = rows(graph())
+  let sessions = (changes: ReturnType<typeof dispatchSpawn>) =>
+    changes.filter((c) => c.name == 'session').map((c) => c.comp)
+  let two = sessions(dispatchSpawn(all, [], ps, 2))
+  assertEquals(two.map((s) => s!.requested_task), [T1, T2])
+  assertEquals(two.map((s) => s!.provider), ['claude', 'claude'])
+  assertEquals(two.map((s) => s!.model), ['sonnet', 'sonnet'])
+  // one slot already spent leaves one spawn; cap 0 leaves none
+  assertEquals(sessions(dispatchSpawn(all, [], ps, 1)).length, 1)
+  assertEquals(dispatchSpawn(all, [], ps, 0), [])
+})
+
+Deno.test('dispatchSpawn: a held or asked-for task is skipped', () => {
+  let all = rows(graph([
+    ...mk(S1, 6, ago(5), {
+      session: { id: 's1', requested_task: T1, status: 'running' },
+    }),
+  ]))
+  // S1 holds a slot AND makes T1 asked-for — one slot left goes to T2
+  let out = dispatchSpawn(all, [], ps, 2)
+    .filter((c) => c.name == 'session').map((c) => c.comp!.requested_task)
+  assertEquals(out, [T2])
+  // an empty provider table spawns nothing rather than half a request
+  assertEquals(dispatchSpawn(rows(graph()), [], [], 2), [])
+})
