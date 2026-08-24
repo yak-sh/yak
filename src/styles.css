@@ -2833,6 +2833,117 @@ html {
   text-decoration: underline;
 }
 
+/* The standing sync indicator (Sync.tsx, T-21441): unsent writes and refused
+   ones, in the App bar. `--sync` is the variant knob — a pending pill points it
+   at amber (waiting, benign), a refused pill at red (the server threw work
+   away) — so the two states share one structure and differ only by that role. */
+.Sync {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  position: relative; /* the refusal panel anchors to the pill */
+}
+.Sync_Pending,
+.Sync_Refused {
+  --sync: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: inherit;
+  color: var(--sync);
+  background: color-mix(in srgb, var(--sync) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sync) 35%, transparent);
+  border-radius: 999px;
+  padding: 1px var(--half-gap);
+  cursor: default;
+}
+.Sync_Pending {
+  --sync: var(--orange);
+}
+.Sync_Refused {
+  --sync: var(--red);
+  cursor: pointer;
+}
+.Sync_Refused-open,
+.Sync_Refused:hover {
+  background: color-mix(in srgb, var(--sync) 22%, transparent);
+}
+/* The pip: a filled disc in the role colour; the pending one breathes so a
+   stuck write reads as live activity, not a settled state. */
+.Sync_Dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sync);
+}
+.Sync_Dot-pending {
+  animation: sync-pulse 1.4s ease-in-out infinite;
+}
+@keyframes sync-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+.Sync_Age,
+.Sync_When {
+  color: var(--dim);
+}
+/* The refusal ledger, opened from the red pill: each refused write, its reason
+   and age, dismissable. Anchored above the bar (the bar is the page floor). */
+.Sync_Panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--half-gap));
+  width: min(22rem, 80vw);
+  max-height: 50vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--half-gap);
+  padding: var(--gap);
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+  z-index: 3; /* clears the bar's own z2 */
+}
+.Sync_Item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.Sync_Item + .Sync_Item {
+  border-top: 1px solid var(--border);
+  padding-top: var(--half-gap);
+}
+.Sync_Head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+}
+.Sync_Reason {
+  flex: 1;
+  min-width: 0;
+  color: var(--red);
+}
+.Sync_Dismiss {
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--dim);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.Sync_Dismiss:hover {
+  color: var(--text);
+}
+.Sync_Summary {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 /* An external page's frozen archive, framed in a card. The page brings
    its own scrollbar, so the hosting scroller yields: no padding, no
    scrolling — the iframe fills the card edge to edge and scrolls

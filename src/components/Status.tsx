@@ -37,6 +37,7 @@ import { title } from './title.tsx'
 import { pickLine, useHits } from './hits.ts'
 import { spawnHit } from './Canvas.tsx'
 import { useComplete } from './Complete.tsx'
+import { Sync } from './Sync.tsx'
 
 let Frame = block('footer', 'Status', {
   Left: 'div',
@@ -522,6 +523,7 @@ export let Status = () => {
           )}
       </Left>
       <Right>
+        <Sync />
         <WhoAmI />
         {mode.value == 'command'
           ? (

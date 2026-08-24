@@ -14,6 +14,7 @@ import {
   type Dep,
   type Ent,
   type EntCore,
+  idOf,
   type Live,
   type Pinned,
   type Session,
@@ -995,6 +996,108 @@ export let pending = (e: Ent) => {
 let outbox = new Map<string, { changes: Change[]; at: number }>()
 export let unsent = () => [...outbox.keys()]
 
+// A reactive mirror of the outbox for the standing sync indicator (T-21441).
+// The Map above stays plain — the hot redelivery loop must not walk a signal —
+// so this signal is rebuilt from it on every outbox mutation, and a view
+// re-renders only when what is pending actually changes. `since` is the moment a
+// write was FIRST queued, held apart from the entry's `at` (which redelivery
+// bumps on each retry), so "how long has this waited" stays honest; a write
+// replayed from a prior life carries its parked `at` forward as that origin.
+export let outboxWrites = signal<
+  { id: string; since: number; count: number }[]
+>([])
+let firstSeen = new Map<string, number>()
+let syncOutbox = () => {
+  for (let [id, o] of outbox) if (!firstSeen.has(id)) firstSeen.set(id, o.at)
+  for (let id of [...firstSeen.keys()]) {
+    if (!outbox.has(id)) firstSeen.delete(id)
+  }
+  outboxWrites.value = [...outbox].map(([id, o]) => ({
+    id,
+    since: firstSeen.get(id) ?? o.at,
+    count: o.changes.length,
+  }))
+}
+
+// The refusal ledger (T-21441, M-16612): a write the server REJECTED (a moved
+// precondition, a lease it can't hold) is durable and returnable. The user saw
+// it land in the optimistic cache, and the drain path is about to reload the
+// page and wipe the in-memory `problem`; a refusal must not vanish with it. Each
+// is kept under the write's own delivery id — its stable identity — so it
+// survives the reload, surfaces again at boot, and clears only when the user
+// dismisses it. It names what failed (the batch), why (the server's reason), and
+// that success would have been the write reaching the server. localStorage backs
+// it by default; the TUI and the fast tier swap an in-memory double.
+export type Refusal = {
+  id: string
+  reason: string
+  at: number
+  summary: string
+}
+type RefusalStore = {
+  record: (r: Refusal) => void
+  clear: (id: string) => void
+  all: () => Refusal[]
+}
+let LEDGER = 'tasks-refused'
+let readLedger = (): Refusal[] => {
+  try {
+    return JSON.parse(globalThis.localStorage?.getItem(LEDGER) ?? '[]')
+  } catch {
+    return []
+  }
+}
+let writeLedger = (rs: Refusal[]) => {
+  try {
+    globalThis.localStorage?.setItem(LEDGER, JSON.stringify(rs))
+  } catch { /* no storage — the in-memory signal still shows this session's */ }
+}
+let refusalStore: RefusalStore = {
+  record: (r) =>
+    writeLedger([...readLedger().filter((x) => x.id != r.id), r].slice(-50)),
+  clear: (id) => writeLedger(readLedger().filter((x) => x.id != id)),
+  all: () => readLedger(),
+}
+export let useRefusalStore = (s: RefusalStore): RefusalStore => {
+  let prev = refusalStore
+  refusalStore = s
+  return prev
+}
+export let refused = signal<Refusal[]>([])
+let syncRefused = () => (refused.value = refusalStore.all())
+
+// One line naming a refused batch: how many changes, which components, which
+// entities — enough for the user to know which edit the server threw away.
+let summarize = (changes: Change[]): string => {
+  if (!changes.length) return ''
+  let names = [...new Set(changes.map((c) => c.name))].join(', ')
+  let ids = [...new Set(changes.map((c) => idOf(ent(c.eid))))].join(', ')
+  let n = `${changes.length} change${changes.length > 1 ? 's' : ''}`
+  return `${n}${names ? ` (${names})` : ''}${ids ? ` to ${ids}` : ''}`
+}
+
+// Record a refusal durably and surface it now. Both refusal arms funnel here —
+// the socket rejection frame and the pre-reload /apply drain — so every refused
+// write persists the same way, under the delivery id the transport already keys.
+export let refuse = (id: string, reason: string, changes: Change[] = []) => {
+  refusalStore.record({
+    id,
+    reason,
+    at: Date.now(),
+    summary: summarize(changes),
+  })
+  syncRefused()
+  problem.value = reason
+}
+export let clearRefusal = (id: string) => {
+  refusalStore.clear(id)
+  syncRefused()
+}
+// Surface at boot what a prior life left refused — the post-reload half of the
+// durability guarantee: a drain refusal wiped by the reload it triggered is read
+// straight back into view.
+export let loadRefusals = () => syncRefused()
+
 // The durable outbox's disk door (T-21440). The map above is lost on a tab
 // crash or a manual reload, so — before either can discard an unacked write —
 // every entry is mirrored to IndexedDB (idb.ts) under the SAME delivery id it
@@ -1050,12 +1153,14 @@ let deliver = (changes: Change[]) => {
   let o = { changes, at: Date.now() }
   outbox.set(id, o)
   outboxStore.park(id, o) // durable: outlive a crash/reload before the ack
+  syncOutbox() // the standing indicator now shows this write as unsent
   armRedeliver()
   route({ apply: changes, id }, id)
 }
 export let acked = (id: string) => {
   outbox.delete(id)
   outboxStore.unpark(id) // the durable copy leaves with the in-memory one
+  syncOutbox()
   if (!outbox.size) redeliverNow()
 }
 
@@ -1077,6 +1182,7 @@ export let replayOutbox = async () => {
     woke = true
   }
   if (woke) {
+    syncOutbox()
     armRedeliver()
     redeliverNow(true)
   }
@@ -1097,12 +1203,13 @@ let drain = async (): Promise<boolean> => {
         headers: config.client ? { 'x-via': config.client } : {},
         body: JSON.stringify(o.changes),
       })
-      if (!res.ok) problem.value = await res.text()
-      outbox.delete(id)
+      if (!res.ok) refuse(id, await res.text(), o.changes) // durable: the reload
+      outbox.delete(id) //                     this drain precedes would wipe it
     } catch {
       return false
     }
   }
+  syncOutbox()
   return true
 }
 
@@ -1650,14 +1757,18 @@ let land = async (data: unknown, mode: Land) => {
   if (!data || typeof data != 'object') return
   let frame = data as Partial<Live & Catchup & Reset & Sub>
   if (frame.error) {
-    problem.value = String(frame.error)
     // A rejected batch comes back with the authoritative state of the eids it
     // touched (server.ts correct()) — apply it to undo the optimistic write.
     // Its cursor is unchanged (nothing committed), so this only heals the cache.
-    // A refusal settles the delivery: the outbox must not redeliver it.
-    if ((frame as { id?: unknown }).id) {
-      acked(String((frame as { id: unknown }).id))
-    }
+    // A refusal settles the delivery: the outbox must not redeliver it. Capture
+    // the refused batch from the outbox BEFORE acked() removes it, so the durable
+    // refusal names the edit the server threw away — not the correction that heals
+    // it. A frame with no id (a general socket error) keeps the ephemeral surface.
+    let id = (frame as { id?: unknown }).id
+    if (id) {
+      refuse(String(id), String(frame.error), outbox.get(String(id))?.changes)
+      acked(String(id))
+    } else problem.value = String(frame.error)
     if (Array.isArray(frame.changes)) applyLocal(frame.changes)
     return
   }
@@ -1707,6 +1818,10 @@ let once = async (write: boolean) => {
   // Requeue any write a prior life left undelivered, BEFORE the socket opens —
   // so a crash or manual reload can no longer silently lose it (T-21440).
   await replayOutbox()
+  // Read back what a prior life left refused — the post-reload half of the
+  // durability guarantee (T-21441): a drain refusal wiped by its own reload
+  // returns to view instead of vanishing.
+  loadRefusals()
   booted = true
 }
 
