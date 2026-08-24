@@ -761,6 +761,63 @@ export let commands: Record<string, Command> = {
       }
     },
   },
+  // :park is :wake aimed at YOURSELF — the dep-loop's arming act (D-21448). A
+  // session working a task gated by open `requires` blockers ends its turn but
+  // must leave a PENDING WAKE on its OWN session, so settled()/reapLeases()
+  // RETAIN its claim (parkedWaiting) instead of lapsing it; the dep-completion
+  // knock (unblock.ts) then resumes it WARM when a blocker lands. The wake is
+  // the parked marker + a safety fallback; the knock is the real resume. The
+  // held claim IS the wait registration — no new facet. Targets the caller's
+  // own SESSION (deliver.to = session), which is what pendingWake(session)
+  // reads — never the actor, whose cadence wake is a different thing.
+  park: {
+    args: [
+      a('when', 'in 12h', { need: false }),
+      a('note', '-- what I was mid-doing', { rest: true, need: false }),
+    ],
+    about:
+      'park until your blockers land — keep your claim, resume warm on a dep',
+    run: (rest, ctx) => {
+      let g = graphOf(ctx)
+      let me = ctx.session ? g.session(ctx.session) : undefined
+      if (!me) {
+        throw new Error(
+          'park: no session to park — park is for a managed session ' +
+            'waiting on its `requires` blockers',
+        )
+      }
+      let m = rest.match(/^([\s\S]*?)\s+--\s+([\s\S]+)$/)
+      let head = (m ? m[1] : rest).trim()
+      let note = m ? m[2].trim() : ''
+      let at = instant(head || 'in 12h')
+      if (at == null) {
+        throw new Error(`park: when is "${head}"? (in 12h, 6am tomorrow)`)
+      }
+      // The gated task this session holds — its single claim, the thing it is
+      // waiting on. The fired wake (or the resuming knock) points back at it.
+      let task = focusFor(g, ctx.session)
+      let taskRow = task ? g.find(task) : undefined
+      let w = uuid()
+      return {
+        changes: [
+          {
+            eid: w,
+            name: 'wake',
+            comp: {
+              at: new Date(at).toISOString(),
+              ...(task ? { target: task } : {}),
+              ...(note ? { note } : {}),
+            },
+          },
+          { eid: w, name: 'deliver', comp: { to: me.eid } },
+        ],
+        msg: `parked${taskRow ? ` on ${idOf(taskRow)}` : ''} — claim held, ` +
+          `resume when a blocker lands (fallback wake ${
+            new Date(at).toString().slice(0, 21)
+          })`,
+      }
+    },
+  },
   // :mail is the letter in one line — to, subject, then `--` folds the
   // envelope open into the page. Minting doc+mail IS the send request
   // (the mailer effect delivers and stamps the receipt); the verb mints

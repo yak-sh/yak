@@ -1724,6 +1724,17 @@ repo-backed project.`
 let CHAT = `This is a taskless chat. Answer the user's prompt directly. Do not
 claim or create a task unless asked.`
 
+// The park directive (D-21448): folded into the prompt of a session spawned onto
+// a task GATED by open \`requires\` blockers. Agent-armed — the agent decides to
+// park; the graph retains the claim and the dep-completion knock resumes it.
+let PARK_DIRECTIVE =
+  `⚑ This task is gated by open \`requires\` blockers (listed with status in ` +
+  `your context). They are being dispatched to run in parallel. Do any part of ` +
+  `this task you can complete WITHOUT them now; if you cannot proceed, run ` +
+  `\`task park\` and end your turn — your claim is retained and you will be ` +
+  `resumed automatically (warm, with this context) when a blocker lands. Do ` +
+  `NOT mark the task done until it is truly complete.`
+
 // Session runtime beside its normalized launch spec. Explicit aliases avoid
 // duplicate column names and keep validation on the canonical component.
 let runRow = (eid: string) => {
@@ -1940,6 +1951,12 @@ export let spawned =
         : undefined,
       task && `T-${task.num}: ${task.title}`,
       task?.body,
+      // A task gated by open `requires` blockers arms the D-21448 park loop: do
+      // the unblocked part now, else `task park` and end the turn — the claim is
+      // retained and the dep-completion knock resumes this session WARM when a
+      // blocker lands (the blockers are listed with status in the boot digest).
+      // Reaches EVERY gated-task spawn, not just the sweep's parked parents.
+      task && gatedTask(String(row.requested_task)) && PARK_DIRECTIVE,
       role && `# R-${role.num} ${role.title ?? ''}`,
       role?.body,
       role &&

@@ -85,6 +85,34 @@ export let backlog = (all: Row[], deps: Dep[], recursive = false) => {
 // name every caller and test knows; recursive descent is opt-in via backlog().
 export let ready = (all: Row[], deps: Dep[]) => backlog(all, deps, false)
 
+// The parked-parent frontier (D-21448): individually-APPROVED, open, unclaimed,
+// unblocked, un-asked GATED tasks — the umbrellas an operator spawns an agent
+// onto. The sweep spawns a WARM agent that holds the claim and PARKS, to be
+// resumed by the dep-completion knock (unblock.ts) when a blocker lands, rather
+// than cold-redispatched. The gated COMPLEMENT of backlog: backlog spawns the
+// ungated frontier that does the work; this spawns the gated umbrellas that wait
+// on it. Only INDIVIDUALLY-approved (not merely authorized-by-ancestor) gated
+// tasks park: a purely-gated intermediate does no setup before it would park, so
+// warm-park buys it nothing over the cold re-dispatch it gets when it ungates —
+// warm-park is reserved for the task the owner actually pointed an agent at.
+// Spawned AFTER the workers (dispatchSpawn), so real work never waits behind a
+// parker for a slot; and a parked session frees its slot the moment it settles
+// (liveRun is false for a settled-with-wake run), so parkers don't hold the cap.
+export let parkable = (all: Row[], deps: Dep[]) => {
+  let by = new Map(all.map((r) => [r.eid, r]))
+  let gated = (eid: string) =>
+    deps.some((d) =>
+      d.type == 'requires' && d.parent == eid &&
+      !settled(by.get(d.child)?.comps.task?.status)
+    )
+  return all
+    .filter((r) =>
+      r.comps.task?.status == 'open' && !r.comps.claim && !r.comps.blocked &&
+      approved(r) && gated(r.eid)
+    )
+    .sort((a, b) => rank(a) - rank(b) || born(a) - born(b) || a.num - b.num)
+}
+
 // The sessions the dispatcher is paying for: live (a session holds its slot
 // until a terminal status — including the moment before the launch effect
 // stamps 'starting', so a burst of sweeps can never over-spawn past the cap),
@@ -208,6 +236,33 @@ export let dispatchSpawn = (
       }).changes,
     )
     free--
+  }
+  // The parked parents (D-21448), after the workers: a gated umbrella spawns a
+  // warm agent that holds T's claim and parks (spawned() folds the park
+  // directive into a gated task's prompt), resumed by the dep-completion knock
+  // when its blockers land. Recursive-only — the same approval gate that
+  // authorizes the frontier. Lower priority than real work; if slots are
+  // contended it simply doesn't spawn this sweep and degrades to cold
+  // re-dispatch once ungated — correct either way.
+  if (recursive) {
+    for (let t of parkable(all, deps)) {
+      if (free <= 0) break
+      if (spawned.has(t.eid) || asked(all, t.eid)) continue
+      let plan = spawnPlan(all, ps, { task: t.eid })
+      if (!plan.provider || !plan.model) break
+      changes.push(
+        ...spawnChanges(all, {
+          task: t.eid,
+          provider: plan.provider,
+          model: plan.model,
+          ...(plan.effort ? { effort: plan.effort } : {}),
+          ...(plan.persona ? { persona: plan.persona } : {}),
+          deps,
+        }).changes,
+      )
+      spawned.add(t.eid)
+      free--
+    }
   }
   return changes
 }

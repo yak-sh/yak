@@ -1351,6 +1351,17 @@ let colon = async (focus: string | undefined, argv: string[]) => {
     let sess = await sessionRow(rest[0])
     if (sess) all.push(sess)
   }
+  if (name == 'park' && session) {
+    // :park reads the caller's own session and the single task it claims
+    // (focusFor). Pre-fetch both so the local reader resolves them without a
+    // whole-graph snapshot — the session row (for g.session) and the claimed
+    // task rows (which carry the `.claim.session` the focus is read from).
+    let sess = await sessionRow(session)
+    if (sess) {
+      all.push(sess)
+      all.push(...await query([`.claim.session=${sess.eid}`]))
+    }
+  }
   if (name == 'scribe') {
     await Promise.all([one(rest[0]), one('scribe-desk'), one('scribe')])
     let desk = find(all, 'scribe-desk')

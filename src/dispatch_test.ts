@@ -248,15 +248,25 @@ Deno.test('backlog: recursive spawns the unblocked frontier; non-recursive stays
   assertEquals(backlog(tree(false), subtree, true).map((r) => r.eid), [])
 })
 
-Deno.test('dispatchSpawn: recursive descent spawns the frontier, non-recursive does not', () => {
+Deno.test('dispatchSpawn: recursive descent spawns the frontier then parks the umbrella; non-recursive does not', () => {
   let spawned = (cs: ReturnType<typeof dispatchSpawn>) =>
     cs.filter((c) => c.name == 'session').map((c) => c.comp!.requested_task)
-  assertEquals(spawned(dispatchSpawn(tree(), subtree, ps, 5, true)), [B1, B3])
+  // workers first (B1, B3 — the ungated frontier), then the approved gated
+  // umbrella U spawns to PARK (D-21448 T-21496). B2 is only authorized, not
+  // individually approved, so it does not park — it cold-redispatches once B3
+  // lands.
+  assertEquals(spawned(dispatchSpawn(tree(), subtree, ps, 5, true)), [
+    B1,
+    B3,
+    U,
+  ])
   // the flag is the whole switch: off, an approved-gated umbrella spawns nothing
+  // (no frontier descent, and no parked parent)
   assertEquals(dispatchSpawn(tree(), subtree, ps, 5, false), [])
-  // slot cap bounds the descent like any backlog
+  // slot cap bounds the whole spawn — workers take the slot before the parker
   assertEquals(spawned(dispatchSpawn(tree(), subtree, ps, 1, true)), [B1])
-  // an un-decided gated root contributes nothing even recursively
+  // an un-decided gated root contributes nothing even recursively — not the
+  // frontier (unauthorized) and not a parked parent (unapproved)
   assertEquals(dispatchSpawn(tree(false), subtree, ps, 5, true), [])
 })
 
@@ -285,16 +295,18 @@ Deno.test('dispatchSpawn: recursive descent leaves a claimed or asked blocker al
     { parent: U, type: 'requires' as const, child: B1 },
     { parent: U, type: 'requires' as const, child: B3 },
   ]
-  // B1 claimed → left alone; only B3 spawns
+  // B1 claimed → left alone; B3 spawns as the worker, then U parks (still gated
+  // while B1 is being worked)
   let held = flat([{ eid: B1, name: 'claim', comp: { session: S1 } }])
-  assertEquals(spawned(dispatchSpawn(held, deps, ps, 5, true)), [B3])
-  // a prior (even failed) ask on B3 leaves it alone too — only B1 spawns
+  assertEquals(spawned(dispatchSpawn(held, deps, ps, 5, true)), [B3, U])
+  // a prior (even failed) ask on B3 leaves it alone too — B1 spawns as the
+  // worker, then U parks
   let askedB3 = flat([
     ...mk(S2, 7, ago(60), {
       session: { id: 's2', requested_task: B3, status: 'failed' },
     }),
   ])
-  assertEquals(spawned(dispatchSpawn(askedB3, deps, ps, 5, true)), [B1])
+  assertEquals(spawned(dispatchSpawn(askedB3, deps, ps, 5, true)), [B1, U])
 })
 
 Deno.test('on: 1/true/on/yes enable; empty and anything else are off', () => {
