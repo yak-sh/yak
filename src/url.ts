@@ -5,6 +5,23 @@ let origin = 'https://tasks.yak.sh'
 
 export let entityUrl = (id: string) => `${origin}/${id}`
 
+// entityUrl's inverse: the id token a graph entity link names — undefined for
+// any other address. Only id-shaped path segments count (prefix-num, short
+// eid, uuid): every other path is a door (/search, /telemetry), and handing
+// one to the id resolver would let a slug or alias match something.
+export let entityId = (raw: string): string | undefined => {
+  let u: URL
+  try {
+    u = new URL(raw.trim())
+  } catch {
+    return undefined
+  }
+  if (u.origin != origin) return undefined
+  return u.pathname.match(
+    /^\/([A-Za-z]+-\d+|[0-9a-f]{6,8}|[0-9a-f][0-9a-f-]{34}[0-9a-f])$/,
+  )?.[1]
+}
+
 // ONE canonical spelling for a page address. A page filed from a browser
 // and the same page asked about later must produce the same string, or a
 // "what references this?" badge lies by omission — so this is the only

@@ -397,6 +397,14 @@ export let manuals = declare({
       'normal server boot and Session Tiles never read that history.',
     args: [],
   },
+  'backfill referenced': {
+    about: 'mint referenced edges for the citations in stored entries',
+    detail:
+      'Explicit and idempotent. Parses every stored entry once on request, ' +
+      'the same way the post-commit effect parses each new one; a rerun ' +
+      'lands only what the last run missed.',
+    args: [],
+  },
   watch: {
     about: 'put an entity in your inbox even when nothing is aimed at you',
     examples: ['task watch T-3', 'task watch T-3 --gone'],

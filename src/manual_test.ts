@@ -63,6 +63,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       'mail doctor': 'mail doctor',
       backfill: 'backfill',
       'backfill worked': 'backfill worked',
+      'backfill referenced': 'backfill referenced',
       watch: 'watch <id> [--gone]',
       mute: 'mute <id> [--gone]',
       inbox: 'inbox [filters…] [--json] [--all] [--sent]',

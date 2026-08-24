@@ -66,6 +66,7 @@ import {
   HEAL_PENDING,
 } from './heal.ts'
 import { recallEntry } from './recall.ts'
+import { historicalReferenced, referencedEntry } from './referenced.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { native } from './mailer.ts'
 import { closingTask } from './closing.ts'
@@ -1441,11 +1442,16 @@ let http = Deno.serve(
         return new Response(why, { status: 400 })
       }
     }
-    // Historical claim materialization is deliberate operator work, never a
+    // Historical materializations are deliberate operator work, never a
     // boot sweep. Ordinary apply batches keep persistence, live broadcasts,
-    // and effects on the same path as every new worked edge.
-    if (path == '/backfill/worked' && req.method == 'POST') {
-      let pending = historicalWorked(db)
+    // and effects on the same path as every new edge.
+    if (path.startsWith('/backfill/') && req.method == 'POST') {
+      let mine = {
+        worked: historicalWorked,
+        referenced: historicalReferenced,
+      }[path.slice('/backfill/'.length)]
+      if (!mine) return new Response('no such backfill', { status: 404 })
+      let pending = mine(db)
       let landed = 0
       for (let i = 0; i < pending.length; i += 200) {
         let t = trace()
@@ -1455,9 +1461,7 @@ let http = Deno.serve(
           t,
           req.headers.get('x-via'),
         )
-        landed += out.filter((c) =>
-          c.name == 'dependency' && c.comp?.type == 'worked'
-        ).length
+        landed += out.filter((c) => c.name == 'dependency').length
         cast(out)
         effect(out, t)
         await new Promise((resolve) => setTimeout(resolve, 0))
@@ -1642,6 +1646,12 @@ on('message', {
     'entry (deduped per session), which the channel delivers as kind=recall; ' +
     'new messages only, no history sweep, and a recall entry carries no ' +
     'message facet so it never recalls itself',
+})
+on('entry', {
+  created: referencedEntry(cast),
+  doc: 'referenced edges (D-21262): a new entry’s text is parsed for entity ' +
+    'ids and page urls, and each resolved citation lands as an ' +
+    'entry→referenced→target edge — pure mechanics, no inference',
 })
 on('session', {
   created: spawned(cast, managed.start),

@@ -1423,6 +1423,9 @@ export let friendly = (model?: string | null) => {
 // marked with what replaced it, never hidden or aged out; never gates).
 // parent worked child (a session once held the task's claim — durable after
 // the lease leaves, so session history is an indexed graph read; never gates).
+// parent referenced child (an entry's mechanical citation — the entity ids and
+// page urls its text names, minted post-commit by referenced.ts; distinct from
+// recalled, which is deliberate surfacing; never gates).
 export let edges = [
   'requires',
   'contains',
@@ -1433,6 +1436,7 @@ export let edges = [
   'recalled',
   'supersedes',
   'worked',
+  'referenced',
 ] as const
 export type Edge = (typeof edges)[number]
 
