@@ -2,9 +2,10 @@
 // empty Codex composer; graph content stays in task_context and is never
 // copied through tmux. Every guard fails closed.
 // SERVER-ONLY (imports db).
-import { cursorOf, db, readComp, snapshot } from './db.ts'
+import { db, readComp } from './db.ts'
 import { delivery } from './door.ts'
-import { noticesFor } from './client.ts'
+import { bus } from './client.ts'
+import { localQuery } from './graph_query.ts'
 import { descends } from './proc.ts'
 import type { Change } from './types.ts'
 
@@ -39,7 +40,7 @@ export type Pane = {
 export type NotifyDeps = {
   now: () => number
   route: (eid: string) => { state: string; transport: string | null }
-  pending: (id: string) => boolean
+  pending: (id: string) => boolean | Promise<boolean>
   pane: (id: string) => Promise<Pane | null>
   under: (pid: number, root: number) => boolean
   capture: (id: string) => Promise<string | null>
@@ -165,7 +166,7 @@ export let notify = async (
   ) return 'none'
   let route = deps.route(session.eid)
   if (route.state != 'queued' || route.transport != 'tmux') return 'none'
-  if (!deps.pending(session.id)) return 'none'
+  if (!await deps.pending(session.id)) return 'none'
   if (!due(session, deps.now())) return 'defer'
 
   let pane1 = await deps.pane(session.pane)
@@ -344,31 +345,18 @@ let stamp = (
   }
 }
 
-// notices() is a pure function of the graph, and the journal cursor is the
-// graph's write version — so a pass that follows no write can answer from the
-// snapshot it already built. Every write bumps the cursor AND debounces a
-// fresh pass through cast(), so nothing waits on this: it only ever spares a
-// walk that was going to reach the same answer. One snapshot is held rather
-// than one built per tick, which is also the end of the sawtooth this cost
-// the heap.
-let graphed: { cursor: number; snap: ReturnType<typeof snapshot> } | undefined
-let graph = () => {
-  let cursor = cursorOf(db)
-  if (graphed?.cursor != cursor) graphed = { cursor, snap: snapshot(db) }
-  return graphed.snap
-}
-
-// `snap` is a THUNK because the snapshot is the pass's one expensive act and
-// only `pending` ever wants it — behind notify()'s cheap gates (a live pid, an
-// idle turn, a queued tmux route). Taking it eagerly made every pass cost a
-// whole-graph walk to discover there was nothing to say.
+// `pending` is a SCOPED read — the same bus the CLI runs, a handful of keyed
+// queries — not a whole-graph snapshot (M-21143). It rides behind notify()'s
+// cheap gates (a live pid, an idle turn, a queued tmux route), so a pass that
+// finds no native session, or none past those gates, never asks the graph
+// anything at all. localQuery answers in-process off the live db.
 let systemDeps = (
-  snap: () => ReturnType<typeof snapshot>,
   cast: Cast,
 ): NotifyDeps => ({
   now: Date.now,
   route: delivery,
-  pending: (id) => noticesFor(snap(), id).lines.length > 0,
+  pending: async (id) =>
+    (await bus(id, undefined, localQuery(db))).lines.length > 0,
   pane: paneInfo,
   under: descends,
   capture: capturePane,
@@ -389,8 +377,8 @@ export let nativeSweep = (cast: Cast): Promise<void> => {
   if (sweeping) return sweeping
   sweeping = (async () => {
     // Discovery first, and it is one indexed read. A pass that finds no
-    // native session — or finds none past notify()'s gates — never builds a
-    // snapshot at all: the walk is owed to work, never to the tick.
+    // native session — or finds none past notify()'s gates — never touches the
+    // graph again: the scoped read is owed to work, never to the tick.
     let sessions = db.prepare(`
       select o.eid as eid, s.id, s.pid, s.pane, s.turn, s.notice_at,
              s.notice_accepted_at
@@ -398,7 +386,7 @@ export let nativeSweep = (cast: Cast): Promise<void> => {
       where s.pane is not null and s.finished_at is null
     `).all() as NativeSession[]
     if (!sessions.length) return
-    let deps = systemDeps(graph, cast)
+    let deps = systemDeps(cast)
     for (let session of sessions) await notify(session, deps)
   })().finally(() => sweeping = undefined)
   return sweeping

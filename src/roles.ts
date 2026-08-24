@@ -14,11 +14,12 @@
 import { createHash } from 'node:crypto'
 import { childPath } from './agent_env.ts'
 import { trouble } from './adapters.ts'
-import { apply, cursorOf, db, readComp, record, snapshot } from './db.ts'
+import { apply, cursorOf, db, readComp, record } from './db.ts'
+import { localQuery, personaGraph } from './graph_query.ts'
 import { isRef } from './props.ts'
 import { errorChange, healthChange } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
-import { notices, noticesFor, readerAt, rows } from './client.ts'
+import { actorRows, bus, busRows, notices, readerAt, uniq } from './client.ts'
 import { materialize } from './persona.ts'
 import { continueSession } from './sessions.ts'
 import {
@@ -480,14 +481,15 @@ let tmuxStart = async (c: RoleConfig, file: string, deps: RoleDeps) => {
 let roleText = (c: RoleConfig) =>
   [
     // Materialized HERE, on the launch path, not eagerly in config(): personaFor
-    // runs a full-graph snapshot()+materialize(), and config() is called on
-    // EVERY reconcile pass while roleText() is called only when a role actually
-    // launches. Eager materialization put that whole-graph snapshot in the
-    // reconciler's hot loop — with a per-pass stamp advancing the journal
-    // cursor, personaFor's cursor-keyed cache missed every time and re-snapshot
-    // the graph continuously, burning a core at idle post eid→id migration
-    // (T-13950). personaText is excluded from roleHash (T-19381), so nothing in
-    // the reconcile decision path needed it; only the file we write does.
+    // reads the persona's bounded subgraph and materialize()s it, and config()
+    // is called on EVERY reconcile pass while roleText() is called only when a
+    // role actually launches. Eager materialization once put a whole-graph
+    // snapshot in the reconciler's hot loop — with a per-pass stamp advancing
+    // the journal cursor, personaFor's cursor-keyed cache missed every time and
+    // re-snapshot the graph continuously, burning a core at idle post eid→id
+    // migration (T-13950). The read is scoped now (M-21143), but the placement
+    // still matters: personaText is excluded from roleHash (T-19381), so nothing
+    // in the reconcile decision path needs it; only the file we write does.
     c.personaText ?? (c.persona ? personaFor(c.persona) : undefined),
     `# ${c.title || 'Persistent role'}`,
     c.body,
@@ -554,11 +556,12 @@ let personaFor = (eid: string): string => {
   let cursor = cursorOf(db)
   let got = personas.get(eid)
   if (got?.cursor == cursor) return got.text
-  let snap = snapshot(db)
-  let all = rows(snap)
+  // The persona reads a BOUNDED subgraph — itself plus the memories and
+  // sub-personas it reaches — never the whole-graph snapshot (M-21143).
+  let { all, deps } = personaGraph(db, [eid])
   let p = all.find((r) => r.eid == eid && r.comps.persona && r.comps.doc)
   if (!p) throw new Error('role persona is not a documented persona')
-  let text = materialize(all, snap.deps, p, Date.now())
+  let text = materialize(all, deps, p, Date.now())
   personas.set(eid, { cursor, text })
   return text
 }
@@ -1052,13 +1055,15 @@ let reconcileNative = async (
 // in the atomic inbox, and a wake is coalesced to one per pending horizon so an
 // ignored prompt is not repeated every tick. A graph-native thread advances in
 // place; a process-backed thread is resumed with the fixed content-free line.
-let serveAttention = (
+let serveAttention = async (
   c: RoleConfig,
   session: DbRow,
   cast: Cast,
   deps: RoleDeps,
 ) => {
-  let pending = noticesFor(snapshot(db), String(session.id))
+  // The session's pending notices, gathered by keyed reads (the same scoped
+  // bus the CLI runs) rather than the whole-graph snapshot (M-21143).
+  let pending = await bus(String(session.id), undefined, localQuery(db))
   if (!pending.lines.length) return
   let newest =
     pending.ack.map((change) =>
@@ -1211,7 +1216,7 @@ let reconcileManaged = async (
     if (session.status != 'completed' || !session.provider_session_id) return
   }
   if (!session) return
-  serveAttention(c, session, cast, deps)
+  await serveAttention(c, session, cast, deps)
 }
 
 // Does the role's scope have attention a fresh operator session would pick up?
@@ -1221,10 +1226,16 @@ let reconcileManaged = async (
 // session then consumes and stamps `notified`. Read-only: the ack is discarded,
 // the fresh session does the stamping when it actually serves. Scope-addressed,
 // matching where the scheduler (T-18725) aims its self-wake.
-let pendingForScope = (scope: string) => {
-  let all = rows(snapshot(db))
-  return notices(all, { ...readerAt(all, scope), session: scope })
-    .lines.length > 0
+let pendingForScope = async (scope: string) => {
+  // The scope's own operator reader — its address row and subscriptions — plus
+  // the bus candidates aimed at it, by keyed reads instead of the whole-graph
+  // snapshot (M-21143). busRows is the SUPERSET of what notices() selects, so
+  // this answers exactly as the whole-graph notices() did.
+  let q = localQuery(db)
+  let base = await actorRows(scope, q)
+  let who = { ...readerAt(base, scope), session: scope }
+  let cand = await busRows(who, q)
+  return notices(uniq([...base, ...cand]), who).lines.length > 0
 }
 
 // The non-pinning wake policies (D-18722 part A). Unlike the pinned managed
@@ -1263,10 +1274,10 @@ let reconcileWake = async (
       }
       if (session.status != 'completed' || !session.provider_session_id) return
     }
-    if (auto) serveAttention(c, session, cast, deps)
+    if (auto) await serveAttention(c, session, cast, deps)
     return
   }
-  if (auto && pendingForScope(c.scope)) startManaged(c, hash, cast, deps)
+  if (auto && await pendingForScope(c.scope)) startManaged(c, hash, cast, deps)
 }
 
 let flights = new Set<string>()

@@ -169,8 +169,11 @@ export type Querier = typeof query
 // four forms (T-3, a bare num, an alias slug, a uuid), resolved server-side
 // through locate(). An id naming nothing is absent from the result, so a
 // caller wanting find()'s undefined asks for one and reads the first.
-export let fetched = async (ids: string[], filters: string[] = []) =>
-  ids.length ? await query([`id=${ids.join(',')}`, ...filters]) : []
+export let fetched = async (
+  ids: string[],
+  filters: string[] = [],
+  q: Querier = query,
+) => ids.length ? await q([`id=${ids.join(',')}`, ...filters]) : []
 
 // One entity by address, or undefined — find() over the wire.
 export let got = async (id: string) => (await fetched([id]))[0]
@@ -246,7 +249,7 @@ let changesOf = (all: Row[]): Change[] =>
 
 // One row per eid, oldest first — a snapshot walks the entity table in num
 // order, so a set stitched from several queries answers in that same order.
-let uniq = (all: Row[]) =>
+export let uniq = (all: Row[]) =>
   [...new Map(all.map((r) => [r.eid, r])).values()]
     .sort((a, b) => a.num - b.num)
 
@@ -2929,21 +2932,21 @@ export let projectionSnapshot = async (): Promise<Snapshot> => {
 // channelEvents, which never asks. Teach the bus to honour a watch and this
 // gather needs `.comment.target=<watched…>` and its siblings the same
 // day, or the rule lands with nothing to decide about.
-let busRows = async (who: Reader) => {
+export let busRows = async (who: Reader, q: Querier = query) => {
   let mine = [who.session, ...(who.operator ? [who.actor] : [])].filter(Boolean)
   let held = [...mine, ...(who.claims ?? [])].join(',')
   let box = [who.session, ...(who.operator ? [who.scope] : [])]
     .filter(Boolean).join(',')
   let [said, emitted, aimed, letters, floated] = await Promise.all([
-    query([`.comment.target=${held}`, '.notified=']),
+    q([`.comment.target=${held}`, '.notified=']),
     // A notice (D-13858) is addressed like a comment — session, claimed task,
     // or the operator's actor — so it rides the same `held` list. Its own arm
     // here keeps busRows the SUPERSET of channelEvents' notice branch.
-    query([`.notice.target=${held}`, '.notified=']),
+    q([`.notice.target=${held}`, '.notified=']),
     // WHO a knock is for is the shared deliver.to; the same facet a wake/mail
     // wears, so keep only the knock rows the bus renders.
-    query([`.deliver.to=${mine.join(',')}`, '.notified=']),
-    query([`.mail.target=${box}`, '.notified=', '.opened=', '.archived=']),
+    q([`.deliver.to=${mine.join(',')}`, '.notified=']),
+    q([`.mail.target=${box}`, '.notified=', '.opened=', '.archived=']),
     // A recall floater (recall.ts) lands in the session's OWN log with NO
     // recipient facet — keyed only by entry.session — so it needs its own arm
     // or channelEvents' recall branch is never supplied and the bus goes quiet
@@ -2959,7 +2962,7 @@ let busRows = async (who: Reader) => {
     // 60+ undelivered floaters, and notices()' 20-cap drained them 20-per-call,
     // surfacing memories for messages hours stale. Any future delivery gap
     // self-heals the same way, never by replay.
-    query([
+    q([
       `.recalled.source!`,
       `.entry.session=${who.session}`,
       '.notified=',
@@ -2977,8 +2980,8 @@ let busRows = async (who: Reader) => {
   let by = seen.flatMap((r) => [r.comps.created?.by, r.comps.created?.via])
     .filter(Boolean).map(String)
   let [kin, notes] = await Promise.all([
-    fetched([...new Set([...at, ...by])]),
-    at.length ? query([`.comment.target=${at.join(',')}`]) : [],
+    fetched([...new Set([...at, ...by])], [], q),
+    at.length ? q([`.comment.target=${at.join(',')}`]) : [],
   ])
   return [...seen, ...kin, ...notes]
 }
@@ -2988,13 +2991,13 @@ let busRows = async (who: Reader) => {
 // keyed round trips against the index — 8-20 ms on a copy of the live graph,
 // where the snapshot it replaces is 0.6 s and 28 MB — so a verb that never
 // touched the graph still hears what is waiting.
-export let bus = async (session: string, cwd?: string) => {
-  let sess = await sessionRow(session)
+export let bus = async (session: string, cwd?: string, q: Querier = query) => {
+  let sess = await sessionRow(session, q)
   if (!sess) return { lines: [] as string[], ack: [] as Change[] }
-  let base = await readerSet(sess)
+  let base = await readerSet(sess, q)
   let who = readerFor(base, session, cwd)
   if (!who.session) return { lines: [] as string[], ack: [] as Change[] }
-  return notices(uniq([...base, ...await busRows(who)]), who)
+  return notices(uniq([...base, ...await busRows(who, q)]), who)
 }
 
 export let noticeBlock = (lines: string[]) =>

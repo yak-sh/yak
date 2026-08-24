@@ -12,10 +12,11 @@
 // call site). sql_test.ts holds the index and the matcher against each other,
 // entry predicates included, so the fast path cannot silently disagree.
 import type { DatabaseSync } from './sqlite.ts'
-import { kindOf, sessionOf } from './types.ts'
+import { type Dep, kindOf, sessionOf } from './types.ts'
 import { type Querier, type Row } from './client.ts'
 import {
   buried,
+  depsOf,
   eager,
   entriesOf,
   entriesScan,
@@ -231,4 +232,45 @@ async (filters, opts) => {
       listed(r.comps, preds) &&
       matchQuery(r.comps, preds, read, undefined, kids)
     )
+}
+
+// The bounded persona subgraph a spawn or a role materializes — exactly the
+// rows+deps materialize()/wornPersona()/commonOf() walk, gathered by keyed
+// reads instead of the whole-graph snapshot (M-21143). BFS from `roots` (a
+// persona, an explicit --persona, the global base, or a project whose common
+// persona is the one it `contains`): each node is eager()-read so its
+// doc/persona/memory/recall comps ride out exactly as snapshot() served them,
+// and its OUTGOING contains/reads edges (depsOf) enqueue the tier members —
+// through sub-personas to any depth. The persona functions stay pure over
+// rows+deps; this only supplies a narrower universe than the whole graph, and
+// an unreachable edge or memory that never enters the walk could not have
+// changed the rendered text (a tier names only what it can reach from its root).
+export let personaGraph = (
+  db: DatabaseSync,
+  roots: string[],
+): { all: Row[]; deps: Dep[] } => {
+  let all = new Map<string, Row>()
+  let deps: Dep[] = []
+  let seenDep = new Set<string>()
+  let seen = new Set<string>()
+  let queue = roots.filter(Boolean)
+  while (queue.length) {
+    let eid = queue.shift()!
+    if (seen.has(eid)) continue
+    seen.add(eid)
+    let comps = eager(db, eid)
+    if (!comps.entity) continue
+    all.set(eid, rowed({ eid, comps }))
+    for (let d of depsOf(db, [eid])) {
+      if (d.parent != eid) continue // only edges OUT of this node drive the walk
+      if (d.type != 'contains' && d.type != 'reads') continue
+      let key = `${d.parent}\0${d.type}\0${d.child}`
+      if (!seenDep.has(key)) {
+        seenDep.add(key)
+        deps.push(d)
+      }
+      queue.push(d.child)
+    }
+  }
+  return { all: [...all.values()], deps }
 }

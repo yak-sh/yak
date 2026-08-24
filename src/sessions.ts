@@ -39,7 +39,8 @@ import {
   providerSpec,
   type Summary,
 } from './adapters.ts'
-import { apply, db, human, record, resolveId, snapshot } from './db.ts'
+import { apply, db, eager, human, locate, record, resolveId } from './db.ts'
+import { evalGraph, personaGraph, rowed } from './graph_query.ts'
 import {
   delivered,
   errorChange,
@@ -63,7 +64,7 @@ import {
   hookClaim,
   lapseChanges,
   releaseChange,
-  rows,
+  uniq,
   wrapChanges,
 } from './client.ts'
 import { type Unlanded, unlanded } from './land.ts'
@@ -522,17 +523,28 @@ let settled = (eid: string, status: string, cast: Cast) => {
   else if (verdict === null && failureOf(row).startsWith('UNLANDED:')) {
     stamp(eid, { error: null }, cast)
   }
-  let all = rows(snapshot(db))
-  let sess = all.find((r) => r.eid == eid)
-  let changes: Change[] = sess
-    ? wrapChanges(
-      all,
-      String(sess.comps.session?.id ?? ''),
-      Date.now(),
-      [],
-      String(row.final_text ?? '') || undefined,
-    )
+  // wrapChanges reads a BOUNDED universe — this session, the claims it holds,
+  // their lapse-notice dedup, and the comments it authored — by keyed read, not
+  // the whole-graph snapshot (M-21143). lapseChanges releases each held claim
+  // and mints one "ended before done" notice per unsettled task (skipping a
+  // task that already wears this exact lapse); brief reads whether the session
+  // spoke and the held tasks' titles.
+  let sess = rowed({ eid, comps: eager(db, eid) })
+  let held = evalGraph(db, `.claim.session=${eid}`).hits
+  let heldEids = held.map((r) => r.eid)
+  let lapses = heldEids.length
+    ? evalGraph(db, `.notice.event=lapse&.notice.target=${heldEids.join(',')}`)
+      .hits
     : []
+  let spoke = evalGraph(db, `.created.via=${eid}&.comment.target!`).hits
+  let all = uniq([sess, ...held, ...lapses, ...spoke])
+  let changes: Change[] = wrapChanges(
+    all,
+    String(sess.comps.session?.id ?? ''),
+    Date.now(),
+    [],
+    String(row.final_text ?? '') || undefined,
+  )
   changes.push(
     ...report(
       eid,
@@ -1832,17 +1844,24 @@ export let spawned =
     // so a spawn is (almost) never personaless. The tiers ride whole — core
     // memories plus the index — rendered by composeWorn so the spawn's prompt
     // and the repo's .tasks files say the same thing.
-    let snap = snapshot(db)
-    let all = rows(snap)
+    let spawnPersona = row.spawn_persona ? String(row.spawn_persona) : undefined
+    let globalBase = resolveId(db, GLOBAL_BASE)
+    // The worn persona reads a BOUNDED subgraph — the personas and memories
+    // reachable from these roots — never the whole-graph snapshot (M-21143).
+    let { all, deps } = personaGraph(
+      db,
+      [spawnPersona, project ? String(project) : undefined, globalBase]
+        .filter((e): e is string => !!e),
+    )
     let worn = composeWorn(
       all,
-      snap.deps,
+      deps,
       wornPersona(
         all,
-        snap.deps,
-        row.spawn_persona ? String(row.spawn_persona) : undefined,
+        deps,
+        spawnPersona,
         project ? String(project) : undefined,
-        resolveId(db, GLOBAL_BASE),
+        globalBase,
       ),
       Date.now(),
     )
@@ -1889,8 +1908,18 @@ export let spawned =
       ...(row.actor || !project ? {} : { actor: project }),
     }, cast)
     if (native && nativeRun) {
+      // hookClaim reads only the target task and the session it claims for —
+      // a two-row universe by keyed read, never the whole-graph snapshot
+      // (M-21143). find(all, job.task) locates the task; sessionFor + taskActor
+      // read the session row and the task's project off that same pair.
+      let taskEid = job.task ? locate(db, job.task) : undefined
       let claim = hookClaim(
-        rows(snapshot(db)),
+        [
+          rowed({ eid, comps: eager(db, eid) }),
+          ...(taskEid
+            ? [rowed({ eid: taskEid, comps: eager(db, taskEid) })]
+            : []),
+        ],
         job.task,
         String(row.id),
         workspace?.tree,
@@ -2621,7 +2650,29 @@ export let recover = (cast: Cast) => {
 // ghost claim. Idempotent by construction — a released lease is gone, so the
 // next boot finds nothing to do.
 export let reapLeases = (cast: Cast) => {
-  let all = rows(snapshot(db))
+  // The universe is exactly the leases and what lapsing them reads — the
+  // claimed entities, the sessions holding them, and any lapse notice already
+  // minted — by keyed read, not the whole-graph snapshot (M-21143). Claims are
+  // few (active leases only), so this candidate set is tiny.
+  let claimed = evalGraph(db, `.claim.session!`).hits
+  let sessEids = [
+    ...new Set(
+      claimed.map((r) => String(r.comps.claim?.session ?? '')).filter(Boolean),
+    ),
+  ]
+  let sessRows = sessEids.flatMap((e) => {
+    let comps = eager(db, e)
+    return comps.entity ? [rowed({ eid: e, comps })] : []
+  })
+  let lapseNotes = claimed.length
+    ? evalGraph(
+      db,
+      `.notice.event=lapse&.notice.target=${
+        claimed.map((r) => r.eid).join(',')
+      }`,
+    ).hits
+    : []
+  let all = uniq([...claimed, ...sessRows, ...lapseNotes])
   let sessions = new Map(
     all.filter((r) => r.comps.session).map((r) => [r.eid, r]),
   )
