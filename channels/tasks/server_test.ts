@@ -72,7 +72,7 @@ let ctx = (over: Partial<Ctx> = {}): Ctx => ({
 
 // --- comments ----------------------------------------------------------------
 
-Deno.test('a comment on the session emits with its actor and instrument', () => {
+Deno.test('a deprecated direct-session comment still emits', () => {
   let batch = [
     ch('c1', 'doc', { title: '', body: 'ping' }),
     ...comment('c1', 'sess'),

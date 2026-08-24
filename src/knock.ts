@@ -90,11 +90,10 @@ export let knocked =
       // delivered (channel plugin / comms bus); the stamp names them.
       let up = awake(to)
       if (up) return done(`cast S-${up.num}`)
-      // 1b: a settled managed session still owns a door. INPUT to a
-      // session is a comment aimed at it — the one way in — and
-      // commented() wakes the run to hear it. So a knock takes that door
-      // rather than growing a second mechanism, exactly as rung 3 takes
-      // mail: each rung says the knock in the medium its target hears.
+      // 1b: a settled managed session still owns a compatibility door:
+      // commented() can wake it from a direct comment. A knock takes that
+      // existing door rather than growing a second mechanism, exactly as rung
+      // 3 takes mail: each rung says the knock in the medium its target hears.
       // Only a MANAGED session: an external one has no run to continue,
       // and rung 1 already caught every session that was reachable.
       let managed = db.prepare(
@@ -198,8 +197,8 @@ export let knocked =
         dispatch(out, t, (c, e) => console.warn(`knock mail ${c} —`, e))
         return done(`mailed ${human(db, to)}`)
       }
-      // 4: a settled session keeps its own door — commenting on it
-      // resumes it (sessions.ts commented); the knock records the miss.
+      // 4: a settled session keeps that compatibility door; the knock records
+      // the miss only after it fails.
       fail(`no door: ${human(db, to)} is not awake, spawnable-at, or addressed`)
     } catch (e) {
       // A ladder rung THREW — an unexpected break (a spawn/apply that blew up),

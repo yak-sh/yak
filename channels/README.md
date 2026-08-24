@@ -8,13 +8,13 @@ push delivery with no polling.
 
 `channels/tasks/` is the tasks channel: a **read-only** listener that watches
 the tasks server's `/ws` sync socket (the same broadcast every browser tab
-hears) and emits the activity aimed at ITS session:
+hears) and emits activity about the work ITS session owns:
 
-- **`comment`** — a comment whose `target` is this session's entity (someone
-  messaging the session) or a task it claims. Rendered
-  `kind="comment" from="<byline>"`, content = the comment's words. Only
-  mint-time comments (the batch also carries the doc that holds the words) are
-  emitted; a bodiless later patch is skipped.
+- **`comment`** — a comment whose `target` is a task this session claims. Direct
+  comments on its session entity still arrive through the deprecated migration
+  path. Rendered `kind="comment" from="<byline>"`, content = the comment's
+  words. Only mint-time comments (the batch also carries the doc that holds the
+  words) are emitted; a bodiless later patch is skipped.
 - **`knock`** — a nudge whose recipient is this session. An actor-level knock
   reaches only a session launched with `--operator`. Rendered `kind="knock"`,
   content = `knock: look at <target id> — <words riding the batch>`.
@@ -43,11 +43,11 @@ The plugin serves the session entity whose `session.pid` equals its own nearest
 seat rule is `src/served.ts`: of the rows wearing that pid, the NEWEST wins, and
 the plugin derives it fresh from its stream index on every batch. So `/clear`
 (which reifies a NEW session entity under the same process) rotates service
-forward — comments aimed at the old S-\* stop injecting, by design — and any
-correction to a row rotates it back. `src/door.ts` derives the same seat from
-the same graph, which is what makes a knock's `delivery: cast S-…` stamp mean
-delivery (T-7288). A subagent is a tool call inside its operator's process and
-reifies wearing no pid, so it never takes the operator's seat.
+forward — the old S-\* compatibility address stops injecting, by design — and
+any correction to a row rotates it back. `src/door.ts` derives the same seat
+from the same graph, which is what makes a knock's `delivery: cast S-…` stamp
+mean delivery (T-7288). A subagent is a tool call inside its operator's process
+and reifies wearing no pid, so it never takes the operator's seat.
 
 The spawn-time `CLAUDE_CODE_SESSION_ID` (set by Claude Code for MCP
 subprocesses, never updated past boot) is the fallback whenever no row wears the

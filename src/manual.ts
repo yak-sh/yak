@@ -586,7 +586,7 @@ export let manuals = declare({
     examples: [
       'task comment T-3 "blocked on the schema call"',
       'task comment T-3 .body=@notes.md',
-      'task comment S-31 "status?"',
+      'task comment T-3 "please include the migration"',
       'task comment T-3 --verdict=approved',
       'task set C-13 .body="what it should have said"',
     ],
@@ -595,7 +595,9 @@ export let manuals = declare({
       'the same (`@@` escapes a comment that genuinely starts with an @). ' +
       'Comments render markdown exactly as bodies do, so author a rich one ' +
       'through the body door rather than as a flat inline string. A comment ' +
-      'is something you WROTE, and it reaches whoever the entity concerns.\n\n' +
+      'is something you WROTE, and it reaches whoever the entity concerns. ' +
+      'Steering belongs on the task, where the current or next run reads it; ' +
+      'commenting on an S-* run is deprecated compatibility.\n\n' +
       "Prints the comment's own id. A comment is an ordinary entity, so " +
       'REVISE a wrong one in place — `task set C-13 .body="…"` — rather ' +
       'than posting a correction beneath it. `task history C-13` keeps every ' +

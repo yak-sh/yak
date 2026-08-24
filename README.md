@@ -18,8 +18,9 @@ project, `S-31` session, `M-40` memory, `E-9` mail…).
 - a **board** is `doc` + `board(query)` — a saved filter over tasks, never a
   stored list: a task is on a board because it matches, so membership can't
   drift
-- a **comment** is `doc` + `comment(target)` — aimed at ANY entity; commenting
-  on a session IS messaging that agent
+- a **comment** is `doc` + `comment(target)` — aimed at ANY entity; steering
+  belongs on the task, where its current or next run reads it (comments aimed at
+  sessions remain a deprecated compatibility path)
 - a **session** is an agent run, reified; a **claim** is its lease on a task —
   the server refuses to hand a held lease to another session
 - mail, memories, personas, people, webhook deliveries are entities too — one
@@ -95,11 +96,12 @@ and `/search` + `/similar` over HTTP.
   is the inbox; unread verified mail flows into live sessions through the
   channel plugin.
 - **Channel plugin** (`channels/`) — a Claude Code channel that pushes comments
-  aimed at a session and replies on its claimed tasks INTO its running
-  transcript, fed by the same `/ws` broadcast every browser hears. Project mail
-  and project-actor knocks require project-attention capability (`--operator`
-  for an ad-hoc session, or a role binding). `channels/README.md` has the
-  mechanism and enablement.
+  on a run's claimed work INTO its running transcript, fed by the same `/ws`
+  broadcast every browser hears. Direct session comments still arrive for
+  migration compatibility, but steering should target the task. Project mail and
+  project-actor knocks require project-attention capability (`--operator` for an
+  ad-hoc session, or a role binding). `channels/README.md` has the mechanism and
+  enablement.
 - **Native Codex delivery** — a task-launched Codex session binds its tmux pane.
   When directly addressed activity is pending, the daemon waits for a stable
   empty composer and types only a constant request to call `task_context`;
@@ -113,8 +115,8 @@ and `/search` + `/similar` over HTTP.
 bare `claude` and `codex` launches keep their native configuration untouched.
 SessionStart reifies the session and returns the normal graph digest, including
 claimable work, to every task-launched agent. `--operator` grants only
-project-wide attention: project mail and project-actor knocks. Direct messages
-and replies on claimed tasks reach every session.
+project-wide attention: project mail and project-actor knocks. Comments on
+claimed work reach its run; direct session messages remain compatibility only.
 
 Projects may add Claude-only invocation settings in
 `.tasks/claude-settings.json`; hook arrays append after Tasks' lifecycle hooks

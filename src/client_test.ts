@@ -288,7 +288,7 @@ Deno.test('find: T-num, bare num, eid, alias slug', () => {
   assertEquals(find(all, 'T-99'), undefined)
 })
 
-Deno.test('notices: unseen comments on claimed tasks + messages to the session', () => {
+Deno.test('notices: claimed-work comments + direct-session compatibility', () => {
   let B = 'aaaaaaaa-0000-4000-8000-000000000010' // another session
   let P = 'aaaaaaaa-0000-4000-8000-000000000011' // their shared actor
   let mk = (

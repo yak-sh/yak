@@ -163,7 +163,11 @@ let graph = (...extra: Change[][]): Snapshot => ({
 let cases: [string, Snapshot, number][] = [
   ['nothing waiting', graph(), 0],
   ['a comment on the claimed task', graph(said('c1', 20, T, 'heads up')), 1],
-  ['a comment on the session itself', graph(said('c2', 21, S, 'ping')), 1],
+  [
+    'a deprecated direct-session comment still arrives',
+    graph(said('c2', 21, S, 'ping')),
+    1,
+  ],
   [
     // Three comments sharing one created.at, inserted num-DESCENDING so the
     // whole-snapshot supplier (rows(), insertion order) and the bus (uniq(),

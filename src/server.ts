@@ -1914,8 +1914,8 @@ on('session', {
 })
 on('comment', {
   created: commented(cast),
-  doc: 'a comment at a settled session resumes that agent with its ' +
-    'unheard backlog',
+  doc: 'a comment on claimed work resumes or steers its process-backed run; ' +
+    'a direct session target remains deprecated compatibility',
 })
 on('comment', {
   created: (_eid, comp) => roleAttention(cast)(String(comp.target)),
@@ -1927,8 +1927,8 @@ on('knock', {
 })
 on('comment', {
   created: (eid, comp) => managed.comment(String(comp.target), eid),
-  doc: 'a comment at a graph-native Codex session appends content-free ' +
-    'attention; task_context owns retrieval and acknowledgement',
+  doc: 'a comment on claimed work appends content-free attention to its ' +
+    'graph-native run; direct session targets remain compatibility',
 })
 on('comment', {
   created: obeyed(cast, () => codexAccount.status().then((s) => s.ready)),

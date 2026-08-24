@@ -451,10 +451,11 @@ let gistOf = (text: unknown) => {
     : `${gist.slice(0, 80)} … ${gist.slice(-(240 - 83))}`
 }
 
-// The outcome, said as ordinary comments via the session: one on
-// the task for its trail, one on the spawning session so its caller hears
-// directly. created.via is that server-stamped instrument; created.by is
-// the actor it spoke for. One body means the two doors cannot disagree.
+// The outcome, said as ordinary comments via the session: one on its task,
+// plus the spawning run's work when that is a different task. Runs are
+// provenance, never addresses; the parent hears through the work it requested
+// or claims. created.via is the server-stamped instrument; created.by is the
+// actor it spoke for. One body means the two doors cannot disagree.
 let report = (
   eid: string,
   status: string,
@@ -464,16 +465,30 @@ let report = (
 ): Change[] => {
   let task = String(row.requested_task ?? '')
   let spawner = db.prepare(`
-    select o.eid as eid from created c
+    select o.eid as eid, ${refEid('s.requested_task')} as requested_task
+    from created c
     join session s on s.entity = c.via
     join entity o on o.id = s.entity
     where c.entity = ${idOf}
-  `).get(eid) as { eid: string } | undefined
+  `).get(eid) as { eid: string; requested_task: string | null } | undefined
   let targets = new Set<string>()
   if (task && db.prepare(`select 1 from task where ${OWNED}`).get(task)) {
     targets.add(task)
   }
-  if (spawner && spawner.eid != eid) targets.add(spawner.eid)
+  if (
+    spawner?.requested_task &&
+    db.prepare(`select 1 from task where ${OWNED}`).get(spawner.requested_task)
+  ) {
+    targets.add(spawner.requested_task)
+  } else if (spawner && spawner.eid != eid) {
+    let held = db.prepare(`
+      select o.eid from claim c
+      join task t on t.entity = c.entity
+      join entity o on o.id = c.entity
+      where c.session = (select id from entity where eid = ?)
+    `).all(spawner.eid) as { eid: string }[]
+    for (let row of held) targets.add(row.eid)
+  }
   if (!targets.size) return []
 
   let { num } = db.prepare('select num from entity where eid = ?').get(
@@ -550,8 +565,9 @@ let settled = (eid: string, status: string, cast: Cast) => {
       eid,
       status,
       row,
-      // The WHY for the spawn-back comment: a known `error` (unlanded work) or
-      // an `exception` break (a failed run) — a failed session wears the latter.
+      // The WHY for the work-thread comment: a known `error` (unlanded work)
+      // or an `exception` break (a failed run) — a failed session wears the
+      // latter.
       String(
         sess?.comps.error?.message ?? sess?.comps.exception?.message ?? '',
       ),
@@ -2247,14 +2263,14 @@ let departed = async (eid: string, pid: number, ms: number) => {
 
 // ---- the input effect ----
 
-// The plain refusal: a comment on the session saying why the words didn't
-// wake it, so the sender learns on their next glance. Written AS that
-// session — it is that session's own resume machinery reporting on itself
-// — which is also the loop's floor: commented() ignores a session talking
-// about itself, and without that this reply would re-enter the gate,
-// fail to resume again, and refuse forever. Telling must never throw out
-// of the effect.
-let refuse = (eid: string, why: string, cast: Cast) => {
+// The plain refusal: a comment on the work (or legacy session target) saying
+// why the words didn't wake its run, so the sender learns on their next glance.
+// Written AS that session — its own resume machinery reporting on itself —
+// which is also the loop's floor: commented() ignores the holder talking on
+// its own work, or a session talking about itself. Without that, this reply
+// would re-enter the gate, fail again, and refuse forever. Telling must never
+// throw out of the effect.
+let refuse = (eid: string, target: string, why: string, cast: Cast) => {
   try {
     let cid = crypto.randomUUID()
     let t = trace()
@@ -2266,7 +2282,7 @@ let refuse = (eid: string, why: string, cast: Cast) => {
           name: 'doc',
           comp: { title: '', body: `can't resume — ${why}` },
         },
-        { eid: cid, name: 'comment', comp: { target: eid } },
+        { eid: cid, name: 'comment', comp: { target } },
       ],
       t,
       eid,
@@ -2278,11 +2294,11 @@ let refuse = (eid: string, why: string, cast: Cast) => {
   }
 }
 
-// The words a session is owed: comments aimed at it that no ear ever took
-// — not `notified` (the delivery ledger the channel plugin, the bus, and
-// resume() below all stamp for their own deliveries, T-7010), not machine
-// events, not its own voice, not bodiless. Oldest first, so a woken
-// session reads its backlog in the order it was said.
+// The words a run is owed: comments on work it currently claims, plus direct
+// session comments through the deprecated compatibility door. Not `notified`
+// (the delivery ledger the channel plugin, the bus, and resume() below all
+// stamp for their own deliveries, T-7010), machine events, its own voice, or
+// bodiless rows. Oldest first, so a woken run reads its backlog in order.
 let unheard = (eid: string) =>
   db.prepare(
     `select o.eid as eid, d.body from comment c
@@ -2290,10 +2306,17 @@ let unheard = (eid: string) =>
      join doc d on d.entity = c.entity
      join created b on b.entity = c.entity
      left join notified n on n.entity = c.entity
-     where c.target = ${idOf} and n.entity is null
+     where (
+       c.target = ${idOf}
+       or exists (
+         select 1 from claim q
+         where q.entity = c.target
+           and q.session = (select id from entity where eid = ?)
+       )
+     ) and n.entity is null
        and b.via is not ${idOf} and trim(d.body) != ''
      order by b.at`,
-  ).all(eid, eid) as { eid: string; body: string }[]
+  ).all(eid, eid, eid) as { eid: string; body: string }[]
 
 // The delivery record: `notified` on exactly what resume() handed the
 // thread, applied and cast like any graph write — so the bus never
@@ -2326,6 +2349,7 @@ let resume = async (
   cast: Cast,
   active = false,
   prompt?: string,
+  target = eid,
 ) => {
   let row = storedSession(db, eid)
   if (!row) return
@@ -2339,10 +2363,15 @@ let resume = async (
   let thread = String(row.provider_session_id ?? '') ||
     (row.origin == 'managed' ? '' : String(row.id ?? ''))
   if (!thread) {
-    return refuse(eid, 'the run never announced a provider thread', cast)
+    return refuse(
+      eid,
+      target,
+      'the run never announced a provider thread',
+      cast,
+    )
   }
   let ad = dialectOf(eid)
-  if (!ad) return refuse(eid, `no adapter for '${row.provider}'`, cast)
+  if (!ad) return refuse(eid, target, `no adapter for '${row.provider}'`, cast)
   let job = {
     instruction: body,
     session_id: String(row.id),
@@ -2358,7 +2387,9 @@ let resume = async (
   // resumed process stamps its own pid at SessionStart, and watched()
   // hangs off that. Its raw stream and stderr land beside the log.
   if (row.origin != 'managed') {
-    if (!row.cwd) return refuse(eid, 'the session recorded no cwd', cast)
+    if (!row.cwd) {
+      return refuse(eid, target, 'the session recorded no cwd', cast)
+    }
     if (msgs.length) told(msgs, cast)
     Deno.mkdirSync(logsDir(), { recursive: true })
     spawn(
@@ -2378,7 +2409,7 @@ let resume = async (
       stamp(eid, back, cast)
       row = { ...row, ...back }
     } catch (e) {
-      return refuse(eid, `no worktree to resume in (${e})`, cast)
+      return refuse(eid, target, `no worktree to resume in (${e})`, cast)
     }
   }
   if (msgs.length) told(msgs, cast)
@@ -2504,16 +2535,28 @@ let steer = (eid: string, cast: Cast) => {
   return interrupt(eid)
 }
 
-// created(comment) — commenting on a session IS messaging that agent (the
-// comms bus already says so). With someone home the cast alone is
-// delivery — an interactive session's channel injects it. A managed print
-// run has no such ear, so it yields the current turn and continues its thread
-// with the backlog. A session's own comments never resume it (an agent must
-// not wake itself by talking) — which is also what keeps refuse()'s own
-// reply out of this gate, since it is written as the session.
+// The run attending a comment's target: the claim holder is the primary route;
+// a direct session target is the deprecated compatibility route. No holder
+// means the comment stays on the work for its next run.
+let commentSession = (target: string) => {
+  if (storedSession(db, target)) return target
+  return (db.prepare(
+    `select ${refEid('c.session')} as session from claim c where c.${OWNED}`,
+  ).get(target) as { session: string } | undefined)?.session
+}
+
+// created(comment) — commenting on claimed work steers its current run. With
+// someone home the cast alone is delivery: an interactive session's channel
+// injects it. A managed print run has no such ear, so it yields the current
+// provider turn and continues its thread with the work's unheard backlog.
+// Direct session comments take the same path only for migration compatibility.
+// A run's own comments never resume it, which also keeps refuse() out of this
+// gate because it writes as the attending session.
 export let commented =
   (cast: Cast) => (ceid: string, comp: Record<string, unknown>) => {
-    let eid = String(comp.target)
+    let target = String(comp.target)
+    let eid = commentSession(target)
+    if (!eid) return
     // A graph-native session's comments are the runner's to serve — but an
     // IMPORTED entry is file history, not runner ownership (D-16704), so a
     // managed session whose transcript was ingested still steers/resumes
@@ -2535,7 +2578,7 @@ export let commented =
       row.origin == 'managed' &&
       sessionActive.includes(String(row.status))
     ) return steer(eid, cast)
-    return resume(eid, cast)
+    return resume(eid, cast, false, undefined, target)
   }
 
 // ---- the delete effect ----

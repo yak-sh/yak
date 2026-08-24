@@ -209,7 +209,7 @@ let beginCanonical = (
   return { eid, done }
 }
 
-// A comment aimed at a session — the input path.
+// A comment aimed at work, or at a session through the compatibility path.
 let say = (target: string, body: string) => {
   let c = uid()
   return [
@@ -1310,11 +1310,19 @@ slow(
 )
 
 slow(
-  'a failed spawn tells its task and its spawner — and only once',
+  'a failed spawn tells its task and its parent work — and only once',
   async () => {
     let { t } = seed()
+    let { t: parent } = seed()
     let spawner = uid(), sid = uid()
-    apply(db, [{ eid: spawner, name: 'session', comp: { id: sid } }])
+    apply(db, [
+      {
+        eid: spawner,
+        name: 'session',
+        comp: { id: sid, requested_task: parent },
+      },
+      { eid: parent, name: 'claim', comp: { session: spawner } },
+    ])
     heard = []
     let { eid, done } = begin(t, { model: 'no-such-model' }, sid)
     await done
@@ -1323,7 +1331,8 @@ slow(
     assertEquals(said.length, 1)
     assertMatch(said[0], /^S-\d+ failed\n/)
     assertMatch(said[0], /unknown model/)
-    assertEquals(settleComments(spawner, eid), said)
+    assertEquals(settleComments(parent, eid), said)
+    assertEquals(settleComments(spawner, eid), [])
     assertEquals(
       (db.prepare(
         'select (select eid from entity where id = cr.via) as via from created cr where cr.entity = (select id from entity where eid = ?)',
@@ -1333,14 +1342,15 @@ slow(
       spawner,
     )
     assert(
-      heard.some((c) => c.name == 'comment' && c.comp?.target == spawner),
+      heard.some((c) => c.name == 'comment' && c.comp?.target == parent),
     )
     let bus = noticesFor(snapshot(db), sid)
     assertEquals(bus.lines.length, 1)
     assertMatch(bus.lines[0], /S-\d+ failed/)
     spawned(cast)(eid, { provider: 'fake' })
     assertEquals(settleComments(t, eid).length, 1)
-    assertEquals(settleComments(spawner, eid).length, 1)
+    assertEquals(settleComments(parent, eid).length, 1)
+    assertEquals(settleComments(spawner, eid), [])
   },
 )
 
@@ -1876,7 +1886,7 @@ slow('a comment resumes nothing it should not', async () => {
 })
 
 slow(
-  'a comment at a settled session joins the log and resumes it',
+  'a deprecated direct session comment still joins the log and resumes it',
   async () => {
     // A real end-to-end run leaves a settled session with a worktree + thread.
     let { t } = seed()
@@ -1918,16 +1928,17 @@ slow('a session commenting on itself never resumes it', async () => {
 })
 
 slow(
-  'a comment steers a live managed session without settling it',
+  'a comment on claimed work steers a live managed session without settling it',
   async () => {
     let { t } = seed()
     let { eid, done } = begin(t)
     await done
+    apply(db, [{ eid: t, name: 'claim', comp: { session: eid } }])
     let reports = settleComments(t, eid).length
     // The resumed turn dawdles long enough for a comment to steer it.
-    let resumed = write(say(eid, 'delay:1000 keep going'))
+    let resumed = write(say(t, 'delay:1000 keep going'))
     assertEquals(row(eid)?.status, 'running')
-    let steer = say(eid, 'also: rename it')
+    let steer = say(t, 'also: rename it')
     await write(steer)
     await resumed
     await until(

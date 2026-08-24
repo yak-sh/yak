@@ -788,6 +788,9 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     return true
   }
 
+  // Claimed work is the address. A direct graph-native session target stays as
+  // migration compatibility; either route appends only content-free attention,
+  // and task_context retrieves the graph words at the next boundary.
   let comment = (target: string, ceid: string) => {
     let held = db.prepare(
       `select (select eid from entity where id = c.session) as session

@@ -4,8 +4,8 @@
 //
 // A `Change` is the wire unit `{eid, name, comp}` — a component PATCH. The /ws
 // endpoint rebroadcasts every applied batch to every client, so this channel is
-// just another client that reads, never writes: it watches the stream for three
-// things aimed at ITS session and turns each into one channel event.
+// just another client that reads, never writes: it watches the stream for
+// events about work ITS session owns and turns each into one channel event.
 
 import { type Change, idOf, kindOf } from './types.ts'
 import { type Seat, served } from './served.ts'
@@ -26,7 +26,7 @@ export type Event = {
 // What channelEvents needs to know about the world beyond one batch: which
 // session entity it serves, that session's actor (a knock may be aimed at
 // either), its home project (where its mail lands), the eids of the tasks it has
-// CLAIMED (a comment on any of them is a message to the claimant — the sweep's
+// CLAIMED (a comment on any of them is input for the claimant — the sweep's
 // `mine` in client.ts notices()), how to turn an eid into a human id (T-7, S-31)
 // — null when the eid isn't known yet — and a letter's words from the cache (the
 // arrival stamp is a bare mail row). `notified` is the durable dedup: an entity
@@ -300,8 +300,8 @@ export let findSession = (
 // `opened`/`archived` stamps (T-7006) read off the index — so a letter
 // already opened or archived never re-rings. Narrowing later is one line here.
 // `operator` gates PROJECT mail to the operator loop. Missing identity fails
-// closed; direct comments, session knocks, and claimed-task replies are
-// selected independently.
+// closed; claimed-work comments and session knocks are selected independently.
+// Direct session comments remain a deprecated compatibility arm.
 // A letter to the SESSION ITSELF (`S-31@<fleet domain>`, resolved in
 // src/mail.ts) is direct address and rings whatever loop this is — the
 // operator gate belongs to project mail alone, exactly as it does in the
@@ -437,16 +437,16 @@ let indexBatch = (changes: Change[], withBorn: boolean): Batch => {
 
 // The filter + format, pure. Given one broadcast batch and the session context,
 // return the channel events to emit — in batch order, so delivery is
-// deterministic. Five things are aimed at a session:
+// deterministic. Five event shapes reach a run:
 //
-//   1. a `comment` whose target is this session's eid OR one of its CLAIMED
-//      tasks (commenting on a task you hold IS messaging you — the comms bus
-//      rule) — but ONLY at mint, when the batch also carries the doc that holds
-//      the words (a bodiless later patch is skipped). A comment on a claimed
-//      task names that task in `on=` so the operator knows which one.
-//   1b. a `notice` (D-13858): keyed exactly like a comment (target is the
-//      session or a claimed task), but emitted, not said — off the mail relay
-//      and out of the conversation thread.
+//   1. a `comment` whose target is one of this run's CLAIMED tasks — but ONLY
+//      at mint, when the batch also carries the doc that holds the words (a
+//      bodiless later patch is skipped). It names the task in `on=` so the run
+//      knows which work changed. This session's eid is accepted only through
+//      the deprecated compatibility arm.
+//   1b. a `notice` (D-13858): keyed exactly like a comment (claimed task, plus
+//      the same session compatibility arm), but emitted, not said — off the
+//      mail relay and out of the conversation thread.
 //   2. a `knock` (types.ts): the shared `deliver {to}` is the recipient —
 //      this session or its actor — and target is what to look at; the
 //      words ride as a plain comment on the TARGET in the same batch (the

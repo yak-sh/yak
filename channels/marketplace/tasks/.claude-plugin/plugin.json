@@ -1,6 +1,6 @@
 {
   "name": "tasks",
   "version": "0.1.0",
-  "description": "Tasks channel — inbound comments on your session and knocks at your door as in-session <channel source=\"tasks\"> events. Binds to one session via TASKS_SESSION; read-only over the tasks server /ws.",
+  "description": "Tasks channel — comments on your claimed work and knocks at your door as in-session <channel source=\"tasks\"> events. Binds to one session via TASKS_SESSION; read-only over the tasks server /ws.",
   "keywords": ["tasks", "channel", "mcp", "graph", "session"]
 }

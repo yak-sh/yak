@@ -1701,9 +1701,10 @@ export let noticeChanges = (
 }
 
 // The operator loop is the session that TRIAGES a project — the only door that
-// receives project-wide mail and actor knocks. Every session still participates
-// in the graph and hears what is aimed at it or its claimed tasks. No session
-// means a deliberate preview/bare view, which keeps showing project mail.
+// receives project-wide mail and actor knocks. Every run still participates in
+// the graph and hears comments on its claimed work; direct session comments
+// remain migration compatibility. No session means a deliberate preview/bare
+// view, which keeps showing project mail.
 export let isOperator = (s?: Record<string, unknown>) =>
   !s ||
   (s.operator == true && !s.requested_task &&
@@ -1763,8 +1764,9 @@ export let subsOf = (all: Row[], actor?: string) => {
 }
 
 // Addressed to this reader — the four doors an item reaches attention
-// through: a comment aimed at the session or a task it claims, a knock
-// aimed at the session or its actor, or project mail that ARRIVED
+// through: a comment on work it claims (or the deprecated direct-session
+// compatibility arm), a knock aimed at the session or its actor, or mail that
+// ARRIVED
 // (message_id is the inbound mark; sent mail carries none). One predicate,
 // so the digest, the TUI, and the web read the SAME inbox.
 export let addressed = (who: Reader) => (r: Row): boolean => {
@@ -1780,9 +1782,9 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
     return t == who.session || !!who.claims?.has(t) ||
       (who.operator == true && !!who.actor && t == who.actor)
   }
-  // A notice reaches the same doors a comment does — it is about the session
-  // or a task it claims (or the actor, for an operator loop) — but it was
-  // emitted, not said (D-13858). Same addressing, different provenance.
+  // A notice reaches the same doors a comment does — claimed work, the legacy
+  // session address, or the actor for an operator loop — but it was emitted,
+  // not said (D-13858). Same addressing, different provenance.
   let n = r.comps.notice
   if (n) {
     let t = String(n.target ?? '')
@@ -2403,8 +2405,8 @@ export let taskBlock = (
 
 // The session's own meta as YAML frontmatter — the digest's lead once a
 // session is reified (T-4554): an agent that reads its S-num by default
-// can address its own session doc (write a brief, hear its comments)
-// without a lookup dance. Only what's known prints; no session, no block.
+// can address its own session doc (for a brief or run inspection) without a
+// lookup dance. Only what's known prints; no session, no block.
 export let sessionMeta = (all: Row[], sid: string) => {
   let sess = all.find((r) =>
     r.comps.session && String(r.comps.session.id) == sid
@@ -2601,8 +2603,9 @@ export let contextDigest = (
 
 // The comms bus, read side. The Claude channel's own pure filter is reused over
 // a set of rows so every provider gets the same recipient and verification
-// rules: direct comments, claimed-task replies, knocks, and verified project
-// mail for an operator. `notified` is minted only for the bounded batch
+// rules: claimed-work comments, the direct-session compatibility arm, knocks,
+// and verified project mail for an operator. `notified` is minted only for the
+// bounded batch
 // rendered here; a tmux wake-up never calls this function and therefore drains
 // nothing.
 let noticeLine = (ev: InboxEvent, row?: Row) => {
@@ -2954,9 +2957,10 @@ export let projectionSnapshot = async (): Promise<Snapshot> => {
   return { changes: changesOf(all), deps: near.deps }
 }
 
-// The rows the bus's selector might pick, as index queries: a comment or a
-// knock aimed at this session or its actor or a task it claims, and mail
-// aimed at the session or its project. Unread is screened server-side —
+// The rows the bus's selector might pick, as index queries: a comment on work
+// this run claims (plus the direct-session compatibility arm), a knock aimed at
+// the session or its actor, and mail aimed at the session or its project.
+// Unread is screened server-side —
 // `notified` for all three, plus `opened`/`archived`, which is the read-state
 // injects() calls `done`.
 //
@@ -2977,9 +2981,9 @@ export let busRows = async (who: Reader, q: Querier = query) => {
     .filter(Boolean).join(',')
   let [said, emitted, aimed, letters, floated] = await Promise.all([
     q([`.comment.target=${held}`, '.notified=']),
-    // A notice (D-13858) is addressed like a comment — session, claimed task,
-    // or the operator's actor — so it rides the same `held` list. Its own arm
-    // here keeps busRows the SUPERSET of channelEvents' notice branch.
+    // A notice (D-13858) is addressed like a comment — claimed task, legacy
+    // session target, or the operator's actor — so it rides the same `held`
+    // list. Its own arm keeps busRows the SUPERSET of channelEvents' branch.
     q([`.notice.target=${held}`, '.notified=']),
     // WHO a knock is for is the shared deliver.to; the same facet a wake/mail
     // wears, so keep only the knock rows the bus renders.

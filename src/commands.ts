@@ -580,10 +580,10 @@ export let commands: Record<string, Command> = {
   // at the caller session's newest MESSAGE entry, for the dream (T-12800) to
   // harvest at consolidation. The tag is the whole point: channel.ts excludes
   // a meta comment from live delivery, so the note never knocks the doer —
-  // read later, never injected live (contrast a bare comment on a session,
-  // which IS a live message to that agent). A fresh session with no message
-  // yet anchors on the session entity, so a memo never fails for want of a
-  // transcript position.
+  // read later, never injected live (unlike the deprecated direct-session
+  // comment compatibility path). A fresh session with no message yet anchors
+  // on the session entity, so a memo never fails for want of a transcript
+  // position.
   meta: {
     args: [a('observation', 'the observation to leave for the dream', {
       rest: true,

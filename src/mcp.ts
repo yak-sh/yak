@@ -231,8 +231,9 @@ export let elide = (r: Row) =>
   )
 
 let BUS = `Pass your stable session id and the reply also carries anything
-you haven't seen — comments on your claimed tasks, messages aimed at your
-session (a comment ON S-31 is a message TO that agent).`
+you haven't seen — especially comments on work you claim. Steering belongs on
+the task, where the current or next run reads it; comments aimed at S-* remain
+deprecated compatibility.`
 
 // The one habit tool-arg strings breed: form-filling. Agents who write
 // beautiful .md FILES compress a body ARG into one run-on paragraph —
@@ -300,8 +301,8 @@ and & literally; the renderer escapes them for its own output type.
 The graph renders bodies as markdown. ${DOC}
 
 Call task_context first each session, and pass the same stable session
-id to every tool that takes one — it is your identity for claims,
-comments, and the comms bus.`,
+id to every tool that takes one — it names the run for attribution, claims,
+and the comms bus.`,
   })
   let tool = <Shape extends z.ZodRawShape>(
     name: string,
@@ -672,9 +673,9 @@ other sessions. ${BUS}`,
     `Dispatch a managed agent onto a task: mints a session entity carrying
 the request. Invalid provider/model/effort values fail before minting;
 launch failures become a failed Session on the board. Returns the S-id:
-session_peek checks on it, task_comment at the SETTLED session says more
-to it, and when the run settles the server comments the outcome on the
-task AND your spawning session, so you hear it directly. provider/model
+session_peek checks on it; task_comment on the TASK says more to its current
+or next run. When the run settles, the server comments the outcome on its task
+and the spawning run's work, never on the run itself. provider/model
 default to YOUR session's own (pass the same session id you claim with),
 then the shared anonymous default. persona names the persona entity
 (id or alias) the spawned session should wear. ${BUS}`,
@@ -1054,6 +1055,9 @@ it is a redo. ${BUS}`,
 with an id). An optional verdict makes it a review; its body is the
 rationale and may be empty for a bare verdict. Pass the same stable
 session identifier you claim with, for attribution.
+
+Steer agents by commenting on the task or tree root. A comment aimed at
+an S-* run still works during migration, but that address is deprecated.
 
 Returns the comment's own id (C-13). A comment is an ordinary entity, so
 REVISE a wrong one in place — graph_apply {eid: 'C-13', name: 'doc',

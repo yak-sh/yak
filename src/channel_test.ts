@@ -82,7 +82,7 @@ Deno.test('channelEvents: one-pass indexing feeds every branch', () => {
   ])
   // c3 (meta) and k2 (settled) are absent.
 
-  // comment on the session: bare, no `on`, byline from created
+  // deprecated direct-session compatibility: bare, no `on`
   assertEquals(evs[0].content, 'hello session')
   assertEquals(evs[0].meta.from, 'U-1')
   assertEquals(evs[0].meta.on, undefined)

@@ -5,7 +5,7 @@
     {
       "name": "tasks",
       "source": "./tasks",
-      "description": "Tasks channel — pushes things aimed at a session (a comment on its entity, a knock at its door) into the running Claude session as <channel source=\"tasks\"> events. Read-only listener over the tasks server's /ws sync socket."
+      "description": "Tasks channel — pushes comments on a session's claimed work and knocks at its door into the running Claude session as <channel source=\"tasks\"> events. Read-only listener over the tasks server's /ws sync socket."
     }
   ]
 }

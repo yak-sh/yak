@@ -2731,12 +2731,13 @@ let backup = async () => {
 }
 
 // An interactive session, fleet-wired: permissions skipped and the tasks
-// channel active, so a comment on the session's entity or a knock at its
-// door drops straight into the running transcript. Identity is Claude's
-// own session id (CLAUDE_CODE_SESSION_ID — /clear rotates it, and the
-// rotation IS the point: one S-* per life). The SessionStart hook reifies
-// the entity under it and stamps the claude process pid; the channel
-// plugin binds by that pid, so service follows each rotation.
+// channel active, so comments on its claimed work and knocks at its door drop
+// straight into the running transcript. Direct session comments stay as
+// compatibility. Identity is Claude's own session id
+// (CLAUDE_CODE_SESSION_ID — /clear rotates it, and the rotation IS the point:
+// one S-* per life). The SessionStart hook reifies the entity under it and
+// stamps the claude process pid; the channel plugin binds by that pid, so
+// service follows each rotation.
 let terminal = async (
   command: string,
   args: string[],
