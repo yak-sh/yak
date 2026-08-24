@@ -3,6 +3,7 @@
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { md, mdAbs, mdInline, mdMentions } from './md.ts'
 import { slow } from './testing.ts'
+import { prefix } from './types.ts'
 
 Deno.test('mdInline: title markup has no block wrapper or nested links', () => {
   assertEquals(
@@ -93,8 +94,10 @@ Deno.test('md: ids in code stay literal; mid-word letters stay words', () => {
   assertEquals(md('`T-123`').includes('data-ref'), false)
   assertEquals(md('```\nT-123\n```').includes('data-ref'), false)
   assertEquals(md('UTF-8 and SHA-256').includes('data-ref'), false)
-  // an unknown prefix is not a reference
-  assertEquals(md('X-123').includes('data-ref'), false)
+  // Derive an unknown instead of reserving one a future kind may claim.
+  let known = new Set([...Object.values(prefix), 'D'])
+  let unknown = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].find((p) => !known.has(p))!
+  assertEquals(md(`${unknown}-123`).includes('data-ref'), false)
 })
 
 Deno.test('md: a code-span commit links through its project repo', () => {

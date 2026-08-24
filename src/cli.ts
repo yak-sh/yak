@@ -62,6 +62,7 @@ import {
   query,
   readerFor,
   readerRows,
+  redact as redactValue,
   refsIn,
   replyChanges,
   repoAt,
@@ -694,6 +695,53 @@ let edit = async (got: Got) => {
   let newV = got.args.new == null ? '' : read(got.args.new)
   await send(editChanges(row, oldV, newV, got.flags.has('--all')))
   print(`${idOf(row)} edited`)
+}
+
+let redact = async (got: Got) => {
+  let { id, selector: raw } = got.args
+  if (!id || raw == null) throw new Error('task redact <id> <selector>')
+  let selector = String(
+    inflate({ comp: 'doc', prop: 'body', value: raw }, undefined, raw).value,
+  )
+  warn(`redacting ${id} — live doc, journal, search indexes, and embedding`)
+  let out = await redactValue(id, selector)
+  print(
+    `${out.audit} recorded: ${out.target}.doc.${out.column}; ` +
+      `${out.journalRows} journal batch${out.journalRows == 1 ? '' : 'es'}, ` +
+      `${out.replacements} value${out.replacements == 1 ? '' : 's'} scrubbed`,
+  )
+  let backup = out.backup
+  if (backup.error) {
+    warn(
+      `published backup: inspection failed — ${backup.error}; rotate the value`,
+    )
+  } else if (!backup.ref) {
+    warn(
+      'published backup: no upstream is configured; exposure is unknown; ' +
+        'rotate the value',
+    )
+  } else if (backup.count == null) {
+    warn(
+      `published backup: ${backup.ref} exposure is unknown because its exact ` +
+        'journal boundary could not be established; rotate the value',
+    )
+  } else if (!backup.count) {
+    print(`published backup: ${backup.ref} has no affected commits`)
+  } else {
+    let first = backup.first!
+    let last = backup.last!
+    warn(
+      `published backup: ${backup.ref} retains the value in ${backup.count} ` +
+        `commit${backup.count == 1 ? '' : 's'} (${first.sha.slice(0, 8)} ` +
+        `${local(first.at)} → ${last.sha.slice(0, 8)} ${local(last.at)}); ` +
+        'rotate the value',
+    )
+  }
+  print('the next backup dump will be clean; prior commits were not rewritten')
+  warn(
+    'SQLite free pages/WAL, frozen archives, blobs, session logs, browser ' +
+      'caches, and recipients are outside this operation',
+  )
 }
 
 // `task done T-3 [comment]` / `task cancel T-3 [reason]` — sugar over
@@ -3001,6 +3049,7 @@ export let verbs = bind({
   new: create,
   set,
   edit,
+  redact,
   show,
   history: past,
   undo: unwind,

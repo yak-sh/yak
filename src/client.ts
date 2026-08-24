@@ -39,6 +39,7 @@ import { FLOOR } from './twin.ts'
 import { type Provider, spawnDefault } from './providers.ts'
 import { request } from './http.ts'
 import type { Anomalies } from './db.ts'
+import type { Published } from './redaction.ts'
 import { unmime } from './rfc2047.ts'
 import {
   channelEvents,
@@ -409,6 +410,37 @@ export let send = async (changes: Change[], via = me()) => {
   if (!res.ok) throw new Error(`apply failed: ${await res.text()}`)
   let out = await res.json() as { changes: Change[] }
   return out.changes
+}
+
+export type RedactionReport = {
+  changes: Change[]
+  audit: string
+  target: string
+  column: 'title' | 'body'
+  hash: string
+  journalRows: number
+  replacements: number
+  firstSeen?: string
+  backup: Published
+}
+
+// The removed value rides only a POST body. In particular it never joins a URL
+// or an error assembled here, and the server's response carries only its hash.
+export let redact = async (
+  id: string,
+  selector: string,
+  via = me(),
+): Promise<RedactionReport> => {
+  let res = await request(`http://${host()}/redact`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(via ? { 'x-via': via } : {}),
+    },
+    body: JSON.stringify({ id, selector }),
+  })
+  if (!res.ok) throw new Error(`redact failed: ${await res.text()}`)
+  return await res.json() as RedactionReport
 }
 
 // The pipe, as a seam. Reading is sync because inflate is, and `taken`

@@ -7,6 +7,7 @@
 // survives — it lives in live.ts, above the swap), css edits re-fetch the
 // stylesheet, and only shell/server edits still cost a real reload.
 import { transform } from 'sucrase'
+import { dirname } from 'node:path'
 import { bound, guard, type Serving } from './bind.ts'
 import { takeBaton } from './baton.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
@@ -27,12 +28,14 @@ import {
   epochOf,
   file as graph,
   historicalWorked,
+  human,
   inverseBatch,
   journalBy,
   journalOf,
   lastBatch,
   locate,
   migrate,
+  redact as redactValue,
   referrersOf,
   refsOf,
   refValuesOf,
@@ -48,6 +51,7 @@ import {
   touch,
   vocabularyDoc,
 } from './db.ts'
+import { published, withBackupLock } from './redaction.ts'
 import { bodied, bodyless, gaps, spread, type Step, step } from './subs.ts'
 import { dispatch, docs, on, relay, trace } from './effects.ts'
 import { registerSessionSource } from './source_session.ts'
@@ -1495,6 +1499,59 @@ let http = Deno.serve(
         note(false, why)
         return new Response(why, { status: 400 })
       })
+    }
+    // Value redaction is the one write that reaches backward into the journal.
+    // Hold backup's process lock from the atomic database scrub through the
+    // upstream-history report, so no pre-scrub snapshot can publish after the
+    // answer. The removed value rides only the POST body and db transaction —
+    // never a URL, diagnostic, telemetry row, git argv, or response.
+    if (path == '/redact' && req.method == 'POST') {
+      let t0 = performance.now()
+      try {
+        let body = await req.json() as { id?: string; selector?: string }
+        if (!body.id || body.selector == null) {
+          throw new Error('redact needs an id and selector')
+        }
+        let done = await withBackupLock(dirname(graph), async () => {
+          let result = redactValue(
+            db,
+            body.id!,
+            body.selector!,
+            req.headers.get('x-via'),
+          )
+          cast(result.changes)
+          effect(result.changes, trace())
+          let backup
+          try {
+            backup = await published(dirname(graph), result.firstSeen)
+          } catch (e) {
+            backup = { ref: null, error: String(e) }
+          }
+          return {
+            ...result,
+            audit: human(db, result.audit),
+            target: human(db, result.target),
+            backup,
+          }
+        })
+        record(db, {
+          source: 'http',
+          name: 'redact',
+          ok: true,
+          ms: performance.now() - t0,
+        })
+        return Response.json(done)
+      } catch (e) {
+        let why = e instanceof Error ? e.message : String(e)
+        record(db, {
+          source: 'http',
+          name: 'redact',
+          ok: false,
+          ms: performance.now() - t0,
+          error: why,
+        })
+        return new Response(why, { status: 400 })
+      }
     }
     // Undo reverses a journaled batch: the server builds the guarded inverse
     // (only it reads the journal) and applies it through the same door as any

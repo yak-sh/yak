@@ -244,6 +244,26 @@ export let manuals = declare({
     args: [arg('id', id), arg('old', text), arg('new', text, false, false)],
     opts: [flag('--all')],
   },
+  redact: {
+    about: 'forget a doc value from live state and journal history',
+    examples: [
+      'task redact T-3 .body',
+      'task redact T-3 @- < secret.txt',
+    ],
+    detail: '`.title` or `.body` replaces the whole current column with ' +
+      '`[redacted]`; a literal replaces that value in the one target doc ' +
+      'column where it appears, including historical-only values. Use ' +
+      '`@file` or `@-` for a literal so the value never enters shell history ' +
+      'or process arguments. The live doc, prior journal payloads, FTS/gram ' +
+      'indexes, and target embedding are scrubbed atomically, and a permanent ' +
+      'hash-only audit entity records the act. Existing git backup commits ' +
+      'are NOT rewritten: the result names the published range that retains ' +
+      'the value and tells you when rotation is required. Frozen archives, ' +
+      'blobs, session logs, browser caches, recipients, and forensic SQLite ' +
+      'free-page/WAL erasure are outside this narrow operation.',
+    root: true,
+    args: [arg('id', id), arg('selector', bodyKind)],
+  },
   show: {
     about: 'one entity as a document (comments render by default)',
     examples: [

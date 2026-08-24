@@ -596,6 +596,11 @@ export let comps: Record<string, Record<string, PropType>> = {
     // message_id set (it arrived) and no `opened` — so outbound is born read.
   },
   conflict: {}, // server-minted audit rows — nothing is wire-writable
+  // A value the graph deliberately forgot. The removed bytes never ride this
+  // facet: target + column say where, hash proves which value, and the
+  // universal created stamp says when/by/via. Server-owned and permanent;
+  // db.ts's redact transaction is its only writer.
+  redaction: {},
   // A webhook delivery, derived from the edge's raw request spool
   // (inbound.ts): the edge captures requests without opinions, the graph
   // pulls them apart. Tag-style like conflict — every column is
@@ -1103,6 +1108,11 @@ export let stamped: Record<string, Record<string, PropType>> = {
     holder: 'text',
     at: 'time',
   },
+  redaction: {
+    target: { eid: 'entity', death: 'keep' },
+    column: { enum: ['title', 'body'] },
+    hash: 'text',
+  },
   role: {
     applied_hash: 'text',
     applied_at: 'time',
@@ -1310,6 +1320,7 @@ export let kindOrder = [
   'mail',
   'hook',
   'conflict',
+  'redaction',
   'review',
   'notice',
   'comment',
@@ -1391,6 +1402,7 @@ export let prefix: Record<string, string> = {
   wake: 'W',
   dream: 'Z', // Z for sleep — the venture's consolidation cursor
   model: 'O', // O for the m-O-del: M is the memories'
+  redaction: 'X', // e-X-cision: R is the roles'
 }
 // The short handle a NUM-LESS entity wears: the uuid's leading 8 hex — its
 // first group, already dashless. Honest that there is no human number, and
@@ -2038,6 +2050,16 @@ export type Conflict = {
   at?: string
 }
 
+// An audit entity for bytes deliberately removed from live doc state and its
+// journal history. The created stamp carries when/by/via; only the digest of
+// the removed value remains.
+export type Redaction = {
+  eid: string
+  target: string
+  column: 'title' | 'body'
+  hash: string
+}
+
 // A stable external name for an entity — a slug from a previous system, a
 // human handle. An entity may wear several: `slug` is the PRIMARY handle
 // (the display name, db.ts human()), `slugs` a space-delimited set of
@@ -2233,6 +2255,7 @@ export type EntCore = {
   hook?: Hook
   email?: Email
   conflict?: Conflict
+  redaction?: Redaction
   comment?: Comment
   notice?: Notice
   meta?: { eid: string }

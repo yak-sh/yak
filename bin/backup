@@ -41,6 +41,12 @@ cd "$data"
 
 [ -d .git ] || { echo "backup: $data is not a git repo (git init it first)" >&2; exit 1; }
 
+# Redaction holds the same lock through its database scrub and published-
+# history report. Otherwise this job could snapshot the old bytes first, wait
+# while redaction reports, then commit and push one new leak afterward.
+exec 9>.git/tasks-backup.lock
+flock -x 9
+
 # Plain output regardless of any ~/.sqliterc (box modes break the checks).
 sq() { sqlite3 -batch -init /dev/null -noheader -list "$@"; }
 

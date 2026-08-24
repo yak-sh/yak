@@ -63,6 +63,12 @@ import {
 } from './props.ts'
 import { canon, fleetLocal } from './mailaddr.ts'
 import {
+  type DocColumn,
+  docColumns,
+  REDACTED,
+  scrubBatch,
+} from './redaction.ts'
+import {
   compsOf,
   hasSources,
   sourceEntries,
@@ -551,6 +557,17 @@ let schema = `
     loser      text not null,
     holder     text not null,
     at         text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
+  -- A value deliberately forgotten. The removed bytes never land here:
+  -- target + column identify the slot and hash proves which value; the
+  -- universal created component carries when/by/via. Server-owned and
+  -- permanent — redact() below is the only writer, and entity deletion
+  -- refuses an audit row.
+  create table if not exists redaction (
+    entity integer primary key references entity(id),
+    target integer not null,
+    "column" text not null check ("column" in ('title', 'body')),
+    hash text not null
   );
   create table if not exists comment (
     entity        integer primary key references entity(id),
@@ -2865,6 +2882,7 @@ let serverOwned = new Set([
   'delivered',
   'error',
   'exception',
+  'redaction',
 ])
 
 // Rewrite a change that names a RENAMED component or column to its current
@@ -4289,6 +4307,19 @@ export let apply = (
           }
           continue
         }
+        // A redaction is the durable fact that bytes were deliberately
+        // forgotten. The value is gone, but that fact may not be erased —
+        // redacting a redaction would recreate the very ambiguity this audit
+        // exists to prevent.
+        if (
+          prep(
+            db,
+            `select 1 from redaction
+             where entity = (select id from entity where eid = ?)`,
+          ).get(eid)
+        ) {
+          throw new Error(`${human(db, eid)} is a permanent redaction audit`)
+        }
         // Death spreads to entities that exist ABOUT the dead one — cards
         // viewing it, comments aimed at it, pins and cameras on a dead
         // canvas or client. The worklist walks that closure first; then
@@ -4958,6 +4989,222 @@ export let record = (
     touchJournal(db, jrow, changes)
   } catch (e) {
     console.warn('journal skipped —', e)
+  }
+}
+
+export type RedactionResult = {
+  changes: Change[]
+  audit: string
+  target: string
+  column: DocColumn
+  hash: string
+  journalRows: number
+  replacements: number
+  firstSeen?: string
+}
+
+type RedactionJournal = {
+  rowid: number
+  ts: string
+  batch: string
+}
+
+let redactionRows = (
+  db: DatabaseSync,
+  value: string,
+): RedactionJournal[] => {
+  // journal.batch is JSON, so pre-screen with the JSON-escaped spelling and
+  // parse only candidates. The parsed transform below is the authority — this
+  // merely avoids decoding every batch in a large graph.
+  let encoded = JSON.stringify(value).slice(1, -1)
+  return prep(
+    db,
+    `select rowid, ts, batch from journal
+     where instr(batch, ?) > 0 order by rowid`,
+  ).all(encoded) as RedactionJournal[]
+}
+
+// Forget one doc value everywhere the graph's write record carried it. This is
+// deliberately NOT apply(): changing live state, old journal rows, the derived
+// vector and the audit must be one transaction, and the ordinary write path is
+// append-only. FTS/gram update synchronously through doc's existing triggers.
+// Any failure — including the sanitized audit append — rolls the whole act
+// back. The removed bytes never appear in an error or return value.
+export let redact = (
+  db: DatabaseSync,
+  id: string,
+  selector: string,
+  writer?: string | null,
+): RedactionResult => {
+  db.exec('begin immediate')
+  try {
+    let target = resolveId(db, id)
+    let targetId = target &&
+      (prep(db, 'select id from entity where eid = ?').get(target) as
+        | { id: number }
+        | undefined)?.id
+    if (!target || targetId == null) throw new Error('no such redaction target')
+
+    let doc = prep(
+      db,
+      `select d.title, d.body from doc d
+       where d.entity = ?`,
+    ).get(targetId) as { title: string; body: string } | undefined
+    let named: DocColumn | undefined = selector == '.title' ||
+        selector == '.doc.title'
+      ? 'title'
+      : selector == '.body' || selector == '.doc.body'
+      ? 'body'
+      : undefined
+    let value = named ? doc?.[named] : selector
+    if (!value || value == REDACTED) {
+      throw new Error(
+        named
+          ? `redact: ${named} has no value to remove`
+          : 'redact: literal has no value to remove',
+      )
+    }
+    if (!named && value.length < 4) {
+      throw new Error(
+        'redact: a literal needs at least 4 characters; use .title or .body ' +
+          'to remove the whole column',
+      )
+    }
+
+    let rows = redactionRows(db, value)
+    let column: DocColumn
+    if (named) {
+      column = named
+    } else {
+      let columns = new Set<DocColumn>()
+      for (let col of ['title', 'body'] as DocColumn[]) {
+        if (doc?.[col]?.includes(value)) columns.add(col)
+      }
+      for (let row of rows) {
+        for (let col of docColumns(JSON.parse(row.batch), target, value)) {
+          columns.add(col)
+        }
+      }
+      if (!columns.size) {
+        throw new Error('redact: literal was not found on the target document')
+      }
+      if (columns.size > 1) {
+        throw new Error(
+          `redact: literal occurs in ${[...columns].join(' and ')}; ` +
+            'redact one whole column instead',
+        )
+      }
+      column = [...columns][0]
+    }
+
+    let journalRows = 0
+    let replacements = 0
+    let firstSeen: string | undefined
+    let rewrite = prep(db, 'update journal set batch = ? where rowid = ?')
+    for (let row of rows) {
+      let clean = scrubBatch(JSON.parse(row.batch), value)
+      if (!clean.count) continue
+      rewrite.run(JSON.stringify(clean.batch), row.rowid)
+      journalRows++
+      replacements += clean.count
+      firstSeen ??= row.ts
+    }
+
+    let docChange: Change | undefined
+    if (doc) {
+      let old = doc[column]
+      let clean = named ? REDACTED : old.replaceAll(value, REDACTED)
+      if (clean != old) {
+        prep(db, `update doc set ${sqlName(column)} = ? where entity = ?`)
+          .run(clean, targetId)
+        docChange = { eid: target, name: 'doc', comp: { [column]: clean } }
+      }
+    }
+    // A stale vector can retain the removed meaning until the next sweep.
+    // Delete it in the same transaction; embedding's trigger dirties the ANN
+    // index and the sweep later embeds only the sanitized doc.
+    prep(db, 'delete from embedding where eid = ?').run(target)
+
+    let now = new Date().toISOString()
+    let actor = writerActor(db, writer)
+    let via = writerVia(db, writer)
+    let actorId = refId(db, actor)
+    let viaId = refId(db, via)
+    let audit = crypto.randomUUID()
+    let digest = sha(value)
+    spine(db, audit)
+    prep(
+      db,
+      `insert into redaction (entity, target, "column", hash)
+       values ((select id from entity where eid = ?), ?, ?, ?)`,
+    ).run(audit, targetId, column, digest)
+    mintNum(db, audit)
+    prep(
+      db,
+      `insert into created (entity, at, "by", via)
+       values ((select id from entity where eid = ?), ?, ?, ?)`,
+    ).run(audit, now, actorId, viaId)
+
+    let updated: Change | undefined
+    if (docChange) {
+      prep(
+        db,
+        `insert into updated (entity, at, "by", via)
+         values (?, ?, ?, ?)
+         on conflict(entity) do update set at = excluded.at,
+           "by" = excluded."by", via = excluded.via`,
+      ).run(targetId, now, actorId, viaId)
+      let comp = readComp(db, target, 'updated')
+      if (comp) updated = { eid: target, name: 'updated', comp }
+    }
+
+    let redaction = {
+      eid: audit,
+      name: 'redaction',
+      comp: readComp(db, audit, 'redaction')!,
+    }
+    let entity = {
+      eid: audit,
+      name: 'entity',
+      comp: readComp(db, audit, 'entity')!,
+    }
+    let created = {
+      eid: audit,
+      name: 'created',
+      comp: readComp(db, audit, 'created')!,
+    }
+    let logged: Change[] = [
+      ...(docChange ? [docChange] : []),
+      redaction,
+      entity,
+    ]
+    let jrow = Number(
+      prep(
+        db,
+        'insert into journal (ts, actor, via, batch) values (?, ?, ?, ?)',
+      ).run(now, actor, via, JSON.stringify(logged)).lastInsertRowid,
+    )
+    touchJournal(db, jrow, logged)
+
+    let changes: Change[] = [
+      ...logged,
+      created,
+      ...(updated ? [updated] : []),
+    ]
+    db.exec('commit')
+    return {
+      changes,
+      audit,
+      target,
+      column,
+      hash: digest,
+      journalRows,
+      replacements,
+      firstSeen,
+    }
+  } catch (e) {
+    rollback(db)
+    throw e
   }
 }
 
