@@ -68,7 +68,10 @@ class Socket {
   static OPEN = 1
   readyState = 1
   send(frame: string) {
-    sent.push(...JSON.parse(frame) as Change[])
+    // A write travels as {apply, id} — the acked delivery (T-21413); a bare
+    // array is any other frame shape.
+    let got = JSON.parse(frame) as Change[] | { apply?: Change[] }
+    sent.push(...(Array.isArray(got) ? got : got.apply ?? []))
   }
   addEventListener() {}
   close() {}

@@ -206,9 +206,11 @@ export let topology = <T>(
     return ready
   }
 
-  let route = (frame: T) => {
+  // An acked delivery (live.ts outbox) passes its own stable id so a RETRY of
+  // the same frame replaces its pending entry instead of queueing a duplicate;
+  // anything else gets a fresh key per call, as before.
+  let route = (frame: T, id = key()) => {
     if (standalone || (leader && serving)) return io.send(frame)
-    let id = key()
     pending.set(id, frame)
     bus.postMessage({ kind: 'out', id, frame })
   }

@@ -197,6 +197,54 @@ Deno.test('writes wait for the holder to finish booting', async () => {
   lease.resolve()
 })
 
+// An acked delivery retries the SAME frame under its own stable id (live.ts
+// outbox, T-21413) — each retry must replace its queued entry, not add one,
+// or a long outage flushes N duplicates when a leader finally serves.
+Deno.test('a retried route under one id flushes once', async () => {
+  let lock = locks()
+  let channel = channels<string>()
+  let boot = deferred()
+  let lease = deferred()
+  let sent: string[] = []
+  let done = () => Promise.resolve()
+  let leader = topology(
+    lock,
+    channel(),
+    {
+      lead: () => boot.promise,
+      follow: done,
+      solo: done,
+      receive: () => {},
+      send: (frame) => {
+        sent.push(frame)
+      },
+    },
+    () => 'leader',
+    () => lease.promise,
+  )
+  let follower = topology(
+    lock,
+    channel(),
+    {
+      lead: done,
+      follow: done,
+      solo: done,
+      receive: () => {},
+      send: () => {},
+    },
+    () => 'retrier',
+  )
+
+  let first = leader.start()
+  let second = follower.start()
+  follower.route('retry', 'delivery-1')
+  follower.route('retry', 'delivery-1')
+  boot.resolve()
+  await Promise.all([first, second])
+  assertEquals(sent, ['retry'])
+  lease.resolve()
+})
+
 Deno.test('a failed lock cleanly restores the solo path', async () => {
   let calls: string[] = []
   let peer = topology(

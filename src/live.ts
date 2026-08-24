@@ -987,12 +987,79 @@ export let pending = (e: Ent) => {
   return true
 }
 
-// Land a local edit: cache first (instant render), then the wire.
+// The outbox: every local edit is HELD here until the server acknowledges it
+// by delivery id (T-21413 — fire-and-forget lost owner edits across a restart:
+// applyLocal showed success while the frame died on a closing socket, and
+// nothing ever retried or complained). An entry leaves only on `{ack}` (or a
+// rejection frame, which surfaces and heals) — never on a send ATTEMPT.
+let outbox = new Map<string, { changes: Change[]; at: number }>()
+export let unsent = () => [...outbox.keys()]
+
+// Redelivery: an unacked write is re-routed until the server confirms it.
+// Re-applying the same patch is harmless (apply() is a merge of the same
+// values); the id is stable across retries so the transport dedups, and the
+// timer disarms itself when the outbox drains — no idle tick.
+export let RESEND = 3_000
+let redeliver: ReturnType<typeof setInterval> | undefined
+export let redeliverNow = (force = false) => {
+  if (!outbox.size) {
+    if (redeliver !== undefined) clearInterval(redeliver)
+    redeliver = undefined
+    return
+  }
+  let now = Date.now()
+  for (let [id, o] of outbox) {
+    if (!force && now - o.at < RESEND) continue
+    o.at = now
+    route({ apply: o.changes, id }, id)
+  }
+}
+let deliver = (changes: Change[]) => {
+  let id = crypto.randomUUID()
+  outbox.set(id, { changes, at: Date.now() })
+  if (redeliver === undefined) {
+    redeliver = setInterval(redeliverNow, RESEND) // Headless (TUI, tests): an armed retry must never hold the process open.
+    ;(globalThis as { Deno?: { unrefTimer?: (id: number) => void } })
+      .Deno?.unrefTimer?.(redeliver as unknown as number)
+  }
+  route({ apply: changes, id }, id)
+}
+export let acked = (id: string) => {
+  outbox.delete(id)
+  if (!outbox.size) redeliverNow()
+}
+
+// A reload discards this tab's memory — outbox included — so undelivered
+// writes must land through the durable door first. POST /apply carries the
+// same client attribution the socket handshake does; a duplicate of an
+// already-applied batch is the same harmless re-merge redelivery makes. A
+// REFUSED batch is dropped and surfaced (retrying a refusal changes nothing);
+// an unreachable server keeps the outbox and reports failure so the caller
+// holds the reload — losing a write silently is the one unacceptable outcome.
+let drain = async (): Promise<boolean> => {
+  for (let [id, o] of [...outbox]) {
+    try {
+      let res = await fetch(`${base()}/apply`, {
+        method: 'POST',
+        headers: config.client ? { 'x-via': config.client } : {},
+        body: JSON.stringify(o.changes),
+      })
+      if (!res.ok) problem.value = await res.text()
+      outbox.delete(id)
+    } catch {
+      return false
+    }
+  }
+  return true
+}
+
+// Land a local edit: cache first (instant render), then the acked wire.
 export let mutate = (...changes: Change[]) => {
   problem.value = ''
   let parsed = normalizeChanges(changes, { resolve: findEid })
+  if (!parsed.length) return
   applyLocal(parsed)
-  send(...parsed)
+  deliver(parsed)
 }
 
 type Catchup = { catchup: Change[]; cursor: number }
@@ -1101,6 +1168,11 @@ let connect = () => {
     let poll = setInterval(async () => {
       try {
         await fetch(`${base()}/snapshot`, { method: 'HEAD' })
+        // The server is back — but this tab may hold writes it made while the
+        // socket was down. They leave through /apply before the reload that
+        // would discard them (T-21413); a failed drain leaves the poller
+        // running, so the next tick asks again.
+        if (!(await drain())) return
         clearInterval(poll)
         polling = false
         owner?.fan('reload')
@@ -1111,6 +1183,13 @@ let connect = () => {
   return socket
 }
 
+// The follower half of the same promise: a fanned 'reload' must not outrun
+// this tab's own outbox. One drain try per tick, on the poller's cadence.
+let reloadDrained = async () => {
+  if (await drain()) return config.reload()
+  setTimeout(reloadDrained, 500)
+}
+
 let wire = (frame: unknown) => {
   let s = connect()
   let msg = JSON.stringify(frame)
@@ -1118,8 +1197,13 @@ let wire = (frame: unknown) => {
   else s.addEventListener('open', () => s.send(msg), { once: true })
 }
 
-let route = (frame: unknown) => owner ? owner.route(frame) : wire(frame)
-export let send = (...changes: unknown[]) => route(changes)
+// An acked delivery threads its id through so a retry REPLACES its queued
+// transport entry instead of piling up a duplicate per tick.
+let route = (frame: unknown, id?: string) =>
+  owner ? owner.route(frame, id) : wire(frame)
+// THE change-batch door — every write leaves through the outbox, so no caller
+// can fire and forget.
+export let send = (...changes: unknown[]) => deliver(changes as Change[])
 
 // Query subscriptions (T-3683), the client half. The cache becomes a UNION of
 // subscription result sets: `subMembers` refcounts which eids each sub holds,
@@ -1477,10 +1561,17 @@ type Land = 'leader' | 'follower' | 'solo'
 // Catch-up/reset still persist in solo mode — the 2.1 boot write.
 let land = async (data: unknown, mode: Land) => {
   if (hot(data)) {
-    if (data == 'reload') setTimeout(config.reload)
+    // Undelivered writes leave through /apply BEFORE the page dies (T-21413);
+    // a failed drain (server flickered again) retries on the poller's cadence
+    // rather than reloading over the outbox.
+    if (data == 'reload') setTimeout(reloadDrained)
     else if ('hmr' in data) {
       config.swap ? config.swap(data.hmr) : config.reload()
     } else config.css?.(data.css)
+    return
+  }
+  if (data && typeof data == 'object' && 'ack' in data) {
+    acked(String((data as { ack: unknown }).ack))
     return
   }
   if (data && typeof data == 'object' && 'observe' in data) {
@@ -1510,6 +1601,10 @@ let land = async (data: unknown, mode: Land) => {
     // A rejected batch comes back with the authoritative state of the eids it
     // touched (server.ts correct()) — apply it to undo the optimistic write.
     // Its cursor is unchanged (nothing committed), so this only heals the cache.
+    // A refusal settles the delivery: the outbox must not redeliver it.
+    if ((frame as { id?: unknown }).id) {
+      acked(String((frame as { id: unknown }).id))
+    }
     if (Array.isArray(frame.changes)) applyLocal(frame.changes)
     return
   }

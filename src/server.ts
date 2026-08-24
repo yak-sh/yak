@@ -671,13 +671,20 @@ let ws = (req: Request) => {
   socket.onmessage = (m) => {
     let frame = JSON.parse(String(m.data))
     // Object frames are control (design §1), structurally disjoint from the
-    // array batches: {since} is the catch-up handshake, everything else
-    // ({sub}/{unsub}) is subscriptions — nothing existing changes.
-    if (!Array.isArray(frame)) {
-      if ('since' in frame) return join(socket, frame)
-      return control(socket, frame)
-    }
-    let sent = frame as Change[]
+    // array batches: {since} is the catch-up handshake, {apply} an acked
+    // write, everything else ({sub}/{unsub}) is subscriptions.
+    let sent: Change[]
+    let id: string | undefined
+    if (Array.isArray(frame)) sent = frame as Change[]
+    else if ('since' in frame) return join(socket, frame)
+    // {apply, id} is a batch wearing a delivery id (T-21413): the ack below is
+    // what lets a client HOLD each write in its outbox until commit instead of
+    // firing and forgetting. A bare array (an older tab) still applies — it
+    // just gets no ack.
+    else if (Array.isArray(frame.apply)) {
+      sent = frame.apply as Change[]
+      if (frame.id != null) id = String(frame.id)
+    } else return control(socket, frame)
     let out: Change[]
     let t = trace()
     try {
@@ -686,13 +693,16 @@ let ws = (req: Request) => {
       console.error('sync: bad batch dropped —', e)
       // Revert the sender's optimistic apply with a SCOPED re-sync of just the
       // eids it touched — the authoritative pre-batch state (M-21143), never a
-      // whole-graph snapshot the rejected write does not need.
+      // whole-graph snapshot the rejected write does not need. The id settles
+      // the delivery: a refusal is an answer, not a reason to redeliver.
       socket.send(JSON.stringify({
         error: e instanceof Error ? e.message : String(e),
         changes: correct(db, sent),
+        id,
       }))
       return
     }
+    if (id) socket.send(JSON.stringify({ ack: id }))
     // The sender hears the canonical patch too: its optimistic spelling may
     // differ from storage (`P02`, `today`, a human reference). Applying the
     // same patch twice is harmless; omitting it leaves the sender divergent.
