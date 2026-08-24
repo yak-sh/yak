@@ -1240,6 +1240,40 @@ let ws: WebSocket | null = null
 let polling = false
 let serial = Promise.resolve()
 
+// Socket liveness (T-21511). A half-open socket (network drop with no FIN, a
+// suspended/backgrounded tab) stays `readyState == OPEN`, so onclose never fires
+// and the reconnect poller never starts — the tab goes silently deaf until a
+// manual reload. The server pings every 25s (server.ts PING_MS); the watchdog
+// resets on ANY frame and, after WATCHDOG_MS of total silence, force-closes the
+// socket so the existing onclose → poller → reconnect path runs. `seen` is the
+// last-frame time, so a tab refocused after being frozen can tell a live socket
+// from a stale one.
+let WATCHDOG_MS = 60_000
+let seen = 0
+let watchdog: ReturnType<typeof setTimeout> | undefined
+// A heartbeat frame carries liveness only, never graph data.
+export let isPing = (data: unknown): boolean =>
+  !!data && typeof data == 'object' && 'ping' in data
+// A socket is stale if it is not OPEN, or has heard nothing (data OR ping) for
+// `ms` — the refocus/watchdog recovery trigger.
+export let socketStale = (
+  readyState: number,
+  since: number,
+  now: number,
+  ms = WATCHDOG_MS,
+): boolean => readyState != WebSocket.OPEN || now - since > ms
+let pet = () => {
+  seen = Date.now()
+  if (watchdog !== undefined) clearTimeout(watchdog)
+  watchdog = setTimeout(() => {
+    if (ws && ws.readyState <= WebSocket.OPEN) ws.close()
+  }, WATCHDOG_MS)
+}
+let unpet = () => {
+  if (watchdog !== undefined) clearTimeout(watchdog)
+  watchdog = undefined
+}
+
 // Observations never join cache or IDB. One bounded state per watched Session
 // is enough to paint its unfinished generation; the partition replaces it at
 // the first durable output or reconnect frame.
@@ -1295,7 +1329,8 @@ let connect = () => {
   ws = socket
   // The catch-up handshake: send the held cursor first, so every later live
   // frame the server broadcasts arrives AFTER the catch-up it just sent.
-  socket.onopen = () =>
+  socket.onopen = () => {
+    pet()
     socket.send(JSON.stringify({
       since: held.cursor ?? 0,
       epoch: held.epoch,
@@ -1305,8 +1340,13 @@ let connect = () => {
       // (M-21143) — safe only because serverQuery keeps membership complete.
       ws: config.serverQuery ? 1 : undefined,
     }))
+  }
   socket.onmessage = (m) => {
+    pet()
     let data = JSON.parse(String(m.data)) as unknown
+    // A heartbeat frame is liveness only (T-21511) — pet the watchdog, land
+    // nothing.
+    if (isPing(data)) return
     serial = serial.then(async () => {
       // Reload must leave the leader before its own page disappears.
       let share = owner
@@ -1319,6 +1359,7 @@ let connect = () => {
     })
   }
   socket.onclose = () => {
+    unpet()
     if (ws != socket) return
     ws = null
     clearObservations()
@@ -1849,6 +1890,17 @@ export let boot = async () => {
   let search = (globalThis as { location?: { search?: string } }).location
     ?.search ?? ''
   config.store ||= storeProbe(search)
+  // Refocusing a tab that owns the socket must recover a stale connection
+  // WITHOUT a manual reload (T-21511): a backgrounded tab is frozen, so its
+  // watchdog and the socket both stall; on becoming visible, if this tab's
+  // socket is closed or has heard nothing for WATCHDOG_MS, force-close it so the
+  // onclose → poller → reconnect path runs. A live socket is left untouched (no
+  // needless reload). A follower holds no socket and is unaffected here.
+  let doc = (globalThis as { document?: Document }).document
+  doc?.addEventListener?.('visibilitychange', () => {
+    if (doc.visibilityState != 'visible' || !ws) return
+    if (socketStale(ws.readyState, seen, Date.now())) ws.close()
+  })
   config.serverQuery ||= serverQueryProbe(search)
   if (!canShare()) {
     await once(true)

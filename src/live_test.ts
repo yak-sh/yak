@@ -26,6 +26,7 @@ import {
   gated,
   holdQuery,
   inbox,
+  isPing,
   jobOf,
   landObservation,
   landSub,
@@ -47,6 +48,7 @@ import {
   sessionRows,
   shelfFor,
   sieve,
+  socketStale,
   subEids,
   subscriptionChecks,
   topZ,
@@ -57,6 +59,7 @@ import { EXISTS, parseQuery, PROJECT, resolveRefs } from './query.ts'
 import { type Ent } from './types.ts'
 import { effect } from '@preact/signals'
 import {
+  assert,
   assertEquals,
   assertNotStrictEquals,
   assertStrictEquals,
@@ -2295,4 +2298,26 @@ Deno.test('commentCount opens no server sub; a defining query does (T-21283)', (
     config.serverQuery = false
     ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
   }
+})
+
+// T-21511: socket-liveness predicates. A heartbeat frame is liveness only, and a
+// socket-owning tab force-reconnects a stale connection (on the watchdog timeout
+// or on refocus) instead of going silently deaf.
+Deno.test('isPing recognizes only heartbeat frames', () => {
+  assert(isPing({ ping: 1 }))
+  assert(!isPing({ apply: [], id: 'x' }))
+  assert(!isPing([{ eid: 'a', name: 'doc' }]))
+  assert(!isPing('reload'))
+  assert(!isPing({ hmr: 1 }))
+  assert(!isPing(null))
+  assert(!isPing(undefined))
+})
+
+Deno.test('socketStale: fresh OPEN is live, silence or non-OPEN is stale', () => {
+  let OPEN = WebSocket.OPEN
+  assert(!socketStale(OPEN, 9_000, 10_000, 60_000)) // heard 1s ago → live
+  assert(socketStale(OPEN, 9_000, 80_000, 60_000)) // silent past window → stale
+  assert(!socketStale(OPEN, 0, 60_000, 60_000)) // exactly the window, strict >
+  assert(socketStale(WebSocket.CONNECTING, 10_000, 10_000, 60_000)) // not OPEN
+  assert(socketStale(WebSocket.CLOSED, 10_000, 10_000, 60_000))
 })

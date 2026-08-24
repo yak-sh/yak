@@ -259,6 +259,15 @@ let file = async (root: string, path: string) => {
 let clients = new Set<WebSocket>()
 let envelopes = new Set<WebSocket>()
 
+// Heartbeat: a half-open socket (network drop with no FIN, a suspended tab)
+// stays OPEN on both ends, so neither onclose fires. A periodic app-level ping
+// gives every client's watchdog guaranteed traffic to distinguish a QUIET graph
+// from a DEAD socket — no ping for a while and the client force-reconnects
+// (T-21511). The browser can't send native pings, so it's a plain data frame the
+// client resets its watchdog on and never lands.
+let PING = JSON.stringify({ ping: 1 })
+let PING_MS = 25_000
+
 // Query subscriptions (T-3683), the whole registry. A Sub is a socket's saved
 // query + the eids currently in its set; `subs` maps each socket to its named
 // subscriptions, `filtered` holds every socket that opened a non-shadow sub.
@@ -663,7 +672,12 @@ let ws = (req: Request) => {
   // No implicit join: a fresh socket is in NO broadcast set until it declares
   // itself — {since} joins the live `clients` (via join()), {sub} sets
   // `filtered` (via control()). A socket that declares neither hears nothing.
+  let beat = setInterval(() => {
+    if (socket.readyState == WebSocket.OPEN) socket.send(PING)
+    else clearInterval(beat)
+  }, PING_MS)
   socket.onclose = () => {
+    clearInterval(beat)
     clients.delete(socket)
     envelopes.delete(socket)
     subs.delete(socket)
