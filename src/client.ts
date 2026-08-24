@@ -863,14 +863,39 @@ export let need = (all: Row[], id: string, where = '', comp = '') => {
     `no entity: ${id}${where}${near ? ` — did you mean ${near}?` : ''}`,
   )
 }
-// need(), narrowed: got() the entity by address, and ONLY on a miss pull
-// the whole graph — the error path, where nearby()'s "did you mean?" is
-// worth its 0.4s and nothing else is. The one door that turns a verb's
-// opening `need(rows(await snapshot()), id)` into a keyed read.
+// The bounded corpus a failed lookup teaches its "did you mean?" from —
+// NEVER the whole graph (M-21143: the snapshot is banned, its concurrent
+// pulls starve the event loop). A miss is the error path, and `nearest` only
+// needs entities whose name is CLOSE to the handle typed: for a ref with a
+// declared target kind, that kind's entities (a small set — projects, people,
+// boards), fetched by component-presence; untargeted (comp '' or the any-
+// entity target), what the doc-text index surfaces for the handle. Both go
+// through the same /query door the happy path already uses, so the CLI never
+// pulls a snapshot even to correct a typo. A suggestion query that fails is
+// swallowed — the caller's "no entity" is the real error, and a best-effort
+// hint must not mask it. Deduped, oldest-first: the order find()/nearby() read.
+let suggestFor = async (
+  wants: { v: string; target?: string }[],
+): Promise<Row[]> => {
+  let lines = new Set<string>()
+  for (let { v, target } of wants) {
+    if (!v || UUID.test(v)) continue // a uuid names itself — nothing to guess
+    lines.add(target && target != 'entity' ? `.${target}!` : v)
+  }
+  let hits = await Promise.all(
+    [...lines].map((line) => query([line]).catch(() => [] as Row[])),
+  )
+  return uniq(hits.flat())
+}
+
+// need(), narrowed: got() the entity by address, and ONLY on a miss fetch a
+// scoped suggestion corpus — the error path, where nearby()'s "did you mean?"
+// earns a keyed query and nothing else does. The one door that turns a verb's
+// opening `need(rows(await snapshot()), id)` into keyed reads.
 export let needed = async (id: string, where = '', comp = '') => {
   let hit = await got(id)
   if (hit) return hit
-  return need(rows(await snapshot()), id, where, comp)
+  return need(await suggestFor([{ v: id, target: comp }]), id, where, comp)
 }
 // The eids a row NAMES through its typed columns — every {eid} prop across
 // its components, read off the vocabulary so a new reference column is picked
@@ -1041,19 +1066,20 @@ export let checkRefs = (all: Row[], preds: Pred[]) => {
 }
 
 // checkRefs over the wire — the narrow door for the strict listing verbs.
-// Confirm a filter's eid-typed refs exist with ONE keyed read, and pull the
-// whole snapshot ONLY on a miss: the error path, where nearby()'s "did you
-// mean?" earns its 0.4 s and nothing else does. locate() is find()'s faithful
-// mirror, so a ref the server resolved resolves in find() over the fetched
-// rows too; a false miss merely re-checks against the snapshot and agrees.
-// The miss branch is the original checkRefs verbatim, so the thrown message is
-// byte-identical to the whole-graph door's.
+// Confirm a filter's eid-typed refs exist with ONE keyed read, and on a miss
+// re-run checkRefs over a SCOPED corpus — the resolved refs plus a suggestion
+// set for the unresolved ones (suggestFor), never the whole snapshot. locate()
+// is find()'s faithful mirror, so a ref the server resolved resolves in find()
+// over the fetched rows too; the resolved `hits` ride along so those refs still
+// pass, and only the genuinely-absent ones throw. The miss branch is the
+// original checkRefs verbatim, so the thrown message is byte-identical.
 export let checkedRefs = async (preds: Pred[]) => {
   let refs = filterRefs(preds)
   if (!refs.length) return
   let hits = await fetched(refs.map((r) => r.v))
   if (refs.every(({ v }) => find(hits, v))) return
-  checkRefs(rows(await snapshot()), preds)
+  let missing = refs.filter(({ v }) => !find(hits, v))
+  checkRefs(uniq([...hits, ...await suggestFor(missing)]), preds)
 }
 let derefProp = (all: Row[], name: string, prop: string, value: unknown) => {
   // The reference's declared target ('' = any entity) doubles as the "this
@@ -1088,7 +1114,10 @@ export let derefedParams = async (ps: Param[]) => {
   if (!refs.length) return derefParams([], ps)
   let all = await fetched(refs.map((p) => String(p.value)))
   if (refs.every((p) => find(all, String(p.value)))) return derefParams(all, ps)
-  return derefParams(rows(await snapshot()), ps)
+  let wants = refs
+    .filter((p) => !find(all, String(p.value)))
+    .map((p) => ({ v: String(p.value), target: refOf(p.comp, p.prop) }))
+  return derefParams(uniq([...all, ...await suggestFor(wants)]), ps)
 }
 export let derefChanges = (all: Row[], changes: Change[]) =>
   changes.map((c) => ({
@@ -1120,7 +1149,21 @@ export let derefedChanges = async (changes: Change[]) => {
   ])
   let all = await fetched(ids)
   if (ids.every((id) => find(all, id))) return derefChanges(all, changes)
-  return derefChanges(rows(await snapshot()), changes)
+  let wants = changes.flatMap((c) => [
+    ...(named(c.eid) && !find(all, String(c.eid))
+      ? [{ v: String(c.eid), target: undefined }]
+      : []),
+    ...Object.entries(c.comp ?? {})
+      .filter(([prop, value]) =>
+        refOf(c.name, prop) != null && named(value) &&
+        !find(all, String(value))
+      )
+      .map(([prop, value]) => ({
+        v: String(value),
+        target: refOf(c.name, prop),
+      })),
+  ])
+  return derefChanges(uniq([...all, ...await suggestFor(wants)]), changes)
 }
 
 // Group routed params into per-component patches.
