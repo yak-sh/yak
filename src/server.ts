@@ -116,6 +116,7 @@ import {
   ollamaProbe,
 } from './ollama_cloud.ts'
 import { resolve, settingRows } from './config.ts'
+import { resolve as resolveAnchor } from './anchor.ts'
 import { codexGeneration } from './runner.ts'
 import { readEntries } from './entries.ts'
 import { graphLog } from './entry_log.ts'
@@ -1075,6 +1076,57 @@ let http = Deno.serve(
         num: Number(comps.entity?.num ?? 0) || null,
         kind: kindOf(comps),
       })
+    }
+    if (path == '/anchor') {
+      // The anchor-resolver door (D-21211, T-21317): one endpoint grades any
+      // anchor tri-state — fresh / moved (with the new range) / broken — and
+      // serves the current bytes from git's object store, never from the db.
+      // `?id=` resolves an entity's own anchor comp in its own repo context
+      // (the entity's repo, its project's, its memory scope's — falling back
+      // to this server's checkout, where the graph's own docs anchor);
+      // explicit ?path/&sha/&start/&end/&hunk grade an unsaved anchor, and
+      // ?repo= overrides the cwd either way. 404s speak, per M-16612.
+      let p = url.searchParams
+      let cwd = p.get('repo') ?? undefined
+      let a: Parameters<typeof resolveAnchor>[1]
+      let id = p.get('id')
+      if (id) {
+        let eid: string | undefined
+        try {
+          eid = resolveId(db, id)
+        } catch (e) {
+          return new Response(String((e as Error).message ?? e), {
+            status: 400,
+          })
+        }
+        if (!eid) return new Response('no entity', { status: 404 })
+        let comps = eager(db, eid)
+        if (!comps.anchor) {
+          return new Response(`${id} has no anchor`, { status: 404 })
+        }
+        a = comps.anchor as typeof a
+        // The repo an entity's anchor means: its own repo comp, else the one
+        // its project (task.project / memory.scope) wears.
+        let home = (owner?: unknown) =>
+          owner
+            ? eager(db, String(owner)).repo?.path as string | undefined
+            : undefined
+        cwd ??= (comps.repo?.path as string | undefined) ??
+          home(comps.task?.project) ?? home(comps.memory?.scope)
+      } else {
+        if (!p.get('path')) {
+          return new Response('need ?id= or ?path=', { status: 400 })
+        }
+        let num = (k: string) => (p.get(k) == null ? null : Number(p.get(k)))
+        a = {
+          paths: p.get('path'),
+          sha: p.get('sha'),
+          hunk: p.get('hunk'),
+          start: num('start'),
+          end: num('end'),
+        }
+      }
+      return Response.json(await resolveAnchor(cwd ?? repo, a))
     }
     if (path == '/body') {
       // The bodies a bodyless payload deferred, for the eids a view is about

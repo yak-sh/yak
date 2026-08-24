@@ -821,14 +821,29 @@ export let comps: Record<string, Record<string, PropType>> = {
   // worn by ANY git-tied entity (a doc, a memory, a persona, a task). `paths`
   // are the repo-relative paths/globs whose code the entity describes
   // (newline- or comma-separated); `sha` the commit the caller last verified
-  // against. Both wire-writable: naming the sha they checked IS the anchor, so
+  // against. All wire-writable: naming the sha they checked IS the anchor, so
   // nothing here is server-stamped (a forged sha only misleads its own author,
   // and `task stale` re-derives the truth from git at read time). Staleness is
   // never stored — a commit newer than `sha` touching `paths` makes the entity
   // stale (src/anchor.ts), the freshness backbone for architecture docs,
   // memories and personas (M-14370: pointers over copies). NOT in kindOrder —
   // an anchored doc is still a doc.
-  anchor: { paths: 'text', sha: 'text' },
+  //
+  // The EXACT tiers (D-21211), stablest first, each optional and each about
+  // the FIRST path: `symbol` names a declaration (recorded now, resolved once
+  // a parser lands — src/anchor.ts resolve() says so rather than guessing);
+  // `hunk` is the region's raw text at anchor time, relocatable by search;
+  // `start`/`end` are its 1-based inclusive lines at `sha`, mechanically
+  // advanced by replaying diffs sha..HEAD. Resolution is tri-state —
+  // fresh / moved (with the new range) / broken — never silently wrong.
+  anchor: {
+    paths: 'text',
+    sha: 'text',
+    symbol: 'text',
+    hunk: 'body',
+    start: 'number',
+    end: 'number',
+  },
   // A decision was TAKEN about this entity — a task, a memory, a doc,
   // anything; like its three neighbours a facet, never an identity. It is
   // the same {at, by, via} stamp, split differently: `at` and `by` are
@@ -1952,12 +1967,18 @@ export type Blocked = {
 
 // The git-anchor facet (D-18378): the revision an entity was verified against.
 // `paths` are repo-relative paths/globs (newline- or comma-separated); `sha`
-// the commit last verified against. Both wire-written; staleness is derived at
-// read time by asking git (src/anchor.ts), never stored.
+// the commit last verified against; the exact tiers (D-21211) narrow the first
+// path to a symbol, a hunk of raw text, and/or a 1-based inclusive line range.
+// All wire-written; freshness is derived at read time by asking git
+// (src/anchor.ts), never stored.
 export type Anchor = {
   eid: string
   paths?: string | null
   sha?: string | null
+  symbol?: string | null
+  hunk?: string | null
+  start?: number | null
+  end?: number | null
 }
 
 // A webhook delivery, pulled apart from the edge's raw request spool —
