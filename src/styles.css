@@ -3596,6 +3596,21 @@ a[data-ref]:hover {
   font-family: var(--mono);
   white-space: pre;
 }
+/* Opened in place: the entry keeps its shape — the `$` line and status stay
+   put — while its lines stop truncating and the full output drops to its own
+   row beneath, so the reveal grows downward and nothing above it moves. */
+.Entry-open {
+  flex-wrap: wrap;
+}
+.Entry-open .Entry_Line {
+  white-space: pre-wrap;
+  overflow: visible;
+  text-overflow: clip;
+}
+.Entry-open .Entry_Output,
+.Entry-open .Entry_Err {
+  flex-basis: 100%;
+}
 .Entry_More {
   flex: none;
   padding: 0 var(--half-gap);

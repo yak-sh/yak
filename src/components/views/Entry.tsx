@@ -63,9 +63,17 @@ let Tab = el('button', 'Tab')
 let lines = (text = '') => text.replace(/\n$/, '').split('\n')
 let first = (text = '') => lines(text)[0]
 let long = (text = '') => lines(text).length > 1
-let more = (show: (() => void) | undefined, text: string) =>
+// The one control that grows a summary in place: `…` reveals the rest, `˅`
+// folds it back. It appears only when there is more than the first line to show.
+let more = (show: (() => void) | undefined, text: string, open = false) =>
   long(text) && (
-    <More type='button' onClick={show} aria-label='show full entry'>…</More>
+    <More
+      type='button'
+      onClick={show}
+      aria-label={open ? 'collapse entry' : 'show full entry'}
+    >
+      {open ? '˅' : '…'}
+    </More>
   )
 let body = (e: Ent) => e.content?.body ?? ''
 let failed = (e: Ent) =>
@@ -260,39 +268,57 @@ export let EntrySummary = ({ e }: { e: Ent }) => (
   </Frame>
 )
 
+// Open in place: the `$ command` line stays exactly where the summary drew it,
+// so the eye keeps its anchor; the truncated preview simply grows into the full
+// command (wrapping) and the full output as a block below — no second card, no
+// jump. Closed, it is the compact one-line summary as before.
 export let CommandSummary = (
-  { e, onOpen }: { e: Ent; onOpen?: () => void },
+  { e, open, onOpen }: { e: Ent; open?: boolean; onOpen?: () => void },
 ) => {
   let out = result(e)
+  let cmd = e.bash?.command ?? ''
   let text = body(out ?? e) || out?.stderr?.text || ''
   let state = out ? failed(out) ? 'fail' : 'success' : 'pending'
   return (
-    <Frame mod={state}>
-      <Name>$</Name> <Line mod='command'>{first(e.bash?.command)}</Line>
-      {text && <Line>{first(text)}</Line>}
+    <Frame mod={[state, open && 'open']}>
+      <Name>$</Name> <Line mod='command'>{open ? cmd : first(cmd)}</Line>
+      {text && !open && <Line>{first(text)}</Line>}
       <Status>
         {out ? failed(out) ? '✗ failed' : '✓ done' : '… pending'}
       </Status>
-      {more(
-        onOpen,
-        [e.bash?.command, body(out ?? e), out?.stderr?.text]
-          .filter(Boolean).join('\n'),
+      {more(onOpen, [cmd, text].filter(Boolean).join('\n'), open)}
+      {open && text && (
+        <Output>
+          <Ansi text={text} />
+        </Output>
       )}
     </Frame>
   )
 }
 
 export let ResultSummary = (
-  { e, onOpen }: { e: Ent; onOpen?: () => void },
-) => (
-  <Frame mod={failed(e) && 'fail'}>
-    <Status>{e.exit?.code == null ? '↳' : `↳ exit ${e.exit.code}`}</Status>
-    {(body(e) || e.stderr?.text) && (
-      <Line>{first(body(e) || e.stderr?.text)}</Line>
-    )}
-    {more(onOpen, [body(e), e.stderr?.text].filter(Boolean).join('\n'))}
-  </Frame>
-)
+  { e, open, onOpen }: { e: Ent; open?: boolean; onOpen?: () => void },
+) => {
+  let text = body(e)
+  let err = e.stderr?.text
+  return (
+    <Frame mod={[failed(e) && 'fail', open && 'open']}>
+      <Status>{e.exit?.code == null ? '↳' : `↳ exit ${e.exit.code}`}</Status>
+      {!open && (text || err) && <Line>{first(text || err)}</Line>}
+      {more(onOpen, [text, err].filter(Boolean).join('\n'), open)}
+      {open && text && (
+        <Output>
+          <Ansi text={text} />
+        </Output>
+      )}
+      {open && err && (
+        <Err mod={failed(e) && 'fail'}>
+          <Ansi text={err} />
+        </Err>
+      )}
+    </Frame>
+  )
+}
 
 export let MessageSummary = ({ e }: { e: Ent }) => (
   <Frame mod={e.message?.role}>

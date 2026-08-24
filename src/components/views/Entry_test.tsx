@@ -92,6 +92,36 @@ Deno.test('command and output summaries show one line and a more control', () =>
     assertEquals(root.querySelector('.Entry-fail'), null)
   }))
 
+Deno.test('open summaries grow their own content in place, no second card', () =>
+  withDom((root) => {
+    rows()
+    let [call, answer] = Object.keys(cache.value)
+    let command = ent(call)
+    // Closed: the compact one-line summary with a `…` to open.
+    render(h(CommandSummary, { e: command }), root)
+    assertEquals(root.querySelector('.Entry_More')?.textContent, '…')
+    assertEquals(root.querySelector('.Entry-open'), null)
+    assertEquals(root.querySelector('.Entry_Output'), null)
+
+    // Open: the same `$` command line, now full and untruncated, the full
+    // output as a block below, and the control folds it back. No lens/tabs.
+    render(h(CommandSummary, { e: command, open: true }), root)
+    assertEquals(root.querySelector('.Entry-open') != null, true)
+    assertEquals(
+      root.querySelector('.Entry_Line-command')?.textContent,
+      'printf one\nprintf two',
+    )
+    assertEquals(root.querySelector('.Entry_Output')?.textContent, 'one\ntwo')
+    assertEquals(root.querySelector('.Entry_More')?.textContent, '˅')
+    assertEquals(root.querySelector('.Entry_Tabs'), null)
+
+    // A result opens the same way: its output and stderr become blocks.
+    let result = ent(answer)
+    render(h(ResultSummary, { e: result, open: true }), root)
+    assertEquals(root.querySelector('.Entry_Output')?.textContent, 'one\ntwo')
+    assertEquals(root.querySelector('.Entry_Err')?.textContent, 'warning\nmore')
+  }))
+
 Deno.test('generic entry summaries are metadata variants', () =>
   withDom((root) => {
     let e = {

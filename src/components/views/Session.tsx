@@ -433,14 +433,19 @@ let prettyJson = (line: string) => {
 // Process logs have only bytes, while graph-native entries have an eid and
 // therefore take every face through the renderer registry.
 export let SessionEntry = (
-  { x, repo, onOpen }: { x: Entry; repo?: string; onOpen?: () => void },
+  { x, repo, open, onOpen }: {
+    x: Entry
+    repo?: string
+    open?: boolean
+    onOpen?: () => void
+  },
 ) => {
   if (!x.eid) return <EntryBody x={x} repo={repo} />
   let e = ent(x.eid)
   let face = resolve(e, 'Entry.Summary')
   return x.row && (face.Render == EntrySummary || face.view == 'JSON')
     ? <EntryBody x={x} repo={repo} />
-    : <face.Render e={e} onOpen={onOpen} />
+    : <face.Render e={e} open={open} onOpen={onOpen} />
 }
 
 export let SessionTime = ({ x }: { x: Entry }) => {
@@ -456,23 +461,33 @@ export let SessionTime = ({ x }: { x: Entry }) => {
   )
 }
 
+// Two independent reveals, both in place: the `…` control grows the entry's
+// own content where it sits (full command, full output) so nothing above it
+// moves; the seq gutter opens the raw event beneath it for inspection. A row is
+// "open" (its seq pinned visible) while either is showing.
 let Row = ({ x, repo }: { x: Entry; repo?: string }) => {
-  let [open, setOpen] = useState(false)
+  let [full, setFull] = useState(false)
+  let [raw, setRaw] = useState(false)
   return (
-    <Line mod={open && 'open'}>
+    <Line mod={(full || raw) && 'open'}>
       <Seq
         type='button'
-        aria-label={`${open ? 'hide' : 'show'} event ${x.seq} details`}
-        data-tip={open ? undefined : 'the raw event'}
-        onClick={() => setOpen(!open)}
+        aria-label={`${raw ? 'hide' : 'show'} event ${x.seq} details`}
+        data-tip={raw ? undefined : 'the raw event'}
+        onClick={() => setRaw(!raw)}
       >
         {x.seq}
       </Seq>
       <Content>
         <SessionTime x={x} />
-        <SessionEntry x={x} repo={repo} onOpen={() => setOpen(true)} />
+        <SessionEntry
+          x={x}
+          repo={repo}
+          open={full}
+          onOpen={() => setFull(!full)}
+        />
       </Content>
-      {open &&
+      {raw &&
         (x.eid ? <EntryLens eid={x.eid} /> : <Json>{prettyJson(x.line)}</Json>)}
     </Line>
   )
