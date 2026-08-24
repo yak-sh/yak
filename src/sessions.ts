@@ -39,7 +39,16 @@ import {
   providerSpec,
   type Summary,
 } from './adapters.ts'
-import { apply, db, eager, human, locate, record, resolveId } from './db.ts'
+import {
+  apply,
+  db,
+  depsOf,
+  eager,
+  human,
+  locate,
+  record,
+  resolveId,
+} from './db.ts'
 import { evalGraph, personaGraph, rowed } from './graph_query.ts'
 import {
   delivered,
@@ -79,6 +88,7 @@ import {
   type Change,
   type Session,
   sessionActive,
+  settled as taskSettled,
   uuid,
 } from './types.ts'
 
@@ -339,6 +349,26 @@ let pendingWake = (eid: string) =>
      limit 1`,
   ).get(eid)
 
+// A task gated by an open `requires` blocker — the same reading dispatch's
+// ready() uses, but for one task: any requires-child whose status is not
+// settled still blocks. A child the read can't resolve counts as open (the safe
+// reading — never lapse a claim on a maybe-still-blocked task).
+let gatedTask = (taskEid: string) =>
+  depsOf(db, [taskEid]).some((d) =>
+    d.type == 'requires' && d.parent == taskEid &&
+    !taskSettled(eager(db, d.child)?.task?.status as string | undefined)
+  )
+
+// A claim is PARKED-WAITING (D-21448 Piece 1) when the session has a return
+// wake armed (pendingWake — the M-7323 parked standing) AND the claimed task is
+// gated by an open `requires` blocker. Such a claim must SURVIVE both release
+// truths — the graceful settle and the boot heal — because releasing it strands
+// the task with no owner and asked() then blocks its re-dispatch: the parked
+// session ended only its turn and returns on its wake to finish it. The wait
+// registration is the edge itself; no new subscription facet.
+let parkedWaiting = (sessionEid: string, taskEid: string) =>
+  pendingWake(sessionEid) && gatedTask(taskEid)
+
 // The turn-edge comps whose appearance in a cast batch means a native session's
 // standing may have moved: a `generation` opens a turn (idle→busy);
 // `delivered`/`error`/`cancel`/`lease` and a final-answer `output` close it; a
@@ -545,7 +575,12 @@ let settled = (eid: string, status: string, cast: Cast) => {
   // task that already wears this exact lapse); brief reads whether the session
   // spoke and the held tasks' titles.
   let sess = rowed({ eid, comps: eager(db, eid) })
+  // A parked-waiting claim is RETAINED across settle (D-21448 Piece 1): dropping
+  // it from the release universe here means wrapChanges neither lapses it nor
+  // mints an "ended before done" notice — the session comes back on its wake to
+  // finish the gated task.
   let held = evalGraph(db, `.claim.session=${eid}`).hits
+    .filter((r) => !parkedWaiting(eid, r.eid))
   let heldEids = held.map((r) => r.eid)
   let lapses = heldEids.length
     ? evalGraph(db, `.notice.event=lapse&.notice.target=${heldEids.join(',')}`)
@@ -2729,7 +2764,11 @@ export let reapLeases = (cast: Cast) => {
   // claimed entities, the sessions holding them, and any lapse notice already
   // minted — by keyed read, not the whole-graph snapshot (M-21143). Claims are
   // few (active leases only), so this candidate set is tiny.
+  // A parked-waiting claim survives the boot heal too (D-21448 Piece 1): its
+  // session ended gracefully to PARK, not abnormally, and returns on its wake —
+  // so it is excluded from the reap universe exactly as from the settle one.
   let claimed = evalGraph(db, `.claim.session!`).hits
+    .filter((r) => !parkedWaiting(String(r.comps.claim?.session ?? ''), r.eid))
   let sessEids = [
     ...new Set(
       claimed.map((r) => String(r.comps.claim?.session ?? '')).filter(Boolean),

@@ -2391,3 +2391,70 @@ Deno.test('reapLeases frees an ended session lease, spares a live one', () => {
   // Idempotent: a released lease is gone, so a second boot finds nothing.
   assertEquals(reapLeases(cast), [])
 })
+
+// D-21448 Piece 1: a PARKED-WAITING claim — the session armed a RETURN WAKE and
+// the claimed task is gated by an OPEN `requires` blocker — survives the boot
+// heal, because the session ended only its turn and comes back on the wake to
+// finish the task. Everything else an ended session holds still lapses. Same
+// predicate settled() uses at a graceful end, exercised through the reap door.
+Deno.test('reapLeases retains a parked-waiting claim, reaps the rest', () => {
+  // An ENDED (completed) session holding one open task, optionally with a return
+  // wake armed and/or a requires-blocker of a given status. Returns the task.
+  let ended = (opts: { wake?: boolean; blocker?: string }) => {
+    let s = uid(), task = uid()
+    apply(db, [{ eid: s, name: 'session', comp: { id: uid() } }])
+    apply(db, [
+      { eid: task, name: 'entity', comp: { eid: task } },
+      { eid: task, name: 'doc', comp: { title: 'held', body: '' } },
+      { eid: task, name: 'task', comp: { status: 'open' } },
+      { eid: task, name: 'claim', comp: { session: s } },
+    ])
+    if (opts.blocker) {
+      let b = uid()
+      apply(db, [
+        { eid: b, name: 'entity', comp: { eid: b } },
+        { eid: b, name: 'doc', comp: { title: 'blocker', body: '' } },
+        { eid: b, name: 'task', comp: { status: opts.blocker } },
+        { eid: task, name: 'dependency', comp: { type: 'requires', child: b } },
+      ])
+    }
+    if (opts.wake) {
+      let w = uid()
+      apply(db, [
+        { eid: w, name: 'entity', comp: { eid: w } },
+        { eid: w, name: 'wake', comp: { at: '2030-01-01T00:00:00Z' } },
+        { eid: w, name: 'deliver', comp: { to: s } },
+      ])
+    }
+    writeSession(db, s, {
+      status: 'completed',
+      finished_at: '2026-01-01T00:00:00Z',
+    })
+    return task
+  }
+  let parked = ended({ wake: true, blocker: 'open' }) // wake + open blocker
+  let cleared = ended({ wake: true, blocker: 'done' }) // wake, blocker satisfied
+  let noWake = ended({ blocker: 'open' }) // gated but no return wake
+  let plain = ended({}) // ordinary ended claim
+
+  let leaseOf = (t: string) =>
+    rows(snapshot(db)).find((r) => r.eid == t)?.comps.claim
+  assert(
+    [parked, cleared, noWake, plain].every(leaseOf),
+    'all four leased before the reap',
+  )
+
+  reapLeases(cast)
+  assert(leaseOf(parked), 'the parked-waiting claim is retained')
+  assertEquals(
+    leaseOf(cleared),
+    undefined,
+    'a satisfied blocker → not gated → lapses',
+  )
+  assertEquals(
+    leaseOf(noWake),
+    undefined,
+    'no return wake → not parked → lapses',
+  )
+  assertEquals(leaseOf(plain), undefined, 'an ordinary ended claim lapses')
+})
