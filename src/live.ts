@@ -212,14 +212,106 @@ let resetQueries = () => {
   })
 }
 
+// T-17126 — back queryEids on a genuine SERVER subscription. Today queryEids
+// resolves "which entities match" against the LOCAL cache (mem/idbResolver, both
+// cache.peek()); that is correct ONLY because join() at server.ts:596 seeds the
+// cache whole. Under a working-set boot (T-18059) the cache goes partial and a
+// local scan silently under-reports. So a MEMBERSHIP query opens a shadow sub —
+// the very server sub boardSub installs, generalized to every useQuery site
+// (`q:<canonical line>`): the server maintains the complete set forward-and-
+// reverse (evalFast/matchQuery, scoped SQL) and streams it, and landSub keeps a
+// per-sub signal this returns. `mem` primes the signal synchronously (no first-
+// paint flash) and stays the fallback where there is no flag, no socket path
+// (the TUI), or the query PROJECTS waking fields (pins/cameras — a projected-
+// field move must re-fire the LIST, which only mem's wake tracking carries; a
+// membership sub does not). Shadow means the whole stream still owns the cache,
+// so nothing is evicted; the :596 flip turns these to owning and the cache
+// becomes bounded. OFF until config.serverQuery (the ?ws-sub probe).
+type ServerSet = {
+  n: number
+  ids: Signal<string[]>
+  sub: string
+  preds: Pred[]
+}
+let queryUses = new Map<string, ServerSet>() // canonical preds key -> set
+let querySignals = new Map<string, Signal<string[]>>() // sub name -> its signal
+let qkey = (preds: Pred[]) => JSON.stringify(preds)
+let membersChanged = (a: Set<string>, b: Set<string>) =>
+  a.size != b.size || [...b].some((e) => !a.has(e))
+
+// Serialize exactly the pred shapes queryEids builds (has/eq/contains/refs) back
+// to a query line, then PROVE the round-trip: only a line that re-parses to the
+// same preds may open a sub, so an unhandled shape (a projection, a path deref,
+// a reverse hop) FALLS BACK to mem rather than putting a wrong query on the wire.
+// Values are already eids; findEid passes an eid through verbatim.
+let predLine = (p: Pred): string | undefined => {
+  if (p.refs) return p.op == '' ? `.refs=${p.value}` : undefined
+  if (p.fields || p.at || p.rev || !p.comp) return undefined
+  if (p.op == EXISTS && p.prop == '') return `.${p.comp}!`
+  if (p.prop == '') return undefined
+  if (p.op == '') return `.${p.comp}.${p.prop}=${p.value}`
+  if (p.op == '~') return `.${p.comp}.${p.prop}~=${p.value}`
+  return undefined
+}
+export let predsToQuery = (preds: Pred[]): string | undefined => {
+  if (!preds.length) return undefined
+  let parts = preds.map(predLine)
+  if (parts.some((s) => s === undefined)) return undefined
+  let line = parts.join('&')
+  try {
+    // Self-verify: the line must re-parse to the exact same preds, or it is not
+    // trusted on the wire — the server would maintain a DIFFERENT set.
+    if (qkey(resolveRefs(parseQuery(line), findEid)) == qkey(preds)) return line
+  } catch { /* a shape the grammar can't round-trip — fall back to mem */ }
+  return undefined
+}
+
+// The server line for a query when the flag is on and the shape round-trips;
+// undefined routes the caller to the local resolver exactly as before.
+let serverLine = (preds: Pred[]): string | undefined =>
+  config.serverQuery ? predsToQuery(preds) : undefined
+
+// Get-or-open the server set for a query. Opened ONCE on creation (a repeat
+// ownBoard would re-subscribe every render); the signal is primed from mem so
+// the first paint is populated, then landSub replaces it with the server's
+// answer. Unheld direct readers (projects/commentsOn/…) keep it open, the same
+// persistence mem's `sets` map gives an unheld query — bounded by the working set.
+let serverSet = (preds: Pred[], line: string): ServerSet => {
+  let key = qkey(preds)
+  let found = queryUses.get(key)
+  if (!found) {
+    let sub = `q:${key}`
+    found = { n: 0, ids: signal(mem.resolve(preds)), sub, preds }
+    queryUses.set(key, found)
+    querySignals.set(sub, found.ids)
+    ownBoard(sub, line)
+  }
+  return found
+}
+
 // Read a query's result signal (get-or-create; the render half of the hook).
-export let queryEids = (preds: Pred[]): Signal<string[]> =>
-  (store ?? mem).subscribe(preds)
+export let queryEids = (preds: Pred[]): Signal<string[]> => {
+  let line = serverLine(preds)
+  return line ? serverSet(preds, line).ids : (store ?? mem).subscribe(preds)
+}
 // Ref-count a query for a component's lifetime (the hook's effect half); the
 // last release drops the set so distinct queries don't accumulate.
-export let holdQuery = (preds: Pred[]): Signal<string[]> =>
-  (store ?? mem).hold(preds)
-export let dropQuery = (preds: Pred[]) => (store ?? mem).drop(preds)
+export let holdQuery = (preds: Pred[]): Signal<string[]> => {
+  let line = serverLine(preds)
+  if (!line) return (store ?? mem).hold(preds)
+  let s = serverSet(preds, line)
+  s.n++
+  return s.ids
+}
+export let dropQuery = (preds: Pred[]) => {
+  let line = serverLine(preds)
+  if (!line) return void (store ?? mem).drop(preds)
+  let s = queryUses.get(qkey(preds))
+  if (!s || --s.n > 0) return
+  queryUses.delete(qkey(preds))
+  querySignals.delete(s.sub)
+  dropBoard(s.sub)
+}
 
 // The reverse-reference reads phrased as the queries the vocabulary already
 // answers: an eid EQUALITY anchors on the derived refs index (index.ts), a
@@ -466,6 +558,13 @@ export let config: {
   // persistent delta-synced store lands. The flip mechanism is wired and
   // parity-proven; a probe (?store=idb) turns it on to exercise and measure it.
   store: boolean
+  // Back queryEids on a genuine SERVER subscription instead of the local cache
+  // (T-17126) — the gate the working-set boot (T-18059) needs so a partial cache
+  // never under-reports. OFF by default: a membership queryEids opens a shadow
+  // sub (the whole stream still owns the cache, nothing is evicted) and reads the
+  // server-authoritative set; the flip to owning subs + a working-set boot is the
+  // next leaf. A probe (?ws-sub) turns it on to exercise and measure.
+  serverQuery: boolean
   reload: () => void
   swap?: (gen: number) => void
   css?: (gen: number) => void
@@ -477,12 +576,15 @@ export let config: {
   shared: true,
   agreement: false,
   store: false,
+  serverQuery: false,
   reload: () => loc?.reload(),
 }
 export let agreementProbe = (search: string) =>
   new URLSearchParams(search).get('probe') == 'subscriptions'
 export let storeProbe = (search: string) =>
   new URLSearchParams(search).get('store') == 'idb'
+export let serverQueryProbe = (search: string) =>
+  new URLSearchParams(search).has('ws-sub')
 export let base = () => `http${config.secure ? 's' : ''}://${config.host}`
 
 // The column sort: priority first (lower sorts higher), num as tiebreak.
@@ -1034,6 +1136,10 @@ export let landSub = (f: Sub) => {
   // and the two must not be able to disagree about who owns the cache.
   if (f.shadow) shadows.add(f.sub)
   let old = subMembers.get(f.sub) ?? new Set<string>()
+  // A queryEids sub (T-17126) republishes its per-sub signal on MEMBERSHIP change
+  // only — a standing-match content frame leaves the set alone, and the member's
+  // own row signal already carries that edit, so the list stays asleep for it.
+  let had = querySignals.has(f.sub) ? new Set(old) : null
   let mine = f.replace ? new Set<string>() : old
   subMembers.set(f.sub, mine)
   let leaving: string[] = f.replace ? [...old] : [...(f.drop ?? [])]
@@ -1046,6 +1152,9 @@ export let landSub = (f: Sub) => {
   for (let eid of f.drop ?? []) mine.delete(eid)
   if (f.replace) leaving = leaving.filter((eid) => !mine.has(eid))
   if (!f.shadow && !shadows.has(f.sub)) evict(leaving)
+  if (had && membersChanged(had, mine)) {
+    querySignals.get(f.sub)!.value = [...mine]
+  }
   subVersion.value++
   return {
     eids: [...new Set([...touched.eids, ...(f.drop ?? [])])],
@@ -1424,6 +1533,7 @@ export let boot = async () => {
   let search = (globalThis as { location?: { search?: string } }).location
     ?.search ?? ''
   config.store ||= storeProbe(search)
+  config.serverQuery ||= serverQueryProbe(search)
   if (!canShare()) {
     await once(true)
     await attachStore()
@@ -1498,6 +1608,8 @@ let probe = globalThis as {
     ) => Promise<{ store: boolean; ms: number; n: number }>
     hold: (line: string) => number
     held: (line: string) => number
+    served: (line: string) => boolean
+    subN: () => number
   }
 }
 probe.__probe = {
@@ -1514,6 +1626,11 @@ probe.__probe = {
     return probeHeld.get(line)!.value.length
   },
   held: (line) => probeHeld.get(line)?.value.length ?? -1,
+  // Whether THIS query opened a genuine server subscription (T-17126) — proof
+  // the answer is server-authoritative, not a local cache scan; subN counts how
+  // many are open across the tab.
+  served: (line) => queryUses.has(qkey(resolveRefs(parseQuery(line), findEid))),
+  subN: () => queryUses.size,
 }
 
 // The whole entity, assembled for a renderer: spine, components present,

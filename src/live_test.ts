@@ -34,6 +34,7 @@ import {
   openDeps,
   parents,
   pinned,
+  predsToQuery,
   projects,
   relations,
   repoUrl,
@@ -52,7 +53,7 @@ import {
   unreadFor,
   unsubscribe,
 } from './live.ts'
-import { parseQuery, resolveRefs } from './query.ts'
+import { EXISTS, parseQuery, PROJECT, resolveRefs } from './query.ts'
 import { type Ent } from './types.ts'
 import { effect } from '@preact/signals'
 import {
@@ -2103,5 +2104,124 @@ Deno.test('boardPost excludes chrome and self from the subscription members', ()
   } finally {
     drop()
     unsubscribe('board:board')
+  }
+})
+
+// T-17126: the self-verifying preds→query serializer that decides whether a
+// queryEids call can open a server subscription. It must round-trip the shapes
+// queryEids actually builds (has/eq/contains/refs) and REFUSE anything else, so a
+// shape the grammar can't spell exactly falls back to the local resolver instead
+// of putting a divergent query on the wire.
+Deno.test('predsToQuery round-trips membership shapes, refuses the rest', () => {
+  let E = 'abcdef10-0000-4000-8000-000000000001'
+  let F = 'abcdef10-0000-4000-8000-000000000002'
+  cache.value = {
+    [E]: { entity: { eid: E, num: 51 } },
+    [F]: { entity: { eid: F, num: 52 } },
+  }
+  resetSignals()
+  let eq = (comp: string, prop: string, value: string) => ({
+    comp,
+    prop,
+    op: '',
+    value,
+  })
+  let has = (comp: string) => ({ comp, prop: '', op: EXISTS, value: '' })
+  let contains = (comp: string, prop: string, value: string) => ({
+    comp,
+    prop,
+    op: '~',
+    value,
+  })
+  let refsTo = (value: string) => ({
+    comp: '',
+    prop: '',
+    op: '',
+    value,
+    refs: true,
+  })
+  assertEquals(predsToQuery([has('project')]), '.project!')
+  assertEquals(
+    predsToQuery([eq('comment', 'target', E)]),
+    `.comment.target=${E}`,
+  )
+  assertEquals(
+    predsToQuery([contains('board', 'query', E)]),
+    `.board.query~=${E}`,
+  )
+  assertEquals(predsToQuery([refsTo(E)]), `.refs=${E}`)
+  assertEquals(
+    predsToQuery([eq('fold', 'client', E), eq('fold', 'board', F)]),
+    `.fold.client=${E}&.fold.board=${F}`,
+  )
+  // A projection (pins) carries waking fields the membership sub can't re-fire —
+  // refused, so the caller keeps the in-memory resolver.
+  assertEquals(
+    predsToQuery([{ comp: '', prop: '', op: PROJECT, value: '', fields: [] }]),
+    undefined,
+  )
+  // An empty query has no line.
+  assertEquals(predsToQuery([]), undefined)
+})
+
+// T-17126: with the flag on, a held membership query is backed by a SERVER
+// subscription — its signal is primed from the local cache, then the server's
+// frames (landSub) drive it. This walks the four transitions the flip relies on
+// (replace / add / drop) and asserts the per-sub signal tracks membership, the
+// same landSub path boards ride. A stub WebSocket keeps `holdQuery`'s sub-open
+// from dialing a real socket; the test drives landSub directly.
+Deno.test('serverQuery: a held membership query tracks its subscription', () => {
+  let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
+  ;(globalThis as { WebSocket: unknown }).WebSocket = class {
+    readyState = 0
+    onopen: unknown = null
+    onmessage: unknown = null
+    onclose: unknown = null
+    send() {}
+    addEventListener() {}
+    close() {}
+  }
+  let P1 = 'aaaa0000-0000-4000-8000-000000000001'
+  let P2 = 'aaaa0000-0000-4000-8000-000000000002'
+  let P3 = 'aaaa0000-0000-4000-8000-000000000003'
+  let proj = (eid: string, num: number) => [
+    { eid, name: 'entity', comp: { eid, num } },
+    { eid, name: 'project', comp: { color: '#111' } },
+  ]
+  config.serverQuery = true
+  try {
+    cache.value = {
+      [P1]: { entity: { eid: P1, num: 1 }, project: { eid: P1 } },
+    }
+    let preds = resolveRefs(parseQuery('.project!'), findEid)
+    let sub = `q:${JSON.stringify(preds)}`
+    let sig = holdQuery(preds)
+    // Primed synchronously from the in-memory cache (one project) — no flash.
+    assertEquals(sig.value, [P1])
+    // The server's initial set REPLACES the prime with the authoritative answer.
+    landSub({
+      sub,
+      replace: true,
+      shadow: true,
+      changes: [...proj(P1, 1), ...proj(P2, 2)],
+    })
+    assertEquals(new Set(sig.value), new Set([P1, P2]))
+    // A fresh match ADDS.
+    landSub({ sub, shadow: true, changes: proj(P3, 3) })
+    assertEquals(new Set(sig.value), new Set([P1, P2, P3]))
+    // A lost match DROPS (left this query, still exists).
+    landSub({ sub, shadow: true, changes: [], drop: [P3] })
+    assertEquals(new Set(sig.value), new Set([P1, P2]))
+    // A death forwards an entity-null and leaves the set.
+    landSub({
+      sub,
+      shadow: true,
+      changes: [{ eid: P2, name: 'entity', comp: null }],
+    })
+    assertEquals(sig.value, [P1])
+    dropQuery(preds)
+  } finally {
+    config.serverQuery = false
+    ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
   }
 })
