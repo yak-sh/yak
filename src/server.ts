@@ -2410,8 +2410,14 @@ vocabularyDoc(db, vocabularyMd(docs()))
 //   {css: gen}  css-only edit — re-fetch the stylesheet, nothing else
 //   'reload'    a SHELL file (main.tsx, live.ts, index.html, vendor/) —
 //               the swap boundary itself moved; only a real reload applies
-// The supervisor owns server-graph restarts. This watcher closes websockets
-// promptly so browser clients poll toward the successor; HTTP keeps draining.
+// The supervisor (dev.ts) owns server-graph restarts as a start-before-drain
+// handoff: a successor binds beside this process and reaches READY before
+// dev.ts stops us, so the port always has a ready listener. We must NOT close
+// client sockets when we see a serverFile edit — that fired the browser's
+// reconnect-and-reload immediately, seconds before the successor was listening,
+// so the page reloaded into the handoff gap and bricked. Just stop this stale
+// watcher and keep serving; our eventual death (post-READY) drops the sockets,
+// and the client then reconnects/reloads onto the already-ready successor.
 let shellish = (p: string) =>
   p.endsWith('/main.tsx') || p.endsWith('/live.ts') ||
   p.endsWith('/index.html') || p.includes('/vendor/')
@@ -2419,10 +2425,7 @@ let watch = async () => {
   let timer: ReturnType<typeof setTimeout> | null = null
   let batch = new Set<string>()
   for await (let e of Deno.watchFs(src)) {
-    if (e.paths.some(serverFile)) {
-      for (let c of clients) c.close()
-      return
-    }
+    if (e.paths.some(serverFile)) return
     for (let p of e.paths) batch.add(p)
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {

@@ -1344,8 +1344,17 @@ let connect = () => {
 }
 
 // The follower half of the same promise: a fanned 'reload' must not outrun
-// this tab's own outbox. One drain try per tick, on the poller's cadence.
+// this tab's own outbox — nor refresh into a server a code edit is still
+// restarting (the several-second brick). Confirm the successor is listening
+// (HEAD /snapshot) AND this tab's outbox has drained, THEN reload; otherwise
+// retry on the poller's cadence — the page stays live on the old JS across the
+// gap. This is the same reachability gate the reconnect poller already uses.
 let reloadDrained = async () => {
+  try {
+    await fetch(`${base()}/snapshot`, { method: 'HEAD' })
+  } catch {
+    return void setTimeout(reloadDrained, 500) // successor not up yet
+  }
   if (await drain()) return config.reload()
   setTimeout(reloadDrained, 500)
 }
