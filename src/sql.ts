@@ -287,19 +287,33 @@ let one = (p: Pred): Sql | null => {
 // join. The base table is the FROM, never re-joined; and a subquery may not join
 // `entity` (its name is the correlation to the OUTER row), so a child pred naming
 // the spine declines rather than silently shadow it.
+//
+// `drop` is the partial-narrowing mode (whereSome): a declining pred is SKIPPED
+// rather than sinking the whole compile. Dropping a pred from a conjunction only
+// WIDENS its result, so the compiled subset selects a SUPERSET that the caller's
+// JS matcher then refines with the full pred list — never a superset that misses
+// a true match. Only the top-level `entity` base uses it; reverse-EXISTS
+// subqueries stay exact-or-decline, so a hop that cannot compile exactly drops
+// WHOLE (its one() returns null) and is refined in JS, never compiled partially.
 let build = (
   preds: Pred[],
   base: string,
   also: string[] = [],
+  drop = false,
 ): { joins: string; cond: string; params: Bind[] } | null => {
   let parts: Sql[] = []
+  let kept: Pred[] = []
   for (let p of preds) {
     let s = one(p)
-    if (!s) return null
+    if (!s) {
+      if (drop) continue // partial narrowing: refine this pred in JS
+      return null
+    }
     parts.push(s)
+    kept.push(p)
   }
   let tables = new Set<string>()
-  for (let p of preds) {
+  for (let p of kept) {
     if (p.rev) continue // its EXISTS is self-contained; nothing joins here
     if (p.op == TEXT) tables.add('doc')
     else if (p.comp && !p.at) tables.add(p.comp)
@@ -415,6 +429,27 @@ export let aggregateSql = (preds: Pred[]): Sql | null => {
 export let where = (preds: Pred[]): Sql | null => {
   let built = build(preds, 'entity')
   if (!built) return null
+  return {
+    sql: `select "entity"."eid" as eid from "entity"${built.joins}` +
+      ` where ${built.cond}${LIVE}`,
+    params: built.params,
+  }
+}
+
+// The partial-narrowing statement: like where(), but a predicate the compiler
+// cannot express EXACTLY is DROPPED from the SQL instead of sinking the whole
+// compile (build's `drop` mode). Because every query is a conjunction, dropping
+// a pred only WIDENS the result, so this selects a SUPERSET of the true matches;
+// the caller reads those candidate rows and refines them in JS with the full
+// pred list (graph_query.ts evalQuery). This is what lets a query mixing a
+// compilable pred (`.status=open`) with a declining one (`.assignee.title~=j`, a
+// time span) read only the narrow candidate set rather than the whole graph.
+// When NOTHING compiles, the candidate set is every live entity — still read
+// through the index, never a materialized snapshot. Never null: the top-level
+// `entity` base cannot reach build's only null branch (the entity-self-join
+// guard, which fires solely inside a reverse-EXISTS subquery).
+export let whereSome = (preds: Pred[]): Sql => {
+  let built = build(preds, 'entity', [], true)!
   return {
     sql: `select "entity"."eid" as eid from "entity"${built.joins}` +
       ` where ${built.cond}${LIVE}`,

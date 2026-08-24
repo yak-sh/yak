@@ -13,7 +13,7 @@
 // entry predicates included, so the fast path cannot silently disagree.
 import type { DatabaseSync } from './sqlite.ts'
 import { kindOf, sessionOf } from './types.ts'
-import { find, type Querier, type Row, rows } from './client.ts'
+import { type Querier, type Row } from './client.ts'
 import {
   buried,
   eager,
@@ -22,11 +22,9 @@ import {
   locate,
   matching,
   referrersOf,
-  snapshot,
 } from './db.ts'
-import { where } from './sql.ts'
+import { where, whereSome } from './sql.ts'
 import {
-  kidsOf,
   listed,
   matchQuery,
   namesLazy,
@@ -127,33 +125,49 @@ export let evalFast = (
   }
 }
 
-// The JS matcher over the full graph — the fallback for a predicate the index
-// declined, and a subscription's initial set. When the query names the lazy
-// partition the universe gains its entries (the snapshot omits them), so a lazy
-// pred the index could not compile is still answered without dropping the
-// partition. `preds`/`byEid`/`snap`/`all` ride out for whoever ranks on top.
+// The scoped fallback for a query the index cannot answer WHOLE — a declining
+// predicate, or a hot ranking. It no longer materializes the graph: whereSome()
+// compiles the compilable SUBSET of the conjunction (dropping a pred only WIDENS
+// an AND-query), matching() reads just the rows that subset selects through the
+// index, and the JS matcher refines them with the FULL pred list. Path derefs
+// and reverse hops read keyed off the live db on demand (`ent`/`kids`), so a
+// candidate set narrower than the whole graph still answers a `.assignee.title`
+// or `.comments…` hop identically — the same accessors localQuery already uses.
+// The snapshot is gone from every query door (M-21143); no request pulls the
+// whole graph into memory.
+//
+// When the query NAMES the lazy entry partition the candidate set gains its
+// entries (matching() omits them the way snapshot did, so entryUniverse adds
+// them back, keyed + bounded). `ent` rides out for whoever ranks on top (hot).
 export let evalQuery = (
   db: DatabaseSync,
   q: string,
   after = 0,
   limit = ENTRY_PAGE,
 ) => {
-  let snap = snapshot(db)
-  let all = rows(snap, true)
-  let preds = resolveRefs(parseQuery(q), (id) => find(all, id)?.eid)
-  if (namesLazy(preds)) {
+  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let entries = namesLazy(preds)
+  let ent = (e: string) => eager(db, e)
+  // A reverse hop reads the children pointing back at each row, keyed off the
+  // live db — the same reverse walk localQuery does — so a `.comments…` hop
+  // answers identically over a narrowed candidate set as over the whole graph.
+  let kids = (eid: string, comp: string, prop: string) =>
+    referrersOf(db, [eid], { comp, prop }).map(ent)
+  let all = matching(db, whereSome(preds)).map(rowed)
+    // matching() reads every entity the subset selects, entry-partition rows
+    // included (they keep a spine); snapshot() omitted ALL of them, so drop them
+    // here too. entryUniverse is the one bounded entry source — keyed per
+    // session or a capped scan — so keeping matching()'s entries would double
+    // every one it also returns (and unbound the scan whereSome couldn't).
+    .filter((r) => !r.comps.entry)
+  if (entries) {
     all = [...all, ...entryUniverse(db, preds, after, limit)]
   }
-  let byEid = new Map(all.map((r) => [r.eid, r.comps]))
-  // A reverse hop reads the children pointing back at each row; kidsOf builds
-  // that reverse view over the same universe, so the JS fallback answers a
-  // `.comments…` hop identically to the index EXISTS.
-  let kids = kidsOf(byEid)
   let hits = all.filter((r) =>
     listed(r.comps, preds) &&
-    matchQuery(r.comps, preds, (e) => byEid.get(e), undefined, kids)
+    matchQuery(r.comps, preds, ent, undefined, kids)
   )
-  return { snap, all, preds, byEid, hits }
+  return { preds, hits, ent }
 }
 
 // The authoritative filter-query answer. The index answers when it can (evalFast
@@ -178,12 +192,11 @@ export let evalGraph = (
         : fast.hits.sort((a, b) => a.num - b.num),
     }
   }
-  let { preds, byEid, hits } = evalQuery(db, q, after, limit)
+  let { preds, ent, hits } = evalQuery(db, q, after, limit)
   let now = Date.now()
   if (orderOf(preds) == 'hot') {
     hits = hits.sort((a, b) =>
-      warm(b.comps, now, (e) => byEid.get(e)) -
-      warm(a.comps, now, (e) => byEid.get(e))
+      warm(b.comps, now, ent) - warm(a.comps, now, ent)
     )
   } else if (namesLazy(preds)) hits = orderedEntries(hits, after, limit)
   return { preds, hits }
