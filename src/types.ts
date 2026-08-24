@@ -136,6 +136,11 @@ export let verdicts = [
 export let verdictName = (verdict?: string | null) =>
   String(verdict ?? '').replaceAll('_', ' ')
 
+// A model's capability tier (supply book D-21285) — what the clearing
+// house matches a task's minimum-capability ask against. Coarse on
+// purpose: grades are DISCOVERED from per-grade P&L, not asserted finely.
+export let grades = ['frontier', 'mid', 'small'] as const
+
 // The graph-native Session-log vocabulary. Grouping it here keeps its column
 // declarations in the one schema while letting the ordinary dot-param door
 // require explicit `.component.prop` spellings for this lazy partition.
@@ -649,6 +654,17 @@ export let comps: Record<string, Record<string, PropType>> = {
   // must keep routing to task. Worn ≠ speaking-for: persona names
   // the voice, actor who it acts for.
   persona: { home: { eid: 'project', death: 'detach' } },
+  // A model as an entity (D-21308): the attribution cascade's terminal —
+  // specialized persona → project base → model — so a projectless run
+  // still names the program that ran, and unconfigured contexts cluster
+  // visibly under their model. Rate cards and the supply book's grade
+  // attach here rather than to a string. `name` is the wire spelling
+  // ('claude-fable-5') the session/generation string columns keep
+  // speaking — resolution is a lookup by it, never a break. `vendor` is
+  // who MAKES the model (anthropic, openai) — deliberately not
+  // `provider`, which already means the runner (claude, codex, ollama):
+  // one vendor's model reaches us through several providers.
+  model: { name: 'text', vendor: 'text', grade: { enum: grades } },
   // An address is a FACET, not a person-column: any entity may wear one —
   // a person, a project (its operator's inbox), someday a webhook source.
   // The whole address book is this comp; send-resolution is one rule:
@@ -1274,6 +1290,7 @@ export let kindOrder = [
   'memory',
   'person',
   'persona',
+  'model',
   // A bare file entity is a blob — ahead of doc so a file that also carries a
   // doc (its name) still reads as a blob, while a task/session that merely
   // wears an attachment keeps its own richer kind (all listed earlier).
@@ -1326,6 +1343,7 @@ export let byName = new Set([
   'persona',
   'role',
   'canvas',
+  'model',
 ])
 
 // The human id: prefix-num (T-7, P-2). Curated prefixes for the kinds
@@ -1346,6 +1364,7 @@ export let prefix: Record<string, string> = {
   knock: 'K',
   wake: 'W',
   dream: 'Z', // Z for sleep — the venture's consolidation cursor
+  model: 'O', // O for the m-O-del: M is the memories'
 }
 // The short handle a NUM-LESS entity wears: the uuid's leading 8 hex — its
 // first group, already dashless. Honest that there is no human number, and
@@ -1997,6 +2016,15 @@ export let slugsOf = (a?: { slug?: string | null; slugs?: string | null }) =>
 // home (null = fleet-shared).
 export type Persona = { eid: string; home?: string | null }
 
+// A model reified (D-21308): name is the wire spelling the session and
+// generation string columns speak, vendor its maker, grade its tier.
+export type Model = {
+  eid: string
+  name?: string | null
+  vendor?: string | null
+  grade?: string | null
+}
+
 // A distilled fact the fleet keeps: content in the doc, provenance in
 // created, scope in scope (the project it belongs to; absent = a
 // principle every operator carries). last_confirmed_at is the last explicit
@@ -2169,6 +2197,7 @@ export type EntCore = {
   memory?: Memory
   feedback?: Feedback
   persona?: Persona
+  model?: Model
   recall?: Recall
   created?: Created
   updated?: Updated

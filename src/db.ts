@@ -795,6 +795,7 @@ export let derived = [
   'hook',
   'person',
   'persona',
+  'model',
   'memory',
   'feedback',
   'meta',
