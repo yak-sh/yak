@@ -5933,6 +5933,16 @@ export let locate = (db: DatabaseSync, id: string): string | undefined =>
 export let buried = (db: DatabaseSync, eid: string): boolean =>
   !!prep(db, 'select 1 from tombstone where eid = ?').get(eid)
 
+// The page entity at a URL, keyed off the `web.url` index — a normalized
+// address reaches the same row it minted (url.ts), so the browser-extension
+// door finds-or-mints without materializing the graph (M-21143). The caller
+// hands a NORMALIZED url, the same shape a write stores.
+export let webAt = (db: DatabaseSync, url: string): string | undefined =>
+  (prep(
+    db,
+    'select o.eid as eid from web t join entity o on o.id = t.entity where t.url = ?',
+  ).get(url) as { eid: string } | undefined)?.eid
+
 let clear = (db: DatabaseSync) => {
   db.exec('create temp table if not exists hit (eid text primary key)')
   db.exec('delete from hit')

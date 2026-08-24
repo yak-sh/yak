@@ -86,7 +86,15 @@ import {
   resolveRefs,
   warm,
 } from './query.ts'
-import { commandOut, commands, focusOf, spawnSpec } from './commands.ts'
+import {
+  commandOut,
+  commands,
+  focusFor,
+  focusOf,
+  type Reader,
+  spawnCorpus,
+  spawnSpec,
+} from './commands.ts'
 import { editChanges } from './edit.ts'
 import { slotsOf } from './verb.ts'
 import { renderEntry, seqRange, type Sift, transcribe } from './log_text.ts'
@@ -135,6 +143,13 @@ export type IO = {
   // — task_spawn's last-resort default when neither the caller nor the
   // args name one.
   providers: () => Promise<{ name: string; models: string[] }[]>
+  // The colon-command executor's graph access, keyed off the LIVE graph — a
+  // scoped reader the `command` tool resolves ids and enumerations through, so
+  // it never pulls the whole graph (M-21143). `overlay` carries rows the
+  // command minted but hasn't applied yet (a spec-line task), the same way
+  // obey/page overlay them. Only the in-process mount (a db in hand) supplies
+  // it; over stdio there is no db, so the command tool falls back to read().
+  reader?: (overlay?: Row[]) => Reader
 }
 
 // The teaching text lives in grammar.ts — derived from the vocabulary,
@@ -748,16 +763,22 @@ ${
     async (
       { line, on, session }: { line: string; on?: string; session?: string },
     ) => {
-      let all = rows(await io.read())
+      // The scoped reader when the mount owns a db (the fleet's /mcp) — the
+      // executor resolves ids and enumerations on demand, no whole-graph read
+      // (M-21143). Over stdio there is no db, so fall back to the HTTP snapshot.
+      let g = io.reader?.()
+      let all = g ? [] : rows(await io.read())
+      let byId = (id: string) => g ? g.find(id) : find(all, id)
+      let byEid = (e: string) => g ? g.find(e) : all.find((r) => r.eid == e)
       let eid: string | undefined
       if (on) {
-        let r = find(all, on)
+        let r = byId(on)
         if (!r) return err(`no entity: ${on}`)
         eid = r.eid
-      } else eid = focusOf(all, session)
+      } else eid = g ? focusFor(g, session) : focusOf(all, session)
       let out
       try {
-        out = commandOut(all, line, eid, session)
+        out = commandOut(all, line, eid, session, g)
       } catch (e) {
         return err((e as Error).message)
       }
@@ -770,24 +791,34 @@ ${
         let wakes = await io.query(
           `.wake! .deliver.to=${to} .delivered= .error=`,
         )
-        let recipient = all.find((r) => r.eid == to) ?? {
+        let recipient = byEid(to) ?? {
           eid: to,
           kind: 'entity',
           num: 0,
           comps: {},
         }
-        said.push(
-          wakeList(wakes, recipient, (id) => all.find((r) => r.eid == id)),
-        )
+        said.push(wakeList(wakes, recipient, (id) => byEid(id)))
       }
       if (out.spawn) {
         let want = spawnSpec(out.spawn)
-        // A spawn on defaults — a fresh read sees the task the line may
-        // have just filed; task_spawn is the door for overrides. One
+        // A spawn on defaults — the reader sees the task the line may have just
+        // filed via its overlay; task_spawn is the door for overrides. One
         // precedence: the line's own spec > the task hint > the caller > table.
-        let snap = await io.read()
-        let now = rows(snap)
-        let plan = spawnPlan(now, await io.providers(), {
+        let after = g
+          ? io.reader!(rows({ changes: out.changes ?? [] }))
+          : undefined
+        let snap = after ? undefined : await io.read()
+        let now = after ? [] : rows(snap!)
+        // The scoped spawn corpus (task, persona, caller, ownership) or, over
+        // stdio, the materialized graph.
+        let persona = after && want.persona
+          ? after.find(want.persona)
+          : undefined
+        let deps = after
+          ? (persona ? after.deps([persona.eid]) : [])
+          : snap!.deps
+        let corpus = after ? spawnCorpus(after, want, session, deps) : now
+        let plan = spawnPlan(corpus, await io.providers(), {
           task: want.task,
           session,
           ask: {
@@ -800,26 +831,32 @@ ${
         if (!plan.provider || !plan.model) {
           return err('no provider to default to')
         }
-        let made = spawnChanges(now, {
+        let made = spawnChanges(corpus, {
           ...want,
           provider: plan.provider,
           model: plan.model,
           effort: plan.effort,
           persona: plan.persona,
           by: session,
-          deps: snap.deps,
-        }, snap.capabilities)
+          deps,
+        }, after ? await serverCaps() : snap!.capabilities)
         await io.write(made.changes, session)
-        let after = find(rows(await io.read()), made.eid)
-        let onto = want.task ? find(now, want.task) : undefined
+        // The just-minted session's id, read back after the write lands: the
+        // reader reads the live db; the stdio fallback re-reads the snapshot.
+        let landed = after
+          ? io.reader!().find(made.eid)
+          : find(rows(await io.read()), made.eid)
+        let onto = want.task
+          ? (after ? after.find(want.task) : find(now, want.task))
+          : undefined
         said.push(
-          `spawned ${after ? idOf(after) : made.eid}${
+          `spawned ${landed ? idOf(landed) : made.eid}${
             onto ? ` onto ${idOf(onto)}` : ' as chat'
           }`,
         )
       }
       if (out.go) {
-        let r = all.find((x) => x.eid == out.go)
+        let r = byEid(out.go)
         said.push(entityUrl(r ? idOf(r) : out.go))
       }
       return bus(said.join('\n') || 'ok', session)

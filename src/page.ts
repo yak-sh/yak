@@ -17,9 +17,9 @@
 // the URL"), and it rides the existing archive path: freeze.ts store()
 // with scrub on, because these bytes come off the open web and must
 // render from themselves alone. Server-only.
-import { apply, db, human, snapshot } from './db.ts'
+import { apply, db, human, locate, webAt } from './db.ts'
+import { dbReader } from './graph_query.ts'
 import { dispatch, trace } from './effects.ts'
-import { rows } from './client.ts'
 import { filing } from './commands.ts'
 import { order } from './obey.ts'
 import { store } from './freeze.ts'
@@ -41,10 +41,11 @@ export let filed = async (body: Filing, cast: Cast) => {
   if (!/^https?:\/\/./.test(url)) {
     return new Response('a http(s) url is required', { status: 400 })
   }
-  let snap = snapshot(db)
-  let all = rows(snap)
-  let page = all.find((r) => r.comps.web?.url == url)
-  let eid = page?.eid ?? crypto.randomUUID()
+  // Find-or-mint the page by its normalized URL — a keyed read, never a
+  // whole-graph snapshot (M-21143).
+  let pageEid = webAt(db, url)
+  let page = pageEid ? dbReader(db).find(pageEid) : undefined
+  let eid = pageEid ?? crypto.randomUUID()
   let changes: Change[] = []
   if (!page) changes.push({ eid, name: 'web', comp: { eid, url } })
   // The tab's title names the page until an archive does (freeze.ts land()
@@ -60,24 +61,27 @@ export let filed = async (body: Filing, cast: Cast) => {
   let line = String(body.line ?? '').trim()
   if (line) {
     // The page is the focus the line runs against, so it must be in the
-    // graph the verbs read — it may be one of the changes above, minted a
-    // microsecond ago and not yet applied.
-    let seen = page ? all : [...all, {
-      eid,
-      num: 0,
-      kind: 'web',
-      comps: { web: { eid, url } },
-    }]
-    let out = order(seen, snap, filing(line), eid, body.session)
+    // graph the verbs read — when just minted it isn't applied yet, so it
+    // rides as an overlay on the reader.
+    let g = dbReader(
+      db,
+      page ? [] : [{
+        eid,
+        num: 0,
+        kind: 'web',
+        comps: { web: { eid, url } },
+      }],
+    )
+    let out = order(g, filing(line), eid, body.session)
     said = out.said
     // Everything the line BROUGHT INTO BEING that is a task is about this
     // page. Standing somewhere is why you filed it — the same reason a
-    // board's quick-add adopts the board's query.
-    let known = new Set(all.map((r) => r.eid))
+    // board's quick-add adopts the board's query. A task change on an eid the
+    // graph already holds is an update, not a new filing.
     filed = [
       ...new Set(
         out.changes
-          .filter((c) => c.name == 'task' && c.comp && !known.has(c.eid))
+          .filter((c) => c.name == 'task' && c.comp && !locate(db, c.eid))
           .map((c) => c.eid),
       ),
     ]

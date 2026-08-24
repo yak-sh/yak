@@ -12,13 +12,20 @@
 // and must land whatever the order does. Execution is the response to it,
 // post-commit, unable to reject the batch that carried it.
 
-import { apply, db, snapshot } from './db.ts'
+import { apply, db } from './db.ts'
+import { dbReader } from './graph_query.ts'
 import { dispatch, trace } from './effects.ts'
 import { providers } from './adapters.ts'
-import { commandOut, orderIn, spawnSpec } from './commands.ts'
+import {
+  commandOut,
+  orderIn,
+  type Reader,
+  spawnCorpus,
+  spawnSpec,
+} from './commands.ts'
 import { spawnDefault } from './providers.ts'
-import { type Change, idOf, type Snapshot } from './types.ts'
-import { find, type Row, rows, spawnChanges, spawnDefaults } from './client.ts'
+import { type Change, idOf } from './types.ts'
+import { rows, spawnChanges, spawnDefaults } from './client.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -33,8 +40,7 @@ type Cast = (changes: Change[]) => void
 // A refusal is WORDS, never a throw: the reason is the receipt, and a
 // door that swallowed it would leave the typist guessing.
 export let order = (
-  all: Row[],
-  snap: Snapshot,
+  g: Reader,
   line: string,
   focus?: string,
   session?: string,
@@ -47,7 +53,7 @@ export let order = (
   let said = ''
   let spawned = ''
   try {
-    let out = commandOut(all, line, focus, session)
+    let out = commandOut([], line, focus, session, g)
     changes.push(...(out.changes ?? []))
     said = out.msg ?? ''
     // `:fix` from a comment is the point of the whole feature — an agent
@@ -59,27 +65,30 @@ export let order = (
       // spec-line `:fix` files its task in out.changes, and that fresh eid
       // must be visible or spawnChanges throws `no task` — the catch below
       // would then discard the whole order and land a bare refusal receipt.
+      // The overlay reader resolves those pending rows without a snapshot.
       let after = out.changes?.length
-        ? rows({ changes: [...snap.changes, ...out.changes] })
-        : all
+        ? dbReader(db, rows({ changes: out.changes }))
+        : g
       let want = spawnSpec(out.spawn)
-      let mine = spawnDefaults(all, session)
+      let mine = spawnDefaults(spawnCorpus(after, want, session), session)
       let table = providers()
       let { provider, model } = spawnDefault(table, {
         provider: want.provider ?? mine.provider,
         model: want.model ?? (want.provider ? undefined : mine.model),
       }, blocked)
       if (!provider || !model) throw new Error('no provider to default to')
-      let made = spawnChanges(after, {
+      let persona = want.persona ? after.find(want.persona) : undefined
+      let deps = persona ? after.deps([persona.eid]) : []
+      let made = spawnChanges(spawnCorpus(after, want, session, deps), {
         ...want,
         provider,
         model,
         by: session,
-        deps: snap.deps,
+        deps,
       })
       changes.push(...made.changes)
       spawned = want.task ?? made.eid
-      let onto = want.task ? find(after, want.task) : undefined
+      let onto = want.task ? after.find(want.task) : undefined
       said = [said, onto ? `spawned onto ${idOf(onto)}` : 'spawned chat']
         .filter(Boolean).join('\n')
     }
@@ -129,18 +138,11 @@ export let obeyed =
     let ok = ready ? await ready().catch(() => false) : true
     let blocked = (name: string) => name == 'codex' && !ok
 
-    let snap = snapshot(db)
     // Teach at the point of failure: order() hands back the refusal as
     // words, and the receipt below says them where the order was given,
-    // so the next line typed is a better one.
-    let { changes, said } = order(
-      rows(snap),
-      snap,
-      line,
-      target,
-      session,
-      blocked,
-    )
+    // so the next line typed is a better one. The reader resolves ids and
+    // enumerations on demand — no whole-graph snapshot (M-21143).
+    let { changes, said } = order(dbReader(db), line, target, session, blocked)
     if (!said && !changes.length) return // `:open` moves a viewport we don't have
     if (said) changes.push(...receipt(target, said))
     try {

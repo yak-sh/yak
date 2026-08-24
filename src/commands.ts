@@ -18,12 +18,13 @@
 // board query does (query.ts). Platform-local verbs (the TUI's :q, the
 // web's :zoom) ride in run()'s `local` table — the shared list is the
 // language both faces speak, and each adds only what the other can't do.
-import { type Change, idOf, uuid } from './types.ts'
+import { type Change, type Dep, idOf, uuid } from './types.ts'
 import {
   cascade,
   claimChanges,
   commentChanges,
   derefChanges,
+  derefWith,
   DESK,
   dreamChanges,
   find,
@@ -38,8 +39,10 @@ import {
   spec,
   type Stdin,
   taskChanges,
+  uniq,
+  UUID,
 } from './client.ts'
-import { adopt, parseQuery } from './query.ts'
+import { adopt, listed, matchQuery, parseQuery } from './query.ts'
 import { instant } from './time.ts'
 import { type Arg, id, slotsOf, text } from './verb.ts'
 
@@ -68,11 +71,103 @@ let a = (name: string, eg?: string, opts: Partial<Arg> = {}): Arg => ({
 // MCP caller would be the SERVER's filesystem, so that door stays shut.
 export type Ctx = {
   eid?: string
+  // The in-memory graph a caller holds — the browser/TUI cache, or a test's
+  // rows. A server door leaves it empty and hands `graph` instead, so the
+  // executor resolves ids and enumerations through SCOPED db reads rather than
+  // a whole-graph snapshot (M-21143).
   rows: Row[]
+  // The graph as a scoped READER: resolve an id, walk dependents, enumerate a
+  // kind, all on demand. Optional — absent means read `rows` (the browser
+  // holds its own cache; a test hands a small Row[]). graphOf() picks whichever
+  // is present, so every verb speaks one vocabulary against both.
+  graph?: Reader
   session?: string
   // `as` is the token the typist actually reached for — an error must
   // never name `.body=` at a door where the body is bare words.
   read?: (p: Param, io?: Stdin, as?: string) => Param
+}
+
+// The graph access a verb needs, as narrow methods rather than a materialized
+// array — so a server door can back each by a scoped db read (graph_query.ts
+// dbReader) instead of `rows(snapshot(db))`. The browser fills it from its
+// cache (rowsReader). Every method is SYNCHRONOUS: the db reads are direct
+// sqlite, the cache reads are array scans, and run() stays sync for the web bar
+// and the TUI.
+export type Reader = {
+  // Resolve a human id / alias / num / uuid / short-eid to its row, or undefined.
+  find: (id: string) => Row | undefined
+  // find(), where a miss is the door's error (with a "did you mean?" when the
+  // reader can afford one). Only :delete needs it.
+  need: (id: string, where?: string, comp?: string) => Row
+  // The session entity for an external session id (`.session.id`), which no
+  // ordinary id resolver reaches — the change-builders find their author by it.
+  session: (sid: string) => Row | undefined
+  // The entities a delete would tombstone alongside `eid` (deaths('cascade')).
+  cascade: (eid: string) => Row[]
+  // Every entity a filter matches — the kind/component enumerations (`.repo!`,
+  // busy desk sessions, an existing dream cursor).
+  select: (filter: string) => Row[]
+  // The dependency edges touching these entities — persona ownership at spawn.
+  deps: (eids: string[]) => Dep[]
+}
+
+// The reader over an in-memory Row[] — the browser/TUI cache and the tests.
+// Every method is the same scan those doors already ran; `deps` is empty
+// because a cache carries edges elsewhere and the browser never spawns through
+// this path.
+export let rowsReader = (all: Row[]): Reader => ({
+  find: (id) => find(all, id),
+  need: (id, where, comp) => need(all, id, where, comp),
+  session: (sid) =>
+    all.find((r) => r.comps.session && String(r.comps.session.id) == sid),
+  cascade: (eid) => cascade(all, eid),
+  select: (filter) => {
+    let preds = parseQuery(filter)
+    return all.filter((r) =>
+      listed(r.comps, preds) && matchQuery(r.comps, preds)
+    )
+  },
+  deps: () => [],
+})
+
+// The reader a verb reads through: the one the door handed in, else one wrapped
+// around the rows in hand. So a verb never branches on which door it runs at.
+let graphOf = (ctx: Ctx): Reader => ctx.graph ?? rowsReader(ctx.rows)
+
+// A change-builder corpus: the specific rows a builder resolves ids against,
+// deduped. A builder still takes a Row[] and calls find()/sessionFor() over it,
+// so the door hands it exactly the entities it will touch (the target, the
+// author session, a dream cursor) — never the whole graph.
+let corpus = (...rows: (Row | undefined)[]): Row[] =>
+  uniq(rows.filter((r): r is Row => !!r))
+
+// The scoped corpus a spawn's builders resolve ids against: the task, the
+// persona, the caller's session, and the persona's ownership endpoints — never
+// the whole graph. spawnPlan/spawnDefaults read the task hint and caller here;
+// spawnChanges reads the rest. Shared by every spawn door (obey, mcp) so the
+// scoping stays one rule.
+export let spawnCorpus = (
+  g: Reader,
+  want: { task?: string; persona?: string },
+  session?: string,
+  deps: Dep[] = [],
+): Row[] =>
+  corpus(
+    want.task ? g.find(want.task) : undefined,
+    want.persona ? g.find(want.persona) : undefined,
+    session ? g.session(session) : undefined,
+    ...deps.flatMap((d) => [g.find(d.parent), g.find(d.child)]),
+  )
+
+// The headless focus, resolved through a reader: a session's single claim is an
+// unambiguous "here". The db-backed twin of focusOf() — same rule, scoped
+// reads. undefined when the session holds no lease, or more than one.
+export let focusFor = (g: Reader, session?: string): string | undefined => {
+  if (!session) return undefined
+  let me = g.session(session)
+  if (!me) return undefined
+  let mine = g.select(`.claim.session=${me.eid}`)
+  return mine.length == 1 ? mine[0].eid : undefined
 }
 
 export type Result = {
@@ -113,7 +208,7 @@ export let focusOf = (rows: Row[], session?: string): string | undefined => {
 }
 
 let here = (ctx: Ctx): Row => {
-  let r = ctx.rows.find((x) => x.eid == ctx.eid)
+  let r = ctx.eid ? graphOf(ctx).find(ctx.eid) : undefined
   if (!r) throw new Error('nothing focused')
   return r
 }
@@ -143,7 +238,7 @@ let move = (status: string): Verb => (_rest, ctx) => {
 let reopen = move('open')
 
 let go = (id: string, ctx: Ctx): Result => {
-  let r = find(ctx.rows, id)
+  let r = graphOf(ctx).find(id)
   if (!r) throw new Error(`no such entity: ${id}`)
   return { go: r.eid }
 }
@@ -153,7 +248,7 @@ let go = (id: string, ctx: Ctx): Result => {
 // the task JOINS the board — a project hands over itself, and a task the
 // project it belongs to.
 let inherit = (ctx: Ctx): Record<string, unknown> => {
-  let r = ctx.rows.find((x) => x.eid == ctx.eid)
+  let r = ctx.eid ? graphOf(ctx).find(ctx.eid) : undefined
   if (!r) return {}
   if (r.comps.board) {
     return adopt(parseQuery(String(r.comps.board.query ?? '')), 'task')
@@ -175,8 +270,9 @@ let del: Verb = (rest, ctx) => {
   let words = rest.trim().split(/\s+/).filter(Boolean)
   let ok = words.some((w) => w == '--cascade' || w == '--force')
   let named = words.find((w) => !w.startsWith('--'))
-  let r = named ? need(ctx.rows, named) : here(ctx)
-  let victims = cascade(ctx.rows, r.eid)
+  let g = graphOf(ctx)
+  let r = named ? g.need(named) : here(ctx)
+  let victims = g.cascade(r.eid)
   if (victims.length && !ok) {
     throw new Error(
       `${idOf(r)} would also delete ${victims.length} dependent${
@@ -231,10 +327,10 @@ let readParams = (args: string[], ctx: Ctx) => {
 // them. The focused session is what a browser can name, while headless doors
 // name their calling session in the context.
 let sessionDefaults = (ctx: Ctx) => {
-  let source = ctx.rows.find((r) => r.eid == ctx.eid && r.comps.session) ??
-    ctx.rows.find((r) =>
-      String(r.comps.session?.id ?? '') == String(ctx.session ?? '')
-    )
+  let g = graphOf(ctx)
+  let focused = ctx.eid ? g.find(ctx.eid) : undefined
+  let source = (focused?.comps.session ? focused : undefined) ??
+    (ctx.session ? g.session(ctx.session) : undefined)
   let session = source?.comps.session
   if (!session) return {}
   let keys = [
@@ -364,6 +460,7 @@ export let commands: Record<string, Command> = {
     })],
     about: 'run a fix agent — here, on T-42, or on a task your words file',
     run: (rest, ctx) => {
+      let g = graphOf(ctx)
       let text = rest.trim()
       // Bare :fix means HERE — said on a task's card (or in its
       // comments, once those run commands), the target is understood.
@@ -373,7 +470,7 @@ export let commands: Record<string, Command> = {
         return { spawn: r.eid, msg: `${idOf(r)} → agent` }
       }
       if (/^[A-Za-z]+-\d+$/.test(text)) {
-        let r = find(ctx.rows, text)
+        let r = g.find(text)
         if (!r?.comps.task) throw new Error(`no such task: ${text}`)
         return { spawn: r.eid, msg: `${idOf(r)} → agent` }
       }
@@ -381,10 +478,10 @@ export let commands: Record<string, Command> = {
       if (!title) throw new Error('fix: needs a title')
       let task = { ...grouped.task }
       if (!task.project) {
-        let tasks = find(ctx.rows, 'tasks')
+        let tasks = g.find('tasks')
         if (tasks?.comps.project) task.project = tasks.eid
         else {
-          let repos = ctx.rows.filter((r) => r.comps.repo && r.comps.project)
+          let repos = g.select('.repo! .project!')
           if (repos.length == 1) task.project = repos[0].eid
         }
       }
@@ -422,7 +519,7 @@ export let commands: Record<string, Command> = {
       let prompt = [title, body].filter(Boolean).join('\n')
       let launch: SpawnIntent = { ...grouped.session, ...grouped.spawn }
       if (launch.persona) {
-        let persona = find(ctx.rows, launch.persona)
+        let persona = graphOf(ctx).find(launch.persona)
         if (!persona) throw new Error(`no entity: ${launch.persona}`)
         launch.persona = persona.eid
       }
@@ -453,6 +550,7 @@ export let commands: Record<string, Command> = {
     about: 'call off the focused task; the words become a comment ' +
       '(shell: `task cancel T-3 [reason]` names one explicitly)',
     run: (rest, ctx) => {
+      let g = graphOf(ctx)
       let r = here(ctx)
       if (!r.comps.task) throw new Error(`${idOf(r)} is not a task`)
       let reason = rest.trim()
@@ -462,7 +560,12 @@ export let commands: Record<string, Command> = {
           // the why rides the same atomic batch — as plain commentary,
           // never a machine trail (the journal records the change)
           ...(reason
-            ? commentChanges(ctx.rows, r.eid, reason, ctx.session)
+            ? commentChanges(
+              corpus(r, ctx.session ? g.session(ctx.session) : undefined),
+              r.eid,
+              reason,
+              ctx.session,
+            )
             : []),
         ],
         msg: `${idOf(r)} → cancelled${reason ? ` — ${reason}` : ''}`,
@@ -486,17 +589,23 @@ export let commands: Record<string, Command> = {
     run: (rest, ctx) => {
       let text = page(rest.trim(), ctx)
       if (!text) throw new Error('meta: needs words (:meta the observation)')
-      let me = ctx.rows.find(
-        (r) => String(r.comps.session?.id ?? '') == ctx.session,
-      )
+      let g = graphOf(ctx)
+      let me = ctx.session ? g.session(ctx.session) : undefined
       if (!me) throw new Error('meta: run under a session')
-      let anchor = ctx.rows
-        .filter((r) => r.comps.entry?.session == me.eid && r.comps.message)
+      // The newest message entry of my session — the transcript position the
+      // memo anchors to. The db reader answers entries in seq order already;
+      // the sort makes the cache reader agree, so .at(-1) is newest either way.
+      let anchor = g.select(`.entry.session=${me.eid} .message.role!`)
         .sort((a, b) =>
-          Number(a.comps.entry!.seq ?? 0) - Number(b.comps.entry!.seq ?? 0)
+          Number(a.comps.entry?.seq ?? 0) - Number(b.comps.entry?.seq ?? 0)
         )
         .at(-1) ?? me
-      let made = commentChanges(ctx.rows, anchor.eid, text, ctx.session)
+      let made = commentChanges(
+        corpus(anchor, me),
+        anchor.eid,
+        text,
+        ctx.session,
+      )
       let eid = made.find((c) => c.name == 'comment')!.eid
       return {
         changes: [...made, { eid, name: 'meta', comp: {} }],
@@ -512,10 +621,17 @@ export let commands: Record<string, Command> = {
     args: [a('project', 'P-19', { kind: id, need: false })],
     about: 'start a venture dreaming — the graph-native consolidation cycle',
     run: (rest, ctx) => {
+      let g = graphOf(ctx)
       let first = rest.trim().split(/\s+/).filter(Boolean)[0]
-      let r = first ? find(ctx.rows, first) : here(ctx)
+      let r = first ? g.find(first) : here(ctx)
       if (!r) throw new Error(`dream: no such project: ${first}`)
-      let made = dreamChanges(ctx.rows, { project: r.eid })
+      // dreamChanges resolves the project and refuses a venture already
+      // dreaming — so the corpus is the project plus any dream cursor scoped
+      // to it, the one existence check it makes.
+      let made = dreamChanges(
+        corpus(r, ...g.select(`.dream.scope=${r.eid}`)),
+        { project: r.eid },
+      )
       return { changes: made.changes, msg: `dreaming ${idOf(r)}` }
     },
   },
@@ -542,9 +658,10 @@ export let commands: Record<string, Command> = {
     ],
     about: "someone's attention, now — on the focused entity",
     run: (rest, ctx) => {
+      let g = graphOf(ctx)
       let r = here(ctx)
       let [first, ...more] = rest.trim().split(/\s+/).filter(Boolean)
-      let to = first ? find(ctx.rows, first) : undefined
+      let to = first ? g.find(first) : undefined
       if (first && !to) {
         throw new Error(
           `knock: no such recipient: ${first} — name an alias or id ` +
@@ -561,7 +678,14 @@ export let commands: Record<string, Command> = {
         changes: [
           { eid: k, name: 'knock', comp: { target: r.eid } },
           { eid: k, name: 'deliver', comp: { to: toEid } },
-          ...(words ? commentChanges(ctx.rows, r.eid, words, ctx.session) : []),
+          ...(words
+            ? commentChanges(
+              corpus(r, ctx.session ? g.session(ctx.session) : undefined),
+              r.eid,
+              words,
+              ctx.session,
+            )
+            : []),
         ],
         msg: `${idOf(r)} → knock ${to ? first : 'project'}`,
       }
@@ -589,8 +713,9 @@ export let commands: Record<string, Command> = {
       let m = rest.match(/^([\s\S]*?)\s+--\s+([\s\S]+)$/)
       let head = m ? m[1] : rest
       let note = m ? m[2].trim() : ''
+      let g = graphOf(ctx)
       let words = head.trim().split(/\s+/).filter(Boolean)
-      let to = words[0] ? find(ctx.rows, words[0]) : undefined
+      let to = words[0] ? g.find(words[0]) : undefined
       // A present-but-unresolved first word is a lookup miss, not a missing
       // argument — say so (the sibling of knock's "no such recipient"), so the
       // reader isn't sent hunting for a syntax error that isn't there (T-13972).
@@ -602,9 +727,7 @@ export let commands: Record<string, Command> = {
       }
       if (!to) throw new Error('wake: name who to wake (:wake homelab in 60m)')
       let more = words.slice(1)
-      let last = more.length > 1
-        ? find(ctx.rows, more[more.length - 1])
-        : undefined
+      let last = more.length > 1 ? g.find(more[more.length - 1]) : undefined
       if (last) more = more.slice(0, -1)
       let when = more.join(' ')
       let at = instant(when)
@@ -613,7 +736,7 @@ export let commands: Record<string, Command> = {
           `wake: when is "${when}"? (in 60m, 9am tomorrow, 2026-07-25T09:00)`,
         )
       }
-      let about = last ?? ctx.rows.find((x) => x.eid == ctx.eid)
+      let about = last ?? (ctx.eid ? g.find(ctx.eid) : undefined)
       let w = uuid()
       return {
         changes: [
@@ -675,7 +798,7 @@ export let commands: Record<string, Command> = {
     about: 'answer the mail — Re: threads at delivery',
     run: (rest, ctx) => {
       let [, first, more] = rest.trim().match(/^(\S+)\s*([\s\S]*)$/) ?? []
-      let named = first ? find(ctx.rows, first) : undefined
+      let named = first ? graphOf(ctx).find(first) : undefined
       let row = named?.comps.mail ? named : here(ctx)
       if (!row.comps.mail) throw new Error(`${idOf(row)} is not a mail`)
       let body = (row == named ? more : rest).trim()
@@ -697,26 +820,28 @@ export let commands: Record<string, Command> = {
     about: "have the scribe write that session's brief",
     words: [0, 1],
     run: (rest, ctx) => {
+      let g = graphOf(ctx)
       let name = rest.trim().split(/\s+/).filter(Boolean)[0]
-      let target = name ? find(ctx.rows, name) : here(ctx)
+      let target = name ? g.find(name) : here(ctx)
       if (!target?.comps.session) {
         throw new Error('scribe: name a session (:scribe S-31)')
       }
-      let desk = find(ctx.rows, DESK.task)
+      let desk = g.find(DESK.task)
       if (!desk?.comps.task) throw new Error('no scribe-desk task in the graph')
-      let busy = ctx.rows.some((r) =>
-        r.comps.session?.requested_task == desk.eid &&
-        ['starting', 'running'].includes(String(r.comps.session.status))
-      )
+      let busy = g.select(
+        `.session.requested_task=${desk.eid} .session.status=starting,running`,
+      ).length > 0
       return {
         changes: [
           ...commentChanges(
-            ctx.rows,
+            corpus(desk, ctx.session ? g.session(ctx.session) : undefined),
             desk.eid,
             `brief ${idOf(target)} — write its session doc`,
             ctx.session,
           ),
-          ...(busy ? [] : spawnChanges(ctx.rows, DESK).changes),
+          ...(busy
+            ? []
+            : spawnChanges(corpus(desk, g.find(DESK.persona)), DESK).changes),
         ],
         msg: busy
           ? `${idOf(target)} → scribe (desk busy, ask queued)`
@@ -729,11 +854,12 @@ export let commands: Record<string, Command> = {
     about: 'lease the focused entity',
     words: [0, 1],
     run: (rest, ctx) => {
+      let g = graphOf(ctx)
       let r = here(ctx)
       let session = rest.trim() || ctx.session
       if (!session) throw new Error('claim: name a session (:claim sess-1)')
       return {
-        changes: claimChanges(ctx.rows, r.eid, session),
+        changes: claimChanges(corpus(r, g.session(session)), r.eid, session),
         msg: `${idOf(r)} ⚑ ${session}`,
       }
     },
@@ -838,9 +964,21 @@ export let commandOut = (
   line: string,
   eid?: string,
   session?: string,
+  graph?: Reader,
 ) => {
-  let out = run(line.replace(/^:/, ''), { eid, rows: all, session })
-  return out.changes ? { ...out, changes: derefChanges(all, out.changes) } : out
+  let out = run(line.replace(/^:/, ''), { eid, rows: all, session, graph })
+  if (!out.changes) return out
+  // Resolve the output's references — a verb may leave a human id in a ref
+  // value (`:set .project=P-19`). Over the db reader that resolution is a keyed
+  // lookup, never a whole-graph corpus; over rows it reads what's in hand.
+  let changes = graph
+    ? derefWith(
+      (v, where, comp) =>
+        !v || UUID.test(v) ? v : graph.need(v, where, comp).eid,
+      out.changes,
+    )
+    : derefChanges(all, out.changes)
+  return { ...out, changes }
 }
 
 // Typeahead over the table: prefix matches lead (`:d` is to the point),

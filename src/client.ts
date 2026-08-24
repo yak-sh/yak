@@ -824,7 +824,8 @@ export let param = (arg: string): Param | null => {
 // else must resolve — an alias (jeff), a human id (T-3), a bare num — or
 // the door throws, never a silent FK failure later. One resolver for
 // every write door (CLI, MCP task_new/update/command, graph_apply).
-let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export let UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // The near match, offered only once the handle it prints RESOLVES here —
 // find() is the same reading of "what names an entity" the caller just
 // failed, so a suggestion can never route somewhere the retry won't.
@@ -1078,15 +1079,6 @@ export let checkedRefs = async (preds: Pred[]) => {
   let missing = refs.filter(({ v }) => !find(hits, v))
   checkRefs(uniq([...hits, ...await suggestFor(missing)]), preds)
 }
-let derefProp = (all: Row[], name: string, prop: string, value: unknown) => {
-  // The reference's declared target ('' = any entity) doubles as the "this
-  // is a reference" signal — undefined where the column is a plain scalar.
-  let target = refOf(name, prop)
-  return target != null &&
-      (typeof value == 'string' || typeof value == 'number')
-    ? deref(all, String(value), ` (.${prop})`, target)
-    : value
-}
 export let derefParams = (all: Row[], ps: Param[]) =>
   ps.map((p) => {
     let declared = propAt(p.comp, p.prop)!
@@ -1116,15 +1108,35 @@ export let derefedParams = async (ps: Param[]) => {
     .map((p) => ({ v: String(p.value), target: refOf(p.comp, p.prop) }))
   return derefParams(uniq([...all, ...await suggestFor(wants)]), ps)
 }
-export let derefChanges = (all: Row[], changes: Change[]) =>
+// Deref a change batch through a resolver — one core, two sources. `resolve`
+// turns a human id (or an eid) into the eid it names, throwing the door's
+// error on a miss; a uuid/empty passes through untouched (its callers own that
+// short-circuit). rows-backed derefChanges reads a materialized Row[]; the
+// db-backed command executor hands a resolver keyed off the live graph, so a
+// verb's output resolves its refs without a whole-graph corpus (M-21143).
+export let derefWith = (
+  resolve: (v: string, where?: string, comp?: string) => string,
+  changes: Change[],
+) =>
   changes.map((c) => ({
     ...c,
-    eid: deref(all, c.eid, ' (eid)'),
+    eid: resolve(c.eid, ' (eid)'),
     comp: c.comp == null ? c.comp : Object.fromEntries(
-      Object.entries(c.comp)
-        .map(([prop, value]) => [prop, derefProp(all, c.name, prop, value)]),
+      Object.entries(c.comp).map(([prop, value]) => {
+        let target = refOf(c.name, prop)
+        return [
+          prop,
+          target != null &&
+            (typeof value == 'string' || typeof value == 'number')
+            ? resolve(String(value), ` (.${prop})`, target)
+            : value,
+        ]
+      }),
     ),
   }))
+
+export let derefChanges = (all: Row[], changes: Change[]) =>
+  derefWith((v, where, comp) => deref(all, v, where, comp), changes)
 let named = (v: unknown) =>
   typeof v == 'number' ||
   (typeof v == 'string' && !!v && !UUID.test(v))

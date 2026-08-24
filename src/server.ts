@@ -142,6 +142,7 @@ import {
   resolveRefs,
 } from './query.ts'
 import {
+  dbReader,
   evalFast,
   evalGraph,
   evalQuery,
@@ -671,6 +672,11 @@ let graphIO: IO = {
   // snapshot()-only truth it read before.
   // deno-lint-ignore require-await
   query: async (q, opts) => evalGraph(db, q, opts).hits,
+  // The colon-command executor's scoped reader — keyed off the live db, so the
+  // in-process `command` tool resolves ids/enumerations on demand instead of
+  // materializing the graph (M-21143). `overlay` carries a command's not-yet-
+  // applied rows (a spec-line task) for the spawn validation.
+  reader: (overlay) => dbReader(db, overlay),
   // deno-lint-ignore require-await
   get: async (eids) => rowsOf(db, eids).map(rowed),
   // deno-lint-ignore require-await

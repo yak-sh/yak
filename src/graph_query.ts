@@ -12,8 +12,9 @@
 // call site). sql_test.ts holds the index and the matcher against each other,
 // entry predicates included, so the fast path cannot silently disagree.
 import type { DatabaseSync } from './sqlite.ts'
-import { type Dep, kindOf, sessionOf } from './types.ts'
-import { type Querier, type Row } from './client.ts'
+import { deaths, type Dep, kindOf, sessionOf } from './types.ts'
+import { find, need, type Querier, type Row } from './client.ts'
+import type { Reader } from './commands.ts'
 import {
   buried,
   depsOf,
@@ -295,4 +296,59 @@ export let personaGraph = (
     }
   }
   return { all: [...all.values()], deps }
+}
+
+// The colon-command executor's graph access, keyed off the live db — the
+// db-backed twin of commands.ts rowsReader (M-21143: the executor never rides a
+// whole-graph snapshot). Every method is a SCOPED read: an id resolves through
+// locate()+eager(), a kind enumeration through evalGraph(), a dependents walk
+// through referrersOf(), persona ownership through depsOf(). `overlay` carries
+// rows a command minted but hasn't applied yet — a filed page, a spec-line
+// task — so the verb that names them resolves them before the batch lands, the
+// way `rows({changes:[…snap, …out]})` used to overlay them on the snapshot.
+export let dbReader = (db: DatabaseSync, overlay: Row[] = []): Reader => {
+  let read = (eid: string): Row | undefined => {
+    let comps = eager(db, eid)
+    return comps.entity ? rowed({ eid, comps }) : undefined
+  }
+  let g: Reader = {
+    find: (id) => {
+      let pending = find(overlay, id)
+      if (pending) return pending
+      let eid = locate(db, id)
+      // A tombstoned entity resolves by name but has left the graph — the
+      // snapshot the rows reader read excluded it, so exclude it here too.
+      return !eid || buried(db, eid) ? undefined : read(eid)
+    },
+    // The scoped reader declines a whole-graph "did you mean?" scan; the miss
+    // still names the id and the door it was said at, as need() always has.
+    need: (id, where, comp) => g.find(id) ?? need([], id, where, comp),
+    session: (sid) =>
+      evalGraph(db, `.session.id=${sid}`).hits.find(
+        (r) => String(r.comps.session?.id) == sid,
+      ),
+    cascade: (eid) => {
+      let aimed = deaths('cascade')
+      let found = new Map<string, Row>()
+      let frontier = [eid]
+      while (frontier.length) {
+        let next: string[] = []
+        for (let d of frontier) {
+          for (let [comp, prop] of aimed) {
+            for (let e of referrersOf(db, [d], { comp, prop })) {
+              if (e == eid || found.has(e)) continue
+              let row = read(e)
+              if (row) found.set(e, row)
+              next.push(e)
+            }
+          }
+        }
+        frontier = next
+      }
+      return [...found.values()]
+    },
+    select: (filter) => evalGraph(db, filter).hits,
+    deps: (eids) => depsOf(db, eids),
+  }
+  return g
 }
