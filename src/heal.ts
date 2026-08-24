@@ -14,9 +14,10 @@
 // between the stamp and here heals at the next boot. Both paths run the SAME
 // handler, and the handler re-reads the graph, so it is idempotent: dedup and
 // the tri-state recovery check hold whoever calls it.
-import { apply, db, human, readComp, snapshot } from './db.ts'
+import { apply, db, human, readComp } from './db.ts'
 import { type Change, kindOf, sessionActive } from './types.ts'
-import { rows, spawnChanges } from './client.ts'
+import { spawnChanges } from './client.ts'
+import { rowsFor } from './graph_query.ts'
 import { dispatch, trace } from './effects.ts'
 import { record as telemetry } from './telemetry.ts'
 
@@ -287,7 +288,9 @@ export let ensureFixer =
     let why = fixerBlocked(task.project ?? undefined, String(task.fault ?? ''))
     if (why) return // ticket stands; the boot sweep re-drives when it clears
     try {
-      let { eid, changes } = spawnChanges(rows(snapshot(db)), {
+      // spawnChanges resolves just the bug task (find + its project for the
+      // actor); read that one entity, never the whole graph (M-21143).
+      let { eid, changes } = spawnChanges(rowsFor(db, [bug]), {
         task: bug,
         provider: FIXER.provider,
         model: FIXER.model,

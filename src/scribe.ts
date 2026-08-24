@@ -7,10 +7,11 @@
 // workspace derives task → project → repo; the persona (alias scribe)
 // carries the runbook, editable in the graph. A sweep like the others —
 // graduates to a `system` entity under T-3906.
-import { apply, db, snapshot } from './db.ts'
+import { apply, db, depsOf, locate } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, type Dep } from './types.ts'
-import { DESK, find, type Row, rows, spawnChanges, STUB } from './client.ts'
+import { DESK, find, type Row, spawnChanges, STUB } from './client.ts'
+import { evalGraph, rowsFor } from './graph_query.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -70,8 +71,19 @@ export let scribeSweep = (cast: Cast) => {
   if (sweeping) return
   sweeping = true
   try {
-    let snap = snapshot(db)
-    let changes = scribeSpawn(rows(snap), snap.deps, Date.now())
+    // Scoped read (M-21143): scribeSpawn needs the sessions (the stub queue and
+    // the desk's own runs), the desk task and scribe persona, and the persona's
+    // edges (spawnChanges reads them for the run's actor). Read those — every
+    // session by kind, the three named entities plus the persona's neighbours —
+    // never the whole graph.
+    let persona = locate(db, DESK.persona)
+    let deps = persona ? depsOf(db, [persona]) : []
+    let neighbours = deps.flatMap((d) => [d.parent, d.child])
+    let all = [
+      ...evalGraph(db, '.kind=session').hits,
+      ...rowsFor(db, [DESK.task, DESK.persona, ...neighbours]),
+    ]
+    let changes = scribeSpawn(all, deps, Date.now())
     if (changes) {
       let t = trace()
       let out = apply(db, changes, t)

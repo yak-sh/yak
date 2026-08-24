@@ -66,6 +66,28 @@ export let rowed = (
   }
 }
 
+// A scoped Row[] for a KNOWN set of ids — the shape a change-builder
+// (spawnChanges, memoryChanges, spawnPlan, …) reads through find(all, id). A
+// caller that knows WHICH entities a builder will touch reads just those, keyed
+// off the live db, instead of materializing the whole graph to hand a builder a
+// set it looks three entities up in (M-21143 — the banned snapshot). locate()
+// maps a human id / num / uuid / slug / alias to its eid, eager() reads its
+// comps, and rowed() shapes it exactly as a materialized graph would; a null id
+// or a miss drops out, as find() over a full graph would return undefined too.
+// Deduped by eid so two spellings of the same entity yield one row.
+export let rowsFor = (
+  db: DatabaseSync,
+  ids: (string | null | undefined)[],
+): Row[] => {
+  let eids = new Set<string>()
+  for (let id of ids) {
+    if (!id) continue
+    let eid = locate(db, id)
+    if (eid) eids.add(eid)
+  }
+  return [...eids].map((eid) => rowed({ eid, comps: eager(db, eid) }))
+}
+
 // The default page for the lazy entry partition — a bound on how many entries
 // one query returns, since a session's log grows without ceiling. Paging walks
 // it by `after` (an entry.seq cursor).

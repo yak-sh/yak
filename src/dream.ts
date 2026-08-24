@@ -14,7 +14,7 @@
 // session of its own — its run-record is telemetry, its output the graph
 // edits. SERVER-ONLY (imports db). The model call is injectable so tests never
 // spawn a provider (like recall.ts's recallFn).
-import { apply, db, human, snapshot, touch } from './db.ts'
+import { apply, db, human, touch } from './db.ts'
 import { type Change, uuid } from './types.ts'
 import { dispatch, trace } from './effects.ts'
 import { record as telemetry } from './telemetry.ts'
@@ -23,7 +23,8 @@ import { readEntries } from './entries.ts'
 import { graphLog } from './entry_log.ts'
 import { transcribe } from './log_text.ts'
 import { complete } from './complete.ts'
-import { memoryChanges, rows } from './client.ts'
+import { memoryChanges } from './client.ts'
+import { rowsFor } from './graph_query.ts'
 import { normalize } from './heal.ts'
 import { embed, FLOOR, similar, textOf } from './embed.ts'
 
@@ -357,7 +358,9 @@ let fileFinding = async (
     // its `id` (not eid: sessionFor keys on session.id, so an eid would mint a
     // spurious session). No id, no attribution to make — skip.
     if (!s.id) return 'skip'
-    let made = memoryChanges(rows(snapshot(db)), {
+    // memoryChanges resolves just the session (find-or-mint by s.id) and the
+    // scope project — read those, never the whole graph (M-21143).
+    let made = memoryChanges(rowsFor(db, [s.eid, project]), {
       title: f.title,
       body: f.body,
       session: s.id,

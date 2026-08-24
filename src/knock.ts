@@ -5,12 +5,13 @@
 // running session's channel plugin hears the broadcast the moment the
 // knock commits. Words never live in the knock — they ride as a plain
 // comment on the target in the same batch. SERVER-ONLY (imports db).
-import { apply, db, human, snapshot } from './db.ts'
+import { apply, db, human } from './db.ts'
 import { reachable } from './door.ts'
 import { delivered, errored, excepted, toOf } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
-import { type Change, uuid } from './types.ts'
-import { isOperator, rows, spawnChanges, spawnPlan } from './client.ts'
+import { capabilities, type Change, uuid } from './types.ts'
+import { isOperator, spawnChanges, spawnPlan } from './client.ts'
+import { rowsFor } from './graph_query.ts'
 import { providers } from './adapters.ts'
 
 type Cast = (changes: Change[]) => void
@@ -143,20 +144,24 @@ export let knocked =
         // The same precedence every door shares: the target task's spawn
         // hint decides the agent (no caller session at this rung), the
         // provider table defaulting the rest.
-        let snap = snapshot(db)
-        let plan = spawnPlan(rows(snap), providers(), { task: target })
+        // spawnPlan reads the target task's spawn hint; spawnChanges resolves
+        // the target and the planned persona (no deps here, so no owner walk).
+        // Read just those, never the whole graph (M-21143).
+        let plan = spawnPlan(rowsFor(db, [target]), providers(), {
+          task: target,
+        })
         if (!plan.provider || !plan.model) {
           return fail(
             `nobody awake and no provider to spawn ${human(db, target)}`,
           )
         }
-        let made = spawnChanges(rows(snap), {
+        let made = spawnChanges(rowsFor(db, [target, plan.persona]), {
           task: target,
           provider: plan.provider,
           model: plan.model,
           effort: plan.effort,
           persona: plan.persona,
-        }, snap.capabilities)
+        }, capabilities)
         let t = trace()
         let out = apply(db, made.changes, t)
         cast(out)
