@@ -352,8 +352,10 @@ let pendingWake = (eid: string) =>
 // A task gated by an open `requires` blocker — the same reading dispatch's
 // ready() uses, but for one task: any requires-child whose status is not
 // settled still blocks. A child the read can't resolve counts as open (the safe
-// reading — never lapse a claim on a maybe-still-blocked task).
-let gatedTask = (taskEid: string) =>
+// reading — never lapse a claim on a maybe-still-blocked task). Exported so the
+// dep-completion knock (unblock.ts, D-21448 Piece 2) reads "ungated" the same
+// way — one reading of the requires edge, not two that can drift.
+export let gatedTask = (taskEid: string) =>
   depsOf(db, [taskEid]).some((d) =>
     d.type == 'requires' && d.parent == taskEid &&
     !taskSettled(eager(db, d.child)?.task?.status as string | undefined)

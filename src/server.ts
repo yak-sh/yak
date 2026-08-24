@@ -74,6 +74,7 @@ import { historicalReferenced, referencedEntry } from './referenced.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { native } from './mailer.ts'
 import { closingTask } from './closing.ts'
+import { unblocking } from './unblock.ts'
 import { knocked } from './knock.ts'
 import { waking } from './wake.ts'
 import { DREAM_PENDING, dreamComb, seedWake, unwoken } from './dream.ts'
@@ -1950,6 +1951,12 @@ on('task', {
   doc: 'closing a task archives the correspondence about it — the ' +
     'letters and comments that were waiting at the moment it closed, ' +
     'never anything that arrives after',
+})
+on('task', {
+  changed: { status: unblocking(cast) },
+  doc: 'an ended task knocks the claimant session of every task that ' +
+    'requires it and is now fully unblocked — the dep-completion wake ' +
+    'that resumes a parked run to finish its own task (D-21448)',
 })
 on('knock', {
   created: knocked(cast),
