@@ -44,6 +44,11 @@ type Cast = (changes: Change[]) => void
 let OWNED = `entity = (select id from entity where eid = ?)`
 
 export type ManagedJob = {
+  // Persona and prompt are seeded as two ordered entries (T-18991); a job that
+  // carries neither (a resume/reconfigure) falls back to the single
+  // `instruction` entry.
+  persona?: string
+  prompt?: string
   instruction: string
   session_id: string
   task?: string
@@ -657,21 +662,35 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     // dispatcher routes every later turn (advance() copies it forward).
     let provider = String(state?.provider ?? 'codex')
     let rows = readEntries(db, eid)
-    let input = rows.find((row) =>
+    // The generation reads `through` the LAST user entry, so its window spans
+    // every seeded user entry — the persona AND the prompt (T-18991).
+    let input = rows.filter((row) =>
       row.comps.message?.role == 'user' && !row.comps.output
-    )?.eid
+    ).at(-1)?.eid
     let generation = rows.find((row) => row.comps.generation)?.eid
     if (!input) {
-      input = uuid()
+      // The always-first user entries: the persona wears the `instruction`
+      // facet so every transcript face folds it collapsed (T-18991); the
+      // prompt is a plain user entry, shown. A job that carries neither part
+      // (a resume/reconfigure, an unsplit test job) falls back to a single
+      // `instruction` entry holding the whole prompt.
+      let seeds = [
+        job.persona && { body: job.persona, mark: true },
+        job.prompt && { body: job.prompt },
+      ].filter((s): s is { body: string; mark?: boolean } => !!s)
+      if (seeds.length == 0) seeds = [{ body: job.instruction, mark: true }]
+      let entries = seeds.map((seed) => ({
+        ...(seed.mark ? { instruction: {} } : {}),
+        message: { role: 'user' },
+        content: { body: seed.body },
+      }))
+      let inputs = entries.map(() => uuid())
+      input = inputs.at(-1)!
       generation = uuid()
       let first = append(
         db,
         eid,
-        [{
-          instruction: {},
-          message: { role: 'user' },
-          content: { body: job.instruction },
-        }, {
+        [...entries, {
           generation: {
             through: input,
             provider,
@@ -680,7 +699,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
           },
         }],
         runner,
-        [input, generation],
+        [...inputs, generation],
       )
       cast(first.changes)
     } else if (!generation) {

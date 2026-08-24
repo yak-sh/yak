@@ -233,6 +233,50 @@ slow(
   },
 )
 
+slow(
+  'graph-native seeds persona and prompt as two ordered entries, persona collapsed',
+  async () => {
+    let db = freshDb()
+    let sid = session(db)
+    let service = managedCodex({
+      db,
+      cast: () => {},
+      transport: {
+        run: () =>
+          Promise.resolve(result([{
+            type: 'message',
+            content: [{ type: 'output_text', text: 'ok' }],
+          }])),
+      },
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+    })
+    await service.start(sid, {
+      persona: 'You are the voice.',
+      prompt: 'T-1: do the thing',
+      instruction: 'You are the voice.\n\ndo the thing',
+      session_id: uuid(),
+      model: 'gpt-requested',
+      effort: 'high',
+    })
+
+    let rows = readEntries(db, sid)
+    let users = rows.filter((row) => row.comps.message?.role == 'user')
+    // Two ordered user entries: persona first, prompt second.
+    assertEquals(users.length, 2)
+    assertEquals(users[0].comps.content.body, 'You are the voice.')
+    assertEquals(users[1].comps.content.body, 'T-1: do the thing')
+    // Only the persona wears the `instruction` facet, so only it collapses.
+    assert(users[0].comps.instruction)
+    assertEquals(users[1].comps.instruction, undefined)
+    assert(users[0].seq < users[1].seq)
+    // The generation reads `through` the prompt, so its window spans both.
+    let generation = rows.find((row) => row.comps.generation)
+    assertEquals(generation!.comps.generation.through, users[1].eid)
+    db.close()
+  },
+)
+
 slow('the generation dispatcher routes by provider to its runner', async () => {
   let db = freshDb()
   // A codex generation reaches the Responses transport and settles clean.
