@@ -177,7 +177,7 @@ let mailDdl = `create table if not exists mail (
 let callDdl = `create table if not exists tool_call (
     ts         text not null
                default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    source     text not null check (source in ('mcp','http','web','srv')),
+    source     text not null check (source in ('mcp','http','web','srv','cli')),
     name       text not null,
     session_id text,
     ok         integer not null,
@@ -1208,7 +1208,7 @@ export let mendMail = (db: DatabaseSync) => {
 // own failures — so an unwidened live table would swallow the very reports
 // nobody else makes. No-ops once healed.
 export let mendCalls = (db: DatabaseSync) => {
-  if (!ddlOf(db, 'tool_call')?.includes("'srv'")) {
+  if (!ddlOf(db, 'tool_call')?.includes("'cli'")) {
     rebuild(db, 'tool_call', callDdl)
   }
 }

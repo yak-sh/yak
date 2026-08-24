@@ -39,6 +39,12 @@ Deno.test('srv: the sync that could not land is recorded like any call', () => {
   assertEquals(mine(name, { only: 'errors' }).map((r) => r.source), ['srv'])
 })
 
+Deno.test('cli: local command failures survive the storage contract', () => {
+  let name = tag()
+  record(db, { source: 'cli', name, ok: false, error: 'bad invocation' })
+  assertEquals(mine(name, { only: 'errors' }).map((r) => r.source), ['cli'])
+})
+
 Deno.test('long text is clipped; the limit clamps at 500', () => {
   let name = tag()
   record(db, { source: 'web', name, ok: false, detail: 'la '.repeat(2000) })

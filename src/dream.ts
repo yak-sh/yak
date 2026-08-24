@@ -3,8 +3,9 @@
 // a venture's completed sessions while idle and FLAGS the meta a heads-down
 // doer can't notice about its own work: a warm path found missing, duplicate
 // tickets, a reflex firing across sessions, complexity outgrowing size, an
-// owner decision taken. Flag, never fix: the drift becomes a 'consider' task
-// or a memory, never an edit in the same pass.
+// owner decision taken. hygiene.ts adds the corpus half: duplicate/cold/long
+// memories, persona bloat, and recurring tool errors. Flag, never fix: drift
+// becomes a task, memory, or proposal, never an edit in the same pass.
 //
 // It is a post-commit EFFECT (a species of recallEntry/heal.ts), not a spawned
 // desk: a self-armed cadence wake mints a knock to a per-venture `dream`
@@ -27,6 +28,7 @@ import { memoryChanges } from './client.ts'
 import { rowsFor } from './graph_query.ts'
 import { normalize } from './heal.ts'
 import { embed, FLOOR, similar, textOf } from './embed.ts'
+import { HARD_SCOPE, type HygieneResult, hygieneSweep } from './hygiene.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -87,7 +89,9 @@ kind:
 
 priority: 2 for something worth doing soon, 3 otherwise. Default 3.
 title is a short imperative; body is a few lines with the pointer (file:line, an
-id) to ground truth, never a restatement of it.`
+id) to ground truth, never a restatement of it.
+
+${HARD_SCOPE}`
 
 // The dream cursor, read from its own table.
 let dreamOf = (eid: string) =>
@@ -329,6 +333,10 @@ let fileFinding = async (
         name: 'finding',
         comp: { hits: (seen.hits ?? 1) + 1, last: iso(Date.now()) },
       }], cast)
+      let after = filed(key)
+      if (after?.eid != seen.eid || after.hits != (seen.hits ?? 1) + 1) {
+        throw new Error(`dream readback failed: ${human(db, seen.eid)}`)
+      }
       return 'recur'
     }
     return 'skip'
@@ -344,7 +352,18 @@ let fileFinding = async (
   if (vec) {
     let mem = nearestMemory(vec)
     if (mem) {
+      let before = (db.prepare(
+        `select count from recall where ${OWNED}`,
+      ).get(mem) as { count: number } | undefined)?.count ?? 0
       cast(touch(db, [mem], true))
+      let after = db.prepare(
+        `select r.count, m.last_confirmed_at as confirmed
+           from memory m join recall r on r.entity = m.entity
+          where m.${OWNED}`,
+      ).get(mem) as { count: number; confirmed: string | null } | undefined
+      if (after?.count != before + 1 || !after.confirmed) {
+        throw new Error(`dream readback failed: ${human(db, mem)}`)
+      }
       return 'reinforce'
     }
   }
@@ -369,9 +388,15 @@ let fileFinding = async (
         : { scope: project ?? undefined }),
     })
     land([...made.changes, mark(made.eid)], cast, s.id)
+    if (filed(key)?.eid != made.eid) {
+      throw new Error(`dream readback failed: ${human(db, made.eid)}`)
+    }
   } else {
     let cs = considerChanges(f, project, s.eid) // all three share one eid
     land([...cs, mark(cs[0].eid)], cast)
+    if (filed(key)?.eid != cs[0].eid) {
+      throw new Error(`dream readback failed: ${human(db, cs[0].eid)}`)
+    }
   }
   return 'filed'
 }
@@ -408,7 +433,21 @@ let comb = async (
 ) => {
   let project = d.scope
   let base = { combed: 0, filed: 0, recurred: 0, reinforced: 0, skipped: 0 }
-  if (!project) return { ...base, floor: d.floor ?? '' }
+  if (!project) {
+    let empty = {
+      ...base,
+      hygiene: {
+        candidates: 0,
+        errors: 0,
+        filed: 0,
+        recurred: 0,
+        skipped: 0,
+        verified: [],
+      },
+      floor: d.floor ?? '',
+    }
+    return { ...empty, pass: passRecord(to, empty, cast) }
+  }
   let repo = pathOf(project)
   let now = Date.now()
   let ceil = iso(now)
@@ -439,8 +478,56 @@ let comb = async (
     }
   }
   let next = advance(project, floor, now)
-  land([{ eid: to, name: 'dream', comp: { floor: next } }], cast)
-  return { ...tally, floor: next }
+  let hygiene = hygieneSweep(project, floor, cast, now)
+  let result = { ...tally, hygiene, floor: next }
+  return { ...result, pass: passRecord(to, result, cast) }
+}
+
+type Pass = {
+  combed: number
+  filed: number
+  recurred: number
+  reinforced: number
+  skipped: number
+  hygiene: HygieneResult
+  floor: string
+}
+
+// One graph-native run record, atomically beside the advanced cursor. Its
+// created stamp dates the pass; the body says only outcomes the code read back
+// above. The notice is machinery, not a comment, so it stays out of the dream's
+// conversation and mail fanout.
+let passRecord = (to: string, r: Pass, cast: Cast): string => {
+  let eid = uuid()
+  let verified = r.hygiene.verified.map((e) => human(db, e)).join(', ') ||
+    'none'
+  let body = `dream pass ${iso(Date.now())}\n` +
+    `sessions: combed ${r.combed}, filed ${r.filed}, recurred ${r.recurred}, ` +
+    `reinforced ${r.reinforced}, skipped ${r.skipped}\n` +
+    `hygiene: ${r.hygiene.candidates} candidates, ${r.hygiene.errors} ` +
+    `recurring error cohorts; filed ${r.hygiene.filed}, recurred ` +
+    `${r.hygiene.recurred}, skipped ${r.hygiene.skipped}\n` +
+    `verified artifacts: ${verified}\nfloor: ${r.floor}`
+  land([
+    ...(r.floor
+      ? [{ eid: to, name: 'dream', comp: { floor: r.floor } } as Change]
+      : []),
+    { eid, name: 'doc', comp: { title: '', body } },
+    { eid, name: 'notice', comp: { target: to, event: 'sweep' } },
+  ], cast)
+  let row = db.prepare(
+    `select d.body from notice n
+      join entity e on e.id = n.entity
+      join doc d on d.entity = n.entity
+     where e.eid = ? and n.target = ${idOf}`,
+  ).get(eid, to) as { body: string } | undefined
+  if (row?.body != body) {
+    throw new Error(`dream pass readback failed: ${human(db, eid)}`)
+  }
+  if (r.floor && dreamOf(to)?.floor != r.floor) {
+    throw new Error(`dream floor readback failed: ${human(db, to)}`)
+  }
+  return eid
 }
 
 // Re-arm the next dream: an UNTARGETED cadence wake with deliver.to = the
@@ -482,7 +569,9 @@ export let dreamComb =
         ms: Date.now() - at,
         detail: `${human(db, to)}: combed ${r.combed}, filed ${r.filed}, ` +
           `recurred ${r.recurred}, reinforced ${r.reinforced}, ` +
-          `skipped ${r.skipped}, floor→${r.floor.slice(0, 10)}`,
+          `skipped ${r.skipped}; hygiene ${r.hygiene.candidates} candidates, ` +
+          `${r.hygiene.errors} error cohorts; pass ${human(db, r.pass)}, ` +
+          `floor→${r.floor.slice(0, 10)}`,
       })
     } catch (e) {
       telemetry(db, {

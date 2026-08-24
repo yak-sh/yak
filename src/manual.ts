@@ -676,9 +676,12 @@ export let manuals = declare({
       'floor, asks a cheap model what META the doer missed — a warm path ' +
       'gone missing, duplicate tickets, a reflex recurring across sessions, ' +
       'complexity outgrowing size, an owner decision taken — and FLAGS it as ' +
-      "a 'consider' task or a memory. Flag, never fix. The dream re-arms " +
-      'itself, so this is a one-time opt-in; a second dream on the same ' +
-      'venture is refused.',
+      "a 'consider' task or a memory. It also derives duplicate, cold, and " +
+      'overlong-memory candidates, persona bloat, and recurring tool-error ' +
+      'cohorts; those land as bounded proposed review tasks, never source ' +
+      'edits. A sweep notice records each verified pass. Flag, never fix. ' +
+      'The dream re-arms itself, so this is a one-time opt-in; a second dream ' +
+      'on the same venture is refused.',
     root: true,
     args: [arg('project', text)],
     opts: [],

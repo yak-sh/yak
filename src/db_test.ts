@@ -2527,20 +2527,20 @@ slow('mendMail: rebuilds the FK-era table, no-ops when healed', () => {
   assertEquals(row(), { target: t })
 })
 
-// The same frozen-check disease on tool_call: a live db's source list
-// predates the server's own background reports, and a dropped row is the
-// one report nobody else was going to make.
+// The same frozen-check disease on tool_call: a live db's source list can
+// predate a new producer, and a dropped row is the one report nobody else was
+// going to make. This fixture already knows `srv` but not the newer `cli`.
 slow('mendCalls: widens the frozen source list, keeps the rows', () => {
   let d = fresh()
   d.exec('drop table tool_call')
   d.exec(`create table tool_call (
     ts text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    source text not null check (source in ('mcp','http','web')),
+    source text not null check (source in ('mcp','http','web','srv')),
     name text not null, session_id text, ok integer not null,
     ms integer, error text, detail text)`)
   d.exec(`insert into tool_call (source, name, ok) values ('mcp', 'kept', 1)`)
   let put = () =>
-    d.exec(`insert into tool_call (source, name, ok) values ('srv', 'x', 0)`)
+    d.exec(`insert into tool_call (source, name, ok) values ('cli', 'x', 0)`)
   assertThrows(put)
   mendCalls(d)
   put()

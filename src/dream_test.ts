@@ -234,6 +234,13 @@ slow(
       where dv."to" = (select id from entity where eid = ?) and w.target is null`,
     ).get(d)
     assertEquals(!!wake, true)
+    // The pass itself is graph data, written only after its outcomes read back.
+    let pass = db.prepare(
+      `select doc.body from notice n join doc on doc.entity = n.entity
+       where n.target = (select id from entity where eid = ?)
+         and n.event = 'sweep'`,
+    ).get(d) as { body: string } | undefined
+    assertEquals(pass?.body.includes('verified artifacts:'), true)
   },
 )
 

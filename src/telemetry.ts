@@ -119,7 +119,7 @@ let frames = (detail: string | null) =>
     .map((l) => l.replace(/:\d+:\d+/g, '').trim())
     .join('|')
 
-let fingerprint = (r: Log) => {
+export let fingerprint = (r: Log) => {
   let cls = errClass(r.error ?? '')
   let fr = frames(r.detail)
   let body = cls || fr ? `${cls}\n${fr}` : (r.error ?? '').split('\n', 1)[0]
