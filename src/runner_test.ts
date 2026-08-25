@@ -698,6 +698,39 @@ Deno.test('a daemon derives the identical bounded request from ordered entries',
   )
 })
 
+Deno.test('projection bounds one tool result without changing its durable entry', () => {
+  let whole = 'first\n' + 'x'.repeat(100_000) + '\nlast'
+  let entries = [
+    row('begin', 1, {
+      message: { role: 'user' },
+      content: { body: 'inspect' },
+    }),
+    row('gen', 2, {
+      generation: { through: 'begin', provider: 'codex', model: 'new' },
+    }),
+    row('call', 3, {
+      output: { source: 'gen' },
+      call: { key: 'call-1' },
+      graph_query: { query: '.kind=task' },
+    }),
+    row('result-entry', 4, {
+      result: { call: 'call' },
+      content: { body: whole },
+    }),
+    row('current', 5, {
+      generation: { through: 'result-entry', provider: 'codex', model: 'new' },
+    }),
+  ]
+  let input = project(entries, 'current') as Record<string, unknown>[]
+  let output = String(input.at(-1)?.output)
+  assertMatch(output, /^first\n/)
+  assertMatch(output, /full result preserved in session entry result-entry/)
+  assertMatch(output, /Narrow or page the request/)
+  assertMatch(output, /\nlast$/)
+  assert(output.length < whole.length)
+  assertEquals(entries[3].comps.content.body, whole)
+})
+
 Deno.test('a provider switch ignores the checkpoint and replays typed history', () => {
   let input = project([
     ...compacted(),
