@@ -350,6 +350,17 @@ Deno.test('kindArg accepts CLI and tool filter spellings', () => {
   assertEquals(kindArg('kind=unknown'), undefined)
 })
 
+Deno.test('subject: a singular kind can list through the existing list verb', () => {
+  assertEquals(subject('project', ['list']), {
+    cmd: 'list',
+    args: ['projects'],
+  })
+  assertEquals(subject('board', ['list', '.project=P-19', '--json']), {
+    cmd: 'list',
+    args: ['boards', '.project=P-19', '--json'],
+  })
+})
+
 Deno.test('subject: old commands and explicit focused commands keep their door', () => {
   assertEquals(subject('show', ['T-3']), undefined)
   assertEquals(subject('recall', ['M-4455']), undefined)

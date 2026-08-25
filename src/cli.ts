@@ -261,6 +261,10 @@ export let subject = (id: string | undefined, args: string[]) => {
     ? typed.slice(1)
     : typed
   if (!verb) return { cmd: 'show', args: [id] }
+  let kind = kindWord(id)
+  if (kind && verb == 'list') {
+    return { cmd: 'list', args: [plural(kind), ...objects] }
+  }
   if (args.includes('--help') || args.includes('-h')) {
     return { cmd: 'help', args: ['subject', id] }
   }
