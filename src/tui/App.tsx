@@ -93,12 +93,14 @@ export let navigationOpen = signal(false)
 export let navigationPick = signal(0)
 let priority = propAt('task', 'priority')!
 
-// The first board is the one we browse — v0 has exactly one.
+// The first board is the one we browse — v0 has exactly one. Membership reads
+// the query door (T-17064); the num sort peeks rows without re-subscribing.
 let boardEid = () =>
-  Object.entries(cache.value)
-    .filter(([, r]) => r.board)
-    .sort(([, a], [, b]) => (a.entity?.num ?? 0) - (b.entity?.num ?? 0))[0]
-    ?.[0]
+  queryEids(parseQuery('.board!'))
+    .value
+    .toSorted((a, b) =>
+      (cache.peek()[a]?.entity?.num ?? 0) - (cache.peek()[b]?.entity?.num ?? 0)
+    )[0]
 
 let rows = (e: Ent, status: string) =>
   boardTasks(e).filter((k) => k.task?.status == status).sort(byPriority)

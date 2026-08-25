@@ -96,7 +96,6 @@ export let shown = (eid: string) =>
   !cache.value[eid]?.quarantined || revealed.value.has(eid)
 let canvasVersion = signal(0)
 let noRelations: Dep[] = []
-let refreshJobs = (_ids: Set<string>) => {}
 let refreshFacets = (_ids: Set<string>) => {}
 let refreshReferences = () => {}
 
@@ -518,7 +517,6 @@ export let resetSignals = () =>
     }
     resetQueries()
     clearResolved() // a reseed may now hold what the server-resolve sidecar named
-    refreshJobs(touched)
     refreshFacets(touched)
     // A wholesale reseed (reconnect) is any-inbox-may-have-changed: refetch
     // every mounted one rather than diffing what the new graph implies.
@@ -945,7 +943,6 @@ export let applyLocal = (changes: Change[]) => {
     if (changedCensus) census.value = Object.keys(next)
     if (changedCanvas) canvasVersion.value++
     publish(changedRows, changedParents, changedChildren)
-    refreshJobs(changedRows)
     refreshQueries(changedRows)
     refreshFacets(changedRows)
     for (let [eid, z] of zs) {
@@ -1570,7 +1567,6 @@ let evict = (eids: string[]) => {
       census.value = Object.keys(next)
       if (changedCanvas) canvasVersion.value++
       publish(gone, new Set(), new Set())
-      refreshJobs(gone)
       refreshQueries(gone)
       refreshFacets(gone)
     })
@@ -2538,57 +2534,20 @@ let linksVia = (from: string, target: string): Backlink[] => {
 export let backlinks = (target: string): Backlink[] =>
   queryEids([refsTo(target)]).value.flatMap((from) => linksVia(from, target))
 
-// The claims aimed at a session ARE its reverse-ref set, so read them off the
-// derived index (index.ts `children`) instead of scanning the whole cache.
-// Output is one eid, decided by the sort — so scan order never mattered.
-let scanJob = (session: string): string | null => {
-  syncIx()
-  let g = cache.value
-  return children(ix, session, 'claim', 'session')
-    .filter((eid) => g[eid]?.task)
+// The task a session is ON: the newest task it holds a claim over, else its
+// managed request. The claims aimed at a session are an eid EQUALITY the refs
+// index answers in O(result); membership is the only reactive edge (claimed_at
+// is server-stamped at the claim's birth, never edited, and a release removes
+// the row), so the face wakes exactly when its session gains or loses a claimed
+// task — no bespoke per-session set to keep (T-17064).
+export let jobOf = (e: Ent): string | null => {
+  let g = cache.peek()
+  return queryEids([eq('claim', 'session', e.eid), has('task')]).value
     .toSorted((a, b) =>
       String(g[b]?.claim?.claimed_at ?? '').localeCompare(
         String(g[a]?.claim?.claimed_at ?? ''),
       )
-    )[0] ?? null
-}
-
-type JobSet = {
-  graph: Record<string, Comps>
-  value: Signal<string | null>
-}
-let jobSets = new Map<string, JobSet>()
-
-// The task a session is ON: the newest task it holds a claim over, else
-// its managed request. Each session watches only claim-bearing rows.
-export let jobOf = (e: Ent): string | null => {
-  let found = jobSets.get(e.eid)
-  if (!found) {
-    found = {
-      graph: cache.peek(),
-      value: signal(untracked(() => scanJob(e.eid))),
-    }
-    jobSets.set(e.eid, found)
-  } else if (found.graph != cache.peek()) {
-    found.graph = cache.peek()
-    found.value.value = untracked(() => scanJob(e.eid))
-  }
-  return found.value.value ?? e.session?.requested_task ?? null
-}
-
-refreshJobs = (eids: Set<string>) => {
-  for (let [session, set] of jobSets) {
-    let changed = [...eids].some((eid) => {
-      let before = set.graph[eid]
-      let after = cache.peek()[eid]
-      let mine = before?.claim?.session == session ||
-        after?.claim?.session == session
-      return mine &&
-        (before?.claim !== after?.claim || !!before?.task != !!after?.task)
-    })
-    set.graph = cache.peek()
-    if (changed) set.value.value = scanJob(session)
-  }
+    )[0] ?? e.session?.requested_task ?? null
 }
 
 // The edges that hold an entity FROM ABOVE — every dependency whose child
