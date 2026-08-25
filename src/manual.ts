@@ -50,6 +50,7 @@ let value = (name: string, kind = text, separate = false): Opt => ({
 
 let json = flag('--json')
 let verbose = flag('--verbose')
+let format = value('--format', of('format', () => ['markdown', 'json']), true)
 let quarantined = flag('--quarantined')
 let kind = of('kind', () => [...new Set([...kindOrder, ...plurals])])
 // `show` already renders comments; --comments affirms that default so the
@@ -301,11 +302,12 @@ export let manuals = declare({
       'task show T-3',
       'task show T-3 --comments',
       'task show T-3 --json',
+      'task show T-3 --format=json',
       'task show T-3 --quarantined',
     ],
     root: true,
     args: [arg('id', id)],
-    opts: [json, quarantined, comments],
+    opts: [json, format, quarantined, comments],
   },
   history: {
     about: "the entity's write history (journal)",

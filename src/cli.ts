@@ -142,6 +142,7 @@ import {
   route,
   usage,
   UsageError,
+  validate,
   validateCommand,
 } from './manual.ts'
 import { type Got, type Run, type Verb } from './verb.ts'
@@ -221,10 +222,10 @@ export let listing = (cmd: string | undefined, args: string[]) =>
     ? { cmd: 'list', args: [cmd, ...args] }
     : undefined
 
-// The display flags `show` accepts (comments render by default; --comments
-// only affirms that so the warm reach for it never errors, T-18416).
-let SHOW_FLAGS = ['--json', '--quarantined', '--comments']
-let isShowFlag = (x: string) => SHOW_FLAGS.includes(x)
+// Subject-first show options enter the executable manual too, so this syntax
+// cannot drift from canonical `task show`.
+let isShowOption = (x: string) =>
+  manuals.show.opts?.some((opt) => opt.name == x.split('=')[0]) ?? false
 
 let showAs = (id: string, objects: string[]) => {
   if (objects.length != 1 || !formats.includes(objects[0])) {
@@ -261,28 +262,23 @@ export let subject = (id: string | undefined, args: string[]) => {
   if (args.includes('--help') || args.includes('-h')) {
     return { cmd: 'help', args: ['subject', id] }
   }
-  if (isShowFlag(verb)) {
-    if (objects.length > 2 || objects.some((x) => !isShowFlag(x))) {
-      throw new UsageError(`task ${id} [show] ${SHOW_FLAGS.join(' ')}`)
-    }
-    return { cmd: 'show', args: [id, verb, ...objects] }
+  if (isShowOption(verb)) {
+    let args = [id, verb, ...objects]
+    validate('show', manuals.show, args)
+    return { cmd: 'show', args }
   }
   if (verb == 'show') {
     if (objects[0] == 'as') {
       let [, format, ...flags] = objects
-      if (
-        !formats.includes(format) || flags.length > 3 ||
-        flags.some((x) => !isShowFlag(x))
-      ) throw new UsageError(`format is one of: ${formats.join(', ')}`)
+      validate('show', manuals.show, [id, '--format', format, ...flags])
       return {
         cmd: 'show',
         args: [id, ...(format == 'json' ? ['--json'] : []), ...flags],
       }
     }
-    if (objects.length > 3 || objects.some((x) => !isShowFlag(x))) {
-      throw new UsageError(`task ${id} [show] ${SHOW_FLAGS.join(' ')}`)
-    }
-    return { cmd: 'show', args: [id, ...objects] }
+    let args = [id, ...objects]
+    validate('show', manuals.show, args)
+    return { cmd: 'show', args }
   }
   // The subject manual names `edge` as the family door. A bare family word
   // teaches its concrete verbs; it is not itself an edge mutation.
@@ -1774,7 +1770,7 @@ let comment = async (got: Got) => {
 }
 
 let show = async (got: Got) => {
-  let json = got.flags.has('--json')
+  let json = got.flags.has('--json') || got.opts['--format'] == 'json'
   let quarantined = got.flags.has('--quarantined')
   let id = got.args.id
   if (!id) throw new Error('task show <id> [--json]')

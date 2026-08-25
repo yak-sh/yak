@@ -51,7 +51,8 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       set: 'set <id> [--body=BODY] [--comment=TEXT]',
       edit: 'edit <id> <old> [new] [--all]',
       redact: 'redact <id> <selector>',
-      show: 'show <id> [--json] [--quarantined] [--comments]',
+      show:
+        'show <id> [--json] [--format=markdown|json] [--quarantined] [--comments]',
       history: 'history <id> [-n=50] [--json] [--verbose]',
       undo: 'undo <id>',
       transcript:
@@ -324,6 +325,8 @@ Deno.test('manual validation accepts each supported option shape', () => {
   // must be accepted (not error) since agents keep reaching for it (T-18416).
   check('show', ['T-1', '--comments'])()
   check('show', ['T-1', '--comments', '--json'])()
+  check('show', ['T-1', '--format=json'])()
+  check('show', ['T-1', '--format', 'markdown'])()
   check('spawn', ['T-1', '.provider=codex'])()
   // A verb whose grammar IS the filter/write params keeps every one of them.
   check('list', ['.status=open', '.priority<=1'])()
@@ -357,6 +360,10 @@ Deno.test('parse names positionals, resolves options, and applies defaults', () 
   assertEquals([...got.flags], ['--json', '--verbose'])
 
   assertEquals(parse('history', manuals.history, ['T-3']).opts['-n'], '50')
+  assertEquals(
+    parse('show', manuals.show, ['T-3', '--format', 'json']).opts['--format'],
+    'json',
+  )
   assertEquals(parse('probes', manuals.probes, []).opts['--grace'], '30')
   assertEquals(
     parse('spawn', manuals.spawn, ['T-3', '.provider=codex']).opts,

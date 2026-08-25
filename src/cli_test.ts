@@ -175,6 +175,14 @@ Deno.test('subject: sentences route through the existing CLI verbs', () => {
     cmd: 'show',
     args: ['T-3', '--json'],
   })
+  assertEquals(route('T-3 show --format=json'), {
+    cmd: 'show',
+    args: ['T-3', '--format=json'],
+  })
+  assertEquals(route('T-3 --format json'), {
+    cmd: 'show',
+    args: ['T-3', '--format', 'json'],
+  })
   assertEquals(route('T-3 --quarantined'), {
     cmd: 'show',
     args: ['T-3', '--quarantined'],
@@ -329,7 +337,7 @@ Deno.test('subject: malformed sentences teach the contextual grammar', () => {
   assertThrows(
     () => subject('T-3', ['show', 'T-9']),
     Error,
-    '[show] --json --quarantined --comments',
+    'task show <id>',
   )
   assertThrows(() => subject('T-3', ['is', 'blocked']), Error, 'status is one')
   assertThrows(() => subject('T-3', ['as', 'yaml']), Error, 'format is one')
@@ -1671,12 +1679,15 @@ slow(
       let listed = await run('list', '--limit', '1', '--json')
       let decided = await run('decided', '--all', '--json')
       let shown = await run('show', 'T-41', '--json')
+      let formatted = await run('show', 'T-41', '--format=json')
       assertEquals(listed.code, 0)
       assertEquals(seen[0], '/query?limit=1&.kind=task')
       assertEquals(decided.code, 0)
       assertEquals(shown.code, 0)
+      assertEquals(formatted.code, 0)
       assertEquals(JSON.parse(text(listed.stdout)), [entity])
       assertEquals(JSON.parse(text(decided.stdout)), [entity])
+      assertEquals(text(formatted.stdout), text(shown.stdout))
       assertEquals(JSON.parse(text(shown.stdout)), {
         ...entity,
         refs: [],
