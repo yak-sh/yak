@@ -47,7 +47,7 @@ import { rows } from './client.ts'
 import { manuals, parse } from './manual.ts'
 import { parseQuery } from './query.ts'
 import { answers, fakeGraph } from './graph_fake.ts'
-import type { Change, Snapshot } from './types.ts'
+import { type Change, edges, type Snapshot } from './types.ts'
 import { slow } from './testing.ts'
 import { VERSION } from './version.ts'
 import { sha } from './sha.ts'
@@ -336,6 +336,7 @@ Deno.test('archive is a root verb before subject-first routing', () => {
 Deno.test('subject: old commands and explicit focused commands keep their door', () => {
   assertEquals(subject('show', ['T-3']), undefined)
   assertEquals(subject('recall', ['M-4455']), undefined)
+  assertEquals(subject('link', ['T-3', 'requires', 'T-9']), undefined)
   assertEquals(subject('dep', ['T-3', 'requires', 'T-9']), undefined)
   assertEquals(subject('require', ['T-3', 'T-9']), undefined)
   assertEquals(subject('query', ['.kind=persona']), undefined)
@@ -380,7 +381,7 @@ slow('task subject help is contextual and needs no server', async () => {
   assertMatch(stdout, /task T-3 — subject-first verbs/)
   assertMatch(
     stdout,
-    /requires\|contains\|reads\|about\|supervises\|delegates\|recalled\|supersedes\|worked <id> \[--gone\]/,
+    new RegExp(`${edges.join('\\|')} <id> \\[--gone\\]`),
   )
   assertMatch(stdout, /task T-3 is open\|wip\|done\|cancelled/)
   assertMatch(stdout, /task T-3 knock \[to\] \[words…\]/)
@@ -915,20 +916,28 @@ slow('task wrap help documents the legacy alias', async () => {
 slow('deprecated routes leave root help but teach at their door', async () => {
   let root = await cli('--help')
   assertEquals(root.code, 0)
+  assertMatch(text(root.stdout), /^\s+task link\b/m)
   assertEquals(/^\s+task dep\b/m.test(text(root.stdout)), false)
+
+  let link = await cli('link', '--help')
+  assertEquals(link.code, 0)
+  assertMatch(
+    text(link.stdout),
+    /task link <id> <type> <child> \[--gone\]/,
+  )
 
   let direct = await cli('dep', '--help')
   assertEquals(direct.code, 0)
   assertMatch(
     text(direct.stdout),
-    /task dep <id> <type> <child> \[--gone\][\s\S]*Deprecated: superseded/,
+    /task dep <id> <type> <child> \[--gone\][\s\S]*Deprecated: superseded by task link/,
   )
 
   let bare = await cli('dep')
-  assertEquals(bare.code, 1)
+  assertEquals(bare.code, 0)
   assertMatch(
-    text(bare.stderr),
-    /usage: task dep <id> <type> <child> \[--gone\][\s\S]*deprecated:/,
+    text(bare.stdout),
+    /task dep <id> <type> <child> \[--gone\][\s\S]*Deprecated: superseded by task link/,
   )
 })
 
@@ -947,9 +956,8 @@ slow('task require is a supported alias with focused help', async () => {
 
 // A deprecated spelling HARD-ERRORS — it points at its replacement and
 // refuses to run, so print-and-continue can't hide a partial run (T-16375).
-// The gate follows the spelling typed, not the handler reached: the
-// subject-first sentence IS the successor `dep` points at, so it runs on
-// (and, against an empty graph, dies on `no entity`).
+// The gate follows the spelling typed, not the handler reached: both current
+// doors run on (and, against an empty graph, die on `no entity`).
 slow('a deprecated spelling hard-errors before its handler runs', async () => {
   // /query answers with a JSON ARRAY (a narrowed verb resolves its id
   // there first); everything else gets the empty-snapshot shape.
@@ -988,6 +996,10 @@ slow('a deprecated spelling hard-errors before its handler runs', async () => {
     let focused = await run('T-3', ':requires', 'T-9')
     assertMatch(text(focused.stderr), /no entity: T-3/)
     assertEquals(/not a command/.test(text(focused.stderr)), false)
+
+    let link = await run('link', 'T-3', 'requires', 'T-9')
+    assertMatch(text(link.stderr), /no entity: T-3/)
+    assertEquals(/deprecated/.test(text(link.stderr)), false)
   } finally {
     await empty.shutdown()
   }

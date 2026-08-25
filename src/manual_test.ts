@@ -89,6 +89,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       comment:
         'comment <id> [text…] [--body=BODY] [-F=FILE] [--verdict=VERDICT]',
       meta: 'meta [text…] [--body=BODY]',
+      link: 'link <id> <type> <child> [--gone]',
       dep: 'dep <id> <type> <child> [--gone]',
       backup: 'backup',
       sync: 'sync [--no-commit] [--check]',
@@ -208,7 +209,7 @@ Deno.test('deprecated routes leave the index but keep their manuals', () => {
   assertThrows(
     check('dep', []),
     Error,
-    'deprecated: superseded by task <id> <type> <child> [--gone]',
+    'deprecated: superseded by task link <id> <type> <child> [--gone]',
   )
 })
 

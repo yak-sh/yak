@@ -3269,6 +3269,7 @@ export let verbs = bind({
   land: () => land(),
   comment,
   meta: (got) => colon(undefined, ['meta', got.body ?? '']),
+  link: dep,
   dep,
   backup: () => backup(),
   sync,
@@ -3346,8 +3347,8 @@ if (import.meta.main) {
         // Exiting non-zero forces the caller onto the current form. stderr,
         // because stdout is what the caller asked for and is usually piped.
         // The gate belongs to the SPELLING, not the handler it lands in:
-        // subject-first sentences merely reuse the old verb's code, so
-        // `task T-3 requires T-9` — the successor `dep` points at — runs on.
+        // `link` and subject-first sentences reuse the old verb's code, but
+        // only a caller that still spells `dep` is refused.
         let spelled = selected.name == 'help' && rest[0] == 'help'
           ? manuals[cmd]
           : selected.manual

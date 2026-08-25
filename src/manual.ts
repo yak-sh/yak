@@ -705,10 +705,20 @@ export let manuals = declare({
     opts: [body],
     some: ['text', '--body'],
   },
+  link: {
+    about: 'link or unlink an edge',
+    examples: [
+      'task link T-3 requires T-9',
+      'task link T-3 requires T-9 --gone',
+    ],
+    root: true,
+    args: [arg('id', id), arg('type'), arg('child', id)],
+    opts: [flag('--gone')],
+  },
   dep: {
     about: 'link or unlink an edge',
-    deprecated: 'superseded by task <id> <type> <child> [--gone]',
-    examples: ['task T-3 requires T-9', 'task T-3 requires T-9 --gone'],
+    deprecated: 'superseded by task link <id> <type> <child> [--gone]',
+    examples: ['task link T-3 requires T-9'],
     root: true,
     args: [arg('id', id), arg('type'), arg('child', id)],
     opts: [flag('--gone')],
