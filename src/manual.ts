@@ -1218,8 +1218,19 @@ let helpAt = (args: string[]) => {
 export let requestedHelp = (argv: string[]) => {
   let end = argv.indexOf('--')
   let head = end < 0 ? argv : argv.slice(0, end)
-  if (!head.some((a) => a == '--help' || a == '-h')) return
-  return helpAt(head.filter((a) => a != '--help' && a != '-h'))
+  if (head.some((a) => a == '--help' || a == '-h')) {
+    return helpAt(head.filter((a) => a != '--help' && a != '-h'))
+  }
+  // A named door with nothing to act on is the shell's warm help path. This
+  // is how agents inspect a command after a tool is unavailable; treating the
+  // probe as invalid usage stamped their Session with an exception and filed
+  // a bug even though the CLI successfully printed the requested usage
+  // (T-19695). Optional/listing doors still run with no arguments.
+  let selected = route(head[0], head.slice(1))
+  if (
+    selected && !selected.args.length &&
+    (wordsOf(selected.manual)[0] || selected.manual.some?.length)
+  ) return render(selected.name, selected.manual)
 }
 
 // Nested verbs are canonical, but a few action-shaped flags are the spelling

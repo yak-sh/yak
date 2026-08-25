@@ -327,6 +327,16 @@ Deno.test('manual validation accepts each supported option shape', () => {
   check('search', ['.status=open'])()
 })
 
+Deno.test('a required verb with no arguments renders help without a usage failure', () => {
+  assertMatch(
+    requestedHelp(['comment']) ?? '',
+    /^task comment <id> \[text…\]/,
+  )
+  assertMatch(requestedHelp(['mail', 'show']) ?? '', /^task mail show <id>/)
+  assertEquals(requestedHelp(['list']), undefined)
+  assertEquals(requestedHelp(['inbox']), undefined)
+})
+
 Deno.test('parse names positionals, resolves options, and applies defaults', () => {
   let got = parse('history', manuals.history, [
     'T-3',
