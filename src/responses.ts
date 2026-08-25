@@ -358,11 +358,16 @@ let credentials = async (
   load: () => Promise<Credential>,
   message: string,
   optional = false,
+  retries = 0,
+  pause: (ms: number) => Promise<void> = sleep,
 ) => {
-  try {
-    return credential(await load(), optional)
-  } catch {
-    throw fault(message)
+  for (let failures = 0;; failures++) {
+    try {
+      return credential(await load(), optional)
+    } catch {
+      if (failures >= retries) throw fault(message)
+      await pause(200 * 2 ** failures)
+    }
   }
 }
 
@@ -399,6 +404,8 @@ export let responses = (options: ResponseOptions) => {
       options.credentials.get,
       'responses: credential unavailable',
       options.authentication == 'optional',
+      retries,
+      pause,
     )
     remember(auth)
     let refreshed = false
@@ -439,6 +446,8 @@ export let responses = (options: ResponseOptions) => {
           options.credentials.refresh,
           'responses: credential refresh failed',
           options.authentication == 'optional',
+          retries,
+          pause,
         )
         remember(auth)
         refreshed = true

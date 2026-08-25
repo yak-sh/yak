@@ -316,9 +316,46 @@ Deno.test('responses scrubs failed-stream evidence and credential errors', async
   assertEquals(JSON.stringify(error.evidence).includes('secret-old'), false)
   assertEquals(JSON.stringify(error.evidence).includes('acct-1'), false)
 
+  let attempts = 0
+  let waits: number[] = []
+  let recovered = responses({
+    credentials: {
+      get: () =>
+        ++attempts == 1
+          ? Promise.reject(new Error('secret-old'))
+          : Promise.resolve({ token: 'secret-new' }),
+    },
+    retries: 2,
+    pause: (ms) => {
+      waits.push(ms)
+      return Promise.resolve()
+    },
+    fetch: () =>
+      Promise.resolve(sse({
+        type: 'response.completed',
+        response: { status: 'completed', model: 'm' },
+      })),
+  })
+  assertEquals((await recovered.run({ model: 'm', input: [] })).model, 'm')
+  assertEquals(attempts, 2)
+  assertEquals(waits, [200])
+
+  attempts = 0
+  waits = []
   let unavailable = responses({
     credentials: {
-      get: () => Promise.reject(new Error('secret-old')),
+      get: () => {
+        attempts++
+        return Promise.reject(new Error('secret-old'))
+      },
+    },
+    retries: 2,
+    pause: (ms) => {
+      waits.push(ms)
+      return Promise.resolve()
+    },
+    fetch: () => {
+      throw Error('credential failure reached HTTP')
     },
   })
   await assertRejects(
@@ -326,6 +363,8 @@ Deno.test('responses scrubs failed-stream evidence and credential errors', async
     Error,
     'credential unavailable',
   )
+  assertEquals(attempts, 3)
+  assertEquals(waits, [200, 400])
 })
 
 Deno.test('responses preserves an incomplete reason', async () => {
