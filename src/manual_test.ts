@@ -43,6 +43,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       codex: 'codex [codex args…] [--operator]',
       list: 'list [kind] [filters…] [--kind=KIND] [--limit=N] [--json]',
       query: 'query [filters…] [--json]',
+      graph_query: 'graph_query [filters…] [--json]',
       decided: 'decided [filters…] [--all] [--json]',
       docs: 'docs [filters…] [--json]',
       stale: 'stale [filters…] [--all] [--json]',
@@ -173,6 +174,7 @@ Deno.test('query is the generic filtered graph read', () => {
   assertMatch(out, /task query \[filters…\] \[--json\]/)
   assertMatch(out, /task query \.kind=persona/)
   check('query', ['.kind=persona', '--json'])()
+  check('graph_query', ['.kind=comment', '--json'])()
 })
 
 Deno.test('deprecated routes leave the index but keep their manuals', () => {

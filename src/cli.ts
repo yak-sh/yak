@@ -3129,6 +3129,7 @@ export let verbs = bind({
   codex,
   list,
   query: list,
+  graph_query: list,
   decided,
   docs,
   stale,

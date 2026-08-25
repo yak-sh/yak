@@ -146,6 +146,17 @@ export let manuals = declare({
     args: [arg('filters', text, true, false)],
     opts: [json],
   },
+  // `graph_query` is the MCP tool's spelling. Keep it as a supported shell
+  // alias: agents crossing that door should reach the same query grammar,
+  // not fall into subject-first parsing where the first filter becomes a verb.
+  graph_query: {
+    dots: 'filters',
+    about: 'query the graph (MCP-compatible spelling)',
+    examples: ['task graph_query .kind=comment'],
+    alias: true,
+    args: [arg('filters', text, true, false)],
+    opts: [json],
+  },
   decided: {
     dots: 'filters',
     about: 'what has been settled here, newest decision first',
