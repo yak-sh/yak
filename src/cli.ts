@@ -269,6 +269,11 @@ export let subject = (id: string | undefined, args: string[]) => {
     return { cmd: 'show', args: [id, ...objects] }
   }
   if ((edges as readonly string[]).includes(verb)) {
+    // Repeating the relation is a common merge of the sentence form and the
+    // old typed form: `T-3 requires requires T-9`. It has only one reading,
+    // so keep the warm path successful while every other surplus word stays
+    // a refusal.
+    if (objects[0] == verb) objects = objects.slice(1)
     let children = objects.filter((x) => x != '--gone')
     let flags = objects.filter((x) => x == '--gone')
     if (

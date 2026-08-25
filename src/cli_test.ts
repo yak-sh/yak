@@ -226,6 +226,10 @@ Deno.test('subject: sentences route through the existing CLI verbs', () => {
       cmd: 'dep',
       args: ['T-3', edge, 'T-9', '--gone'],
     })
+    assertEquals(route(`T-3 ${edge} ${edge} T-9 --gone`), {
+      cmd: 'dep',
+      args: ['T-3', edge, 'T-9', '--gone'],
+    })
   }
 })
 
@@ -282,6 +286,11 @@ Deno.test('subject: old commands and explicit focused commands keep their door',
 
 Deno.test('subject: malformed sentences teach the contextual grammar', () => {
   assertThrows(() => subject('T-3', ['requires']), Error, '<id> [--gone]')
+  assertThrows(
+    () => subject('T-3', ['requires', 'requires', 'requires', 'T-9']),
+    Error,
+    '<id> [--gone]',
+  )
   assertThrows(
     () => subject('T-3', ['show', 'T-9']),
     Error,
