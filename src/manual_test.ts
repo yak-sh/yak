@@ -50,7 +50,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       edit: 'edit <id> <old> [new] [--all]',
       redact: 'redact <id> <selector>',
       show: 'show <id> [--json] [--quarantined] [--comments]',
-      history: 'history <id> [-n=50] [--json]',
+      history: 'history <id> [-n=50] [--json] [--verbose]',
       undo: 'undo <id>',
       transcript:
         'transcript <id> [--prose] [--seq=RANGE] [--after=N] [--limit=N] [--since=ISO] [--until=ISO] [--json]',
@@ -313,10 +313,16 @@ Deno.test('manual validation accepts each supported option shape', () => {
 })
 
 Deno.test('parse names positionals, resolves options, and applies defaults', () => {
-  let got = parse('history', manuals.history, ['T-3', '-n', '7', '--json'])
+  let got = parse('history', manuals.history, [
+    'T-3',
+    '-n',
+    '7',
+    '--json',
+    '--verbose',
+  ])
   assertEquals(got.args, { id: 'T-3' })
   assertEquals(got.opts, { '-n': '7' })
-  assertEquals([...got.flags], ['--json'])
+  assertEquals([...got.flags], ['--json', '--verbose'])
 
   assertEquals(parse('history', manuals.history, ['T-3']).opts['-n'], '50')
   assertEquals(parse('probes', manuals.probes, []).opts['--grace'], '30')

@@ -49,6 +49,7 @@ let value = (name: string, kind = text, separate = false): Opt => ({
 })
 
 let json = flag('--json')
+let verbose = flag('--verbose')
 let quarantined = flag('--quarantined')
 let kind = of('kind', () => [...new Set([...kindOrder, ...plurals])])
 // `show` already renders comments; --comments affirms that default so the
@@ -296,9 +297,10 @@ export let manuals = declare({
   history: {
     about: "the entity's write history (journal)",
     examples: ['task history T-3 -n 10'],
+    detail: '`--verbose` prints the full change payloads as JSON.',
     root: true,
     args: [arg('id', id)],
-    opts: [{ ...count, or: '50' }, json],
+    opts: [{ ...count, or: '50' }, json, verbose],
   },
   undo: {
     about: "reverse a journaled batch — the graph's guarded undo",

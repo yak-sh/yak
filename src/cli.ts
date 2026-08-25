@@ -1764,7 +1764,7 @@ let show = async (got: Got) => {
 // The entity's write history — the journal, one line per touching batch:
 // when · who · what changed. Blame without a version table.
 let past = async (got: Got) => {
-  let json = got.flags.has('--json')
+  let json = got.flags.has('--json') || got.flags.has('--verbose')
   let n = Number(got.opts['-n'])
   let id = got.args.id
   if (!id) throw new Error('task history <id> [-n N]')
