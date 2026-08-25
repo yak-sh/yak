@@ -140,7 +140,6 @@ import {
   readerFor,
   readerRows,
   type Row,
-  rows,
 } from './client.ts'
 import {
   listed,
@@ -156,6 +155,8 @@ import {
   evalGraph,
   evalQuery,
   localQuery,
+  personaGraph,
+  projectionGraph,
   rowed,
   workingSet,
 } from './graph_query.ts'
@@ -1235,29 +1236,31 @@ let handle = async (req: Request) => {
     }))
   }
   if (path == '/persona') {
-    // A persona materialized over the FULL graph — the SAME bytes a spawned
-    // session reads as its system prompt (persona.ts materialize()), so the
-    // browser must NOT render them from its own cache: under a partial cache
-    // the tier walk misses memories and edges and quietly corrupts the very
-    // prompt. `id` addresses the persona (locate: T-3, num, uuid, slug).
-    // `scoped` is the in-scope memories the editor lists as untiered — the
-    // one other whole-graph walk the Persona view owed the cache — resolved
-    // here so discovery no longer depends on what the client happens to hold.
+    // A persona materialized server-side — the SAME bytes a spawned session
+    // reads as its system prompt (persona.ts materialize()), so the browser
+    // must NOT render them from its own cache: under a partial cache the tier
+    // walk misses memories and edges and quietly corrupts the very prompt.
+    // The read is the spawn path's own bounded walk (personaGraph: the tier
+    // closure from this root, derived homeReads included), never the
+    // whole-graph snapshot (M-21143). `id` addresses the persona (locate:
+    // T-3, num, uuid, slug). `scoped` is the in-scope memories the editor
+    // lists as untiered — a keyed memory.scope query, resolved here so
+    // discovery no longer depends on what the client happens to hold.
     let eid = locate(db, url.searchParams.get('id') ?? '')
     if (!eid) return new Response('no such entity', { status: 404 })
-    let snap = snapshot(db)
-    let all = rows(snap)
+    let { all, deps } = personaGraph(db, [eid])
     let p = all.find((r) => r.eid == eid && r.comps.persona && r.comps.doc)
     if (!p) return new Response('not a persona', { status: 404 })
-    let home = p.comps.persona.home ?? null
-    let scoped = all
-      .filter((r) =>
-        r.comps.memory && r.comps.doc &&
-        ((r.comps.memory.scope as string | null) ?? null) == home
-      )
+    let home = (p.comps.persona.home as string | null) ?? null
+    let scoped = evalGraph(
+      db,
+      home ? `.memory.scope=${home}` : '.memory.scope=',
+    )
+      .hits
+      .filter((r) => r.comps.memory && r.comps.doc)
       .map((r) => r.eid)
     return Response.json({
-      text: materialize(all, snap.deps, p, Date.now()),
+      text: materialize(all, deps, p, Date.now()),
       scoped,
     })
   }
@@ -2096,8 +2099,12 @@ let syncSoon = () => {
   clearTimeout(syncing)
   syncing = setTimeout(async () => {
     try {
-      let snap = snapshot(db)
-      let files = projection(rows(snap), snap.deps, Date.now())
+      // The projection universe is a bounded keyed walk (every persona +
+      // project, closed over tiers), never the whole-graph snapshot — this
+      // fires on every persona-ish change, and snapshot() here cost the
+      // graph each time (M-21143).
+      let { all, deps } = projectionGraph(db)
+      let files = projection(all, deps, Date.now())
       for (let f of syncFiles(files).failed) stuck(f)
       // Every projection path, not just this tick's writes: a file some
       // earlier tick left dirty (untracked then, adopted since) is dirt

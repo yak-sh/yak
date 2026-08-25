@@ -35,6 +35,7 @@ import {
   locate,
   matching,
   referrersOf,
+  rowsOf,
   vocabHash,
 } from './db.ts'
 import { aggregateSql, where, whereSome } from './sql.ts'
@@ -366,6 +367,13 @@ async (filters, opts) => {
 // rows+deps; this only supplies a narrower universe than the whole graph, and
 // an unreachable edge or memory that never enters the walk could not have
 // changed the rendered text (a tier names only what it can reach from its root).
+// The walk is batched PER LEVEL, not per node: one rowsOf + one depsOf per
+// BFS generation instead of one eager + one depsOf per entity. A tier
+// closure holds thousands of memories, and per-node keyed reads cost ~90
+// statements each — the fleet-wide projection walked that way ran ~19s of
+// synchronous SQLite on a live-size graph, blocking the very event loop
+// the conversion off snapshot() was meant to relieve. Level-batching is
+// the same membership in ~tier-depth statement rounds.
 export let personaGraph = (
   db: DatabaseSync,
   roots: string[],
@@ -374,26 +382,44 @@ export let personaGraph = (
   let deps: Dep[] = []
   let seenDep = new Set<string>()
   let seen = new Set<string>()
-  let queue = roots.filter(Boolean)
-  while (queue.length) {
-    let eid = queue.shift()!
-    if (seen.has(eid)) continue
-    seen.add(eid)
-    let comps = eager(db, eid)
-    if (!comps.entity) continue
-    all.set(eid, rowed({ eid, comps }))
-    for (let d of depsOf(db, [eid])) {
-      if (d.parent != eid) continue // only edges OUT of this node drive the walk
+  let frontier = [...new Set(roots.filter(Boolean))]
+  while (frontier.length) {
+    for (let e of frontier) seen.add(e)
+    let level = new Set(frontier)
+    for (let r of rowsOf(db, frontier)) {
+      if (!r.comps.entity) continue
+      all.set(r.eid, rowed(r))
+    }
+    let next = new Set<string>()
+    for (let d of depsOf(db, frontier)) {
+      if (!level.has(d.parent)) continue // only edges OUT drive the walk
       if (d.type != 'contains' && d.type != 'reads') continue
       let key = `${d.parent}\0${d.type}\0${d.child}`
       if (!seenDep.has(key)) {
         seenDep.add(key)
         deps.push(d)
       }
-      queue.push(d.child)
+      if (!seen.has(d.child)) next.add(d.child)
     }
+    frontier = [...next]
   }
   return { all: [...all.values()], deps }
+}
+
+// The fleet-wide projection universe — client.ts projectionSnapshot's
+// in-process twin: every persona and every project as roots, closed over
+// their tiers by the same walk. filesFor/taskRoots see every managed
+// venture, commonOf every project's contains edge, and each persona its
+// full tier closure — including specialists reached only through the
+// derived homeReads edges depsOf folds in. A bounded read where the
+// whole-graph snapshot cost the graph (M-21143).
+export let projectionGraph = (db: DatabaseSync) => {
+  let roots = (db.prepare(
+    `select o.eid as eid from persona t join entity o on o.id = t.entity
+     union
+     select o.eid from project t join entity o on o.id = t.entity`,
+  ).all() as { eid: string }[]).map((r) => r.eid)
+  return personaGraph(db, roots)
 }
 
 // The colon-command executor's graph access, keyed off the live db — the
