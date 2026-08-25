@@ -162,17 +162,21 @@ Deno.test('usage reports preserve argv and session attribution', async () => {
   for (let [k] of saved) Deno.env.delete(k)
   Deno.env.set('TASKS_SESSION', 'agent-thread')
   try {
-    await reportUsage(['help', 'edge'], 'no such help topic', (input, init) => {
-      got = { input: String(input), init }
-      return Promise.resolve(new Response(null, { status: 204 }))
-    })
+    await reportUsage(
+      ['help', 'missing'],
+      'no such help topic',
+      (input, init) => {
+        got = { input: String(input), init }
+        return Promise.resolve(new Response(null, { status: 204 }))
+      },
+    )
   } finally {
     Deno.env.delete('TASKS_SESSION')
     for (let [k, v] of saved) if (v != null) Deno.env.set(k, v)
   }
   assertMatch(got.input!, /\/usage$/)
   assertEquals(JSON.parse(String(got.init?.body)), {
-    args: ['help', 'edge'],
+    args: ['help', 'missing'],
     error: 'no such help topic',
     session: 'agent-thread',
   })
@@ -1805,13 +1809,13 @@ slow('invalid help reports the exact CLI usage failure', async () => {
         '-A',
         new URL('./cli.ts', import.meta.url).pathname,
         'help',
-        'edge',
+        'missing',
       ],
       clearEnv: true,
       env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
     }).output()
     assertEquals(out.code, 1)
-    assertMatch(text(out.stderr), /no such help topic: edge/)
+    assertMatch(text(out.stderr), /no such help topic: missing/)
     assertEquals(seen, ['/usage'])
   } finally {
     await server.shutdown()

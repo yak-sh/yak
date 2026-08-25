@@ -137,6 +137,8 @@ Deno.test('help topics cover nested and colon vocabularies', () => {
   assertMatch(requestedHelp(['add', '--help']) ?? '', /^task add \[title…\]/)
   assertMatch(help(['link']), /^task <parent> requires\|contains/)
   assertMatch(help(['link']), /task T-3 requires T-9 --gone/)
+  assertMatch(help(['edge']), /^task <parent> requires\|contains/)
+  assertMatch(help(['edge']), /task T-3 requires T-9 --gone/)
   assertMatch(help(['fix']), /^task :fix/)
   assertMatch(help([':fix']), /^task :fix/)
   assertMatch(help(['chat']), /^task :chat/)
