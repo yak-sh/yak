@@ -2312,7 +2312,8 @@ let decisions = (decided: Row[], budget: number, scope?: string) => {
 // under a standing directive to read and adopt. recallIndex ranks and
 // formats; a `scope=` (empty = absent) pred keeps it to the principles
 // every operator shares. Recognition, not retrieval — the recall bump rides
-// deliberate expansion (memory_recall), never this listing.
+// deliberate expansion (MCP memory_recall / CLI task show), never this
+// listing.
 let fleetMemory = (all: Row[], now: number, budget: number) => {
   if (budget < 3) return []
   let global: Pred[] = [{
@@ -2324,7 +2325,7 @@ let fleetMemory = (all: Row[], now: number, budget: number) => {
   let mems = recallIndex(all, global, now, budget - 1)
   if (!mems.length) return []
   return [
-    '## from the fleet — read any that fit (memory_recall <id>), adopt what helps',
+    '## from the fleet — read any that fit (MCP memory_recall / CLI task show <id>), adopt what helps',
     ...mems.map((l) => `- ${l}`),
   ]
 }

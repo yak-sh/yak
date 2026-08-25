@@ -94,7 +94,10 @@ Deno.test('materialize: header and tiers in warmth order', () => {
     'Mind the gap.\n\n## Trust tiers\n\nAsk before crossing.',
   )
   // the index carries lines, not bodies
-  assertStringIncludes(md, '---\n\n## Memory Index\n\n*Recall a body by id')
+  assertStringIncludes(
+    md,
+    '---\n\n## Memory Index\n\n*Recall a body by id (MCP `memory_recall` / CLI `task show`).*',
+  )
   assertStringIncludes(md, 'delegation discipline')
   assert(!md.includes('Worktrees only.'))
 })

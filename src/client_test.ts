@@ -3732,7 +3732,7 @@ Deno.test('contextDigest: golden — every section, frozen assembly', () => {
     '- T-5 open — Second claimed',
     '## decided',
     '- 2026-08-12 T-11 — A decision',
-    '## from the fleet — read any that fit (memory_recall <id>), adopt what helps',
+    '## from the fleet — read any that fit (MCP memory_recall / CLI task show <id>), adopt what helps',
     '- M-12 0.04 A principle',
     'claim: `task claim <id> sess-x` · comment: `task comment <id> "…"` · release when done or handing off',
   ].join('\n')

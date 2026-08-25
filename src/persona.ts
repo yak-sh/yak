@@ -37,7 +37,7 @@ export let DIALECT: Dialect = {
 next sync overwrites hand edits. -->`,
   rule: '---',
   index:
-    '## Memory Index\n\n*Recall a body by id (memory_recall / task show).*',
+    '## Memory Index\n\n*Recall a body by id (MCP `memory_recall` / CLI `task show`).*',
 }
 
 // One index line — the memory_recall rendering, tolerant of non-memory
