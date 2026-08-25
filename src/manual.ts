@@ -545,17 +545,18 @@ export let manuals = declare({
     opts: [value('--session', empty, true)],
   },
   release: {
-    about: 'drop the lease, optionally only when held by the named session',
+    about: 'drop one or more leases',
     detail:
-      'The optional session (or --claim SESSION) is an expectation: release ' +
-      'refuses if another session now holds the lease.',
+      'A trailing S-id or --claim SESSION is an expectation: release refuses ' +
+      'if another session now holds any named lease.',
     examples: [
       'task release T-3',
+      'task release T-3 T-4',
       'task release T-3 S-31',
       'task release T-3 --claim S-31',
     ],
     root: true,
-    args: [arg('id', id), arg('session', text, false, false)],
+    args: [arg('id', id, true)],
     opts: [value('--claim', text, true)],
   },
   block: {

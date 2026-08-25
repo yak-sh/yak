@@ -1491,6 +1491,48 @@ slow('task require writes the subject-first requires edge', async () => {
   }
 })
 
+slow('release drops several leases in one atomic batch', async () => {
+  let { server, host, acked } = graphServer({
+    changes: [
+      ...graph.changes,
+      { eid: O, name: 'claim', comp: { session: S } },
+    ],
+    deps: [],
+  })
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'release',
+        'T-2',
+        'T-4',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: host },
+    }).output()
+    assertEquals(out.code, 0, text(out.stderr))
+    assertEquals(text(out.stdout), 'T-2, T-4 released\n')
+    assertEquals(acked, [
+      {
+        eid: T,
+        name: 'claim',
+        comp: null,
+        was: { session: sha(S) },
+      },
+      {
+        eid: O,
+        name: 'claim',
+        comp: null,
+        was: { session: sha(S) },
+      },
+    ])
+  } finally {
+    await server.shutdown()
+  }
+})
+
 slow('inbox asks only for its reader and keeps order when read', async () => {
   let actor = 'bbbbbbbb-0000-4000-8000-000000000051'
   let far = 'bbbbbbbb-0000-4000-8000-000000000052'

@@ -1500,9 +1500,10 @@ export let releaseChange = (row: Row): Change | undefined => {
 }
 
 let release = async (got: Got) => {
-  let id = got.args.id
-  if (!id) throw new Error('task release <id>')
-  let positional = got.args.session
+  let ids = [...(got.many.id ?? [])]
+  let positional = ids.length > 1 && /^S-\d+$/i.test(ids.at(-1)!)
+    ? ids.pop()
+    : undefined
   let option = got.opts['--claim']
   if (positional && option && positional != option) {
     throw new UsageError(
@@ -1510,22 +1511,30 @@ let release = async (got: Got) => {
         `usage: task ${usageOf(manuals.release)}`,
     )
   }
-  let row = await needed(id)
-  let change = releaseChange(row)
-  if (!change) return warn(`${idOf(row)} is not claimed`)
   let expected = positional ?? option
+  let session = expected
+    ? await sessionRow(await sessionArg(expected))
+    : undefined
+  if (expected && !session) throw new Error(`no session: ${expected}`)
+  let rows = await Promise.all(ids.map((id) => needed(id)))
+  let held: { row: Row; change: Change }[] = []
+  for (let row of rows) {
+    let change = releaseChange(row)
+    if (change) held.push({ row, change })
+    else warn(`${idOf(row)} is not claimed`)
+  }
   if (expected) {
-    let sid = await sessionArg(expected)
-    let session = await sessionRow(sid)
-    if (!session) throw new Error(`no session: ${expected}`)
-    if (session.eid != row.comps.claim?.session) {
-      let holder = await needed(String(row.comps.claim?.session))
-      let name = String(holder.comps.session?.id ?? idOf(holder))
-      throw new Error(`${idOf(row)} claimed by ${name}, not ${expected}`)
+    for (let { row } of held) {
+      if (session!.eid != row.comps.claim?.session) {
+        let holder = await needed(String(row.comps.claim?.session))
+        let name = String(holder.comps.session?.id ?? idOf(holder))
+        throw new Error(`${idOf(row)} claimed by ${name}, not ${expected}`)
+      }
     }
   }
-  await send([change])
-  print(`${idOf(row)} released`)
+  if (!held.length) return
+  await send(held.map(({ change }) => change))
+  print(`${held.map(({ row }) => idOf(row)).join(', ')} released`)
 }
 
 // `task wake <who> --gone [target]` clears a pending wake. A wake has no

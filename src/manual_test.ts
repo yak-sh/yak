@@ -77,7 +77,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       'inbox archive': 'inbox archive <id>',
       archive: 'archive <id>',
       claim: 'claim <id> [session] [--session=TEXT]',
-      release: 'release <id> [session] [--claim=TEXT]',
+      release: 'release <id…> [--claim=TEXT]',
       block: 'block <id> [reason…]',
       unblock: 'unblock <id>',
       delete: 'delete <id> [--cascade] [--force]',
@@ -420,7 +420,6 @@ Deno.test('parse names positionals, resolves options, and applies defaults', () 
   assertEquals(parse('list', manuals.list, ['--kind=comment']).opts, {
     '--kind': 'comment',
   })
-
   // Explicit session naming is the conventional spelling external agents
   // reach for; both option forms feed the claim handler's existing resolver.
   assertEquals(
@@ -430,6 +429,10 @@ Deno.test('parse names positionals, resolves options, and applies defaults', () 
   assertEquals(
     parse('claim', manuals.claim, ['T-3', '--session=S-9']).opts,
     { '--session': 'S-9' },
+  )
+  assertEquals(
+    parse('release', manuals.release, ['T-3', 'T-4']).many.id,
+    ['T-3', 'T-4'],
   )
 })
 
