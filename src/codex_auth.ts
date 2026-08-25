@@ -2,6 +2,7 @@
 // locked staging CODEX_HOME, while app-server alone speaks OAuth and refresh.
 // Nothing here parses auth.json; provider errors cross only after redaction.
 import { join } from 'node:path'
+import { VERSION } from './version.ts'
 
 export type Rpc = {
   call: (
@@ -404,7 +405,7 @@ export let codexIssuer = (
     }
     try {
       await call('initialize', {
-        clientInfo: { name: 'tasks', title: 'Tasks', version: '0.1.0' },
+        clientInfo: { name: 'tasks', title: 'Tasks', version: VERSION },
       })
       await notify('initialized')
       return { call, notify, wait, close }

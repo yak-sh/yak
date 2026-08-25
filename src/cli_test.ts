@@ -47,6 +47,7 @@ import { parseQuery } from './query.ts'
 import { answers, fakeGraph } from './graph_fake.ts'
 import type { Change, Snapshot } from './types.ts'
 import { slow } from './testing.ts'
+import { VERSION } from './version.ts'
 
 let transcript = (...events: unknown[]) => {
   let path = Deno.makeTempFileSync()
@@ -87,6 +88,13 @@ let unsafe = (text: string) =>
     return (n < 0x20 && ![1, 2, 10].includes(n)) ||
       (n >= 0x7f && n <= 0x9f)
   })
+
+slow('task --version succeeds without a server', async () => {
+  let out = await cli('--version')
+  assertEquals(out.code, 0)
+  assertEquals(text(out.stdout), `task ${VERSION}\n`)
+  assertEquals(text(out.stderr), '')
+})
 
 Deno.test('every routed CLI declaration owns its handler', () => {
   let names = Object.keys(manuals).filter((name) =>

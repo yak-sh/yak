@@ -15,6 +15,7 @@ import type {
   ToolAnnotations,
 } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
+import { VERSION } from './version.ts'
 import {
   type Change,
   type Dep,
@@ -295,7 +296,7 @@ export let mcpServer = (io: IO) => {
   // Server instructions ride the initialize handshake and land in the
   // agent's standing context — the strongest ambient steering the
   // protocol offers. Keep it to what every writer must know.
-  let server = new McpServer({ name: 'tasks', version: '0.1.0' }, {
+  let server = new McpServer({ name: 'tasks', version: VERSION }, {
     instructions: `Tool arguments are source data, never HTML. Pass <, >,
 and & literally; the renderer escapes them for its own output type.
 The graph renders bodies as markdown. ${DOC}

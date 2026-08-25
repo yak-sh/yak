@@ -148,6 +148,7 @@ import { type Got, type Run, type Verb } from './verb.ts'
 import { complete } from './tabcomplete.ts'
 import { loadPlugins, pluginSpecifiers } from './plugins.ts'
 import { safe } from './terminal.ts'
+import { VERSION } from './version.ts'
 export { subjectUsage } from './manual.ts'
 
 let formats = ['markdown', 'json']
@@ -3129,6 +3130,12 @@ export let verbs = bind({
 // Only run the CLI when invoked as the program — importing this module (e.g.
 // from tests) must not dispatch a command or call Deno.exit.
 if (import.meta.main) {
+  // Version probes must stay offline: they are commonly used to discover an
+  // executable before either the Tasks server or configured plugins exist.
+  if (Deno.args[0] == '--version') {
+    print(`task ${VERSION}`)
+    Deno.exit(0)
+  }
   // Load any configured plugins before dispatch, so a plugin's CLI-facing
   // registrars are in place when a verb runs (D-18663 seam 1). Inert by
   // default: no TASKS_PLUGINS means an empty list and no imports.
