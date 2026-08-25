@@ -85,7 +85,7 @@ slow(
     }`
 
     // Claim by the human session id — it must resolve to S's real entity.
-    let ok = await run('claim', tHuman, sHuman)
+    let ok = await run('claim', tHuman, '--session', sHuman)
     assertEquals(ok.code, 0, dec(ok.stderr))
     // The confirmation names the resolved external id, not the literal S-num.
     assertStringIncludes(dec(ok.stdout), 'sess-real')

@@ -76,7 +76,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       'inbox show': 'inbox show <id> [--json]',
       'inbox archive': 'inbox archive <id>',
       archive: 'archive <id>',
-      claim: 'claim <id> [session]',
+      claim: 'claim <id> [session] [--session=TEXT]',
       release: 'release <id> [session] [--claim=TEXT]',
       block: 'block <id> [reason…]',
       unblock: 'unblock <id>',
@@ -409,6 +409,17 @@ Deno.test('parse names positionals, resolves options, and applies defaults', () 
   assertEquals(parse('list', manuals.list, ['--kind=comment']).opts, {
     '--kind': 'comment',
   })
+
+  // Explicit session naming is the conventional spelling external agents
+  // reach for; both option forms feed the claim handler's existing resolver.
+  assertEquals(
+    parse('claim', manuals.claim, ['T-3', '--session', 'S-9']).opts,
+    { '--session': 'S-9' },
+  )
+  assertEquals(
+    parse('claim', manuals.claim, ['T-3', '--session=S-9']).opts,
+    { '--session': 'S-9' },
+  )
 })
 
 Deno.test('a trailing body option binds its space form as the body', () => {

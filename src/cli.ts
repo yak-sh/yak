@@ -1223,7 +1223,7 @@ let sessionArg = async (arg: string): Promise<string> => {
 // A claim is a session's lease on a task — other agents see who holds
 // it, and the server refuses to hand a held lease to someone else.
 let claim = async (got: Got) => {
-  let id = got.args.id, sess = got.args.session
+  let id = got.args.id, sess = got.opts['--session'] ?? got.args.session
   if (!id) throw new Error('task claim <id> [session]')
   let session = sess ? await sessionArg(sess) : me()
   if (!session) {
