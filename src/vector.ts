@@ -44,12 +44,35 @@ let load = (): Binary => {
   return binary = (m.default ?? m) as Binary
 }
 
-export let loadVector = (db: DatabaseSync) => db.loadExtension(load().path)
+// Vector search is a DERIVED, OPTIONAL feature — it rebuilds from the embed
+// sweep — so it must never be a hard boot dependency of the whole server. A
+// corrupt or incompatible persisted ANN index makes loadExtension THROW as it
+// initializes against the bad data; catch it, disable vector search for this
+// process, and let the server boot on FTS alone. `available` gates every
+// function below so none touches vector SQL against a connection that never
+// loaded the extension.
+let available = false
+export let vectorReady = () => available
+
+export let loadVector = (db: DatabaseSync) => {
+  try {
+    db.loadExtension(load().path)
+    available = true
+  } catch (e) {
+    available = false
+    let why = e instanceof Error ? e.message : String(e)
+    console.error(
+      `sqlite-vector: extension failed to load (corrupt/incompatible vector ` +
+        `index?): ${why} — semantic search DISABLED, FTS still serves`,
+    )
+  }
+}
 
 let count = (db: DatabaseSync) =>
   (db.prepare('select count(*) n from embedding').get() as { n: number }).n
 
 export let refreshVector = (db: DatabaseSync) => {
+  if (!available) return 0
   let row = db.prepare('select dirty from embedding_index where id = 1')
     .get() as { dirty: number } | undefined
   if (!row?.dirty) return 0
@@ -75,6 +98,7 @@ export let knn = (
   q: Float32Array,
   k: number,
 ): { eid: string; score: number }[] => {
+  if (!available) return []
   refreshVector(db)
   if (!count(db)) return []
   let bytes = new Uint8Array(q.buffer, q.byteOffset, q.byteLength)
@@ -87,6 +111,7 @@ export let knn = (
 }
 
 export let initVector = (db: DatabaseSync) => {
+  if (!available) return
   db.prepare(
     `select vector_init(
       'embedding', 'vec',

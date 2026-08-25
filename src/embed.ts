@@ -10,7 +10,7 @@
 // once, quietly, and every door degrades to silence. apply() never waits on
 // any of this.
 import type { DatabaseSync } from './sqlite.ts'
-import { DIM, knn, refreshVector } from './vector.ts'
+import { DIM, knn, refreshVector, vectorReady } from './vector.ts'
 // textOf and FLOOR live in twin.ts so the client may share them without pulling
 // this server-only module (and its vector.ts extension loader) into the browser
 // bundle. Re-exported here because embed.ts uses textOf internally and is the
@@ -159,7 +159,10 @@ let put = (db: DatabaseSync, eid: string, text: string, vec: Float32Array) =>
 // Interval-safe like the others: one sweep in flight, failures warn.
 let sweeping = false
 export let embedSweep = async (db: DatabaseSync, limit = 100) => {
-  if (sweeping || dead) return 0
+  // put() stores vectors through the extension's vector_as_f32, so with the
+  // extension unavailable there is nothing the sweep can safely do — skip it
+  // whole. Embeddings and their ANN index rebuild once a healthy index loads.
+  if (sweeping || dead || !vectorReady()) return 0
   sweeping = true
   let n = 0
   try {
