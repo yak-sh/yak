@@ -29,6 +29,7 @@ import {
   distinctValues,
   EXISTS,
   type Field,
+  listed,
   matchQuery,
   namesLazy,
   parseQuery,
@@ -204,8 +205,11 @@ let refreshQueries = (eids: Set<string>) => {
 }
 
 // A wholesale cache replacement (seed / snapshot reset): clear the store, seed
-// the fresh graph, then re-scan every held query from it.
+// the fresh graph, then re-scan every held query from it. Server-backed sets
+// re-prime from the fresh cache the same way they were born — the sub's next
+// frame replaces them with the authoritative answer when it lands.
 let resetQueries = () => {
+  resetServerSets()
   if (!store) return void mem.reset()
   queueStore(async () => {
     await clearIdb(storeDb!)
@@ -227,13 +231,18 @@ let resetQueries = () => {
 // (the TUI), or the query PROJECTS waking fields (pins/cameras — a projected-
 // field move must re-fire the LIST, which only mem's wake tracking carries; a
 // membership sub does not). Shadow means the whole stream still owns the cache,
-// so nothing is evicted; the :596 flip turns these to owning and the cache
-// becomes bounded. OFF until config.serverQuery (the ?ws-sub probe).
+// so nothing is evicted; under the working-set boot the subs are what stream
+// the working set in and the cache is bounded. Gated by config.serverQuery
+// (on by default; `?ws-sub=off` opts out).
 type ServerSet = {
   n: number
   ids: Signal<string[]>
   sub: string
   preds: Pred[]
+  // Whether the server has EVER answered this sub. Until it has, the local
+  // resolver owns the signal (re-primed on read, refreshed on local writes);
+  // from the first landSub frame on, the server's answer is authoritative.
+  live: boolean
 }
 let queryUses = new Map<string, ServerSet>() // canonical preds key -> set
 let querySignals = new Map<string, Signal<string[]>>() // sub name -> its signal
@@ -273,6 +282,40 @@ export let predsToQuery = (preds: Pred[]): string | undefined => {
 let serverLine = (preds: Pred[]): string | undefined =>
   config.serverQuery ? predsToQuery(preds) : undefined
 
+// A LOCAL write must paint through a server-backed set immediately: between
+// applyLocal and the sub's echo (or with the socket down — a test, an offline
+// tab) the signal would hold a stale set and a just-made entity wouldn't
+// appear. Re-test just the touched eids, the same row-local test mem.refresh
+// runs; the sub's next frame replaces the whole set and stays authoritative.
+// The wholesale half: after a seed/reset every server set re-resolves from the
+// fresh cache (mem.resolve — the same priming a new set gets) and awaits the
+// server's re-confirmation, the same as a newborn set.
+let resetServerSets = () => {
+  for (let s of queryUses.values()) {
+    s.live = false
+    s.ids.value = mem.resolve(s.preds)
+  }
+}
+
+let refreshServerSets = (eids: Set<string>) => {
+  if (!queryUses.size) return
+  let read = (t: string) => cache.peek()[t]
+  for (let s of queryUses.values()) {
+    let ids = s.ids.peek()
+    let next = ids
+    for (let eid of eids) {
+      let r = read(eid)
+      let wants = !!r && listed(r, s.preds) &&
+        matchQuery(r, s.preds, read, undefined, kidsVia(read))
+      let had = next.includes(eid)
+      if (had != wants) {
+        next = wants ? [...next, eid] : next.filter((x) => x != eid)
+      }
+    }
+    if (next != ids) s.ids.value = next
+  }
+}
+
 // Get-or-open the server set for a query. Opened ONCE on creation (a repeat
 // ownBoard would re-subscribe every render); the signal is primed from mem so
 // the first paint is populated, then landSub replaces it with the server's
@@ -283,10 +326,18 @@ let serverSet = (preds: Pred[], line: string): ServerSet => {
   let found = queryUses.get(key)
   if (!found) {
     let sub = `q:${key}`
-    found = { n: 0, ids: signal(mem.resolve(preds)), sub, preds }
+    found = { n: 0, ids: signal(mem.resolve(preds)), sub, preds, live: false }
     queryUses.set(key, found)
     querySignals.set(sub, found.ids)
     ownBoard(sub, line)
+  } else if (!found.live) {
+    // Unconfirmed by the server: the prime may predate cache churn a local
+    // maintenance pass didn't see (a wholesale replacement) — re-prime.
+    let ids = mem.resolve(preds)
+    let held = found.ids.peek()
+    if (ids.length != held.length || ids.some((e, i) => e != held[i])) {
+      found.ids.value = ids
+    }
   }
   return found
 }
@@ -570,10 +621,11 @@ export let config: {
   store: boolean
   // Back queryEids on a genuine SERVER subscription instead of the local cache
   // (T-17126) — the gate the working-set boot (T-18059) needs so a partial cache
-  // never under-reports. OFF by default: a membership queryEids opens a shadow
-  // sub (the whole stream still owns the cache, nothing is evicted) and reads the
-  // server-authoritative set; the flip to owning subs + a working-set boot is the
-  // next leaf. A probe (?ws-sub) turns it on to exercise and measure.
+  // never under-reports. ON by default since both flip-gates landed (defining-
+  // query bounding T-21283, working-set boot T-18059): a membership queryEids
+  // opens a server sub and reads the authoritative set, and connect() asks for
+  // the 0.55MB working set instead of the whole graph. `?ws-sub=off` is the
+  // opt-out (rollback/debug); the TUI opts out at its own boot for now.
   serverQuery: boolean
   reload: () => void
   swap?: (gen: number) => void
@@ -586,15 +638,19 @@ export let config: {
   shared: true,
   agreement: false,
   store: false,
-  serverQuery: false,
+  serverQuery: true,
   reload: () => loc?.reload(),
 }
 export let agreementProbe = (search: string) =>
   new URLSearchParams(search).get('probe') == 'subscriptions'
 export let storeProbe = (search: string) =>
   new URLSearchParams(search).get('store') == 'idb'
-export let serverQueryProbe = (search: string) =>
-  new URLSearchParams(search).has('ws-sub')
+// Tri-state: absent leaves the default alone; `?ws-sub` forces on; `?ws-sub=off`
+// is the opt-out (the rollback lever now that the default is on).
+export let serverQueryProbe = (search: string): boolean | undefined => {
+  let p = new URLSearchParams(search)
+  return p.has('ws-sub') ? p.get('ws-sub') != 'off' : undefined
+}
 export let base = () => `http${config.secure ? 's' : ''}://${config.host}`
 
 // The column sort: priority first (lower sorts higher), num as tiebreak.
@@ -942,6 +998,7 @@ export let applyLocal = (changes: Change[]) => {
     if (changedCanvas) canvasVersion.value++
     publish(changedRows, changedParents, changedChildren)
     refreshQueries(changedRows)
+    refreshServerSets(changedRows)
     for (let [eid, z] of zs) {
       let live = pinZs.get(eid)
       if (live) live.value = z
@@ -1508,6 +1565,12 @@ export let landSub = (f: Sub) => {
   // only — a standing-match content frame leaves the set alone, and the member's
   // own row signal already carries that edit, so the list stays asleep for it.
   let had = querySignals.has(f.sub) ? new Set(old) : null
+  // The server has spoken for this query — its set is authoritative from here.
+  if (had) {
+    for (let s of queryUses.values()) {
+      if (s.sub == f.sub) s.live = true
+    }
+  }
   let mine = f.replace ? new Set<string>() : old
   subMembers.set(f.sub, mine)
   let leaving: string[] = f.replace ? [...old] : [...(f.drop ?? [])]
@@ -1565,6 +1628,7 @@ let evict = (eids: string[]) => {
       if (changedCanvas) canvasVersion.value++
       publish(gone, new Set(), new Set())
       refreshQueries(gone)
+      refreshServerSets(gone)
     })
   }
 }
@@ -1960,7 +2024,7 @@ export let boot = async () => {
     if (doc.visibilityState != 'visible' || !ws) return
     if (socketStale(ws.readyState, seen, Date.now())) ws.close()
   })
-  config.serverQuery ||= serverQueryProbe(search)
+  config.serverQuery = serverQueryProbe(search) ?? config.serverQuery
   if (!canShare()) {
     await once(true)
     await attachStore()
