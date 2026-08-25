@@ -34,13 +34,15 @@ Deno.env.set('CODEX_HOME', `${tmp}/codex`)
 Deno.env.set('POLL_MS', '10') // tests wait on facts, never on the clock
 Deno.env.set('STOP_GRACE_MS', '1000')
 
-let { apply, db, delta, journalOf, snapshot, sweepSelect } = await import(
-  './db.ts'
-)
+let { apply, db, delta, human, journalOf, snapshot, sweepSelect } =
+  await import(
+    './db.ts'
+  )
 let { hookClaim, noticesFor, rows } = await import('./client.ts')
 let { childEnv, childPath } = await import('./agent_env.ts')
 let { append, readEntries } = await import('./entries.ts')
 let { graphLog, pageEntries } = await import('./entry_log.ts')
+let { referencedEntry } = await import('./referenced.ts')
 let {
   codexPending,
   commented,
@@ -108,6 +110,7 @@ on('stop_request', {
   sweep: { pending: PENDING('stop_request') },
 })
 on('comment', { created: commented(cast) })
+on('entry', { created: referencedEntry(cast) })
 
 // The relay's row fetch, as server.ts performs it at boot — one door
 // (sweepSelect), so the swept row carries eids for the owner and every
@@ -229,10 +232,13 @@ let refusals = (target: string) =>
        and cr.via = (select id from entity where eid = ?)`,
   ).all(target, target) as { body: string }[]).map((c) => c.body)
 
-// The delivery ledger: a comment wears `notified` once some ear took it.
+// Model attention is the transcript entry's reference to the graph item.
 let told = (eid: string) =>
   !!db.prepare(
-    'select 1 from notified where entity = (select id from entity where eid = ?)',
+    `select 1 from dependency d
+     join entry x on x.entity = d.parent
+     where d.type = 'referenced'
+       and d.child = (select id from entity where eid = ?)`,
   ).get(eid)
 
 // A session row + log file exactly as a dead child would have left them.
@@ -1788,7 +1794,8 @@ slow(
       .map((line) => JSON.parse(line) as { type: string; text?: string })
     assertEquals(
       events.some((e) =>
-        e.type == 'session.input' && e.text == 'heard after restart'
+        e.type == 'session.input' &&
+        e.text == `${human(db, pending[1].eid)}: heard after restart`
       ),
       true,
     )
@@ -1957,7 +1964,8 @@ slow(
     apply(db, [{ eid: t, name: 'claim', comp: { session: eid } }])
     let reports = settleComments(t, eid).length
     // The resumed turn dawdles long enough for a comment to steer it.
-    let resumed = write(say(t, 'delay:1000 keep going'))
+    let first = say(t, 'delay:1000 keep going')
+    let resumed = write(first)
     assertEquals(row(eid)?.status, 'running')
     let steer = say(t, 'also: rename it')
     await write(steer)
@@ -1980,10 +1988,15 @@ slow(
       )
     assertEquals(
       events.filter((e) => e.type == 'session.input').map((e) => e.text),
-      ['delay:1000 keep going', 'also: rename it'],
+      [
+        `${human(db, first[1].eid)}: delay:1000 keep going`,
+        `${human(db, steer[1].eid)}: also: rename it`,
+      ],
     )
     assertEquals(
-      events.some((e) => e.text == 'working: also: rename it'),
+      events.some((e) =>
+        e.text == `working: ${human(db, steer[1].eid)}: also: rename it`
+      ),
       true,
     )
     assertEquals(

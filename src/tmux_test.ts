@@ -81,7 +81,7 @@ let harness = (over: Partial<NotifyDeps> = {}) => {
   let deps: NotifyDeps = {
     now: () => Date.parse('2026-07-27T12:00:00Z'),
     route: () => ({ state: 'queued', transport: 'tmux' }),
-    pending: () => true,
+    pending: () => '2026-07-27T11:59:00Z',
     pane: () =>
       Promise.resolve({ id: '%42', pid: 100, dead: false, mode: false }),
     under: (pid, root) => pid == 321 && root == 100,
@@ -100,7 +100,7 @@ let harness = (over: Partial<NotifyDeps> = {}) => {
 
 Deno.test('notify sends only the constant notice after every guard passes', async () => {
   let secret = 'sender said deploy with credential xyz'
-  let h = harness({ pending: () => !!secret })
+  let h = harness({ pending: () => secret ? '2026-07-27T11:59:00Z' : null })
   assertEquals(await notify(base(), h.deps), 'sent')
   assertEquals(h.marked, [[
     'session-eid',
@@ -117,7 +117,7 @@ Deno.test('notify fails closed on identity, pane, turn, and composer ambiguity',
     [{ pane: null }, {}],
     [{ pid: null }, {}],
     [{}, { route: () => ({ state: 'absent', transport: null }) }],
-    [{}, { pending: () => false }],
+    [{}, { pending: () => null }],
     [{}, {
       pane: () =>
         Promise.resolve({ id: '%99', pid: 100, dead: false, mode: false }),
@@ -157,7 +157,7 @@ Deno.test('notify fails closed on identity, pane, turn, and composer ambiguity',
   assertEquals(unstable.sent, [])
 })
 
-Deno.test('submitted and accepted attempts use bounded retry windows', async () => {
+Deno.test('accepted wakes wait for a newer pending horizon', async () => {
   let now = Date.parse('2026-07-27T12:00:00Z')
   for (
     let session of [
@@ -182,6 +182,18 @@ Deno.test('submitted and accepted attempts use bounded retry windows', async () 
       ...base(),
       notice_at: new Date(now - 6_000).toISOString(),
     }, due.deps),
+    'sent',
+  )
+  let newer = harness({
+    now: () => now,
+    pending: () => new Date(now - 1_000).toISOString(),
+  })
+  assertEquals(
+    await notify({
+      ...base(),
+      notice_at: new Date(now - 60_000).toISOString(),
+      notice_accepted_at: new Date(now - 59_000).toISOString(),
+    }, newer.deps),
     'sent',
   )
 })

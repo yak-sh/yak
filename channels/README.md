@@ -57,24 +57,19 @@ no-op (connects, delivers nothing).
 ## Delivery — the stream, and the gap the stream can't carry
 
 Push is the socket: every applied batch is rebroadcast, and the plugin emits
-what the batch aims at its session. Two things bound it. `notified` is the
-shared durable stamp: an anonymous `via` proves a channel push, while a session
-`via` says only that the bus printed the item. The plugin also remembers what it
-sent this run, because the stamp is a wire write and the server can be down
-exactly when gaps happen.
+what the batch aims at its session. The plugin remembers in-flight sends within
+the process. After delivery, the event's human id lands in the transcript and
+the entry's `referenced` edge is the durable attention record.
 
 A gap has two halves. The snapshot→join window is replayed by the `{since}`
-handshake as `{catchup}`, which pushes past `notified` (T-7167). The
-disconnect→snapshot half is **inside** the snapshot — no cursor window can reach
-it, and a tasksd restart mints a fresh epoch that voids the cursor anyway — so a
-RE-sync reconciles against state instead: the same filter over the whole
-snapshot, bounded by channel-authored `notified` stamps and read-state. This
-includes the first sync after Claude replaces an MCP subprocess, so a bus stamp
-cannot suppress a push the previous process missed. A recovered item is
-atomically re-stamped anonymously after its notification write succeeds; later
-processes then stay quiet. A knock the ladder already stamped
+handshake as `{catchup}` (T-7167). The disconnect→snapshot half is **inside**
+the snapshot — no cursor window can reach it, and a tasksd restart mints a fresh
+epoch that voids the cursor anyway — so a RE-sync reconciles against state
+instead: the same filter over the whole snapshot, bounded by the served
+session's transcript references and explicit archives. This includes the first
+sync after Claude replaces an MCP subprocess. A knock the ladder already stamped
 `delivery: cast S-me` is the sweep's sharpest case: the stamp claims this
-channel took it, and no channel-authored `notified` proves it did.
+channel took it, and no transcript reference proves it did.
 
 ## Env
 

@@ -19,6 +19,7 @@ import {
   findEid,
   mutate,
   observation,
+  references,
   repoUrl,
   uuid,
 } from '../../live.ts'
@@ -630,20 +631,20 @@ export let Session = ({ e }: { e: Ent }) => {
     : s.started_at
     ? `started ${ago(s.started_at)}`
     : 'not started'
-  // A comment joins the thread once the session has HEARD it: a managed
-  // resume prints the words as its own `session.input` line (the log IS
-  // the delivery — the comment would double it, so it hides), and the
-  // `notified` stamp covers what a live run was served. An event comment
-  // is machinery narrating and the session's own note is the agent
-  // speaking — both already part of the story. Anything else is still in
-  // flight: it waits under the log until the agent takes it.
+  // A comment joins the thread once the transcript cites it. A managed resume
+  // prints `C-id: words` as its own user row, so that copy hides; graph-native
+  // context/tool delivery has a reference without a duplicate say row.
   let inputs = new Set(
     log.entries.flatMap((x) =>
       x.row?.kind == 'say' && x.row.role == 'user' ? [x.row.text] : []
     ),
   )
-  let cs = commentsOn(e.eid).filter((c) => !inputs.has(c.doc?.body ?? ''))
-  let heard = (c: Ent) => c.created?.via == e.eid || !!c.notified
+  let cited = new Set(references(e.eid).out.map((r) => r.eid))
+  let cs = commentsOn(e.eid).filter((c) => {
+    let body = c.doc?.body ?? ''
+    return !inputs.has(body) && !inputs.has(`${idOf(c)}: ${body}`)
+  })
+  let heard = (c: Ent) => c.created?.via == e.eid || cited.has(c.eid)
   let heardCs = cs.filter(heard)
   let thread = weave(rows, heardCs)
   // Windowed from the tail on the web; the whole thread in the TUI.

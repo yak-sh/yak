@@ -1051,8 +1051,9 @@ Deno.test('wake_policy attention cold-spawns on pending scope attention, then sl
   await rolesSweep(cast, deps)
   assertEquals(mspawns(role), 1) // spawned on the trigger, not before
 
-  // The fresh session consumes the attention (what task_context's serve does),
-  // so the trigger clears and the role sleeps: no second spawn.
+  // Completing the item archives it, so the trigger clears and the role
+  // sleeps: no second spawn. Merely loading context is transcript attention,
+  // not a second read-state facet.
   let run = db.prepare(
     `select o.eid as eid from session s join entity o on o.id = s.entity where s.role = ${R} order by s.rowid desc limit 1`,
   ).get(role) as { eid: string }
@@ -1060,7 +1061,7 @@ Deno.test('wake_policy attention cold-spawns on pending scope attention, then sl
     update session set origin = 'managed', status = 'completed',
       provider_session_id = 't', cwd = ?, finished_at = ? where entity = ${R}
   `).run(dir, new Date().toISOString(), run.eid)
-  apply(db, [{ eid: msg, name: 'notified', comp: {} }])
+  apply(db, [{ eid: msg, name: 'archived', comp: {} }])
   await rolesSweep(cast, { ...deps, now: () => new Date().toISOString() })
   assertEquals(mspawns(role), 1) // asleep — nothing pending
 })

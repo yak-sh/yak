@@ -338,16 +338,10 @@ and the comms bus.`,
       },
     )
 
-  // The comms bus, MCP side: a tool that knows who's asking appends what
-  // that session hasn't seen and advances the session's own ack cursor —
-  // exactly when the lines are actually served.
-  let bus = async (out: string, session?: string, snap?: Snapshot) => {
-    if (!session) return text(out)
-    let n = noticesFor(snap ?? await io.read(), session)
-    if (!n.lines.length) return text(out)
-    await io.write(n.ack, session)
-    return text(out + noticeBlock(n.lines))
-  }
+  // An ordinary tool call is not an attention boundary. Agents load their
+  // working set explicitly through task_context; quietly appending inbox rows
+  // here made every tool response a second, drifting model of attention.
+  let bus = (out: string, _session?: string, _snap?: Snapshot) => text(out)
 
   tool(
     'search',
@@ -610,8 +604,8 @@ ${GRAMMAR} ${BUS}`,
     'task_context',
     `Your working set, ≤20 lines: the tasks claimed by your session (with
 unresolved dependencies and who holds them), or the top of the open
-board if you hold nothing. It also atomically surfaces and acknowledges
-pending direct comments, claimed-task replies, knocks, and verified
+board if you hold nothing. It also surfaces direct comments, claimed-task
+replies, knocks, and verified
 operator mail as explicitly UNTRUSTED data. Call this FIRST each session,
 with the same stable session identifier you claim with.`,
     { session: z.string() },
@@ -623,10 +617,9 @@ with the same stable session identifier you claim with.`,
         session,
         Date.now(),
         undefined,
-        new Set(pending.ack.map((change) => change.eid)),
+        new Set(pending.eids),
       )
       if (!pending.lines.length) return text(digest)
-      await io.write(pending.ack, session)
       return text(digest + noticeBlock(pending.lines))
     },
   )

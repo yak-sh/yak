@@ -2131,56 +2131,6 @@ export let belongs = (r: Scoped, scope?: string) => {
 // managed row's final_text for a session that never got a brief comp.
 let briefOf = (r: Row) =>
   String(r.comps.brief?.text ?? '') || String(r.comps.session?.final_text ?? '')
-// Comments that landed on the actor's recent past sessions AFTER those
-// sessions stopped listening — one digest line of history, never
-// injected as conversation (a dead session's cursor stays frozen: it
-// documents what that session never saw). "Recent" bounds the sweep to
-// the actor's other sessions touched this week, newest five; "unseen"
-// is the bus cursor's own definition — created after the session's
-// last ack, or after its birth if it never acked. Machine events and
-// the actor's own words don't count.
-let unheard = (
-  sessions: Row[],
-  commentsByTarget: Map<string, Row[]>,
-  sess: Row | undefined,
-  now: number,
-) => {
-  let actor = String(sess?.comps.session?.actor ?? '')
-  if (!actor) return []
-  let recent = sessions
-    .filter((r) =>
-      r.eid != sess?.eid &&
-      r.comps.session?.actor == actor &&
-      now - Date.parse(editedAt(r)) < 7 * DAY
-    )
-    .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))
-    .slice(0, 5)
-  let got = recent
-    .map((s) => {
-      // Unheard is the per-item stamp, the same rule notices() serves by —
-      // so the digest and the bus can never disagree about what is owed.
-      // Still floored at the session's birth: nothing can be owed to a
-      // session that did not exist when it was written. The comment index
-      // makes this O(comments on s) rather than a scan of the whole graph.
-      let n = (commentsByTarget.get(s.eid) ?? []).filter((r) =>
-        r.comps.created?.by != actor && !r.comps.notified &&
-        bornAt(r) > bornAt(s)
-      ).length
-      return [s, n] as const
-    })
-    .filter(([, n]) => n > 0)
-  if (!got.length) return []
-  if (got.length == 1) {
-    let [s, n] = got[0]
-    return [
-      `## unheard — ${idOf(s)} got ${n} comment${
-        n > 1 ? 's' : ''
-      } after it wrapped (task show)`,
-    ]
-  }
-  let ids = got.map(([s, n]) => `${idOf(s)} ×${n}`).join(', ')
-  return [`## unheard — comments after they wrapped: ${ids} (task show)`]
-}
 // PROJECT layer — the pulse: tasks that MOVED in the scope you stand in,
 // newest touch first, selected by task.project so no foreign entity
 // rides in on a catch-all. This reads the same with or without a session,
@@ -2478,13 +2428,6 @@ export let contextDigest = (
     if (c.comment) comments.push(r)
     if (c.decided) decided.push(r)
   }
-  let commentsByTarget = new Map<string, Row[]>()
-  for (let r of comments) {
-    let t = String(r.comps.comment?.target ?? '')
-    let arr = commentsByTarget.get(t)
-    if (arr) arr.push(r)
-    else commentsByTarget.set(t, [r])
-  }
   let sess = sessions.find((r) => String(r.comps.session?.id) == session)
   let cwd = String(sess?.comps.session?.cwd ?? '')
   scope = scopeFor(all, sess, cwd, scope)
@@ -2527,12 +2470,11 @@ export let contextDigest = (
   // pointed at `task mail`, a door that has since been retired.
   let unread = all.filter(inboxItem(readerFor(all, session, cwd, scope)))
     .filter(isUnread)
-  if (unread.length) {
+  // A session is an agent run: its claim, loaded context and entry trace ARE
+  // its attention. Only the human preview reports exogenous inbox read-state.
+  if (!session && unread.length) {
     lines.push(`## inbox — ${unread.length} unread (task inbox)`)
   }
-  // What your past selves were told after they stopped listening —
-  // history on one line, never re-injected as live conversation.
-  lines.push(...unheard(sessions, commentsByTarget, sess, now))
   // The actor's own interruption stack comes before narrative memory: these
   // are live tasks the operator can claim and pop without reconstructing a
   // yak chain from prose. A bare preview has no actor and therefore no stack.
@@ -2604,14 +2546,15 @@ export let contextDigest = (
 // The comms bus, read side. The Claude channel's own pure filter is reused over
 // a set of rows so every provider gets the same recipient and verification
 // rules: claimed-work comments, the direct-session compatibility arm, knocks,
-// and verified project mail for an operator. `notified` is minted only for the
-// bounded batch
-// rendered here; a tmux wake-up never calls this function and therefore drains
-// nothing.
+// and verified project mail for an operator. This is an agent QUERY, not an
+// inbox read: serving it writes no read-state. The result's eids let a caller
+// avoid rendering the same row twice inside one response, and its newest clock
+// lets a transport compare an accepted wake with later work.
 let noticeLine = (ev: InboxEvent, row?: Row) => {
   let from = ev.meta.from ? ` from ${ev.meta.from}` : ''
   let on = ev.meta.on ? ` on ${ev.meta.on}` : ''
-  let ref = ev.meta.id ? ` ${ev.meta.id}` : ''
+  let id = ev.meta.id ?? (row ? idOf(row) : '')
+  let ref = id ? ` ${id}` : ''
   let body = ev.content.replace(/\s+/g, ' ').trim()
   let verdict = verdictName(String(row?.comps.review?.verdict ?? ''))
   if (verdict) body = `[${verdict}] ${body}`
@@ -2625,7 +2568,7 @@ let noticeLine = (ev: InboxEvent, row?: Row) => {
 // a second implementation of the selection would drift from this one the
 // first time either arm moved.
 export let notices = (all: Row[], who: Reader) => {
-  let none = { lines: [] as string[], ack: [] as Change[] }
+  let none = { lines: [] as string[], eids: [] as string[], at: '' }
   if (!who.session) return none
   let sessEid = who.session
   let byEid = new Map(all.map((r) => [r.eid, r]))
@@ -2634,6 +2577,9 @@ export let notices = (all: Row[], who: Reader) => {
     actorEid: who.actor,
     homeEid: who.scope,
     claimedEids: who.claims,
+    claimedAt: (eid) =>
+      String(byEid.get(eid)?.comps.claim?.claimed_at ?? '') ||
+      undefined,
     idOf: (eid) => {
       let row = byEid.get(eid)
       return row ? idOf(row) : null
@@ -2646,9 +2592,8 @@ export let notices = (all: Row[], who: Reader) => {
     },
     done: (eid) => {
       let row = byEid.get(eid)
-      return !!row?.comps.opened || !!row?.comps.archived
+      return !!row?.comps.archived
     },
-    notified: (eid) => !!byEid.get(eid)?.comps.notified,
     // isOperator() already required session.operator of a session that
     // exists, and one does — who.session names it.
     operator: who.operator,
@@ -2676,15 +2621,12 @@ export let notices = (all: Row[], who: Reader) => {
   if (events.length > served.length) {
     lines.push(`…and ${events.length - served.length} more pending`)
   }
-  // One atomic ack batch: exactly the items rendered above, each stamped
-  // where it can be read back per item. Overflow and concurrent arrivals
-  // remain owed, because nothing here says "seen up to a time".
-  let ack: Change[] = served.map((ev): Change => ({
-    eid: ev.eid,
-    name: 'notified',
-    comp: {},
-  }))
-  return { lines, ack }
+  let eids = served.map((ev) => ev.eid)
+  let at = served.reduce((latest, ev) => {
+    let born = bornAt(byEid.get(ev.eid)!)
+    return born > latest ? born : latest
+  }, '')
+  return { lines, eids, at }
 }
 
 // The bus from a whole graph, for callers already holding one — the boot
@@ -2960,9 +2902,8 @@ export let projectionSnapshot = async (): Promise<Snapshot> => {
 // The rows the bus's selector might pick, as index queries: a comment on work
 // this run claims (plus the direct-session compatibility arm), a knock aimed at
 // the session or its actor, and mail aimed at the session or its project.
-// Unread is screened server-side —
-// `notified` for all three, plus `opened`/`archived`, which is the read-state
-// injects() calls `done`.
+// Human read-state never screens this agent query. `archived` is completion,
+// while `opened`/`notified` written for a human must not hide work from a model.
 //
 // This set must stay a SUPERSET of what channelEvents(mode:'inbox') can
 // select. Widen an arm there and widen it here, or the bus goes quiet on
@@ -2980,15 +2921,15 @@ export let busRows = async (who: Reader, q: Querier = query) => {
   let box = [who.session, ...(who.operator ? [who.scope] : [])]
     .filter(Boolean).join(',')
   let [said, emitted, aimed, letters, floated] = await Promise.all([
-    q([`.comment.target=${held}`, '.notified=']),
+    q([`.comment.target=${held}`]),
     // A notice (D-13858) is addressed like a comment — claimed task, legacy
     // session target, or the operator's actor — so it rides the same `held`
     // list. Its own arm keeps busRows the SUPERSET of channelEvents' branch.
-    q([`.notice.target=${held}`, '.notified=']),
+    q([`.notice.target=${held}`]),
     // WHO a knock is for is the shared deliver.to; the same facet a wake/mail
     // wears, so keep only the knock rows the bus renders.
-    q([`.deliver.to=${mine.join(',')}`, '.notified=']),
-    q([`.mail.target=${box}`, '.notified=', '.opened=', '.archived=']),
+    q([`.deliver.to=${mine.join(',')}`]),
+    q([`.mail.target=${box}`, '.archived=']),
     // A recall floater (recall.ts) lands in the session's OWN log with NO
     // recipient facet — keyed only by entry.session — so it needs its own arm
     // or channelEvents' recall branch is never supplied and the bus goes quiet
@@ -3007,7 +2948,6 @@ export let busRows = async (who: Reader, q: Querier = query) => {
     q([
       `.recalled.source!`,
       `.entry.session=${who.session}`,
-      '.notified=',
       `.created.at>=${recallWindowMin}-minutes-ago`,
     ]),
   ])
@@ -3035,10 +2975,12 @@ export let busRows = async (who: Reader, q: Querier = query) => {
 // touched the graph still hears what is waiting.
 export let bus = async (session: string, cwd?: string, q: Querier = query) => {
   let sess = await sessionRow(session, q)
-  if (!sess) return { lines: [] as string[], ack: [] as Change[] }
+  if (!sess) return { lines: [] as string[], eids: [] as string[], at: '' }
   let base = await readerSet(sess, q)
   let who = readerFor(base, session, cwd)
-  if (!who.session) return { lines: [] as string[], ack: [] as Change[] }
+  if (!who.session) {
+    return { lines: [] as string[], eids: [] as string[], at: '' }
+  }
   return notices(uniq([...base, ...await busRows(who, q)]), who)
 }
 
@@ -3073,8 +3015,8 @@ export let releaseChange = (row: Row): Change => ({
 // stacked 9 on one task). The session ends ONCE, so the notice is minted
 // once: skip a target that already wears this exact lapse notice. Keyed by
 // (target, event=lapse, body) — the body names the lapsing session, so a
-// DIFFERENT session lapsing on the same task still rings, and the served-once
-// `notified` machinery downstream is untouched (it was never the bug).
+// DIFFERENT session lapsing on the same task still rings; notification facets
+// downstream are independent of the mint dedup.
 export let lapseChanges = (all: Row[], sess: Row): Change[] => {
   let id = String(sess.comps.session?.id ?? '')
   let name = idOf(sess)

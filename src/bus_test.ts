@@ -237,9 +237,9 @@ let cases: [string, Snapshot, number][] = [
   ['unverified project mail', graph(letter('m2', 29, P, { verified: 0 })), 0],
   ['a letter to the session itself', graph(letter('m3', 30, S)), 1],
   [
-    'a letter already opened',
+    'a human-opened letter still reaches the agent',
     graph(letter('m4', 31, P), ent('m4', 31, { opened: {} })),
-    0,
+    1,
   ],
   [
     'a letter already archived',
@@ -247,9 +247,9 @@ let cases: [string, Snapshot, number][] = [
     0,
   ],
   [
-    'an item already notified',
+    'human notification state does not hide an agent item',
     graph(said('c7', 33, T, 'told you'), ent('c7', 33, { notified: {} })),
-    0,
+    1,
   ],
   [
     'everything at once',
@@ -406,7 +406,7 @@ Deno.test('context queries render the same digest as the whole graph', async () 
 
 Deno.test('bus: a session id naming nothing is silent, and asks nothing more', async () => {
   let { got, seen } = await against(graph(said('c1', 20, T, 'hi')), 'nobody')
-  assertEquals(got, { lines: [], ack: [] })
+  assertEquals(got, { lines: [], eids: [], at: '' })
   assertEquals(got, noticesFor(graph(said('c1', 20, T, 'hi')), 'nobody'))
   assertEquals(seen, ['/query?.kind=session&.session.id=nobody'])
 })

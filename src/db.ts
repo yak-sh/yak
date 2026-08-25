@@ -2516,8 +2516,8 @@ export let migrate = (db: DatabaseSync) => {
     ) {
       db.exec('alter table entity alter column num drop not null')
     }
-    // Retired by the per-comment `notified` stamp, which is per item and so
-    // cannot advance past an unserved sibling the way a cursor could.
+    // Retired by per-item human notification state; agents derive attention
+    // from claims and transcript references instead of this session cursor.
     dropCol('session', 'acked_at')
     addCol('task', 'project', 'project integer references entity(id)')
     addCol('task', 'assignee', 'assignee integer references entity(id)')

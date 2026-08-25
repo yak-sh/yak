@@ -1065,24 +1065,13 @@ let serveAttention = async (
   // bus the CLI runs) rather than the whole-graph snapshot (M-21143).
   let pending = await bus(String(session.id), undefined, localQuery(db))
   if (!pending.lines.length) return
-  let newest =
-    pending.ack.map((change) =>
-      (db.prepare(`select at from created where ${OWNED}`).get(change.eid) as
-        | { at: string }
-        | undefined)?.at ?? ''
-    ).sort().at(-1) ?? ''
+  let newest = pending.at
   let sent = String(session.notice_at ?? '')
-  // When this session last CONSUMED notices: serving stamps `notified` with
-  // the serving session as `via`, so the newest such stamp is the answer,
-  // per item and exact.
-  let served = String(
-    (db.prepare(`select max(at) as at from notified where via = ${idOf}`)
-      .get(String(session.eid)) as { at: string | null } | undefined)?.at ?? '',
-  )
-  // One wake per pending horizon. A task_context after the attempt consumes
-  // notices and may reveal overflow; a newer graph item creates a new
-  // horizon. An ignored prompt is not repeated every two seconds.
-  if (sent && served <= sent && newest <= sent) return
+  let accepted = String(session.notice_accepted_at ?? '')
+  // One accepted wake per pending horizon. The transcript/context load is the
+  // attention record; a newer graph item opens a new horizon without needing
+  // per-item read-state.
+  if (sent && accepted >= sent && newest <= sent) return
   let at = deps.now()
   stampSession(String(session.eid), {
     notice_at: at,
@@ -1222,10 +1211,8 @@ let reconcileManaged = async (
 // Does the role's scope have attention a fresh operator session would pick up?
 // The non-pinning wake policies keep no session alive to idle, so a cold role's
 // trigger is read HERE — the same bus selection task_context serves, keyed on
-// the scope's operator loop, so what wakes the role is exactly what the spawned
-// session then consumes and stamps `notified`. Read-only: the ack is discarded,
-// the fresh session does the stamping when it actually serves. Scope-addressed,
-// matching where the scheduler (T-18725) aims its self-wake.
+// the scope's operator loop. This is a read-only wake decision; model attention
+// is recorded later by the spawned session's claim/context/entry trace.
 let pendingForScope = async (scope: string) => {
   // The scope's own operator reader — its address row and subscriptions — plus
   // the bus candidates aimed at it, by keyed reads instead of the whole-graph

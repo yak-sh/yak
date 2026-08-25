@@ -1018,6 +1018,16 @@ let readLines = (path: string, t: Tail) => {
 // the wire (the same discipline latest_seq keeps in stamp()).
 let stderrs = new Map<string, string>()
 
+let inputBatch = (type: unknown, text: unknown): Batch => ({
+  specs: [{
+    ...(type == 'session.prompt' ? { instruction: {} } : {}),
+    message: { role: 'user' },
+    content: { body: scrub(text) },
+  }],
+  ids: [uuid()],
+  calls: [],
+})
+
 // One pass over the new lines does BOTH halves (D-16704): it stamps the
 // summary columns (liveness) AND appends each recognized line's transcript
 // rows as graph entries (history). The two are independent — the summary is
@@ -1056,15 +1066,7 @@ export let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
     // output (so no summary), but they ARE the user's turn in the transcript.
     let type = (e as { type?: unknown }).type
     if (type == 'session.prompt' || type == 'session.input') {
-      emit({
-        specs: [{
-          ...(type == 'session.prompt' ? { instruction: {} } : {}),
-          message: { role: 'user' },
-          content: { body: scrub(e.text) },
-        }],
-        ids: [uuid()],
-        calls: [],
-      })
+      emit(inputBatch(type, e.text))
       // A resumption re-OPENS the log: a terminal event behind this marker was
       // a previous run's ending, not this one's. The live tail never re-reads
       // a settled run — but recover() drains whole files, and must not flag
@@ -2360,51 +2362,42 @@ let refuse = (eid: string, target: string, why: string, cast: Cast) => {
 }
 
 // The words a run is owed: comments on work it currently claims, plus direct
-// session comments through the deprecated compatibility door. Not `notified`
-// (the delivery ledger the channel plugin, the bus, and resume() below all
-// stamp for their own deliveries, T-7010), machine events, its own voice, or
-// bodiless rows. Oldest first, so a woken run reads its backlog in order.
+// session comments through the deprecated compatibility door. Its transcript
+// is the attention record: an entry citing the comment means this session took
+// it. A reaped claim therefore exposes the row to the next claimant without a
+// second read ledger. Machine events, its own voice, and bodiless rows are out.
+// Oldest first, so a woken run reads its backlog in order.
 let unheard = (eid: string) =>
-  db.prepare(
+  (db.prepare(
     `select o.eid as eid, d.body from comment c
      join entity o on o.id = c.entity
      join doc d on d.entity = c.entity
      join created b on b.entity = c.entity
-     left join notified n on n.entity = c.entity
      where (
        c.target = ${idOf}
        or exists (
          select 1 from claim q
          where q.entity = c.target
            and q.session = (select id from entity where eid = ?)
+           and b.at > q.claimed_at
        )
-     ) and n.entity is null
+     ) and not exists (
+       select 1 from entry x
+       join dependency r
+         on r.parent = x.entity and r.type = 'referenced'
+       where x.session = ${idOf} and r.child = c.entity
+     )
        and b.via is not ${idOf} and trim(d.body) != ''
      order by b.at`,
-  ).all(eid, eid, eid) as { eid: string; body: string }[]
-
-// The delivery record: `notified` on exactly what resume() handed the
-// thread, applied and cast like any graph write — so the bus never
-// re-serves those words and every cache (the UI's pending-vs-sent) hears
-// they landed. Failing to record must not unsay what was delivered.
-let told = (msgs: { eid: string }[], cast: Cast) => {
-  try {
-    cast(apply(
-      db,
-      msgs.map((m) => ({ eid: m.eid, name: 'notified', comp: {} })),
-      trace(),
-    ))
-  } catch (e) {
-    console.warn('delivery stamp dropped —', e)
-  }
-}
+  ).all(eid, eid, eid, eid) as { eid: string; body: string }[])
+    .map((m) => ({ ...m, id: human(db, m.eid) }))
 
 // Resume a session with everything it is owed — the deliverer of last
 // resort beside the channel plugin (interactive push) and the comms bus
 // (next tool call). Gathers the unheard backlog, continues the provider
-// thread with it as ONE turn, and stamps `notified` on exactly
-// what it handed over — only after every gate has passed, so refused
-// words stay owed rather than marked told. Words that CAN'T wake the
+// thread with it as ONE turn. Each line names its comment, so transcript
+// ingestion records the durable reference only after delivery. Words that
+// CAN'T wake the
 // session get a refusal said on the session, never a silent drop: a
 // swallowed message reads as delivered. The lines and the reply land in
 // the SAME log — seq just continues — and the existing tailer closes the
@@ -2421,7 +2414,7 @@ let resume = async (
   if (!active && reachable(eid)) return // somebody is home — the cast delivers
   let msgs = prompt ? [] : unheard(eid)
   if (!prompt && !msgs.length) return // nothing owed
-  let body = prompt ?? msgs.map((m) => m.body).join('\n\n')
+  let body = prompt ?? msgs.map((m) => `${m.id}: ${m.body}`).join('\n\n')
   // The thread to resume. A managed run announced one in its init
   // event; an external claude never had to — `session.id` IS its
   // thread, the id the CLI minted and `--resume` takes back.
@@ -2455,7 +2448,6 @@ let resume = async (
     if (!row.cwd) {
       return refuse(eid, target, 'the session recorded no cwd', cast)
     }
-    if (msgs.length) told(msgs, cast)
     Deno.mkdirSync(logsDir(), { recursive: true })
     spawn(
       eid,
@@ -2477,35 +2469,54 @@ let resume = async (
       return refuse(eid, target, `no worktree to resume in (${e})`, cast)
     }
   }
-  if (msgs.length) told(msgs, cast)
-
   // Each message joins the log as its own `say` — same file, seq just
   // continues — so the transcript shows the words as they were said.
   let path = logFile(eid)
   Deno.mkdirSync(logsDir(), { recursive: true })
+  let prior = Deno.readTextFileSync(path).split('\n')
+  if (prior.at(-1) == '') prior.pop()
+  let inputs = (prompt ? [{ body: prompt }] : msgs).map((m) => ({
+    text: 'id' in m ? `${m.id}: ${m.body}` : m.body,
+    timestamp: new Date().toISOString(),
+  }))
   Deno.writeTextFileSync(
     path,
-    (prompt ? [{ body: prompt }] : msgs).map((m) =>
+    inputs.map((input) =>
       `${
         JSON.stringify({
           type: 'session.input',
-          text: m.body,
-          timestamp: new Date().toISOString(),
+          ...input,
         })
       }\n`
     ).join(''),
     { append: true },
   )
+  // These markers are ours, so ingest them in the same turn instead of asking
+  // the follower to rediscover bytes it deliberately starts after. That makes
+  // the transcript reference the delivery before another live comment can
+  // race the continuation and be gathered with it again.
+  let state = imp(eid, MANAGED)
+  let errs: string[] = []
+  inputs.forEach((input, i) =>
+    ingestLine(
+      eid,
+      state,
+      prior.length + i + 1,
+      inputBatch('session.input', input.text),
+      errs,
+      cast,
+      true,
+      input.timestamp,
+    )
+  )
   // Follow the continuation from the END of what's there now: the settled
   // run's terminal event stays behind us — never re-drained, never counted
   // twice, and its `ended` never poisons the new turn.
-  let lines = Deno.readTextFileSync(path).split('\n')
-  if (lines.at(-1) == '') lines.pop()
   let from: Tail = {
     at: Deno.statSync(path).size,
-    seq: lines.length,
+    seq: prior.length + inputs.length,
     ended: false,
-    errs: [],
+    errs,
   }
 
   // Back to running, every trace of the last ending cleared — the tailer

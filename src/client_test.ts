@@ -314,8 +314,15 @@ Deno.test('notices: claimed-work comments + direct-session compatibility', () =>
         name: 'session',
         comp: { id: 'sess-x', cwd: '/w', actor: P },
       },
+      {
+        eid: T1,
+        name: 'claim',
+        comp: { session: S, claimed_at: '2026-01-01' },
+      },
       { eid: B, name: 'entity', comp: { eid: B, num: 80, created_at: '' } },
       { eid: B, name: 'session', comp: { id: 'sess-b', actor: P } },
+      // the lease took everything already on the task
+      ...mk('c-0', T1, B, '2025-12-31', 'older than the claim'),
       // on the claimed task, after the cutoff: heard
       ...mk('c-1', T1, B, '2026-01-02', 'heads up'),
       { eid: 'c-1', name: 'review', comp: { verdict: 'approved' } },
@@ -331,41 +338,17 @@ Deno.test('notices: claimed-work comments + direct-session compatibility', () =>
   let n = noticesFor(busSnap, 'sess-x')
   assertEquals(n.lines.length, 2)
   assertEquals(n.lines[0].includes('heads up'), true)
+  assertEquals(n.lines.some((line) => line.includes('older than')), false)
   assertEquals(n.lines[0].includes('[approved]'), true)
   assertEquals(n.lines[1].includes('P-81 · via S-80: ping'), true)
-  // serving a comment stamps `notified` on it (T-7010): the sweep is a
-  // delivery door, so the channel plugin won't re-inject what it already told.
-  let told = n.ack.filter((c) => c.name == 'notified').map((c) => c.eid).sort()
-  assertEquals(told, ['c-1', 'c-2'])
-  assertEquals(
-    n.ack.every((c) => c.name == 'notified' ? c.comp != null : true),
-    true,
-  )
-  // a comment already `notified` isn't re-stamped — the batch stays lean
-  // (the write is idempotent besides).
+  assertEquals(n.eids.sort(), ['c-1', 'c-2'])
+  // Human inbox state cannot hide work from an agent.
   let pre: Snapshot = {
     changes: [...busSnap.changes, { eid: 'c-1', name: 'notified', comp: {} }],
     deps: snap.deps,
   }
-  assertEquals(
-    noticesFor(pre, 'sess-x').ack.filter((c) => c.name == 'notified').map((c) =>
-      c.eid
-    ),
-    ['c-2'],
-  )
-  // per-item `notified` — not the cursor — silences a served comment: stamp
-  // both heard comments and neither is re-served.
-  let seen: Snapshot = {
-    changes: [
-      ...busSnap.changes,
-      { eid: 'c-1', name: 'notified', comp: {} },
-      { eid: 'c-2', name: 'notified', comp: {} },
-    ],
-    deps: snap.deps,
-  }
-  assertEquals(noticesFor(seen, 'sess-x').lines.length, 0)
-  // the acked_at cursor no longer gates: a cursor past both comments does NOT
-  // hide them — only the per-item stamp does (drain-proof, see below).
+  assertEquals(noticesFor(pre, 'sess-x').lines.length, 2)
+  // The retired session cursor cannot hide them either.
   let acked: Snapshot = {
     changes: busSnap.changes.map((c) =>
       c.eid == S && c.name == 'session'
@@ -375,8 +358,12 @@ Deno.test('notices: claimed-work comments + direct-session compatibility', () =>
     deps: snap.deps,
   }
   assertEquals(noticesFor(acked, 'sess-x').lines.length, 2)
-  // unknown session: silent, no ack
-  assertEquals(noticesFor(busSnap, 'sess-nobody'), { lines: [], ack: [] })
+  // unknown session: silent
+  assertEquals(noticesFor(busSnap, 'sess-nobody'), {
+    lines: [],
+    eids: [],
+    at: '',
+  })
 })
 
 Deno.test('notices: comments, acted knocks, and verified operator mail surface together', () => {
@@ -449,15 +436,12 @@ Deno.test('notices: comments, acted knocks, and verified operator mail surface t
   assertEquals(n.lines.every((line) => line.startsWith('UNTRUSTED ')), true)
   assertEquals(n.lines.some((line) => line.includes('review this')), true)
   assertEquals(
-    n.lines.some((line) => line.includes('knock: look at T-2')),
+    n.lines.some((line) => line.includes('knock K-44: look at T-2')),
     true,
   )
   assertEquals(n.lines.some((line) => line.includes('mail body')), true)
   assertEquals(n.lines.some((line) => line.includes('unverified')), false)
-  assertEquals(
-    n.ack.filter((c) => c.name == 'notified').map((c) => c.eid).sort(),
-    [C, K, M].sort(),
-  )
+  assertEquals(n.eids.sort(), [C, K, M].sort())
   let ordinary: Snapshot = {
     ...g,
     changes: g.changes.map((change) =>
@@ -469,18 +453,13 @@ Deno.test('notices: comments, acted knocks, and verified operator mail surface t
   let direct = noticesFor(ordinary, 'sess-x').lines
   assertEquals(direct.some((line) => line.includes('mail body')), false)
   assertEquals(direct.some((line) => line.includes('review this')), true)
-  assertEquals(direct.some((line) => line.includes('knock: look at T-2')), true)
-  let seen = {
-    ...g,
-    changes: [
-      ...g.changes,
-      ...n.ack.filter((c) => c.name == 'notified'),
-    ],
-  }
-  assertEquals(noticesFor(seen, 'sess-x').lines, [])
+  assertEquals(
+    direct.some((line) => line.includes('knock K-44: look at T-2')),
+    true,
+  )
 })
 
-Deno.test('notices: overflow remains pending until a later read', () => {
+Deno.test('notices: an explicit context read is bounded and stateless', () => {
   let comments = Array.from({ length: 22 }, (_, i) => {
     let eid = `comment-${String(i).padStart(2, '0')}`
     return [
@@ -497,31 +476,11 @@ Deno.test('notices: overflow remains pending until a later read', () => {
   let g: Snapshot = { changes: [...snap.changes, ...comments], deps: snap.deps }
   let first = noticesFor(g, 'sess-x')
   assertEquals(first.lines.length, 21) // 20 items + overflow summary
-  assertEquals(
-    first.ack.filter((c) => c.name == 'notified').length,
-    20,
-  )
-  let later: Snapshot = {
-    ...g,
-    changes: [
-      ...g.changes,
-      ...first.ack.filter((c) => c.name == 'notified'),
-    ],
-  }
-  let second = noticesFor(later, 'sess-x')
-  assertEquals(second.lines.length, 2)
-  assertEquals(
-    second.ack.filter((c) => c.name == 'notified').length,
-    2,
-  )
+  assertEquals(first.eids.length, 20)
+  assertEquals(noticesFor(g, 'sess-x'), first)
 })
 
-// Drain-proof: one reader serving a comment advances the shared `acked_at`
-// cursor, but selection reads the PER-ITEM stamp — so a second, un-notified
-// comment the cursor would have swept past is still served. This is the exact
-// failure the cursor had (a subagent's ack blinding the operator to a sibling
-// comment) and the reason per-item is the truth.
-Deno.test('notices: per-item stamp is drain-proof (a served ack cannot hide a sibling)', () => {
+Deno.test('notices: human stamps cannot drain an agent query', () => {
   let B = 'aaaaaaaa-0000-4000-8000-000000000030'
   let mk = (eid: string, at: string, body: string) => [
     { eid, name: 'entity', comp: { eid, num: 90 } },
@@ -539,11 +498,6 @@ Deno.test('notices: per-item stamp is drain-proof (a served ack cannot hide a si
     ],
     deps: snap.deps,
   }
-  // fresh: both un-notified, both served
-  assertEquals(noticesFor(g, 'sess-x').lines.length, 2)
-  // one reader served m-1: it stamped `notified` on m-1 AND advanced the
-  // shared cursor past BOTH (acked_at = now). The old cursor gate would now
-  // hide m-2 (born before the cursor); per-item keeps it — m-2 is un-notified.
   let drained: Snapshot = {
     changes: [
       ...g.changes.map((c) =>
@@ -556,13 +510,8 @@ Deno.test('notices: per-item stamp is drain-proof (a served ack cannot hide a si
     deps: snap.deps,
   }
   let n = noticesFor(drained, 'sess-x')
-  assertEquals(n.lines.length, 1)
-  assertEquals(n.lines[0].includes('second ping'), true)
-  // and serving it only stamps the sibling, never re-stamps m-1
-  assertEquals(
-    n.ack.filter((c) => c.name == 'notified').map((c) => c.eid),
-    ['m-2'],
-  )
+  assertEquals(n.lines.length, 2)
+  assertEquals(n.eids, ['m-1', 'm-2'])
 })
 
 Deno.test('rows filter through the query grammar + byBoard', () => {
@@ -1497,16 +1446,17 @@ Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => 
   assertEquals(mailOnly(P), [M1, M4])
   assertEquals(mailOnly(T2), [M4])
   assertEquals(mailOnly(), [M4]) // scopeless: only what my address holds
-  // the digest counts with the INBOX's predicate — addressed to me — so
-  // the number and `task inbox` cannot disagree. Standing in the venture,
-  // that is its mail PLUS the letter to my own address, whatever it's about
-  assertMatch(
-    contextDigest(g, 'sess-x', Date.now(), P),
-    /## inbox — 2 unread \(task inbox\)/,
+  // Session digests are model context, so human inbox counts stay out.
+  assertEquals(
+    contextDigest(g, 'sess-x', Date.now(), P).includes('## inbox'),
+    false,
   )
-  // scopeless, I am still an address: the letter to me survives, the
-  // venture's does not — an unscoped session never saw the fleet's pile
-  assertMatch(contextDigest(g, 'sess-x'), /## inbox — 1 unread/)
+  assertEquals(contextDigest(g, 'sess-x').includes('## inbox'), false)
+  // Human previews retain the exogenous read-state count.
+  assertMatch(
+    contextDigest(g, undefined, Date.now(), P),
+    /## inbox — 1 unread \(task inbox\)/,
+  )
   // nothing addressed, nothing said
   assertEquals(contextDigest(snap, 'sess-x').includes('## inbox'), false)
 })
@@ -3465,7 +3415,7 @@ Deno.test('contextDigest: resume pops this actor stack before narrative memory',
   assertEquals(d.indexOf('## resume') < d.indexOf('## previously'), true)
 })
 
-Deno.test('contextDigest: unheard — comments after a past session stopped listening', () => {
+Deno.test('contextDigest: agent history has no read-state summary', () => {
   let NOW = Date.parse('2026-07-20T12:00:00Z')
   let ago = (h: number) => new Date(NOW - h * 3_600_000).toISOString()
   let num = 70
@@ -3508,7 +3458,7 @@ Deno.test('contextDigest: unheard — comments after a past session stopped list
     changes: [...base, ...extra],
     deps: [],
   })
-  // one session, two unheard: un-notified, and by another actor
+  // Human stamps and old session comments never become an agent unread count.
   let one = g([
     ...note(eid(6), eid(3), ago(10)),
     ...note(eid(7), eid(3), ago(5)),
@@ -3522,19 +3472,14 @@ Deno.test('contextDigest: unheard — comments after a past session stopped list
     { eid: eid(13), name: 'notified', comp: {} },
   ])
   let d = contextDigest(one, 'u-new', NOW)
-  assertMatch(d, /## unheard — S-72 got 2 comments after it wrapped/)
-  // two sessions aggregate on the one line, newest first; birth cuts off
-  // the never-acked one
+  assertEquals(d.includes('## unheard'), false)
   let two = g([
     ...note(eid(6), eid(3), ago(10)),
     ...note(eid(7), eid(4), ago(8)),
     ...note(eid(8), eid(4), ago(31)), // before u-older existed: void
   ])
-  assertMatch(
-    contextDigest(two, 'u-new', NOW),
-    /## unheard — comments after they wrapped: S-72 ×1, S-73 ×1/,
-  )
-  // nothing unheard, or no session at all: no line
+  assertEquals(contextDigest(two, 'u-new', NOW).includes('## unheard'), false)
+  // no session at all stays equally free of agent read-state.
   assertEquals(contextDigest(g([]), 'u-new', NOW).includes('unheard'), false)
   assertEquals(contextDigest(one, undefined, NOW).includes('unheard'), false)
 })
@@ -3760,8 +3705,6 @@ Deno.test('contextDigest: golden — every section, frozen assembly', () => {
     'claimed by you:',
     '- T-4 wip — First claimed',
     '- T-5 open — Second claimed',
-    '## inbox — 1 unread (task inbox)',
-    '## unheard — S-3 got 1 comment after it wrapped (task show)',
     '## resume — pop your stack',
     '- T-7 open — Actor created open',
     '## previously — S-2 Prev session',

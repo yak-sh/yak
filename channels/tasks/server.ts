@@ -6,13 +6,11 @@
 // its session entity, a knock at its door, a letter arriving for its home
 // project — with no polling of the comms bus.
 //
-// It writes ONLY its own delivery stamps, never graph content: it opens the
-// tasks server's /ws sync socket (the same broadcast every browser tab hears)
-// and emits, and POSTs a bare `notified` stamp to /apply for each item it
-// injects (T-7010) — the durable dedup that keeps a reconnect from re-ringing.
-// It never writes a reply, an edit, or any content; those go through the task
-// CLI/MCP the session already has. It holds no credential — /snapshot, /ws, and
-// /apply are the local server's own, unauthed surface.
+// It is read-only: it opens the tasks server's /ws sync socket (the same
+// broadcast every browser tab hears) and emits. The transcript references
+// created by those events are the durable proof of model attention; the
+// channel never writes a second `notified` ledger. Replies and edits go through
+// the task CLI/MCP the session already has.
 //
 // Identity: the claude PROCESS this plugin runs under. The seat rule is
 // src/served.ts — the NEWEST session entity wearing session.pid == our
@@ -31,8 +29,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { Change, Snapshot } from '../../src/types.ts'
 import {
-  channelAck,
-  channelBaseline,
+  attentionOf,
   channelEvents,
   docOf,
   doneOf,
@@ -41,7 +38,6 @@ import {
   humanId,
   type Index,
   learn,
-  notifiedOf,
   printRun,
 } from '../../src/channel.ts'
 import { argsOf, claudePid } from '../../src/proc.ts'
@@ -68,10 +64,9 @@ let HINT = (Deno.env.get('CLAUDE_CODE_SESSION_ID') || '').trim() || undefined
 // never open the socket.
 let BOUND = PID != null || HINT != null
 
-// A print-mode claude renders no channel events, and stamping `notified`
-// for injections nobody sees deafens the bus (channel.ts printRun, T-7420)
-// — same no-op posture as UNBOUND. Without /proc there is no argv to read,
-// so the check fails open toward serving, as the walk itself does.
+// A print-mode claude renders no channel events (channel.ts printRun, T-7420),
+// so it takes the same no-op posture as UNBOUND. Without /proc there is no argv
+// to read, so the check fails open toward serving, as the walk itself does.
 let PRINT = PID != null && printRun(argsOf(PID))
 
 // --- last-resort safety net --------------------------------------------------
@@ -113,13 +108,15 @@ let homes = new Map<string, string>()
 // claims is a message to it, so the served session's claimed-task eids feed the
 // filter the same way notices()'s `mine` does. Release/detach (comp or
 // session null) or a tombstone drops the eid.
-let claims = new Map<string, string>()
+let claims = new Map<string, { session: string; at?: string }>()
 
 // The entities this session holds right now — the filter's `mine` set, and
 // the thing `feed` diffs across a batch to notice a claim arriving.
 let ours = () => {
   let held = new Set<string>()
-  for (let [eid, holder] of claims) if (holder == sessionEid) held.add(eid)
+  for (let [eid, claim] of claims) {
+    if (claim.session == sessionEid) held.add(eid)
+  }
   return held
 }
 
@@ -141,9 +138,19 @@ let resolve = (changes: Change[]) => {
     if (c.name != 'claim') continue
     // A patch that doesn't touch session (e.g. the claimed_at stamp) leaves
     // the holder as it was — merge, don't clobber.
+    let prior = claims.get(c.eid)
     let s = c.comp && 'session' in c.comp ? c.comp.session : undefined
+    let at = c.comp && 'claimed_at' in c.comp ? c.comp.claimed_at : undefined
     if (c.comp == null || s === null) claims.delete(c.eid)
-    else if (typeof s == 'string' && s) claims.set(c.eid, s)
+    else {
+      let session = typeof s == 'string' && s ? s : prior?.session
+      if (session) {
+        claims.set(c.eid, {
+          session,
+          at: typeof at == 'string' && at ? at : prior?.at,
+        })
+      }
+    }
   }
   // Identity is DERIVED from the index (which learn() just merged this
   // batch into), so nothing here is remembered across batches — a rotation
@@ -163,6 +170,8 @@ let resolve = (changes: Change[]) => {
           `session rotated → ${s ? humanId(index, s.eid) ?? s.eid : 'nobody'}`,
         )
       }
+      sent.clear()
+      taken.clear()
       sessionEid = s?.eid
     }
     // The marks come off the merged row, so a patch that carries none
@@ -188,19 +197,11 @@ let resolve = (changes: Change[]) => {
 // read-only listener stays live.
 let held: { cursor?: number; epoch?: string; vocabHash?: string } = {}
 
-// Fold a snapshot into our state: remember its cursor/epoch/vocab (for the next
-// {since}), warm the index, resolve identity.
-//
-// Every snapshot closes a time gap: whatever committed while this process (or
-// its socket) was away is inside the snapshot, beyond the {since} window. The
-// first one is also the only durable handoff from the prior MCP process.
-// `notified.via` separates the history a channel already pushed (anonymous)
-// from an item only the comms bus printed (session-authored), so process churn
-// recovers the latter once without re-ringing the former.
-let baseline: Set<string> | undefined
+// Fold a snapshot into our state. A whole snapshot closes reconnect gaps; feed
+// derives prior attention from this session's entry references before it emits
+// anything still owed.
 let absorb = (snap: Snapshot) => {
   held = { cursor: snap.cursor, epoch: snap.epoch, vocabHash: snap.vocabHash }
-  baseline ??= channelBaseline(snap.changes)
   feed(snap.changes, 'resume')
 }
 
@@ -243,35 +244,46 @@ let mcp = new Server(
 // whole session (proven in email-channel). The listen loop only starts on
 // oninitialized, so no batch is processed before then.
 
-// eid names the entity to stamp `notified` — the plugin's business, not the
-// client's — so it is stripped here, never riding the notification params.
+// eid is transport bookkeeping; the human id rides meta and reaches the
+// transcript, while the UUID never reaches the client.
 let flush = ({ eid: _id, ...ev }: Event) =>
   mcp.notification({ method: 'notifications/claude/channel', params: ev })
-
-// The channel's ONE write: stamp `notified` on what it just delivered — a bare
-// presence the server's stampedPresence loop clocks (T-7010). Not graph content
-// (a reply, an edit); the plugin recording its own delivery, the way
-// knocked()/mailed() stamp their outcomes. /apply is the local server's own
-// unauthed surface, same as /snapshot and /ws.
-let markNotified = async (changes: Change[]) => {
-  let res = await fetch(`http://${HOST}/apply`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(changes),
-  })
-  if (!res.ok) throw new Error(`apply ${res.status}: ${await res.text()}`)
-  await res.body?.cancel()
-}
 
 // --- the stream --------------------------------------------------------------
 // Each /ws live frame carries the committed Change[] plus its journal cursor.
 // Learn from it, keep identity fresh, then emit whatever it aims at this
 // session. Watcher control frames carry neither and are ignored.
 
-// Everything this run injected — our own delivery memory, kept because the
-// durable `notified` stamp is written over the wire and a server that is
-// down (exactly when a gap happens) eats that write.
+// Everything this process injected, plus the durable attention derived from
+// the served session's transcript.
 let sent = new Set<string>()
+let entries = new Map<string, string>()
+let taken = new Set<string>()
+
+let attention = (changes: Change[], session: string, reset = false) => {
+  if (reset) {
+    entries.clear()
+    taken.clear()
+  }
+  for (let c of changes) {
+    if (c.name == 'entity' && c.comp == null) entries.delete(c.eid)
+    if (c.name != 'entry') continue
+    let session = c.comp && 'session' in c.comp ? c.comp.session : undefined
+    if (c.comp == null || session === null) entries.delete(c.eid)
+    else if (typeof session == 'string') entries.set(c.eid, session)
+  }
+  if (reset) {
+    for (let eid of attentionOf(changes, session)) taken.add(eid)
+    return
+  }
+  for (let c of changes) {
+    if (
+      c.name != 'dependency' || !c.comp || c.comp.gone == true ||
+      c.comp.type != 'referenced' || entries.get(c.eid) != session
+    ) continue
+    if (typeof c.comp.child == 'string') taken.add(c.comp.child)
+  }
+}
 
 // Learn from a batch of changes, keep identity fresh, and emit whatever it
 // aims at this session. Three passes share it: live frames, the {catchup}
@@ -279,27 +291,20 @@ let sent = new Set<string>()
 // modes differ only in how they dedup (channel.ts Ctx.mode).
 let feed = (changes: Change[], mode?: 'catchup' | 'resume') => {
   learn(index, changes)
-  // What this session held BEFORE the batch. A claim inside it widens our
-  // scope, and `widen` below closes the backlog that widening exposes. Only
-  // a live frame is measured: a resume sweep carries every claim row in the
-  // graph, so measuring one would re-trigger itself forever.
-  let before = mode ? undefined : ours()
   resolve(changes)
   if (!sessionEid) return // our session isn't in the graph yet
+  attention(changes, sessionEid, mode == 'resume')
   let claimedEids = ours()
   let events = channelEvents(changes, {
     sessionEid,
     actorEid,
     homeEid,
     claimedEids,
+    claimedAt: (eid) => claims.get(eid)?.at,
     idOf: (eid) => humanId(index, eid),
     docOf: (eid) => docOf(index, eid),
     done: (eid) => doneOf(index, eid),
-    notified: (eid) => notifiedOf(index, eid),
-    // A fresh process trusts only channel-authored notification stamps. The
-    // inbox path omits this baseline and keeps whole-fleet `notified` meaning.
-    baseline: baseline ? (eid) => baseline!.has(eid) : undefined,
-    sent: (eid) => sent.has(eid),
+    sent: (eid) => sent.has(eid) || taken.has(eid),
     mode,
     // The operator loop gets project mail; a specialist does not (T-7006).
     operator: operator && origin != 'managed' && !requestedTaskEid,
@@ -307,28 +312,14 @@ let feed = (changes: Change[], mode?: 'catchup' | 'resume') => {
   for (let e of events) {
     // Claim the in-flight delivery before the async pipe write, or a second
     // frame in that window can enqueue the same event. A rejected write drops
-    // the claim and leaves no durable proof, so the next recovery may retry.
-    let replace = notifiedOf(index, e.eid) && !baseline?.has(e.eid)
+    // the claim; a completed one becomes durable when transcript ingestion
+    // records the id carried in event meta.
     sent.add(e.eid)
     flush(e)
-      .then(() => {
-        index.get(e.eid)?.comps.add('notified')
-        return markNotified(channelAck(e.eid, replace))
-      })
       .catch((why: unknown) => {
         sent.delete(e.eid)
         err(`delivery confirmation failed: ${why}`)
       })
-  }
-  // A claim we just gained makes entities ours that were not ours a moment
-  // ago — so their comments were never aimed at anyone this channel serves,
-  // and no live frame will ever carry them again. That is the reconnect gap
-  // in a different dimension: there the gap is in TIME, here it is in SCOPE,
-  // and either way what we missed is sitting in the snapshot. So resume over
-  // it. `notified` bounds the sweep, so anything the push already delivered
-  // stays delivered once (T-9394).
-  if (before && [...claimedEids].some((eid) => !before.has(eid))) {
-    sync().catch((e: unknown) => err(`claim resume failed: ${e}`))
   }
 }
 

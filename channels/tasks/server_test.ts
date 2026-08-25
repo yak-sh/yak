@@ -5,19 +5,15 @@ import { assertEquals } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import type { Change } from '../../src/types.ts'
 import {
-  channelAck,
-  channelBaseline,
   channelEvents,
   cleanAttr,
   cleanBody,
   type Ctx,
   docOf,
-  doneOf,
   findSession,
   humanId,
   type Index,
   learn,
-  notifiedOf,
   printRun,
 } from '../../src/channel.ts'
 
@@ -139,6 +135,19 @@ Deno.test('a comment on an UNCLAIMED task is dropped', () => {
     channelEvents(batch, ctx({ claimedEids: new Set(['other']) })),
     [],
   )
+})
+
+Deno.test('claim acquisition takes the comments already on the task', () => {
+  let batch = [
+    ...comment('c1', 't9'),
+    ch('c1', 'created', { at: '2026-07-24T00:00:00Z' }),
+    ch('c1', 'doc', { title: '', body: 'older words' }),
+  ]
+  let c = ctx({
+    claimedEids: new Set(['t9']),
+    claimedAt: () => '2026-07-25T00:00:00Z',
+  })
+  assertEquals(channelEvents(batch, c), [])
 })
 
 Deno.test('unresolvable provenance renders as unknown', () => {
@@ -318,10 +327,15 @@ Deno.test('mail addressed to this session injects without operator', () => {
   )
 })
 
-Deno.test('mail already opened/archived is not re-announced', () => {
-  let batch = [stamp()]
-  let dealt = ctx({ docOf: letter, done: () => true })
-  assertEquals(channelEvents(batch, dealt), [])
+Deno.test('mail archive completes agent delivery; human open does not', () => {
+  assertEquals(
+    channelEvents([stamp()], ctx({ docOf: letter, done: () => false })).length,
+    1,
+  )
+  assertEquals(
+    channelEvents([stamp()], ctx({ docOf: letter, done: () => true })),
+    [],
+  )
 })
 
 Deno.test('a specialist session gets no project mail (T-7006)', () => {
@@ -368,138 +382,12 @@ Deno.test('an echo arrival with no doc anywhere falls back to a pointer', () => 
   })
 })
 
-Deno.test('an already-notified item is not re-injected (durable dedup)', () => {
-  // The plugin stamps `notified` after each inject and reads it back through
-  // ctx.notified — so a re-broadcast (or a reconnect that re-syncs the same
-  // arrival) never rings twice. Comments and knocks dedup the same way.
-  let told = new Set<string>()
-  let c = ctx({ docOf: letter, notified: (e) => told.has(e) })
-  let first = channelEvents([stamp()], c)
-  assertEquals(first.length, 1)
-  told.add(first[0].eid) // the plugin's post-inject stamp
-  assertEquals(channelEvents([stamp()], c), [])
-})
-
-Deno.test('a bus-notified item injects; a channel-notified item does not', () => {
-  // The shared presence cannot answer whether PUSH happened. The baseline is
-  // the durable subset whose anonymous provenance proves a prior channel did.
-  let c = (over: Partial<Ctx>) =>
-    ctx({ docOf: letter, notified: () => true, ...over })
-  // No baseline (tests, the inbox sweep): the whole-`notified` gate stands.
-  assertEquals(
-    channelEvents([stamp()], c({})).length,
-    0,
-    'no baseline: old gate',
+Deno.test('human notified state never screens a channel event', () => {
+  let out = channelEvents(
+    [stamp(), ch('m1', 'notified', { at: '2026-07-25T00:00:00Z' })],
+    ctx({ docOf: letter }),
   )
-  // A session-authored bus stamp is outside the PUSH baseline, so it rings.
-  assertEquals(
-    channelEvents([stamp()], c({ baseline: () => false })).length,
-    1,
-    'bus-only: the push fires',
-  )
-  // An anonymous channel stamp belongs to the baseline and stays silent.
-  assertEquals(
-    channelEvents([stamp()], c({ baseline: () => true })).length,
-    0,
-    'channel-confirmed history stays silent',
-  )
-  // Our own delivery still outranks the baseline lift.
-  assertEquals(
-    channelEvents([stamp()], c({ baseline: () => false, sent: () => true }))
-      .length,
-    0,
-    'what this run already sent is never re-rung',
-  )
-})
-
-slow('a fresh channel recovers a bus stamp once, then stays quiet', () => {
-  let db = freshDb()
-  let item = crypto.randomUUID()
-  let bus = crypto.randomUUID()
-  apply(db, [
-    { eid: item, name: 'doc', comp: { title: 'hello', body: 'a letter' } },
-    { eid: bus, name: 'session', comp: { id: 'bus-session' } },
-  ])
-  apply(
-    db,
-    [{ eid: item, name: 'notified', comp: {} }],
-    undefined,
-    'bus-session',
-  )
-
-  let boot = () => {
-    let changes = [...snapshot(db).changes, { ...stamp(), eid: item }]
-    let index: Index = new Map()
-    learn(index, changes)
-    let baseline = channelBaseline(changes)
-    return channelEvents(changes, {
-      ...ctx({
-        docOf: letter,
-        idOf: (eid) => eid == item ? 'E-5' : idOf(eid),
-        mode: 'resume',
-      }),
-      done: (eid) => doneOf(index, eid),
-      notified: (eid) => notifiedOf(index, eid),
-      baseline: (eid) => baseline.has(eid),
-    })
-  }
-
-  let busStamp = snapshot(db).changes.find((c) =>
-    c.eid == item && c.name == 'notified'
-  )
-  assertEquals(busStamp?.comp?.via, bus)
-  assertEquals(boot().map((e) => e.eid), [item])
-
-  // The successful push promotes the shared stamp to a durable channel proof.
-  apply(db, channelAck(item, true))
-  let channelStamp = snapshot(db).changes.find((c) =>
-    c.eid == item && c.name == 'notified'
-  )
-  assertEquals(channelStamp?.comp?.via, null)
-  assertEquals(boot(), [])
-  assertEquals(boot(), [])
-
-  // Read-state remains the stronger gate even when only the bus told it.
-  apply(db, [{ eid: item, name: 'notified', comp: null }])
-  apply(
-    db,
-    [{ eid: item, name: 'notified', comp: {} }],
-    undefined,
-    'bus-session',
-  )
-  apply(db, [{ eid: item, name: 'opened', comp: {} }])
-  assertEquals(boot(), [])
-})
-
-Deno.test('a catch-up replay pushes a notified gap item anyway (T-7167)', () => {
-  // The idle-operator case: the digest/bus stamped `notified` while the channel
-  // was down, so the live gate would skip it — but the {since} catch-up replay
-  // is exactly the push that idle operator never got, so it must fire. Holds for
-  // mail, comments, and knocks.
-  let told = () => true // everything already notified by the sweep
-  assertEquals(
-    channelEvents([stamp()], ctx({ docOf: letter, notified: told })).length,
-    0,
-    'live frame: notified suppresses',
-  )
-  assertEquals(
-    channelEvents(
-      [stamp()],
-      ctx({ docOf: letter, notified: told, mode: 'catchup' }),
-    )
-      .length,
-    1,
-    'catch-up: notified lifts',
-  )
-  let cmt: Change[] = [
-    ...comment('c9', 'sess'),
-    ch('c9', 'doc', { title: '', body: 'gap message' }),
-  ]
-  assertEquals(channelEvents(cmt, ctx({ notified: told })), [])
-  assertEquals(
-    channelEvents(cmt, ctx({ notified: told, mode: 'catchup' }))[0].content,
-    'gap message',
-  )
+  assertEquals(out.map((e) => e.eid), ['m1'])
 })
 
 slow('a catch-up comment keeps its actor and instrument byline', () => {
@@ -546,6 +434,7 @@ slow('a catch-up comment keeps its actor and instrument byline', () => {
       meta: {
         kind: 'comment',
         from: `${human(actor)} · via ${human(writer)}`,
+        id: human(eid)!,
       },
       eid,
     }],
@@ -553,9 +442,8 @@ slow('a catch-up comment keeps its actor and instrument byline', () => {
 })
 
 Deno.test('what THIS run injected is never re-rung, even by a catch-up', () => {
-  // Our own delivery memory outranks every mode: the `notified` write can be
-  // lost (the server is down exactly when gaps happen), so the plugin keeps
-  // its own record of what it said.
+  // In-flight delivery memory outranks every mode; transcript references take
+  // over as the durable record after ingestion.
   let mine = new Set(['m1'])
   assertEquals(
     channelEvents(
@@ -623,21 +511,17 @@ Deno.test('a bodiless recall entry is skipped', () => {
   assertEquals(channelEvents(batch, ctx()), [])
 })
 
-Deno.test('an already-notified recall entry is not re-injected', () => {
+Deno.test('a human-notified recall still reaches the model', () => {
   let batch = recalled('r1', 'sess', 'M-5 · a floated thought')
-  let told = new Set<string>()
-  let c = ctx({ notified: (e) => told.has(e) })
-  let first = channelEvents(batch, c)
-  assertEquals(first.length, 1)
-  told.add(first[0].eid) // the plugin's post-inject stamp
-  assertEquals(channelEvents(batch, c), [])
+  batch.push(ch('r1', 'notified', {}))
+  assertEquals(channelEvents(batch, ctx()).map((e) => e.eid), ['r1'])
 })
 
 // --- the reconnect sweep (T-7302) --------------------------------------------
 // A knock that commits while the socket is down is INSIDE the snapshot the
 // reconnect fetches, so no {since} window replays it. The resume pass reads
 // state instead: the ladder stamped `cast S-31` — this session — and nothing
-// ever stamped `notified`, so the stamp is a claim nobody made good.
+// no transcript reference exists, so the stamp is a claim nobody made good.
 
 // A settled knock is TWO frames now (D-14945): the knock and its delivered
 // outcome. `via` names the ladder's claim — `cast S-31`, this session — and
@@ -687,9 +571,9 @@ Deno.test('a resume sweep carries the words that rode THAT knock', () => {
 })
 
 Deno.test('a resume sweep leaves a delivered knock alone', () => {
-  // `notified` is the bound: the stamp was made good, so the row is history.
+  // A transcript reference is the bound: sent() represents that derived set.
   assertEquals(
-    channelEvents(cast(), ctx({ mode: 'resume', notified: () => true })),
+    channelEvents(cast(), ctx({ mode: 'resume', sent: () => true })),
     [],
   )
   // …and so is a knock the ladder resolved some OTHER way (spawn, mail) or

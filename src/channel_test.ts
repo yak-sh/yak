@@ -5,7 +5,7 @@
 // the behavior the eight former per-name scans produced.
 
 import { assertEquals } from '@std/assert'
-import { channelEvents, type Ctx } from './channel.ts'
+import { attentionOf, channelEvents, type Ctx } from './channel.ts'
 import type { Change } from './types.ts'
 
 let ids: Record<string, string> = {
@@ -25,6 +25,24 @@ let ctx: Ctx = {
   claimedEids: new Set(['TASK']),
   idOf: (e) => ids[e] ?? null,
 }
+
+Deno.test('attentionOf derives model receipt from transcript references', () => {
+  let changes: Change[] = [
+    { eid: 'E1', name: 'entry', comp: { session: 'S' } },
+    {
+      eid: 'E1',
+      name: 'dependency',
+      comp: { type: 'referenced', child: 'C1' },
+    },
+    { eid: 'E2', name: 'entry', comp: { session: 'OTHER' } },
+    {
+      eid: 'E2',
+      name: 'dependency',
+      comp: { type: 'referenced', child: 'C2' },
+    },
+  ]
+  assertEquals([...attentionOf(changes, 'S')].sort(), ['C1', 'E1'])
+})
 
 Deno.test('channelEvents: one-pass indexing feeds every branch', () => {
   let batch: Change[] = [

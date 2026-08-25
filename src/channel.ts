@@ -14,9 +14,8 @@ import { type Seat, served } from './served.ts'
 // server.js emits under method notifications/claude/channel. The MCP server's
 // name ("tasks") becomes the source= attribute; meta carries the rest (kind,
 // from). Attacker-controlled strings live in meta/content, never built into a
-// forged attribute. `eid` is the entity this event notifies about — the plugin
-// stamps `notified` on it (its own delivery record) and it is stripped before
-// the wire, never reaching the client.
+// forged attribute. `eid` is the internal entity identity; its human id also
+// rides meta so transcript ingestion records what crossed the model boundary.
 export type Event = {
   content: string
   meta: Record<string, string>
@@ -29,53 +28,33 @@ export type Event = {
 // CLAIMED (a comment on any of them is input for the claimant — the sweep's
 // `mine` in client.ts notices()), how to turn an eid into a human id (T-7, S-31)
 // — null when the eid isn't known yet — and a letter's words from the cache (the
-// arrival stamp is a bare mail row). `notified` is the durable dedup: an entity
-// already told (this plugin's own inject stamp, or the sweep) never re-rings,
-// even across a reconnect.
+// arrival stamp is a bare mail row). `sent` combines in-flight transport memory
+// with transcript references on reconnect.
 export type Ctx = {
   sessionEid: string
   actorEid?: string | null
   homeEid?: string | null
   claimedEids?: Set<string>
+  claimedAt?: (eid: string) => string | undefined
   idOf: (eid: string) => string | null
   docOf?: (eid: string) => { title: string; body: string } | null
-  // The durable read-state (T-7006): true once a mail wears `opened` or
-  // `archived`, read off the index — so a letter already dealt with never
-  // re-rings across a reconnect.
+  // Explicit completion: true once a mail wears `archived`.
   done?: (eid: string) => boolean
-  // The durable dedup (T-7010): true once an entity wears `notified`, read off
-  // the index — so anything this plugin (or the sweep) already told the operator
-  // is not re-injected, even across a reconnect. Replaces the old ephemeral
-  // `seen`/`delivered` set; `inject-needed == NOT notified`.
-  notified?: (eid: string) => boolean
-  // What THIS run injected — the plugin's own delivery memory, the one gate
-  // no mode lifts. `notified` is the fleet's stamp (the bus writes it too,
-  // and our own write is lost if the server is down when we try); this is
-  // ours, so a replay can never re-ring what we already said.
+  // What this transport already injected or the transcript already cites.
+  // The live channel derives the durable half from entry references.
   sent?: (eid: string) => boolean
-  // The durable PUSH proofs captured at this channel process's first snapshot:
-  // notified rows whose server-stamped `via` is null. The bus writes the same
-  // presence through its serving session, so its non-null stamp cannot claim a
-  // channel instance delivered anything. A baseline makes that distinction;
-  // absent (tests, the inbox sweep), the whole-`notified` gate stands.
-  baseline?: (eid: string) => boolean
   // Which pass this is; absent = a live frame.
   // - `catchup`: the {since} journal replay on a freshly-(re)connected
-  //   socket (T-7167). It pushes past `notified`, because the digest/bus may
-  //   have stamped a gap item while the channel was down and that stamp
-  //   dedups a live RE-broadcast, not the one push an idle operator never
-  //   got. Bounded to the snapshot→join window, so no backlog flood.
+  //   socket (T-7167), bounded to the snapshot→join window.
   // - `resume`: the reconnect sweep over a whole snapshot (T-7302). The
   //   disconnect→snapshot gap is INSIDE the snapshot, so no {since} window
   //   can replay it — the channel reconciles against state instead, and
-  //   `notified` is what bounds it to what nobody has told this session yet.
-  //   It also lets a knock the ladder already stamped `cast S-me` through:
-  //   see the knock branch.
+  //   Transcript references bound it to what this session has not taken. It
+  //   also lets a knock the ladder stamped `cast S-me` through.
   // Either way `done`/`injects`/`operator` still gate — correctness, not
   // dedup.
   // `inbox` is the deliberate task_context sweep: unlike a live channel,
-  // it may surface an addressed knock after the resolver stamped its routing
-  // outcome. `notified` still bounds it to what nobody has read.
+  // it may surface an addressed knock after the resolver stamped its outcome.
   mode?: 'catchup' | 'resume' | 'inbox'
   // Whether the served session is the project's operator loop. Only a positive
   // capability receives project mail or actor knocks; direct address and
@@ -142,6 +121,28 @@ export type Sess = {
 }
 export type Index = Map<string, Row>
 
+// The model attention recoverable from one full graph snapshot. Entry ids
+// cover recall floaters (which are themselves events); referenced children
+// cover graph items named in transcript content or event metadata.
+export let attentionOf = (changes: Change[], session: string) => {
+  let entries = new Map<string, string>()
+  for (let c of changes) {
+    if (c.name != 'entry' || !c.comp) continue
+    if (typeof c.comp.session == 'string') entries.set(c.eid, c.comp.session)
+  }
+  let out = new Set(
+    [...entries].filter(([, owner]) => owner == session).map(([eid]) => eid),
+  )
+  for (let c of changes) {
+    if (
+      c.name != 'dependency' || !c.comp || c.comp.gone == true ||
+      c.comp.type != 'referenced' || entries.get(c.eid) != session
+    ) continue
+    if (typeof c.comp.child == 'string') out.add(c.comp.child)
+  }
+  return out
+}
+
 // Merge one session patch into the row's remembered fields: a column the
 // patch omits keeps its value, an explicit null clears it.
 let remember = (row: Row, comp: Record<string, unknown>) => {
@@ -203,42 +204,12 @@ export let learn = (index: Index, changes: Change[]) => {
 // server wires in.
 export let docOf = (index: Index, eid: string) => index.get(eid)?.doc ?? null
 
-// eid → done (T-7006): it wears `opened` or `archived`. learn() keeps the
-// comp set fresh from every broadcast, so this is restart-proof dedup —
-// the Ctx.done the live server wires in.
+// eid → done: archive is explicit completion. `opened` is human read-state and
+// cannot screen a model consumer.
 export let doneOf = (index: Index, eid: string) => {
   let comps = index.get(eid)?.comps
-  return !!comps && (comps.has('opened') || comps.has('archived'))
+  return !!comps?.has('archived')
 }
-
-// eid → notified (T-7010): it already wears `notified` — told, whether by this
-// plugin's own inject stamp or the bus/digest sweep. learn() keeps the comp set
-// fresh from every broadcast, so this is restart-proof dedup — the Ctx.notified
-// the live server wires in. Orthogonal to done: told, not dealt-with.
-export let notifiedOf = (index: Index, eid: string) =>
-  !!index.get(eid)?.comps.has('notified')
-
-// What a fresh channel process may trust as proof of an earlier PUSH. A
-// channel writes anonymously (`via = null`); the comms bus names the session
-// that printed the item. The distinction survives process churn because a
-// snapshot carries every server-stamped column.
-export let channelBaseline = (changes: Change[]) =>
-  new Set(
-    changes
-      .filter((c) =>
-        c.name == 'notified' && c.comp != null && c.comp.via === null
-      )
-      .map((c) => c.eid),
-  )
-
-// A recovered bus-served item already wears `notified`. Replace that one
-// presence atomically after the push lands so its current stamp becomes the
-// durable channel proof the next process can trust. The journal retains both
-// acts; unopened state remains present throughout the transaction.
-export let channelAck = (eid: string, replace = false): Change[] => [
-  ...(replace ? [{ eid, name: 'notified', comp: null }] : []),
-  { eid, name: 'notified', comp: {} },
-]
 
 // eid → human id (T-7), or null when the spine's num hasn't been seen yet.
 export let humanId = (index: Index, eid: string): string | null => {
@@ -253,9 +224,7 @@ export let humanId = (index: Index, eid: string): string | null => {
 // comment-resume courier) renders NO channel events: the run is one turn
 // and the process ends with it, so a notification injected mid-turn goes
 // nowhere (proven live: five -p runs, zero channel events in the
-// transcript — T-7420). Serving one is worse than serving nobody: each
-// emit stamps `notified`, which silences the comms bus — the ear a -p
-// agent DOES have, on its next tool call. Only flags before `--` count;
+// transcript — T-7420). Only flags before `--` count;
 // after it, everything is the prompt.
 export let printRun = (args: string[]) => {
   let end = args.indexOf('--')
@@ -321,8 +290,8 @@ export let injects = (
 
 // A knock the ladder settled as OURS: delivered.via `cast S-31` names the
 // very session this channel serves (knock.ts writes `cast S-${num}` when the
-// door answered). Paired with the `notified` gate it is the whole test for
-// "the stamp says delivered and nobody delivered it".
+// door answered). The transcript-derived `sent` gate decides whether the
+// session already took it.
 let lost = (via: string, ctx: Ctx) => {
   let me = ctx.idOf(ctx.sessionEid)
   return !!me && via == `cast ${me}`
@@ -468,13 +437,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
     born,
   } = indexBatch(changes, ctx.mode == 'resume' || ctx.mode == 'inbox')
   let out: Event[] = []
-  // Already told by PUSH: this run's deliveries, or an anonymous channel stamp
-  // from an earlier process. Without a baseline (tests, the inbox sweep), the
-  // shared `notified` presence retains its ordinary whole-fleet meaning.
-  let pushed = (eid: string) => ctx.baseline ? ctx.baseline(eid) : true
-  let told = (eid: string) =>
-    !!ctx.sent?.(eid) ||
-    (ctx.mode != 'catchup' && !!ctx.notified?.(eid) && pushed(eid))
+  let told = (eid: string) => !!ctx.sent?.(eid)
   for (let c of changes) {
     if (!c.comp) continue
 
@@ -494,6 +457,8 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       let at = str(c.comp.target)
       let mine = at == ctx.sessionEid || !!ctx.claimedEids?.has(at)
       if (!mine) continue
+      let took = ctx.claimedAt?.(at)
+      if (took && str(created.get(c.eid)?.at) <= took) continue
       if (metas.has(c.eid)) continue // a meta memo is harvested, never injected live
       let content = words(docs.get(c.eid))
       if (!content) continue // bodiless mint or a later comp-only patch
@@ -503,6 +468,8 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
         kind: 'comment',
         from: cleanAttr(from),
       }
+      let id = ctx.idOf(c.eid)
+      if (id) meta.id = id
       // On a claimed TASK (not the session), name the target so the operator
       // knows which one — the sweep line prefixes the same id.
       if (at != ctx.sessionEid) meta.on = cleanAttr(ctx.idOf(at) ?? at)
@@ -519,6 +486,8 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       let at = str(c.comp.target)
       let mine = at == ctx.sessionEid || !!ctx.claimedEids?.has(at)
       if (!mine) continue
+      let took = ctx.claimedAt?.(at)
+      if (took && str(created.get(c.eid)?.at) <= took) continue
       let content = words(docs.get(c.eid))
       if (!content) continue // bodiless mint or a later comp-only patch
       if (told(c.eid)) continue
@@ -527,6 +496,8 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
         kind: 'notice',
         from: cleanAttr(from),
       }
+      let id = ctx.idOf(c.eid)
+      if (id) meta.id = id
       if (at != ctx.sessionEid) meta.on = cleanAttr(ctx.idOf(at) ?? at)
       out.push({ content, meta, eid: c.eid })
       continue
@@ -538,7 +509,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       // present in a resume snapshot. A settled knock is a receipt, not a
       // second nudge, so skip it. On a RESUME sweep it is the opposite:
       // delivered.via `cast S-me` is the ladder CLAIMING this channel took
-      // it, and an un-`notified` row proves the claim false — that knock is
+      // it, and no transcript reference proves the claim false — that knock is
       // exactly what a disconnect ate (T-7302), so ring it and make it true.
       let won = delivered.get(c.eid)
       let acted = !!won || errored.has(c.eid)
@@ -576,7 +547,10 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
         ? `look at ${atId}`
         : 'a knock'
       let content = note ? `${head} — ${note}` : head
-      out.push({ content, meta: { kind: 'knock' }, eid: c.eid })
+      let meta: Record<string, string> = { kind: 'knock' }
+      let id = ctx.idOf(c.eid)
+      if (id) meta.id = id
+      out.push({ content, meta, eid: c.eid })
       continue
     }
 
@@ -584,8 +558,8 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       // The sweep's stamp broadcast is the arrival: received_at is a
       // server-only column, so only the full-row stamp carries it (knock's
       // acted_at trick, inverted — here the stamp IS the news). The mint's
-      // wire frames never wear it, and `notified` keeps any later full-row
-      // re-broadcast — or a reconnect — from ringing twice.
+      // wire frames never wear it; sent/transcript attention dedups later
+      // full-row broadcasts and reconnects.
       if (c.comp.received_at == null) continue
       if (
         !injects(
@@ -619,7 +593,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
     // written into its own log. The delivery address is the entry's session
     // partition — no recipient facet — so it rings whatever loop this is, like a
     // comment on the session itself, never gated on operator/mail. The content
-    // is the floater lines (M-id · title); the `notified` gate dedups a replay.
+    // is the floater lines (M-id · title); the sent gate dedups a replay.
     if (c.name == 'recalled') {
       if (sessions.get(c.eid) != ctx.sessionEid) continue
       // Bounded to recent (T-17487): on a catch-up sweep — where `born` and
@@ -634,7 +608,10 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       let content = cleanBody(bodies.get(c.eid) ?? '')
       if (!content) continue
       if (told(c.eid)) continue
-      out.push({ content, meta: { kind: 'recall' }, eid: c.eid })
+      let meta: Record<string, string> = { kind: 'recall' }
+      let id = ctx.idOf(c.eid)
+      if (id) meta.id = id
+      out.push({ content, meta, eid: c.eid })
       continue
     }
   }

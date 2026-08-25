@@ -17,7 +17,6 @@ export const CODEX_NOTICE =
 // Keep its paste protection enabled and cross that window before submitting.
 const SUBMIT_DELAY = 'sleep 0.15'
 const RETRY_MS = 5_000
-const ACCEPTED_RETRY_MS = 5 * 60_000
 const STABLE_MS = 50
 
 export type NativeSession = {
@@ -40,7 +39,7 @@ export type Pane = {
 export type NotifyDeps = {
   now: () => number
   route: (eid: string) => { state: string; transport: string | null }
-  pending: (id: string) => boolean | Promise<boolean>
+  pending: (id: string) => string | null | Promise<string | null>
   pane: (id: string) => Promise<Pane | null>
   under: (pid: number, root: number) => boolean
   capture: (id: string) => Promise<string | null>
@@ -145,14 +144,14 @@ let samePane = (pane: Pane | null, session: NativeSession) =>
   !!pane && pane.id == session.pane && !pane.dead && !pane.mode &&
   !!session.pid
 
-let due = (session: NativeSession, now: number) => {
+let due = (session: NativeSession, now: number, pendingAt: string) => {
   let sent = Date.parse(session.notice_at ?? '')
   if (!Number.isFinite(sent)) return true
+  let pending = Date.parse(pendingAt)
+  if (Number.isFinite(pending) && pending > sent) return true
   let accepted = Date.parse(session.notice_accepted_at ?? '')
-  let delay = Number.isFinite(accepted) && accepted >= sent
-    ? ACCEPTED_RETRY_MS
-    : RETRY_MS
-  return now - sent >= delay
+  if (Number.isFinite(accepted) && accepted >= sent) return false
+  return now - sent >= RETRY_MS
 }
 
 // One guarded attempt. The last external read is capture3; after that we only
@@ -166,8 +165,9 @@ export let notify = async (
   ) return 'none'
   let route = deps.route(session.eid)
   if (route.state != 'queued' || route.transport != 'tmux') return 'none'
-  if (!await deps.pending(session.id)) return 'none'
-  if (!due(session, deps.now())) return 'defer'
+  let pending = await deps.pending(session.id)
+  if (!pending) return 'none'
+  if (!due(session, deps.now(), pending)) return 'defer'
 
   let pane1 = await deps.pane(session.pane)
   if (!samePane(pane1, session) || !deps.under(session.pid, pane1!.pid)) {
@@ -355,8 +355,7 @@ let systemDeps = (
 ): NotifyDeps => ({
   now: Date.now,
   route: delivery,
-  pending: async (id) =>
-    (await bus(id, undefined, localQuery(db))).lines.length > 0,
+  pending: async (id) => (await bus(id, undefined, localQuery(db))).at || null,
   pane: paneInfo,
   under: descends,
   capture: capturePane,

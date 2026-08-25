@@ -1605,24 +1605,13 @@ slow('bare task appends the current claimed task digest', async () => {
     let out = await bareCli({ TASKS_HOST: host, TASKS_SESSION: 'sub-1' })
     assertEquals(out.code, 0)
     assertMatch(text(out.stdout), /task —[\s\S]*- T-2 wip — Child work/)
-    // The digest resolves the session and its claimed task, then the bus
-    // reads its own bounded queries (client.ts bus()) — the reader's rows,
-    // then the candidates its selector might pick. Several arms dispatch
-    // CONCURRENTLY (readerSet + bus() Promise.all), so arrival order is
-    // unspecified: the contract is the multiset of queries, not its order.
+    // The compact bare-command digest is not the explicit context door: it
+    // resolves only the session and its claimed task, with no inbox sidecar.
     assertEquals(
       [...seen].sort(),
       [
         '/query?.kind=session&.session.id=sub-1',
         `/query?.kind=task&.claim.session=${S}`,
-        '/query?.kind=session&.session.id=sub-1',
-        `/query?.claim.session=${S}`,
-        '/query?.repo!',
-        `/query?.comment.target=${S},${T}&.notified=`,
-        `/query?.notice.target=${S},${T}&.notified=`,
-        `/query?.deliver.to=${S}&.notified=`,
-        `/query?.mail.target=${S}&.notified=&.opened=&.archived=`,
-        `/query?.recalled.source!&.entry.session=${S}&.notified=&.created.at>=10-minutes-ago`,
       ].sort(),
     )
   } finally {
@@ -1642,14 +1631,9 @@ slow('bare task never reads or prints the open board', async () => {
   }
 })
 
-// Passive delivery: a verb that merely READ the graph serves the bus from
-// what it already has — no per-verb wiring, and no second snapshot (one is
-// ~16MB on a real graph). It rides stderr so a pipe or --json can never
-// swallow a message that was just stamped read.
-// A verb that never READ the graph now serves the bus too — that is the whole
-// point of asking its own bounded question rather than riding a snapshot.
-// `help` touches nothing and still hands over what is waiting.
-slow('a verb that reads nothing serves the bus all the same', async () => {
+// Model input has one explicit door. Ordinary verbs never append an implicit
+// sidecar or mutate human inbox state.
+slow('a verb that reads nothing does not serve agent input', async () => {
   let { server, acked, seen, host } = busServer()
   try {
     let out = await new Deno.Command(Deno.execPath(), {
@@ -1663,19 +1647,15 @@ slow('a verb that reads nothing serves the bus all the same', async () => {
       env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
     }).output()
     assertEquals(out.code, 0)
-    assertMatch(text(out.stderr), /the ask you missed/)
-    assertEquals(acked.map((c) => `${c.name} ${c.eid}`), [`notified ${C}`])
-    // and it cost keyed queries, never the corpus
-    assertEquals(seen.filter((line) => line.startsWith('/snapshot')), [])
+    assertEquals(text(out.stderr), '')
+    assertEquals(acked, [])
+    assertEquals(seen, [])
   } finally {
     await server.shutdown()
   }
 })
 
-// A HOOK has no reader (T-14196). Serving there prints to a stream nobody
-// will read and stamps every line `notified`, which is how an unread message
-// disappears without ever being delivered — worst of all at SessionEnd, which
-// is what `wrap --hook` is. So a hook serves nothing and stamps nothing.
+// A hook other than context has no model reader, so it serves nothing.
 slow(
   'a hook never serves the bus, because nobody is there to read it',
   async () => {
@@ -1704,8 +1684,8 @@ slow(
   },
 )
 
-// The one hook that DOES serve, and must keep serving: its stdout is the
-// digest the session boots into, so the lines are delivered by definition.
+// Context is the explicit model attention boundary. It serves current input on
+// stdout without writing human read-state.
 slow('the boot digest is the hook that delivers, on stdout', async () => {
   let { server, acked, seen, host } = busServer()
   try {
@@ -1724,14 +1704,14 @@ slow('the boot digest is the hook that delivers, on stdout', async () => {
     assertEquals(out.code, 0, text(out.stderr))
     assertMatch(text(out.stdout), /pending messages/)
     assertMatch(text(out.stdout), /the ask you missed/)
-    assertEquals(acked.map((c) => `${c.name} ${c.eid}`), [`notified ${C}`])
+    assertEquals(acked, [])
     assertEquals(seen.some((path) => path.startsWith('/snapshot')), false)
   } finally {
     await server.shutdown()
   }
 })
 
-slow('any graph-reading verb serves the bus, on stderr', async () => {
+slow('a graph-reading verb does not append agent input', async () => {
   let { server, acked, host } = busServer()
   try {
     let out = await new Deno.Command(Deno.execPath(), {
@@ -1746,17 +1726,11 @@ slow('any graph-reading verb serves the bus, on stderr', async () => {
       env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
     }).output()
     assertEquals(out.code, 0)
-    // the message reached the operator as a served notice...
-    assertMatch(text(out.stderr), /pending messages/)
-    assertMatch(text(out.stderr), /the ask you missed/)
+    assertEquals(text(out.stderr), '')
     assertEquals(unsafe(text(out.stderr)), [])
-    // ...and the block never touched what the caller asked for. (`show`
-    // renders the comment thread itself on stdout, which is its job — what
-    // must not leak there is the BUS, since that is what a pipe would eat.)
     assertEquals(/pending messages/.test(text(out.stdout)), false)
     assertEquals(unsafe(text(out.stdout)), [])
-    // ...and was stamped read exactly once
-    assertEquals(acked.map((c) => `${c.name} ${c.eid}`), [`notified ${C}`])
+    assertEquals(acked, [])
   } finally {
     await server.shutdown()
   }

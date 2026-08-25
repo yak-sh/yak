@@ -739,7 +739,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   // without `notified`, `archived` without `opened`. Only `archived` hides an
   // item from the inbox, which is what makes it drain-proof. NOT in kindOrder:
   // facets any entity wears (a comment, a knock, a mail), never its identity.
-  notified: {}, // the operator has been told (inject or sweep) — never hides
+  notified: {}, // a human operator has been told — agents never wear this
   opened: {}, //   the operator has looked — NOT opened == unread; never hides
   archived: {}, // the operator is done — hides an inbox item
   // A safety boundary over ANY entity. Presence hides it from every list and

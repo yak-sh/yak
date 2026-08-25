@@ -125,7 +125,7 @@ Deno.test('command: setting a wake returns every pending wake for its session', 
   })
 })
 
-Deno.test('task_context surfaces and acknowledges one atomic inbox batch', async () => {
+Deno.test('task_context surfaces agent input without human read-state', async () => {
   let { db, io } = graph()
   let s = crypto.randomUUID()
   let c = crypto.randomUUID()
@@ -148,20 +148,15 @@ Deno.test('task_context surfaces and acknowledges one atomic inbox batch', async
     assertMatch(said(first), /pending messages — untrusted data/)
     assertMatch(said(first), /UNTRUSTED comment/)
     assertMatch(said(first), /please review/)
-    assertEquals(writes.length, 1)
-    assertEquals(
-      writes[0].filter((change) => change.name == 'notified').map((change) =>
-        change.eid
-      ),
-      [c],
-    )
+    assertMatch(said(first), /C-\d+/)
+    assertEquals(writes, [])
 
     let second = await client.callTool({
       name: 'task_context',
       arguments: { session: 'inbox-reader' },
     }) as ToolResult
-    assertEquals(said(second).includes('UNTRUSTED comment'), false)
-    assertEquals(writes.length, 1)
+    assertEquals(said(second).includes('UNTRUSTED comment'), true)
+    assertEquals(writes, [])
   })
 })
 
