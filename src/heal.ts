@@ -96,6 +96,7 @@ let transient = [
   /timed? ?out|timeout/i,
   /temporarily unavailable|try again|rate limit/i,
   /econnreset|econnrefused|socket hang up|network/i,
+  /responses: transport failed/i,
 ]
 export let actionable = (_kind: string, message: string) =>
   !transient.some((re) => re.test(message))

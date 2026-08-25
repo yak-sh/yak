@@ -18,6 +18,7 @@ Deno.env.set('TASKS_FIXER_MODEL', 'fake-fast')
 let { apply, db } = await import('./db.ts')
 let { exceptionChange, excepted, delivered } = await import('./deliver.ts')
 let {
+  actionable,
   cliFault,
   ensureFixer,
   faultKey,
@@ -83,6 +84,16 @@ Deno.test('a single break files one keyed, pointed, open ticket', () => {
   let body = (db.prepare(`select body from doc where ${OWNED}`)
     .get(mine[0].eid) as { body: string }).body
   assert(body.includes(msg), 'body carries the message')
+})
+
+Deno.test('a redacted Responses network interruption does not file a bug', () => {
+  let eid = session()
+  let msg = 'responses: transport failed'
+  exceptionChange(eid, msg)
+  file(eid, {})
+
+  assertEquals(actionable('session', msg), false)
+  assertEquals(bugsFor(faultKey('session', msg, null)), [])
 })
 
 Deno.test('a storm — identical and volatile-differing — files ONE ticket', () => {
