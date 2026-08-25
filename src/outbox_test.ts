@@ -9,7 +9,7 @@
 // and only an ack — releases it, and draining disarms the redelivery timer
 // (the sanitizers fail this file if it leaks).
 
-import { assertEquals, assertStringIncludes } from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from './testing.ts'
 import { type Change } from './types.ts'
 
@@ -160,6 +160,56 @@ Deno.test('mutate holds the write in the outbox until acked', async () => {
     for (let id of ids) acked(id)
     assertEquals(unsent().length, 0)
   } finally {
+    restore()
+  }
+})
+
+// ——— the backoff (T-21442): a wedged server is probed, never hammered ———
+
+Deno.test('backoff doubles the gap and caps at RESEND_MAX', async () => {
+  let { RESEND, RESEND_MAX, backoff } = await import('./live.ts')
+  let gaps: number[] = []
+  let wait = RESEND
+  for (let i = 0; i < 10; i++) gaps.push(wait = backoff(wait))
+  // Each gap is double the last until it saturates the cap — never beyond it.
+  assertEquals(gaps[0], RESEND * 2)
+  for (let i = 1; i < gaps.length; i++) {
+    assert(gaps[i] == Math.min(gaps[i - 1] * 2, RESEND_MAX))
+    assert(gaps[i] <= RESEND_MAX)
+  }
+  assertEquals(gaps.at(-1), RESEND_MAX)
+})
+
+Deno.test('a wedged server is retried on a widening gap, and an ack halts it', async () => {
+  let restore = stubSockets()
+  let live = await import('./live.ts')
+  // The transport is wedged: record each send's id, and NEVER ack.
+  let sends: string[] = []
+  let prevRoute = live.useRoute((_frame, id) => {
+    if (id) sends.push(id)
+  })
+  try {
+    let t0 = Date.now()
+    live.mutate({ eid: uid(), name: 'doc', comp: { title: 'wedged' } })
+    let [id] = live.unsent()
+    // Drive 80s of a wedged server, ticking every RESEND — the interval the
+    // fixed cadence used to fire on (which would re-send ~26 times).
+    let ticks = Math.ceil(80_000 / live.RESEND)
+    for (let k = 1; k <= ticks; k++) {
+      live.redeliverNow(false, t0 + k * live.RESEND)
+    }
+    let resends = sends.filter((x) => x == id).length - 1 // minus the initial send
+    // Backoff (gaps 3,6,12,24,48s) fits ~4 retries in 80s, not ~26.
+    assert(resends >= 2, `should still retry a wedged server, got ${resends}`)
+    assert(resends <= 8, `backoff must cap redelivery, got ${resends} in 80s`)
+    // Once acked, the write is gone — no tick re-sends it, however far ahead.
+    live.acked(id)
+    sends.length = 0
+    live.redeliverNow(false, t0 + 10_000_000)
+    assertEquals(sends.filter((x) => x == id).length, 0)
+  } finally {
+    live.useRoute(prevRoute)
+    for (let x of live.unsent()) live.acked(x) // drain → disarm the timer
     restore()
   }
 })

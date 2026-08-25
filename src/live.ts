@@ -1165,21 +1165,40 @@ export let useOutboxStore = (s: OutboxStore): OutboxStore => {
 // Re-applying the same patch is harmless (apply() is a merge of the same
 // values); the id is stable across retries so the transport dedups, and the
 // timer disarms itself when the outbox drains — no idle tick.
+//
+// The gap between retries BACKS OFF exponentially (T-21442). A fixed RESEND
+// cadence turned a slow or wedged server into a runaway: every unacked write
+// re-routed every 3s, and each re-apply wrote journal rows that wedged the
+// server further — a positive feedback loop that ballooned the journal to
+// ~1GB and took the graph down. So a write's gap DOUBLES on each retry
+// (RESEND, 2·RESEND, … capped at RESEND_MAX), probing a stuck server on a
+// widening interval instead of hammering it; a recovered server resets the
+// cadence (resetBackoff on reconnect) so retries turn prompt again.
 export let RESEND = 3_000
+export let RESEND_MAX = 60_000
+export let backoff = (wait: number) => Math.min(wait * 2, RESEND_MAX)
+// Per-write current gap, keyed by delivery id. Absent = the first retry waits
+// RESEND. Transient retry state, NOT parked — a reload starts a fresh cadence.
+let waits = new Map<string, number>()
 let redeliver: ReturnType<typeof setInterval> | undefined
-export let redeliverNow = (force = false) => {
+export let redeliverNow = (force = false, now = Date.now()) => {
   if (!outbox.size) {
     if (redeliver !== undefined) clearInterval(redeliver)
     redeliver = undefined
+    waits.clear()
     return
   }
-  let now = Date.now()
   for (let [id, o] of outbox) {
-    if (!force && now - o.at < RESEND) continue
+    let wait = waits.get(id) ?? RESEND
+    if (!force && now - o.at < wait) continue
     o.at = now
+    waits.set(id, backoff(wait))
     route({ apply: o.changes, id }, id)
   }
 }
+// A reconnect means the server is reachable again: drop every write's backoff
+// so the next tick re-sends unacked writes promptly instead of at a stale 60s.
+export let resetBackoff = () => waits.clear()
 let armRedeliver = () => {
   if (redeliver !== undefined) return
   redeliver = setInterval(redeliverNow, RESEND) // Headless (TUI, tests): an armed retry must never hold the process open.
@@ -1197,6 +1216,7 @@ let deliver = (changes: Change[]) => {
 }
 export let acked = (id: string) => {
   outbox.delete(id)
+  waits.delete(id) // the backoff leaves with its write
   outboxStore.unpark(id) // the durable copy leaves with the in-memory one
   syncOutbox()
   if (!outbox.size) redeliverNow()
@@ -1243,6 +1263,7 @@ let drain = async (): Promise<boolean> => {
       })
       if (!res.ok) refuse(id, await res.text(), o.changes) // durable: the reload
       outbox.delete(id) //                     this drain precedes would wipe it
+      waits.delete(id)
     } catch {
       return false
     }
@@ -1369,6 +1390,7 @@ let connect = () => {
   // frame the server broadcasts arrives AFTER the catch-up it just sent.
   socket.onopen = () => {
     pet()
+    resetBackoff() // server reachable again → retry unacked writes promptly
     socket.send(JSON.stringify({
       since: held.cursor ?? 0,
       epoch: held.epoch,
@@ -1447,8 +1469,15 @@ let wire = (frame: unknown) => {
 
 // An acked delivery threads its id through so a retry REPLACES its queued
 // transport entry instead of piling up a duplicate per tick.
-let route = (frame: unknown, id?: string) =>
+let route: (frame: unknown, id?: string) => void = (frame, id) =>
   owner ? owner.route(frame, id) : wire(frame)
+// The transport seam (mirrors useOutboxStore): a test counts redelivery sends
+// without a socket. Returns the prior route so the test can restore it.
+export let useRoute = (fn: typeof route): typeof route => {
+  let prev = route
+  route = fn
+  return prev
+}
 // THE change-batch door — every write leaves through the outbox, so no caller
 // can fire and forget.
 export let send = (...changes: unknown[]) => deliver(changes as Change[])
