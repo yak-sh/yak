@@ -123,6 +123,8 @@ Deno.test('every verb usage is rendered from its declaration', () => {
 Deno.test('help topics cover nested and colon vocabularies', () => {
   assertMatch(help(['mail', 'send']), /^task mail send/)
   assertMatch(help(['session', 'brief']), /^task session brief/)
+  assertMatch(help(['link']), /^task <parent> requires\|contains/)
+  assertMatch(help(['link']), /task T-3 requires T-9 --gone/)
   assertMatch(help(['fix']), /^task :fix/)
   assertMatch(help([':fix']), /^task :fix/)
   assertMatch(help(['chat']), /^task :chat/)

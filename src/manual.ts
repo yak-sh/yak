@@ -1068,6 +1068,13 @@ export let subjectUsage = (id = '<id>') =>
                                       link or unlink an edge
   task ${id} :<command> …            run a focused ':' command`
 
+let linkHelp = () =>
+  `task <parent> ${edges.join('|')} <child> [--gone]
+  link or unlink an edge
+
+  task T-3 requires T-9
+  task T-3 requires T-9 --gone`
+
 let roots = () => Object.values(manuals).filter((m) => m.root && !m.deprecated)
 
 export let usage = () =>
@@ -1140,6 +1147,7 @@ let commandHelp = (name = '') => {
 export let help = (args: string[]) => {
   if (!args.length) return usage()
   if (args[0] == 'subject' && args.length <= 2) return subjectUsage(args[1])
+  if (args[0] == 'link' && args.length == 1) return linkHelp()
   if (args[0] == 'grammar' && args.length == 1) {
     return `${GRAMMAR}\n\n${FILTERS}`
   }
