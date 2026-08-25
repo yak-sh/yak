@@ -716,6 +716,9 @@ let set = async (got: Got) => {
   print(`${idOf(row)} updated`)
 }
 
+let assign = (got: Got) =>
+  set({ ...got, params: [param(`.assignee=${got.args.who}`)!] })
+
 // `task edit <id> <old> [new]` — the graph's Edit primitive (T-16357): a
 // surgical old→new replacement on a doc body, in place of a full rewrite that
 // silently clobbers a concurrent edit. editChanges() guards the write with the
@@ -3145,6 +3148,7 @@ export let verbs = bind({
   context,
   wrap,
   create,
+  assign,
   rm: del,
   require: requireEdge,
 })

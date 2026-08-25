@@ -116,6 +116,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       context: 'context [sid] [--hook] [--subagent]',
       wrap: 'wrap [sid] [--hook]',
       create: 'create [title…]',
+      assign: 'assign <id> <who>',
       rm: 'rm <id> [--cascade] [--force]',
       require: 'require <parent> <child> [--gone]',
     },
@@ -132,6 +133,7 @@ Deno.test('help topics cover nested and colon vocabularies', () => {
   assertMatch(help([':fix']), /^task :fix/)
   assertMatch(help(['chat']), /^task :chat/)
   assertMatch(help([':chat']), /^task :chat/)
+  assertMatch(help(['assign']), /^task assign <id> <who>/)
   assertThrows(
     () => help(['grammar', 'extra']),
     Error,

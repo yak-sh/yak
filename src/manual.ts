@@ -1039,6 +1039,15 @@ export let manuals = declare({
     args: [arg('title', text, true, false)],
     passthrough: true,
   },
+  // `assign` is the plain-language warm path to task.assignee. Keep the
+  // general graph patch under `set`; this alias makes the common act
+  // discoverable without creating a second assignment model (T-19540).
+  assign: {
+    about: 'assign a task; shorthand for task set <id> .assignee=<who>',
+    examples: ['task assign T-3 jeff'],
+    alias: true,
+    args: [arg('id', id), arg('who', text)],
+  },
   // `rm` stays a supported top-level alias of `delete` — the shell verb a
   // caller reaches for on first guess (T-18345). Without this entry `rm`
   // isn't a cliVerb, so `task rm T-18345` fell through to subject-first
