@@ -119,8 +119,8 @@ Deno.test('a storm — identical and volatile-differing — files ONE ticket', (
 // because the fault message carried the full failing command — the whole
 // `--body` payload — so every distinct body produced a distinct faultKey and
 // the dedup never coalesced (T-18396). cliFault keeps the message fault-shaped
-// (error + verb), so the SAME grammar fault raised by wildly different comments
-// keys together and files ONE ticket.
+// (error + command head), so the SAME grammar fault raised by wildly different
+// comments keys together and files ONE ticket.
 Deno.test('a CLI grammar refusal dedups by verb+error, not the payload', () => {
   let err = 'comment does not take --body'
   let a = cliFault(err, ['comment', 'T-3', '--body', 'the quick brown fox'])
@@ -138,6 +138,15 @@ Deno.test('a CLI grammar refusal dedups by verb+error, not the payload', () => {
   exceptionChange(e2, b)
   file(e2, {})
   assertEquals(bugsFor(faultKey('session', a, null)).length, 1) // ONE ticket
+})
+
+Deno.test('a subject-first CLI fault names the invalid verb, not a valid show', () => {
+  let err = 'no subject verb: edge (task T-3127 --help)'
+  let a = cliFault(err, ['T-3127', 'edge', 'payload one'])
+  let b = cliFault(err, ['T-99', 'edge', 'payload two'])
+  assert(a.includes('Command: task T-3127 edge'))
+  assert(!a.includes('payload one'))
+  assertEquals(faultKey('session', a, null), faultKey('session', b, null))
 })
 
 Deno.test('a recovered break files nothing (the tri-state guard)', () => {
