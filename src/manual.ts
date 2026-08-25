@@ -918,10 +918,15 @@ export let manuals = declare({
   },
   telemetry: {
     about: 'tool calls + crashes; --stats for latency percentiles',
-    examples: ['task telemetry --errors -n 20', 'task telemetry --stats'],
+    examples: [
+      'task telemetry --errors -n 20',
+      'task telemetry --stats',
+      'task telemetry --since=2026-08-25T12:00:00Z --json',
+    ],
     detail: '--stats reports the latency distribution instead of raw rows: ' +
       'per door and tool, the count of timed calls and the p50/p95/p99 of ' +
-      'their duration, computed in SQL. --errors and --since screen it too.',
+      'their duration, computed in SQL. --errors and --since screen it too; ' +
+      '--json returns either view as structured rows.',
     root: true,
     args: [],
     opts: [
@@ -929,6 +934,7 @@ export let manuals = declare({
       flag('--stats'),
       value('--since', timestamp),
       count,
+      json,
     ],
   },
   usage: {

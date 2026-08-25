@@ -2636,11 +2636,14 @@ let telemetry = async (got: Got) => {
   let q = new URLSearchParams()
   if (got.flags.has('--errors')) q.set('only', 'errors')
   if (got.opts['--since']) q.set('since', got.opts['--since'])
-  if (got.flags.has('--stats')) return telemetryStats(q)
+  if (got.flags.has('--stats')) {
+    return telemetryStats(q, got.flags.has('--json'))
+  }
   if (got.opts['-n']) q.set('limit', got.opts['-n'])
   let res = await request(`http://${host()}/telemetry?${q}`)
   if (!res.ok) throw new Error(`server said ${res.status}`)
   let rows = await res.json() as Log[]
+  if (got.flags.has('--json')) return print(jsonText(rows))
   if (!rows.length) return warn('(nothing recorded)')
   for (let r of rows) {
     // A collapsed crash cohort (telemetry.ts recent()): the row IS the newest
@@ -2662,11 +2665,12 @@ let telemetry = async (got: Got) => {
 
 // The latency view: p50/p95/p99 per door+tool, computed in SQL server-side
 // (telemetry.ts stats()). Busiest group first, milliseconds right-aligned.
-let telemetryStats = async (q: URLSearchParams) => {
+let telemetryStats = async (q: URLSearchParams, json: boolean) => {
   q.set('stats', '1')
   let res = await request(`http://${host()}/telemetry?${q}`)
   if (!res.ok) throw new Error(`server said ${res.status}`)
   let rows = await res.json() as Stat[]
+  if (json) return print(jsonText(rows))
   if (!rows.length) return warn('(nothing timed)')
   let ms = (n: number) => `${n}ms`.padStart(9)
   print(

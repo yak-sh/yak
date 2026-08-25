@@ -110,7 +110,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       'role disable': 'role disable [ids…] [--all]',
       'role retire': 'role retire [ids…] [--all]',
       probes: 'probes [--all] [--reap] [--grace=30]',
-      telemetry: 'telemetry [--errors] [--stats] [--since=ISO] [-n=N]',
+      telemetry: 'telemetry [--errors] [--stats] [--since=ISO] [-n=N] [--json]',
       usage: 'usage [filters…] [--by=DIM] [--json]',
       wake: 'wake <who> [when…] [target] [--body=BODY] [--gone]',
       ':': ':<command> … | <id> :<command> …',
@@ -365,6 +365,10 @@ Deno.test('parse names positionals, resolves options, and applies defaults', () 
     'json',
   )
   assertEquals(parse('probes', manuals.probes, []).opts['--grace'], '30')
+  assertEquals(
+    [...parse('telemetry', manuals.telemetry, ['--stats', '--json']).flags],
+    ['--stats', '--json'],
+  )
   assertEquals(
     parse('spawn', manuals.spawn, ['T-3', '.provider=codex']).opts,
     { '--effort': 'high', '--provider': 'codex' },
