@@ -3259,6 +3259,7 @@ export let verbs = bind({
   history: past,
   undo: unwind,
   transcript,
+  logs: transcript,
   search: seek,
   doctor: () => doctor(),
   mail: () => print(help(['mail'])),

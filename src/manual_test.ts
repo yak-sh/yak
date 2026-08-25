@@ -58,6 +58,8 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       undo: 'undo <id>',
       transcript:
         'transcript <id> [--prose] [--seq=RANGE] [--after=N] [--limit=N] [--since=ISO] [--until=ISO] [--json]',
+      logs:
+        'logs <id> [--prose] [--seq=RANGE] [--after=N] [--limit=N] [--since=ISO] [--until=ISO] [--json]',
       search: 'search [words…] [--json]',
       doctor: 'doctor',
       mail: 'mail [filters…] [--json] [--all] [--sent]',

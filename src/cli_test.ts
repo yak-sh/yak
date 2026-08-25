@@ -370,6 +370,7 @@ Deno.test('subject: old commands and explicit focused commands keep their door',
   assertEquals(subject('query', ['.kind=persona']), undefined)
   assertEquals(subject('graph_query', ['kind=comment']), undefined)
   assertEquals(subject('log', ['S-3']), undefined)
+  assertEquals(subject('logs', ['S-18894']), undefined)
   assertEquals(subject('fix', ['T-3']), undefined)
   assertEquals(subject('T-3', [':done']), undefined)
 })
@@ -939,6 +940,16 @@ slow('task wrap help documents the legacy alias', async () => {
     text(out.stdout),
     /task wrap \[sid\] \[--hook\][\s\S]*task session wrap/,
   )
+})
+
+slow('task logs help resolves the transcript alias', async () => {
+  let out = await cli('logs', '--help')
+  assertEquals(out.code, 0)
+  assertMatch(
+    text(out.stdout),
+    /task logs <id>[\s\S]*Alias of `task transcript`/,
+  )
+  assertEquals(text(out.stderr), '')
 })
 
 slow('deprecated routes leave root help but teach at their door', async () => {

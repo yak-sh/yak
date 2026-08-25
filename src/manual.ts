@@ -371,6 +371,19 @@ export let manuals = declare({
     args: [arg('id', id)],
     opts: transcriptOpts,
   },
+  // `logs` is the first shell spelling a caller reaches for when looking at
+  // a session. Keep it as a supported alias of the graph-backed transcript
+  // reader; without a declaration subject-first parsing reads `logs` as an
+  // entity and the session id as an unknown subject verb (T-19223).
+  logs: {
+    about: "a session's whole log as a clean, ordered transcript",
+    examples: ['task transcript S-16872'],
+    detail:
+      'Alias of `task transcript`; session logs are ordered graph entries.',
+    alias: true,
+    args: [arg('id', id)],
+    opts: transcriptOpts,
+  },
   search: {
     dots: 'filters',
     about: 'full-text search (trailing * = prefix)',
