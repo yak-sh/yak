@@ -117,6 +117,8 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       ':': ':<command> … | <id> :<command> …',
       help: 'help [verb|grammar|:] [nested verb]',
       complete: 'complete [words…]',
+      log:
+        'log <id> [--prose] [--seq=RANGE] [--after=N] [--limit=N] [--since=ISO] [--until=ISO] [--json]',
       ls: 'ls [filters…] [--json]',
       context: 'context [sid] [--hook] [--subagent]',
       wrap: 'wrap [sid] [--hook]',
@@ -145,6 +147,8 @@ Deno.test('help topics cover nested and colon vocabularies', () => {
   assertMatch(help(['chat']), /^task :chat/)
   assertMatch(help([':chat']), /^task :chat/)
   assertMatch(help(['assign']), /^task assign <id> <who>/)
+  assertMatch(help(['log']), /^task log <id>/)
+  assertMatch(help(['log']), /Alias of `task transcript`/)
   assertThrows(
     () => help(['grammar', 'extra']),
     Error,

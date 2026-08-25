@@ -340,6 +340,7 @@ Deno.test('subject: old commands and explicit focused commands keep their door',
   assertEquals(subject('require', ['T-3', 'T-9']), undefined)
   assertEquals(subject('query', ['.kind=persona']), undefined)
   assertEquals(subject('graph_query', ['.kind=comment']), undefined)
+  assertEquals(subject('log', ['S-3']), undefined)
   assertEquals(subject('fix', ['T-3']), undefined)
   assertEquals(subject('T-3', [':done']), undefined)
 })

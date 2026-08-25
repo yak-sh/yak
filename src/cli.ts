@@ -3297,6 +3297,7 @@ export let verbs = bind({
   wake: wakeVerb,
   help: (got) => print(help(got.words)),
   complete: completeCmd,
+  log: transcript,
   ls: list,
   context,
   wrap,

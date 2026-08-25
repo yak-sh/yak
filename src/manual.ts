@@ -76,6 +76,15 @@ let listSort = of(
       name,
     ) => [name, `-${name}`]),
 )
+let transcriptOpts = [
+  flag('--prose'),
+  value('--seq', { name: 'range', test: /^\d*\.\.\d*$/ }, true),
+  value('--after', num, true),
+  value('--limit', num, true),
+  value('--since', timestamp, true),
+  value('--until', timestamp, true),
+  json,
+]
 let verdict = enumOf(comps.review.verdict, 'verdict')
 let provider = of('provider', () => providers().map((p) => p.name))
 let model = of(
@@ -359,15 +368,7 @@ export let manuals = declare({
       'page.',
     root: true,
     args: [arg('id', id)],
-    opts: [
-      flag('--prose'),
-      value('--seq', { name: 'range', test: /^\d*\.\.\d*$/ }, true),
-      value('--after', num, true),
-      value('--limit', num, true),
-      value('--since', timestamp, true),
-      value('--until', timestamp, true),
-      json,
-    ],
+    opts: transcriptOpts,
   },
   search: {
     dots: 'filters',
@@ -1052,6 +1053,17 @@ export let manuals = declare({
     alias: true,
     passthrough: true,
     args: [arg('words', text, true, false)],
+  },
+  // `transcript` is the canonical artifact name, but a Session advertises an
+  // ordered log everywhere else. Keep that natural lookup and invocation as
+  // an alias rather than making callers know the renderer's chosen noun.
+  log: {
+    about: "a session's whole log as a clean, ordered transcript",
+    detail: 'Alias of `task transcript`.',
+    examples: ['task log S-16872', 'task log S-16872 --prose'],
+    alias: true,
+    args: [arg('id', id)],
+    opts: transcriptOpts,
   },
   ls: {
     dots: 'filters',
