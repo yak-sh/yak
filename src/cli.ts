@@ -307,11 +307,20 @@ let predicates = (args: string[], hint: (a: string) => string = () => '') =>
     return p
   })
 
+export let listArgs = (got: Pick<Got, 'opts' | 'words'>) => {
+  let selected = got.opts['--kind']
+  return selected ? [`.kind=${kindWord(selected)}`, ...got.words] : got.words
+}
+
 let list = async (got: Got) => {
   let json = got.flags.has('--json')
-  // A bare word names the KIND to list (`task list projects`); `.kind=` is an
-  // ordinary filter now, so the dotted spelling rides `line` like any pred.
-  let words = got.words.map((a) => [a, kindWord(a)] as const)
+  // --kind is syntax sugar at this boundary. From here on it is the same
+  // ordinary `.kind=` filter as every other spelling, so query behavior keeps
+  // one owner (T-18549).
+  let args = listArgs(got)
+  // A bare word names the KIND to list (`task list projects`); `.kind=` rides
+  // `line` like any other filter.
+  let words = args.map((a) => [a, kindWord(a)] as const)
   let bare = words.find(([, k]) => k)?.[1]
   // Here a bare word is also a KIND, so one that is neither names both
   // doors rather than only the filter one.

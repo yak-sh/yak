@@ -40,7 +40,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       tui: 'tui',
       claude: 'claude [claude args…] [--operator]',
       codex: 'codex [codex args…] [--operator]',
-      list: 'list [kind] [filters…] [--json]',
+      list: 'list [kind] [filters…] [--kind=KIND] [--json]',
       query: 'query [filters…] [--json]',
       decided: 'decided [filters…] [--all] [--json]',
       docs: 'docs [filters…] [--json]',
@@ -300,6 +300,8 @@ Deno.test('manual validation accepts each supported option shape', () => {
   check('spawn', ['T-1', '.provider=codex'])()
   // A verb whose grammar IS the filter/write params keeps every one of them.
   check('list', ['.status=open', '.priority<=1'])()
+  check('list', ['--kind=comment'])()
+  check('list', ['--kind=comments', '.created.at>=today'])()
   check('set', ['T-1', '.status=done'])()
   check('search', ['.project=P-19', 'deploy'])()
   check('search', ['.status=open'])()
@@ -317,6 +319,9 @@ Deno.test('parse names positionals, resolves options, and applies defaults', () 
     parse('spawn', manuals.spawn, ['T-3', '.provider=codex']).opts,
     { '--effort': 'high', '--provider': 'codex' },
   )
+  assertEquals(parse('list', manuals.list, ['--kind=comment']).opts, {
+    '--kind': 'comment',
+  })
 })
 
 Deno.test('a trailing body option binds its space form as the body', () => {

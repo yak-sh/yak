@@ -25,6 +25,7 @@ import {
   jsonText,
   leadPrio,
   lifecycleHooks,
+  listArgs,
   listing,
   liveRoleSessions,
   operatorHook,
@@ -246,6 +247,17 @@ Deno.test('listing: a plural kind is the list verb, the singular is a subject', 
   // `docs` spells the plural of the `doc` kind but is also a registered verb,
   // so the verb wins — the plural listing must not shadow it.
   assertEquals(listing('docs', []), undefined)
+})
+
+Deno.test('listArgs: --kind enters the canonical filter grammar', () => {
+  assertEquals(
+    listArgs({ opts: { '--kind': 'comment' }, words: ['.created.at>=today'] }),
+    ['.kind=comment', '.created.at>=today'],
+  )
+  assertEquals(listArgs({ opts: { '--kind': 'comments' }, words: [] }), [
+    '.kind=comment',
+  ])
+  assertEquals(listArgs({ opts: {}, words: ['projects'] }), ['projects'])
 })
 
 Deno.test('subject: old commands and explicit focused commands keep their door', () => {

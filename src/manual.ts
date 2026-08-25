@@ -50,6 +50,7 @@ let value = (name: string, kind = text, separate = false): Opt => ({
 
 let json = flag('--json')
 let quarantined = flag('--quarantined')
+let kind = of('kind', () => [...new Set([...kindOrder, ...plurals])])
 // `show` already renders comments; --comments affirms that default so the
 // warm reach for it never errors (T-18416).
 let comments = flag('--comments')
@@ -121,14 +122,14 @@ export let manuals = declare({
       'task list boards .title~=fleet',
     ],
     detail: 'A leading KIND word says what to list — `projects`, ' +
-      '`.kind=project` and `kind=project` all name it, and the plural is a ' +
+      '`--kind=project` and `.kind=project` all name it, and the plural is a ' +
       'verb of its own (`task projects`). Tasks are the default. The second ' +
       "column is the handle you can type: a task's status, everything " +
       `else's alias. Quarantined rows require an explicit ` +
       `'.quarantined!' filter. Kinds: ${kindOrder.join(', ')}.`,
     root: true,
     args: [arg('kind', text, false, false), arg('filters', text, true, false)],
-    opts: [json],
+    opts: [value('--kind', kind), json],
   },
   query: {
     dots: 'filters',
