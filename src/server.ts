@@ -61,14 +61,8 @@ import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { landBlob, serveBlob } from './blob.ts'
 import { filed } from './page.ts'
-import { excepted, PENDING } from './deliver.ts'
-import {
-  cliFault,
-  ensureFixer,
-  fileBug,
-  FIXER_PENDING,
-  HEAL_PENDING,
-} from './heal.ts'
+import { PENDING } from './deliver.ts'
+import { ensureFixer, fileBug, FIXER_PENDING, HEAL_PENDING } from './heal.ts'
 import { recallEntry } from './recall.ts'
 import {
   historicalReferenced,
@@ -945,19 +939,15 @@ let clientError = async (req: Request) => {
   return new Response(null, { status: 204 })
 }
 
-// A CLI grammar refusal is both feedback and a tooling fault. The invoking
-// Session is the useful broken entity: its transcript explains why the caller
-// reached for this spelling. A shell without an identity falls back to the
-// self-healing home so it still files, rather than becoming telemetry nobody
-// acts on.
+// A CLI grammar refusal is caller feedback, not a broken Session. Keep the
+// invocation durably in telemetry so the grammar and manual can improve,
+// without stamping `exception` and summoning self-healing for a mistype.
 let cliUsage = async (req: Request) => {
   try {
     let b = JSON.parse(await bounded(req, 16 * 1024))
     let args = Array.isArray(b.args) ? b.args.map(String) : []
     let session = b.session == null ? null : String(b.session)
     let error = String(b.error ?? 'invalid CLI usage')
-    // The full invocation is telemetry (detail), never the fault MESSAGE: the
-    // command line carries the payload that would splinter the dedup key.
     record(db, {
       source: 'cli',
       name: 'usage',
@@ -966,21 +956,6 @@ let cliUsage = async (req: Request) => {
       error,
       detail: JSON.stringify(args),
     })
-    let target = session
-      ? (db.prepare(
-        `select o.eid from session s join entity o on o.id = s.entity
-         where s.id = ?`,
-      ).get(session) as
-        | { eid: string }
-        | undefined)?.eid
-      : undefined
-    target ??= (db.prepare(
-      `select e.eid from project p join entity e on e.id = p.entity
-       where e.num = 19`,
-    ).get() as { eid: string } | undefined)?.eid
-    if (target) {
-      excepted(target, cliFault(error, args), null, cast)
-    }
   } catch (e) {
     console.warn('CLI usage report dropped —', e)
   }

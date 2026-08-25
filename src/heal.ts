@@ -72,22 +72,6 @@ export let faultKey = (kind: string, message: string, stack?: string | null) =>
     stackHead(stack) ? `@${stackHead(stack)}` : ''
   }`
 
-// A CLI grammar refusal's fault message: the STABLE identity of the fault —
-// the error and the command HEAD alone, never the whole invocation. The full
-// command line (a `--body` payload, a design brief, any prose) varies per call,
-// so folding it into the message gives every occurrence a distinct faultKey and
-// defeats the dedup below — one bug ticket per comment instead of one per
-// grammar fault, which is exactly the storm this system exists to prevent
-// (T-18396). Subject-first syntax needs its second word too: `task T-3 edge`
-// truncated to `task T-3` makes a valid show command look broken (T-20966).
-// Human ids normalize away in faultKey, so different subjects still dedup.
-let commandHead = (args: string[]) =>
-  /^[A-Za-z]+-\d+$/.test(args[0] ?? '') ? args.slice(0, 2) : args.slice(0, 1)
-
-export let cliFault = (error: string, args: string[]) =>
-  `CLI usage failure: ${error}\nCommand: task ${commandHead(args).join(' ')}`
-    .trimEnd()
-
 // The actionability predicate — ONE tunable function, kept tiny on purpose
 // (M-17062: a heavy allowlist is how a gate becomes a straitjacket). Known
 // transient classes clear on their own, so filing a ticket is noise. Add a
