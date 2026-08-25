@@ -3147,6 +3147,7 @@ export let verbs = bind({
   inbox: inboxList,
   'inbox show': inboxShow,
   'inbox archive': inboxArchive,
+  archive: inboxArchive,
   claim,
   release,
   block,

@@ -72,6 +72,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       inbox: 'inbox [filters…] [--json] [--all] [--sent]',
       'inbox show': 'inbox show <id> [--json]',
       'inbox archive': 'inbox archive <id>',
+      archive: 'archive <id>',
       claim: 'claim <id> [session]',
       release: 'release <id>',
       block: 'block <id> [reason…]',

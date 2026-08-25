@@ -280,6 +280,10 @@ Deno.test('listArgs: --kind enters the canonical filter grammar', () => {
   assertEquals(listArgs({ opts: {}, words: ['projects'] }), ['projects'])
 })
 
+Deno.test('archive is a root verb before subject-first routing', () => {
+  assertEquals(subject('archive', ['K-20995']), undefined)
+})
+
 Deno.test('subject: old commands and explicit focused commands keep their door', () => {
   assertEquals(subject('show', ['T-3']), undefined)
   assertEquals(subject('dep', ['T-3', 'requires', 'T-9']), undefined)
@@ -965,6 +969,7 @@ slow('nested and palette help always resolves before effects', async () => {
   let cases: [string[], RegExp][] = [
     [['mail', 'show', '--help'], /^task mail show/],
     [['inbox', 'archive', '--help'], /^task inbox archive/],
+    [['archive', '--help'], /^task archive/],
     [[':fix', '--help'], /^task :fix/],
     [['fix', '--help'], /^task :fix/],
     [['T-1', ':done', '--help'], /^task :done/],
@@ -1314,6 +1319,36 @@ let busGraph: Snapshot = {
 let busServer = () => fakeGraph(busGraph)
 
 let graphServer = (snap = graph) => fakeGraph(snap)
+
+slow('task archive writes the inbox archived facet', async () => {
+  let K = 'bbbbbbbb-0000-4000-8000-000000020995'
+  let snap: Snapshot = {
+    changes: [
+      { eid: K, name: 'entity', comp: { eid: K, num: 20995 } },
+      { eid: K, name: 'knock', comp: { target: T } },
+    ],
+    deps: [],
+  }
+  let { server, acked, host } = graphServer(snap)
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'archive',
+        'K-20995',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: host, TASKS_BACKOFF: '' },
+    }).output()
+    assertEquals(out.code, 0, text(out.stderr))
+    assertEquals(text(out.stdout), 'archived K-20995\n')
+    assertEquals(acked, [{ eid: K, name: 'archived', comp: {} }])
+  } finally {
+    await server.shutdown()
+  }
+})
 
 Deno.test('the CLI has no whole-graph read path', () => {
   let source = Deno.readTextFileSync(new URL('./cli.ts', import.meta.url))

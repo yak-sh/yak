@@ -497,6 +497,14 @@ export let manuals = declare({
     about: 'hide the item from your inbox',
     args: [arg('id', id)],
   },
+  // Keep the warm root spelling on the same operation as inbox archive. An
+  // alias makes it a verb before subject-first can read `archive` as an id.
+  archive: {
+    about: 'hide an item from your inbox',
+    examples: ['task archive K-20995'],
+    alias: true,
+    args: [arg('id', id)],
+  },
   claim: {
     about: 'lease a task (default: your own session id)',
     examples: ['task claim T-3 my-session-id'],
