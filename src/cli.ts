@@ -268,6 +268,11 @@ export let subject = (id: string | undefined, args: string[]) => {
     }
     return { cmd: 'show', args: [id, ...objects] }
   }
+  // The subject manual names `edge` as the family door. A bare family word
+  // teaches its concrete verbs; it is not itself an edge mutation.
+  if (verb == 'edge' && !objects.length) {
+    return { cmd: 'help', args: ['subject', id] }
+  }
   if ((edges as readonly string[]).includes(verb)) {
     // Repeating the relation is a common merge of the sentence form and the
     // old typed form: `T-3 requires requires T-9`. It has only one reading,

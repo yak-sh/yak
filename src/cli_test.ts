@@ -208,6 +208,10 @@ Deno.test('subject: sentences route through the existing CLI verbs', () => {
     cmd: 'set',
     args: ['T-3', '.status=wip'],
   })
+  assertEquals(route('T-3 edge'), {
+    cmd: 'help',
+    args: ['subject', 'T-3'],
+  })
   for (
     let edge of [
       'requires',
@@ -316,6 +320,13 @@ slow('task subject help is contextual and needs no server', async () => {
   )
   assertMatch(stdout, /task T-3 is open\|wip\|done\|cancelled/)
   assertEquals(subjectUsage('T-3').trim(), stdout.trim())
+})
+
+slow('task subject edge teaches the concrete edge verbs', async () => {
+  let out = await cli('T-3', 'edge')
+  assertEquals(out.code, 0)
+  assertEquals(text(out.stderr), '')
+  assertEquals(text(out.stdout).trim(), subjectUsage('T-3').trim())
 })
 
 Deno.test('parse: only explicit stdin spellings read the pipe', () => {
