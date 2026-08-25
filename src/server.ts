@@ -2535,7 +2535,15 @@ let drain = async () => {
   // the duration.
   await managed.settle()
   for (let c of clients) c.close(1012, 'server restart')
-  await http.shutdown()
+  // shutdown() waits for EVERY in-flight response, and the streaming doors
+  // (a /logs tail) hold theirs open indefinitely — unbounded, this wait held
+  // the baton 13+ minutes while the prepped successor parked every request
+  // (observed live). Bound it: past the bound, the exit below is what frees
+  // the graph, and Deno.exit ends the straggler streams regardless.
+  await Promise.race([
+    http.shutdown(),
+    new Promise((r) => setTimeout(r, 15_000)),
+  ])
   await codexAccount.close()
   ownership.close()
   // PRAGMA optimize on the long-lived connection at graceful shutdown — the
