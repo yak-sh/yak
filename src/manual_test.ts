@@ -161,6 +161,14 @@ Deno.test('inbox --archive routes through the canonical archive verb', () => {
   assertEquals(got.args.id, 'K-9')
 })
 
+Deno.test('recall help translates the MCP tool into CLI vocabulary', () => {
+  for (let topic of ['recall', 'memory_recall']) {
+    let out = help([topic])
+    assertMatch(out, /^task show <M-id>/)
+    assertMatch(out, /task search \.kind=memory/)
+  }
+})
+
 Deno.test('spawn help and parsing share the provider vocabulary', () => {
   let out = help(['spawn'])
   assert(out.includes('--provider=PROVIDER'))

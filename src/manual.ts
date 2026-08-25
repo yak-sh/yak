@@ -1246,6 +1246,17 @@ let commandHelp = (name = '') => {
     .join('\n')
 }
 
+// MCP tool names are sometimes carried into the shell by an agent's context.
+// Keep the shared concept discoverable without pretending the CLI has a
+// second verb for the same read.
+let conceptHelp: Record<string, string> = {
+  recall: `task show <M-id>
+  read one memory through the CLI
+
+memory_recall is the MCP spelling. In the CLI, use task show M-7 to read a
+known memory, or task search .kind=memory <words…> to find one.`,
+}
+
 export let help = (args: string[]) => {
   if (!args.length) return usage()
   if (args[0] == '<id>' && args.length == 1) return subjectUsage()
@@ -1259,6 +1270,8 @@ export let help = (args: string[]) => {
     return commandHelp(args[0].slice(1))
   }
   let name = args.join(' ')
+  let concept = conceptHelp[name.replace(/^memory_/, '')]
+  if (concept) return concept
   let manual = manuals[name]
   if (manual) return render(name, manual)
   if (args.length == 1 && commands[args[0]]) return commandHelp(args[0])
