@@ -1097,6 +1097,7 @@ export let subjectUsage = (id = '<id>') =>
   task ${id} is ${statuses.join('|')}  set task status
   task ${id} ${edges.join('|')} <id> [--gone]
                                       link or unlink an edge
+  task ${id} knock [to] [words…]      knock about this entity
   task ${id} :<command> …            run a focused ':' command`
 
 let linkHelp = () =>

@@ -304,6 +304,12 @@ export let subject = (id: string | undefined, args: string[]) => {
       args: [id, ...(objects[0] == 'json' ? ['--json'] : [])],
     }
   }
+  // Knock already names its subject as the focused entity. Requiring the
+  // palette's colon here contradicts `task help knock`'s "on the focused
+  // entity" contract and makes the natural subject-first spelling fail.
+  if (verb == 'knock') {
+    return { cmd: id, args: [':knock', ...objects] }
+  }
   // Focused palette commands keep their explicit colon: several accept
   // optional objects whose subject-first reading would be ambiguous.
   if (verb.startsWith(':')) return

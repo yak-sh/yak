@@ -289,6 +289,13 @@ Deno.test('subject: old commands and explicit focused commands keep their door',
   assertEquals(subject('T-3', [':done']), undefined)
 })
 
+Deno.test('subject: knock enters the existing focused-command door', () => {
+  assertEquals(subject('T-3', ['knock', 'P-19', 'please', 'look']), {
+    cmd: 'T-3',
+    args: [':knock', 'P-19', 'please', 'look'],
+  })
+})
+
 Deno.test('subject: malformed sentences teach the contextual grammar', () => {
   assertThrows(() => subject('T-3', ['requires']), Error, '<id> [--gone]')
   assertThrows(
@@ -320,6 +327,7 @@ slow('task subject help is contextual and needs no server', async () => {
     /requires\|contains\|reads\|about\|supervises\|delegates\|recalled\|supersedes\|worked <id> \[--gone\]/,
   )
   assertMatch(stdout, /task T-3 is open\|wip\|done\|cancelled/)
+  assertMatch(stdout, /task T-3 knock \[to\] \[words…\]/)
   assertEquals(subjectUsage('T-3').trim(), stdout.trim())
 })
 
