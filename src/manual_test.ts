@@ -53,7 +53,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       edit: 'edit <id> <old> [new] [--all]',
       redact: 'redact <id> <selector>',
       show:
-        'show <id> [--json] [--format=markdown|json] [--quarantined] [--comments]',
+        'show <id> [--json] [--format=markdown|json] [--quarantined] [--full] [--comments]',
       history: 'history <id> [-n=50] [--json] [--verbose]',
       undo: 'undo <id>',
       transcript:
@@ -350,6 +350,9 @@ Deno.test('manual validation accepts each supported option shape', () => {
   check('show', ['T-1', '--comments', '--json'])()
   check('show', ['T-1', '--format=json'])()
   check('show', ['T-1', '--format', 'markdown'])()
+  // Graph query calls an untruncated result `full`; CLI show already is one.
+  check('show', ['T-1', '--full'])()
+  check('show', ['T-1', '--full', '--json'])()
   check('spawn', ['T-1', '.provider=codex'])()
   // A verb whose grammar IS the filter/write params keeps every one of them.
   check('list', ['.status=open', '.priority<=1'])()

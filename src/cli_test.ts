@@ -215,6 +215,15 @@ Deno.test('subject: sentences route through the existing CLI verbs', () => {
     cmd: 'show',
     args: ['T-3', '--json', '--quarantined'],
   })
+  // Graph tools spell an untruncated read `full`; CLI show is already whole.
+  assertEquals(route('T-3 --full'), {
+    cmd: 'show',
+    args: ['T-3', '--full'],
+  })
+  assertEquals(route('T-3 show --full'), {
+    cmd: 'show',
+    args: ['T-3', '--full'],
+  })
   // --comments affirms the default (comments always render), never errors.
   assertEquals(route('T-3 --comments'), {
     cmd: 'show',

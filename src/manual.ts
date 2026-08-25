@@ -53,8 +53,9 @@ let verbose = flag('--verbose')
 let format = value('--format', of('format', () => ['markdown', 'json']), true)
 let quarantined = flag('--quarantined')
 let kind = of('kind', () => [...new Set([...kindOrder, ...plurals])])
-// `show` already renders comments; --comments affirms that default so the
-// warm reach for it never errors (T-18416).
+// `show` is already whole and renders comments; these flags affirm those
+// defaults so familiar spellings from the graph tools do not fail.
+let full = flag('--full')
 let comments = flag('--comments')
 let body = value('--body', bodyKind)
 let bodyFile = { ...value('-F', file, true), alias: '--body' }
@@ -323,6 +324,7 @@ export let manuals = declare({
     about: 'one entity as a document (comments render by default)',
     examples: [
       'task show T-3',
+      'task show T-3 --full',
       'task show T-3 --comments',
       'task show T-3 --json',
       'task show T-3 --format=json',
@@ -330,7 +332,7 @@ export let manuals = declare({
     ],
     root: true,
     args: [arg('id', id)],
-    opts: [json, format, quarantined, comments],
+    opts: [json, format, quarantined, full, comments],
   },
   history: {
     about: "the entity's write history (journal)",
