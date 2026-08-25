@@ -232,7 +232,14 @@ export let subject = (id: string | undefined, args: string[]) => {
     !id || id == '--help' || cliVerbs.has(id) || commands[id] ||
     id.startsWith(':') || id.startsWith('-')
   ) return
-  let [verb, ...objects] = args
+  let [typed, ...objects] = args
+  // An edge is a subject verb even when the caller carries the palette's
+  // explicit colon into the entity-first form. Both spellings enter `dep`;
+  // other colon verbs still need the focused palette command path below.
+  let verb = typed?.startsWith(':') &&
+      (edges as readonly string[]).includes(typed.slice(1))
+    ? typed.slice(1)
+    : typed
   if (!verb) return { cmd: 'show', args: [id] }
   if (args.includes('--help') || args.includes('-h')) {
     return { cmd: 'help', args: ['subject', id] }

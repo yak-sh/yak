@@ -214,6 +214,10 @@ Deno.test('subject: sentences route through the existing CLI verbs', () => {
       cmd: 'dep',
       args: ['T-3', edge, 'T-9', '--gone'],
     })
+    assertEquals(route(`T-3 :${edge} T-9 --gone`), {
+      cmd: 'dep',
+      args: ['T-3', edge, 'T-9', '--gone'],
+    })
   }
 })
 
@@ -872,6 +876,12 @@ slow('a deprecated spelling hard-errors before its handler runs', async () => {
     let sentence = await run('T-3', 'requires', 'T-9')
     assertMatch(text(sentence.stderr), /no entity: T-3/)
     assertEquals(/deprecated/.test(text(sentence.stderr)), false)
+
+    // Carrying the focused-command colon into the sentence is the same edge
+    // operation, not a lookup for a palette command named `requires`.
+    let focused = await run('T-3', ':requires', 'T-9')
+    assertMatch(text(focused.stderr), /no entity: T-3/)
+    assertEquals(/not a command/.test(text(focused.stderr)), false)
   } finally {
     await empty.shutdown()
   }
