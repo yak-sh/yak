@@ -168,7 +168,17 @@ export let fetched = async (
   ids: string[],
   filters: string[] = [],
   q: Querier = query,
-) => ids.length ? await q([`id=${ids.join(',')}`, ...filters]) : []
+) => {
+  let unique = [...new Set(ids)]
+  let batches = []
+  // UUIDs make 50 addresses a roughly 2 KB URL. Bound the transport as well
+  // as deduping it: a genuinely varied listing must not trade repetition for
+  // the same URL-limit failure one request later.
+  for (let i = 0; i < unique.length; i += 50) {
+    batches.push(q([`id=${unique.slice(i, i + 50).join(',')}`, ...filters]))
+  }
+  return uniq((await Promise.all(batches)).flat())
+}
 
 // One entity by address, or undefined — find() over the wire.
 export let got = async (id: string) => (await fetched([id]))[0]

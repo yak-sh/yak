@@ -13,6 +13,7 @@ import {
   designChanges,
   edgesOf,
   facetsFor,
+  fetched,
   find,
   hookClaim,
   inboxItem,
@@ -97,6 +98,18 @@ Deno.test('rows: merge, derived kind, ids', () => {
   assertEquals(idOf(by(S)), 'S-1')
   assertEquals(kindOf({ comment: {}, review: {} }), 'review')
   assertEquals(kindOf({}), 'entity')
+})
+
+Deno.test('fetched dedupes and bounds address batches', async () => {
+  let unique = Array.from({ length: 51 }, (_, i) => `name-${i}`)
+  let calls: string[][] = []
+  await fetched([...unique, ...unique], ['.kind=person'], (filters) => {
+    calls.push(filters)
+    return Promise.resolve([])
+  })
+  assertEquals(calls.map((c) => c[0].slice(3).split(',').length), [50, 1])
+  assertEquals(calls.flatMap((c) => c[0].slice(3).split(',')), unique)
+  assertEquals(calls.every((c) => c[1] == '.kind=person'), true)
 })
 
 Deno.test('rows: canonical Session facets win, including null', () => {
