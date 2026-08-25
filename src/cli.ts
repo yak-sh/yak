@@ -244,6 +244,17 @@ export let subject = (id: string | undefined, args: string[]) => {
     return { cmd: 'show', args: [id, verb, ...objects] }
   }
   if (verb == 'show') {
+    if (objects[0] == 'as') {
+      let [, format, ...flags] = objects
+      if (
+        !formats.includes(format) || flags.length > 3 ||
+        flags.some((x) => !isShowFlag(x))
+      ) throw new UsageError(`format is one of: ${formats.join(', ')}`)
+      return {
+        cmd: 'show',
+        args: [id, ...(format == 'json' ? ['--json'] : []), ...flags],
+      }
+    }
     if (objects.length > 3 || objects.some((x) => !isShowFlag(x))) {
       throw new UsageError(`task ${id} [show] ${SHOW_FLAGS.join(' ')}`)
     }
