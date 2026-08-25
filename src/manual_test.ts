@@ -143,6 +143,14 @@ Deno.test('help topics cover nested and colon vocabularies', () => {
   assertThrows(() => help([':fix', 'extra']), Error, 'no such help topic')
 })
 
+Deno.test('inbox --archive routes through the canonical archive verb', () => {
+  let selected = route('inbox', ['--archive', 'K-9'])!
+  assertEquals(selected.name, 'inbox archive')
+  assertEquals(selected.args, ['K-9'])
+  let got = parse(selected.name, selected.manual, selected.args)
+  assertEquals(got.args.id, 'K-9')
+})
+
 Deno.test('spawn help and parsing share the provider vocabulary', () => {
   let out = help(['spawn'])
   assert(out.includes('--provider=PROVIDER'))

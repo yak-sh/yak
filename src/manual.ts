@@ -1222,17 +1222,26 @@ export let requestedHelp = (argv: string[]) => {
   return helpAt(head.filter((a) => a != '--help' && a != '-h'))
 }
 
+// Nested verbs are canonical, but a few action-shaped flags are the spelling
+// callers reach for before they know the family vocabulary. Keep those warm
+// paths at the router so validation and execution still use one declaration.
+let routeAliases: Record<string, string> = {
+  'inbox --archive': 'inbox archive',
+}
+
 export let route = <V extends Manual = Manual>(
   cmd: string | undefined,
   args: string[],
   all: Record<string, V> = manuals as Record<string, V>,
 ) => {
   if (!cmd) return
-  let nested = all[`${cmd} ${args[0]}`]
+  let asked = `${cmd} ${args[0]}`
+  let nestedName = routeAliases[asked] ?? asked
+  let nested = all[nestedName]
   let familyHelp = args[0] == 'help' &&
     Object.keys(all).some((name) => name.startsWith(`${cmd} `))
   return nested
-    ? { name: `${cmd} ${args[0]}`, manual: nested, args: args.slice(1) }
+    ? { name: nestedName, manual: nested, args: args.slice(1) }
     : familyHelp
     ? { name: 'help', manual: all.help, args: [cmd] }
     : all[cmd]
