@@ -131,7 +131,7 @@ import { commit } from './git.ts'
 import { land as landTree } from './land.ts'
 import { request } from './http.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
-import { seqRange, type Sift, transcribe } from './log_text.ts'
+import { renderEntry, seqRange, type Sift, transcribe } from './log_text.ts'
 import { type EntryRow, graphLog, pageEntries } from './entry_log.ts'
 import {
   cliVerbs,
@@ -1814,6 +1814,22 @@ let unwind = async (got: Got) => {
 // the graph query door (T-16798 — the /logs door is gone), renders through the
 // shared log_text formatter, and screens with --prose / --seq / since / until.
 // Pages by --after (a seq cursor) + --limit; default is the whole log.
+let sessionLog = async (id: string) => {
+  if (!id) {
+    throw new Error('session id required')
+  }
+  let row = await needed(id)
+  if (!row.comps.session) throw new Error(`not a session: ${idOf(row)}`)
+  // graphLog must see the WHOLE partition to resolve call↔result and derive
+  // busy/latest/model; each reader bounds only the rendered output.
+  let hits = await query([`.entry.session=${row.eid}`], { limit: 1_000_000 })
+  let log = graphLog(hits.flatMap((r) => {
+    let seq = Number(r.comps.entry?.seq ?? 0)
+    return seq ? [{ eid: r.eid, seq, comps: r.comps as EntryRow['comps'] }] : []
+  }))
+  return { row, log }
+}
+
 let transcript = async (got: Got) => {
   let json = got.flags.has('--json')
   let id = got.args.id
@@ -1822,17 +1838,9 @@ let transcript = async (got: Got) => {
       'task transcript <S> [--prose] [--seq A..B] [--after N] [--limit N]',
     )
   }
-  let row = await needed(id)
-  if (!row.comps.session) throw new Error(`not a session: ${idOf(row)}`)
+  let { row, log } = await sessionLog(id)
   let after = got.opts['--after'] ? Number(got.opts['--after']) : undefined
   let limit = got.opts['--limit'] ? Number(got.opts['--limit']) : undefined
-  // graphLog must see the WHOLE partition to resolve call↔result and derive
-  // busy/latest/model; --after/--limit bound the OUTPUT (pageEntries).
-  let hits = await query([`.entry.session=${row.eid}`], { limit: 1_000_000 })
-  let log = graphLog(hits.flatMap((r) => {
-    let seq = Number(r.comps.entry?.seq ?? 0)
-    return seq ? [{ eid: r.eid, seq, comps: r.comps as EntryRow['comps'] }] : []
-  }))
   let entries = pageEntries(log.entries, { after, limit })
   let sift: Sift = {
     ...(got.flags.has('--prose') ? { prose: true } : {}),
@@ -1858,6 +1866,29 @@ let transcript = async (got: Got) => {
     ].join(' · '),
   )
   for (let line of transcribe(entries, sift)) print(line)
+}
+
+// The shell spelling of session_peek: a bounded glance, not a second log
+// source. --lines survives as compatibility with the established CLI reach.
+let sessionPeek = async (got: Got) => {
+  let id = got.args.id
+  if (!id) throw new Error('task session peek <S> [--lines N]')
+  let { row, log } = await sessionLog(id)
+  let n = Math.min(Math.max(Number(got.opts['--lines'] ?? 20), 1), 500)
+  let s = row.comps.session!
+  print(
+    [
+      `${idOf(row)} ${log.busy ? 'running' : s.status ?? 'idle'}`,
+      `${s.provider ?? '?'} ${log.model ?? s.serving_model ?? s.model ?? ''}`
+        .trim(),
+      `seq ${log.latest || s.latest_seq || 0}`,
+    ].join(' · '),
+  )
+  for (let entry of pageEntries(log.entries, { tail: n })) {
+    let line = renderEntry(entry, 200)
+    if (line != null) print(line)
+  }
+  if (s.stderr) print(`stderr:\n${s.stderr}`)
 }
 
 // The injection loop's front door. Plain: print the digest for a session
@@ -3122,6 +3153,7 @@ export let verbs = bind({
   'session context': context,
   'session wrap': wrap,
   'session brief': sessionBrief,
+  'session peek': sessionPeek,
   'session turn': sessionTurn,
   role,
   'role stop': (got) => roleState('stop', got),

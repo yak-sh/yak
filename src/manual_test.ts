@@ -96,6 +96,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       'session context': 'session context [sid] [--hook] [--subagent]',
       'session wrap': 'session wrap [sid] [--hook]',
       'session brief': 'session brief [text…] [--body=BODY]',
+      'session peek': 'session peek <id> [--lines=N]',
       'session turn': 'session turn [idle|busy] [sid] [--hook]',
       role: 'role [command…] [--json]',
       'role stop': 'role stop [ids…] [--all]',

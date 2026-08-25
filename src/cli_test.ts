@@ -2097,6 +2097,25 @@ slow(
       // The header names the session and its provider.
       assertStringIncludes(stdout, 'S-71')
       assertStringIncludes(stdout, 'codex')
+
+      let peek = await new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          'session',
+          'peek',
+          'S-71',
+          '--lines=1',
+        ],
+        clearEnv: true,
+        env: { TASKS_HOST: host },
+      }).output()
+      assertEquals(peek.code, 0, text(peek.stderr))
+      let glance = text(peek.stdout)
+      assertEquals(glance.includes('USER_ASKS_XYZZY'), false)
+      assertEquals(glance.includes('echo PLOVER'), false)
+      assertStringIncludes(glance, 'AGENT_REPLIES_PLUGH')
     } finally {
       await server.shutdown()
     }

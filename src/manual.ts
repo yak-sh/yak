@@ -789,6 +789,11 @@ export let manuals = declare({
     opts: [body],
     some: ['text', '--body'],
   },
+  'session peek': {
+    about: "tail a session's rendered entry log",
+    args: [arg('id', id)],
+    opts: [value('--lines', num, true)],
+  },
   'session turn': {
     about: 'announce a native provider turn boundary',
     args: [
