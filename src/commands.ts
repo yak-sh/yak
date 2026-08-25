@@ -536,6 +536,30 @@ export let commands: Record<string, Command> = {
       }
     },
   },
+  comment: {
+    dots: true,
+    args: [a('text', '.body=@- | words…', { rest: true })],
+    about: 'comment on the focused entity',
+    run: (rest, ctx) => {
+      let r = here(ctx)
+      let text = rest.trim()
+      let p = param(text)
+      if (p && (p.comp != 'doc' || p.prop != 'body')) {
+        throw new Error(`comment: cannot set ${p.comp}.${p.prop}`)
+      }
+      let body = p
+        ? String((ctx.read ?? ((p: Param) => p))(p).value)
+        : page(text, ctx)
+      if (!body) throw new Error('comment: needs words or .body=<text>')
+      let made = commentChanges(
+        corpus(r, ctx.session ? graphOf(ctx).session(ctx.session) : undefined),
+        r.eid,
+        body,
+        ctx.session,
+      )
+      return { changes: made, msg: `comment → ${idOf(r)}` }
+    },
+  },
   done: {
     args: [],
     about:

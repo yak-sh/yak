@@ -297,6 +297,34 @@ Deno.test('chat starts a taskless model with an optional multiline prompt', () =
   )
 })
 
+Deno.test('comment writes on the focus and reads the shell body convention', () => {
+  let inline = run('comment please include the migration', ctx(T, 'sess-x'))
+  assertEquals(
+    inline.changes!.find((c) => c.name == 'comment')!.comp,
+    { target: T },
+  )
+  assertEquals(
+    inline.changes!.find((c) => c.name == 'doc')!.comp?.body,
+    'please include the migration',
+  )
+  assertEquals(inline.msg, 'comment → T-4')
+
+  let heredoc = run('comment .body=@-', {
+    ...ctx(T, 'sess-x'),
+    read: (p) => ({ ...p, value: 'the whole review\n' }),
+  })
+  assertEquals(
+    heredoc.changes!.find((c) => c.name == 'doc')!.comp?.body,
+    'the whole review\n',
+  )
+  assertThrows(() => run('comment', ctx(T)), Error, 'needs words')
+  assertThrows(
+    () => run('comment .title=nope', ctx(T)),
+    Error,
+    'cannot set doc.title',
+  )
+})
+
 Deno.test('cancel: trailing words become a plain comment, same batch', () => {
   assertEquals(run('cancel', ctx(T)).changes, [
     { eid: T, name: 'task', comp: { status: 'cancelled' } },
