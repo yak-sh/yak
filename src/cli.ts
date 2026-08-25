@@ -698,13 +698,21 @@ let set = async (got: Got) => {
   // ones are worth reading is the second vocabulary that caused it.
   let say = got.opts['--comment']
   let id = got.args.id
-  if (!id || !got.params.length) {
+  // --body is the warm spelling of .body for every prose-writing door. Keep
+  // it in the dot-param pipeline so routing, patch grouping and atomic
+  // commentary remain one mechanism; when both are said, the explicit option
+  // is last and therefore wins like a repeated dot-param does.
+  let params = [...got.params]
+  if (got.opts['--body'] != null) {
+    params.push({ comp: 'doc', prop: 'body', value: got.opts['--body'] })
+  }
+  if (!id || !params.length) {
     throw new Error('task set <id> .prop=value ...')
   }
   let sid = me()
   let [row, resolved, sess] = await Promise.all([
     needed(id),
-    derefedParams(got.params),
+    derefedParams(params),
     say && sid ? sessionRow(sid) : undefined,
   ])
   let all = [row, ...(sess ? [sess] : [])]

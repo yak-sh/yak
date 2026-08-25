@@ -229,19 +229,21 @@ export let manuals = declare({
   },
   set: {
     dots: 'params',
+    body: 'body',
     about: 'patch any entity; --comment says why, in the same batch',
     examples: [
       'task set T-3 .status=done --comment="verified end-to-end"',
       'task set T-3 .assignee=jeff .priority=1',
-      'task set S-12 ".body=@brief.md"',
+      'task set S-12 --body=@brief.md',
       'task set S-12 .body=@- < brief.md',
     ],
-    detail: 'A dot-param or --comment that IS `@file` is read from that ' +
+    detail:
+      'A dot-param, --body or --comment that IS `@file` is read from that ' +
       'file, and `-`/`@-` from piped stdin. The patch and the reason for ' +
       'it ride one atomic batch, so neither can land without the other.',
     root: true,
     args: [arg('id', id)],
-    opts: [value('--comment', bodyText)],
+    opts: [body, value('--comment', bodyText)],
   },
   edit: {
     about: 'surgical body edit: replace old with new, refusing a stale write',

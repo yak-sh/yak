@@ -47,7 +47,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       docs: 'docs [filters…] [--json]',
       stale: 'stale [filters…] [--all] [--json]',
       new: 'new [title…]',
-      set: 'set <id> [--comment=TEXT]',
+      set: 'set <id> [--body=BODY] [--comment=TEXT]',
       edit: 'edit <id> <old> [new] [--all]',
       redact: 'redact <id> <selector>',
       show: 'show <id> [--json] [--quarantined] [--comments]',
@@ -287,6 +287,7 @@ Deno.test('manual validation accepts each supported option shape', () => {
     'to',
     'end',
   ])()
+  check('set', ['T-1', '--body=@notes.md'])()
   check('mail send', ['jeff', 'Subject', '--body', 'the', 'letter'])()
   check('role stop', ['R-1'])()
   check('role stop', ['--all'])()
@@ -381,6 +382,10 @@ Deno.test('a trailing body option binds its space form as the body', () => {
     ]).opts['--comment'],
     'verified end to end',
   )
+  let set = parse('set', manuals.set, ['T-3', '--body', 'revised', 'brief'])
+  assertEquals(set.args.id, 'T-3')
+  assertEquals(set.body, 'revised brief')
+  assertEquals(set.opts['--body'], 'revised brief')
 })
 
 Deno.test('-F reads a comment body from a file through the body option', () => {

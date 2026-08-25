@@ -1015,7 +1015,34 @@ slow('task set rejects surplus positional arguments', async () => {
   let out = await cli('set', 'T-1', '.status=open', 'surplus')
   assertEquals(out.code, 1)
   assertEquals(text(out.stdout), '')
-  assertMatch(text(out.stderr), /task set <id> \[--comment=TEXT\]/)
+  assertMatch(
+    text(out.stderr),
+    /task set <id> \[--body=BODY\] \[--comment=TEXT\]/,
+  )
+})
+
+slow('task set --body patches the document body', async () => {
+  let fake = graphServer()
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'set',
+        'T-2',
+        '--body=revised brief',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: fake.host },
+    }).output()
+    assertEquals(out.code, 0, text(out.stderr))
+    assertEquals(fake.acked, [
+      { eid: T, name: 'doc', comp: { body: 'revised brief' } },
+    ])
+  } finally {
+    await fake.server.shutdown()
+  }
 })
 
 slow('task dep rejects surplus positional arguments', async () => {
