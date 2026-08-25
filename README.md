@@ -79,7 +79,7 @@ and `/search` + `/similar` over HTTP.
   task claude                   # graph-wired interactive Claude
   task codex                    # graph-wired interactive Codex
   task codex --operator         # also receive project-wide attention
-  task mail                      # your unread fleet inbox
+  task inbox                     # everything addressed to you
   task search flux capac*
   task help grammar              # the whole filter grammar
   ```
@@ -92,8 +92,8 @@ and `/search` + `/similar` over HTTP.
   permissionless sandboxed worker whose only capability is the graph.
 - **Mail** — a mail is an entity whose `doc` carries subject and body; creating
   it requests delivery. Local-first: a fleet recipient is delivered in-graph
-  instantly, and only external mailboxes ride the Cloudflare edge. `task mail`
-  is the inbox; unread verified mail flows into live sessions through the
+  instantly, and only external mailboxes ride the Cloudflare edge. `task inbox`
+  includes mail; unread verified mail flows into live sessions through the
   channel plugin.
 - **Channel plugin** (`channels/`) — a Claude Code channel that pushes comments
   on a run's claimed work INTO its running transcript, fed by the same `/ws`
