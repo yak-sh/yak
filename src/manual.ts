@@ -19,6 +19,7 @@ import {
   body as bodyKind,
   type Decl,
   enumOf,
+  file,
   type Got,
   id,
   num,
@@ -53,6 +54,7 @@ let quarantined = flag('--quarantined')
 // warm reach for it never errors (T-18416).
 let comments = flag('--comments')
 let body = value('--body', bodyKind)
+let bodyFile = { ...value('-F', file, true), alias: '--body' }
 let bodyText = { ...bodyKind, name: 'text' }
 // Retired flags whose habit outlives them, said once each (Manual.retired).
 let BRIEF_BODY = "takes no --body — did you mean 'task session brief --body=…'?"
@@ -600,12 +602,14 @@ export let manuals = declare({
     examples: [
       'task comment T-3 "blocked on the schema call"',
       'task comment T-3 .body=@notes.md',
+      'task comment T-3 -F notes.md',
       'task comment T-3 "please include the migration"',
       'task comment T-3 --verdict=approved',
       'task set C-13 .body="what it should have said"',
     ],
     detail: 'The body is a DOCUMENT like a task body — `.body=@-` reads a ' +
-      'heredoc, `.body=@file` reads a file, and a lone trailing @token does ' +
+      'heredoc, `.body=@file` or `-F file` reads a file, and a lone trailing ' +
+      '@token does ' +
       'the same (`@@` escapes a comment that genuinely starts with an @). ' +
       'Comments render markdown exactly as bodies do, so author a rich one ' +
       'through the body door rather than as a flat inline string. A comment ' +
@@ -621,6 +625,7 @@ export let manuals = declare({
     args: [arg('id', id), arg('text', text, true, false)],
     opts: [
       body,
+      bodyFile,
       value('--verdict', verdict),
     ],
     some: ['text', '--body', '--verdict'],
@@ -1284,10 +1289,16 @@ let parsed = (
     if (!accepts(opt.kind!, raw)) {
       throw usageError(name, manual, `${opt.name} needs ${wanted(opt.kind!)}`)
     }
-    if (provided.has(opt.name)) return
-    opts[opt.name] = raw
-    if (opt.kind!.read) reads[opt.name] = { raw, as }
-    provided.add(opt.name)
+    let key = opt.alias ?? opt.name
+    if (provided.has(key)) return
+    opts[key] = raw
+    if (opt.kind!.read) {
+      reads[key] = {
+        raw: opt.kind!.read == 'file' ? `@${raw}` : raw,
+        as,
+      }
+    }
+    provided.add(key)
   }
   for (let i = 0; i < argv.length; i++) {
     let arg = argv[i]
@@ -1391,7 +1402,7 @@ let parsed = (
       }
       throw usageError(name, manual, `does not take ${optionName(arg)}`)
     }
-    present.add(opt.name)
+    present.add(opt.alias ?? opt.name)
     if (!opt.kind) {
       flags.add(opt.name)
       continue

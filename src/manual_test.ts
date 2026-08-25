@@ -81,7 +81,8 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       spawn: 'spawn <id> [--provider=PROVIDER] [--model=MODEL] ' +
         '[--effort=high] [--persona=ID]',
       land: 'land',
-      comment: 'comment <id> [text…] [--body=BODY] [--verdict=VERDICT]',
+      comment:
+        'comment <id> [text…] [--body=BODY] [-F=FILE] [--verdict=VERDICT]',
       meta: 'meta [text…] [--body=BODY]',
       dep: 'dep <id> <type> <child> [--gone]',
       backup: 'backup',
@@ -260,6 +261,7 @@ Deno.test('manual validation accepts each supported option shape', () => {
   // and it is a VALUE, so the id is still the one word the verb needs.
   check('comment', ['T-1', '.body=@notes.md'])()
   check('comment', ['T-1', '--body=@-'])()
+  check('comment', ['T-1', '-F', 'notes.md'])()
   // The SPACE form of a trailing body option — `--body words…` — is the warm
   // path agents reach for; it binds the remaining words exactly as `--body=…`
   // would (T-18566/T-18481). Valid wherever body is the last thing on the line.
@@ -356,6 +358,33 @@ Deno.test('a trailing body option binds its space form as the body', () => {
       'end',
     ]).opts['--comment'],
     'verified end to end',
+  )
+})
+
+Deno.test('-F reads a comment body from a file through the body option', () => {
+  let dir = Deno.makeTempDirSync()
+  let file = `${dir}/comment.md`
+  try {
+    Deno.writeTextFileSync(file, 'the whole comment\n')
+    let got = parse('comment', manuals.comment, ['T-3', '-F', file])
+    assertEquals(got.args.id, 'T-3')
+    assertEquals(got.body, 'the whole comment\n')
+    assertEquals(got.opts['--body'], 'the whole comment\n')
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
+Deno.test('-F names a missing comment file', () => {
+  assertThrows(
+    () =>
+      parse('comment', manuals.comment, [
+        'T-3',
+        '-F',
+        '/no/such/comment.md',
+      ]),
+    Error,
+    '-F=/no/such/comment.md: no such file',
   )
 })
 

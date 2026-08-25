@@ -9,7 +9,7 @@ export type Kind = {
   of?: () => string[]
   test?: RegExp
   id?: boolean
-  read?: boolean
+  read?: boolean | 'file'
 }
 
 export type Arg = {
@@ -25,6 +25,7 @@ export type Opt = {
   kind?: Kind
   or?: string
   separate?: boolean
+  alias?: string
 }
 
 export type Dots = 'filters' | 'params' | string[] | undefined
@@ -70,6 +71,7 @@ export let text: Kind = { name: 'text', test: /.+/ }
 export let id: Kind = { name: 'id', test: /.+/, id: true }
 export let path: Kind = { name: 'dir', test: /.+/ }
 export let body: Kind = { name: 'body', test: /.+/, read: true }
+export let file: Kind = { name: 'file', test: /.+/, read: 'file' }
 export let num: Kind = { name: 'n', test: /^[1-9]\d*$/ }
 
 export let of = (name: string, values: () => string[]): Kind => ({
