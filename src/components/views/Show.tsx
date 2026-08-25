@@ -29,6 +29,7 @@ import { Relate } from './Relate.tsx'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 import { Icon } from '../icons.tsx'
+import { Chat } from '../Chat.tsx'
 
 // The lego box. A SECTION is an internal view ('Body', 'Meta',
 // 'Dependencies', 'Runs', 'Comments' — registered in Entity.tsx like 'Id'
@@ -40,6 +41,7 @@ import { Icon } from '../icons.tsx'
 // an entity shape is a higher-scoring registry entry, not an edit here.
 
 let Frame = block('div', 'Show', {
+  Main: 'div',
   Heading: 'h1',
   Title: 'span',
   Body: 'p',
@@ -66,6 +68,7 @@ let Frame = block('div', 'Show', {
   Score: 'span',
 })
 let {
+  Main,
   Heading,
   Title,
   Body: BodyEl,
@@ -631,16 +634,19 @@ let stack = [
 // view-timeline in styles.css).
 export let Show = ({ e }: { e: Ent }) => (
   <Frame>
-    <Heading>
-      {e.task && <Pip e={e} />}
-      <Title>
-        <TitleEdit eid={e.eid} />
-      </Title>
-    </Heading>
-    <Entity eid={e.eid} view='Meta' id />
-    <Entity eid={e.eid} view='Mail' />
-    <Entity eid={e.eid} view='Body' />
-    {stack.map((v) => <Entity key={v} eid={e.eid} view={v} />)}
+    <Main>
+      <Heading>
+        {e.task && <Pip e={e} />}
+        <Title>
+          <TitleEdit eid={e.eid} />
+        </Title>
+      </Heading>
+      <Entity eid={e.eid} view='Meta' id />
+      <Entity eid={e.eid} view='Mail' />
+      <Entity eid={e.eid} view='Body' />
+      {stack.map((v) => <Entity key={v} eid={e.eid} view={v} />)}
+    </Main>
+    <Chat e={e} />
   </Frame>
 )
 

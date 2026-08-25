@@ -820,6 +820,7 @@ export let derived = [
   'feedback',
   'meta',
   'resume',
+  'chat',
   'dream',
   // A notice (D-13858): {target FK cascade, kind text} — an entity-keyed spine,
   // every column nullable, wholly PropType-expressible, so it derives.
@@ -847,8 +848,8 @@ let spine = (db: DatabaseSync, eid: string) =>
   prep(db, 'insert or ignore into entity (eid) values (?)').run(eid)
 
 // The kinds that get a human number. Cheap/bulk/ephemeral kinds stay out:
-// `entry` (log lines), `wake` (one per pace cycle, read only by kind=wake and
-// self-replaced per actor — never typed by a human, so a num is pure overload).
+// `entry` (log lines) and `wake` (one per pace cycle, read only by kind=wake and
+// self-replaced per actor) are never typed by a human, so a num is pure overload.
 // Their spines carry a NULL num; every other kind is numbered (T-3684).
 let unnumbered = new Set(['entry', 'wake'])
 export let numbered = (kind: string) => !unnumbered.has(kind)

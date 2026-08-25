@@ -47,6 +47,7 @@ import {
   reindexEdge,
 } from './index.ts'
 import { type MemoryResolver, memoryResolver } from './resolver.ts'
+import type { References } from './referenced.ts'
 import {
   clearIdb,
   type IdbResolver,
@@ -97,6 +98,7 @@ let canvasVersion = signal(0)
 let noRelations: Dep[] = []
 let refreshJobs = (_ids: Set<string>) => {}
 let refreshFacets = (_ids: Set<string>) => {}
+let refreshReferences = () => {}
 
 // Human ids are a hot lookup vocabulary, not a query. Keep them beside the
 // cache so rendering one reference never scans or subscribes to the graph.
@@ -521,6 +523,7 @@ export let resetSignals = () =>
     // A wholesale reseed (reconnect) is any-inbox-may-have-changed: refetch
     // every mounted one rather than diffing what the new graph implies.
     refreshInbox()
+    refreshReferences()
   })
 
 // A z-only pin patch binds straight to its one DOM attribute. The fallback
@@ -759,6 +762,38 @@ let refreshInbox = () => {
   for (let eid of inboxSignals.keys()) loadInbox(eid)
 }
 
+let referenceSignals = new Map<string, Signal<References>>()
+let referenceLoading = new Set<string>()
+let referenceAgain = new Set<string>()
+let loadReferences = (eid: string) => {
+  if (referenceLoading.has(eid)) return void referenceAgain.add(eid)
+  referenceLoading.add(eid)
+  fetch(`${base()}/references?eid=${encodeURIComponent(eid)}`)
+    .then((r) => r.ok ? r.json() as Promise<References> : { out: [], in: [] })
+    .then((value) => {
+      let found = referenceSignals.get(eid)
+      if (found) found.value = value
+    })
+    .catch(() => {})
+    .finally(() => {
+      referenceLoading.delete(eid)
+      if (referenceAgain.delete(eid)) loadReferences(eid)
+    })
+}
+
+export let references = (eid: string): References => {
+  let found = referenceSignals.get(eid)
+  if (!found) {
+    referenceSignals.set(eid, found = signal({ out: [], in: [] }))
+    loadReferences(eid)
+  }
+  return found.value
+}
+
+refreshReferences = () => {
+  for (let eid of referenceSignals.keys()) loadReferences(eid)
+}
+
 // A live hand on the entity: its claim's session is awake — a managed
 // run still going, or an external door still open. The wip pip pulses
 // on this instead of sitting half-filled; a stale claim doesn't count.
@@ -923,6 +958,9 @@ export let applyLocal = (changes: Change[]) => {
   // its predicate reads. `graph` is the pre-batch cache, so a deleted item's
   // row is still there for inboxDirty to recognise.
   if (inboxSignals.size && inboxDirty(changes, graph)) refreshInbox()
+  if (referenceSignals.size && changes.some((c) => c.name == 'dependency')) {
+    refreshReferences()
+  }
   // The touched keys feed either the boot catch-up write, or the Web-Lock
   // leader's live persist. Followers and 2.1 fallback tabs never persist a
   // live frame.
@@ -2365,6 +2403,13 @@ export let commentsOn = (target: string): Ent[] =>
   queryEids([eq('comment', 'target', target)]).value
     .map(ent)
     .sort((a, b) => a.num - b.num)
+
+// One actor's selected chat for one entity. chat(actor,target) is unique in
+// SQLite and both columns are indexed in every cache backend, so this is a
+// bounded lookup whose result alone wakes the aside.
+export let chatFor = (actor: string, target: string): Ent | undefined =>
+  queryEids([eq('chat', 'actor', actor), eq('chat', 'target', target)]).value
+    .map(ent)[0]
 // A per-tile badge on every rendered entity — LOCAL, never a per-entity server
 // sub (T-21283). The open card's Comments view (commentsOn, bounded) owns the
 // complete list; this count is best-effort over the working set.

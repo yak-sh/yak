@@ -4,8 +4,13 @@
 // empty content). Module db like recall_test — referencedEntry closes over it.
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db } = await import('./db.ts')
-let { cites, historicalReferenced, referencedChanges, referencedEntry } =
-  await import('./referenced.ts')
+let {
+  cites,
+  historicalReferenced,
+  referencedChanges,
+  referencedEntry,
+  references,
+} = await import('./referenced.ts')
 let { assertEquals } = await import('@std/assert')
 import type { Change } from './types.ts'
 
@@ -98,6 +103,16 @@ Deno.test('referencedChanges: a cited entity becomes an edge, once', () => {
   assertEquals(children(e), [t.eid])
   // idempotent: what the entry already wears is diffed away
   assertEquals(referencedChanges(db, e, `working ${t.id} now`), [])
+})
+
+Deno.test('references projects cited entry edges to their session both ways', () => {
+  let target = task('association target')
+  let session = sess()
+  let line = entry(session, target.id)
+  apply(db, referencedChanges(db, line, target.id))
+
+  assertEquals(references(db, session).out.map((r) => r.eid), [target.eid])
+  assertEquals(references(db, target.eid).in.map((r) => r.eid), [session])
 })
 
 Deno.test('referencedChanges: what does not resolve is skipped', () => {

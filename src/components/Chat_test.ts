@@ -1,0 +1,65 @@
+// The chat's first write is one atomic move: retire the selected binding,
+// create the replacement Session, bind it, and preserve the first prompt.
+import { assertEquals, assertThrows } from '@std/assert'
+import { chatChanges, chatPlan } from './Chat.tsx'
+
+Deno.test('chatChanges replaces the binding without deleting its old session', () => {
+  let got = chatChanges(
+    'old',
+    'next',
+    'actor',
+    'target',
+    { id: 'provider-id', provider: 'codex', model: 'gpt' },
+    'What changed?',
+    false,
+  )
+  assertEquals(got, [
+    { eid: 'old', name: 'chat', comp: null },
+    {
+      eid: 'next',
+      name: 'session',
+      comp: { id: 'provider-id', provider: 'codex', model: 'gpt' },
+    },
+    {
+      eid: 'next',
+      name: 'chat',
+      comp: { actor: 'actor', target: 'target' },
+    },
+    {
+      eid: 'next',
+      name: 'doc',
+      comp: { title: '', body: 'What changed?' },
+    },
+  ])
+})
+
+Deno.test('chatPlan wears the operator persona on a graph-native provider', () => {
+  let operator = {
+    eid: 'actor',
+    num: 1,
+    kind: 'project',
+    spawn: { eid: 'actor', persona: 'operator-persona' },
+    refs: [],
+    kids: [],
+  }
+  let ps = [
+    {
+      name: 'codex',
+      models: ['gpt'],
+      labels: { gpt: 'GPT' },
+      efforts: ['low', 'medium'],
+    },
+    { name: 'codex-cli', models: ['gpt'], fallback: true },
+  ]
+  assertEquals(chatPlan(operator, ps, () => false), {
+    provider: 'codex',
+    model: 'gpt',
+    effort: 'medium',
+    persona: 'operator-persona',
+  })
+  assertThrows(
+    () => chatPlan(operator, ps, (name) => name == 'codex'),
+    Error,
+    'No graph-native chat model is available',
+  )
+})

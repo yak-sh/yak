@@ -1444,6 +1444,109 @@ html {
    column's measure — it wraps, never truncates. The pip pins to the
    FIRST line (the proven head trick); the named view-timeline is what
    the App bar's compact title listens to. */
+.Show {
+  display: grid;
+  grid-template-columns: minmax(0, var(--measure)) minmax(18rem, 26rem);
+  gap: calc(var(--gap) * 2);
+  align-items: start;
+}
+.Show_Main {
+  min-width: 0;
+}
+.Chat {
+  min-width: 0;
+  display: grid;
+  gap: var(--gap);
+  position: sticky;
+  top: var(--gap);
+  max-height: calc(100vh - 7rem);
+}
+.Chat_References,
+.Chat_Conversation {
+  min-width: 0;
+  border-left: 1px solid var(--border);
+  padding-left: var(--gap);
+}
+.Chat_Label {
+  margin: 0;
+  color: var(--dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.Chat_Links {
+  display: grid;
+  gap: 2px;
+  margin-top: var(--half-gap);
+}
+.Chat_Link {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--half-gap);
+  min-width: 0;
+  color: var(--text);
+  text-decoration: none;
+}
+.Chat_Link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Chat_Link small {
+  flex: none;
+  color: var(--dim);
+}
+.Chat_Link:hover span {
+  text-decoration: underline;
+}
+.Chat_Head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--half-gap);
+}
+.Chat_New {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.Chat_Start {
+  display: grid;
+  gap: var(--half-gap);
+}
+.Chat_Box {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+}
+.Chat_State {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.Chat .Session {
+  min-height: 20rem;
+  max-height: calc(100vh - 10rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+@media (max-width: 900px) {
+  .Show {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .Chat {
+    position: static;
+    max-height: none;
+  }
+  .Chat .Session {
+    max-height: 70vh;
+  }
+}
 .Show_Heading {
   display: flex;
   gap: var(--half-gap);

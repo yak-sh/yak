@@ -108,6 +108,10 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'task.project',
       'task.assignee',
       'client.actor',
+      // A selected chat remains session history if either side disappears;
+      // only its selection coordinates detach.
+      'chat.actor',
+      'chat.target',
       'session.actor',
       'session.parent',
       'session.requested_task',

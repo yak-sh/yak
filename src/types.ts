@@ -522,6 +522,13 @@ export let comps: Record<string, Record<string, PropType>> = {
     target: { eid: 'entity', death: 'cascade' },
     mode: { enum: subModes },
   },
+  // The selected conversational session for one actor looking at one entity.
+  // The session wears this facet; replacing the chat moves the facet to a new
+  // session while the old transcript remains durable history.
+  chat: {
+    actor: { eid: 'entity', death: 'detach' },
+    target: { eid: 'entity', death: 'detach' },
+  },
   // The brake, pulled as data: creating one asks the server to stop the
   // session it targets. Valid only against an ACTIVE managed session
   // (apply() refuses the rest); the row stays as audit, like conflict, and
@@ -949,6 +956,7 @@ export let indexes: Record<string, Idx[]> = {
   output: [{ cols: ['source', 'key'], unique: true, where: 'key is not null' }],
   result: [{ cols: ['call'], unique: true }],
   subscription: [{ cols: ['actor', 'target'], unique: true }],
+  chat: [{ cols: ['actor', 'target'], unique: true }],
 }
 
 // Snapshot partition (T-18093, D-18092). A comp is `eager` — its entities
@@ -2210,6 +2218,7 @@ export type EntCore = {
     target?: string | null
     mode?: (typeof subModes)[number]
   }
+  chat?: { eid: string; actor?: string | null; target?: string | null }
   session?: Session
   brief?: Brief
   worktree?: Worktree

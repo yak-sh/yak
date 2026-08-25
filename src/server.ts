@@ -70,7 +70,11 @@ import {
   HEAL_PENDING,
 } from './heal.ts'
 import { recallEntry } from './recall.ts'
-import { historicalReferenced, referencedEntry } from './referenced.ts'
+import {
+  historicalReferenced,
+  referencedEntry,
+  references,
+} from './referenced.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { native } from './mailer.ts'
 import { closingTask } from './closing.ts'
@@ -1471,6 +1475,13 @@ let http = Deno.serve(
       } catch (e) {
         return new Response(String((e as Error).message ?? e), { status: 400 })
       }
+    }
+    if (path == '/references') {
+      let eid = url.searchParams.get('eid') ?? ''
+      if (!eid) return new Response('eid required', { status: 400 })
+      return Response.json(references(db, eid), {
+        headers: { 'cache-control': 'no-store' },
+      })
     }
     if (path == '/mcp' && req.method == 'POST') return mcp(req)
     if (path == '/error' && req.method == 'POST') return clientError(req)
