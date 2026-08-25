@@ -59,6 +59,7 @@ Deno.test('stale: unembedded and text-moved docs owe; fresh do not', () => {
   assertEquals(owed.includes(a), true)
   assertEquals(owed.includes(b), false)
   assertEquals(owed.includes(c), true)
+  assertEquals(stale(db, 1).length, 1)
 })
 
 Deno.test('stale: comments, empty docs, and quarantine never owe', () => {

@@ -112,7 +112,7 @@ let lives = (db: DatabaseSync, eid: string) =>
 
 // The docs owed a (re)embedding: eligible, and whose stored hash no longer
 // names their text. Pure SQL + hash — the testable half of the sweep.
-export let stale = (db: DatabaseSync) =>
+export let stale = (db: DatabaseSync, limit = Infinity) =>
   (db.prepare(
     `select o.eid as eid, d.title, d.body, e.hash as had from doc d
      join entity o on o.id = d.entity
@@ -129,6 +129,7 @@ export let stale = (db: DatabaseSync) =>
   }[])
     .map((r) => ({ ...r, text: textOf(r.title, r.body) }))
     .filter((r) => r.text && hash(r.text) != r.had)
+    .slice(0, limit)
 
 // Rows for the ineligible: an entity deleted, a doc emptied, a doc that
 // became a comment. Pruning reads the SAME rule stale() embeds by, so the
@@ -151,21 +152,24 @@ let put = (db: DatabaseSync, eid: string, text: string, vec: Float32Array) =>
        at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
   ).run(eid, MODEL, hash(text), new Uint8Array(vec.buffer), DIM)
 
-// The sweep: prune, then embed what's owed, one at a time — each await
-// yields the event loop, so a 2k-doc backfill never starves the server.
+// The sweep: prune, then embed a bounded batch. An `await` only yields to the
+// microtask queue when inference resolves, so an unbounded backfill can starve
+// HTTP and retain inference state until V8's heap is exhausted. The batch is a
+// fixed memory ceiling; a macrotask between rows keeps the server responsive.
 // Interval-safe like the others: one sweep in flight, failures warn.
 let sweeping = false
-export let embedSweep = async (db: DatabaseSync) => {
+export let embedSweep = async (db: DatabaseSync, limit = 100) => {
   if (sweeping || dead) return 0
   sweeping = true
   let n = 0
   try {
     prune(db)
-    for (let r of stale(db)) {
+    for (let r of stale(db, limit)) {
       let vec = await embed(r.text)
       if (!vec) break // the embedder died mid-sweep — stop quietly
       put(db, r.eid, r.text, vec)
       n++
+      await new Promise((resolve) => setTimeout(resolve, 0))
     }
     refreshVector(db)
     if (n) console.log(`embed sweep: ${n} fresh`)
