@@ -497,7 +497,10 @@ export let manuals = declare({
     about: 'lease a task (default: your own session id)',
     examples: ['task claim T-3 my-session-id'],
     root: true,
-    args: [arg('id', id), arg('session', text, false, false)],
+    // An empty shell expansion means "use the ambient session", exactly like
+    // omitting this optional slot. Agent briefs commonly carry a session
+    // placeholder before the child has a provider id (T-19193).
+    args: [arg('id', id), arg('session', empty, false, false)],
   },
   release: {
     about: 'drop the lease',

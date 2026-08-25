@@ -253,6 +253,9 @@ Deno.test('manual validation rejects loss-shaped arguments', () => {
 })
 
 Deno.test('manual validation accepts each supported option shape', () => {
+  // An unresolved optional session placeholder keeps claim on its documented
+  // ambient-session path instead of killing the session (T-19193).
+  check('claim', ['T-1', ''])()
   check('history', ['T-1', '-n', '2', '--json'])()
   check('history', ['T-1', '-n2'])()
   check('mail files', ['E-1', '--out', 'tmp'])()
