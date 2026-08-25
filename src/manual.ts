@@ -528,10 +528,18 @@ export let manuals = declare({
     args: [arg('id', id), arg('session', empty, false, false)],
   },
   release: {
-    about: 'drop the lease',
-    examples: ['task release T-3'],
+    about: 'drop the lease, optionally only when held by the named session',
+    detail:
+      'The optional session (or --claim SESSION) is an expectation: release ' +
+      'refuses if another session now holds the lease.',
+    examples: [
+      'task release T-3',
+      'task release T-3 S-31',
+      'task release T-3 --claim S-31',
+    ],
     root: true,
-    args: [arg('id', id)],
+    args: [arg('id', id), arg('session', text, false, false)],
+    opts: [value('--claim', text, true)],
   },
   block: {
     about: 'mark a task stuck on an EXTERNAL reason (not a task→task dep)',

@@ -31,6 +31,7 @@ import {
   operatorHook,
   place,
   printer,
+  releaseChange,
   reportUsage,
   restartReady,
   roleEid,
@@ -49,6 +50,7 @@ import { answers, fakeGraph } from './graph_fake.ts'
 import type { Change, Snapshot } from './types.ts'
 import { slow } from './testing.ts'
 import { VERSION } from './version.ts'
+import { sha } from './sha.ts'
 
 let transcript = (...events: unknown[]) => {
   let path = Deno.makeTempFileSync()
@@ -128,6 +130,24 @@ Deno.test('printer: CLI styling wraps sanitized content', () => {
   let got = ''
   printer((line) => got = line)('safe\x1b[2Jtext', true)
   assertEquals(got, '\x1b[1msafe[2Jtext\x1b[0m')
+})
+
+Deno.test('release guards the holder it read', () => {
+  let row = rows({
+    changes: [
+      { eid: 'task', name: 'entity', comp: { eid: 'task', num: 1 } },
+      { eid: 'task', name: 'task', comp: { status: 'open' } },
+      { eid: 'task', name: 'claim', comp: { session: 'session-eid' } },
+    ],
+  })[0]
+  assertEquals(releaseChange(row), {
+    eid: row.eid,
+    name: 'claim',
+    comp: null,
+    was: { session: sha('session-eid') },
+  })
+  delete row.comps.claim
+  assertEquals(releaseChange(row), undefined)
 })
 
 Deno.test('usage reports preserve argv and session attribution', async () => {

@@ -145,11 +145,12 @@ import {
   validate,
   validateCommand,
 } from './manual.ts'
-import { type Got, type Run, type Verb } from './verb.ts'
+import { type Got, type Run, usageOf, type Verb } from './verb.ts'
 import { complete } from './tabcomplete.ts'
 import { loadPlugins, pluginSpecifiers } from './plugins.ts'
 import { safe } from './terminal.ts'
 import { VERSION } from './version.ts'
+import { sha } from './sha.ts'
 export { subjectUsage } from './manual.ts'
 
 let formats = ['markdown', 'json']
@@ -1472,11 +1473,47 @@ let colon = async (focus: string | undefined, argv: string[]) => {
   }
 }
 
+// Release the lease this read observed, never a successor that won the gap
+// between needed() and apply(). The expected-holder spelling below adds a
+// human check; this precondition is the atomic half shared by every spelling.
+export let releaseChange = (row: Row): Change | undefined => {
+  let held = String(row.comps.claim?.session ?? '')
+  return held
+    ? {
+      eid: row.eid,
+      name: 'claim',
+      comp: null,
+      was: { session: sha(held) },
+    }
+    : undefined
+}
+
 let release = async (got: Got) => {
   let id = got.args.id
   if (!id) throw new Error('task release <id>')
+  let positional = got.args.session
+  let option = got.opts['--claim']
+  if (positional && option && positional != option) {
+    throw new UsageError(
+      `release names two different sessions: ${positional} and ${option}\n` +
+        `usage: task ${usageOf(manuals.release)}`,
+    )
+  }
   let row = await needed(id)
-  await send([{ eid: row.eid, name: 'claim', comp: null }])
+  let change = releaseChange(row)
+  if (!change) return warn(`${idOf(row)} is not claimed`)
+  let expected = positional ?? option
+  if (expected) {
+    let sid = await sessionArg(expected)
+    let session = await sessionRow(sid)
+    if (!session) throw new Error(`no session: ${expected}`)
+    if (session.eid != row.comps.claim?.session) {
+      let holder = await needed(String(row.comps.claim?.session))
+      let name = String(holder.comps.session?.id ?? idOf(holder))
+      throw new Error(`${idOf(row)} claimed by ${name}, not ${expected}`)
+    }
+  }
+  await send([change])
   print(`${idOf(row)} released`)
 }
 
