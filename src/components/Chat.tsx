@@ -1,7 +1,7 @@
 // The document-side conversation: indexed cited-entity associations above one
 // actor's selected graph-native Session. The binding is graph data on the
 // session, so a reload or another browser finds the same transcript.
-import { useRef, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { sessionFrames } from '../client.ts'
 import {
   capable,
@@ -10,27 +10,26 @@ import {
   mutate,
   myActor,
   references,
+  routeSub,
   uuid,
 } from '../live.ts'
 import { catalog, type Provider } from '../providers.ts'
 import type { Change, Ent } from '../types.ts'
 import { block } from './ui.tsx'
-import { follow } from './nav.tsx'
+import { ComposerInput } from './Comments.tsx'
 import { Entity } from './Entity.tsx'
+import { ListFrame } from './ListFrame.tsx'
 import { liveBlocked, load, providers } from './Run.tsx'
 
 let Frame = block('aside', 'Chat', {
   References: 'section',
   Label: 'h2',
-  Links: 'div',
-  Link: 'a',
   Head: 'div',
   New: 'button',
   Start: 'div',
-  Box: 'textarea',
   State: 'p',
 })
-let { References, Label, Links, Link, Head, New, Start, Box, State } = Frame
+let { References, Label, Head, New, Start, State } = Frame
 
 export let chatPlan = (
   operator: Ent,
@@ -56,28 +55,28 @@ export let chatPlan = (
   }
 }
 
-let ReferenceList = (
+export let ReferenceRow = ({ eid }: { eid: string }) => {
+  useEffect(() => routeSub(eid), [eid])
+  return <Entity eid={eid} view='List.Tile' />
+}
+
+export let ReferenceList = (
   { label, items }: {
     label: string
-    items: { eid: string; id: string; title: string }[]
+    items: { eid: string }[]
   },
 ) =>
   items.length
     ? (
       <References>
         <Label>{label}</Label>
-        <Links>
+        <ListFrame>
           {items.map((item) => (
-            <Link
-              key={item.eid}
-              href={`/${item.id}`}
-              onClick={follow(`/${item.id}`)}
-            >
-              <span>{item.title || item.id}</span>
-              {item.title && <small>{item.id}</small>}
-            </Link>
+            <ListFrame.Row key={item.eid}>
+              <ReferenceRow eid={item.eid} />
+            </ListFrame.Row>
           ))}
-        </Links>
+        </ListFrame>
       </References>
     )
     : null
@@ -99,7 +98,7 @@ export let chatChanges = (
   { eid: session, name: 'doc', comp: { title: '', body } },
 ]
 
-let Starter = (
+export let Starter = (
   { e, actor, old, done }: {
     e: Ent
     actor: string
@@ -143,10 +142,10 @@ let Starter = (
   }
   return (
     <Start>
-      <Box
+      <ComposerInput
         elRef={box}
         rows={3}
-        placeholder={`Ask about ${e.doc?.title || 'this document'}…`}
+        placeholder='start a chat…'
         onKeyDown={(event: KeyboardEvent) => {
           if (event.key != 'Enter' || event.shiftKey) return
           event.preventDefault()

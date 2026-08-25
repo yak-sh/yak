@@ -11,7 +11,7 @@ import { apply, db, human, resolveId } from './db.ts'
 import { entityId, normalize } from './url.ts'
 import { type Change } from './types.ts'
 
-export type Reference = { eid: string; id: string; title: string }
+export type Reference = { eid: string }
 export type References = { out: Reference[]; in: Reference[] }
 
 // Component tables key by the integer `entity` spine id (D-18866); this module
@@ -151,15 +151,7 @@ export let references = (db: DatabaseSync, eid: string): References => {
      where x.session = ${idOf}
     `).all(eid) as { eid: string }[]
   let named = (rows: { eid: string }[]): Reference[] =>
-    [...new Set(rows.map((r) => r.eid))].map((target) => ({
-      eid: target,
-      id: human(db, target),
-      title: String(
-        (db.prepare(`select title from doc where ${OWNED}`).get(
-          target,
-        ) as { title?: string } | undefined)?.title ?? '',
-      ),
-    }))
+    [...new Set(rows.map((r) => r.eid))].map((eid) => ({ eid }))
   return {
     out: named([...direct('child'), ...own]),
     in: named(direct('parent')),

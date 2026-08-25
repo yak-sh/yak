@@ -34,6 +34,11 @@ let Frame = block('div', 'Comments', {
 let { Item, Who, Via, Verdict, When, Body, Box, New } = Frame
 let { Hints, Hint, Name, Args, About } = Frame
 
+// Every composer starts with the same sunken writing surface. Export the
+// primitive so a specialized composer keeps that vocabulary without copying
+// its class or its CSS.
+export let ComposerInput = New
+
 // An instrument's face: browsers by a short client handle, anything else
 // by its chip id (S-31, never the raw session uuid).
 export let viaName = (eid?: string | null) => {

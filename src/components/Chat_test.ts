@@ -1,7 +1,10 @@
 // The chat's first write is one atomic move: retire the selected binding,
 // create the replacement Session, bind it, and preserve the first prompt.
 import { assertEquals, assertThrows } from '@std/assert'
-import { chatChanges, chatPlan } from './Chat.tsx'
+import { h } from 'preact'
+import { cache, ent } from '../live.ts'
+import { mount } from './mount.ts'
+import { chatChanges, chatPlan, ReferenceList, Starter } from './Chat.tsx'
 
 Deno.test('chatChanges replaces the binding without deleting its old session', () => {
   let got = chatChanges(
@@ -62,4 +65,48 @@ Deno.test('chatPlan wears the operator persona on a graph-native provider', () =
     Error,
     'No graph-native chat model is available',
   )
+})
+
+Deno.test('chat references mount the entity List.Tile renderer', () => {
+  cache.value = {
+    target: {
+      entity: { eid: 'target', num: 7 },
+      doc: { eid: 'target', title: 'A target', body: '' },
+      task: { eid: 'target', status: 'open', priority: 0 },
+    },
+  }
+  let mounted = mount(
+    h(ReferenceList, { label: 'referenced by', items: [{ eid: 'target' }] }),
+  )
+  try {
+    assertEquals(
+      mounted.root.querySelector('.List_Row > .Tile-task .Tile_Title')
+        ?.textContent,
+      'A target',
+    )
+    assertEquals(mounted.root.querySelector('.Chat_Link'), null)
+  } finally {
+    mounted.free()
+    cache.value = {}
+  }
+})
+
+Deno.test('a new chat reuses the composer input with a terse prompt', () => {
+  cache.value = {
+    target: {
+      entity: { eid: 'target', num: 7 },
+      doc: { eid: 'target', title: 'A very long document title', body: '' },
+    },
+  }
+  let mounted = mount(
+    h(Starter, { e: ent('target'), actor: 'actor', done() {} }),
+  )
+  try {
+    let box = mounted.root.querySelector('.Comments_New')
+    assertEquals(box?.getAttribute('placeholder'), 'start a chat…')
+    assertEquals(box?.getAttribute('class'), 'Comments_New')
+  } finally {
+    mounted.free()
+    cache.value = {}
+  }
 })

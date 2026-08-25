@@ -1475,30 +1475,8 @@ html {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.Chat_Links {
-  display: grid;
-  gap: 2px;
+.Chat_References > .List {
   margin-top: var(--half-gap);
-}
-.Chat_Link {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--half-gap);
-  min-width: 0;
-  color: var(--text);
-  text-decoration: none;
-}
-.Chat_Link span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.Chat_Link small {
-  flex: none;
-  color: var(--dim);
-}
-.Chat_Link:hover span {
-  text-decoration: underline;
 }
 .Chat_Head {
   display: flex;
@@ -1518,11 +1496,6 @@ html {
 .Chat_Start {
   display: grid;
   gap: var(--half-gap);
-}
-.Chat_Box {
-  box-sizing: border-box;
-  width: 100%;
-  resize: vertical;
 }
 .Chat_State {
   margin: 0;
