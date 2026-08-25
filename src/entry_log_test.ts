@@ -1,6 +1,6 @@
 // Graph Session log projection tests hold the provider-neutral rendering and
 // derived-state contract without a server, browser, or process transcript.
-import { assertEquals, assertMatch } from '@std/assert'
+import { assert, assertEquals, assertMatch } from '@std/assert'
 import {
   contextOf,
   type EntryRow,
@@ -320,4 +320,116 @@ Deno.test('standingOf matches graphLog busy/terminal across states', () => {
   ])
   // empty log is idle
   assertEquals(agrees([]), 'idle')
+})
+
+// T-21829: maintainStanding must not rescan the whole log per turn edge. It reads
+// only the current turn's tail, from the last generation's `through` edge —
+// standingWindow (entries.ts) picks that seq in SQL; this mirrors the SAME rule
+// purely so we can prove, over many logs, that slicing there leaves standingOf's
+// verdict IDENTICAL to the whole-log scan. That equivalence is the whole license
+// for the optimization: a wrong slice would corrupt the SessionDot facet.
+let boundary = (rows: EntryRow[]): number => {
+  let sorted = rows.toSorted((a, b) => a.seq - b.seq)
+  let gen = sorted.filter((r) => r.comps.generation).at(-1)
+  if (!gen) return 1
+  let through = sorted.find((r) => r.eid == gen!.comps.generation?.through)
+  return through?.seq ?? gen.seq
+}
+let tail = (rows: EntryRow[]) => {
+  let from = boundary(rows)
+  return rows.filter((r) => r.seq >= from)
+}
+// The bounded window yields the same verdict AND is actually smaller than the
+// whole log (or equal, for a single-turn / pre-generation log) — a window that
+// never shrank would pass equivalence while fixing nothing.
+let equiv = (rows: EntryRow[], want: 'busy' | 'terminal' | 'idle') => {
+  let full = standingOf(rows)
+  assertEquals(full, want, 'full-log verdict')
+  assertEquals(standingOf(tail(rows)), full, 'bounded verdict matches full')
+  assert(tail(rows).length <= rows.length)
+}
+
+// A completed turn: user input, its generation (delivered), a final-answer agent
+// output. Seqs are assigned by the caller so turns chain in one log.
+let doneTurn = (base: number) => [
+  row(`in${base}`, base, {
+    message: { role: 'user' },
+    content: { body: 'go' },
+  }),
+  row(`gen${base}`, base + 1, {
+    generation: { through: `in${base}` },
+    delivered: { at: 'x' },
+  }),
+  row(`out${base}`, base + 2, {
+    output: { source: `gen${base}`, phase: 'final_answer' },
+    message: { role: 'agent' },
+    content: { body: 'done' },
+  }),
+]
+
+Deno.test('bounded standing window equals the whole-log scan', () => {
+  // Three settled turns, then a fresh generation still in flight → busy. The
+  // window drops the six prior-turn rows yet still reads busy from the last gen.
+  let busyTail = [
+    ...doneTurn(1),
+    ...doneTurn(4),
+    ...doneTurn(7),
+    row('in10', 10, { message: { role: 'user' }, content: { body: 'more' } }),
+    row('gen10', 11, { generation: { through: 'in10' } }),
+  ]
+  equiv(busyTail, 'busy')
+  assert(tail(busyTail).length < busyTail.length, 'prior turns are dropped')
+
+  // Same history, last turn delivered its final answer → terminal.
+  equiv([...doneTurn(1), ...doneTurn(4), ...doneTurn(7)], 'terminal')
+
+  // A multi-generation turn (tool loop): early generations delivered with tool
+  // outputs, the last still open → busy. All share one `through`, so the whole
+  // turn is one window and every early generation is resolved inside it.
+  equiv([
+    row('in1', 1, { message: { role: 'user' } }),
+    row('gen1', 2, { generation: { through: 'in1' }, delivered: { at: 'x' } }),
+    row('call1', 3, { output: { source: 'gen1' }, call: { key: 'c1' } }),
+    row('res1', 4, { result: { call: 'call1' }, content: { body: 'ok' } }),
+    row('gen2', 5, { generation: { through: 'in1' } }),
+  ], 'busy')
+
+  // An unresolved lease in the current turn → busy, even past settled history.
+  equiv([
+    ...doneTurn(1),
+    row('in4', 4, { message: { role: 'user' } }),
+    row('gen4', 5, { generation: { through: 'in4' }, lease: { holder: 'r' } }),
+  ], 'busy')
+
+  // An unresolved call (no result) in the current turn → busy.
+  equiv([
+    ...doneTurn(1),
+    row('in4', 4, { message: { role: 'user' } }),
+    row('gen4', 5, { generation: { through: 'in4' }, delivered: { at: 'x' } }),
+    row('call4', 6, { output: { source: 'gen4' }, call: { key: 'c4' } }),
+  ], 'busy')
+
+  // A resolved (cancelled) lease closing the turn → idle, not busy.
+  equiv([
+    ...doneTurn(1),
+    row('in4', 4, { message: { role: 'user' } }),
+    row('gen4', 5, { generation: { through: 'in4' } }),
+    row('cancel4', 6, { cancel: { target: 'gen4' } }),
+  ], 'idle')
+
+  // A terminal turn reopened by a trailing user message, no generation yet →
+  // idle. The window keeps that whole last turn (the last generation is behind
+  // the new input), and the verdict still matches.
+  equiv([
+    ...doneTurn(1),
+    ...doneTurn(4),
+    row('in7', 7, { message: { role: 'user' }, content: { body: 'again' } }),
+  ], 'idle')
+
+  // Pre-generation log (only a user message queued): no boundary, read whole,
+  // idle.
+  equiv([row('in1', 1, { message: { role: 'user' } })], 'idle')
+
+  // Empty log: idle, window is the (empty) whole log.
+  equiv([], 'idle')
 })

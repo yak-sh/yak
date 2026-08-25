@@ -153,6 +153,43 @@ Deno.test('native standing tracks the log across turn edges', () => {
   assertEquals(standing(eid), truth())
 })
 
+Deno.test('standing over many turns matches the full-log scan (bounded window)', () => {
+  // Drive several complete turns so the log grows, then open a fresh turn. The
+  // write-path recompute now reads only the last turn's tail (standingWindow),
+  // but its verdict must still equal a full-log scan — prior turns are settled.
+  let eid = native()
+  toTerminal(eid)
+  toTerminal(eid)
+  toTerminal(eid)
+  assertEquals(standing(eid), 'terminal')
+  assertEquals(standing(eid), standingOf(readEntries(db, eid)))
+
+  // A new turn opens over that history → busy, still matching the whole log.
+  let input = uid(), gen = uid()
+  cast(
+    append(
+      db,
+      eid,
+      [{ message: { role: 'user' }, content: { body: 'more' } }],
+      null,
+      [input],
+    )
+      .changes,
+  )
+  cast(
+    append(
+      db,
+      eid,
+      [{ generation: { through: input, provider: 'codex', model: 'm' } }],
+      null,
+      [gen],
+    )
+      .changes,
+  )
+  assertEquals(standing(eid), 'busy')
+  assertEquals(standing(eid), standingOf(readEntries(db, eid)))
+})
+
 Deno.test('cancelling a leased turn leaves its standing idle', () => {
   let eid = native()
   let input = append(db, eid, [{ message: { role: 'user' } }]).eids[0]

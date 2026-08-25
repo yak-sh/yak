@@ -114,16 +114,47 @@ export let callKeys = (
     ),
   )
 
-// UI and audit reads retain the complete immutable partition. entriesOf
-// paginates for lazy clients, so this door pages to exhaustion.
-export let readEntries = (db: DatabaseSync, session: string) => {
+// Page a session's partition from a seq lower bound (inclusive) to the tail.
+// entriesOf paginates for lazy clients, so this pages to exhaustion. readEntries
+// takes the whole log; standing maintenance takes only the current turn's tail
+// (from its generation edge, standingWindow — T-21829), keeping that hot write
+// path O(turn) instead of O(N) per turn edge.
+export let entriesFrom = (db: DatabaseSync, session: string, from: number) => {
   let all: ReturnType<typeof entriesOf> = []
-  for (let after = 0;;) {
+  for (let after = from - 1;;) {
     let page = entriesOf(db, session, after, 5000)
     all.push(...page)
     if (page.length < 5000) return all
     after = page.at(-1)!.seq
   }
+}
+
+// UI and audit reads retain the complete immutable partition.
+export let readEntries = (db: DatabaseSync, session: string) =>
+  entriesFrom(db, session, 1)
+
+// The seq boundary standingOf's verdict depends on (T-21829): the LAST
+// generation's turn start. standingOf reads only the current turn's tail — the
+// last generation, the entries after its `through` edge, and any unresolved
+// lease/call. All of those live at or after that edge because turns are serial
+// per session (the runner leases one action at a time) and a completed turn is
+// fully settled — its generations delivered with a final-answer output, its
+// calls answered by results, its leases removed. So reading from this boundary
+// yields the IDENTICAL standingOf verdict as the whole log, over a bounded
+// window. The through row is INCLUDED (from = its seq) so standingOf recomputes
+// the same `edge` internally. No generation yet → 1 (a short pre-turn log, read
+// whole). The tail-scan back to the last generation is itself bounded by one
+// turn (the runner appends generations, then that turn's tool loop after them).
+export let standingWindow = (db: DatabaseSync, session: string): number => {
+  let row = db.prepare(
+    `select coalesce(t.seq, e.seq) as edge
+       from entry e
+       join generation g on g.entity = e.entity
+       left join entry t on t.entity = g.through
+      where e.session = ${idOf}
+      order by e.seq desc limit 1`,
+  ).get(session) as { edge: number } | undefined
+  return row?.edge ?? 1
 }
 
 export let readEntry = (db: DatabaseSync, eid: string) => entryOf(db, eid)

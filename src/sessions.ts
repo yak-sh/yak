@@ -57,7 +57,13 @@ import {
   healthChange,
 } from './deliver.ts'
 import { present, reachable } from './door.ts'
-import { append, callKeys, importedLines, readEntries } from './entries.ts'
+import {
+  append,
+  callKeys,
+  entriesFrom,
+  importedLines,
+  standingWindow,
+} from './entries.ts'
 import { standingOf } from './entry_log.ts'
 import {
   type Batch,
@@ -307,16 +313,18 @@ let stamp = (
 // A native (graph-born, managed-codex) session's SessionDot reads its `standing`
 // facet O(1); THIS is where the facet is maintained — at the write edge, not
 // scanned per render (T-17855, was 157ms/dot). Recompute standingOf over the
-// full log and stamp it. standingOf is the SAME function graphLog derives
-// busy/terminal from, so at every edge it's maintained on the facet equals the
-// log-derived truth exactly (maintainStandingFor picks the edges). stamp()
-// dedupes (writeSession only casts a moved column), so a no-op costs one read
-// and no write; graphSession() gates out process-backed sessions (their dots
-// never scanned). The O(log) recompute rides a rare turn edge off the render
-// path — the whole point of the facet.
+// current turn's tail (standingWindow, T-21829 — NOT the whole log, which made
+// this O(N) per turn edge and O(N²) over a busy session's life, pegging the main
+// isolate) and stamp it. standingOf is the SAME function graphLog derives
+// busy/terminal from, and the bounded window preserves its verdict exactly
+// (standingWindow's contract), so the facet equals the log-derived truth
+// (maintainStandingFor picks the edges). stamp() dedupes (writeSession only
+// casts a moved column), so a no-op costs one read and no write; graphSession()
+// gates out process-backed sessions (their dots never scanned). The bounded
+// recompute rides a rare turn edge off the render path — the whole point.
 export let maintainStanding = (eid: string, cast: Cast) => {
   if (!graphSession(db, eid)) return
-  let standing = standingOf(readEntries(db, eid))
+  let standing = standingOf(entriesFrom(db, eid, standingWindow(db, eid)))
   // finished_at is stamped from the SAME log-derived fact so the dot reads a
   // graph operator's lifecycle O(1) (T-17855 producer; the consumer gives
   // finished_at precedence over the standing facet). It means DONE and not
