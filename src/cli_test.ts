@@ -303,6 +303,7 @@ Deno.test('archive is a root verb before subject-first routing', () => {
 
 Deno.test('subject: old commands and explicit focused commands keep their door', () => {
   assertEquals(subject('show', ['T-3']), undefined)
+  assertEquals(subject('recall', ['M-4455']), undefined)
   assertEquals(subject('dep', ['T-3', 'requires', 'T-9']), undefined)
   assertEquals(subject('require', ['T-3', 'T-9']), undefined)
   assertEquals(subject('query', ['.kind=persona']), undefined)

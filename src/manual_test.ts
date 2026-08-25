@@ -123,6 +123,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       add: 'add [title…]',
       rm: 'rm <id> [--cascade] [--force]',
       require: 'require <parent> <child> [--gone]',
+      recall: 'recall <id> [--json] [--quarantined] [--comments]',
     },
   )
 })

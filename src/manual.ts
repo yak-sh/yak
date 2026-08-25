@@ -1108,6 +1108,16 @@ export let manuals = declare({
     args: [arg('parent', id), arg('child', id)],
     opts: [flag('--gone')],
   },
+  // `recall` is the natural shell spelling of MCP's `memory_recall`. Keep the
+  // canonical entity-reading door at `show`, but do not let subject-first
+  // parsing mistake this warm alias for an entity id (T-18947).
+  recall: {
+    about: 'show a memory (alias of show)',
+    examples: ['task recall M-4455'],
+    alias: true,
+    args: [arg('id', id)],
+    opts: [json, quarantined, comments],
+  },
 })
 
 export let cliVerbs = new Set(

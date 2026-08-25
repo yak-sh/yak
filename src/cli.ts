@@ -3210,6 +3210,7 @@ export let verbs = bind({
   add: create,
   rm: del,
   require: requireEdge,
+  recall: show,
 })
 
 // Only run the CLI when invoked as the program — importing this module (e.g.
