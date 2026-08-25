@@ -151,6 +151,7 @@ import {
 } from './query.ts'
 import {
   dbReader,
+  evalAgg,
   evalFast,
   evalGraph,
   evalQuery,
@@ -1308,6 +1309,21 @@ let http = Deno.serve(
           !s.startsWith('id=')
         )
         let q = segs.join('&')
+        // An aggregate projection (`.distinct=col` / `.tally=col`) answers with
+        // the reduction, not a row set — the census asks for values, so rows,
+        // layers and id= addressing don't apply. Keys come back sorted the way
+        // the census always has.
+        let agg = evalAgg(db, q)
+        if (agg) {
+          let keys = [...agg.values.keys()].sort()
+          return Response.json(
+            agg.op == 'distinct' ? { distinct: keys } : {
+              tally: Object.fromEntries(
+                keys.map((k) => [k, agg.values.get(k)]),
+              ),
+            },
+          )
+        }
         // Any remaining filter line still screens, so `id=` composes with the
         // grammar rather than replacing it.
         let screen = (hits: Row[]) =>

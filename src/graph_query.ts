@@ -37,8 +37,9 @@ import {
   referrersOf,
   vocabHash,
 } from './db.ts'
-import { where, whereSome } from './sql.ts'
+import { aggregateSql, where, whereSome } from './sql.ts'
 import {
+  aggOf,
   listed,
   matchQuery,
   namesLazy,
@@ -48,6 +49,7 @@ import {
   type Pred,
   resolveRefs,
   scopedSessions,
+  tally,
   warm,
 } from './query.ts'
 
@@ -204,6 +206,34 @@ export let evalQuery = (
     matchQuery(r.comps, preds, ent, undefined, kids)
   )
   return { preds, hits, ent }
+}
+
+// The aggregate answer — a query carrying `.distinct=col` / `.tally=col`
+// reduced server-side. SQL when the column and every filter beside it compile
+// (aggregateSql: one indexed statement, never a row set in JS); otherwise the
+// JS matcher's rows tallied — the same universe either way, since matchQuery
+// passes the AGG pred through. Null for a query with no aggregate projection,
+// so a door asks this first and falls through to membership unchanged.
+export let evalAgg = (
+  db: DatabaseSync,
+  q: string,
+): { op: 'distinct' | 'tally'; values: Map<string, number> } | null => {
+  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let agg = aggOf(preds)
+  if (!agg) return null
+  let sql = aggregateSql(preds)
+  if (sql) {
+    let rows = db.prepare(sql.sql).all(...sql.params) as {
+      value: string
+      n?: number
+    }[]
+    return {
+      op: agg.op,
+      values: new Map(rows.map((r) => [String(r.value), Number(r.n ?? 1)])),
+    }
+  }
+  let { hits } = evalQuery(db, q)
+  return { op: agg.op, values: tally(hits.map((h) => h.comps), agg.at) }
 }
 
 // The authoritative filter-query answer. The index answers when it can (evalFast

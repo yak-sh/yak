@@ -7,7 +7,7 @@
 // entries lives in sql_test.ts; this proves the door on top of it.
 import { assertEquals } from '@std/assert'
 import { uuid } from './types.ts'
-import { evalGraph } from './graph_query.ts'
+import { evalAgg, evalGraph } from './graph_query.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, open } = await import('./db.ts')
@@ -151,5 +151,31 @@ Deno.test('kind= selects an eager kind past a lazy comp in kindOrder (T-17354)',
   // A genuinely-lazy kind (a POSITIVE `entry` presence) still routes into the
   // partition — the guard narrows to absence assertions only.
   assertEquals(evalGraph(db, '.kind=entry').hits.length, 4)
+  db.close()
+})
+
+Deno.test('evalAgg answers .distinct/.tally, filtered and null-for-membership', () => {
+  let db = freshDb()
+  let mk = (domain: string, status: string) => {
+    let eid = uuid()
+    apply(db, [
+      { eid, name: 'task', comp: { status, domain } },
+      { eid, name: 'doc', comp: { title: 't', body: '' } },
+    ])
+  }
+  mk('Ops', 'open')
+  mk('Eng', 'open')
+  mk('Ops', 'done')
+  mk('', 'open') // an empty domain is not a domain — dropped like the census
+  // the SQL path: distinct sorted, empties out; tally counts per value
+  assertEquals([...evalAgg(db, '.distinct=domain')!.values.keys()].sort(), [
+    'Eng',
+    'Ops',
+  ])
+  assertEquals(evalAgg(db, '.tally=domain')!.values.get('Ops'), 2)
+  // the other preds screen the universe the aggregate reduces
+  assertEquals(evalAgg(db, '.tally=domain&.status=open')!.values.get('Ops'), 1)
+  // no AGG projection → null, the door falls through to membership
+  assertEquals(evalAgg(db, '.status=open'), null)
   db.close()
 })

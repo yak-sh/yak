@@ -26,6 +26,7 @@ import {
 } from './types.ts'
 import { isUnread, type Row, rowOf } from './client.ts'
 import {
+  distinctValues,
   EXISTS,
   type Field,
   matchQuery,
@@ -96,7 +97,6 @@ export let shown = (eid: string) =>
   !cache.value[eid]?.quarantined || revealed.value.has(eid)
 let canvasVersion = signal(0)
 let noRelations: Dep[] = []
-let refreshFacets = (_ids: Set<string>) => {}
 let refreshReferences = () => {}
 
 // Human ids are a hot lookup vocabulary, not a query. Keep them beside the
@@ -517,7 +517,6 @@ export let resetSignals = () =>
     }
     resetQueries()
     clearResolved() // a reseed may now hold what the server-resolve sidecar named
-    refreshFacets(touched)
     // A wholesale reseed (reconnect) is any-inbox-may-have-changed: refetch
     // every mounted one rather than diffing what the new graph implies.
     refreshInbox()
@@ -944,7 +943,6 @@ export let applyLocal = (changes: Change[]) => {
     if (changedCanvas) canvasVersion.value++
     publish(changedRows, changedParents, changedChildren)
     refreshQueries(changedRows)
-    refreshFacets(changedRows)
     for (let [eid, z] of zs) {
       let live = pinZs.get(eid)
       if (live) live.value = z
@@ -1568,7 +1566,6 @@ let evict = (eids: string[]) => {
       if (changedCanvas) canvasVersion.value++
       publish(gone, new Set(), new Set())
       refreshQueries(gone)
-      refreshFacets(gone)
     })
   }
 }
@@ -2361,42 +2358,29 @@ export let rows = (): Row[] =>
     comps: r as Record<string, Record<string, unknown>>,
   }))
 
-// The distinct domain census — the one facet the query door can't answer, since
-// it aggregates DISTINCT VALUES (a task moving Eng→Ops keeps its `.task.domain!`
-// membership but changes the census), not membership. So it stays a value scan,
-// woken only when a task's domain actually changes (T-17064: distinct/aggregate
-// grammar would retire this too — T-17046). Gathered off the byComp index (one
-// pass over task rows, never the whole graph — D-18055), healed by syncIx.
-let facetGraph = cache.peek()
-let facetVersion = signal(0)
-let domainList: string[] = []
-let scanDomains = () => {
-  syncIx()
-  let g = cache.peek()
-  let domains = new Set<string>()
-  for (let eid of ix.byComp.get('task') ?? []) {
-    let d = g[eid]?.task?.domain
-    if (d) domains.add(d) // '' is not a domain — matches the old `domain || []`
-  }
-  domainList = [...domains].sort()
-  facetGraph = g
-}
+// The distinct domain census through the query door (T-17504): the universe is
+// every task, and a wake-projected `task.domain` re-fires the set when a
+// VALUE changes (a task moving Eng→Ops keeps its membership but changes the
+// census) — the same mechanism a pin's move uses, so the bespoke facet-rescan
+// machinery this replaces is gone. Empties drop in distinctValues, matching
+// the census as it always read.
+let censusPreds: Pred[] = [
+  has('task'),
+  {
+    comp: '',
+    prop: '',
+    op: PROJECT,
+    value: '',
+    fields: [{ comp: 'task', prop: 'domain', wake: true }],
+  },
+]
 export let domains = {
   get value() {
-    facetVersion.value
-    if (facetGraph != cache.peek()) scanDomains()
-    return domainList
+    return distinctValues(
+      queryEids(censusPreds).value.map((eid) => cache.peek()[eid] ?? {}),
+      { comp: 'task', prop: 'domain' },
+    )
   },
-}
-
-refreshFacets = (eids: Set<string>) => {
-  let changed = [...eids].some((eid) =>
-    facetGraph[eid]?.task?.domain != cache.peek()[eid]?.task?.domain
-  )
-  facetGraph = cache.peek()
-  if (!changed) return
-  scanDomains()
-  facetVersion.value++
 }
 
 // Presence/reference reads the query door answers directly: every project (by
