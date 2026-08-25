@@ -240,11 +240,6 @@ Deno.test('manual validation rejects loss-shaped arguments', () => {
       ['T-1'],
       'needs <text> or --body=<text, @file, - or @-> or --verdict=<verdict>',
     ],
-    [
-      'session brief',
-      [],
-      'needs <text> or --body=<text, @file, - or @->',
-    ],
     // The space form is warm only when body is TRAILING (accepts test below).
     // A bare body option FOLLOWED by another option is not trailing, so it can
     // not safely swallow the rest — it names the value and the `=` spelling
@@ -283,6 +278,18 @@ Deno.test('manual validation rejects loss-shaped arguments', () => {
   for (let [name, args, message] of cases) {
     assertThrows(check(name, args), Error, message)
   }
+})
+
+Deno.test('a bare session brief is the read form', () => {
+  assertEquals(parse('session brief', manuals['session brief'], []), {
+    args: {},
+    many: {},
+    opts: {},
+    flags: new Set<string>(),
+    params: [],
+    words: [],
+    body: undefined,
+  })
 })
 
 Deno.test('manual validation accepts each supported option shape', () => {

@@ -2581,23 +2581,27 @@ let wrap = async (got: Got) => {
   }
 }
 
-// The self-authored brief (T-4554, D-19459): write YOUR session's `brief`
-// component — the first-class handoff the next digest quotes IN FULL as
-// `## previously`. It is NOT the session doc: doc.body stays free for the
+// The self-authored brief (T-4554, D-19459): show or write YOUR session's
+// `brief` component — the first-class handoff the next digest quotes IN FULL
+// as `## previously`. It is NOT the session doc: doc.body stays free for the
 // scribe's narrative. Body doors match mail's: trailing words, --body=@file,
-// --body=- or @- (piped stdin).
+// --body=- or @- (piped stdin); no body is the read door.
 let sessionBrief = async (got: Got) => {
   let sid = me()
   if (!sid) throw new Error('session brief: run under a session (no identity)')
+  let sess = await sessionRow(sid)
+  if (!sess) {
+    throw new Error(`no session entity for ${sid} — task session context first`)
+  }
   let body = got.body
+  if (body == null) {
+    let current = String(sess.comps.brief?.text ?? '')
+    return print(current || `${idOf(sess)} has no brief`)
+  }
   if (!body) {
     throw new Error(
       'a brief needs words: text, @file, or --body=@file|-|@-',
     )
-  }
-  let sess = await sessionRow(sid)
-  if (!sess) {
-    throw new Error(`no session entity for ${sid} — task session context first`)
   }
   await send([{ eid: sess.eid, name: 'brief', comp: { text: body } }])
   print(`${idOf(sess)} brief written`)

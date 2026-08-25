@@ -1016,6 +1016,35 @@ slow('task session wrap help never runs the hook verb', async () => {
   assertMatch(text(out.stdout), /task session wrap \[sid\] \[--hook\]/)
 })
 
+slow('a bare session brief displays the current brief', async () => {
+  let snap: Snapshot = {
+    ...sub,
+    changes: [
+      ...sub.changes,
+      { eid: S, name: 'brief', comp: { text: 'Shipped it.\n\nNext: deploy.' } },
+    ],
+  }
+  let { server, host } = graphServer(snap)
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'session',
+        'brief',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
+    }).output()
+    assertEquals(out.code, 0, text(out.stderr))
+    assertEquals(text(out.stdout), 'Shipped it.\n\nNext: deploy.\n')
+    assertEquals(text(out.stderr), '')
+  } finally {
+    await server.shutdown()
+  }
+})
+
 slow('nested and palette help always resolves before effects', async () => {
   let cases: [string[], RegExp][] = [
     [['mail', 'show', '--help'], /^task mail show/],

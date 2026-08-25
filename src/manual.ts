@@ -829,10 +829,9 @@ export let manuals = declare({
   'session brief': {
     dots: ['body'],
     body: 'text',
-    about: 'write your own session brief; a lone @file is read',
+    about: 'show or write your own session brief; a lone @file is read',
     args: [arg('text', text, true, false)],
     opts: [body],
-    some: ['text', '--body'],
   },
   'session peek': {
     about: "tail a session's rendered entry log",
