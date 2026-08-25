@@ -1063,6 +1063,17 @@ export let manuals = declare({
     alias: true,
     args: [arg('id', id), arg('who', text)],
   },
+  // `add` is the collection-shaped twin of `create`: callers reach for both
+  // before learning that this graph says `new` (T-21813).
+  add: {
+    dots: 'params',
+    about: 'create a task (bare words become the title)',
+    body: 'body',
+    examples: ['task add P1 .project=holdco Fix the flux capacitor'],
+    alias: true,
+    args: [arg('title', text, true, false)],
+    passthrough: true,
+  },
   // `rm` stays a supported top-level alias of `delete` — the shell verb a
   // caller reaches for on first guess (T-18345). Without this entry `rm`
   // isn't a cliVerb, so `task rm T-18345` fell through to subject-first

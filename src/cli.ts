@@ -3206,6 +3206,7 @@ export let verbs = bind({
   wrap,
   create,
   assign,
+  add: create,
   rm: del,
   require: requireEdge,
 })

@@ -119,6 +119,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       wrap: 'wrap [sid] [--hook]',
       create: 'create [title…]',
       assign: 'assign <id> <who>',
+      add: 'add [title…]',
       rm: 'rm <id> [--cascade] [--force]',
       require: 'require <parent> <child> [--gone]',
     },
@@ -129,6 +130,8 @@ Deno.test('help topics cover nested and colon vocabularies', () => {
   assertEquals(help(['<id>']), subjectUsage())
   assertMatch(help(['mail', 'send']), /^task mail send/)
   assertMatch(help(['session', 'brief']), /^task session brief/)
+  assertMatch(help(['add']), /^task add \[title…\]/)
+  assertMatch(requestedHelp(['add', '--help']) ?? '', /^task add \[title…\]/)
   assertMatch(help(['link']), /^task <parent> requires\|contains/)
   assertMatch(help(['link']), /task T-3 requires T-9 --gone/)
   assertMatch(help(['fix']), /^task :fix/)
