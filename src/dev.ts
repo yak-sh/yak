@@ -2,9 +2,15 @@
 // predecessors, announce when boot is complete, then let the predecessor drain;
 // the public port therefore always has a ready listener during source deploys.
 import { devFile, serverFile } from './reload.ts'
+import { peer } from './bind.ts'
 
 let src = new URL('.', import.meta.url).pathname
 let deno = Deno.execPath()
+// The public address this supervisor answers for — read the same way server.ts
+// reads it. Used only to tell a genuine lost race (another live supervisor
+// already serves the port) from a transient first-boot crash (the address is
+// empty), so the two get opposite handling in firstBoot() below.
+let port = Number(Deno.env.get('PORT') ?? 5173)
 
 // Where a successor's death reason is kept. Mirrors sessions.ts logsDir() (its
 // LOGS_DIR lever included), replicated rather than imported so the supervisor
@@ -348,17 +354,47 @@ let relaunch = async () => {
   Deno.exit(42)
 }
 
-let supervise = async () => {
-  // A lost boot race (bind.ts refused this process — another server holds the
-  // port) is a clean stop, not a bug: one line and a non-42 exit ends the
-  // `deno task dev` loop rather than dumping an uncaught stack. Only the FIRST
-  // boot needs this; a later handoff/crash is absorbed by insist()/revive().
-  try {
-    current = watch(await launch())
-  } catch (e) {
-    console.error('supervisor could not start —', (e as Error).message)
-    Deno.exit(1)
+// The FIRST boot, made as resilient as every later one. A child can exit
+// before ready for two very different reasons that look identical from here
+// ("exited before ready (code N)"):
+//
+//   - A genuine LOST RACE: another live supervisor already serves this port
+//     (bind.ts refuses the second). holdco-up relaunches `deno task dev`
+//     periodically, so this happens every time the graph is already up.
+//     Retrying can never win the port and would leave a zombie idle supervisor
+//     each tick, so step aside cleanly (a healthy peer answers /graph even
+//     mid-migration, so this is detectable at once).
+//
+//   - A TRANSIENT crash: the child died before ready and the address is now
+//     EMPTY (e.g. the vector extension's init losing a race during a boot
+//     storm). This is exactly the failure revive() heals AFTER first boot; the
+//     old single-shot exit(1) instead took the whole graph down until cron
+//     respawned it — the flap-to-dead. Heal it here on the same backoff.
+//
+// A supervisor never exits on a healable failure (line: revive's rationale),
+// and a persistently broken build idles the box at the 30s backoff cap rather
+// than spinning — the same contract revive() already honors.
+let firstBoot = async (): Promise<Deno.ChildProcess> => {
+  for (let n = 0;; n++) {
+    let ms = RETRY[Math.min(n, RETRY.length - 1)]
+    if (ms) await wait(ms)
+    try {
+      return watch(await launch())
+    } catch (e) {
+      console.error('server first boot failed —', (e as Error).message)
+      if (await peer(port)) {
+        console.error(
+          `port ${port} already served by another supervisor — stepping aside`,
+        )
+        Deno.exit(0)
+      }
+      // Address empty: transient crash. Loop and retry on backoff.
+    }
   }
+}
+
+let supervise = async () => {
+  current = await firstBoot()
   let handoff = insist(() => serial(swap))
   for await (let event of Deno.watchFs(src)) {
     if (event.paths.some(devFile)) return relaunch()

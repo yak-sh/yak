@@ -90,9 +90,12 @@ export let serverClassifier = (
 
 export let serverFile = serverClassifier()
 
-// The supervisor's OWN module graph — dev.ts imports this file and nothing
-// else. These files still need a supervisor relaunch because a process cannot
-// replace the code it already imported (dev.ts, exit 42).
-export let devFiles = ['dev.ts', 'reload.ts']
+// The supervisor's OWN module graph — the files dev.ts imports. These need a
+// supervisor relaunch (dev.ts, exit 42), not a handoff, because a process
+// cannot replace the code it already imported. Kept by hand because it stays
+// small, guarded by the test that reads dev.ts's imports and requires every one
+// named here — so an added import (bind.ts, for the lost-race check) fails that
+// test until it joins this list.
+export let devFiles = ['dev.ts', 'reload.ts', 'bind.ts']
 
 export let devFile = named(devFiles)
