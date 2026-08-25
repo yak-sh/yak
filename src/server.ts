@@ -2349,7 +2349,13 @@ tick('scribe', () => scribeSweep(cast), 10 * 60_000)
 // (T-14612). Reads still answer from whatever vectors the copy holds, so
 // /similar keeps working.
 if (isLive()) {
-  let embedding = tick('embed', () => embedSweep(db), 10 * 60_000)
+  // No boot pass: the first sweep loads the ~400MB onnx model and runs
+  // synchronous inference chunks that block the event loop for ~18s measured —
+  // landing exactly on the freshly-bound listener of every reload handoff.
+  // Defer it a minute so a new server breathes first; the interval and the
+  // doc-edit debounce keep vectors fresh from then on.
+  let embedding = tick('embed', () => embedSweep(db), 10 * 60_000, false)
+  setTimeout(embedding, 60_000)
   let embedSoon = (() => {
     let t: ReturnType<typeof setTimeout> | undefined
     return () => {
