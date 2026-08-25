@@ -102,6 +102,14 @@ let deadline = (pid: number, ms: number, beat: string) => {
   return { p, clear: () => clearTimeout(timer) }
 }
 
+// The READY beat must outlast a FULL boot over the live graph, and boot cost
+// grows with the db: a bloated journal pushes migrate/index work into minutes
+// (a 1.4GB graph booted ~5–7min, measured). Env-tunable so a large graph boots
+// without the supervisor killing it at the door and respawning forever. The
+// real cure is keeping the db small (VACUUM + journal retention, T-18290/T-21442);
+// this only stops a slow boot from reading as a wedged one.
+let bootMs = Number(Deno.env.get('TASKS_BOOT_DEADLINE_MS') ?? 900_000)
+
 // Spawns the child with `--ready=<port>` appended and resolves once it has
 // dialed that port back. The port rides argv so the address dies with the
 // child; in the environment it would outlive this supervisor in every
@@ -159,9 +167,9 @@ export let launch = async (
       onBound()
       // Beat 2: READY — the successor migrated under the baton. Bounded by the
       // predecessor's drain (managed.settle caps at 300s), so a roomier wait.
-      await beat(330_000, 'ready')
+      await beat(bootMs, 'ready')
     } else {
-      await beat(60_000, 'ready')
+      await beat(bootMs, 'ready')
     }
     // Boot duration on every success, so a creeping regression (2s → 10s → 60s)
     // is visible in the log LONG before it crosses the deadline and turns into
