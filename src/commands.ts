@@ -569,7 +569,8 @@ export let commands: Record<string, Command> = {
   },
   wip: {
     args: [],
-    about: 'move the focused task to wip',
+    about:
+      'move the focused task to wip (shell: `task wip T-3` names one explicitly)',
     words: [0, 0],
     run: move('wip'),
   },

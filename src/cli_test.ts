@@ -2032,6 +2032,35 @@ slow(
   },
 )
 
+slow(
+  'task wip <id> targets the named task past its 0-word palette form',
+  async () => {
+    let { server, acked, host } = graphServer(graph)
+    try {
+      let out = await new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          'wip',
+          'T-4',
+        ],
+        clearEnv: true,
+        env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
+      }).output()
+      assertEquals(text(out.stderr), '')
+      assertEquals(out.code, 0)
+      assertEquals(text(out.stdout).trim(), 'T-4 → wip')
+      assertEquals(
+        acked.filter((c) => c.name == 'task'),
+        [{ eid: O, name: 'task', comp: { status: 'wip' } }],
+      )
+    } finally {
+      await server.shutdown()
+    }
+  },
+)
+
 // The non-id spellings are untouched: `task cancel <prose>` with no
 // id-shaped first word still means the FOCUSED task, exactly as `task
 // :cancel <prose>` always has.

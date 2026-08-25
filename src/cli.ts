@@ -812,35 +812,36 @@ let redact = async (got: Got) => {
   )
 }
 
-// `task done T-3 [comment]` / `task cancel T-3 [reason]` — sugar over
-// .status=done|cancelled plus an optional comment, one atomic batch like
-// `task set`. Only fires when the FIRST word is id-shaped: `done` and
-// `cancel` are also palette verbs (commands.ts) that operate on the
-// session's FOCUSED task, and bare prose ("cancel duplicate of the
-// umbrella") is legitimately a reason for that focused task, not a typo'd
-// target — the dispatcher below sends anything else there unchanged. What
-// this closes is the id-shaped case: T-14573 found `task cancel T-123`
-// silently cancelling the wrong (focused) task and posting "T-123" as the
-// reason, because the id read as reason prose instead of a target.
+// Explicit-target status moves are sugar over a task patch plus an optional
+// closing comment, one atomic batch like `task set`. They fire only when the
+// FIRST word is id-shaped: the same words are palette verbs (commands.ts) that
+// otherwise operate on the session's FOCUSED task, and bare cancel prose is a
+// legitimate reason for that focused task. T-14573 found `task cancel T-123`
+// silently cancelling the wrong task; T-20976 found the sibling asymmetry where
+// `task wip T-123` was refused despite being the predictable shell spelling.
 let idLike = (s?: string) => !!s && /^[A-Za-z]+-\d+$/.test(s)
 
-let finish = (status: 'done' | 'cancelled') => async (args: string[]) => {
-  let [id, ...words] = args
-  let comment = words.join(' ')
-  let sid = me()
-  let [row, sess] = await Promise.all([
-    needed(id),
-    comment && sid ? sessionRow(sid) : undefined,
-  ])
-  let all = [row, ...(sess ? [sess] : [])]
-  await send([
-    { eid: row.eid, name: 'task', comp: { status } },
-    ...(comment ? commentChanges(all, row.eid, comment, me()) : []),
-  ])
-  print(`${idOf(row)} → ${status}${comment ? ` — ${comment}` : ''}`)
-}
+let finish =
+  (status: 'wip' | 'done' | 'cancelled') => async (args: string[]) => {
+    let [id, ...words] = args
+    let comment = words.join(' ')
+    let sid = me()
+    let [row, sess] = await Promise.all([
+      needed(id),
+      comment && sid ? sessionRow(sid) : undefined,
+    ])
+    let all = [row, ...(sess ? [sess] : [])]
+    await send([
+      { eid: row.eid, name: 'task', comp: { status } },
+      ...(comment ? commentChanges(all, row.eid, comment, me()) : []),
+    ])
+    print(`${idOf(row)} → ${status}${comment ? ` — ${comment}` : ''}`)
+  }
+let wip = finish('wip')
 let done = finish('done')
 let cancel = finish('cancelled')
+
+let finishes = { wip, done, cancel }
 
 // External block: a task stuck on something with no entity (a vendor, an
 // owner decision). Writes the `blocked` facet's free-text `on`; apply()
@@ -3312,10 +3313,12 @@ if (import.meta.main) {
       } else if (rest[0]?.startsWith(':')) {
         validateCommand(rest[0].slice(1), rest.slice(1))
         await colon(cmd, rest)
-      } else if ((cmd == 'done' || cmd == 'cancel') && idLike(rest[0])) {
-        // Explicit-target sugar (T-14573) — done/cancel validate their
-        // own args below, not the focused-task palette's word count.
-        await (cmd == 'done' ? done(rest) : cancel(rest))
+      } else if (
+        (cmd == 'wip' || cmd == 'done' || cmd == 'cancel') && idLike(rest[0])
+      ) {
+        // Explicit-target sugar validates its own args below, not the focused
+        // palette command's word count.
+        await finishes[cmd](rest)
       } else if (cmd && commands[cmd]) {
         validateCommand(cmd, rest)
         await colon(undefined, [cmd, ...rest])
