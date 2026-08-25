@@ -128,6 +128,20 @@ export let manuals = declare({
     args: [arg('kind', text, false, false), arg('filters', text, true, false)],
     opts: [json],
   },
+  query: {
+    dots: 'filters',
+    about: 'query the graph (filter grammar)',
+    examples: [
+      'task query .kind=persona',
+      'task query .project=P-19 .status=open --json',
+    ],
+    detail: 'The CLI spelling of the same filtered graph read as ' +
+      '`graph_query` and `/query`. It renders through `task list`; a ' +
+      '`.kind=` filter selects any entity kind, and tasks are the default.',
+    root: true,
+    args: [arg('filters', text, true, false)],
+    opts: [json],
+  },
   decided: {
     dots: 'filters',
     about: 'what has been settled here, newest decision first',

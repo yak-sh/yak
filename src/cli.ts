@@ -3055,6 +3055,7 @@ export let verbs = bind({
   claude,
   codex,
   list,
+  query: list,
   decided,
   docs,
   stale,

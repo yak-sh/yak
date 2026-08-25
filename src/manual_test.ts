@@ -41,6 +41,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       claude: 'claude [claude args…] [--operator]',
       codex: 'codex [codex args…] [--operator]',
       list: 'list [kind] [filters…] [--json]',
+      query: 'query [filters…] [--json]',
       decided: 'decided [filters…] [--all] [--json]',
       docs: 'docs [filters…] [--json]',
       stale: 'stale [filters…] [--all] [--json]',
@@ -144,6 +145,13 @@ Deno.test('spawn help and parsing share the provider vocabulary', () => {
     Error,
     '--model needs model',
   )
+})
+
+Deno.test('query is the generic filtered graph read', () => {
+  let out = help(['query'])
+  assertMatch(out, /task query \[filters…\] \[--json\]/)
+  assertMatch(out, /task query \.kind=persona/)
+  check('query', ['.kind=persona', '--json'])()
 })
 
 Deno.test('deprecated routes leave the index but keep their manuals', () => {

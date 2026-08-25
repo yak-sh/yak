@@ -243,6 +243,7 @@ Deno.test('listing: a plural kind is the list verb, the singular is a subject', 
 Deno.test('subject: old commands and explicit focused commands keep their door', () => {
   assertEquals(subject('show', ['T-3']), undefined)
   assertEquals(subject('dep', ['T-3', 'requires', 'T-9']), undefined)
+  assertEquals(subject('query', ['.kind=persona']), undefined)
   assertEquals(subject('fix', ['T-3']), undefined)
   assertEquals(subject('T-3', [':done']), undefined)
 })
