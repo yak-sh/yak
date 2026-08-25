@@ -12,6 +12,7 @@ import {
 } from './entries.ts'
 import { graphLog } from './entry_log.ts'
 import {
+  graphSession,
   managedCodex,
   type ManagedCodexOptions,
   runnerSessions,
@@ -144,6 +145,10 @@ slow('the runner ignores imported-only session partitions', () => {
     [old, uuid()],
     { source: 'managed', line: 1 },
   )
+  append(db, history, [{
+    content: { body: 'M-1 · related thought' },
+    recalled: { source: old },
+  }])
   let managed = session(db)
   let input = uuid()
   append(
@@ -157,6 +162,8 @@ slow('the runner ignores imported-only session partitions', () => {
   )
 
   assertEquals(runnerSessions(db), [managed])
+  assertEquals(graphSession(db, history), false)
+  assertEquals(graphSession(db, managed), true)
   db.close()
 })
 

@@ -88,18 +88,16 @@ export type ManagedCodexOptions = {
 
 let now = () => new Date()
 
-// A session is graph-native when a RUNNER or composer minted an entry for it —
-// never merely because file history was IMPORTED into its partition. An
-// imported entry (D-16704) wears `imported`; a file-backed managed or native
-// session whose transcript is ingested still owns its liveness through the
-// summary columns, not the runner's lease machinery. So the substrate is
-// decided by a NON-imported entry — else ingesting a managed session's log
-// would flip it to graph-native and route its liveness down the runner's path.
+// A session is graph-native when the runner minted a generation for it. Other
+// graph-born entries are not execution markers: auto-recall appends `recalled`
+// entries to process-backed transcripts, and comments may append `attention`.
+// Imported generations (D-16704) remain file history. The generation is the
+// durable execution boundary runnerSessions() already drives from below.
 export let graphSession = (db: DatabaseSync, eid: string) =>
   !!db.prepare(
-    `select 1 from entry e
+    `select 1 from entry e join generation g on g.entity = e.entity
      where e.session = (select id from entity where eid = ?)
-       and not exists (select 1 from imported i where i.entity = e.entity)
+       and not exists (select 1 from imported i where i.entity = g.entity)
      limit 1`,
   ).get(eid)
 

@@ -39,7 +39,7 @@ let { apply, db, delta, journalOf, snapshot, sweepSelect } = await import(
 )
 let { hookClaim, noticesFor, rows } = await import('./client.ts')
 let { childEnv, childPath } = await import('./agent_env.ts')
-let { readEntries } = await import('./entries.ts')
+let { append, readEntries } = await import('./entries.ts')
 let { graphLog, pageEntries } = await import('./entry_log.ts')
 let {
   codexPending,
@@ -1894,6 +1894,15 @@ slow(
     await done
     assertEquals(row(eid)?.status, 'completed')
     let before = row(eid)!.latest_seq as number
+
+    // Ambient recall writes graph data into every transcript. It does not
+    // change which executor owns the Session: this codex-cli run must still
+    // resume through its process adapter rather than the graph runner.
+    let source = readEntries(db, eid)[0].eid
+    append(db, eid, [{
+      content: { body: 'M-1 · related thought' },
+      recalled: { source },
+    }])
 
     heard = []
     let entriesBefore = logOf(eid).entries.length
