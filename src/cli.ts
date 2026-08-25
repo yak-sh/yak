@@ -344,6 +344,11 @@ export let listArgs = (got: Pick<Got, 'opts' | 'words'>) => {
   return selected ? [`.kind=${kindWord(selected)}`, ...got.words] : got.words
 }
 
+// A kind has three warm spellings at listing doors: `comments`,
+// `.kind=comment`, and the tool-style `kind=comment`.
+export let kindArg = (word: string) =>
+  kindWord(word.match(/^\.?kind=(.+)$/)?.[1] ?? word)
+
 let list = async (got: Got) => {
   let json = got.flags.has('--json')
   let limit = got.opts['--limit'] ? Number(got.opts['--limit']) : undefined
@@ -353,7 +358,7 @@ let list = async (got: Got) => {
   let args = listArgs(got)
   // A bare word names the KIND to list (`task list projects`); `.kind=` rides
   // `line` like any other filter.
-  let words = args.map((a) => [a, kindWord(a)] as const)
+  let words = args.map((a) => [a, kindArg(a)] as const)
   let bare = words.find(([, k]) => k)?.[1]
   // Here a bare word is also a KIND, so one that is neither names both
   // doors rather than only the filter one.

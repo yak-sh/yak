@@ -195,6 +195,13 @@ Deno.test('query is the generic filtered graph read', () => {
   check('graph_query', ['.kind=comment', '--json'])()
 })
 
+Deno.test('graph_query is a hidden compatibility alias for the CLI query', () => {
+  let out = help(['graph_query'])
+  assertMatch(out, /task graph_query \[filters…\] \[--json\]/)
+  check('graph_query', ['kind=comment'])()
+  assertEquals(usage().includes('task graph_query'), false)
+})
+
 Deno.test('deprecated routes leave the index but keep their manuals', () => {
   let index = usage()
   for (let [name, manual] of Object.entries(manuals)) {

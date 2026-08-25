@@ -23,6 +23,7 @@ import {
   hookSession,
   hookTurn,
   jsonText,
+  kindArg,
   leadPrio,
   lifecycleHooks,
   listArgs,
@@ -342,6 +343,13 @@ Deno.test('archive is a root verb before subject-first routing', () => {
   assertEquals(subject('archive', ['K-20995']), undefined)
 })
 
+Deno.test('kindArg accepts CLI and tool filter spellings', () => {
+  assertEquals(kindArg('comments'), 'comment')
+  assertEquals(kindArg('.kind=comment'), 'comment')
+  assertEquals(kindArg('kind=comment'), 'comment')
+  assertEquals(kindArg('kind=unknown'), undefined)
+})
+
 Deno.test('subject: old commands and explicit focused commands keep their door', () => {
   assertEquals(subject('show', ['T-3']), undefined)
   assertEquals(subject('recall', ['M-4455']), undefined)
@@ -349,7 +357,7 @@ Deno.test('subject: old commands and explicit focused commands keep their door',
   assertEquals(subject('dep', ['T-3', 'requires', 'T-9']), undefined)
   assertEquals(subject('require', ['T-3', 'T-9']), undefined)
   assertEquals(subject('query', ['.kind=persona']), undefined)
-  assertEquals(subject('graph_query', ['.kind=comment']), undefined)
+  assertEquals(subject('graph_query', ['kind=comment']), undefined)
   assertEquals(subject('log', ['S-3']), undefined)
   assertEquals(subject('fix', ['T-3']), undefined)
   assertEquals(subject('T-3', [':done']), undefined)

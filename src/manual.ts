@@ -171,13 +171,12 @@ export let manuals = declare({
     args: [arg('filters', text, true, false)],
     opts: [json],
   },
-  // `graph_query` is the MCP tool's spelling. Keep it as a supported shell
-  // alias: agents crossing that door should reach the same query grammar,
-  // not fall into subject-first parsing where the first filter becomes a verb.
+  // Tool names leak into shell instructions, so the MCP spelling remains a
+  // hidden alias while `query` stays the CLI vocabulary (T-21811).
   graph_query: {
     dots: 'filters',
-    about: 'query the graph (MCP-compatible spelling)',
-    examples: ['task graph_query .kind=comment'],
+    about: 'query the graph (filter grammar)',
+    examples: ['task graph_query kind=comment'],
     alias: true,
     args: [arg('filters', text, true, false)],
     opts: [json],
