@@ -16,6 +16,7 @@ import {
   bornAt,
   bus,
   byBoard,
+  byList,
   checkedRefs,
   claimant,
   claimChanges,
@@ -377,7 +378,11 @@ let list = async (got: Got) => {
   let named = line.map((a) => a.match(/^\.kind=(.+)$/)?.[1]).find(Boolean)
   let kind = bare ?? (named ? kindWord(named) ?? 'task' : 'task')
   let filters = named ? line : [`.kind=${kind}`, ...line]
-  let hits = (await query(filters, { limit })).sort(byBoard)
+  let sort = got.opts['--sort']
+  let hits = (await query(filters, { limit: sort ? undefined : limit })).sort(
+    sort ? byList(sort) : byBoard,
+  )
+  if (sort && limit) hits = hits.slice(0, limit)
   let refs = await fetched(
     hits.flatMap((r) => [
       String(r.comps.claim?.session ?? ''),

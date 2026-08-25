@@ -3,6 +3,7 @@
 import {
   belongs,
   byBoard,
+  byList,
   checkRefs,
   claimant,
   claimChanges,
@@ -543,6 +544,36 @@ Deno.test('rows filter through the query grammar + byBoard', () => {
     true,
   )
   assertEquals([...all.filter((r) => r.comps.task)].sort(byBoard)[0].eid, T2) // open before wip
+})
+
+Deno.test('byList: named values sort either way and missing values stay last', () => {
+  let row = (
+    eid: string,
+    num: number,
+    priority?: number,
+    created?: string,
+  ) => ({
+    eid,
+    num,
+    kind: 'task',
+    comps: {
+      task: { status: 'open', priority },
+      ...(created ? { created: { at: created } } : {}),
+    },
+  })
+  let a = row('a', 1, 2, '2026-01-01T00:00:00.000Z')
+  let b = row('b', 2, 1, '2026-02-01T00:00:00.000Z')
+  let empty = row('empty', 3)
+  assertEquals([a, empty, b].sort(byList('priority')).map((r) => r.eid), [
+    'b',
+    'a',
+    'empty',
+  ])
+  assertEquals([a, empty, b].sort(byList('-created')).map((r) => r.eid), [
+    'b',
+    'a',
+    'empty',
+  ])
 })
 
 Deno.test('taskChanges: defaults + grouped comps ride along', () => {

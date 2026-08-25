@@ -69,6 +69,13 @@ let count = value('-n', num, true)
 let empty = { name: 'text', test: /.*/ }
 let minutes = { name: 'minutes', test: /^\d+$/ }
 let timestamp = { name: 'iso', test: /.+/ }
+let listSort = of(
+  'sort',
+  () =>
+    ['priority', 'created', 'updated', 'num'].flatMap((
+      name,
+    ) => [name, `-${name}`]),
+)
 let verdict = enumOf(comps.review.verdict, 'verdict')
 let provider = of('provider', () => providers().map((p) => p.name))
 let model = of(
@@ -120,6 +127,7 @@ export let manuals = declare({
     examples: [
       'task list .status=open .priority<=1',
       'task list .project=harness .updated.at>="1 week ago"',
+      'task list sessions --sort=-created',
       'task projects',
       'task list boards .title~=fleet',
     ],
@@ -127,11 +135,17 @@ export let manuals = declare({
       '`--kind=project` and `.kind=project` all name it, and the plural is a ' +
       'verb of its own (`task projects`). Tasks are the default. The second ' +
       "column is the handle you can type: a task's status, everything " +
-      `else's alias. Quarantined rows require an explicit ` +
+      `else's alias. --sort accepts priority, created, updated or num; ` +
+      `prefix the value with - for descending order. Quarantined rows require an explicit ` +
       `'.quarantined!' filter. Kinds: ${kindOrder.join(', ')}.`,
     root: true,
     args: [arg('kind', text, false, false), arg('filters', text, true, false)],
-    opts: [value('--kind', kind), value('--limit', num, true), json],
+    opts: [
+      value('--kind', kind),
+      value('--limit', num, true),
+      value('--sort', listSort, true),
+      json,
+    ],
   },
   query: {
     dots: 'filters',

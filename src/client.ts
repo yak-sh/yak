@@ -1312,6 +1312,37 @@ export let byBoard = (a: Row, b: Row) =>
   (Number(a.comps.task?.priority ?? 0) - Number(b.comps.task?.priority ?? 0)) ||
   (a.num - b.num)
 
+// List sorting is deliberately a small display vocabulary, not another query
+// language: membership stays server-owned while the CLI orders its bounded
+// result. Missing values stay last in either direction.
+export let byList = (sort: string) => {
+  let desc = sort.startsWith('-')
+  let name = desc ? sort.slice(1) : sort
+  let value = (r: Row): string | number | undefined => {
+    let priority = r.comps.task?.priority
+    return name == 'priority'
+      ? typeof priority == 'number' ? priority : undefined
+      : name == 'created'
+      ? bornAt(r) || undefined
+      : name == 'updated'
+      ? editedAt(r) || undefined
+      : name == 'num'
+      ? r.num
+      : undefined
+  }
+  return (a: Row, b: Row) => {
+    let x = value(a)
+    let y = value(b)
+    if (x == null || y == null) {
+      return x == null ? (y == null ? a.num - b.num : 1) : -1
+    }
+    let order = typeof x == 'number' && typeof y == 'number'
+      ? x - y
+      : String(x).localeCompare(String(y))
+    return (desc ? -order : order) || a.num - b.num
+  }
+}
+
 // A set of contains-linked docs, root-first: a doc no other doc in the set
 // contains is a root and leads; the rest fall to num order. Pure over the rows
 // and the `contains` edges among them, so `task docs` and its test share one

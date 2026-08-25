@@ -41,7 +41,8 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       tui: 'tui',
       claude: 'claude [claude args…] [--operator]',
       codex: 'codex [codex args…] [--operator]',
-      list: 'list [kind] [filters…] [--kind=KIND] [--limit=N] [--json]',
+      list:
+        'list [kind] [filters…] [--kind=KIND] [--limit=N] [--sort=SORT] [--json]',
       query: 'query [filters…] [--json]',
       graph_query: 'graph_query [filters…] [--json]',
       decided: 'decided [filters…] [--all] [--json]',
@@ -347,6 +348,17 @@ Deno.test('a required verb with no arguments renders help without a usage failur
   assertMatch(requestedHelp(['mail', 'show']) ?? '', /^task mail show <id>/)
   assertEquals(requestedHelp(['list']), undefined)
   assertEquals(requestedHelp(['inbox']), undefined)
+})
+
+Deno.test('list sort accepts joined and separate values', () => {
+  assertEquals(
+    parse('list', manuals.list, ['sessions', '--sort=-created']).opts,
+    { '--sort': '-created' },
+  )
+  assertEquals(
+    parse('list', manuals.list, ['.status=open', '--sort', 'priority']).opts,
+    { '--sort': 'priority' },
+  )
 })
 
 Deno.test('parse names positionals, resolves options, and applies defaults', () => {
