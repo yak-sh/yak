@@ -1,6 +1,6 @@
 // The client cache's disk shadow: IndexedDB persistence so a returning tab
 // hydrates the graph from local disk (tens of ms) + a small delta, instead
-// of re-fetching the whole ~10.5 MB /snapshot (~1.4 s) on every reload
+// of re-pulling its working set and subscriptions cold on every reload
 // (T-6823). Raw IndexedDB, no wrapper lib (vendored-only philosophy),
 // feature-detected. A failed IDB op is telemetry, never a broken render —
 // every path degrades to today's full-snapshot boot. The stores mirror the

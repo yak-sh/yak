@@ -641,19 +641,14 @@ let join = (
     epoch?: string
     vocab?: string
     live?: number
-    ws?: number
   },
 ) => {
   if (f.live == 1) envelopes.add(sock)
   else envelopes.delete(sock)
   if (f.since == null || cursorStale(db, f.epoch, f.vocab, f.since)) {
-    // A serverQuery client (ws:1) seeds the working set, not the whole graph.
-    sock.send(
-      JSON.stringify({
-        reset: true,
-        snapshot: f.ws == 1 ? workingSet(db) : snapshot(db),
-      }),
-    )
+    // A cold or stale client seeds the WORKING SET — never the whole graph
+    // (M-21143); its subscriptions stream the rest on demand.
+    sock.send(JSON.stringify({ reset: true, snapshot: workingSet(db) }))
   } else {
     let d = delta(db, f.since)
     sock.send(JSON.stringify({ catchup: d.changes, cursor: d.cursor }))
@@ -1087,10 +1082,10 @@ let handle = async (req: Request) => {
     )
   }
   if (path == '/ws') return ws(req)
-  if (path == '/snapshot') return Response.json(snapshot(db))
   // The advertised capability tokens, cheaply — a headless spawn door
   // (client.ts serverCaps) reads this to decide whether to speak canonical
-  // `spawn` without paying for a whole snapshot. Same array snapshot() rides.
+  // `spawn` without paying for a whole snapshot — and the reachability
+  // HEAD the browser's reload gate pings.
   if (path == '/capabilities') return Response.json(capabilities)
   // The admin census's graph-true counts: one COUNT per component table,
   // authoritative for eager AND entry-partition components the cache omits.

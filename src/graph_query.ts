@@ -269,7 +269,7 @@ export let evalGraph = (
 }
 
 // The DEFINING sets a working-set boot seeds — the canvas chrome and the nav's
-// own queries (a serverQuery client subscribes to exactly these on mount, and a
+// own queries (a client subscribes to exactly these on mount, and a
 // board/card streams the rest). Each is bounded by a chrome-sized kind (canvases,
 // projects, this client's UI state), never the graph. `.session!` is DELIBERATELY
 // absent: sessions are the one unbounded kind (thousands, ~86% of a naive working
@@ -289,7 +289,7 @@ export let WS_SETS = [
   '.client!',
 ]
 
-// The working-set boot (M-21143 / T-18059): a joining serverQuery client seeds
+// The working-set boot (M-21143 / T-18059): a joining client seeds
 // the DEFINING sets it will subscribe to plus the entities its cards point at,
 // and ALL edges (allDeps) — NOT the long tail (old tasks, entries, memories,
 // comments, mail: the bulk of a whole-graph snapshot), which streams as views

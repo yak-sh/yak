@@ -110,7 +110,7 @@ let freePort = () => {
 let ready = async (url: string, within = 15_000) => {
   for (let waited = 0; waited < within; waited += 100) {
     try {
-      if ((await fetch(`${url}/snapshot`)).ok) return true
+      if ((await fetch(`${url}/capabilities`)).ok) return true
     } catch { /* not up yet */ }
     await pause(100)
   }

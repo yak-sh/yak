@@ -140,7 +140,7 @@ export let App = () => {
     return () => removeEventListener('keydown', key)
   }, [])
   // Hold a route sub for the fullscreen root while it's this one — under a
-  // partial cache (serverQuery) an entity reached by direct URL is in no
+  // partial cache an entity reached by direct URL is in no
   // defining set, so this is what loads it; a no-op under a whole-graph cache.
   // Computed before the /admin early return so the hook order stays stable.
   let rootEid = route.value.startsWith('/admin')

@@ -232,8 +232,8 @@ let resetQueries = () => {
 // field move must re-fire the LIST, which only mem's wake tracking carries; a
 // membership sub does not). Shadow means the whole stream still owns the cache,
 // so nothing is evicted; under the working-set boot the subs are what stream
-// the working set in and the cache is bounded. Gated by config.serverQuery
-// (on by default; `?ws-sub=off` opts out).
+// the working set in and the cache is bounded.
+// (always on: a partial cache must read the authoritative set).
 type ServerSet = {
   n: number
   ids: Signal<string[]>
@@ -279,8 +279,7 @@ export let predsToQuery = (preds: Pred[]): string | undefined => {
 
 // The server line for a query when the flag is on and the shape round-trips;
 // undefined routes the caller to the local resolver exactly as before.
-let serverLine = (preds: Pred[]): string | undefined =>
-  config.serverQuery ? predsToQuery(preds) : undefined
+let serverLine = (preds: Pred[]): string | undefined => predsToQuery(preds)
 
 // A LOCAL write must paint through a server-backed set immediately: between
 // applyLocal and the sub's echo (or with the socket down — a test, an offline
@@ -368,9 +367,9 @@ export let dropQuery = (preds: Pred[]) => {
 
 // A query that is evaluated PER RENDERED ROW — a reverse-lookup keyed by the
 // row's own eid (a tile's comment count on every entity in a list or tree) —
-// must NEVER open a server sub, even with serverQuery on: that scales with rows
+// must NEVER open a server sub: that scales with rows
 // on screen, not views, and a page of them floods the leader (1363 subs / a
-// stalled serial chain, measured under ?ws-sub — T-21283). These resolve LOCALLY
+// stalled serial chain, measured — T-21283). These resolve LOCALLY
 // over the working set the DEFINING subs (boards/projects/sessions/canvases)
 // stream in — a tile badge is best-effort, and an OPEN card's own view keeps its
 // bounded sub for the complete, correct list. `mem` always, never the server.
@@ -619,14 +618,6 @@ export let config: {
   // persistent delta-synced store lands. The flip mechanism is wired and
   // parity-proven; a probe (?store=idb) turns it on to exercise and measure it.
   store: boolean
-  // Back queryEids on a genuine SERVER subscription instead of the local cache
-  // (T-17126) — the gate the working-set boot (T-18059) needs so a partial cache
-  // never under-reports. ON by default since both flip-gates landed (defining-
-  // query bounding T-21283, working-set boot T-18059): a membership queryEids
-  // opens a server sub and reads the authoritative set, and connect() asks for
-  // the 0.55MB working set instead of the whole graph. `?ws-sub=off` is the
-  // opt-out (rollback/debug); the TUI opts out at its own boot for now.
-  serverQuery: boolean
   reload: () => void
   swap?: (gen: number) => void
   css?: (gen: number) => void
@@ -638,19 +629,12 @@ export let config: {
   shared: true,
   agreement: false,
   store: false,
-  serverQuery: true,
   reload: () => loc?.reload(),
 }
 export let agreementProbe = (search: string) =>
   new URLSearchParams(search).get('probe') == 'subscriptions'
 export let storeProbe = (search: string) =>
   new URLSearchParams(search).get('store') == 'idb'
-// Tri-state: absent leaves the default alone; `?ws-sub` forces on; `?ws-sub=off`
-// is the opt-out (the rollback lever now that the default is on).
-export let serverQueryProbe = (search: string): boolean | undefined => {
-  let p = new URLSearchParams(search)
-  return p.has('ws-sub') ? p.get('ws-sub') != 'off' : undefined
-}
 export let base = () => `http${config.secure ? 's' : ''}://${config.host}`
 
 // The column sort: priority first (lower sorts higher), num as tiebreak.
@@ -1448,8 +1432,8 @@ let connect = () => {
       vocab: held.vocabHash,
       live: 1,
       // ws:1 asks a cold boot to seed the WORKING SET, not the whole graph
-      // (M-21143) — safe only because serverQuery keeps membership complete.
-      ws: config.serverQuery ? 1 : undefined,
+      // (M-21143) — server-backed membership keeps a partial cache complete.
+      ws: 1,
     }))
   }
   socket.onmessage = (m) => {
@@ -1479,7 +1463,7 @@ let connect = () => {
     polling = true
     let poll = setInterval(async () => {
       try {
-        await fetch(`${base()}/snapshot`, { method: 'HEAD' })
+        await fetch(`${base()}/capabilities`, { method: 'HEAD' })
         // The server is back — but this tab may hold writes it made while the
         // socket was down. They leave through /apply before the reload that
         // would discard them (T-21413); a failed drain leaves the poller
@@ -1498,12 +1482,12 @@ let connect = () => {
 // The follower half of the same promise: a fanned 'reload' must not outrun
 // this tab's own outbox — nor refresh into a server a code edit is still
 // restarting (the several-second brick). Confirm the successor is listening
-// (HEAD /snapshot) AND this tab's outbox has drained, THEN reload; otherwise
+// (HEAD /capabilities) AND this tab's outbox has drained, THEN reload; otherwise
 // retry on the poller's cadence — the page stays live on the old JS across the
 // gap. This is the same reachability gate the reconnect poller already uses.
 let reloadDrained = async () => {
   try {
-    await fetch(`${base()}/snapshot`, { method: 'HEAD' })
+    await fetch(`${base()}/capabilities`, { method: 'HEAD' })
   } catch {
     return void setTimeout(reloadDrained, 500) // successor not up yet
   }
@@ -1788,7 +1772,6 @@ export let entrySub = (session: string) => {
 // where the entity is already loaded. Same ownership path as entrySub.
 let routeUses = new Map<string, number>()
 export let routeSub = (eid: string) => {
-  if (!config.serverQuery) return () => {}
   let sub = `route:${eid}`
   let n = routeUses.get(sub) ?? 0
   routeUses.set(sub, n + 1)
@@ -1868,13 +1851,6 @@ let seedFrom = (snap: Snapshot, write = true) => {
   }
   return Promise.resolve(false)
 }
-
-// First-visit / no-IDB fill: the whole graph over HTTP (the TUI and a fresh
-// browser have nothing to hydrate, and a full snapshot can't reorder — it is
-// a complete prefix). The socket's {since} handshake that follows just joins
-// the broadcast and closes the fetch→open gap with a tiny catch-up.
-let fromSnapshot = async (write = true) =>
-  seedFrom(await (await fetch(`${base()}/snapshot`)).json(), write)
 
 let persist = (
   touched: { eids: string[]; edges: Dep[] },
@@ -1963,17 +1939,12 @@ let land = async (data: unknown, mode: Land) => {
   }
 }
 
-let local = async (write: boolean) => {
+let local = async () => {
   let stored = await idb.hydrate()
   if (stored.meta.cursor === undefined) {
-    // serverQuery boots EMPTY (M-21143): the socket's ws:1 handshake seeds the
-    // working set as its reset, so we skip the whole-graph HTTP /snapshot — the
-    // dominant 44MB. A legacy client still fills from the full snapshot here.
-    if (config.serverQuery) mark('working-set')
-    else {
-      mark('snapshot')
-      await fromSnapshot(write)
-    }
+    // A cold boot seeds EMPTY (M-21143): the socket's ws:1 handshake seeds the
+    // working set as its reset — there is no whole-graph load, over any door.
+    mark('working-set')
   } else {
     mark('hydrate+delta')
     pinZs.clear()
@@ -1985,9 +1956,9 @@ let local = async (write: boolean) => {
 }
 
 let booted = false
-let once = async (write: boolean) => {
+let once = async () => {
   if (booted) return
-  await local(write)
+  await local()
   // Requeue any write a prior life left undelivered, BEFORE the socket opens —
   // so a crash or manual reload can no longer silently lose it (T-21440).
   await replayOutbox()
@@ -2024,9 +1995,8 @@ export let boot = async () => {
     if (doc.visibilityState != 'visible' || !ws) return
     if (socketStale(ws.readyState, seen, Date.now())) ws.close()
   })
-  config.serverQuery = serverQueryProbe(search) ?? config.serverQuery
   if (!canShare()) {
-    await once(true)
+    await once()
     await attachStore()
     connect()
     return
@@ -2045,13 +2015,13 @@ export let boot = async () => {
     channel,
     {
       lead: async () => {
-        await once(true)
+        await once()
         await attachStore()
         connect()
       },
-      follow: () => once(false),
+      follow: () => once(),
       solo: async () => {
-        await once(true)
+        await once()
         await attachStore()
         connect()
       },

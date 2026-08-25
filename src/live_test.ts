@@ -2222,7 +2222,6 @@ Deno.test('serverQuery: a held membership query tracks its subscription', () => 
     { eid, name: 'entity', comp: { eid, num } },
     { eid, name: 'project', comp: { color: '#111' } },
   ]
-  config.serverQuery = true
   try {
     cache.value = {
       [P1]: { entity: { eid: P1, num: 1 }, project: { eid: P1 } },
@@ -2255,14 +2254,13 @@ Deno.test('serverQuery: a held membership query tracks its subscription', () => 
     assertEquals(sig.value, [P1])
     dropQuery(preds)
   } finally {
-    config.serverQuery = false
     ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
   }
 })
 
 // T-21283: a per-rendered-row reverse-lookup (commentCount on every tile) must
 // NEVER open a per-entity server sub — that scales with rows on screen and
-// floods the leader (1363 subs measured). It stays LOCAL even with serverQuery
+// floods the leader (1363 subs measured). It stays LOCAL even with server subs
 // on, while a DEFINING query still opens its bounded sub.
 Deno.test('commentCount opens no server sub; a defining query does (T-21283)', () => {
   let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
@@ -2278,7 +2276,6 @@ Deno.test('commentCount opens no server sub; a defining query does (T-21283)', (
   let probe =
     (globalThis as unknown as { __probe: { subN: () => number } }).__probe
   let X = 'cccc0000-0000-4000-8000-000000000001'
-  config.serverQuery = true
   try {
     cache.value = {
       [X]: { entity: { eid: X, num: 1 }, canvas: { eid: X } },
@@ -2295,7 +2292,6 @@ Deno.test('commentCount opens no server sub; a defining query does (T-21283)', (
     assertEquals(probe.subN(), n0 + 1)
     dropQuery(preds)
   } finally {
-    config.serverQuery = false
     ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
   }
 })
