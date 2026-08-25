@@ -1052,6 +1052,16 @@ export let manuals = declare({
     args: [arg('id', id)],
     opts: [flag('--cascade'), flag('--force')],
   },
+  // `require` is the imperative edge verb callers reach for before learning
+  // the subject-first sentence. Keep that warm path working, while the
+  // canonical `task <parent> requires <child>` stays in root help.
+  require: {
+    about: 'make one entity require another',
+    examples: ['task require T-3 T-9', 'task require T-3 T-9 --gone'],
+    alias: true,
+    args: [arg('parent', id), arg('child', id)],
+    opts: [flag('--gone')],
+  },
 })
 
 export let cliVerbs = new Set(

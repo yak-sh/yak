@@ -116,6 +116,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       wrap: 'wrap [sid] [--hook]',
       create: 'create [title…]',
       rm: 'rm <id> [--cascade] [--force]',
+      require: 'require <parent> <child> [--gone]',
     },
   )
 })

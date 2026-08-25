@@ -1695,6 +1695,16 @@ let dep = async (got: Got) => {
   print(`${idOf(row)} ${type} ${idOf(child)}${gone ? ' — unlinked' : ''}`)
 }
 
+let requireEdge = (got: Got) =>
+  dep({
+    ...got,
+    args: {
+      id: got.args.parent,
+      type: 'requires',
+      child: got.args.child,
+    },
+  })
+
 // Comments attach to anything; attribution rides the session env (me()).
 // A comment is something you WROTE — there is no door here for marking it
 // as machinery, because a caller who has one uses it to stay off the mail
@@ -3136,6 +3146,7 @@ export let verbs = bind({
   wrap,
   create,
   rm: del,
+  require: requireEdge,
 })
 
 // Only run the CLI when invoked as the program — importing this module (e.g.

@@ -283,6 +283,7 @@ Deno.test('listArgs: --kind enters the canonical filter grammar', () => {
 Deno.test('subject: old commands and explicit focused commands keep their door', () => {
   assertEquals(subject('show', ['T-3']), undefined)
   assertEquals(subject('dep', ['T-3', 'requires', 'T-9']), undefined)
+  assertEquals(subject('require', ['T-3', 'T-9']), undefined)
   assertEquals(subject('query', ['.kind=persona']), undefined)
   assertEquals(subject('fix', ['T-3']), undefined)
   assertEquals(subject('T-3', [':done']), undefined)
@@ -867,6 +868,19 @@ slow('deprecated routes leave root help but teach at their door', async () => {
   )
 })
 
+slow('task require is a supported alias with focused help', async () => {
+  let root = await cli('--help')
+  assertEquals(root.code, 0)
+  assertEquals(/^\s+task require\b/m.test(text(root.stdout)), false)
+
+  let direct = await cli('require', '--help')
+  assertEquals(direct.code, 0)
+  assertMatch(
+    text(direct.stdout),
+    /task require <parent> <child> \[--gone\][\s\S]*task require T-3 T-9/,
+  )
+})
+
 // A deprecated spelling HARD-ERRORS — it points at its replacement and
 // refuses to run, so print-and-continue can't hide a partial run (T-16375).
 // The gate follows the spelling typed, not the handler reached: the
@@ -1269,6 +1283,32 @@ let graphServer = (snap = graph) => fakeGraph(snap)
 Deno.test('the CLI has no whole-graph read path', () => {
   let source = Deno.readTextFileSync(new URL('./cli.ts', import.meta.url))
   assertEquals(source.includes('await snapshot()'), false)
+})
+
+slow('task require writes the subject-first requires edge', async () => {
+  let fake = graphServer()
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'require',
+        'T-2',
+        'T-4',
+      ],
+      env: { TASKS_HOST: fake.host },
+    }).output()
+    assertEquals(out.code, 0)
+    assertEquals(text(out.stdout).trim(), 'T-2 requires T-4')
+    assertEquals(fake.acked, [{
+      eid: T,
+      name: 'dependency',
+      comp: { type: 'requires', child: O },
+    }])
+  } finally {
+    await fake.server.shutdown()
+  }
 })
 
 slow('inbox asks only for its reader and keeps order when read', async () => {
