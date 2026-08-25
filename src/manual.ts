@@ -129,7 +129,7 @@ export let manuals = declare({
       `'.quarantined!' filter. Kinds: ${kindOrder.join(', ')}.`,
     root: true,
     args: [arg('kind', text, false, false), arg('filters', text, true, false)],
-    opts: [value('--kind', kind), json],
+    opts: [value('--kind', kind), value('--limit', num, true), json],
   },
   query: {
     dots: 'filters',

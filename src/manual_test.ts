@@ -40,7 +40,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       tui: 'tui',
       claude: 'claude [claude args…] [--operator]',
       codex: 'codex [codex args…] [--operator]',
-      list: 'list [kind] [filters…] [--kind=KIND] [--json]',
+      list: 'list [kind] [filters…] [--kind=KIND] [--limit=N] [--json]',
       query: 'query [filters…] [--json]',
       decided: 'decided [filters…] [--all] [--json]',
       docs: 'docs [filters…] [--json]',
@@ -409,9 +409,16 @@ Deno.test('complete answers help and passes its completion line through', () => 
 })
 
 Deno.test('parse preserves filter tokens and routes write params', () => {
-  let filters = ['projects', '.title~=fleet', '.updated.at>=1 week ago']
+  let filters = [
+    'projects',
+    '.title~=fleet',
+    '.updated.at>=1 week ago',
+    '--limit',
+    '12',
+  ]
   let listed = parse('list', manuals.list, filters)
-  assertEquals(listed.words, filters)
+  assertEquals(listed.words, filters.slice(0, 3))
+  assertEquals(listed.opts['--limit'], '12')
   assertEquals(listed.params, [])
 
   let made = parse('new', manuals.new, [

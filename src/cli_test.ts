@@ -1520,7 +1520,7 @@ slow(
       ],
       deps: [],
     }
-    let { server, host } = graphServer(snap)
+    let { server, seen, host } = graphServer(snap)
     let run = (...args: string[]) =>
       new Deno.Command(Deno.execPath(), {
         args: [
@@ -1539,10 +1539,11 @@ slow(
       decided: { at: '2026-08-03T00:00:00.000Z' },
     }
     try {
-      let listed = await run('list', '--json')
+      let listed = await run('list', '--limit', '1', '--json')
       let decided = await run('decided', '--all', '--json')
       let shown = await run('show', 'T-41', '--json')
       assertEquals(listed.code, 0)
+      assertEquals(seen[0], '/query?limit=1&.kind=task')
       assertEquals(decided.code, 0)
       assertEquals(shown.code, 0)
       assertEquals(JSON.parse(text(listed.stdout)), [entity])

@@ -332,6 +332,7 @@ export let listArgs = (got: Pick<Got, 'opts' | 'words'>) => {
 
 let list = async (got: Got) => {
   let json = got.flags.has('--json')
+  let limit = got.opts['--limit'] ? Number(got.opts['--limit']) : undefined
   // --kind is syntax sugar at this boundary. From here on it is the same
   // ordinary `.kind=` filter as every other spelling, so query behavior keeps
   // one owner (T-18549).
@@ -363,7 +364,7 @@ let list = async (got: Got) => {
   let named = line.map((a) => a.match(/^\.kind=(.+)$/)?.[1]).find(Boolean)
   let kind = bare ?? (named ? kindWord(named) ?? 'task' : 'task')
   let filters = named ? line : [`.kind=${kind}`, ...line]
-  let hits = (await query(filters)).sort(byBoard)
+  let hits = (await query(filters, { limit })).sort(byBoard)
   let refs = await fetched(
     hits.flatMap((r) => [
       String(r.comps.claim?.session ?? ''),
