@@ -226,6 +226,22 @@ export let listing = (cmd: string | undefined, args: string[]) =>
 let SHOW_FLAGS = ['--json', '--quarantined', '--comments']
 let isShowFlag = (x: string) => SHOW_FLAGS.includes(x)
 
+let showAs = (id: string, objects: string[]) => {
+  if (objects.length != 1 || !formats.includes(objects[0])) {
+    throw new UsageError(`format is one of: ${formats.join(', ')}`)
+  }
+  return {
+    cmd: 'show',
+    args: [id, ...(objects[0] == 'json' ? ['--json'] : [])],
+  }
+}
+
+// The subject-first format phrase is also unambiguous after explicit `show`.
+// Normalize both spellings before manual validation so rendering still has one
+// handler and the warm `task show T-3 as json` reach cannot become extra argv.
+export let showing = (cmd: string | undefined, args: string[]) =>
+  cmd == 'show' && args[1] == 'as' ? showAs(args[0], args.slice(2)) : undefined
+
 // Subject-first is syntax sugar only. The returned route enters the same
 // handlers as the canonical subcommands, so graph behavior has one owner.
 export let subject = (id: string | undefined, args: string[]) => {
@@ -296,13 +312,7 @@ export let subject = (id: string | undefined, args: string[]) => {
     return { cmd: 'set', args: [id, `.status=${objects[0]}`] }
   }
   if (verb == 'as') {
-    if (objects.length != 1 || !formats.includes(objects[0])) {
-      throw new UsageError(`format is one of: ${formats.join(', ')}`)
-    }
-    return {
-      cmd: 'show',
-      args: [id, ...(objects[0] == 'json' ? ['--json'] : [])],
-    }
+    return showAs(id, objects)
   }
   // Knock already names its subject as the focused entity. Requiring the
   // palette's colon here contradicts `task help knock`'s "on the focused
@@ -3220,7 +3230,8 @@ if (import.meta.main) {
     if (asked != null) print(asked)
     else if (!cmd) await bare()
     else {
-      let routed = listing(cmd, rest) ?? subject(cmd, rest)
+      let routed = listing(cmd, rest) ?? showing(cmd, rest) ??
+        subject(cmd, rest)
       if (routed) {
         cmd = routed.cmd
         rest = routed.args

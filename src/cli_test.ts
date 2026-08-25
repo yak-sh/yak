@@ -34,6 +34,7 @@ import {
   reportUsage,
   restartReady,
   roleEid,
+  showing,
   strayFile,
   strayFlag,
   subagentDigest,
@@ -235,6 +236,22 @@ Deno.test('subject: sentences route through the existing CLI verbs', () => {
       args: ['T-3', edge, 'T-9', '--gone'],
     })
   }
+})
+
+Deno.test('showing: explicit show accepts the format phrase', () => {
+  assertEquals(showing('show', ['D-18466', 'as', 'json']), {
+    cmd: 'show',
+    args: ['D-18466', '--json'],
+  })
+  assertEquals(showing('show', ['D-18466', 'as', 'markdown']), {
+    cmd: 'show',
+    args: ['D-18466'],
+  })
+  assertThrows(
+    () => showing('show', ['D-18466', 'as', 'yaml']),
+    Error,
+    'format is one of: markdown, json',
+  )
 })
 
 // `task decided` scopes itself to where you stand, so `.project=P-30` has to
