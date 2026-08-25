@@ -331,10 +331,10 @@ export let takeEntry = (
   }
 }
 
-// Generations and graph_query calls only read external state. Replaying either
-// may repeat provider work, billing, or a graph read, but cannot repeat a
-// hosted side effect. Reclaim only those classes under the expired lease's
-// full CAS; every other call remains ambiguous.
+// Generations and read-only graph calls only observe external state. Replaying
+// them may repeat provider work, billing, or serve bookkeeping, but cannot
+// repeat the caller's side effect. Reclaim only those classes under the
+// expired lease's full CAS; every other call remains ambiguous.
 export let reclaimEntry = (
   db: DatabaseSync,
   stale: LeaseToken,
@@ -370,8 +370,11 @@ export let reclaimEntry = (
              and not exists (select 1 from output o where o.source = l.entity)
              and not exists (select 1 from delivered d where d.entity = l.entity))
            or
-           (exists (select 1 from call c join graph_query q on q.entity = c.entity
-             where c.entity = l.entity)
+           (exists (select 1 from call c where c.entity = l.entity)
+             and (
+               exists (select 1 from graph_query q where q.entity = l.entity)
+               or exists (select 1 from task_context t where t.entity = l.entity)
+             )
              and not exists (select 1 from result r where r.call = l.entity))
          )`,
     ).get(stale.eid, stale.holder, stale.at, stale.until, token.at) as

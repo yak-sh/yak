@@ -156,7 +156,7 @@ Deno.test('lease and usage facets are server-owned and one runner wins', () => {
   db.close()
 })
 
-Deno.test('only expired generation and graph_query leases can be reclaimed', () => {
+Deno.test('only expired generation and read-only call leases can be reclaimed', () => {
   let db = freshDb()
   let sid = session(db), old = uuid(), next = uuid()
   apply(db, [
@@ -217,6 +217,28 @@ Deno.test('only expired generation and graph_query leases can be reclaimed', () 
   )!
   assertEquals(queryRetry.token.eid, query)
   assertEquals(queryRetry.kind, 'call')
+
+  let context = append(db, sid, [{
+    output: { source: generation },
+    call: { key: 'read-context' },
+    task_context: {},
+  }]).eids[0]
+  let contextLease = takeEntry(
+    db,
+    context,
+    old,
+    100,
+    () => new Date('2026-08-10T12:00:00Z'),
+  )!
+  let contextRetry = reclaimEntry(
+    db,
+    contextLease.token,
+    next,
+    100,
+    () => new Date('2026-08-10T12:00:00.200Z'),
+  )!
+  assertEquals(contextRetry.token.eid, context)
+  assertEquals(contextRetry.kind, 'call')
 
   append(db, sid, [{
     output: { source: generation },
