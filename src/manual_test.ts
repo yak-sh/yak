@@ -9,6 +9,7 @@ import {
   parse,
   requestedHelp,
   route,
+  subjectUsage,
   usage,
   validate,
   validateCommand,
@@ -122,6 +123,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
 })
 
 Deno.test('help topics cover nested and colon vocabularies', () => {
+  assertEquals(help(['<id>']), subjectUsage())
   assertMatch(help(['mail', 'send']), /^task mail send/)
   assertMatch(help(['session', 'brief']), /^task session brief/)
   assertMatch(help(['link']), /^task <parent> requires\|contains/)
