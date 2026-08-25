@@ -1016,11 +1016,12 @@ let _writerBaton: Deno.FsFile | undefined
 // A sole boot already migrated at import (db.ts) and only claims the baton —
 // free now — to hold the writer role for its life. A --join successor connected
 // the DB read-capable at import but has NOT migrated: it tells the supervisor it
-// is BOUND (so the predecessor is stopped and, on its exit, releases the baton),
-// waits for the baton, then migrates as the now-sole writer. The port is already
-// listening, so requests are HELD on `boot` (below) through this window rather
-// than refused — reads and writes alike wait out the brief handoff instead of
-// racing the predecessor over the file.
+// is PREPPED (imports done, db connected — so the predecessor is stopped and, on
+// its exit, releases the baton), waits for the baton, then migrates as the
+// now-sole writer. This process is NOT yet listening — the predecessor keeps the
+// port through its settle, and the bind at the bottom of boot takes it only once
+// we can actually answer — so the handoff's dark gap is the predecessor's
+// shutdown plus our migrate, not the whole boot.
 let becomeWriter = async () => {
   if (joining) await signalReady() // beat 1: bound — release the DB to me
   _writerBaton = await takeBaton(graph, { wait: joining })
@@ -1045,753 +1046,751 @@ let browserPlugins = specs
   .filter((s) => s.startsWith(`${repoUrl}plugins/`))
   .map((s) => `/${s.slice(repoUrl.length)}`)
 
-let http = Deno.serve(
-  { port, reusePort: true },
-  async (req) => {
-    let url = new URL(req.url)
-    let path = url.pathname
-    // Answered BEFORE boot: a peer deciding whether it may join this address
-    // must hear whose graph is here without waiting out our migrations.
-    if (path == '/graph') return Response.json(serving)
-    await boot
-    if (path.startsWith('/accounts/codex')) {
-      return accountHttp(codexAccount, req, path)
-    }
-    if (path.startsWith('/config/credentials')) {
-      return credentialHttp(credentials, req, path)
-    }
-    // The non-secret plane's source report (T-18590): each catalog setting's
-    // effective value + which plane answered + the existing setting eid a client
-    // save targets. GET-only, no-store; secrets never appear (settingRows is
-    // plainKeys only) — their state lives at /config/credentials.
-    if (path == '/config/settings') {
-      if (req.method != 'GET') {
-        return Response.json({ error: { code: 'method_not_allowed' } }, {
-          status: 405,
-          headers: { 'cache-control': 'no-store' },
-        })
-      }
-      return Response.json(
-        settingRows(
-          (key) => settingValue(db, key),
-          (key) => settingEid(db, key),
-        ),
-        { headers: { 'cache-control': 'no-store' } },
-      )
-    }
-    if (path == '/ws') return ws(req)
-    if (path == '/snapshot') return Response.json(snapshot(db))
-    // The advertised capability tokens, cheaply — a headless spawn door
-    // (client.ts serverCaps) reads this to decide whether to speak canonical
-    // `spawn` without paying for a whole snapshot. Same array snapshot() rides.
-    if (path == '/capabilities') return Response.json(capabilities)
-    // The admin census's graph-true counts: one COUNT per component table,
-    // authoritative for eager AND entry-partition components the cache omits.
-    if (path == '/census') return Response.json(componentCounts(db))
-    // The graph's storage-integrity anomalies (D-18866): orphaned component rows
-    // and dangling {eid} references — both wire-invisible, so the doctor cannot
-    // see them through /query and reads this raw db scan instead. Read-only.
-    if (path == '/integrity') return Response.json(scanAnomalies(db))
-    if (path == '/resolve') {
-      // The id-resolve fallback door (T-18102): a client whose working-set
-      // cache can't name a token resolves it here — the same resolveId every
-      // read door uses (T-3684). Naming-only: eid, num, kind — the immutable
-      // facts a link or crumb needs, never content (that rides subscriptions),
-      // so nothing folded from this answer can go stale. 404 = no such entity,
-      // so the client shows its honest Lost instead of a spinner that never
-      // settles; 400 = an ambiguous short-eid prefix, the typist's news.
-      let id = url.searchParams.get('id') ?? ''
-      let eid: string | undefined
-      try {
-        eid = id ? resolveId(db, id) : undefined
-      } catch (e) {
-        return new Response(String((e as Error).message ?? e), { status: 400 })
-      }
-      if (!eid) return new Response('no entity', { status: 404 })
-      let comps = eager(db, eid)
-      return Response.json({
-        eid,
-        num: Number(comps.entity?.num ?? 0) || null,
-        kind: kindOf(comps),
-      })
-    }
-    if (path == '/anchor') {
-      // The anchor-resolver door (D-21211, T-21317): one endpoint grades any
-      // anchor tri-state — fresh / moved (with the new range) / broken — and
-      // serves the current bytes from git's object store, never from the db.
-      // `?id=` resolves an entity's own anchor comp in its own repo context
-      // (the entity's repo, its project's, its memory scope's — falling back
-      // to this server's checkout, where the graph's own docs anchor);
-      // explicit ?path/&sha/&start/&end/&hunk grade an unsaved anchor, and
-      // ?repo= overrides the cwd either way. 404s speak, per M-16612.
-      let p = url.searchParams
-      let cwd = p.get('repo') ?? undefined
-      let a: Parameters<typeof resolveAnchor>[1]
-      let id = p.get('id')
-      if (id) {
-        let eid: string | undefined
-        try {
-          eid = resolveId(db, id)
-        } catch (e) {
-          return new Response(String((e as Error).message ?? e), {
-            status: 400,
-          })
-        }
-        if (!eid) return new Response('no entity', { status: 404 })
-        let comps = eager(db, eid)
-        if (!comps.anchor) {
-          return new Response(`${id} has no anchor`, { status: 404 })
-        }
-        a = comps.anchor as typeof a
-        // The repo an entity's anchor means: its own repo comp, else the one
-        // its project (task.project / memory.scope) wears.
-        let home = (owner?: unknown) =>
-          owner
-            ? eager(db, String(owner)).repo?.path as string | undefined
-            : undefined
-        cwd ??= (comps.repo?.path as string | undefined) ??
-          home(comps.task?.project) ?? home(comps.memory?.scope)
-      } else {
-        if (!p.get('path')) {
-          return new Response('need ?id= or ?path=', { status: 400 })
-        }
-        let num = (k: string) => (p.get(k) == null ? null : Number(p.get(k)))
-        a = {
-          paths: p.get('path'),
-          sha: p.get('sha'),
-          hunk: p.get('hunk'),
-          start: num('start'),
-          end: num('end'),
-        }
-      }
-      return Response.json(await resolveAnchor(cwd ?? repo, a))
-    }
-    if (path == '/body') {
-      // The bodies a bodyless payload deferred, for the eids a view is about
-      // to paint or edit (live.ts `want`). A Change batch, so it lands
-      // through applyLocal like any patch — no second intake path.
-      let eids = (url.searchParams.get('eids') ?? '').split(',').filter(Boolean)
-      return Response.json({ changes: bodies(db, eids) })
-    }
-    if (path == '/delta') {
-      // The returning client's catch-up: changes since its cursor. A cursor is
-      // only valid against the epoch and vocabulary that issued it, and only up
-      // to the journal's current tip — a mismatch means a different graph
-      // lineage, a shape change, or a rewind past the client's frontier, so 409
-      // tells the client to full-resnapshot rather than serve a misleading
-      // delta (cursorStale, db.ts).
-      let p = url.searchParams
-      if (
-        cursorStale(
-          db,
-          p.get('epoch'),
-          p.get('vocab'),
-          Number(p.get('since') ?? 0),
-        )
-      ) {
-        return new Response('stale', { status: 409 })
-      }
-      return Response.json(delta(db, Number(p.get('since') ?? 0)))
-    }
-    if (path == '/search') {
-      // a malformed filter is the typist's news, not a server error
-      try {
-        return Response.json(search(
-          db,
-          url.searchParams.get('q') ?? '',
-          Number(url.searchParams.get('limit') ?? 20),
-        ))
-      } catch (e) {
-        return new Response(String((e as Error).message ?? e), { status: 400 })
-      }
-    }
-    if (path == '/similar') {
-      // Semantic neighbors of arbitrary text — the dupe hint's door.
-      // 503 = this box has no embedder; callers show nothing, not errors.
-      let q = url.searchParams.get('q') ?? ''
-      if (!q.trim()) return new Response('q required', { status: 400 })
-      let hits = await similarTo(
-        db,
-        q,
-        Number(url.searchParams.get('limit') ?? 8),
-        Number(url.searchParams.get('floor') ?? 0),
-        url.searchParams.get('eid') ?? undefined,
-      )
-      if (!hits) return new Response('no embedder here', { status: 503 })
-      return Response.json(hits.map((h) => {
-        let comps = eager(db, h.eid)
-        let entity = comps.entity
-        let kind = kindOf(comps)
-        return {
-          ...h,
-          id: entity
-            ? idOf({ eid: h.eid, kind, num: Number(entity.num) })
-            : h.eid,
-          kind,
-          title: String(comps.doc?.title ?? ''),
-        }
-      }))
-    }
-    if (path == '/persona') {
-      // A persona materialized over the FULL graph — the SAME bytes a spawned
-      // session reads as its system prompt (persona.ts materialize()), so the
-      // browser must NOT render them from its own cache: under a partial cache
-      // the tier walk misses memories and edges and quietly corrupts the very
-      // prompt. `id` addresses the persona (locate: T-3, num, uuid, slug).
-      // `scoped` is the in-scope memories the editor lists as untiered — the
-      // one other whole-graph walk the Persona view owed the cache — resolved
-      // here so discovery no longer depends on what the client happens to hold.
-      let eid = locate(db, url.searchParams.get('id') ?? '')
-      if (!eid) return new Response('no such entity', { status: 404 })
-      let snap = snapshot(db)
-      let all = rows(snap)
-      let p = all.find((r) => r.eid == eid && r.comps.persona && r.comps.doc)
-      if (!p) return new Response('not a persona', { status: 404 })
-      let home = p.comps.persona.home ?? null
-      let scoped = all
-        .filter((r) =>
-          r.comps.memory && r.comps.doc &&
-          ((r.comps.memory.scope as string | null) ?? null) == home
-        )
-        .map((r) => r.eid)
-      return Response.json({
-        text: materialize(all, snap.deps, p, Date.now()),
-        scoped,
-      })
-    }
-    if (path == '/query') {
-      // The graph over plain GET: the query string IS the filter line —
-      // the same grammar boards and task_list speak — and hits come back
-      // Structured like every entity JSON door. Kind is a filter now, not a
-      // parameter: `.kind=project` screens by derived kind through the grammar.
-      // `backlinks=1` adds who points at each hit (eid columns + edges),
-      // `deps=1` the hit's own edges both ways; `id=` names entities outright.
-      // A malformed filter is the typist's news, not a server error.
-      try {
-        let segs = url.search.slice(1).split('&').filter(Boolean)
-          .map(decodeURIComponent)
-        let backs = segs.includes('backlinks=1')
-        let edged = segs.includes('deps=1')
-        let reveal = segs.includes('quarantined=1')
-        // Paging for the lazy entry partition: `after=` is an entry.seq cursor,
-        // `limit=` the page size. Ignored by an eager query, which the snapshot
-        // path already answers whole in num order.
-        let after = Number(
-          segs.find((s) => s.startsWith('after='))?.slice(6),
-        ) ||
-          0
-        let limit = Number(
-          segs.find((s) => s.startsWith('limit='))?.slice(6),
-        ) || undefined
-        // `id=` FETCHES rather than filters: each value is an ADDRESS — T-3, a
-        // bare num, an alias slug, a uuid — and locate() is the index's own
-        // reading of "what names an entity", the same four rules find() spells
-        // over a materialized graph. It is a parameter beside backlinks=
-        // rather than a predicate because addressing is not filtering:
-        // `.entity.eid~=abc` would be a substring search over uuids, legal and
-        // meaningless.
-        //
-        // An id naming nothing is simply absent, the way a filter matching
-        // nothing returns no rows — a caller asking for five and getting three
-        // learns which two are gone by their absence.
-        let named = segs.filter((s) => s.startsWith('id='))
-          .flatMap((s) => s.slice(3).split(',')).filter(Boolean)
-        let only = named.length
-          ? new Set(
-            (named.map((i) => locate(db, i)).filter(Boolean) as string[])
-              .filter((eid) => !buried(db, eid)),
-          )
-          : null
-        segs = segs.filter((s) =>
-          s != 'backlinks=1' && s != 'deps=1' && s != 'quarantined=1' &&
-          !s.startsWith('after=') &&
-          !s.startsWith('limit=') &&
-          !s.startsWith('id=')
-        )
-        let q = segs.join('&')
-        // An aggregate projection (`.distinct=col` / `.tally=col`) answers with
-        // the reduction, not a row set — the census asks for values, so rows,
-        // layers and id= addressing don't apply. Keys come back sorted the way
-        // the census always has.
-        let agg = evalAgg(db, q)
-        if (agg) {
-          let keys = [...agg.values.keys()].sort()
-          return Response.json(
-            agg.op == 'distinct' ? { distinct: keys } : {
-              tally: Object.fromEntries(
-                keys.map((k) => [k, agg.values.get(k)]),
-              ),
-            },
-          )
-        }
-        // Any remaining filter line still screens, so `id=` composes with the
-        // grammar rather than replacing it.
-        let screen = (hits: Row[]) =>
-          only ? hits.filter((r) => only.has(r.eid)) : hits
-        // What a hit carries BESIDE its components: its own edges (deps=1)
-        // and who points at it (backlinks=1). Both are keyed off the hits —
-        // depsOf and refsOf read the edge table and each typed eid column by
-        // eid — so a one-entity question costs one entity. Backlinks used to
-        // walk every row of the graph for this, which is what held the whole
-        // door on the snapshot path; now every path serves both layers the
-        // same way, and `deps` is the first door outside /snapshot to carry an
-        // entity's OUTGOING edges at all (`task show` prints them).
-        //
-        // `deps` are the snap.deps triples touching the hit, eids and all: an
-        // endpoint's id and status come from fetching it, and a caller
-        // rendering edges is fetching those rows anyway.
-        let layers = (hits: Row[]) => {
-          if (!backs && !edged) return hits.map((r) => jsonOf(r))
-          let eids = hits.map((r) => r.eid)
-          let deps = depsOf(db, eids).filter((d) =>
-            reveal ||
-            (!eager(db, d.parent).quarantined &&
-              !eager(db, d.child).quarantined)
-          )
-          let mine = new Map<string, Dep[]>()
-          for (let d of deps) {
-            for (let e of [d.parent, d.child]) {
-              if (mine.has(e)) mine.get(e)!.push(d)
-              else mine.set(e, [d])
-            }
-          }
-          let back = new Map<
-            string,
-            { from: string; via: string; title: string }[]
-          >()
-          if (backs) {
-            let wanted = new Set(eids)
-            // An edge is a reference like any other; its verb IS the `via`.
-            let refs = [
-              ...refsOf(db, eids).filter((r) =>
-                reveal || !eager(db, r.from).quarantined
-              ),
-              ...deps.filter((d) => wanted.has(d.child))
-                .map((d) => ({ from: d.parent, via: d.type, to: d.child })),
-            ]
-            // The title rides along because a backlink is READ, not chased:
-            // the extension's "what references this page" panel is one query
-            // or it is two, and the id alone would force the second.
-            let named = new Map(
-              rowsOf(db, [...new Set(refs.map((r) => r.from))])
-                .map(rowed).map((r) => [r.eid, r]),
-            )
-            for (let { from, via, to } of refs) {
-              let r = named.get(from)
-              if (!r) continue // a comp row whose spine is gone names nobody
-              let list = back.get(to) ?? []
-              list.push({
-                from: idOf(r),
-                via,
-                title: String(r.comps.doc?.title ?? ''),
-              })
-              back.set(to, list)
-            }
-          }
-          return hits.map((r) => ({
-            ...jsonOf(r),
-            ...(edged ? { deps: mine.get(r.eid) ?? [] } : {}),
-            ...(backs ? { backlinks: back.get(r.eid) ?? [] } : {}),
-          }))
-        }
-        // Named entities are read one eager() each — a handful of keyed reads,
-        // against a filter that would otherwise select everything and drag the
-        // whole graph in behind it.
-        // A dead entity is gone before this: `only` was built above with the
-        // tombstone excluded (buried), so it holds live eids only and eager()
-        // always finds a spine with components. Since the D-18866 flip retains a
-        // tombstoned spine row, that exclusion is explicit rather than a side
-        // effect of delete removing the row.
-        if (only) {
-          let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
-          let hits = [...only].map((eid) =>
-            rowed({ eid, comps: eager(db, eid) })
-          )
-            .filter((r) => reveal || listed(r.comps, preds))
-            .filter((r) =>
-              matchQuery(
-                r.comps,
-                preds,
-                (e) => eager(db, e),
-                undefined,
-                dbKids((e) => eager(db, e)),
-              )
-            )
-          return Response.json(
-            layers(screen(hits).sort((a, b) => a.num - b.num)),
-          )
-        }
-        // The authoritative pipeline (evalGraph): the index answers when it can
-        // (a one-row question cost a 27 MB snapshot and 0.29s before sql.ts,
-        // 100x), else the JS matcher over the full universe — which now carries
-        // the lazy entry partition whenever the query names it. Kind is a filter
-        // in q now (`.kind=`), hot ranking and entry ordering/paging all settle
-        // inside evalGraph, so this door and the in-process graph_query tool
-        // read one answer.
-        let { hits } = evalGraph(db, q, { after, limit })
-        return Response.json(layers(hits))
-      } catch (e) {
-        return new Response(String((e as Error).message ?? e), { status: 400 })
-      }
-    }
-    if (path == '/inbox') {
-      // The inbox as the SERVER enumerates it — the SAME client.ts predicate
-      // (inboxFor's union, screened by inboxItem/addressed over a readerFor|
-      // readerAt reader), run in-process against THIS graph so a partial-cache
-      // client reads its FINISHED inbox in one round-trip instead of scanning a
-      // whole-graph cache it no longer holds (T-18105). `session`(+`cwd`) builds
-      // the working reader; `actor` the browsing one. `mode=all` is the CLI's
-      // --all (direct address incl. archived, no watch/mute); repeated `f=` are
-      // dot-param filters, screening the union the way `task inbox <filters>`
-      // does. A malformed filter is the typist's news, not a server error.
-      try {
-        let p = url.searchParams
-        let mode: 'inbox' | 'all' = p.get('mode') == 'all' ? 'all' : 'inbox'
-        let session = p.get('session') ?? undefined
-        let actor = p.get('actor') ?? undefined
-        if (!session && !actor) {
-          return new Response('session or actor required', { status: 400 })
-        }
-        let local = localQuery(db)
-        let who = session
-          ? readerFor(
-            await readerRows(session, local),
-            session,
-            p.get('cwd') ?? undefined,
-          )
-          : readerAt(await actorRows(actor, local), actor)
-        let union = await inboxFor(who, p.getAll('f'), mode, local)
-        let keep = mode == 'all' ? addressed(who) : inboxItem(who)
-        return Response.json(union.filter(keep).map((r) => jsonOf(r)))
-      } catch (e) {
-        return new Response(String((e as Error).message ?? e), { status: 400 })
-      }
-    }
-    if (path == '/references') {
-      let eid = url.searchParams.get('eid') ?? ''
-      if (!eid) return new Response('eid required', { status: 400 })
-      return Response.json(references(db, eid), {
+// The request handler, DEFINED here but not yet listening. The bind happens at
+// the bottom of boot (just before booted()): reusePort deals connections to
+// every listener on the port, so a successor that binds while it still has a
+// minutes-long boot ahead of it steals ~half of all new connections from its
+// perfectly healthy predecessor and parks them on `await boot` — under a busy
+// landing cadence that alone reads as the graph being down. Binding late keeps
+// the predecessor the ONLY listener until this process can actually answer,
+// and shrinks the dark gap to drain + migrate.
+let handle = async (req: Request) => {
+  let url = new URL(req.url)
+  let path = url.pathname
+  // Answered BEFORE boot: a peer deciding whether it may join this address
+  // must hear whose graph is here without waiting out our migrations.
+  if (path == '/graph') return Response.json(serving)
+  await boot
+  if (path.startsWith('/accounts/codex')) {
+    return accountHttp(codexAccount, req, path)
+  }
+  if (path.startsWith('/config/credentials')) {
+    return credentialHttp(credentials, req, path)
+  }
+  // The non-secret plane's source report (T-18590): each catalog setting's
+  // effective value + which plane answered + the existing setting eid a client
+  // save targets. GET-only, no-store; secrets never appear (settingRows is
+  // plainKeys only) — their state lives at /config/credentials.
+  if (path == '/config/settings') {
+    if (req.method != 'GET') {
+      return Response.json({ error: { code: 'method_not_allowed' } }, {
+        status: 405,
         headers: { 'cache-control': 'no-store' },
       })
     }
-    if (path == '/mcp' && req.method == 'POST') return mcp(req)
-    if (path == '/error' && req.method == 'POST') return clientError(req)
-    if (path == '/usage' && req.method == 'POST') return cliUsage(req)
-    if (path == '/telemetry') {
-      let since = url.searchParams.get('since') ?? undefined
-      let only = url.searchParams.get('only') ?? undefined
-      // ?stats=1 asks for the latency distribution (p50/p95/p99 per door+tool,
-      // computed in SQL) instead of the raw rows.
-      if (url.searchParams.get('stats')) {
-        return Response.json(stats(db, { since, only }))
-      }
-      return Response.json(recent(db, {
-        since,
-        limit: Number(url.searchParams.get('limit')) || undefined,
-        only,
-      }))
+    return Response.json(
+      settingRows(
+        (key) => settingValue(db, key),
+        (key) => settingEid(db, key),
+      ),
+      { headers: { 'cache-control': 'no-store' } },
+    )
+  }
+  if (path == '/ws') return ws(req)
+  if (path == '/snapshot') return Response.json(snapshot(db))
+  // The advertised capability tokens, cheaply — a headless spawn door
+  // (client.ts serverCaps) reads this to decide whether to speak canonical
+  // `spawn` without paying for a whole snapshot. Same array snapshot() rides.
+  if (path == '/capabilities') return Response.json(capabilities)
+  // The admin census's graph-true counts: one COUNT per component table,
+  // authoritative for eager AND entry-partition components the cache omits.
+  if (path == '/census') return Response.json(componentCounts(db))
+  // The graph's storage-integrity anomalies (D-18866): orphaned component rows
+  // and dangling {eid} references — both wire-invisible, so the doctor cannot
+  // see them through /query and reads this raw db scan instead. Read-only.
+  if (path == '/integrity') return Response.json(scanAnomalies(db))
+  if (path == '/resolve') {
+    // The id-resolve fallback door (T-18102): a client whose working-set
+    // cache can't name a token resolves it here — the same resolveId every
+    // read door uses (T-3684). Naming-only: eid, num, kind — the immutable
+    // facts a link or crumb needs, never content (that rides subscriptions),
+    // so nothing folded from this answer can go stale. 404 = no such entity,
+    // so the client shows its honest Lost instead of a spinner that never
+    // settles; 400 = an ambiguous short-eid prefix, the typist's news.
+    let id = url.searchParams.get('id') ?? ''
+    let eid: string | undefined
+    try {
+      eid = id ? resolveId(db, id) : undefined
+    } catch (e) {
+      return new Response(String((e as Error).message ?? e), { status: 400 })
     }
-    // HTTP writes (the CLI and MCP server): same apply, same allowlist,
-    // same broadcast — an HTTP client is just a client without a socket.
-    if (path == '/apply' && req.method == 'POST') {
-      let t0 = performance.now()
-      let note = (ok: boolean, error?: string) =>
-        record(db, {
-          source: 'http',
-          name: 'apply',
-          ok,
-          ms: performance.now() - t0,
-          error,
-        })
-      return req.json().then((changes: Change[]) => {
-        let t = trace()
-        // Attribution is an honesty header, not auth: the CLI names its
-        // session in x-via (the instrument), apply resolves it to the actor
-        // it acts for, and an anonymous post falls back to the box owner.
-        let out = apply(
-          db,
-          changes,
-          t,
-          req.headers.get('x-via'),
-        )
-        cast(out)
-        effect(out, t)
-        note(true)
-        return Response.json({ ok: true, changes: out })
-      }).catch((e) => {
-        // The MESSAGE, not String(e) — a rejection is read by a person or
-        // an agent, and `String(new Error(x))` prefixes a stray "Error:"
-        // that the CLI then wraps again ("apply failed: Error: …").
-        let why = e instanceof Error ? e.message : String(e)
-        note(false, why)
-        return new Response(why, { status: 400 })
-      })
-    }
-    // Value redaction is the one write that reaches backward into the journal.
-    // Hold backup's process lock from the atomic database scrub through the
-    // upstream-history report, so no pre-scrub snapshot can publish after the
-    // answer. The removed value rides only the POST body and db transaction —
-    // never a URL, diagnostic, telemetry row, git argv, or response.
-    if (path == '/redact' && req.method == 'POST') {
-      let t0 = performance.now()
+    if (!eid) return new Response('no entity', { status: 404 })
+    let comps = eager(db, eid)
+    return Response.json({
+      eid,
+      num: Number(comps.entity?.num ?? 0) || null,
+      kind: kindOf(comps),
+    })
+  }
+  if (path == '/anchor') {
+    // The anchor-resolver door (D-21211, T-21317): one endpoint grades any
+    // anchor tri-state — fresh / moved (with the new range) / broken — and
+    // serves the current bytes from git's object store, never from the db.
+    // `?id=` resolves an entity's own anchor comp in its own repo context
+    // (the entity's repo, its project's, its memory scope's — falling back
+    // to this server's checkout, where the graph's own docs anchor);
+    // explicit ?path/&sha/&start/&end/&hunk grade an unsaved anchor, and
+    // ?repo= overrides the cwd either way. 404s speak, per M-16612.
+    let p = url.searchParams
+    let cwd = p.get('repo') ?? undefined
+    let a: Parameters<typeof resolveAnchor>[1]
+    let id = p.get('id')
+    if (id) {
+      let eid: string | undefined
       try {
-        let body = await req.json() as { id?: string; selector?: string }
-        if (!body.id || body.selector == null) {
-          throw new Error('redact needs an id and selector')
-        }
-        let done = await withBackupLock(dirname(graph), async () => {
-          let result = redactValue(
-            db,
-            body.id!,
-            body.selector!,
-            req.headers.get('x-via'),
-          )
-          cast(result.changes)
-          effect(result.changes, trace())
-          let backup
-          try {
-            backup = await published(dirname(graph), result.firstSeen)
-          } catch (e) {
-            backup = { ref: null, error: String(e) }
-          }
-          return {
-            ...result,
-            audit: human(db, result.audit),
-            target: human(db, result.target),
-            backup,
-          }
-        })
-        record(db, {
-          source: 'http',
-          name: 'redact',
-          ok: true,
-          ms: performance.now() - t0,
-        })
-        return Response.json(done)
+        eid = resolveId(db, id)
       } catch (e) {
-        let why = e instanceof Error ? e.message : String(e)
-        record(db, {
-          source: 'http',
-          name: 'redact',
-          ok: false,
-          ms: performance.now() - t0,
-          error: why,
-        })
-        return new Response(why, { status: 400 })
-      }
-    }
-    // Undo reverses a journaled batch: the server builds the guarded inverse
-    // (only it reads the journal) and applies it through the same door as any
-    // write. Build and apply share this one synchronous tick — no await
-    // between — so the world can't move after the inverse is priced and before
-    // it lands. ?id= names a journal batch; ?eid= its entity's latest batch.
-    if (path == '/undo' && req.method == 'POST') {
-      let t0 = performance.now()
-      let note = (ok: boolean, error?: string) =>
-        record(db, {
-          source: 'http',
-          name: 'undo',
-          ok,
-          ms: performance.now() - t0,
-          error,
-        })
-      try {
-        let idParam = url.searchParams.get('id')
-        let eid = url.searchParams.get('eid')
-        let id = idParam != null
-          ? Number(idParam)
-          : eid
-          ? lastBatch(db, eid)
-          : 0
-        if (!id) {
-          throw new Error(
-            eid ? `${eid} has no history to undo` : 'undo needs ?id= or ?eid=',
-          )
-        }
-        let t = trace()
-        let out = apply(db, inverseBatch(db, id), t, req.headers.get('x-via'))
-        cast(out)
-        effect(out, t)
-        note(true)
-        return Response.json({ ok: true, changes: out, id })
-      } catch (e) {
-        let why = e instanceof Error ? e.message : String(e)
-        note(false, why)
-        return new Response(why, { status: 400 })
-      }
-    }
-    // Historical materializations are deliberate operator work, never a
-    // boot sweep. Ordinary apply batches keep persistence, live broadcasts,
-    // and effects on the same path as every new edge.
-    if (path.startsWith('/backfill/') && req.method == 'POST') {
-      let mine = {
-        worked: historicalWorked,
-        referenced: historicalReferenced,
-      }[path.slice('/backfill/'.length)]
-      if (!mine) return new Response('no such backfill', { status: 404 })
-      let pending = mine(db)
-      let landed = 0
-      for (let i = 0; i < pending.length; i += 200) {
-        let t = trace()
-        let out = apply(
-          db,
-          pending.slice(i, i + 200),
-          t,
-          req.headers.get('x-via'),
-        )
-        landed += out.filter((c) => c.name == 'dependency').length
-        cast(out)
-        effect(out, t)
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      }
-      return Response.json({ found: pending.length, landed })
-    }
-    // The adapter table, for a browser that must offer what a spawn
-    // request will be checked against (adapters.ts is server-only).
-    if (path == '/providers') return Response.json(await readyProviders())
-    // Mail attachments, proxied read-only: the fleet-mail worker holds
-    // them in R2 behind a token that stays in THIS process — clients
-    // name the mail ENTITY; the spool's message_id is server business.
-    // /mail/:id/files lists ({message_id, files}); …/files/:name streams
-    // the bytes. Each miss says which link broke, so the CLI teaches at
-    // failure time instead of shrugging.
-    let files = path.match(/^\/mail\/([^/]+)\/files(?:\/(.+))?$/)
-    if (files) {
-      let ref = decodeURIComponent(files[1])
-      let row = mailIdOf(ref)
-      if (!row) return new Response(`not a mail: ${ref}`, { status: 404 })
-      if (!row.message_id) {
-        return new Response(
-          `${ref} has no spool row (outbound/relay mail carries no attachments)`,
-          { status: 404 },
-        )
-      }
-      let name = files[2] ? decodeURIComponent(files[2]) : undefined
-      let up = fleetRaw(
-        `/messages/${encodeURIComponent(row.message_id)}/attachments` +
-          (name ? `/${encodeURIComponent(name)}` : ''),
-      )
-      if (!up) {
-        return new Response(
-          'fleet-mail API not configured on this server (FLEET_MAIL_API_URL / FLEET_MAIL_API_TOKEN)',
-          { status: 503 },
-        )
-      }
-      let res = await up
-      if (!res.ok) return new Response(await res.text(), { status: res.status })
-      if (name) {
-        return new Response(res.body, {
-          headers: {
-            'content-type': res.headers.get('content-type') ??
-              'application/octet-stream',
-          },
-        })
-      }
-      return Response.json({
-        message_id: row.message_id,
-        files: await res.json(),
-      })
-    }
-    // The wire's record, per entity (?eid=) or instrument (?via= — a
-    // session's whole day). Raw eids only — id resolution is a client concern.
-    if (path == '/journal') {
-      let via = url.searchParams.get('via')
-      let limit = Number(url.searchParams.get('limit') ?? 50) || 50
-      return Response.json(
-        via
-          ? journalBy(db, via, limit)
-          : journalOf(db, url.searchParams.get('eid') ?? '', limit),
-      )
-    }
-    if (path == '/freeze') {
-      return freeze(url.searchParams.get('eid') ?? '', cast)
-    }
-    // A page as witnessed by a browser — the extension's write door
-    // (page.ts owns what one filing IS).
-    if (path == '/page' && req.method == 'POST') {
-      return req.json().then((body) => filed(body, cast)).catch((e) =>
-        new Response(e instanceof Error ? e.message : String(e), {
+        return new Response(String((e as Error).message ?? e), {
           status: 400,
         })
-      )
-    }
-    if (path == '/upload' && req.method == 'POST') {
-      return req.text().then((body) =>
-        store(
-          url.searchParams.get('eid') ?? '',
-          body,
-          cast,
-          url.searchParams.has('scrub'),
-        )
-      )
-    }
-    if (path.startsWith('/frozen/')) {
-      return serveFrozen(path.slice(8).replace(/\.html$/, ''))
-    }
-    // Attach a file: the raw body IS the bytes, its content-type the mime,
-    // ?name= the filename, ?eid= the entity to attach to (a fresh uuid mints
-    // a bare file entity). landBlob stores the bytes content-addressed; the
-    // `blob` metadata rides apply() like any write (blob.ts owns the store).
-    if (path == '/blob' && req.method == 'POST') {
-      try {
-        let eid = url.searchParams.get('eid') ?? ''
-        if (!eid) return new Response('eid required', { status: 400 })
-        let name = url.searchParams.get('name') ?? 'file'
-        let mime = req.headers.get('content-type') || 'application/octet-stream'
-        let bytes = new Uint8Array(await req.arrayBuffer())
-        let t = trace()
-        let out = apply(
-          db,
-          await landBlob(eid, name, mime, bytes),
-          t,
-          req.headers.get('x-via'),
-        )
-        cast(out)
-        effect(out, t)
-        return Response.json({ ok: true, changes: out })
-      } catch (e) {
-        let why = e instanceof Error ? e.message : String(e)
-        return new Response(why, { status: 400 })
+      }
+      if (!eid) return new Response('no entity', { status: 404 })
+      let comps = eager(db, eid)
+      if (!comps.anchor) {
+        return new Response(`${id} has no anchor`, { status: 404 })
+      }
+      a = comps.anchor as typeof a
+      // The repo an entity's anchor means: its own repo comp, else the one
+      // its project (task.project / memory.scope) wears.
+      let home = (owner?: unknown) =>
+        owner
+          ? eager(db, String(owner)).repo?.path as string | undefined
+          : undefined
+      cwd ??= (comps.repo?.path as string | undefined) ??
+        home(comps.task?.project) ?? home(comps.memory?.scope)
+    } else {
+      if (!p.get('path')) {
+        return new Response('need ?id= or ?path=', { status: 400 })
+      }
+      let num = (k: string) => (p.get(k) == null ? null : Number(p.get(k)))
+      a = {
+        paths: p.get('path'),
+        sha: p.get('sha'),
+        hunk: p.get('hunk'),
+        start: num('start'),
+        end: num('end'),
       }
     }
-    if (path.startsWith('/blob/')) return serveBlob(path.slice(6))
-    // The user's theme: a stylesheet in their vault, not this repo, so
-    // re-skinning is a file beside your data — never a fork of styles.css
-    // (T-12778). Loaded after styles.css, it overrides the :root theme
-    // contract. Absent is the normal case: an empty stylesheet, not a 404
-    // the log would cry about. themeWatch (below) hot-swaps it on save.
-    if (path == '/theme.css') {
-      let theme = `${Deno.env.get('HOME')}/.tasks/theme.css`
-      let css = await Deno.readTextFile(theme).catch(() => '')
-      return new Response(css, {
-        headers: { 'content-type': mime.css, 'cache-control': 'no-cache' },
+    return Response.json(await resolveAnchor(cwd ?? repo, a))
+  }
+  if (path == '/body') {
+    // The bodies a bodyless payload deferred, for the eids a view is about
+    // to paint or edit (live.ts `want`). A Change batch, so it lands
+    // through applyLocal like any patch — no second intake path.
+    let eids = (url.searchParams.get('eids') ?? '').split(',').filter(Boolean)
+    return Response.json({ changes: bodies(db, eids) })
+  }
+  if (path == '/delta') {
+    // The returning client's catch-up: changes since its cursor. A cursor is
+    // only valid against the epoch and vocabulary that issued it, and only up
+    // to the journal's current tip — a mismatch means a different graph
+    // lineage, a shape change, or a rewind past the client's frontier, so 409
+    // tells the client to full-resnapshot rather than serve a misleading
+    // delta (cursorStale, db.ts).
+    let p = url.searchParams
+    if (
+      cursorStale(
+        db,
+        p.get('epoch'),
+        p.get('vocab'),
+        Number(p.get('since') ?? 0),
+      )
+    ) {
+      return new Response('stale', { status: 409 })
+    }
+    return Response.json(delta(db, Number(p.get('since') ?? 0)))
+  }
+  if (path == '/search') {
+    // a malformed filter is the typist's news, not a server error
+    try {
+      return Response.json(search(
+        db,
+        url.searchParams.get('q') ?? '',
+        Number(url.searchParams.get('limit') ?? 20),
+      ))
+    } catch (e) {
+      return new Response(String((e as Error).message ?? e), { status: 400 })
+    }
+  }
+  if (path == '/similar') {
+    // Semantic neighbors of arbitrary text — the dupe hint's door.
+    // 503 = this box has no embedder; callers show nothing, not errors.
+    let q = url.searchParams.get('q') ?? ''
+    if (!q.trim()) return new Response('q required', { status: 400 })
+    let hits = await similarTo(
+      db,
+      q,
+      Number(url.searchParams.get('limit') ?? 8),
+      Number(url.searchParams.get('floor') ?? 0),
+      url.searchParams.get('eid') ?? undefined,
+    )
+    if (!hits) return new Response('no embedder here', { status: 503 })
+    return Response.json(hits.map((h) => {
+      let comps = eager(db, h.eid)
+      let entity = comps.entity
+      let kind = kindOf(comps)
+      return {
+        ...h,
+        id: entity
+          ? idOf({ eid: h.eid, kind, num: Number(entity.num) })
+          : h.eid,
+        kind,
+        title: String(comps.doc?.title ?? ''),
+      }
+    }))
+  }
+  if (path == '/persona') {
+    // A persona materialized over the FULL graph — the SAME bytes a spawned
+    // session reads as its system prompt (persona.ts materialize()), so the
+    // browser must NOT render them from its own cache: under a partial cache
+    // the tier walk misses memories and edges and quietly corrupts the very
+    // prompt. `id` addresses the persona (locate: T-3, num, uuid, slug).
+    // `scoped` is the in-scope memories the editor lists as untiered — the
+    // one other whole-graph walk the Persona view owed the cache — resolved
+    // here so discovery no longer depends on what the client happens to hold.
+    let eid = locate(db, url.searchParams.get('id') ?? '')
+    if (!eid) return new Response('no such entity', { status: 404 })
+    let snap = snapshot(db)
+    let all = rows(snap)
+    let p = all.find((r) => r.eid == eid && r.comps.persona && r.comps.doc)
+    if (!p) return new Response('not a persona', { status: 404 })
+    let home = p.comps.persona.home ?? null
+    let scoped = all
+      .filter((r) =>
+        r.comps.memory && r.comps.doc &&
+        ((r.comps.memory.scope as string | null) ?? null) == home
+      )
+      .map((r) => r.eid)
+    return Response.json({
+      text: materialize(all, snap.deps, p, Date.now()),
+      scoped,
+    })
+  }
+  if (path == '/query') {
+    // The graph over plain GET: the query string IS the filter line —
+    // the same grammar boards and task_list speak — and hits come back
+    // Structured like every entity JSON door. Kind is a filter now, not a
+    // parameter: `.kind=project` screens by derived kind through the grammar.
+    // `backlinks=1` adds who points at each hit (eid columns + edges),
+    // `deps=1` the hit's own edges both ways; `id=` names entities outright.
+    // A malformed filter is the typist's news, not a server error.
+    try {
+      let segs = url.search.slice(1).split('&').filter(Boolean)
+        .map(decodeURIComponent)
+      let backs = segs.includes('backlinks=1')
+      let edged = segs.includes('deps=1')
+      let reveal = segs.includes('quarantined=1')
+      // Paging for the lazy entry partition: `after=` is an entry.seq cursor,
+      // `limit=` the page size. Ignored by an eager query, which the snapshot
+      // path already answers whole in num order.
+      let after = Number(
+        segs.find((s) => s.startsWith('after='))?.slice(6),
+      ) ||
+        0
+      let limit = Number(
+        segs.find((s) => s.startsWith('limit='))?.slice(6),
+      ) || undefined
+      // `id=` FETCHES rather than filters: each value is an ADDRESS — T-3, a
+      // bare num, an alias slug, a uuid — and locate() is the index's own
+      // reading of "what names an entity", the same four rules find() spells
+      // over a materialized graph. It is a parameter beside backlinks=
+      // rather than a predicate because addressing is not filtering:
+      // `.entity.eid~=abc` would be a substring search over uuids, legal and
+      // meaningless.
+      //
+      // An id naming nothing is simply absent, the way a filter matching
+      // nothing returns no rows — a caller asking for five and getting three
+      // learns which two are gone by their absence.
+      let named = segs.filter((s) => s.startsWith('id='))
+        .flatMap((s) => s.slice(3).split(',')).filter(Boolean)
+      let only = named.length
+        ? new Set(
+          (named.map((i) => locate(db, i)).filter(Boolean) as string[])
+            .filter((eid) => !buried(db, eid)),
+        )
+        : null
+      segs = segs.filter((s) =>
+        s != 'backlinks=1' && s != 'deps=1' && s != 'quarantined=1' &&
+        !s.startsWith('after=') &&
+        !s.startsWith('limit=') &&
+        !s.startsWith('id=')
+      )
+      let q = segs.join('&')
+      // An aggregate projection (`.distinct=col` / `.tally=col`) answers with
+      // the reduction, not a row set — the census asks for values, so rows,
+      // layers and id= addressing don't apply. Keys come back sorted the way
+      // the census always has.
+      let agg = evalAgg(db, q)
+      if (agg) {
+        let keys = [...agg.values.keys()].sort()
+        return Response.json(
+          agg.op == 'distinct' ? { distinct: keys } : {
+            tally: Object.fromEntries(
+              keys.map((k) => [k, agg.values.get(k)]),
+            ),
+          },
+        )
+      }
+      // Any remaining filter line still screens, so `id=` composes with the
+      // grammar rather than replacing it.
+      let screen = (hits: Row[]) =>
+        only ? hits.filter((r) => only.has(r.eid)) : hits
+      // What a hit carries BESIDE its components: its own edges (deps=1)
+      // and who points at it (backlinks=1). Both are keyed off the hits —
+      // depsOf and refsOf read the edge table and each typed eid column by
+      // eid — so a one-entity question costs one entity. Backlinks used to
+      // walk every row of the graph for this, which is what held the whole
+      // door on the snapshot path; now every path serves both layers the
+      // same way, and `deps` is the first door outside /snapshot to carry an
+      // entity's OUTGOING edges at all (`task show` prints them).
+      //
+      // `deps` are the snap.deps triples touching the hit, eids and all: an
+      // endpoint's id and status come from fetching it, and a caller
+      // rendering edges is fetching those rows anyway.
+      let layers = (hits: Row[]) => {
+        if (!backs && !edged) return hits.map((r) => jsonOf(r))
+        let eids = hits.map((r) => r.eid)
+        let deps = depsOf(db, eids).filter((d) =>
+          reveal ||
+          (!eager(db, d.parent).quarantined &&
+            !eager(db, d.child).quarantined)
+        )
+        let mine = new Map<string, Dep[]>()
+        for (let d of deps) {
+          for (let e of [d.parent, d.child]) {
+            if (mine.has(e)) mine.get(e)!.push(d)
+            else mine.set(e, [d])
+          }
+        }
+        let back = new Map<
+          string,
+          { from: string; via: string; title: string }[]
+        >()
+        if (backs) {
+          let wanted = new Set(eids)
+          // An edge is a reference like any other; its verb IS the `via`.
+          let refs = [
+            ...refsOf(db, eids).filter((r) =>
+              reveal || !eager(db, r.from).quarantined
+            ),
+            ...deps.filter((d) => wanted.has(d.child))
+              .map((d) => ({ from: d.parent, via: d.type, to: d.child })),
+          ]
+          // The title rides along because a backlink is READ, not chased:
+          // the extension's "what references this page" panel is one query
+          // or it is two, and the id alone would force the second.
+          let named = new Map(
+            rowsOf(db, [...new Set(refs.map((r) => r.from))])
+              .map(rowed).map((r) => [r.eid, r]),
+          )
+          for (let { from, via, to } of refs) {
+            let r = named.get(from)
+            if (!r) continue // a comp row whose spine is gone names nobody
+            let list = back.get(to) ?? []
+            list.push({
+              from: idOf(r),
+              via,
+              title: String(r.comps.doc?.title ?? ''),
+            })
+            back.set(to, list)
+          }
+        }
+        return hits.map((r) => ({
+          ...jsonOf(r),
+          ...(edged ? { deps: mine.get(r.eid) ?? [] } : {}),
+          ...(backs ? { backlinks: back.get(r.eid) ?? [] } : {}),
+        }))
+      }
+      // Named entities are read one eager() each — a handful of keyed reads,
+      // against a filter that would otherwise select everything and drag the
+      // whole graph in behind it.
+      // A dead entity is gone before this: `only` was built above with the
+      // tombstone excluded (buried), so it holds live eids only and eager()
+      // always finds a spine with components. Since the D-18866 flip retains a
+      // tombstoned spine row, that exclusion is explicit rather than a side
+      // effect of delete removing the row.
+      if (only) {
+        let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+        let hits = [...only].map((eid) => rowed({ eid, comps: eager(db, eid) }))
+          .filter((r) => reveal || listed(r.comps, preds))
+          .filter((r) =>
+            matchQuery(
+              r.comps,
+              preds,
+              (e) => eager(db, e),
+              undefined,
+              dbKids((e) => eager(db, e)),
+            )
+          )
+        return Response.json(
+          layers(screen(hits).sort((a, b) => a.num - b.num)),
+        )
+      }
+      // The authoritative pipeline (evalGraph): the index answers when it can
+      // (a one-row question cost a 27 MB snapshot and 0.29s before sql.ts,
+      // 100x), else the JS matcher over the full universe — which now carries
+      // the lazy entry partition whenever the query names it. Kind is a filter
+      // in q now (`.kind=`), hot ranking and entry ordering/paging all settle
+      // inside evalGraph, so this door and the in-process graph_query tool
+      // read one answer.
+      let { hits } = evalGraph(db, q, { after, limit })
+      return Response.json(layers(hits))
+    } catch (e) {
+      return new Response(String((e as Error).message ?? e), { status: 400 })
+    }
+  }
+  if (path == '/inbox') {
+    // The inbox as the SERVER enumerates it — the SAME client.ts predicate
+    // (inboxFor's union, screened by inboxItem/addressed over a readerFor|
+    // readerAt reader), run in-process against THIS graph so a partial-cache
+    // client reads its FINISHED inbox in one round-trip instead of scanning a
+    // whole-graph cache it no longer holds (T-18105). `session`(+`cwd`) builds
+    // the working reader; `actor` the browsing one. `mode=all` is the CLI's
+    // --all (direct address incl. archived, no watch/mute); repeated `f=` are
+    // dot-param filters, screening the union the way `task inbox <filters>`
+    // does. A malformed filter is the typist's news, not a server error.
+    try {
+      let p = url.searchParams
+      let mode: 'inbox' | 'all' = p.get('mode') == 'all' ? 'all' : 'inbox'
+      let session = p.get('session') ?? undefined
+      let actor = p.get('actor') ?? undefined
+      if (!session && !actor) {
+        return new Response('session or actor required', { status: 400 })
+      }
+      let local = localQuery(db)
+      let who = session
+        ? readerFor(
+          await readerRows(session, local),
+          session,
+          p.get('cwd') ?? undefined,
+        )
+        : readerAt(await actorRows(actor, local), actor)
+      let union = await inboxFor(who, p.getAll('f'), mode, local)
+      let keep = mode == 'all' ? addressed(who) : inboxItem(who)
+      return Response.json(union.filter(keep).map((r) => jsonOf(r)))
+    } catch (e) {
+      return new Response(String((e as Error).message ?? e), { status: 400 })
+    }
+  }
+  if (path == '/references') {
+    let eid = url.searchParams.get('eid') ?? ''
+    if (!eid) return new Response('eid required', { status: 400 })
+    return Response.json(references(db, eid), {
+      headers: { 'cache-control': 'no-store' },
+    })
+  }
+  if (path == '/mcp' && req.method == 'POST') return mcp(req)
+  if (path == '/error' && req.method == 'POST') return clientError(req)
+  if (path == '/usage' && req.method == 'POST') return cliUsage(req)
+  if (path == '/telemetry') {
+    let since = url.searchParams.get('since') ?? undefined
+    let only = url.searchParams.get('only') ?? undefined
+    // ?stats=1 asks for the latency distribution (p50/p95/p99 per door+tool,
+    // computed in SQL) instead of the raw rows.
+    if (url.searchParams.get('stats')) {
+      return Response.json(stats(db, { since, only }))
+    }
+    return Response.json(recent(db, {
+      since,
+      limit: Number(url.searchParams.get('limit')) || undefined,
+      only,
+    }))
+  }
+  // HTTP writes (the CLI and MCP server): same apply, same allowlist,
+  // same broadcast — an HTTP client is just a client without a socket.
+  if (path == '/apply' && req.method == 'POST') {
+    let t0 = performance.now()
+    let note = (ok: boolean, error?: string) =>
+      record(db, {
+        source: 'http',
+        name: 'apply',
+        ok,
+        ms: performance.now() - t0,
+        error,
+      })
+    return req.json().then((changes: Change[]) => {
+      let t = trace()
+      // Attribution is an honesty header, not auth: the CLI names its
+      // session in x-via (the instrument), apply resolves it to the actor
+      // it acts for, and an anonymous post falls back to the box owner.
+      let out = apply(
+        db,
+        changes,
+        t,
+        req.headers.get('x-via'),
+      )
+      cast(out)
+      effect(out, t)
+      note(true)
+      return Response.json({ ok: true, changes: out })
+    }).catch((e) => {
+      // The MESSAGE, not String(e) — a rejection is read by a person or
+      // an agent, and `String(new Error(x))` prefixes a stray "Error:"
+      // that the CLI then wraps again ("apply failed: Error: …").
+      let why = e instanceof Error ? e.message : String(e)
+      note(false, why)
+      return new Response(why, { status: 400 })
+    })
+  }
+  // Value redaction is the one write that reaches backward into the journal.
+  // Hold backup's process lock from the atomic database scrub through the
+  // upstream-history report, so no pre-scrub snapshot can publish after the
+  // answer. The removed value rides only the POST body and db transaction —
+  // never a URL, diagnostic, telemetry row, git argv, or response.
+  if (path == '/redact' && req.method == 'POST') {
+    let t0 = performance.now()
+    try {
+      let body = await req.json() as { id?: string; selector?: string }
+      if (!body.id || body.selector == null) {
+        throw new Error('redact needs an id and selector')
+      }
+      let done = await withBackupLock(dirname(graph), async () => {
+        let result = redactValue(
+          db,
+          body.id!,
+          body.selector!,
+          req.headers.get('x-via'),
+        )
+        cast(result.changes)
+        effect(result.changes, trace())
+        let backup
+        try {
+          backup = await published(dirname(graph), result.firstSeen)
+        } catch (e) {
+          backup = { ref: null, error: String(e) }
+        }
+        return {
+          ...result,
+          audit: human(db, result.audit),
+          target: human(db, result.target),
+          backup,
+        }
+      })
+      record(db, {
+        source: 'http',
+        name: 'redact',
+        ok: true,
+        ms: performance.now() - t0,
+      })
+      return Response.json(done)
+    } catch (e) {
+      let why = e instanceof Error ? e.message : String(e)
+      record(db, {
+        source: 'http',
+        name: 'redact',
+        ok: false,
+        ms: performance.now() - t0,
+        error: why,
+      })
+      return new Response(why, { status: 400 })
+    }
+  }
+  // Undo reverses a journaled batch: the server builds the guarded inverse
+  // (only it reads the journal) and applies it through the same door as any
+  // write. Build and apply share this one synchronous tick — no await
+  // between — so the world can't move after the inverse is priced and before
+  // it lands. ?id= names a journal batch; ?eid= its entity's latest batch.
+  if (path == '/undo' && req.method == 'POST') {
+    let t0 = performance.now()
+    let note = (ok: boolean, error?: string) =>
+      record(db, {
+        source: 'http',
+        name: 'undo',
+        ok,
+        ms: performance.now() - t0,
+        error,
+      })
+    try {
+      let idParam = url.searchParams.get('id')
+      let eid = url.searchParams.get('eid')
+      let id = idParam != null ? Number(idParam) : eid ? lastBatch(db, eid) : 0
+      if (!id) {
+        throw new Error(
+          eid ? `${eid} has no history to undo` : 'undo needs ?id= or ?eid=',
+        )
+      }
+      let t = trace()
+      let out = apply(db, inverseBatch(db, id), t, req.headers.get('x-via'))
+      cast(out)
+      effect(out, t)
+      note(true)
+      return Response.json({ ok: true, changes: out, id })
+    } catch (e) {
+      let why = e instanceof Error ? e.message : String(e)
+      note(false, why)
+      return new Response(why, { status: 400 })
+    }
+  }
+  // Historical materializations are deliberate operator work, never a
+  // boot sweep. Ordinary apply batches keep persistence, live broadcasts,
+  // and effects on the same path as every new edge.
+  if (path.startsWith('/backfill/') && req.method == 'POST') {
+    let mine = {
+      worked: historicalWorked,
+      referenced: historicalReferenced,
+    }[path.slice('/backfill/'.length)]
+    if (!mine) return new Response('no such backfill', { status: 404 })
+    let pending = mine(db)
+    let landed = 0
+    for (let i = 0; i < pending.length; i += 200) {
+      let t = trace()
+      let out = apply(
+        db,
+        pending.slice(i, i + 200),
+        t,
+        req.headers.get('x-via'),
+      )
+      landed += out.filter((c) => c.name == 'dependency').length
+      cast(out)
+      effect(out, t)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    return Response.json({ found: pending.length, landed })
+  }
+  // The adapter table, for a browser that must offer what a spawn
+  // request will be checked against (adapters.ts is server-only).
+  if (path == '/providers') return Response.json(await readyProviders())
+  // Mail attachments, proxied read-only: the fleet-mail worker holds
+  // them in R2 behind a token that stays in THIS process — clients
+  // name the mail ENTITY; the spool's message_id is server business.
+  // /mail/:id/files lists ({message_id, files}); …/files/:name streams
+  // the bytes. Each miss says which link broke, so the CLI teaches at
+  // failure time instead of shrugging.
+  let files = path.match(/^\/mail\/([^/]+)\/files(?:\/(.+))?$/)
+  if (files) {
+    let ref = decodeURIComponent(files[1])
+    let row = mailIdOf(ref)
+    if (!row) return new Response(`not a mail: ${ref}`, { status: 404 })
+    if (!row.message_id) {
+      return new Response(
+        `${ref} has no spool row (outbound/relay mail carries no attachments)`,
+        { status: 404 },
+      )
+    }
+    let name = files[2] ? decodeURIComponent(files[2]) : undefined
+    let up = fleetRaw(
+      `/messages/${encodeURIComponent(row.message_id)}/attachments` +
+        (name ? `/${encodeURIComponent(name)}` : ''),
+    )
+    if (!up) {
+      return new Response(
+        'fleet-mail API not configured on this server (FLEET_MAIL_API_URL / FLEET_MAIL_API_TOKEN)',
+        { status: 503 },
+      )
+    }
+    let res = await up
+    if (!res.ok) return new Response(await res.text(), { status: res.status })
+    if (name) {
+      return new Response(res.body, {
+        headers: {
+          'content-type': res.headers.get('content-type') ??
+            'application/octet-stream',
+        },
       })
     }
-    // Plugin bytes: served from this repo's `plugins/` dir the same on-the-fly
-    // way src is (TS → JS, mtime-cached), so the browser imports the same
-    // modules the server did — a path prefix, not a bundler (D-18663 seam 1).
-    // Reachable only when a plugin is configured; otherwise nothing links here.
-    if (path.startsWith('/plugins/')) return file(repo.slice(0, -1), path)
-    // An extensionless path is a ROUTE (/T-123): the app boots and reads
-    // the URL — same shell, different root card.
-    let shell = path.includes('.') ? path : '/index.html'
-    // When plugins are configured, inject their browser URLs into the shell so
-    // main.tsx can import them before first render. With none configured (the
-    // default), the shell is served byte-for-byte unchanged — the loader stays
-    // inert.
-    if (shell == '/index.html' && browserPlugins.length) {
-      let html = await Deno.readTextFile(`${src}index.html`)
-      let tag = `<script type="application/json" id="tasks-plugins">${
-        JSON.stringify(browserPlugins)
-      }</script>`
-      return new Response(html.replace('</head>', `  ${tag}\n  </head>`), {
-        headers: { 'content-type': mime.html, 'cache-control': 'no-cache' },
+    return Response.json({
+      message_id: row.message_id,
+      files: await res.json(),
+    })
+  }
+  // The wire's record, per entity (?eid=) or instrument (?via= — a
+  // session's whole day). Raw eids only — id resolution is a client concern.
+  if (path == '/journal') {
+    let via = url.searchParams.get('via')
+    let limit = Number(url.searchParams.get('limit') ?? 50) || 50
+    return Response.json(
+      via
+        ? journalBy(db, via, limit)
+        : journalOf(db, url.searchParams.get('eid') ?? '', limit),
+    )
+  }
+  if (path == '/freeze') {
+    return freeze(url.searchParams.get('eid') ?? '', cast)
+  }
+  // A page as witnessed by a browser — the extension's write door
+  // (page.ts owns what one filing IS).
+  if (path == '/page' && req.method == 'POST') {
+    return req.json().then((body) => filed(body, cast)).catch((e) =>
+      new Response(e instanceof Error ? e.message : String(e), {
+        status: 400,
       })
+    )
+  }
+  if (path == '/upload' && req.method == 'POST') {
+    return req.text().then((body) =>
+      store(
+        url.searchParams.get('eid') ?? '',
+        body,
+        cast,
+        url.searchParams.has('scrub'),
+      )
+    )
+  }
+  if (path.startsWith('/frozen/')) {
+    return serveFrozen(path.slice(8).replace(/\.html$/, ''))
+  }
+  // Attach a file: the raw body IS the bytes, its content-type the mime,
+  // ?name= the filename, ?eid= the entity to attach to (a fresh uuid mints
+  // a bare file entity). landBlob stores the bytes content-addressed; the
+  // `blob` metadata rides apply() like any write (blob.ts owns the store).
+  if (path == '/blob' && req.method == 'POST') {
+    try {
+      let eid = url.searchParams.get('eid') ?? ''
+      if (!eid) return new Response('eid required', { status: 400 })
+      let name = url.searchParams.get('name') ?? 'file'
+      let mime = req.headers.get('content-type') || 'application/octet-stream'
+      let bytes = new Uint8Array(await req.arrayBuffer())
+      let t = trace()
+      let out = apply(
+        db,
+        await landBlob(eid, name, mime, bytes),
+        t,
+        req.headers.get('x-via'),
+      )
+      cast(out)
+      effect(out, t)
+      return Response.json({ ok: true, changes: out })
+    } catch (e) {
+      let why = e instanceof Error ? e.message : String(e)
+      return new Response(why, { status: 400 })
     }
-    return file(src.slice(0, -1), shell)
-  },
-)
-bound(ownership)
+  }
+  if (path.startsWith('/blob/')) return serveBlob(path.slice(6))
+  // The user's theme: a stylesheet in their vault, not this repo, so
+  // re-skinning is a file beside your data — never a fork of styles.css
+  // (T-12778). Loaded after styles.css, it overrides the :root theme
+  // contract. Absent is the normal case: an empty stylesheet, not a 404
+  // the log would cry about. themeWatch (below) hot-swaps it on save.
+  if (path == '/theme.css') {
+    let theme = `${Deno.env.get('HOME')}/.tasks/theme.css`
+    let css = await Deno.readTextFile(theme).catch(() => '')
+    return new Response(css, {
+      headers: { 'content-type': mime.css, 'cache-control': 'no-cache' },
+    })
+  }
+  // Plugin bytes: served from this repo's `plugins/` dir the same on-the-fly
+  // way src is (TS → JS, mtime-cached), so the browser imports the same
+  // modules the server did — a path prefix, not a bundler (D-18663 seam 1).
+  // Reachable only when a plugin is configured; otherwise nothing links here.
+  if (path.startsWith('/plugins/')) return file(repo.slice(0, -1), path)
+  // An extensionless path is a ROUTE (/T-123): the app boots and reads
+  // the URL — same shell, different root card.
+  let shell = path.includes('.') ? path : '/index.html'
+  // When plugins are configured, inject their browser URLs into the shell so
+  // main.tsx can import them before first render. With none configured (the
+  // default), the shell is served byte-for-byte unchanged — the loader stays
+  // inert.
+  if (shell == '/index.html' && browserPlugins.length) {
+    let html = await Deno.readTextFile(`${src}index.html`)
+    let tag = `<script type="application/json" id="tasks-plugins">${
+      JSON.stringify(browserPlugins)
+    }</script>`
+    return new Response(html.replace('</head>', `  ${tag}\n  </head>`), {
+      headers: { 'content-type': mime.html, 'cache-control': 'no-cache' },
+    })
+  }
+  return file(src.slice(0, -1), shell)
+}
 
 // Pass-through legacy sessions materialize on read from their transcript files
 // (D-17790 / T-17795) — registered here, server-only, so the read doors resolve
@@ -2527,12 +2526,16 @@ let drain = async () => {
   // interval another turn, so a hung drain can no longer leak stale-code writes
   // at the live db (T-19494).
   stopTimers()
+  // Let in-flight graph-native generations/calls finish and settle BEFORE the
+  // listener closes: this drain is what keeps a source-edit handoff from
+  // killing a live codex turn, and it can run for minutes (settle caps at
+  // 300s). The successor binds only when READY (see the bind at the bottom of
+  // boot), so through this whole settle we are still the port's one listener —
+  // settling above shutdown() keeps the graph answering instead of dark for
+  // the duration.
+  await managed.settle()
   for (let c of clients) c.close(1012, 'server restart')
   await http.shutdown()
-  // Let in-flight graph-native generations/calls finish and settle before we
-  // go: the supervisor already has a successor serving the port, so this drain
-  // is what keeps a source-edit handoff from killing a live codex turn.
-  await managed.settle()
   await codexAccount.close()
   ownership.close()
   // PRAGMA optimize on the long-lived connection at graceful shutdown — the
@@ -2548,6 +2551,16 @@ let drain = async () => {
   }
   Deno.exit(0)
 }
+
+// Bind LAST. Everything above — the baton, migrate, the boot reconcilers — is
+// done, so the first connection the kernel deals us is one we can answer NOW.
+// Until this line the predecessor was the port's only listener and served
+// through its settle; the dark gap is just its shutdown→exit plus our migrate,
+// seconds instead of the whole boot. reusePort stays: it is what lets this
+// bind land while the predecessor's closing listener still drains its last
+// accepted connections.
+let http = Deno.serve({ port, reusePort: true }, handle)
+bound(ownership)
 
 Deno.addSignalListener('SIGINT', drain)
 Deno.addSignalListener('SIGTERM', drain)

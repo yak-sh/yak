@@ -1,6 +1,9 @@
-// The development and deployed server supervisor. Successors bind beside their
-// predecessors, announce when boot is complete, then let the predecessor drain;
-// the public port therefore always has a ready listener during source deploys.
+// The development and deployed server supervisor. Successors PREP beside their
+// predecessors (import + connect, no listener — reusePort would deal half of
+// all new connections to a listener still minutes from serving), the
+// predecessor serves through its own drain, and the successor binds the public
+// port only when READY; the dark gap is its predecessor's shutdown plus a
+// migrate, seconds, not a boot.
 import { devFile, serverFile } from './reload.ts'
 import { peer } from './bind.ts'
 
@@ -122,9 +125,10 @@ let bootMs = Number(Deno.env.get('TASKS_BOOT_DEADLINE_MS') ?? 900_000)
 // descendant shell.
 //
 // `onBound` turns this into the TWO-beat single-writer handoff (T-20223). A
-// --join successor signals TWICE: beat 1 "bound" (listening, DB connected
-// read-capable, NOT yet migrated), then beat 2 "ready" (migrated under the
-// writer baton, fully up). onBound fires between them — it stops the
+// --join successor signals TWICE: beat 1 "prepped" (imports done, DB connected
+// read-capable — NOT yet migrated, NOT yet listening: the predecessor stays
+// the port's only listener until the successor is ready), then beat 2 "ready"
+// (migrated under the writer baton, bound, fully up). onBound fires between them — it stops the
 // predecessor, whose exit releases the baton the successor is waiting on — so
 // the successor never migrates or writes beside a live predecessor. Without
 // onBound (a sole boot) the child signals once and this resolves on it.
@@ -166,8 +170,8 @@ export let launch = async (
   }
   try {
     if (onBound) {
-      // Beat 1: BOUND — fast (connect + bind), so the sole-boot deadline.
-      await beat(60_000, 'bound')
+      // Beat 1: PREPPED — fast (import + connect), so the sole-boot deadline.
+      await beat(60_000, 'prepped')
       // Stop the predecessor; its exit frees the writer baton the successor is
       // now waiting on. Reads/writes queue on the successor through the gap.
       onBound()
@@ -297,16 +301,17 @@ let stop = async (child: Deno.ChildProcess) => {
   await child.status
 }
 
-// The single-writer handoff (T-20223). The successor is spawned to bind BESIDE
-// the predecessor and serve reads, but it must NOT migrate or write until the
-// predecessor has released the DB. So the beats are ordered: launch() waits for
-// the successor to report BOUND, then `onBound` here stops the predecessor;
-// its exit releases the writer baton; the successor migrates under the baton
-// and reports READY, which is when launch() resolves. There is never a moment
+// The single-writer handoff (T-20223). The successor is spawned to PREP beside
+// the predecessor — imports, DB connect, no listener — and it must NOT migrate
+// or write until the predecessor has released the DB. So the beats are ordered:
+// launch() waits for the successor to report PREPPED, then `onBound` here stops
+// the predecessor; its exit releases the writer baton; the successor migrates
+// under the baton, binds the port only now, and reports READY, which is when
+// launch() resolves. There is never a moment
 // when two processes write the one file.
 //
-// The predecessor is condemned only at "bound", never before — so a successor
-// that fails to even start (a bad commit's import/bind error, before "bound")
+// The predecessor is condemned only at "prepped", never before — so a successor
+// that fails to even start (a bad commit's import error, before "prepped")
 // leaves the predecessor untouched and serving old code, and insist() retries
 // on backoff (a bad commit idles the box, T-14046). A successor that fails
 // AFTER we condemned the predecessor is healed by a fresh boot, which claims

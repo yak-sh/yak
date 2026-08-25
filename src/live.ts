@@ -505,7 +505,6 @@ export let resetSignals = () =>
     indexAll(ix, cache.peek(), deps.peek())
     ixGraph = cache.peek()
     ixDeps = deps.peek()
-    let touched = new Set([...census.peek(), ...Object.keys(cache.value)])
     census.value = Object.keys(cache.value)
     canvasVersion.value++
     for (let [eid, found] of rowSignals) found.value = cache.value[eid]
