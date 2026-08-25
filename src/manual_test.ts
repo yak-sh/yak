@@ -113,7 +113,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       probes: 'probes [--all] [--reap] [--grace=30]',
       telemetry: 'telemetry [--errors] [--stats] [--since=ISO] [-n=N] [--json]',
       usage: 'usage [filters…] [--by=DIM] [--json]',
-      wake: 'wake <who> [when…] [target] [--body=BODY] [--gone]',
+      wake: 'wake [who] [when…] [target] [--body=BODY] [--list] [--gone]',
       ':': ':<command> … | <id> :<command> …',
       help: 'help [verb|grammar|:] [nested verb]',
       complete: 'complete [words…]',

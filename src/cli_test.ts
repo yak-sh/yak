@@ -1668,6 +1668,20 @@ slow('setting a wake shows every pending wake for that session', async () => {
     assertMatch(stdout, /pending wakes for S-71 \(2\):/)
     assertMatch(stdout, /existing reminder/)
     assertMatch(stdout, /new reminder/)
+
+    let listed = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'wake',
+        '--list',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: `127.0.0.1:${server.addr.port}` },
+    }).output()
+    assertEquals(listed.code, 0, text(listed.stderr))
+    assertMatch(text(listed.stdout), /pending wakes for S-71 \(2\):/)
   } finally {
     await server.shutdown()
   }

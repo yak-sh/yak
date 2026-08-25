@@ -987,13 +987,16 @@ export let manuals = declare({
   wake: {
     about: 'a knock on a timer',
     examples: [
+      'task wake --list',
+      'task wake homelab --list',
       'task wake S-31 in 60m',
       'task wake homelab "9am tomorrow" T-42',
       'task wake home "in 900s" --body="mid mail-loop port, T-7018 next"',
       'task wake home --gone',
       'task wake homelab --gone T-42',
     ],
-    detail: 'The optional --body (or .body=@-, @file) is a NOTE — what you ' +
+    detail: '--list reads every pending wake; name WHO to screen it to one ' +
+      'recipient. The optional --body (or .body=@-, @file) is a NOTE — what you ' +
       'were mid-doing, why you will return. It rides through to the knock the ' +
       'wake mints, so a resumed session reconstitutes instead of guessing. A ' +
       'cadence return (a wake at your own home board) reads "your pass ' +
@@ -1006,11 +1009,11 @@ export let manuals = declare({
     dots: ['body'],
     body: 'text',
     args: [
-      arg('who', id),
+      arg('who', id, false, false),
       arg('when', text, true, false),
       arg('target', id, false, false),
     ],
-    opts: [body, flag('--gone')],
+    opts: [body, flag('--list'), flag('--gone')],
   },
   ':': {
     syntax: ':<command> … | <id> :<command> …',

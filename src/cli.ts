@@ -1560,6 +1560,59 @@ let wakeCancel = async (rest: string[]) => {
   )
 }
 
+// Pending wakes are already indexed by component and recipient. Keep the read
+// at that server-side seam: this is a fleet-wide inspection door, so a client
+// snapshot would turn one narrow question into a whole-graph scan.
+let wakeRead = async (words: string[]) => {
+  if (words.length > 1) {
+    throw new UsageError('task wake [who] --list — list pending wakes')
+  }
+  let who = words[0] ? await needed(words[0]) : undefined
+  let wakes = await query([
+    '.wake!',
+    '.deliver!',
+    '.delivered=',
+    '.error=',
+    ...(who ? [`.deliver.to=${who.eid}`] : []),
+  ])
+  let ids = wakes.flatMap((r) => [
+    String(r.comps.deliver?.to ?? ''),
+    String(r.comps.wake?.target ?? ''),
+  ]).filter(Boolean)
+  let refs = await fetched([...new Set(ids)])
+  let byEid = (eid: string) => refs.find((r) => r.eid == eid)
+  let recipients = who ? [who] : [
+    ...new Map(
+      wakes.map((r) => {
+        let eid = String(r.comps.deliver?.to ?? '')
+        return [eid, byEid(eid) ?? { eid, kind: 'entity', num: 0, comps: {} }]
+      }),
+    ).values(),
+  ]
+  if (!recipients.length) return print('pending wakes (0): none')
+  for (let recipient of recipients) {
+    print(wakeList(
+      wakes.filter((r) => r.comps.deliver?.to == recipient.eid),
+      recipient,
+      byEid,
+    ))
+  }
+}
+
+let wakeVerb = (got: Got) => {
+  if (got.flags.has('--list')) {
+    if (got.flags.has('--gone') || got.body != null) {
+      throw new UsageError('wake --list does not take --gone or --body')
+    }
+    return wakeRead(got.words)
+  }
+  return got.flags.has('--gone') ? wakeCancel(got.words) : colon(undefined, [
+    'wake',
+    ...got.words,
+    ...(got.body != null ? ['--', got.body] : []),
+  ])
+}
+
 // A role is DESIRED capacity, so the only honest stop is a state patch. The
 // reconciler drives processes toward this row every couple of seconds, which
 // means killing a pane or a tmux session is not a stop — it is a relaunch with
@@ -3241,12 +3294,7 @@ export let verbs = bind({
   usage: usageReport,
   // The note (what you were mid-doing) rides the body door and folds onto the
   // colon line as `-- <note>`, the same `--` :mail uses for its body.
-  wake: (got) =>
-    got.flags.has('--gone') ? wakeCancel(got.words) : colon(undefined, [
-      'wake',
-      ...got.words,
-      ...(got.body != null ? ['--', got.body] : []),
-    ]),
+  wake: wakeVerb,
   help: (got) => print(help(got.words)),
   complete: completeCmd,
   ls: list,
