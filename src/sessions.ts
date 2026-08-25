@@ -2682,12 +2682,8 @@ export let recover = (cast: Cast) => {
     db,
     `where origin = 'managed'
       and status in ('starting', 'running', 'stopping')
-      and not exists (
-        select 1 from entry e where e.session = s.entity
-          and not exists (select 1 from imported i where i.entity = e.entity)
-      )
     `,
-  )
+  ).filter((row) => !graphSession(db, row.eid))
   for (let { eid, provider, input_at } of rows) {
     let ad = adapters[String(provider)]
     if (!ad) {

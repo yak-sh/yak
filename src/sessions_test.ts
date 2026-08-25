@@ -1552,6 +1552,18 @@ slow(
   'boot: a child that died while we were away is read from its file',
   async () => {
     let eid = plant([INIT, '{"type":"message","text":"hi"}', RESULT])
+    let source = append(
+      db,
+      eid,
+      [{ message: { role: 'agent' }, content: { body: 'remember this' } }],
+      null,
+      undefined,
+      { source: 'managed', line: 99 },
+    ).eids[0]
+    append(db, eid, [{
+      content: { body: 'M-1 · related thought' },
+      recalled: { source },
+    }])
     recover(cast)
     await running.get(eid)!.done
     let s = row(eid)!
