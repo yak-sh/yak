@@ -5,7 +5,7 @@
 // Debug.Tile render through the very same components the browser uses,
 // painted as lines instead of CSS.
 import { signal } from '@preact/signals'
-import { useBoardSub } from '../components/subscriptions.ts'
+import { useBoardSub, useEntity } from '../components/subscriptions.ts'
 import { useCommentsOn } from '../components/useQuery.ts'
 import { tuiKeys } from '../keybindings.ts'
 import { formatProp, propAt } from '../props.ts'
@@ -1078,6 +1078,10 @@ export let App = () => {
   useBoardSub(p ? ent(p) : undefined)
   let s = selected()
   let here = trail.value.at(-1)
+  // The entered entity is held for as long as it is on screen — it carries the
+  // edges the refs list paints (T-22371), which used to ride the boot as the
+  // graph's whole edge table.
+  useEntity(here)
   // The trail persists across runs; entities don't have to. Drop any
   // entries the graph no longer knows (deleted while we were away).
   if (here && !cache.value[here]) {

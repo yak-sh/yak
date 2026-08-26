@@ -119,6 +119,16 @@ export let projected = (fields: Field[]) => {
     })
 }
 
+// Edges never ride a ROW payload. A subscription's changes are its members'
+// own components; its EDGES are the `.edges!` rider's delivery — refcounted per
+// sub and released with it. A `dependency` change slipping into `changes`
+// (a standing member whose batch happened to link something) would land in the
+// client's edge table with NO sub holding it, which is exactly the unreleasable
+// state the rider exists to end: it would never be evicted, and a sub that never
+// asked for edges would quietly accumulate them.
+export let unedged = (changes: Change[]) =>
+  changes.filter((c) => c.name != 'dependency')
+
 // Agreement is hard for moving time: membership can change with no write.
 // Path membership is maintained from far-side reference invalidation.
 // A WINDOW is a gap by design rather than by difficulty: the sub answers a

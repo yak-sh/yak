@@ -24,7 +24,6 @@ import {
 import { find, need, type Querier, type Row } from './client.ts'
 import type { Reader } from './commands.ts'
 import {
-  allDeps,
   buried,
   cursorOf,
   depsOf,
@@ -34,6 +33,7 @@ import {
   epochOf,
   locate,
   matching,
+  reaching,
   referrersOf,
   rowsOf,
   vocabHash,
@@ -42,6 +42,7 @@ import { aggregateSql, countSql, where, whereSome, windowed } from './sql.ts'
 import { hasSources } from './source.ts'
 import {
   aggOf,
+  EDGES,
   listed,
   matchQuery,
   namesLazy,
@@ -53,6 +54,7 @@ import {
   scopedSessions,
   screened,
   tally,
+  type Walk,
   warm,
   type Win,
   windowOf,
@@ -65,7 +67,28 @@ import {
 // reason a compiler can: not "I cannot say this" but "saying it buys nothing". A
 // `.kind=K` filter narrows like any other pred — parseQuery expands the scope
 // to kindPreds, so this sees the presence clauses, never a lone ranking.
-let narrows = (preds: Pred[]) => preds.some((p) => p.op != ORDER)
+// The EDGES rider joins ORDER here for the same reason: `.edges!` asks for a
+// DELIVERY beside the answer, it never narrows one, so a query wearing only
+// riders has said nothing about membership and the index has nothing to offer.
+let narrows = (preds: Pred[]) =>
+  preds.some((p) => p.op != ORDER && p.op != EDGES)
+
+// A traversal accessor bound to a db, memoised for ONE evaluation pass: the
+// closure `.reaches[requires,<=3]=T-42` names is the same for every candidate
+// row, so it is resolved once (one recursive CTE, db.ts reaching) and every row
+// then tests it with a Set lookup. Built per call so nothing caches a closure
+// across writes — an edge landing between two queries must move the answer.
+export let walker = (db: DatabaseSync): Walk => {
+  let memo = new Map<string, Set<string>>()
+  return (r, target) => {
+    let key = `${r.type}\0${r.depth}\0${target}`
+    let hit = memo.get(key)
+    if (!hit) {
+      memo.set(key, hit = new Set(reaching(db, target, r.type, r.depth)))
+    }
+    return hit
+  }
+}
 
 // A keyed read wearing the shape a materialized graph hands out: kind is
 // derived, num rides the spine, and a caller must not be able to tell which
@@ -232,6 +255,7 @@ export let evalQuery = (
   // answers identically over a narrowed candidate set as over the whole graph.
   let kids = (eid: string, comp: string, prop: string) =>
     referrersOf(db, [eid], { comp, prop }).map(ent)
+  let walk = walker(db)
   let all = matching(db, whereSome(preds)).map(rowed)
     // matching() reads every entity the subset selects, entry-partition rows
     // included (they keep a spine); snapshot() omitted ALL of them, so drop them
@@ -244,7 +268,7 @@ export let evalQuery = (
   }
   let hits = all.filter((r) =>
     listed(r.comps, preds) &&
-    matchQuery(r.comps, preds, ent, undefined, kids)
+    matchQuery(r.comps, preds, ent, undefined, kids, walk)
   )
   return { preds, hits, ent }
 }
@@ -279,10 +303,12 @@ export let evalCapped = (
   let base = windowed(whereSome(screened(preds, false)), { limit: room, after })
   // matching() reads the hit table in its own order — re-rank by num so the
   // slice keeps the NEWEST matches, not an arbitrary cap-full.
+  let walk = walker(db)
   let raw = matching(db, base).map(rowed)
   let hits = raw
     .filter((r) =>
-      listed(r.comps, preds) && matchQuery(r.comps, preds, ent, undefined, kids)
+      listed(r.comps, preds) &&
+      matchQuery(r.comps, preds, ent, undefined, kids, walk)
     )
     .sort((a, b) => b.num - a.num)
   // A candidate read that came back SHORT of its own bound saw the whole
@@ -480,25 +506,32 @@ export let WS_SETS = [
   '.client!',
 ]
 
-// The working-set boot (M-21143 / T-18059): a joining client seeds
-// the DEFINING sets it will subscribe to plus the entities its cards point at,
-// and ALL edges (allDeps) — NOT the long tail (old tasks, entries, memories,
+// The working-set boot (M-21143 / T-18059): a joining client seeds the DEFINING
+// sets it will subscribe to — NOT the long tail (old tasks, entries, memories,
 // comments, mail: the bulk of a whole-graph snapshot), which streams as views
 // mount. Same Snapshot shape as snapshot(), so the client's seedFrom seeds it
 // unchanged — a PARTIAL cache by construction, kept complete for membership by
 // the server subscriptions queryEids opens. queryEids resolving server-side
 // (T-17126) and subs bounded to defining queries (T-21283) are what make this
 // safe. A cold boot serves this instead of the 44MB whole-graph snapshot() —
-// measured 1.62MB vs 42MB on a live-size copy, a 96% cut in the per-connect cost
-// that starved the event loop.
+// measured 1.62MB vs 42MB on a live-size copy.
+//
+// TWO things this used to ship and no longer does, because both now have a
+// SCOPED delivery (T-22371, D-22567 rung 2):
+//   - `allDeps(db)`: every edge between two eager entities, on every join —
+//     because edges had no other way to reach a client. On a copy of the live
+//     graph that was 4,909 triples, 557 KB, 81% of the whole frame (691,542
+//     bytes before, 127,243 after). They ride the `.edges!` RIDER now, incident
+//     to a subscription's own result set.
+//   - the one-hop walk to each card's `target`: a pinned card's entity, preseeded
+//     because the canvas painted it with no sub of its own. Each Card holds a
+//     route sub for its target now (live.ts routeSub), so the entity arrives —
+//     and LEAVES — with the card that shows it.
+// `deps: []` stays in the frame because Snapshot's shape is the client's seed
+// contract; it is now always empty, and seedFrom no longer reads it as truth.
 export let workingSet = (db: DatabaseSync): Snapshot => {
   let ids = new Set<string>()
   for (let q of WS_SETS) for (let r of evalGraph(db, q).hits) ids.add(r.eid)
-  // The entities the cards point at — one hop, so a pinned card paints.
-  for (let eid of [...ids]) {
-    let t = eager(db, eid).card?.target as string | undefined
-    if (t) ids.add(t)
-  }
   let changes: Change[] = []
   for (let eid of ids) {
     for (let [name, comp] of Object.entries(eager(db, eid))) {
@@ -507,7 +540,7 @@ export let workingSet = (db: DatabaseSync): Snapshot => {
   }
   return {
     changes,
-    deps: allDeps(db),
+    deps: [],
     cursor: cursorOf(db),
     epoch: epochOf(db),
     vocabHash,
@@ -542,10 +575,11 @@ async (filters, opts) => {
   let read = (e: string) => eager(db, e)
   let kids = (eid: string, comp: string, prop: string) =>
     referrersOf(db, [eid], { comp, prop }).map(read)
+  let walk = walker(db)
   return only.map((eid) => rowed({ eid, comps: eager(db, eid) }))
     .filter((r) =>
       listed(r.comps, preds) &&
-      matchQuery(r.comps, preds, read, undefined, kids)
+      matchQuery(r.comps, preds, read, undefined, kids, walk)
     )
 }
 

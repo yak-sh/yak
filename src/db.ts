@@ -6850,12 +6850,35 @@ export let entriesScan = (db: DatabaseSync, after = 0, limit = 500) => {
   }))
 }
 
+// Is this edge endpoint in the LAZY partition — the entities the root snapshot
+// omits and no cache ever holds? Asked per ENDPOINT as a correlated seek on the
+// lazy table's own owner key (`entry.entity` is an integer primary key), not
+// through `_omit`. `_omit` is the right shape for snapshot(), which pays its
+// build once and then screens 89 whole-table scans with it; a rider pays it per
+// SUBSCRIBE, and rebuilding a 36,000-row temp table to screen two edges measured
+// 80ms a call against 0.37ms for the unscreened read — eleven route subs on one
+// canvas mount would have blocked the loop for most of a second (M-17862).
+// Derived from the same `lazyTables` list, so a second lazy comp is free.
+let notLazy = (endpoint: string) =>
+  lazyTables.map((name) =>
+    ` and not exists (select 1 from ${
+      sqlName(name)
+    } lz where lz.entity = ${endpoint})`
+  ).join('')
+
 // Every edge touching these entities, both directions — the narrow reading of
 // `snap.deps`, derived `reads` included. Losing those would make this door
 // disagree with the graph-out one about what an entity's edges ARE, so the
 // persona table is read here too, keyed the same way: personas homed at a hit,
 // and a hit that is itself a persona.
-export let depsOf = (db: DatabaseSync, eids: string[]): Dep[] => {
+//
+// `eagerOnly` screens the answer to the entities a CLIENT can hold — see
+// eagerDeps below.
+let incident = (
+  db: DatabaseSync,
+  eids: string[],
+  eagerOnly: boolean,
+): Dep[] => {
   if (!eids.length) return []
   stage(db, eids)
   let mine = `in (select eid from hit)`
@@ -6868,13 +6891,17 @@ export let depsOf = (db: DatabaseSync, eids: string[]): Dep[] => {
   // halves on one table, which sqlite answers as a MULTI-INDEX OR: the parent
   // half seeks the primary key, the child half seeks dependency_child.
   let myIds = `in (select e.id from entity e where e.eid ${mine})`
+  // The screen rides OUTSIDE the disjunction — an endpoint is lazy or it isn't,
+  // whichever side of the OR selected the row — so the multi-index OR above is
+  // untouched and each NOT EXISTS is one more seek per candidate edge.
+  let live = eagerOnly ? notLazy('d.parent') + notLazy('d.child') : ''
   let deps = (prep(
     db,
     `select p.eid as parent, d.type as type, c.eid as child, d.ord as ord
       from dependency d
       join entity p on p.id = d.parent
       join entity c on c.id = d.child
-      where d.parent ${myIds} or d.child ${myIds}
+      where (d.parent ${myIds} or d.child ${myIds})${live}
       order by p.eid, d.type, d.ord, c.eid`,
   ).all() as Dep[]).map(shedOrd)
   return [
@@ -6883,28 +6910,48 @@ export let depsOf = (db: DatabaseSync, eids: string[]): Dep[] => {
   ]
 }
 
-// Every edge the snapshot would carry — the working-set boot (server.ts) ships
-// these wholesale (~0.4MB, measured), so an entity streamed later by a
-// subscription already has its edges in the client and `relations()` never
-// under-reports (edges are cheap enough to ship whole rather than stream
-// per-sub). The projection, the `_omit` filter, and the homeReads fold are
-// snapshot()'s deps verbatim — an edge touching an omitted entity (a lazy entry,
-// an embedding) is dropped here exactly as there, so the two agree and no
-// dangling edge to an entity no client will ever hold rides the boot.
-export let allDeps = (db: DatabaseSync): Dep[] => {
-  fillOmit(db)
-  let deps = (prep(
+export let depsOf = (db: DatabaseSync, eids: string[]): Dep[] =>
+  incident(db, eids, false)
+
+// The same edges, screened to the EAGER graph: the edges a CLIENT may hold.
+// A session-log entry's `referenced` edge points from an entity no cache will
+// ever carry, so delivering it is a dangling triple — and `snapshot()` and the
+// `allDeps` this replaced both dropped exactly those, so the `.edges!` rider has
+// to agree with them or the wire says two different things about what an edge
+// IS. Not a nicety: one card on a well-referenced task draws 522 incident edges,
+// 469 of them from entries, and the rider would have shipped every one along
+// with a projected peer row for each.
+export let eagerDeps = (db: DatabaseSync, eids: string[]): Dep[] =>
+  incident(db, eids, true)
+
+// The bounded transitive closure `.reaches[type,<=N]=id` selects: the eids that
+// reach `target` through at most `depth` edges of one type, walking child→parent
+// so every step is a `dependency_child` seek (sql.ts reachSql documents why the
+// type term is held back with `+`). The target itself is excluded — reaching is
+// a path of at least one hop. This is the JS matcher's half of the same closure
+// the compiler emits, so a query mixing `.reaches` with a pred SQL declines
+// still answers, and answers identically.
+//
+// There is no whole-graph edge reader beside it, deliberately: `allDeps` — the
+// dump every joining client used to receive — is gone (T-22371). Edges are
+// delivered SCOPED, by depsOf above, to whatever a subscription selected.
+export let reaching = (
+  db: DatabaseSync,
+  target: string,
+  type: string,
+  depth: number,
+): string[] =>
+  (prep(
     db,
-    `select p.eid as parent, d.type as type, c.eid as child, d.ord as ord
-      from dependency d
-      join entity p on p.id = d.parent
-      join entity c on c.id = d.child
-      where p.eid not in (select eid from _omit)
-        and c.eid not in (select eid from _omit)
-      order by p.eid, d.type, d.ord, c.eid`,
-  ).all() as Dep[]).map(shedOrd)
-  return [...deps, ...homeReads(homes(db), deps)]
-}
+    `with recursive __reach(id, depth) as (
+       select id, 0 from entity where eid = ?
+       union select d.parent, __reach.depth + 1 from dependency d
+         join __reach on d.child = __reach.id
+         where __reach.depth < ? and +d.type = ?
+     )
+     select o.eid as eid from __reach join entity o on o.id = __reach.id
+      where __reach.depth > 0`,
+  ).all(target, depth, type) as { eid: string }[]).map((r) => r.eid)
 
 // Who points AT these entities through a typed eid column — one keyed
 // statement per column in the readable vocabulary (`stamped` included, so an

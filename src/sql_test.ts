@@ -20,6 +20,7 @@ import {
   parseQuery,
   PROJECT,
   tally,
+  type Walk,
 } from './query.ts'
 import { aggregateSql, select, where } from './sql.ts'
 import { open } from './db.ts'
@@ -176,6 +177,47 @@ put('c3', {
   created: { by: 'p1', at: '2026-08-04T00:00:00.000Z', via: null },
 })
 
+// Dependency edges — the one non-component table. `.reaches[type,<=N]=id` walks
+// these, so the compiler's recursive CTE and an ordinary JS breadth-first walk
+// have to name the same set. The chain is a CYCLE on purpose (e1→e2→e3→e1): an
+// unbounded closure over it would never terminate, so the depth cap is what
+// makes the traversal an answer at all, and both readers must cap identically.
+// The `contains` edge beside it proves the walk stays inside ONE edge type.
+let link = (parent: string, type: string, child: string) => {
+  db.prepare(
+    `insert into dependency (parent, type, child) values (
+       (select id from entity where eid = ?), ?,
+       (select id from entity where eid = ?))`,
+  ).run(parent, type, child)
+  EDGES.push({ parent, type, child })
+}
+let EDGES: { parent: string; type: string; child: string }[] = []
+link('e1', 'requires', 'e2')
+link('e2', 'requires', 'e3')
+link('e3', 'requires', 'e1')
+link('e4', 'contains', 'e3')
+
+// The traversal as a plain breadth-first walk: from the target, back along
+// child→parent, `depth` hops, the target itself excluded. This is the
+// DEFINITION the CTE has to match — written independently of it, or the test
+// would only prove SQL agrees with itself.
+let reachers = (type: string, target: string, depth: number) => {
+  let seen = new Set<string>()
+  let frontier = [target]
+  for (let d = 0; d < depth; d++) {
+    let next: string[] = []
+    for (let node of frontier) {
+      for (let e of EDGES) {
+        if (e.type != type || e.child != node) continue
+        next.push(e.parent)
+        seen.add(e.parent)
+      }
+    }
+    frontier = next
+  }
+  return seen
+}
+
 // The JS side reads the same shape live.ts and client.ts hand matchQuery:
 // eid → { comp → { col → value } }, absent components simply missing.
 let graph = () => {
@@ -230,10 +272,13 @@ let graph = () => {
 let world = graph()
 
 let kids = kidsOf(new Map(Object.entries(world)))
+let walk: Walk = (r, target) => reachers(r.type, target, r.depth)
 let byJs = (q: string) => {
   let preds = parseQuery(q)
   return Object.entries(world)
-    .filter(([, comps]) => matchQuery(comps, preds, (e) => world[e], NOW, kids))
+    .filter(([, comps]) =>
+      matchQuery(comps, preds, (e) => world[e], NOW, kids, walk)
+    )
     .map(([eid]) => eid).sort()
 }
 
@@ -416,6 +461,20 @@ let COMPILES = [
   // `~=` over a stamp is a literal substring, never a phrase
   '.created.at~=2026-08',
   '.created.at~=nope',
+  // the bounded traversal: a recursive CTE over the edge table, held against a
+  // plain BFS. Each depth is its own case because the cap IS the semantics.
+  '.reaches[requires,<=1]=e3',
+  '.reaches[requires,<=2]=e3',
+  '.reaches[requires,<=3]=e3', // the cycle closes: e3 reaches itself
+  '.reaches[requires,<=9]=e3', // and a deeper cap adds nothing more
+  '.reaches[contains,<=3]=e3', // one edge type only — e4, never the requires chain
+  '.reaches[requires,<=2]=e4', // nothing points at e4 through requires
+  '.reaches[requires,<=2]=nobody', // an unknown target reaches nothing
+  // composes with an ordinary column pred, ANDed like any other filter
+  '.reaches[requires,<=3]=e3&.task.status=open',
+  // the EDGES rider is a DELIVERY, not a filter: it must not move the answer
+  '.task.status=open&.edges!',
+  '.task.status=open&.edges.peers=task.status,doc.title',
 ]
 
 for (let q of COMPILES) {

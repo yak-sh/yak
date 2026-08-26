@@ -1,15 +1,17 @@
 // The working-set boot (M-21143 / T-18059): a joining serverQuery client is
-// seeded the DEFINING sets (canvas chrome + this client's UI state) plus the
-// entities its cards point at — NOT the whole graph. This holds the two facts
-// the flip rests on: the boot INCLUDES the chrome + card targets, and EXCLUDES
-// the long tail (memories, unpinned tasks) that a whole-graph snapshot shipped
-// and that the SessionDot-class re-brick was made of. A future edit that lets a
-// non-defining kind leak into the boot, or drops a card's target, fails here.
+// seeded the DEFINING sets (canvas chrome + this client's UI state) — NOT the
+// whole graph. This holds the facts the flip rests on: the boot INCLUDES the
+// chrome, and EXCLUDES the long tail (memories, unpinned tasks) that a
+// whole-graph snapshot shipped and that the SessionDot-class re-brick was made
+// of. It also holds the two things T-22371 took OUT, because both were
+// whole-graph reads with no scoped door: every EDGE in the graph, and a one-hop
+// walk from every card to whatever it pointed at. Each has a subscription now,
+// so a future edit that puts either back in the boot fails here.
 import { assertEquals } from '@std/assert'
 import { uuid } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply } = await import('./db.ts')
+let { apply, depsOf } = await import('./db.ts')
 let { freshDb } = await import('./testdb.ts')
 let { workingSet, WS_SETS } = await import('./graph_query.ts')
 
@@ -26,7 +28,7 @@ let seededAs = (
   return by
 }
 
-Deno.test('working set seeds the chrome + card targets, excludes the long tail', () => {
+Deno.test('working set seeds the chrome only, never the long tail', () => {
   let db = freshDb()
   let canvas = uuid(), card = uuid(), pinnedTask = uuid()
   let coldTask = uuid(), mem = uuid(), project = uuid()
@@ -36,7 +38,8 @@ Deno.test('working set seeds the chrome + card targets, excludes the long tail',
     { eid: canvas, name: 'canvas', comp: {} },
     { eid: card, name: 'card', comp: { target: pinnedTask, view: 'text' } },
     { eid: card, name: 'pin', comp: { canvas, x: 0, y: 0, w: 1, h: 1, z: 0 } },
-    // The pinned task IS reachable — one hop off the card.
+    // The pinned task is what the card points at. It is NOT boot cargo: the
+    // Card holds a route sub for it (live.ts routeSub, T-22371).
     { eid: pinnedTask, name: 'doc', comp: { title: 'pinned', body: 'x' } },
     { eid: pinnedTask, name: 'task', comp: { status: 'open', priority: 0 } },
     // A project — a defining set (nav lists it).
@@ -53,20 +56,16 @@ Deno.test('working set seeds the chrome + card targets, excludes the long tail',
   let snap = workingSet(db)
   let by = seededAs(snap.changes)
 
-  // Included: the canvas chrome, the card, its one-hop target, the project.
+  // Included: the canvas chrome, the card, the project.
   assertEquals(by.has(canvas), true, 'canvas in working set')
   assertEquals(by.has(card), true, 'card in working set')
+  assertEquals(by.has(project), true, 'project in working set')
+  // NOT the card's target: preseeding it read one hop off every card in the
+  // graph, for rows a client may never paint. The Card subscribes it instead.
   assertEquals(
     by.has(pinnedTask),
-    true,
-    'card target (pinned task) in working set',
-  )
-  assertEquals(by.has(project), true, 'project in working set')
-  // The pinned task rides WHOLE — its task component too, not just the doc.
-  assertEquals(
-    by.get(pinnedTask)?.has('task'),
-    true,
-    'pinned task carries its task comp',
+    false,
+    'a card target is subscribed by the card, not preseeded',
   )
 
   // Excluded: the long tail. This is the re-brick the flip removes.
@@ -78,7 +77,7 @@ Deno.test('working set seeds the chrome + card targets, excludes the long tail',
   assertEquals(by.has(mem), false, 'a memory is NOT in the working set')
 })
 
-Deno.test('working set carries all edges and a live cursor', () => {
+Deno.test('working set carries NO edges — a rider delivers them scoped', () => {
   let db = freshDb()
   let canvas = uuid(), card = uuid(), task = uuid()
   apply(db, [
@@ -87,16 +86,24 @@ Deno.test('working set carries all edges and a live cursor', () => {
     { eid: card, name: 'pin', comp: { canvas, x: 0, y: 0, w: 1, h: 1, z: 0 } },
     { eid: task, name: 'doc', comp: { title: 't', body: '' } },
     { eid: task, name: 'task', comp: { status: 'open', priority: 0 } },
-    // An edge between two entities: the working set ships edges wholesale.
-    // The parent IS the eid; the comp names the rest of the sentence.
+    // An edge between two entities. The boot used to ship every one of these
+    // (4,909 on a copy of the live graph — 557 KB, 81% of the whole join frame)
+    // because an edge had no other way to reach a client; the rider is that way
+    // now.
     { eid: card, name: 'dependency', comp: { type: 'requires', child: task } },
   ])
   let snap = workingSet(db)
-  // Edges ride wholesale (cheap; the client's index heals dangling refs).
+  assertEquals(snap.deps, [], 'no edge rides the boot')
+  // The SCOPED door answers the same edge for whoever subscribes an endpoint.
   assertEquals(
-    snap.deps.some((d) => d.parent == card && d.child == task),
+    depsOf(db, [card]).some((d) => d.parent == card && d.child == task),
     true,
-    'the requires edge rides the working set',
+    'the requires edge is incident to the card',
+  )
+  assertEquals(
+    depsOf(db, [task]).some((d) => d.parent == card && d.child == task),
+    true,
+    'and incident to the child, read from the reverse endpoint',
   )
   // A real cursor and vocab so the client's handshake reconciles like any reset.
   assertEquals(typeof snap.cursor, 'number')

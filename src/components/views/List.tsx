@@ -6,7 +6,7 @@ import { block } from '../ui.tsx'
 import { menuAt } from '../nav.tsx'
 import { filterLine, passOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
-import { useBoardSub } from '../subscriptions.ts'
+import { useBoardSub, usePinTargets } from '../subscriptions.ts'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
@@ -20,9 +20,13 @@ let { Row } = ListFrame
 // so the existing card relocates there (the row IS that card, listed).
 export let List = ({ e }: { e: Ent }) => {
   let pass = passOf(e.eid)
+  // Each row paints a pin's TARGET with no Card around it, so this face holds
+  // those rows itself — nothing else subscribes them (T-22371).
+  let ps = pinned(e.eid)
+  usePinTargets(ps)
   return (
     <ListFrame>
-      {pinned(e.eid)
+      {ps
         .toSorted((a, b) => b.z - a.z)
         .filter((p) => pass(p.target))
         .map((p) => (

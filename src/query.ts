@@ -55,6 +55,7 @@
 import { bareType, isRef, parseProp, type Prop, propAt } from './props.ts'
 import {
   comps,
+  edges,
   kindOrder,
   kindWord,
   propRenames,
@@ -112,6 +113,16 @@ export type Pred = {
   // membership — which is why a reply that carries one also states the total it
   // is a prefix of.
   win?: Win
+  // The EDGES RIDER's peer projection: `.edges.peers=status,title` names the
+  // columns the FAR endpoint of each incident edge carries into the reply, so a
+  // requires-tree renders (id, status) without subscribing every blocker row.
+  // Empty for a bare `.edges!`. op is EDGES; edgeRider() reads the directive.
+  peers?: Hop[]
+  // A bounded TRAVERSAL rather than a column read: `.reaches[requires,<=3]=T-42`
+  // selects the entities that reach `value` through at most `depth` edges of one
+  // type. op is REACHES. The cap is part of the grammar — an unbounded closure
+  // over the edge table is refused, never silently walked (M-17862).
+  reach?: { type: string; depth: number }
 }
 
 // A window: how many of the selection to answer with, and where to continue.
@@ -217,10 +228,11 @@ for (let name of reverseAssocs.keys()) {
 
 // The reserved query WORDS — directives that are neither a column nor an
 // association: `.refs` (the multi-column reverse-union), the `.distinct` /
-// `.tally` aggregates, `.fields` (the projection), and `.limit`/`.after` (the
-// window). Guarded here the way scopes and reverse assocs are, so a vocabulary
-// that ever grows one of these as a real prop is a load error rather than a
-// silently dead directive.
+// `.tally` aggregates, `.fields` (the projection), `.limit`/`.after` (the
+// window), `.edges` (the incident-edge rider) and `.reaches` (the bounded
+// traversal). Guarded here the way scopes and reverse assocs are, so a
+// vocabulary that ever grows one of these as a real prop is a load error rather
+// than a silently dead directive.
 export let reserved = [
   'refs',
   'distinct',
@@ -228,6 +240,8 @@ export let reserved = [
   'fields',
   'limit',
   'after',
+  'edges',
+  'reaches',
 ]
 for (let name of reserved) {
   if (owned(name)) {
@@ -450,6 +464,52 @@ export let PROJECT = 'project'
 // changes should re-fire reads `fields.filter((f) => f.wake)`.
 export let fieldsOf = (preds: Pred[]): Field[] | undefined =>
   preds.find((p) => p.op == PROJECT)?.fields
+
+// The EDGES RIDER — `.edges!`, optionally `.edges.peers=status,title`. It rides
+// the pred list like AGG/PROJECT (matchQuery passes it through, so the OTHER
+// preds still select the rows), and asks a subscription to deliver the dep
+// triples INCIDENT to its result set — the scoped replacement for shipping every
+// edge in the graph at boot. `peers` names the far endpoint's columns to project
+// beside them, so a requires-tree renders (id, status) without a sub per blocker.
+export let EDGES = 'edges'
+
+// The rider a query carries, or undefined for a plain membership query. Several
+// `.edges` tokens union their peer columns — one rider, one delivery.
+export let edgeRider = (preds: Pred[]): { peers: Hop[] } | undefined => {
+  let asked = preds.filter((p) => p.op == EDGES)
+  if (!asked.length) return undefined
+  let seen = new Set<string>()
+  let peers: Hop[] = []
+  for (let p of asked) {
+    for (let h of p.peers ?? []) {
+      let key = `${h.comp}.${h.prop}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      peers.push(h)
+    }
+  }
+  return { peers }
+}
+
+// A BOUNDED TRAVERSAL pred — `.reaches[requires,<=3]=T-42` — is a real filter,
+// not a rider: it SELECTS the entities within a depth-capped transitive closure
+// over one edge type. sql.ts compiles it to a recursive CTE over the indexed dep
+// table; the JS matcher answers it from a `walk` that resolves the same closure
+// once per query rather than per row.
+export let REACHES = 'reaches'
+
+// The traversal closures a pred list asks for, deduped — what a door precomputes
+// before matching so the walk happens once, not per candidate row.
+export let reachesOf = (preds: Pred[]): Pred[] =>
+  preds.filter((p) => p.op == REACHES)
+
+// Who reaches a traversal's target: the eids within `depth` edges of `value`,
+// walking edge type `type` from child back to parent. One per query — every row
+// then tests with a Set lookup.
+export type Walk = (
+  reach: { type: string; depth: number },
+  target: string,
+) => Set<string>
 
 // A query addresses the LAZY entry partition when it names any session-log
 // component (sessionComps) — `.entry.session`, `.generation.provider`,
@@ -723,7 +783,42 @@ let revHop = (token: string): Pred | null => {
 // hyphenated, so nothing new routes — but before this, '.blocked-by=T-1' failed
 // the pattern and fell through to a bare TEXT term, silently searching for the
 // filter the caller thought they wrote.
+// `.reaches[requires,<=3]=T-42` — the bracket carries what a dot-param cannot:
+// WHICH edge type to walk and HOW FAR. The cap is required by the shape itself,
+// so an unbounded closure has no spelling to be refused later. Matched before
+// the dot-param pattern, which stops at the '['.
+let REACH = /^\.reaches\[([A-Za-z_]+)\s*,\s*<=\s*(\d+)\]=(.*)$/s
+
 export let preds = (token: string): Pred[] | null => {
+  // Any `.reaches[…` spelling answers HERE, right or wrong: a malformed one that
+  // fell through would not match the dot-param pattern either and would end up a
+  // bare TEXT term, silently searching for the traversal the caller thought they
+  // wrote (the hyphen lesson below, same trap).
+  if (token.startsWith('.reaches[') && !owned('reaches')) {
+    let reach = token.match(REACH)
+    let [, type, depth, value] = reach ?? []
+    if (!reach || !value) {
+      throw new Error(
+        '.reaches names an edge type, a depth cap and an entity: ' +
+          '.reaches[requires,<=3]=T-42',
+      )
+    }
+    if (!(edges as readonly string[]).includes(type)) {
+      throw new Error(
+        `.reaches walks an edge type (${edges.join(', ')}) — not ${type}`,
+      )
+    }
+    if (Number(depth) < 1) {
+      throw new Error(`.reaches needs at least one hop: got <=${depth}`)
+    }
+    return [{
+      comp: '',
+      prop: '',
+      op: REACHES,
+      value,
+      reach: { type, depth: Number(depth) },
+    }]
+  }
   let r = revHop(token)
   if (r) return [r]
   let m = token.match(
@@ -829,6 +924,35 @@ export let preds = (token: string): Pred[] | null => {
       ? { limit: Number(value) }
       : { after: Number(value) }
     return [{ comp: '', prop: '', op: WINDOW, value, win }]
+  }
+  // `.edges!` / `.edges.peers=status,title` — the RIDER, not a filter: deliver the
+  // dep triples incident to whatever the other preds select, and optionally the
+  // far endpoint's named columns beside them. This is what replaces shipping every
+  // edge in the graph at boot: edges arrive scoped to a result set, like rows.
+  // Each peer column routes like a bare prop (or its explicit `task.status`); a
+  // path is refused — a peer projection reads one entity's own columns. Guarded so
+  // a future `edges` column would win. edgeRider() reads the directive.
+  if (segs[0] == 'edges' && !owned('edges')) {
+    if (segs.length == 1 && op == '!' && !value) {
+      return [{ comp: '', prop: '', op: EDGES, value: '', peers: [] }]
+    }
+    if (segs.length == 2 && segs[1] == 'peers' && op == '=' && value) {
+      let peers = value.split(',').map((seg): Hop => {
+        let groups = groupsOf(seg.split('.'))
+        let at = groups[groups.length - 1]
+        if (groups.length > 1 || !at.prop) {
+          throw new Error(
+            `.edges.peers projects columns, not paths: .edges.peers=${seg}`,
+          )
+        }
+        return at
+      })
+      return [{ comp: '', prop: '', op: EDGES, value: '', peers }]
+    }
+    throw new Error(
+      '.edges rides a query (.edges!) and may project the far endpoint ' +
+        '(.edges.peers=status,title)',
+    )
   }
   // A SCOPE resolves a virtual prop to the Pred[] it splices into the AND-list.
   // Real props win: `owned` names a prop a column/component already routes, so
@@ -1054,9 +1178,10 @@ export let resolveRefs = (
 ): Pred[] =>
   preds.map((p) => {
     // A multi-column reverse-union's value is an id like any reference — but it
-    // owns no comp/prop to type it, so resolve it through the entity target.
-    if (p.refs) {
-      if (p.op != '' || !p.value) return p
+    // owns no comp/prop to type it, so resolve it through the entity target. A
+    // traversal's target is the same shape: one entity, no column to type it.
+    if (p.refs || p.op == REACHES) {
+      if ((p.op != '' && p.op != REACHES) || !p.value) return p
       try {
         let value = String(parseProp(REFS_PROP, p.value, { resolve: lookup }))
         return value == p.value ? p : { ...p, value }
@@ -1182,13 +1307,23 @@ export let matchQuery = (
   ent?: (eid: string) => Comps | undefined,
   now?: number,
   kids?: Kids,
+  walk?: Walk,
 ) =>
   preds.every((p) => {
     if (p.op == NEVER) return false // the empty query: selects nothing
-    if (p.op == ORDER || p.op == AGG || p.op == PROJECT) return true
+    if (p.op == ORDER || p.op == AGG || p.op == PROJECT || p.op == EDGES) {
+      return true
+    }
     // A window bounds the ANSWER, never membership: every match still matches,
     // and the door that answers is what cuts the page.
     if (p.op == WINDOW) return true
+    if (p.op == REACHES) {
+      // The bounded closure, resolved ONCE per query by the caller's walk and
+      // tested here with a Set lookup — never a per-row traversal. No walk means
+      // no closure, the same reading a reverse hop gives a missing accessor.
+      let self = eidOf(c)
+      return !!self && !!walk && !!p.reach && walk(p.reach, p.value).has(self)
+    }
     if (p.refs) {
       // The multi-column reverse-union: read every {eid} column this bag
       // carries. `.refs=X` holds when any equals X; `.refs!` when any is set;
@@ -1216,7 +1351,7 @@ export let matchQuery = (
       let children = self && kids ? kids(self, p.rev.comp, p.rev.prop) : []
       if (p.rev.count) return cmpCount(children.length, p.op, p.value)
       let hit = children.some((k) =>
-        !!k && matchQuery(k, p.rev!.preds, ent, now, kids)
+        !!k && matchQuery(k, p.rev!.preds, ent, now, kids, walk)
       )
       return p.rev.not ? !hit : hit
     }

@@ -7,11 +7,14 @@
 // is a db-parameterized function, so a read-only connection serves as well as
 // the writer's.
 import type { DatabaseSync } from './sqlite.ts'
-import type { Change } from './types.ts'
+import type { Change, Dep } from './types.ts'
+import { kindOrder } from './types.ts'
 import {
   aggOf,
+  edgeRider,
   type Field,
   fieldsOf,
+  type Hop,
   listed,
   matchQuery,
   parseQuery,
@@ -24,12 +27,14 @@ import {
   cursorStale,
   delta,
   eager,
+  eagerDeps,
   locate,
   referrersOf,
   refValuesOf,
   rootChanges,
+  rowsOf,
 } from './db.ts'
-import { evalAgg, evalSub, workingSet } from './graph_query.ts'
+import { evalAgg, evalSub, walker, workingSet } from './graph_query.ts'
 import { liveFrame } from './wire.ts'
 import {
   bodied,
@@ -39,6 +44,7 @@ import {
   spread,
   type Step,
   step,
+  unedged,
 } from './subs.ts'
 
 // A Sub is this socket's saved query + the eids currently in its set. Shadow
@@ -104,7 +110,16 @@ type Sub = {
     watch: Set<string> | null
     exact: boolean
   }
+  // The EDGES RIDER (`.edges!`, D-22567 §2, T-22371): this sub also owns the dep
+  // triples INCIDENT to its members. That is the scoped delivery edges never
+  // had — a joining client used to receive `allDeps`, every edge in the graph,
+  // because nothing else could put an edge in a cache. `keys` is what this
+  // client currently holds, so a delta says only what moved; `held` is the far
+  // endpoints whose projected columns rode along, remembered so a later write to
+  // one of them re-projects instead of going unnoticed.
+  edges?: Rider
 }
+type Rider = { peers: Hop[]; keys: Map<string, Dep>; held: Set<string> }
 
 // What a subscription frame has to CARRY. A live subscription owns its
 // client's view of these rows, so it ships the components. A SHADOW one does
@@ -127,7 +142,9 @@ let aggDirty = (watch: Set<string>, name: string) =>
 // for `.fields=doc.body` is asking for the body, and silently withholding it
 // would make the projection a lie about itself.
 let carry = (sub: Sub, changes: Change[]) =>
-  sub.cut ? sub.cut(changes) : sub.bodies ? changes : bodyless(changes)
+  unedged(
+    sub.cut ? sub.cut(changes) : sub.bodies ? changes : bodyless(changes),
+  )
 
 let payload = (
   sub: Sub,
@@ -137,6 +154,155 @@ let payload = (
   sub.shadow && !sub.details
     ? [{ eid, name: 'entity', comp: comps.entity as Change['comp'] }]
     : carry(sub, spread(eid, comps))
+
+// An edge's identity is its whole sentence — a triple has no row key — so the
+// rider keys by it and a re-linked edge is the same edge.
+let depKey = (d: Dep) => `${d.parent}\0${d.type}\0${d.child}`
+
+// The far endpoints these edges name that the member set does not already
+// hold: exactly the rows a requires-tree needs in order to render, and exactly
+// the ones a membership query never selected.
+let outside = (deps: Iterable<Dep>, members: Set<string>) => {
+  let out = new Set<string>()
+  for (let d of deps) {
+    if (!members.has(d.parent)) out.add(d.parent)
+    if (!members.has(d.child)) out.add(d.child)
+  }
+  return out
+}
+
+// A peer row cut to its PROJECTION: the spine, so the client can name the
+// entity, plus the columns `.edges.peers=` asked for and nothing else. A peer is
+// not a subscription — it arrives because an edge points at it and leaves with
+// that edge — so it must never carry a body or a component nobody asked for.
+// One batched read for the whole set (rowsOf), never one eager() each.
+let peerPayload = (
+  db: DatabaseSync,
+  peers: Hop[],
+  eids: string[],
+): Change[] => {
+  if (!eids.length || !peers.length) return []
+  let out: Change[] = []
+  for (let { eid, comps } of rowsOf(db, eids)) {
+    if (!comps.entity) continue
+    out.push({ eid, name: 'entity', comp: comps.entity as Change['comp'] })
+    let picked = new Map<string, Record<string, unknown>>()
+    // A peer must be NAMEABLE, and kind is derived from which components an
+    // entity wears — so its own kind component rides even when the projection
+    // named no column on it, or the tree would render every blocker as whatever
+    // kind the projected columns happened to imply. kindOrder is ordered, so the
+    // FIRST present component is the kind, and shipping only that one gives the
+    // peer exactly the kind the whole row has.
+    let kind = kindOrder.find((c) => comps[c])
+    if (kind) picked.set(kind, {})
+    for (let h of peers) {
+      let v = comps[h.comp]?.[h.prop]
+      if (v == null) continue
+      picked.set(h.comp, { ...picked.get(h.comp), [h.prop]: v })
+    }
+    for (let [name, comp] of picked) {
+      out.push({ eid, name, comp: comp as Change['comp'] })
+    }
+  }
+  return out
+}
+
+// Open a rider over a fresh member set: its incident edges, the far endpoints
+// they name, and the state every later delta speaks from.
+let riderOpen = (db: DatabaseSync, peers: Hop[], members: Set<string>) => {
+  let deps = members.size ? eagerDeps(db, [...members]) : []
+  let held = outside(deps, members)
+  let state: Rider = {
+    peers,
+    keys: new Map(deps.map((d) => [depKey(d), d])),
+    held,
+  }
+  return {
+    state,
+    frame: { edges: deps, peers: peerPayload(db, peers, [...held]) },
+  }
+}
+
+// Did a delta actually MOVE anything? A rider that says nothing must not put a
+// frame on the wire — every sub with edges would otherwise speak on every batch.
+let rider = (d: ReturnType<typeof riderDelta>) =>
+  !!(d.edges.length || d.unedges.length || d.peers.length || d.unpeers.length)
+
+// What ONE committed batch does to a rider — bounded by the delta, never by the
+// graph. A member that JOINED brings its whole incident set (one keyed read); an
+// edge WRITTEN in the batch moves at both its endpoints, so it joins or leaves
+// by whether either endpoint is a member; a member that DIED takes every edge
+// touching it (apply() deletes those rows, casting no per-edge change), and one
+// that merely LEFT the set takes the edges no remaining member holds. Then the
+// far-endpoint projection is re-derived — only when something actually moved —
+// and a touched eid that IS a held peer re-projects, so a blocker's status
+// reaches the tree without a subscription per blocker.
+let riderDelta = (
+  db: DatabaseSync,
+  r: Rider,
+  members: Set<string>,
+  joined: string[],
+  moved: boolean,
+  gone: Set<string>,
+  batch: Change[],
+  touched: string[],
+) => {
+  let add: Dep[] = []
+  let cut: Dep[] = []
+  let take = (d: Dep) => {
+    let k = depKey(d)
+    if (r.keys.has(k)) return
+    r.keys.set(k, d)
+    add.push(d)
+  }
+  let lose = (k: string) => {
+    let d = r.keys.get(k)
+    if (!d) return
+    r.keys.delete(k)
+    cut.push(d)
+  }
+  if (joined.length) { for (let d of eagerDeps(db, joined)) take(d) }
+  // Whether an edge may be DELIVERED is one question with one answer — the eager
+  // screen — so rather than re-deciding it here, ask the same reader about the
+  // endpoints the batch named and believe what comes back. An unlink needs no
+  // such ask: gone is gone.
+  let linked = batch.filter((c) => c.name == 'dependency' && c.comp)
+  let admits = new Set<string>()
+  if (linked.some((c) => !c.comp!.gone)) {
+    let ends = linked.flatMap((c) => [c.eid, String(c.comp!.child)])
+    for (let d of eagerDeps(db, ends)) admits.add(depKey(d))
+  }
+  for (let c of linked) {
+    let d: Dep = {
+      parent: c.eid,
+      type: String(c.comp!.type) as Dep['type'],
+      child: String(c.comp!.child),
+    }
+    let ours = members.has(d.parent) || members.has(d.child)
+    if (c.comp!.gone || !ours || !admits.has(depKey(d))) lose(depKey(d))
+    else take(d)
+  }
+  if (gone.size || moved) {
+    for (let [k, d] of [...r.keys]) {
+      if (gone.has(d.parent) || gone.has(d.child)) lose(k)
+      else if (!members.has(d.parent) && !members.has(d.child)) lose(k)
+    }
+  }
+  let peers: Change[] = []
+  let unpeers: string[] = []
+  if (add.length || cut.length) {
+    let want = outside(r.keys.values(), members)
+    let fresh = [...want].filter((e) => !r.held.has(e))
+    unpeers = [...r.held].filter((e) => !want.has(e))
+    r.held = want
+    peers = peerPayload(db, r.peers, fresh)
+  }
+  // A held peer someone WROTE to re-projects: it is nobody's member, so no
+  // membership pass would have noticed the edit its edge exists to show.
+  let again = touched.filter((e) => r.held.has(e) && !gone.has(e))
+  if (again.length) peers = [...peers, ...peerPayload(db, r.peers, again)]
+  return { edges: add, unedges: cut, peers, unpeers }
+}
 
 // A path member can move when any row along its reference chain changes, not
 // only when the source itself changes. Walk each possible touched rung back to
@@ -263,9 +429,22 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
       // The declared projection, compiled once. A route sub never has one: it
       // exists to load ONE entity whole, which is the opposite ask.
       let fields = route != null ? undefined : fieldsOf(preds)
+      // A route sub's SCOPE rides in its name, but its query line may still
+      // carry riders (`id=<eid>&.edges!`). `id=` is an ADDRESS, not a filter —
+      // the same split localQuery makes — so strip it and parse whatever
+      // remains, which is how a route sub declares it wants its edges too.
+      let rides = route == null ? preds : parseQuery(
+        line.split('&').filter((t) => !t.startsWith('id=')).join('&'),
+      )
+      let members = new Set(hits.map((r) => r.eid))
+      // The rider is opened with the member set, so its first frame carries
+      // this query's edges and nothing else's — the scoped answer that replaces
+      // the whole-graph dump a joining client used to be handed (T-22371).
+      let ask = edgeRider(rides)
+      let ride = ask ? riderOpen(db, ask.peers, members) : undefined
       map.set(f.sub, {
         preds,
-        members: new Set(hits.map((r) => r.eid)),
+        members,
         shadow: !!f.shadow,
         moving: gaps(preds).includes('moving-time'),
         bodies: bodied(f.sub),
@@ -286,6 +465,7 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
             },
           }
           : {}),
+        ...(ride ? { edges: ride.state } : {}),
       })
       let sub = map.get(f.sub)!
       let changes = hits.flatMap((r) => payload(sub, r.eid, r.comps))
@@ -305,6 +485,7 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
           // without re-deriving it, and landSub is what turns the statement
           // into the cache's column-level loaded/unloaded mark.
           ...(fields ? { fields } : {}),
+          ...(ride ? ride.frame : {}),
         }),
       )
     } catch (e) {
@@ -374,6 +555,10 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
     }
     let patch = new Map<string, Change[]>()
     for (let c of batch) patch.set(c.eid, [...(patch.get(c.eid) ?? []), c])
+    // One traversal memo for the whole pass: a `.reaches` sub's closure is the
+    // same for every candidate eid, and re-resolving it per row would put a
+    // recursive walk on the write path.
+    let walk = walker(db)
     for (let [id, sub] of map) {
       // An aggregate sub speaks value→count deltas. The batch DIRTIES it only
       // if it touches a component the line reads (D-22567 §1) — an unrelated
@@ -416,15 +601,19 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         let next = new Set(answer.hits.map((r) => r.eid))
         let changes: Change[] = []
         let drop: string[] = []
+        let entered: string[] = []
+        let left = false
         for (let r of answer.hits) {
           if (!sub.members.has(r.eid)) {
             changes.push(...payload(sub, r.eid, r.comps))
+            entered.push(r.eid)
           } else if (patch.has(r.eid) && (!sub.shadow || sub.details)) {
             changes.push(...carry(sub, patch.get(r.eid)!))
           }
         }
         for (let eid of sub.members) {
           if (next.has(eid)) continue
+          left = true
           if (gone.has(eid)) changes.push({ eid, name: 'entity', comp: null })
           else drop.push(eid)
         }
@@ -437,7 +626,22 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         let win = answer.window ?? { limit, total: answer.hits.length }
         let moved = win.total != sub.win.total
         sub.win.total = win.total
-        if (changes.length || drop.length || moved) {
+        // A window and a rider compose: the members are a bounded prefix, and
+        // the edges are the ones incident to THAT prefix. A row scrolling out
+        // of the window takes its edges with it exactly as a departure does.
+        let ride = sub.edges &&
+          riderDelta(
+            db,
+            sub.edges,
+            sub.members,
+            entered,
+            left,
+            gone,
+            batch,
+            touched,
+          )
+        let rode = ride && rider(ride)
+        if (changes.length || drop.length || moved || rode) {
           send(JSON.stringify({
             sub: id,
             changes,
@@ -445,12 +649,14 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
             cursor: cur,
             shadow: sub.shadow,
             window: win,
+            ...(rode ? ride : {}),
           }))
         }
         continue
       }
       let changes: Change[] = []
       let drop: string[] = []
+      let entered: string[] = []
       let candidates = sub.preds.some((p) => p.at || p.rev)
         ? pathSources(db, sub.preds, touched)
         : touched
@@ -460,23 +666,38 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         // A route sub matches its fixed id; a query sub runs the matcher.
         let hit = alive &&
           (sub.only ? sub.only.has(eid) : listed(c, sub.preds) &&
-            matchQuery(c, sub.preds, comps, undefined, dbKids(db, comps)))
+            matchQuery(c, sub.preds, comps, undefined, dbKids(db, comps), walk))
         let s: Step = step(sub.members, eid, alive, hit)
-        if (s == 'add') changes.push(...payload(sub, eid, c))
-        // A standing match tells a shadow sub nothing: membership did not
+        if (s == 'add') {
+          changes.push(...payload(sub, eid, c))
+          entered.push(eid)
+        } // A standing match tells a shadow sub nothing: membership did not
         // move, and the client heard the patch on the complete stream.
         else if (s == 'update' && (!sub.shadow || sub.details)) {
           changes.push(...carry(sub, patch.get(eid) ?? []))
         } else if (s == 'remove') drop.push(eid)
         else if (s == 'dead') changes.push({ eid, name: 'entity', comp: null })
       }
-      if (changes.length || drop.length) {
+      let ride = sub.edges &&
+        riderDelta(
+          db,
+          sub.edges,
+          sub.members,
+          entered,
+          drop.length > 0,
+          gone,
+          batch,
+          touched,
+        )
+      let rode = ride && rider(ride)
+      if (changes.length || drop.length || rode) {
         send(JSON.stringify({
           sub: id,
           changes,
           drop,
           cursor: cur,
           shadow: sub.shadow,
+          ...(rode ? ride : {}),
         }))
       }
     }
@@ -498,6 +719,7 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
   // future-facing gain still classifies as a gap in subs.ts).
   let aged = (now = Date.now()) => {
     let cur = cursorOf(db)
+    let walk = walker(db)
     let reads = new Map<string, Record<string, Record<string, unknown>>>()
     let comps = (eid: string) => {
       let hit = reads.get(eid)
@@ -512,7 +734,7 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         let c = comps(eid)
         let alive = !!c.entity
         let hit = alive && listed(c, sub.preds) &&
-          matchQuery(c, sub.preds, comps, now, dbKids(db, comps))
+          matchQuery(c, sub.preds, comps, now, dbKids(db, comps), walk)
         let s: Step = step(sub.members, eid, alive, hit)
         if (s == 'remove') drop.push(eid)
         else if (s == 'dead') changes.push({ eid, name: 'entity', comp: null })

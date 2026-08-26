@@ -6,6 +6,8 @@ import {
   bareRenamesOf,
   complete,
   distinctValues,
+  edgeRider,
+  EDGES,
   EXISTS,
   fieldsOf,
   hot,
@@ -20,6 +22,7 @@ import {
   predComps,
   preds,
   PROJECT,
+  REACHES,
   resolution,
   resolveRefs,
   reverseAssocs,
@@ -28,6 +31,7 @@ import {
   SUNK,
   sunk,
   tally,
+  type Walk,
   warm as rank, // the test file's own `warm` fixture predates the export
 } from './query.ts'
 import { instant, span } from './time.ts'
@@ -529,6 +533,79 @@ Deno.test('.fields parses to a PROJECT projection with per-field wake', () => {
   assertThrows(() => preds('.fields=assignee.title'), Error)
   assertThrows(() => preds('.fields=pin'), Error)
   assertThrows(() => preds('.fields='), Error)
+})
+
+Deno.test('.edges parses to an EDGES rider, bare and with peers', () => {
+  assertEquals(preds('.edges!'), [
+    { comp: '', prop: '', op: EDGES, value: '', peers: [] },
+  ])
+  // peer columns route like any bare prop, or spell their component out
+  assertEquals(preds('.edges.peers=status,doc.title')![0].peers, [
+    { comp: 'task', prop: 'status' },
+    { comp: 'doc', prop: 'title' },
+  ])
+  // several riders in one line are ONE delivery — edgeRider unions the columns
+  assertEquals(
+    edgeRider(parseQuery('.task!&.edges!&.edges.peers=doc.title')),
+    { peers: [{ comp: 'doc', prop: 'title' }] },
+  )
+  // a query that never asks carries no rider at all
+  assertEquals(edgeRider(parseQuery('.task!')), undefined)
+  // a path, a bare component, and a value on the bare form are refused
+  assertThrows(() => preds('.edges.peers=assignee.title'), Error)
+  assertThrows(() => preds('.edges.peers=pin'), Error)
+  assertThrows(() => preds('.edges.peers='), Error)
+  assertThrows(() => preds('.edges=x'), Error)
+})
+
+Deno.test('the EDGES rider is a delivery, never a filter', () => {
+  // The other preds still decide membership; the rider passes every row it is
+  // handed, so adding `.edges!` to a live board cannot move what the board holds.
+  let ps = parseQuery('.task.status=open&.edges.peers=task.status')
+  assert(matchQuery({ task: { status: 'open' } }, ps))
+  assert(!matchQuery({ task: { status: 'done' } }, ps))
+  // and a rider ALONE has said nothing about membership
+  assert(matchQuery({ doc: { title: 'anything' } }, parseQuery('.edges!')))
+})
+
+Deno.test('.reaches parses to a bounded traversal and refuses the unbounded', () => {
+  assertEquals(preds('.reaches[requires,<=3]=T-42'), [
+    {
+      comp: '',
+      prop: '',
+      op: REACHES,
+      value: 'T-42',
+      reach: { type: 'requires', depth: 3 },
+    },
+  ])
+  // whitespace inside the bracket is allowed; the cap is not optional
+  assertEquals(preds('.reaches[contains, <= 2]=T-1')![0].reach, {
+    type: 'contains',
+    depth: 2,
+  })
+  // An unbounded or malformed spelling must REFUSE, never fall through to a
+  // bare text term that silently searches for the traversal nobody ran.
+  assertThrows(() => preds('.reaches[requires]=T-42'), Error, 'depth cap')
+  assertThrows(() => preds('.reaches[requires,<=0]=T-42'), Error, 'one hop')
+  assertThrows(() => preds('.reaches[nonsense,<=2]=T-42'), Error, 'edge type')
+  assertThrows(() => preds('.reaches[requires,<=2]='), Error)
+})
+
+Deno.test('a traversal reads its closure from the walk, once, not per row', () => {
+  let ps = parseQuery('.reaches[requires,<=2]=T-9')
+  let asked: string[] = []
+  let walk: Walk = (r, target) => {
+    asked.push(`${r.type}/${r.depth}/${target}`)
+    return new Set(['a'])
+  }
+  let bag = (eid: string) => ({ entity: { eid, num: 1 } })
+  assert(matchQuery(bag('a'), ps, undefined, undefined, undefined, walk))
+  assert(!matchQuery(bag('b'), ps, undefined, undefined, undefined, walk))
+  assertEquals(asked, ['requires/2/T-9', 'requires/2/T-9'])
+  // No walk means no closure — the same reading a reverse hop gives a missing
+  // accessor, so a door that forgot to supply one under-reports loudly rather
+  // than answering from nothing.
+  assert(!matchQuery(bag('a'), ps))
 })
 
 Deno.test('a projection rides the pred list without filtering, read via fieldsOf', () => {

@@ -15,6 +15,7 @@ import { dragData } from './drag.ts'
 import { Entity } from './Entity.tsx'
 import { SessionDot } from './session_status.tsx'
 import { Card, icons } from './Card.tsx'
+import { usePinTargets } from './subscriptions.ts'
 import { Icon } from './icons.tsx'
 import { shelfHost, shelfOpen, shelve } from './shelf.ts'
 import { useQueryEids } from './useQuery.ts'
@@ -190,6 +191,9 @@ export let Tray = () => {
   let ls = live()
   let shelf = shelfFor(clientId())
   let ps = shelf ? pinned(shelf).toSorted((a, b) => b.z - a.z) : []
+  // Shelved cards are painted as chips, not Cards, so the tray holds their
+  // targets — the boot no longer preseeds what a card points at (T-22371).
+  usePinTargets(ps)
   let open = ps.find((p) => p.eid == shelfOpen.value)
 
   return (

@@ -16,6 +16,7 @@ import { filterable, FilterInput } from './Filter.tsx'
 import { Icon } from './icons.tsx'
 import { cardMenuAt } from './nav.tsx'
 import { overShelf, shelve } from './shelf.ts'
+import { useEntity } from './subscriptions.ts'
 
 // Each tab view wears an icon; the name moves into an anchored tooltip.
 // Exported: the fullscreen Screen bar (App.tsx) draws the same tabs.
@@ -92,6 +93,13 @@ export let Card = (
     onMinimize?: () => void
   },
 ) => {
+  // The card's TARGET is subscribed for the card's life (T-22371). It used to
+  // arrive in the working-set boot, which walked one hop from every card and
+  // preseeded whatever it pointed at — a whole-graph read on every join, for
+  // rows a client might not even be showing. A route sub is the scoped form:
+  // the entity streams in with the card, stays live, carries its edges (the
+  // `.edges!` rider), and is evicted when the last card on it closes.
+  useEntity(p.target)
   // Plain props do not invalidate a computed signal. Mirror the latest pin
   // into one so moves update the style while z-only raises still bind
   // straight to the attribute without rerendering the card body.

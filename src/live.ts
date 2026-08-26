@@ -961,6 +961,7 @@ export let applyLocal = (changes: Change[]) => {
   let changedParents = new Set<string>()
   let changedChildren = new Set<string>()
   let changedCanvas = false
+  let depsMoved = false
   let changedCensus = false
   let changed = false
   // Camera motion renders from camera.value + hear(), not the graph cache.
@@ -991,23 +992,24 @@ export let applyLocal = (changes: Change[]) => {
         changedRows.add(eid)
         if (before.canvas) changedCanvas = true
       }
-      // The cascade: every edge touching the dead eid leaves deps too —
-      // record them so the IDB shadow drops the same rows the signal does.
-      for (let d of deps.value) {
-        if (d.parent == eid || d.child == eid) {
-          edges.push(d)
-          reindexEdge(ix, d, true)
-          changedParents.add(d.parent)
-          changedChildren.add(d.child)
-        }
-      }
-      if (edges.length) {
-        deps.value = deps.value.filter((d) => d.parent != eid && d.child != eid)
+      // The cascade: every edge touching the dead eid leaves the table
+      // outright — whoever held it, the edge no longer exists — so it goes from
+      // every holder at once, and is recorded so the IDB shadow drops the same
+      // rows the signal does.
+      for (let d of edgesAt(eid)) {
+        edges.push(d)
+        reindexEdge(ix, d, true)
+        changedParents.add(d.parent)
+        changedChildren.add(d.child)
+        depsMoved = true
       }
       continue
     }
     // An edge change names its whole triple (see db.ts): gone removes it,
-    // otherwise it joins the edge list once.
+    // otherwise it joins the edge list once. This is the FULL-BROADCAST arm —
+    // a filtered client hears its edges through the `.edges!` rider instead —
+    // so the stream itself is the holder, and a rider holding the same triple
+    // keeps it when the stream lets go.
     if (name == 'dependency') {
       if (!comp) continue
       let d = {
@@ -1016,18 +1018,14 @@ export let applyLocal = (changes: Change[]) => {
         child: String(comp.child),
       }
       edges.push(d)
-      let same = (x: Dep) =>
-        x.parent == d.parent && x.type == d.type && x.child == d.child
-      let nextDeps = comp.gone
-        ? deps.value.filter((x) => !same(x))
-        : deps.value.some(same)
-        ? deps.value
-        : [...deps.value, d]
-      if (nextDeps != deps.value) {
-        deps.value = nextDeps
-        reindexEdge(ix, d, !!comp.gone)
-        changedParents.add(eid)
-        changedChildren.add(d.child)
+      let moved = comp.gone
+        ? holdEdges(LIVE_EDGES, [], [d])
+        : holdEdges(LIVE_EDGES, [d], [])
+      for (let x of [...moved.gained, ...moved.lost]) {
+        reindexEdge(ix, x, !!comp.gone)
+        changedParents.add(x.parent)
+        changedChildren.add(x.child)
+        depsMoved = true
       }
       continue
     }
@@ -1073,6 +1071,9 @@ export let applyLocal = (changes: Change[]) => {
       }
       idGraph = next
     }
+  }
+  if (depsMoved) {
+    deps.value = heldDeps = [...edgeHolders.values()].map((h) => h.dep)
   }
   if (seeding) return { eids: [...eids], edges }
   ixGraph = cache.peek()
@@ -1438,6 +1439,16 @@ export type Sub = {
   // replace frame: the columns these rows carry, and by omission the ones they
   // do NOT. Absent means full components. `loaded()` reads it.
   fields?: Field[]
+  // The EDGES RIDER's half of the frame (T-22371): the dep triples INCIDENT to
+  // this sub's result set, and — where the query asked `.edges.peers=` — the far
+  // endpoints' projected rows. Both are held BY THE SUB, refcounted and released
+  // with it, exactly as its members are. This is what replaced `snapshot.deps`:
+  // a client no longer receives every edge in the graph in order to render the
+  // handful its open cards are about.
+  edges?: Dep[]
+  unedges?: Dep[]
+  peers?: Change[]
+  unpeers?: string[]
 }
 type Observed = { observe: unknown }
 type Hot = 'reload' | { hmr: number } | { css: number }
@@ -1690,14 +1701,143 @@ let subFields = new Map<string, Field[]>()
 // other way is the masquerade this exists to prevent.
 export let loaded = (eid: string, comp: string, prop: string): boolean => {
   let projectedOnly = false
+  let member = false
   for (let [sub, members] of subMembers) {
     if (!members.has(eid)) continue
+    member = true
     let fields = subFields.get(sub)
     if (!fields) return true
     if (fields.some((f) => f.comp == comp && f.prop == prop)) return true
     projectedOnly = true
   }
-  return !projectedOnly
+  if (member) return !projectedOnly
+  // A row held only as an edge PEER (T-22371) is projected too — it carries
+  // whatever `.edges.peers=` named and nothing else — but the rider states its
+  // columns by DELIVERING them rather than by naming a contract, so presence is
+  // the honest test: a column the peer payload did not carry is unloaded, and a
+  // render that needs it subscribes the row whole.
+  for (let peers of subPeers.values()) {
+    if (peers.has(eid)) return cache.peek()[eid]?.[comp]?.[prop] !== undefined
+  }
+  return true
+}
+
+// Edges are HELD the way rows are (T-22371). `subEdges` is which triples each
+// sub delivered and `subPeers` the far endpoints its `.edges.peers=` projection
+// carried; `edgeHolders` refcounts a triple across the subs that named it, so
+// two cards about one blocker keep a single edge between them and the last one
+// to close takes it away. `deps` — the client's whole edge table — is exactly
+// the union. Before this it was `allDeps`: every edge in the graph, shipped at
+// boot because an edge had no scoped delivery, so nothing could be released.
+let edgeHolders = new Map<string, { dep: Dep; subs: Set<string> }>()
+let subEdges = new Map<string, Set<string>>()
+let subPeers = new Map<string, Set<string>>()
+let edgeKey = (d: Dep) => `${d.parent}\0${d.type}\0${d.child}`
+
+// Two holders that are not subscriptions. LIVE_EDGES is the complete broadcast
+// itself — a shadow client (TUI, tests) still hears every `dependency` patch and
+// nothing else keeps those edges. SEED_EDGES is a legacy whole-graph snapshot's
+// `deps`, held forever because nothing ever hands them back. A filtered browser
+// has neither: every edge it holds arrives on a rider and leaves with it.
+let LIVE_EDGES = '\0live'
+let SEED_EDGES = '\0seed'
+
+// A wholesale `deps` replacement from OUTSIDE this table — a test that plants a
+// graph, a seed — is healed the way syncIx heals the derived index: `heldDeps`
+// marks the array the holder table last published, so an assignment nobody here
+// made re-derives the holders from it once, rather than leaving the table and
+// the signal quietly disagreeing about what the client holds.
+let heldDeps: Dep[] = deps.peek()
+let syncHolders = () => {
+  let now = deps.peek()
+  if (now === heldDeps) return
+  edgeHolders.clear()
+  subEdges.clear()
+  for (let d of now) {
+    edgeHolders.set(edgeKey(d), { dep: d, subs: new Set([SEED_EDGES]) })
+  }
+  heldDeps = now
+}
+
+let release = (sub: string, key: string, lost: Dep[]) => {
+  let h = edgeHolders.get(key)
+  if (!h) return
+  h.subs.delete(sub)
+  if (h.subs.size) return
+  edgeHolders.delete(key)
+  lost.push(h.dep)
+}
+
+// One sub's edge delta, folded into the shared table. Answers with the triples
+// whose HOLDING moved — the ones the union gained or lost — so the caller
+// reindexes and republishes exactly those endpoints, never the whole table.
+let holdEdges = (sub: string, add: Dep[], cut: Dep[]) => {
+  syncHolders()
+  let mine = subEdges.get(sub) ?? new Set<string>()
+  subEdges.set(sub, mine)
+  let gained: Dep[] = []
+  let lost: Dep[] = []
+  for (let d of add) {
+    let k = edgeKey(d)
+    mine.add(k)
+    let h = edgeHolders.get(k)
+    if (!h) {
+      edgeHolders.set(k, h = { dep: d, subs: new Set() })
+      gained.push(d)
+    }
+    h.subs.add(sub)
+  }
+  for (let d of cut) {
+    let k = edgeKey(d)
+    mine.delete(k)
+    release(sub, k, lost)
+  }
+  return { gained, lost }
+}
+
+// An entity's death takes its edges from EVERY holder: the rows are gone from
+// the graph, so no subscription can still be said to hold them.
+let edgesAt = (eid: string): Dep[] => {
+  syncHolders()
+  let lost: Dep[] = []
+  for (let [k, h] of [...edgeHolders]) {
+    if (h.dep.parent != eid && h.dep.child != eid) continue
+    edgeHolders.delete(k)
+    for (let s of h.subs) subEdges.get(s)?.delete(k)
+    lost.push(h.dep)
+  }
+  return lost
+}
+
+// Everything one sub holds, handed back — a replace's clean slate and the
+// unsubscribe half.
+let freeEdges = (sub: string): Dep[] => {
+  syncHolders()
+  let mine = subEdges.get(sub)
+  subEdges.delete(sub)
+  let lost: Dep[] = []
+  if (mine) { for (let k of mine) release(sub, k, lost) }
+  return lost
+}
+
+// Fold a gained/lost set into the deps signal and the derived edge index, then
+// wake exactly the endpoints that moved — the same maintenance applyLocal does
+// for a live `dependency` patch, which is why relations() needs no new door.
+let settleEdges = (gained: Dep[], lost: Dep[]) => {
+  if (!gained.length && !lost.length) return
+  let parents = new Set<string>()
+  let children = new Set<string>()
+  let mark = (d: Dep, gone: boolean) => {
+    reindexEdge(ix, d, gone)
+    parents.add(d.parent)
+    children.add(d.child)
+  }
+  syncIx()
+  for (let d of lost) mark(d, true)
+  for (let d of gained) mark(d, false)
+  deps.value = heldDeps = [...edgeHolders.values()].map((h) => h.dep)
+  ixDeps = deps.peek()
+  publish(new Set(), parents, children)
 }
 
 // A subscription frame: land its changes like any batch (adds + updates flow
@@ -1741,6 +1881,11 @@ export let landSub = (f: Sub) => {
   if (f.replace) {
     f.fields ? subFields.set(f.sub, f.fields) : subFields.delete(f.sub)
   }
+  // The rider's rows land like any others, but they are held by PEERSHIP, not
+  // membership: a peer is in the cache because an edge points at it, so it never
+  // joins `subMembers` (a useQuery result would wrongly gain it) and instead
+  // rides its own held set, consulted by evict().
+  let peered = f.peers?.length ? applyLocal(f.peers) : undefined
   let touched = applyLocal(f.changes)
   settleObservations(f.changes)
   // The server marks shadow-ness on every frame it sends, so believe the
@@ -1768,7 +1913,19 @@ export let landSub = (f: Sub) => {
   }
   for (let eid of f.drop ?? []) mine.delete(eid)
   if (f.replace) leaving = leaving.filter((eid) => !mine.has(eid))
-  if (!f.shadow && !shadows.has(f.sub)) evict(leaving)
+  // The edges this sub holds, before eviction asks who holds what: a replace
+  // starts from nothing, a delta adds and cuts. A frame carrying no rider at all
+  // leaves the tables untouched — most subs never ask for edges.
+  let dropped = f.replace ? freeEdges(f.sub) : []
+  let rode = holdEdges(f.sub, f.edges ?? [], f.unedges ?? [])
+  let was = subPeers.get(f.sub) ?? new Set<string>()
+  let peers = f.replace ? new Set<string>() : new Set(was)
+  for (let c of f.peers ?? []) peers.add(c.eid)
+  for (let e of f.unpeers ?? []) peers.delete(e)
+  subPeers.set(f.sub, peers)
+  let orphans = [...was].filter((e) => !peers.has(e))
+  settleEdges(rode.gained, [...dropped, ...rode.lost])
+  if (!f.shadow && !shadows.has(f.sub)) evict([...leaving, ...orphans])
   // The server's answer replaces the set, so a projected sub's waking-value
   // signatures are reseeded from it — otherwise the first later patch reads
   // them against the pre-answer prime and reports a move nobody made.
@@ -1778,8 +1935,14 @@ export let landSub = (f: Sub) => {
   }
   subVersion.value++
   return {
-    eids: [...new Set([...touched.eids, ...(f.drop ?? [])])],
-    edges: touched.edges,
+    eids: [
+      ...new Set([
+        ...touched.eids,
+        ...(peered?.eids ?? []),
+        ...(f.drop ?? []),
+      ]),
+    ],
+    edges: [...touched.edges, ...rode.gained, ...rode.lost],
   }
 }
 
@@ -1790,7 +1953,12 @@ let evict = (eids: string[]) => {
   syncIds()
   syncIx()
   let graph = cache.peek()
-  let held = (eid: string) => [...subMembers.values()].some((s) => s.has(eid))
+  // A row is held by MEMBERSHIP or by PEERSHIP — the far endpoint of an edge a
+  // rider delivered is in the cache for a reason, and evicting it out from under
+  // the tree that renders it would blank the tree.
+  let held = (eid: string) =>
+    [...subMembers.values()].some((s) => s.has(eid)) ||
+    [...subPeers.values()].some((s) => s.has(eid))
   let next = { ...cache.value }
   let changed = false
   let changedCanvas = false
@@ -1842,6 +2010,12 @@ let shadow = (sub: string, q: string) => {
 // stream did), so it takes nothing with it.
 let forget = (sub: string) => {
   let leaving = shadows.has(sub) ? [] : [...(subMembers.get(sub) ?? [])]
+  // Edges and peers go back regardless of shadow-ness: a shadow sub never owned
+  // the cache, but its RIDER is the only door its edges came through, so nothing
+  // else is keeping them and they leave with it.
+  let lost = freeEdges(sub)
+  let peers = [...(subPeers.get(sub) ?? [])]
+  subPeers.delete(sub)
   shadows.delete(sub)
   subMembers.delete(sub)
   subWindows.delete(sub)
@@ -1850,7 +2024,8 @@ let forget = (sub: string) => {
   if (sub.startsWith('entries:')) {
     clearObservations(sub.slice('entries:'.length))
   }
-  if (leaving.length) evict(leaving)
+  settleEdges([], lost)
+  if (leaving.length || peers.length) evict([...leaving, ...peers])
   subVersion.value++
 }
 export let unsubscribe = (sub: string) => {
@@ -2009,7 +2184,7 @@ export let routeSub = (eid: string) => {
   // The scope rides in the name (the server answers that one entity), but the
   // query says it explicitly too — an empty q is refused server-side, never a
   // silent match-all.
-  if (!n) ownBoard(sub, `id=${eid}`)
+  if (!n) ownBoard(sub, `id=${eid}&${ROUTE_EDGES}`)
   return () => {
     let held = (routeUses.get(sub) ?? 1) - 1
     if (held > 0) return void routeUses.set(sub, held)
@@ -2017,6 +2192,15 @@ export let routeSub = (eid: string) => {
     dropBoard(sub)
   }
 }
+
+// What an entity sub asks for BESIDE its row (T-22371): the edges incident to
+// it, and enough of each far endpoint to render the sentence — an id (the spine
+// rides always), a status and a title. That is what a requires-tree needs, and
+// it is why no card has to subscribe to its blockers: the peer projection is a
+// read of two columns, not a membership. Every consumer of `relations()` — Show's
+// requires/contains/reads lists, Relate, Debug, the Meta tally, the TUI's refs —
+// is fed from here now that the graph's whole edge table no longer rides the boot.
+let ROUTE_EDGES = '.edges.peers=task.status,doc.title'
 
 // Bring a lazy board's scoped-session entry subscriptions into line with its
 // query `q` (`''` closes them all). Reuses the ref-counted entrySub, so a board
@@ -2060,7 +2244,14 @@ let seedFrom = (snap: Snapshot, write = true) => {
   clearObservations()
   pinZs.clear()
   cache.value = {}
+  // A seed replaces the ROWS; the edge table is rebuilt by the subs that hold
+  // it, which re-subscribe over the same reconnect. A working-set boot now
+  // carries `deps: []` — it used to carry 4,909 of them, 81% of the frame on the
+  // live graph (T-22371) — and a
+  // legacy whole-graph snapshot still seeds its own, unheld, exactly as before.
   deps.value = snap.deps
+  subPeers.clear()
+  syncHolders()
   // A wholesale replacement: skip the per-change durable mirror below and let
   // resetSignals → resetQueries seed the store in one bulk pass instead.
   seeding = true

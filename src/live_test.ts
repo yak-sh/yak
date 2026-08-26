@@ -740,6 +740,101 @@ Deno.test('unsubscribing evicts only what no other subscription holds', () => {
   assertEquals(Object.keys(cache.value), [])
 })
 
+// The client half of the EDGES rider (T-22371). Edges are held exactly the way
+// rows are — refcounted across the subs that named them, released with the last
+// one — because before this the client's whole edge table WAS `allDeps`: every
+// edge in the graph, shipped at boot, held by nobody, evictable never.
+Deno.test('edges are refcounted per sub and leave with the last holder', () => {
+  let row = (eid: string) => [
+    { eid, name: 'entity', comp: { eid, num: 1 } },
+  ]
+  let edge = (parent: string, child: string) => ({
+    parent,
+    type: 'requires' as const,
+    child,
+  })
+  cache.value = {}
+  deps.value = []
+  resetSignals()
+
+  // Two cards, both about the same blocker: one edge each, plus one they share.
+  landSub({
+    sub: 'left',
+    replace: true,
+    changes: row('a'),
+    edges: [edge('a', 'shared'), edge('a', 'mine')],
+  })
+  landSub({
+    sub: 'right',
+    replace: true,
+    changes: row('b'),
+    edges: [edge('a', 'shared'), edge('b', 'theirs')],
+  })
+  assertEquals(deps.value.length, 3, 'the union, not the sum')
+  // relations() reads the derived index, so the delivery has to reach it.
+  assertEquals(
+    relations('a').value.map((d) => d.child).toSorted(),
+    ['mine', 'shared'],
+  )
+
+  // An unlink delta drops only what this sub held alone.
+  landSub({ sub: 'left', changes: [], unedges: [edge('a', 'mine')] })
+  assertEquals(relations('a').value.map((d) => d.child), ['shared'])
+
+  unsubscribe('left')
+  assertEquals(
+    deps.value.map((d) => d.child).toSorted(),
+    ['shared', 'theirs'],
+    'the shared edge survives its second holder',
+  )
+  unsubscribe('right')
+  assertEquals(deps.value, [])
+  assertEquals(relations('a').value, [])
+})
+
+// A peer is in the cache because an EDGE points at it, not because a query
+// selected it — so it is held, and evicted, by peership rather than membership.
+Deno.test('rider peers are held apart from members, and evicted with them', () => {
+  cache.value = {}
+  deps.value = []
+  resetSignals()
+  landSub({
+    sub: 'card',
+    replace: true,
+    changes: [{ eid: 'a', name: 'entity', comp: { eid: 'a', num: 1 } }],
+    edges: [{ parent: 'a', type: 'requires', child: 'blocker' }],
+    peers: [
+      { eid: 'blocker', name: 'entity', comp: { eid: 'blocker', num: 2 } },
+      { eid: 'blocker', name: 'task', comp: { status: 'open' } },
+    ],
+  })
+  // The peer paints — but it is NOT a member, or a useQuery over this sub's
+  // query would wrongly gain it.
+  assertEquals(ent('blocker').task?.status, 'open')
+  assertEquals(subEids('card')?.has('blocker'), false)
+  assertEquals(subEids('card')?.has('a'), true)
+
+  // A peer's own edit lands like any patch.
+  landSub({
+    sub: 'card',
+    changes: [],
+    peers: [{ eid: 'blocker', name: 'task', comp: { status: 'done' } }],
+  })
+  assertEquals(ent('blocker').task?.status, 'done')
+
+  // Nothing points at it any more: the peer leaves the cache with its edge.
+  landSub({
+    sub: 'card',
+    changes: [],
+    unedges: [{ parent: 'a', type: 'requires', child: 'blocker' }],
+    unpeers: ['blocker'],
+  })
+  assertEquals(Object.keys(cache.value), ['a'])
+
+  unsubscribe('card')
+  assertEquals(Object.keys(cache.value), [])
+})
+
 // A shadow subscription rides beside the complete stream, which is still the
 // cache's owner — so closing one must take nothing with it.
 Deno.test('closing a shadow subscription evicts nothing', () => {
