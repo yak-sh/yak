@@ -347,6 +347,195 @@ fn uuid_v4() -> String {
     format!("{a:08x}-{b:04x}-{c:04x}-{d:04x}-{e:012x}")
 }
 
+// --- WS subscription parity --------------------------------------------------
+
+// The cold JOIN a client sends before subscribing (working-set reset + live).
+const JOIN: &str = "{\"since\":0,\"live\":1,\"ws\":1}";
+
+// Open a socket, run the JOIN handshake, and drain the reset frame — the state a
+// client is in when it starts subscribing.
+fn joined_ws(base: &str) -> Ws {
+    let mut ws = Ws::open(base);
+    ws.send(JOIN);
+    ws.next_text(Duration::from_secs(5)).expect("reset frame");
+    ws
+}
+
+// Read frames until one is a subscription frame for `name` (its `sub` field), or
+// None on timeout — skips the reset, live frames, and other subs' frames.
+fn next_sub(ws: &mut Ws, name: &str, deadline: Duration) -> Option<Value> {
+    let t = Instant::now();
+    while t.elapsed() < deadline {
+        let Some(s) = ws.next_text(Duration::from_millis(500)) else { continue };
+        let Ok(v) = serde_json::from_str::<Value>(&s) else { continue };
+        if v.get("sub").and_then(|x| x.as_str()) == Some(name) {
+            return Some(v);
+        }
+    }
+    None
+}
+
+// Subscribe on both sockets and assert the initial reply is byte-identical.
+fn same_sub(ts_ws: &mut Ws, br_ws: &mut Ws, name: &str, q: &str) {
+    let frame = format!(
+        "{{\"sub\":\"{name}\",\"q\":\"{}\"}}",
+        q.replace('\\', "\\\\").replace('"', "\\\"")
+    );
+    ts_ws.send(&frame);
+    br_ws.send(&frame);
+    let ts = next_sub(ts_ws, name, Duration::from_secs(5)).expect("ts sub reply");
+    let br = next_sub(br_ws, name, Duration::from_secs(5)).expect("bridge sub reply");
+    assert_eq!(
+        serde_json::to_string(&ts).unwrap(),
+        serde_json::to_string(&br).unwrap(),
+        "SUB reply differs for {name} (q={q})"
+    );
+    eprintln!("ok  sub {name}  (q={q})");
+}
+
+// After a foreign write, assert both sockets emit a byte-identical delta for the
+// named sub (or that BOTH stay silent, when the write moves nothing).
+fn same_sub_delta(ts_ws: &mut Ws, br_ws: &mut Ws, name: &str, what: &str) {
+    let ts = next_sub(ts_ws, name, Duration::from_secs(5));
+    let br = next_sub(br_ws, name, Duration::from_secs(5));
+    match (ts, br) {
+        (Some(a), Some(b)) => {
+            assert_eq!(
+                serde_json::to_string(&a).unwrap(),
+                serde_json::to_string(&b).unwrap(),
+                "SUB delta differs for {name} after {what}"
+            );
+            eprintln!("ok  sub-delta {name}  ({what})");
+        }
+        (None, None) => eprintln!("ok  sub-delta {name}  ({what}: both silent)"),
+        (a, b) => panic!(
+            "SUB delta presence differs for {name} after {what}: ts={} bridge={}",
+            a.is_some(),
+            b.is_some()
+        ),
+    }
+}
+
+#[test]
+fn ws_sub_parity() {
+    let Some((ts, br)) = both() else {
+        eprintln!("ws_sub_parity: skipped (set TS_URL and BRIDGE_URL)");
+        return;
+    };
+
+    // --- initial-answer parity across the ported sub kinds -------------------
+    // Membership (kind-anchored subset grammar), windowed (`.limit=`), aggregate
+    // (`.count!`/`.tally=`/`.distinct=`), and a route sub (one entity whole).
+    let mut ts_ws = joined_ws(&ts);
+    let mut br_ws = joined_ws(&br);
+
+    let cases: &[(&str, &str)] = &[
+        ("m-project", ".kind=project"),
+        ("m-board", ".kind=board"),
+        ("m-wip", ".kind=task&.status=wip"),
+        ("w-mem5", ".kind=memory&.limit=5"),
+        ("w-task3", ".kind=task&.limit=3"),
+        ("a-count", ".kind=task&.status=open&.count!"),
+        ("a-tally", ".kind=task&.tally=task.status"),
+        ("a-distinct", ".kind=task&.distinct=task.status"),
+    ];
+    for (name, q) in cases {
+        same_sub(&mut ts_ws, &mut br_ws, name, q);
+    }
+
+    // A route sub streams ONE entity whole (bodies included), seeded from a live
+    // task id.
+    if let Some(eid) = an_eid(&ts, "task") {
+        same_sub(&mut ts_ws, &mut br_ws, &format!("route:{eid}"), "");
+    }
+
+    // --- live maintain parity: add / update / dead / remove ------------------
+    // A FRESH socket pair carrying ONLY the marker sub, so each write fires
+    // exactly one delta and next_sub never has to discard a sibling sub's frame
+    // while hunting for this one. (The other sockets' subs still fire on the same
+    // writes — into buffers this test does not read.)
+    let mut ts_ws = joined_ws(&ts);
+    let mut br_ws = joined_ws(&br);
+    // A membership sub whose set is EMPTY (a marker no live task carries), so the
+    // deltas a fresh write drives are deterministic and small.
+    let marker = format!("zqmark{}", &uuid_v4()[..8]);
+    let name = "m-marker";
+    let q = format!(".kind=task&.title~={marker}");
+    same_sub(&mut ts_ws, &mut br_ws, name, &q);
+
+    // create a task carrying the marker → an ADD on both.
+    let eid = uuid_v4();
+    apply(
+        &ts,
+        &format!(
+            "[{{\"eid\":\"{eid}\",\"name\":\"doc\",\"comp\":{{\"title\":\"{marker} one\"}}}},\
+              {{\"eid\":\"{eid}\",\"name\":\"task\",\"comp\":{{\"status\":\"open\"}}}}]"
+        ),
+    );
+    same_sub_delta(&mut ts_ws, &mut br_ws, name, "create (add)");
+
+    // patch the title, still carrying the marker → an UPDATE (the batch's own
+    // doc change, plus the updated envelope) on both.
+    apply(
+        &ts,
+        &format!(
+            "[{{\"eid\":\"{eid}\",\"name\":\"doc\",\"comp\":{{\"title\":\"{marker} two\"}}}}]"
+        ),
+    );
+    same_sub_delta(&mut ts_ws, &mut br_ws, name, "retitle (update)");
+
+    // delete the task → a DEAD (entity-null) on both.
+    apply(&ts, &format!("[{{\"eid\":\"{eid}\",\"name\":\"entity\",\"comp\":null}}]"));
+    same_sub_delta(&mut ts_ws, &mut br_ws, name, "delete (dead)");
+
+    // A REMOVE (a standing member that stops matching): create carrying the
+    // marker (add), then retitle WITHOUT it (drop).
+    let eid2 = uuid_v4();
+    apply(
+        &ts,
+        &format!(
+            "[{{\"eid\":\"{eid2}\",\"name\":\"doc\",\"comp\":{{\"title\":\"{marker} keep\"}}}},\
+              {{\"eid\":\"{eid2}\",\"name\":\"task\",\"comp\":{{\"status\":\"open\"}}}}]"
+        ),
+    );
+    same_sub_delta(&mut ts_ws, &mut br_ws, name, "create#2 (add)");
+    apply(
+        &ts,
+        &format!("[{{\"eid\":\"{eid2}\",\"name\":\"doc\",\"comp\":{{\"title\":\"gone now\"}}}}]"),
+    );
+    same_sub_delta(&mut ts_ws, &mut br_ws, name, "retitle-away (remove)");
+    // clean up the probe entity.
+    apply(&ts, &format!("[{{\"eid\":\"{eid2}\",\"name\":\"entity\",\"comp\":null}}]"));
+    same_sub_delta(&mut ts_ws, &mut br_ws, name, "delete#2 (dead)");
+
+    // --- window + aggregate MAINTAIN parity ----------------------------------
+    // Each on its OWN socket pair so a single task write fires exactly one delta:
+    // a windowed sub RE-ANSWERS (a new top-num task enters the newest-3, pushing
+    // one out); a `.count!` aggregate ships the value→count DIFF.
+    let mut ts_wm = joined_ws(&ts);
+    let mut br_wm = joined_ws(&br);
+    same_sub(&mut ts_wm, &mut br_wm, "wm", ".kind=task&.limit=3");
+    let mut ts_cm = joined_ws(&ts);
+    let mut br_cm = joined_ws(&br);
+    same_sub(&mut ts_cm, &mut br_cm, "cm", ".kind=task&.status=open&.count!");
+
+    let eid3 = uuid_v4();
+    apply(
+        &ts,
+        &format!(
+            "[{{\"eid\":\"{eid3}\",\"name\":\"doc\",\"comp\":{{\"title\":\"{marker} win\"}}}},\
+              {{\"eid\":\"{eid3}\",\"name\":\"task\",\"comp\":{{\"status\":\"open\"}}}}]"
+        ),
+    );
+    same_sub_delta(&mut ts_wm, &mut br_wm, "wm", "create (window re-answer)");
+    same_sub_delta(&mut ts_cm, &mut br_cm, "cm", "create (count +1)");
+    apply(&ts, &format!("[{{\"eid\":\"{eid3}\",\"name\":\"entity\",\"comp\":null}}]"));
+    same_sub_delta(&mut ts_wm, &mut br_wm, "wm", "delete (window re-answer)");
+    same_sub_delta(&mut ts_cm, &mut br_cm, "cm", "delete (count -1)");
+
+    eprintln!("\nWS subscription parity OK");
+}
+
 // --- pure logic tests (always run, no servers) -------------------------------
 
 #[test]

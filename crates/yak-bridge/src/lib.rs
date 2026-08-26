@@ -9,6 +9,7 @@ pub mod journalr;
 pub mod live;
 pub mod read;
 pub mod snap;
+pub mod subserve;
 
 // Would opening `db` land on the live graph while this binary carries a bundled
 // SQLite? That is the cross-build co-reader the same-build rule forbids

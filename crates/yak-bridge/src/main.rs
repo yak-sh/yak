@@ -6,11 +6,16 @@
 // client's expensive query can never stall another's — the per-connection
 // isolation D-22388 bought, realized as threads.
 //
-// READ ONLY: no /apply in this rung. Writes still POST the Deno server; a write
-// frame or a sub/control frame on a socket is accepted and ignored (the full
-// subscription machinery is the documented rung-2 follow-up). The join/catchup/
-// live handshake is complete, so a raw `{since:0,live:1,ws:1}` probe gets its
-// reset+snapshot and every later commit as a live frame.
+// READ ONLY: no /apply here. Writes still POST the Deno server; a write frame on
+// a socket is ignored. But the WS SUBSCRIPTION machinery IS served now (T-22747,
+// subserve.rs): a `{sub, q}` frame registers a query and streams its members —
+// membership, windowed, aggregate and route subs — with live add/update/
+// remove/dead deltas byte-identical to the Deno server. The join/catchup/live
+// handshake stays complete, so a raw `{since:0,live:1,ws:1}` probe still gets
+// its reset+snapshot and every later commit as a live frame until it subscribes.
+// (The `.edges` rider, the lazy `entries:` partition, path/reverse-hop sub
+// filters and `.fields` projection are the standing follow-up — refused loudly,
+// never half-served.)
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Query, State};
@@ -20,8 +25,8 @@ use axum::Router;
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::time::Duration;
-use yak_bridge::{journalr, live, read, snap};
-use yak_kernel::feed::{cursor_of, data_version, journal_since};
+use yak_bridge::subserve::Subserve;
+use yak_bridge::{journalr, read, snap};
 use yak_kernel::Store;
 
 #[derive(Clone)]
@@ -142,11 +147,14 @@ async fn serve_socket(mut socket: WebSocket, uri: String) {
     let _ = worker.join();
 }
 
-// The worker THREAD: its own read-only Store + journal cursor. Blocks on the
-// control channel with a short timeout, and between control frames polls the
-// journal for foreign commits (data_version gate) and pushes live frames. This
-// is the wake mechanism D-22388 leaves pluggable — a poll here; a wal-watch or
-// a DO alarm elsewhere.
+// The worker THREAD: its own read-only Store + a Subserve that owns this
+// socket's subscription registry, join state, and journal cursor. Blocks on the
+// control channel with a short timeout; each frame is routed through the
+// Subserve, and between frames it polls the journal for foreign commits
+// (data_version gate) — folding each into the subscriptions and, while
+// unfiltered, the plain live stream — and ticks the moving-time windows. This is
+// the wake mechanism D-22388 leaves pluggable: a poll here; a wal-watch or a DO
+// alarm elsewhere.
 fn worker_loop(uri: String, rx: Receiver<ToWorker>, tx: tokio::sync::mpsc::UnboundedSender<String>) {
     let store = match Store::open(&uri) {
         Ok(s) => s,
@@ -157,89 +165,16 @@ fn worker_loop(uri: String, rx: Receiver<ToWorker>, tx: tokio::sync::mpsc::Unbou
             return;
         }
     };
-    let mut joined = false;
-    let mut envelope = false;
-    let mut cursor: i64 = 0;
-    let mut last_ver = data_version(&store.conn);
+    let mut sub = Subserve::new(&store);
     loop {
         match rx.recv_timeout(Duration::from_millis(150)) {
-            Ok(ToWorker::Frame(t)) => {
-                handle_frame(&store, &t, &mut joined, &mut envelope, &mut cursor, &tx);
-                // A join just set the cursor; don't let the very next poll
-                // re-emit what the catchup/snapshot already delivered.
-                last_ver = data_version(&store.conn);
-            }
-            Err(RecvTimeoutError::Timeout) => {}
+            Ok(ToWorker::Frame(t)) => sub.frame(&store, &t, &tx),
+            // The clock moved without a write — age the moving-time windows.
+            Err(RecvTimeoutError::Timeout) => sub.tick(&store, &tx),
             Err(RecvTimeoutError::Disconnected) => return,
         }
-        if joined {
-            let ver = data_version(&store.conn);
-            if ver != last_ver {
-                last_ver = ver;
-                for r in journal_since(&store.conn, cursor) {
-                    cursor = r.rowid;
-                    let changes = live::live_changes(&store, &r);
-                    if changes.is_empty() {
-                        continue; // wholly entry-partition — nothing for the root
-                    }
-                    if tx
-                        .send(live::live_frame(&changes, r.rowid, envelope).to_string())
-                        .is_err()
-                    {
-                        return; // socket gone
-                    }
-                }
-            }
-        }
+        sub.poll(&store, &tx);
     }
-}
-
-// One control frame. `{since}` is the join handshake; everything else — a
-// `{sub}`/`{unsub}` subscription or a write batch — is accepted and IGNORED in
-// this read rung (the full subscription machinery is the rung-2 follow-up; a
-// write still goes to the Deno /apply door).
-fn handle_frame(
-    store: &Store,
-    raw: &str,
-    joined: &mut bool,
-    envelope: &mut bool,
-    cursor: &mut i64,
-    tx: &tokio::sync::mpsc::UnboundedSender<String>,
-) {
-    let Ok(f) = serde_json::from_str::<serde_json::Value>(raw) else { return };
-    let Some(obj) = f.as_object() else { return }; // arrays are write batches
-    if !obj.contains_key("since") {
-        return; // sub/unsub/apply — deferred / not a read-wire frame
-    }
-    let since = obj.get("since").and_then(|v| v.as_i64());
-    let epoch_held = obj.get("epoch").and_then(|v| v.as_str());
-    let vocab_held = obj.get("vocab").and_then(|v| v.as_str());
-    *envelope = obj.get("live").and_then(|v| v.as_i64()) == Some(1);
-    let frame = if since.is_none() || cursor_stale(store, epoch_held, vocab_held, since.unwrap()) {
-        *cursor = cursor_of(&store.conn);
-        snap::reset_frame(store).to_string()
-    } else {
-        let f = live::catchup_frame(store, since.unwrap());
-        *cursor = f.get("cursor").and_then(|c| c.as_i64()).unwrap_or(*cursor);
-        f.to_string()
-    };
-    let _ = tx.send(frame);
-    *joined = true;
-}
-
-// cursorStale (db.ts): a held cursor can no longer be trusted for a delta when
-// the epoch or vocab moved, or the client's frontier sits beyond our tip. The
-// vocab check uses the bridge's own fingerprint — see snap.rs: until the hash
-// is Rust-sourced, a client holding the Deno server's vocabHash resets once
-// here (harmless), which is the one documented WS divergence.
-fn cursor_stale(store: &Store, epoch_held: Option<&str>, vocab_held: Option<&str>, since: i64) -> bool {
-    let reset = snap::reset_frame(store);
-    let snap = &reset["snapshot"];
-    let epoch = snap["epoch"].as_str().unwrap_or("");
-    let vocab = snap["vocabHash"].as_str().unwrap_or("");
-    epoch_held != Some(epoch)
-        || vocab_held != Some(vocab)
-        || since > cursor_of(&store.conn)
 }
 
 #[tokio::main]

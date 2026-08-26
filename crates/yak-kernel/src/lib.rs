@@ -27,6 +27,8 @@ pub mod search;
 #[cfg(feature = "native")]
 pub mod store;
 #[cfg(feature = "native")]
+pub mod subquery;
+#[cfg(feature = "native")]
 pub mod telemetry;
 #[cfg(feature = "native")]
 pub mod time;
