@@ -21,9 +21,12 @@ let pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 // WAL salvage) that need "am I the sole owner RIGHT NOW" — a transient hold
 // they close as soon as the guarded work is done, which never reorders the
 // takeBaton semantics above.
-export let tryBaton = (db: string): Deno.FsFile | undefined => {
+export let tryBaton = (
+  db: string,
+  suffix = '-writer.lock',
+): Deno.FsFile | undefined => {
   if (db == ':memory:') return undefined
-  let file = Deno.openSync(`${db}-writer.lock`, {
+  let file = Deno.openSync(`${db}${suffix}`, {
     create: true,
     read: true,
     write: true,
@@ -48,15 +51,25 @@ export let tryBaton = (db: string): Deno.FsFile | undefined => {
 // or the deadline names a predecessor that would not let go.
 export let takeBaton = async (
   db: string,
-  { wait = false, deadlineMs = 330_000, poll = 50, rest = pause }: {
+  {
+    wait = false,
+    deadlineMs = 330_000,
+    poll = 50,
+    rest = pause,
+    suffix = '-writer.lock',
+  }: {
     wait?: boolean
     deadlineMs?: number
     poll?: number
     rest?: (ms: number) => Promise<void>
+    // Which sidecar this baton serializes: '-writer.lock' is the schema/WAL
+    // writer; '-effects.lock' is the effects daemon's exactly-one-dispatcher
+    // lease (D-22388 step 3). Same kernel-released flock either way.
+    suffix?: string
   } = {},
 ): Promise<Deno.FsFile | undefined> => {
   if (db == ':memory:') return undefined
-  let file = Deno.openSync(`${db}-writer.lock`, {
+  let file = Deno.openSync(`${db}${suffix}`, {
     create: true,
     read: true,
     write: true,
@@ -66,8 +79,8 @@ export let takeBaton = async (
   if (!wait) {
     file.close()
     throw new Error(
-      `db writer baton for ${db} is already held — another server is ` +
-        `writing this graph. Stop it, or point DB_PATH at a free copy.`,
+      `db baton ${suffix} for ${db} is already held — another process owns ` +
+        `this role. Stop it, or point DB_PATH at a free copy.`,
     )
   }
   let deadline = Date.now() + deadlineMs
@@ -77,7 +90,7 @@ export let takeBaton = async (
   }
   file.close()
   throw new Error(
-    `db writer baton for ${db} still held after ${deadlineMs}ms — the ` +
+    `db baton ${suffix} for ${db} still held after ${deadlineMs}ms — the ` +
       `predecessor did not release it`,
   )
 }

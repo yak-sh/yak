@@ -28,11 +28,22 @@ import { type Change } from './types.ts'
 // dispatch promise so tests can await a whole effect chain.
 export type Handler = (eid: string, comp: Record<string, unknown>) => unknown
 
+// Which PROCESS a row belongs to when effects run split across two
+// (D-22388 step 3). 'do' — the default, and the effects daemon's half — is
+// the worldly outbox: spawns, kills, mail, knocks, sweeps. 'serve' marks the
+// few rows welded to the serving process's in-memory state (the graph-native
+// runner, whose observation stream needs the sockets). Inline mode (one
+// process) dispatches both; split mode gives each process a complementary
+// `want` filter, so every row still fires in exactly one place.
+export type Where = 'serve' | 'do'
+
 export type Effect = {
   created?: Handler
   // Column-scoped: fires when a PATCH (not a create) carries that column.
   changed?: Record<string, Handler>
   removed?: (eid: string) => unknown
+  // Which process class owns this row when dispatch is split; absent = 'do'.
+  where?: Where
   // The outbox relay's declaration: what an UNACTED row of this comp
   // looks like (a SQL predicate over its table). An intent committed
   // just before a crash never fired its created() — at boot, relay()
@@ -92,8 +103,12 @@ export let dispatch = (
   t: Trace,
   oops: (comp: string, e: unknown) => void = (comp, e) =>
     console.warn(`effect ${comp} failed —`, e),
+  // Which rows this PROCESS may fire (split dispatch, D-22388 step 3).
+  // Default: all of them — inline mode, and every existing caller.
+  want: (w: Where) => boolean = () => true,
 ): Promise<unknown[]> => {
   let jobs: Promise<unknown>[] = []
+  let mine = (e: Effect) => want(e.where ?? 'do')
   let fire = (comp: string, run: () => unknown) => {
     try {
       jobs.push(Promise.resolve(run()).catch((e) => oops(comp, e)))
@@ -107,7 +122,7 @@ export let dispatch = (
       // order the cascade took them.
       for (let gone of t.removed.get(eid) ?? []) {
         for (let e of registry[gone] ?? []) {
-          if (e.removed) fire(gone, () => e.removed!(eid))
+          if (e.removed && mine(e)) fire(gone, () => e.removed!(eid))
         }
       }
       continue
@@ -115,7 +130,7 @@ export let dispatch = (
     if (comp == null) {
       if (t.removed.get(eid)?.includes(name)) {
         for (let e of registry[name] ?? []) {
-          if (e.removed) fire(name, () => e.removed!(eid))
+          if (e.removed && mine(e)) fire(name, () => e.removed!(eid))
         }
       }
       continue
@@ -126,13 +141,16 @@ export let dispatch = (
       // child, and gone when unlinking). created() is the one hook —
       // an edge has no columns to patch and no row to remove.
       for (let e of registry.dependency ?? []) {
-        if (e.created) fire('dependency', () => e.created!(eid, comp!))
+        if (e.created && mine(e)) {
+          fire('dependency', () => e.created!(eid, comp!))
+        }
       }
       continue
     }
     if (name == 'entity') continue
     let born = t.created.has(`${name} ${eid}`)
     for (let e of registry[name] ?? []) {
+      if (!mine(e)) continue
       if (born) {
         if (e.created) fire(name, () => e.created!(eid, comp!))
       } else {
@@ -155,6 +173,8 @@ export let relay = (
   rows: (comp: string, pending: string) => Record<string, unknown>[],
   oops: (comp: string, e: unknown) => void = (comp, e) =>
     console.warn(`sweep ${comp} failed —`, e),
+  // Same split as dispatch: a process relays only the sweeps it owns.
+  want: (w: Where) => boolean = () => true,
 ): Promise<unknown[]> => {
   let jobs: Promise<unknown>[] = []
   // Isolation at BOTH grains: a fetch that throws fails that sweep alone,
@@ -162,7 +182,7 @@ export let relay = (
   // rest of the pending set still fires, same discipline as dispatch.
   for (let [comp, es] of Object.entries(registry)) {
     for (let e of es) {
-      if (!e.sweep || !e.created) continue
+      if (!e.sweep || !e.created || !want(e.where ?? 'do')) continue
       let got: Record<string, unknown>[]
       try {
         got = rows(comp, e.sweep.pending)

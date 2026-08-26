@@ -351,6 +351,42 @@ export let integrityReport = (a: Anomalies | null): Report[] => {
   return out
 }
 
+// Deliverables (knock/wake/mail) are outbox rows: created, then settled
+// delivered or error by the effects dispatcher — inline in the server, or the
+// effects daemon in split mode (D-22388 step 3). A pending row growing old
+// means NOBODY is dispatching: the daemon died and its supervisor is not
+// healing it, or a split server runs with no daemon at all. That failure is
+// otherwise silent — writes succeed, the board looks normal, letters just
+// never leave — which is exactly the class the doctor exists for. A wake is
+// pending ON PURPOSE until its hour, so only a wake whose `at` has passed
+// counts.
+export let undispatched = (
+  rows: Row[],
+  now: number,
+  minutes = 10,
+): Report[] => {
+  let old = (t: unknown) => {
+    let at = Date.parse(String(t ?? ''))
+    return !isNaN(at) && now - at > minutes * 60_000
+  }
+  let stale = rows.filter((r) => {
+    if (!r.comps.deliver || r.comps.delivered || r.comps.error) return false
+    if (r.comps.mail?.message_id || r.comps.mail?.received_at) return false // inbound: arrival is its settlement
+    let due = r.comps.wake ? r.comps.wake.at : r.comps.created?.at
+    return old(due)
+  })
+  if (!stale.length) return []
+  return [{
+    level: 'warn',
+    text:
+      `${stale.length} deliverable(s) pending over ${minutes}m (${
+        stale.slice(0, 5).map((r) => idOf(r)).join(', ')
+      }${stale.length > 5 ? ', …' : ''}) — nothing is dispatching effects: ` +
+      `check the effects daemon (effectsd, TASKS_EFFECTS=daemon) or the ` +
+      `server's inline dispatcher`,
+  }]
+}
+
 // The registry. A new check is one more row here — its verdict a pure
 // function above, its run() a thin read through the Querier.
 export let checks: Check[] = [
@@ -380,6 +416,17 @@ export let checks: Check[] = [
     name: 'storage',
     about: 'no orphaned component rows or dangling entity references',
     run: async () => integrityReport(await integrity()),
+  },
+  {
+    name: 'effects',
+    about: 'deliverables are being dispatched (effects daemon / inline)',
+    run: async (q, now) =>
+      undispatched(
+        (await Promise.all(
+          [['.kind=knock'], ['.kind=wake'], ['.kind=mail']].map((f) => q(f)),
+        )).flat(),
+        now,
+      ),
   },
 ]
 // Future rows, each one entry once its signal exists: a managed session

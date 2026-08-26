@@ -158,3 +158,48 @@ Deno.test('docs: the registry read back — hooks, sweep, one-liner', () => {
   // an undocumented registration still appears — hiding is not an option
   assertEquals(docs().find((x) => x.comp == 'web')?.doc, undefined)
 })
+
+Deno.test('split dispatch: each row fires only for the process that wants it', async () => {
+  let fired: string[] = []
+  on('pin', {
+    where: 'serve',
+    created: (eid) => fired.push(`serve ${eid}`),
+  })
+  on('pin', {
+    created: (eid) => fired.push(`do ${eid}`),
+  })
+  let eid = uid()
+  let t = trace()
+  t.created.add(`pin ${eid}`)
+  let changes: Change[] = [{ eid, name: 'pin', comp: { canvas: 'c' } }]
+  // The serving half of a split: serve rows only.
+  await dispatch(changes, t, undefined, (w) => w == 'serve')
+  assertEquals(fired, [`serve ${eid}`])
+  // The daemon half: do rows only (the default class).
+  fired.length = 0
+  await dispatch(changes, t, undefined, (w) => w == 'do')
+  assertEquals(fired, [`do ${eid}`])
+  // Inline (no filter): both — the pre-split behavior.
+  fired.length = 0
+  await dispatch(changes, t)
+  assertEquals(fired.toSorted(), [`do ${eid}`, `serve ${eid}`])
+})
+
+Deno.test('split relay: a process re-fires only the sweeps it owns', async () => {
+  let fired: string[] = []
+  on('cursor', {
+    where: 'serve',
+    created: (eid) => fired.push(`serve ${eid}`),
+    sweep: { pending: 'a is null' },
+  })
+  on('cursor', {
+    created: (eid) => fired.push(`do ${eid}`),
+    sweep: { pending: 'b is null' },
+  })
+  let rows = (comp: string) => (comp == 'cursor' ? [{ eid: 'c-1' }] : [])
+  await relay(rows, undefined, (w) => w == 'serve')
+  assertEquals(fired, ['serve c-1'])
+  fired.length = 0
+  await relay(rows, undefined, (w) => w == 'do')
+  assertEquals(fired, ['do c-1'])
+})

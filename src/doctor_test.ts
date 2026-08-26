@@ -15,6 +15,7 @@ import {
   staleClaims,
   STATIC_RULES,
   stuckSessions,
+  undispatched,
 } from './doctor.ts'
 import { canon } from './mailaddr.ts'
 import type { Querier, Row } from './client.ts'
@@ -289,4 +290,51 @@ Deno.test('integrityReport: no /integrity route is an unverified warn', () => {
   assertEquals(out.length, 1)
   assertEquals(out[0].level, 'warn')
   assertEquals(out[0].text.includes('UNVERIFIED'), true)
+})
+
+Deno.test('undispatched: an old pending deliverable warns; settled and fresh stay silent', () => {
+  let now = Date.parse('2026-08-26T12:00:00Z')
+  let old = '2026-08-26T11:00:00Z'
+  let fresh = '2026-08-26T11:59:30Z'
+  let rows = [
+    // old and never settled — the finding
+    ent('knock', 1, { deliver: { to: 'e-9' }, created: { at: old } }),
+    // settled — silent
+    ent('knock', 2, {
+      deliver: { to: 'e-9' },
+      created: { at: old },
+      delivered: { at: old },
+    }),
+    // failed loudly — silent here (its own error is the record)
+    ent('mail', 3, {
+      deliver: { to: 'e-9' },
+      created: { at: old },
+      error: { at: old, message: 'no' },
+    }),
+    // fresh — inside the dispatch window
+    ent('knock', 4, { deliver: { to: 'e-9' }, created: { at: fresh } }),
+    // a wake is pending ON PURPOSE until its hour
+    ent('wake', 5, {
+      deliver: { to: 'e-9' },
+      created: { at: old },
+      wake: { at: '2026-08-26T13:00:00Z' },
+    }),
+    // a wake past its hour and unsettled — the finding
+    ent('wake', 6, {
+      deliver: { to: 'e-9' },
+      created: { at: old },
+      wake: { at: old },
+    }),
+    // inbound mail: arrival is its settlement
+    ent('mail', 7, {
+      deliver: { to: 'e-9' },
+      created: { at: old },
+      mail: { message_id: '<m>' },
+    }),
+  ]
+  let out = undispatched(rows, now)
+  assertEquals(out.length, 1)
+  assertEquals(out[0].level, 'warn')
+  assertEquals(out[0].text.includes('2 deliverable(s)'), true)
+  assertEquals(undispatched([], now), [])
 })

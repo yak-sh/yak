@@ -142,6 +142,11 @@ export let launch = async (
   let began = Date.now()
   let child = new Deno.Command(path, {
     args: [...run, `--ready=${port}`],
+    // Under this supervisor the topology is SPLIT (D-22388 step 3): the
+    // server dispatches only its `where:'serve'` effects and the effectsd
+    // child below owns the doing half. A bare `deno run src/server.ts`
+    // (tests, probes) stays inline — the env is the supervisor's to set.
+    env: { TASKS_EFFECTS: 'daemon' },
     stdin: 'inherit',
     stdout: 'inherit',
     stderr: 'piped',
@@ -398,11 +403,75 @@ let firstBoot = async (): Promise<Deno.ChildProcess> => {
   }
 }
 
+// The effects daemon (effectsd.ts, D-22388 step 3) — the doing half of the
+// split the server env above declares. Spawned only after a server is READY
+// (schema migrated — the daemon connects with --join and never migrates),
+// respawned on death with the same backoff a server crash gets, and replaced
+// after every successful handoff so it always runs the tree's code. No ready
+// beat: it binds nothing; its boot relay + feed pick up whatever queued.
+let effectsArgs = ['run', '-A', 'src/effectsd.ts', '--join']
+let effectsd: Deno.ChildProcess | undefined
+let effectsGen = 0
+let spawnEffects = () => {
+  let gen = ++effectsGen
+  let boot = (n: number) => {
+    if (gen != effectsGen) return // replaced while we were backing off
+    try {
+      let child = new Deno.Command(deno, {
+        args: effectsArgs,
+        stdin: 'inherit',
+        stdout: 'inherit',
+        stderr: 'piped',
+      }).spawn()
+      record(child.stderr, child.pid)
+      effectsd = child
+      child.status.then((status) => {
+        if (gen != effectsGen) return // condemned by a replace or shutdown
+        console.error(
+          `effectsd stopped unexpectedly (${status.code}) — relaunching`,
+        )
+        setTimeout(
+          () => boot(n + 1),
+          RETRY[Math.min(n + 1, RETRY.length - 1)],
+        )
+      })
+    } catch (e) {
+      console.error('effectsd spawn failed —', e)
+      setTimeout(() => boot(n + 1), RETRY[Math.min(n + 1, RETRY.length - 1)])
+    }
+  }
+  boot(0)
+}
+let stopEffects = () => {
+  effectsGen++ // condemn: the status handler above stands down
+  try {
+    effectsd?.kill('SIGTERM')
+  } catch {
+    // already gone
+  }
+}
+let replaceEffects = () => {
+  stopEffects()
+  spawnEffects()
+}
+
 let supervise = async () => {
   current = await firstBoot()
-  let handoff = insist(() => serial(swap))
+  spawnEffects()
+  let handoff = insist(() =>
+    serial(swap).then((ok) => {
+      // The successor is READY (migrated) — replace the daemon so effects run
+      // the same tree the server does. A failed handoff keeps both as they
+      // were: the old server serves and the old daemon dispatches.
+      if (ok) replaceEffects()
+      return ok
+    })
+  )
   for await (let event of Deno.watchFs(src)) {
-    if (event.paths.some(devFile)) return relaunch()
+    if (event.paths.some(devFile)) {
+      stopEffects()
+      return relaunch()
+    }
     if (event.paths.some(serverFile)) handoff()
   }
 }
