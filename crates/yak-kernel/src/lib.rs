@@ -94,6 +94,17 @@ pub fn writes_live_graph(target: &str) -> bool {
     same_graph_file(target, &live_db())
 }
 
+// Did THIS build link the bundled SQLite rather than the system libsqlite3? A
+// service co-reading (or co-writing) the live WAL file must link the SAME build
+// the Deno server links — a bundled build shares the wal-index across two
+// different SQLite versions with no guard (M-22673, T-22622). Cargo feature
+// unification is why this must be asked of the KERNEL and not a downstream
+// crate's own feature: a whole-workspace build unifies a bundled sibling's
+// feature into this crate, so only the kernel knows what it actually linked.
+pub fn is_bundled() -> bool {
+    cfg!(feature = "bundled")
+}
+
 // The default the whole fleet means by "the server" (client.ts host()).
 pub const DEFAULT_HOST: &str = "127.0.0.1:5173";
 

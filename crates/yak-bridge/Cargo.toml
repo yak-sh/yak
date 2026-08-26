@@ -1,0 +1,43 @@
+[package]
+name = "yak-bridge"
+version = "0.1.1"
+edition = "2021"
+license = "Apache-2.0"
+description = "The yak read bridge: an axum + tokio HTTP/WS server that serves the graph's READ wire (/query, /journal, WS join/catchup/live) over yak-kernel's read-only Store + journal Feed, byte-parity with the Deno server."
+keywords = ["graph", "entity-component", "sqlite", "axum", "websocket"]
+categories = ["database", "web-programming::http-server"]
+repository = "https://github.com/yak-sh/yak"
+homepage = "https://yak.sh"
+exclude = ["*.ts"]
+
+[[bin]]
+name = "yak-bridge"
+path = "src/main.rs"
+
+[lib]
+name = "yak_bridge"
+path = "src/lib.rs"
+
+[features]
+# The escape hatch the boot assertion guards: building with `bundled` links the
+# kernel's OWN SQLite instead of the system one, which a co-reader of the live
+# WAL graph must never do (M-22673). It exists so the assertion has a real
+# condition to refuse on — never enable it against the live file.
+bundled = ["yak-kernel/bundled"]
+
+[dependencies]
+# NOT `bundled`: even a read-only co-reader of the live WAL graph shares the
+# wal-index the Deno server builds, so it must link the SAME system libsqlite3
+# (M-22673, the T-22622 corruption). default-features = false drops `bundled`
+# and keeps `native` (Store, feed, journal, search) + `remote` (unused here but
+# cheap, and keeps open_graph() available).
+yak-kernel = { version = "0.1.1", path = "../yak-kernel", default-features = false, features = ["native", "remote"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+rusqlite = { version = "0.40" }
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "signal", "time"] }
+
+[dev-dependencies]
+# The parity harness drives HTTP and a WS socket against BOTH servers.
+ureq = { version = "3", default-features = false }
+tungstenite = { version = "0.24" }
