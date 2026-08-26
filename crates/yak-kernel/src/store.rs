@@ -6,7 +6,7 @@
 
 use crate::vocab::vocab;
 pub use crate::model::{is_uuid, Dep, Row};
-use crate::model::Source;
+use crate::model::{Graph, Hit, Source};
 use crate::profiling;
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use serde_json::{Map, Value};
@@ -83,6 +83,26 @@ impl Store {
         self.tables.contains(name)
     }
 
+    // Quarantined entities are SCREENED from reads — the graph's own
+    // convention, applied by the /query route, by client.ts rows(), and by
+    // FTS (search.rs carries the same `not exists` in its sql). A file reader
+    // that skipped it would list rows the server refuses to serve, which is
+    // exactly how the two doors first disagreed (T-22576). The wire lifts the
+    // screen with quarantined=1; no reader here asks yet, so there is no
+    // reveal flag to thread — add one on the day something needs it.
+    //
+    // Returns a `and not exists (…)` fragment for entity alias `a`, or empty
+    // on a graph too old to have the table.
+    fn unscreened(&self, alias: &str) -> String {
+        if !self.has_table("quarantined") {
+            return String::new();
+        }
+        format!(
+            " and not exists (select 1 from quarantined __q \
+             where __q.entity = {alias}.id)"
+        )
+    }
+
     // resolveId's grammar: prefixed num (prefix is display-only, num rules),
     // bare num, full uuid, short-eid prefix, alias slug.
     pub fn resolve_id(&self, id: &str) -> Option<String> {
@@ -155,10 +175,14 @@ impl Store {
     }
 
     pub fn row(&self, eid: &str) -> Option<Row> {
-        // one probe answers both "does it exist" and "what num does it wear"
+        // one probe answers all three: does it exist, is it screened, and
+        // what num does it wear — a quarantined entity reads as absent.
         let num: Option<Option<i64>> = one(
             &self.conn,
-            "select num from entity where eid = ?1",
+            &format!(
+                "select e.num from entity e where e.eid = ?1{}",
+                self.unscreened("e")
+            ),
             [eid],
             |r| r.get::<_, Option<i64>>(0),
         );
@@ -180,6 +204,7 @@ impl Store {
                 comps.insert(name.clone(), Value::Object(m));
             }
         }
+        crate::model::project_session(&mut comps);
         let kind = v.kind_of(&|k| comps.contains_key(k));
         Some(Row { eid: eid.into(), num, kind, comps })
     }
@@ -191,6 +216,9 @@ impl Store {
         if !self.has_table(kind) {
             return vec![];
         }
+        // No screen here on purpose: a LISTING screens one level up, where
+        // `visible()` can be lifted by a `.quarantined` filter (T-22558). The
+        // per-entity doors have no such reveal, so they screen in sql.
         let sql = format!(
             "select e.eid, e.num from {} t join entity e \
              on e.id = t.entity order by e.num",
@@ -324,7 +352,8 @@ impl Store {
         order
             .into_iter()
             .filter_map(|(eid, num)| {
-                let comps = bags.remove(&eid)?;
+                let mut comps = bags.remove(&eid)?;
+                crate::model::project_session(&mut comps);
                 let kind = v.kind_of(&|k| comps.contains_key(k));
                 Some(Row { eid, num, kind, comps })
             })
@@ -420,44 +449,58 @@ impl Store {
     // (evaluated once, not correlated) turns the disjunction into two preds
     // over one table, which sqlite answers as a MULTI-INDEX OR: the parent
     // half seeks the primary key, the child half seeks dependency_child.
+    // The disjunction stays a top-level AND-term under the screens, so that
+    // plan survives them.
+    //
+    // Both endpoints are screened, the way the route's deps=1 layer screens
+    // them (localread.ts localDeps filters on either end).
     pub fn deps_of(&self, eid: &str) -> Vec<Dep> {
-        let sql = "select pe.eid, d.type, ce.eid from dependency d \
-                   join entity pe on pe.id = d.parent \
-                   join entity ce on ce.id = d.child \
-                   where d.parent = (select id from entity where eid = ?1) \
-                      or d.child  = (select id from entity where eid = ?1) \
-                   order by pe.eid, d.type, d.ord, ce.eid";
-        collect(&self.conn, sql, [eid], |r| {
+        let sql = format!(
+            "select pe.eid, d.type, ce.eid from dependency d \
+             join entity pe on pe.id = d.parent \
+             join entity ce on ce.id = d.child \
+             where (d.parent = (select id from entity where eid = ?1) \
+                 or d.child  = (select id from entity where eid = ?1)){}{} \
+             order by pe.eid, d.type, d.ord, ce.eid",
+            self.unscreened("pe"),
+            self.unscreened("ce")
+        );
+        collect(&self.conn, &sql, [eid], |r| {
             Ok(Dep { parent: r.get(0)?, type_: r.get(1)?, child: r.get(2)? })
         })
     }
 
     // Comments aimed at an entity, birth order (bornAt sort).
     pub fn comments_on(&self, eid: &str) -> Vec<String> {
-        let sql = "select ce.eid from comment c \
-                   join entity ce on ce.id = c.entity \
-                   join entity te on te.id = c.target \
-                   left join created cr on cr.entity = c.entity \
-                   where te.eid = ?1 order by coalesce(cr.at, ''), ce.num";
-        collect(&self.conn, sql, [eid], |r| r.get(0))
+        let sql = format!(
+            "select ce.eid from comment c \
+             join entity ce on ce.id = c.entity \
+             join entity te on te.id = c.target \
+             left join created cr on cr.entity = c.entity \
+             where te.eid = ?1{} order by coalesce(cr.at, ''), ce.num",
+            self.unscreened("ce")
+        );
+        collect(&self.conn, &sql, [eid], |r| r.get(0))
     }
 }
 
 // A row cache for renderers that resolve many eids (said(), authoring).
+// Holds a Graph, not a Store, so one renderer serves the file and the wire —
+// and over the wire the memo is what keeps a page to a handful of requests.
 pub struct Rows<'a> {
-    pub store: &'a Store,
+    pub graph: &'a dyn Graph,
     cache: std::cell::RefCell<HashMap<String, Option<Row>>>,
 }
 
 impl<'a> Rows<'a> {
-    pub fn new(store: &'a Store) -> Rows<'a> {
-        Rows { store, cache: Default::default() }
+    pub fn new(graph: &'a dyn Graph) -> Rows<'a> {
+        Rows { graph, cache: Default::default() }
     }
     pub fn get(&self, eid: &str) -> Option<Row> {
         if let Some(hit) = self.cache.borrow().get(eid) {
             return hit.clone();
         }
-        let got = self.store.row(eid);
+        let got = self.graph.row(eid);
         self.cache.borrow_mut().insert(eid.into(), got.clone());
         got
     }
@@ -479,7 +522,7 @@ impl<'a> Rows<'a> {
         if want.is_empty() {
             return;
         }
-        let got = self.store.rows_of(&want);
+        let got = self.graph.rows_of(&want);
         let mut cache = self.cache.borrow_mut();
         for r in got {
             cache.insert(r.eid.clone(), Some(r));
@@ -496,6 +539,42 @@ impl<'a> Rows<'a> {
 impl Source for Store {
     fn resolve_id(&self, id: &str) -> Option<String> {
         Store::resolve_id(self, id)
+    }
+}
+
+// The file's answer to the read surface — the inherent methods, which the
+// remote impl mirrors over HTTP.
+impl Graph for Store {
+    fn row(&self, eid: &str) -> Option<Row> {
+        Store::row(self, eid)
+    }
+    fn rows_of_kind(&self, kind: &str) -> Result<Vec<Row>, String> {
+        Ok(Store::rows_of_kind(self, kind))
+    }
+    fn rows_of(&self, eids: &[String]) -> Vec<Row> {
+        Store::rows_of(self, eids)
+    }
+    // The file hands back everything of the kind; the caller's `visible()`
+    // screen is what reveal lifts, so nothing to do with it here.
+    fn rows_matching(
+        &self,
+        kind: &str,
+        preds: &[crate::query::Pred],
+        _reveal: bool,
+    ) -> Result<Vec<Row>, String> {
+        Ok(Store::rows_of_kind(self, kind)
+            .into_iter()
+            .filter(|r| crate::query::matches(r, preds))
+            .collect())
+    }
+    fn deps_of(&self, eid: &str) -> Vec<Dep> {
+        Store::deps_of(self, eid)
+    }
+    fn comments_on(&self, eid: &str) -> Vec<String> {
+        Store::comments_on(self, eid)
+    }
+    fn search(&self, q: &str, limit: usize) -> Result<Vec<Hit>, String> {
+        crate::search::search(self, q, limit)
     }
 }
 

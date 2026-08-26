@@ -13,12 +13,19 @@ exclude = ["*.ts"]
 # `native` carries everything that cannot cross into wasm32 (sqlite, files).
 # yak-wasm depends on this crate with default-features = false and gets
 # only the pure core: vocab, model, query, cache.
+#
+# `remote` is the wire reader (remote.rs): a blocking HTTP client and nothing
+# else — no async runtime, since a CLI read is one request answered before the
+# next line prints. ureq rides without default features on purpose: the wire
+# is `http://host:port` (client.ts host()), so TLS would be dead weight.
 [features]
-default = ["native"]
+default = ["native", "remote"]
 native = ["dep:rusqlite", "dep:chrono", "dep:sha2", "dep:uuid"]
+remote = ["dep:ureq"]
 
 [dependencies]
 rusqlite = { version = "0.40", features = ["bundled"], optional = true }
+ureq = { version = "3", default-features = false, optional = true }
 serde_json = { version = "1", features = ["preserve_order"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"], optional = true }
 sha2 = { version = "0.10", optional = true }

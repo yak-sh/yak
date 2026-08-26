@@ -4,7 +4,7 @@
 use chrono::{DateTime, Local};
 use yak_kernel::store::{Dep, Row, Rows};
 use yak_kernel::vocab::{vocab, PropType};
-use yak_kernel::Store;
+use yak_kernel::Graph;
 use serde_json::Value;
 
 pub fn local_time(iso: &str) -> String {
@@ -335,7 +335,7 @@ fn warm_page(rows: &Rows, row: &Row, deps: &[Dep], comments: &[String]) {
 }
 
 // showMd, ported. `rows` resolves every eid a line names.
-pub fn show_md(store: &Store, row: &Row) -> String {
+pub fn show_md(store: &dyn Graph, row: &Row) -> String {
     let v = vocab();
     let rows = Rows::new(store);
     let deps = store.deps_of(&row.eid);

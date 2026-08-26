@@ -8,6 +8,7 @@ use crate::profiling;
 use crate::query;
 use crate::store::Store;
 use crate::vocab::vocab;
+pub use crate::model::Hit;
 use rusqlite::OptionalExtension;
 
 // The search line's tokens, double-quote aware: a quoted phrase stays one
@@ -31,18 +32,6 @@ fn tokens(q: &str) -> Vec<String> {
         out.push(cur);
     }
     out
-}
-
-#[derive(Debug, Clone)]
-pub struct Hit {
-    pub eid: String,
-    pub num: Option<i64>,
-    pub kind: String,
-    pub title: String,
-    pub snip: String,
-    pub open: String,
-    pub open_id: Option<String>,
-    pub retired: bool,
 }
 
 pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> {

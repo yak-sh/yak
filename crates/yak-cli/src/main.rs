@@ -1,9 +1,18 @@
 // yak — the Rust CLI (T-22532/T-22558, D-22530): the pure-read verbs
-// over the live graph file, read-only, output parity with the TS CLI.
+// over the live graph, read-only, output parity with the TS CLI.
 // READ-ONLY divergences, documented: `inbox` renders without stamping the
 // bus `notified` marks, `inbox show` without the `opened` stamp, `context`
 // without the `## pending messages` bus block — read-stamps belong to the
 // write-capable doors. `inbox archive` and `context --hook` refuse.
+//
+// Since T-22576 `list`, `show` and `search` are storage-TRANSPARENT: they are
+// written against yak_kernel::Graph, so the same code answers from a graph
+// FILE or from a running server's JSON wire, and the printed bytes are the
+// same either way. Where it reads is named by the environment, never by a
+// flag — see usage(). The verbs that reach past those three (inbox, context,
+// history, telemetry) still read the FILE directly: they ask for journal and
+// bus shapes the JSON read routes do not carry, so they open a Store of their
+// own and refuse rather than half-answer when there is no file.
 
 mod digest;
 mod render;
@@ -12,7 +21,45 @@ use render::{authoring_line, claimant, id_of, local_time, show_md};
 use yak_kernel::profiling::{self, span};
 use yak_kernel::query;
 use yak_kernel::store::Rows;
-use yak_kernel::{db_path, search, Store};
+use yak_kernel::{db_path, Graph, Store};
+
+fn usage() -> String {
+    format!(
+        "task-rs <list|show|search|apply> …
+
+  list [.filter…] [kind]   the board, one line per hit
+  show <id>                one entity as markdown
+  search <words…>          full-text hits (trailing * = prefix)
+  inbox | history | telemetry | context        (file only)
+  apply [--db path] …      one batch through the write path (file only)
+
+list, show and search read a FILE or a SERVER, whichever the environment
+names, and print the same bytes either way. The rest need the graph file:
+they read journal, bus and telemetry shapes the JSON routes do not carry.
+
+Where it reads — the CLI's own rules (localread.ts armPath), by environment:
+
+  DB_PATH=<file>    read that graph file
+  TASKS_HOST=h:p    read that server over http (default {})
+  neither           the live pairing: $HOME/.tasks/tasks.db
+  DB_PATH=:memory:  never a graph: the wire answers
+  TASKS_LOCAL=0     the local arm off outright — the wire answers
+
+DB_PATH wins over TASKS_HOST: an explicit file is a name this process gave
+itself. A file that will not open read-only is not an error while a server
+can answer — the wire takes over, as it does for the TS CLI.
+
+  --where           print the endpoint this environment resolves to",
+        yak_kernel::DEFAULT_HOST
+    )
+}
+
+// The file door, for the verbs that cannot ride the wire.
+fn open_store() -> Result<Store, String> {
+    let path = db_path();
+    Store::open(&format!("file:{path}?mode=ro"))
+        .map_err(|e| format!("cannot open {path}: {e}"))
+}
 
 fn main() {
     // One monotonic clock read, unconditional — it costs less than the argv
@@ -36,39 +83,66 @@ fn main() {
 fn run(args: &[String]) -> i32 {
     let verb = args.first().map(String::as_str).unwrap_or("");
     let rest = &args[1.min(args.len())..];
-    // The write door dispatches before the read-only Store opens: apply
-    // needs its own read-write connection (yak_kernel::WriteStore).
+    // The write door dispatches before any read opens: apply needs its own
+    // read-write connection (yak_kernel::WriteStore), and it is a FILE door —
+    // /apply stays the one write door on the wire, so the write path never
+    // rides TASKS_HOST here.
     if verb == "apply" {
         return apply_cmd(rest);
     }
-    let path = db_path();
-    let uri = format!("file:{path}?mode=ro");
-    let store = match Store::open(&uri) {
-        Ok(s) => s,
+    if verb == "--help" || verb == "-h" || verb == "help" {
+        println!("{}", usage());
+        return 0;
+    }
+    if verb == "--where" {
+        println!("{:?}", yak_kernel::endpoint());
+        return 0;
+    }
+    // The verbs that read the journal, the bus and the tool_call log want
+    // shapes the JSON read routes do not serve, so they take the file door
+    // directly and say so plainly when there is no file to take.
+    if matches!(verb, "inbox" | "history" | "telemetry" | "context") {
+        let store = match open_store() {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("{e}");
+                return 1;
+            }
+        };
+        return match verb {
+            "inbox" => inbox(&store, rest),
+            "history" => history(&store, rest),
+            "telemetry" => telemetry(&store, rest),
+            _ => context(&store, rest),
+        };
+    }
+    // Opening is timed too: on the wire this is the first request, and a
+    // remote read's cost lives in round trips rather than in sql.
+    let opened = {
+        let _p = span("open");
+        yak_kernel::open_graph()
+    };
+    let (graph, whence) = match opened {
+        Ok(g) => g,
         Err(e) => {
-            eprintln!("cannot open {path}: {e}");
+            eprintln!("{e}");
             return 1;
         }
     };
+    let g = graph.as_ref();
+    let _ = whence;
     match verb {
-        "list" => list(&store, rest),
-        "show" => show(&store, rest),
-        "search" => search_cmd(&store, rest),
-        "inbox" => inbox(&store, rest),
-        "history" => history(&store, rest),
-        "telemetry" => telemetry(&store, rest),
-        "context" => context(&store, rest),
-        // a kind's PLURAL lists it (cli.ts listing()) — `task designs`
+        "list" => list(g, rest),
+        "show" => show(g, rest),
+        "search" => search_cmd(g, rest),
+        // a kind's PLURAL lists it (cli.ts listing()) — `yak designs`
         w if !w.is_empty() && plural_kind(w).is_some() => {
             let mut fwd = vec![plural_kind(w).unwrap()];
             fwd.extend(rest.iter().cloned());
-            list(&store, &fwd)
+            list(g, &fwd)
         }
         _ => {
-            eprintln!(
-                "yak [--profile] \
-                 <list|show|search|apply|inbox|history|telemetry|context> …"
-            );
+            eprintln!("{}", usage());
             2
         }
     }
@@ -162,14 +236,14 @@ fn plural_kind(word: &str) -> Option<String> {
     (k != word).then_some(word.to_string())
 }
 
-fn show(store: &Store, args: &[String]) -> i32 {
+fn show(g: &dyn Graph, args: &[String]) -> i32 {
     let Some(id) = args.first() else {
         eprintln!("yak show <id>");
         return 2;
     };
     let eid = {
         let _p = span("resolve");
-        store.resolve_id(id)
+        g.resolve_id(id)
     };
     let Some(eid) = eid else {
         eprintln!("no entity {id}");
@@ -177,7 +251,7 @@ fn show(store: &Store, args: &[String]) -> i32 {
     };
     let row = {
         let _p = span("row");
-        store.row(&eid)
+        g.row(&eid)
     };
     let Some(row) = row else {
         eprintln!("no entity {id}");
@@ -185,13 +259,13 @@ fn show(store: &Store, args: &[String]) -> i32 {
     };
     let md = {
         let _p = span("render");
-        show_md(store, &row)
+        show_md(g, &row)
     };
     println!("{md}");
     0
 }
 
-fn list(store: &Store, args: &[String]) -> i32 {
+fn list(store: &dyn Graph, args: &[String]) -> i32 {
     let (kind, mut preds) = match query::parse(args) {
         Ok(x) => x,
         Err(e) => {
@@ -207,15 +281,21 @@ fn list(store: &Store, args: &[String]) -> i32 {
     // `.kind=` is derived identity, not table membership: an entity wearing
     // design+task is kind design, so a task listing excludes it (kindOf).
     let reveal = preds.iter().any(|p| p.comp == "quarantined");
-    let mut hits: Vec<yak_kernel::Row> = {
+    let found = {
         let _p = span("query");
-        store
-            .rows_of_kind(&kind)
+        store.rows_matching(&kind, &preds, reveal)
+    };
+    let mut hits: Vec<yak_kernel::Row> = match found {
+        Ok(rows) => rows
             .into_iter()
             .filter(|r| r.kind == kind)
             .filter(|r| reveal || yak_kernel::store::visible(r))
-            .filter(|r| query::matches(r, &preds))
-            .collect()
+            .collect(),
+        // A board that could not be asked for is not an empty board.
+        Err(e) => {
+            eprintln!("{e}");
+            return 1;
+        }
     };
     hits.sort_by(query::by_board);
     let _p = span("render");
@@ -611,7 +691,7 @@ fn flag_value(args: &[String], name: &str) -> Option<String> {
     None
 }
 
-fn search_cmd(store: &Store, args: &[String]) -> i32 {
+fn search_cmd(store: &dyn Graph, args: &[String]) -> i32 {
     let q = args.join(" ");
     if q.is_empty() {
         eprintln!("yak search <words...> (trailing * = prefix)");
@@ -619,7 +699,7 @@ fn search_cmd(store: &Store, args: &[String]) -> i32 {
     }
     let found = {
         let _p = span("search");
-        search::search(store, &q, 20)
+        store.search(&q, 20)
     };
     let hits = match found {
         Ok(h) => h,
