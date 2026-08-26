@@ -10,7 +10,15 @@
 // in-memory index, tomorrow an IDB indexed cursor — the call site never
 // changes (T-17046).
 import { useEffect, useMemo } from 'preact/hooks'
-import { dropQuery, ent, findEid, holdQuery, queryEids } from '../live.ts'
+import {
+  type Backlink,
+  dropQuery,
+  ent,
+  findEid,
+  holdQuery,
+  linksVia,
+  queryEids,
+} from '../live.ts'
 import { parseQuery, resolveRefs } from '../query.ts'
 import type { Ent } from '../types.ts'
 
@@ -30,3 +38,20 @@ export let useQueryEids = (query: string): string[] => {
 // The matching entities, assembled. Each rides its own `row` signal, so the
 // list re-renders on membership change and each row on its own edits.
 export let useQuery = (query: string): Ent[] => useQueryEids(query).map(ent)
+
+// The open card's reverse lists (T-21489), held for the view's life. Each is an
+// EID-KEYED server sub — "comments aimed at X", "entities referencing X" — so
+// the set is complete even when the cache is partial (a referrer outside the
+// working set still counts, T-18094), opened on mount and torn down with the
+// last unmount: cards accumulate no subs as they open and close. The plain
+// live.ts doors (commentsOn/backlinks) resolve the same queries for tests and
+// for imperative reads that reuse a set a mounted view already holds.
+export let useCommentsOn = (target: string): Ent[] =>
+  useQueryEids(`.comment.target=${target}`)
+    .map(ent)
+    .sort((a, b) => a.num - b.num)
+
+// `via` — WHICH column points here — reads off each referrer's own row signal
+// (linksVia), so a retarget wakes the face without a membership change.
+export let useBacklinks = (target: string): Backlink[] =>
+  useQueryEids(`.refs=${target}`).flatMap((from) => linksVia(from, target))

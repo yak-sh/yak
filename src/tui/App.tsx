@@ -6,6 +6,7 @@
 // painted as lines instead of CSS.
 import { signal } from '@preact/signals'
 import { useBoardSub } from '../components/subscriptions.ts'
+import { useCommentsOn } from '../components/useQuery.ts'
 import { tuiKeys } from '../keybindings.ts'
 import { formatProp, propAt } from '../props.ts'
 import { type Ent, idOf, verdictName } from '../types.ts'
@@ -15,7 +16,6 @@ import {
   byPriority,
   cache,
   capable,
-  commentsOn,
   crewed,
   ent,
   findEid,
@@ -350,7 +350,7 @@ let TuiTask = ({ e }: { e: Ent }) => (
     {e.refs.map((r) => (
       <Entity key={r.child} eid={r.child} view='Dependency' type={r.type} />
     ))}
-    {commentsOn(e.eid).map((c) => (
+    {useCommentsOn(e.eid).map((c) => (
       <div class='TComment'>
         <span class='Comments_Who'>{byline(c)}</span> {c.review && (
           <span

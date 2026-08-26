@@ -318,8 +318,12 @@ let refreshServerSets = (eids: Set<string>) => {
 // Get-or-open the server set for a query. Opened ONCE on creation (a repeat
 // ownBoard would re-subscribe every render); the signal is primed from mem so
 // the first paint is populated, then landSub replaces it with the server's
-// answer. Unheld direct readers (projects/commentsOn/…) keep it open, the same
-// persistence mem's `sets` map gives an unheld query — bounded by the working set.
+// answer. Unheld GLOBAL-shape readers (projects/sessionRows/…) keep it open —
+// bounded by the count of distinct shapes in the code. An EID-KEYED query
+// (comments-of X, refs-to X) has an unbounded key space, so its render path
+// must hold-and-release through the hook (useQueryEids/useCommentsOn/
+// useBacklinks — T-21489): the card's sub opens on mount, the last drop tears
+// it down, and an imperative read meanwhile reuses the held set.
 let serverSet = (preds: Pred[], line: string): ServerSet => {
   let key = qkey(preds)
   let found = queryUses.get(key)
@@ -2481,7 +2485,11 @@ export let shelfFor = (client: string): string | undefined =>
 // an eid EQUALITY the refs index answers in O(result). A face subscribes to its
 // own list (num-ordered) and tally; birth, death and retargeting update only the
 // targets they affect. `.map(ent)` rides each note's own row signal, so a note
-// edit wakes only the thread it is in.
+// edit wakes only the thread it is in. A RENDERED view must come through
+// useCommentsOn (components/useQuery.ts): the hook HOLDS the eid-keyed server
+// sub for the card's life and the last unmount tears it down (T-21489); this
+// plain door reuses a held set but, unheld, would leave the wire sub open for
+// the socket's life — it stays for tests and socketless imperative reads.
 export let commentsOn = (target: string): Ent[] =>
   queryEids([eq('comment', 'target', target)]).value
     .map(ent)
@@ -2599,9 +2607,12 @@ export let pinned = (canvas: string): Pinned[] =>
 // over the same refCols the union spans), so a referrer retargeting a pointer
 // wakes the face too. A new association shows up with no second edit: this is
 // how a task finds its sessions and Debug lists whatever holds a reference to
-// the entity on screen.
-type Backlink = { from: string; via: string }
-let linksVia = (from: string, target: string): Backlink[] => {
+// the entity on screen. A RENDERED view must come through useBacklinks
+// (components/useQuery.ts) — the hook holds the eid-keyed server sub for the
+// card's life and releases it on unmount (T-21489); this plain door stays for
+// tests and for imperative reads that reuse a set the view already holds.
+export type Backlink = { from: string; via: string }
+export let linksVia = (from: string, target: string): Backlink[] => {
   let r = row(from).value
   return !r ? [] : refCols
     .filter(([c, p]) =>

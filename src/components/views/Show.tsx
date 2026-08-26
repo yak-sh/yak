@@ -3,7 +3,6 @@ import { type ComponentChildren } from 'preact'
 import { comps, type Ent } from '../../types.ts'
 import { FLOOR, textOf } from '../../twin.ts'
 import {
-  backlinks,
   base,
   boardsOver,
   commentCount,
@@ -17,6 +16,7 @@ import {
   statuses,
 } from '../../live.ts'
 import { linkProps } from '../nav.tsx'
+import { useBacklinks } from '../useQuery.ts'
 import { block, Stamp } from '../ui.tsx'
 import { Comments, viaName } from '../Comments.tsx'
 import { Dot } from '../Dot.tsx'
@@ -361,7 +361,7 @@ export let CommentDependencies = ({ e }: { e: Ent }) => (
 // is the door to the agents that served it.
 export let Runs = ({ e }: { e: Ent }) => {
   let ids = new Set(
-    backlinks(e.eid)
+    useBacklinks(e.eid)
       .filter((b) => ['session.requested_task', 'session.role'].includes(b.via))
       .map((b) => b.from),
   )
@@ -391,7 +391,7 @@ export let Boards = ({ e }: { e: Ent }) => {
 // Open work only, board-ordered (status column, then rank): the project
 // page is a working view; the full history lives on its boards.
 export let Tasks = ({ e }: { e: Ent }) => {
-  let ids = backlinks(e.eid)
+  let ids = useBacklinks(e.eid)
     .filter((b) => b.via == 'task.project')
     .map((b) => ent(b.from))
     .filter((t) => t.task && !settled(t.task.status))

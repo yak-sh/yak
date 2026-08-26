@@ -1,7 +1,8 @@
 import { useRef, useState } from 'preact/hooks'
 import { commands, orderIn, suggest } from '../commands.ts'
 import { slotsOf } from '../verb.ts'
-import { commentsOn, ent, mutate, pending, repoUrl, uuid } from '../live.ts'
+import { ent, mutate, pending, repoUrl, uuid } from '../live.ts'
+import { useCommentsOn } from './useQuery.ts'
 import { ago, block, pretty } from './ui.tsx'
 import { useDraft } from './drafts.ts'
 import {
@@ -252,7 +253,7 @@ export let Composer = (
 // weaves the heard comments into the thread and pins its own composer.)
 export let Comments = ({ eid }: { eid: string }) => (
   <Frame>
-    {commentsOn(eid).map((c) => <Note key={c.eid} c={c} />)}
+    {useCommentsOn(eid).map((c) => <Note key={c.eid} c={c} />)}
     <Composer eid={eid} />
   </Frame>
 )

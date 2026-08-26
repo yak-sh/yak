@@ -2308,6 +2308,60 @@ Deno.test('commentCount shares one aggregate sub across targets (T-21283)', () =
   }
 })
 
+// T-21489: the open card's reverse lists — comments-of X, refs-to X — are HELD
+// eid-keyed server subs: opened once per open entity (the hook's mount), reused
+// by the plain doors and by later holders, and torn down with the LAST drop, so
+// cards accumulate no subs as they open and close.
+Deno.test('reverse subs: held per open card, torn down on close (T-21489)', () => {
+  let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
+  ;(globalThis as { WebSocket: unknown }).WebSocket = class {
+    readyState = 0
+    onopen: unknown = null
+    onmessage: unknown = null
+    onclose: unknown = null
+    send() {}
+    addEventListener() {}
+    close() {}
+  }
+  let probe =
+    (globalThis as unknown as { __probe: { subN: () => number } }).__probe
+  let X = 'dddd0000-0000-4000-8000-000000000001'
+  try {
+    cache.value = {
+      [X]: { entity: { eid: X, num: 1 }, canvas: { eid: X } },
+      c1: { entity: { eid: 'c1', num: 2 }, comment: { eid: 'c1', target: X } },
+      k1: { entity: { eid: 'k1', num: 3 }, claim: { eid: 'k1', session: X } },
+    }
+    let comments = resolveRefs(parseQuery(`.comment.target=${X}`), findEid)
+    let refs = resolveRefs(parseQuery(`.refs=${X}`), findEid)
+    let n0 = probe.subN()
+    // The card opens: one sub per reverse list, primed from the local cache.
+    let thread = holdQuery(comments)
+    let pointers = holdQuery(refs)
+    assertEquals(probe.subN(), n0 + 2)
+    assertEquals(thread.value, ['c1'])
+    // The reverse-union sees every pointer: the claim AND the comment.
+    assertEquals(new Set(pointers.value), new Set(['c1', 'k1']))
+    // The plain doors REUSE the held sets — no third sub, same answers.
+    assertEquals(commentsOn(X).map((c) => c.eid), ['c1'])
+    assertEquals(
+      new Set(backlinks(X).map((b) => `${b.from} ${b.via}`)),
+      new Set(['c1 comment.target', 'k1 claim.session']),
+    )
+    assertEquals(probe.subN(), n0 + 2)
+    // A second view of the same card shares; its release keeps the sub.
+    holdQuery(comments)
+    dropQuery(comments)
+    assertEquals(probe.subN(), n0 + 2)
+    // The card closes: the last drops tear both down — nothing accumulates.
+    dropQuery(comments)
+    dropQuery(refs)
+    assertEquals(probe.subN(), n0)
+  } finally {
+    ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
+  }
+})
+
 // The client half of the aggregate wire (T-21283): the server's initial tally
 // REPLACES the local count and is authoritative from then on; delta frames
 // merge (n=0 drops the key); rows never ride, so the cache is untouched.

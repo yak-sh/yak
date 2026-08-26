@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks'
 import { type Ent, type Hit, idOf, uuid } from '../../types.ts'
 import { backlinks, ent, mutate } from '../../live.ts'
+import { useBacklinks } from '../useQuery.ts'
 import { block } from '../ui.tsx'
 import { resolve } from '../registry.ts'
 import { Entity } from '../Entity.tsx'
@@ -30,6 +31,9 @@ let { Pane, Gutter: GutterEl, Acts, Act, Fill: FillEl, Row, Empty } = Frame
 // The panes of one layout, straight off the reactive cache. The cache
 // key is the identity (a comp cast from another client may carry no eid
 // inside itself — the Pinned precedent), so eid is restamped here.
+// Imperative on purpose — handlers call it mid-gesture — so the Layout
+// component HOLDS the `.refs=<layout>` sub (useBacklinks at its root) and
+// every read here reuses that held set; alone this would leak the sub.
 let panesOf = (layout: string) =>
   backlinks(layout)
     .filter((b) => b.via == 'pane.layout')
@@ -174,6 +178,10 @@ let PaneView = ({ eid, layout }: { eid: string; layout: string }) => {
 }
 
 export let Layout = ({ e }: { e: Ent }) => {
+  // Hold the layout's reverse sub for the view's life: panesOf's imperative
+  // reads (render helpers AND drag/close handlers) reuse this held set, and
+  // closing the layout releases it (T-21489).
+  useBacklinks(e.eid)
   let root = e.layout?.root
   if (root && ent(root).pane) {
     return (

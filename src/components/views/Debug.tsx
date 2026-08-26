@@ -2,7 +2,8 @@ import { type ComponentChildren, Fragment } from 'preact'
 import { useState } from 'preact/hooks'
 import { formatProp, isRef, propAt } from '../../props.ts'
 import { comps as vocab, type Ent, idOf, plural } from '../../types.ts'
-import { backlinks, ent, mutate, parents } from '../../live.ts'
+import { ent, mutate, parents } from '../../live.ts'
+import { useBacklinks } from '../useQuery.ts'
 import { up } from './Show.tsx'
 import { block, el } from '../ui.tsx'
 import { Prop } from '../editors.tsx'
@@ -278,10 +279,10 @@ export let AddComp = ({ e }: { e: Ent }) => {
 export let Debug = (
   { e, project, tabs = true }: { e: Ent; project?: boolean; tabs?: boolean },
 ) => {
-  // Incoming references too: whatever in the cache points here, said by
-  // which prop brought it (live.ts backlinks, derived from the typed
-  // vocabulary — sessions on their task, cards on their target, …).
-  let links = backlinks(e.eid)
+  // Incoming references too: whatever points here, said by which prop
+  // brought it (useBacklinks — the held eid-keyed reverse sub, derived from
+  // the typed vocabulary: sessions on their task, cards on their target, …).
+  let links = useBacklinks(e.eid)
   let head = <Entity eid={e.eid} view='Debug.Tile' />
   let body = (
     <>
@@ -345,7 +346,7 @@ let groups = (links: { from: string; via: string }[]) => {
 }
 
 let ProjectIncoming = ({ e }: { e: Ent }) => {
-  let linked = groups(backlinks(e.eid))
+  let linked = groups(useBacklinks(e.eid))
   if (!linked.length) return null
   return (
     <Kids>
