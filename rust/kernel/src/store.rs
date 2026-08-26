@@ -7,6 +7,7 @@
 use crate::vocab::vocab;
 pub use crate::model::{is_uuid, Dep, Row};
 use crate::model::Source;
+use crate::profiling;
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -20,8 +21,44 @@ fn q(id: &str) -> String {
     format!("\"{}\"", id)
 }
 
+// The two shapes every read in this file takes, each counted as one timed
+// execution. Instrumenting the store means instrumenting these two doors
+// rather than each call site — and the free functions serve the write path's
+// own connection too.
+
+// query_row + optional: at most one row, and a hit counts as one.
+pub fn one<T>(
+    conn: &Connection,
+    sql: &str,
+    params: impl rusqlite::Params,
+    row: impl FnOnce(&rusqlite::Row<'_>) -> rusqlite::Result<T>,
+) -> Option<T> {
+    let t = profiling::sql(sql);
+    let got = conn.query_row(sql, params, row).optional().ok().flatten();
+    t.done(got.is_some() as usize);
+    got
+}
+
+// prepare + collect: every row the statement produced.
+pub fn collect<T>(
+    conn: &Connection,
+    sql: &str,
+    params: impl rusqlite::Params,
+    row: impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>,
+) -> Vec<T> {
+    let t = profiling::sql(sql);
+    let Ok(mut st) = conn.prepare(sql) else { return vec![] };
+    let out: Vec<T> = st
+        .query_map(params, row)
+        .map(|it| it.filter_map(|x| x.ok()).collect())
+        .unwrap_or_default();
+    t.done(out.len());
+    out
+}
+
 impl Store {
     pub fn open(path: &str) -> rusqlite::Result<Store> {
+        let _p = profiling::span("db.open");
         let conn = Connection::open_with_flags(
             path,
             OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
@@ -29,13 +66,15 @@ impl Store {
         conn.busy_timeout(std::time::Duration::from_millis(5000))?;
         let mut tables = HashSet::new();
         {
-            let mut st = conn.prepare(
-                "select name from sqlite_master where type in ('table','view')",
-            )?;
+            let sql =
+                "select name from sqlite_master where type in ('table','view')";
+            let t = profiling::sql(sql);
+            let mut st = conn.prepare(sql)?;
             let mut rows = st.query([])?;
             while let Some(r) = rows.next()? {
                 tables.insert(r.get::<_, String>(0)?);
             }
+            t.done(tables.len());
         }
         Ok(Store { conn, tables })
     }
@@ -59,20 +98,13 @@ impl Store {
         let cols = v.readable(comp);
         if cols.is_empty() {
             // membership-only comp (no wire columns): presence is the value
-            let present: Option<i64> = self
-                .conn
-                .query_row(
-                    &format!(
-                        "select 1 from {} t join entity e on e.id = t.entity \
-                         where e.eid = ?1",
-                        q(comp)
-                    ),
-                    [eid],
-                    |r| r.get(0),
-                )
-                .optional()
-                .ok()
-                .flatten();
+            let sql = format!(
+                "select 1 from {} t join entity e on e.id = t.entity \
+                 where e.eid = ?1",
+                q(comp)
+            );
+            let present: Option<i64> =
+                one(&self.conn, &sql, [eid], |r| r.get(0));
             return present.map(|_| Map::new());
         }
         let mut joins = String::new();
@@ -96,55 +128,41 @@ impl Store {
             q(comp),
             joins
         );
+        let t = profiling::sql(&sql);
         let mut st = self.conn.prepare(&sql).ok()?;
-        st.query_row([eid], |r| {
-            let mut m = Map::new();
-            for (i, (name, _)) in cols.iter().enumerate() {
-                let v: Value = match r.get_ref(i)? {
-                    rusqlite::types::ValueRef::Null => continue,
-                    rusqlite::types::ValueRef::Integer(n) => Value::from(n),
-                    rusqlite::types::ValueRef::Real(f) => Value::from(f),
-                    rusqlite::types::ValueRef::Text(s) => {
-                        Value::from(String::from_utf8_lossy(s).to_string())
-                    }
-                    rusqlite::types::ValueRef::Blob(_) => continue,
-                };
-                m.insert(name.clone(), v);
-            }
-            Ok(m)
-        })
-        .optional()
-        .ok()
-        .flatten()
+        let got = st
+            .query_row([eid], |r| {
+                let mut m = Map::new();
+                for (i, (name, _)) in cols.iter().enumerate() {
+                    let v: Value = match r.get_ref(i)? {
+                        rusqlite::types::ValueRef::Null => continue,
+                        rusqlite::types::ValueRef::Integer(n) => Value::from(n),
+                        rusqlite::types::ValueRef::Real(f) => Value::from(f),
+                        rusqlite::types::ValueRef::Text(s) => {
+                            Value::from(String::from_utf8_lossy(s).to_string())
+                        }
+                        rusqlite::types::ValueRef::Blob(_) => continue,
+                    };
+                    m.insert(name.clone(), v);
+                }
+                Ok(m)
+            })
+            .optional()
+            .ok()
+            .flatten();
+        t.done(got.is_some() as usize);
+        got
     }
 
     pub fn row(&self, eid: &str) -> Option<Row> {
         // one probe answers both "does it exist" and "what num does it wear"
-        let num: Option<i64> = self
-            .conn
-            .query_row(
-                "select num from entity where eid = ?1",
-                [eid],
-                |r| r.get::<_, Option<i64>>(0),
-            )
-            .optional()
-            .ok()
-            .flatten()
-            .flatten();
-        let exists: bool = self
-            .conn
-            .query_row(
-                "select 1 from entity where eid = ?1",
-                [eid],
-                |r| r.get::<_, i64>(0),
-            )
-            .optional()
-            .ok()
-            .flatten()
-            .is_some();
-        if !exists {
-            return None;
-        }
+        let num: Option<Option<i64>> = one(
+            &self.conn,
+            "select num from entity where eid = ?1",
+            [eid],
+            |r| r.get::<_, Option<i64>>(0),
+        );
+        let Some(num) = num else { return None };
         let v = vocab();
         let mut comps = Map::new();
         // entity comp first, the way the wire projects the spine
@@ -174,19 +192,13 @@ impl Store {
             return vec![];
         }
         let v = vocab();
-        let mut order: Vec<(String, Option<i64>)> = vec![];
-        {
-            let sql = format!(
-                "select e.eid, e.num from {} t join entity e \
-                 on e.id = t.entity order by e.num",
-                q(kind)
-            );
-            let Ok(mut st) = self.conn.prepare(&sql) else { return vec![] };
-            let it = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?)));
-            if let Ok(it) = it {
-                order = it.filter_map(|x| x.ok()).collect();
-            }
-        }
+        let sql = format!(
+            "select e.eid, e.num from {} t join entity e \
+             on e.id = t.entity order by e.num",
+            q(kind)
+        );
+        let order: Vec<(String, Option<i64>)> =
+            collect(&self.conn, &sql, [], |r| Ok((r.get(0)?, r.get(1)?)));
         let mut bags: HashMap<String, Map<String, Value>> = HashMap::new();
         for (eid, num) in &order {
             let mut spine = Map::new();
@@ -225,12 +237,15 @@ impl Store {
                 joins,
                 q(kind)
             );
+            let t = profiling::sql(&sql);
+            let mut got = 0usize;
             let Ok(mut st) = self.conn.prepare(&sql) else { continue };
             let mut rows = match st.query([]) {
                 Ok(r) => r,
                 Err(_) => continue,
             };
             while let Ok(Some(r)) = rows.next() {
+                got += 1;
                 let Ok(eid) = r.get::<_, String>(0) else { continue };
                 let mut m = Map::new();
                 for (i, (name, _)) in cols.iter().enumerate() {
@@ -252,6 +267,7 @@ impl Store {
                     bag.insert(comp.clone(), Value::Object(m));
                 }
             }
+            t.done(got);
         }
         order
             .into_iter()
@@ -273,10 +289,7 @@ impl Store {
              order by e.num",
             q(kind)
         );
-        let Ok(mut st) = self.conn.prepare(&sql) else { return vec![] };
-        st.query_map([], |r| r.get(0))
-            .map(|it| it.filter_map(|x| x.ok()).collect())
-            .unwrap_or_default()
+        collect(&self.conn, &sql, [], |r| r.get(0))
     }
 
     pub fn deps_of(&self, eid: &str) -> Vec<Dep> {
@@ -285,12 +298,9 @@ impl Store {
                    join entity ce on ce.id = d.child \
                    where pe.eid = ?1 or ce.eid = ?1 \
                    order by pe.eid, d.type, d.ord, ce.eid";
-        let Ok(mut st) = self.conn.prepare(sql) else { return vec![] };
-        st.query_map([eid], |r| {
+        collect(&self.conn, sql, [eid], |r| {
             Ok(Dep { parent: r.get(0)?, type_: r.get(1)?, child: r.get(2)? })
         })
-        .map(|it| it.filter_map(|x| x.ok()).collect())
-        .unwrap_or_default()
     }
 
     // Comments aimed at an entity, birth order (bornAt sort).
@@ -300,10 +310,7 @@ impl Store {
                    join entity te on te.id = c.target \
                    left join created cr on cr.entity = c.entity \
                    where te.eid = ?1 order by coalesce(cr.at, ''), ce.num";
-        let Ok(mut st) = self.conn.prepare(sql) else { return vec![] };
-        st.query_map([eid], |r| r.get(0))
-            .map(|it| it.filter_map(|x| x.ok()).collect())
-            .unwrap_or_default()
+        collect(&self.conn, sql, [eid], |r| r.get(0))
     }
 }
 
@@ -339,10 +346,7 @@ impl Source for Store {
 // own connection with the same rules the read Store uses.
 pub fn resolve(conn: &Connection, id: &str) -> Option<String> {
     let num_of = |n: i64| -> Option<String> {
-        conn.query_row("select eid from entity where num = ?1", [n], |r| r.get(0))
-            .optional()
-            .ok()
-            .flatten()
+        one(conn, "select eid from entity where num = ?1", [n], |r| r.get(0))
     };
     if let Some(c) = regex_num(id) {
         return num_of(c);
@@ -354,57 +358,44 @@ pub fn resolve(conn: &Connection, id: &str) -> Option<String> {
     }
     let low = id.to_lowercase();
     if is_uuid(&low) {
-        if let Some(hit) = conn
-            .query_row(
-                "select eid from entity where eid = ?1",
-                [&low],
-                |r| r.get::<_, String>(0),
-            )
-            .optional()
-            .ok()
-            .flatten()
-        {
+        if let Some(hit) = one(
+            conn,
+            "select eid from entity where eid = ?1",
+            [&low],
+            |r| r.get::<_, String>(0),
+        ) {
             return Some(hit);
         }
     }
     if low.len() >= 6 && low.len() <= 8
         && low.chars().all(|c| c.is_ascii_hexdigit())
     {
-        let mut st = conn
-            .prepare("select eid from entity where eid >= ?1 and eid < ?2 limit 2")
-            .ok()?;
         let hi = format!("{low}\u{ffff}");
-        let hits: Vec<String> = st
-            .query_map([&low, &hi], |r| r.get(0))
-            .ok()?
-            .filter_map(|x| x.ok())
-            .collect();
+        let hits: Vec<String> = collect(
+            conn,
+            "select eid from entity where eid >= ?1 and eid < ?2 limit 2",
+            [&low, &hi],
+            |r| r.get(0),
+        );
         if hits.len() == 1 {
             return Some(hits[0].clone());
         }
     }
-    let has_alias: bool = conn
-        .query_row(
-            "select 1 from sqlite_master where type = 'table' and name = 'alias'",
-            [],
-            |r| r.get::<_, i64>(0),
-        )
-        .optional()
-        .ok()
-        .flatten()
-        .is_some();
+    let has_alias = one(
+        conn,
+        "select 1 from sqlite_master where type = 'table' and name = 'alias'",
+        [],
+        |r| r.get::<_, i64>(0),
+    )
+    .is_some();
     if has_alias {
-        if let Some(hit) = conn
-            .query_row(
-                "select e.eid from alias a join entity e \
-                 on e.id = a.entity where a.slug = ?1",
-                [&low],
-                |r| r.get::<_, String>(0),
-            )
-            .optional()
-            .ok()
-            .flatten()
-        {
+        if let Some(hit) = one(
+            conn,
+            "select e.eid from alias a join entity e \
+             on e.id = a.entity where a.slug = ?1",
+            [&low],
+            |r| r.get::<_, String>(0),
+        ) {
             return Some(hit);
         }
     }

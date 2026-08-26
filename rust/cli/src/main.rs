@@ -3,19 +3,38 @@
 
 mod render;
 
+use kernel::profiling::{self, span};
 use kernel::query;
 use kernel::store::Rows;
 use kernel::{db_path, search, Store};
 use render::{authoring_line, claimant, id_of, show_md};
 
 fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    // One monotonic clock read, unconditional — it costs less than the argv
+    // allocation on the next line, and it is what lets `startup` cover the
+    // scan that decides whether to profile at all. No timer is armed.
+    let t0 = std::time::Instant::now();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    profiling::arm(&mut args, t0);
+    profiling::mark("startup", t0);
+
+    let code = run(&args);
+
+    // After the verb's own output, and on stderr: stdout stays byte-identical
+    // to an unprofiled run, which is what the parity tests read.
+    if let Some(r) = profiling::report() {
+        eprint!("{r}");
+    }
+    std::process::exit(code);
+}
+
+fn run(args: &[String]) -> i32 {
     let verb = args.first().map(String::as_str).unwrap_or("");
     let rest = &args[1.min(args.len())..];
     // The write door dispatches before the read-only Store opens: apply
     // needs its own read-write connection (kernel::WriteStore).
     if verb == "apply" {
-        std::process::exit(apply_cmd(rest));
+        return apply_cmd(rest);
     }
     let path = db_path();
     let uri = format!("file:{path}?mode=ro");
@@ -23,19 +42,18 @@ fn main() {
         Ok(s) => s,
         Err(e) => {
             eprintln!("cannot open {path}: {e}");
-            std::process::exit(1);
+            return 1;
         }
     };
-    let code = match verb {
+    match verb {
         "list" => list(&store, rest),
         "show" => show(&store, rest),
         "search" => search_cmd(&store, rest),
         _ => {
-            eprintln!("task-rs <list|show|search|apply> …");
+            eprintln!("task-rs [--profile] <list|show|search|apply> …");
             2
         }
-    };
-    std::process::exit(code);
+    }
 }
 
 // task-rs apply [--db path] [--fed] [--writer w] [--batch json | reads stdin]
@@ -118,15 +136,27 @@ fn show(store: &Store, args: &[String]) -> i32 {
         eprintln!("task-rs show <id>");
         return 2;
     };
-    let Some(eid) = store.resolve_id(id) else {
+    let eid = {
+        let _p = span("resolve");
+        store.resolve_id(id)
+    };
+    let Some(eid) = eid else {
         eprintln!("no entity {id}");
         return 1;
     };
-    let Some(row) = store.row(&eid) else {
+    let row = {
+        let _p = span("row");
+        store.row(&eid)
+    };
+    let Some(row) = row else {
         eprintln!("no entity {id}");
         return 1;
     };
-    println!("{}", show_md(store, &row));
+    let md = {
+        let _p = span("render");
+        show_md(store, &row)
+    };
+    println!("{md}");
     0
 }
 
@@ -138,17 +168,24 @@ fn list(store: &Store, args: &[String]) -> i32 {
             return 2;
         }
     };
-    query::resolve_values(store, &mut preds);
+    {
+        let _p = span("resolve");
+        query::resolve_values(store, &mut preds);
+    }
     let rows_cache = Rows::new(store);
     // `.kind=` is derived identity, not table membership: an entity wearing
     // design+task is kind design, so a task listing excludes it (kindOf).
-    let mut hits: Vec<kernel::Row> = store
-        .rows_of_kind(&kind)
-        .into_iter()
-        .filter(|r| r.kind == kind)
-        .filter(|r| query::matches(r, &preds))
-        .collect();
+    let mut hits: Vec<kernel::Row> = {
+        let _p = span("query");
+        store
+            .rows_of_kind(&kind)
+            .into_iter()
+            .filter(|r| r.kind == kind)
+            .filter(|r| query::matches(r, &preds))
+            .collect()
+    };
     hits.sort_by(query::by_board);
+    let _p = span("render");
     // the second column: a task's status, everything else's alias slug
     let lines: Vec<(&kernel::Row, String)> = hits
         .iter()
@@ -209,7 +246,11 @@ fn search_cmd(store: &Store, args: &[String]) -> i32 {
         eprintln!("task-rs search <words...> (trailing * = prefix)");
         return 2;
     }
-    let hits = match search::search(store, &q, 20) {
+    let found = {
+        let _p = span("search");
+        search::search(store, &q, 20)
+    };
+    let hits = match found {
         Ok(h) => h,
         Err(e) => {
             eprintln!("{e}");
@@ -220,6 +261,7 @@ fn search_cmd(store: &Store, args: &[String]) -> i32 {
         println!("(no hits)");
         return 0;
     }
+    let _p = span("render");
     for h in hits {
         let aim = if h.open != h.eid {
             format!(

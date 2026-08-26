@@ -48,7 +48,13 @@ pub struct Vocab {
 
 pub fn vocab() -> &'static Vocab {
     static V: OnceLock<Vocab> = OnceLock::new();
-    V.get_or_init(crate::vocab_gen::baked)
+    V.get_or_init(|| {
+        // the one place the baked contract is built — a phase worth naming,
+        // and the only span in the pure core (profiling is native-only)
+        #[cfg(feature = "native")]
+        let _s = crate::profiling::span("vocab.init");
+        crate::vocab_gen::baked()
+    })
 }
 
 impl Vocab {

@@ -11,3 +11,8 @@ path = "src/main.rs"
 kernel = { path = "../kernel" }
 serde_json = { version = "1", features = ["preserve_order"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+# the profile test builds its own one-table graph rather than reading the
+# owner's — the same bundled sqlite the kernel already links
+[dev-dependencies]
+rusqlite = { version = "0.40", features = ["bundled"] }

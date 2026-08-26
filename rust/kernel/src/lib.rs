@@ -13,6 +13,8 @@ pub mod change;
 #[cfg(feature = "native")]
 pub mod feed;
 pub mod model;
+#[cfg(feature = "native")]
+pub mod profiling;
 pub mod query;
 #[cfg(feature = "native")]
 pub mod search;
