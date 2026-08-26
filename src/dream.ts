@@ -15,7 +15,7 @@
 // session of its own — its run-record is telemetry, its output the graph
 // edits. SERVER-ONLY (imports db). The model call is injectable so tests never
 // spawn a provider (like recall.ts's recallFn).
-import { apply, db, human, touch } from './db.ts'
+import { apply, db, human, locate, touch } from './db.ts'
 import { type Change, uuid } from './types.ts'
 import { dispatch, trace } from './effects.ts'
 import { record as telemetry } from './telemetry.ts'
@@ -29,6 +29,7 @@ import { rowsFor } from './graph_query.ts'
 import { normalize } from './heal.ts'
 import { embed, FLOOR, similar, textOf } from './embed.ts'
 import { HARD_SCOPE, type HygieneResult, hygieneSweep } from './hygiene.ts'
+import type { SystemSpec, SystemTuning } from './roles.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -48,6 +49,28 @@ let iso = (ms: number) => new Date(ms).toISOString()
 // without a code edit (the complete.ts / heal.ts FIXER way).
 export let CADENCE = Number(Deno.env.get('TASKS_DREAM_CADENCE_MS')) || DAY // 24h
 export let DREAM_MODEL = Deno.env.get('TASKS_DREAM_MODEL') || 'gpt-5.6-luna'
+
+// The dream as a SYSTEM ROLE (T-18730): on/off and the cadence live as graph
+// data on a role entity aliased `dream` — state != running pauses every
+// venture's combs (a fired knock is consumed, nothing re-arms; turning the
+// role back on re-seeds via the sweep), cooldown (seconds) overrides the
+// CADENCE env between combs, quiet is the seed delay for an unwoken dream.
+// Absent row = these code defaults, exactly the pre-port behavior. The
+// per-venture dream entities keep their own scope + floor cursors.
+export let DREAM_TUNING: SystemTuning = { quiet: 1, cooldown: CADENCE / 1000 }
+
+let dreamTuning = (): { cadenceMs: number; off: boolean } => {
+  let eid = locate(db, 'dream')
+  let row = eid
+    ? db.prepare(
+      `select state, cooldown from role where ${OWNED}`,
+    ).get(eid) as { state: string; cooldown: number | null } | undefined
+    : undefined
+  return {
+    cadenceMs: Number(row?.cooldown ?? DREAM_TUNING.cooldown) * 1000,
+    off: !!row && row.state != 'running',
+  }
+}
 
 // A transcript is bounded by the model's context — a marathon session's whole
 // log won't fit, and the tail is where the meta lives (what the doer reached
@@ -538,7 +561,11 @@ let rearm = (to: string, cast: Cast) => {
   let w = uuid()
   let t = trace()
   let out = apply(db, [
-    { eid: w, name: 'wake', comp: { at: iso(Date.now() + CADENCE) } },
+    {
+      eid: w,
+      name: 'wake',
+      comp: { at: iso(Date.now() + dreamTuning().cadenceMs) },
+    },
     { eid: w, name: 'deliver', comp: { to } },
   ], t)
   cast(out)
@@ -558,6 +585,13 @@ export let dreamComb =
     let to = toOf(eid)
     let d = dreamOf(to)
     if (!d) return // not a dream knock — abstain
+    // The dream role is off: consume the knock (the wake did fire) but comb
+    // nothing and re-arm nothing — the role's sweep re-seeds every venture
+    // when the owner turns it back on (T-18730).
+    if (dreamTuning().off) {
+      delivered(eid, 'dream off', cast)
+      return
+    }
     delivered(eid, 'dream comb', cast)
     let at = Date.now()
     try {
@@ -623,3 +657,37 @@ export let unwoken = (): string[] =>
      where not exists (select 1 from wake join deliver dv on dv.entity = wake.entity
        where dv."to" = dr.entity and ${PENDING('wake')})`,
   ).all() as { eid: string }[]).map((r) => r.eid)
+
+// The role's reconcile (T-18730): what the boot-only seed did once, the system
+// tick does continuously — every dream with no pending cadence wake is seeded
+// (a fresh dream, one whose wake fired-and-consumed while the server was down,
+// or every venture's when the role turns back on). quiet is the seed delay;
+// the wake's created effect arms the server's one timer.
+export let dreamRun = (
+  t: SystemTuning,
+  cast: Cast,
+): { reason: string; observed?: string } => {
+  let dreams = unwoken()
+  let seeded: string | undefined
+  let n = 0
+  for (let d of dreams) {
+    let seed = seedWake(d, iso(Date.now() + t.quiet * 1000))
+    if (!seed.length) continue
+    land(seed, cast)
+    seeded = seed[0].eid
+    n++
+  }
+  return n
+    ? { reason: `seeded ${n} unwoken dreams`, observed: seeded }
+    : { reason: 'every dream is armed' }
+}
+
+// The registration server.ts hands roles.ts: the dream IS the system role
+// aliased `dream` — mint a role row on that alias to pause it (state !=
+// running) or retune the cadence (cooldown, seconds); absent, the code
+// defaults above hold and every venture combs on the env CADENCE.
+export let DREAM_ROLE: SystemSpec = {
+  alias: 'dream',
+  defaults: DREAM_TUNING,
+  run: dreamRun,
+}

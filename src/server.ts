@@ -75,7 +75,7 @@ import { closingTask } from './closing.ts'
 import { unblocking } from './unblock.ts'
 import { knocked } from './knock.ts'
 import { waking } from './wake.ts'
-import { DREAM_PENDING, dreamComb, seedWake, unwoken } from './dream.ts'
+import { DREAM_PENDING, DREAM_ROLE, dreamComb } from './dream.ts'
 import {
   fleetApi,
   fleetRaw,
@@ -2284,19 +2284,9 @@ reapLeases(cast)
 // synchronous loop). A rejection nobody handles ends the process, so .catch.
 standingBackfill(cast).catch((e) => console.warn('standing backfill —', e))
 
-// Self-start each dream that has no pending wake — a fresh dream, or one whose
-// cadence wake fired-and-consumed while the server was down (a dream re-arms at
-// each run's end, so this only fills the gaps). Near-term, so the first comb
-// runs shortly after boot; the wake's created effect arms the one timer.
-for (let d of unwoken()) {
-  let seed = seedWake(d)
-  if (seed.length) {
-    let t = trace()
-    let out = apply(db, seed, t)
-    cast(out)
-    dispatch(out, t)
-  }
-}
+// Dreams with no pending wake are seeded by the dream system role's sweep
+// (T-18730, registered below) — the system tick's boot run covers what the
+// boot-only loop here did, and keeps covering it every tick thereafter.
 
 // The file-first Sessions that ended before live ingestion are no longer
 // bulk-imported at boot (T-16822's sweep, retired in T-17797): they resolve as
@@ -2447,6 +2437,9 @@ registerSystem(SCRIBE)
 // The fixer rides the same seam (T-18729): its cap/cooldown/mute are role
 // data on the `fixer` alias, and its sweep re-drives gated bugs continuously.
 registerSystem(FIXER_ROLE)
+// So does the dream (T-18730): pause/cadence are role data on the `dream`
+// alias, and its sweep seeds every unwoken dream — at boot and thereafter.
+registerSystem(DREAM_ROLE)
 tick('system', () => systemSweep(cast), 10 * 60_000)
 
 // Embeddings (embed.ts): every non-comment doc keeps a semantic vector,

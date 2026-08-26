@@ -9,6 +9,7 @@ let {
   advance,
   considerChanges,
   dreamComb,
+  dreamRun,
   findingKey,
   namesResolved,
   nearestMemory,
@@ -501,3 +502,64 @@ slow(
     assertEquals(considers.n, 1)
   },
 )
+
+// ——— T-18730: the dream as a system role — seeding sweep, pause as role data ———
+
+Deno.test('dreamRun seeds every unwoken dream, then reports all armed', () => {
+  let p = proj('Sweep venture')
+  let d = dreamEnt(p, ago(30))
+  let out = dreamRun({ quiet: 1, cooldown: 60 }, noop)
+  assertEquals(out.reason.startsWith('seeded '), true)
+  assertEquals(unwoken().includes(d), false) // now armed
+  // nothing left unwoken — the next pass says so
+  assertEquals(dreamRun({ quiet: 1, cooldown: 60 }, noop), {
+    reason: 'every dream is armed',
+  })
+})
+
+Deno.test('a stopped dream role consumes a knock without combing or re-arming', async () => {
+  let role = uid()
+  apply(db, [
+    { eid: role, name: 'doc', comp: { title: 'dream', body: '' } },
+    { eid: role, name: 'alias', comp: { slug: 'dream' } },
+    {
+      eid: role,
+      name: 'role',
+      comp: { state: 'stopped', surface: 'native' },
+    },
+  ])
+  try {
+    let p = proj('Paused venture')
+    let f0 = ago(30)
+    let d = dreamEnt(p, f0)
+    let s = sess(p, ago(2))
+    msg(s.eid, 'work that would have been combed')
+    let k = knock(d)
+    let combed = false
+    let fake = () => {
+      combed = true
+      return Promise.resolve(null)
+    }
+    await dreamComb(noop, fake as never)(k)
+    // The knock is consumed — delivered, via the off stamp — but no model ran,
+    // the floor did not move, and no cadence wake re-armed.
+    let via = db.prepare(
+      `select via from delivered
+        where entity = (select id from entity where eid = ?)`,
+    ).get(k) as { via: string } | undefined
+    assertEquals(via?.via, 'dream off')
+    assertEquals(combed, false)
+    let floor = (db.prepare(
+      `select floor from dream
+        where entity = (select id from entity where eid = ?)`,
+    ).get(d) as { floor: string }).floor
+    assertEquals(floor, f0)
+    let wake = db.prepare(
+      `select 1 from wake w join deliver dv on dv.entity = w.entity
+        where dv."to" = (select id from entity where eid = ?)`,
+    ).get(d)
+    assertEquals(!!wake, false)
+  } finally {
+    apply(db, [{ eid: role, name: 'entity', comp: null }])
+  }
+})
