@@ -13,20 +13,38 @@
 //
 // Detection: a real request to /providers (not just "is the port open"), plus
 // pid-churn flap detection — a crash-looping server answers intermittently and
-// its listening pid changes every few seconds, which reads as `crashloop`, not
-// `healthy`. Alerts fire on state TRANSITION (healthy→trouble, →recovery) and
-// then only every REMINDER ms while trouble persists, so a long outage doesn't
-// page every run. Exit 0 only when healthy, so the run is itself deadman-
-// stampable.
+// its listening pid changes every few seconds. Churn ALONE is not trouble:
+// since the bind-last reload (efd8236) a healthy deploy changes the pid while
+// every probe keeps answering 200, so `crashloop` requires churn AND at least
+// one failed check in the window. Alerts fire on state TRANSITION
+// (healthy→trouble, →recovery) and then only every REMINDER ms while trouble
+// persists, so a long outage doesn't page every run. Exit 0 only when healthy,
+// so the run is itself deadman-stampable.
+//
+// Heartbeat / deadman: every run rewrites STATE and prints one line to stderr
+// (cron appends it to ~/.tasks/graph-watchdog.log). STATE's mtime older than
+// ~5 min therefore means the WATCHDOG itself stopped running — that mtime is
+// the deadman check; there is deliberately no second watchdog watching this one.
+// Every page attempt is appended to SENDS with the Cloudflare message-id or
+// the error, so "did it page?" is answerable after the fact.
+//
+// `--test-page` sends one clearly-marked test page and exits — the on-demand
+// proof that the delivery path works end to end.
 
 let PORT = Deno.env.get('GRAPH_WATCHDOG_PORT') ?? '5173'
 let URL = Deno.env.get('GRAPH_WATCHDOG_URL') ??
   `http://127.0.0.1:${PORT}/providers`
 let STATE = Deno.env.get('GRAPH_WATCHDOG_STATE') ??
   `${Deno.env.get('HOME')}/.tasks/graph-watchdog.json`
+let SENDS = Deno.env.get('GRAPH_WATCHDOG_SENDS') ??
+  `${Deno.env.get('HOME')}/.tasks/graph-watchdog-sends.log`
 let ENV_FILE = '/home/yaks/code/holdco/.env'
 let OWNER = 'jeff@yak.sh'
-let FROM = 'graph-watchdog@bot.yak.sh'
+// task@bot.yak.sh is the fleet's PROVEN sender (delivery receipts on record);
+// graph-watchdog@bot.yak.sh was silently dropped — 19 pages accepted by the
+// API during the 2026-08-25 outages, none delivered. The name label keeps the
+// watchdog identifiable in the inbox; the address is the one that arrives.
+let FROM = 'task@bot.yak.sh'
 
 let WINDOW = 6 // checks kept for cross-run flap detection
 let FLAP_PIDS = 3 // ≥ this many distinct listening pids in the window = churn
@@ -50,15 +68,17 @@ export type State = {
 // PURE. Classify recent checks. `crashloop` wins over `down`/`healthy` because
 // a flapping server produces a mix of successes, failures, and changing pids —
 // and that instability, not a clean silence, is the thing hardest to notice by
-// eye. `flapped` is intra-run pid churn (fast signal); FLAP_PIDS is cross-run
-// churn (slow signal); either trips it.
+// eye. But churn alone is a DEPLOY, not a crash: bind-last reloads change the
+// pid while every probe stays 200, so crashloop requires a churn signal
+// (`flapped` intra-run, or FLAP_PIDS distinct pids cross-run) AND at least one
+// failed check in the same window.
 export let classify = (history: Check[]): Health => {
   let recent = history.slice(-WINDOW)
   if (recent.length === 0) return 'healthy'
   let pids = new Set(recent.filter((c) => c.pid != null).map((c) => c.pid))
-  if (recent.some((c) => c.flapped) || pids.size >= FLAP_PIDS) {
-    return 'crashloop'
-  }
+  let churn = recent.some((c) => c.flapped) || pids.size >= FLAP_PIDS
+  let failed = recent.some((c) => !c.ok)
+  if (churn && failed) return 'crashloop'
   let tail = recent.slice(-DOWN_N)
   if (tail.length >= DOWN_N && tail.every((c) => !c.ok)) return 'down'
   return 'healthy' // a single failed check is an unconfirmed blip, not yet down
@@ -177,12 +197,32 @@ let alertText = (kind: string, c: Check): { subject: string; body: string } => {
   }
 }
 
+// One line per send attempt — timestamp, kind, and message-id or error — so
+// "did it page?" is answerable from SENDS after the fact. Never throws: the
+// log must not break the page.
+let logSend = (kind: string, outcome: string) => {
+  try {
+    Deno.writeTextFileSync(
+      SENDS,
+      `${new Date().toISOString()} ${kind} ${outcome}\n`,
+      { append: true },
+    )
+  } catch (e) {
+    console.error(`graph-watchdog: cannot write ${SENDS}: ${e}`)
+  }
+}
+
 // Inlined Cloudflare Email Sending — deliberately NOT imported from src/mailer.ts
 // so a broken src/ can't disarm the alarm. Text + a minimal html part, matching
-// the payload shape mailer.ts uses.
-let page = async (kind: string, c: Check): Promise<void> => {
+// the payload shape mailer.ts uses. Returns the message-id; logs every attempt.
+let page = async (
+  kind: string,
+  c: Check,
+  subjectPrefix = '',
+): Promise<string> => {
   let cfg = creds()
   if (!cfg) {
+    logSend(kind, 'error: no creds')
     throw new Error(
       'no CLOUDFLARE_EMAIL_TOKEN / HOLDCO_CF_ACCOUNT_ID — cannot page',
     )
@@ -206,17 +246,23 @@ let page = async (kind: string, c: Check): Promise<void> => {
         from: { address: FROM, name: 'graph-watchdog' },
         to: [OWNER],
         reply_to: FROM,
-        subject,
+        subject: `${subjectPrefix}${subject}`,
         text: body,
         html: `<pre>${esc(body)}</pre>`,
       }),
     },
   )
   if (!res.ok) {
-    throw new Error(
-      `page failed (HTTP ${res.status}): ${(await res.text()).slice(0, 200)}`,
-    )
+    let err = `HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`
+    logSend(kind, `error: ${err}`)
+    throw new Error(`page failed (${err})`)
   }
+  let id = ''
+  try {
+    id = (await res.json())?.result?.message_id ?? ''
+  } catch { /* accepted but unparsable — the log still records the accept */ }
+  logSend(kind, id || 'accepted (no message_id in response)')
+  return id
 }
 
 let load = (): State => {
@@ -236,6 +282,13 @@ let save = (s: State) => {
 }
 
 let main = async () => {
+  // The on-demand delivery proof: send one clearly-marked page and exit.
+  if (Deno.args.includes('--test-page')) {
+    let c = await probe()
+    let id = await page('recovery', c, '[watchdog test — ignore] ')
+    console.error(`graph-watchdog: test page sent, message_id=${id}`)
+    Deno.exit(0)
+  }
   let state = load()
   let check = await probe()
   let history = [...state.history, check].slice(-WINDOW * 2)

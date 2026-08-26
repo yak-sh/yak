@@ -29,13 +29,20 @@ Deno.test('classify: one failed check is an unconfirmed blip, not down', () => {
   assertEquals(classify([chk(false, 100)]), 'healthy')
 })
 
-Deno.test('classify: pid churn across runs is crashloop even with some 200s', () => {
+Deno.test('classify: pid churn plus failures is crashloop', () => {
   let h = [chk(true, 1), chk(false, 2), chk(true, 3)]
-  assertEquals(classify(h), 'crashloop') // 3 distinct pids in window
+  assertEquals(classify(h), 'crashloop') // 3 distinct pids AND a failed check
 })
 
-Deno.test('classify: intra-run flap is crashloop immediately', () => {
-  assertEquals(classify([chk(true, 7, true)]), 'crashloop')
+Deno.test('classify: pid churn with all 200s is deploys, not crashloop', () => {
+  // bind-last reloads change the pid while every probe answers — healthy
+  assertEquals(classify([chk(true, 1), chk(true, 2), chk(true, 3)]), 'healthy')
+  assertEquals(classify([chk(true, 7, true)]), 'healthy') // clean intra-run swap
+})
+
+Deno.test('classify: intra-run flap plus a failure is crashloop', () => {
+  assertEquals(classify([chk(false, 7, true)]), 'crashloop')
+  assertEquals(classify([chk(true, 7, true), chk(false, 7)]), 'crashloop')
 })
 
 Deno.test('classify: stable pid, all healthy, is healthy', () => {
