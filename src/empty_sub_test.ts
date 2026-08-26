@@ -1,0 +1,94 @@
+// An empty-query subscription is refused (server.ts control()): the answer is
+// never match-all — on the live graph that stages every entity and ships tens
+// of MB. A route sub keeps its name-scoped answer; every other empty sub gets
+// a loud, settling empty replace carrying the refusal.
+
+import { assert, assertEquals } from '@std/assert'
+import { slow } from './testing.ts'
+
+Deno.env.set('DB_PATH', ':memory:')
+
+let U = ''
+if (Deno.env.get('TASKS_SLOW')) {
+  let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
+  let port = (seat.addr as Deno.NetAddr).port
+  seat.close()
+  Deno.env.set('PORT', String(port))
+  await import('./server.ts')
+  U = `127.0.0.1:${port}`
+}
+let alone = { sanitizeOps: false, sanitizeResources: false }
+let uid = () => crypto.randomUUID()
+
+type Frame = {
+  sub?: string
+  changes?: unknown[]
+  replace?: boolean
+  error?: string
+}
+
+let dial = async () => {
+  let sock = new WebSocket(`ws://${U}/ws`)
+  let queue: Frame[] = []
+  let waiters: ((f: Frame) => void)[] = []
+  sock.onmessage = (m) => {
+    let f = JSON.parse(String(m.data)) as Frame
+    if (!f.sub) return
+    let w = waiters.shift()
+    w ? w(f) : queue.push(f)
+  }
+  await new Promise((r) => sock.onopen = r)
+  let next = () =>
+    queue.length
+      ? Promise.resolve(queue.shift()!)
+      : new Promise<Frame>((r) => waiters.push(r))
+  return { sock, next }
+}
+
+slow(
+  'an empty-query sub is refused with a settling empty replace',
+  alone,
+  async () => {
+    let { sock, next } = await dial()
+    sock.send(JSON.stringify({ sub: 'board:nope', q: '' }))
+    let f = await next()
+    assertEquals(f.sub, 'board:nope')
+    assertEquals(f.changes, [])
+    assertEquals(f.replace, true)
+    assert(f.error?.includes('empty query refused'))
+    sock.close()
+  },
+)
+
+slow(
+  'a route sub still answers its one entity with no query',
+  alone,
+  async () => {
+    let eid = uid()
+    let res = await fetch(`http://${U}/apply`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify([{ eid, name: 'doc', comp: { title: 'routed' } }]),
+    })
+    await res.text()
+    assertEquals(res.status, 200)
+    let { sock, next } = await dial()
+    sock.send(JSON.stringify({ sub: `route:${eid}`, q: '' }))
+    let f = await next()
+    assertEquals(f.sub, `route:${eid}`)
+    assertEquals(f.error, undefined)
+    let eids = new Set((f.changes as { eid: string }[]).map((c) => c.eid))
+    assertEquals(eids, new Set([eid]))
+    sock.close()
+  },
+)
+
+slow('a filtered sub still answers normally', alone, async () => {
+  let { sock, next } = await dial()
+  sock.send(JSON.stringify({ sub: 'board:tasks', q: '.task!' }))
+  let f = await next()
+  assertEquals(f.sub, 'board:tasks')
+  assertEquals(f.error, undefined)
+  assertEquals(f.replace, true)
+  sock.close()
+})

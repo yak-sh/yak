@@ -586,6 +586,29 @@ let control = (
     // later create ADDs it). A query sub evaluates its filter as before.
     let route = f.sub.startsWith('route:') ? f.sub.slice('route:'.length) : null
     let details = route != null || f.sub.startsWith('entries:')
+    // An empty query is NEVER a match-all: on this graph that answer stages
+    // every live entity (seconds of blocked event loop) and ships tens of MB
+    // to one socket — the Everything-board mount measured 32s wall. Only a
+    // route sub may omit its query (its name scopes it to one entity); any
+    // other empty sub is refused loudly with a settling empty frame, so the
+    // client's set goes live-and-empty instead of hanging on a reply.
+    if (route == null && !(f.q ?? '').trim()) {
+      console.warn(
+        `sub refused — empty query would match the whole graph:`,
+        f.sub,
+      )
+      sock.send(JSON.stringify({
+        sub: f.sub,
+        changes: [],
+        drop: [],
+        replace: true,
+        cursor: cursorOf(db),
+        shadow: !!f.shadow,
+        error:
+          'empty query refused — a subscription never matches the whole graph',
+      }))
+      return
+    }
     let { preds, hits } = route != null
       ? { preds: [], hits: rowsFor(route) }
       : evalFast(db, f.q ?? '', details) ?? evalQuery(db, f.q ?? '')

@@ -1816,7 +1816,10 @@ export let routeSub = (eid: string) => {
   let sub = `route:${eid}`
   let n = routeUses.get(sub) ?? 0
   routeUses.set(sub, n + 1)
-  if (!n) ownBoard(sub, '')
+  // The scope rides in the name (the server answers that one entity), but the
+  // query says it explicitly too — an empty q is refused server-side, never a
+  // silent match-all.
+  if (!n) ownBoard(sub, `id=${eid}`)
   return () => {
     let held = (routeUses.get(sub) ?? 1) - 1
     if (held > 0) return void routeUses.set(sub, held)
@@ -1946,6 +1949,15 @@ let land = async (data: unknown, mode: Land) => {
   }
   if (!data || typeof data != 'object') return
   let frame = data as Partial<Live & Catchup & Reset & Sub>
+  // A refused SUBSCRIPTION (empty query, server.ts control()) still carries
+  // its sub and an empty replace: land it through the sub arm so the set
+  // settles live-and-empty, and keep the refusal loud without raising the
+  // global problem banner a rejected WRITE earns.
+  if (frame.error && typeof frame.sub == 'string') {
+    console.warn(`sub ${frame.sub} refused —`, frame.error)
+    landSub(frame as Sub)
+    return
+  }
   if (frame.error) {
     // A rejected batch comes back with the authoritative state of the eids it
     // touched (server.ts correct()) — apply it to undo the optimistic write.
