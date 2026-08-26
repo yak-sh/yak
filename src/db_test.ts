@@ -2006,7 +2006,7 @@ slow(
     // showMd: the stamped outcome renders, derived from comps + stamped
     let all = rows(snap)
     let row = all.find((r) => r.eid == t)!
-    assertMatch(showMd(snap, all, row), /opened\.by: /)
+    assertMatch(showMd(snap, all, row), /opened:\n( {2}.+\n)* {2}by: /)
     // MCP/CLI grammar teaches each as a tag comp
     for (let n of ['notified', 'opened', 'archived', 'quarantined']) {
       assertMatch(GRAMMAR, new RegExp(`${n}: \\(tag\\)`))

@@ -2695,13 +2695,17 @@ Deno.test('showMd: frontmatter, edge sentences, claim holder, body', () => {
   }
   let md = showMd(snap, all, typed)
   assertMatch(md, /^---\nid: T-2\nkind: task\n/)
-  assertMatch(md, /status: wip/)
-  assertMatch(md, /priority: P0/)
-  assertMatch(md, /verified: true/)
+  // the spine renders as a comp: raw eid + num under entity:
+  assertMatch(md, new RegExp(`entity:\n {2}eid: ${T1}\n {2}num: `))
+  // comps serialize nested — no flattened task.status/priority lines
+  assertMatch(md, /task:\n {2}status: wip\n {2}priority: P0/)
+  assertEquals(md.includes('task.status:'), false)
+  assertMatch(md, /mail:\n {2}verified: true/)
   assertMatch(md, /claim: sess-x/) // the holder's session id, not an eid
   assertMatch(md, /requires:\n {2}- T-3 \(open\) — Second/)
   assertMatch(md, /# First/)
-  assertEquals(md.includes('aaaaaaaa'), false) // no uuid reaches the reader
+  // the entity block is the ONE place a uuid reaches the reader
+  assertEquals(md.split('aaaaaaaa').length, 2)
   assertEquals(JSON.parse(JSON.stringify(typed)).comps.mail.verified, 1)
   let back = showMd(snap, all, by(T2))
   assertMatch(back, /referenced by:\n {2}- T-2 \(wip\) — First · requires this/)

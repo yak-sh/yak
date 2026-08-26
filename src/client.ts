@@ -3485,26 +3485,33 @@ export let showMd = (snap: { deps: Dep[] }, all: Row[], row: Row) => {
     }`
   }
   let fm = [`id: ${idOf(row)}`, `kind: ${row.kind}`]
+  // The spine is a comp like any other: the raw eid + server-minted num,
+  // nested under entity:. The id: line above stays — it's the derived
+  // identity people actually use.
+  let spine = row.comps.entity
+  if (spine?.eid) {
+    fm.push('entity:', `  eid: ${spine.eid}`)
+    if (spine.num != null) fm.push(`  num: ${spine.num}`)
+  }
   for (let [comp, props] of Object.entries(comps)) {
     // doc is the document below; a claim reads better as its holder line
     if (comp == 'doc' || comp == 'claim' || !row.comps[comp]) continue
     // Stamped columns render too — the OUTCOME (acted_at, to_addr,
     // frozen_at) is the half a reader came for; only the wire refuses
     // them, not the page.
+    // Frontmatter IS the comps, serialized: every comp a nested block keyed
+    // by its column names. id/kind (identity), claim (another entity's), and
+    // edges are the only lines that aren't a comp.
     let values: string[] = []
     for (let prop of Object.keys({ ...props, ...stamped[comp] })) {
       let v = row.comps[comp][prop]
       if (v == null || v === '') {
         // A missing memory scope is a fleet-wide choice, not missing data.
-        if (comp == 'memory' && prop == 'scope') fm.push('scope: shared')
+        if (comp == 'memory' && prop == 'scope') values.push('  scope: shared')
         continue
       }
       let p = propAt(comp, prop)!
-      let key = p.name
-      let face = formatProp(p, v, { describe: said })
-      if (['created', 'updated', 'proposed', 'decided'].includes(comp)) {
-        values.push(`  ${prop}: ${face}`)
-      } else fm.push(`${key}: ${face}`)
+      values.push(`  ${prop}: ${formatProp(p, v, { describe: said })}`)
     }
     if (values.length) fm.push(`${comp}:`, ...values)
   }
