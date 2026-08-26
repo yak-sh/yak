@@ -7,6 +7,7 @@ pub mod query;
 pub mod search;
 pub mod store;
 pub mod vocab;
+mod vocab_gen;
 
 pub use store::{Dep, Row, Rows, Store};
 pub use vocab::{vocab, PropType, Vocab};

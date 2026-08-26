@@ -1,15 +1,11 @@
-// The vocabulary, read from the contract the TOML manifests compose. The
-// embedded artifact is src/vocab/fixture.json — the codegen's own assembled
-// output (T-22531), so Rust and TS read one source. Embedded at COMPILE time:
-// a stale binary carries a stale vocabulary, the same trade every compiled
-// client makes; the kernel's vocab-table diff (D-22530 §2) is the eventual
-// guard.
+// The vocabulary, generated from the contract the TOML manifests compose
+// (src/vocab/*.toml → vocab_gen.rs, T-22547). Native Rust data baked at
+// COMPILE time — no runtime parse; a stale binary carries a stale
+// vocabulary, the same trade every compiled client makes. The kernel's
+// vocab-table diff (D-22530 §2) is the eventual guard.
 
-use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::OnceLock;
-
-const FIXTURE: &str = include_str!("../../../src/vocab/fixture.json");
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PropType {
@@ -27,37 +23,6 @@ pub enum PropType {
 }
 
 impl PropType {
-    fn parse(v: &Value) -> PropType {
-        match v {
-            Value::String(s) => match s.as_str() {
-                "body" => PropType::Body,
-                "number" => PropType::Number,
-                "priority" => PropType::Priority,
-                "bool" => PropType::Bool,
-                "time" => PropType::Time,
-                "url" => PropType::Url,
-                "query" => PropType::Query,
-                _ => PropType::Text,
-            },
-            Value::Object(o) => {
-                if let Some(e) = o.get("enum") {
-                    PropType::Enum(
-                        e.as_array().unwrap_or(&vec![])
-                            .iter()
-                            .filter_map(|x| x.as_str().map(String::from))
-                            .collect(),
-                    )
-                } else if let Some(t) = o.get("eid") {
-                    PropType::Eid(t.as_str().unwrap_or("entity").into())
-                } else if let Some(t) = o.get("text") {
-                    PropType::Well(t.as_str().unwrap_or("").into())
-                } else {
-                    PropType::Text
-                }
-            }
-            _ => PropType::Text,
-        }
-    }
     pub fn is_ref(&self) -> bool {
         matches!(self, PropType::Eid(_))
     }
@@ -71,52 +36,13 @@ pub struct Vocab {
     pub kind_order: Vec<String>,
     pub prefix: HashMap<String, String>,
     pub statuses: Vec<String>,
-}
-
-fn cols(v: &Value) -> Vec<(String, PropType)> {
-    v.as_object()
-        .map(|o| {
-            o.iter()
-                .map(|(k, t)| (k.clone(), PropType::parse(t)))
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-fn strings(v: &Value) -> Vec<String> {
-    serde_json::from_str::<Vec<String>>(v.as_str().unwrap_or("[]"))
-        .unwrap_or_default()
+    // Old spellings that still resolve — the compatibility promise in data.
+    pub renames: Vec<(String, String)>,
 }
 
 pub fn vocab() -> &'static Vocab {
     static V: OnceLock<Vocab> = OnceLock::new();
-    V.get_or_init(|| {
-        let root: Map<String, Value> =
-            serde_json::from_str(FIXTURE).expect("fixture.json parses");
-        let obj = |k: &str| -> Map<String, Value> {
-            serde_json::from_str(root[k].as_str().unwrap_or("{}"))
-                .unwrap_or_default()
-        };
-        let comps = obj("comps")
-            .iter()
-            .map(|(k, v)| (k.clone(), cols(v)))
-            .collect();
-        let stamped = obj("stamped")
-            .iter()
-            .map(|(k, v)| (k.clone(), cols(v)))
-            .collect();
-        let prefix = obj("prefix")
-            .iter()
-            .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.into())))
-            .collect();
-        Vocab {
-            comps,
-            stamped,
-            kind_order: strings(&root["kindOrder"]),
-            prefix,
-            statuses: strings(&root["statuses"]),
-        }
-    })
+    V.get_or_init(crate::vocab_gen::baked)
 }
 
 impl Vocab {
@@ -200,5 +126,14 @@ mod tests {
         assert!(v.prop_type("task", "project").unwrap().is_ref());
         assert_eq!(v.id_of("task", "x", Some(3)), "T-3");
         assert_eq!(v.id_of("entity", "abcdef1234", None), "abcdef12");
+    }
+
+    #[test]
+    fn renames_ride_the_contract() {
+        let v = vocab();
+        assert!(v
+            .renames
+            .iter()
+            .any(|(from, to)| from == "view:Show" && to == "Full"));
     }
 }

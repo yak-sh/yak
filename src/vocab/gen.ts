@@ -349,6 +349,97 @@ export let emit = (a: ReturnType<typeof assemble>): string => {
   return out.join('\n')
 }
 
+// ---- emit (Rust) ----------------------------------------------------------
+// The kernel crate's vocabulary (T-22547): the same assembled contract,
+// emitted as a `baked()` constructor for vocab::Vocab — native Rust data,
+// no runtime JSON parse. Enum references resolve to their value lists here
+// (the manifests are the only place names exist); aliases are a wire-side
+// concern and do not ride into Rust, matching the fixture-parse behavior
+// this replaces.
+
+let rq = (s: string) => `"${s.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
+
+let rustProp = (t: ColSpec, enums: Record<string, { values: string[] }>) => {
+  if (typeof t == 'string') {
+    let named: Record<string, string> = {
+      body: 'Body',
+      number: 'Number',
+      priority: 'Priority',
+      bool: 'Bool',
+      time: 'Time',
+      url: 'Url',
+      query: 'Query',
+    }
+    return `PropType::${named[t] ?? 'Text'}`
+  }
+  if ('eid' in t) return `PropType::Eid(${rq(t.eid)}.into())`
+  if ('well' in t) return `PropType::Well(${rq(t.well)}.into())`
+  if ('enum' in t) {
+    let values = typeof t.enum == 'string'
+      ? enums[t.enum]?.values ?? refuse(`unknown enum '${t.enum}'`)
+      : t.enum
+    let list = values.map((v) => `${rq(v)}.into()`).join(', ')
+    return `PropType::Enum(vec![${list}])`
+  }
+  return refuse(`unrecognized column spec ${JSON.stringify(t)}`)
+}
+
+export let emitRust = (a: ReturnType<typeof assemble>): string => {
+  let out: string[] = []
+  out.push(
+    '// GENERATED from src/vocab/*.toml — edit the manifests, then run',
+    "// `deno task codegen`. Hand edits here are refused by the gate's",
+    '// stale check (`deno task codegen --check`). One contract, three',
+    '// faces: types.ts, fixture.json, and this module.',
+    '',
+    'use crate::vocab::{PropType, Vocab};',
+    'use std::collections::HashMap;',
+    '',
+    'pub(crate) fn baked() -> Vocab {',
+  )
+  let colsRust = (cols: Record<string, ColSpec>) => {
+    let rows = Object.entries(cols).map(([k, t]) =>
+      `            (${rq(k)}.into(), ${rustProp(t, a.enums)}),`
+    )
+    return rows.length ? `vec![\n${rows.join('\n')}\n        ]` : 'vec![]'
+  }
+  out.push('    let comps = vec![')
+  for (let name of a.compOrder) {
+    out.push(
+      `        (${rq(name)}.into(), ${colsRust(a.comps[name].cols ?? {})}),`,
+    )
+  }
+  out.push('    ];')
+  out.push('    let stamped = HashMap::from([')
+  for (let name of a.stampedOrder) {
+    out.push(
+      `        (${rq(name)}.into(), ${colsRust(a.comps[name].stamped ?? {})}),`,
+    )
+  }
+  out.push('    ]);')
+  out.push('    let prefix = HashMap::from([')
+  for (let name of a.compOrder) {
+    let p = a.comps[name].prefix
+    if (p) out.push(`        (${rq(name)}.into(), ${rq(p)}.into()),`)
+  }
+  out.push('    ]);')
+  let strVec = (xs: string[]) =>
+    `vec![${xs.map((x) => `${rq(x)}.into()`).join(', ')}]`
+  out.push(`    let kind_order = ${strVec(a.kindOrder)};`)
+  out.push(`    let statuses = ${strVec(a.enums.statuses.values)};`)
+  out.push('    let renames = vec![')
+  for (let k of Object.keys(a.renames).sort()) {
+    out.push(`        (${rq(k)}.into(), ${rq(a.renames[k])}.into()),`)
+  }
+  out.push('    ];')
+  out.push(
+    '    Vocab { comps, stamped, kind_order, prefix, statuses, renames }',
+    '}',
+    '',
+  )
+  return out.join('\n')
+}
+
 // ---- drive ----------------------------------------------------------------
 
 let loadManifests = (): Manifest[] => {
@@ -384,9 +475,13 @@ if (import.meta.main) {
   let fixture = JSON.stringify(capture(mod), null, 2) + '\n'
   await Deno.remove(tmp)
 
+  let rustTarget = `${dir}../../rust/kernel/src/vocab_gen.rs`
+  let rustBody = emitRust(assembled)
+
   let current = await Deno.readTextFile(target).catch(() => '')
   let currentFixture = await Deno.readTextFile(`${dir}fixture.json`)
     .catch(() => '')
+  let currentRust = await Deno.readTextFile(rustTarget).catch(() => '')
   if (check) {
     if (current != fresh) {
       console.error(
@@ -400,12 +495,22 @@ if (import.meta.main) {
       )
       Deno.exit(1)
     }
-    console.log('vocab: types.ts and fixture.json match the manifests')
+    if (currentRust != rustBody) {
+      console.error(
+        'rust/kernel/src/vocab_gen.rs is stale — run `deno task codegen`',
+      )
+      Deno.exit(1)
+    }
+    console.log(
+      'vocab: types.ts, fixture.json and vocab_gen.rs match the manifests',
+    )
   } else {
     await Deno.writeTextFile(target, fresh)
     await Deno.writeTextFile(`${dir}fixture.json`, fixture)
+    await Deno.writeTextFile(rustTarget, rustBody)
     console.log(
-      `vocab: wrote types.ts (${fresh.length} bytes) + fixture.json`,
+      `vocab: wrote types.ts (${fresh.length} bytes) + fixture.json + ` +
+        `vocab_gen.rs (${rustBody.length} bytes)`,
     )
   }
 }
