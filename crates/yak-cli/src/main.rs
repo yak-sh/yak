@@ -203,6 +203,21 @@ fn apply_cmd(args: &[String]) -> i32 {
         eprintln!("apply: a batch is an array of {{eid, name, comp}} changes");
         return 2;
     };
+    // T-22622 defense-in-depth: the bundled `yak` binary links its OWN SQLite
+    // build, so writing the live WAL file while the Deno server holds it is the
+    // cross-build multi-writer that corrupted the graph (C-22669). A proof or
+    // probe that forgets probe discipline must fail loudly here, not corrupt
+    // production. Write a COPY on a free port instead.
+    if yak_kernel::writes_live_graph(&db) {
+        eprintln!(
+            "refusing to open the live graph {db} for writing: the `yak` \
+             binary links a different SQLite build than the server, and two \
+             builds sharing one WAL corrupt it (T-22622). Copy the db to a \
+             scratch path and pass --db (or DB_PATH), or write over the wire \
+             (POST /apply)."
+        );
+        return 1;
+    }
     let store = match yak_kernel::WriteStore::open(&db) {
         Ok(s) => s,
         Err(e) => {

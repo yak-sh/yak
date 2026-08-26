@@ -18,13 +18,24 @@ exclude = ["*.ts"]
 # else — no async runtime, since a CLI read is one request answered before the
 # next line prints. ureq rides without default features on purpose: the wire
 # is `http://host:port` (client.ts host()), so TLS would be dead weight.
+#
+# `bundled` compiles SQLite IN. It is ON by default so the published crate and
+# the self-contained `yak` CLI stay dependency-free and portable. But a Rust
+# process that CO-WRITES a file a Deno process also opens (a future
+# write-capable service, D-22530) MUST NOT enable it: it depends on the kernel
+# with `default-features = false` + `["native", "remote"]` so rusqlite links
+# the SAME system libsqlite3 the Deno server links. Two SQLite BUILDS sharing
+# one WAL wal-index have no cross-build version guard and corrupt the graph —
+# that was the T-22622 corruption (C-22669). Same file, same build: the single
+# guarantee SQLite actually tests.
 [features]
-default = ["native", "remote"]
+default = ["native", "remote", "bundled"]
 native = ["dep:rusqlite", "dep:chrono", "dep:sha2", "dep:uuid"]
 remote = ["dep:ureq"]
+bundled = ["rusqlite/bundled"]
 
 [dependencies]
-rusqlite = { version = "0.40", features = ["bundled"], optional = true }
+rusqlite = { version = "0.40", optional = true }
 ureq = { version = "3", default-features = false, optional = true }
 serde_json = { version = "1", features = ["preserve_order"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"], optional = true }

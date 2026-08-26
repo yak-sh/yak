@@ -15,6 +15,12 @@ name = "yak"
 path = "src/main.rs"
 
 [dependencies]
+# The `yak` binary is self-contained and portable, so it takes the kernel's
+# default features — which include `bundled` SQLite. It is a READ CLI plus a
+# file-door `apply`; it never co-writes the live graph (its write door refuses
+# the live path, T-22622), so a bundled build is safe here. A write-capable
+# co-writer service would instead set default-features = false to link the
+# same system libsqlite3 the Deno server links.
 yak-kernel = { version = "0.1.1", path = "../yak-kernel" }
 serde_json = { version = "1", features = ["preserve_order"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }

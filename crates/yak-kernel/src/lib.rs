@@ -67,6 +67,33 @@ pub fn live_db() -> String {
     format!("{home}/.tasks/tasks.db")
 }
 
+// True when `target` names the SAME file as `live` — directly, by symlink, or
+// by a relative/`.`/`..` path that resolves to it. The comparison is pure over
+// its two inputs (no env), so the guard tests without an environment.
+//
+// The live file exists in production, so a target that will not canonicalize
+// is not it (`:memory:`, a scratch copy under a temp dir that was removed);
+// fall back to a plain string match only for the case the live file itself is
+// absent (a fresh box, the fast tier). This is the guard behind
+// `writes_live_graph`.
+#[cfg(feature = "native")]
+pub fn same_graph_file(target: &str, live: &str) -> bool {
+    match (std::fs::canonicalize(target), std::fs::canonicalize(live)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => target == live,
+    }
+}
+
+// Would opening `target` for writing land on the live graph? The bundled
+// binaries link their OWN SQLite build, so co-writing the live WAL file while
+// the Deno server holds it is the cross-build multi-writer that corrupted the
+// graph (T-22622 / C-22669). Every proof and probe must write a COPY on a free
+// port instead; this is the assertion that makes a forgetful one fail loudly.
+#[cfg(feature = "native")]
+pub fn writes_live_graph(target: &str) -> bool {
+    same_graph_file(target, &live_db())
+}
+
 // The default the whole fleet means by "the server" (client.ts host()).
 pub const DEFAULT_HOST: &str = "127.0.0.1:5173";
 
@@ -182,5 +209,43 @@ mod endpoint_tests {
             f(Some("/tmp/a.db"), Some("h:1"), true),
             Endpoint::Wire("h:1".into())
         );
+    }
+}
+
+// The live-write guard (T-22622): the same file by any path is the live file;
+// a sibling copy and `:memory:` are not.
+#[cfg(all(test, feature = "native"))]
+mod live_guard_tests {
+    use super::same_graph_file;
+    use std::io::Write;
+
+    #[test]
+    fn same_file_by_any_path_is_the_live_file() {
+        let dir = std::env::temp_dir().join(format!("liveguard-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join(".tasks")).unwrap();
+        let live = dir.join(".tasks/tasks.db");
+        std::fs::File::create(&live).unwrap().write_all(b"x").unwrap();
+        let live = live.to_str().unwrap();
+
+        // the exact path, and a `.`/`..` detour that resolves to it
+        assert!(same_graph_file(live, live));
+        let detour = dir.join(".tasks/../.tasks/tasks.db");
+        assert!(same_graph_file(detour.to_str().unwrap(), live));
+
+        // a symlink pointing at the live file
+        let link = dir.join("link.db");
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(live, &link).unwrap();
+            assert!(same_graph_file(link.to_str().unwrap(), live));
+        }
+
+        // a sibling copy is NOT the live file, nor is :memory:
+        let copy = dir.join(".tasks/copy.db");
+        std::fs::File::create(&copy).unwrap().write_all(b"x").unwrap();
+        assert!(!same_graph_file(copy.to_str().unwrap(), live));
+        assert!(!same_graph_file(":memory:", live));
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }
