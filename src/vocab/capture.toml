@@ -1,0 +1,15 @@
+# The capture plugin (D-22530 §8): frozen web pages (freeze.ts, page.ts).
+
+name = "capture"
+
+# An external page. The URL is what was pasted; the rendered thing is the
+# server's frozen archive of it (one self-contained HTML file on disk),
+# stamped frozen_at when ready — frozen_at is server-owned, never wire-set.
+[comps.web]
+rank = 130
+kind_rank = 70
+stamped_rank = 110
+[comps.web.cols]
+url = "url"
+[comps.web.stamped]
+frozen_at = "time"

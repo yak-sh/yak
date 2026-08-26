@@ -1,0 +1,160 @@
+# The work plugin (D-22530 §8): tasks, projects/ventures, boards, designs —
+# the portfolio vocabulary.
+
+name = "work"
+
+# The status vocabulary, in board-column order. 'cancelled' is authored,
+# not derived — nobody can derive "we changed our minds" — and not
+# deletion: deletion tombstones mistakes, cancellation preserves a
+# decision about real work, trail intact.
+[enums.statuses]
+rank = 10
+values = ["open", "wip", "done", "cancelled"]
+
+# A venture's lifecycle, from a glimmer to its end. `hold` and `paused` are
+# reversible stops — the venture remembers where it came from (hold_from,
+# paused_from) so unhold/unpause restores the phase; `shuttered` and
+# `killed` are terminal. Two verbs because a hold is operational (wait for
+# a blocker) and a pause is a deliberate rest of the work.
+[enums.ventureStates]
+rank = 80
+values = [
+  "incubating",
+  "idea",
+  "building",
+  "launching",
+  "live",
+  "hold",
+  "paused",
+  "shuttered",
+  "killed",
+]
+
+# How a venture is run: long-loop keeps a session alive across turns, cold
+# spawns fresh each time, cron wakes it on a schedule.
+[enums.ventureModes]
+rank = 90
+values = ["long-loop", "cold", "cron"]
+
+# A review is a comment with one of these verdicts. Input aliases keep the
+# operator verbs short; the graph stores only the settled words.
+[enums.verdicts]
+rank = 120
+values = ["approved", "rejected", "changes_requested"]
+
+[comps.task]
+rank = 20
+kind_rank = 20
+prefix = "T"
+[comps.task.cols]
+status = { enum = "statuses" }
+priority = "priority"
+project = { eid = "project", death = "detach" }
+# Whose PLATE this is — durable routing to any entity (a person, a project
+# standing in for its operator). Orthogonal to claim, which is who holds it
+# NOW; a dead assignee detaches, never takes the task.
+assignee = { eid = "entity", death = "detach" }
+domain = { well = "domains" } # free text; the graph suggests
+
+# color: the venture's tmux window colour, and whatever else comes to want
+# one. Any tmux colour spelling (`cyan`, `brightblue`, `colour45`,
+# `#5fafd7`). Empty means DERIVE it — roles.ts hashes the venture id over
+# the fleet palette.
+[comps.project]
+rank = 30
+kind_rank = 30
+prefix = "P"
+by_name = true
+[comps.project.cols]
+color = "text"
+
+# The project's checkout and public repository URL. `gate` names its one
+# complete test command; `push` is the venture's standing permission for
+# the projection to push what it commits — OFF by default, and off for
+# every repo the graph doesn't know, because a push to main deploys in some
+# ventures and an unknown repo must land on the harmless side.
+[comps.repo]
+rank = 40
+[comps.repo.cols]
+path = "text"
+url = "url"
+base_branch = "text"
+gate = "text"
+push = "bool"
+
+# A project's venture facet: lifecycle phase + operating config. A facet,
+# not an identity — a doc+project+venture is still a project, so it stays
+# out of kindOrder. The four names dodge bare dot-param collisions
+# (phase↚state, run_mode↚mode, agent_model↚model, operated_by↚operator,
+# site↚url) — venture access is always qualified `.venture.<col>`.
+# `paused_from`/`hold_from` remember the phase a reversible stop came from.
+# `run_mode`/`agent_model`/`operated_by` are an interim operator↔venture
+# binding — orchestration topology (T-8855/T-3906) subsumes them later.
+[comps.venture]
+rank = 50
+[comps.venture.cols]
+phase = { enum = "ventureStates" }
+paused_from = { enum = "ventureStates" }
+hold_from = { enum = "ventureStates" }
+run_mode = { enum = "ventureModes" }
+agent_model = "text"
+operated_by = "text"
+tagline = "text"
+site = "url"
+
+# A board is a saved filter over tasks (query.ts grammar); an empty query
+# selects NOTHING — a board that means "every task" says `.task!`.
+[comps.board]
+rank = 70
+kind_rank = 50
+prefix = "B"
+by_name = true
+[comps.board.cols]
+query = "query"
+
+# The thinking that precedes a build. A tag, because the doc already
+# carries the writing and the `proposed`/`decided` stamps already carry its
+# life. A state enum here would be a second vocabulary for a fact the graph
+# holds, and the two would drift. kind_rank ahead of task: a design is a
+# PROPOSAL — it may carry the same task facet yet stays a design until
+# decided, and never lands on a kind=task board.
+[comps.design]
+rank = 100
+kind_rank = 10
+
+# Marks a doc as architecture documentation — the graph's self-description
+# of what the system IS (root D-18438 + leaves, linked by `contains`). A
+# presence-only tag like `design`, but NOT in kindOrder: an architecture
+# doc is still a plain doc — the tag only lets `task docs` and filters find
+# them as a class.
+[comps.architecture]
+rank = 110
+
+# The BLOCK facet (D-17094): this task is stuck on something EXTERNAL — a
+# vendor, an owner decision, a registration — that has no entity, so a
+# `requires` edge can't name it. `on` is that free-text reason and rides
+# the WIRE; `since` is server-stamped, frozen on re-word. Orthogonal to
+# status — a task is blocked AND open/wip — so a facet, NOT a status and
+# NOT in kindOrder. The ONLY thing that reddens the Dot (live.ts blocked());
+# open `requires` edges are normal decomposition. `.blocked` is the fleet
+# query for what is actually stuck, and on what.
+[comps.blocked]
+rank = 970
+stamped_rank = 180
+[comps.blocked.cols]
+on = "text"
+[comps.blocked.stamped]
+since = "time"
+
+# A verdict-bearing comment. The aim, rationale, and authorship stay on
+# comment + doc + created; this component contributes only judgment.
+[comps.review]
+rank = 740
+kind_rank = 280
+[comps.review.cols]
+[comps.review.cols.verdict]
+enum = "verdicts"
+[comps.review.cols.verdict.aliases]
+approve = "approved"
+reject = "rejected"
+changes = "changes_requested"

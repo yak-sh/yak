@@ -1,6 +1,7 @@
 {
   "tasks": {
-    "check": "deno fmt --check && deno lint && deno check",
+    "check": "deno fmt --check && deno lint && deno check && deno task codegen --check",
+    "codegen": "deno run --allow-read --allow-write --allow-run=deno src/vocab/gen.ts",
     "gate": "deno task check && deno task test && deno task bench:gate && deno task bench:gate:web && deno run -A src/cli.ts sync --check",
     "dev": "sh -c 'while :; do deno run -A --unstable-net --unstable-worker-options src/dev.ts && break; [ $? -eq 42 ] || break; done'",
     "tui": "sh -c 'while :; do deno run -A src/tui/main.tsx && break; [ $? -eq 42 ] || break; done'",
@@ -51,6 +52,7 @@
     "zod": "npm:zod@^3.24.0",
     "sucrase": "npm:sucrase@^3.35.0",
     "@std/assert": "jsr:@std/assert@^1.0.0",
+    "@std/toml": "jsr:@std/toml@^1.0.0",
     "@std/testing": "jsr:@std/testing@^1.0.0",
     "@db/sqlite": "jsr:@db/sqlite@0.13.0",
     "@sqlite-vector-linux-x86_64": "npm:@sqliteai/sqlite-vector-linux-x86_64@1.0.0",

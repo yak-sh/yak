@@ -1,0 +1,95 @@
+# The mail plugin (D-22530 §8): outbound/inbound mail (mail.ts, mailer.ts,
+# mailaddr.ts, inbound.ts), webhooks, and the address book.
+
+name = "mail"
+
+# Outbound mail, asked for as data: creating one requests delivery (the
+# mailer effect sends and settles the outcome as the shared delivered/error
+# components, and denormalizes the resolved envelope onto the row as DATA).
+# Subject rides doc.title, the body doc.body — a mail is a document that
+# travels. WHERE it goes is the `deliver {to}` facet (an outbound mail
+# wears one; an INBOUND arrival does not — its recipient is `to_addr`
+# DATA). `from` is NOT wire-writable on purpose: the sender is who WROTE
+# the mail, and that is the server's fact, not the caller's claim (T-9511)
+# — apply() stamps it from the writing actor's address, so no door can
+# assert someone else's identity. Read-state is the `opened` stamp
+# (T-7006): message_id set (it arrived) and no `opened` = unread, so
+# outbound is born read.
+[comps.mail]
+rank = 670
+kind_rank = 240
+prefix = "E" # E-mail: S is the sessions'
+stamped_rank = 190
+[comps.mail.cols]
+# What the mail is ABOUT. A sent mail is history — its subject's death
+# doesn't unsend it (the provenance byline rule).
+target = { eid = "entity", death = "keep" }
+# The mail this one ANSWERS — reference at authoring, resolved to an RFC
+# Message-ID at delivery (mail.ts). History like target: a reply outlives
+# the mail it answered.
+reply_to = { eid = "mail", death = "keep" }
+[comps.mail.stamped]
+# WHO SIGNED IT. Server-owned because a session that could name its own
+# sender could sign as anyone (T-9511); readable because a letter nobody
+# can see the sender of is a letter nobody can answer: `reply` aims here.
+from = "text"
+# The resolved envelope, denormalized as DATA (mail.ts): to_addr = the
+# address delivery actually used; sent_id = the Message-ID our native send
+# was assigned, so replies-to-replies thread.
+to_addr = "text"
+# Inbound provenance (inbound.ts): message_id is the fleet spool's id — the
+# idempotency key AND the inbound mark (delivery skips rows that carry it,
+# or arrival would echo back out as a send); received_at when the edge
+# landed it; verified the edge's DKIM verdict. Unverified content is DATA —
+# it lands verbatim, nothing executes on it.
+message_id = "text"
+received_at = "time"
+verified = "bool"
+sent_id = "text"
+# The inbound RFC header, preserved even when its named mail has not
+# reached this graph. inbound.ts derives reply_to when it has.
+in_reply_to = "text"
+# A SMALL FIXED set of non-content routing headers off an inbound letter,
+# as a JSON object (canonical-cased keys), or null (T-14133). NOT raw MIME
+# retention — these five (List-Unsubscribe/-Post, Reply-To, Return-Path,
+# Auto-Submitted) are the narrow version (T-13875): the graph reads whether
+# RFC 8058 one-click headers survived the last hop. `text`, not `body`:
+# five short values ride the snapshot, never a lazy trip.
+headers = "text"
+
+# A webhook delivery, derived from the edge's raw request spool
+# (inbound.ts): the edge captures requests without opinions, the graph
+# pulls them apart. Tag-style like conflict — every column is
+# server-stamped; a webhook was never mail, so it never wears the mail
+# comp. source names the edge route; method/path/headers/payload/sig_ok
+# are its captured request, unchanged. event is the graph's one-line
+# derivation, spool_id the edge row — (source, spool_id) is the idempotency
+# key.
+[comps.hook]
+rank = 700
+kind_rank = 250
+prefix = "H"
+stamped_rank = 200
+[comps.hook.stamped]
+source = "text"
+event = "text"
+payload = "body"
+spool_id = "text"
+received_at = "time"
+method = "text"
+path = "text"
+headers = "body"
+sig_ok = "bool"
+
+# An address is a FACET, not a person-column: any entity may wear one — a
+# person, a project (its operator's inbox), someday a webhook source. The
+# whole address book is this comp; send-resolution is one rule: reference →
+# the entity's email.address, absent = a stamped error. kind_rank near the
+# tail: an address names an entity only when nothing else does — an
+# addressed person stays a person.
+[comps.email]
+rank = 790
+kind_rank = 370
+prefix = "A" # A-ddress: E is the mails'
+[comps.email.cols]
+address = "text"

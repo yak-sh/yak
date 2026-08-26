@@ -1,0 +1,79 @@
+# The identity/knowledge plugin (D-22530 §8, provisional grouping): people,
+# personas, models, memories, feedback.
+
+name = "identity"
+
+# A model's capability tier (supply book D-21285) — what the clearing house
+# matches a task's minimum-capability ask against. Coarse on purpose:
+# grades are DISCOVERED from per-grade P&L, not asserted finely.
+[enums.grades]
+rank = 130
+values = ["frontier", "mid", "small"]
+
+# A durable identity — the owner, an operator. The doc carries the name, an
+# alias the handle (jeff), and tasks point at it through assignee; sessions
+# stay what they are (one run), a person is who they run FOR.
+[comps.person]
+rank = 760
+kind_rank = 320
+prefix = "U" # U-ser: P is the projects'
+by_name = true
+plural = "people"
+
+# A voice a session can wear: the doc is its irreducible core text, and its
+# TIERS are edges — persona `contains` X preloads X's whole body, persona
+# `reads` X carries only X's index line. home is its home project; null =
+# fleet-shared. Worn ≠ speaking-for: persona names the voice, actor who it
+# acts for.
+[comps.persona]
+rank = 770
+kind_rank = 330
+prefix = "N" # N for the name it wears: P is the projects'
+by_name = true
+[comps.persona.cols]
+home = { eid = "project", death = "detach" }
+
+# A model as an entity (D-21308): the attribution cascade's terminal —
+# specialized persona → project base → model — so a projectless run still
+# names the program that ran. `name` is the wire spelling
+# ('claude-fable-5') the session/generation string columns keep speaking —
+# resolution is a lookup by it, never a break. `vendor` is who MAKES the
+# model (anthropic, openai) — deliberately not `provider`, which already
+# means the runner (claude, codex, ollama).
+[comps.model]
+rank = 780
+kind_rank = 340
+prefix = "O" # O for the m-O-del: M is the memories'
+by_name = true
+[comps.model.cols]
+name = "text"
+vendor = "text"
+grade = { enum = "grades" }
+
+# A distilled fact worth keeping — content rides the doc (title = the index
+# line, body = the fact), provenance the universal created stamp. The scope
+# column is scope, NOT project: bare '.project' must keep routing to task,
+# and a collision would make it ambiguous. Scope is history — a fact
+# outlives the project it was learned for. last_confirmed_at is
+# server-stamped by the confirm door. There is no `type` column (T-12585):
+# it was a kind column hiding inside a component.
+[comps.memory]
+rank = 800
+kind_rank = 310
+prefix = "M"
+stamped_rank = 210
+[comps.memory.cols]
+scope = { eid = "project", death = "keep" }
+[comps.memory.stamped]
+last_confirmed_at = "time"
+
+# This entity records feedback, and `by` is who GAVE it. A facet like the
+# stamps: a memory usually wears it, but a comment or a doc may. Not in
+# kindOrder. `by` is wire-only, deliberately NOT defaulted to the writing
+# actor: the recorder is almost never the source — absent means the source
+# was not recorded, which is true; it is never a claim about anyone. Death
+# 'keep': the source outlives their tombstone, like a byline.
+[comps.feedback]
+rank = 810
+[comps.feedback.cols]
+by = { eid = "entity", death = "keep" }
