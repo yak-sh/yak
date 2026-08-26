@@ -631,9 +631,15 @@ let config = (eid: string): RoleConfig => {
 let stamp = (eid: string, patch: DbRow, cast: Cast) => {
   let prior = readComp(db, eid, 'role') as DbRow | undefined
   if (!prior) return
+  // A field the patch omits stays at its prior value (the moved-filter below
+  // never writes it), so the quiet-check must treat omission as "unchanged"
+  // too — comparing an absent key as undefined made a patch that omitted
+  // `observed` (the native adopt path) look like news on every pass, and the
+  // 2s liveness loop then rewrote+broadcast decided_at forever.
   if (
-    patch.decision === prior.decision && patch.reason === prior.reason &&
-    patch.observed === prior.observed
+    (['decision', 'reason', 'observed'] as const).every((k) =>
+      !Object.hasOwn(patch, k) || patch[k] === prior[k]
+    )
   ) delete patch.decided_at
   let failure = Object.hasOwn(patch, 'error') ? patch.error : undefined
   let role = Object.fromEntries(

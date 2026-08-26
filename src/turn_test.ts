@@ -91,3 +91,19 @@ slow('concurrent hook processes never tear or lose a line', async () => {
   assertEquals(sids.size, writers * each)
   Deno.removeSync(dir, { recursive: true })
 })
+
+slow('drain leaves an empty spool untouched — no truncate, no fs event', () => {
+  let dir = Deno.makeTempDirSync()
+  let path = `${dir}/turns.jsonl`
+  Deno.writeTextFileSync(path, '')
+  // The server's watcher re-drains on any turns.jsonl event; a truncate of an
+  // already-empty spool emits one and feeds the loop. mtime moving is the
+  // observable half of that write.
+  let past = new Date(Date.now() - 60_000)
+  Deno.utimeSync(path, past, past)
+  let turns: unknown[] = []
+  drain((turn) => turns.push(turn), path)
+  assertEquals(turns, [])
+  assertEquals(Deno.statSync(path).mtime!.getTime(), past.getTime())
+  Deno.removeSync(dir, { recursive: true })
+})

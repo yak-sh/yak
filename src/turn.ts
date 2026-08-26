@@ -74,7 +74,11 @@ export let drain = (
   try {
     lines = locked(f, () => {
       let text = readAll(f)
-      f.truncateSync()
+      // Truncate only what was read: the server's fs watcher re-drains on any
+      // turns.jsonl event, and truncating an already-empty spool emits one —
+      // an unconditional truncate here fed that event back into itself and
+      // span the watcher at ~7k drains/s, pegging the event loop.
+      if (text) f.truncateSync()
       return text.split('\n').filter(Boolean)
     })
   } finally {

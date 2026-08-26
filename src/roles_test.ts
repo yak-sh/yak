@@ -366,6 +366,18 @@ Deno.test('native role dedupes, rolls drift, heals death, and stops exactly', as
   assertEquals(count('new-window'), 1)
   assertEquals(count('kill-pane'), 0)
 
+  // Quiet too: the adopt patch omits `observed`, and an omitted field is
+  // "unchanged" — a repeat adopt must not restamp decided_at (each restamp
+  // broadcast the role comp to every client, forever, on the 2s loop).
+  let settled = db.prepare(
+    `select decided_at from role where entity = ${R}`,
+  ).get(role) as { decided_at: string }
+  await rolesSweep(cast, deps)
+  assertEquals(
+    db.prepare(`select decided_at from role where entity = ${R}`).get(role),
+    settled,
+  )
+
   // Drift rolls the pane: kill the old, open a new window.
   apply(db, [{
     eid: role,
