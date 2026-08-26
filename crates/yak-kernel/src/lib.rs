@@ -3,7 +3,7 @@
 // plus, behind the `native` feature, everything that touches the file: the
 // read-only sqlite store, FTS, and since T-22550 the WRITE path — apply()
 // with its gate registry, the journal, and the catchup feed. The core
-// compiles to wasm32 (kernel-wasm), so nothing outside `native` may touch
+// compiles to wasm32 (yak-wasm), so nothing outside `native` may touch
 // rusqlite, files, or the clock. Still no migration and no baton — a
 // library client connects, reads, writes through apply, and leaves the
 // schema alone.

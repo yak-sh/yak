@@ -495,7 +495,7 @@ if (import.meta.main) {
   let fixture = JSON.stringify(capture(mod), null, 2) + '\n'
   await Deno.remove(tmp)
 
-  let rustTarget = `${dir}../../rust/kernel/src/vocab_gen.rs`
+  let rustTarget = `${dir}../../crates/yak-kernel/src/vocab_gen.rs`
   let rustBody = emitRust(assembled)
 
   let current = await Deno.readTextFile(target).catch(() => '')
@@ -517,7 +517,7 @@ if (import.meta.main) {
     }
     if (currentRust != rustBody) {
       console.error(
-        'rust/kernel/src/vocab_gen.rs is stale — run `deno task codegen`',
+        'crates/yak-kernel/src/vocab_gen.rs is stale — run `deno task codegen`',
       )
       Deno.exit(1)
     }

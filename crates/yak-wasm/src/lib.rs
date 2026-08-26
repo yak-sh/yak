@@ -9,8 +9,8 @@
 // query(filter line) -> {rows} | {error} · reset() · size() — the SPA's
 // future data engine in miniature (T-22559, D-22530 §5).
 
-use kernel::cache::{Change, GraphCache};
-use kernel::{query, vocab};
+use yak_kernel::cache::{Change, GraphCache};
+use yak_kernel::{query, vocab};
 use serde_json::Value;
 use std::sync::Mutex;
 

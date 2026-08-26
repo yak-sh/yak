@@ -19,7 +19,7 @@ fn fixture(dir: &std::path::Path) -> String {
 }
 
 fn run(db: &str, args: &[&str], profile_env: Option<&str>) -> Output {
-    let mut c = Command::new(env!("CARGO_BIN_EXE_task-rs"));
+    let mut c = Command::new(env!("CARGO_BIN_EXE_yak"));
     c.env("DB_PATH", db).args(args);
     c.env_remove("YAK_PROFILE").env_remove("TASKS_PROFILE");
     if let Some(k) = profile_env {
@@ -30,7 +30,7 @@ fn run(db: &str, args: &[&str], profile_env: Option<&str>) -> Output {
 
 #[test]
 fn profiling_leaves_stdout_byte_identical() {
-    let dir = std::env::temp_dir().join(format!("task-rs-prof-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("yak-prof-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let db = fixture(&dir);
 

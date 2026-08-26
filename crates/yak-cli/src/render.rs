@@ -2,9 +2,9 @@
 // Parity target: T-22534's comp-nested frontmatter (96b532a).
 
 use chrono::{DateTime, Local};
-use kernel::store::{Row, Rows};
-use kernel::vocab::{vocab, PropType};
-use kernel::Store;
+use yak_kernel::store::{Row, Rows};
+use yak_kernel::vocab::{vocab, PropType};
+use yak_kernel::Store;
 use serde_json::Value;
 
 pub fn local_time(iso: &str) -> String {

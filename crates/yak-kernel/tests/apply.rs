@@ -3,9 +3,9 @@
 // schema lives with the TS migrator; the parity harness (scripts/parity)
 // drives both writers over a REAL migrated file. Here: the rules, sub-ms.
 
-use kernel::change::Change;
-use kernel::feed::{cursor_of, journal_since, row_changes, Feed};
-use kernel::write::{apply, default_gates, ApplyError, ApplyOpts, WriteStore};
+use yak_kernel::change::Change;
+use yak_kernel::feed::{cursor_of, journal_since, row_changes, Feed};
+use yak_kernel::write::{apply, default_gates, ApplyError, ApplyOpts, WriteStore};
 use rusqlite::Connection;
 use serde_json::{json, Map, Value};
 
@@ -191,7 +191,7 @@ fn was_guard_passes_and_refuses() {
     // guarded patch with the read value's hash passes
     let mut c = ch(A, "doc", json!({"title": "v2"}));
     let mut was = Map::new();
-    was.insert("title".into(), Value::from(kernel::write::sha(&json!("v1"))));
+    was.insert("title".into(), Value::from(yak_kernel::write::sha(&json!("v1"))));
     c.was = Some(was.clone());
     run(&s, vec![c]);
     let title: String = one(&s, "select title from doc");

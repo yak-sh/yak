@@ -1,17 +1,17 @@
 // Cross-language parity for the kernel write path (T-22550): the same
-// batches run through TS apply() on copy A and through `task-rs apply` on
+// batches run through TS apply() on copy A and through `yak apply` on
 // copy B of one migrated fixture graph; the journal rows and every touched
 // table must come out identical (timestamps and the conflict audit's random
 // eid normalized). Refusal batches must refuse on BOTH sides and leave both
 // copies equally untouched.
 //
-//   deno run -A rust/parity.ts        (builds task-rs if missing)
+//   deno run -A crates/yak-cli/parity.ts   (builds yak if missing)
 //
 // A slow harness by design — run it by hand or from the slow tier, never the
 // 1ms gate.
-import { apply, open } from '../src/db.ts'
-import { fed } from '../src/effects.ts'
-import type { Change } from '../src/types.ts'
+import { apply, open } from '../../src/db.ts'
+import { fed } from '../../src/effects.ts'
+import type { Change } from '../../src/types.ts'
 
 let tmp = await Deno.makeTempDir({ prefix: 'parity-' })
 let baseDb = `${tmp}/base.db`
@@ -47,7 +47,7 @@ await Deno.copyFile(baseDb, aDb)
 await Deno.copyFile(baseDb, bDb)
 
 // sha of 'Parity task' for the was-guard round trip
-import { sha } from '../src/sha.ts'
+import { sha } from '../../src/sha.ts'
 
 type Case = { name: string; batch: Change[]; refuses?: boolean }
 let cases: Case[] = [
@@ -159,7 +159,7 @@ dbA.exec('pragma wal_checkpoint(truncate)')
 dbA.close()
 
 // ---- Rust side over copy B ----
-let bin = new URL('./target/release/task-rs', import.meta.url).pathname
+let bin = new URL('../../target/release/yak', import.meta.url).pathname
 try {
   await Deno.stat(bin)
 } catch {

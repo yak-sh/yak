@@ -5,11 +5,11 @@
 // probe entity is then deleted through the same Rust door and the tombstone
 // cast observed. Run by hand against a live server:
 //
-//   deno run -A rust/live_proof.ts [host]
+//   deno run -A crates/yak-cli/live_proof.ts [host]
 //
 // Writes exactly one probe entity to the live graph and tombstones it again.
 let host = Deno.args[0] ?? '127.0.0.1:5173'
-let bin = new URL('./target/release/task-rs', import.meta.url).pathname
+let bin = new URL('../../target/release/yak', import.meta.url).pathname
 let db = `${Deno.env.get('HOME')}/.tasks/tasks.db`
 
 let up = await fetch(`http://${host}/providers`).then((r) => r.ok).catch(() =>
@@ -71,7 +71,7 @@ await new Promise((r) => setTimeout(r, 300))
 
 // 2. a stale was refuses, and no frame follows
 frames.length = 0
-import { sha } from '../src/sha.ts'
+import { sha } from '../../src/sha.ts'
 let w2 = await rust([{
   eid,
   name: 'doc',

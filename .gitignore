@@ -19,4 +19,4 @@ node_modules/
 # 5fc7573; it regenerates every sync, so ignore it lest a stray `git add -A`
 # commit the derived output.
 .tasks/
-/rust/target/
+/target/

@@ -2,14 +2,14 @@
 // journal-shaped deltas, asks queries, and asserts the loop — then times it
 // on a realistic cache. Run by hand (it is a proof, not a gate tier):
 //
-//   cargo build --release -p kernel-wasm --target wasm32-unknown-unknown
-//   deno run --allow-read rust/kernel-wasm/harness.ts
+//   cargo build --release -p yak-wasm --target wasm32-unknown-unknown
+//   deno run --allow-read crates/yak-wasm/harness.ts
 //
 // The JS here is the whole client contract: alloc, write utf-8, call,
 // unpack (ptr << 32 | len), free — the SPA glue would be this file.
 
 let wasmPath = new URL(
-  '../target/wasm32-unknown-unknown/release/kernel_wasm.wasm',
+  '../../target/wasm32-unknown-unknown/release/yak_wasm.wasm',
   import.meta.url,
 )
 let bytes = await Deno.readFile(wasmPath)

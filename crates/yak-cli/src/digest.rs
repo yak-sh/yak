@@ -4,10 +4,10 @@
 // `## pending messages` bus block is absent on purpose (serving it stamps
 // `notified`, a write that belongs to the write-capable doors).
 
-use kernel::query;
-use kernel::reader::{self, Reader};
-use kernel::store::{Row, Rows};
-use kernel::{vocab, Store};
+use yak_kernel::query;
+use yak_kernel::reader::{self, Reader};
+use yak_kernel::store::{Row, Rows};
+use yak_kernel::{vocab, Store};
 
 use crate::render::{authoring_line, claimant, id_of};
 
@@ -75,7 +75,7 @@ fn rows_wearing(store: &Store, comp: &str) -> Vec<Row> {
         .unwrap_or_default();
     eids.iter()
         .filter_map(|e| store.row(e))
-        .filter(kernel::store::visible)
+        .filter(yak_kernel::store::visible)
         .collect()
 }
 
@@ -93,7 +93,7 @@ fn fleet_memories(store: &Store) -> Vec<Row> {
         .unwrap_or_default();
     eids.iter()
         .filter_map(|e| store.row(e))
-        .filter(kernel::store::visible)
+        .filter(yak_kernel::store::visible)
         .collect()
 }
 
@@ -102,17 +102,17 @@ fn hot(r: &Row, now: i64) -> f64 {
     let mut count = comp(r, "recall", "count")
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
-    let mut last = kernel::time::parse_stamp(&cs(r, "recall", "last_at"));
+    let mut last = yak_kernel::time::parse_stamp(&cs(r, "recall", "last_at"));
     if count == 0.0 || last.is_none() {
         count = 1.0;
         let at = edited_at(r);
-        last = kernel::time::parse_stamp(&at);
+        last = yak_kernel::time::parse_stamp(&at);
         if last.is_none() {
             return 0.0;
         }
     }
     let last = last.unwrap();
-    let first = kernel::time::parse_stamp(&cs(r, "recall", "first_at"))
+    let first = yak_kernel::time::parse_stamp(&cs(r, "recall", "first_at"))
         .unwrap_or(last);
     let mean = if count > 1.0 {
         ((last - first).max(0)) as f64 / (count - 1.0)
@@ -246,7 +246,7 @@ pub fn context_digest(
     let tasks: Vec<Row> = store
         .rows_of_kind("task")
         .into_iter()
-        .filter(kernel::store::visible)
+        .filter(yak_kernel::store::visible)
         .collect();
     let actor = sess
         .as_ref()
@@ -318,16 +318,16 @@ pub fn context_digest(
     // the unread count, preview only — the inbox's own predicate
     if session.is_none() {
         let who: Reader =
-            kernel::reader::reader_for(store, None, &cwd, scope.as_deref());
-        let unread = kernel::inbox::inbox_rows(
+            yak_kernel::reader::reader_for(store, None, &cwd, scope.as_deref());
+        let unread = yak_kernel::inbox::inbox_rows(
             store,
             &who,
             &[],
-            kernel::inbox::Mode::Inbox,
+            yak_kernel::inbox::Mode::Inbox,
         )
         .into_iter()
-        .filter(|r| kernel::reader::inbox_item(&who, r))
-        .filter(kernel::reader::is_unread)
+        .filter(|r| yak_kernel::reader::inbox_item(&who, r))
+        .filter(yak_kernel::reader::is_unread)
         .count();
         if unread > 0 {
             lines.push(format!("## inbox — {unread} unread (task inbox)"));
@@ -349,7 +349,7 @@ pub fn context_digest(
         briefed.sort_by(|x, y| edited_at(y).cmp(&edited_at(x)));
         let prev = briefed
             .iter()
-            .find(|r| kernel::reader::truthy(comp(r, "session", "operator")))
+            .find(|r| yak_kernel::reader::truthy(comp(r, "session", "operator")))
             .or(briefed.first());
         if let Some(prev) = prev {
             let title = snip(&title_of(prev));
@@ -497,7 +497,7 @@ fn on_mine(
         .filter_map(|e| store.row(e))
         .filter(|r| {
             cs(r, "created", "via") != sess.eid
-                && kernel::time::parse_stamp(&born_at(r))
+                && yak_kernel::time::parse_stamp(&born_at(r))
                     .map(|t| now - t < 7 * DAY)
                     .unwrap_or(false)
         })
@@ -562,7 +562,7 @@ fn pulse(
     }
     let cutoff = now - 7 * DAY;
     let fresh = |r: &Row| {
-        kernel::time::parse_stamp(&edited_at(r))
+        yak_kernel::time::parse_stamp(&edited_at(r))
             .map(|t| t > cutoff)
             .unwrap_or(false)
     };

@@ -254,25 +254,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kernel"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "rusqlite",
- "serde_json",
- "sha2",
- "uuid",
-]
-
-[[package]]
-name = "kernel-wasm"
-version = "0.1.0"
-dependencies = [
- "kernel",
- "serde_json",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -490,16 +471,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "task-rs"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "kernel",
- "rusqlite",
- "serde_json",
-]
-
-[[package]]
 name = "thiserror"
 version = "2.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -656,6 +627,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7837d08f69c77cf6b07689544538e017c1bfcf57e34b4c0ff58e6c2cd3b37091"
 dependencies = [
  "windows-link",
+]
+
+[[package]]
+name = "yak-cli"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "rusqlite",
+ "serde_json",
+ "yak-kernel",
+]
+
+[[package]]
+name = "yak-kernel"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "rusqlite",
+ "serde_json",
+ "sha2",
+ "uuid",
+]
+
+[[package]]
+name = "yak-wasm"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "yak-kernel",
 ]
 
 [[package]]

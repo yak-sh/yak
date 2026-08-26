@@ -1,0 +1,32 @@
+[package]
+name = "yak-cli"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "The `yak` command line: read and write an entity-component graph — list, show, search, and gated batch apply — over the yak-kernel."
+keywords = ["cli", "graph", "entity-component", "sqlite", "query"]
+categories = ["command-line-utilities", "database"]
+default-run = "yak"
+# TODO: add `repository` at the next point release — the yak-sh GitHub org
+# does not exist yet.
+exclude = ["*.ts"]
+
+[[bin]]
+name = "yak"
+path = "src/main.rs"
+
+# Transition alias for the pre-rename name (T-22582); drops at the next
+# point release.
+[[bin]]
+name = "task-rs"
+path = "src/main.rs"
+
+[dependencies]
+yak-kernel = { version = "0.1.0", path = "../yak-kernel" }
+serde_json = { version = "1", features = ["preserve_order"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+# the profile test builds its own one-table graph rather than reading the
+# owner's — the same bundled sqlite the kernel already links
+[dev-dependencies]
+rusqlite = { version = "0.40", features = ["bundled"] }

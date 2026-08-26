@@ -1,4 +1,4 @@
-// task-rs — the Rust CLI (T-22532/T-22558, D-22530): the pure-read verbs
+// yak — the Rust CLI (T-22532/T-22558, D-22530): the pure-read verbs
 // over the live graph file, read-only, output parity with the TS CLI.
 // READ-ONLY divergences, documented: `inbox` renders without stamping the
 // bus `notified` marks, `inbox show` without the `opened` stamp, `context`
@@ -8,11 +8,11 @@
 mod digest;
 mod render;
 
-use kernel::profiling::{self, span};
-use kernel::query;
-use kernel::store::Rows;
-use kernel::{db_path, search, Store};
 use render::{authoring_line, claimant, id_of, local_time, show_md};
+use yak_kernel::profiling::{self, span};
+use yak_kernel::query;
+use yak_kernel::store::Rows;
+use yak_kernel::{db_path, search, Store};
 
 fn main() {
     // One monotonic clock read, unconditional — it costs less than the argv
@@ -37,7 +37,7 @@ fn run(args: &[String]) -> i32 {
     let verb = args.first().map(String::as_str).unwrap_or("");
     let rest = &args[1.min(args.len())..];
     // The write door dispatches before the read-only Store opens: apply
-    // needs its own read-write connection (kernel::WriteStore).
+    // needs its own read-write connection (yak_kernel::WriteStore).
     if verb == "apply" {
         return apply_cmd(rest);
     }
@@ -66,7 +66,7 @@ fn run(args: &[String]) -> i32 {
         }
         _ => {
             eprintln!(
-                "task-rs [--profile] \
+                "yak [--profile] \
                  <list|show|search|apply|inbox|history|telemetry|context> …"
             );
             2
@@ -74,7 +74,7 @@ fn run(args: &[String]) -> i32 {
     }
 }
 
-// task-rs apply [--db path] [--fed] [--writer w] [--batch json | reads stdin]
+// yak apply [--db path] [--fed] [--writer w] [--batch json | reads stdin]
 // One batch through the kernel write path (T-22550): prints the effective
 // batch as JSON, or the refusal on stderr with exit 1 — the same all-or-
 // nothing contract apply() keeps on every other door.
@@ -125,21 +125,21 @@ fn apply_cmd(args: &[String]) -> i32 {
             return 2;
         }
     };
-    let Some(changes) = kernel::change::parse_batch(&parsed) else {
+    let Some(changes) = yak_kernel::change::parse_batch(&parsed) else {
         eprintln!("apply: a batch is an array of {{eid, name, comp}} changes");
         return 2;
     };
-    let store = match kernel::WriteStore::open(&db) {
+    let store = match yak_kernel::WriteStore::open(&db) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("cannot open {db} for writing: {e}");
             return 1;
         }
     };
-    let opts = kernel::ApplyOpts { writer: writer.as_deref(), fed };
-    match kernel::apply(&store, changes, &opts, &kernel::default_gates()) {
+    let opts = yak_kernel::ApplyOpts { writer: writer.as_deref(), fed };
+    match yak_kernel::apply(&store, changes, &opts, &yak_kernel::default_gates()) {
         Ok(out) => {
-            println!("{}", kernel::change::batch_json(&out));
+            println!("{}", yak_kernel::change::batch_json(&out));
             0
         }
         Err(e) => {
@@ -164,7 +164,7 @@ fn plural_kind(word: &str) -> Option<String> {
 
 fn show(store: &Store, args: &[String]) -> i32 {
     let Some(id) = args.first() else {
-        eprintln!("task-rs show <id>");
+        eprintln!("yak show <id>");
         return 2;
     };
     let eid = {
@@ -207,20 +207,20 @@ fn list(store: &Store, args: &[String]) -> i32 {
     // `.kind=` is derived identity, not table membership: an entity wearing
     // design+task is kind design, so a task listing excludes it (kindOf).
     let reveal = preds.iter().any(|p| p.comp == "quarantined");
-    let mut hits: Vec<kernel::Row> = {
+    let mut hits: Vec<yak_kernel::Row> = {
         let _p = span("query");
         store
             .rows_of_kind(&kind)
             .into_iter()
             .filter(|r| r.kind == kind)
-            .filter(|r| reveal || kernel::store::visible(r))
+            .filter(|r| reveal || yak_kernel::store::visible(r))
             .filter(|r| query::matches(r, &preds))
             .collect()
     };
     hits.sort_by(query::by_board);
     let _p = span("render");
     // the second column: a task's status, everything else's alias slug
-    let lines: Vec<(&kernel::Row, String)> = hits
+    let lines: Vec<(&yak_kernel::Row, String)> = hits
         .iter()
         .map(|r| {
             let handle = if r.comps.contains_key("task") {
@@ -279,7 +279,7 @@ fn list(store: &Store, args: &[String]) -> i32 {
 fn inbox(store: &Store, args: &[String]) -> i32 {
     if args.first().map(String::as_str) == Some("show") {
         let Some(id) = args.get(1) else {
-            eprintln!("task-rs inbox show <id>");
+            eprintln!("yak inbox show <id>");
             return 2;
         };
         let Some(eid) = store.resolve_id(id) else {
@@ -320,15 +320,15 @@ fn inbox(store: &Store, args: &[String]) -> i32 {
         }
     }
     query::resolve_values(store, &mut preds);
-    let v = kernel::vocab();
+    let v = yak_kernel::vocab();
     let sid = me();
-    let who = kernel::reader::reader_for(
+    let who = yak_kernel::reader::reader_for(
         store,
         sid.as_deref(),
         &cwd(),
         None,
     );
-    let mut items: Vec<kernel::Row> = if sent {
+    let mut items: Vec<yak_kernel::Row> = if sent {
         // outbound: mail-comp wearers that never arrived from the edge
         let now = query::now_ms();
         store
@@ -345,31 +345,31 @@ fn inbox(store: &Store, args: &[String]) -> i32 {
                         .get("deliver")
                         .and_then(|d| d.get("to"))
                         .is_some()
-                    && kernel::query::matches_at(r, &preds, now)
+                    && yak_kernel::query::matches_at(r, &preds, now)
             })
             .collect()
     } else {
         let mode = if every {
-            kernel::inbox::Mode::All
+            yak_kernel::inbox::Mode::All
         } else {
-            kernel::inbox::Mode::Inbox
+            yak_kernel::inbox::Mode::Inbox
         };
-        let candidates = kernel::inbox::inbox_rows(store, &who, &preds, mode);
+        let candidates = yak_kernel::inbox::inbox_rows(store, &who, &preds, mode);
         candidates
             .into_iter()
             .filter(|r| {
                 if every {
-                    kernel::reader::addressed(&who, r)
+                    yak_kernel::reader::addressed(&who, r)
                 } else {
-                    kernel::reader::inbox_item(&who, r)
+                    yak_kernel::reader::inbox_item(&who, r)
                 }
             })
             .collect()
     };
     // oldest→newest; a same-batch tie (identical stamp) reads in mint order
     items.sort_by(|a, b| {
-        kernel::inbox::born_at(a)
-            .cmp(&kernel::inbox::born_at(b))
+        yak_kernel::inbox::born_at(a)
+            .cmp(&yak_kernel::inbox::born_at(b))
             .then(a.num.unwrap_or(0).cmp(&b.num.unwrap_or(0)))
     });
     if items.is_empty() {
@@ -386,7 +386,7 @@ fn inbox(store: &Store, args: &[String]) -> i32 {
         return 0;
     }
     for r in &items {
-        println!("{}", kernel::inbox::line(v, r));
+        println!("{}", yak_kernel::inbox::line(v, r));
     }
     0
 }
@@ -408,7 +408,7 @@ fn history(store: &Store, args: &[String]) -> i32 {
         eprintln!("no such entity: {id}");
         return 1;
     };
-    let entries = kernel::journal::journal_of(store, &eid, n);
+    let entries = yak_kernel::journal::journal_of(store, &eid, n);
     if entries.is_empty() {
         println!("{}: no history", id_of(&row));
         return 0;
@@ -419,10 +419,10 @@ fn history(store: &Store, args: &[String]) -> i32 {
             e.id,
             local_time(&e.ts),
             {
-                let a = kernel::journal::actor_of(e);
+                let a = yak_kernel::journal::actor_of(e);
                 a.chars().take(24).collect::<String>()
             },
-            kernel::journal::what_of(e)
+            yak_kernel::journal::what_of(e)
         );
     }
     0
@@ -433,12 +433,12 @@ fn telemetry(store: &Store, args: &[String]) -> i32 {
     let errors = args.iter().any(|a| a == "--errors");
     let since = flag_value(args, "--since");
     if args.iter().any(|a| a == "--json") {
-        eprintln!("--json is not ported in task-rs — use the TS CLI");
+        eprintln!("--json is not ported in yak — use the TS CLI");
         return 2;
     }
     if args.iter().any(|a| a == "--stats") {
         let rows =
-            kernel::telemetry::stats(store, since.as_deref(), errors);
+            yak_kernel::telemetry::stats(store, since.as_deref(), errors);
         if rows.is_empty() {
             eprintln!("(nothing timed)");
             return 0;
@@ -463,7 +463,7 @@ fn telemetry(store: &Store, args: &[String]) -> i32 {
     }
     let n = flag_value(args, "-n").and_then(|v| v.parse::<usize>().ok());
     let rows =
-        kernel::telemetry::recent(store, since.as_deref(), n, errors);
+        yak_kernel::telemetry::recent(store, since.as_deref(), n, errors);
     if rows.is_empty() {
         eprintln!("(nothing recorded)");
         return 0;
@@ -554,7 +554,7 @@ fn context(store: &Store, args: &[String]) -> i32 {
         }
         _ => {
             // the preview: scoped to the repo you stand in
-            let scope = kernel::reader::scope_for(store, None, &cwd(), None);
+            let scope = yak_kernel::reader::scope_for(store, None, &cwd(), None);
             println!(
                 "{}",
                 digest::context_digest(store, None, now, scope.as_deref())
@@ -614,7 +614,7 @@ fn flag_value(args: &[String], name: &str) -> Option<String> {
 fn search_cmd(store: &Store, args: &[String]) -> i32 {
     let q = args.join(" ");
     if q.is_empty() {
-        eprintln!("task-rs search <words...> (trailing * = prefix)");
+        eprintln!("yak search <words...> (trailing * = prefix)");
         return 2;
     }
     let found = {
@@ -651,7 +651,7 @@ fn search_cmd(store: &Store, args: &[String]) -> i32 {
         };
         println!(
             "{} {}: {}{} — {}{}",
-            kernel::vocab().id_of(&h.kind, &h.eid, h.num),
+            yak_kernel::vocab().id_of(&h.kind, &h.eid, h.num),
             h.kind,
             title,
             aim,
