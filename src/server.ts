@@ -2656,7 +2656,14 @@ let themeWatch = async () => {
     return
   }
   for await (let e of w) {
-    if (e.paths.some((p) => p.endsWith('/turns.jsonl'))) turnSweep()
+    // Only a WRITE arms the spool drain. Drain's own read emits an `access`
+    // event on turns.jsonl, and acting on it re-armed the drain in a tight
+    // loop (~8.7k opens/s of steady CPU) — the second half of the feedback the
+    // empty-spool truncate guard (turn.ts) closed. A hook's append is
+    // `modify`, so filtering access keeps every real report and kills the echo.
+    if (
+      e.kind != 'access' && e.paths.some((p) => p.endsWith('/turns.jsonl'))
+    ) turnSweep()
     if (!e.paths.some((p) => p.endsWith('/theme.css'))) continue
     let msg = JSON.stringify({ css: ++gen })
     for (let c of clients) {
