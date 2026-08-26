@@ -11,7 +11,7 @@
 // another's query — centralizing the matcher on the server is what makes it
 // expressible (design §2).
 import { bodyCols, propAt } from './props.ts'
-import { leafOf, type Pred } from './query.ts'
+import { type Field, leafOf, type Pred } from './query.ts'
 import { span } from './time.ts'
 import { type Change } from './types.ts'
 
@@ -79,6 +79,45 @@ export let bodyless = (changes: Change[]): Change[] =>
     // this way: a read row always carries its eid.
     return Object.keys(comp).length ? [{ ...c, comp }] : []
   })
+
+// A batch cut down to a PROJECTION — the columns a subscription DECLARED it
+// reads (`.fields=session.status,session.standing`, query.ts), applied to the
+// same Changes a full payload would have shipped. bodyless generalized: that
+// one cuts a fixed class of columns from every sub, this one keeps exactly the
+// named ones, and both cut at the same seam so the two can only differ in bytes.
+// Changes are SPREAD, never rebuilt — a precondition rides beside `comp`.
+//
+// Three things always ride, whatever the projection says:
+//
+// - The SPINE (`entity`): eid + num are the row's identity, not a column, and a
+//   client that can't name a row can't render one. `.fields=eid` is the
+//   eids-only form — an empty projection, so the spine is ALL that rides.
+// - A comp DELETION (`comp: null`) and an entity death: membership news, not
+//   column news. Cutting those would strand a row the client must drop.
+// - Nothing else. A patch touching no projected column projects to NOTHING, and
+//   subserve never sends an empty frame — which is the point: a projected sub
+//   pays zero traffic for a column it does not read.
+//
+// The omission carries the same meaning bodyless gives a body: an absent column
+// is UNLOADED, never null. live.ts `loaded()` is what tells a reader which is
+// which, and a render needing more subscribes for more.
+export let projected = (fields: Field[]) => {
+  let keep = new Map<string, Set<string>>()
+  for (let f of fields) {
+    let cols = keep.get(f.comp) ?? new Set<string>()
+    keep.set(f.comp, cols.add(f.prop))
+  }
+  return (changes: Change[]): Change[] =>
+    changes.flatMap((c) => {
+      if (c.name == 'entity' || c.comp == null) return [c]
+      let cols = keep.get(c.name)
+      if (!cols) return []
+      let comp = Object.fromEntries(
+        Object.entries(c.comp).filter(([k]) => cols.has(k)),
+      )
+      return Object.keys(comp).length ? [{ ...c, comp }] : []
+    })
+}
 
 // Agreement is hard for moving time: membership can change with no write.
 // Path membership is maintained from far-side reference invalidation.

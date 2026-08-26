@@ -11,6 +11,7 @@ import {
 import {
   awake,
   type Change,
+  comps,
   type Dep,
   type Ent,
   type EntCore,
@@ -29,6 +30,7 @@ import {
   distinctValues,
   EXISTS,
   type Field,
+  fieldsOf,
   listed,
   matchQuery,
   namesLazy,
@@ -235,15 +237,25 @@ let resetQueries = () => {
 // and-reverse (evalFast/matchQuery, scoped SQL) and streams it, and landSub
 // keeps a per-sub signal this returns. `mem` primes the signal synchronously
 // (no first-paint flash) and stays the fallback where there is no socket path
-// (the TUI) or the query PROJECTS waking fields (pins/cameras — a projected-
-// field move must re-fire the LIST, which only mem's wake tracking carries; a
-// membership sub does not). The subs are what stream rows in, and eviction on
-// release is what keeps the cache bounded.
+// (the TUI). The subs are what stream rows in, and eviction on release is what
+// keeps the cache bounded.
+//
+// A PROJECTED query rides a server sub like any other (D-22567 §3): the line
+// carries its `.fields=`, so the server ships only those columns and only
+// re-fires on them. What a projection additionally needs — a waking projected
+// field's move re-firing the LIST, not just the member's own row — this set
+// carries below, mirroring the resolver's own `wake`/`vals` pair, because
+// membership alone cannot express "the boxes moved".
 type ServerSet = {
   n: number
   ids: Signal<string[]>
   sub: string
   preds: Pred[]
+  // The projection's WAKING columns (`.fields=…` minus the `~`-volatile ones),
+  // and per member a signature of their values. Empty for a plain membership
+  // query, so the whole mechanism costs nothing there.
+  wake: Field[]
+  vals: Map<string, string>
   // Whether the server has EVER answered this sub. Until it has, the local
   // resolver owns the signal (re-primed on read, refreshed on local writes);
   // from the first landSub frame on, the server's answer is authoritative.
@@ -272,7 +284,21 @@ let predLine = (p: Pred): string | undefined => {
       ? `.after=${p.win.after}`
       : undefined
   }
-  if (p.fields || p.at || p.rev) return undefined
+  // A PROJECTION serializes back to its own directive — `.fields=eid` for the
+  // eids-only form, else the columns with `~` back on the volatile ones. The
+  // round-trip proof below is what makes this safe: a projection that does not
+  // re-parse identically falls back to mem rather than opening a sub the server
+  // would answer with different columns.
+  if (p.fields) {
+    return p.op != PROJECT
+      ? undefined
+      : p.fields.length
+      ? `.fields=${
+        p.fields.map((f) => `${f.comp}.${f.prop}${f.wake ? '' : '~'}`).join(',')
+      }`
+      : '.fields=eid'
+  }
+  if (p.at || p.rev) return undefined
   // A shared-ref equality (`.client=X` — query.ts sharedRef routes comp '')
   // is one read concept across every owning component; the grammar already
   // speaks it, and the round-trip proof below still gates the wire.
@@ -312,7 +338,21 @@ let resetServerSets = () => {
   for (let s of queryUses.values()) {
     s.live = false
     s.ids.value = mem.resolve(s.preds)
+    seedWake(s, s.ids.peek())
   }
+}
+
+// The value signature of one member's waking projected columns — what a re-fire
+// compares against to tell a move (a pin's x/y/w/h) from a mute z-bump. The
+// resolver's own `sig`, over the cache these sets read.
+let wakeSig = (eid: string, fields: Field[]): string => {
+  let r = cache.peek()[eid]
+  return JSON.stringify(fields.map((f) => r?.[f.comp]?.[f.prop] ?? null))
+}
+let seedWake = (s: ServerSet, ids: Iterable<string>) => {
+  if (!s.wake.length) return
+  s.vals.clear()
+  for (let e of ids) s.vals.set(e, wakeSig(e, s.wake))
 }
 
 let refreshServerSets = (eids: Set<string>) => {
@@ -321,6 +361,12 @@ let refreshServerSets = (eids: Set<string>) => {
   for (let s of queryUses.values()) {
     let ids = s.ids.peek()
     let next = ids
+    // A waking projected field of a STANDING member moved. Membership is
+    // unchanged, so the set would stay asleep — but the projection IS what the
+    // list renders (a pin's box), so its move is list news. A volatile (`~`)
+    // column is deliberately absent from `wake`, so its value lands in the cache
+    // and wakes nothing.
+    let moved = false
     for (let eid of eids) {
       let r = read(eid)
       let wants = !!r && listed(r, s.preds) &&
@@ -328,9 +374,21 @@ let refreshServerSets = (eids: Set<string>) => {
       let had = next.includes(eid)
       if (had != wants) {
         next = wants ? [...next, eid] : next.filter((x) => x != eid)
+        if (s.wake.length) {
+          wants ? s.vals.set(eid, wakeSig(eid, s.wake)) : s.vals.delete(eid)
+        }
+      } else if (had && s.wake.length) {
+        let now = wakeSig(eid, s.wake)
+        if (s.vals.get(eid) !== now) {
+          s.vals.set(eid, now)
+          moved = true
+        }
       }
     }
+    // A membership change publishes the new set; a pure move republishes the
+    // same members as a fresh array so the view re-reads their boxes.
     if (next != ids) s.ids.value = next
+    else if (moved) s.ids.value = [...next]
   }
 }
 
@@ -347,10 +405,21 @@ let serverSet = (preds: Pred[], line: string): ServerSet => {
   let key = qkey(preds)
   let found = queryUses.get(key)
   if (!found) {
+    // `q:<canonical preds>` — the projection is IN the key, so the same filter
+    // under two projections is two subs, never one set answering both.
     let sub = `q:${key}`
-    found = { n: 0, ids: signal(mem.resolve(preds)), sub, preds, live: false }
+    found = {
+      n: 0,
+      ids: signal(mem.resolve(preds)),
+      sub,
+      preds,
+      live: false,
+      wake: (fieldsOf(preds) ?? []).filter((f) => f.wake),
+      vals: new Map(),
+    }
     queryUses.set(key, found)
     querySignals.set(sub, found.ids)
+    seedWake(found, found.ids.peek())
     ownBoard(sub, line)
   } else if (!found.live) {
     // Unconfirmed by the server: the prime may predate cache churn a local
@@ -359,6 +428,7 @@ let serverSet = (preds: Pred[], line: string): ServerSet => {
     let held = found.ids.peek()
     if (ids.length != held.length || ids.some((e, i) => e != held[i])) {
       found.ids.value = ids
+      seedWake(found, ids)
     }
   }
   return found
@@ -1364,6 +1434,10 @@ export type Sub = {
   // ABSENCE on an unwindowed sub is itself the statement that the set is whole.
   // `total` is absent when no index could vouch for one (a declining filter).
   window?: { limit: number; total?: number }
+  // The PROJECTION the server answered under (D-22567 §3), stated on the
+  // replace frame: the columns these rows carry, and by omission the ones they
+  // do NOT. Absent means full components. `loaded()` reads it.
+  fields?: Field[]
 }
 type Observed = { observe: unknown }
 type Hot = 'reload' | { hmr: number } | { css: number }
@@ -1477,7 +1551,20 @@ let connect = () => {
   }
   socket.onmessage = (m) => {
     pet()
-    let data = JSON.parse(String(m.data)) as unknown
+    let text = String(m.data)
+    // What the socket has actually carried, per sub — the instrument the
+    // projection work is measured with (D-22567 §3), and the one that tells a
+    // tab holding a 6 MB sub from one holding a 1.5 MB one. Counting the raw
+    // frame is the honest number: it is what crossed the wire, before any
+    // parsing this side does with it.
+    carried.total += text.length
+    let data = JSON.parse(text) as unknown
+    // Attribute the RAW frame's bytes to the sub that asked for them — the
+    // number is what crossed the wire, before any parsing this side does, but
+    // the NAME has to come from the parsed frame: a sub is named after its
+    // canonical preds, which is JSON with its own escaped quotes.
+    let sub = (data as { sub?: string }).sub
+    if (sub) carried.subs[sub] = (carried.subs[sub] ?? 0) + text.length
     // A heartbeat frame is liveness only (T-21511) — pet the watchdog, land
     // nothing.
     if (isPing(data)) return
@@ -1577,6 +1664,42 @@ export let subWindow = (sub: string): Window | undefined => {
   return subWindows.get(sub)
 }
 
+// Bytes this socket has carried, whole and per sub (__probe.wire) — see the
+// onmessage counter.
+let carried = { total: 0, subs: {} as Record<string, number> }
+
+// What each PROJECTED sub declared it carries (D-22567 §3) — recorded from the
+// server's own statement on the reply, so the client believes the frame rather
+// than re-deriving the contract. A sub absent here streams FULL components.
+let subFields = new Map<string, Field[]>()
+
+// Is this column actually LOADED — or is the cache holding a row whose
+// projection never named it? This is the cache's partiality contract one level
+// down: at the ENTITY level absence never means non-existence, and at the COLUMN
+// level absence never means null. A projected sub streams only its declared
+// columns, so `e.session.final_text` reading undefined under a `.fields=` sub
+// means UNLOADED — the same word bodyless already gives a deferred body — and a
+// render that needs it subscribes for more (a fuller projection, or the
+// card/route sub that loads an entity whole).
+//
+// It answers off the SUBS, never a per-row mark: the same shape evict()'s own
+// `held` uses one level up, and it needs no maintenance on the patch path. The
+// bias is deliberate — an unprojected sub, or a row no projected sub holds (the
+// working-set seed, a want() fetch), is FULL and says true; anything else says
+// false. Erring toward "unloaded" costs a needless re-subscribe; erring the
+// other way is the masquerade this exists to prevent.
+export let loaded = (eid: string, comp: string, prop: string): boolean => {
+  let projectedOnly = false
+  for (let [sub, members] of subMembers) {
+    if (!members.has(eid)) continue
+    let fields = subFields.get(sub)
+    if (!fields) return true
+    if (fields.some((f) => f.comp == comp && f.prop == prop)) return true
+    projectedOnly = true
+  }
+  return !projectedOnly
+}
+
 // A subscription frame: land its changes like any batch (adds + updates flow
 // through the unchanged applyLocal), then track membership. A death rides in
 // `changes` as an entity-null (gone for everyone — applyLocal already removed
@@ -1611,6 +1734,13 @@ export let landSub = (f: Sub) => {
   // query this frame replaced.
   if (f.window) subWindows.set(f.sub, f.window)
   else if (f.replace) subWindows.delete(f.sub)
+  // The projection is recorded BEFORE the rows land, so the cache is never
+  // briefly holding projected columns while `loaded` still calls the row full.
+  // The server states it on every replace; a maintenance frame inherits what
+  // the sub was opened under.
+  if (f.replace) {
+    f.fields ? subFields.set(f.sub, f.fields) : subFields.delete(f.sub)
+  }
   let touched = applyLocal(f.changes)
   settleObservations(f.changes)
   // The server marks shadow-ness on every frame it sends, so believe the
@@ -1623,11 +1753,10 @@ export let landSub = (f: Sub) => {
   // own row signal already carries that edit, so the list stays asleep for it.
   let had = querySignals.has(f.sub) ? new Set(old) : null
   // The server has spoken for this query — its set is authoritative from here.
-  if (had) {
-    for (let s of queryUses.values()) {
-      if (s.sub == f.sub) s.live = true
-    }
-  }
+  let set = had
+    ? [...queryUses.values()].find((s) => s.sub == f.sub)
+    : undefined
+  if (set) set.live = true
   let mine = f.replace ? new Set<string>() : old
   subMembers.set(f.sub, mine)
   let leaving: string[] = f.replace ? [...old] : [...(f.drop ?? [])]
@@ -1640,6 +1769,10 @@ export let landSub = (f: Sub) => {
   for (let eid of f.drop ?? []) mine.delete(eid)
   if (f.replace) leaving = leaving.filter((eid) => !mine.has(eid))
   if (!f.shadow && !shadows.has(f.sub)) evict(leaving)
+  // The server's answer replaces the set, so a projected sub's waking-value
+  // signatures are reseeded from it — otherwise the first later patch reads
+  // them against the pre-answer prime and reports a move nobody made.
+  if (set?.wake.length && f.replace) seedWake(set, mine)
   if (had && membersChanged(had, mine)) {
     querySignals.get(f.sub)!.value = [...mine]
   }
@@ -1712,6 +1845,7 @@ let forget = (sub: string) => {
   shadows.delete(sub)
   subMembers.delete(sub)
   subWindows.delete(sub)
+  subFields.delete(sub)
   agreement?.checked.delete(sub)
   if (sub.startsWith('entries:')) {
     clearObservations(sub.slice('entries:'.length))
@@ -2202,6 +2336,7 @@ let probe = globalThis as {
     subShapes: () => Record<string, number>
     subMembersOf: (line: string) => number
     cacheN: () => number
+    wire: () => { total: number; subs: Record<string, number> }
   }
 }
 probe.__probe = {
@@ -2245,6 +2380,7 @@ probe.__probe = {
   // How many rows the partial cache holds — the T-21491 bound: working-set
   // floor + sub-held + demand-fetched, far below the server's row count.
   cacheN: () => Object.keys(cache.peek()).length,
+  wire: () => ({ total: carried.total, subs: { ...carried.subs } }),
 }
 
 // The whole entity, assembled for a renderer: spine, components present,
@@ -2564,8 +2700,66 @@ export let projects = (): Ent[] =>
       (cache.peek()[b]?.entity?.num ?? Infinity)
     )
     .map(ent)
+// The session chrome, projected (D-22567 §3). `.session!` is the one UNBOUNDED
+// kind — thousands of rows — and unprojected it put 6.22 MB on the wire for
+// every tab, because a session entity's eager bag is its whole history: the
+// final_text and usage_json and stderr of every run that ever finished, plus
+// the created/updated/worktree/spawn provenance around them. The Tray's strip
+// is mounted in every tab and renders coloured DOTS.
+//
+// So the chrome asks for the columns it decides and paints with, and nothing
+// else: enough to tell awake from settled and recent from old (Tray `shown`),
+// sort by start, and give each dot its standing (session_status graphStanding —
+// which reads `error`/`exception` for PRESENCE, hence their timestamps). A
+// session's `provider`/`pid` are spawn-preferred through sessionOf, so both
+// spellings ride or the merge reads a stale one.
+let dotFields: Field[] = [
+  'session.status',
+  'session.pid',
+  'session.turn',
+  'session.origin',
+  'session.standing',
+  'session.started_at',
+  'session.finished_at',
+  'session.provider',
+  'spawn.provider',
+  'runtime.pid',
+  'error.at',
+  'exception.at',
+].map((f) => {
+  let [comp, prop] = f.split('.')
+  return { comp, prop, wake: true }
+})
+let sessionDots: Pred[] = [
+  has('session'),
+  { comp: '', prop: '', op: PROJECT, value: '', fields: dotFields },
+]
+
+// What a face that RENDERS a session row needs on top of the dot's columns —
+// the identity, model and effort SessionRow shows. Held only while such a face
+// is mounted (the Tray's panel while it is open, a project's Dashboard), so the
+// columns nobody is looking at stay off the wire. Same `.session!` query as
+// above under a DIFFERENT projection, which makes it a different SUB with its
+// own member set: that is what "projection is part of sub identity" buys, and
+// the cache merges the two because the fuller one is a superset.
+export let sessionDetail = '.session!&.fields=' + [
+  ...dotFields.map((f) => `${f.comp}.${f.prop}`),
+  'session.model',
+  'session.effort',
+  'session.persona',
+  'session.actor',
+  'session.serving_model',
+  'session.requested_task',
+  'session.role',
+  'spawn.model',
+  'spawn.effort',
+  'spawn.persona',
+  'created.at',
+  'doc.title',
+].join(',')
+
 export let sessionRows = (): [string, Session][] =>
-  queryEids([has('session')]).value.flatMap((eid) => {
+  queryEids(sessionDots).value.flatMap((eid) => {
     let s = sessionOf(row(eid).value ?? {})
     return s ? [[eid, s] as [string, Session]] : []
   })
@@ -2738,20 +2932,28 @@ export let rootCanvas = () => {
 // The canvas working set: the carded pins on ONE canvas, scoped to it through
 // the query door so opening a canvas reads its own contents rather than
 // trusting the whole cache (T-18103) — under a partial cache a pin outside the
-// loaded set still counts, where a scan silently dropped it. `.fields` PROJECTS
-// each row's box (x/y/w/h) and card face (target/view) so a change to any of
-// them re-fires the list — the same rows the old refreshPins re-published — plus
-// `z~` VOLATILE: z's value rides along (seeding pinZ) but a z-bump on every
-// toFront never re-fires the list, the raise binding straight to pinZ instead.
-let pinFields: Field[] = [
-  { comp: 'pin', prop: 'x', wake: true },
-  { comp: 'pin', prop: 'y', wake: true },
-  { comp: 'pin', prop: 'w', wake: true },
-  { comp: 'pin', prop: 'h', wake: true },
-  { comp: 'pin', prop: 'z', wake: false },
-  { comp: 'card', prop: 'target', wake: true },
-  { comp: 'card', prop: 'view', wake: true },
-]
+// loaded set still counts, where a scan silently dropped it.
+//
+// The projection here is not about BYTES — `pinned()` builds a whole `Pinned`
+// out of each row and callers read the lot back off it (topZ, Run's spawn box,
+// pinsOn's own canvas), so every column of both components must ride. It is
+// about the WAKE signal: a change to any projected column re-fires the LIST —
+// the same rows the old refreshPins re-published — except `z`, marked VOLATILE,
+// whose value rides along (seeding pinZ) while a z-bump on every toFront
+// re-fires nothing, the raise binding straight to pinZ instead.
+//
+// So it is DERIVED from the vocabulary rather than listed: a pin column added
+// to types.ts rides automatically, where a hand-kept list would omit it and
+// leave a column nobody can read (M-17871 — one list, zero further edits). This
+// matters more now that a projected query rides a real SERVER sub (D-22567 §3):
+// the projected row is all a late-arriving pin has.
+let whole = (comp: string, volatile: string[] = []): Field[] =>
+  Object.keys(comps[comp]).map((prop) => ({
+    comp,
+    prop,
+    wake: !volatile.includes(prop),
+  }))
+let pinFields: Field[] = [...whole('pin', ['z']), ...whole('card')]
 let pinsOn = (canvas: string): Pred[] => [
   eq('pin', 'canvas', canvas),
   has('card'),

@@ -1,5 +1,11 @@
 import { awake, type Ent } from '../../types.ts'
-import { boardsOver, byWarmth, ent, unreadFor } from '../../live.ts'
+import {
+  boardsOver,
+  byWarmth,
+  ent,
+  sessionDetail,
+  unreadFor,
+} from '../../live.ts'
 import { block } from '../ui.tsx'
 import { Entity } from '../Entity.tsx'
 import { useQuery } from '../useQuery.ts'
@@ -84,7 +90,11 @@ let rolesOf = (roles: Ent[]) =>
 let latelyOf = (tasks: Ent[]) => tasks.toSorted(byWarmth(Date.now()))
 
 export let Dashboard = ({ e }: { e: Ent }) => {
-  let sessions = useQuery('.session!')
+  // The sessions facet screens EVERY session down to the few serving this
+  // project, then renders them as rows — so it asks for the row columns and
+  // none of the history behind them (live.ts sessionDetail; unprojected this
+  // one query was 6.22 MB).
+  let sessions = useQuery(sessionDetail)
   let claims = useQuery('.claim!')
   let roles = useQuery(`.role.scope=${e.eid}`)
   let tasks = useQuery(`.task.project=${e.eid}`)

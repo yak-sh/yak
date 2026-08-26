@@ -604,11 +604,14 @@ export let whereSome = (preds: Pred[], now = Date.now()): Sql => {
 // components are LEFT JOINed like a filter's and selected aliased `comp.prop`; a
 // `~`-volatile field is projected identically — volatility is a change-signal
 // concern the caller reads off fieldsOf(), invisible to SQL. A query naming no
-// projection IS `where()` (eid only). null if a projected column is unknown or
-// any filter declined — the exactness contract, unbroken.
+// projection IS `where()` (eid only), and so is the EIDS-ONLY projection
+// (`.fields=eid`, an empty field list) — the two ask SQL for the same statement
+// and differ only in what the caller then believes about the rows. null if a
+// projected column is unknown or any filter declined — the exactness contract,
+// unbroken.
 export let select = (preds: Pred[], now = Date.now()): Sql | null => {
   let fields = fieldsOf(preds)
-  if (!fields) return where(preds, now)
+  if (!fields?.length) return where(preds, now)
   for (let f of fields) if (!known(f.comp, f.prop)) return null
   let built = build(preds, 'entity', fields.map((f) => f.comp), false, now)
   if (!built) return null

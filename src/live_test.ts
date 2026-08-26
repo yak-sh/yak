@@ -30,6 +30,7 @@ import {
   jobOf,
   landObservation,
   landSub,
+  loaded,
   myCamera,
   myCursor,
   myMode,
@@ -2209,11 +2210,28 @@ Deno.test('predsToQuery round-trips membership shapes, refuses the rest', () => 
     predsToQuery([eq('fold', 'client', E), eq('fold', 'board', F)]),
     `.fold.client=${E}&.fold.board=${F}`,
   )
-  // A projection (pins) carries waking fields the membership sub can't re-fire —
-  // refused, so the caller keeps the in-memory resolver.
+  // A PROJECTION rides the wire now (D-22567 §3): the eids-only form, and named
+  // columns with `~` back on the volatile ones — so the server answers only
+  // those columns and the sub's identity includes which.
   assertEquals(
     predsToQuery([{ comp: '', prop: '', op: PROJECT, value: '', fields: [] }]),
-    undefined,
+    '.fields=eid',
+  )
+  assertEquals(
+    predsToQuery([
+      eq('pin', 'canvas', E),
+      {
+        comp: '',
+        prop: '',
+        op: PROJECT,
+        value: '',
+        fields: [
+          { comp: 'pin', prop: 'x', wake: true },
+          { comp: 'pin', prop: 'z', wake: false },
+        ],
+      },
+    ]),
+    `.pin.canvas=${E}&.fields=pin.x,pin.z~`,
   )
   // An empty query has no line.
   assertEquals(predsToQuery([]), undefined)
@@ -2277,6 +2295,59 @@ Deno.test('serverQuery: a held membership query tracks its subscription', () => 
   } finally {
     ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
   }
+})
+
+// D-22567 §3, the client half: a PROJECTED sub's rows are honest about being
+// projected. The cache is already partial at the ENTITY level (absence never
+// means non-existence); a projection makes it partial at the COLUMN level too,
+// and an undefined column that merely was never asked for must not read as
+// null. `loaded()` is what tells the two apart, and it answers off the subs —
+// so an unprojected sub, or a row no projected sub holds, is full.
+Deno.test('loaded: a projected row does not masquerade as a full one', () => {
+  let S = 'dddd0000-0000-4000-8000-000000000001'
+  cache.value = {}
+  resetSignals()
+  let fields = [
+    { comp: 'session', prop: 'turn', wake: true },
+    { comp: 'session', prop: 'standing', wake: true },
+  ]
+  landSub({
+    sub: 'q:projected',
+    replace: true,
+    shadow: true,
+    fields,
+    changes: [
+      { eid: S, name: 'entity', comp: { eid: S, num: 9 } },
+      { eid: S, name: 'session', comp: { turn: 'busy' } },
+    ],
+  })
+  assertEquals(loaded(S, 'session', 'turn'), true)
+  // Declared but absent from this row — an honestly EMPTY column.
+  assertEquals(loaded(S, 'session', 'standing'), true)
+  // Never declared: unloaded, not null. A render needing it subscribes for more.
+  assertEquals(loaded(S, 'session', 'final_text'), false)
+  assertEquals(loaded(S, 'doc', 'title'), false)
+  // A FULLER sub over the same row heals it — the union of what holds it is
+  // what the cache carries, which is why two projections of one query can share
+  // a cache without either lying about the other's columns.
+  landSub({
+    sub: 'q:whole',
+    replace: true,
+    shadow: true,
+    changes: [{ eid: S, name: 'session', comp: { cwd: '/tmp' } }],
+  })
+  assertEquals(loaded(S, 'session', 'final_text'), true)
+  unsubscribe('q:projected')
+  unsubscribe('q:whole')
+})
+
+Deno.test('loaded: a row no projected sub holds is full', () => {
+  // The working-set seed and want() both land whole rows that belong to no sub;
+  // saying "unloaded" for those would send every reader chasing a heal.
+  let S = 'dddd0000-0000-4000-8000-000000000002'
+  cache.value = { [S]: { entity: { eid: S, num: 10 } } }
+  resetSignals()
+  assertEquals(loaded(S, 'session', 'final_text'), true)
 })
 
 // T-21283: a per-rendered-row reverse-lookup (commentCount on every tile) must

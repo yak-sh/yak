@@ -1,6 +1,14 @@
 import { useEffect, useRef } from 'preact/hooks'
 import { signal } from '@preact/signals'
-import { clientId, ent, mode, pinned, sessionRows, shelfFor } from '../live.ts'
+import {
+  clientId,
+  ent,
+  mode,
+  pinned,
+  sessionDetail,
+  sessionRows,
+  shelfFor,
+} from '../live.ts'
 import { awake, type Session } from '../types.ts'
 import { block } from './ui.tsx'
 import { dragData } from './drag.ts'
@@ -9,6 +17,7 @@ import { SessionDot } from './session_status.tsx'
 import { Card, icons } from './Card.tsx'
 import { Icon } from './icons.tsx'
 import { shelfHost, shelfOpen, shelve } from './shelf.ts'
+import { useQueryEids } from './useQuery.ts'
 
 // The Tray is bottom-right screen chrome: live-session attention plus a
 // per-client Shelf. A shelved entity is a normal Card while open and one icon
@@ -117,6 +126,50 @@ let drop = (e: DragEvent) => {
   shelve(target, view, pin)
 }
 
+// The open panel's rows. Its own component so its SUBSCRIPTION lives exactly as
+// long as it is on screen: the strip's dots ride a projection carrying only the
+// columns a dot decides by (live.ts sessionDots), and a rendered ROW needs more
+// — the identity, model and effort SessionRow shows. So the panel holds the
+// fuller projection of the SAME query, which is a different sub (projection is
+// part of sub identity, D-22567 §3), and gives it back when it closes. A
+// collapsed tray — the default — never asks for those columns at all.
+let LiveRows = ({ ls }: { ls: [string, Session][] }) => {
+  useQueryEids(sessionDetail)
+  return (
+    <Group>
+      <Label>live</Label>
+      {ls.map(([eid, s]) => (
+        <Row
+          mod='live'
+          key={eid}
+          draggable
+          // no pin in the payload: a live row isn't shelved, so
+          // dropping it on the canvas SPAWNS a session card
+          onDragStart={(e: DragEvent) => dragData(e, eid, 'Session')}
+        >
+          <Entity eid={eid} view='Tray.List.Tile' />
+          {
+            /* only a settled run dismisses — a live one wants your
+              eyes (stop it from its own view) */
+          }
+          {!awake(s) && (
+            <X
+              type='button'
+              aria-label='dismiss'
+              onClick={(e: MouseEvent) => {
+                e.stopPropagation()
+                dismiss(eid)
+              }}
+            >
+              ×
+            </X>
+          )}
+        </Row>
+      ))}
+    </Group>
+  )
+}
+
 export let Tray = () => {
   let root = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -180,39 +233,7 @@ export let Tray = () => {
       </Strip>
       {trayOpen.value && (
         <Panel>
-          {ls.length > 0 && (
-            <Group>
-              <Label>live</Label>
-              {ls.map(([eid, s]) => (
-                <Row
-                  mod='live'
-                  key={eid}
-                  draggable
-                  // no pin in the payload: a live row isn't shelved, so
-                  // dropping it on the canvas SPAWNS a session card
-                  onDragStart={(e: DragEvent) => dragData(e, eid, 'Session')}
-                >
-                  <Entity eid={eid} view='Tray.List.Tile' />
-                  {
-                    /* only a settled run dismisses — a live one wants your
-                      eyes (stop it from its own view) */
-                  }
-                  {!awake(s) && (
-                    <X
-                      type='button'
-                      aria-label='dismiss'
-                      onClick={(e: MouseEvent) => {
-                        e.stopPropagation()
-                        dismiss(eid)
-                      }}
-                    >
-                      ×
-                    </X>
-                  )}
-                </Row>
-              ))}
-            </Group>
-          )}
+          {ls.length > 0 && <LiveRows ls={ls} />}
           {!ls.length && <Hint>no live sessions</Hint>}
         </Panel>
       )}

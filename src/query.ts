@@ -790,9 +790,18 @@ export let preds = (token: string): Pred[] | null => {
   // query. Each column routes like a bare prop (or its explicit `pin.x`); a path
   // is refused — a projection reads one entity's own columns. Guarded so a future
   // `fields` column would win. fieldsOf()/select() read the PROJECT pred.
+  //
+  // `.fields=eid` is the EIDS-ONLY form: an empty projection, so a result row
+  // carries its spine and nothing else. It is spelled as a column because that
+  // is what it is — every row already carries `eid`, so naming it and nothing
+  // beside it says "the ids, no columns". An empty `.fields=` stays a refusal:
+  // a caller who wrote no columns meant to write some.
   if (path == 'fields' && !owned('fields')) {
     if (op != '=' || !value) {
       throw new Error('.fields names columns: .fields=pin.x,pin.y')
+    }
+    if (value == 'eid') {
+      return [{ comp: '', prop: '', op: PROJECT, value: '', fields: [] }]
     }
     let fields = value.split(',').map((seg): Field => {
       let wake = !seg.endsWith('~')

@@ -10,6 +10,8 @@ import type { DatabaseSync } from './sqlite.ts'
 import type { Change } from './types.ts'
 import {
   aggOf,
+  type Field,
+  fieldsOf,
   listed,
   matchQuery,
   parseQuery,
@@ -29,7 +31,15 @@ import {
 } from './db.ts'
 import { evalAgg, evalSub, workingSet } from './graph_query.ts'
 import { liveFrame } from './wire.ts'
-import { bodied, bodyless, gaps, spread, type Step, step } from './subs.ts'
+import {
+  bodied,
+  bodyless,
+  gaps,
+  projected,
+  spread,
+  type Step,
+  step,
+} from './subs.ts'
 
 // A Sub is this socket's saved query + the eids currently in its set. Shadow
 // subs hear both streams for prove-before-flip; the later migration switch is
@@ -41,6 +51,19 @@ type Sub = {
   moving: boolean
   bodies: boolean
   details: boolean
+  // The sub's PROJECTION (D-22567 §3): the columns its query DECLARED it reads
+  // (`.fields=session.status`), or undefined for a full-component sub, which is
+  // byte-identical to before. Every payload — the initial set, an ADD, a
+  // standing-match patch — goes out through it, so a column the client never
+  // asked for never rides, and a patch touching NO projected column projects to
+  // nothing and is never sent. Projection is part of sub IDENTITY: the client
+  // names its sub after the whole query line (live.ts serverSet), so the same
+  // filter under two projections is two subs with two member sets, never one
+  // set answering both.
+  fields?: Field[]
+  // That declaration compiled once, at subscribe — the cut every payload runs
+  // through. Absent exactly when `fields` is.
+  cut?: (changes: Change[]) => Change[]
   // A ROUTE sub (`route:<eid>`) names one entity by id, not a query — the
   // fullscreen root a client reaches by direct URL, which the query grammar
   // can't express (`.eid=` is refused, query.ts) and which no defining set
@@ -94,8 +117,17 @@ type Sub = {
 let aggDirty = (watch: Set<string>, name: string) =>
   name == 'entity' || name == 'quarantined' || watch.has(name)
 
+// The ONE payload seam: every Change this socket sends for a row sub passes
+// here, so the initial set, an ADD and a standing-match patch can only agree
+// about which columns exist.
+//
+// A PROJECTION wins over the body deferral where it names a column: bodyless is
+// the DEFAULT cut (nobody declared what they read, so defer the class nobody
+// reads), while a projection is a caller stating exactly what it reads — asking
+// for `.fields=doc.body` is asking for the body, and silently withholding it
+// would make the projection a lie about itself.
 let carry = (sub: Sub, changes: Change[]) =>
-  sub.bodies ? changes : bodyless(changes)
+  sub.cut ? sub.cut(changes) : sub.bodies ? changes : bodyless(changes)
 
 let payload = (
   sub: Sub,
@@ -228,6 +260,9 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         : evalSub(db, line, details)
       let { preds, hits } = answer
       let window = 'window' in answer ? answer.window : undefined
+      // The declared projection, compiled once. A route sub never has one: it
+      // exists to load ONE entity whole, which is the opposite ask.
+      let fields = route != null ? undefined : fieldsOf(preds)
       map.set(f.sub, {
         preds,
         members: new Set(hits.map((r) => r.eid)),
@@ -238,6 +273,7 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         // snapshot and root live stream, so their shadow owns bodies and
         // standing-match updates too.
         details,
+        ...(fields ? { fields, cut: projected(fields) } : {}),
         ...(route != null ? { only: new Set([route]) } : {}),
         ...(window
           ? {
@@ -264,6 +300,11 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
           // A bounded answer SAYS it is bounded. An answer that is whole says
           // nothing, so an unwindowed sub's frame is exactly what it was.
           ...(window ? { window } : {}),
+          // And it STATES its projection the same way: the client asked for it,
+          // but a frame carrying the contract is one the client can believe
+          // without re-deriving it, and landSub is what turns the statement
+          // into the cache's column-level loaded/unloaded mark.
+          ...(fields ? { fields } : {}),
         }),
       )
     } catch (e) {

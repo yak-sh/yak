@@ -18,9 +18,28 @@ let Frame = block('section', 'Usage', {
 })
 let { Head, Table, Empty } = Frame
 
+// Exactly what use() reads off a session (usage.ts) plus the requested_task the
+// screen below walks — a PROJECTION, so the one view that legitimately wants
+// usage_json still leaves final_text, stderr, transcript and the whole
+// created/updated/worktree provenance off the wire (D-22567 §3).
+let usageQuery = '.session!&.fields=' + [
+  'session.id',
+  'session.usage_json',
+  'session.provider',
+  'session.model',
+  'session.serving_model',
+  'session.persona',
+  'session.requested_task',
+  'session.started_at',
+  'session.finished_at',
+  'spawn.provider',
+  'spawn.model',
+  'spawn.persona',
+].join(',')
+
 export let Usage = ({ e }: { e: Ent }) => {
   // Every session, screened to those that worked a task homed on this project.
-  let sessions = useQuery('.session!')
+  let sessions = useQuery(usageQuery)
   let uses: Use[] = []
   for (let s of sessions) {
     let task = s.session?.requested_task
