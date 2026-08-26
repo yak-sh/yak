@@ -209,6 +209,63 @@ export let evalQuery = (
   return { preds, hits, ent }
 }
 
+// A subscription whose filter the index cannot answer WHOLE gets a BOUNDED
+// newest-first answer instead of whereSome's full candidate scan. On the live
+// graph the scan stages every eager entity (~21k) and refines in JS — 5s of
+// blocked event loop for a time-window board, 45s+ for a hot ranking, on
+// EVERY card mount — while a board renders a page, never the tail. Candidates
+// come off the spine newest-first (entries excluded in SQL: their spines
+// dominate the high nums and would eat the whole budget before refinement),
+// read at 2× the cap so a moderately-selective refinement still fills it, then
+// the same listed+matchQuery refinement evalQuery runs. The contract shift is
+// deliberate and documented at the door: a declining sub's initial answer is a
+// newest-first PREFIX of its matches; deltas keep it live from there, and the
+// HTTP /query door still pages the exact, complete answer.
+export let SUB_CAP = 1000
+export let evalCapped = (
+  db: DatabaseSync,
+  q: string,
+  cap = SUB_CAP,
+) => {
+  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let ent = (e: string) => eager(db, e)
+  let kids = (eid: string, comp: string, prop: string) =>
+    referrersOf(db, [eid], { comp, prop }).map(ent)
+  let base = whereSome(preds)
+  let capped = {
+    sql: `${base.sql} and not exists ` +
+      `(select 1 from entry where entry.entity = "entity"."id")` +
+      ` order by "entity"."num" desc limit ${cap * 2}`,
+    params: base.params,
+  }
+  // matching() reads the hit table in its own order — re-rank by num so the
+  // slice keeps the NEWEST matches, not an arbitrary cap-full.
+  let hits = matching(db, capped).map(rowed)
+    .filter((r) =>
+      listed(r.comps, preds) && matchQuery(r.comps, preds, ent, undefined, kids)
+    )
+    .sort((a, b) => b.num - a.num)
+    .slice(0, cap)
+  return { preds, hits }
+}
+
+// The subscription answerer control() calls: exact when the index answers
+// whole (evalFast), exact when the sub NEEDS the whole universe (an entries
+// partition, a lazy-naming query, an aggregate tally — a capped tally would
+// undercount every badge), bounded newest-first otherwise. A subscribe never
+// full-scans the graph on a socket's clock.
+export let evalSub = (
+  db: DatabaseSync,
+  q: string,
+  details = false,
+) => {
+  let exact = evalFast(db, q, details)
+  if (exact) return exact
+  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  if (details || namesLazy(preds) || aggOf(preds)) return evalQuery(db, q)
+  return evalCapped(db, q)
+}
+
 // The aggregate answer — a query carrying `.distinct=col` / `.tally=col`
 // reduced server-side. SQL when the column and every filter beside it compile
 // (aggregateSql: one indexed statement, never a row set in JS); otherwise the

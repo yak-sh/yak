@@ -7,7 +7,12 @@
 // entries lives in sql_test.ts; this proves the door on top of it.
 import { assertEquals } from '@std/assert'
 import { uuid } from './types.ts'
-import { evalAgg, evalGraph } from './graph_query.ts'
+import {
+  evalAgg,
+  evalCapped as evalCappedDoor,
+  evalGraph,
+  evalSub as evalSubDoor,
+} from './graph_query.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, open } = await import('./db.ts')
@@ -178,4 +183,37 @@ Deno.test('evalAgg answers .distinct/.tally, filtered and null-for-membership', 
   // no AGG projection → null, the door falls through to membership
   assertEquals(evalAgg(db, '.status=open'), null)
   db.close()
+})
+
+Deno.test('evalCapped answers a declining query newest-first, bounded', () => {
+  let db = freshDb()
+  // 'zap' is a bare-word text pred — the index declines it, whereSome scans.
+  for (let i = 0; i < 6; i++) {
+    apply(db, [{ eid: uuid(), name: 'doc', comp: { title: `zap ${i}` } }])
+  }
+  apply(db, [{ eid: uuid(), name: 'doc', comp: { title: 'unrelated' } }])
+  let { hits } = evalCappedDoor(db, 'zap', 3)
+  assertEquals(hits.length, 3)
+  // The cap SELECTS the newest matches (a set — frame order is irrelevant).
+  let titles = new Set(hits.map((h) => String(h.comps.doc?.title)))
+  assertEquals(titles, new Set(['zap 5', 'zap 4', 'zap 3']))
+})
+
+Deno.test('evalSub: exact for narrowing and aggregate queries, capped otherwise', () => {
+  let db = freshDb()
+  for (let i = 0; i < 4; i++) {
+    let eid = uuid()
+    apply(db, [{ eid, name: 'doc', comp: { title: `t${i}` } }, {
+      eid,
+      name: 'task',
+      comp: { status: 'open' },
+    }])
+  }
+  // Narrowing: the index answers whole — every task, mine and freshDb's seed.
+  let exact = evalSubDoor(db, '.task!').hits
+  let mine = exact.filter((h) => /^t\d$/.test(String(h.comps.doc?.title)))
+  assertEquals(mine.length, 4)
+  // Aggregate: exact tally path, never capped (all opens counted).
+  let agg = evalAgg(db, '.task!&.tally=task.status')
+  assertEquals((agg?.values.get('open') ?? 0) >= 4, true)
 })

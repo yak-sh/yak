@@ -154,9 +154,8 @@ import {
 import {
   dbReader,
   evalAgg,
-  evalFast,
   evalGraph,
-  evalQuery,
+  evalSub,
   localQuery,
   personaGraph,
   projectionGraph,
@@ -611,7 +610,7 @@ let control = (
     }
     let { preds, hits } = route != null
       ? { preds: [], hits: rowsFor(route) }
-      : evalFast(db, f.q ?? '', details) ?? evalQuery(db, f.q ?? '')
+      : evalSub(db, f.q ?? '', details)
     // An aggregate sub answers a tally, not a member list. Build the standing
     // count from the membership pass (vals doubles as the member set), send
     // the whole map once, and let maintain() speak in deltas from here.
