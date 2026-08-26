@@ -8,6 +8,7 @@
 // Ids: `eid` is a UUID so ANY side (client included) can mint entities;
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
 import { DatabaseSync, type StatementSync } from './sqlite.ts'
+import { tryBaton } from './baton.ts'
 import { initVector, loadVector } from './vector.ts'
 import { dirname, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -2359,6 +2360,108 @@ let migrateToIdKeys = (db: DatabaseSync) => {
   db.exec('pragma foreign_keys = on')
 }
 
+// A writer killed mid-write (SIGKILL, SIGBUS — the vector the baton cannot
+// close, T-20223/T-21914) can leave `<db>-wal` malformed while the main file
+// stays healthy. Every boot then throws `database disk image is malformed` and
+// the supervisor's retry loops forever: the fleet substrate is down until a
+// human moves the WAL aside. healWal() does at boot exactly what the 2026-08-25
+// incident recovery did by hand — and ONLY then:
+//
+// - Probe only when a WAL file exists (a clean shutdown checkpoints and removes
+//   it, so healthy boots pay nothing). `pragma quick_check` costs ~2s on the
+//   live graph; a wal-present boot is a crash restart or a --join successor,
+//   where that price is right.
+// - Salvage only while holding the writer baton transiently (tryBaton): a
+//   --join successor probing beside a LIVE predecessor must never move the WAL
+//   that predecessor is writing. Baton held elsewhere → propagate, don't touch.
+// - Salvage = safety-copy the main db, rename wal → `.corrupt.<ts>` and shm →
+//   `.stale.<ts>` — preserved for forensics, never deleted — then retry ONCE.
+//   The db reverts to its last checkpoint; loss is bounded to frames that were
+//   already unreadable.
+// - A second failure means the MAIN file is bad — not self-healable. Restore
+//   the wal/shm exactly as found and propagate.
+let stamp = () => new Date().toISOString().replaceAll(':', '-')
+let exists = (p: string) => {
+  try {
+    Deno.statSync(p)
+    return true
+  } catch {
+    return false
+  }
+}
+let probe = (db: DatabaseSync) => {
+  let row = db.prepare('pragma quick_check(1)').get() as Record<string, string>
+  let verdict = row?.quick_check ?? Object.values(row ?? {})[0]
+  if (verdict != 'ok') throw new Error(`quick_check: ${verdict}`)
+}
+let healWal = (db: DatabaseSync, path: string): DatabaseSync => {
+  if (path == ':memory:' || !exists(`${path}-wal`)) return db
+  try {
+    probe(db)
+    return db
+  } catch (e) {
+    let baton = tryBaton(path)
+    if (!baton) throw e // a live process owns this graph — never salvage under it
+    let ts = stamp()
+    try {
+      // Evidence copies FIRST — every later step may consume the originals.
+      Deno.copyFileSync(path, `${path}.pre-walrecover.${ts}`)
+      Deno.copyFileSync(`${path}-wal`, `${path}-wal.corrupt.${ts}`)
+      if (exists(`${path}-shm`)) {
+        Deno.copyFileSync(`${path}-shm`, `${path}-shm.stale.${ts}`)
+      }
+      // The WAL is salvageable only if the main file ALONE is healthy: probe
+      // it through an immutable URI, which reads main and ignores wal/shm
+      // entirely. Failure means main-db corruption — not self-healable, so
+      // propagate with everything still exactly as found (only copies exist).
+      let alone = new DatabaseSync(`file:${path}?immutable=1`, {
+        readOnly: true,
+      })
+      try {
+        probe(alone)
+      } finally {
+        alone.close()
+      }
+      // Dispose of the corrupt-wal handle. close() runs a checkpoint that
+      // copies the (checksum-valid, semantically stale) frames INTO main and
+      // deletes the wal — proven live — so the main file is corrupt after
+      // this line no matter what. That is fine: the safety copy taken above
+      // IS the healthy as-found main, and restoring it is byte-identical to
+      // the state the immutable probe just passed.
+      try {
+        db.close()
+      } catch { /* a corrupt wal may make close itself throw */ }
+      Deno.copyFileSync(`${path}.pre-walrecover.${ts}`, path)
+      if (exists(`${path}-wal`)) {
+        Deno.renameSync(`${path}-wal`, `${path}-wal.corrupt.${ts}`)
+      }
+      if (exists(`${path}-shm`)) {
+        Deno.renameSync(`${path}-shm`, `${path}-shm.stale.${ts}`)
+      }
+      let healed = new DatabaseSync(path)
+      probe(healed) // no wal now: reads serve from the proven-healthy main
+      let n = 'unknown'
+      try {
+        n = String(
+          (healed.prepare('select count(*) n from entity').get() as {
+            n: number
+          }).n,
+        )
+      } catch { /* pre-migrate graph: no entity table yet */ }
+      console.error(
+        `WAL SALVAGED for ${path}: boot found a malformed WAL (${e}) and ` +
+          `recovered by reverting to the last checkpoint. Preserved: ` +
+          `${path}-wal.corrupt.${ts}, ${path}-shm.stale.${ts}, safety copy ` +
+          `${path}.pre-walrecover.${ts}. Entities now: ${n}. Loss is bounded ` +
+          `to the un-checkpointed frames that were already unreadable.`,
+      )
+      return healed
+    } finally {
+      baton.close()
+    }
+  }
+}
+
 // Connect only — enough to READ the graph, taking NO write to it. The migrate
 // phase (which DOES write) is split out below so a --join deploy successor can
 // serve reads while it waits for the predecessor to release the writer baton,
@@ -2380,7 +2483,7 @@ export let connect = (path = file) => {
     )
   }
   Deno.mkdirSync(dirname(path), { recursive: true })
-  let db = new DatabaseSync(path)
+  let db = healWal(new DatabaseSync(path), path)
   loadVector(db)
   // Connection-local settings ONLY — nothing here writes shared data, so this
   // is safe to run beside a predecessor that still holds the writer baton.

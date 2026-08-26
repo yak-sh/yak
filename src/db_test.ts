@@ -57,6 +57,7 @@ let { comps, kindOrder, lazy, partition, sessionOf, shortId, stamped } =
     './types.ts'
   )
 let { bareDb } = await import('./testdb.ts')
+let { DatabaseSync } = await import('./sqlite.ts')
 let { slow } = await import('./testing.ts')
 
 // The apply/snapshot suite just needs a working migrated graph, not a DDL
@@ -4503,4 +4504,63 @@ slow('migrateBoardsToProjects: a filtered board is left alone', () => {
   assertEquals(compOf(d, project, 'board'), undefined) // project untouched
   assertEquals(!!compOf(d, filtered, 'board'), true) // filtered survives
   assertEquals(!!compOf(d, orphan, 'board'), true) // orphan survives
+})
+
+// The malformed-WAL salvage (T-21914). Build the incident state
+// deterministically: checkpoint a healthy main (T1), advance it via a later
+// checkpoint, keep fresh frames in the WAL, then revert the main file to T1
+// beside that newer WAL — the stale-main + newer-WAL mismatch a writer killed
+// mid-write leaves behind. Reads then throw `database disk image is malformed`.
+let walWreck = (dir: string) => {
+  let path = `${dir}/g.db`
+  let raw = new DatabaseSync(path)
+  raw.exec('pragma journal_mode = wal')
+  raw.exec('create table t (id integer primary key, v text)')
+  let fill = (db: InstanceType<typeof DatabaseSync>, v: string, n: number) => {
+    let ins = db.prepare('insert into t (v) values (?)')
+    for (let i = 0; i < n; i++) ins.run(v)
+  }
+  fill(raw, 'x'.repeat(100), 500)
+  raw.exec('pragma wal_checkpoint(TRUNCATE)')
+  raw.close()
+  let t1 = Deno.readFileSync(path)
+  raw = new DatabaseSync(path)
+  fill(raw, 'y'.repeat(150), 2000)
+  raw.exec('pragma wal_checkpoint(FULL)')
+  fill(raw, 'z'.repeat(200), 800)
+  let wal = Deno.readFileSync(`${path}-wal`)
+  raw.close()
+  Deno.writeFileSync(path, t1)
+  Deno.writeFileSync(`${path}-wal`, wal)
+  try {
+    Deno.removeSync(`${path}-shm`)
+  } catch { /* already gone */ }
+  return { path, t1 }
+}
+
+slow('connect() salvages a malformed WAL: aside, preserved, serving', () => {
+  let dir = Deno.makeTempDirSync()
+  let { path } = walWreck(dir)
+  let healed = connect(path)
+  healed.exec('select count(*) from t') // reads serve again
+  healed.close()
+  let names = [...Deno.readDirSync(dir)].map((e) => e.name)
+  assertEquals(names.some((n) => n.startsWith('g.db-wal.corrupt.')), true)
+  assertEquals(names.some((n) => n.startsWith('g.db.pre-walrecover.')), true)
+  Deno.removeSync(dir, { recursive: true })
+})
+
+slow('connect() refuses to salvage when the MAIN file is bad', () => {
+  let dir = Deno.makeTempDirSync()
+  let { path, t1 } = walWreck(dir)
+  // Trash a page inside the main file itself: now the WAL is not the (only)
+  // failing component, so salvage must restore the WAL as found and propagate
+  // — main-db corruption is not self-healable.
+  let bad = new Uint8Array(t1)
+  bad.fill(0xef, 8192, 12288)
+  Deno.writeFileSync(path, bad)
+  assertThrows(() => connect(path))
+  let names = [...Deno.readDirSync(dir)].map((e) => e.name)
+  assertEquals(names.includes('g.db-wal'), true) // restored as found
+  Deno.removeSync(dir, { recursive: true })
 })

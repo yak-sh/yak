@@ -16,6 +16,24 @@
 
 let pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
+// One synchronous grab, no waiting: the held FsFile, or undefined if a live
+// process has the baton. For callers inside synchronous boot code (connect()'s
+// WAL salvage) that need "am I the sole owner RIGHT NOW" — a transient hold
+// they close as soon as the guarded work is done, which never reorders the
+// takeBaton semantics above.
+export let tryBaton = (db: string): Deno.FsFile | undefined => {
+  if (db == ':memory:') return undefined
+  let file = Deno.openSync(`${db}-writer.lock`, {
+    create: true,
+    read: true,
+    write: true,
+    mode: 0o600,
+  })
+  if (file.tryLockSync(true)) return file
+  file.close()
+  return undefined
+}
+
 // The held baton is the FsFile whose lock the kernel drops when this process
 // ends; the caller keeps it for the process lifetime and never closes it —
 // closing would surrender the writer role while still serving. ':memory:'

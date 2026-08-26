@@ -61,6 +61,11 @@ export let loadVector = (db: DatabaseSync) => {
   } catch (e) {
     available = false
     let why = e instanceof Error ? e.message : String(e)
+    // Database-level corruption is NOT a vector problem: swallowing it here
+    // hides the malformed-WAL signal connect()'s salvage listens for, and the
+    // server would boot against a broken graph. Rethrow that class; only
+    // vector-index trouble stays optional.
+    if (why.includes('database disk image is malformed')) throw e
     console.error(
       `sqlite-vector: extension failed to load (corrupt/incompatible vector ` +
         `index?): ${why} — semantic search DISABLED, FTS still serves`,
