@@ -270,6 +270,52 @@ Deno.test('a failed lock cleanly restores the solo path', async () => {
   assertEquals(calls, ['solo', 'write'])
 })
 
+// T-21523: a leader about to be FROZEN cedes its lease deliberately — the next
+// queued tab is promoted while the frozen one pumps nothing — and seek()
+// re-queues it on resume, behind the promoted tab, never double-queued.
+Deno.test('cede promotes the next tab; seek re-queues the ceder', async () => {
+  let lock = locks()
+  let channel = channels<string>()
+  let calls = [[], []] as string[][]
+  let io = (i: number) => ({
+    lead: () => {
+      calls[i].push('lead')
+      return Promise.resolve()
+    },
+    follow: () => {
+      calls[i].push('follow')
+      return Promise.resolve()
+    },
+    solo: () => Promise.resolve(),
+    receive: () => {},
+    send: () => {},
+  })
+  let a = topology(lock, channel(), io(0), () => 'a')
+  let b = topology(lock, channel(), io(1), () => 'b')
+  await Promise.all([a.start(), b.start()])
+  assertEquals([a.isLeader(), b.isLeader()], [true, false])
+
+  // The freeze path: the leader steps down, the queued follower takes over.
+  a.cede()
+  await tick()
+  assertEquals([a.isLeader(), b.isLeader()], [false, true])
+
+  // Resume: the ceder queues BEHIND the new leader — nothing changes yet —
+  // and a second seek while queued adds nothing.
+  a.seek()
+  a.seek()
+  await tick()
+  assertEquals([a.isLeader(), b.isLeader()], [false, true])
+
+  // When the new leader cedes in turn, the queued ceder is promoted once.
+  b.cede()
+  await tick()
+  assertEquals([a.isLeader(), b.isLeader()], [true, false])
+  assertEquals(calls[0], ['lead', 'lead'])
+  a.cede()
+  await tick()
+})
+
 slow('one board name lives until its final tab owner leaves', async () => {
   let lock = locks()
   let channel = channels<string>()

@@ -2017,6 +2017,25 @@ export let boot = async () => {
     if (doc.visibilityState != 'visible' || !ws) return
     if (socketStale(ws.readyState, seen, Date.now())) ws.close()
   })
+  // A FROZEN leader is the follower starvation T-21523 names: the Web Lock
+  // releases only on page DESTROY, so a leader Chrome freezes keeps the lock
+  // and the socket while pumping nothing, and every follower starves until the
+  // owner refocuses that one tab. The lifecycle `freeze` event is the tell —
+  // cede leadership BEFORE freezing, so the lock manager promotes a live tab.
+  // The socket handle is nulled before close so onclose skips the reconnect
+  // poller: this tab is deliberately parked, not cut off. On `resume` it
+  // re-queues for the lock — usually behind the tab promoted meanwhile. An
+  // ordinary hidden-but-running leader is untouched: throttled timers still
+  // pump, and ceding on mere visibilitychange would churn leadership on every
+  // tab switch.
+  doc?.addEventListener?.('freeze', () => {
+    if (!owner?.isLeader()) return
+    let s = ws
+    ws = null
+    s?.close()
+    owner.cede()
+  })
+  doc?.addEventListener?.('resume', () => owner?.seek())
   if (!canShare()) {
     await once()
     await attachStore()

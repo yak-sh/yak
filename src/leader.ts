@@ -175,6 +175,15 @@ export let topology = <T>(
     }
   }
 
+  // cede() resolves the CURRENT lease from inside (T-21523): a leader about to
+  // be frozen steps down deliberately, the lock manager promotes the next
+  // queued tab, and this tab is a plain follower when it thaws. seek() is the
+  // way back — re-queue for the lock, usually behind the tab promoted
+  // meanwhile. `seeking` spans queued-through-holding, so a follower whose
+  // original request still waits never double-queues.
+  let vacate: (() => void) | null = null
+  let seeking = false
+
   let lead = async () => {
     leader = true
     if (landing) await landing
@@ -184,13 +193,17 @@ export let topology = <T>(
     serving = true
     bus.postMessage({ kind: 'ready' })
     flush()
-    await hold()
+    await Promise.race([hold(), new Promise<void>((r) => vacate = r)])
+    vacate = null
     serving = false
     leader = false
+    seeking = false
     installed.clear()
   }
 
-  let start = () => {
+  let seek = () => {
+    if (leader || seeking || standalone) return
+    seeking = true
     locks.request('tasks-sync', lead).catch(async () => {
       leader = false
       serving = false
@@ -200,6 +213,10 @@ export let topology = <T>(
       settle(true)
       if (!landed) finish()
     })
+  }
+
+  let start = () => {
+    seek()
     if (io.subscribe || io.unsubscribe) timer = setInterval(pulse, PULSE)
     announce()
     bus.postMessage({ kind: 'hello' })
@@ -242,12 +259,14 @@ export let topology = <T>(
   }
 
   return {
+    cede: () => vacate?.(),
     fan,
     drop,
     isLeader: () => leader && serving,
     isSolo: () => standalone,
     leave,
     route,
+    seek,
     start,
     use,
   }
