@@ -3,16 +3,13 @@
 // extensions. Linux uses the system library because @db/sqlite's 0.13.0
 // bundled x86_64 library crashes during sqlite3_initialize on Deno 2.9.
 
-let paths: Record<string, string> = {
-  linux: 'libsqlite3.so.0',
-  darwin: '/usr/lib/libsqlite3.dylib',
-  windows: 'sqlite3.dll',
-}
-let path = Deno.env.get('DENO_SQLITE_PATH') ?? paths[Deno.build.os]
-if (!path) throw new Error(`No system SQLite library for ${Deno.build.os}`)
-Deno.env.set('DENO_SQLITE_PATH', path)
-
-let sqlite = await import('@db/sqlite')
+// Declaration order is load-bearing: the prelude sets DENO_SQLITE_PATH, and
+// module evaluation (post-order, declaration order) runs it before the driver
+// initializes. Static + fully qualified (same pin as deno.json) because a
+// worker's module graph resolves no bare specifiers and a dynamic import
+// under --frozen wedges silently inside a worker.
+import { sqlitePath as path } from './sqlitepath.ts'
+import * as sqlite from 'jsr:@db/sqlite@0.13.0'
 let DriverDatabase = sqlite.Database
 type DriverStatement = InstanceType<typeof sqlite.Statement>
 type Params = Parameters<DriverStatement['run']>

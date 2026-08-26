@@ -36,11 +36,8 @@ import {
   migrate,
   recast,
   redact as redactValue,
-  referrersOf,
   refsOf,
-  refValuesOf,
   resolveId,
-  rootChanges,
   rowsOf,
   scanAnomalies,
   search,
@@ -53,7 +50,7 @@ import {
 import { db } from './live_db.ts'
 import { catchup } from './catchup.ts'
 import { published, withBackupLock } from './redaction.ts'
-import { bodied, bodyless, gaps, spread, type Step, step } from './subs.ts'
+import { dbKids, type Subserve, subserve } from './subserve.ts'
 import { dispatch, fed, relay, trace, type Where } from './effects.ts'
 import {
   bootDoing,
@@ -109,26 +106,15 @@ import {
   readerRows,
   type Row,
 } from './client.ts'
-import {
-  aggOf,
-  type Hop,
-  listed,
-  matchQuery,
-  parseQuery,
-  type Pred,
-  resolveRefs,
-} from './query.ts'
+import { listed, matchQuery, parseQuery, resolveRefs } from './query.ts'
 import {
   dbReader,
   evalAgg,
   evalGraph,
-  evalSub,
   localQuery,
   personaGraph,
   rowed,
-  workingSet,
 } from './graph_query.ts'
-import { liveFrame } from './wire.ts'
 import { nativeSoon } from './tmux.ts'
 import { loadPlugins, pluginSpecifiers } from './plugins.ts'
 import { stop as stopTimers } from './timers.ts'
@@ -213,8 +199,17 @@ let file = async (root: string, path: string) => {
 // The sync channel: clients send flat change batches ([{eid, name, comp}]),
 // the server applies them and rebroadcasts to every other client. Non-array
 // frames are control messages ('reload', from the watcher).
-let clients = new Set<WebSocket>()
-let envelopes = new Set<WebSocket>()
+//
+// Serving is per-connection (D-22388 step 4): each socket is served by ONE
+// subserve instance — in its own Worker for a file-backed graph (own thread,
+// own read-only connection, own query eval, so one client's expensive query
+// never stalls another's), inline in this process for :memory: (a worker's
+// separate connection would open a DIFFERENT empty graph) or when workers are
+// unavailable. This process stays the one WRITER either way: a worker posts
+// its client's batches back here, and every commit reaches the workers as a
+// {cast} forward off the journal feed.
+type Served = { sock: WebSocket; inline?: Subserve; worker?: Worker }
+let served = new Set<Served>()
 
 // Heartbeat: a half-open socket (network drop with no FIN, a suspended tab)
 // stays OPEN on both ends, so neither onclose fires. A periodic app-level ping
@@ -225,415 +220,73 @@ let envelopes = new Set<WebSocket>()
 let PING = JSON.stringify({ ping: 1 })
 let PING_MS = 25_000
 
-// Query subscriptions (T-3683), the whole registry. A Sub is a socket's saved
-// query + the eids currently in its set; `subs` maps each socket to its named
-// subscriptions, `filtered` holds every socket that opened a non-shadow sub.
-// Shadow subs hear both streams for prove-before-flip; the later migration
-// switch is still one boolean. onclose drops both — GC-free, per-socket.
-type Sub = {
-  preds: Pred[]
-  members: Set<string>
-  shadow: boolean
-  moving: boolean
-  bodies: boolean
-  details: boolean
-  // A ROUTE sub (`route:<eid>`) names one entity by id, not a query — the
-  // fullscreen root a client reaches by direct URL, which the query grammar
-  // can't express (`.eid=` is refused, query.ts) and which no defining set
-  // holds. `only` short-circuits the matcher to this fixed id: membership is
-  // "this eid, while it's alive", so the entity loads whole (details), updates
-  // live, and dies with the row. Empty/absent for every query sub.
-  only?: Set<string>
-  // An AGGREGATE sub (T-21283): a query carrying `.tally=comp.prop` answers a
-  // VALUE→COUNT map, not a member list — one sub serves every tile's badge, so
-  // a page of per-row reverse-lookups never floods the wire. `vals` remembers
-  // each member's current column value (a death can't be re-read from the db),
-  // `counts` is the standing tally; maintain() pushes DELTA maps (n=0 deletes).
-  agg?: { at: Hop; vals: Map<string, string>; counts: Map<string, number> }
-}
-let subs = new Map<WebSocket, Map<string, Sub>>()
-let filtered = new Set<WebSocket>()
-
 // Observations belong only to connected readers of this Session partition.
 // No cursor means no journal position, and this path never reaches apply(),
-// cast(), snapshot(), or the browser's persistent landing branch.
+// cast(), snapshot(), or the browser's persistent landing branch. A worker
+// socket is counted on the forward — the worker's own map decides delivery.
 export let broadcastObservation = (value: Observation) => {
   let observation = safeObservation(value)
   if (!observation) return 0
   let frame = JSON.stringify({ observe: observation })
   let sent = 0
-  for (let [sock, map] of subs) {
-    if (
-      sock.readyState != WebSocket.OPEN ||
-      !map.has(`entries:${observation.session}`)
-    ) continue
+  for (let s of served) {
+    if (s.sock.readyState != WebSocket.OPEN) continue
     try {
-      sock.send(frame)
-      sent++
+      if (s.inline) {
+        if (s.inline.observe(frame, observation.session)) sent++
+      } else {
+        s.worker!.postMessage({ observe: frame, session: observation.session })
+        sent++
+      }
     } catch { /* a closing watcher loses an optional hint */ }
   }
   return sent
 }
 
-// The filter-query pipeline lives in graph_query.ts, parameterized by db so a
-// test drives it without booting the server; here every call closes over the
-// one live db. evalFast/evalQuery back the /ws initial set; evalGraph is the
-// whole answer the /query door and the in-process graph_query tool share.
+// The subscription machinery itself — Sub, control, maintain, aged, the live
+// stream, the join handshake — lives in subserve.ts, one instance per socket,
+// shared verbatim by the inline path and the per-connection workers. What
+// remains here is the fan-out: iterate the served set, hand each connection
+// the committed batch (inline directly, worker by message).
 
-// Fold a committed batch into every subscription (design §2), synchronously —
-// no await between apply and these frames, so snapshot-then-updates stays
-// gapless. Per candidate eid × sub: one eager keyed read (batch-cached), then
-// the §2 transition — ADD queues full comps, UPDATE queues the batch's own
-// patches, REMOVE pushes a drop, a death forwards entity-null. Ordinary preds
-// use the batch's touched eids; path preds add sources reached by walking the
-// touched rows backward through their declared reference chain.
-// What a subscription frame has to CARRY. A live subscription owns its
-// client's view of these rows, so it ships the components. A SHADOW one does
-// not: it never flips the socket into `filtered`, so the same client is still
-// hearing the complete broadcast, and landSub() reads a shadow frame's changes
-// for one thing only — the eids, to keep the member set. Everything else in
-// that frame is a second copy of what the client already has.
-//
-// It is not a small second copy. Over the eighteen live boards the shadow
-// frames came to 62.6 MB, and the spine says the same thing about membership
-// in 3.9 MB — 6.2% of the bytes, with the whole-graph board going from 21.7 MB
-// and 765ms to 1.4 MB and 383ms. Membership is identical on every one.
-//
-// The ordering under cast() is what makes the spine safe: sendLive() reaches
-// the complete-broadcast clients BEFORE maintain() runs, so a client always
-// holds an entity's components before a shadow frame mentions its eid. Reverse
-// that and a spine-only add would land a component-less row in a cache whose
-// whole contract is that it is complete.
-//
-// The other half of the same question is BODIES: a live subscription owns the
-// rows, but a board or shape never paints a body, and doc bodies are 44% of
-// what a whole-graph subscription ships. Only `card:`/`route:` subs — the
-// ones that exist to show one entity whole — carry them (subs.ts `bodied`).
-let carry = (sub: Sub, changes: Change[]) =>
-  sub.bodies ? changes : bodyless(changes)
-
-let payload = (
-  sub: Sub,
-  eid: string,
-  comps: Record<string, Record<string, unknown>>,
-): Change[] =>
-  sub.shadow && !sub.details
-    ? [{ eid, name: 'entity', comp: comps.entity as Change['comp'] }]
-    : carry(sub, spread(eid, comps))
-
-// A path member can move when any row along its reference chain changes, not
-// only when the source itself changes. Walk each possible touched rung back to
-// the source through the predicate's own columns. The reverse queries are
-// component-keyed; ordinary subscriptions keep the touched-eid fast path.
-let pathSources = (preds: Pred[], touched: string[]) => {
-  let out = new Set(touched)
-  for (let p of preds) {
-    // A reverse hop: a touched CHILD moves its PARENT — read the child's ref
-    // column back to the entity it points at. A touched grandchild (a child's
-    // own component, e.g. its created row) shares the child's eid, so this one
-    // hop reaches it too. The sub-filter's own hops are recomputed from the
-    // parent by matchQuery, so they need no separate invalidation here.
-    if (p.rev) {
-      for (
-        let eid of refValuesOf(db, touched, {
-          comp: p.rev.comp,
-          prop: p.rev.prop,
-        })
-      ) out.add(eid)
-      continue
-    }
-    if (!p.at) continue
-    let refs = [{ comp: p.comp, prop: p.prop }, ...p.at.slice(0, -1)]
-    for (let depth = 1; depth <= refs.length; depth++) {
-      let found = touched
-      for (let at = depth - 1; at >= 0 && found.length; at--) {
-        found = referrersOf(db, found, refs[at])
-      }
-      for (let eid of found) out.add(eid)
-    }
-  }
-  return [...out]
-}
-
-// A reverse hop's Kids over the live db: the children referring at `eid` through
-// `comp.prop` (referrersOf), each hydrated to its eager bag by `read`. Bound per
-// maintain()/aged() pass to that pass's memoised `comps` fetcher.
-let dbKids =
-  (read: (eid: string) => Record<string, Record<string, unknown>>) =>
-  (eid: string, comp: string, prop: string) =>
-    referrersOf(db, [eid], { comp, prop }).map((k) => read(k))
-
+// Fold a committed batch into every INLINE connection's subscriptions —
+// worker sockets hear the same batch through cast()'s forward. Exported for
+// the subscription tests, which drive maintain() directly on :memory:.
 export let maintain = (batch: Change[]) => {
-  if (!subs.size) return
   let cur = cursorOf(db)
-  let gone = new Set(
-    batch.filter((c) => c.name == 'entity' && c.comp == null).map((c) => c.eid),
-  )
-  let touched = [...new Set(batch.map((c) => c.eid))]
-  let reads = new Map<string, Record<string, Record<string, unknown>>>()
-  let comps = (eid: string) => {
-    let hit = reads.get(eid)
-    if (!hit) reads.set(eid, hit = eager(db, eid))
-    return hit
-  }
-  let patch = new Map<string, Change[]>()
-  for (let c of batch) patch.set(c.eid, [...(patch.get(c.eid) ?? []), c])
-  for (let [sock, map] of subs) {
-    if (sock.readyState != WebSocket.OPEN) continue
-    for (let [id, sub] of map) {
-      // An aggregate sub speaks value→count deltas: a member arriving,
-      // leaving, or moving its column value adjusts the standing tally, and
-      // only the touched values ride the frame (n=0 tells the client to drop
-      // the key). vals is the member set — a death reads its last value from
-      // there, since the row is already gone from the db.
-      if (sub.agg) {
-        let { at, vals, counts } = sub.agg
-        let delta = new Map<string, number>()
-        let bump = (v: string, by: number) => {
-          if (!v) return
-          let n = (counts.get(v) ?? 0) + by
-          n > 0 ? counts.set(v, n) : counts.delete(v)
-          delta.set(v, Math.max(n, 0))
-        }
-        for (let eid of touched) {
-          let c = gone.has(eid) ? {} : comps(eid)
-          let alive = !gone.has(eid) && !!c.entity
-          let hit = alive && listed(c, sub.preds) &&
-            matchQuery(c, sub.preds, comps, undefined, dbKids(comps))
-          let now = hit ? String(c[at.comp]?.[at.prop] ?? '') : ''
-          let was = vals.get(eid) ?? ''
-          if (now == was) continue
-          bump(was, -1)
-          bump(now, 1)
-          now ? vals.set(eid, now) : vals.delete(eid)
-        }
-        if (delta.size) {
-          sock.send(JSON.stringify({
-            sub: id,
-            agg: Object.fromEntries(delta),
-            cursor: cur,
-            shadow: sub.shadow,
-          }))
-        }
-        continue
-      }
-      let changes: Change[] = []
-      let drop: string[] = []
-      let candidates = sub.preds.some((p) => p.at || p.rev)
-        ? pathSources(sub.preds, touched)
-        : touched
-      for (let eid of candidates) {
-        let c = gone.has(eid) ? {} : comps(eid)
-        let alive = !gone.has(eid) && !!c.entity
-        // A route sub matches its fixed id; a query sub runs the matcher.
-        let hit = alive &&
-          (sub.only ? sub.only.has(eid) : listed(c, sub.preds) &&
-            matchQuery(c, sub.preds, comps, undefined, dbKids(comps)))
-        let s: Step = step(sub.members, eid, alive, hit)
-        if (s == 'add') changes.push(...payload(sub, eid, c))
-        // A standing match tells a shadow sub nothing: membership did not
-        // move, and the client heard the patch on the complete stream.
-        else if (s == 'update' && (!sub.shadow || sub.details)) {
-          changes.push(...carry(sub, patch.get(eid) ?? []))
-        } else if (s == 'remove') drop.push(eid)
-        else if (s == 'dead') changes.push({ eid, name: 'entity', comp: null })
-      }
-      if (changes.length || drop.length) {
-        sock.send(JSON.stringify({
-          sub: id,
-          changes,
-          drop,
-          cursor: cur,
-          shadow: sub.shadow,
-        }))
-      }
-    }
+  for (let s of served) {
+    if (s.sock.readyState != WebSocket.OPEN) continue
+    s.inline?.maintain(batch, cur)
   }
 }
 
-// A moving time phrase ('today', '1 week ago') names a window the CLOCK moves,
-// not the data — so a member ages out of it with nobody writing anything, and
-// maintain() only ever re-tests what a batch touched. The sweep is that missing
-// trigger: on each tick, every moving-time subscription re-tests its OWN members
-// against the clock and drops the ones that have fallen out.
-//
-// Members only, and that is exact rather than partial. A past-facing window
-// ('today', 'since a week ago') sheds as its near edge advances and can never
-// GAIN a member without a write, because a row's timestamp does not move. Only
-// a FUTURE-facing phrase over a future column ('.wake.at<=in 60m') can gain,
-// and finding those entrants means asking the whole graph — evalQuery takes
-// ~1s over a 22 MB snapshot of the live board, so a tick that did it would cost
-// more than everything it serves. gaps() still reports 'moving-time' for both,
-// so that half stays classified rather than silently assumed handled.
-//
-// `now` is a parameter because a window a client waits a minute to cross is a
-// test nobody writes; handing the matcher a later moment states the same thing
-// in a millisecond.
+// The moving-time sweep (subserve.aged): every connection re-tests its own
+// moving-window members against the clock — inline directly, workers by
+// message. Exported for the subscription tests.
 export let aged = (now = Date.now()) => {
-  if (!subs.size) return
-  let cur = cursorOf(db)
-  let reads = new Map<string, Record<string, Record<string, unknown>>>()
-  let comps = (eid: string) => {
-    let hit = reads.get(eid)
-    if (!hit) reads.set(eid, hit = eager(db, eid))
-    return hit
-  }
-  for (let [sock, map] of subs) {
-    if (sock.readyState != WebSocket.OPEN) continue
-    for (let [id, sub] of map) {
-      if (!sub.moving) continue
-      let changes: Change[] = []
-      let drop: string[] = []
-      for (let eid of [...sub.members]) {
-        let c = comps(eid)
-        let alive = !!c.entity
-        let hit = alive && listed(c, sub.preds) &&
-          matchQuery(c, sub.preds, comps, now, dbKids(comps))
-        let s: Step = step(sub.members, eid, alive, hit)
-        if (s == 'remove') drop.push(eid)
-        else if (s == 'dead') changes.push({ eid, name: 'entity', comp: null })
-      }
-      if (changes.length || drop.length) {
-        sock.send(JSON.stringify({
-          sub: id,
-          changes,
-          drop,
-          cursor: cur,
-          shadow: sub.shadow,
-        }))
-      }
-    }
-  }
-}
-// One entity as a subscription hit — its eager comps, or nothing if the id
-// names no live entity yet (a route sub opened before its target is minted, or
-// on a tombstone). Shaped like an evalFast/evalQuery hit so control() ships it
-// through the one payload path.
-let rowsFor = (
-  eid: string,
-): { eid: string; comps: Record<string, Record<string, unknown>> }[] => {
-  let comps = eager(db, eid)
-  return comps.entity ? [{ eid, comps }] : []
-}
-
-// A socket's control frame (design §1): `{sub, q}` subscribes or replaces (the
-// initial frame is the query's current matches as one batch, and seeds the
-// member set, marked `replace` for the client); `{unsub}` forgets one. A
-// non-shadow subscribe flips the socket into `filtered`; a shadow subscribe
-// keeps the legacy stream beside its result frames.
-let control = (
-  sock: WebSocket,
-  f: { sub?: string; q?: string; unsub?: string; shadow?: boolean },
-) => {
-  // A shadow subscription proves its set beside the complete stream. It must
-  // not flip the socket into partial-cache delivery before stage 2c.
-  if (typeof f.sub == 'string' && !f.shadow) filtered.add(sock)
-  let map = subs.get(sock) ?? new Map<string, Sub>()
-  subs.set(sock, map)
-  if (typeof f.unsub == 'string') return void map.delete(f.unsub)
-  if (typeof f.sub != 'string') return
-  try {
-    // A route sub names one entity by id in its own name — no query to eval; its
-    // hits are that entity's current comps (empty if it isn't minted yet, so a
-    // later create ADDs it). A query sub evaluates its filter as before.
-    let route = f.sub.startsWith('route:') ? f.sub.slice('route:'.length) : null
-    let details = route != null || f.sub.startsWith('entries:')
-    // An empty query SELECTS NOTHING (query.ts parseQuery mints the
-    // never-pred), so an empty sub legitimately answers the empty set below —
-    // cheap, no error, no special case. Only a route sub carries meaning with
-    // no query: its name scopes it to one entity.
-    let { preds, hits } = route != null
-      ? { preds: [], hits: rowsFor(route) }
-      : evalSub(db, f.q ?? '', details)
-    // An aggregate sub answers a tally, not a member list. Build the standing
-    // count from the membership pass (vals doubles as the member set), send
-    // the whole map once, and let maintain() speak in deltas from here.
-    let agg = route == null ? aggOf(preds) : undefined
-    if (agg) {
-      let vals = new Map<string, string>()
-      let counts = new Map<string, number>()
-      for (let r of hits) {
-        let v = String(r.comps[agg.at.comp]?.[agg.at.prop] ?? '')
-        if (!v) continue
-        vals.set(r.eid, v)
-        counts.set(v, (counts.get(v) ?? 0) + 1)
-      }
-      map.set(f.sub, {
-        preds,
-        members: new Set(vals.keys()),
-        shadow: !!f.shadow,
-        moving: false,
-        bodies: false,
-        details: false,
-        agg: { at: agg.at, vals, counts },
-      })
-      sock.send(JSON.stringify({
-        sub: f.sub,
-        agg: Object.fromEntries(counts),
-        replace: true,
-        cursor: cursorOf(db),
-        shadow: !!f.shadow,
-      }))
-      return
-    }
-    map.set(f.sub, {
-      preds,
-      members: new Set(hits.map((r) => r.eid)),
-      shadow: !!f.shadow,
-      moving: gaps(preds).includes('moving-time'),
-      bodies: bodied(f.sub),
-      // Entry partitions and route entities are absent from both the root
-      // snapshot and root live stream, so their shadow owns bodies and
-      // standing-match updates too.
-      details,
-      ...(route != null ? { only: new Set([route]) } : {}),
-    })
-    let sub = map.get(f.sub)!
-    let changes = hits.flatMap((r) => payload(sub, r.eid, r.comps))
-    sock.send(
-      JSON.stringify({
-        sub: f.sub,
-        changes,
-        drop: [],
-        replace: true,
-        cursor: cursorOf(db),
-        shadow: !!f.shadow,
-      }),
-    )
-  } catch (e) {
-    console.warn('sub: bad query —', e)
-  }
-}
-
-// Send one committed batch in the shape each socket negotiated: long-lived
-// old clients keep their bare arrays while new browser leaders get the cursor
-// needed for an atomic IDB checkpoint.
-let sendLive = (changes: Change[], except?: WebSocket, at?: number) => {
-  changes = rootChanges(db, changes)
-  if (!changes.length) return
-  // A journal-fed cast stamps the ROW's rowid, so a client that disconnects
-  // mid-drain reconnects from exactly what it heard; a non-journaled cast
-  // (touch) keeps the current top.
-  let cursor = at ?? cursorOf(db)
-  let bare = JSON.stringify(liveFrame(changes, cursor, false))
-  let framed = JSON.stringify(liveFrame(changes, cursor, true))
-  for (let c of clients) {
-    if (c == except || c.readyState != WebSocket.OPEN || filtered.has(c)) {
-      continue
-    }
-    c.send(envelopes.has(c) ? framed : bare)
+  for (let s of served) {
+    if (s.sock.readyState != WebSocket.OPEN) continue
+    if (s.inline) s.inline.aged(now)
+    else s.worker!.postMessage({ aged: now })
   }
 }
 
 let runnerSoon = () => {}
 
-// Broadcast a committed batch to every full-graph client (subscription
-// sockets hear only their own frames, via maintain), then fold it into subs.
-// The one door every non-/ws write path (MCP, /apply, effects, touch, freeze)
-// reaches subscribers through.
+// Broadcast a committed batch to every connection — inline sockets serve it
+// here (live stream + subscription fold, subserve.cast), worker sockets get
+// it as a message and serve it on their own thread. The one door every write
+// path (MCP, /apply, effects, touch, freeze) reaches subscribers through. A
+// journal-fed cast stamps the ROW's rowid, so a client that disconnects
+// mid-drain reconnects from exactly what it heard; a non-journaled cast
+// (touch) keeps the current top.
 let cast = (changes: Change[], except?: WebSocket, at?: number) => {
-  sendLive(changes, except, at)
-  maintain(changes)
+  let cursor = at ?? cursorOf(db)
+  for (let s of served) {
+    if (s.sock == except || s.sock.readyState != WebSocket.OPEN) continue
+    if (s.inline) s.inline.cast(changes, cursor)
+    else s.worker!.postMessage({ cast: changes, cursor })
+  }
   // Native tmux delivery belongs to the doing owner: inline that's us; in
   // split mode the effects daemon's native tick sweeps, and two processes
   // driving send-keys would double-submit.
@@ -688,46 +341,37 @@ let feed = catchup(db, (r) => {
 })
 feed.watch(graph)
 
-// A booting socket's catch-up handshake (T-6829): the client declares the
-// cursor+epoch+vocab it holds; the server replays the journal since it — or a
-// full reset if the cursor is void (first visit) or its epoch/vocab moved (a
-// db restore's fresh rowids, a vocabulary change) — and only THEN adds the
-// socket to the live broadcast, so every later commit reaches it AFTER its
-// catch-up, in journal order. Synchronous end to end: no await between the
-// delta read and the add, so no commit interleaves (the gapless property,
-// same as maintain()). This ONE ordered channel replaces the old two-channel
-// boot (live over /ws, catch-up over HTTP /delta) whose reorder the client
-// used to buffer around — the wire preserves order at the source now. HTTP
-// /delta and /snapshot stay for one-shot clients (CLI, headless) with no
-// live stream. A commit ≤ H is already in the delta; one after the add
-// broadcasts live — no gap, no non-idempotent dup.
-let join = (
-  sock: WebSocket,
-  f: {
-    since?: number
-    epoch?: string
-    vocab?: string
-    live?: number
-  },
+// A write batch from one socket, applied HERE — the writer process — whichever
+// side served the socket. {apply, id} is a batch wearing a delivery id
+// (T-21413): the ack is what lets a client HOLD each write in its outbox until
+// commit instead of firing and forgetting; a bare array (an older tab) still
+// applies, it just gets no ack. A refusal answers with a SCOPED re-sync of
+// just the eids it touched — the authoritative pre-batch state (M-21143),
+// never a whole-graph snapshot. The commit reaches every socket — the sender
+// included, which hears the canonical patch — through the journal feed, same
+// as a foreign writer's would.
+let applyFrom = (
+  socket: WebSocket,
+  writer: string | null,
+  sent: Change[],
+  id?: string,
 ) => {
-  // Drain the feed first, so a foreign commit the watcher hasn't settled yet
-  // can't arrive twice — once in this delta, again when the pass broadcasts
-  // it. After the drain, delta-read and add stay one synchronous stretch: the
-  // gapless property below.
-  feed.settle()
-  if (f.live == 1) envelopes.add(sock)
-  else envelopes.delete(sock)
-  if (f.since == null || cursorStale(db, f.epoch, f.vocab, f.since)) {
-    // A cold or stale client seeds the WORKING SET — never the whole graph
-    // (M-21143); its subscriptions stream the rest on demand.
-    sock.send(JSON.stringify({ reset: true, snapshot: workingSet(db) }))
-  } else {
-    let d = delta(db, f.since)
-    sock.send(JSON.stringify({ catchup: d.changes, cursor: d.cursor }))
+  try {
+    apply(db, sent, fed(), writer)
+  } catch (e) {
+    console.error('sync: bad batch dropped —', e)
+    socket.send(JSON.stringify({
+      error: e instanceof Error ? e.message : String(e),
+      changes: correct(db, sent),
+      id,
+    }))
+    return
   }
-  clients.add(sock)
+  if (id) socket.send(JSON.stringify({ ack: id }))
+  feed.settle()
 }
 
+let workerN = 0
 let ws = (req: Request) => {
   let { socket, response } = Deno.upgradeWebSocket(req)
   // The tab names itself once, at connect: ?client=<eid> is the writer for
@@ -736,57 +380,72 @@ let ws = (req: Request) => {
   // the box owner like any anonymous write.
   let writer = new URL(req.url).searchParams.get('client')
   // No implicit join: a fresh socket is in NO broadcast set until it declares
-  // itself — {since} joins the live `clients` (via join()), {sub} sets
-  // `filtered` (via control()). A socket that declares neither hears nothing.
+  // itself — {since} opens the live stream, {sub} the subscriptions (both in
+  // subserve). A socket that declares neither hears nothing.
   let beat = setInterval(() => {
     if (socket.readyState == WebSocket.OPEN) socket.send(PING)
     else clearInterval(beat)
   }, PING_MS)
+  // The delegator split: a file-backed graph hands the connection to its own
+  // worker — its own thread, its own read-only connection — and this process
+  // only pumps frames and applies writes. :memory: serves inline (a worker's
+  // separate connection would open a DIFFERENT empty graph), as does any
+  // environment where the Worker fails to construct.
+  let s: Served = { sock: socket }
+  if (graph != ':memory:') {
+    try {
+      let w = new Worker(new URL('./wsworker.ts', import.meta.url), {
+        type: 'module',
+        name: `ws#${++workerN}`,
+      })
+      w.postMessage({ init: graph })
+      w.onmessage = (m) => {
+        let d = m.data
+        if (typeof d?.frame == 'string') {
+          if (socket.readyState == WebSocket.OPEN) socket.send(d.frame)
+        } else if (Array.isArray(d?.apply)) {
+          applyFrom(socket, writer, d.apply as Change[], d.id)
+        }
+      }
+      w.onerror = (e) => console.warn('wsworker error —', e.message)
+      s.worker = w
+    } catch (e) {
+      console.warn('ws: worker unavailable, serving inline —', e)
+    }
+  }
+  if (!s.worker) {
+    s.inline = subserve(db, (json) => {
+      if (socket.readyState == WebSocket.OPEN) socket.send(json)
+    })
+  }
+  served.add(s)
   socket.onclose = () => {
     clearInterval(beat)
-    clients.delete(socket)
-    envelopes.delete(socket)
-    subs.delete(socket)
-    filtered.delete(socket)
+    served.delete(s)
+    s.worker?.terminate()
   }
   socket.onmessage = (m) => {
-    let frame = JSON.parse(String(m.data))
-    // Object frames are control (design §1), structurally disjoint from the
-    // array batches: {since} is the catch-up handshake, {apply} an acked
-    // write, everything else ({sub}/{unsub}) is subscriptions.
-    let sent: Change[]
-    let id: string | undefined
-    if (Array.isArray(frame)) sent = frame as Change[]
-    else if ('since' in frame) return join(socket, frame)
-    // {apply, id} is a batch wearing a delivery id (T-21413): the ack below is
-    // what lets a client HOLD each write in its outbox until commit instead of
-    // firing and forgetting. A bare array (an older tab) still applies — it
-    // just gets no ack.
-    else if (Array.isArray(frame.apply)) {
-      sent = frame.apply as Change[]
-      if (frame.id != null) id = String(frame.id)
-    } else return control(socket, frame)
-    try {
-      apply(db, sent, fed(), writer)
-    } catch (e) {
-      console.error('sync: bad batch dropped —', e)
-      // Revert the sender's optimistic apply with a SCOPED re-sync of just the
-      // eids it touched — the authoritative pre-batch state (M-21143), never a
-      // whole-graph snapshot the rejected write does not need. The id settles
-      // the delivery: a refusal is an answer, not a reason to redeliver.
-      socket.send(JSON.stringify({
-        error: e instanceof Error ? e.message : String(e),
-        changes: correct(db, sent),
-        id,
-      }))
-      return
+    let raw = String(m.data)
+    // Worker mode: the whole frame goes to the worker; it parses, serves
+    // reads itself, and posts write batches back to applyFrom above.
+    if (s.worker) return s.worker.postMessage({ raw })
+    let frame = JSON.parse(raw)
+    // Object frames are control, structurally disjoint from the array
+    // batches: {since}/{sub}/{unsub} go to subserve, writes apply here. The
+    // inline join drains the feed first, so a foreign commit the watcher
+    // hasn't settled yet can't arrive twice.
+    if (Array.isArray(frame)) {
+      return applyFrom(socket, writer, frame as Change[])
     }
-    if (id) socket.send(JSON.stringify({ ack: id }))
-    // The commit reaches every socket — the sender included, which hears the
-    // canonical patch (its optimistic spelling may differ from storage) —
-    // through the journal feed, same as a foreign writer's would. The fed()
-    // trace is what journals the effect ask the feed honors.
-    feed.settle()
+    if (Array.isArray(frame.apply)) {
+      return applyFrom(
+        socket,
+        writer,
+        frame.apply as Change[],
+        frame.id != null ? String(frame.id) : undefined,
+      )
+    }
+    s.inline!.frame(frame, () => feed.settle())
   }
   return response
 }
@@ -1507,7 +1166,7 @@ let handle = async (req: Request) => {
               preds,
               (e) => eager(db, e),
               undefined,
-              dbKids((e) => eager(db, e)),
+              dbKids(db, (e: string) => eager(db, e)),
             )
           )
         return Response.json(
@@ -1977,8 +1636,8 @@ let watch = async () => {
         : paths.every((p) => p.endsWith('.css'))
         ? { css: ++gen }
         : { hmr: ++gen }
-      for (let c of clients) {
-        if (c.readyState == WebSocket.OPEN) c.send(JSON.stringify(msg))
+      for (let { sock } of served) {
+        if (sock.readyState == WebSocket.OPEN) sock.send(JSON.stringify(msg))
       }
     }, 50)
   }
@@ -2040,8 +1699,8 @@ let themeWatch = async () => {
     ) turnSweep()
     if (!e.paths.some((p) => p.endsWith('/theme.css'))) continue
     let msg = JSON.stringify({ css: ++gen })
-    for (let c of clients) {
-      if (c.readyState == WebSocket.OPEN) c.send(msg)
+    for (let { sock } of served) {
+      if (sock.readyState == WebSocket.OPEN) sock.send(msg)
     }
   }
 }
@@ -2065,7 +1724,7 @@ let drain = async () => {
   // settling above shutdown() keeps the graph answering instead of dark for
   // the duration.
   await managed.settle()
-  for (let c of clients) c.close(1012, 'server restart')
+  for (let { sock } of served) sock.close(1012, 'server restart')
   // shutdown() waits for EVERY in-flight response, and the streaming doors
   // (a /logs tail) hold theirs open indefinitely — unbounded, this wait held
   // the baton 13+ minutes while the prepped successor parked every request
