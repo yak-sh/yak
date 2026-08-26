@@ -1,0 +1,506 @@
+{
+  "name": "sessions",
+  "enums": {
+    "httpMethods": {
+      "rank": 40,
+      "values": [
+        "GET",
+        "HEAD",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "messageRoles": {
+      "rank": 30,
+      "values": [
+        "user",
+        "agent"
+      ]
+    },
+    "turnStates": {
+      "rank": 20,
+      "values": [
+        "idle",
+        "busy"
+      ]
+    }
+  },
+  "comps": {
+    "apply": {
+      "rank": 420,
+      "log": true,
+      "cols": {
+        "changes": "body"
+      }
+    },
+    "attention": {
+      "rank": 320,
+      "log": true
+    },
+    "bash": {
+      "rank": 360,
+      "log": true,
+      "cols": {
+        "command": "body",
+        "cwd": "text"
+      }
+    },
+    "brief": {
+      "rank": 250,
+      "cols": {
+        "text": "body"
+      }
+    },
+    "call": {
+      "rank": 350,
+      "log": true,
+      "cols": {
+        "key": "text"
+      }
+    },
+    "cancel": {
+      "rank": 500,
+      "log": true,
+      "cols": {
+        "target": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      }
+    },
+    "chat": {
+      "rank": 620,
+      "cols": {
+        "actor": {
+          "eid": "entity",
+          "death": "detach"
+        },
+        "target": {
+          "eid": "entity",
+          "death": "detach"
+        }
+      },
+      "indexes": [
+        {
+          "cols": [
+            "actor",
+            "target"
+          ],
+          "unique": true
+        }
+      ]
+    },
+    "checkpoint": {
+      "rank": 490,
+      "log": true,
+      "cols": {
+        "through": {
+          "eid": "entry",
+          "death": "keep"
+        }
+      }
+    },
+    "claim": {
+      "rank": 590,
+      "stamped_rank": 130,
+      "kind_rank": 180,
+      "cols": {
+        "session": {
+          "eid": "session",
+          "death": "release"
+        }
+      },
+      "stamped": {
+        "claimed_at": "time"
+      }
+    },
+    "content": {
+      "rank": 290,
+      "log": true,
+      "cols": {
+        "body": "body"
+      }
+    },
+    "entry": {
+      "rank": 280,
+      "stamped_rank": 290,
+      "kind_rank": 160,
+      "lazy": true,
+      "log": true,
+      "cols": {
+        "session": {
+          "eid": "session",
+          "death": "cascade"
+        }
+      },
+      "stamped": {
+        "seq": "number"
+      },
+      "indexes": [
+        {
+          "cols": [
+            "session",
+            "seq"
+          ],
+          "unique": true
+        }
+      ]
+    },
+    "exit": {
+      "rank": 440,
+      "log": true,
+      "cols": {
+        "code": "number"
+      }
+    },
+    "fetch": {
+      "rank": 370,
+      "log": true,
+      "cols": {
+        "url": "url",
+        "method": {
+          "enum": "httpMethods"
+        }
+      }
+    },
+    "generation": {
+      "rank": 330,
+      "stamped_rank": 300,
+      "log": true,
+      "cols": {
+        "through": {
+          "eid": "entry",
+          "death": "keep"
+        },
+        "provider": "text",
+        "model": "text",
+        "effort": "text"
+      },
+      "stamped": {
+        "serving_model": "text"
+      },
+      "indexes": [
+        {
+          "cols": [
+            "through"
+          ],
+          "unique": true
+        }
+      ]
+    },
+    "graph_query": {
+      "rank": 410,
+      "log": true,
+      "cols": {
+        "query": "query"
+      }
+    },
+    "headers": {
+      "rank": 460,
+      "log": true,
+      "cols": {
+        "data": "body"
+      }
+    },
+    "imported": {
+      "rank": 570,
+      "stamped_rank": 310,
+      "log": true,
+      "stamped": {
+        "source": "text",
+        "line": "number"
+      }
+    },
+    "instruction": {
+      "rank": 310,
+      "log": true
+    },
+    "lease": {
+      "rank": 550,
+      "stamped_rank": 320,
+      "log": true,
+      "stamped": {
+        "holder": {
+          "eid": "runner",
+          "death": "keep"
+        },
+        "at": "time",
+        "until": "time"
+      }
+    },
+    "message": {
+      "rank": 300,
+      "log": true,
+      "cols": {
+        "role": {
+          "enum": "messageRoles"
+        }
+      }
+    },
+    "opaque": {
+      "rank": 530,
+      "log": true,
+      "cols": {
+        "format": "text",
+        "data": "body"
+      }
+    },
+    "output": {
+      "rank": 340,
+      "log": true,
+      "cols": {
+        "source": {
+          "eid": "generation",
+          "death": "keep"
+        },
+        "key": "text",
+        "phase": "text"
+      },
+      "indexes": [
+        {
+          "cols": [
+            "source",
+            "key"
+          ],
+          "unique": true,
+          "where": "key is not null"
+        }
+      ]
+    },
+    "patch": {
+      "rank": 380,
+      "log": true,
+      "cols": {
+        "path": "text",
+        "diff": "body"
+      }
+    },
+    "reasoning": {
+      "rank": 510,
+      "log": true
+    },
+    "recalled": {
+      "rank": 520,
+      "log": true,
+      "cols": {
+        "source": {
+          "eid": "entry",
+          "death": "keep"
+        }
+      }
+    },
+    "response": {
+      "rank": 450,
+      "log": true,
+      "cols": {
+        "status": "number"
+      }
+    },
+    "result": {
+      "rank": 430,
+      "log": true,
+      "cols": {
+        "call": {
+          "eid": "call",
+          "death": "keep"
+        }
+      },
+      "indexes": [
+        {
+          "cols": [
+            "call"
+          ],
+          "unique": true
+        }
+      ]
+    },
+    "resume": {
+      "rank": 600,
+      "stamped_rank": 140,
+      "stamped": {
+        "actor": {
+          "eid": "entity",
+          "death": "keep"
+        },
+        "at": "time",
+        "rank": "number"
+      }
+    },
+    "runner": {
+      "rank": 540,
+      "kind_rank": 170,
+      "log": true,
+      "cols": {
+        "name": "text"
+      }
+    },
+    "runtime": {
+      "rank": 270,
+      "stamped_rank": 280,
+      "cols": {
+        "pid": "number",
+        "pane": "text",
+        "transcript": "text"
+      },
+      "stamped": {
+        "provider_session_id": "text",
+        "serving_model": "text"
+      }
+    },
+    "session": {
+      "rank": 240,
+      "stamped_rank": 260,
+      "kind_rank": 150,
+      "prefix": "S",
+      "cols": {
+        "id": "text",
+        "cwd": "text",
+        "pid": "number",
+        "pane": "text",
+        "turn": {
+          "enum": "turnStates"
+        },
+        "transcript": "text",
+        "agent_type": "text",
+        "source": "text",
+        "operator": "bool",
+        "provider": "text",
+        "model": "text",
+        "effort": "text",
+        "requested_task": {
+          "eid": "entity",
+          "death": "detach"
+        },
+        "role": {
+          "eid": "role",
+          "death": "keep"
+        },
+        "persona": {
+          "eid": "entity",
+          "death": "detach"
+        },
+        "actor": {
+          "eid": "entity",
+          "death": "detach"
+        },
+        "parent": {
+          "eid": "session",
+          "death": "detach"
+        }
+      },
+      "stamped": {
+        "notice_at": "time",
+        "notice_accepted_at": "time",
+        "notice_token": "text",
+        "origin": {
+          "enum": [
+            "external",
+            "managed"
+          ]
+        },
+        "branch": "text",
+        "base_revision": "text",
+        "status": "text",
+        "provider_session_id": "text",
+        "serving_model": "text",
+        "latest_seq": "number",
+        "standing": "text",
+        "started_at": "time",
+        "stop_requested_at": "time",
+        "input_at": "time",
+        "finished_at": "time",
+        "exit_code": "number",
+        "stop_reason": "text",
+        "final_text": "body",
+        "usage_json": "text",
+        "stderr": "body"
+      }
+    },
+    "spawn": {
+      "rank": 580,
+      "cols": {
+        "provider": "text",
+        "model": "text",
+        "effort": "text",
+        "persona": {
+          "eid": "entity",
+          "death": "detach"
+        }
+      }
+    },
+    "stderr": {
+      "rank": 470,
+      "log": true,
+      "cols": {
+        "text": "body"
+      }
+    },
+    "stop_request": {
+      "rank": 630,
+      "kind_rank": 200,
+      "cols": {
+        "target": {
+          "eid": "session",
+          "death": "cascade"
+        }
+      }
+    },
+    "task_context": {
+      "rank": 400,
+      "log": true
+    },
+    "timeout": {
+      "rank": 480,
+      "log": true,
+      "cols": {
+        "ms": "number"
+      }
+    },
+    "tool": {
+      "rank": 390,
+      "log": true,
+      "cols": {
+        "name": "text",
+        "detail": "text"
+      }
+    },
+    "usage": {
+      "rank": 560,
+      "stamped_rank": 330,
+      "log": true,
+      "stamped": {
+        "input": "number",
+        "cached": "number",
+        "output": "number",
+        "reasoning": "number"
+      }
+    },
+    "worktree": {
+      "rank": 260,
+      "stamped_rank": 270,
+      "cols": {
+        "cwd": "text"
+      },
+      "stamped": {
+        "branch": "text",
+        "base_revision": "text"
+      }
+    }
+  },
+  "session_active": [
+    "starting",
+    "running",
+    "stopping"
+  ],
+  "capabilities": [
+    "spawn",
+    "session-facets"
+  ],
+  "session_facets": [
+    "spawn",
+    "worktree",
+    "runtime"
+  ]
+}

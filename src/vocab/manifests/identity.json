@@ -1,0 +1,71 @@
+{
+  "name": "identity",
+  "enums": {
+    "grades": {
+      "rank": 130,
+      "values": [
+        "frontier",
+        "mid",
+        "small"
+      ]
+    }
+  },
+  "comps": {
+    "feedback": {
+      "rank": 810,
+      "cols": {
+        "by": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      }
+    },
+    "memory": {
+      "rank": 800,
+      "stamped_rank": 210,
+      "kind_rank": 310,
+      "prefix": "M",
+      "cols": {
+        "scope": {
+          "eid": "project",
+          "death": "keep"
+        }
+      },
+      "stamped": {
+        "last_confirmed_at": "time"
+      }
+    },
+    "model": {
+      "rank": 780,
+      "kind_rank": 340,
+      "prefix": "O",
+      "by_name": true,
+      "cols": {
+        "name": "text",
+        "vendor": "text",
+        "grade": {
+          "enum": "grades"
+        }
+      }
+    },
+    "person": {
+      "rank": 760,
+      "kind_rank": 320,
+      "prefix": "U",
+      "by_name": true,
+      "plural": "people"
+    },
+    "persona": {
+      "rank": 770,
+      "kind_rank": 330,
+      "prefix": "N",
+      "by_name": true,
+      "cols": {
+        "home": {
+          "eid": "project",
+          "death": "detach"
+        }
+      }
+    }
+  }
+}

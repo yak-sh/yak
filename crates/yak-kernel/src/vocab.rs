@@ -1,8 +1,10 @@
-// The vocabulary, generated from the contract the TOML manifests compose
-// (src/vocab/*.toml → vocab_gen.rs, T-22547). Native Rust data baked at
-// COMPILE time — no runtime parse; a stale binary carries a stale
-// vocabulary, the same trade every compiled client makes. The kernel's
-// vocab-table diff (D-22530 §2) is the eventual guard.
+// The vocabulary, baked from the contract (T-22547). Its SOURCE OF TRUTH is
+// the annotated Rust in crates/xtask/src/contract (D-22530 §6, T-22607): a
+// cargo xtask emits the data manifests, and `deno task codegen` emits this
+// module's data (vocab_gen.rs) from them. Native Rust data baked at COMPILE
+// time — no runtime parse; a stale binary carries a stale vocabulary, the same
+// trade every compiled client makes. The kernel's vocab-table diff (D-22530
+// §2) is the eventual guard.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;

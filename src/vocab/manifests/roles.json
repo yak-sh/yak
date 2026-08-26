@@ -1,0 +1,115 @@
+{
+  "name": "roles",
+  "enums": {
+    "roleStates": {
+      "rank": 50,
+      "values": [
+        "running",
+        "stopped",
+        "paused",
+        "disabled",
+        "retired",
+        "held"
+      ]
+    },
+    "roleSurfaces": {
+      "rank": 60,
+      "values": [
+        "native",
+        "managed"
+      ]
+    },
+    "wakePolicies": {
+      "rank": 70,
+      "values": [
+        "always",
+        "attention",
+        "scheduled",
+        "manual"
+      ]
+    }
+  },
+  "comps": {
+    "bug": {
+      "rank": 930,
+      "cols": {
+        "fault": "text",
+        "hits": "number",
+        "last": "time"
+      }
+    },
+    "dream": {
+      "rank": 660,
+      "kind_rank": 230,
+      "prefix": "Z",
+      "cols": {
+        "scope": {
+          "eid": "project",
+          "death": "cascade"
+        },
+        "floor": "time"
+      }
+    },
+    "finding": {
+      "rank": 940,
+      "cols": {
+        "key": "text",
+        "hits": "number",
+        "last": "time"
+      }
+    },
+    "fixer": {
+      "rank": 950
+    },
+    "nofix": {
+      "rank": 960
+    },
+    "role": {
+      "rank": 60,
+      "stamped_rank": 250,
+      "kind_rank": 140,
+      "prefix": "R",
+      "by_name": true,
+      "cols": {
+        "state": {
+          "enum": "roleStates"
+        },
+        "surface": {
+          "enum": "roleSurfaces"
+        },
+        "scope": {
+          "eid": "entity",
+          "death": "detach"
+        },
+        "checkout": {
+          "eid": "entity",
+          "death": "detach"
+        },
+        "schedule": "text",
+        "wake_policy": {
+          "enum": "wakePolicies"
+        },
+        "wake_target": {
+          "eid": "entity",
+          "death": "detach"
+        },
+        "retry_at": "time",
+        "quiet": "number",
+        "cooldown": "number",
+        "cap": "number"
+      },
+      "stamped": {
+        "applied_hash": "text",
+        "applied_at": "time",
+        "stopped_at": "time",
+        "decision": "text",
+        "reason": "text",
+        "observed": {
+          "eid": "entity",
+          "death": "keep"
+        },
+        "decided_at": "time"
+      }
+    }
+  }
+}

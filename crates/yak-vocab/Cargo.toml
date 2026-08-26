@@ -1,0 +1,11 @@
+[package]
+name = "yak-vocab"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "The vocabulary contract's runtime side (D-22530 §6): the CompDef/EnumDef/… registry types the #[derive(Comp)] macro submits into, the marker prop types the contract's fields wear, and the assembler that emits the per-plugin data manifest (the former TOML shape, now generated interchange) from the inventory."
+publish = false
+
+[dependencies]
+inventory = "0.3"
+serde_json = { version = "1", features = ["preserve_order"] }

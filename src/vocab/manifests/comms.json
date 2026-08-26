@@ -1,0 +1,89 @@
+{
+  "name": "comms",
+  "enums": {
+    "subModes": {
+      "rank": 110,
+      "values": [
+        "watch",
+        "mute"
+      ]
+    }
+  },
+  "comps": {
+    "deliver": {
+      "rank": 890,
+      "cols": {
+        "to": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      }
+    },
+    "delivered": {
+      "rank": 900,
+      "stamped_rank": 150,
+      "stamped": {
+        "at": "time",
+        "via": "text"
+      }
+    },
+    "error": {
+      "rank": 910,
+      "stamped_rank": 160,
+      "stamped": {
+        "at": "time",
+        "message": "text"
+      }
+    },
+    "knock": {
+      "rank": 640,
+      "kind_rank": 210,
+      "prefix": "K",
+      "cols": {
+        "target": {
+          "eid": "entity",
+          "death": "cascade"
+        }
+      }
+    },
+    "subscription": {
+      "rank": 610,
+      "kind_rank": 190,
+      "cols": {
+        "actor": {
+          "eid": "entity",
+          "death": "cascade"
+        },
+        "target": {
+          "eid": "entity",
+          "death": "cascade"
+        },
+        "mode": {
+          "enum": "subModes"
+        }
+      },
+      "indexes": [
+        {
+          "cols": [
+            "actor",
+            "target"
+          ],
+          "unique": true
+        }
+      ]
+    },
+    "wake": {
+      "rank": 650,
+      "kind_rank": 220,
+      "prefix": "W",
+      "cols": {
+        "at": "time",
+        "target": {
+          "eid": "entity",
+          "death": "cascade"
+        },
+        "note": "text"
+      }
+    }
+  }
+}

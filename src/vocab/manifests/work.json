@@ -1,0 +1,148 @@
+{
+  "name": "work",
+  "enums": {
+    "statuses": {
+      "rank": 10,
+      "values": [
+        "open",
+        "wip",
+        "done",
+        "cancelled"
+      ]
+    },
+    "ventureModes": {
+      "rank": 90,
+      "values": [
+        "long-loop",
+        "cold",
+        "cron"
+      ]
+    },
+    "ventureStates": {
+      "rank": 80,
+      "values": [
+        "incubating",
+        "idea",
+        "building",
+        "launching",
+        "live",
+        "hold",
+        "paused",
+        "shuttered",
+        "killed"
+      ]
+    },
+    "verdicts": {
+      "rank": 120,
+      "values": [
+        "approved",
+        "rejected",
+        "changes_requested"
+      ]
+    }
+  },
+  "comps": {
+    "architecture": {
+      "rank": 110
+    },
+    "blocked": {
+      "rank": 970,
+      "stamped_rank": 180,
+      "cols": {
+        "on": "text"
+      },
+      "stamped": {
+        "since": "time"
+      }
+    },
+    "board": {
+      "rank": 70,
+      "kind_rank": 50,
+      "prefix": "B",
+      "by_name": true,
+      "cols": {
+        "query": "query"
+      }
+    },
+    "design": {
+      "rank": 100,
+      "kind_rank": 10
+    },
+    "project": {
+      "rank": 30,
+      "kind_rank": 30,
+      "prefix": "P",
+      "by_name": true,
+      "cols": {
+        "color": "text"
+      }
+    },
+    "repo": {
+      "rank": 40,
+      "cols": {
+        "path": "text",
+        "url": "url",
+        "base_branch": "text",
+        "gate": "text",
+        "push": "bool"
+      }
+    },
+    "review": {
+      "rank": 740,
+      "kind_rank": 280,
+      "cols": {
+        "verdict": {
+          "enum": "verdicts",
+          "aliases": {
+            "approve": "approved",
+            "reject": "rejected",
+            "changes": "changes_requested"
+          }
+        }
+      }
+    },
+    "task": {
+      "rank": 20,
+      "kind_rank": 20,
+      "prefix": "T",
+      "cols": {
+        "status": {
+          "enum": "statuses"
+        },
+        "priority": "priority",
+        "project": {
+          "eid": "project",
+          "death": "detach"
+        },
+        "assignee": {
+          "eid": "entity",
+          "death": "detach"
+        },
+        "domain": {
+          "well": "domains"
+        }
+      }
+    },
+    "venture": {
+      "rank": 50,
+      "cols": {
+        "phase": {
+          "enum": "ventureStates"
+        },
+        "paused_from": {
+          "enum": "ventureStates"
+        },
+        "hold_from": {
+          "enum": "ventureStates"
+        },
+        "run_mode": {
+          "enum": "ventureModes"
+        },
+        "agent_model": "text",
+        "operated_by": "text",
+        "tagline": "text",
+        "site": "url"
+      }
+    }
+  }
+}

@@ -1,0 +1,187 @@
+{
+  "name": "canvas",
+  "enums": {
+    "dirs": {
+      "rank": 100,
+      "values": [
+        "h",
+        "v"
+      ]
+    }
+  },
+  "comps": {
+    "camera": {
+      "rank": 180,
+      "kind_rank": 110,
+      "cols": {
+        "client": {
+          "eid": "client",
+          "death": "cascade"
+        },
+        "canvas": {
+          "eid": "entity",
+          "death": "cascade"
+        },
+        "x": "number",
+        "y": "number",
+        "zoom": "number",
+        "w": "number",
+        "h": "number"
+      },
+      "indexes": [
+        {
+          "cols": [
+            "client",
+            "canvas"
+          ],
+          "unique": true
+        }
+      ]
+    },
+    "canvas": {
+      "rank": 120,
+      "kind_rank": 60,
+      "by_name": true
+    },
+    "card": {
+      "rank": 150,
+      "kind_rank": 80,
+      "cols": {
+        "target": {
+          "eid": "entity",
+          "death": "cascade"
+        },
+        "view": "text"
+      }
+    },
+    "client": {
+      "rank": 170,
+      "stamped_rank": 120,
+      "kind_rank": 100,
+      "cols": {
+        "user_agent": "text",
+        "actor": {
+          "eid": "entity",
+          "death": "detach"
+        }
+      },
+      "stamped": {
+        "ip": "text"
+      }
+    },
+    "cursor": {
+      "rank": 210,
+      "kind_rank": 130,
+      "cols": {
+        "client": {
+          "eid": "client",
+          "death": "cascade"
+        },
+        "target": {
+          "eid": "entity",
+          "death": "keep"
+        },
+        "view": "text"
+      },
+      "indexes": [
+        {
+          "cols": [
+            "client"
+          ],
+          "unique": true
+        }
+      ]
+    },
+    "fold": {
+      "rank": 190,
+      "kind_rank": 120,
+      "cols": {
+        "client": {
+          "eid": "client",
+          "death": "cascade"
+        },
+        "board": {
+          "eid": "board",
+          "death": "cascade"
+        },
+        "statuses": "text"
+      },
+      "indexes": [
+        {
+          "cols": [
+            "client",
+            "board"
+          ],
+          "unique": true
+        }
+      ]
+    },
+    "layout": {
+      "rank": 80,
+      "kind_rank": 40,
+      "prefix": "L",
+      "by_name": true,
+      "cols": {
+        "root": {
+          "eid": "pane",
+          "death": "detach"
+        }
+      }
+    },
+    "pane": {
+      "rank": 90,
+      "kind_rank": 90,
+      "cols": {
+        "layout": {
+          "eid": "layout",
+          "death": "cascade"
+        },
+        "parent": {
+          "eid": "pane",
+          "death": "cascade"
+        },
+        "size": "number",
+        "order": "number",
+        "dir": {
+          "enum": "dirs"
+        },
+        "content": {
+          "eid": "entity",
+          "death": "detach"
+        },
+        "view": "text"
+      }
+    },
+    "pin": {
+      "rank": 160,
+      "cols": {
+        "canvas": {
+          "eid": "entity",
+          "death": "cascade"
+        },
+        "x": "number",
+        "y": "number",
+        "w": "number",
+        "h": "number",
+        "z": "number"
+      }
+    },
+    "shelf": {
+      "rank": 200,
+      "cols": {
+        "client": {
+          "eid": "client",
+          "death": "release"
+        }
+      },
+      "indexes": [
+        {
+          "cols": [
+            "client"
+          ],
+          "unique": true
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "name": "mail",
+  "comps": {
+    "email": {
+      "rank": 790,
+      "kind_rank": 370,
+      "prefix": "A",
+      "cols": {
+        "address": "text"
+      }
+    },
+    "hook": {
+      "rank": 700,
+      "stamped_rank": 200,
+      "kind_rank": 250,
+      "prefix": "H",
+      "stamped": {
+        "source": "text",
+        "event": "text",
+        "payload": "body",
+        "spool_id": "text",
+        "received_at": "time",
+        "method": "text",
+        "path": "text",
+        "headers": "body",
+        "sig_ok": "bool"
+      }
+    },
+    "mail": {
+      "rank": 670,
+      "stamped_rank": 190,
+      "kind_rank": 240,
+      "prefix": "E",
+      "cols": {
+        "target": {
+          "eid": "entity",
+          "death": "keep"
+        },
+        "reply_to": {
+          "eid": "mail",
+          "death": "keep"
+        }
+      },
+      "stamped": {
+        "from": "text",
+        "to_addr": "text",
+        "message_id": "text",
+        "received_at": "time",
+        "verified": "bool",
+        "sent_id": "text",
+        "in_reply_to": "text",
+        "headers": "text"
+      }
+    }
+  }
+}

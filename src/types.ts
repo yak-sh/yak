@@ -1,8 +1,8 @@
-// GENERATED from src/vocab/*.toml — edit the manifests, then run
-// `deno task codegen`. Hand edits here are refused by the gate's
-// stale check (`deno task codegen --check`). The prose that used to
-// live beside each declaration lives in the manifests now; the code
-// half of this module is src/vocab/code.ts.part.
+// GENERATED — do not edit. The vocabulary source of truth is the
+// annotated Rust contract in crates/xtask/src/contract; a cargo xtask
+// emits src/vocab/manifests/*.json and `deno task codegen` emits this
+// file from them. Hand edits here are refused by the gate's stale check
+// (`deno task codegen --check`). The code half is src/vocab/code.ts.part.
 //
 // Shared FE/BE vocabulary: entity components, edges, and the sync
 // unit. No imports; the module IS the schema, on both sides of the

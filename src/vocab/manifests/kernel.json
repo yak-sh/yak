@@ -1,0 +1,306 @@
+{
+  "name": "kernel",
+  "enums": {
+    "noticeKinds": {
+      "rank": 140,
+      "values": [
+        "lapse",
+        "sweep",
+        "scene"
+      ]
+    }
+  },
+  "comps": {
+    "alias": {
+      "rank": 750,
+      "kind_rank": 380,
+      "cols": {
+        "slug": "text",
+        "slugs": "text"
+      }
+    },
+    "anchor": {
+      "rank": 980,
+      "cols": {
+        "paths": "text",
+        "sha": "text",
+        "symbol": "text",
+        "hunk": "body",
+        "start": "number",
+        "end": "number"
+      }
+    },
+    "archived": {
+      "rank": 870,
+      "stamped_rank": 60,
+      "stamped": {
+        "at": "time",
+        "by": {
+          "eid": "entity",
+          "death": "keep"
+        },
+        "via": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      }
+    },
+    "blob": {
+      "rank": 140,
+      "kind_rank": 350,
+      "cols": {
+        "mime": "text",
+        "name": "text",
+        "sha": "text",
+        "bytes": "number",
+        "w": "number",
+        "h": "number"
+      }
+    },
+    "comment": {
+      "rank": 710,
+      "kind_rank": 300,
+      "cols": {
+        "target": {
+          "eid": "entity",
+          "death": "cascade"
+        }
+      }
+    },
+    "conflict": {
+      "rank": 680,
+      "stamped_rank": 230,
+      "kind_rank": 260,
+      "stamped": {
+        "target": {
+          "eid": "entity",
+          "death": "keep"
+        },
+        "loser": "text",
+        "holder": "text",
+        "at": "time"
+      }
+    },
+    "created": {
+      "rank": 830,
+      "stamped_rank": 20,
+      "cols": {
+        "by": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      },
+      "stamped": {
+        "at": "time",
+        "via": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      }
+    },
+    "decided": {
+      "rank": 990,
+      "stamped_rank": 90,
+      "cols": {
+        "at": "time",
+        "by": {
+          "eid": "entity",
+          "death": "keep"
+        },
+        "verdict": {
+          "enum": [
+            "approved",
+            "declined"
+          ]
+        }
+      },
+      "stamped": {
+        "via": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      }
+    },
+    "doc": {
+      "rank": 10,
+      "kind_rank": 360,
+      "cols": {
+        "title": "text",
+        "body": "body"
+      }
+    },
+    "entity": {
+      "wire": false,
+      "stamped_rank": 10,
+      "stamped": {
+        "num": "number"
+      }
+    },
+    "exception": {
+      "rank": 920,
+      "stamped_rank": 170,
+      "stamped": {
+        "at": "time",
+        "message": "text",
+        "stack": "text"
+      }
+    },
+    "favorite": {
+      "rank": 220,
+      "stamped_rank": 80,
+      "stamped": {
+        "at": "time"
+      }
+    },
+    "meta": {
+      "rank": 730
+    },
+    "notice": {
+      "rank": 720,
+      "kind_rank": 290,
+      "cols": {
+        "target": {
+          "eid": "entity",
+          "death": "cascade"
+        },
+        "event": {
+          "enum": "noticeKinds"
+        }
+      }
+    },
+    "notified": {
+      "rank": 850,
+      "stamped_rank": 40,
+      "stamped": {
+        "at": "time",
+        "by": {
+          "eid": "entity",
+          "death": "keep"
+        },
+        "via": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      }
+    },
+    "opened": {
+      "rank": 860,
+      "stamped_rank": 50,
+      "stamped": {
+        "at": "time",
+        "by": {
+          "eid": "entity",
+          "death": "keep"
+        },
+        "via": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      }
+    },
+    "proposed": {
+      "rank": 1000,
+      "stamped_rank": 100,
+      "cols": {
+        "at": "time",
+        "by": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      },
+      "stamped": {
+        "via": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      }
+    },
+    "quarantined": {
+      "rank": 880,
+      "stamped_rank": 70,
+      "stamped": {
+        "at": "time",
+        "by": {
+          "eid": "entity",
+          "death": "keep"
+        },
+        "via": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      }
+    },
+    "recall": {
+      "rank": 820,
+      "stamped_rank": 220,
+      "stamped": {
+        "count": "number",
+        "first_at": "time",
+        "last_at": "time"
+      }
+    },
+    "redaction": {
+      "rank": 690,
+      "stamped_rank": 240,
+      "kind_rank": 270,
+      "prefix": "X",
+      "stamped": {
+        "target": {
+          "eid": "entity",
+          "death": "keep"
+        },
+        "column": {
+          "enum": [
+            "title",
+            "body"
+          ]
+        },
+        "hash": "text"
+      }
+    },
+    "setting": {
+      "rank": 230,
+      "cols": {
+        "key": "text",
+        "value": "text"
+      }
+    },
+    "updated": {
+      "rank": 840,
+      "stamped_rank": 30,
+      "cols": {
+        "by": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      },
+      "stamped": {
+        "at": "time",
+        "via": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      }
+    }
+  },
+  "renames": {
+    "view:Debug.ListItem": "Debug.Tile",
+    "view:Id": "Inline",
+    "view:List.Item": "List.Tile",
+    "view:Show": "Full",
+    "view:Task.Row": "Board.List.Tile"
+  },
+  "edges": [
+    "requires",
+    "contains",
+    "reads",
+    "about",
+    "supervises",
+    "delegates",
+    "recalled",
+    "supersedes",
+    "worked",
+    "referenced",
+    "wants"
+  ]
+}

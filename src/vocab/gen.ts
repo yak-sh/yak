@@ -1,18 +1,22 @@
-// The vocabulary codegen (D-22530 rung 1, T-22531): per-plugin TOML
-// manifests in this directory are the SOURCE OF TRUTH for the graph
-// vocabulary; this script assembles them and emits src/types.ts — the
-// generated data section followed by the hand-written code half
-// (code.ts.part). Composition is order-independent by construction:
-// every ordered thing carries an explicit rank, ties refuse, and a comp
-// name owned by two manifests refuses loudly with both claimants named.
+// The vocabulary codegen (D-22530 §6, T-22607): the SOURCE OF TRUTH is now
+// the annotated Rust contract in crates/xtask/src/contract — a cargo xtask
+// assembles it and emits the per-plugin data manifests in ./manifests/*.json
+// (the former TOML shape, demoted to generated interchange). This script reads
+// those manifests and emits src/types.ts — the generated data section followed
+// by the hand-written code half (code.ts.part) — plus fixture.json and the
+// kernel crate's vocab_gen.rs. Composition is order-independent by
+// construction: every ordered thing carries an explicit rank, ties refuse, and
+// a comp name owned by two manifests refuses loudly with both claimants named.
 //
-//   deno task codegen          regenerate types.ts + fixture.json
-//   deno task codegen --check  fail (exit 1) if the committed files are
-//                              stale against the manifests — the gate
+//   cargo run -p xtask -- vocab   regenerate the manifests from the Rust
+//   deno task codegen             regenerate types.ts + fixture.json + Rust
+//   deno task codegen --check     fail (exit 1) if the committed files are
+//                                 stale against the manifests — the gate
+//                                 (the manifests' own staleness against the
+//                                 Rust rides `cargo test` in xtask)
 //
 // The emitted file is deno-fmt'ed via a subprocess so the stale check
 // compares post-format bytes, never a formatting phantom.
-import { parse } from '@std/toml'
 import { capture } from './fixture.ts'
 
 type ColSpec =
@@ -193,11 +197,11 @@ let colBlock = (cols: Record<string, ColSpec>): string => {
 export let emit = (a: ReturnType<typeof assemble>): string => {
   let out: string[] = []
   out.push(
-    '// GENERATED from src/vocab/*.toml — edit the manifests, then run',
-    "// `deno task codegen`. Hand edits here are refused by the gate's",
-    '// stale check (`deno task codegen --check`). The prose that used to',
-    '// live beside each declaration lives in the manifests now; the code',
-    '// half of this module is src/vocab/code.ts.part.',
+    '// GENERATED — do not edit. The vocabulary source of truth is the',
+    '// annotated Rust contract in crates/xtask/src/contract; a cargo xtask',
+    '// emits src/vocab/manifests/*.json and `deno task codegen` emits this',
+    "// file from them. Hand edits here are refused by the gate's stale check",
+    '// (`deno task codegen --check`). The code half is src/vocab/code.ts.part.',
     '//',
     '// Shared FE/BE vocabulary: entity components, edges, and the sync',
     '// unit. No imports; the module IS the schema, on both sides of the',
@@ -387,10 +391,11 @@ let rustProp = (t: ColSpec, enums: Record<string, { values: string[] }>) => {
 export let emitRust = (a: ReturnType<typeof assemble>): string => {
   let out: string[] = []
   out.push(
-    '// GENERATED from src/vocab/*.toml — edit the manifests, then run',
-    "// `deno task codegen`. Hand edits here are refused by the gate's",
-    '// stale check (`deno task codegen --check`). One contract, three',
-    '// faces: types.ts, fixture.json, and this module.',
+    '// GENERATED — do not edit. Emitted by `deno task codegen` from the',
+    '// vocabulary manifests, whose source of truth is the annotated Rust',
+    '// contract in crates/xtask/src/contract. Refused by the gate stale',
+    '// check (`deno task codegen --check`). One contract, three faces:',
+    '// types.ts, fixture.json, and this module.',
     '',
     'use crate::vocab::{PropType, Vocab};',
     'use std::collections::HashMap;',
@@ -463,12 +468,15 @@ export let emitRust = (a: ReturnType<typeof assemble>): string => {
 // ---- drive ----------------------------------------------------------------
 
 let loadManifests = (): Manifest[] => {
-  let files = [...Deno.readDirSync(dir)]
-    .filter((f) => f.isFile && f.name.endsWith('.toml'))
+  let mdir = `${dir}manifests/`
+  let files = [...Deno.readDirSync(mdir)]
+    .filter((f) => f.isFile && f.name.endsWith('.json'))
     .map((f) => f.name).sort()
-  if (!files.length) refuse('no manifests found')
+  if (!files.length) {
+    refuse('no manifests found — run `cargo run -p xtask -- vocab`')
+  }
   return files.map((f) =>
-    parse(Deno.readTextFileSync(dir + f)) as unknown as Manifest
+    JSON.parse(Deno.readTextFileSync(mdir + f)) as Manifest
   )
 }
 

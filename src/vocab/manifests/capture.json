@@ -1,0 +1,16 @@
+{
+  "name": "capture",
+  "comps": {
+    "web": {
+      "rank": 130,
+      "stamped_rank": 110,
+      "kind_rank": 70,
+      "cols": {
+        "url": "url"
+      },
+      "stamped": {
+        "frozen_at": "time"
+      }
+    }
+  }
+}

@@ -1,7 +1,8 @@
-// GENERATED from src/vocab/*.toml — edit the manifests, then run
-// `deno task codegen`. Hand edits here are refused by the gate's
-// stale check (`deno task codegen --check`). One contract, three
-// faces: types.ts, fixture.json, and this module.
+// GENERATED — do not edit. Emitted by `deno task codegen` from the
+// vocabulary manifests, whose source of truth is the annotated Rust
+// contract in crates/xtask/src/contract. Refused by the gate stale
+// check (`deno task codegen --check`). One contract, three faces:
+// types.ts, fixture.json, and this module.
 
 use crate::vocab::{PropType, Vocab};
 use std::collections::HashMap;
