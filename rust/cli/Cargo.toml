@@ -1,0 +1,13 @@
+[package]
+name = "task-rs"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "task-rs"
+path = "src/main.rs"
+
+[dependencies]
+kernel = { path = "../kernel" }
+serde_json = { version = "1", features = ["preserve_order"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
