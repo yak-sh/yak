@@ -39,16 +39,66 @@ globalThis.addEventListener?.('popstate', () => {
   mark()
 })
 
-export let navigate = (to: string) => {
-  if (!his) return
+// The root change itself, minus history: navigate() pushes an entry first;
+// the navigation interceptor below arrives WITHOUT pushing, because an
+// intercepted navigation's history entry is the browser's to mint.
+let arrive = (to: string) => {
   peek.value = [] // a real root change dismisses every floating peek
   let was = screenTarget()?.eid
-  his.pushState(null, '', to)
   route.value = to
   track(was)
   keep()
   mark()
 }
+
+export let navigate = (to: string) => {
+  if (!his) return
+  his.pushState(null, '', to)
+  arrive(to)
+}
+
+// Whether a path is the app's own route shape — `/` or ONE extensionless
+// segment (`/T-123`, `/home`). Multi-segment and dotted paths are real
+// resources (/blob/<sha>, /logs/…, files) and keep native navigation.
+export let appRoute = (path: string) => /^\/[^/?#.]*$/.test(path)
+
+// The whole class of in-app links intercepted at the NAVIGATION layer: any
+// click that would LEAVE the document for an app route — an md-rendered
+// anchor, an Id chip whose per-element handler fell through (eidOf's server
+// fallback resolves async, so the first click on an unloaded ref used to
+// full-load the page: a fresh boot, a new socket, a whole working-set reset
+// per click), any future render path — routes in place instead. The API's own
+// preconditions keep what must stay native: modified clicks and middle-click
+// never set canIntercept, downloads and hash moves are skipped, cross-origin
+// cannot intercept, and our own pushState arrivals are same-document. Only
+// `push` navigations are taken — back/forward stays native, popstate above
+// already owns the same-document form. Feature-detected: the TUI's fake DOM
+// and non-supporting browsers keep the per-element handlers (which stay
+// wired regardless — they also own the fine-pointer peek).
+type NavigateEvent = {
+  canIntercept: boolean
+  hashChange: boolean
+  downloadRequest: string | null
+  navigationType: string
+  formData: unknown
+  destination: { url: string; sameDocument: boolean }
+  intercept: (opts: { handler: () => Promise<void> }) => void
+}
+let navApi = (globalThis as { navigation?: EventTarget }).navigation
+navApi?.addEventListener?.('navigate', (e) => {
+  let ev = e as unknown as NavigateEvent
+  if (!ev.canIntercept || ev.hashChange || ev.downloadRequest != null) return
+  if (ev.navigationType != 'push' || ev.destination.sameDocument) return
+  if (ev.formData != null) return
+  let url = new URL(ev.destination.url)
+  if (!appRoute(url.pathname)) return
+  ev.intercept({
+    handler: () => {
+      arrive(url.pathname + url.search)
+      return Promise.resolve()
+    },
+  })
+})
 
 let linkAt = (ev: MouseEvent) => {
   let el = (v: EventTarget | null) =>
