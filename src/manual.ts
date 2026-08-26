@@ -1599,9 +1599,14 @@ let parsed = (
       flags.add(opt.name)
       continue
     }
+    // A long option's value follows `name=`; a short option's may be glued
+    // (`-n50`) OR carry the same `=` separator (`-n=50`) that usageOf prints
+    // for EVERY value option (`[-n=N]`). Strip that one leading `=` so the
+    // documented spelling parses — without it `-n=50` kept the `=` and failed
+    // num as `=50`, so the tool refused its own advertised form (T-21817).
     let got = opt.name.startsWith('--')
       ? arg.slice(opt.name.length + 1)
-      : arg.slice(opt.name.length)
+      : arg.slice(opt.name.length).replace(/^=/, '')
     if (arg == opt.name) {
       let next = argv[i + 1]
       if (!opt.separate || !next || option(next)) {

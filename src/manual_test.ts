@@ -406,6 +406,20 @@ Deno.test('parse names positionals, resolves options, and applies defaults', () 
   assertEquals([...got.flags], ['--json', '--verbose'])
 
   assertEquals(parse('history', manuals.history, ['T-3']).opts['-n'], '50')
+  // A short value option accepts the `=` separator usageOf advertises
+  // (`[-n=N]`), not only the space/glued forms (T-21817).
+  assertEquals(
+    parse('history', manuals.history, ['T-3', '-n=7']).opts['-n'],
+    '7',
+  )
+  assertEquals(
+    parse('history', manuals.history, ['T-3', '-n7']).opts['-n'],
+    '7',
+  )
+  assertEquals(
+    parse('telemetry', manuals.telemetry, ['-n=50']).opts['-n'],
+    '50',
+  )
   assertEquals(
     parse('show', manuals.show, ['T-3', '--format', 'json']).opts['--format'],
     'json',
