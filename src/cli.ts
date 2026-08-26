@@ -2123,6 +2123,38 @@ export let finalText = (path: string) => {
   } catch { /* no transcript is no brief */ }
 }
 
+// T-22165: harness worktree isolation can silently fail — a child spawned
+// with isolation:worktree has landed in the SHARED main checkout, where a
+// commit goes straight to main. The tell is git's own layout: the main
+// checkout's `.git` is a DIRECTORY, a linked worktree's is a pointer file.
+// Walk up from cwd to the nearest `.git`; a directory means shared. The hook
+// must never fail the session, so the digest WARNS loudly and the agent acts.
+export let sharedCheckout = (
+  cwd: string,
+  dirAt = (p: string): boolean | undefined => {
+    try {
+      return Deno.statSync(p).isDirectory
+    } catch {
+      return undefined
+    }
+  },
+) => {
+  for (let dir = cwd; dir && dir != '/'; dir = dir.replace(/\/[^/]*$/, '')) {
+    let git = dirAt(`${dir}/.git`)
+    if (git != undefined) return git
+  }
+  return false
+}
+
+export let isolationWarning = (
+  cwd?: string,
+  shared: (cwd: string) => boolean = sharedCheckout,
+) =>
+  cwd && shared(cwd)
+    ? '⚠ SHARED MAIN CHECKOUT — your worktree isolation is absent; run ' +
+      '`git worktree add` and work there before touching any file.\n\n'
+    : ''
+
 // Subagent mode's output: a delegated Task-tool child is NOT the operator
 // loop, so it triages nothing — no mail, no pulse, no fleet, no bus sweep.
 // It sees ONLY its own task (the managed TASKS_TASK, else whatever its
@@ -2133,6 +2165,7 @@ export let subagentDigest = (
   snap: Snapshot,
   sid: string,
   agentType?: string,
+  cwd?: string,
 ) => {
   let all = rows(snap)
   let sess = all.find((r) =>
@@ -2144,7 +2177,8 @@ export let subagentDigest = (
     task = all.find((r) => r.comps.claim?.session == sess.eid)
   }
   let head = `# subagent${agentType ? ` ${agentType}` : ''} · ${sid}`
-  return task ? taskBlock(all, snap.deps, task).join('\n') : head
+  return isolationWarning(cwd) +
+    (task ? taskBlock(all, snap.deps, task).join('\n') : head)
 }
 
 // Operator capability belongs to the provider tree launched by `task
@@ -2295,7 +2329,7 @@ let context = async (input: Got) => {
           await send(hc)
           snap = await read(sid, cwd, [inherited])
         }
-        print(subagentDigest(snap, sid, agentType))
+        print(subagentDigest(snap, sid, agentType, cwd))
         return
       }
       // The payload disambiguates the two hooks wired to this one line:
@@ -2319,7 +2353,7 @@ let context = async (input: Got) => {
           await send(s.changes)
           snap = await read(subId, cwd) // the block should see the reify
         }
-        print(subagentDigest(snap, subId, agentType))
+        print(subagentDigest(snap, subId, agentType, cwd))
         return
       }
       sid ??= String(body.session_id ?? '')
@@ -2415,7 +2449,12 @@ let context = async (input: Got) => {
     )
     let agentType = sess?.comps.session?.agent_type
     return print(
-      subagentDigest(snap, sid, agentType ? String(agentType) : undefined),
+      subagentDigest(
+        snap,
+        sid,
+        agentType ? String(agentType) : undefined,
+        Deno.cwd(),
+      ),
     )
   }
   // Bare = the preview: what a fresh session would boot with, scoped to

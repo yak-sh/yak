@@ -22,6 +22,7 @@ import {
   hookProvider,
   hookSession,
   hookTurn,
+  isolationWarning,
   jsonText,
   kindArg,
   leadPrio,
@@ -36,6 +37,7 @@ import {
   reportUsage,
   restartReady,
   roleEid,
+  sharedCheckout,
   showing,
   strayFile,
   strayFlag,
@@ -2411,3 +2413,29 @@ slow(
     }
   },
 )
+
+// T-22165: the isolation guard's detection seam, pure. The main checkout's
+// .git is a directory; a linked worktree's is a pointer file; the nearest
+// .git up the walk decides.
+Deno.test('sharedCheckout tells the main checkout from a linked worktree', () => {
+  let fs = (m: Record<string, boolean>) => (p: string) => m[p]
+  assertEquals(sharedCheckout('/repo/src', fs({ '/repo/.git': true })), true)
+  assertEquals(sharedCheckout('/wt', fs({ '/wt/.git': false })), false)
+  assertEquals(sharedCheckout('/tmp/x', fs({})), false)
+  assertEquals(
+    sharedCheckout(
+      '/repo/wt/deep',
+      fs({ '/repo/wt/.git': false, '/repo/.git': true }),
+    ),
+    false,
+  )
+})
+
+Deno.test('isolationWarning fires only for a shared-checkout cwd', () => {
+  assertStringIncludes(
+    isolationWarning('/x', () => true),
+    'SHARED MAIN CHECKOUT',
+  )
+  assertEquals(isolationWarning('/x', () => false), '')
+  assertEquals(isolationWarning(undefined), '')
+})
