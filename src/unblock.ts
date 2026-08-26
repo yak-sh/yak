@@ -18,7 +18,8 @@
 // "Ungated" is sessions.ts `gatedTask` verbatim — the same requires reading
 // dispatch's ready() and Piece 1's park retention use, imported rather than
 // re-derived so the three never drift. SERVER-ONLY (imports db).
-import { apply, db, depsOf } from './db.ts'
+import { apply, db, depsOf, human } from './db.ts'
+import { delivered } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, uuid } from './types.ts'
 import { gatedTask } from './sessions.ts'
@@ -42,6 +43,22 @@ let claimant = (taskEid: string): string | null =>
        where entity = (select id from entity where eid = ?)`,
   ).get(taskEid) as { session: string | null } | undefined)?.session ?? null
 
+// The session's pending park wakes — armed by `task park` as its safety
+// fallback, unresolved (neither delivered nor error). The knock minted here is
+// the real resume, so the fallback's job is over; without settling it the
+// standing read keeps the finished session `idle` (terminal + pendingWake)
+// until the timer fires, up to the park's full 12h (T-21509).
+let parkWakes = (sessionEid: string): string[] =>
+  (db.prepare(
+    `select e.eid as eid from deliver d
+       join wake w on w.entity = d.entity
+       join entity e on e.id = d.entity
+       left join delivered v on v.entity = d.entity
+       left join error x on x.entity = d.entity
+     where d."to" = (select id from entity where eid = ?)
+       and v.entity is null and x.entity is null`,
+  ).all(sessionEid) as { eid: string }[]).map((r) => r.eid)
+
 export let unblocking =
   (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
     if (!terminal.has(String(comp.status ?? ''))) return
@@ -51,6 +68,7 @@ export let unblocking =
       .map((d) => d.parent)
     if (!dependents.length) return
     let out: Change[] = []
+    let resumed: { session: string; knock: string }[] = []
     for (let t of dependents) {
       if (gatedTask(t)) continue // another blocker still holds it
       let session = claimant(t)
@@ -60,10 +78,19 @@ export let unblocking =
         { eid: k, name: 'knock', comp: { target: t } },
         { eid: k, name: 'deliver', comp: { to: session } },
       )
+      resumed.push({ session, knock: k })
     }
     if (!out.length) return
     let t = trace()
     let done = apply(db, out, t, null)
     cast(done)
     dispatch(done, t, (n, e) => console.warn(`unblock knock ${n} —`, e))
+    // The knock is the resume, so the park's fallback wake has done its job:
+    // settle it delivered (via names the knock), the same idiom wake.ts uses
+    // when a timer fires. An ungated knock never re-parks, so nothing re-arms.
+    for (let { session, knock } of resumed) {
+      for (let w of parkWakes(session)) {
+        delivered(w, `knock ${human(db, knock)}`, cast)
+      }
+    }
   }

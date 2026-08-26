@@ -103,3 +103,33 @@ Deno.test('a non-terminal status change knocks nobody', () => {
   ended(dep, 'wip')
   assertEquals(knocksTo(s), [])
 })
+
+Deno.test('the resume knock settles the parked fallback wake delivered', () => {
+  let dep = task()
+  let t = task(), s = session()
+  requires(t, dep)
+  claim(t, s)
+  // The park's safety fallback: a wake aimed at the session, unresolved.
+  let w = uid()
+  apply(db, [
+    { eid: w, name: 'wake', comp: { at: '2099-01-01T00:00:00.000Z' } },
+    { eid: w, name: 'deliver', comp: { to: s } },
+  ])
+  ended(dep, 'done')
+  assertEquals(knocksTo(s).length, 1) // the resume happened
+  let row = db.prepare(
+    `select via from delivered
+     where entity = (select id from entity where eid = ?)`,
+  ).get(w) as { via: string } | undefined
+  assertEquals(row != null, true) // the fallback is settled, not pending
+  assertEquals(String(row?.via).startsWith('knock '), true)
+})
+
+Deno.test('no pending wake: the knock still lands, nothing settles', () => {
+  let dep = task()
+  let t = task(), s = session()
+  requires(t, dep)
+  claim(t, s)
+  ended(dep, 'done') // no wake armed at all — must not throw
+  assertEquals(knocksTo(s).length, 1)
+})
