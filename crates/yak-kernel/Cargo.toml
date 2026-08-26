@@ -1,13 +1,13 @@
 [package]
 name = "yak-kernel"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "Apache-2.0"
 description = "The yak graph kernel: an entity-component graph over SQLite — vocabulary, the row/comp model, the wire Change, a filter grammar, a delta-fed cache, and the gated apply() write path."
 keywords = ["graph", "entity-component", "sqlite", "database", "kernel"]
 categories = ["database", "data-structures"]
-# TODO: add `repository` at the next point release — the yak-sh GitHub org
-# does not exist yet.
+repository = "https://github.com/yak-sh/yak"
+homepage = "https://yak.sh"
 exclude = ["*.ts"]
 
 # `native` carries everything that cannot cross into wasm32 (sqlite, files).

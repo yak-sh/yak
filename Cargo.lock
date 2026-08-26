@@ -631,7 +631,7 @@ dependencies = [
 
 [[package]]
 name = "yak-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "rusqlite",
@@ -641,7 +641,7 @@ dependencies = [
 
 [[package]]
 name = "yak-kernel"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "rusqlite",
@@ -652,7 +652,7 @@ dependencies = [
 
 [[package]]
 name = "yak-wasm"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde_json",
  "yak-kernel",
