@@ -231,13 +231,27 @@ export let latestMessage = async (session: string) => {
   return last
 }
 
-// The human id of a just-minted entity, read back by its eid for the num
-// the server stamped — /apply is synchronous against the same db, so the
-// row is already there; the eid stands in on the rare miss. One keyed
-// query instead of a whole snapshot for every mint's success line.
-export let minted = async (eid: string) => {
-  let r = await got(eid)
-  return r ? idOf(r) : eid
+// The human id of an entity the server just minted, read from /apply's OWN
+// echoed batch (send's return) — which carries the spine {entity:{eid,num}}
+// stamped in the SAME transaction as the write (db.ts apply). Printing THAT
+// num is atomic with the create: it provably names the entity this batch
+// minted. A SECOND read-back of the eid (the old `minted`, a keyed got())
+// reopened it against a graph that could restart under the read — the read
+// missed and printed the raw uuid, or resolved a never-landed eid through a
+// fallback to a FOREIGN entity and printed a num the caller never created
+// (T-22591): the CLI then wrote its body/claim/comment onto that stranger.
+// No spine in the echo means the mint did not land: throw, naming the eid,
+// so a create fails LOUDLY rather than fabricating an id.
+export let mintedIn = (applied: Change[], eid: string): string => {
+  let r = rows({ changes: applied }).find((r) => r.eid == eid)
+  if (!r || !r.num) {
+    throw new Error(
+      `create not confirmed: /apply echoed no spine for ${shortId(eid)} — ` +
+        `the entity was not minted (a server restart can drop a write). ` +
+        `Nothing was created under a printed id; re-run.`,
+    )
+  }
+  return idOf(r)
 }
 
 // The graph as rows: one per entity, components merged in; kind derived.

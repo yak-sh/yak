@@ -53,7 +53,7 @@ import {
   mailThread,
   me,
   memoryChanges,
-  minted,
+  mintedIn,
   needed,
   neighborhoods,
   noticeBlock,
@@ -719,8 +719,8 @@ let create = async (got: Got) => {
     if (scope) grouped.task = { ...grouped.task, project: scope }
   }
   let eid = crypto.randomUUID()
-  await send(taskChanges(eid, grouped))
-  print(`${await minted(eid)} created`)
+  let applied = await send(taskChanges(eid, grouped))
+  print(`${mintedIn(applied, eid)} created`)
   let hint = await similarHint(
     `${grouped.doc.title}\n${grouped.doc.body ?? ''}`,
     eid,
@@ -1007,8 +1007,8 @@ let mailSend = async (got: Got) => {
     )
   }
   let made = mailChanges({ to, subject, body })
-  await send(made.changes)
-  let eid = await minted(made.eid)
+  let applied = await send(made.changes)
+  let eid = mintedIn(applied, made.eid)
   print(`${eid} → ${to} — task show ${eid} for the delivery receipt`)
 }
 
@@ -1024,8 +1024,8 @@ let mailReply = async (input: Got) => {
     )
   }
   let made = replyChanges(row, body)
-  await send(made.changes)
-  let eid = await minted(made.eid)
+  let applied = await send(made.changes)
+  let eid = mintedIn(applied, made.eid)
   print(
     `${eid} → ${made.changes[1].comp?.to} (re: ${
       idOf(row)
@@ -1317,9 +1317,13 @@ let launch = async (
     by,
     deps: persona?.deps,
   }, caps)
-  await send(made.changes)
+  let applied = await send(made.changes)
   let onto = id ? find(all, id) : undefined
-  print(`${await minted(made.eid)} spawned${onto ? ` onto ${idOf(onto)}` : ''}`)
+  print(
+    `${mintedIn(applied, made.eid)} spawned${
+      onto ? ` onto ${idOf(onto)}` : ''
+    }`,
+  )
 }
 
 let spawn = async (got: Got) => {
@@ -1886,7 +1890,7 @@ let comment = async (got: Got) => {
     sid,
     { verdict },
   )
-  await send(made)
+  let applied = await send(made)
   // Hand back the comment's OWN id, like every other mint door. Without it a
   // writer has no reference to what it just wrote, so the only reachable way
   // to fix a wrong comment is another comment — which is why the board fills
@@ -1894,7 +1898,7 @@ let comment = async (got: Got) => {
   let mine = made.find((c) => c.name == 'comment')!.eid
   let said = verdict ? `${verdict} review` : 'comment'
   print(
-    `${await minted(mine)} — ${said} on ${idOf(row)}`,
+    `${mintedIn(applied, mine)} — ${said} on ${idOf(row)}`,
   )
 }
 
@@ -2582,8 +2586,8 @@ let design = async (got: Got) => {
   let props = patches(await derefedParams(got.params))
   let sess = await sessionRow(session)
   let made = designChanges(sess ? [sess] : [], { title, body, session, props })
-  await send(made.changes)
-  print(`${await minted(made.eid)} proposed`)
+  let applied = await send(made.changes)
+  print(`${mintedIn(applied, made.eid)} proposed`)
   let hint = await similarHint(`${title}\n${body ?? ''}`, made.eid)
   if (hint) print(hint)
 }
@@ -2602,9 +2606,11 @@ let dream = async (input: Got) => {
   let made = dreamChanges([project, ...await query(['.kind=dream'])], {
     project: project.eid,
   })
-  await send(made.changes)
+  let applied = await send(made.changes)
   print(
-    `${await minted(made.eid)} dreaming ${idOf(project)} — first comb shortly`,
+    `${mintedIn(applied, made.eid)} dreaming ${
+      idOf(project)
+    } — first comb shortly`,
   )
 }
 
@@ -2645,8 +2651,8 @@ let remember = async (got: Got) => {
     feedback: got.opts['--feedback'],
     session,
   })
-  await send(made.changes)
-  print(`${await minted(made.eid)} remembered`)
+  let applied = await send(made.changes)
+  print(`${mintedIn(applied, made.eid)} remembered`)
   let hint = await similarHint(`${title}\n${body ?? ''}`, made.eid)
   if (hint) print(hint)
 }

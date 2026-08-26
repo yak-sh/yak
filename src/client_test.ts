@@ -30,6 +30,7 @@ import {
   mailLine,
   me,
   memoryChanges,
+  mintedIn,
   noticesFor,
   param,
   patches,
@@ -99,6 +100,50 @@ Deno.test('rows: merge, derived kind, ids', () => {
   assertEquals(idOf(by(S)), 'S-1')
   assertEquals(kindOf({ comment: {}, review: {} }), 'review')
   assertEquals(kindOf({}), 'entity')
+})
+
+// The create-print invariant (T-22591): a create names the num of the entity
+// it actually MINTED — the spine /apply echoed for THIS eid — never a num
+// obtained any other way. The fatal bug printed a foreign num (the caller's
+// own session's) for a task that never landed, so the CLI wrote its
+// body/claim/comment onto the stranger. mintedIn reads the num only from the
+// batch's own spine, so a foreign entity riding the same batch cannot be
+// mistaken for the mint, and a missing spine is a loud failure, not a guess.
+Deno.test('mintedIn: names the minted eid, never a foreign num', () => {
+  let NEW = 'bbbbbbbb-0000-4000-8000-000000000001'
+  let SESSION = 'bbbbbbbb-0000-4000-8000-0000000000ff'
+  // The echoed /apply batch: the task this write minted (num 7) alongside the
+  // caller's own session (num 22575), which rides the batch as a touched
+  // provenance row. The old separate read-back could resolve to the session.
+  let applied: Change[] = [
+    { eid: NEW, name: 'doc', comp: { title: 'Fresh', body: '' } },
+    { eid: NEW, name: 'task', comp: { status: 'open', priority: 1 } },
+    { eid: NEW, name: 'entity', comp: { eid: NEW, num: 7, created_at: '' } },
+    { eid: SESSION, name: 'session', comp: { id: 'sess-y', cwd: '/w' } },
+    {
+      eid: SESSION,
+      name: 'entity',
+      comp: { eid: SESSION, num: 22575, created_at: '' },
+    },
+  ]
+  assertEquals(mintedIn(applied, NEW), 'T-7')
+})
+
+Deno.test('mintedIn: no spine for the eid is a loud failure, not a stale num', () => {
+  let NEW = 'bbbbbbbb-0000-4000-8000-000000000002'
+  let SESSION = 'bbbbbbbb-0000-4000-8000-0000000000ff'
+  // The mint did NOT land (a restart dropped it): the batch carries only the
+  // caller's session spine. There is no num that names the task, so the door
+  // must throw rather than borrow 22575.
+  let applied: Change[] = [
+    {
+      eid: SESSION,
+      name: 'entity',
+      comp: { eid: SESSION, num: 22575, created_at: '' },
+    },
+    { eid: SESSION, name: 'session', comp: { id: 'sess-y', cwd: '/w' } },
+  ]
+  assertThrows(() => mintedIn(applied, NEW), Error, 'not confirmed')
 })
 
 Deno.test('fetched dedupes and bounds address batches', async () => {
