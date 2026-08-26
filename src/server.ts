@@ -372,6 +372,7 @@ let applyFrom = (
 }
 
 let workerN = 0
+let workersWanted = Deno.env.get('TASKS_WS_WORKERS') == '1'
 let ws = (req: Request) => {
   let { socket, response } = Deno.upgradeWebSocket(req)
   // The tab names itself once, at connect: ?client=<eid> is the writer for
@@ -386,13 +387,21 @@ let ws = (req: Request) => {
     if (socket.readyState == WebSocket.OPEN) socket.send(PING)
     else clearInterval(beat)
   }, PING_MS)
-  // The delegator split: a file-backed graph hands the connection to its own
-  // worker — its own thread, its own read-only connection — and this process
-  // only pumps frames and applies writes. :memory: serves inline (a worker's
-  // separate connection would open a DIFFERENT empty graph), as does any
-  // environment where the Worker fails to construct.
+  // The delegator split: with TASKS_WS_WORKERS=1, a file-backed graph hands
+  // the connection to its own worker — its own thread, its own read-only
+  // connection — and this process only pumps frames and applies writes.
+  // OPT-IN, default inline, since the 2026-08-26 live corruption (journal +
+  // doc_gram_data cross-linked) opened inside the first window workers ran
+  // beside the effects daemon: per-socket connections churning open/close in
+  // the writer's own process are the prime suspect (POSIX lock/fd interplay,
+  // T-22588) and stay off the live graph until exonerated. :memory: always
+  // serves inline (a worker's separate connection would open a DIFFERENT
+  // empty graph), as does any environment where the Worker fails to
+  // construct, and — loudly — any socket whose worker reports its connection
+  // dead: the delegator closes that socket so the client reconnects onto an
+  // inline serve, and no join can die silently again.
   let s: Served = { sock: socket }
-  if (graph != ':memory:') {
+  if (workersWanted && graph != ':memory:') {
     try {
       let w = new Worker(new URL('./wsworker.ts', import.meta.url), {
         type: 'module',
@@ -405,6 +414,17 @@ let ws = (req: Request) => {
           if (socket.readyState == WebSocket.OPEN) socket.send(d.frame)
         } else if (Array.isArray(d?.apply)) {
           applyFrom(socket, writer, d.apply as Change[], d.id)
+        } else if (typeof d?.dead == 'string') {
+          // The worker's connection failed (its init, or a read mid-serve).
+          // Serving would be silence; kill the pair and let the client's
+          // reconnect land on an inline serve — workersWanted flips off for
+          // the process, one failure is enough.
+          console.error(
+            `wsworker dead — serving inline from here on: ${d.dead}`,
+          )
+          workersWanted = false
+          w.terminate()
+          socket.close(1012, 'resubscribe')
         }
       }
       w.onerror = (e) => console.warn('wsworker error —', e.message)

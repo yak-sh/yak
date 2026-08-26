@@ -56,6 +56,12 @@ self.onmessage = (m: MessageEvent<In>) => {
     if ('aged' in d) return sub.aged(d.aged)
     if ('observe' in d) return void sub.observe(d.observe, d.session)
   } catch (e) {
+    // An error escaping to here is the connection or the file, not one bad
+    // query (subserve catches those itself) — a client served by silence is
+    // the failure mode this must never repeat (2026-08-26: workers reading a
+    // corrupt live db logged here while every join died mute). Report dead;
+    // the delegator closes the socket and the client reconnects inline.
     console.warn('wsworker:', e)
+    post({ dead: e instanceof Error ? e.message : String(e) })
   }
 }

@@ -10,6 +10,9 @@ import { slow } from './testing.ts'
 
 let dir = await Deno.makeTempDir({ prefix: 'wsworker-test-' })
 Deno.env.set('DB_PATH', `${dir}/graph.db`)
+// The delegator's worker mode is opt-in (default inline since the 2026-08-26
+// corruption); these tests exist to exercise the worker path, so opt in.
+Deno.env.set('TASKS_WS_WORKERS', '1')
 let alone = { sanitizeOps: false, sanitizeResources: false }
 
 let U = ''
