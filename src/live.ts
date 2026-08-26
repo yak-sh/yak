@@ -1325,6 +1325,10 @@ export type Sub = {
   replace?: boolean
   cursor?: number
   shadow?: boolean
+  // An aggregate frame (T-21283): a value→count map instead of members. The
+  // initial frame replaces the whole tally; later frames are deltas (n=0
+  // drops the key). No row changes ride these, so the cache is untouched.
+  agg?: Record<string, number>
 }
 type Observed = { observe: unknown }
 type Hot = 'reload' | { hmr: number } | { css: number }
@@ -1535,6 +1539,24 @@ let shadows = new Set<string>()
 // evicted from the cache. A control reply replaces the prior set wholesale;
 // maintenance frames patch it.
 export let landSub = (f: Sub) => {
+  // An aggregate frame lands in its tally signal and nowhere else — it carries
+  // no rows, so the cache, member sets and eviction all stay out of it.
+  if (f.agg) {
+    let s = aggSets.get(f.sub)
+    if (s) {
+      if (f.replace) {
+        s.map.value = { ...f.agg }
+        s.live.value = true
+      } else {
+        let next = { ...s.map.peek() }
+        for (let [v, n] of Object.entries(f.agg)) {
+          n > 0 ? next[v] = n : delete next[v]
+        }
+        s.map.value = next
+      }
+    }
+    return { eids: [], edges: [] }
+  }
   if (f.replace && f.sub.startsWith('entries:')) {
     clearObservations(f.sub.slice('entries:'.length))
   }
@@ -2452,11 +2474,31 @@ export let commentsOn = (target: string): Ent[] =>
 export let chatFor = (actor: string, target: string): Ent | undefined =>
   queryEids([eq('chat', 'actor', actor), eq('chat', 'target', target)]).value
     .map(ent)[0]
-// A per-tile badge on every rendered entity — LOCAL, never a per-entity server
-// sub (T-21283). The open card's Comments view (commentsOn, bounded) owns the
-// complete list; this count is best-effort over the working set.
+// A per-tile badge on every rendered entity — ONE aggregate sub for the whole
+// client, never a per-entity server sub (T-21283: a page of per-row subs
+// floods, 1363 measured). The server answers `.tally=comment.target` whole
+// once, then speaks deltas as comments arrive, die, or retarget; every tile
+// reads its key out of the shared map. Until the server has answered (and on
+// the no-socket paths — the TUI, a test), the local working-set count serves,
+// exactly the badge this replaces.
+type AggSet = { live: Signal<boolean>; map: Signal<Record<string, number>> }
+let aggSets = new Map<string, AggSet>()
+let aggQuery = (name: string, line: string): AggSet => {
+  let found = aggSets.get(name)
+  if (!found) {
+    found = { live: signal(false), map: signal({}) }
+    aggSets.set(name, found)
+    ownBoard(name, line)
+  }
+  return found
+}
 export let commentCount = (target: string): Signal<number> =>
-  computed(() => localEids([eq('comment', 'target', target)]).value.length)
+  computed(() => {
+    let t = aggQuery('agg:comments', '.comment!&.tally=comment.target')
+    return t.live.value
+      ? t.map.value[target] ?? 0
+      : localEids([eq('comment', 'target', target)]).value.length
+  })
 
 type Folded = { eid: string; statuses: string }
 // The fold row for a (client, board) — a unique (client, board) pair, so the two

@@ -142,6 +142,8 @@ import {
   type Row,
 } from './client.ts'
 import {
+  aggOf,
+  type Hop,
   listed,
   matchQuery,
   parseQuery,
@@ -287,6 +289,12 @@ type Sub = {
   // "this eid, while it's alive", so the entity loads whole (details), updates
   // live, and dies with the row. Empty/absent for every query sub.
   only?: Set<string>
+  // An AGGREGATE sub (T-21283): a query carrying `.tally=comp.prop` answers a
+  // VALUE→COUNT map, not a member list — one sub serves every tile's badge, so
+  // a page of per-row reverse-lookups never floods the wire. `vals` remembers
+  // each member's current column value (a death can't be re-read from the db),
+  // `counts` is the standing tally; maintain() pushes DELTA maps (n=0 deletes).
+  agg?: { at: Hop; vals: Map<string, string>; counts: Map<string, number> }
 }
 let subs = new Map<WebSocket, Map<string, Sub>>()
 let filtered = new Set<WebSocket>()
@@ -418,6 +426,42 @@ export let maintain = (batch: Change[]) => {
   for (let [sock, map] of subs) {
     if (sock.readyState != WebSocket.OPEN) continue
     for (let [id, sub] of map) {
+      // An aggregate sub speaks value→count deltas: a member arriving,
+      // leaving, or moving its column value adjusts the standing tally, and
+      // only the touched values ride the frame (n=0 tells the client to drop
+      // the key). vals is the member set — a death reads its last value from
+      // there, since the row is already gone from the db.
+      if (sub.agg) {
+        let { at, vals, counts } = sub.agg
+        let delta = new Map<string, number>()
+        let bump = (v: string, by: number) => {
+          if (!v) return
+          let n = (counts.get(v) ?? 0) + by
+          n > 0 ? counts.set(v, n) : counts.delete(v)
+          delta.set(v, Math.max(n, 0))
+        }
+        for (let eid of touched) {
+          let c = gone.has(eid) ? {} : comps(eid)
+          let alive = !gone.has(eid) && !!c.entity
+          let hit = alive && listed(c, sub.preds) &&
+            matchQuery(c, sub.preds, comps, undefined, dbKids(comps))
+          let now = hit ? String(c[at.comp]?.[at.prop] ?? '') : ''
+          let was = vals.get(eid) ?? ''
+          if (now == was) continue
+          bump(was, -1)
+          bump(now, 1)
+          now ? vals.set(eid, now) : vals.delete(eid)
+        }
+        if (delta.size) {
+          sock.send(JSON.stringify({
+            sub: id,
+            agg: Object.fromEntries(delta),
+            cursor: cur,
+            shadow: sub.shadow,
+          }))
+        }
+        continue
+      }
       let changes: Change[] = []
       let drop: string[] = []
       let candidates = sub.preds.some((p) => p.at || p.rev)
@@ -542,6 +586,37 @@ let control = (
     let { preds, hits } = route != null
       ? { preds: [], hits: rowsFor(route) }
       : evalFast(db, f.q ?? '', details) ?? evalQuery(db, f.q ?? '')
+    // An aggregate sub answers a tally, not a member list. Build the standing
+    // count from the membership pass (vals doubles as the member set), send
+    // the whole map once, and let maintain() speak in deltas from here.
+    let agg = route == null ? aggOf(preds) : undefined
+    if (agg) {
+      let vals = new Map<string, string>()
+      let counts = new Map<string, number>()
+      for (let r of hits) {
+        let v = String(r.comps[agg.at.comp]?.[agg.at.prop] ?? '')
+        if (!v) continue
+        vals.set(r.eid, v)
+        counts.set(v, (counts.get(v) ?? 0) + 1)
+      }
+      map.set(f.sub, {
+        preds,
+        members: new Set(vals.keys()),
+        shadow: !!f.shadow,
+        moving: false,
+        bodies: false,
+        details: false,
+        agg: { at: agg.at, vals, counts },
+      })
+      sock.send(JSON.stringify({
+        sub: f.sub,
+        agg: Object.fromEntries(counts),
+        replace: true,
+        cursor: cursorOf(db),
+        shadow: !!f.shadow,
+      }))
+      return
+    }
     map.set(f.sub, {
       preds,
       members: new Set(hits.map((r) => r.eid)),

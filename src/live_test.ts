@@ -54,6 +54,7 @@ import {
   topZ,
   unreadFor,
   unsubscribe,
+  useRoute,
 } from './live.ts'
 import { EXISTS, parseQuery, PROJECT, resolveRefs } from './query.ts'
 import { type Ent } from './types.ts'
@@ -2260,9 +2261,9 @@ Deno.test('serverQuery: a held membership query tracks its subscription', () => 
 
 // T-21283: a per-rendered-row reverse-lookup (commentCount on every tile) must
 // NEVER open a per-entity server sub — that scales with rows on screen and
-// floods the leader (1363 subs measured). It stays LOCAL even with server subs
-// on, while a DEFINING query still opens its bounded sub.
-Deno.test('commentCount opens no server sub; a defining query does (T-21283)', () => {
+// floods the leader (1363 subs measured). ONE shared aggregate sub serves every
+// tile: the first read may open it; later reads — any target — open nothing.
+Deno.test('commentCount shares one aggregate sub across targets (T-21283)', () => {
   let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
   ;(globalThis as { WebSocket: unknown }).WebSocket = class {
     readyState = 0
@@ -2276,24 +2277,67 @@ Deno.test('commentCount opens no server sub; a defining query does (T-21283)', (
   let probe =
     (globalThis as unknown as { __probe: { subN: () => number } }).__probe
   let X = 'cccc0000-0000-4000-8000-000000000001'
+  let Y = 'cccc0000-0000-4000-8000-000000000002'
   try {
     cache.value = {
       [X]: { entity: { eid: X, num: 1 }, canvas: { eid: X } },
       c1: { entity: { eid: 'c1', num: 2 }, comment: { eid: 'c1', target: X } },
       c2: { entity: { eid: 'c2', num: 3 }, comment: { eid: 'c2', target: X } },
     }
-    let n0 = probe.subN()
-    // The per-tile count resolves locally — two comments — and opens NO sub.
+    // Prime the shared agg sub (idempotent across the file), then count every
+    // subscribe frame that leaves: per-target reads must send NOTHING.
     assertEquals(commentCount(X).value, 2)
-    assertEquals(probe.subN(), n0)
-    // A defining presence query DOES open its (bounded) server sub.
-    let preds = resolveRefs(parseQuery('.canvas!'), findEid)
-    holdQuery(preds)
-    assertEquals(probe.subN(), n0 + 1)
-    dropQuery(preds)
+    let sent = 0
+    let restore = useRoute(() => sent++)
+    let n0 = probe.subN()
+    try {
+      assertEquals(commentCount(X).value, 2)
+      assertEquals(commentCount(Y).value, 0)
+      assertEquals(sent, 0)
+      assertEquals(probe.subN(), n0)
+      // A defining presence query DOES open its (bounded) server sub.
+      let preds = resolveRefs(parseQuery('.canvas!'), findEid)
+      holdQuery(preds)
+      assertEquals(probe.subN(), n0 + 1)
+      dropQuery(preds)
+    } finally {
+      useRoute(restore)
+    }
   } finally {
     ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
   }
+})
+
+// The client half of the aggregate wire (T-21283): the server's initial tally
+// REPLACES the local count and is authoritative from then on; delta frames
+// merge (n=0 drops the key); rows never ride, so the cache is untouched.
+Deno.test('an aggregate frame replaces, then deltas merge', () => {
+  let X = 'cccc0000-0000-4000-8000-000000000011'
+  let Y = 'cccc0000-0000-4000-8000-000000000012'
+  cache.value = {
+    c1: { entity: { eid: 'c1', num: 1 }, comment: { eid: 'c1', target: X } },
+  }
+  let x = commentCount(X)
+  let y = commentCount(Y)
+  assertEquals(x.value, 1) // local prime — the working-set count
+  // The server answers the whole tally: X has three comments beyond the
+  // working set, Y one — authoritative over the local scan.
+  landSub({
+    sub: 'agg:comments',
+    changes: [],
+    replace: true,
+    agg: { [X]: 3, [Y]: 1 },
+  })
+  assertEquals(x.value, 3)
+  assertEquals(y.value, 1)
+  // A delta frame moves one key and leaves the rest standing.
+  landSub({ sub: 'agg:comments', changes: [], agg: { [X]: 4 } })
+  assertEquals(x.value, 4)
+  assertEquals(y.value, 1)
+  // n=0 drops the key — the last comment left.
+  landSub({ sub: 'agg:comments', changes: [], agg: { [Y]: 0 } })
+  assertEquals(y.value, 0)
+  assertEquals(Object.keys(cache.value).length, 1) // no rows landed
 })
 
 // T-21511: socket-liveness predicates. A heartbeat frame is liveness only, and a
