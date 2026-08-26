@@ -292,11 +292,20 @@ impl Store {
         collect(&self.conn, &sql, [], |r| r.get(0))
     }
 
+    // Both endpoints of every edge touching an eid. The filter must name the
+    // edge table's OWN columns: `pe.eid = ?1 or ce.eid = ?1` spans two joined
+    // copies of `entity`, so no single index answers it and sqlite falls back
+    // to SCANNING all of entity, seeking dependency once per row — 110ms of a
+    // 155ms `show`. Resolving the eid to its integer id in a scalar subquery
+    // (evaluated once, not correlated) turns the disjunction into two preds
+    // over one table, which sqlite answers as a MULTI-INDEX OR: the parent
+    // half seeks the primary key, the child half seeks dependency_child.
     pub fn deps_of(&self, eid: &str) -> Vec<Dep> {
         let sql = "select pe.eid, d.type, ce.eid from dependency d \
                    join entity pe on pe.id = d.parent \
                    join entity ce on ce.id = d.child \
-                   where pe.eid = ?1 or ce.eid = ?1 \
+                   where d.parent = (select id from entity where eid = ?1) \
+                      or d.child  = (select id from entity where eid = ?1) \
                    order by pe.eid, d.type, d.ord, ce.eid";
         collect(&self.conn, sql, [eid], |r| {
             Ok(Dep { parent: r.get(0)?, type_: r.get(1)?, child: r.get(2)? })

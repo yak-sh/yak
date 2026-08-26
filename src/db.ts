@@ -6831,15 +6831,22 @@ export let depsOf = (db: DatabaseSync, eids: string[]): Dep[] => {
   if (!eids.length) return []
   stage(db, eids)
   let mine = `in (select eid from hit)`
-  // Endpoints are int ids; project both to eids and filter on the projected
-  // eids (never the base int, C-19763).
+  // C-19763's landmine is binding an eid VALUE to a base int column, which
+  // matches nothing in silence; the cure it prescribes is resolving eid→id
+  // BEFORE binding, which is what `myIds` does here. Filtering the projected
+  // p.eid/c.eid instead spans two joined copies of `entity`, so no single
+  // index answers the disjunction and sqlite SCANS all of entity, seeking
+  // dependency once per row. Naming the edge table's own columns keeps both
+  // halves on one table, which sqlite answers as a MULTI-INDEX OR: the parent
+  // half seeks the primary key, the child half seeks dependency_child.
+  let myIds = `in (select e.id from entity e where e.eid ${mine})`
   let deps = (prep(
     db,
     `select p.eid as parent, d.type as type, c.eid as child, d.ord as ord
       from dependency d
       join entity p on p.id = d.parent
       join entity c on c.id = d.child
-      where p.eid ${mine} or c.eid ${mine}
+      where d.parent ${myIds} or d.child ${myIds}
       order by p.eid, d.type, d.ord, c.eid`,
   ).all() as Dep[]).map(shedOrd)
   return [
