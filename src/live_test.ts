@@ -772,6 +772,24 @@ Deno.test('domains: nothing to say about an empty graph', () => {
   assertEquals(domains.value, [])
 })
 
+// The census is an AGGREGATE, not a task stream (D-22567 §1): once the server
+// answers `.distinct=task.domain` the well reads THAT, with no task in the
+// cache to reduce. The local pass above is the pre-answer courtesy, not the
+// source of truth.
+Deno.test('domains: the server distinct wins over the working set', () => {
+  fill([['T', 'Ops']])
+  landSub({
+    sub: 'agg:domains',
+    changes: [],
+    replace: true,
+    agg: { Fable: 1, Eng: 1 },
+  })
+  assertEquals(domains.value, ['Eng', 'Fable'])
+  // And a delta moves it without a task changing hands.
+  landSub({ sub: 'agg:domains', changes: [], agg: { Eng: 0, Ops: 1 } })
+  assertEquals(domains.value, ['Fable', 'Ops'])
+})
+
 Deno.test('projects: project rows only, oldest first, named by doc', () => {
   fill([['T', 'Ops'], ['P', 'Sol'], ['P', 'Fable']])
   assertEquals(projects().map((p) => p.doc?.title), ['Sol', 'Fable'])

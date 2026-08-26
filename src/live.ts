@@ -2471,26 +2471,23 @@ export let rows = (): Row[] =>
     comps: r as Record<string, Record<string, unknown>>,
   }))
 
-// The distinct domain census through the query door (T-17504): the universe is
-// every task, and a wake-projected `task.domain` re-fires the set when a
-// VALUE changes (a task moving Eng→Ops keeps its membership but changes the
-// census) — the same mechanism a pin's move uses, so the bespoke facet-rescan
-// machinery this replaces is gone. Empties drop in distinctValues, matching
-// the census as it always read.
-let censusPreds: Pred[] = [
-  has('task'),
-  {
-    comp: '',
-    prop: '',
-    op: PROJECT,
-    value: '',
-    fields: [{ comp: 'task', prop: 'domain', wake: true }],
-  },
-]
+// The distinct domain census as an AGGREGATE sub (T-17504, then D-22567 §1):
+// the well asks the server for the VALUES, so the client never holds the tasks
+// they came from. This used to be a `.task!` membership sub carrying a
+// wake-projected `task.domain` — which streamed EVERY task into the cache
+// (23,992 change records, 4.7 MB measured on the live graph) so a render could
+// reduce them to a dozen strings. `.distinct=task.domain` answers those strings
+// from the index and re-answers when a task moves Eng→Ops, the same fact the
+// projection was there to catch.
+//
+// Until the server answers (and on the socketless paths — the TUI, a test), the
+// working set's own census serves: a suggestion well is best-effort by nature,
+// which is why this one may read locally where a board's membership may not.
 export let domains = {
   get value() {
-    return distinctValues(
-      queryEids(censusPreds).value.map((eid) => cache.peek()[eid] ?? {}),
+    let t = aggQuery('agg:domains', '.task!&.distinct=task.domain')
+    return t.live.value ? Object.keys(t.map.value).sort() : distinctValues(
+      localEids([has('task')]).value.map((eid) => cache.peek()[eid] ?? {}),
       { comp: 'task', prop: 'domain' },
     )
   },
