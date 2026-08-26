@@ -34,6 +34,7 @@ import {
   lastBatch,
   locate,
   migrate,
+  recast,
   redact as redactValue,
   referrersOf,
   refsOf,
@@ -51,9 +52,10 @@ import {
   vocabularyDoc,
 } from './db.ts'
 import { db } from './live_db.ts'
+import { catchup } from './catchup.ts'
 import { published, withBackupLock } from './redaction.ts'
 import { bodied, bodyless, gaps, spread, type Step, step } from './subs.ts'
-import { dispatch, docs, on, relay, trace } from './effects.ts'
+import { dispatch, docs, fed, on, relay, trace } from './effects.ts'
 import { registerSessionSource } from './source_session.ts'
 import { registerCodexSource } from './source_codex.ts'
 import { registerManagedSource } from './source_managed.ts'
@@ -655,10 +657,13 @@ let control = (
 // Send one committed batch in the shape each socket negotiated: long-lived
 // old clients keep their bare arrays while new browser leaders get the cursor
 // needed for an atomic IDB checkpoint.
-let sendLive = (changes: Change[], except?: WebSocket) => {
+let sendLive = (changes: Change[], except?: WebSocket, at?: number) => {
   changes = rootChanges(db, changes)
   if (!changes.length) return
-  let cursor = cursorOf(db)
+  // A journal-fed cast stamps the ROW's rowid, so a client that disconnects
+  // mid-drain reconnects from exactly what it heard; a non-journaled cast
+  // (touch) keeps the current top.
+  let cursor = at ?? cursorOf(db)
   let bare = JSON.stringify(liveFrame(changes, cursor, false))
   let framed = JSON.stringify(liveFrame(changes, cursor, true))
   for (let c of clients) {
@@ -675,8 +680,8 @@ let runnerSoon = () => {}
 // sockets hear only their own frames, via maintain), then fold it into subs.
 // The one door every non-/ws write path (MCP, /apply, effects, touch, freeze)
 // reaches subscribers through.
-let cast = (changes: Change[], except?: WebSocket) => {
-  sendLive(changes, except)
+let cast = (changes: Change[], except?: WebSocket, at?: number) => {
+  sendLive(changes, except, at)
   maintain(changes)
   nativeSoon(cast)
   // Maintain the native-session `standing` facet at the write edge (T-17855),
@@ -703,6 +708,26 @@ let effect = (out: Change[], t: ReturnType<typeof trace>) => {
     }))
 }
 
+// The journal feed (D-22388 step 1): the one path every JOURNALED commit takes
+// to the sockets and the effect registry — the server's own writes (their
+// doors call feed.settle() right after apply(), keeping today's synchronous
+// ordering) and a foreign process's (the -wal watcher wakes the same drain),
+// uniformly. Effects fire only for rows journaled with a fed() trace — the
+// doors that DEFERRED dispatch here — so the self-dispatching modules (heal,
+// wake, deliver, …) and the runner's deliberate effect-free applies are never
+// double-fired, and record()'d stamps broadcast without dispatching.
+// Handler-internal casts (sessions.ts, managed_codex.ts, …) still cast
+// directly; their journaled rows re-broadcast once when the feed passes them —
+// idempotent by the wire's contract ("applying the same patch twice is
+// harmless") — and migrate onto the feed with the effects-daemon extraction
+// (D-22388 step 3).
+let feed = catchup(db, (r) => {
+  let changes = recast(db, r)
+  cast(changes, undefined, r.rowid)
+  if (r.trace) effect(changes, r.trace)
+})
+feed.watch(graph)
+
 // A booting socket's catch-up handshake (T-6829): the client declares the
 // cursor+epoch+vocab it holds; the server replays the journal since it — or a
 // full reset if the cursor is void (first visit) or its epoch/vocab moved (a
@@ -725,6 +750,11 @@ let join = (
     live?: number
   },
 ) => {
+  // Drain the feed first, so a foreign commit the watcher hasn't settled yet
+  // can't arrive twice — once in this delta, again when the pass broadcasts
+  // it. After the drain, delta-read and add stay one synchronous stretch: the
+  // gapless property below.
+  feed.settle()
   if (f.live == 1) envelopes.add(sock)
   else envelopes.delete(sock)
   if (f.since == null || cursorStale(db, f.epoch, f.vocab, f.since)) {
@@ -776,10 +806,8 @@ let ws = (req: Request) => {
       sent = frame.apply as Change[]
       if (frame.id != null) id = String(frame.id)
     } else return control(socket, frame)
-    let out: Change[]
-    let t = trace()
     try {
-      out = apply(db, sent, t, writer)
+      apply(db, sent, fed(), writer)
     } catch (e) {
       console.error('sync: bad batch dropped —', e)
       // Revert the sender's optimistic apply with a SCOPED re-sync of just the
@@ -794,12 +822,11 @@ let ws = (req: Request) => {
       return
     }
     if (id) socket.send(JSON.stringify({ ack: id }))
-    // The sender hears the canonical patch too: its optimistic spelling may
-    // differ from storage (`P02`, `today`, a human reference). Applying the
-    // same patch twice is harmless; omitting it leaves the sender divergent.
-    sendLive(out)
-    maintain(out)
-    effect(out, t)
+    // The commit reaches every socket — the sender included, which hears the
+    // canonical patch (its optimistic spelling may differ from storage) —
+    // through the journal feed, same as a foreign writer's would. The fed()
+    // trace is what journals the effect ask the feed honors.
+    feed.settle()
   }
   return response
 }
@@ -848,22 +875,24 @@ let graphIO: IO = {
     ),
   // deno-lint-ignore require-await
   write: async (changes, via) => {
-    let t = trace()
-    let out = apply(db, changes, t, via)
-    cast(out)
-    effect(out, t)
+    let out = apply(db, changes, fed(), via)
+    feed.settle()
     return out
   },
   // deno-lint-ignore require-await
   find: async (q, limit) => search(db, q, limit),
   upload: async (eid, html) => {
-    let res = await store(eid, html, cast)
+    // store() journals its stamp (record); the feed carries it to the sockets.
+    let res = await store(eid, html, () => feed.settle())
     if (!res.ok) throw new Error(await res.text())
   },
   // The one writer of recall stats: stamp, then cast, so every cache hears
   // the new warmth (the apply wire refuses these rows).
   // deno-lint-ignore require-await
   touch: async (eids, confirm) => {
+    // Recall touches are deliberately NOT journaled (reading is not editing),
+    // so they cannot ride the feed: the direct cast is their only delivery,
+    // live-only by design.
     let out = touch(db, eids, confirm)
     if (out.length) cast(out)
   },
@@ -879,10 +908,8 @@ let graphIO: IO = {
         eid ? `${eid} has no history to undo` : 'undo needs id or eid',
       )
     }
-    let t = trace()
-    let out = apply(db, inverseBatch(db, batch), t, via)
-    cast(out)
-    effect(out, t)
+    let out = apply(db, inverseBatch(db, batch), fed(), via)
+    feed.settle()
     return out
   },
   providers: () => readyProviders(),
@@ -1610,18 +1637,16 @@ let handle = async (req: Request) => {
         error,
       })
     return req.json().then((changes: Change[]) => {
-      let t = trace()
       // Attribution is an honesty header, not auth: the CLI names its
       // session in x-via (the instrument), apply resolves it to the actor
       // it acts for, and an anonymous post falls back to the box owner.
       let out = apply(
         db,
         changes,
-        t,
+        fed(),
         req.headers.get('x-via'),
       )
-      cast(out)
-      effect(out, t)
+      feed.settle()
       note(true)
       return Response.json({ ok: true, changes: out })
     }).catch((e) => {
@@ -1652,8 +1677,9 @@ let handle = async (req: Request) => {
           body.selector!,
           req.headers.get('x-via'),
         )
-        cast(result.changes)
-        effect(result.changes, trace())
+        // The redaction journaled its own row (with an empty trace, so the
+        // feed reproduces the old changed-handler-only dispatch).
+        feed.settle()
         let backup
         try {
           backup = await published(dirname(graph), result.firstSeen)
@@ -1710,10 +1736,13 @@ let handle = async (req: Request) => {
           eid ? `${eid} has no history to undo` : 'undo needs ?id= or ?eid=',
         )
       }
-      let t = trace()
-      let out = apply(db, inverseBatch(db, id), t, req.headers.get('x-via'))
-      cast(out)
-      effect(out, t)
+      let out = apply(
+        db,
+        inverseBatch(db, id),
+        fed(),
+        req.headers.get('x-via'),
+      )
+      feed.settle()
       note(true)
       return Response.json({ ok: true, changes: out, id })
     } catch (e) {
@@ -1734,16 +1763,14 @@ let handle = async (req: Request) => {
     let pending = mine(db)
     let landed = 0
     for (let i = 0; i < pending.length; i += 200) {
-      let t = trace()
       let out = apply(
         db,
         pending.slice(i, i + 200),
-        t,
+        fed(),
         req.headers.get('x-via'),
       )
       landed += out.filter((c) => c.name == 'dependency').length
-      cast(out)
-      effect(out, t)
+      feed.settle()
       await new Promise((resolve) => setTimeout(resolve, 0))
     }
     return Response.json({ found: pending.length, landed })
@@ -1841,15 +1868,13 @@ let handle = async (req: Request) => {
       let name = url.searchParams.get('name') ?? 'file'
       let mime = req.headers.get('content-type') || 'application/octet-stream'
       let bytes = new Uint8Array(await req.arrayBuffer())
-      let t = trace()
       let out = apply(
         db,
         await landBlob(eid, name, mime, bytes),
-        t,
+        fed(),
         req.headers.get('x-via'),
       )
-      cast(out)
-      effect(out, t)
+      feed.settle()
       return Response.json({ ok: true, changes: out })
     } catch (e) {
       let why = e instanceof Error ? e.message : String(e)
@@ -2607,19 +2632,17 @@ function turnSweep() {
          join entity e on e.id = s.entity where s.id = ?`,
       ).get(sid) as { eid: string } | undefined
       if (!row) return
-      let t = trace()
-      let out = apply(
+      apply(
         db,
         [{
           eid: row.eid,
           name: 'session',
           comp: { turn },
         }],
-        t,
+        fed(),
         sid,
       )
-      cast(out)
-      effect(out, t)
+      feed.settle()
     })
   } catch (e) {
     console.warn('turn spool retained —', e)

@@ -70,8 +70,19 @@ export let docs = () =>
 // What apply() learned that the wire doesn't say: which comp rows the
 // batch inserted, and which rows its deletes took (keyed by eid). Hand a
 // fresh one to apply(), then to dispatch() with the batch it returned.
-export type Trace = { created: Set<string>; removed: Map<string, string[]> }
+export type Trace = {
+  created: Set<string>
+  removed: Map<string, string[]>
+  // Dispatch belongs to the journal FEED (catchup.ts), not the call site:
+  // apply() journals a fed trace beside the batch, and the feed fires the
+  // effects when its cursor passes the row — own writes and a foreign
+  // process's uniformly. A plain trace() keeps dispatch at the call site
+  // (the self-dispatching modules: heal, wake, deliver, …) and journals no
+  // trace, so the feed can never fire those effects a second time.
+  fed?: boolean
+}
 export let trace = (): Trace => ({ created: new Set(), removed: new Map() })
+export let fed = (): Trace => ({ ...trace(), fed: true })
 
 // Run every matching handler, isolated: a throw (or rejection) goes to
 // `oops` and the rest still fire. Returns a promise of all handler

@@ -2786,6 +2786,15 @@ export let migrate = (db: DatabaseSync) => {
       addCol(table, 'via', 'via integer')
     }
     addCol('journal', 'via', 'via text')
+    // What apply() learned that the batch JSON doesn't say (D-22388): which
+    // comp rows were CREATED and which rows deletes took — the effects.ts
+    // Trace, serialized, so the journal feed (catchup.ts) can fire the same
+    // effects the writer would have. Written only for a fed() trace — a
+    // writer that DEFERRED dispatch to the feed. NULL means dispatch already
+    // happened at the call site or was never asked for (a plain/absent
+    // trace, the record() stamp door), and the feed broadcasts without
+    // dispatching, so an effect can never fire twice for one row.
+    addCol('journal', 'trace', 'trace text')
     // The managed-session lifecycle (src/sessions.ts): what it is doing and
     // how it ended. The old launch aliases are planted before backfillSpawn()
     // for live databases, then stay dormant as rollback input. The rest is
@@ -4144,8 +4153,13 @@ export let apply = (
   // and only defaults the gap (created.by at birth, updated.by on a touch).
   let saidCreator = new Set<string>()
   let saidEditor = new Set<string>()
-  let took = (eid: string, name: string) =>
+  // Removals are logged locally (the journal's trace column serializes them
+  // for a fed trace); `t`, when brought, mirrors the same rows.
+  let removedLog = new Map<string, string[]>()
+  let took = (eid: string, name: string) => {
+    removedLog.set(eid, [...(removedLog.get(eid) ?? []), name])
     t?.removed.set(eid, [...(t.removed.get(eid) ?? []), name])
+  }
   // A bounced claim is worth remembering: noted here mid-transaction,
   // written AFTER the rollback (an audit row can't ride the batch it
   // condemns) as a conflict entity — display strings, not references,
@@ -5147,13 +5161,24 @@ export let apply = (
         let jrow = Number(
           prep(
             db,
-            'insert into journal (ts, actor, via, batch) values (?, ?, ?, ?)',
+            'insert into journal (ts, actor, via, batch, trace) values (?, ?, ?, ?, ?)',
           )
             .run(
               now,
               actor, // the resolved writing actor (T-6669), same as the by-default
               via,
               JSON.stringify(logged),
+              // The Trace, journaled — but only when the caller DEFERRED its
+              // dispatch to the journal feed (a fed() trace). A plain trace()
+              // means the call site dispatches itself, and an absent trace
+              // means no effects at all (the runner's deliberate effect-free
+              // applies) — either way the feed must not fire them again.
+              t?.fed
+                ? JSON.stringify({
+                  created: [...createdComps],
+                  removed: [...removedLog],
+                })
+                : null,
             ).lastInsertRowid,
         )
         touchJournal(db, jrow, logged)
@@ -5440,8 +5465,18 @@ export let redact = (
     let jrow = Number(
       prep(
         db,
-        'insert into journal (ts, actor, via, batch) values (?, ?, ?, ?)',
-      ).run(now, actor, via, JSON.stringify(logged)).lastInsertRowid,
+        'insert into journal (ts, actor, via, batch, trace) values (?, ?, ?, ?, ?)',
+        // An EMPTY trace, not null: redaction historically dispatched with a
+        // fresh Trace (changed-handlers only — a role doc rewrite re-drives
+        // its role), and the journal consumer reproduces that.
+      ).run(
+        now,
+        actor,
+        via,
+        JSON.stringify(logged),
+        '{"created":[],"removed":[]}',
+      )
+        .lastInsertRowid,
     )
     touchJournal(db, jrow, logged)
 
@@ -5737,13 +5772,23 @@ export let rootChanges = (db: DatabaseSync, changes: Change[]): Change[] => {
 // window is empty), the client's next since. Shared by IndexedDB catch-up
 // (a temporal cut) and query subscriptions (a spatial cut) — one journal
 // reader, two doors (T-6823/T-3683).
-export let delta = (
-  db: DatabaseSync,
-  since: number,
-): { changes: Change[]; cursor: number } => {
-  let log = prep(
+// One journal row, read back whole: the batch as applied (canonicalized), the
+// provenance envelope, and the writer's Trace (revived — null when the writer
+// asked for no effects). The unit a journal-cursor consumer (catchup.ts) is
+// handed per commit, and the row delta() concatenates for a replay window.
+export type JournalRow = {
+  rowid: number
+  ts: string
+  actor: string | null
+  via: string | null
+  batch: Change[]
+  trace: Trace | null
+}
+
+export let journalSince = (db: DatabaseSync, since: number): JournalRow[] =>
+  (prep(
     db,
-    `select rowid, ts, actor, via, batch from journal
+    `select rowid, ts, actor, via, batch, trace from journal
      where rowid > ? order by rowid`,
   ).all(since) as {
     rowid: number
@@ -5751,63 +5796,116 @@ export let delta = (
     actor: string | null
     via: string | null
     batch: string
-  }[]
-  let changes: Change[] = []
-  let cursor = since
-  for (let r of log) {
-    cursor = r.rowid
-    let batch = canonicalChanges(JSON.parse(r.batch) as Change[])
-    for (let c of batch) changes.push(c)
-    // Sort the batch's eids the way apply() did to stamp provenance: a
-    // birth is a server-minted spine (an `entity` change carrying num — a
-    // delete is `entity`/comp:null instead), the dead are those deletes and
-    // cascade tombstones, and everything else is a touch. Edge changes touch
-    // BOTH endpoints, like apply(). A wire batch that named its own author/
-    // editor already rides in `changes` above; its `by` survives applyLocal's
-    // column-merge, so the synth only fills the `at` the journal dropped.
-    let born = new Set<string>()
-    let dead = new Set<string>()
-    let touched = new Set<string>()
-    let saidCreated = new Set<string>()
-    let saidUpdated = new Set<string>()
-    for (let c of batch) {
-      if (c.name == 'entity') (c.comp ? born : dead).add(c.eid)
-      else if (c.name == 'dependency') {
-        touched.add(c.eid)
-        if (c.comp) touched.add(String(c.comp.child))
-      } else {
-        touched.add(c.eid)
-        if (c.name == 'created') saidCreated.add(c.eid)
-        if (c.name == 'updated') saidUpdated.add(c.eid)
+    trace: string | null
+  }[]).map((r) => {
+    let t = r.trace
+      ? JSON.parse(r.trace) as {
+        created: string[]
+        removed: [string, string[]][]
       }
+      : null
+    return {
+      rowid: Number(r.rowid),
+      ts: r.ts,
+      actor: r.actor,
+      via: r.via,
+      batch: canonicalChanges(JSON.parse(r.batch) as Change[]),
+      trace: t
+        ? { created: new Set(t.created), removed: new Map(t.removed) }
+        : null,
     }
-    // created: one per birth, mirroring apply()'s stamp for every `minted`
-    // eid — the row's ts+actor+via is its provenance.
-    for (let eid of born) {
-      changes.push({
-        eid,
-        name: 'created',
-        comp: saidCreated.has(eid)
-          ? { eid, at: r.ts, via: r.via }
-          : { eid, at: r.ts, by: r.actor, via: r.via },
-      })
-    }
-    // updated: every distinct touched eid NOT born here and NOT dead —
-    // apply() skips births (created covers them) and the dead (a tombstone
-    // takes no edits). Appending per row in rowid order makes the LAST write
-    // win under column-merge: "updated is the last edit."
-    for (let eid of touched) {
-      if (born.has(eid) || dead.has(eid)) continue
-      changes.push({
-        eid,
-        name: 'updated',
-        comp: saidUpdated.has(eid)
-          ? { eid, at: r.ts, via: r.via }
-          : { eid, at: r.ts, by: r.actor, via: r.via },
-      })
+  })
+
+// One row replayed as the changes its commit meant: the batch, then the
+// provenance the journal deliberately left out, re-derived from the envelope.
+export let rowChanges = (r: JournalRow): Change[] => {
+  let changes: Change[] = [...r.batch]
+  // Sort the batch's eids the way apply() did to stamp provenance: a
+  // birth is a server-minted spine (an `entity` change carrying num — a
+  // delete is `entity`/comp:null instead), the dead are those deletes and
+  // cascade tombstones, and everything else is a touch. Edge changes touch
+  // BOTH endpoints, like apply(). A wire batch that named its own author/
+  // editor already rides in `changes` above; its `by` survives applyLocal's
+  // column-merge, so the synth only fills the `at` the journal dropped.
+  let born = new Set<string>()
+  let dead = new Set<string>()
+  let touched = new Set<string>()
+  let saidCreated = new Set<string>()
+  let saidUpdated = new Set<string>()
+  for (let c of r.batch) {
+    if (c.name == 'entity') (c.comp ? born : dead).add(c.eid)
+    else if (c.name == 'dependency') {
+      touched.add(c.eid)
+      if (c.comp) touched.add(String(c.comp.child))
+    } else {
+      touched.add(c.eid)
+      if (c.name == 'created') saidCreated.add(c.eid)
+      if (c.name == 'updated') saidUpdated.add(c.eid)
     }
   }
+  // created: one per birth, mirroring apply()'s stamp for every `minted`
+  // eid — the row's ts+actor+via is its provenance.
+  for (let eid of born) {
+    changes.push({
+      eid,
+      name: 'created',
+      comp: saidCreated.has(eid)
+        ? { eid, at: r.ts, via: r.via }
+        : { eid, at: r.ts, by: r.actor, via: r.via },
+    })
+  }
+  // updated: every distinct touched eid NOT born here and NOT dead —
+  // apply() skips births (created covers them) and the dead (a tombstone
+  // takes no edits). Appending per row in rowid order makes the LAST write
+  // win under column-merge: "updated is the last edit."
+  for (let eid of touched) {
+    if (born.has(eid) || dead.has(eid)) continue
+    changes.push({
+      eid,
+      name: 'updated',
+      comp: saidUpdated.has(eid)
+        ? { eid, at: r.ts, via: r.via }
+        : { eid, at: r.ts, by: r.actor, via: r.via },
+    })
+  }
+  return changes
+}
+
+export let delta = (
+  db: DatabaseSync,
+  since: number,
+): { changes: Change[]; cursor: number } => {
+  let changes: Change[] = []
+  let cursor = since
+  for (let r of journalSince(db, since)) {
+    cursor = r.rowid
+    changes.push(...rowChanges(r))
+  }
   return { changes: rootChanges(db, changes), cursor }
+}
+
+// A journal row replayed as the frames its LIVE cast carries: rowChanges plus
+// a re-read of every touched comp that wears server-stamped columns — the
+// insert-time fills (a notification stamp's at/by/via, mail.from) that apply()
+// echoes to live sockets but deliberately leaves out of the journal. The
+// re-read is current-state, which for the settle-right-after-commit caller is
+// the same state apply() echoed; a later row's overwrite re-broadcasts anyway,
+// so column-merge converges either way. A tombstoned eid reads no row and
+// echoes nothing.
+export let recast = (db: DatabaseSync, r: JournalRow): Change[] => {
+  let out = rowChanges(r)
+  let seen = new Set<string>()
+  for (let { eid, name, comp } of r.batch) {
+    if (!comp || name == 'entity' || name == 'dependency') continue
+    if (name == 'created' || name == 'updated') continue
+    if (!Object.keys(stamped[name] ?? {}).length) continue
+    let key = `${name} ${eid}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    let row = readComp(db, eid, name)
+    if (row) out.push({ eid, name, comp: row as Change['comp'] })
+  }
+  return out
 }
 
 // A recall touch — the server-minted aggregate behind ranked retrieval
