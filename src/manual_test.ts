@@ -42,7 +42,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       claude: 'claude [claude args…] [--operator]',
       codex: 'codex [codex args…] [--operator]',
       list:
-        'list [kind] [filters…] [--kind=KIND] [--limit=N] [--sort=SORT] [--json]',
+        'list [kind] [filters…] [--all] [--kind=KIND] [--limit=N] [--sort=SORT] [--json]',
       query: 'query [filters…] [--json]',
       graph_query: 'graph_query [filters…] [--json]',
       decided: 'decided [filters…] [--all] [--json]',

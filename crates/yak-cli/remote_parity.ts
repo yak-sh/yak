@@ -72,7 +72,13 @@ let cases: string[][] = [
   // answering "no entity" is the pass — as is both showing it, on a graph
   // where this num is not quarantined.
   ['show', 'T-1947'],
+  // A bare list is the WORKING SET now (open+wip, board order, bounded to
+  // WORKING_SET), not the whole graph (T-22643). --all widens to every status
+  // unbounded, --limit bounds explicitly — each must read the same file vs
+  // wire.
   ['list'],
+  ['list', '--all'],
+  ['list', '--limit', '10'],
   ['list', '.project=P-19', '.status=open'],
   ['list', '.status=wip'],
   ['list', '.priority<=1', '.status=open'],

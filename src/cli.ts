@@ -86,6 +86,7 @@ import {
   taskChanges,
   undo,
   unreadPipe,
+  WORKING_SET,
   wrapChanges,
 } from './client.ts'
 import { editChanges } from './edit.ts'
@@ -357,7 +358,8 @@ export let kindArg = (word: string) =>
 
 let list = async (got: Got) => {
   let json = got.flags.has('--json')
-  let limit = got.opts['--limit'] ? Number(got.opts['--limit']) : undefined
+  let all = got.flags.has('--all')
+  let asked = got.opts['--limit'] ? Number(got.opts['--limit']) : undefined
   // --kind is syntax sugar at this boundary. From here on it is the same
   // ordinary `.kind=` filter as every other spelling, so query behavior keeps
   // one owner (T-18549).
@@ -388,12 +390,23 @@ let list = async (got: Got) => {
   // tasks). Derived titles and the ⚑ column resolve through one bounded read.
   let named = line.map((a) => a.match(/^\.kind=(.+)$/)?.[1]).find(Boolean)
   let kind = bare ?? (named ? kindWord(named) ?? 'task' : 'task')
+  // A bare `task list` — no filter, no kind, no --all, no --limit — is the
+  // WORKING SET, not the whole graph (T-22643): open+wip tasks in board order,
+  // bounded to WORKING_SET. Widening is explicit — any filter, a bare kind,
+  // --all (every status, unbounded), or --limit=N. Not the windows grammar
+  // yet (T-22617); adopt its `.limit` when it lands.
+  let base = line.length == 0 && !bare && !named && !all && asked == undefined
+  let limit = base ? WORKING_SET : asked
   let filters = named ? line : [`.kind=${kind}`, ...line]
+  if (base) filters = [...filters, '.status=open,wip']
   let sort = got.opts['--sort']
-  let hits = (await query(filters, { limit: sort ? undefined : limit })).sort(
+  // The default and an explicit --sort both order in the client, so the slice
+  // takes the board/sort top-N; only a server-bounded --limit truncates first.
+  let paged = base || Boolean(sort)
+  let hits = (await query(filters, { limit: paged ? undefined : limit })).sort(
     sort ? byList(sort) : byBoard,
   )
-  if (sort && limit) hits = hits.slice(0, limit)
+  if (paged && limit) hits = hits.slice(0, limit)
   let refs = await fetched(
     hits.flatMap((r) => [
       String(r.comps.claim?.session ?? ''),

@@ -11,6 +11,7 @@ import {
   separated,
   type Stdin,
   stdin,
+  WORKING_SET,
 } from './client.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
 import { comps, edges, kindOrder, plurals, statuses } from './types.ts'
@@ -141,7 +142,11 @@ export let manuals = declare({
       'task projects',
       'task list boards .title~=fleet',
     ],
-    detail: 'A leading KIND word says what to list — `projects`, ' +
+    detail: 'A bare `task list` shows the WORKING SET, not the whole graph: ' +
+      'open+wip tasks in board order, bounded to the newest ' +
+      `${WORKING_SET}. Widen explicitly — a status/project/other filter, a ` +
+      'bare kind, `--all` (every status, unbounded), or `--limit=N`. ' +
+      'A leading KIND word says what to list — `projects`, ' +
       '`--kind=project` and `.kind=project` all name it, and the plural is a ' +
       'verb of its own (`task projects`). Tasks are the default. The second ' +
       "column is the handle you can type: a task's status, everything " +
@@ -151,6 +156,7 @@ export let manuals = declare({
     root: true,
     args: [arg('kind', text, false, false), arg('filters', text, true, false)],
     opts: [
+      flag('--all'),
       value('--kind', kind),
       value('--limit', num, true),
       value('--sort', listSort, true),

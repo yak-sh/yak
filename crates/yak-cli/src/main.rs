@@ -265,8 +265,56 @@ fn show(g: &dyn Graph, args: &[String]) -> i32 {
     0
 }
 
+// A bare `yak list` shows the working set board-ordered, bounded to this many
+// — never the whole graph (T-22643). Mirrors cli.ts WORKING_SET.
+const WORKING_SET: usize = 50;
+
 fn list(store: &dyn Graph, args: &[String]) -> i32 {
-    let (kind, mut preds) = match query::parse(args) {
+    // Split flags from filter args. --all widens to every status, unbounded;
+    // --limit=N (or --limit N) bounds explicitly; a bare list defaults to the
+    // working set below.
+    let mut all = false;
+    let mut asked: Option<usize> = None;
+    let mut filters: Vec<String> = vec![];
+    let mut i = 0;
+    while i < args.len() {
+        let a = &args[i];
+        if a == "--all" {
+            all = true;
+        } else if a == "--limit" {
+            i += 1;
+            match args.get(i).and_then(|s| s.parse::<usize>().ok()) {
+                Some(n) => asked = Some(n),
+                None => {
+                    eprintln!("--limit wants a number");
+                    return 2;
+                }
+            }
+        } else if let Some(n) = a.strip_prefix("--limit=") {
+            match n.parse::<usize>() {
+                Ok(v) => asked = Some(v),
+                Err(_) => {
+                    eprintln!("--limit wants a number");
+                    return 2;
+                }
+            }
+        } else if a.starts_with("--") {
+            eprintln!("unknown flag {a}");
+            return 2;
+        } else {
+            filters.push(a.clone());
+        }
+        i += 1;
+    }
+    // A bare `yak list` — no filter, no bare kind, no --all, no --limit — is
+    // the WORKING SET: open+wip tasks, board order, bounded. Widening is
+    // explicit; any of those turns it off. Injected as a filter STRING so
+    // parse() reads one grammar.
+    let base = filters.is_empty() && !all && asked.is_none();
+    if base {
+        filters.push(".status=open,wip".into());
+    }
+    let (kind, mut preds) = match query::parse(&filters) {
         Ok(x) => x,
         Err(e) => {
             eprintln!("{e}");
@@ -298,6 +346,11 @@ fn list(store: &dyn Graph, args: &[String]) -> i32 {
         }
     };
     hits.sort_by(query::by_board);
+    // Board-order top-N: the default bounds to the working set, an explicit
+    // --limit to what was asked; --all leaves it unbounded.
+    if let Some(n) = if base { Some(WORKING_SET) } else { asked } {
+        hits.truncate(n);
+    }
     let _p = span("render");
     // the second column: a task's status, everything else's alias slug
     let lines: Vec<(&yak_kernel::Row, String)> = hits

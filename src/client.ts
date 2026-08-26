@@ -1359,6 +1359,11 @@ export let find = (all: Row[], id: string) => {
   return all.find((r) => slugsOf(r.comps.alias).includes(id))
 }
 
+// A bare `task list` shows this many of the working set, board-ordered — a
+// bound so the door never dumps the whole graph (T-22643). Not the windows
+// grammar yet (T-22617); when that lands this is the default window size.
+export let WORKING_SET = 50
+
 // The board sort: status column order, then priority, then num.
 export let byBoard = (a: Row, b: Row) =>
   (statuses.findIndex((s) => s == a.comps.task?.status) -

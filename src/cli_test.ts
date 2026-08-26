@@ -1707,6 +1707,59 @@ slow('list shows the wake title derived by the UI', async () => {
   }
 })
 
+// A bare `task list` is the working set — open+wip in board order, never the
+// whole graph (T-22643). Widening is explicit: --all shows every status.
+slow(
+  'a bare list is the working set; --all widens to every status',
+  async () => {
+    let task = (num: number, status: string): Change[] => {
+      let eid = `bbbbbbbb-0000-4000-8000-0000000000${num}`
+      return [
+        { eid, name: 'entity', comp: { eid, num } },
+        { eid, name: 'doc', comp: { eid, title: `task ${status}`, body: '' } },
+        { eid, name: 'task', comp: { eid, status, priority: 1 } },
+      ]
+    }
+    let snap: Snapshot = {
+      changes: [
+        ...task(91, 'open'),
+        ...task(92, 'wip'),
+        ...task(93, 'done'),
+        ...task(94, 'cancelled'),
+      ],
+      deps: [],
+    }
+    let { server, host } = graphServer(snap)
+    let run = (...args: string[]) =>
+      new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          ...args,
+        ],
+        clearEnv: true,
+        env: { TASKS_HOST: host },
+      }).output()
+    try {
+      let bare = await run('list')
+      assertEquals(bare.code, 0, text(bare.stderr))
+      let ids = text(bare.stdout).trim().split('\n').map((l) =>
+        l.split(/\s+/)[0]
+      )
+      assertEquals(ids.sort(), ['T-91', 'T-92']) // done/cancelled excluded
+      let all = await run('list', '--all')
+      assertEquals(all.code, 0, text(all.stderr))
+      let allIds = text(all.stdout).trim().split('\n').map((l) =>
+        l.split(/\s+/)[0]
+      )
+      assertEquals(allIds.sort(), ['T-91', 'T-92', 'T-93', 'T-94'])
+    } finally {
+      await server.shutdown()
+    }
+  },
+)
+
 slow('setting a wake shows every pending wake for that session', async () => {
   let session = 'bbbbbbbb-0000-4000-8000-000000000071'
   let target = 'bbbbbbbb-0000-4000-8000-000000000072'
