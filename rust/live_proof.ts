@@ -63,6 +63,12 @@ if (!w1.ok) throw new Error(`rust write refused: ${w1.err}`)
 await until(() => saw(eid), 10_000, 'the live frame for the rust write')
 console.log(`1. rust write → live WS frame OK (write ${w1.ms}ms)`)
 
+// Under the delegator (T-22549) live follow-ons ride a client's OWN subs, so
+// subscribe to the probe entity the way a fullscreen view would before
+// expecting its patches.
+ws.send(JSON.stringify({ sub: `route:${eid}`, q: `id=${eid}` }))
+await new Promise((r) => setTimeout(r, 300))
+
 // 2. a stale was refuses, and no frame follows
 frames.length = 0
 import { sha } from '../src/sha.ts'
