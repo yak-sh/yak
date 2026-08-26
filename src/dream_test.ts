@@ -19,6 +19,10 @@ let {
   unwoken,
 } = await import('./dream.ts')
 let { hash, MODEL } = await import('./embed.ts')
+let { ownVector, refreshVector } = await import('./vector.ts')
+// Sole writer of its own :memory: graph, so this process owns the quantize the
+// way the embed sweep's process does (T-22622).
+ownVector()
 let { axes } = await import('./testvec.ts')
 let { slow } = await import('./testing.ts')
 let { assertEquals } = await import('@std/assert')
@@ -92,10 +96,15 @@ let task = (title: string, status: string) => {
 // coordinates ride a dense basis (testvec.ts) at full dimensionality so the
 // ANN index ranks them like real embeddings.
 let vec = (...xs: number[]) => axes(...xs)
-let putVec = (eid: string, v: Float32Array) =>
+// Store the way the sweep does — write, then rebuild the ANN index. knn() is
+// strictly read-only (T-22622), so an unquantized write is invisible to
+// semantic search until whoever owns the index quantizes it.
+let putVec = (eid: string, v: Float32Array) => {
   db.prepare(
     'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
   ).run(eid, MODEL, hash(eid), new Uint8Array(v.buffer))
+  refreshVector(db)
+}
 let memWithVec = (title: string, v: Float32Array) => {
   let eid = uid()
   apply(db, [

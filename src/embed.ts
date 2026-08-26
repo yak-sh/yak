@@ -162,7 +162,7 @@ export let embedSweep = async (db: DatabaseSync, limit = 100) => {
   // put() stores vectors through the extension's vector_as_f32, so with the
   // extension unavailable there is nothing the sweep can safely do — skip it
   // whole. Embeddings and their ANN index rebuild once a healthy index loads.
-  if (sweeping || dead || !vectorReady()) return 0
+  if (sweeping || dead || !vectorReady(db)) return 0
   sweeping = true
   let n = 0
   try {

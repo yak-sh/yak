@@ -48,18 +48,41 @@ let load = (): Binary => {
 // sweep — so it must never be a hard boot dependency of the whole server. A
 // corrupt or incompatible persisted ANN index makes loadExtension THROW as it
 // initializes against the bad data; catch it, disable vector search for this
-// process, and let the server boot on FTS alone. `available` gates every
-// function below so none touches vector SQL against a connection that never
-// loaded the extension.
-let available = false
-export let vectorReady = () => available
+// process, and let the server boot on FTS alone. `ready` gates every function
+// below so none touches vector SQL against a connection that never loaded the
+// extension.
+//
+// PER CONNECTION, not per process: the extension's functions belong to the
+// handle they were loaded into, so a process holding mixed handles — one with
+// the extension, one without — must not answer for both. It used to be a
+// module-global boolean, which was merely lucky while connect() loaded the
+// extension into every handle; the moment loading became opt-in (T-22622) that
+// global started claiming vector SQL on plain handles and migrate() died with
+// "no such function: vector_init".
+let ready = new WeakSet<DatabaseSync>()
+export let vectorReady = (db: DatabaseSync) => ready.has(db)
+
+// WHO MAY QUANTIZE. `vector_quantize` is a native-extension WRITE, and it used
+// to ride the READ path (knn → refreshVector), so any process that reached
+// semantic search rebuilt the ANN index outside apply()'s serialization. The
+// day dispatch split into its own daemon (T-22548) that made the write a
+// SECOND writer's, from a connection that had never run vector_init — the
+// 2026-08-26 split-brain (T-22622): the daemon that OWNED the sweep could not
+// quantize ("Vector context not found") while the server quantized on its read
+// path instead. So the write is claimed, once, by the process that runs the
+// embed sweep (doing.ts) — D-22530's rule that a write-capable extension lives
+// only where its write does. Everyone else reads: a dirty index degrades to
+// staler neighbours, never a write.
+let owns = false
+export let ownVector = () => owns = true
+export let vectorOwner = () => owns
 
 export let loadVector = (db: DatabaseSync) => {
   try {
     db.loadExtension(load().path)
-    available = true
+    ready.add(db)
   } catch (e) {
-    available = false
+    ready.delete(db)
     let why = e instanceof Error ? e.message : String(e)
     // Database-level corruption is NOT a vector problem: swallowing it here
     // hides the malformed-WAL signal connect()'s salvage listens for, and the
@@ -77,7 +100,7 @@ let count = (db: DatabaseSync) =>
   (db.prepare('select count(*) n from embedding').get() as { n: number }).n
 
 export let refreshVector = (db: DatabaseSync) => {
-  if (!available) return 0
+  if (!ready.has(db) || !owns) return 0
   let row = db.prepare('select dirty from embedding_index where id = 1')
     .get() as { dirty: number } | undefined
   if (!row?.dirty) return 0
@@ -95,28 +118,49 @@ export let refreshVector = (db: DatabaseSync) => {
 // K nearest stored vectors to a query, ranked by the persisted ANN index —
 // the SQL that replaces embed.ts's hand-rolled cosine scan. `score` is cosine
 // similarity (1 − the COSINE distance the extension reports), nearest first.
-// refreshVector first so a write that dirtied the index is quantized before we
-// read it (a no-op on the hot path, where the sweep already refreshed); an
-// empty corpus has no quantization table to scan, so it answers empty.
+// STRICTLY READ-ONLY: this used to refreshVector() first, which made every
+// caller of semantic search a native writer (T-22525). The sweep that owns the
+// index quantizes it; a read that arrives while the index is dirty answers
+// from the last quantization — staler neighbours, never a write. An empty
+// corpus has no quantization table to scan, so it answers empty.
 export let knn = (
   db: DatabaseSync,
   q: Float32Array,
   k: number,
 ): { eid: string; score: number }[] => {
-  if (!available) return []
-  refreshVector(db)
+  if (!ready.has(db)) return []
   if (!count(db)) return []
   let bytes = new Uint8Array(q.buffer, q.byteOffset, q.byteLength)
-  return (db.prepare(
-    `select e.eid as eid, v.distance as distance
+  try {
+    return (db.prepare(
+      `select e.eid as eid, v.distance as distance
        from vector_quantize_scan('embedding', 'vec', ?, ?) v
        join embedding e on e.rowid = v.id`,
-  ).all(bytes, k) as { eid: string; distance: number }[])
-    .map((r) => ({ eid: r.eid, score: 1 - r.distance }))
+    ).all(bytes, k) as { eid: string; distance: number }[])
+      .map((r) => ({ eid: r.eid, score: 1 - r.distance }))
+  } catch (e) {
+    // Vectors exist but nothing has quantized them yet — a fresh graph, or one
+    // rebuilt by `.recover` (which does not carry the extension's shadow
+    // tables) before the sweep's first pass. Building it is the SWEEP's write,
+    // never this read's, so answer empty until it lands. Every other failure is
+    // a genuine fault and rides upward, where the effect dispatcher records it.
+    let why = e instanceof Error ? e.message : String(e)
+    if (!why.includes('Quantization table not found')) throw e
+    return []
+  }
 }
 
+// vector_init is BOTH halves of setup, and the second is the one that bites:
+// it creates the persisted ANN table on a graph that lacks it (a write, hence
+// migrate()), AND it establishes the extension's PER-CONNECTION context — the
+// thing `vector_quantize` looks up. A connection that skipped it fails with
+// "Vector context not found" no matter how healthy the file is, which is
+// exactly what a --join daemon hit (it connects, never migrates). So every
+// process that touches vector SQL calls this on ITS OWN handle; on a graph
+// already initialized and not dirty it is byte-identical (measured), so a join
+// connection may call it freely.
 export let initVector = (db: DatabaseSync) => {
-  if (!available) return
+  if (!ready.has(db)) return
   db.prepare(
     `select vector_init(
       'embedding', 'vec',

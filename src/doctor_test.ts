@@ -16,6 +16,7 @@ import {
   STATIC_RULES,
   stuckSessions,
   undispatched,
+  vectorStale,
 } from './doctor.ts'
 import { canon } from './mailaddr.ts'
 import type { Querier, Row } from './client.ts'
@@ -337,4 +338,27 @@ Deno.test('undispatched: an old pending deliverable warns; settled and fresh sta
   assertEquals(out[0].level, 'warn')
   assertEquals(out[0].text.includes('2 deliverable(s)'), true)
   assertEquals(undispatched([], now), [])
+})
+
+Deno.test('vectorStale: a dirty mark outliving the sweep is the split-brain', () => {
+  let now = Date.parse('2026-08-26T12:00:00Z')
+  let at = (t: string, dirty = true, rows = 40) => ({
+    orphans: {},
+    dangling: {},
+    vector: { dirty, rows, newest: t },
+  })
+  // dirty since an hour ago and nothing rebuilt it — the finding
+  let out = vectorStale(at('2026-08-26T11:00:00Z'), now)
+  assertEquals(out.length, 1)
+  assertEquals(out[0].level, 'fail')
+  assertEquals(out[0].text.includes('40 embeddings'), true)
+  // dirtied a moment ago — the sweep has not had its tick yet
+  assertEquals(vectorStale(at('2026-08-26T11:59:00Z'), now), [])
+  // clean — the sweep cleared it in the tick that dirtied it
+  assertEquals(vectorStale(at('2026-08-26T11:00:00Z', false), now), [])
+  // no embeddings at all — nothing to quantize
+  assertEquals(vectorStale(at('2026-08-26T11:00:00Z', true, 0), now), [])
+  // a server too old to report the state is unverified, never an all-clear
+  assertEquals(vectorStale({ orphans: {}, dangling: {} }, now)[0].level, 'warn')
+  assertEquals(vectorStale(null, now)[0].level, 'warn')
 })

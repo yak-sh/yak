@@ -16,6 +16,14 @@
 // — under the writer baton, once server.ts has bound the port and the
 // predecessor has released the DB (becomeWriter in server.ts). Every other
 // boot is the sole writer and opens (connect + migrate) inline as before.
-import { connect, open } from './db.ts'
+//
+// This is also the ONE place the vector extension is asked for (the `true`
+// below). It is write-capable, so under D-22530 it loads only where its write
+// lives — the serving/doing distribution, never a library consumer that
+// happens to call connect(). Loading it does not claim the WRITE: that is
+// ownVector(), taken by whichever process runs the embed sweep (doing.ts).
+import { connect, file, open } from './db.ts'
 
-export let db = Deno.args.includes('--join') ? connect() : open()
+export let db = Deno.args.includes('--join')
+  ? connect(file, true)
+  : open(file, true)

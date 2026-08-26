@@ -9,6 +9,10 @@ let { vectorDb } = await import('./testdb.ts')
 let { hash, prune, similar, similarTo, stale, stored, textOf } = await import(
   './embed.ts'
 )
+let { ownVector, refreshVector } = await import('./vector.ts')
+// This test process is the sole writer of its own :memory: graph, so it owns
+// the quantize the way the embed sweep's process does (T-22622).
+ownVector()
 let { axes } = await import('./testvec.ts')
 let { slow } = await import('./testing.ts')
 let { assertEquals } = await import('@std/assert')
@@ -31,10 +35,15 @@ let doc = (eid: string, title: string, body = '') => {
     )
 }
 let vec = (...xs: number[]) => axes(...xs)
-let put = (eid: string, text: string, v: Float32Array) =>
+// Store a vector the way the sweep does — write, then rebuild the ANN index.
+// The rebuild is not optional here: knn() is strictly read-only (T-22622), so
+// an unquantized write is invisible to similar() until its owner quantizes it.
+let put = (eid: string, text: string, v: Float32Array) => {
   db.prepare(
     'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
   ).run(eid, 'Xenova/bge-small-en-v1.5', hash(text), new Uint8Array(v.buffer))
+  refreshVector(db)
+}
 
 Deno.test('hash: stable for same text, moved by any edit', () => {
   assertEquals(hash('a title\nbody'), hash('a title\nbody'))
@@ -179,9 +188,11 @@ slow('similar: dot-ranked, floored, limited', () => {
   assertEquals(top[0].eid, x)
 })
 
-// A re-embed writes in place (same rowid) and must answer with the NEW vector:
-// the vector extension's dirty trigger marks the write, and knn() refreshes the
-// ANN index before it reads, so no stale neighbour can survive an upsert.
+// A re-embed writes in place (same rowid) and must answer with the NEW vector
+// once the index is rebuilt. The rebuild is the SWEEP's, never the reader's:
+// knn() is strictly read-only (T-22525/T-22622), so this drives refreshVector
+// explicitly where embedSweep would, and the stale answer BEFORE it is the
+// documented degrade — staler neighbours, never a write on the read path.
 slow('similar: an in-place re-embed answers with the new vector', () => {
   let d = vectorDb()
   let e = uid()
@@ -204,8 +215,11 @@ slow('similar: an in-place re-embed answers with the new vector', () => {
       (similar(d, vec(1, 0), 9, -2).find((h) => h.eid == e)?.score ?? -9) * 100,
     )
   store(vec(1, 0))
+  refreshVector(d)
   assertEquals(score(), 100) // query IS the stored vector → cosine 1.0
   store(vec(0, 1)) // re-embed in place, orthogonal to the query
+  assertEquals(score(), 100) // read-only knn still answers the old quantization
+  refreshVector(d) // the sweep's rebuild — the only thing that may write
   assertEquals(score(), 0) // the index rebuilt: the new vector answers
 })
 
@@ -239,6 +253,7 @@ slow('similar: SQL KNN ranks the same neighbours the JS scan did', () => {
   let mine = new Set(
     want.map(([t, c]) => store(t, vec(c, Math.sqrt(1 - c * c)))),
   )
+  refreshVector(d) // the sweep's rebuild — knn() itself never writes
 
   // The deleted JS scan, verbatim in spirit: exact cosine over every stored
   // vector, sorted, living head.

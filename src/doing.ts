@@ -45,6 +45,7 @@ import { SCRIBE } from './scribe.ts'
 import { dispatchSweep } from './dispatch.ts'
 import { ruled } from './spawnrule.ts'
 import { embedSweep } from './embed.ts'
+import { initVector, ownVector } from './vector.ts'
 import { projection, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
 import {
@@ -720,6 +721,14 @@ export let bootDoing = (d: Doing, syncSoon: () => void) => {
   // the interval catches anything the debounce dropped. Only the live
   // instance sweeps (T-14612).
   if (isLive()) {
+    // The sweep is the ANN index's only writer, so THIS process owns the
+    // native quantize (D-22530), and it must establish the extension's
+    // per-connection context itself: a --join daemon connects and never
+    // migrates, which is the one place initVector otherwise runs. Claim
+    // before initVector — its trailing refreshVector is a no-op for a
+    // non-owner. Both are inert without the extension (T-22622).
+    ownVector()
+    initVector(db)
     // No boot pass: the first sweep loads the ~400MB onnx model and runs
     // synchronous inference chunks that block the event loop for ~18s
     // measured. Defer it a minute so a fresh process breathes first.

@@ -14,7 +14,7 @@
 
 import { DatabaseSync } from './sqlite.ts'
 import { open } from './db.ts'
-import { initVector, loadVector } from './vector.ts'
+import { initVector, loadVector, ownVector } from './vector.ts'
 
 // The clones are isolated :memory: handles: busy_timeout has no peer to wait
 // for, and synchronous has no disk to flush. Avoiding those no-op pragmas also
@@ -67,6 +67,10 @@ export let freshDb = () => clone(snap ??= open(':memory:').serialize())
 export let vectorDb = () => {
   let db = freshDb()
   loadVector(db)
+  // A test process is the sole writer of its own throwaway graph, so it claims
+  // the quantize the same way the embed sweep's process does in production —
+  // without the claim refreshVector is inert (T-22622).
+  ownVector()
   initVector(db)
   return db
 }

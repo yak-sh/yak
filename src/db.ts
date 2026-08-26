@@ -2578,7 +2578,7 @@ let healWal = (db: DatabaseSync, path: string): DatabaseSync => {
 // serve reads while it waits for the predecessor to release the writer baton,
 // then migrate() alone once it holds it (T-20223, becomeWriter in server.ts).
 // Every sole-writer boot goes through open(), which is connect() + migrate().
-export let connect = (path = file) => {
+export let connect = (path = file, vector = false) => {
   // A test must NEVER open the owner's live graph. Under `deno test` the main
   // module is always a *_test.ts file; reaching the live path there means a
   // caller forgot DB_PATH (the `test` task sets :memory:). Refuse before we
@@ -2595,7 +2595,13 @@ export let connect = (path = file) => {
   }
   Deno.mkdirSync(dirname(path), { recursive: true })
   let db = healWal(new DatabaseSync(path), path)
-  loadVector(db)
+  // The vector extension is OPT-IN, because it is write-capable and connect()
+  // is the LIBRARY door (D-22530: such an extension loads only in the
+  // distribution that owns its write). Loading it here handed one to every
+  // consumer — the CLI's read arm, a probe, any future library client — and it
+  // is what put a native writer in a second process (T-22622). Only
+  // live_db.ts, the server-side handle, asks for it.
+  if (vector) loadVector(db)
   // Connection-local settings ONLY — nothing here writes shared data, so this
   // is safe to run beside a predecessor that still holds the writer baton.
   // busy_timeout and synchronous both live in the connection, never the file;
@@ -3034,7 +3040,8 @@ export let migrate = (db: DatabaseSync) => {
 // the graph is empty. Returns a live handle held for the process lifetime. The
 // sole-writer door: connect() then migrate() with no window between, safe only
 // because the caller is the one writer (first boot, revive, test, probe).
-export let open = (path = file) => migrate(connect(path))
+export let open = (path = file, vector = false) =>
+  migrate(connect(path, vector))
 
 // The one live handle moved to live_db.ts: importing THIS module runs nothing
 // — it is library code (D-22388), safe in the CLI's read arm and in any test —
@@ -6529,6 +6536,9 @@ export let componentCounts = (db: DatabaseSync): Record<string, number> => {
 export type Anomalies = {
   orphans: Record<string, number> // component table → rows with no owner spine
   dangling: Record<string, number> // `table.column` → refs to a missing entity
+  // The ANN index's maintenance state — the split-brain tell (T-22622). Absent
+  // from a server too old to report it, which the doctor treats as unverified.
+  vector?: { dirty: boolean; rows: number; newest: string | null }
 }
 export let scanAnomalies = (db: DatabaseSync): Anomalies => {
   let idKeyed = hasCol(db, 'entity', 'id')
@@ -6560,7 +6570,25 @@ export let scanAnomalies = (db: DatabaseSync): Anomalies => {
       if (n) dangling[`${t}.${c}`] = n
     }
   }
-  return { orphans, dangling }
+  return { orphans, dangling, vector: vectorState(db) }
+}
+
+// The ANN index's maintenance state, read from plain tables — no extension
+// needed, so any connection can report it. `dirty` is the trigger's mark that
+// an embedding write has not been quantized since; `newest` is the most recent
+// embedding row. The pair is what makes the T-22622 split-brain visible: a
+// dirty mark that OUTLIVES the sweep interval means nobody is quantizing —
+// either no process claimed ownVector(), or the owner's connection never ran
+// vector_init and every rebuild throws "Vector context not found".
+let vectorState = (db: DatabaseSync): Anomalies['vector'] => {
+  if (!tableExists(db, 'embedding') || !tableExists(db, 'embedding_index')) {
+    return undefined
+  }
+  let mark = prep(db, 'select dirty from embedding_index where id = 1')
+    .get() as { dirty: number } | undefined
+  let head = prep(db, 'select count(*) n, max(at) newest from embedding')
+    .get() as { n: number; newest: string | null }
+  return { dirty: !!mark?.dirty, rows: head.n, newest: head.newest }
 }
 
 // One entity's one component, projected exactly as snapshot() would (same

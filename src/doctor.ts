@@ -351,6 +351,43 @@ export let integrityReport = (a: Anomalies | null): Report[] => {
   return out
 }
 
+// The ANN index has exactly ONE writer: the process running the embed sweep,
+// which claims it with ownVector() (D-22530 — a write-capable extension lives
+// only where its write does). The failure this exists for is the 2026-08-26
+// split-brain (T-22622): dispatch moved to its own daemon, the daemon's --join
+// connection had never run vector_init, and every rebuild it attempted threw
+// "Vector context not found" — while the server, which HAD the context, kept
+// quantizing on its READ path. Silent from the outside: writes land, search
+// answers, the neighbours are just quietly frozen at the last good rebuild.
+//
+// The tell is a dirty mark that outlives the sweep interval. The sweep clears
+// it in the same tick that dirties it, so a mark older than a few intervals
+// means nobody is quantizing.
+export let vectorStale = (
+  a: Anomalies | null,
+  now: number,
+  minutes = 30,
+): Report[] => {
+  let v = a?.vector
+  if (!a || !v) {
+    return [{
+      level: 'warn',
+      text: 'this server does not report vector-index state — the ANN ' +
+        'maintenance check is UNVERIFIED (upgrade the server to run it)',
+    }]
+  }
+  if (!v.dirty || !v.rows) return []
+  let at = Date.parse(String(v.newest ?? ''))
+  if (isNaN(at) || now - at <= minutes * 60_000) return []
+  return [{
+    level: 'fail',
+    text: `the ANN index has been dirty since ${v.newest} (${v.rows} ` +
+      `embeddings) — nothing has quantized it in over ${minutes}m, so ` +
+      `semantic search is answering frozen neighbours. No process claimed ` +
+      `the vector write, or the owner's connection never ran vector_init`,
+  }]
+}
+
 // Deliverables (knock/wake/mail) are outbox rows: created, then settled
 // delivered or error by the effects dispatcher — inline in the server, or the
 // effects daemon in split mode (D-22388 step 3). A pending row growing old
@@ -416,6 +453,11 @@ export let checks: Check[] = [
     name: 'storage',
     about: 'no orphaned component rows or dangling entity references',
     run: async () => integrityReport(await integrity()),
+  },
+  {
+    name: 'vector',
+    about: 'the ANN index is being rebuilt by the sweep that owns it',
+    run: async (_q, now) => vectorStale(await integrity(), now),
   },
   {
     name: 'effects',

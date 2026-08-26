@@ -2,9 +2,14 @@
 // refresh rebuilds it, and SQLite answers KNN from that rebuilt structure.
 Deno.env.set('DB_PATH', ':memory:')
 let { db } = await import('./live_db.ts')
-let { DIM, refreshVector } = await import('./vector.ts')
+let { DIM, ownVector, refreshVector } = await import('./vector.ts')
 let { assertEquals } = await import('@std/assert')
 let { slow } = await import('./testing.ts')
+
+// Quantization belongs to the process that runs the embed sweep (T-22622); a
+// test is the sole writer of its own :memory: graph, so it claims it here the
+// way doing.ts does in production. Without this refreshVector is inert.
+ownVector()
 
 slow('vector index: embedding writes dirty, rebuild, and answer KNN', () => {
   let eid = crypto.randomUUID()
