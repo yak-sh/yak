@@ -82,6 +82,15 @@ export type Comps =
   & Omit<EntCore, 'eid' | 'num' | 'kind' | 'refs' | 'kids'>
   & { [comp: string]: Record<string, unknown> | undefined }
 
+// THE client cache — and it is PARTIAL (T-21491, step 4 of D-21486): the
+// working-set boot seed, plus every row a mounted subscription streams in
+// (defining subs, open-card reverse subs, the per-client singleton sub), plus
+// rows want() fetched on demand. An eid leaving its last subscription is
+// evicted (landSub/forget → evict). The one contract every reader carries:
+// ABSENCE NEVER MEANS NON-EXISTENCE — a row not here may simply not be held;
+// ask the query door (queryEids — server-answered) or want() it, never infer
+// "doesn't exist" from a miss. It exists because a mounted view must paint
+// from memory at frame rate; it is a speed layer, not the graph.
 export let cache = signal<Record<string, Comps>>({})
 export let deps = signal<Dep[]>([])
 export let problem = signal('')
@@ -218,22 +227,17 @@ let resetQueries = () => {
   })
 }
 
-// T-17126 — back queryEids on a genuine SERVER subscription. Today queryEids
-// resolves "which entities match" against the LOCAL cache (mem/idbResolver, both
-// cache.peek()); that is correct ONLY because join() at server.ts:596 seeds the
-// cache whole. Under a working-set boot (T-18059) the cache goes partial and a
-// local scan silently under-reports. So a MEMBERSHIP query opens a shadow sub —
-// the very server sub boardSub installs, generalized to every useQuery site
-// (`q:<canonical line>`): the server maintains the complete set forward-and-
-// reverse (evalFast/matchQuery, scoped SQL) and streams it, and landSub keeps a
-// per-sub signal this returns. `mem` primes the signal synchronously (no first-
-// paint flash) and stays the fallback where there is no flag, no socket path
-// (the TUI), or the query PROJECTS waking fields (pins/cameras — a projected-
+// queryEids rides a genuine SERVER subscription (T-17126): the cache is
+// partial (T-21491), so a local scan silently under-reports — a MEMBERSHIP
+// query opens the server sub boardSub installs, generalized to every useQuery
+// site (`q:<canonical line>`): the server maintains the complete set forward-
+// and-reverse (evalFast/matchQuery, scoped SQL) and streams it, and landSub
+// keeps a per-sub signal this returns. `mem` primes the signal synchronously
+// (no first-paint flash) and stays the fallback where there is no socket path
+// (the TUI) or the query PROJECTS waking fields (pins/cameras — a projected-
 // field move must re-fire the LIST, which only mem's wake tracking carries; a
-// membership sub does not). Shadow means the whole stream still owns the cache,
-// so nothing is evicted; under the working-set boot the subs are what stream
-// the working set in and the cache is bounded.
-// (always on: a partial cache must read the authoritative set).
+// membership sub does not). The subs are what stream rows in, and eviction on
+// release is what keeps the cache bounded.
 type ServerSet = {
   n: number
   ids: Signal<string[]>
@@ -381,6 +385,13 @@ export let dropQuery = (preds: Pred[]) => {
 // over the working set the DEFINING subs (boards/projects/sessions/canvases)
 // stream in — a tile badge is best-effort, and an OPEN card's own view keeps its
 // bounded sub for the complete, correct list. `mem` always, never the server.
+//
+// mem is NOT a whole-graph resolver (T-21491): the cache it indexes is partial
+// by construction, so an answer from here covers only held rows. A caller must
+// either HOLD a sub that guarantees its rows are present (the client-singleton
+// reads behind ensureClientRows) or explicitly accept a best-effort working-set
+// answer (a tile badge before its aggregate sub goes live). Anything needing
+// the complete result goes through queryEids — the server answers.
 let localEids = (preds: Pred[]): Signal<string[]> => mem.subscribe(preds)
 
 // The reverse-reference reads phrased as the queries the vocabulary already
@@ -1969,26 +1980,22 @@ let land = async (data: unknown, mode: Land) => {
   }
 }
 
-let local = async () => {
-  let stored = await idb.hydrate()
-  if (stored.meta.cursor === undefined) {
-    // A cold boot seeds EMPTY (M-21143): the socket's ws:1 handshake seeds the
-    // working set as its reset — there is no whole-graph load, over any door.
-    mark('working-set')
-  } else {
-    mark('hydrate+delta')
-    pinZs.clear()
-    cache.value = stored.ents
-    deps.value = stored.deps
-    resetSignals()
-    held = stored.meta
-  }
-}
+// Every boot is COLD (T-21491): the socket's ws:1 handshake seeds the working
+// set as its reset — there is no whole-graph load, over any door. The IDB
+// hydrate+delta return path is gone with it: a stored graph re-entered the
+// cache as rows NO subscription holds, so it could never evict and the cache
+// regrew whole on every return. The working-set reset is ~0.55MB — the cold
+// boot the epic already accepted — and idb.persist still shadows the (now
+// partial) cache, so T-21492 can measure whether partial persistence earns a
+// read path back. Meta (cursor/epoch) is deliberately NOT adopted either:
+// a delta against a cache that wasn't hydrated would patch rows that aren't
+// there.
+let local = () => mark('working-set')
 
 let booted = false
 let once = async () => {
   if (booted) return
-  await local()
+  local()
   // Requeue any write a prior life left undelivered, BEFORE the socket opens —
   // so a crash or manual reload can no longer silently lose it (T-21440).
   await replayOutbox()
@@ -2078,10 +2085,14 @@ export let boot = async () => {
         serial = serial.then(() => land(frame, 'follower'))
       },
       send: wire,
-      subscribe: (sub, q) => {
-        shadows.add(sub)
-        wire({ sub, q, shadow: true })
-      },
+      // NON-shadow on purpose (T-21491): the first sub flips this socket into
+      // the server's `filtered` set, so the whole-graph live broadcast stops
+      // and every row arrives owned by a subscription — landSub records its
+      // members, and the last release evicts them. Shadow subs were the
+      // compatibility mode that kept the complete stream as the cache owner;
+      // the browser is off it. (The ownerless fallback — TUI, tests — keeps
+      // shadow() and the full broadcast.)
+      subscribe: (sub, q) => wire({ sub, q }),
       unsubscribe: (sub) => wire({ unsub: sub }),
       forget,
     },
@@ -2122,6 +2133,7 @@ let probe = globalThis as {
     subN: () => number
     subShapes: () => Record<string, number>
     subMembersOf: (line: string) => number
+    cacheN: () => number
   }
 }
 probe.__probe = {
@@ -2162,6 +2174,9 @@ probe.__probe = {
   },
   subMembersOf: (line) =>
     subEids(`q:${qkey(resolveRefs(parseQuery(line), findEid))}`)?.size ?? -1,
+  // How many rows the partial cache holds — the T-21491 bound: working-set
+  // floor + sub-held + demand-fetched, far below the server's row count.
+  cacheN: () => Object.keys(cache.peek()).length,
 }
 
 // The whole entity, assembled for a renderer: spine, components present,
