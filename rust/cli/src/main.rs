@@ -1,13 +1,18 @@
-// task-rs — the Rust CLI PoC (T-22532, D-22530's second rung): list, show,
-// search over the live graph file, read-only, output parity with the TS CLI.
+// task-rs — the Rust CLI (T-22532/T-22558, D-22530): the pure-read verbs
+// over the live graph file, read-only, output parity with the TS CLI.
+// READ-ONLY divergences, documented: `inbox` renders without stamping the
+// bus `notified` marks, `inbox show` without the `opened` stamp, `context`
+// without the `## pending messages` bus block — read-stamps belong to the
+// write-capable doors. `inbox archive` and `context --hook` refuse.
 
+mod digest;
 mod render;
 
 use kernel::profiling::{self, span};
 use kernel::query;
 use kernel::store::Rows;
 use kernel::{db_path, search, Store};
-use render::{authoring_line, claimant, id_of, show_md};
+use render::{authoring_line, claimant, id_of, local_time, show_md};
 
 fn main() {
     // One monotonic clock read, unconditional — it costs less than the argv
@@ -49,8 +54,21 @@ fn run(args: &[String]) -> i32 {
         "list" => list(&store, rest),
         "show" => show(&store, rest),
         "search" => search_cmd(&store, rest),
+        "inbox" => inbox(&store, rest),
+        "history" => history(&store, rest),
+        "telemetry" => telemetry(&store, rest),
+        "context" => context(&store, rest),
+        // a kind's PLURAL lists it (cli.ts listing()) — `task designs`
+        w if !w.is_empty() && plural_kind(w).is_some() => {
+            let mut fwd = vec![plural_kind(w).unwrap()];
+            fwd.extend(rest.iter().cloned());
+            list(&store, &fwd)
+        }
         _ => {
-            eprintln!("task-rs [--profile] <list|show|search|apply> …");
+            eprintln!(
+                "task-rs [--profile] \
+                 <list|show|search|apply|inbox|history|telemetry|context> …"
+            );
             2
         }
     }
@@ -131,6 +149,19 @@ fn apply_cmd(args: &[String]) -> i32 {
     }
 }
 
+// Only the PLURAL routes to list, and never over a registered verb —
+// mirrors cli.ts listing(): the singular stays a subject.
+fn plural_kind(word: &str) -> Option<String> {
+    let verbs = [
+        "list", "show", "search", "inbox", "history", "telemetry", "context",
+    ];
+    if verbs.contains(&word) {
+        return None;
+    }
+    let k = query::kind_word(word)?;
+    (k != word).then_some(word.to_string())
+}
+
 fn show(store: &Store, args: &[String]) -> i32 {
     let Some(id) = args.first() else {
         eprintln!("task-rs show <id>");
@@ -175,12 +206,14 @@ fn list(store: &Store, args: &[String]) -> i32 {
     let rows_cache = Rows::new(store);
     // `.kind=` is derived identity, not table membership: an entity wearing
     // design+task is kind design, so a task listing excludes it (kindOf).
+    let reveal = preds.iter().any(|p| p.comp == "quarantined");
     let mut hits: Vec<kernel::Row> = {
         let _p = span("query");
         store
             .rows_of_kind(&kind)
             .into_iter()
             .filter(|r| r.kind == kind)
+            .filter(|r| reveal || kernel::store::visible(r))
             .filter(|r| query::matches(r, &preds))
             .collect()
     };
@@ -238,6 +271,344 @@ fn list(store: &Store, args: &[String]) -> i32 {
         eprintln!("(no matches)");
     }
     0
+}
+
+// task inbox [filters…] [--all|--sent] · inbox show <id> — READ-ONLY:
+// listing never stamps `notified`, show never stamps `opened` (the TS CLI
+// stamps both; those writes belong to the write-capable doors).
+fn inbox(store: &Store, args: &[String]) -> i32 {
+    if args.first().map(String::as_str) == Some("show") {
+        let Some(id) = args.get(1) else {
+            eprintln!("task-rs inbox show <id>");
+            return 2;
+        };
+        let Some(eid) = store.resolve_id(id) else {
+            eprintln!("no such entity: {id}");
+            return 1;
+        };
+        let Some(row) = store.row(&eid) else {
+            eprintln!("no such entity: {id}");
+            return 1;
+        };
+        println!("{}", show_md(store, &row));
+        eprintln!("(read-only: not stamped opened — use `task inbox show`)");
+        return 0;
+    }
+    if args.first().map(String::as_str) == Some("archive") {
+        eprintln!(
+            "inbox archive writes — use the TS CLI (`task inbox archive`)"
+        );
+        return 2;
+    }
+    let every = args.iter().any(|a| a == "--all");
+    let sent = args.iter().any(|a| a == "--sent");
+    let words: Vec<&String> =
+        args.iter().filter(|a| !a.starts_with("--")).collect();
+    let mut preds = vec![];
+    for w in &words {
+        if !w.starts_with('.') {
+            eprintln!("not an inbox filter: {w}");
+            return 2;
+        }
+        match query::dot_token(w) {
+            Ok(query::Dot::P(p)) => preds.push(p),
+            Ok(query::Dot::Kind(_)) => {}
+            Err(e) => {
+                eprintln!("{e}");
+                return 2;
+            }
+        }
+    }
+    query::resolve_values(store, &mut preds);
+    let v = kernel::vocab();
+    let sid = me();
+    let who = kernel::reader::reader_for(
+        store,
+        sid.as_deref(),
+        &cwd(),
+        None,
+    );
+    let mut items: Vec<kernel::Row> = if sent {
+        // outbound: mail-comp wearers that never arrived from the edge
+        let now = query::now_ms();
+        store
+            .eids_of_kind("mail")
+            .iter()
+            .filter_map(|e| store.row(e))
+            .filter(|r| {
+                r.comps.contains_key("mail")
+                    && r.comps
+                        .get("mail")
+                        .and_then(|m| m.get("message_id"))
+                        .is_none()
+                    && r.comps
+                        .get("deliver")
+                        .and_then(|d| d.get("to"))
+                        .is_some()
+                    && kernel::query::matches_at(r, &preds, now)
+            })
+            .collect()
+    } else {
+        let mode = if every {
+            kernel::inbox::Mode::All
+        } else {
+            kernel::inbox::Mode::Inbox
+        };
+        let candidates = kernel::inbox::inbox_rows(store, &who, &preds, mode);
+        candidates
+            .into_iter()
+            .filter(|r| {
+                if every {
+                    kernel::reader::addressed(&who, r)
+                } else {
+                    kernel::reader::inbox_item(&who, r)
+                }
+            })
+            .collect()
+    };
+    // oldest→newest; a same-batch tie (identical stamp) reads in mint order
+    items.sort_by(|a, b| {
+        kernel::inbox::born_at(a)
+            .cmp(&kernel::inbox::born_at(b))
+            .then(a.num.unwrap_or(0).cmp(&b.num.unwrap_or(0)))
+    });
+    if items.is_empty() {
+        eprintln!(
+            "{}",
+            if sent {
+                "(nothing sent)"
+            } else if every {
+                "(nothing addressed to you)"
+            } else {
+                "(inbox empty)"
+            }
+        );
+        return 0;
+    }
+    for r in &items {
+        println!("{}", kernel::inbox::line(v, r));
+    }
+    0
+}
+
+// task history <id> [-n N] — the entity's write history off the journal.
+fn history(store: &Store, args: &[String]) -> i32 {
+    let Some(id) = args.first().filter(|a| !a.starts_with('-')) else {
+        eprintln!("task history <id> [-n N]");
+        return 2;
+    };
+    let n = flag_value(args, "-n")
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(50);
+    let Some(eid) = store.resolve_id(id) else {
+        eprintln!("no such entity: {id}");
+        return 1;
+    };
+    let Some(row) = store.row(&eid) else {
+        eprintln!("no such entity: {id}");
+        return 1;
+    };
+    let entries = kernel::journal::journal_of(store, &eid, n);
+    if entries.is_empty() {
+        println!("{}: no history", id_of(&row));
+        return 0;
+    }
+    for e in &entries {
+        println!(
+            "#{:<6} {}  {:<24} {}",
+            e.id,
+            local_time(&e.ts),
+            {
+                let a = kernel::journal::actor_of(e);
+                a.chars().take(24).collect::<String>()
+            },
+            kernel::journal::what_of(e)
+        );
+    }
+    0
+}
+
+// task telemetry [--errors] [--since=ts] [-n N] [--stats]
+fn telemetry(store: &Store, args: &[String]) -> i32 {
+    let errors = args.iter().any(|a| a == "--errors");
+    let since = flag_value(args, "--since");
+    if args.iter().any(|a| a == "--json") {
+        eprintln!("--json is not ported in task-rs — use the TS CLI");
+        return 2;
+    }
+    if args.iter().any(|a| a == "--stats") {
+        let rows =
+            kernel::telemetry::stats(store, since.as_deref(), errors);
+        if rows.is_empty() {
+            eprintln!("(nothing timed)");
+            return 0;
+        }
+        let ms = |n: f64| format!("{:>9}", format!("{n}ms"));
+        println!(
+            "{:<4} {:<14} {:>6} {:>9} {:>9} {:>9}",
+            "door", "tool", "n", "p50", "p95", "p99"
+        );
+        for r in rows {
+            println!(
+                "{:<4} {:<14} {:>6} {} {} {}",
+                r.source,
+                r.name,
+                r.n,
+                ms(r.p50),
+                ms(r.p95),
+                ms(r.p99)
+            );
+        }
+        return 0;
+    }
+    let n = flag_value(args, "-n").and_then(|v| v.parse::<usize>().ok());
+    let rows =
+        kernel::telemetry::recent(store, since.as_deref(), n, errors);
+    if rows.is_empty() {
+        eprintln!("(nothing recorded)");
+        return 0;
+    }
+    for r in rows {
+        let cohort = match r.count {
+            Some(c) if c > 1 => format!(
+                "  {c}× since {}",
+                local_time(r.first.as_deref().unwrap_or(&r.ts))
+            ),
+            _ => String::new(),
+        };
+        println!(
+            "{}  {:<4} {:<14} {} {:>6}  {:<10}  {}{cohort}",
+            local_time(&r.ts),
+            r.source,
+            r.name,
+            if r.ok { "ok " } else { "ERR" },
+            r.ms.map(|m| format!("{m}ms")).unwrap_or_default(),
+            r.session_id.as_deref().unwrap_or("-"),
+            r.error
+                .as_deref()
+                .unwrap_or("")
+                .chars()
+                .take(80)
+                .collect::<String>()
+        );
+    }
+    0
+}
+
+// task context [P-x | S-x] — the boot digest, read-only (no reify, no bus
+// block, no read-stamps). --hook and --subagent are write/agent doors and
+// refuse here.
+fn context(store: &Store, args: &[String]) -> i32 {
+    if args.iter().any(|a| a == "--hook" || a == "--subagent") {
+        eprintln!(
+            "context --hook/--subagent reify sessions (writes) — \
+             use the TS CLI"
+        );
+        return 2;
+    }
+    let now = query::now_ms();
+    let named = args.first().filter(|a| !a.starts_with('-'));
+    if let Some(id) = named {
+        let Some(eid) = store.resolve_id(id) else {
+            eprintln!("no such entity: {id}");
+            return 1;
+        };
+        let Some(row) = store.row(&eid) else {
+            eprintln!("no such entity: {id}");
+            return 1;
+        };
+        if row.comps.contains_key("project") {
+            println!(
+                "{}",
+                digest::context_digest(store, None, now, Some(&eid))
+            );
+            return 0;
+        }
+        if let Some(sc) = row.comps.get("session") {
+            let sid = sc
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let fm = digest::session_meta(store, &sid);
+            let out = digest::context_digest(store, Some(&sid), now, None);
+            if fm.is_empty() {
+                println!("{out}");
+            } else {
+                println!("{fm}\n{out}");
+            }
+            return 0;
+        }
+        eprintln!("{id} names neither a project nor a session");
+        return 1;
+    }
+    match me() {
+        Some(sid) if store.session_row(&sid).is_some() => {
+            let fm = digest::session_meta(store, &sid);
+            let out = digest::context_digest(store, Some(&sid), now, None);
+            if fm.is_empty() {
+                println!("{out}");
+            } else {
+                println!("{fm}\n{out}");
+            }
+        }
+        _ => {
+            // the preview: scoped to the repo you stand in
+            let scope = kernel::reader::scope_for(store, None, &cwd(), None);
+            println!(
+                "{}",
+                digest::context_digest(store, None, now, scope.as_deref())
+            );
+        }
+    }
+    0
+}
+
+fn cwd() -> String {
+    std::env::current_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default()
+}
+
+// me() — the CLI's standing identity (client.ts me()), env-resolved.
+fn me() -> Option<String> {
+    let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
+    let id = env("CLAUDE_CODE_SESSION_ID")
+        .or_else(|| env("TASKS_SESSION"))
+        .or_else(|| env("CODEX_THREAD_ID"));
+    if env("CLAUDE_CODE_CHILD_SESSION").as_deref() != Some("1") {
+        return id;
+    }
+    let at = worktree_root();
+    let own = env("TASKS_SESSION").is_some()
+        && env("TASKS_SESSION") == env("CLAUDE_CODE_SESSION_ID")
+        && at.is_some()
+        && at == env("TASKS_TREE");
+    if own { id } else { at.or(id) }
+}
+
+fn worktree_root() -> Option<String> {
+    let mut d = std::env::current_dir().ok()?;
+    loop {
+        if d.join(".git").is_file() {
+            return Some(d.to_string_lossy().to_string());
+        }
+        if !d.pop() {
+            return None;
+        }
+    }
+}
+
+fn flag_value(args: &[String], name: &str) -> Option<String> {
+    for (i, a) in args.iter().enumerate() {
+        if let Some(v) = a.strip_prefix(&format!("{name}=")) {
+            return Some(v.to_string());
+        }
+        if a == name {
+            return args.get(i + 1).cloned();
+        }
+    }
+    None
 }
 
 fn search_cmd(store: &Store, args: &[String]) -> i32 {

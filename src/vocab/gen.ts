@@ -448,8 +448,12 @@ export let emitRust = (a: ReturnType<typeof assemble>): string => {
   }
   out.push('    ];')
   out.push(`    let edges = ${strVec(a.edges)};`)
+  // The session-log partition + facets — bare-prop routing (query.rs
+  // route()) needs both, same derivations as sessionComps/sessionFacetNames.
+  out.push(`    let session_comps = ${strVec(a.logOrder)};`)
+  out.push(`    let session_facets = ${strVec(a.sessionFacets)};`)
   out.push(
-    '    Vocab { comps, stamped, kind_order, prefix, statuses, renames, deaths, edges }',
+    '    Vocab { comps, stamped, kind_order, prefix, statuses, renames, deaths, edges, session_comps, session_facets }',
     '}',
     '',
   )

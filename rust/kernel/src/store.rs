@@ -292,6 +292,74 @@ impl Store {
         collect(&self.conn, &sql, [], |r| r.get(0))
     }
 
+    // Entities whose `comp.prop` REFERENCE points at one of `targets` —
+    // the reverse lookup the inbox arms ride (comment.target=…). Ref
+    // columns store integer ids, so the probe joins through entity twice.
+    pub fn eids_where_ref(
+        &self,
+        comp: &str,
+        prop: &str,
+        targets: &[String],
+    ) -> Vec<String> {
+        if targets.is_empty() || !self.has_table(comp) {
+            return vec![];
+        }
+        let marks = vec!["?"; targets.len()].join(",");
+        let sql = format!(
+            "select e.eid from {} t join entity e on e.id = t.entity \
+             join entity tt on tt.id = t.{} \
+             where tt.eid in ({marks}) order by e.num",
+            q(comp),
+            q(prop)
+        );
+        let Ok(mut st) = self.conn.prepare(&sql) else { return vec![] };
+        st.query_map(rusqlite::params_from_iter(targets), |r| r.get(0))
+            .map(|it| it.filter_map(|x| x.ok()).collect())
+            .unwrap_or_default()
+    }
+
+    // Entities whose `comp.prop` TEXT column equals one of `values`.
+    pub fn eids_where_text(
+        &self,
+        comp: &str,
+        prop: &str,
+        values: &[String],
+    ) -> Vec<String> {
+        if values.is_empty() || !self.has_table(comp) {
+            return vec![];
+        }
+        let marks = vec!["?"; values.len()].join(",");
+        let sql = format!(
+            "select e.eid from {} t join entity e on e.id = t.entity \
+             where t.{} in ({marks}) order by e.num",
+            q(comp),
+            q(prop)
+        );
+        let Ok(mut st) = self.conn.prepare(&sql) else { return vec![] };
+        st.query_map(rusqlite::params_from_iter(values), |r| r.get(0))
+            .map(|it| it.filter_map(|x| x.ok()).collect())
+            .unwrap_or_default()
+    }
+
+    // The session ENTITY carrying this session-id string, if reified.
+    pub fn session_row(&self, sid: &str) -> Option<Row> {
+        if !self.has_table("session") {
+            return None;
+        }
+        let eid: Option<String> = self
+            .conn
+            .query_row(
+                "select e.eid from session s join entity e \
+                 on e.id = s.entity where s.id = ?1",
+                [sid],
+                |r| r.get(0),
+            )
+            .optional()
+            .ok()
+            .flatten();
+        eid.and_then(|e| self.row(&e))
+    }
+
     // Both endpoints of every edge touching an eid. The filter must name the
     // edge table's OWN columns: `pe.eid = ?1 or ce.eid = ?1` spans two joined
     // copies of `entity`, so no single index answers it and sqlite falls back
@@ -417,4 +485,11 @@ fn regex_num(id: &str) -> Option<i64> {
         return None;
     }
     num.parse().ok()
+}
+
+// The query doors screen quarantined content by default (db.ts unshifts a
+// `.quarantined=` absent pred); every reader that assembles its own row set
+// applies the same screen unless a filter reveals.
+pub fn visible(r: &Row) -> bool {
+    !r.comps.contains_key("quarantined")
 }

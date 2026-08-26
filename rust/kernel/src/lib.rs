@@ -12,14 +12,24 @@ pub mod cache;
 pub mod change;
 #[cfg(feature = "native")]
 pub mod feed;
+#[cfg(feature = "native")]
+pub mod inbox;
+#[cfg(feature = "native")]
+pub mod journal;
 pub mod model;
 #[cfg(feature = "native")]
 pub mod profiling;
 pub mod query;
 #[cfg(feature = "native")]
+pub mod reader;
+#[cfg(feature = "native")]
 pub mod search;
 #[cfg(feature = "native")]
 pub mod store;
+#[cfg(feature = "native")]
+pub mod telemetry;
+#[cfg(feature = "native")]
+pub mod time;
 pub mod vocab;
 mod vocab_gen;
 #[cfg(feature = "native")]

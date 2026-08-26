@@ -5,9 +5,33 @@
 // into the line is refused, not half-applied.
 
 use crate::profiling;
+use crate::query;
 use crate::store::Store;
 use crate::vocab::vocab;
 use rusqlite::OptionalExtension;
+
+// The search line's tokens, double-quote aware: a quoted phrase stays one
+// term (query.ts keeps "two words" a single text pred).
+fn tokens(q: &str) -> Vec<String> {
+    let mut out = vec![];
+    let mut cur = String::new();
+    let mut quoted = false;
+    for c in q.chars() {
+        match c {
+            '"' => quoted = !quoted,
+            c if c.is_whitespace() && !quoted => {
+                if !cur.is_empty() {
+                    out.push(std::mem::take(&mut cur));
+                }
+            }
+            c => cur.push(c),
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
 
 #[derive(Debug, Clone)]
 pub struct Hit {
@@ -22,24 +46,52 @@ pub struct Hit {
 }
 
 pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> {
-    if q.split_whitespace().any(|w| w.starts_with('.')) {
-        return Err(
-            "dot-filters in search are not ported in the Rust PoC — \
-             text terms only"
-                .into(),
-        );
+    // The search line is board grammar: bare words are TEXT terms, dot
+    // tokens are the same filter preds every list door takes, screening
+    // the ranked hits before the cap (db.ts search()).
+    let mut words: Vec<String> = vec![];
+    let mut kind_screen: Option<String> = None;
+    let mut filters: Vec<query::Pred> = vec![];
+    for tok in tokens(q) {
+        if tok.starts_with('.') && tok.len() > 1 {
+            match query::dot_token(&tok)? {
+                query::Dot::Kind(k) => kind_screen = Some(k),
+                query::Dot::P(p) => filters.push(p),
+            }
+        } else {
+            words.push(tok);
+        }
     }
-    let match_q = q
-        .split_whitespace()
+    query::resolve_values(store, &mut filters);
+    let screened = kind_screen.is_some() || !filters.is_empty();
+    let match_q = words
+        .iter()
         .map(|w| w.trim_end_matches('*').replace('"', ""))
         .filter(|w| !w.is_empty())
         .map(|w| format!("\"{w}\"*"))
         .collect::<Vec<_>>()
         .join(" ");
-    if match_q.is_empty() {
+    if match_q.is_empty() && !screened {
         return Ok(vec![]);
     }
-    let sql = "
+    // An address is identity, not prose: one lone term that resolves as an
+    // id floats its entity to the head (db.ts `addressed`).
+    let addressed = (words.len() == 1 && !screened)
+        .then(|| store.resolve_id(&words[0]))
+        .flatten();
+    let quarantine = "
+        and not exists (select 1 from quarantined qq where qq.entity = e.id)
+        and not exists (
+          select 1 from comment c join quarantined q2 on q2.entity = c.target
+          where c.entity = e.id
+        )";
+    // With filters the cap moves AFTER the screen, so hidden hits cannot
+    // displace visible ones; without them the SQL cap stands as before.
+    let base: Vec<(String, String, String, Option<i64>)> = if !match_q
+        .is_empty()
+    {
+        let sql = format!(
+            "
       select e.eid, d.title,
         snippet(doc_fts, 1, char(1), char(2), '…', 10) as snip,
         e.num
@@ -48,25 +100,98 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
       join entity e on e.id = d.entity
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id
-      where doc_fts match ?1
-        and not exists (select 1 from quarantined qq where qq.entity = e.id)
-        and not exists (
-          select 1 from comment c join quarantined q2 on q2.entity = c.target
-          where c.entity = e.id
-        )
+      where doc_fts match ?1 {quarantine}
       order by bm25(doc_fts, 8.0, 1.0)
         - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at)))
-      limit ?2";
-    let t = profiling::sql(sql);
-    let mut st = store.conn.prepare(sql).map_err(|e| e.to_string())?;
-    let base: Vec<(String, String, String, Option<i64>)> = st
-        .query_map(rusqlite::params![match_q, limit as i64], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
-        })
-        .map_err(|e| e.to_string())?
-        .filter_map(|x| x.ok())
-        .collect();
-    t.done(base.len());
+      {}",
+            if screened { "" } else { "limit ?2" }
+        );
+        let t = profiling::sql(&sql);
+        let mut st = store.conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let map = |r: &rusqlite::Row<'_>| -> rusqlite::Result<(
+            String,
+            String,
+            String,
+            Option<i64>,
+        )> { Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)) };
+        let it = if screened {
+            st.query_map(rusqlite::params![match_q], map)
+        } else {
+            st.query_map(rusqlite::params![match_q, limit as i64], map)
+        };
+        let got: Vec<(String, String, String, Option<i64>)> =
+            it.map_err(|e| e.to_string())?.filter_map(|x| x.ok()).collect();
+        t.done(got.len());
+        got
+    } else {
+        // filters with no text: every visible doc, newest touch first
+        let sql = format!(
+            "
+      select e.eid, d.title, d.title as snip, e.num
+      from doc d
+      join entity e on e.id = d.entity
+      left join updated up on up.entity = e.id
+      left join created cr on cr.entity = e.id
+      where 1 {quarantine}
+      order by coalesce(up.at, cr.at) desc"
+        );
+        let t = profiling::sql(&sql);
+        let mut st = store.conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let got: Vec<(String, String, String, Option<i64>)> = st
+            .query_map([], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })
+            .map_err(|e| e.to_string())?
+            .filter_map(|x| x.ok())
+            .collect();
+        t.done(got.len());
+        got
+    };
+    // Screen ranked hits against the filters over full rows, then cap.
+    let rows_cache = crate::store::Rows::new(store);
+    let now = query::now_ms();
+    let base: Vec<(String, String, String, Option<i64>)> = if screened {
+        base.into_iter()
+            .filter(|(eid, _, _, _)| {
+                let Some(row) = rows_cache.get(eid) else { return false };
+                if let Some(k) = &kind_screen {
+                    if row.kind != *k {
+                        return false;
+                    }
+                }
+                query::matches_at(&row, &filters, now)
+            })
+            .take(limit)
+            .collect()
+    } else {
+        base
+    };
+    let base: Vec<(String, String, String, Option<i64>)> = match &addressed {
+        Some(direct) => {
+            let head = store.conn.query_row(
+                "select e.eid, d.title, '', e.num from doc d \
+                 join entity e on e.id = d.entity where e.eid = ?1 \
+                 and not exists \
+                   (select 1 from quarantined qq where qq.entity = e.id) \
+                 and not exists (select 1 from comment c \
+                   join quarantined q2 on q2.entity = c.target \
+                   where c.entity = e.id)",
+                [direct],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            );
+            match head.optional().map_err(|e| e.to_string())? {
+                Some(h) => {
+                    let mut out = vec![h];
+                    out.extend(
+                        base.into_iter().filter(|(eid, _, _, _)| eid != direct),
+                    );
+                    out.into_iter().take(limit).collect()
+                }
+                None => base,
+            }
+        }
+        None => base,
+    };
     let v = vocab();
     let mut hits: Vec<Hit> = base
         .into_iter()

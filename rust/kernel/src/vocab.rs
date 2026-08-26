@@ -44,6 +44,11 @@ pub struct Vocab {
     pub deaths: Vec<(String, String, String)>,
     // The valid dependency words.
     pub edges: Vec<String>,
+    // The session-log lazy partition's comps — bare props never route here.
+    pub session_comps: Vec<String>,
+    // Session facets (the spawn twin window) — share bare filters with
+    // session.
+    pub session_facets: Vec<String>,
 }
 
 pub fn vocab() -> &'static Vocab {
@@ -75,6 +80,13 @@ impl Vocab {
     }
     pub fn prop_type(&self, comp: &str, prop: &str) -> Option<PropType> {
         self.readable(comp).into_iter().find(|(n, _)| n == prop).map(|(_, t)| t)
+    }
+    // comp '' searches the vocabulary: the first owner's declaration
+    // (props.ts bareType).
+    pub fn bare_type(&self, prop: &str) -> Option<PropType> {
+        self.owners(prop)
+            .into_iter()
+            .find_map(|c| self.prop_type(&c, prop))
     }
     // propOwners: every component (wire or stamped) declaring the column.
     pub fn owners(&self, prop: &str) -> Vec<String> {
