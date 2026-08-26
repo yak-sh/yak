@@ -38,6 +38,7 @@ import {
   resolveRefs,
   scopedSessions,
   warm,
+  windowOf,
 } from './query.ts'
 import {
   anchor,
@@ -261,6 +262,16 @@ let membersChanged = (a: Set<string>, b: Set<string>) =>
 // Values are already eids; findEid passes an eid through verbatim.
 let predLine = (p: Pred): string | undefined => {
   if (p.refs) return p.op == '' ? `.refs=${p.value}` : undefined
+  // A window is a bound, not a filter, and it spells itself: without this a
+  // `.limit=` query would fail the round-trip and fall back to a LOCAL scan of
+  // a partial cache — the exact under-report the server sub exists to prevent.
+  if (p.win) {
+    return p.win.limit != null
+      ? `.limit=${p.win.limit}`
+      : p.win.after != null
+      ? `.after=${p.win.after}`
+      : undefined
+  }
   if (p.fields || p.at || p.rev) return undefined
   // A shared-ref equality (`.client=X` — query.ts sharedRef routes comp '')
   // is one read concept across every owning component; the grammar already
@@ -1348,6 +1359,11 @@ export type Sub = {
   // initial frame replaces the whole tally; later frames are deltas (n=0
   // drops the key). No row changes ride these, so the cache is untouched.
   agg?: Record<string, number>
+  // The frame's stated WINDOW (D-22567 §4): the members are the newest `limit`
+  // of `total` matches. Present exactly when the answer is a PREFIX, so its
+  // ABSENCE on an unwindowed sub is itself the statement that the set is whole.
+  // `total` is absent when no index could vouch for one (a declining filter).
+  window?: { limit: number; total?: number }
 }
 type Observed = { observe: unknown }
 type Hot = 'reload' | { hmr: number } | { css: number }
@@ -1550,6 +1566,17 @@ let subMembers = new Map<string, Set<string>>()
 let subVersion = signal(0)
 let shadows = new Set<string>()
 
+// What each sub's frames SAID about its bounds. A window is the server telling
+// a view "you hold the newest `limit` of `total`", so a face can say what it is
+// showing of what (M-16612) instead of quietly passing a page off as the set.
+// Absent = unbounded, which is the only thing an unwindowed sub ever says.
+export type Window = { limit: number; total?: number }
+let subWindows = new Map<string, Window>()
+export let subWindow = (sub: string): Window | undefined => {
+  subVersion.value
+  return subWindows.get(sub)
+}
+
 // A subscription frame: land its changes like any batch (adds + updates flow
 // through the unchanged applyLocal), then track membership. A death rides in
 // `changes` as an entity-null (gone for everyone — applyLocal already removed
@@ -1579,6 +1606,11 @@ export let landSub = (f: Sub) => {
   if (f.replace && f.sub.startsWith('entries:')) {
     clearObservations(f.sub.slice('entries:'.length))
   }
+  // A window rides any frame that has one to state; a REPLACE with none is the
+  // server saying this answer is whole, which must clear a bound left by the
+  // query this frame replaced.
+  if (f.window) subWindows.set(f.sub, f.window)
+  else if (f.replace) subWindows.delete(f.sub)
   let touched = applyLocal(f.changes)
   settleObservations(f.changes)
   // The server marks shadow-ness on every frame it sends, so believe the
@@ -1679,6 +1711,7 @@ let forget = (sub: string) => {
   let leaving = shadows.has(sub) ? [] : [...(subMembers.get(sub) ?? [])]
   shadows.delete(sub)
   subMembers.delete(sub)
+  subWindows.delete(sub)
   agreement?.checked.delete(sub)
   if (sub.startsWith('entries:')) {
     clearObservations(sub.slice('entries:'.length))
@@ -1767,11 +1800,34 @@ let ownBoard = (sub: string, q: string) =>
   owner ? owner.use(sub, q) : shadow(sub, q)
 let dropBoard = (sub: string) => owner ? owner.drop(sub) : unsubscribe(sub)
 
+// A fullscreen board opens a WINDOW over its membership, not the whole of it
+// (D-22567 §4). A board is a saved query, and the Everything board's `.task!`
+// is ~24k rows — 4.7 MB onto one socket so a view can paint a page. The exact
+// per-status numbers still come from the tally sub beside it (T-22509), so the
+// face can say what it is showing of what rather than passing a page off as the
+// set. A query that names its OWN window keeps it; a bad query is left alone,
+// since the server refuses it and padding it would only change the error.
+export let BOARD_WINDOW = 400
+export let boardLine = (q: string): string => {
+  if (!q.trim()) return q
+  try {
+    if (windowOf(parseQuery(q)).limit != null) return q
+  } catch {
+    return q
+  }
+  return `${q}&.limit=${BOARD_WINDOW}`
+}
+
+// The window a board's member sub is holding, or undefined while it holds the
+// whole set — what a face reads to say "400 of 1248".
+export let boardWindow = (e: Ent): Window | undefined =>
+  subWindow(`board:${e.eid}`)
+
 // Several views in one tab share one ownership entry. Cross-tab references
 // reduce in leader.ts before the one logical board name reaches the socket.
 export let boardSub = (e: Ent) => {
   let sub = `board:${e.eid}`
-  let q = String(e.board?.query ?? '')
+  let q = boardLine(String(e.board?.query ?? ''))
   let use = boardUses.get(sub)
   if (use) use.n++
   else {
@@ -1853,7 +1909,7 @@ let syncEntrySubs = (sub: string, q: string) => {
 // Query edits replace the installed name without tearing down its ownership.
 export let boardQuery = (e: Ent) => {
   let sub = `board:${e.eid}`
-  let q = String(e.board?.query ?? '')
+  let q = boardLine(String(e.board?.query ?? ''))
   let use = boardUses.get(sub)
   if (!use || use.q == q) return
   use.q = q
@@ -2426,7 +2482,10 @@ let boardScan = (e: Ent, tasks: boolean): Ent[] => {
   if (config.agreement) {
     assertAgree(
       `board:${e.eid}`,
-      String(e.board?.query ?? ''),
+      // The line the sub was OPENED with, window and all — the check is about
+      // this subscription, and its window is what a divergence must be read
+      // against (gaps() names it, so a prefix annotates instead of asserting).
+      boardLine(String(e.board?.query ?? '')),
       boardPost(e, tasks, queryEids(preds).value),
       post,
     )

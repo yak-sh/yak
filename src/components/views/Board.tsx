@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Ent } from '../../types.ts'
 import {
+  boardTally,
   boardTasks,
   byPriority,
   byWarmth,
@@ -14,11 +15,11 @@ import {
 import { spec, taskChanges } from '../../client.ts'
 import { adopt, orderOf, parseQuery } from '../../query.ts'
 import { peek, useDraft } from '../drafts.ts'
-import { useBoardSub } from '../subscriptions.ts'
+import { useBoardSub, useBoardTally } from '../subscriptions.ts'
 import { block } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
-import { passOf } from '../Filter.tsx'
+import { filterLine, passOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
 import { Entity } from '../Entity.tsx'
 
@@ -123,6 +124,16 @@ let addKey = (eid: string, status: string) => `new:${eid}:${status}`
 
 export let Board = ({ e }: { e: Ent }) => {
   useBoardSub(e)
+  // The member sub is a WINDOW now (live.ts boardLine), so the rows a column
+  // holds are a page of it — while the COUNT a column names is the whole
+  // truth, and it comes from the same aggregate the tile reads (T-22509): one
+  // indexed group-by instead of a membership stream nobody paints. A column
+  // reading its own length would report the page as the set.
+  // The tally answers the SAVED query, so it stops being this board's truth the
+  // moment the titlebar's ephemeral filter narrows what's on screen — then the
+  // held rows are the only set anyone is claiming.
+  useBoardTally(e)
+  let counts = filterLine(e.eid).trim() ? undefined : boardTally(e)
   // Which column's quick-create box is open ('' = none). One at a time:
   // the box is a keyboard, and there's one keyboard. On mount, a column
   // with a live draft reopens itself — a half-typed task the last mount
@@ -268,7 +279,7 @@ export let Board = ({ e }: { e: Ent }) => {
             <ColName onDblClick={() => fold(s)}>
               <Dot status={s} />
               {s}
-              <Count>{list.length}</Count>
+              <Count>{counts?.[s] ?? list.length}</Count>
               {!folded.has(s) && adding != s && (
                 <Add onClick={() => setAdding(s)} title={`new ${s} task`}>
                   +

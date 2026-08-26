@@ -70,4 +70,8 @@ many ('.status=open&.count!'), '.tally=status' each value's count,
 '.distinct=domain' the values themselves. They ride beside the filters that
 select what they reduce, and they answer from the index — a caller wanting a
 number asks for the number, never for the rows to count.
+A WINDOW bounds the ANSWER without changing what matches: '.limit=200' is
+the newest 200 by id, '.after=13882' continues below one you already have,
+so paging is '.limit=200' then the same line carrying your last id's number.
+A reply that carries a window says so, and says the total it is a prefix of.
 Boards persist these same queries (board.query).`

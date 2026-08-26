@@ -62,6 +62,25 @@ type Sub = {
     watch: Set<string> | null
     counts: Map<string, number>
   }
+  // A WINDOWED sub (D-22567 §4): the members are a bounded PREFIX of the
+  // query's matches — the newest `limit` by spine num — and the frame said so.
+  // `.limit=` asks for one; SUB_CAP puts one under every row sub that asks for
+  // nothing, so the cap that was implicit since 96f2e6b is now stated.
+  //
+  // A window is the one membership a per-eid delta cannot keep honest: a birth
+  // pushes the oldest member out and a departure pulls the next-newest in, and
+  // NEITHER of those rows is in the batch. So a dirtying batch RE-ANSWERS the
+  // window from the index and ships the diff — the aggregate branch's shape,
+  // for the same reason. Only when `exact`: a declining query's answer costs a
+  // candidate scan to re-read (the 5s stall evalCapped exists to avoid), so it
+  // keeps the per-eid maintenance and its frame states the bound alone.
+  win?: {
+    line: string
+    limit: number
+    total?: number
+    watch: Set<string> | null
+    exact: boolean
+  }
 }
 
 // What a subscription frame has to CARRY. A live subscription owns its
@@ -204,9 +223,11 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
       // never-pred), so an empty sub legitimately answers the empty set —
       // cheap, no error. Only a route sub carries meaning with no query: its
       // name scopes it to one entity.
-      let { preds, hits } = route != null
+      let answer = route != null
         ? { preds: [], hits: rowsFor(db, route) }
         : evalSub(db, line, details)
+      let { preds, hits } = answer
+      let window = 'window' in answer ? answer.window : undefined
       map.set(f.sub, {
         preds,
         members: new Set(hits.map((r) => r.eid)),
@@ -218,6 +239,17 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         // standing-match updates too.
         details,
         ...(route != null ? { only: new Set([route]) } : {}),
+        ...(window
+          ? {
+            win: {
+              line,
+              limit: window.limit,
+              total: window.total,
+              watch: predComps(asked),
+              exact: !!('exact' in answer && answer.exact),
+            },
+          }
+          : {}),
       })
       let sub = map.get(f.sub)!
       let changes = hits.flatMap((r) => payload(sub, r.eid, r.comps))
@@ -229,6 +261,9 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
           replace: true,
           cursor: cursorOf(db),
           shadow: !!f.shadow,
+          // A bounded answer SAYS it is bounded. An answer that is whole says
+          // nothing, so an unwindowed sub's frame is exactly what it was.
+          ...(window ? { window } : {}),
         }),
       )
     } catch (e) {
@@ -321,6 +356,54 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
             agg: Object.fromEntries(delta),
             cursor: cur,
             shadow: sub.shadow,
+          }))
+        }
+        continue
+      }
+      // An EXACT window re-answers rather than patching: the rows that cross
+      // its edge are precisely the ones no batch mentions, so a per-eid pass
+      // cannot see them. One indexed statement gives the new page; the diff
+      // against the standing members is what the client hears — an add for a
+      // row that entered, a drop for one the edge pushed out, and the batch's
+      // own patches for members that merely changed. Gated by the same
+      // component-overlap dirty test the aggregates use, so an unrelated write
+      // costs one Set lookup.
+      if (sub.win?.exact) {
+        let { line, watch, limit } = sub.win
+        if (watch && !batch.some((c) => aggDirty(watch, c.name))) continue
+        let answer = evalSub(db, line, sub.details, limit)
+        let next = new Set(answer.hits.map((r) => r.eid))
+        let changes: Change[] = []
+        let drop: string[] = []
+        for (let r of answer.hits) {
+          if (!sub.members.has(r.eid)) {
+            changes.push(...payload(sub, r.eid, r.comps))
+          } else if (patch.has(r.eid) && (!sub.shadow || sub.details)) {
+            changes.push(...carry(sub, patch.get(r.eid)!))
+          }
+        }
+        for (let eid of sub.members) {
+          if (next.has(eid)) continue
+          if (gone.has(eid)) changes.push({ eid, name: 'entity', comp: null })
+          else drop.push(eid)
+        }
+        sub.members = next
+        // The total moves without membership moving — a match beyond the edge
+        // is still a match — so the window is restated whenever it changed,
+        // even on a frame carrying no rows. A sub that was bounded keeps
+        // stating its bound even once the answer fits inside it, or the client
+        // would be left holding a window nobody withdrew.
+        let win = answer.window ?? { limit, total: answer.hits.length }
+        let moved = win.total != sub.win.total
+        sub.win.total = win.total
+        if (changes.length || drop.length || moved) {
+          send(JSON.stringify({
+            sub: id,
+            changes,
+            drop,
+            cursor: cur,
+            shadow: sub.shadow,
+            window: win,
           }))
         }
         continue

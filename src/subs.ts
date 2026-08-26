@@ -82,7 +82,11 @@ export let bodyless = (changes: Change[]): Change[] =>
 
 // Agreement is hard for moving time: membership can change with no write.
 // Path membership is maintained from far-side reference invalidation.
-export type Gap = 'moving-time'
+// A WINDOW is a gap by design rather than by difficulty: the sub answers a
+// bounded prefix and says so, while a local query door resolves the whole
+// match — so the two are EXPECTED to differ once the answer outgrows the
+// bound, and the difference is the feature, not a divergence to assert on.
+export type Gap = 'moving-time' | 'window'
 
 let atoms = (value: string) =>
   value.split(',').flatMap((v) => {
@@ -103,6 +107,7 @@ let moving = (p: Pred): boolean => {
 
 export let gaps = (preds: Pred[]): Gap[] => [
   ...preds.some(moving) ? ['moving-time' as Gap] : [],
+  ...preds.some((p) => p.win) ? ['window' as Gap] : [],
 ]
 
 export type Diff = { scanOnly: string[]; subOnly: string[] }

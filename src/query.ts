@@ -17,6 +17,9 @@
 //   .prop~=v         contains, case-insensitive
 //   .prop<v <=v >v >=v   comparisons (numeric when both sides are numbers)
 //
+//   .limit=200       a WINDOW: the newest 200 matches, not the whole set
+//   .after=13882     continue that window below a spine num (the next page)
+//
 // Bare words are TEXT preds — contains over the doc (title or body),
 // case-insensitive; "quoted words" stay one pred. Separators are '&' and
 // whitespace both: an &-segment that is one dot-param keeps its spaces
@@ -102,7 +105,20 @@ export type Pred = {
   // its own `wake` (a `~`-marked column is projected but excluded from the
   // change-signal, so a churny value like a pin's z delivers yet never re-fires).
   fields?: Field[]
+  // A WINDOW rather than a filter: `.limit=200` bounds the answer to a prefix,
+  // `.after=<num>` continues it below a spine num. op is WINDOW, so matchQuery
+  // passes it through (the filter part selects the whole set) and windowOf()
+  // reads the bound; comp/prop stay empty. A window states a SIZE, never a
+  // membership — which is why a reply that carries one also states the total it
+  // is a prefix of.
+  win?: Win
 }
+
+// A window: how many of the selection to answer with, and where to continue.
+// Both optional — `.limit=` alone is the first page, `.after=` alone continues
+// an unbounded read below a cursor. Newest-first by spine num is the order
+// every windowed door answers in, so `after` reads as "older than this num".
+export type Win = { limit?: number; after?: number }
 
 // One projected column: which component column a result row carries, and whether
 // a change to it WAKES the subscription. `wake: false` (a `~`-suffixed field) is
@@ -201,10 +217,18 @@ for (let name of reverseAssocs.keys()) {
 
 // The reserved query WORDS — directives that are neither a column nor an
 // association: `.refs` (the multi-column reverse-union), the `.distinct` /
-// `.tally` aggregates, and `.fields` (the projection). Guarded here the way
-// scopes and reverse assocs are, so a vocabulary that ever grows one of these as
-// a real prop is a load error rather than a silently dead directive.
-export let reserved = ['refs', 'distinct', 'tally', 'fields']
+// `.tally` aggregates, `.fields` (the projection), and `.limit`/`.after` (the
+// window). Guarded here the way scopes and reverse assocs are, so a vocabulary
+// that ever grows one of these as a real prop is a load error rather than a
+// silently dead directive.
+export let reserved = [
+  'refs',
+  'distinct',
+  'tally',
+  'fields',
+  'limit',
+  'after',
+]
 for (let name of reserved) {
   if (owned(name)) {
     throw new Error(`reserved query word .${name} shadows a prop`)
@@ -352,6 +376,27 @@ export let aggOf = (
   return p?.agg ? { op: p.agg, at: { comp: p.comp, prop: p.prop } } : undefined
 }
 
+// A WINDOW directive rides the pred list like ORDER/AGG/PROJECT —
+// `.limit=200&.after=13882`. matchQuery passes WINDOW through (true), so the
+// OTHER preds select the whole membership and the window only bounds how much
+// of it a door answers with.
+export let WINDOW = 'window'
+
+// The window a query asks for, folded from every WINDOW pred it carries — so
+// `.limit=50&.after=900` reads as one bound however it was spelled, and a later
+// pred wins a repeated one. `{}` when the query names no window: a door reads
+// `limit == null` as "the whole answer", which is what keeps an unwindowed
+// query's frame semantics exactly what they were.
+export let windowOf = (preds: Pred[]): Win => {
+  let out: Win = {}
+  for (let p of preds) {
+    if (p.op != WINDOW || !p.win) continue
+    if (p.win.limit != null) out.limit = p.win.limit
+    if (p.win.after != null) out.after = p.win.after
+  }
+  return out
+}
+
 // The components a pred list READS — the dirty test an aggregate subscription
 // applies to a committed batch: a change dirties the aggregate iff it touches a
 // component the selection or the aggregated column reads. `null` means "every
@@ -364,6 +409,7 @@ export let predComps = (preds: Pred[]): Set<string> | null => {
   for (let p of preds) {
     if (p.refs || p.at || p.rev) return null
     if (p.op == NEVER || p.op == ORDER || p.op == PROJECT) continue
+    if (p.op == WINDOW) continue
     // `.count!` aggregates the selection, naming no column of its own.
     if (p.op == AGG && !p.comp) continue
     if (!p.comp) return null
@@ -435,9 +481,30 @@ export let scopedSessions = (preds: Pred[]): string[] =>
 // deliberate extra step that lets a list ask about it. This stays beside
 // matchQuery rather than inside it: writers and keyed internals still need to
 // reason about a row without silently changing the question they asked.
-export let listed = (comps: Comps, preds: Pred[]) =>
-  !comps.quarantined ||
+export let reveals = (preds: Pred[]) =>
   preds.some((p) => p.comp == 'quarantined' || leafOf(p).comp == 'quarantined')
+
+export let listed = (comps: Comps, preds: Pred[]) =>
+  !comps.quarantined || reveals(preds)
+
+// The pred list a COMPILED membership statement should carry: the caller's
+// filter plus the two universal screens a door otherwise applies in JS after
+// the statement — quarantine (listed) and the lazy entry partition (namesLazy).
+// Both are spelled as ordinary component-ABSENCE preds, so the existing
+// compiler answers them from the same LEFT JOIN it gives any facet, and
+// namesLazy's `.prop == '' && .op == ''` guard keeps the entry screen from
+// reading as an opt-IN to the partition.
+//
+// Why it matters beyond tidiness: a JS filter that runs AFTER a statement's
+// LIMIT under-fills the page, so a window can only be exact once the screens
+// the answer depends on are inside the same statement. `search()` (db.ts) has
+// unshifted the quarantine half by hand since before this existed.
+let absent = (comp: string): Pred => ({ comp, prop: '', op: '', value: '' })
+export let screened = (preds: Pred[], entries: boolean): Pred[] => [
+  ...preds,
+  ...reveals(preds) ? [] : [absent('quarantined')],
+  ...entries ? [] : [absent('entry')],
+]
 
 // kind=K as a filter, not a JS screen. kindOf is "the first kindOrder
 // component present", so kind=K is K present AND every earlier component
@@ -737,6 +804,22 @@ export let preds = (token: string): Pred[] | null => {
       return { comp: at.comp, prop: at.prop, wake }
     })
     return [{ comp: '', prop: '', op: PROJECT, value: '', fields }]
+  }
+  // `.limit=200` / `.after=13882` — the WINDOW, a bound on the answer rather
+  // than a filter on its members. `limit` is how many of the newest matches to
+  // answer with; `after` continues that window below a spine num, so paging a
+  // board is `.limit=200` then `.limit=200&.after=<the last num you got>`.
+  // Both take a non-negative integer and nothing else: a window whose bound is
+  // a guess is worse than none, so a bad one is refused rather than dropped.
+  // Guarded so a future `limit`/`after` column would win the spelling.
+  if ((path == 'limit' || path == 'after') && !owned(path)) {
+    if (op != '=' || !/^\d+$/.test(value)) {
+      throw new Error(`.${path} takes a whole number: .${path}=200`)
+    }
+    let win: Win = path == 'limit'
+      ? { limit: Number(value) }
+      : { after: Number(value) }
+    return [{ comp: '', prop: '', op: WINDOW, value, win }]
   }
   // A SCOPE resolves a virtual prop to the Pred[] it splices into the AND-list.
   // Real props win: `owned` names a prop a column/component already routes, so
@@ -1094,6 +1177,9 @@ export let matchQuery = (
   preds.every((p) => {
     if (p.op == NEVER) return false // the empty query: selects nothing
     if (p.op == ORDER || p.op == AGG || p.op == PROJECT) return true
+    // A window bounds the ANSWER, never membership: every match still matches,
+    // and the door that answers is what cuts the page.
+    if (p.op == WINDOW) return true
     if (p.refs) {
       // The multi-column reverse-union: read every {eid} column this bag
       // carries. `.refs=X` holds when any equals X; `.refs!` when any is set;
@@ -1466,5 +1552,7 @@ export let complete = (
       starts(c.text.slice(1), pre) && c.text.slice(1) != pre
     ),
     ...starts(ORDER, pre) ? [{ text: '.order=hot', kind: 'rank' }] : [],
+    ...starts('limit', pre) ? [{ text: '.limit=', kind: 'window' }] : [],
+    ...starts('after', pre) ? [{ text: '.after=', kind: 'window' }] : [],
   ]
 }

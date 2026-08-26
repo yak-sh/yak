@@ -14,11 +14,10 @@
 // the definition, and `sql_test.ts` holds the two answers against each other
 // over every predicate class rather than trusting this file's reading of them.
 //
-// What it declines today, all still served by the fallback: time phrases (the
-// span is a moving window, and inTime's edge cases deserve their own pass),
-// path predicates (`.assignee.title~=j`, a second join), the shared-ref
-// spelling (`comp: ''`, which reads whichever component happens to carry the
-// column), and a substring too short for a trigram (see `grams`).
+// What it declines today, all still served by the fallback: path predicates
+// (`.assignee.title~=j`, a second join), the shared-ref spelling (`comp: ''`,
+// which reads whichever component happens to carry the column), and a substring
+// too short for a trigram (see `grams`).
 import { isRef, propAt } from './props.ts'
 import {
   AGG,
@@ -30,7 +29,10 @@ import {
   PROJECT,
   refCols,
   TEXT,
+  type Win,
+  WINDOW,
 } from './query.ts'
+import { type Span, span } from './time.ts'
 import { comps, stamped } from './types.ts'
 
 // Bound values are only ever text or numbers — the grammar has no other
@@ -61,6 +63,17 @@ let col = (comp: string, prop: string): string =>
     ? `(select __re.eid from entity __re where __re.id = "${comp}"."${prop}")`
     : `"${comp}"."${prop}"`
 
+// The column as the MATCHER reads it. `updated.at` falls back to `created.at`
+// for a row never touched since it was made (query.ts read(): being made IS the
+// last time a thing changed) — so the compiled column has to say the same, or
+// every window board silently omits everything filed and not revisited, which
+// is exactly the class `.updated.at>=today` exists to show. The fallback needs
+// `created` joined; build() adds it for any pred that reads this column.
+let UPDATED_AT = `coalesce("updated"."at", "created"."at")`
+let falls = (comp: string, prop: string) => comp == 'updated' && prop == 'at'
+let readCol = (comp: string, prop: string): string =>
+  falls(comp, prop) ? UPDATED_AT : col(comp, prop)
+
 // Is this a column the graph actually has? A pred naming an unknown column
 // would compile to broken SQL rather than to `false`, so it is refused.
 let known = (comp: string, prop: string) =>
@@ -86,6 +99,22 @@ let tagOf = (comp: string, prop: string) => {
 let asText = (c: string) => `cast(${c} as text)`
 
 let numeric = (s: string) => /^-?\d+(\.\d+)?$/.test(s)
+
+// Every comparison over a TIME column rests on the stored value BEING a stamp:
+// query.ts reads one through Date.parse, so a value it cannot parse is NaN and
+// matches nothing at all, while SQL would happily sort it — an empty string
+// lands BELOW every date and would answer `<yesterday`. Bounding the column to
+// the lexical band a canonical stamp lives in excludes exactly those, on both
+// sides, and being a range over the same column it costs an index scan
+// nothing. What it cannot exclude is a value inside the band that is still not
+// a date ('2026-13-45T…'); that last inch rests on the canonicalization
+// invariant (see `edge`), which is what makes any of this exact to begin with.
+let LO = '0000-01-01T00:00:00.000Z'
+let HI = '9999-12-31T23:59:59.999Z'
+let stampish = (c: string, s: Sql): Sql => ({
+  sql: `(${c} between ? and ? and ${s.sql})`,
+  params: [LO, HI, ...s.params],
+})
 
 // eq(v, value): '' is absent-or-empty, 'x..y' / 'x...y' a range, 'a,b' any-of,
 // anything else a string match. NULL is not equal to anything but absence.
@@ -135,9 +164,13 @@ let eq = (c: string, value: string): Sql | null => {
 // operand, or a text-typed column against a non-numeric one. Anything else is
 // refused rather than guessed.
 let NUMERIC_TAGS = ['number', 'priority', 'bool']
+// A compiled column is usually its own quoted name, so its type reads straight
+// out of the expression. A DERIVED one is not a name any more, so it says what
+// it means here and eq()/cmp() type it exactly as they type a plain column.
+let DERIVED: Record<string, string> = { [UPDATED_AT]: 'time' }
 let tagFor = (c: string) => {
   let m = c.match(/^"(.+)"\."(.+)"$/)
-  return m ? tagOf(m[1], m[2]) : undefined
+  return m ? tagOf(m[1], m[2]) : DERIVED[c]
 }
 let isNum = (c: string) => NUMERIC_TAGS.includes(String(tagFor(c)))
 let cmp = (c: string, op: string, value: string): Sql | null => {
@@ -148,10 +181,89 @@ let cmp = (c: string, op: string, value: string): Sql | null => {
       ? { sql: `${c} ${op} ?`, params: [Number(value)] }
       : null
   }
-  if (tag == 'time') return null // spans are their own pass
+  // A stamp never parses as a number, so query.ts's cmp() is lexical for EVERY
+  // row of a time column however numeric the operand looks — which is the one
+  // case where "both sides agree" needs no per-row decision. The canonical
+  // spelling (see `edge`) is what makes that lexical order chronological, and
+  // the column is declared text, so no cast stands between it and an index.
+  if (tag == 'time') {
+    return stampish(c, { sql: `${c} ${op} ?`, params: [value] })
+  }
   return numeric(value)
     ? null
     : { sql: `${asText(c)} ${op} ?`, params: [value] }
+}
+
+// ---- time spans (T-22370) ----
+//
+// A time phrase names a RANGE and the op picks its edge (query.ts inTime). It
+// compiles to a plain TEXT comparison because every time-typed column holds ONE
+// spelling: `new Date(at).toISOString()`, stamped by props.ts `time()` for every
+// wire write (normalizeChanges runs inside apply()) and by server code for the
+// stamped half — and db.ts's heal pass re-parses stored scalars through the same
+// door. Over that spelling lexicographic order IS chronological order, so
+// `"updated"."at" >= ?` asks exactly what `Date.parse(at) >= start` asks, and an
+// index can answer it. SQLite's own date functions would read an offset stamp
+// too, but wrapping the column in one forfeits the index — and the invariant
+// makes them unnecessary.
+//
+// Compiling these is what lets a windowed board answer WHOLE. While they
+// declined, `.updated.at=today` sank the whole statement, the subscription fell
+// to the capped newest-first candidate prefix, and "Updated Today" showed 290
+// of its 1248 matches.
+let iso = (ms: number) => new Date(ms).toISOString()
+let bound = (c: string, op: string, ms: number): Sql => ({
+  sql: `${c} ${op} ?`,
+  params: [iso(ms)],
+})
+let all = (a: Sql, b: Sql): Sql => ({
+  sql: `(${a.sql} and ${b.sql})`,
+  params: [...a.params, ...b.params],
+})
+let any = (parts: Sql[]): Sql =>
+  parts.length == 1 ? parts[0] : {
+    sql: `(${parts.map((p) => p.sql).join(' or ')})`,
+    params: parts.flatMap((p) => p.params),
+  }
+
+// inTime's edges, each reduced to the comparison it actually is. A span whose
+// end is its start is an INSTANT (a phrase naming one moment), and there
+// inTime's `t == s.start` arms carry the whole answer; over a proper range those
+// arms are redundant, since `t == start` already satisfies `start <= t < end`.
+let edge = (c: string, op: string, s: Span): Sql => {
+  let point = s.end <= s.start
+  return op == '<'
+    ? bound(c, '<', s.start)
+    : op == '<='
+    ? point ? bound(c, '<=', s.start) : bound(c, '<', s.end)
+    : op == '>'
+    ? point ? bound(c, '>', s.start) : bound(c, '>=', s.end)
+    : op == '>='
+    ? bound(c, '>=', s.start)
+    : point // '' — within
+    ? bound(c, '=', s.start)
+    : all(bound(c, '>=', s.start), bound(c, '<', s.end))
+}
+
+// The time road, mirroring query.ts test() branch for branch: a comma list of
+// phrases is any-of under `=` (none-of under `!=`); anything else re-reads the
+// WHOLE value as one phrase; a value that is no phrase at all declines here and
+// takes the ordinary scalar road (an ISO range, an absence test), exactly as
+// the matcher does.
+let timeSql = (p: Pred, c: string, now: number): Sql | null => {
+  let spans = p.value.split(',').map((v) => span(v, now))
+  if (spans.every((s) => s) && (p.op == '' || p.op == '!')) {
+    let hit = stampish(c, any(spans.map((s) => edge(c, '', s!))))
+    // A null column is not a string, so the matcher never enters the time road
+    // for it: `=` misses and `!=` holds. SQL's own NULL gives the first; the
+    // second needs coalesce, or `not (null …)` would drop exactly the rows a
+    // `!=` means to keep.
+    return p.op == ''
+      ? hit
+      : { sql: `(coalesce(${hit.sql}, 0) = 0)`, params: hit.params }
+  }
+  let s = span(p.value, now)
+  return s ? stampish(c, edge(c, p.op, s)) : null
 }
 
 // `~=` is String(v ?? '').toLowerCase().includes(needle). instr() rather than
@@ -233,16 +345,17 @@ let body = (p: Pred, c: string): Sql | null =>
 // The ops query.ts routes to cmp(), spelled the same in SQL.
 let CMP: Record<string, string> = { '<': '<', '<=': '<=', '>': '>', '>=': '>=' }
 
-let one = (p: Pred): Sql | null => {
+let one = (p: Pred, now: number): Sql | null => {
   // The empty query's never-pred: a false condition, so the index answers
   // the empty set immediately — never a full scan, never a dropped pred.
   if (p.op == NEVER) return { sql: '0', params: [] }
   if (p.op == ORDER) return { sql: '1', params: [] } // a ranking, not a filter
   if (p.op == AGG) return { sql: '1', params: [] } // a projection; see aggregateSql
   if (p.op == PROJECT) return { sql: '1', params: [] } // fields; see select()
+  if (p.op == WINDOW) return { sql: '1', params: [] } // a bound; see windowed()
   if (p.op == TEXT) return text(p.value)
   if (p.refs) return refsSql(p) // multi-column reverse-union: an eid IN union
-  if (p.rev) return revSql(p) // a reverse hop: a correlated EXISTS/count
+  if (p.rev) return revSql(p, now) // a reverse hop: a correlated EXISTS/count
   if (p.at) return null // path preds need a second join
   if (!known(p.comp, p.prop)) return null
   if (!p.prop) {
@@ -253,15 +366,18 @@ let one = (p: Pred): Sql | null => {
       params: [],
     }
   }
-  // query.ts reads an untouched entity's created.at as updated.at. Compiling
-  // this would need that second join; the exact fallback already has it.
-  if (p.op == EXISTS && p.comp == 'updated' && p.prop == 'at') return null
   if (p.op == EXISTS) {
-    return { sql: `${col(p.comp, p.prop)} is not null`, params: [] }
+    return { sql: `${readCol(p.comp, p.prop)} is not null`, params: [] }
   }
   let tag = tagOf(p.comp, p.prop)
-  if (tag == 'time') return null // spans are their own pass
-  let c = col(p.comp, p.prop)
+  let c = readCol(p.comp, p.prop)
+  // A phrase takes the span road; `~=` never does (the matcher excludes it, so
+  // a stamp's substring stays a literal contains), and a value that is no
+  // phrase falls through to the ordinary scalar road below.
+  if (tag == 'time' && p.op != '~') {
+    let t = timeSql(p, c, now)
+    if (t) return t
+  }
   if (tag == 'body') return body(p, c)
   if (p.op == '') return eq(c, p.value)
   if (p.op == '!') {
@@ -304,11 +420,12 @@ let build = (
   base: string,
   also: string[] = [],
   drop = false,
+  now = Date.now(),
 ): { joins: string; cond: string; params: Bind[] } | null => {
   let parts: Sql[] = []
   let kept: Pred[] = []
   for (let p of preds) {
-    let s = one(p)
+    let s = one(p, now)
     if (!s) {
       if (drop) continue // partial narrowing: refine this pred in JS
       return null
@@ -321,6 +438,8 @@ let build = (
     if (p.rev) continue // its EXISTS is self-contained; nothing joins here
     if (p.op == TEXT) tables.add('doc')
     else if (p.comp && !p.at) tables.add(p.comp)
+    // the far half of the updated.at fallback (readCol)
+    if (!p.at && falls(p.comp, p.prop)) tables.add('created')
   }
   // `also` carries the projected columns' components (select()): a projection may
   // name a table no filter joined, and it must still be LEFT JOINed to be read.
@@ -355,7 +474,7 @@ let COUNT_OPS: Record<string, string> = {
   '>': '>',
   '>=': '>=',
 }
-let revSql = (p: Pred): Sql | null => {
+let revSql = (p: Pred, now: number): Sql | null => {
   let r = p.rev!
   let base = r.comp
   // The child's int reference equals the parent spine's int id (both id-keyed),
@@ -369,7 +488,7 @@ let revSql = (p: Pred): Sql | null => {
       params: [Number(p.value)],
     }
   }
-  let inner = build(r.preds, base)
+  let inner = build(r.preds, base, [], false, now)
   if (!inner) return null
   let tail = inner.cond == '1' ? '' : ` and ${inner.cond}`
   return {
@@ -405,25 +524,31 @@ let refsSql = (p: Pred): Sql | null => {
 // beside it, so the projection rides the same exact WHERE as a membership query.
 // Empties (null and '') are dropped to match tally(); a numeric/time column
 // declines, since cast-to-text would disagree with the matcher's String(v).
-export let aggregateSql = (preds: Pred[]): Sql | null => {
+// How MANY entities a filter selects — the `.count!` statement, and the TOTAL a
+// windowed reply states its page is a prefix of. One indexed count over the same
+// WHERE a membership query runs, so the two can never disagree about what the
+// selection is. null when any predicate declined.
+export let countSql = (preds: Pred[], now = Date.now()): Sql | null => {
+  let built = build(preds, 'entity', [], false, now)
+  if (!built) return null
+  return {
+    sql: `select '' as value, count(*) as n from "entity"${built.joins}` +
+      ` where ${built.cond}${LIVE}`,
+    params: built.params,
+  }
+}
+
+export let aggregateSql = (preds: Pred[], now = Date.now()): Sql | null => {
   let agg = preds.find((p) => p.op == AGG)
   if (!agg) return null
   // `.count!` reduces the SELECTION, not a column: one indexed count over the
   // same WHERE, answered under the empty key so every aggregate — count, tally,
   // distinct — comes back as one value→count shape.
-  if (agg.agg == 'count') {
-    let built = build(preds, 'entity')
-    if (!built) return null
-    return {
-      sql: `select '' as value, count(*) as n from "entity"${built.joins}` +
-        ` where ${built.cond}${LIVE}`,
-      params: built.params,
-    }
-  }
+  if (agg.agg == 'count') return countSql(preds, now)
   if (!agg.comp || !agg.prop) return null
   let tag = tagOf(agg.comp, agg.prop)
   if (!['text', 'enum', 'eid'].includes(String(tag))) return null
-  let built = build(preds, 'entity')
+  let built = build(preds, 'entity', [], false, now)
   if (!built) return null
   let c = col(agg.comp, agg.prop)
   let cond = `${c} is not null and ${asText(c)} != '' and ${built.cond}`
@@ -443,8 +568,8 @@ export let aggregateSql = (preds: Pred[]): Sql | null => {
 // `read()` already says by returning undefined for both. The spine is already
 // the FROM table, so `.entity.num=13882` must not join it to itself (SQLite
 // refuses "ambiguous column name: entity.eid") — build() drops it.
-export let where = (preds: Pred[]): Sql | null => {
-  let built = build(preds, 'entity')
+export let where = (preds: Pred[], now = Date.now()): Sql | null => {
+  let built = build(preds, 'entity', [], false, now)
   if (!built) return null
   return {
     sql: `select "entity"."eid" as eid from "entity"${built.joins}` +
@@ -465,8 +590,8 @@ export let where = (preds: Pred[]): Sql | null => {
 // through the index, never a materialized snapshot. Never null: the top-level
 // `entity` base cannot reach build's only null branch (the entity-self-join
 // guard, which fires solely inside a reverse-EXISTS subquery).
-export let whereSome = (preds: Pred[]): Sql => {
-  let built = build(preds, 'entity', [], true)!
+export let whereSome = (preds: Pred[], now = Date.now()): Sql => {
+  let built = build(preds, 'entity', [], true, now)!
   return {
     sql: `select "entity"."eid" as eid from "entity"${built.joins}` +
       ` where ${built.cond}${LIVE}`,
@@ -481,11 +606,11 @@ export let whereSome = (preds: Pred[]): Sql => {
 // concern the caller reads off fieldsOf(), invisible to SQL. A query naming no
 // projection IS `where()` (eid only). null if a projected column is unknown or
 // any filter declined — the exactness contract, unbroken.
-export let select = (preds: Pred[]): Sql | null => {
+export let select = (preds: Pred[], now = Date.now()): Sql | null => {
   let fields = fieldsOf(preds)
-  if (!fields) return where(preds)
+  if (!fields) return where(preds, now)
   for (let f of fields) if (!known(f.comp, f.prop)) return null
-  let built = build(preds, 'entity', fields.map((f) => f.comp))
+  let built = build(preds, 'entity', fields.map((f) => f.comp), false, now)
   if (!built) return null
   let cols = fields.map((f) =>
     `${col(f.comp, f.prop)} as "${f.comp}.${f.prop}"`
@@ -496,3 +621,25 @@ export let select = (preds: Pred[]): Sql | null => {
     params: built.params,
   }
 }
+
+// A statement bounded to a WINDOW: the newest `limit` rows by spine num, and —
+// with `after` — only those below a num cursor, so paging is `.limit=N` then
+// the same line carrying the last num it answered. The order is the window's
+// definition, not a presentation choice: "newest first" is what makes a prefix
+// mean something and a cursor able to continue it.
+//
+// This may only ride a statement whose result needs no JS refinement — an EXACT
+// where(), over screened() preds — because a filter applied after the LIMIT
+// under-fills the page. That is why the quarantine and entry screens moved into
+// the compiled preds (query.ts screened) rather than staying post-filters.
+export let windowed = (base: Sql, w: Win): Sql => ({
+  sql: base.sql +
+    (w.after != null ? ` and "entity"."num" < ?` : '') +
+    ` order by "entity"."num" desc` +
+    (w.limit != null ? ` limit ?` : ''),
+  params: [
+    ...base.params,
+    ...w.after != null ? [w.after] : [],
+    ...w.limit != null ? [w.limit] : [],
+  ],
+})

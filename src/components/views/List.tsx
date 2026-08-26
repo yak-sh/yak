@@ -1,10 +1,10 @@
 import { type Ent } from '../../types.ts'
 import { unmime } from '../../rfc2047.ts'
-import { boardAll, byWarmth, pinned } from '../../live.ts'
+import { boardAll, boardWindow, byWarmth, pinned } from '../../live.ts'
 import { orderOf, parseQuery } from '../../query.ts'
 import { block } from '../ui.tsx'
 import { menuAt } from '../nav.tsx'
-import { passOf } from '../Filter.tsx'
+import { filterLine, passOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
 import { useBoardSub } from '../subscriptions.ts'
 import { Id } from './Inline.tsx'
@@ -60,7 +60,15 @@ export let BoardList = ({ e }: { e: Ent }) => {
   } catch {
     return <ListFrame /> // a bad query already shows itself on the Board face
   }
-  let more = rows.length - CAP
+  // The member sub is a WINDOW now (live.ts boardLine), so `rows` is a page of
+  // the board and not the board. "+N more" counts against the total the server
+  // STATED, or the feed would say "+300 more" while four thousand match — the
+  // silent truncation this row exists to prevent. An ephemeral filter narrows
+  // what's shown without the server knowing, so the stated total stops being
+  // this feed's truth the moment the bar has anything in it.
+  let win = filterLine(e.eid).trim() ? undefined : boardWindow(e)
+  let shown = Math.min(CAP, rows.length)
+  let more = Math.max(0, (win?.total ?? rows.length) - shown)
   return (
     <ListFrame>
       {rows.slice(0, CAP).map((t) => (

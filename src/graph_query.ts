@@ -38,7 +38,8 @@ import {
   rowsOf,
   vocabHash,
 } from './db.ts'
-import { aggregateSql, where, whereSome } from './sql.ts'
+import { aggregateSql, countSql, where, whereSome, windowed } from './sql.ts'
+import { hasSources } from './source.ts'
 import {
   aggOf,
   listed,
@@ -50,8 +51,11 @@ import {
   type Pred,
   resolveRefs,
   scopedSessions,
+  screened,
   tally,
   warm,
+  type Win,
+  windowOf,
 } from './query.ts'
 
 // A filter of only rankings — or of nothing at all — selects EVERY entity, and
@@ -140,6 +144,32 @@ let orderedEntries = (hits: Row[], after: number, limit: number): Row[] =>
     )
     .slice(0, limit)
 
+// A caller's window over the line's own: an explicit argument wins, so the
+// /query door's paging still bounds a query whose text names no window.
+export let merged = (a: Win, b?: Win): Win => {
+  let after = b?.after ?? a.after
+  return {
+    limit: b?.limit ?? a.limit,
+    // A cursor of ZERO is no cursor. Nums and entry seqs both start at 1, and
+    // every door that pages has always spelled "from the start" as `after ?? 0`
+    // — so reading a literal 0 as a bound would answer the empty set to callers
+    // that have passed it for years.
+    after: after || undefined,
+  }
+}
+
+// How many entities a filter selects, from the index. `undefined` when no
+// statement can say it: a declining predicate, or a registered SOURCE, whose
+// pass-through entities join the answer AFTER the statement (matching()) and so
+// are invisible to a count. A total nobody can vouch for is not stated.
+let countOf = (db: DatabaseSync, preds: Pred[]): number | undefined => {
+  if (hasSources()) return undefined
+  let sql = countSql(preds)
+  if (!sql) return undefined
+  let row = db.prepare(sql.sql).get(...sql.params) as { n?: number } | undefined
+  return Number(row?.n ?? 0)
+}
+
 // The index's answer, or null when it declines (the caller falls back to
 // evalQuery). Entries ride the index too — matching() walks the whole db — so
 // the only question is whether they belong in THIS answer: yes when the query
@@ -149,16 +179,26 @@ export let evalFast = (
   db: DatabaseSync,
   q: string,
   forceEntries = false,
+  w?: Win,
 ) => {
   let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
   if (!narrows(preds)) return null
-  let built = where(preds)
-  if (!built) return null
   let entries = forceEntries || namesLazy(preds)
+  // The statement carries the screens the JS filters below otherwise apply
+  // AFTER it (query.ts screened) — which is the whole reason a LIMIT may ride
+  // it: a filter that runs after the limit under-fills the page. The JS filters
+  // stay for the rows matching() unions in from a SOURCE, which no statement saw.
+  let built = where(screened(preds, entries))
+  if (!built) return null
+  let win = merged(windowOf(preds), w)
+  // Entries page by their own seq (orderedEntries), never by spine num, so a
+  // lazy answer stays whole here and is windowed downstream.
+  let bounded = !entries && (win.limit != null || win.after != null)
   return {
     preds,
     entries,
-    hits: matching(db, built).map(rowed)
+    win,
+    hits: matching(db, bounded ? windowed(built, win) : built).map(rowed)
       .filter((r) => entries || !r.comps.entry)
       .filter((r) => listed(r.comps, preds)),
   }
@@ -226,27 +266,30 @@ export let evalCapped = (
   db: DatabaseSync,
   q: string,
   cap = SUB_CAP,
+  after?: number,
 ) => {
   let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
   let ent = (e: string) => eager(db, e)
   let kids = (eid: string, comp: string, prop: string) =>
     referrersOf(db, [eid], { comp, prop }).map(ent)
-  let base = whereSome(preds)
-  let capped = {
-    sql: `${base.sql} and not exists ` +
-      `(select 1 from entry where entry.entity = "entity"."id")` +
-      ` order by "entity"."num" desc limit ${cap * 2}`,
-    params: base.params,
-  }
+  // The entry and quarantine screens ride the compiled preds like any filter
+  // (query.ts screened), so the candidate window is spent on rows that can
+  // actually match rather than on entry spines the JS pass drops afterwards.
+  let room = cap * 2
+  let base = windowed(whereSome(screened(preds, false)), { limit: room, after })
   // matching() reads the hit table in its own order — re-rank by num so the
   // slice keeps the NEWEST matches, not an arbitrary cap-full.
-  let hits = matching(db, capped).map(rowed)
+  let raw = matching(db, base).map(rowed)
+  let hits = raw
     .filter((r) =>
       listed(r.comps, preds) && matchQuery(r.comps, preds, ent, undefined, kids)
     )
     .sort((a, b) => b.num - a.num)
-    .slice(0, cap)
-  return { preds, hits }
+  // A candidate read that came back SHORT of its own bound saw the whole
+  // superset, and refining a complete superset is a complete answer — which is
+  // how a declining query can still know it is not holding a prefix.
+  let whole = raw.length < room && hits.length <= cap
+  return { preds, hits: hits.slice(0, cap), whole }
 }
 
 // The MEMBERSHIP answerer control() calls: exact when the index answers whole
@@ -258,16 +301,69 @@ export let evalCapped = (
 // sends it to evalAgg and no row set is ever built. The aggregate branch below
 // remains for a caller that asks evalSub an aggregate line directly: a capped
 // tally would undercount every badge, so it must stay exact.
+// What a subscription's initial frame carries. `window` is present exactly when
+// the members are a PREFIX of the query's matches — the client is told the bound
+// it holds and, when an index can vouch for it, the total it is a prefix of. An
+// answer that is whole carries no window at all, so an unwindowed sub's frame
+// semantics are untouched.
+export type SubAnswer = {
+  preds: Pred[]
+  hits: Row[]
+  window?: { limit: number; total?: number }
+  // Whether the INDEX answered this whole — no JS refinement over a candidate
+  // scan. Only an exact window is cheap enough to RE-ANSWER on every dirtying
+  // batch, which is what a windowed sub does to stay right at its edge; a
+  // declining one keeps the per-eid maintenance it has always had.
+  exact?: boolean
+}
+
 export let evalSub = (
   db: DatabaseSync,
   q: string,
   details = false,
-) => {
-  let exact = evalFast(db, q, details)
-  if (exact) return exact
-  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
-  if (details || namesLazy(preds) || aggOf(preds)) return evalQuery(db, q)
-  return evalCapped(db, q)
+  cap = SUB_CAP,
+): SubAnswer => {
+  let asked = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  // A sub that NEEDS the whole universe never windows: entries page by their
+  // own seq, and a capped tally would undercount every badge.
+  if (details || namesLazy(asked) || aggOf(asked)) {
+    let { preds, hits } = evalQuery(db, q)
+    return { preds, hits }
+  }
+  let win = windowOf(asked)
+  // Every row sub is bounded. `.limit=` is a client saying a smaller window is
+  // all it wants; SUB_CAP is the server's floor under the ones that say nothing,
+  // so no single socket can stage the graph. Both are the same stated form.
+  let limit = win.limit ?? cap
+  // Read ONE past the bound: that single extra row tells a whole answer from a
+  // prefix without paying a count for every subscription in the fleet.
+  let fast = evalFast(db, q, false, { limit: limit + 1, after: win.after })
+  if (fast) {
+    let hits = fast.hits.sort((a, b) => b.num - a.num)
+    // Whole, and nobody asked for a window: the frame says nothing about bounds
+    // because there is nothing to say.
+    if (hits.length <= limit && win.limit == null) {
+      return { preds: fast.preds, hits, exact: true }
+    }
+    let over = hits.length > limit
+    return {
+      preds: fast.preds,
+      hits: hits.slice(0, limit),
+      exact: true,
+      window: {
+        limit,
+        total: over ? countOf(db, screened(fast.preds, false)) : hits.length,
+      },
+    }
+  }
+  // The filter declines, so the answer is a candidate prefix the JS matcher
+  // refined and no statement can total. Saying the bound and leaving the total
+  // unstated is the honest frame: the client knows it holds a window, and knows
+  // nobody counted the rest.
+  let capped = evalCapped(db, q, limit, win.after)
+  return capped.whole && win.limit == null
+    ? { preds: capped.preds, hits: capped.hits }
+    : { preds: capped.preds, hits: capped.hits, window: { limit } }
 }
 
 // The aggregate answer — a query carrying `.count!`, `.distinct=col` or
@@ -320,17 +416,27 @@ export let evalGraph = (
   q: string,
   opts: { after?: number; limit?: number } = {},
 ): { preds: Pred[]; hits: Row[] } => {
-  let after = opts.after ?? 0
-  let limit = opts.limit ?? ENTRY_PAGE
+  // The LINE's own window (`.limit=`/`.after=`) is the default; an explicit
+  // opts bound — the /query door's paging — overrides it, so a caller that
+  // always passed a limit keeps doing exactly what it did.
+  let win = merged(
+    windowOf(resolveRefs(parseQuery(q), (id) => locate(db, id))),
+    opts,
+  )
+  let after = win.after ?? 0
+  let limit = win.limit ?? ENTRY_PAGE
   // An EXPLICIT limit bounds an eager answer too — the newest `limit` by num,
-  // returned in num order. Entry pages keep their own seq paging; a caller
-  // that passed no limit keeps the whole eager answer, as before.
-  let cut = (hits: Row[]) =>
-    opts.limit != null && hits.length > opts.limit
-      ? hits.sort((a, b) => b.num - a.num).slice(0, opts.limit)
+  // returned in num order, and `after` continues that window below a num.
+  // Entry pages keep their own seq paging; a caller that named no window keeps
+  // the whole eager answer, as before.
+  let cut = (hits: Row[]) => {
+    let rows = win.after != null ? hits.filter((r) => r.num < win.after!) : hits
+    return win.limit != null && rows.length > win.limit
+      ? rows.sort((a, b) => b.num - a.num).slice(0, win.limit)
         .sort((a, b) => a.num - b.num)
-      : hits
-  let fast = evalFast(db, q)
+      : rows
+  }
+  let fast = evalFast(db, q, false, win)
   if (fast && orderOf(fast.preds) != 'hot') {
     return {
       preds: fast.preds,
@@ -345,7 +451,9 @@ export let evalGraph = (
     hits = hits.sort((a, b) =>
       warm(b.comps, now, ent) - warm(a.comps, now, ent)
     )
-    if (opts.limit != null) hits = hits.slice(0, opts.limit)
+    // A hot ranking is its OWN order, so its window is a prefix of that
+    // ranking rather than of the spine — `after` names no cursor into it.
+    if (win.limit != null) hits = hits.slice(0, win.limit)
   } else if (namesLazy(preds)) hits = orderedEntries(hits, after, limit)
   else hits = cut(hits)
   return { preds, hits }

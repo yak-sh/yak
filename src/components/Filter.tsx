@@ -29,6 +29,11 @@ let lineOf = (eid: string, initial = '') => {
 // the current view earns the input or just the spacer
 export let filterable = new Set(['Board', 'List'])
 
+// the bar's current text, for a face that must know whether it is SCREENING
+// at all: a count the server computed over the saved query is the truth only
+// while nothing narrows it here. Reading the signal subscribes the caller.
+export let filterLine = (eid: string): string => lineOf(eid).value
+
 // the face's half: the current pass predicate for this entity's rows
 export let passOf = (eid: string, initial = ''): (eid: string) => boolean => {
   try {

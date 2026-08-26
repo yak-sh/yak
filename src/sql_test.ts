@@ -62,8 +62,44 @@ let put = (eid: string, rows: Record<string, Record<string, Cell>>) => {
   }
 }
 
+// A time phrase names a range around a MOMENT, so both readers are handed the
+// same one. Without that, `1-hour-ago` is compiled at one microsecond and
+// matched at another, and a row on the boundary decides the test. Every stamp
+// below is placed relative to it, so which rows fall inside `today` is fixed
+// whatever zone the machine keeps — and the two readers still have to agree
+// about it, which is the only thing being asserted.
+let NOW = Date.parse('2026-08-20T15:00:00.000Z')
+let ago = (ms: number) => new Date(NOW - ms).toISOString()
+let HOUR = 3_600_000
+let DAY = 24 * HOUR
+
 // project is a real reference, so its target has to exist.
 put('p1', { doc: { title: 'a project' }, project: {} })
+
+// The window-board population: a row touched minutes ago, one a few hours back,
+// one days back, one that has NEVER been touched since it was made (so
+// `.updated.at` reads its created.at — the 1,656-entity class a compiled
+// `updated.at` would drop on the floor), and one with neither stamp.
+put('w1', {
+  doc: { title: 'touched just now' },
+  created: { at: ago(9 * DAY), by: null, via: null },
+  updated: { at: ago(5 * 60_000), by: null, via: null },
+})
+put('w2', {
+  doc: { title: 'touched hours ago' },
+  created: { at: ago(9 * DAY), by: null, via: null },
+  updated: { at: ago(4 * HOUR), by: null, via: null },
+})
+put('w3', {
+  doc: { title: 'touched days ago' },
+  created: { at: ago(9 * DAY), by: null, via: null },
+  updated: { at: ago(3 * DAY), by: null, via: null },
+})
+put('w4', {
+  doc: { title: 'made today, never touched' },
+  created: { at: ago(2 * HOUR), by: null, via: null },
+})
+put('w5', { doc: { title: 'no stamps at all' } })
 
 put('e1', {
   doc: { title: 'alpha widget', body: 'the first one' },
@@ -163,6 +199,7 @@ let graph = () => {
     'generation',
     'response',
     'created',
+    'updated',
   ]
   // Component tables are id-keyed now: read each row the way the SQL matcher's
   // select() projects it — the owner's eid as `eid`, every reference column back
@@ -196,14 +233,12 @@ let kids = kidsOf(new Map(Object.entries(world)))
 let byJs = (q: string) => {
   let preds = parseQuery(q)
   return Object.entries(world)
-    .filter(([, comps]) =>
-      matchQuery(comps, preds, (e) => world[e], undefined, kids)
-    )
+    .filter(([, comps]) => matchQuery(comps, preds, (e) => world[e], NOW, kids))
     .map(([eid]) => eid).sort()
 }
 
 let bySql = (q: string) => {
-  let built = where(parseQuery(q))
+  let built = where(parseQuery(q), NOW)
   if (!built) return null
   return (db.prepare(built.sql).all(...built.params) as { eid: string }[])
     .map((r) => r.eid).sort()
@@ -339,6 +374,48 @@ let COMPILES = [
   '.refs=p1',
   '.refs=e2', // one comment (c3) points here
   '.refs=nobody', // no referrers at all
+  // Time spans (T-22370). A phrase names a RANGE and the op picks its edge, so
+  // each op is its own compilation and each has to agree — these are what a
+  // window board asks, and while they declined the board answered a spine-
+  // ordered prefix of its matches instead of the matches.
+  '.updated.at=today',
+  '.updated.at>=today',
+  '.updated.at<=today',
+  '.updated.at>today',
+  '.updated.at<today',
+  '.updated.at!=today',
+  '.updated.at>=1-hour-ago',
+  '.updated.at>=1-week-ago',
+  '.updated.at<yesterday',
+  '.created.at=today',
+  '.created.at>=1-week-ago',
+  '.proposed.at>=2026-07-01',
+  '.proposed.at<2026-08-02',
+  // an any-of list of phrases, and its negation
+  '.updated.at=today,yesterday',
+  '.updated.at!=today,yesterday',
+  // a full stamp is a phrase too — span() reads it as the SECOND it names, so
+  // this is a one-second range and not the equality it looks like
+  '.created.at=2026-08-02T00:00:00',
+  // the fallback: an entity never touched reads created.at as its updated.at,
+  // so w4 (made today, never updated) is IN a today window and w5 (no stamps
+  // at all) is in nothing — the pair a coalesce-less compile gets wrong
+  '.updated.at!',
+  '.updated.at=',
+  // and the fallback under a filter, which is the shape a board carries
+  '.updated.at>=today&.doc.title~=touched',
+  // a time span inside a reverse hop's sub-filter, where the whole correlated
+  // EXISTS rides the same compilation
+  '.comments.created.at=today',
+  '.comments.created.at>=1-week-ago',
+  '.comments.created.at>=2026-08-01',
+  // a value that is NO phrase falls to the ordinary scalar road — a range over
+  // two stamps, compared lexically, exactly as the matcher's cmp() does
+  '.created.at=2026-08-01..2026-08-04',
+  '.created.at=2026-08-01...2026-08-04',
+  // `~=` over a stamp is a literal substring, never a phrase
+  '.created.at~=2026-08',
+  '.created.at~=nope',
 ]
 
 for (let q of COMPILES) {
@@ -352,9 +429,6 @@ for (let q of COMPILES) {
 // answer right. If one of these ever starts compiling, it must arrive with its
 // own agreement case rather than by accident.
 let DECLINES = [
-  '.updated.at>=1-week-ago', // a moving span
-  '.updated.at!', // the matcher falls back to created.at
-  '.created.at=today',
   '.doc.body=', // a body is only ever narrowed by the index, never scanned
   '.task.domain>=1', // text column against a numeric operand
   // shorter than a trigram: fts5 would answer these by decoding the whole
@@ -372,11 +446,6 @@ let DECLINES = [
   // a body substring on a NON-doc body: sql.ts only ever narrows doc.body, so a
   // content-body scan declines and the matcher answers it over the partition
   '.content.body~=boom',
-  // a reverse hop whose SUB-filter is a moving span: the child pred declines
-  // (spans are their own pass), so the whole EXISTS declines and the matcher
-  // answers it — exactness-or-nothing across the correlated join.
-  '.comments.created.at=today',
-  '.comments.created.at>=1-week-ago',
   // the reverse-union's presence/absence admit rows in no reverse map, so SQL
   // declines them (as the anchor does) and the matcher answers
   '.refs!',
@@ -498,8 +567,8 @@ Deno.test('projection: no .fields makes select the plain membership where', () =
 })
 
 // Exactness across the projection: an unknown projected column, and a filter
-// beside the projection that itself declines (a moving span), both decline the
-// whole thing rather than answer an almost-right question.
+// beside the projection that itself declines (a path deref, a second join),
+// both decline the whole thing rather than answer an almost-right question.
 Deno.test('projection: an unknown column or a declining filter declines', () => {
   assertEquals(
     select([{
@@ -511,7 +580,7 @@ Deno.test('projection: an unknown column or a declining filter declines', () => 
     }]),
     null,
   )
-  assertEquals(select(parseQuery('.created.at=today&.fields=pin.x')), null)
+  assertEquals(select(parseQuery('.assignee.title~=j&.fields=pin.x')), null)
 })
 
 // kind=K is not a filter STRING but a synthetic Pred[] (query.ts kindPreds):
