@@ -2642,31 +2642,29 @@ export let migrate = (db: DatabaseSync) => {
   try {
     // WAL lets readers proceed during a write, removing the reader/writer
     // blocking of the default rollback journal (journal_mode = delete) — the
-    // fleet runs many concurrent `task` readers against one writer (T-13905).
-    // journal_mode is a PERSISTENT property stamped in the db header, so it
-    // survives the connection that set it: flipping the live 800MB graph is an
-    // operational step for an owner maintenance window, NOT something a plain
-    // restart may do silently. So this is GATED and default-OFF — an unset
-    // TASKS_WAL leaves the file at whatever it already is (`delete` today), and
-    // activation is a deliberate later step (set TASKS_WAL=1 in the service
-    // unit during a window). WAL's -wal/-shm sidecars are already gitignored,
-    // and bin/backup's VACUUM INTO reads a consistent snapshot under WAL
-    // unchanged. Setting synchronous = normal is WAL's crash-safe pairing (a
-    // checkpoint still fsyncs), unless TASKS_SYNC already named a mode.
+    // fleet runs many concurrent `task` readers against one writer, and the
+    // journal-native direction (D-22388) adds writer processes beside the
+    // server. Unconditional since T-19444 (validated live via T-13905); an
+    // in-memory db answers `memory` and stays there — that is its only mode,
+    // not a failure. WAL's -wal/-shm sidecars are gitignored, and bin/backup's
+    // VACUUM INTO reads a consistent snapshot under WAL unchanged. Setting
+    // synchronous = normal is WAL's crash-safe pairing (a checkpoint still
+    // fsyncs), unless TASKS_SYNC already named a mode.
     //
     // This is a PERSISTENT SHARED WRITE — it stamps the file header — so it
     // lives HERE in the write phase, never in connect(): a --join successor
     // must never flip the header beside its live predecessor, which is the very
     // two-writer mode confusion the baton exists to kill (T-20223). It runs
     // under the baton, on the sole writer, so no peer has the file open.
-    if (Deno.env.get('TASKS_WAL')) {
-      let sync = Deno.env.get('TASKS_SYNC')
+    {
       let got = (db.prepare('pragma journal_mode = wal').get() as
         | { journal_mode: string }
         | undefined)?.journal_mode
-      if (got != 'wal') {
-        console.warn(`TASKS_WAL set but journal_mode is ${got}, not wal`)
-      } else if (!sync) db.exec('pragma synchronous = normal')
+      if (got == 'wal') {
+        if (!Deno.env.get('TASKS_SYNC')) db.exec('pragma synchronous = normal')
+      } else if (got != 'memory') {
+        console.warn(`journal_mode is ${got}, not wal`)
+      }
     }
     // The eid→id storage reshape (D-18866) runs FIRST: it reshapes an
     // eid-keyed legacy graph to the canonical id-keyed spine every statement

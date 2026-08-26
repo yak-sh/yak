@@ -268,34 +268,31 @@ slow('snapshot shares a walk until either database handle writes', () => {
 })
 
 slow(
-  'journal_mode: WAL is gated on TASKS_WAL, off by default (T-13905)',
+  'journal_mode: WAL is unconditional on file-backed graphs (T-19444)',
   () => {
     let path = Deno.makeTempFileSync({ suffix: '.db' })
     let mode = (d: ReturnType<typeof open>) =>
       (d.prepare('pragma journal_mode').get() as { journal_mode: string })
         .journal_mode
-    Deno.env.delete('TASKS_WAL')
     try {
       let a = open(path)
-      assertEquals(mode(a), 'delete') // default: rollback journal, never flipped
+      assertEquals(mode(a), 'wal') // no env var, no gate — every open ensures it
       a.close()
-      Deno.env.set('TASKS_WAL', '1')
+      // journal_mode is a persistent header property, so a re-open reads WAL
+      // without re-flipping anything.
       let b = open(path)
-      assertEquals(mode(b), 'wal') // the gated activation flips the file
+      assertEquals(mode(b), 'wal')
       b.close()
-      // journal_mode is a persistent header property, so a later DEFAULT open
-      // still reads WAL — which is why flipping the live db is owner-windowed.
-      Deno.env.delete('TASKS_WAL')
-      let c = open(path)
-      assertEquals(mode(c), 'wal')
-      c.close()
+      // An in-memory graph has exactly one mode and migrate() leaves it alone.
+      let m = open(':memory:')
+      assertEquals(mode(m), 'memory')
+      m.close()
     } finally {
-      Deno.env.delete('TASKS_WAL')
       Deno.removeSync(path)
       for (let s of ['-wal', '-shm']) {
         try {
           Deno.removeSync(`${path}${s}`)
-        } catch { /* absent when the mode never flipped */ }
+        } catch { /* absent if never created */ }
       }
     }
   },
