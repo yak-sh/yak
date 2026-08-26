@@ -20,10 +20,17 @@ type In =
   | { cast: unknown[]; cursor: number }
   | { aged: number }
   | { observe: string; session: string }
+  | { close: true }
 
 let post = (m: unknown) =>
   (self as unknown as { postMessage(m: unknown): void }).postMessage(m)
 
+// The worker OWNS its read-only connection, so it must be the one to close it.
+// Worker.terminate() kills this isolate without ever closing an FFI-opened
+// sqlite3 handle — the fd is not a resource Deno tracks — so the read fd (and
+// the WAL read mark it pins) would leak, one pair per socket ever served
+// (T-22658). Held at module scope so the {close} teardown can reach it.
+let db: DatabaseSync | undefined
 let sub: Subserve | undefined
 
 self.onmessage = (m: MessageEvent<In>) => {
@@ -33,9 +40,29 @@ self.onmessage = (m: MessageEvent<In>) => {
       // connect()-style pragmas without connect(): the worker never migrates
       // (schema stays under the writer baton) and never loads the vector
       // extension (write-capable extensions live only in the owning process).
-      let db = new DatabaseSync(d.init, { readOnly: true })
+      db = new DatabaseSync(d.init, { readOnly: true })
       db.exec('pragma busy_timeout = 5000')
       sub = subserve(db, (json) => post({ frame: json }))
+      return
+    }
+    if ('close' in d) {
+      // The delegator is tearing this socket down. Close the connection here and
+      // answer {closed} so the delegator terminates only AFTER — never relying on
+      // terminate() to reclaim it, which it can't (the FFI sqlite3* is a
+      // process-global native handle, not a resource the isolate owns). An
+      // un-closed handle leaks unbounded: measured +2 fds per socket, forever.
+      // Closed, SQLite's unix VFS stashes the fd on the inode's unused list —
+      // it can't close() it outright while the writer in this same process still
+      // holds POSIX locks on the inode (a close would drop them all) — and the
+      // NEXT worker's open reuses it, so the open-fd count is bounded by peak
+      // concurrency instead of growing per socket.
+      try {
+        db?.close()
+      } finally {
+        db = undefined
+        sub = undefined
+        post({ closed: true })
+      }
       return
     }
     if (!sub) return

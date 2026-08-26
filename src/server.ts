@@ -220,6 +220,12 @@ let served = new Set<Served>()
 let PING = JSON.stringify({ ping: 1 })
 let PING_MS = 25_000
 
+// How long the delegator waits for a worker's {closed} ack before it force-
+// terminates anyway (T-22658). The graceful close acks in microseconds; this
+// deadline only bites a worker wedged mid-query, and matches the worker's own
+// busy_timeout so a close queued behind one legitimate long read still lands.
+let WORKER_CLOSE_MS = 5_000
+
 // Observations belong only to connected readers of this Session partition.
 // No cursor means no journal position, and this path never reaches apply(),
 // cast(), snapshot(), or the browser's persistent landing branch. A worker
@@ -372,7 +378,13 @@ let applyFrom = (
 }
 
 let workerN = 0
-let workersWanted = Deno.env.get('TASKS_WS_WORKERS') == '1'
+// Per-WS workers are ON by default (T-22658): the T-22622 corruption RCA closed
+// having FULLY exonerated them — they open read-only (readOnly:true) and cannot
+// write a page; the corruption was cross-build SQLite writes (M-22673), nothing
+// to do with workers — and the fd leak that made re-enabling wait is fixed above
+// (graceful {close} teardown). TASKS_WS_WORKERS=0 is the escape hatch back to
+// inline serving if one is ever needed.
+let workersWanted = Deno.env.get('TASKS_WS_WORKERS') != '0'
 let ws = (req: Request) => {
   let { socket, response } = Deno.upgradeWebSocket(req)
   // The tab names itself once, at connect: ?client=<eid> is the writer for
@@ -387,20 +399,43 @@ let ws = (req: Request) => {
     if (socket.readyState == WebSocket.OPEN) socket.send(PING)
     else clearInterval(beat)
   }, PING_MS)
-  // The delegator split: with TASKS_WS_WORKERS=1, a file-backed graph hands
-  // the connection to its own worker — its own thread, its own read-only
-  // connection — and this process only pumps frames and applies writes.
-  // OPT-IN, default inline, since the 2026-08-26 live corruption (journal +
-  // doc_gram_data cross-linked) opened inside the first window workers ran
-  // beside the effects daemon: per-socket connections churning open/close in
-  // the writer's own process are the prime suspect (POSIX lock/fd interplay,
-  // T-22588) and stay off the live graph until exonerated. :memory: always
-  // serves inline (a worker's separate connection would open a DIFFERENT
-  // empty graph), as does any environment where the Worker fails to
-  // construct, and — loudly — any socket whose worker reports its connection
-  // dead: the delegator closes that socket so the client reconnects onto an
-  // inline serve, and no join can die silently again.
+  // The delegator split: a file-backed graph hands the connection to its own
+  // worker — its own thread, its own read-only connection — and this process
+  // only pumps frames and applies writes. ON by default; the 2026-08-26 live
+  // corruption briefly forced this inline while workers were the suspect, but
+  // the T-22622 RCA closed EXONERATING them (read-only, cannot write; the
+  // corruption was cross-build SQLite writes, M-22673) and the teardown fd leak
+  // that remained is fixed (graceful {close} below). :memory: always serves
+  // inline (a worker's separate connection would open a DIFFERENT empty graph),
+  // as does any environment where the Worker fails to construct, and — loudly —
+  // any socket whose worker reports its connection dead: the delegator closes
+  // that socket so the client reconnects onto an inline serve, and no join can
+  // die silently again.
   let s: Served = { sock: socket }
+  // Graceful worker teardown (T-22658): Worker.terminate() leaks the worker's
+  // sqlite fds, so ask the worker to close its own connection ({close}) and
+  // terminate only on its {closed} ack — or after a deadline, so a wedged worker
+  // still cannot outlive its socket. Idempotent: the dead-worker path and the
+  // socket's onclose can both reach shut().
+  let closedAck = () => {}
+  let shutting = false
+  let shut = () => {
+    let w = s.worker
+    if (!w || shutting) return
+    shutting = true
+    let torn = false
+    let kill = () => {
+      if (torn) return
+      torn = true
+      w.terminate()
+    }
+    let timer = setTimeout(kill, WORKER_CLOSE_MS)
+    closedAck = () => {
+      clearTimeout(timer)
+      kill()
+    }
+    w.postMessage({ close: true })
+  }
   if (workersWanted && graph != ':memory:') {
     try {
       let w = new Worker(new URL('./wsworker.ts', import.meta.url), {
@@ -414,6 +449,8 @@ let ws = (req: Request) => {
           if (socket.readyState == WebSocket.OPEN) socket.send(d.frame)
         } else if (Array.isArray(d?.apply)) {
           applyFrom(socket, writer, d.apply as Change[], d.id)
+        } else if (d?.closed) {
+          closedAck()
         } else if (typeof d?.dead == 'string') {
           // The worker's connection failed (its init, or a read mid-serve).
           // Serving would be silence; kill the pair and let the client's
@@ -423,7 +460,7 @@ let ws = (req: Request) => {
             `wsworker dead — serving inline from here on: ${d.dead}`,
           )
           workersWanted = false
-          w.terminate()
+          shut()
           socket.close(1012, 'resubscribe')
         }
       }
@@ -442,7 +479,7 @@ let ws = (req: Request) => {
   socket.onclose = () => {
     clearInterval(beat)
     served.delete(s)
-    s.worker?.terminate()
+    shut()
   }
   socket.onmessage = (m) => {
     let raw = String(m.data)

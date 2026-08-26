@@ -6,7 +6,7 @@
 // moved in the split). All slow(): a server boot and worker spawns have no
 // place in the 1ms tier.
 import { assert, assertEquals } from '@std/assert'
-import { slow } from './testing.ts'
+import { slow, until } from './testing.ts'
 
 let dir = await Deno.makeTempDir({ prefix: 'wsworker-test-' })
 Deno.env.set('DB_PATH', `${dir}/graph.db`)
@@ -121,6 +121,59 @@ slow(
     )
     assertEquals(folded.cursor, 99)
     w.terminate()
+  },
+)
+
+// How many of THIS process's open fds point at the graph file (workers are
+// threads in the same process, so their read fds show up here too). The leak
+// T-22658 fixes was ~2 per socket that terminate() never closed.
+let dbFds = () => {
+  let base = (Deno.env.get('DB_PATH') ?? '').split('/').pop() ?? 'graph.db'
+  let n = 0
+  for (let e of Deno.readDirSync('/proc/self/fd')) {
+    try {
+      if (Deno.readLinkSync(`/proc/self/fd/${e.name}`).includes(base)) n++
+    } catch { /* fd closed under us mid-scan */ }
+  }
+  return n
+}
+
+slow(
+  'wsworker teardown: {close} drops the connection — no fd leak across churn',
+  alone,
+  async () => {
+    // One open→close→terminate cycle, graceful: the worker closes its own
+    // connection and acks {closed} before we terminate the isolate.
+    let cycle = async () => {
+      let w = new Worker(new URL('./wsworker.ts', import.meta.url), {
+        type: 'module',
+      })
+      let closed = new Promise<void>((ok) => {
+        w.onmessage = (m) => m.data?.closed && ok()
+      })
+      w.postMessage({ init: Deno.env.get('DB_PATH') })
+      // The connection is open once the worker can answer a join.
+      w.postMessage({ raw: JSON.stringify({ since: 0, live: 1, ws: 1 }) })
+      w.postMessage({ close: true })
+      await closed
+      w.terminate()
+    }
+    // Warm one cycle so the reuse-pool fd (SQLite stashes the closed handle's fd
+    // on the inode, since the server's writer holds locks on the same inode in
+    // this process) is already in the baseline. These cycles are SERIAL, so the
+    // pool is one fd every later cycle reuses.
+    await cycle()
+    let base = dbFds()
+    for (let i = 0; i < 8; i++) await cycle()
+    // Bounded, not growing: every worker's read fd was closed on teardown and
+    // reused by the next open. Before the fix, terminate() left each handle
+    // un-closed and the count climbed ~2 per cycle, unbounded (3→13 over 5 in the
+    // RCA probe). Poll, since a just-terminated isolate can settle a tick late.
+    let after = await until(() => {
+      let n = dbFds()
+      return n <= base ? n : 0
+    }, { label: () => `db fds to return to ${base}, saw ${dbFds()}` })
+    assert(after <= base, `db fds bounded at baseline (${base}), not leaking`)
   },
 )
 
