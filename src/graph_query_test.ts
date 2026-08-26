@@ -183,6 +183,14 @@ Deno.test('evalAgg answers .distinct/.tally, filtered and null-for-membership', 
   assertEquals(evalAgg(db, '.tally=domain')!.values.get('Ops'), 2)
   // the other preds screen the universe the aggregate reduces
   assertEquals(evalAgg(db, '.tally=domain&.status=open')!.values.get('Ops'), 1)
+  // `.count!` counts the SELECTION, under the empty key no tally can collide
+  // with — one shape for every aggregate.
+  let count = (q: string) => evalAgg(db, q)!.values.get('')
+  assertEquals(count('.task.domain=Ops&.count!'), 2)
+  assertEquals(count('.task.domain=Eng&.count!'), 1)
+  assertEquals(count('.task.domain=Ops&.task.status=open&.count!'), 1)
+  // A pred the compiler declines still counts EXACTLY, through the matcher.
+  assertEquals(count('.task.domain=Ops&.title~=t&.count!'), 2)
   // no AGG projection → null, the door falls through to membership
   assertEquals(evalAgg(db, '.status=open'), null)
   db.close()

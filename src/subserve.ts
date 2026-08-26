@@ -8,17 +8,26 @@
 // the writer's.
 import type { DatabaseSync } from './sqlite.ts'
 import type { Change } from './types.ts'
-import { aggOf, type Hop, listed, matchQuery, type Pred } from './query.ts'
+import {
+  aggOf,
+  listed,
+  matchQuery,
+  parseQuery,
+  type Pred,
+  predComps,
+  resolveRefs,
+} from './query.ts'
 import {
   cursorOf,
   cursorStale,
   delta,
   eager,
+  locate,
   referrersOf,
   refValuesOf,
   rootChanges,
 } from './db.ts'
-import { evalSub, workingSet } from './graph_query.ts'
+import { evalAgg, evalSub, workingSet } from './graph_query.ts'
 import { liveFrame } from './wire.ts'
 import { bodied, bodyless, gaps, spread, type Step, step } from './subs.ts'
 
@@ -39,12 +48,20 @@ type Sub = {
   // "this eid, while it's alive", so the entity loads whole (details), updates
   // live, and dies with the row. Empty/absent for every query sub.
   only?: Set<string>
-  // An AGGREGATE sub (T-21283): a query carrying `.tally=comp.prop` answers a
-  // VALUE→COUNT map, not a member list — one sub serves every tile's badge, so
-  // a page of per-row reverse-lookups never floods the wire. `vals` remembers
-  // each member's current column value (a death can't be re-read from the db),
-  // `counts` is the standing tally; maintain() pushes DELTA maps (n=0 deletes).
-  agg?: { at: Hop; vals: Map<string, string>; counts: Map<string, number> }
+  // An AGGREGATE sub (T-21283, D-22567 §1): a query carrying `.count!` /
+  // `.tally=comp.prop` / `.distinct=col` answers a VALUE→COUNT map, not a member
+  // list — one sub serves every tile's badge and every board tile's stats, so
+  // neither a page of per-row reverse-lookups nor a board's whole membership
+  // ever rides the wire. Nothing here is keyed by MEMBER: `counts` is the
+  // standing answer (bounded by DISTINCT VALUES, not rows) and `line` re-answers
+  // it with one indexed statement. `watch` is the dirty test — the components
+  // the line reads, or null for "every batch dirties it". maintain() recomputes
+  // a dirty aggregate and sends the DIFF (n=0 deletes a key).
+  agg?: {
+    line: string
+    watch: Set<string> | null
+    counts: Map<string, number>
+  }
 }
 
 // What a subscription frame has to CARRY. A live subscription owns its
@@ -52,6 +69,12 @@ type Sub = {
 // not: the client still hears the complete broadcast, and landSub() reads a
 // shadow frame's changes for the eids only. Doc bodies ride only the subs that
 // exist to show one entity whole (subs.ts bodied).
+// The universal half of an aggregate's dirty test: whatever a line's preds
+// name, EVERY query also reads the spine (a birth or a death moves any answer)
+// and the quarantine facet (listed() screens on it). predComps names the rest.
+let aggDirty = (watch: Set<string>, name: string) =>
+  name == 'entity' || name == 'quarantined' || watch.has(name)
+
 let carry = (sub: Sub, changes: Change[]) =>
   sub.bodies ? changes : bodyless(changes)
 
@@ -149,34 +172,24 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         ? f.sub.slice('route:'.length)
         : null
       let details = route != null || f.sub.startsWith('entries:')
-      // An empty query SELECTS NOTHING (query.ts parseQuery mints the
-      // never-pred), so an empty sub legitimately answers the empty set —
-      // cheap, no error. Only a route sub carries meaning with no query: its
-      // name scopes it to one entity.
-      let { preds, hits } = route != null
-        ? { preds: [], hits: rowsFor(db, route) }
-        : evalSub(db, f.q ?? '', details)
-      // An aggregate sub answers a tally, not a member list. Build the
-      // standing count from the membership pass (vals doubles as the member
-      // set), send the whole map once, and speak deltas from here.
-      let agg = route == null ? aggOf(preds) : undefined
-      if (agg) {
-        let vals = new Map<string, string>()
-        let counts = new Map<string, number>()
-        for (let r of hits) {
-          let v = String(r.comps[agg.at.comp]?.[agg.at.prop] ?? '')
-          if (!v) continue
-          vals.set(r.eid, v)
-          counts.set(v, (counts.get(v) ?? 0) + 1)
-        }
+      // An aggregate sub answers a VALUE, so it never enumerates members — not
+      // even once, at subscribe. Parse the line, and if it carries an AGG
+      // projection let evalAgg answer it with one indexed statement; only a
+      // membership sub pays evalSub's row set.
+      let line = f.q ?? ''
+      let asked = route != null
+        ? []
+        : resolveRefs(parseQuery(line), (id) => locate(db, id))
+      if (aggOf(asked)) {
+        let counts = evalAgg(db, line)?.values ?? new Map<string, number>()
         map.set(f.sub, {
-          preds,
-          members: new Set(vals.keys()),
+          preds: [],
+          members: new Set(),
           shadow: !!f.shadow,
           moving: false,
           bodies: false,
           details: false,
-          agg: { at: agg.at, vals, counts },
+          agg: { line, watch: predComps(asked), counts },
         })
         send(JSON.stringify({
           sub: f.sub,
@@ -187,6 +200,13 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         }))
         return
       }
+      // An empty query SELECTS NOTHING (query.ts parseQuery mints the
+      // never-pred), so an empty sub legitimately answers the empty set —
+      // cheap, no error. Only a route sub carries meaning with no query: its
+      // name scopes it to one entity.
+      let { preds, hits } = route != null
+        ? { preds: [], hits: rowsFor(db, route) }
+        : evalSub(db, line, details)
       map.set(f.sub, {
         preds,
         members: new Set(hits.map((r) => r.eid)),
@@ -279,32 +299,22 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
     let patch = new Map<string, Change[]>()
     for (let c of batch) patch.set(c.eid, [...(patch.get(c.eid) ?? []), c])
     for (let [id, sub] of map) {
-      // An aggregate sub speaks value→count deltas: a member arriving,
-      // leaving, or moving its column value adjusts the standing tally, and
-      // only the touched values ride the frame (n=0 tells the client to drop
-      // the key). vals is the member set — a death reads its last value from
-      // there, since the row is already gone from the db.
+      // An aggregate sub speaks value→count deltas. The batch DIRTIES it only
+      // if it touches a component the line reads (D-22567 §1) — an unrelated
+      // write costs one Set lookup per changed component and nothing else. A
+      // dirty aggregate re-answers from the INDEX (evalAgg: count/group-by over
+      // indexed columns, µs) and ships the DIFF against the standing answer, so
+      // a birth, a death and a moved value all fall out of one recompute
+      // without a per-member map to keep honest. n=0 tells the client to drop
+      // the key.
       if (sub.agg) {
-        let { at, vals, counts } = sub.agg
+        let { line, watch, counts } = sub.agg
+        if (watch && !batch.some((c) => aggDirty(watch, c.name))) continue
+        let next = evalAgg(db, line)?.values ?? new Map<string, number>()
         let delta = new Map<string, number>()
-        let bump = (v: string, by: number) => {
-          if (!v) return
-          let n = (counts.get(v) ?? 0) + by
-          n > 0 ? counts.set(v, n) : counts.delete(v)
-          delta.set(v, Math.max(n, 0))
-        }
-        for (let eid of touched) {
-          let c = gone.has(eid) ? {} : comps(eid)
-          let alive = !gone.has(eid) && !!c.entity
-          let hit = alive && listed(c, sub.preds) &&
-            matchQuery(c, sub.preds, comps, undefined, dbKids(db, comps))
-          let now = hit ? String(c[at.comp]?.[at.prop] ?? '') : ''
-          let was = vals.get(eid) ?? ''
-          if (now == was) continue
-          bump(was, -1)
-          bump(now, 1)
-          now ? vals.set(eid, now) : vals.delete(eid)
-        }
+        for (let [v, n] of next) if (counts.get(v) != n) delta.set(v, n)
+        for (let v of counts.keys()) if (!next.has(v)) delta.set(v, 0)
+        sub.agg.counts = next
         if (delta.size) {
           send(JSON.stringify({
             sub: id,

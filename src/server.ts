@@ -1078,12 +1078,15 @@ let handle = async (req: Request) => {
         !s.startsWith('id=')
       )
       let q = segs.join('&')
-      // An aggregate projection (`.distinct=col` / `.tally=col`) answers with
-      // the reduction, not a row set — the census asks for values, so rows,
-      // layers and id= addressing don't apply. Keys come back sorted the way
-      // the census always has.
+      // An aggregate projection (`.count!` / `.distinct=col` / `.tally=col`)
+      // answers with the reduction, not a row set — the census asks for values,
+      // so rows, layers and id= addressing don't apply. Keys come back sorted
+      // the way the census always has; `.count!` is one number under `count`.
       let agg = evalAgg(db, q)
       if (agg) {
+        if (agg.op == 'count') {
+          return Response.json({ count: agg.values.get('') ?? 0 })
+        }
         let keys = [...agg.values.keys()].sort()
         return Response.json(
           agg.op == 'distinct' ? { distinct: keys } : {

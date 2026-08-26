@@ -249,11 +249,15 @@ export let evalCapped = (
   return { preds, hits }
 }
 
-// The subscription answerer control() calls: exact when the index answers
-// whole (evalFast), exact when the sub NEEDS the whole universe (an entries
-// partition, a lazy-naming query, an aggregate tally — a capped tally would
-// undercount every badge), bounded newest-first otherwise. A subscribe never
+// The MEMBERSHIP answerer control() calls: exact when the index answers whole
+// (evalFast), exact when the sub NEEDS the whole universe (an entries partition,
+// a lazy-naming query), bounded newest-first otherwise. A subscribe never
 // full-scans the graph on a socket's clock.
+//
+// An AGGREGATE sub never arrives here at all — it answers a value, so control()
+// sends it to evalAgg and no row set is ever built. The aggregate branch below
+// remains for a caller that asks evalSub an aggregate line directly: a capped
+// tally would undercount every badge, so it must stay exact.
 export let evalSub = (
   db: DatabaseSync,
   q: string,
@@ -266,16 +270,22 @@ export let evalSub = (
   return evalCapped(db, q)
 }
 
-// The aggregate answer — a query carrying `.distinct=col` / `.tally=col`
-// reduced server-side. SQL when the column and every filter beside it compile
-// (aggregateSql: one indexed statement, never a row set in JS); otherwise the
-// JS matcher's rows tallied — the same universe either way, since matchQuery
-// passes the AGG pred through. Null for a query with no aggregate projection,
-// so a door asks this first and falls through to membership unchanged.
+// The aggregate answer — a query carrying `.count!`, `.distinct=col` or
+// `.tally=col` reduced server-side. SQL when the column and every filter beside
+// it compile (aggregateSql: one indexed statement, never a row set in JS);
+// otherwise the JS matcher's rows reduced — the same universe either way, since
+// matchQuery passes the AGG pred through. Null for a query with no aggregate
+// projection, so a door asks this first and falls through to membership
+// unchanged.
+//
+// Every shape answers as one value→count map: `count` uses the empty key, which
+// no tally can collide with (tally drops empties, exactly as the census does).
 export let evalAgg = (
   db: DatabaseSync,
   q: string,
-): { op: 'distinct' | 'tally'; values: Map<string, number> } | null => {
+):
+  | { op: 'distinct' | 'tally' | 'count'; values: Map<string, number> }
+  | null => {
   let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
   let agg = aggOf(preds)
   if (!agg) return null
@@ -291,7 +301,12 @@ export let evalAgg = (
     }
   }
   let { hits } = evalQuery(db, q)
-  return { op: agg.op, values: tally(hits.map((h) => h.comps), agg.at) }
+  return {
+    op: agg.op,
+    values: agg.op == 'count'
+      ? new Map([['', hits.length]])
+      : tally(hits.map((h) => h.comps), agg.at),
+  }
 }
 
 // The authoritative filter-query answer. The index answers when it can (evalFast

@@ -64,5 +64,10 @@ with a comment jeff wrote, ANY child matching (the default). '.comments!'
 has any comment, '.comments=' has none, '.comments>=5' counts them, and a
 '!' on the association negates — '.comments!.created.by=jeff' has NONE by
 jeff, '.comments!.created.by!=jeff' has EVERY comment by jeff (ALL, by De
-Morgan). Bare words are text terms (doc contains). Boards persist these
-same queries (board.query).`
+Morgan). Bare words are text terms (doc contains).
+AGGREGATES reduce the selection to a VALUE instead of rows: '.count!' how
+many ('.status=open&.count!'), '.tally=status' each value's count,
+'.distinct=domain' the values themselves. They ride beside the filters that
+select what they reduce, and they answer from the index — a caller wanting a
+number asks for the number, never for the rows to count.
+Boards persist these same queries (board.query).`

@@ -26,7 +26,12 @@ if (Deno.env.get('TASKS_SLOW')) {
 let alone = { sanitizeOps: false, sanitizeResources: false }
 let uid = () => crypto.randomUUID()
 
-type AggFrame = { sub?: string; agg?: Record<string, number> }
+type AggFrame = {
+  sub?: string
+  agg?: Record<string, number>
+  changes?: unknown[]
+  replace?: boolean
+}
 
 let post = async (changes: unknown[]) => {
   let res = await fetch(`http://${U}/apply`, {
@@ -40,18 +45,21 @@ let post = async (changes: unknown[]) => {
 
 // One socket, one agg sub; frames matching the sub queue in order and each
 // await pops the next — an apply's delta is awaited, never slept for.
-let dial = async (q: string) => {
+let dial = async (q: string, name = 'agg:t') => {
   let sock = new WebSocket(`ws://${U}/ws`)
   let queue: AggFrame[] = []
   let waiters: ((f: AggFrame) => void)[] = []
   sock.onmessage = (m) => {
     let f = JSON.parse(String(m.data)) as AggFrame
-    if (f.sub != 'agg:t') return
+    if (f.sub != name) return
+    // An aggregate sub answers a VALUE. No row ever rides its frames — that is
+    // the whole of T-22509, so assert it on every frame rather than once.
+    assertEquals(f.changes, undefined)
     let w = waiters.shift()
     w ? w(f) : queue.push(f)
   }
   await new Promise((r) => sock.onopen = r)
-  sock.send(JSON.stringify({ sub: 'agg:t', q, shadow: true }))
+  sock.send(JSON.stringify({ sub: name, q, shadow: true }))
   let next = () =>
     queue.length
       ? Promise.resolve(queue.shift()!)
@@ -89,6 +97,77 @@ slow('an aggregate sub answers whole, then speaks deltas', alone, async () => {
   // A death drops its key toward zero.
   assertEquals(await post([{ eid: c1, name: 'entity', comp: null }]), 200)
   assertEquals((await next()).agg, { [a]: 1 })
+
+  sock.close()
+  await new Promise((r) => sock.onclose = r)
+})
+
+// The board TILE's shape (T-22509): the tile renders four status counts, so it
+// subscribes to four numbers. A status move re-answers the tally from the index
+// and ships only the two keys that moved — the board's members never appear.
+slow(
+  'a board tile tally follows a status move, members absent',
+  alone,
+  async () => {
+    let p = uid(), t1 = uid(), t2 = uid()
+    let task = (eid: string, status: string) => [
+      { eid, name: 'doc', comp: { title: 'work', body: '' } },
+      { eid, name: 'task', comp: { status, project: p } },
+    ]
+    assertEquals(await post([{ eid: p, name: 'project', comp: {} }]), 200)
+    assertEquals(await post(task(t1, 'open')), 200)
+    assertEquals(await post(task(t2, 'open')), 200)
+
+    let q = `.task.project=${p}&.tally=task.status`
+    let { sock, next } = await dial(q, 'agg:tile')
+    assertEquals((await next()).agg, { open: 2 })
+
+    // A status move: one recompute, one frame, both moved keys.
+    assertEquals(
+      await post([{ eid: t1, name: 'task', comp: { status: 'wip' } }]),
+      200,
+    )
+    assertEquals((await next()).agg, { open: 1, wip: 1 })
+
+    // A write to a component the line does NOT read must not stir the aggregate;
+    // the next frame the sub speaks is the one after it.
+    assertEquals(
+      await post([{ eid: t2, name: 'doc', comp: { title: 'retitled' } }]),
+      200,
+    )
+    assertEquals(await post([{ eid: t2, name: 'entity', comp: null }]), 200)
+    assertEquals((await next()).agg, { open: 0 })
+
+    sock.close()
+    await new Promise((r) => sock.onclose = r)
+  },
+)
+
+// `.count!` is the same machinery reduced to one number, under the empty key.
+slow('a count sub answers one number and maintains it', alone, async () => {
+  let p = uid(), t1 = uid(), t2 = uid()
+  let task = (eid: string) => [
+    { eid, name: 'doc', comp: { title: 'c', body: '' } },
+    { eid, name: 'task', comp: { status: 'open', project: p } },
+  ]
+  assertEquals(await post([{ eid: p, name: 'project', comp: {} }]), 200)
+  assertEquals(await post(task(t1)), 200)
+
+  let { sock, next } = await dial(
+    `.task.project=${p}&.count!`,
+    'agg:count',
+  )
+  assertEquals((await next()).agg, { '': 1 })
+
+  assertEquals(await post(task(t2)), 200)
+  assertEquals((await next()).agg, { '': 2 })
+
+  // Leaving the selection counts the same as dying.
+  assertEquals(
+    await post([{ eid: t2, name: 'task', comp: { project: null } }]),
+    200,
+  )
+  assertEquals((await next()).agg, { '': 1 })
 
   sock.close()
   await new Promise((r) => sock.onclose = r)

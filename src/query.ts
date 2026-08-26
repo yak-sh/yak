@@ -90,9 +90,10 @@ export type Pred = {
   refs?: boolean
   // An AGGREGATE projection rather than a filter: `agg` names the reduction
   // over this pred's column — `distinct` its non-empty values, `tally` each
-  // value's count. op is AGG, so matchQuery passes it through (the filter part
-  // selects the universe); aggOf()/tally()/aggregateSql() read the projection.
-  agg?: 'distinct' | 'tally'
+  // value's count. `count` reduces the SELECTION itself, so it names no column
+  // and leaves comp/prop empty. op is AGG, so matchQuery passes it through (the
+  // filter part selects the universe); aggOf()/tally()/aggregateSql() read it.
+  agg?: 'distinct' | 'tally' | 'count'
   // A FIELD PROJECTION rather than a filter: the columns each result row carries
   // beyond its eid (`.fields=pin.x,pin.z~`), so a partial-cache subscription
   // reads live values without holding the whole graph. op is PROJECT, matchQuery
@@ -337,16 +338,38 @@ export let ORDER = 'order'
 export let orderOf = (preds: Pred[]) => preds.find((p) => p.op == ORDER)?.value
 
 // An AGGREGATE directive rides the pred list like ORDER — `.distinct=domain`,
-// `.tally=domain`. matchQuery passes AGG through (true), so the OTHER preds
-// select the universe the aggregate reduces; a reader pulls the projection with
-// aggOf() and computes it with tally() (or aggregateSql server-side).
+// `.tally=domain`, `.count!`. matchQuery passes AGG through (true), so the OTHER
+// preds select the universe the aggregate reduces; a reader pulls the projection
+// with aggOf() and computes it with tally() (or aggregateSql server-side).
 export let AGG = 'agg'
 
+// `count` names no column, so its `at` is the empty hop — a reader branches on
+// `op`, never on whether `at` is populated.
 export let aggOf = (
   preds: Pred[],
-): { op: 'distinct' | 'tally'; at: Hop } | undefined => {
+): { op: 'distinct' | 'tally' | 'count'; at: Hop } | undefined => {
   let p = preds.find((p) => p.op == AGG)
   return p?.agg ? { op: p.agg, at: { comp: p.comp, prop: p.prop } } : undefined
+}
+
+// The components a pred list READS — the dirty test an aggregate subscription
+// applies to a committed batch: a change dirties the aggregate iff it touches a
+// component the selection or the aggregated column reads. `null` means "every
+// batch dirties it": a path hop, a reverse hop or a `.refs` union reads columns
+// on OTHER entities, which no comp-name overlap can name, so those recompute
+// unconditionally rather than answer stale. The spine (`entity`) and
+// `quarantined` are the caller's to add — every query reads them.
+export let predComps = (preds: Pred[]): Set<string> | null => {
+  let out = new Set<string>()
+  for (let p of preds) {
+    if (p.refs || p.at || p.rev) return null
+    if (p.op == NEVER || p.op == ORDER || p.op == PROJECT) continue
+    // `.count!` aggregates the selection, naming no column of its own.
+    if (p.op == AGG && !p.comp) continue
+    if (!p.comp) return null
+    out.add(p.comp)
+  }
+  return out
 }
 
 // The aggregate itself, over the rows a query matched: value → count, empties
@@ -662,6 +685,18 @@ export let preds = (token: string): Pred[] | null => {
     throw new Error(
       '.refs takes an id (.refs=T-3), presence (.refs!) or absence (.refs=)',
     )
+  }
+  // `.count!` — the plainest aggregate: how many entities the REST of the line
+  // selects, a number rather than a row set. It names no column, which is the
+  // whole difference from `.tally=`, so PRESENCE is the only spelling it takes.
+  //
+  // The vocabulary already owns a bare `count` (recall.count), so this claims
+  // exactly one spelling and leaves the rest: `.count>3` still filters that
+  // column, and `.recall.count!` still says the presence test this bare form
+  // used to mean. A directive winning a bare spelling outright would silently
+  // change what a saved board asks.
+  if (path == 'count' && op == '!') {
+    return [{ comp: '', prop: '', op: AGG, value: '', agg: 'count' }]
   }
   // `.distinct=domain` / `.tally=domain` — an aggregate PROJECTION over one
   // column, not a filter. Its column routes like any bare prop (or the explicit

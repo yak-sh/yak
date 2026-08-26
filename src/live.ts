@@ -2560,13 +2560,28 @@ export let chatFor = (actor: string, target: string): Ent | undefined =>
 // reads its key out of the shared map. Until the server has answered (and on
 // the no-socket paths — the TUI, a test), the local working-set count serves,
 // exactly the badge this replaces.
-type AggSet = { live: Signal<boolean>; map: Signal<Record<string, number>> }
+type AggSet = {
+  live: Signal<boolean>
+  map: Signal<Record<string, number>>
+  line: string
+  n: number
+}
 let aggSets = new Map<string, AggSet>()
+// Get-or-open, and RE-ASK when the line moved under a name that is already open
+// (a board's query edited beneath its tile). Re-asking keeps the SAME set, so
+// every reader stays bound to it and simply sees the answer go un-live and then
+// land again — the way boardQuery replaces a member sub without tearing down
+// its ownership.
 let aggQuery = (name: string, line: string): AggSet => {
   let found = aggSets.get(name)
   if (!found) {
-    found = { live: signal(false), map: signal({}) }
+    found = { live: signal(false), map: signal({}), line, n: 0 }
     aggSets.set(name, found)
+    ownBoard(name, line)
+  } else if (found.line != line) {
+    found.line = line
+    found.live.value = false
+    found.map.value = {}
     ownBoard(name, line)
   }
   return found
@@ -2578,6 +2593,57 @@ export let commentCount = (target: string): Signal<number> =>
       ? t.map.value[target] ?? 0
       : localEids([eq('comment', 'target', target)]).value.length
   })
+
+// An aggregate held for a VIEW's lifetime. The comment tally above is one
+// GLOBAL shape and stays open for the socket's life; an aggregate keyed by an
+// ENTITY (a board's status tally) has an unbounded key space, so its render
+// path holds and releases exactly like an eid-keyed query sub does (T-21489) —
+// the last drop closes the wire sub.
+export let holdAgg = (name: string, line: string): AggSet => {
+  let set = aggQuery(name, line)
+  set.n++
+  return set
+}
+export let dropAgg = (name: string) => {
+  let set = aggSets.get(name)
+  if (!set || --set.n > 0) return
+  aggSets.delete(name)
+  dropBoard(name)
+}
+
+// A board TILE renders status counts and nothing else, so it subscribes to the
+// COUNTS — never the members (T-22509: the Everything board streamed ~4.4k task
+// rows into every canvas showing its tile). The server maintains
+// `<query>&.tally=task.status` from the index; only a FULLSCREEN board opens the
+// member sub.
+//
+// Three answers, not two: a line to ask; `''` for the EMPTY query, which selects
+// nothing at every door, so its tally is known to be empty without asking; and
+// undefined for a query that does not PARSE — nothing to ask and nothing to
+// claim, which is what keeps a typo'd board from painting four confident zeros.
+export let boardTallyLine = (e: Ent): string | undefined => {
+  let q = String(e.board?.query ?? '').trim()
+  if (!q) return ''
+  try {
+    boardPreds(e)
+  } catch {
+    return undefined
+  }
+  return `${q}&.tally=task.status`
+}
+export let boardTallyName = (e: Ent) => `tally:${e.eid}`
+
+// The board's status counts as the server answers them, or undefined until it
+// has. Undefined is NOT zero: a tile paints no stats rather than four wrong
+// ones (the rail's Asks tile showed 0/0/0/0 while the sub held 62 rows). Read
+// during a render, so the signals it touches wake the tile when the tally moves.
+export let boardTally = (e: Ent): Record<string, number> | undefined => {
+  let line = boardTallyLine(e)
+  if (line == null) return undefined
+  if (!line) return {}
+  let t = aggQuery(boardTallyName(e), line)
+  return t.live.value ? t.map.value : undefined
+}
 
 type Folded = { eid: string; statuses: string }
 // The fold row for a (client, board) — a unique (client, board) pair, so the two

@@ -17,6 +17,7 @@ import {
   orderOf,
   parseQuery,
   pred,
+  predComps,
   preds,
   PROJECT,
   resolution,
@@ -464,6 +465,44 @@ Deno.test('an aggregate rides the pred list without filtering, read via aggOf', 
   assertEquals(distinctValues(rows, agg.at), ['Eng', 'Ops'])
   assertEquals(tally(rows, agg.at).get('Ops'), 2)
   assertEquals(tally(rows, agg.at).has(''), false)
+})
+
+Deno.test('.count! parses to an AGG over the selection, naming no column', () => {
+  assertEquals(preds('.count!'), [
+    { comp: '', prop: '', op: AGG, value: '', agg: 'count' },
+  ])
+  // It rides beside the filters that select the universe it counts.
+  let ps = parseQuery('.task.status=open&.count!')!
+  assertEquals(aggOf(ps), { op: 'count', at: { comp: '', prop: '' } })
+  assertEquals(ps.filter((p) => p.op != AGG).length, 1)
+  // It claims the PRESENCE spelling only: the vocabulary's own bare `count`
+  // (recall.count) still answers every other op, and the explicit spelling
+  // still says the presence test the bare form used to mean.
+  assertEquals(preds('.count>3')![0], {
+    comp: 'recall',
+    prop: 'count',
+    op: '>',
+    value: '3',
+  })
+  assertEquals(preds('.recall.count!')![0].comp, 'recall')
+})
+
+Deno.test('predComps names the dirty set, null where a pred reads elsewhere', () => {
+  let comps = (q: string) => {
+    let got = predComps(parseQuery(q))
+    return got && [...got].sort()
+  }
+  assertEquals(comps('.task.status=open&.tally=task.status'), ['task'])
+  // The count pred contributes nothing of its own; the filters name the set.
+  assertEquals(comps('.task.status=open&.count!'), ['task'])
+  assertEquals(comps('.comment!&.tally=comment.target'), ['comment'])
+  // The empty query reads nothing (it selects nothing at every door).
+  assertEquals(comps(''), [])
+  // A path, a reverse hop and a refs union all read columns on OTHER entities,
+  // which no comp name can cover — those recompute unconditionally.
+  assertEquals(comps('.assignee.title~=j&.count!'), null)
+  assertEquals(comps('.comments!&.count!'), null)
+  assertEquals(comps('.refs=T-3&.count!'), null)
 })
 
 // ---- projection (.fields) ----

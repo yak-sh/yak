@@ -407,7 +407,20 @@ let refsSql = (p: Pred): Sql | null => {
 // declines, since cast-to-text would disagree with the matcher's String(v).
 export let aggregateSql = (preds: Pred[]): Sql | null => {
   let agg = preds.find((p) => p.op == AGG)
-  if (!agg?.comp || !agg.prop) return null
+  if (!agg) return null
+  // `.count!` reduces the SELECTION, not a column: one indexed count over the
+  // same WHERE, answered under the empty key so every aggregate — count, tally,
+  // distinct — comes back as one value→count shape.
+  if (agg.agg == 'count') {
+    let built = build(preds, 'entity')
+    if (!built) return null
+    return {
+      sql: `select '' as value, count(*) as n from "entity"${built.joins}` +
+        ` where ${built.cond}${LIVE}`,
+      params: built.params,
+    }
+  }
+  if (!agg.comp || !agg.prop) return null
   let tag = tagOf(agg.comp, agg.prop)
   if (!['text', 'enum', 'eid'].includes(String(tag))) return null
   let built = build(preds, 'entity')
