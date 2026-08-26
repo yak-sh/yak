@@ -477,12 +477,13 @@ fn inbox(store: &Store, args: &[String]) -> i32 {
         None,
     );
     let mut items: Vec<yak_kernel::Row> = if sent {
-        // outbound: mail-comp wearers that never arrived from the edge
+        // outbound: mail-comp wearers that never arrived from the edge.
+        // rows_of_kind loads every mail row in bulk (one query per comp
+        // table, num order) — never row-at-a-time, the N+1 M-17862 forbids.
         let now = query::now_ms();
         store
-            .eids_of_kind("mail")
-            .iter()
-            .filter_map(|e| store.row(e))
+            .rows_of_kind("mail")
+            .into_iter()
             .filter(|r| {
                 r.comps.contains_key("mail")
                     && r.comps
