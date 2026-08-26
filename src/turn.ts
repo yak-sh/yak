@@ -1,6 +1,16 @@
 // The lifecycle hook's hot path: turn payload into the server's durable spool.
 // It deliberately imports nothing and waits on no server response — a busy
 // event loop cannot consume Claude's three-second hook budget.
+//
+// Concurrency (T-21949): many hook processes append while the server drains.
+// The old shape (bare O_APPEND writes + a rename-based take) could lose a
+// line: an appender that opened the spool just before drain renamed it wrote
+// into the taken file after drain had read it, and the remove threw the line
+// away. An advisory exclusive lock on the spool inode serializes every touch
+// — append, requeue, and drain's read+truncate — so lines neither tear nor
+// land in a file that has already been read. Drain holds the lock only for
+// the read+truncate and processes from memory afterwards, so appenders wait
+// microseconds, never on the server's work.
 
 export let turnOf = (body: Record<string, unknown>) =>
   body.hook_event_name == 'UserPromptSubmit'
@@ -9,6 +19,36 @@ export let turnOf = (body: Record<string, unknown>) =>
     ? 'idle'
     : undefined
 
+let locked = <T>(f: Deno.FsFile, body: () => T): T => {
+  f.lockSync(true)
+  try {
+    return body()
+  } finally {
+    f.unlockSync()
+  }
+}
+
+// One locked single-write append; shared by report and drain's requeue so
+// every writer honors the same lock and a line is one write() call.
+let append = (path: string, lines: string) => {
+  let f = Deno.openSync(path, { append: true, create: true, write: true })
+  try {
+    locked(f, () => f.writeSync(new TextEncoder().encode(lines)))
+  } finally {
+    f.close()
+  }
+}
+
+let readAll = (f: Deno.FsFile) => {
+  let chunks: Uint8Array[] = []
+  let buf = new Uint8Array(65536)
+  for (let n; (n = f.readSync(buf)) != null;) chunks.push(buf.slice(0, n))
+  let out = new Uint8Array(chunks.reduce((s, c) => s + c.length, 0))
+  let at = 0
+  for (let c of chunks) out.set(c, at), at += c.length
+  return new TextDecoder().decode(out)
+}
+
 export let report = (
   body: Record<string, unknown>,
   path = `${Deno.env.get('HOME')}/.tasks/turns.jsonl`,
@@ -16,38 +56,37 @@ export let report = (
   let sid = String(body.session_id ?? '')
   let turn = turnOf(body)
   if (!sid || !turn) return
-  Deno.writeTextFileSync(path, `${JSON.stringify({ sid, turn })}\n`, {
-    append: true,
-    create: true,
-  })
+  append(path, `${JSON.stringify({ sid, turn })}\n`)
 }
 
 export let drain = (
   act: (turn: { sid: string; turn: string }) => void,
   path = `${Deno.env.get('HOME')}/.tasks/turns.jsonl`,
 ) => {
-  let taken = `${path}.${crypto.randomUUID()}`
+  let f: Deno.FsFile
   try {
-    Deno.renameSync(path, taken)
+    f = Deno.openSync(path, { read: true, write: true })
   } catch (e) {
     if (e instanceof Deno.errors.NotFound) return
     throw e
   }
+  let lines: string[]
   try {
-    let lines = Deno.readTextFileSync(taken).split('\n').filter(Boolean)
-    for (let i = 0; i < lines.length; i++) {
-      try {
-        act(JSON.parse(lines[i]))
-      } catch (e) {
-        Deno.writeTextFileSync(path, `${lines.slice(i).join('\n')}\n`, {
-          append: true,
-          create: true,
-        })
-        throw e
-      }
-    }
+    lines = locked(f, () => {
+      let text = readAll(f)
+      f.truncateSync()
+      return text.split('\n').filter(Boolean)
+    })
   } finally {
-    Deno.removeSync(taken)
+    f.close()
+  }
+  for (let i = 0; i < lines.length; i++) {
+    try {
+      act(JSON.parse(lines[i]))
+    } catch (e) {
+      append(path, `${lines.slice(i).join('\n')}\n`)
+      throw e
+    }
   }
 }
 
