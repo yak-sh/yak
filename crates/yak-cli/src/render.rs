@@ -2,7 +2,7 @@
 // Parity target: T-22534's comp-nested frontmatter (96b532a).
 
 use chrono::{DateTime, Local};
-use yak_kernel::store::{Row, Rows};
+use yak_kernel::store::{Dep, Row, Rows};
 use yak_kernel::vocab::{vocab, PropType};
 use yak_kernel::Store;
 use serde_json::Value;
@@ -280,10 +280,67 @@ pub fn format_prop(
     }
 }
 
+// Every eid the page is about to name, gathered before any of them is read so
+// the whole set loads in one bulk pass rather than a probe per entity — the
+// page walked ~25 related entities through ~101 comp tables apiece (T-22589,
+// M-17862). The gather only has to be close: an eid it misses still resolves
+// through Rows::get, so a new mention costs speed, never accuracy.
+fn warm_page(rows: &Rows, row: &Row, deps: &[Dep], comments: &[String]) {
+    let v = vocab();
+    // what the frontmatter names: every {eid} column the row wears — `claim`
+    // included, which the frontmatter loop skips but claimant() resolves
+    let mut want: Vec<String> = vec![];
+    for (comp, cols) in &v.comps {
+        if comp == "entity" {
+            continue;
+        }
+        let Some(bag) = row.comps.get(comp).and_then(|x| x.as_object()) else {
+            continue;
+        };
+        for (prop, _) in cols.iter().filter(|(_, t)| t.is_ref()) {
+            if let Some(x) = bag.get(prop) {
+                want.push(scalar_str(x));
+            }
+        }
+    }
+    // what the edge and comment blocks name: the far end of every dep, and
+    // each comment
+    for d in deps {
+        want.push(if d.parent == row.eid {
+            d.child.clone()
+        } else {
+            d.parent.clone()
+        });
+    }
+    want.extend(comments.iter().cloned());
+    rows.warm(&want);
+    // Naming those reaches further, twice: said() resolves a session's
+    // persona, and a comment's author and instrument are themselves said().
+    // Two more waves close the recursion — face() is where it bottoms out.
+    for _ in 0..2 {
+        let mut next: Vec<String> = vec![];
+        for e in &want {
+            let Some(r) = rows.get(e) else { continue };
+            for (comp, prop) in
+                [("session", "persona"), ("created", "by"), ("created", "via")]
+            {
+                if let Some(x) = comp_get(&r, comp, prop) {
+                    next.push(scalar_str(x));
+                }
+            }
+        }
+        rows.warm(&next);
+        want = next;
+    }
+}
+
 // showMd, ported. `rows` resolves every eid a line names.
 pub fn show_md(store: &Store, row: &Row) -> String {
     let v = vocab();
     let rows = Rows::new(store);
+    let deps = store.deps_of(&row.eid);
+    let comments = store.comments_on(&row.eid);
+    warm_page(&rows, row, &deps, &comments);
     let mut fm: Vec<String> =
         vec![format!("id: {}", id_of(row)), format!("kind: {}", row.kind)];
     if let Some(spine) = row.comps.get("entity").and_then(|x| x.as_object()) {
@@ -328,7 +385,6 @@ pub fn show_md(store: &Store, row: &Row) -> String {
     if let Some(held) = claimant(&rows, row) {
         fm.push(format!("claim: {held}"));
     }
-    let deps = store.deps_of(&row.eid);
     let refs: Vec<_> = deps.iter().filter(|d| d.parent == row.eid).collect();
     let backs: Vec<_> = deps.iter().filter(|d| d.child == row.eid).collect();
     let mut seen: Vec<&str> = vec![];
@@ -365,7 +421,6 @@ pub fn show_md(store: &Store, row: &Row) -> String {
         out.push(String::new());
         out.push(body);
     }
-    let comments = store.comments_on(&row.eid);
     if !comments.is_empty() {
         out.push(String::new());
         out.push("## Comments".into());

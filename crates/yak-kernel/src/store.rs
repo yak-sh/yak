@@ -191,7 +191,6 @@ impl Store {
         if !self.has_table(kind) {
             return vec![];
         }
-        let v = vocab();
         let sql = format!(
             "select e.eid, e.num from {} t join entity e \
              on e.id = t.entity order by e.num",
@@ -199,6 +198,59 @@ impl Store {
         );
         let order: Vec<(String, Option<i64>)> =
             collect(&self.conn, &sql, [], |r| Ok((r.get(0)?, r.get(1)?)));
+        // the kind's own table IS the membership — sqlite reads it as a
+        // subquery, so the set never has to be carried through the string
+        self.fill(&format!("select entity from {}", q(kind)), order)
+    }
+
+    // The same bulk read for an arbitrary SET of eids — what a renderer
+    // resolving many related entities needs (T-22589). Rows come back for
+    // whichever eids the graph has, num order; the rest are simply absent,
+    // the way row() answers None.
+    pub fn rows_of(&self, eids: &[String]) -> Vec<Row> {
+        if eids.is_empty() {
+            return vec![];
+        }
+        // Membership is named by entity.id, not eid: every comp table is keyed
+        // on the integer, so an id list lets each per-comp query seek instead
+        // of scanning a table as long as the graph. Chunked because the eids
+        // are bound, and sqlite caps how many parameters one statement takes.
+        let mut order: Vec<(String, Option<i64>)> = vec![];
+        let mut ids: Vec<i64> = vec![];
+        for batch in eids.chunks(500) {
+            let holes: Vec<String> =
+                (1..=batch.len()).map(|i| format!("?{i}")).collect();
+            let sql = format!(
+                "select e.id, e.eid, e.num from entity e where e.eid in ({}) \
+                 order by e.num",
+                holes.join(",")
+            );
+            let got: Vec<(i64, String, Option<i64>)> = collect(
+                &self.conn,
+                &sql,
+                rusqlite::params_from_iter(batch.iter()),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            );
+            for (id, eid, num) in got {
+                ids.push(id);
+                order.push((eid, num));
+            }
+        }
+        if ids.is_empty() {
+            return vec![];
+        }
+        // integers straight from entity.id — nothing a caller spelled
+        let list: Vec<String> = ids.iter().map(|i| i.to_string()).collect();
+        self.fill(&list.join(","), order)
+    }
+
+    // The bulk read both rows_of_kind and rows_of are made of: one query per
+    // component table over a membership `t.entity in (<set>)`, filling a bag
+    // per entity. `set` is SQL — a subquery for a kind, an id list for a set.
+    // Column projection matches comp_row() exactly, so a row assembled here
+    // and a row probed there are the same row.
+    fn fill(&self, set: &str, order: Vec<(String, Option<i64>)>) -> Vec<Row> {
+        let v = vocab();
         let mut bags: HashMap<String, Map<String, Value>> = HashMap::new();
         for (eid, num) in &order {
             let mut spine = Map::new();
@@ -231,11 +283,11 @@ impl Store {
             }
             let sql = format!(
                 "select {} from {} t join entity __o on __o.id = t.entity{} \
-                 where t.entity in (select entity from {})",
+                 where t.entity in ({})",
                 sel.join(", "),
                 q(comp),
                 joins,
-                q(kind)
+                set
             );
             let t = profiling::sql(&sql);
             let mut got = 0usize;
@@ -408,6 +460,34 @@ impl<'a> Rows<'a> {
         let got = self.store.row(eid);
         self.cache.borrow_mut().insert(eid.into(), got.clone());
         got
+    }
+
+    // Load many eids in one bulk pass instead of a probe apiece (T-22589).
+    // Correctness never rides on this: an eid warm() misses still resolves
+    // through get(), so a renderer that forgets to name one loses speed, not
+    // accuracy — which is what makes the gather safe to keep approximate.
+    pub fn warm(&self, eids: &[String]) {
+        let want: Vec<String> = {
+            let seen = self.cache.borrow();
+            let mut asked: HashSet<&str> = HashSet::new();
+            eids.iter()
+                .filter(|e| !e.is_empty() && !seen.contains_key(*e))
+                .filter(|e| asked.insert(e.as_str()))
+                .cloned()
+                .collect()
+        };
+        if want.is_empty() {
+            return;
+        }
+        let got = self.store.rows_of(&want);
+        let mut cache = self.cache.borrow_mut();
+        for r in got {
+            cache.insert(r.eid.clone(), Some(r));
+        }
+        // an eid the graph does not have caches as a miss, the way get() does
+        for e in want {
+            cache.entry(e).or_insert(None);
+        }
     }
 }
 
