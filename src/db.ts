@@ -1120,13 +1120,16 @@ export let migrateRefs = (db: DatabaseSync) => {
     : []
   let staleBoards = boards.map((r) => ({ ...r, next: renameFilter(r.query) }))
     .filter((r) => r.next != r.query)
-  let kinds = ['memory', 'persona'].filter((table) => hasCol(db, table, 'eid'))
+  let kinds = ['memory', 'persona'].filter((table) =>
+    hasCol(db, table, 'entity')
+  )
   let teachings = hasCol(db, 'doc', 'body') && kinds.length
     ? prep(
       db,
-      `select eid, title, body from doc where ${
+      `select o.eid as eid, d.title, d.body
+       from doc d join entity o on o.id = d.entity where ${
         kinds.map((table) =>
-          `exists (select 1 from ${table} where ${table}.eid = doc.eid)`
+          `exists (select 1 from ${table} where ${table}.entity = d.entity)`
         ).join(' or ')
       }`,
     ).all() as { eid: string; title: string; body: string }[]
@@ -1212,16 +1215,6 @@ let rebuild = (db: DatabaseSync, name: string, ddl: string) => {
   db.exec('commit')
 }
 
-// mail.target shipped wearing an FK to entity(eid) — but it's a
-// death-'keep' column, and tombstoning deletes the spine row, so the
-// kept reference vetoed the whole delete batch (T-4593). Rebuild around
-// the FK-free ddl; no-ops once healed. Exported as the migration's seam.
-export let mendMail = (db: DatabaseSync) => {
-  if (ddlOf(db, 'mail')?.includes('target text references')) {
-    rebuild(db, 'mail', mailDdl)
-  }
-}
-
 // The same shape for tool_call's source list: a row the CHECK doesn't know
 // is dropped with a warning, and record() is by contract silent about its
 // own failures — so an unwidened live table would swallow the very reports
@@ -1257,8 +1250,8 @@ export let mendApply = (db: DatabaseSync) => {
 export let backfillOpened = (db: DatabaseSync) => {
   if (!hasCol(db, 'mail', 'read_at')) return
   db.exec(
-    `insert or ignore into opened (eid, at)
-       select eid, read_at from mail where read_at is not null`,
+    `insert or ignore into opened (entity, at)
+       select entity, read_at from mail where read_at is not null`,
   )
 }
 
@@ -1269,22 +1262,24 @@ export let backfillVia = (db: DatabaseSync) => {
   if (hasCol(db, 'comment', 'author_eid')) {
     db.exec(
       `update created set via = (
-         select author_eid from comment where comment.eid = created.eid
+         select e.id from comment c join entity e on e.eid = c.author_eid
+         where c.entity = created.entity
        )
        where via is null and exists (
          select 1 from comment
-         where comment.eid = created.eid and author_eid is not null
+         where comment.entity = created.entity and author_eid is not null
        )`,
     )
   }
   if (hasCol(db, 'memory', 'source_eid')) {
     db.exec(
       `update created set via = (
-         select source_eid from memory where memory.eid = created.eid
+         select e.id from memory m join entity e on e.eid = m.source_eid
+         where m.entity = created.entity
        )
        where via is null and exists (
          select 1 from memory
-         where memory.eid = created.eid and source_eid is not null
+         where memory.entity = created.entity and source_eid is not null
        )`,
     )
   }
@@ -1332,8 +1327,8 @@ export let backfillJournalTouch = (db: DatabaseSync) => {
 export let retireMemoryType = (db: DatabaseSync) => {
   if (!hasCol(db, 'memory', 'type')) return
   db.exec(
-    `insert or ignore into feedback (eid)
-       select eid from memory where type = 'feedback'`,
+    `insert or ignore into feedback (entity)
+       select entity from memory where type = 'feedback'`,
   )
   db.exec('alter table memory drop column type')
 }
@@ -1353,11 +1348,11 @@ export let retireProposal = (db: DatabaseSync) => {
   try {
     if (legacy) {
       db.exec(`
-        insert or ignore into proposed (eid, at, "by", via)
-        select t.eid,
+        insert or ignore into proposed (entity, at, "by", via)
+        select t.entity,
           coalesce(c.at, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
           c."by", c.via
-        from task t left join created c on c.eid = t.eid
+        from task t left join created c on c.entity = t.entity
         where t.proposal != 0
       `)
     }
@@ -1546,10 +1541,10 @@ export let migrateErrors = (db: DatabaseSync) => {
   try {
     for (let table of tables) {
       db.exec(
-        `insert into error (eid, at, message)
-           select eid, ${at[table]}, error from ${table}
+        `insert into error (entity, at, message)
+           select entity, ${at[table]}, error from ${table}
            where error is not null
-         on conflict(eid) do update set
+         on conflict(entity) do update set
            at = coalesce(excluded.at, error.at),
            message = excluded.message`,
       )
@@ -1558,7 +1553,7 @@ export let migrateErrors = (db: DatabaseSync) => {
       let missed = prep(
         db,
         `select 1 from ${table} source
-         left join error target on target.eid = source.eid
+         left join error target on target.entity = source.entity
          where source.error is not null
            and target.message is not source.error limit 1`,
       ).get()
@@ -1587,15 +1582,15 @@ export let migrateDelivery = (db: DatabaseSync) => {
   let win = (table: string, via: string) => {
     if (!hasCol(db, table, 'acted_at')) return
     db.exec(
-      `insert or ignore into delivered (eid, at, via)
-         select eid, acted_at, ${via} from ${table}
+      `insert or ignore into delivered (entity, at, via)
+         select entity, acted_at, ${via} from ${table}
          where acted_at is not null` +
         (hasCol(db, table, 'error') ? ` and error is null` : ``),
     )
     if (hasCol(db, table, 'error')) {
       db.exec(
-        `insert or ignore into error (eid, at, message)
-           select eid, acted_at, error from ${table} where error is not null`,
+        `insert or ignore into error (entity, at, message)
+           select entity, acted_at, error from ${table} where error is not null`,
       )
     }
   }
@@ -2755,13 +2750,14 @@ export let migrate = (db: DatabaseSync) => {
     addCol('dependency', 'ord', 'ord integer')
     // The per-type delivery receipts become the shared delivered/error
     // components, and the per-type recipient columns the shared deliver.to.
-    // Both before mendMail: a mail rebuild must see the trimmed shape.
     migrateErrors(db)
     migrateDelivery(db)
     migrateDeliver(db)
-    mendMail(db)
+    // The FK-era mail rebuild (mendMail, T-4593) is retired: migrateToIdKeys
+    // rebuilds mail to the canonical ddl first, so no db can reach here still
+    // wearing the eid FK.
     // Mend the inbound letters an earlier migrateDeliver stranded in deliver{to}
-    // (T-15110). After mendMail so it reads the rebuilt mail table.
+    // (T-15110).
     healInboundDeliver(db)
     mendCalls(db)
     mendApply(db)

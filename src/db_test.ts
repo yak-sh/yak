@@ -25,7 +25,7 @@ let {
   liveDb,
   locate,
   mendCalls,
-  mendMail,
+
   migrateBoardsToProjects,
   migrateErrors,
   mintEpoch,
@@ -2487,46 +2487,9 @@ Deno.test('mail survives its subject: death keeps the reference', () => {
   assertEquals(comp(m, 'mail')?.target, t) // history stands
 })
 
-// The FK-era mail table vetoed that delete (T-4593); open() heals a live
-// db through mendMail — rebuild once, then never again.
-slow('mendMail: rebuilds the FK-era table, no-ops when healed', () => {
-  let d = fresh()
-  // regress mail to the shape live dbs shipped with (FK on target)
-  d.exec('drop table mail')
-  // The FK-era shape, already trimmed of acted_at/error/to the way open()'s
-  // migrateDelivery + migrateDeliver leave it before mendMail runs (D-14945);
-  // the FK on target is the bug this rebuild heals.
-  d.exec(`create table mail (
-    eid        text primary key references entity(eid),
-    "from"     text,
-    target text references entity(eid),
-    to_addr    text,
-    message_id text, received_at text, verified integer)`)
-  // open() appends the post-FK-era columns (addCol) BEFORE mendMail runs,
-  // so the stale table always matches the rebuild ddl's shipping order.
-  d.exec('alter table mail add column reply_to text')
-  d.exec('alter table mail add column sent_id text')
-  d.exec('alter table mail add column in_reply_to text')
-  let t = uid(), m = uid()
-  apply(d, [
-    { eid: t, name: 'doc', comp: { title: 'subject' } },
-    { eid: m, name: 'mail', comp: { target: t } },
-    { eid: m, name: 'deliver', comp: { to: 'jeff@x.test' } },
-  ])
-  assertThrows(() => apply(d, [{ eid: t, name: 'entity', comp: null }])) // the bug
-  mendMail(d)
-  apply(d, [{ eid: t, name: 'entity', comp: null }]) // healed
-  let row = () =>
-    d.prepare(`select ${refEid('target')} as target from mail where ${OWNED}`)
-      .get(m)
-  assertEquals(row(), { target: t }) // rows copied whole, ref kept
-  let ddl = () =>
-    d.prepare(`select sql from sqlite_master where name = 'mail'`).get()
-  let healed = ddl()
-  mendMail(d) // already-fixed db: a no-op
-  assertEquals(ddl(), healed)
-  assertEquals(row(), { target: t })
-})
+// The FK-era mail rebuild (mendMail, T-4593) is retired: migrateToIdKeys
+// rebuilds mail to the canonical ddl before that seam, so the eid-FK shape
+// can no longer reach it.
 
 // The same frozen-check disease on tool_call: a live db's source list can
 // predate a new producer, and a dropped row is the one report nobody else was
