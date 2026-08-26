@@ -257,7 +257,11 @@ let membersChanged = (a: Set<string>, b: Set<string>) =>
 // Values are already eids; findEid passes an eid through verbatim.
 let predLine = (p: Pred): string | undefined => {
   if (p.refs) return p.op == '' ? `.refs=${p.value}` : undefined
-  if (p.fields || p.at || p.rev || !p.comp) return undefined
+  if (p.fields || p.at || p.rev) return undefined
+  // A shared-ref equality (`.client=X` — query.ts sharedRef routes comp '')
+  // is one read concept across every owning component; the grammar already
+  // speaks it, and the round-trip proof below still gates the wire.
+  if (!p.comp) return p.prop && p.op == '' ? `.${p.prop}=${p.value}` : undefined
   if (p.op == EXISTS && p.prop == '') return `.${p.comp}!`
   if (p.prop == '') return undefined
   if (p.op == '') return `.${p.comp}.${p.prop}=${p.value}`
@@ -2478,8 +2482,25 @@ export let sessionRows = (): [string, Session][] =>
     let s = sessionOf(row(eid).value ?? {})
     return s ? [[eid, s] as [string, Session]] : []
   })
-export let shelfFor = (client: string): string | undefined =>
-  queryEids([eq('shelf', 'client', client)]).value[0]
+export let shelfFor = (client: string): string | undefined => {
+  ensureClientRows(client)
+  return localEids([eq('shelf', 'client', client)]).value[0]
+}
+
+// THIS tab's own screen-state rows — cursor, camera, fold, shelf: every
+// component whose `client` column names this browser — streamed by ONE small
+// server sub per tab (T-21490, step 3 of D-21486). Held for the tab's LIFE: the
+// key space is exactly one value (this client's uuid), so the eid-keyed
+// teardown rule (T-21489) doesn't bite — O(tabs) wire subs, not O(rows) — and
+// the singleton readers stay LOCAL lookups over the rows the sub streams in. A
+// per-shape wire sub here would accumulate (a fold sub per board visited);
+// resolving locally without the sub would under-report on a partial cache.
+let clientSubs = new Set<string>()
+export let ensureClientRows = (client: string) => {
+  if (!client || clientSubs.has(client)) return
+  clientSubs.add(client)
+  holdQuery(resolveRefs(parseQuery(`.client=${client}`), findEid))
+}
 
 // The comments aimed HERE — every entity whose `comment.target` is this eid,
 // an eid EQUALITY the refs index answers in O(result). A face subscribes to its
@@ -2529,12 +2550,14 @@ export let commentCount = (target: string): Signal<number> =>
 
 type Folded = { eid: string; statuses: string }
 // The fold row for a (client, board) — a unique (client, board) pair, so the two
-// eid EQUALITIES the refs index answers narrow to ≤1 row. queryEids owns
-// MEMBERSHIP (the fold's birth/death for this pair wakes the face); its live
-// `statuses` field rides the fold's own row signal, so a collapse/expand edit
-// wakes the face too without re-testing the whole cache.
+// eid EQUALITIES the refs index answers narrow to ≤1 row. Resolved LOCALLY over
+// the rows the tab's client sub streams (ensureClientRows — a wire sub per
+// board visited would accumulate, T-21490); membership wakes the face, and the
+// live `statuses` field rides the fold's own row signal, so a collapse/expand
+// edit wakes the face too without re-testing the whole cache.
 export let foldFor = (client: string, board: string): Folded | undefined => {
-  let eid = queryEids([
+  ensureClientRows(client)
+  let eid = localEids([
     eq('fold', 'client', client),
     eq('fold', 'board', board),
   ]).value[0]
@@ -2689,27 +2712,36 @@ export let toPlane = (clientX: number, clientY: number, rect: DOMRect) => {
   }
 }
 
-// This client's camera over one canvas, if it exists yet — resolved through the
-// query door (both {eid} columns anchor the derived index) rather than a
-// whole-cache scan, so a partial cache still finds the row the graph holds.
-export let myCamera = (client: string, canvas: string) =>
-  queryEids([eq('camera', 'client', client), eq('camera', 'canvas', canvas)])
+// This client's camera over one canvas, if it exists yet — resolved LOCALLY
+// (both {eid} columns anchor the derived index) over the rows the tab's client
+// sub streams (T-21490), so a partial cache still finds the row the graph holds
+// without a wire sub per canvas visited.
+export let myCamera = (client: string, canvas: string) => {
+  ensureClientRows(client)
+  return localEids([
+    eq('camera', 'client', client),
+    eq('camera', 'canvas', canvas),
+  ])
     .value
     .map((eid) => cache.peek()[eid]?.camera)
     .find((c) => !!c)
+}
 
 // This client's cursor — WHERE it's looking, one row per client (T-12788).
-// Resolved through the query door (the client column anchors the derived unique
-// index), never a whole-cache scan, so reading it in nav.tsx's follow effect
-// stays O(1) and the hot render path never pays (M-17862). Reactive on BOTH the
+// Resolved LOCALLY (the client column anchors the derived unique index) over
+// the rows the tab's client sub streams (T-21490), never a whole-cache scan, so
+// reading it in nav.tsx's follow effect stays O(1) and the hot render path
+// never pays (M-17862). Reactive on BOTH the
 // eid set (queryEids) AND the row's content (the per-row signal, not a peek), so
 // an agent moving THIS cursor's target re-fires the follow — a peek would miss a
 // same-eid target change, the whole point of "show you something".
-export let myCursor = (client: string) =>
-  queryEids([eq('cursor', 'client', client)])
+export let myCursor = (client: string) => {
+  ensureClientRows(client)
+  return localEids([eq('cursor', 'client', client)])
     .value
     .map((eid) => row(eid).value?.cursor)
     .find((c) => !!c)
+}
 
 // Who this browser is: a client entity, its uuid minted into localStorage on
 // first visit. The db rows appear when the camera first persists.

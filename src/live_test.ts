@@ -30,6 +30,8 @@ import {
   jobOf,
   landObservation,
   landSub,
+  myCamera,
+  myCursor,
   myMode,
   observation,
   openDeps,
@@ -2414,4 +2416,91 @@ Deno.test('socketStale: fresh OPEN is live, silence or non-OPEN is stale', () =>
   assert(!socketStale(OPEN, 0, 60_000, 60_000)) // exactly the window, strict >
   assert(socketStale(WebSocket.CONNECTING, 10_000, 10_000, 60_000)) // not OPEN
   assert(socketStale(WebSocket.CLOSED, 10_000, 10_000, 60_000))
+})
+
+// T-21490: per-client singletons — cursor, camera, fold, shelf — ride ONE small
+// server sub per tab (`.client=<uuid>`, the shared-ref scan query.ts already
+// speaks), held for the tab's life; the readers stay LOCAL lookups over the
+// rows it streams, so visiting boards or canvases opens no further wire subs.
+Deno.test('client singletons: one tab sub, local reads, isolation (T-21490)', () => {
+  let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
+  ;(globalThis as { WebSocket: unknown }).WebSocket = class {
+    readyState = 0
+    onopen: unknown = null
+    onmessage: unknown = null
+    onclose: unknown = null
+    send() {}
+    addEventListener() {}
+    close() {}
+  }
+  let probe =
+    (globalThis as unknown as { __probe: { subN: () => number } }).__probe
+  let A = 'aaaa0000-0000-4000-8000-0000000000aa'
+  let B = 'bbbb0000-0000-4000-8000-0000000000bb'
+  let CV = 'cccc0000-0000-4000-8000-0000000000cc'
+  let T = 'eeee0000-0000-4000-8000-0000000000ee'
+  let b1 = 'b1b10000-0000-4000-8000-0000000000b1'
+  let b2 = 'b2b20000-0000-4000-8000-0000000000b2'
+  try {
+    cache.value = {
+      [T]: { entity: { eid: T, num: 1 }, canvas: { eid: T } },
+      [CV]: { entity: { eid: CV, num: 2 }, canvas: { eid: CV } },
+      ca: {
+        entity: { eid: 'ca', num: 3 },
+        cursor: { eid: 'ca', client: A, target: T },
+      },
+      fa: {
+        entity: { eid: 'fa', num: 4 },
+        fold: { eid: 'fa', client: A, board: b1, statuses: 'open' },
+      },
+      sa: { entity: { eid: 'sa', num: 5 }, shelf: { eid: 'sa', client: A } },
+      ka: {
+        entity: { eid: 'ka', num: 6 },
+        camera: {
+          eid: 'ka',
+          client: A,
+          canvas: CV,
+          x: 7,
+          y: 8,
+          zoom: 1,
+          w: 1,
+          h: 1,
+        },
+      },
+      cb: {
+        entity: { eid: 'cb', num: 7 },
+        cursor: { eid: 'cb', client: B, target: CV },
+      },
+    }
+    // The sub line is the shared-ref scan, proven round-trippable to the wire.
+    let preds = resolveRefs(parseQuery(`.client=${A}`), findEid)
+    assertEquals(predsToQuery(preds), `.client=${A}`)
+    let n0 = probe.subN()
+    // Every singleton read for A answers A's rows through ONE wire sub.
+    assertEquals(myCursor(A)?.target, T)
+    assertEquals(foldFor(A, b1)?.statuses, 'open')
+    assertEquals(foldFor(A, b2), undefined) // a second board: no second sub
+    assertEquals(shelfFor(A), 'sa')
+    assertEquals(myCamera(A, CV)?.x, 7)
+    assertEquals(probe.subN(), n0 + 1)
+    // Isolation: A's reads never surface B's rows; B's first read adds ITS sub.
+    assertEquals(myCursor(B)?.target, CV)
+    assertEquals(probe.subN(), n0 + 2)
+    // The tab sub streams a new fold row for A — the local reader sees it.
+    landSub({
+      sub: `q:${JSON.stringify(preds)}`,
+      changes: [
+        { eid: 'f2', name: 'entity', comp: { eid: 'f2', num: 9 } },
+        {
+          eid: 'f2',
+          name: 'fold',
+          comp: { eid: 'f2', client: A, board: b2, statuses: 'wip' },
+        },
+      ],
+    })
+    assertEquals(foldFor(A, b2)?.statuses, 'wip')
+    assertEquals(probe.subN(), n0 + 2) // still no per-shape subs
+  } finally {
+    ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
+  }
 })
