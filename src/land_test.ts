@@ -316,3 +316,57 @@ slow(
     }
   },
 )
+
+// A run whose spawn REJECTS (EAGAIN under load, a vanished binary) must come
+// back as a failed Result, not an unhandled rejection crashing land after its
+// merge — the T-22282 shape. The first call land makes is need('find
+// worktree'), so the guard surfaces as that labeled error.
+Deno.test('a spawn-level failure is a failed result, never a crash', async () => {
+  await assertRejects(
+    () =>
+      land({
+        ...quiet,
+        run: () => Promise.reject(new Error("Failed to spawn 'git'")),
+      }),
+    Error,
+    'find worktree failed',
+  )
+})
+
+slow('a transiently failing push publishes on the retry', async () => {
+  let r = await setup()
+  try {
+    let bare = await withUpstream(r)
+    let pushes = 0
+    let real = async (bin: string, args: string[], cwd: string) => {
+      if (args[0] == 'push' && ++pushes == 1) {
+        return { code: 1, out: '', err: 'transient spawn blip' }
+      }
+      let out = await new Deno.Command(bin, {
+        args,
+        cwd,
+        stdout: 'piped' as const,
+        stderr: 'piped' as const,
+      }).output()
+      return {
+        code: out.code,
+        out: new TextDecoder().decode(out.stdout),
+        err: new TextDecoder().decode(out.stderr),
+      }
+    }
+    let warned = ''
+    let outcome = await land({
+      cwd: r.tree,
+      run: real,
+      write: (text, error) => {
+        if (error && text.includes('publish')) warned = text
+      },
+    })
+    assert('landed' in outcome)
+    assertEquals(pushes, 2)
+    assertEquals(warned, '')
+    assertEquals(await command(bare, 'rev-parse', 'main'), outcome.landed)
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
