@@ -210,8 +210,6 @@ slow(
         JSON.stringify(watching.observations()).includes('cursor'),
         false,
       )
-      let snap = await (await fetch(`http://${U}/snapshot`)).text()
-      assertEquals(snap.includes(generation), false)
     } finally {
       watching.close()
       elsewhere.close()
@@ -577,13 +575,7 @@ slow('entry shadows carry the lazy partition', alone, async () => {
       carried.find((c) => c.name == 'content')?.comp?.body,
       'visible from the partition',
     )
-    // The root SNAPSHOT still omits the partition — that transport optimization
-    // is preserved (T-16847 keeps root-snapshot partitioning intact).
-    let snap = await (await fetch(`http://${U}/snapshot`)).json() as {
-      changes: { eid: string }[]
-    }
-    assertEquals(snap.changes.some((c) => c.eid == entry), false)
-    // But the root /query now REACHES the partition when the query names it —
+    // The root /query REACHES the partition when the query names it —
     // the whole point of T-16847; the empty root of old was the bug that made
     // graph_query answer `.entry.session=X` with [] over hundreds of entries.
     let root = await fetch(
@@ -892,31 +884,27 @@ slow(
   },
 )
 
-// `deps=1` is the only door outside /snapshot that carries an entity's OWN
-// edges — `task show` prints its requires:/referenced by: blocks out of them,
-// and could not be narrowed without it. It reads the edge table keyed by the
-// hits, where /snapshot returns every edge in the graph; so what it says about
-// one entity must be edge for edge what the graph-out door says.
+// `deps=1` is the door that carries an entity's OWN edges — `task show` prints
+// its requires:/referenced by: blocks out of them. It reads the edge table
+// keyed by the hits, and must report the stored edges AND the derived ones.
 //
 // Derived `reads` are the half that would go missing quietly: home is the
-// one truth, so snapshot() computes a project→persona edge on its way OUT
+// one truth, so snapshot() computes a project→persona edge on its way out
 // rather than storing it, and a narrow door reading only the `dependency`
-// table drops it with nothing to see anywhere.
+// table would drop it — deps=1 has to surface it the same way.
 type Dep = { parent: string; type: string; child: string }
 let sentences = (deps: Dep[], eid: string) =>
   deps.filter((d) => d.parent == eid || d.child == eid)
     .map((d) => `${d.parent} ${d.type} ${d.child}`).sort()
 
-let bothEdges = async (eid: string) => {
+let edgesOf = async (eid: string) => {
   let hits = await (await fetch(`http://${U}/query?id=${eid}&deps=1`))
     .json() as { deps: Dep[] }[]
-  let snap = await (await fetch(`http://${U}/snapshot`))
-    .json() as { deps: Dep[] }
-  return [sentences(hits[0].deps, eid), sentences(snap.deps, eid)]
+  return sentences(hits[0].deps, eid)
 }
 
 slow(
-  'query: deps= reports the edges /snapshot reports, derived reads included',
+  'query: deps= reports stored and derived edges',
   alone,
   async () => {
     let a = task({ status: 'open' })
@@ -942,17 +930,12 @@ slow(
         comp: { type: 'contains', child: common },
       },
     ])
-    for (let eid of [a.eid, b.eid, proj, common, spec]) {
-      let [door, snap] = await bothEdges(eid)
-      assertEquals(door, snap, `deps disagreed about ${eid}`)
-    }
-    // Stated outright, or the comparison above passes on two empty lists: the
-    // stored edge both ways round, and the specialist's derived one — while
+    // The stored edge both ways round, and the specialist's derived one — while
     // the common persona rides its `contains` and derives nothing on top.
-    assertEquals((await bothEdges(a.eid))[0], [`${a.eid} requires ${b.eid}`])
-    assertEquals((await bothEdges(b.eid))[0], [`${a.eid} requires ${b.eid}`])
-    assertEquals((await bothEdges(spec))[0], [`${proj} reads ${spec}`])
-    assertEquals((await bothEdges(common))[0], [`${proj} contains ${common}`])
+    assertEquals(await edgesOf(a.eid), [`${a.eid} requires ${b.eid}`])
+    assertEquals(await edgesOf(b.eid), [`${a.eid} requires ${b.eid}`])
+    assertEquals(await edgesOf(spec), [`${proj} reads ${spec}`])
+    assertEquals(await edgesOf(common), [`${proj} contains ${common}`])
 
     // and a backlink is a backlink whatever made the edge: the derived one
     // names its project the same way the stored one does.
