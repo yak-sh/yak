@@ -147,9 +147,11 @@ Deno.test('scribe — scribeSpawn over the scoped read equals the snapshot', asy
   let full = scribeSpawn(rows(snap), snap.deps, now)
 
   // the stub session makes a spawn due on both paths
-  if (!scoped || !full) throw new Error('expected a scribe spawn')
+  if (!scoped.changes || !full.changes) {
+    throw new Error('expected a scribe spawn')
+  }
   assertEquals(
-    norm({ eid: scoped[0].eid, changes: scoped }),
-    norm({ eid: full[0].eid, changes: full }),
+    norm({ eid: scoped.observed!, changes: scoped.changes }),
+    norm({ eid: full.observed!, changes: full.changes }),
   )
 })

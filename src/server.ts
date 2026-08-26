@@ -84,7 +84,7 @@ import {
   mailIdOf,
   mayStamp,
 } from './inbound.ts'
-import { scribeSweep } from './scribe.ts'
+import { SCRIBE } from './scribe.ts'
 import { dispatchSweep } from './dispatch.ts'
 import { ruled } from './spawnrule.ts'
 import { embedSweep, similarTo } from './embed.ts'
@@ -165,6 +165,7 @@ import {
 import { liveFrame } from './wire.ts'
 import { nativeSoon, nativeSweep, noticeAccepted } from './tmux.ts'
 import {
+  registerSystem,
   roleAttention,
   roleBoot,
   roleClaim,
@@ -173,6 +174,7 @@ import {
   rolePersona,
   roleRemoved,
   roleSession,
+  systemSweep,
 } from './roles.ts'
 import { prune as pruneTree, reap as reapProbes, sweep } from './probes.ts'
 import { loadPlugins, pluginSpecifiers } from './plugins.ts'
@@ -1974,6 +1976,8 @@ on('role', {
     wake_policy: roleConfig(cast),
     wake_target: roleConfig(cast),
     retry_at: roleConfig(cast),
+    quiet: roleConfig(cast),
+    cooldown: roleConfig(cast),
   },
   removed: roleRemoved(cast),
   sweep: { pending: '1' },
@@ -2433,10 +2437,14 @@ console.log(
 )
 
 // The scribe (scribe.ts): when wrap stubs wait, spawn the desk — a
-// session wearing the scribe persona writes the briefs and memories.
-// Ten-minute tick; the sweep's own throttle keeps it to one desk an
-// hour. Graduates to a `system` entity under T-3906 with the others.
-tick('scribe', () => scribeSweep(cast), 10 * 60_000)
+// session wearing the scribe persona writes the briefs and memories. A
+// system role (T-18728): registered with roles.ts, its on/off and
+// throttle live as role data on the scribe-desk entity, and each pass
+// stamps its decision there. The ten-minute tick is the cadence that
+// carries its time-based trigger; the throttle keeps it to one desk an
+// hour regardless.
+registerSystem(SCRIBE)
+tick('system', () => systemSweep(cast), 10 * 60_000)
 
 // Embeddings (embed.ts): every non-comment doc keeps a semantic vector,
 // refreshed a few seconds after its text moves — that's what lets a

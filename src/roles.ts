@@ -14,7 +14,7 @@
 import { createHash } from 'node:crypto'
 import { childPath } from './agent_env.ts'
 import { trouble } from './adapters.ts'
-import { apply, cursorOf, db, readComp, record } from './db.ts'
+import { apply, cursorOf, db, locate, readComp, record } from './db.ts'
 import { localQuery, personaGraph } from './graph_query.ts'
 import { isRef } from './props.ts'
 import { errorChange, healthChange } from './deliver.ts'
@@ -1267,12 +1267,108 @@ let reconcileWake = async (
   if (auto && await pendingForScope(c.scope)) startManaged(c, hash, cast, deps)
 }
 
+// ——— System roles (D-18722 part C, T-18727): in-process spawn-on-trigger ———
+// A system role's work runs IN THIS PROCESS — no pane, no pinned session.
+// The predicate and the work stay CODE, registered here (the effects.ts
+// registry pattern); on/off (role.state), the throttle values (role.quiet /
+// role.cooldown, seconds), and the run record (decision/reason/observed plus
+// the error facet — the same stamp operator roles get) are graph DATA on the
+// role entity. The registry binds by alias slug, so the role entity is
+// owner-mintable: while it is absent the handler runs on its code defaults and
+// nothing is stamped (there is nowhere to stamp) — exactly the pre-port sweep.
+
+export type SystemTuning = { quiet: number; cooldown: number }
+export type SystemSpec = {
+  alias: string // the role entity's alias slug, and the registry key
+  defaults: SystemTuning // seconds; a null graph column falls back here
+  run: (t: SystemTuning, cast: Cast) => { reason: string; observed?: string }
+}
+
+let systems = new Map<string, SystemSpec>()
+export let registerSystem = (s: SystemSpec) => systems.set(s.alias, s)
+
+// The registered spec whose alias names this entity — null for every operator
+// role. Resolved through locate per ask (the registry stays small), so the
+// binding follows the alias wherever the owner points it.
+let systemOf = (eid: string): SystemSpec | undefined => {
+  for (let s of systems.values()) if (locate(db, s.alias) == eid) return s
+  return undefined
+}
+
+// One system reconcile: gate on state, run the handler with graph-tuned
+// values, record the decision. A throw stamps the error facet and keeps the
+// role row as the place the failure is read (M-16612) — the next pass retries.
+let reconcileSystem = (
+  eid: string,
+  spec: SystemSpec,
+  cast: Cast,
+  deps: RoleDeps,
+) => {
+  let row = db.prepare(`select state, quiet, cooldown from role where ${OWNED}`)
+    .get(eid) as
+      | { state: string; quiet: number | null; cooldown: number | null }
+      | undefined
+  if (!row) return
+  if (row.state != 'running') {
+    stamp(eid, {
+      decision: 'skip',
+      reason: `state ${row.state}`,
+      observed: null,
+      decided_at: deps.now(),
+    }, cast)
+    return
+  }
+  try {
+    let out = spec.run({
+      quiet: Number(row.quiet ?? spec.defaults.quiet),
+      cooldown: Number(row.cooldown ?? spec.defaults.cooldown),
+    }, cast)
+    stamp(eid, {
+      decision: out.observed ? 'spawn' : 'skip',
+      reason: out.reason,
+      observed: out.observed ?? null,
+      decided_at: deps.now(),
+      error: null,
+    }, cast)
+  } catch (e) {
+    stamp(eid, { error: String(e).slice(0, 2000) }, cast)
+  }
+}
+
+// The system tick: every registered role gets a reconcile pass — the cadence
+// that carries time-based triggers (quiet elapsing, cooldown expiring), which
+// no graph change announces. Scheduler-as-data (T-18725) subsumes this tick
+// when it lands. A spec with no role row in the graph runs bare on its code
+// defaults — the half-seeded graph behaves exactly as before the port.
+export let systemSweep = (cast: Cast, deps: RoleDeps = defaults) => {
+  for (let spec of systems.values()) {
+    let eid = locate(db, spec.alias)
+    if (eid && readComp(db, eid, 'role')) {
+      reconcile(eid, cast, deps)
+        .catch((e) => console.warn(`system role ${spec.alias} —`, e))
+    } else {
+      try {
+        spec.run(spec.defaults, cast)
+      } catch (e) {
+        console.warn(`${spec.alias} sweep —`, e)
+      }
+    }
+  }
+}
+
 let flights = new Set<string>()
 
 let reconcile = async (eid: string, cast: Cast, deps: RoleDeps) => {
   if (flights.has(eid)) return
   flights.add(eid)
   try {
+    // A system role never reaches the operator machinery: no pane, no config()
+    // repo demands, no pinning — its whole reconcile is the in-process handler.
+    let spec = systemOf(eid)
+    if (spec) {
+      reconcileSystem(eid, spec, cast, deps)
+      return
+    }
     let wanted = db.prepare(`select state, retry_at from role where ${OWNED}`)
       .get(eid) as { state: string; retry_at: string | null } | undefined
     if (!wanted) {
@@ -1390,6 +1486,9 @@ let deadline = (eid: string, cast: Cast) => {
   let role = db.prepare(`select state, surface from role where ${OWNED}`)
     .get(eid) as { state: string; surface: string } | undefined
   if (!role || role.state != 'running' || role.surface != 'native') return
+  // A system role has no pane to keep alive — the 2s liveness loop is the
+  // operator-pane watchdog, and arming it here would poll the handler forever.
+  if (systemOf(eid)) return
   deadlines.set(
     eid,
     setTimeout(() => {

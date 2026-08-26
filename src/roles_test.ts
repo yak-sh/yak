@@ -20,7 +20,7 @@ Deno.mkdirSync(`${tasksHome}/.deno/bin`, { recursive: true })
 Deno.writeTextFileSync(`${tasksHome}/.deno/bin/task`, '')
 Deno.chmodSync(`${tasksHome}/.deno/bin/task`, 0o755)
 
-let { apply, db, journalOf } = await import('./db.ts')
+let { apply, db, journalOf, readComp } = await import('./db.ts')
 let { append, readEntries } = await import('./entries.ts')
 let {
   nativeProviderArgs,
@@ -38,7 +38,9 @@ let {
   roleRemoved,
   rolesSweep,
   ownerSession,
+  registerSystem,
   starting,
+  systemSweep,
   styleArgs,
   windowOf,
   ventureOf,
@@ -1414,4 +1416,70 @@ Deno.test('config drift defers under a live native operator, lands on restart', 
   let now = panesOf(role)
   assertEquals(now.length, 1)
   assert(now[0] != pane0) // rolled to a fresh pane carrying the new config
+})
+
+// ——— System roles (D-18722 part C): in-process, tunables + record as data ———
+Deno.test('system role: bare defaults, graph tunables, and the run record', async () => {
+  let calls: { quiet: number; cooldown: number }[] = []
+  let outcome: { reason: string; observed?: string } = { reason: 'nothing' }
+  let boom: string | undefined
+  registerSystem({
+    alias: 'test-sweeper',
+    defaults: { quiet: 900, cooldown: 3600 },
+    run: (t) => {
+      calls.push(t)
+      if (boom) throw new Error(boom)
+      return outcome
+    },
+  })
+  // no role entity in the graph: the handler runs bare on its code defaults
+  systemSweep(cast, deps)
+  assertEquals(calls.at(-1), { quiet: 900, cooldown: 3600 })
+
+  // a role row binds by alias: tunables come from the graph, the pass stamps
+  let role = uid()
+  apply(db, [
+    { eid: role, name: 'doc', comp: { title: 'sweeper', body: '' } },
+    { eid: role, name: 'alias', comp: { slug: 'test-sweeper' } },
+    {
+      eid: role,
+      name: 'role',
+      comp: { state: 'running', surface: 'native', quiet: 60, cooldown: 120 },
+    },
+  ])
+  systemSweep(cast, deps)
+  await until(() => calls.length == 2, { label: 'the tuned pass' })
+  assertEquals(calls.at(-1), { quiet: 60, cooldown: 120 })
+  let row = () => readComp(db, role, 'role') as Record<string, unknown>
+  assertEquals(row().decision, 'skip')
+  assertEquals(row().reason, 'nothing')
+
+  // a spawn records what it observed
+  outcome = { reason: '1 waiting', observed: role }
+  systemSweep(cast, deps)
+  await until(() => row().decision == 'spawn', { label: 'the spawn record' })
+  assertEquals(row().reason, '1 waiting')
+  assertEquals(row().observed, role)
+
+  // a throw stamps the error facet; the next healthy pass clears it
+  boom = 'the desk is on fire'
+  systemSweep(cast, deps)
+  await until(
+    () => !!readComp(db, role, 'error'),
+    { label: 'the error stamp' },
+  )
+  boom = undefined
+  systemSweep(cast, deps)
+  await until(
+    () => !readComp(db, role, 'error'),
+    { label: 'the error clear' },
+  )
+
+  // stopped: the handler does not run, and the record says why
+  apply(db, [{ eid: role, name: 'role', comp: { state: 'stopped' } }])
+  let ran = calls.length
+  systemSweep(cast, deps)
+  await until(() => row().reason == 'state stopped', { label: 'the off stamp' })
+  assertEquals(calls.length, ran)
+  apply(db, [{ eid: role, name: 'entity', comp: null }])
 })

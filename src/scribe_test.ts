@@ -91,18 +91,22 @@ Deno.test('deskFree: an unsettled or recent desk session blocks', () => {
 
 Deno.test('scribeSpawn: haiku wearing the scribe persona, or nothing, or a shout', () => {
   let g = graph()
-  let changes = scribeSpawn(rows(g), g.deps, NOW)!
-  let sess = changes.find((c) => c.name == 'session')!.comp!
+  let out = scribeSpawn(rows(g), g.deps, NOW)
+  let sess = out.changes!.find((c) => c.name == 'session')!.comp!
   assertEquals(sess.provider, 'claude')
   assertEquals(sess.model, 'haiku')
   assertEquals(sess.persona, PERSONA)
   assertEquals(sess.requested_task, DESK)
-  // no stubs = no spawn, quietly
+  assertEquals(out.observed, out.changes!.find((c) => c.name == 'session')!.eid)
+  assertEquals(out.reason, '1 waiting')
+  // no stubs = no spawn, and the record says so
   let quiet: Snapshot = {
     changes: graph().changes.filter((c) => c.eid != S1),
     deps: [],
   }
-  assertEquals(scribeSpawn(rows(quiet), quiet.deps, NOW), null)
+  assertEquals(scribeSpawn(rows(quiet), quiet.deps, NOW), {
+    reason: 'no stubs waiting',
+  })
   // stubs but no desk = a half-seeded graph should say so
   let noDesk: Snapshot = {
     changes: graph().changes.filter((c) => c.eid != DESK),
@@ -112,6 +116,30 @@ Deno.test('scribeSpawn: haiku wearing the scribe persona, or nothing, or a shout
     () => scribeSpawn(rows(noDesk), noDesk.deps, NOW),
     Error,
     'no scribe-desk',
+  )
+})
+
+Deno.test('tunables are data: quiet widens the settle, cooldown the gap', () => {
+  let g = graph()
+  // a 45-minute-old stub is settled at the default quiet but not at 1h
+  assertEquals(
+    scribeSpawn(rows(g), g.deps, NOW, { quiet: 3600, cooldown: 3600 }).reason,
+    'no stubs waiting',
+  )
+  // a completed desk run 20 minutes back cools the desk at the default
+  // hour, but a 15-minute cooldown lets the next pass spawn
+  let recent = rows(graph(
+    mk(S2, 5, ago(20), {
+      session: { id: 'sc-2', requested_task: DESK, status: 'completed' },
+    }),
+  ))
+  assertEquals(
+    scribeSpawn(recent, g.deps, NOW).reason,
+    '1 waiting — desk busy or cooling down',
+  )
+  assertEquals(
+    scribeSpawn(recent, g.deps, NOW, { quiet: 900, cooldown: 900 }).reason,
+    '1 waiting',
   )
 })
 
@@ -138,5 +166,7 @@ Deno.test('the desk never scribes itself: its own wrap stubs are exempt', () => 
     ],
     deps: [],
   }
-  assertEquals(scribeSpawn(rows(alone), alone.deps, NOW), null)
+  assertEquals(scribeSpawn(rows(alone), alone.deps, NOW), {
+    reason: 'no stubs waiting',
+  })
 })

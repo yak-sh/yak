@@ -5,20 +5,24 @@
 // session wearing the scribe persona, journal-attributed like anyone.
 // The desk is a standing task (alias scribe-desk) because a spawn's
 // workspace derives task → project → repo; the persona (alias scribe)
-// carries the runbook, editable in the graph. A sweep like the others —
-// graduates to a `system` entity under T-3906.
+// carries the runbook, editable in the graph. A SYSTEM ROLE (T-18728):
+// the predicate and work live here, registered with roles.ts — a `role`
+// comp on the scribe-desk entity carries on/off and the throttle values
+// (quiet/cooldown, seconds) as graph data, and each pass stamps its
+// decision there; absent that row, the code defaults below apply.
 import { apply, db, depsOf, locate } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, type Dep } from './types.ts'
 import { DESK, find, type Row, spawnChanges, STUB } from './client.ts'
 import { evalGraph, rowsFor } from './graph_query.ts'
+import { type SystemSpec, type SystemTuning } from './roles.ts'
 
 type Cast = (changes: Change[]) => void
 
 // Freshly-wrapped stubs get a quiet quarter hour (a resumed session may
 // still enrich its own doc); one desk an hour is the cost throttle.
-let QUIET = 15 * 60_000
-let THROTTLE = 60 * 60_000
+// Seconds, the wake vocabulary — role.quiet / role.cooldown override them.
+export let TUNING: SystemTuning = { quiet: 15 * 60, cooldown: 60 * 60 }
 
 // Milliseconds since an entity's birth ('created') or its last touch
 // ('updated', which falls back to birth) — off the provenance components
@@ -34,41 +38,62 @@ let age = (r: Row, now: number, comp: 'created' | 'updated') => {
 // The queue: session docs still wearing the wrap marker, dust settled.
 // The desk's own sessions are exempt — a scribe's wrap leaves a stub
 // too, and scribing the scribe would spawn a desk an hour forever.
-export let stubs = (all: Row[], now: number, deskEid?: string) =>
+export let stubs = (
+  all: Row[],
+  now: number,
+  deskEid?: string,
+  quietMs = TUNING.quiet * 1000,
+) =>
   all.filter((r) =>
     r.comps.session && String(r.comps.doc?.body ?? '').startsWith(STUB) &&
     !(deskEid && r.comps.session.requested_task == deskEid) &&
-    age(r, now, 'updated') > QUIET
+    age(r, now, 'updated') > quietMs
   )
 
 // One scribe at a time, and not more than hourly — a desk session still
 // unsettled blocks regardless of age (never two writers on the queue).
-export let deskFree = (all: Row[], desk: Row, now: number) =>
+export let deskFree = (
+  all: Row[],
+  desk: Row,
+  now: number,
+  cooldownMs = TUNING.cooldown * 1000,
+) =>
   !all.some((r) =>
     r.comps.session?.requested_task == desk.eid &&
     (['starting', 'running'].includes(String(r.comps.session.status)) ||
-      age(r, now, 'created') < THROTTLE)
+      age(r, now, 'created') < cooldownMs)
   )
 
-// The spawn, or the reason there isn't one (null = nothing to do; the
-// missing-desk case logs once at the sweep so a half-seeded graph says
-// so instead of silently never scribing).
-export let scribeSpawn = (all: Row[], deps: Dep[], now: number) => {
+// The pass's decision: the spawn plus the run record's words, or just the
+// words (the missing-desk case throws so a half-seeded graph says so
+// instead of silently never scribing).
+export let scribeSpawn = (
+  all: Row[],
+  deps: Dep[],
+  now: number,
+  t: SystemTuning = TUNING,
+): { changes?: Change[]; observed?: string; reason: string } => {
   let desk = find(all, DESK.task)
-  if (!stubs(all, now, desk?.eid).length) return null
+  let queue = stubs(all, now, desk?.eid, t.quiet * 1000)
+  if (!queue.length) return { reason: 'no stubs waiting' }
   if (!desk?.comps.task) throw new Error('no scribe-desk task in the graph')
   if (!find(all, DESK.persona)?.comps.persona) {
     throw new Error('no scribe persona in the graph')
   }
-  if (!deskFree(all, desk, now)) return null
-  return spawnChanges(all, { ...DESK, deps }).changes
+  if (!deskFree(all, desk, now, t.cooldown * 1000)) {
+    return { reason: `${queue.length} waiting — desk busy or cooling down` }
+  }
+  let { eid, changes } = spawnChanges(all, { ...DESK, deps })
+  return { changes, observed: eid, reason: `${queue.length} waiting` }
 }
 
-// The interval-safe door, mirroring inbound: never two sweeps in
-// flight, and a failure is a warning — the next tick tries again.
-let sweeping = false
-export let scribeSweep = (cast: Cast) => {
-  if (sweeping) return
+// The pass itself — interval-safe (never two in flight); a throw is the
+// caller's: reconcileSystem stamps it on the role, the bare sweep warns.
+export let scribeRun = (
+  t: SystemTuning,
+  cast: Cast,
+): { reason: string; observed?: string } => {
+  if (sweeping) return { reason: 'a pass is already in flight' }
   sweeping = true
   try {
     // Scoped read (M-21143): scribeSpawn needs the sessions (the stub queue and
@@ -83,16 +108,24 @@ export let scribeSweep = (cast: Cast) => {
       ...evalGraph(db, '.kind=session').hits,
       ...rowsFor(db, [DESK.task, DESK.persona, ...neighbours]),
     ]
-    let changes = scribeSpawn(all, deps, Date.now())
-    if (changes) {
-      let t = trace()
-      let out = apply(db, changes, t)
-      cast(out)
-      dispatch(out, t, (c, e) => console.warn(`scribe effect ${c} —`, e))
+    let out = scribeSpawn(all, deps, Date.now(), t)
+    if (out.changes) {
+      let tr = trace()
+      let applied = apply(db, out.changes, tr)
+      cast(applied)
+      dispatch(applied, tr, (c, e) => console.warn(`scribe effect ${c} —`, e))
     }
-  } catch (e) {
-    console.warn('scribe sweep —', e)
+    return { reason: out.reason, observed: out.observed }
   } finally {
     sweeping = false
   }
+}
+let sweeping = false
+
+// The registration server.ts hands roles.ts: the scribe IS the system role
+// bound to the scribe-desk entity, throttle defaults above.
+export let SCRIBE: SystemSpec = {
+  alias: DESK.task,
+  defaults: TUNING,
+  run: scribeRun,
 }

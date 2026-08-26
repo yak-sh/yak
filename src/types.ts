@@ -299,6 +299,12 @@ export let comps: Record<string, Record<string, PropType>> = {
     // owner's retry so a fixed role's stale burst can't re-trip it; the
     // reconciler never writes it, so a successful launch can't wipe the fence.
     retry_at: 'time',
+    // System-role throttling as graph data (D-18722 part C): quiet is how long
+    // a trigger item must sit untouched before it counts, cooldown the minimum
+    // gap between run starts. SECONDS, the wake vocabulary. The values are
+    // data; enforcement stays in the role's registered handler (roles.ts).
+    quiet: 'number',
+    cooldown: 'number',
   },
   board: { query: 'query' }, // saved filter (query.ts grammar); '' = all
   // A tiling layout (D-14718): the doc names it, root its top pane.
@@ -1841,6 +1847,8 @@ export type Role = {
   applied_at?: string | null
   stopped_at?: string | null
   retry_at?: string | null
+  quiet?: number | null
+  cooldown?: number | null
   decision?: string | null
   reason?: string | null
   observed?: string | null

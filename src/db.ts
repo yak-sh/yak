@@ -239,6 +239,8 @@ let schema = `
     applied_at   text,
     stopped_at   text,
     retry_at     text,
+    quiet        integer,
+    cooldown     integer,
     decision     text,
     reason       text,
     observed     text,
@@ -2743,6 +2745,8 @@ export let migrate = (db: DatabaseSync) => {
     addCol('role', 'reason', 'reason text')
     addCol('role', 'observed', 'observed integer')
     addCol('role', 'decided_at', 'decided_at text')
+    addCol('role', 'quiet', 'quiet integer')
+    addCol('role', 'cooldown', 'cooldown integer')
     addCol('generation', 'serving_model', 'serving_model text')
     addCol('session', 'cwd', 'cwd text')
     addCol('session', 'pid', 'pid integer')
