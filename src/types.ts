@@ -1485,6 +1485,10 @@ export let friendly = (model?: string | null) => {
 // parent wants child (a persona's pending spawn mark — an event matched its
 // watch (spawnrule.ts) and the dispatch sweep clears the edge by spawning the
 // persona onto the target; never gates).
+// parent delegates child (session lineage, T-16412: the parent run spawned
+// the child run. The canonical form of session.parent — apply() mirrors the
+// column write into this edge and boot backfills it, so the column is a
+// rolling alias; lineage, not capability or containment; never gates).
 export let edges = [
   'requires',
   'contains',

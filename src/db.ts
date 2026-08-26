@@ -1461,6 +1461,20 @@ export let backfillSpawn = (db: DatabaseSync) => {
   }
 }
 
+// Lineage rides an edge (T-16412, D-16328): `parent delegates child` is the
+// canonical form of session.parent; the column is its rolling alias. Boot
+// backfills the edge from every stored column value — insert or ignore
+// against the (parent, type, child) primary key, live parents only, so a
+// settled backfill re-fires as a true no-op.
+export let backfillLineage = (db: DatabaseSync) => {
+  db.exec(`
+    insert or ignore into dependency (parent, type, child)
+    select s.parent, 'delegates', s.entity from session s
+    join entity p on p.id = s.parent
+    where s.parent is not null
+  `)
+}
+
 // Lift the execution axes without inventing facets for sessions that never
 // carried either one. An existing canonical row wins — including its nulls —
 // so an interrupted rolling deploy can never revive a cleared legacy alias.
@@ -2820,6 +2834,7 @@ export let migrate = (db: DatabaseSync) => {
     `)
     backfillSpawn(db)
     backfillSessionFacets(db)
+    backfillLineage(db)
     // The identity chain (types.ts): instruments point at who they act for.
     addCol('client', 'actor', 'actor integer references entity(id)')
     // Inbound provenance (inbound.ts): the fleet sweep's idempotency key
@@ -3243,6 +3258,47 @@ let facetCols = (name: 'worktree' | 'runtime') => [
   ...Object.keys(comps[name]),
   ...Object.keys(stamped[name]),
 ]
+
+// The apply-side half of the lineage alias (see backfillLineage above): a
+// session.parent write also links
+// `parent delegates child` (a rewrite or clear unlinks the old edge), so
+// edge readers see lineage no matter which door wrote it. The PRE-batch
+// column names the outgoing edge — safe because apply holds the whole batch
+// under one lock. Column-ward mirroring is deliberately absent: nothing
+// writes the edge directly yet, and the column retires only after this
+// rolling release proves out (T-16412).
+let mirrorLineage = (db: DatabaseSync, changes: Change[]): Change[] => {
+  let last = new Map<string, string | null>()
+  for (let change of changes) {
+    if (change.name != 'session') continue
+    if (change.comp != null && !('parent' in change.comp)) continue
+    last.set(change.eid, (change.comp?.parent ?? null) as string | null)
+  }
+  if (!last.size) return changes
+  let out = [...changes]
+  for (let [eid, next] of last) {
+    let prior = prep(
+      db,
+      `select p.eid from session s join entity p on p.id = s.parent
+       where s.entity = (select id from entity where eid = ?)`,
+    ).get(eid) as { eid: string } | undefined
+    if (prior && prior.eid != next) {
+      out.push({
+        eid: prior.eid,
+        name: 'dependency',
+        comp: { type: 'delegates', child: eid, gone: true },
+      })
+    }
+    if (next && prior?.eid != next) {
+      out.push({
+        eid: next,
+        name: 'dependency',
+        comp: { type: 'delegates', child: eid },
+      })
+    }
+  }
+  return out
+}
 
 // Old and new session doors overlap during a rolling release. Apply sees the
 // whole batch under one lock, so it can make the canonical facet win without
@@ -4128,6 +4184,7 @@ export let apply = (
     changes = dualSpawn(db, changes)
     changes = dualFacet(db, changes, 'worktree')
     changes = dualFacet(db, changes, 'runtime')
+    changes = mirrorLineage(db, changes)
     // A write that engages a source-materialized entity graduates it — hydrates
     // its source comps into this batch (D-17790). After the dual* transforms so
     // a hydrated session.provider is never promoted to a spawn request; a

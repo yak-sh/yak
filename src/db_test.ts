@@ -4,6 +4,7 @@ Deno.env.set('DB_PATH', ':memory:')
 let {
   apply,
   backfillJournalTouch,
+  backfillLineage,
   backfillOpened,
   backfillVia,
   componentCounts,
@@ -1173,6 +1174,54 @@ Deno.test('session execution facets dual-materialize in both directions', () => 
     compOf(d, canonical, 'session')?.transcript,
     '/tmp/canonical.jsonl',
   )
+})
+
+Deno.test('session.parent mirrors to a delegates edge; rewrite and clear unlink (T-16412)', () => {
+  let d = fresh()
+  let p1 = uid(), p2 = uid(), child = uid()
+  let lineage = () =>
+    snapshot(d).deps.filter((x) => x.type == 'delegates' && x.child == child)
+      .map((x) => x.parent)
+  apply(d, [
+    { eid: p1, name: 'session', comp: { id: uid() } },
+    { eid: p2, name: 'session', comp: { id: uid() } },
+    { eid: child, name: 'session', comp: { id: uid(), parent: p1 } },
+  ])
+  assertEquals(lineage(), [p1])
+  // Idempotent: writing the same parent again mints no second edge.
+  apply(d, [{ eid: child, name: 'session', comp: { parent: p1 } }])
+  assertEquals(lineage(), [p1])
+  // A rewrite unlinks the old parent and links the new one.
+  apply(d, [{ eid: child, name: 'session', comp: { parent: p2 } }])
+  assertEquals(lineage(), [p2])
+  // A clear unlinks.
+  apply(d, [{ eid: child, name: 'session', comp: { parent: null } }])
+  assertEquals(lineage(), [])
+})
+
+Deno.test('backfillLineage lifts stored parent columns into delegates edges once', () => {
+  let d = fresh()
+  let p = uid(), child = uid()
+  apply(d, [
+    { eid: p, name: 'session', comp: { id: uid() } },
+    { eid: child, name: 'session', comp: { id: uid(), parent: p } },
+  ])
+  // Simulate a pre-edge store: drop the mirrored edge, keep the column.
+  apply(d, [{
+    eid: p,
+    name: 'dependency',
+    comp: { type: 'delegates', child, gone: true },
+  }])
+  assertEquals(
+    snapshot(d).deps.some((x) => x.type == 'delegates' && x.child == child),
+    false,
+  )
+  backfillLineage(d)
+  let edges = () =>
+    snapshot(d).deps.filter((x) => x.type == 'delegates' && x.child == child)
+  assertEquals(edges().length, 1)
+  backfillLineage(d) // settled: re-fires as a no-op
+  assertEquals(edges().length, 1)
 })
 
 Deno.test('canonical null wins either session-facet batch order', () => {
