@@ -83,7 +83,14 @@ import {
   wrapChanges,
 } from './client.ts'
 import { type Unlanded, unlanded } from './land.ts'
-import { composeWorn, GLOBAL_BASE, wornPersona } from './persona.ts'
+import {
+  adopted,
+  commonOf,
+  composeWorn,
+  deliveredBy,
+  GLOBAL_BASE,
+  wornPersona,
+} from './persona.ts'
 import {
   sessionRow as storedSession,
   sessionRows as storedSessions,
@@ -1927,6 +1934,13 @@ export let spawned =
       [spawnPersona, project ? String(project) : undefined, globalBase]
         .filter((e): e is string => !!e),
     )
+    // An ADOPTED repo (CLAUDE.md → .tasks/AGENTS.md) hands the common persona
+    // to the session from disk, so the composed prompt omits what that file
+    // delivers — the base tier lands once, not once per door (T-21957). An
+    // unadopted or repo-less spawn still composes complete.
+    let common = project && repo && adopted(repo.path)
+      ? commonOf(all, deps, String(project))
+      : undefined
     let worn = composeWorn(
       all,
       deps,
@@ -1938,6 +1952,8 @@ export let spawned =
         globalBase,
       ),
       Date.now(),
+      undefined,
+      common ? deliveredBy(all, deps, common.eid, Date.now()) : undefined,
     )
     let { num } = db.prepare('select num from entity where eid = ?')
       .get(eid) as { num: number }

@@ -108,6 +108,25 @@ let tiers = (
   return { pre: warm(pre), idx: warm(idx) }
 }
 
+// What one persona DELIVERS, as eid sets — the dedup currency between
+// delivery files (T-21957). `pre` is what it preloads in full; `idx` is
+// everything it says at all (a preloaded body covers an index line, never
+// the reverse). A second document rendered for the same reader passes these
+// as `omit` so a tier lands once, through whichever file said it first.
+export type Delivered = { pre: Set<string>; idx: Set<string> }
+export let deliveredBy = (
+  all: Row[],
+  deps: Dep[],
+  eid: string,
+  now: number,
+): Delivered => {
+  let { pre, idx } = tiers(all, deps, eid, now)
+  return {
+    pre: new Set(pre.map((r) => r.eid)),
+    idx: new Set([...pre, ...idx].map((r) => r.eid)),
+  }
+}
+
 // The whole persona as one markdown document: header naming the edit path,
 // preloaded bodies (warmest first — the budgeted auto-tier hangs off this
 // ordering later), then the index. A persona's own body describes it to graph
@@ -115,15 +134,23 @@ let tiers = (
 // preloaded body is its own little document — a rule before it, an H1
 // title over it — so a body may use ## freely. Rules ride as their own
 // parts: the \n\n join blank-lines every --- and no text line above can
-// read it as a setext underline.
+// read it as a setext underline. `omit` drops tiers another document already
+// delivers to the same reader (deliveredBy) — a preload elsewhere silences
+// both forms here; an index line elsewhere silences only the index line,
+// since this document's preload is the fuller form and still earns its place.
 export let materialize = (
   all: Row[],
   deps: Dep[],
   p: Row,
   now: number,
   d: Dialect = DIALECT,
+  omit?: Delivered,
 ) => {
   let { pre, idx } = tiers(all, deps, p.eid, now)
+  if (omit) {
+    pre = pre.filter((r) => !omit.pre.has(r.eid))
+    idx = idx.filter((r) => !omit.idx.has(r.eid))
+  }
   let header = d.header(idOf(p), String(p.comps.doc?.title ?? 'persona'))
   let parts = [
     header,
@@ -199,6 +226,7 @@ export let composeWorn = (
   worn: Row[],
   now: number,
   d: Dialect = DIALECT,
+  omit?: Delivered,
 ): string | undefined => {
   if (!worn.length) return undefined
   let primary = worn[worn.length - 1]
@@ -207,7 +235,7 @@ export let composeWorn = (
     type: 'contains',
     child: r.eid,
   }))
-  return materialize(all, [...deps, ...folded], primary, now, d)
+  return materialize(all, [...deps, ...folded], primary, now, d, omit)
 }
 
 // A project's SPECIALIST personas, surfaced as edges. `home` is the
@@ -266,6 +294,11 @@ export let filesFor = (all: Row[], deps: Dep[], now: number) => {
         push,
       })
     }
+    // A specialist file only exists BESIDE its repo's AGENTS.md, and a
+    // session reading one reads both — so tiers the common persona already
+    // delivers are omitted here rather than said twice (T-21957). Outside a
+    // repo the specialist rides the spawn path, which renders complete.
+    let said = base ? deliveredBy(all, deps, base.eid, now) : undefined
     for (
       let p of all.filter((r) =>
         r.comps.persona?.home == proj.eid && r.eid != base?.eid
@@ -274,7 +307,7 @@ export let filesFor = (all: Row[], deps: Dep[], now: number) => {
       let slug = String(p.comps.alias?.slug ?? idOf(p))
       out.push({
         path: `${root}/personas/${slug}.md`,
-        body: materialize(all, deps, p, now),
+        body: materialize(all, deps, p, now, DIALECT, said),
         push,
       })
     }
@@ -292,6 +325,22 @@ export let taskRoots = (all: Row[]): { root: string; push: boolean }[] =>
     root: `${r.comps.repo.path}/.tasks`,
     push: !!r.comps.repo.push,
   }))
+
+// A repo has ADOPTED the projection when its root CLAUDE.md or AGENTS.md
+// resolves into .tasks/AGENTS.md — then a native harness run in that repo
+// already reads the common persona from disk, and a spawn's composed prompt
+// may omit what that file delivers (T-21957). Checked fresh each spawn,
+// never cached: the flip is the owner's move and may happen between spawns.
+export let adopted = (repoPath: string) => {
+  for (let name of ['CLAUDE.md', 'AGENTS.md']) {
+    try {
+      if (
+        Deno.realPathSync(`${repoPath}/${name}`).endsWith('/.tasks/AGENTS.md')
+      ) return true
+    } catch { /* absent or dangling — not adopted via this name */ }
+  }
+  return false
+}
 
 // The two file shapes the materializer can hold under a .tasks root. We own
 // the directory end to end, so a listing is authoritative: anything matching

@@ -13,8 +13,10 @@ import { type Dep, type Edge, kindOf } from './types.ts'
 import { projectionSnapshot, type Row, rows } from './client.ts'
 import { fakeGraph } from './graph_fake.ts'
 import {
+  adopted,
   commonOf,
   composeWorn,
+  deliveredBy,
   DIALECT,
   filesFor,
   homeReads,
@@ -710,4 +712,132 @@ Deno.test('composeWorn: a specialist wired to the fleet base carries it with no 
   let md = composeWorn(all, deps, worn, NOW)!
   assertStringIncludes(md, 'SPECRULE.')
   assertStringIncludes(md, 'FLEETRULE.')
+})
+
+// T-21957: the base tier lands once however many doors deliver it.
+Deno.test('composeWorn: a base reached through two doors renders once', () => {
+  let project = row({ doc: { title: 'Venture', body: '' }, project: {} })
+  let fleet = row({
+    doc: { title: 'fleet base', body: '' },
+    persona: { home: null },
+  })
+  let baseMem = mem('fleet rule', 'FLEETRULE.')
+  let common = row({
+    doc: { title: 'Common', body: '' },
+    persona: { home: project.eid },
+  })
+  let role = row({
+    doc: { title: 'scribe', body: '' },
+    persona: { home: null },
+  })
+  let deps = [
+    edge(project, 'contains', common),
+    edge(common, 'contains', fleet),
+    edge(role, 'contains', fleet), // the role embeds the base TOO
+    edge(fleet, 'contains', baseMem),
+  ]
+  let all = [project, fleet, baseMem, common, role]
+  let worn = wornPersona(all, deps, role.eid, project.eid, fleet.eid)
+  let md = composeWorn(all, deps, worn, NOW)!
+  assertEquals(md.split('FLEETRULE.').length - 1, 1)
+})
+
+Deno.test('materialize omit: tiers another file delivers drop, uniques stay', () => {
+  let common = row({
+    doc: { title: 'Common', body: '' },
+    persona: { home: null },
+  })
+  let shared = mem('shared rule', 'SHAREDBODY.')
+  let listed = row({
+    doc: { title: 'listed only', body: 'LISTEDBODY.' },
+    memory: {},
+  })
+  let upgraded = row({
+    doc: { title: 'upgraded', body: 'UPGRADEDBODY.' },
+    memory: {},
+  })
+  let role = row({
+    doc: { title: 'scribe', body: '' },
+    persona: { home: null },
+  })
+  let own = mem('role rule', 'OWNBODY.')
+  let deps = [
+    edge(common, 'contains', shared),
+    edge(common, 'reads', listed),
+    edge(common, 'reads', upgraded), // common only lists it
+    edge(role, 'contains', shared), // delivered by common in full → drops
+    edge(role, 'contains', own), // unique → stays
+    edge(role, 'contains', upgraded), // preload is the fuller form → stays
+    edge(role, 'reads', listed), // already listed by common → line drops
+  ]
+  let all = [common, shared, listed, upgraded, role, own]
+  let said = deliveredBy(all, deps, common.eid, NOW)
+  let md = materialize(all, deps, role, NOW, DIALECT, said)
+  assert(!md.includes('SHAREDBODY.'))
+  assertStringIncludes(md, 'OWNBODY.')
+  assertStringIncludes(md, 'UPGRADEDBODY.')
+  assert(!md.includes('listed only'))
+  // without omit the same render is complete — the spawn-outside-a-repo form
+  let whole = materialize(all, deps, role, NOW)
+  assertStringIncludes(whole, 'SHAREDBODY.')
+  assertStringIncludes(whole, 'listed only')
+})
+
+Deno.test('filesFor: a specialist file presumes the AGENTS.md beside it', () => {
+  let proj = row({
+    doc: { title: 'Venture', body: '' },
+    project: {},
+    repo: { path: '/repo' },
+  })
+  let shared = mem('shared rule', 'SHAREDBODY.')
+  let common = row({
+    doc: { title: 'Common', body: '' },
+    persona: { home: proj.eid },
+  })
+  let spec = row({
+    doc: { title: 'reviewer', body: '' },
+    persona: { home: proj.eid },
+    alias: { slug: 'reviewer' },
+  })
+  let own = mem('spec rule', 'OWNBODY.')
+  let deps = [
+    edge(proj, 'contains', common),
+    edge(common, 'contains', shared),
+    edge(spec, 'contains', shared),
+    edge(spec, 'contains', own),
+  ]
+  let files = filesFor([proj, shared, common, spec, own], deps, NOW)
+  let agents = files.find((f) => f.path.endsWith('AGENTS.md'))!
+  let reviewer = files.find((f) => f.path.endsWith('reviewer.md'))!
+  assertStringIncludes(agents.body, 'SHAREDBODY.')
+  assert(!reviewer.body.includes('SHAREDBODY.'))
+  assertStringIncludes(reviewer.body, 'OWNBODY.')
+  // no common persona → nothing is presumed, the specialist stays whole
+  let alone = filesFor(
+    [proj, shared, spec, own],
+    deps.filter((d) => d.parent != proj.eid),
+    NOW,
+  )
+  assertStringIncludes(
+    alone.find((f) => f.path.endsWith('reviewer.md'))!.body,
+    'SHAREDBODY.',
+  )
+})
+
+Deno.test('adopted: the CLAUDE.md symlink chain into .tasks, and only that', () => {
+  let dir = Deno.makeTempDirSync()
+  try {
+    assertEquals(adopted(dir), false)
+    Deno.mkdirSync(`${dir}/.tasks`)
+    Deno.writeTextFileSync(`${dir}/.tasks/AGENTS.md`, 'persona\n')
+    // a plain committed file is NOT adoption — the flip is the symlink
+    Deno.writeTextFileSync(`${dir}/CLAUDE.md`, 'hand-written\n')
+    assertEquals(adopted(dir), false)
+    Deno.removeSync(`${dir}/CLAUDE.md`)
+    Deno.symlinkSync(`${dir}/.tasks/AGENTS.md`, `${dir}/AGENTS.md`)
+    Deno.symlinkSync('AGENTS.md', `${dir}/CLAUDE.md`) // the chained form
+    assertEquals(adopted(dir), true)
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
 })
