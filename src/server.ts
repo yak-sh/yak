@@ -734,20 +734,37 @@ let ws = (req: Request) => {
 // classifies the body — this route is the only place that sees both the
 // request and its reply).
 let graphIO: IO = {
+  // The whole eager graph — code_run's sandbox contract and the command tool's
+  // stdio-only fallback are the LAST callers (every other tool reads scoped,
+  // T-22217). Deleting it rides the epic's snapshot() subtraction once those
+  // two contracts are revisited.
   // deno-lint-ignore require-await
   read: async () => snapshot(db),
-  // The authoritative filter-query, in-process: the same evalGraph the /query
-  // door runs, so graph_query reaches the lazy entry partition instead of the
-  // snapshot()-only truth it read before.
-  // deno-lint-ignore require-await
-  query: async (q, opts) => evalGraph(db, q, opts).hits,
+  // The authoritative filter-query, in-process: localQuery routes `id=`
+  // addressing (locate: T-3, num, slug, uuid) and hands the rest to the same
+  // evalGraph the /query door runs — one Querier semantics on both transports,
+  // so client.ts's scoped readers (checkedRefs, contextSnapshot, bus) run here
+  // with zero round trips.
+  query: (q, opts) => localQuery(db)(q.split('&').filter(Boolean), opts),
   // The colon-command executor's scoped reader — keyed off the live db, so the
   // in-process `command` tool resolves ids/enumerations on demand instead of
   // materializing the graph (M-21143). `overlay` carries a command's not-yet-
   // applied rows (a spec-line task) for the spawn validation.
   reader: (overlay) => dbReader(db, overlay),
+  // Entities BY ADDRESS — the same id= resolution the /query door runs, so a
+  // tool's `find(await io.get([id]), id)` resolves every form find() reads.
+  get: (ids, filters = []) =>
+    ids.length
+      ? localQuery(db)([`id=${ids.join(',')}`, ...filters])
+      : Promise.resolve([]),
+  // The dependency edges touching these entities, quarantine-screened the way
+  // the /query deps=1 layer is; `reveal` lifts the screen like quarantined=1.
   // deno-lint-ignore require-await
-  get: async (eids) => rowsOf(db, eids).map(rowed),
+  deps: async (eids, reveal = false) =>
+    depsOf(db, eids).filter((d) =>
+      reveal ||
+      (!eager(db, d.parent).quarantined && !eager(db, d.child).quarantined)
+    ),
   // deno-lint-ignore require-await
   write: async (changes, via) => {
     let t = trace()

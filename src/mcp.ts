@@ -33,14 +33,16 @@ import { sha } from './sha.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
 import {
   authoringLine,
+  bus as busNotices,
   byBoard,
-  checkRefs,
+  checkedRefs,
   claimant,
   claimChanges,
   commentChanges,
   contextDigest,
+  contextSnapshot,
   decidedChange,
-  derefParams,
+  derefedParams,
   edgesOf,
   feedbackChange,
   fetched,
@@ -48,6 +50,7 @@ import {
   history,
   historyLine,
   host,
+  httpDeps,
   idOf,
   type JournalEntry,
   jsonAuthored,
@@ -55,9 +58,9 @@ import {
   memoryChanges,
   memoryHead,
   noticeBlock,
-  noticesFor,
   param,
   patches,
+  type Querier,
   query as queryHttp,
   recallIndex,
   refHandles,
@@ -69,23 +72,21 @@ import {
   search,
   send,
   serverCaps,
+  sessionRow,
   similarHint,
   spawnChanges,
   spawnPlan,
   taskChanges,
   undo,
+  uniq,
 } from './client.ts'
 import {
-  kidsOf,
-  listed,
-  matchQuery,
   noFilter,
   orderOf,
   parseQuery,
   pred,
   resolution,
   resolveRefs,
-  warm,
 } from './query.ts'
 import {
   commandOut,
@@ -93,7 +94,6 @@ import {
   focusFor,
   focusOf,
   type Reader,
-  spawnCorpus,
   spawnSpec,
 } from './commands.ts'
 import { editChanges } from './edit.ts'
@@ -111,17 +111,25 @@ import { wakeList } from './title.ts'
 
 // How the tools reach the graph — in-process on the server, HTTP here.
 export type IO = {
+  // The whole eager graph. code_run's sandbox contract (graph.rows) and the
+  // command tool's stdio-only fallback are its LAST callers — every other tool
+  // reads scoped through query/get/deps (T-22217). Don't add callers.
   read: () => Promise<Snapshot>
   // The authoritative filter-query — the whole graph, INCLUDING the lazy entry
-  // partition when the filter names it (`.entry.session=…`), paged by seq. This
-  // is why graph_query reads the graph and not just snapshot()'s eager slice.
-  // In-process it runs the server's evalGraph; over stdio it is the /query GET.
+  // partition when the filter names it (`.entry.session=…`), paged by seq, and
+  // `id=` addressing (T-3, num, slug, uuid — locate, find()'s mirror). In-
+  // process it runs the server's localQuery; over stdio it is the /query GET.
   query: (
     q: string,
     opts?: { after?: number; limit?: number },
   ) => Promise<Row[]>
-  // Entities by eid, for bounded reference expansion in derived read faces.
-  get: (eids: string[]) => Promise<Row[]>
+  // Entities BY ADDRESS (any form id= reads), extra filters screening the
+  // hits — find() over the wire, for target resolution and bounded reference
+  // expansion in derived read faces.
+  get: (ids: string[], filters?: string[]) => Promise<Row[]>
+  // The dependency edges touching these entities, both directions, quarantine-
+  // screened; `reveal` lifts the screen the way quarantined=1 does.
+  deps: (eids: string[], reveal?: boolean) => Promise<Dep[]>
   // `via` is journal attribution — the calling session's id, when the
   // tool knows it. Never auth.
   write: (changes: Change[], via?: string) => Promise<Change[]>
@@ -293,6 +301,15 @@ let HINTS: Record<string, ToolAnnotations> = {
 }
 
 export let mcpServer = (io: IO) => {
+  // The io-backed Querier: client.ts's scoped readers (checkedRefs, sessionRow,
+  // contextSnapshot, bus) run through whichever transport this mount has —
+  // localQuery in-process, the /query GET over stdio — so no tool needs the
+  // whole graph to resolve a handle or assemble a corpus (T-22217).
+  let ioQ: Querier = (filters, opts) =>
+    io.query(filters.filter(Boolean).join('&'), opts)
+  // find() over the wire: the row an address names, or undefined — the same
+  // four forms (T-3, num, slug, uuid), resolved by the server's locate().
+  let got = async (id: string) => find(await io.get([id]), id)
   // Server instructions ride the initialize handshake and land in the
   // agent's standing context — the strongest ambient steering the
   // protocol offers. Keep it to what every writer must know.
@@ -390,7 +407,7 @@ covered). ${FILTERS}`,
       { filters = [], by = 'model' }: { filters?: string[]; by?: Dim },
     ) => {
       let ps = parseFilters(filters)
-      if (refHandles(ps).length) checkRefs(rows(await io.read(), true), ps)
+      if (refHandles(ps).length) await checkedRefs(ps, ioQ)
       let hits = await io.query(['.kind=session', ...filters].join('&'))
       let uses: Use[] = []
       for (let r of hits) {
@@ -428,31 +445,26 @@ filters must ALL match. ${FILTERS} ${BUS}`,
     async (
       { filters = [], session }: { filters?: string[]; session?: string },
     ) => {
-      let now = Date.now()
-      let all = rows(await io.read(), true)
-      let ps = resolveRefs(
-        parseFilters(filters),
-        (id) => find(all, id)?.eid,
-      )
-      checkRefs(all, ps)
-      let byEid = new Map(all.map((r) => [r.eid, r.comps]))
-      let kids = kidsOf(byEid)
-      let hits = all
+      let ps = parseFilters(filters)
+      if (refHandles(ps).length) await checkedRefs(ps, ioQ)
+      // Membership, ref resolution and hot ordering run server-side — the
+      // same preds, matchQuery and kid-walks this tool ran over a
+      // materialized graph now run in io.query (localQuery in-process); the
+      // board order applies here over the bounded hits.
+      let hits = (await io.query(['.task!', ...filters].join('&')))
         .filter((r) => r.comps.task)
-        .filter((r) => listed(r.comps, ps))
-        .filter((r) =>
-          matchQuery(r.comps, ps, (e) => byEid.get(e), undefined, kids)
-        )
-        .sort(
-          orderOf(ps) == 'hot'
-            ? (a, b) =>
-              warm(b.comps, now, (e) => byEid.get(e)) -
-              warm(a.comps, now, (e) => byEid.get(e))
-            : byBoard,
-        )
+      if (orderOf(ps) != 'hot') hits = hits.sort(byBoard)
+      // What line() renders BESIDE each hit — the claimant session and the
+      // authoring instrument (and its persona, one more hop) — fetched keyed.
+      let refs = await io.get(hits.flatMap(refsIn))
+      let context = uniq([
+        ...hits,
+        ...refs,
+        ...await io.get(refs.flatMap(refsIn)),
+      ])
       let why = hits.length ? '' : resolution(ps, 'task')
       return bus(
-        hits.map((r) => line(all, r)).join('\n') ||
+        hits.map((r) => line(context, r)).join('\n') ||
           (why
             ? `(no matches) · filters resolved to ${why} — task_list ` +
               `returns tasks`
@@ -500,7 +512,6 @@ lands in one atomic apply. Reference param values accept human ids
         session?: string
       },
     ) => {
-      let all = rows(await io.read())
       if (
         tasks &&
         [title, body, status, params].some((value) => value != null)
@@ -515,16 +526,32 @@ lands in one atomic apply. Reference param values accept human ids
       // resolves to its persona's home or its actor-when-a-project. A task
       // with no project is orphaned: off every board and unlandable, silent
       // until a land fails (T-16496). An explicit .project= in params still
-      // wins. scopeFor is undefined only when nothing places the caller.
+      // wins. scopeFor is undefined only when nothing places the caller — it
+      // reads only the session, the persona it wears, that persona's home,
+      // and the actor, so that small set stands in for the corpus.
+      let sess = session ? await sessionRow(session, ioQ) : undefined
+      let kin = await io.get(
+        [
+          String(sess?.comps.session?.persona ?? ''),
+          String(sess?.comps.session?.actor ?? ''),
+        ].filter(Boolean),
+      )
+      let worn = kin.find((r) => r.eid == sess?.comps.session?.persona)
+      let home = String(worn?.comps.persona?.home ?? '')
       let scope = scopeFor(
-        all,
-        session
-          ? all.find((r) => String(r.comps.session?.id) == session)
-          : undefined,
+        uniq([
+          ...(sess ? [sess] : []),
+          ...kin,
+          ...(home ? await io.get([home]) : []),
+        ]),
+        sess,
       )
       let minted: string[] = []
-      let changes = want.flatMap((t) => {
-        let grouped = patches(derefParams(all, parseAll(t.params ?? [])))
+      let changes: Change[] = []
+      for (let t of want) {
+        let grouped = patches(
+          await derefedParams(parseAll(t.params ?? []), ioQ),
+        )
         grouped.doc = {
           ...grouped.doc,
           title: t.title,
@@ -536,10 +563,10 @@ lands in one atomic apply. Reference param values accept human ids
         }
         let eid = crypto.randomUUID()
         minted.push(eid)
-        return taskChanges(eid, grouped)
-      })
+        changes.push(...taskChanges(eid, grouped))
+      }
       await io.write(changes, session)
-      let after = rows(await io.read())
+      let after = await io.get(minted)
       let ids = minted.map((eid) => {
         let made = after.find((r) => r.eid == eid)
         return made ? idOf(made) : eid
@@ -588,14 +615,23 @@ ${GRAMMAR} ${BUS}`,
         session?: string
       },
     ) => {
-      let all = rows(await io.read())
-      let row = find(all, id)
+      let row = await got(id)
       if (!row) return err(`no entity: ${id}`)
-      let grouped = patches(derefParams(all, parseAll(params)))
+      let grouped = patches(await derefedParams(parseAll(params), ioQ))
+      // The comment builder resolves its author (the session row) and the
+      // task's project (the row itself) — hand it exactly those.
+      let sess = comment && session ? await sessionRow(session, ioQ) : undefined
       await io.write([
         ...Object.entries(grouped)
           .map(([name, comp]) => ({ eid: row.eid, name, comp })),
-        ...(comment ? commentChanges(all, row.eid, comment, session) : []),
+        ...(comment
+          ? commentChanges(
+            uniq([row, ...(sess ? [sess] : [])]),
+            row.eid,
+            comment,
+            session,
+          )
+          : []),
       ], session)
       return bus(`updated ${idOf(row)}${wall(grouped.doc?.body)}`, session)
     },
@@ -611,8 +647,15 @@ operator mail as explicitly UNTRUSTED data. Call this FIRST each session,
 with the same stable session identifier you claim with.`,
     { session: z.string() },
     async ({ session }: { session: string }) => {
-      let snap = await io.read()
-      let pending = noticesFor(snap, session)
+      // The digest corpus and the pending bus, assembled from the same
+      // bounded keyed reads the CLI's `task context` runs (contextSnapshot /
+      // bus) — through io, so the in-process mount reads the live db and
+      // stdio the /query door. notices() sorts identically on both paths
+      // (T-15463), so the served lines match the whole-snapshot read.
+      let [snap, pending] = await Promise.all([
+        contextSnapshot(session, undefined, undefined, [], ioQ, io.deps),
+        busNotices(session, undefined, ioQ),
+      ])
       let digest = contextDigest(
         snap,
         session,
@@ -634,11 +677,20 @@ another session holds the lease; task_release drops it when you finish
 or hand off.`,
     { id: z.string(), session: z.string() },
     async ({ id, session }: { id: string; session: string }) => {
-      let all = rows(await io.read())
-      let row = find(all, id)
+      let row = await got(id)
       if (!row) return err(`no entity: ${id}`)
+      // claimChanges resolves its author (the session row) and the task's
+      // project (the row itself) — hand it exactly those.
+      let sess = await sessionRow(session, ioQ)
       try {
-        await io.write(claimChanges(all, row.eid, session), session)
+        await io.write(
+          claimChanges(
+            uniq([row, ...(sess ? [sess] : [])]),
+            row.eid,
+            session,
+          ),
+          session,
+        )
       } catch (e) {
         return {
           ...await bus(`claim failed: ${(e as Error).message}`, session),
@@ -655,7 +707,7 @@ or hand off.`,
 other sessions. ${BUS}`,
     { id: z.string(), session: z.string().optional() },
     async ({ id, session }: { id: string; session?: string }) => {
-      let row = find(rows(await io.read()), id)
+      let row = await got(id)
       if (!row) return err(`no entity: ${id}`)
       await io.write([{ eid: row.eid, name: 'claim', comp: null }], session)
       return bus(`released ${idOf(row)}`, session)
@@ -693,11 +745,21 @@ then the shared anonymous default. persona names the persona entity
         session?: string
       },
     ) => {
-      let snap = await io.read()
-      let all = rows(snap)
+      // The scoped spawn corpus (spawnCorpus's shape, assembled through io so
+      // both transports read keyed): the task, the caller's session, and —
+      // once the plan settles which persona rides — that persona and its
+      // ownership endpoints, with the edges touching it.
+      let [task, sess] = await Promise.all([
+        got(id),
+        session ? sessionRow(session, ioQ) : undefined,
+      ])
+      let base = uniq([
+        ...(task ? [task] : []),
+        ...(sess ? [sess] : []),
+      ])
       // One precedence for every door: explicit args > the task's spawn hint
       // > the CALLER's own spec (its session row) > the provider-table default.
-      let plan = spawnPlan(all, await io.providers(), {
+      let plan = spawnPlan(base, await io.providers(), {
         task: id,
         session,
         ask: { provider, model, effort, persona },
@@ -715,22 +777,25 @@ then the shared anonymous default. persona names the persona entity
         effort: plan.effort,
       })
       if (bad) return err(bad)
+      let worn = plan.persona ? await got(plan.persona) : undefined
+      let deps = worn ? await io.deps([worn.eid]) : []
+      let ends = await io.get(deps.flatMap((d) => [d.parent, d.child]))
       let made
       try {
-        made = spawnChanges(all, {
+        made = spawnChanges(uniq([...base, ...(worn ? [worn] : []), ...ends]), {
           task: id,
           provider: plan.provider,
           model: plan.model,
           effort: plan.effort,
           persona: plan.persona,
           by: session,
-          deps: snap.deps,
-        }, snap.capabilities)
+          deps,
+        }, await serverCaps())
       } catch (e) {
         return err((e as Error).message)
       }
       await io.write(made.changes, session)
-      let after = find(rows(await io.read()), made.eid)
+      let after = (await io.get([made.eid]))[0]
       return bus(
         `spawned ${after ? idOf(after) : made.eid} onto ${id}`,
         session,
@@ -796,24 +861,20 @@ ${
       }
       if (out.spawn) {
         let want = spawnSpec(out.spawn)
-        // A spawn on defaults — the reader sees the task the line may have just
-        // filed via its overlay; task_spawn is the door for overrides. One
-        // precedence: the line's own spec > the task hint > the caller > table.
-        let after = g
-          ? io.reader!(rows({ changes: out.changes ?? [] }))
-          : undefined
-        let snap = after ? undefined : await io.read()
-        let now = after ? [] : rows(snap!)
-        // The scoped spawn corpus (task, persona, caller, ownership) or, over
-        // stdio, the materialized graph.
-        let persona = after && want.persona
-          ? after.find(want.persona)
-          : undefined
-        let deps = after
-          ? (persona ? after.deps([persona.eid]) : [])
-          : snap!.deps
-        let corpus = after ? spawnCorpus(after, want, session, deps) : now
-        let plan = spawnPlan(corpus, await io.providers(), {
+        // A spawn on defaults — the line's own changes landed above, so the
+        // scoped corpus (spawnCorpus's shape: task, caller, persona +
+        // ownership) reads back keyed through io on BOTH transports.
+        // One precedence: the line's own spec > the task hint > the caller >
+        // table.
+        let [onto, sess] = await Promise.all([
+          want.task ? got(want.task) : undefined,
+          session ? sessionRow(session, ioQ) : undefined,
+        ])
+        let base = uniq([
+          ...(onto ? [onto] : []),
+          ...(sess ? [sess] : []),
+        ])
+        let plan = spawnPlan(base, await io.providers(), {
           task: want.task,
           session,
           ask: {
@@ -826,24 +887,25 @@ ${
         if (!plan.provider || !plan.model) {
           return err('no provider to default to')
         }
-        let made = spawnChanges(corpus, {
-          ...want,
-          provider: plan.provider,
-          model: plan.model,
-          effort: plan.effort,
-          persona: plan.persona,
-          by: session,
-          deps,
-        }, after ? await serverCaps() : snap!.capabilities)
+        let worn = plan.persona ? await got(plan.persona) : undefined
+        let deps = worn ? await io.deps([worn.eid]) : []
+        let ends = await io.get(deps.flatMap((d) => [d.parent, d.child]))
+        let made = spawnChanges(
+          uniq([...base, ...(worn ? [worn] : []), ...ends]),
+          {
+            ...want,
+            provider: plan.provider,
+            model: plan.model,
+            effort: plan.effort,
+            persona: plan.persona,
+            by: session,
+            deps,
+          },
+          await serverCaps(),
+        )
         await io.write(made.changes, session)
-        // The just-minted session's id, read back after the write lands: the
-        // reader reads the live db; the stdio fallback re-reads the snapshot.
-        let landed = after
-          ? io.reader!().find(made.eid)
-          : find(rows(await io.read()), made.eid)
-        let onto = want.task
-          ? (after ? after.find(want.task) : find(now, want.task))
-          : undefined
+        // The just-minted session's id, read back after the write lands.
+        let landed = (await io.get([made.eid]))[0]
         said.push(
           `spawned ${landed ? idOf(landed) : made.eid}${
             onto ? ` onto ${idOf(onto)}` : ' as chat'
@@ -872,8 +934,7 @@ running or settled; stderr rides along when the child wrote any. ${BUS}`,
     async (
       { id, tail, session }: { id: string; tail?: number; session?: string },
     ) => {
-      let all = rows(await io.read())
-      let row = find(all, id)
+      let row = await got(id)
       if (!row?.comps.session) return err(`no session: ${id}`)
       let s = row.comps.session
       // The whole partition is read (entryLog); the glance pages the OUTPUT to
@@ -940,8 +1001,7 @@ or a created-at window (since/until, ISO). ${BUS}`,
         session?: string
       },
     ) => {
-      let all = rows(await io.read())
-      let row = find(all, id)
+      let row = await got(id)
       if (!row?.comps.session) return err(`no session: ${id}`)
       let s = row.comps.session
       // A default page bounds what lands in an agent's context; a filled page
@@ -996,8 +1056,7 @@ maximum number of newest batches to return. ${BUS}`,
         session?: string
       },
     ) => {
-      let all = rows(await io.read())
-      let row = find(all, id)
+      let row = await got(id)
       if (!row) return err(`no entity: ${id}`)
       let entries = await io.history(row.eid, limit)
       if (!entries.length) return bus(`${idOf(row)}: no history`, session)
@@ -1023,7 +1082,7 @@ it is a redo. ${BUS}`,
       let ref: { id?: number; eid?: string }
       if (m) ref = { id: Number(m[1]) }
       else {
-        let row = find(rows(await io.read()), id)
+        let row = await got(id)
         if (!row) return err(`no entity: ${id}`)
         ref = { eid: row.eid }
       }
@@ -1074,16 +1133,24 @@ first.`,
       },
     ) => {
       if (!verdict && !body?.trim()) return err('body or verdict is required')
-      let all = rows(await io.read())
-      let row = find(all, id)
+      let row = await got(id)
       if (!row) return err(`no entity: ${id}`)
       let words = body ?? ''
-      let made = commentChanges(all, row.eid, words, session, { verdict })
+      // The builder resolves its author (the session row) and the target's
+      // project (the row itself) — hand it exactly those.
+      let sess = await sessionRow(session, ioQ)
+      let made = commentChanges(
+        uniq([row, ...(sess ? [sess] : [])]),
+        row.eid,
+        words,
+        session,
+        { verdict },
+      )
       await io.write(made, session)
       // The writer's handle on what it just wrote — without it, fixing a
       // wrong comment means writing another one.
       let mine = made.find((c) => c.name == 'comment')?.eid
-      let after = rows(await io.read()).find((r) => r.eid == mine)
+      let after = mine ? (await io.get([mine]))[0] : undefined
       let said = verdict ? `${verdict} review` : 'comment'
       return bus(
         `${after ? idOf(after) : mine} — ${said} on ${idOf(row)}${wall(words)}`,
@@ -1156,9 +1223,8 @@ your read is refused, with their text and a fresh token. ${BUS}`,
       },
     ) => {
       if (type != null) return err(RETIRED_TYPE)
-      let all = rows(await io.read())
       if (id) {
-        let row = find(all, id)
+        let row = await got(id)
         if (!row?.comps.memory) return err(`no memory: ${id}`)
         // Replacing a body without naming the one you read is the lost
         // update, so it is refused HERE rather than left to the caller's
@@ -1187,7 +1253,7 @@ your read is refused, with their text and a fresh token. ${BUS}`,
           })
         }
         if (scope != null) {
-          let project = find(all, scope)
+          let project = await got(scope)
           if (!project?.comps.project) return err(`no project: ${scope}`)
           patch.push({
             eid: row.eid,
@@ -1196,8 +1262,10 @@ your read is refused, with their text and a fresh token. ${BUS}`,
           })
         }
         if (feedback != null) {
+          // The builder resolves WHO gave it — hand it exactly that row.
+          let who = feedback ? await got(feedback) : undefined
           try {
-            patch.push(feedbackChange(all, row.eid, feedback))
+            patch.push(feedbackChange(who ? [who] : [], row.eid, feedback))
           } catch (e) {
             return err((e as Error).message)
           }
@@ -1221,19 +1289,31 @@ your read is refused, with their text and a fresh token. ${BUS}`,
       }
       let made
       try {
-        made = memoryChanges(all, {
-          title,
-          body,
-          scope,
-          feedback,
-          decided,
-          session,
-        })
+        // The builder resolves the scope project, the author session, and the
+        // feedback giver — hand it exactly those rows.
+        let [sess, scopeRow, who] = await Promise.all([
+          sessionRow(session, ioQ),
+          scope ? got(scope) : undefined,
+          feedback ? got(feedback) : undefined,
+        ])
+        made = memoryChanges(
+          uniq(
+            [sess, scopeRow, who].filter((r): r is Row => !!r),
+          ),
+          {
+            title,
+            body,
+            scope,
+            feedback,
+            decided,
+            session,
+          },
+        )
       } catch (e) {
         return err((e as Error).message)
       }
       await io.write(made.changes, session)
-      let after = find(rows(await io.read()), made.eid)
+      let after = (await io.get([made.eid]))[0]
       let dupe = await similarHint(`${title}\n${body ?? ''}`, made.eid)
       return bus(
         `saved ${after ? idOf(after) : made.eid}${dupe ? `\n${dupe}` : ''}${
@@ -1282,7 +1362,6 @@ recording someone's correction, and limit caps returned index lines
       },
     ) => {
       if (type != null) return err(RETIRED_TYPE)
-      let all = rows(await io.read())
       if (
         ids &&
         [query, feedback, limit].some((value) => value != null)
@@ -1290,9 +1369,10 @@ recording someone's correction, and limit caps returned index lines
         return err('ids cannot be combined with query, feedback, or limit')
       }
       if (ids) {
+        let named = await io.get(ids)
         let hits: Row[] = []
         for (let id of ids) {
-          let row = find(all, id)
+          let row = find(named, id)
           if (!row?.comps.memory) return err(`no memory: ${id}`)
           hits.push(row)
         }
@@ -1313,17 +1393,21 @@ recording someone's correction, and limit caps returned index lines
       }
       let preds
       try {
-        preds = resolveRefs(
-          parseQuery(query ?? ''),
-          (id) => find(all, id)?.eid,
-        )
+        let raw = parseQuery(query ?? '')
+        let handles = refHandles(raw)
+        let resolved = handles.length ? await io.get(handles) : []
+        preds = resolveRefs(raw, (id) => find(resolved, id)?.eid)
       } catch (e) {
         return err((e as Error).message)
       }
       // A tag comp has no column, so it screens HERE rather than through the
       // pred grammar — the same way the inbox reads `archived`. Its `by` is a
-      // column and does filter: '.feedback.by=jeff'.
-      let pool = feedback ? all.filter((r) => r.comps.feedback) : all
+      // column and does filter: '.feedback.by=jeff'. The pool is every memory
+      // — recallIndex screened for `.comps.memory` anyway, so the keyed
+      // enumeration is the same universe the whole-graph scan reduced to.
+      let pool = await io.query(
+        ['.memory!', ...(feedback ? ['.feedback!'] : [])].join('&'),
+      )
       let lines = recallIndex(pool, preds, Date.now(), limit ?? 20)
       return bus(lines.join('\n') || '(no memories)', session)
     },
@@ -1378,7 +1462,7 @@ empty. ${GRAMMAR} ${FILTERS}`,
       // which would otherwise read as "no matches". Only a non-uuid handle needs
       // the graph to validate it, so a `.entry.session=<uuid>` stays off it.
       let ps = query != null ? parseQuery(query) : parseFilters(filters)
-      if (refHandles(ps).length) checkRefs(rows(await io.read(), true), ps)
+      if (refHandles(ps).length) await checkedRefs(ps, ioQ)
       // The authoritative matching happens in io.query (evalGraph in-process,
       // /query over stdio), which reads the full graph including the lazy entry
       // partition — not the snapshot()-only slice this tool used to screen.
@@ -1517,7 +1601,7 @@ back and retry. ${BUS}`,
         session?: string
       },
     ) => {
-      let row = find(rows(await io.read()), eid)
+      let row = await got(eid)
       if (!row) return err(`no entity: ${eid}`)
       let batch
       try {
@@ -1546,7 +1630,30 @@ heights of 0 are auto — treated as ~240px for visibility. Move a
 client's cursor — navigate its open tab — with the show tool.`,
     {},
     async () => {
-      let all = rows(await io.read())
+      // The chrome enumerations, keyed (WS_SETS' shape): cursors, cameras and
+      // pinned cards, then one bounded fetch for what they point at — each
+      // client row (its user_agent) and each target (its title).
+      let [curRows, camRows, cardRows] = await Promise.all([
+        io.query('.cursor!'),
+        io.query('.camera!'),
+        io.query('.card!'),
+      ])
+      let want = new Set<string>()
+      for (let r of curRows) {
+        let c = r.comps.cursor as Record<string, string>
+        if (c.client) want.add(String(c.client))
+        if (c.target) want.add(String(c.target))
+      }
+      for (let r of camRows) {
+        let c = r.comps.camera as Record<string, unknown>
+        if (c.client) want.add(String(c.client))
+      }
+      for (let r of cardRows) {
+        let c = r.comps.card as Record<string, string>
+        if (c.target) want.add(String(c.target))
+      }
+      let named = await io.get([...want])
+      let all = uniq([...curRows, ...camRows, ...cardRows, ...named])
       let byEid = new Map(all.map((r) => [r.eid, r]))
       let title = (eid: string) => {
         let t = byEid.get(eid)
@@ -1634,15 +1741,17 @@ card id (close it with card_close, move it with card_move).`,
         y?: number
       },
     ) => {
-      let all = rows(await io.read())
-      let row = find(all, target)
+      let row = await got(target)
       if (!row) return err(`no entity: ${target}`)
-      let canvas = all.find((r) => r.kind == 'canvas')
+      // The oldest canvas is the root — the same first-canvas the whole-graph
+      // read yielded, now one keyed enumeration (hits come back num-ascending).
+      let canvas = (await io.query('.canvas!'))
+        .find((r) => r.kind == 'canvas')
       if (!canvas) return err('no canvas')
       if (x == null || y == null) {
         // The LIVELIEST viewport, not the newest-minted: a camera moves
         // whenever its human pans, so updated.at names who's looking.
-        let cam = all.filter((r) => r.comps.camera?.canvas == canvas.eid)
+        let cam = (await io.query(`.camera.canvas=${canvas.eid}`))
           .sort((a, b) =>
             String(b.comps.updated?.at ?? '').localeCompare(
               String(a.comps.updated?.at ?? ''),
@@ -1656,9 +1765,7 @@ card id (close it with card_close, move it with card_move).`,
       }
       let z = Math.max(
         0,
-        ...all.filter((r) => r.comps.pin).map((r) =>
-          Number(r.comps.pin.z) || 0
-        ),
+        ...(await io.query('.pin!')).map((r) => Number(r.comps.pin?.z) || 0),
       ) + 1
       let views: Record<string, string> = {
         task: 'Full',
@@ -1683,7 +1790,7 @@ card id (close it with card_close, move it with card_move).`,
           comp: { canvas: canvas.eid, x, y, w: 0, h: 0, z }, // w 0 = auto
         },
       ])
-      let made = rows(await io.read()).find((r) => r.eid == eid)
+      let made = (await io.get([eid]))[0]
       return text(`opened ${made ? idOf(made) : eid} at ${x},${y}`)
     },
   )
@@ -1707,7 +1814,7 @@ card id (close it with card_close, move it with card_move).`,
         h?: number
       },
     ) => {
-      let row = find(rows(await io.read()), id)
+      let row = await got(id)
       if (!row?.comps.pin) return err(`no pinned card: ${id}`)
       let comp = Object.fromEntries(
         Object.entries({ x, y, w, h }).filter(([, v]) => v != null),
@@ -1723,7 +1830,7 @@ card id (close it with card_close, move it with card_move).`,
     'Close a card (deletes the card entity, never its target).',
     { id: z.string() },
     async ({ id }: { id: string }) => {
-      let row = find(rows(await io.read()), id)
+      let row = await got(id)
       if (!row?.comps.card) return err(`no card: ${id}`)
       await io.write([{ eid: row.eid, name: 'entity', comp: null }])
       return text(`closed ${idOf(row)}`)
@@ -1753,23 +1860,24 @@ there. Back-navigation still returns them — moving a cursor never traps.`,
         session?: string
       },
     ) => {
-      let all = rows(await io.read())
-      let row = find(all, target)
+      let row = await got(target)
       if (!row) return err(`no entity: ${target}`)
       // WHOSE tab: the named client, or the liveliest — the client that most
       // recently moved a cursor or camera, the same "who's looking now" rule
-      // card_open uses to place a card.
+      // card_open uses to place a card. Cursors and cameras are chrome-sized
+      // enumerations (WS_SETS' shape), read keyed.
       let moved = (r: Row) =>
         String(r.comps.updated?.at ?? r.comps.created?.at ?? '')
       let clientEid: string
       if (client) {
-        let c = find(all, client)
+        let c = await got(client)
         if (!c) return err(`no client: ${client}`)
         clientEid = c.eid
       } else {
-        let live = all
-          .filter((r) => r.comps.cursor || r.comps.camera)
-          .sort((a, b) => moved(b).localeCompare(moved(a)))[0]
+        let live = uniq([
+          ...await io.query('.cursor!'),
+          ...await io.query('.camera!'),
+        ]).sort((a, b) => moved(b).localeCompare(moved(a)))[0]
         let id = String(
           live?.comps.cursor?.client ?? live?.comps.camera?.client ?? '',
         )
@@ -1777,14 +1885,14 @@ there. Back-navigation still returns them — moving a cursor never traps.`,
         clientEid = id
       }
       // One cursor row per client (unique): patch the existing one, or mint.
-      let cur = all.find((r) => r.comps.cursor?.client == clientEid)
+      let cur = (await io.query(`.cursor.client=${clientEid}`))[0]
       let eid = cur?.eid ?? uuid()
       await io.write([{
         eid,
         name: 'cursor',
         comp: { client: clientEid, target: row.eid, view: view ?? null },
       }], session)
-      let who = all.find((r) => r.eid == clientEid)
+      let who = (await io.get([clientEid]))[0]
       return bus(
         `showing ${idOf(row)} to ${who ? idOf(who) : clientEid}`,
         session,
@@ -1807,7 +1915,7 @@ its page and title instead.`,
     ) => {
       let eid: string
       if (id) {
-        let row = find(rows(await io.read()), id)
+        let row = await got(id)
         if (!row?.comps.web) return err(`no web entity: ${id}`)
         eid = row.eid
         await io.write([{ eid, name: 'doc', comp: { title } }])
@@ -1819,7 +1927,7 @@ its page and title instead.`,
         ])
       }
       await io.upload(eid, html)
-      let made = rows(await io.read()).find((r) => r.eid == eid)
+      let made = (await io.get([eid]))[0]
       let name = made ? idOf(made) : eid
       return text(`published ${name} — card_open ${name} to show it`)
     },
@@ -1969,12 +2077,44 @@ affirms that). Quarantined content requires quarantined: true. ${BUS}`,
         session?: string
       },
     ) => {
-      let snap = await io.read()
-      let all = rows(snap, !!quarantined)
-      let row = find(all, id)
+      // around()'s shape through io: the row (quarantine-opted when asked —
+      // the two-pull union, readGraph's idiom), its comments, the edges
+      // touching it with their endpoint rows, and the authoring refs plus
+      // one more hop for the instrument's persona/actor faces.
+      let reveal = !!quarantined
+      let named = uniq([
+        ...await io.get([id]),
+        ...(reveal ? await io.get([id], ['.quarantined!']) : []),
+      ])
+      let row = find(named, id)
       if (!row) return err(`no entity: ${id}`)
-      let comments = all.filter((r) => r.comps.comment?.target == row.eid)
-      let edges = edgesOf(snap, all, row.eid)
+      let comments = uniq([
+        ...await io.query(`.comment.target=${row.eid}`),
+        ...(reveal
+          ? await io.query(`.comment.target=${row.eid}&.quarantined!`)
+          : []),
+      ])
+      let deps = await io.deps([row.eid], reveal)
+      // Entry rows (the lazy partition) can hold `referenced` edges at a hot
+      // entity — dozens of log-line mentions. The eager read never surfaced
+      // them (entries were outside snapshot()'s slice, so edgesOf's visible
+      // screen dropped those edges); keep that reading deliberately by
+      // screening entry endpoints, which the visible check below then drops.
+      let ends = (await io.get(
+        [...new Set(deps.flatMap((d) => [d.parent, d.child]))]
+          .filter((e) => e != row.eid),
+      )).filter((r) => !r.comps.entry)
+      let refs = await io.get(
+        [row, ...comments, ...ends].flatMap(refsIn),
+      )
+      let all = uniq([
+        row,
+        ...comments,
+        ...ends,
+        ...refs,
+        ...await io.get(refs.flatMap(refsIn)),
+      ])
+      let edges = edgesOf({ deps }, all, row.eid)
       return bus(
         JSON.stringify(
           {
@@ -2046,7 +2186,8 @@ if (import.meta.main) {
     // reachable over stdio too. A filter LINE splits into its `&` tokens, the
     // encoding-safe unit client.query already speaks.
     query: (q, opts) => queryHttp(q.split('&').filter(Boolean), opts),
-    get: (eids) => fetched(eids),
+    get: (ids, filters = []) => fetched(ids, filters),
+    deps: (eids, reveal) => httpDeps(eids, reveal),
     write: send,
     find: search,
     upload: async (eid, html) => {

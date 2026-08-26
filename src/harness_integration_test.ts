@@ -6,6 +6,7 @@ import { assertEquals, assertMatch } from '@std/assert'
 import { rows } from './client.ts'
 import {
   apply,
+  depsOf,
   inverseBatch,
   journalOf,
   lastBatch,
@@ -13,7 +14,7 @@ import {
   snapshot,
 } from './db.ts'
 import { readEntries } from './entries.ts'
-import { evalGraph } from './graph_query.ts'
+import { localQuery } from './graph_query.ts'
 import { combineTools, localTools, tasksTools } from './harness_tools.ts'
 import { managedCodex } from './managed_codex.ts'
 import { type IO } from './mcp.ts'
@@ -53,9 +54,12 @@ let complete = (item: Record<string, unknown>, leak: string) =>
 
 let ioFor = (db: ReturnType<typeof open>): IO => ({
   read: () => Promise.resolve(snapshot(db)),
-  query: (q, opts) => Promise.resolve(evalGraph(db, q, opts).hits),
-  get: (eids) =>
-    Promise.resolve(rows(snapshot(db)).filter((r) => eids.includes(r.eid))),
+  query: (q, opts) => localQuery(db)(q.split('&').filter(Boolean), opts),
+  get: (ids, filters = []) =>
+    ids.length
+      ? localQuery(db)([`id=${ids.join(',')}`, ...filters])
+      : Promise.resolve([]),
+  deps: (eids) => Promise.resolve(depsOf(db, eids)),
   write: (changes, via) => Promise.resolve(apply(db, changes, undefined, via)),
   find: () => Promise.resolve([]),
   upload: () => Promise.resolve(),

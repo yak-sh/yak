@@ -170,6 +170,7 @@ slow(
         gets++
         return Promise.resolve([])
       },
+      deps: () => Promise.resolve([]),
       write: (changes, via) => {
         writes.push({ changes, via })
         return Promise.resolve(changes)

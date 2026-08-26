@@ -3,8 +3,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
-import { idOf, rows } from './client.ts'
-import { evalGraph } from './graph_query.ts'
+import { find, idOf, type Row, rows } from './client.ts'
+import { localQuery } from './graph_query.ts'
 import { CUT, elide, type IO, mcpServer } from './mcp.ts'
 import { commandOut } from './commands.ts'
 import { sha } from './sha.ts'
@@ -12,7 +12,7 @@ import { type Change, edges, statuses, uuid, verdicts } from './types.ts'
 import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, inverseBatch, journalOf, lastBatch, snapshot, touch } =
+let { apply, depsOf, inverseBatch, journalOf, lastBatch, snapshot, touch } =
   await import('./db.ts')
 let { freshDb } = await import('./testdb.ts')
 let { append } = await import('./entries.ts')
@@ -300,6 +300,7 @@ let blank = (): IO => ({
   read: () => Promise.resolve({ changes: [], deps: [] }),
   query: () => Promise.resolve([]),
   get: () => Promise.resolve([]),
+  deps: () => Promise.resolve([]),
   write: (changes) => Promise.resolve(changes),
   find: () => Promise.resolve([]),
   upload: () => Promise.resolve(),
@@ -309,14 +310,22 @@ let blank = (): IO => ({
   providers: () => Promise.resolve([{ name: 'test', models: ['test'] }]),
 })
 
+// The graph as an address-resolving get over a Row[] — the same find() the
+// server's id= door mirrors, so a fake serves T-41 the way locate() does.
+let getFrom = (all: Row[]) => (ids: string[]) =>
+  Promise.resolve(ids.flatMap((id) => find(all, id) ?? []))
+
 let graph = () => {
   let db = freshDb()
   let pages = new Map<string, string>()
   let io: IO = {
     read: () => Promise.resolve(snapshot(db)),
-    query: (q, opts) => Promise.resolve(evalGraph(db, q, opts).hits),
-    get: (eids) =>
-      Promise.resolve(rows(snapshot(db)).filter((r) => eids.includes(r.eid))),
+    query: (q, opts) => localQuery(db)(q.split('&').filter(Boolean), opts),
+    get: (ids, filters = []) =>
+      ids.length
+        ? localQuery(db)([`id=${ids.join(',')}`, ...filters])
+        : Promise.resolve([]),
+    deps: (eids) => Promise.resolve(depsOf(db, eids)),
     write: (changes, via) =>
       Promise.resolve(apply(db, changes, undefined, via)),
     find: () => Promise.resolve([]),
@@ -383,14 +392,19 @@ Deno.test('MCP entity JSON shares the component-shaped contract', async () => {
       comp: { eid: comment, target: task },
     },
   ]
-  io.read = () => Promise.resolve({ changes, deps: [] })
-  // graph_query reads io.query now (the authoritative pipeline), not io.read —
-  // so the injected graph rides that door; task_show still reads io.read.
+  // graph_query and task_show both read the scoped doors now (io.query /
+  // io.get) — the injected graph rides those, and read() stays blank.
   let graphRows = rows({ changes })
+  io.get = getFrom(graphRows)
   io.query = (q) => {
     let kind = q.match(/\.kind=(\w+)/)?.[1]
+    let target = q.match(/\.comment\.target=([\w-]+)/)?.[1]
     return Promise.resolve(
-      kind ? graphRows.filter((r) => r.kind == kind) : graphRows,
+      target
+        ? graphRows.filter((r) => r.comps.comment?.target == target)
+        : kind
+        ? graphRows.filter((r) => r.kind == kind)
+        : graphRows,
     )
   }
   let entity = {
@@ -461,9 +475,11 @@ Deno.test('MCP query and show expose provenance context in via', async () => {
   ]
   let graph = rows({ changes })
   let io = blank()
-  io.read = () => Promise.resolve({ changes, deps: [] })
-  io.query = () => Promise.resolve([graph.find((r) => r.eid == task)!])
-  io.get = (eids) => Promise.resolve(graph.filter((r) => eids.includes(r.eid)))
+  io.query = (q) =>
+    Promise.resolve(
+      /\.comment\.target=/.test(q) ? [] : [graph.find((r) => r.eid == task)!],
+    )
+  io.get = getFrom(graph)
   await protocol(io, async (client) => {
     for (let name of ['graph_query', 'task_show']) {
       let result = await client.callTool({

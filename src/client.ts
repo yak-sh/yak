@@ -916,6 +916,7 @@ export let need = (all: Row[], id: string, where = '', comp = '') => {
 // hint must not mask it. Deduped, oldest-first: the order find()/nearby() read.
 let suggestFor = async (
   wants: { v: string; target?: string }[],
+  q: Querier = query,
 ): Promise<Row[]> => {
   let lines = new Set<string>()
   for (let { v, target } of wants) {
@@ -923,7 +924,7 @@ let suggestFor = async (
     lines.add(target && target != 'entity' ? `.${target}!` : v)
   }
   let hits = await Promise.all(
-    [...lines].map((line) => query([line]).catch(() => [] as Row[])),
+    [...lines].map((line) => q([line]).catch(() => [] as Row[])),
   )
   return uniq(hits.flat())
 }
@@ -1037,26 +1038,48 @@ export let around = async (id: string, quarantined = false) => {
   return { deps, all, row }
 }
 
-// Several entities' dependency neighborhoods in one keyed read. The rows the
-// edges name ride back too, including their typed refs (claim sessions), so a
-// renderer can humanize every endpoint without opening the corpus.
-export let neighborhoods = async (ids: string[]) => {
+// The dependency edges touching these entities — /query's deps=1 layer with
+// the rows discarded, deduped across hits (an edge between two asked-for
+// entities rides back on both). The server binds depsOf directly in-process;
+// every deps-driven reader takes one so both callers exist. `reveal` lifts the
+// quarantine screen the way quarantined=1 does at the route.
+export type DepsFn = (eids: string[], reveal?: boolean) => Promise<Dep[]>
+export let httpDeps: DepsFn = async (eids, reveal = false) => {
+  if (!eids.length) return []
+  let seen = new Map<string, Dep>()
+  for (let i = 0; i < eids.length; i += 50) {
+    let res = await request(
+      `http://${host()}/query?id=${
+        encodeURIComponent(eids.slice(i, i + 50).join(','))
+      }&deps=1${reveal ? '&quarantined=1' : ''}`,
+    )
+    if (!res.ok) throw new Error(`server said ${res.status}`)
+    let raw = await res.json() as { deps?: Dep[] }[]
+    for (let hit of raw) {
+      for (let d of hit.deps ?? []) {
+        seen.set(`${d.type} ${d.parent} ${d.child}`, d)
+      }
+    }
+  }
+  return [...seen.values()]
+}
+
+// Several entities' dependency neighborhoods in bounded keyed reads. The rows
+// the edges name ride back too, including their typed refs (claim sessions), so
+// a renderer can humanize every endpoint without opening the corpus.
+export let neighborhoods = async (
+  ids: string[],
+  q: Querier = query,
+  depsFn: DepsFn = httpDeps,
+) => {
   if (!ids.length) return { deps: [] as Dep[], rows: [] as Row[] }
-  let res = await request(
-    `http://${host()}/query?id=${encodeURIComponent(ids.join(','))}&deps=1`,
-  )
-  if (!res.ok) throw new Error(`server said ${res.status}`)
-  let raw = await res.json() as (Record<string, unknown> & { deps?: Dep[] })[]
-  let deps = raw.flatMap((hit) => hit.deps ?? [])
-  let hits = raw.map((hit) => {
-    let { deps: _deps, ...rest } = hit
-    return rowOf(rest)
-  })
+  let hits = await fetched(ids, [], q)
+  let deps = await depsFn(hits.map((r) => r.eid))
   let want = new Set(hits.flatMap(refsIn))
   for (let d of deps) want.add(d.parent), want.add(d.child)
   for (let r of hits) want.delete(r.eid)
-  let ends = await fetched([...want])
-  let refs = await fetched(ends.flatMap(refsIn))
+  let ends = await fetched([...want], [], q)
+  let refs = await fetched(ends.flatMap(refsIn), [], q)
   return { deps, rows: uniq([...hits, ...ends, ...refs]) }
 }
 
@@ -1113,13 +1136,13 @@ export let checkRefs = (all: Row[], preds: Pred[]) => {
 // over the fetched rows too; the resolved `hits` ride along so those refs still
 // pass, and only the genuinely-absent ones throw. The miss branch is the
 // original checkRefs verbatim, so the thrown message is byte-identical.
-export let checkedRefs = async (preds: Pred[]) => {
+export let checkedRefs = async (preds: Pred[], q: Querier = query) => {
   let refs = filterRefs(preds)
   if (!refs.length) return
-  let hits = await fetched(refs.map((r) => r.v))
+  let hits = await fetched(refs.map((r) => r.v), [], q)
   if (refs.every(({ v }) => find(hits, v))) return
   let missing = refs.filter(({ v }) => !find(hits, v))
-  checkRefs(uniq([...hits, ...await suggestFor(missing)]), preds)
+  checkRefs(uniq([...hits, ...await suggestFor(missing, q)]), preds)
 }
 export let derefParams = (all: Row[], ps: Param[]) =>
   ps.map((p) => {
@@ -1136,19 +1159,19 @@ export let derefParams = (all: Row[], ps: Param[]) =>
 // Dot-param references resolved from only the rows they name. As with
 // checkedRefs, the corpus is reserved for the miss path where nearby() can
 // teach a correction; a successful write pays one keyed read at most.
-export let derefedParams = async (ps: Param[]) => {
+export let derefedParams = async (ps: Param[], q: Querier = query) => {
   let refs = ps.filter((p) => {
     let t = propAt(p.comp, p.prop)?.type
     return typeof t == 'object' && 'eid' in t && p.value &&
       !UUID.test(String(p.value))
   })
   if (!refs.length) return derefParams([], ps)
-  let all = await fetched(refs.map((p) => String(p.value)))
+  let all = await fetched(refs.map((p) => String(p.value)), [], q)
   if (refs.every((p) => find(all, String(p.value)))) return derefParams(all, ps)
   let wants = refs
     .filter((p) => !find(all, String(p.value)))
     .map((p) => ({ v: String(p.value), target: refOf(p.comp, p.prop) }))
-  return derefParams(uniq([...all, ...await suggestFor(wants)]), ps)
+  return derefParams(uniq([...all, ...await suggestFor(wants, q)]), ps)
 }
 // Deref a change batch through a resolver — one core, two sources. `resolve`
 // turns a human id (or an eid) into the eid it names, throwing the door's
@@ -2831,10 +2854,12 @@ export let contextSnapshot = async (
   cwd?: string,
   scope?: string,
   named: string[] = [],
+  q: Querier = query,
+  depsFn: DepsFn = httpDeps,
 ): Promise<Snapshot> => {
   let [base, explicit] = await Promise.all([
-    readerRows(session),
-    fetched([scope, ...named].filter(Boolean) as string[]),
+    readerRows(session, q),
+    fetched([scope, ...named].filter(Boolean) as string[], [], q),
   ])
   let seed = uniq([...base, ...explicit])
   let who = readerFor(seed, session, cwd, scope)
@@ -2854,35 +2879,35 @@ export let contextSnapshot = async (
     inbox,
     comments,
   ] = await Promise.all([
-    query(['.kind=task', `.task.status=${open}`]),
+    q(['.kind=task', `.task.status=${open}`]),
     scope
       ? Promise.all([
-        query(
+        q(
           ['.kind=task', `.task.project=${scope}`, `.updated.at>=${since}`],
         ),
-        query(
+        q(
           ['.kind=task', `.task.project=${scope}`, `.created.at>=${since}`],
         ),
       ]).then((sets) => sets.flat())
       : [],
-    query(['.decided!']),
-    query(['.kind=memory', '.memory.scope=']),
-    actor ? query(['.kind=session', `.session.actor=${actor}`]) : [],
-    actor ? query(['.kind=task', `.resume.actor=${actor}`]) : [],
+    q(['.decided!']),
+    q(['.kind=memory', '.memory.scope=']),
+    actor ? q(['.kind=session', `.session.actor=${actor}`]) : [],
+    actor ? q(['.kind=task', `.resume.actor=${actor}`]) : [],
     actor
       ? Promise.all([
-        query(['.kind=task', `.updated.by=${actor}`, `.updated.at>=${since}`]),
-        query(['.kind=task', `.created.by=${actor}`, `.created.at>=${since}`]),
+        q(['.kind=task', `.updated.by=${actor}`, `.updated.at>=${since}`]),
+        q(['.kind=task', `.created.by=${actor}`, `.created.at>=${since}`]),
       ]).then((sets) => sets.flat())
       : [],
-    inboxRows(session, cwd),
-    claims.length ? query([`.comment.target=${claims.join(',')}`]) : [],
+    inboxRows(session, cwd, [], 'inbox', q),
+    claims.length ? q([`.comment.target=${claims.join(',')}`]) : [],
   ])
   // Only the CURRENT session's claims are ever read (mine, below), so query
   // that one session — never the actor's whole session history, which for a
   // dogfooding actor overflows the request URL past the server cap (T-19393).
   let actorClaims = who.session
-    ? await query([`.claim.session=${who.session}`])
+    ? await q([`.claim.session=${who.session}`])
     : []
   let preliminary = uniq([
     ...seed,
@@ -2910,7 +2935,7 @@ export let contextSnapshot = async (
   if (!local.length) local = available
   let shown = mine.length ? mine.slice(0, 4) : local.sort(byBoard).slice(0, 5)
   shown = uniq([...shown, ...explicit.filter((r) => r.comps.task)])
-  let near = await neighborhoods(shown.map((r) => r.eid))
+  let near = await neighborhoods(shown.map((r) => r.eid), q, depsFn)
   let recent = sessions
     .filter((r) =>
       r.eid != sess?.eid && Date.now() - Date.parse(editedAt(r)) < 7 * DAY
@@ -2918,10 +2943,12 @@ export let contextSnapshot = async (
     .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))
     .slice(0, 5)
   let unheardRows = recent.length
-    ? await query([`.comment.target=${recent.map((r) => r.eid).join(',')}`])
+    ? await q([`.comment.target=${recent.map((r) => r.eid).join(',')}`])
     : []
   let refs = await fetched(
     [...comments, ...unheardRows].flatMap(refsIn),
+    [],
+    q,
   )
   let all = uniq([...preliminary, ...near.rows, ...unheardRows, ...refs])
   return { changes: changesOf(all), deps: near.deps }
