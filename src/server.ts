@@ -75,6 +75,7 @@ import { closingTask } from './closing.ts'
 import { unblocking } from './unblock.ts'
 import { knocked } from './knock.ts'
 import { waking } from './wake.ts'
+import { scheduleArm, scheduleKnocked, scheduleSettled } from './schedule.ts'
 import { DREAM_PENDING, DREAM_ROLE, dreamComb } from './dream.ts'
 import {
   fleetApi,
@@ -2082,6 +2083,29 @@ on('knock', {
   doc: 'the dream: a cadence knock to a venture dream combs its sessions ' +
     'finished since the floor cursor, flagging drift as consider tasks and ' +
     'capturing owner decisions as memories — FLAG-only, never a fix (T-12800)',
+})
+on('role', {
+  created: (eid) => scheduleArm(eid, cast),
+  changed: {
+    schedule: (eid) => scheduleArm(eid, cast),
+    wake_policy: (eid) => scheduleArm(eid, cast),
+    state: (eid) => scheduleArm(eid, cast),
+  },
+  // Boot: every role reconciles its clock — a cadence missed while the
+  // server was down is one pending row again, never a storm.
+  sweep: { pending: '1' },
+  doc: 'a running scheduled role keeps exactly one pending self-wake at ' +
+    'its next instant; any other role keeps none (D-18722 part B)',
+})
+on('session', {
+  changed: { status: scheduleSettled(cast) },
+  doc: 'a role session reaching a terminal status re-arms its scheduled ' +
+    'role’s next self-wake',
+})
+on('knock', {
+  created: (eid) => scheduleKnocked(cast)(eid),
+  doc: 'a fired cadence knock re-arms the next instant, so the cadence ' +
+    'never stalls on a run that misses its terminal stamp',
 })
 on('wake', {
   created: waking(cast),

@@ -1233,6 +1233,21 @@ let pendingForScope = async (scope: string) => {
 // the reconciler leaves for an explicit `task role start` or a direct knock; it
 // still never tears down a running session the way `stopped` does. The
 // crash-loop breaker and spawn idempotency in reconcile() apply here unchanged.
+// A due cadence (D-18722 part B): the role's self-wake FIRED and no run has
+// started since. The delivered wake row is the durable signal — a reconcile
+// arriving by any path serves it, and one missed during downtime is served
+// at boot. ISO stamps compare lexically.
+let dueScheduled = (eid: string): boolean =>
+  !!db.prepare(
+    `select 1 from wake w
+     join deliver dl on dl.entity = w.entity
+     join delivered d on d.entity = w.entity
+     where dl."to" = ${idOf} and w.target is null
+       and d.at > coalesce(
+         (select max(s.started_at) from session s where s.role = ${idOf}),
+         '')`,
+  ).get(eid, eid)
+
 let reconcileWake = async (
   c: RoleConfig,
   policy: string,
@@ -1241,6 +1256,7 @@ let reconcileWake = async (
   deps: RoleDeps,
 ) => {
   let auto = policy != 'manual'
+  let due = policy == 'scheduled' && dueScheduled(c.eid)
   let killed = await tmuxKill(c.eid, deps)
   let session = latest(c.eid)
   if (killed || (active(session) && session?.origin != 'managed')) return
@@ -1262,9 +1278,15 @@ let reconcileWake = async (
       if (session.status != 'completed' || !session.provider_session_id) return
     }
     if (auto) await serveAttention(c, session, cast, deps)
+    // A due cadence is a NEW run, not a notice: a settled predecessor does
+    // not swallow it. Spawn-on-trigger; the injection loop boots the fresh
+    // session into the role's work.
+    if (due && !active(session)) startManaged(c, hash, cast, deps)
     return
   }
-  if (auto && await pendingForScope(c.scope)) startManaged(c, hash, cast, deps)
+  if (auto && (due || await pendingForScope(c.scope))) {
+    startManaged(c, hash, cast, deps)
+  }
 }
 
 // ——— System roles (D-18722 part C, T-18727): in-process spawn-on-trigger ———

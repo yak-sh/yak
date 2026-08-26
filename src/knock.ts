@@ -78,6 +78,18 @@ export let knocked =
     // delivered stamp — this ladder has no door for it, so abstain rather than
     // descend to rung 4 and stamp a spurious "no door" error every cadence.
     if (db.prepare(`select 1 from dream where ${OWNED}`).get(to)) return
+    // A SCOPED role entity (role comp, not a unified project-role) has no
+    // door either: roleAttention already ran the reconciler on this knock's
+    // creation, and that reconcile owns the response (D-18722). Settle it —
+    // a cadence knock must not stamp 'no door' every tick. A unified
+    // operator (role ON its project) keeps the full ladder: its doors are
+    // its sessions.
+    if (
+      db.prepare(
+        `select 1 from role where ${OWNED}
+         and not exists (select 1 from project where ${OWNED})`,
+      ).get(to, to)
+    ) return done('role reconcile')
     // Who asked. The knock's own provenance is the author of anything it
     // sends on their behalf.
     let knocker = () =>
