@@ -24,6 +24,7 @@ import {
   AGG,
   EXISTS,
   fieldsOf,
+  NEVER,
   ORDER,
   type Pred,
   PROJECT,
@@ -233,6 +234,9 @@ let body = (p: Pred, c: string): Sql | null =>
 let CMP: Record<string, string> = { '<': '<', '<=': '<=', '>': '>', '>=': '>=' }
 
 let one = (p: Pred): Sql | null => {
+  // The empty query's never-pred: a false condition, so the index answers
+  // the empty set immediately — never a full scan, never a dropped pred.
+  if (p.op == NEVER) return { sql: '0', params: [] }
   if (p.op == ORDER) return { sql: '1', params: [] } // a ranking, not a filter
   if (p.op == AGG) return { sql: '1', params: [] } // a projection; see aggregateSql
   if (p.op == PROJECT) return { sql: '1', params: [] } // fields; see select()

@@ -4546,7 +4546,7 @@ export let apply = (
       // grammar can't parse is a board that will never match anything and
       // never say why. The parser already knows — `task list .zzz=1`
       // errors — so refuse at the door, while the typo is still in front
-      // of whoever made it. Empty stays legal: it means every task.
+      // of whoever made it. Empty stays legal: it selects nothing.
       if (name == 'board' && comp?.query != null) {
         try {
           parseQuery(String(comp.query))

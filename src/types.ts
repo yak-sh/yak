@@ -1566,7 +1566,8 @@ export type Venture = {
 }
 
 // A board is a saved filter over tasks: `query` speaks the query.ts
-// grammar ('.project=…&.status=open,wip'); empty/null means every task.
+// grammar ('.project=…&.status=open,wip'); empty/null selects NOTHING —
+// a board that means "every task" says `.task!`.
 export type BoardTag = { eid: string; query?: string | null }
 
 // A tiling layout (D-14718): the doc names it, root its top pane.

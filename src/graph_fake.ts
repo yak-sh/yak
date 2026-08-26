@@ -30,13 +30,16 @@ export let answers = (snap: Snapshot) => {
     // Leaving a pagination param in would parse it as a bogus text pred and
     // filter every row out — which is how a paginated CLI read (task transcript)
     // silently reads nothing against this fake.
-    let preds = parseQuery(
-      segs.filter((s) =>
-        !s.startsWith('id=') && !s.startsWith('after=') &&
-        !s.startsWith('limit=') &&
-        s != 'deps=1' && s != 'backlinks=1' && s != 'quarantined=1'
-      ).join('&'),
-    )
+    let line = segs.filter((s) =>
+      !s.startsWith('id=') && !s.startsWith('after=') &&
+      !s.startsWith('limit=') &&
+      s != 'deps=1' && s != 'backlinks=1' && s != 'quarantined=1'
+    ).join('&')
+    // Same reading as the real doors: `id=` already selected, a remaining
+    // filter only screens — and no remaining filter means no screen (an empty
+    // QUERY selects nothing, so parsing '' here would drop every named hit).
+    // With no id= either, parseQuery('') mints the never-pred: empty answer.
+    let preds = line.trim() || !named.length ? parseQuery(line) : []
     return all.filter((r) =>
       matchQuery(r.comps, preds, (e) => byEid.get(e)?.comps, undefined, kids) &&
       (!named.length || eids.has(r.eid))

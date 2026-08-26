@@ -2538,7 +2538,7 @@ Deno.test('recallIndex: warmest first, index lines only, filtered', () => {
       },
     ],
   })
-  let lines = recallIndex(mems, parseQuery(''), NOW)
+  let lines = recallIndex(mems, [], NOW)
   assertEquals(lines.length, 2)
   assertMatch(lines[0], /^M-12 /) // the warm one leads
   assertMatch(lines[0], /warm fact/)

@@ -31,7 +31,7 @@ Deno.test('board tile carries status counts in its meta row', () => {
     value: document,
     configurable: true,
   })
-  cache.value = data('')
+  cache.value = data('.task!')
   let root = document.querySelector('main')!
   try {
     let board = ent('board')

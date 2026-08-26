@@ -159,7 +159,7 @@ let cases: [string, string, Record<string, unknown>, boolean][] = [
   ['spine num', '.num=7', {}, true],
   ['spine num list', '.num=1,7,9', {}, true],
   ['explicit comp', '.task.status=open', {}, true],
-  ['empty query matches all', '', {}, true],
+  ['empty query selects nothing', '', {}, false],
   [
     'numeric compare, not lexicographic',
     '.priority>=2',

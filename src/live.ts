@@ -2442,6 +2442,10 @@ export let boardAll = (e: Ent): Ent[] => boardScan(e, false)
 // whatever they already show. Throws like a saved query does; the bar
 // catches (mid-keystroke is no place to error) where a board would show.
 export let sieve = (line: string): (eid: string) => boolean => {
+  // A blank filter BAR is "no screen" — the bar narrows what a view already
+  // shows, it does not select. The empty QUERY selects nothing (parseQuery's
+  // never-pred), so this caller states its own meaning before parsing.
+  if (!line.trim()) return () => true
   let preds = resolveRefs(parseQuery(line), findEid)
   if (!preds.length) return () => true
   return (eid) =>

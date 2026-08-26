@@ -129,10 +129,13 @@ Deno.test('an empty result means the scope is empty, never a dropped partition',
 Deno.test('an unscoped eager query never drags the lazy partition in', () => {
   let { db } = world()
   // No lazy facet named → entries stay out (the partition is opt-in). The two
-  // sessions are the only eager entities the empty query returns.
-  let hits = evalGraph(db, '').hits
+  // sessions are the only eager entities a session query returns.
+  let hits = evalGraph(db, '.session!').hits
   assertEquals(hits.some((h) => h.comps.entry), false)
   assertEquals(hits.filter((h) => h.comps.session).length, 2)
+  // And the EMPTY query selects nothing — there is nothing to return until
+  // the caller actually selects something.
+  assertEquals(evalGraph(db, '').hits, [])
   db.close()
 })
 

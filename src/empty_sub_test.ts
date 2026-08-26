@@ -1,9 +1,9 @@
-// An empty-query subscription is refused (server.ts control()): the answer is
-// never match-all — on the live graph that stages every entity and ships tens
-// of MB. A route sub keeps its name-scoped answer; every other empty sub gets
-// a loud, settling empty replace carrying the refusal.
+// An empty-query subscription answers the EMPTY SET: an empty query selects
+// nothing (query.ts parseQuery mints the never-pred), so the reply is a cheap
+// empty replace — never match-all, which on the live graph staged every entity
+// and shipped tens of MB. A route sub keeps its name-scoped answer.
 
-import { assert, assertEquals } from '@std/assert'
+import { assertEquals } from '@std/assert'
 import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -46,7 +46,7 @@ let dial = async () => {
 }
 
 slow(
-  'an empty-query sub is refused with a settling empty replace',
+  'an empty-query sub answers the empty set — nothing was selected',
   alone,
   async () => {
     let { sock, next } = await dial()
@@ -55,7 +55,7 @@ slow(
     assertEquals(f.sub, 'board:nope')
     assertEquals(f.changes, [])
     assertEquals(f.replace, true)
-    assert(f.error?.includes('empty query refused'))
+    assertEquals(f.error, undefined)
     sock.close()
   },
 )

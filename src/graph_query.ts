@@ -307,13 +307,21 @@ export let evalGraph = (
 ): { preds: Pred[]; hits: Row[] } => {
   let after = opts.after ?? 0
   let limit = opts.limit ?? ENTRY_PAGE
+  // An EXPLICIT limit bounds an eager answer too — the newest `limit` by num,
+  // returned in num order. Entry pages keep their own seq paging; a caller
+  // that passed no limit keeps the whole eager answer, as before.
+  let cut = (hits: Row[]) =>
+    opts.limit != null && hits.length > opts.limit
+      ? hits.sort((a, b) => b.num - a.num).slice(0, opts.limit)
+        .sort((a, b) => a.num - b.num)
+      : hits
   let fast = evalFast(db, q)
   if (fast && orderOf(fast.preds) != 'hot') {
     return {
       preds: fast.preds,
       hits: fast.entries
         ? orderedEntries(fast.hits, after, limit)
-        : fast.hits.sort((a, b) => a.num - b.num),
+        : cut(fast.hits.sort((a, b) => a.num - b.num)),
     }
   }
   let { preds, ent, hits } = evalQuery(db, q, after, limit)
@@ -322,7 +330,9 @@ export let evalGraph = (
     hits = hits.sort((a, b) =>
       warm(b.comps, now, ent) - warm(a.comps, now, ent)
     )
+    if (opts.limit != null) hits = hits.slice(0, opts.limit)
   } else if (namesLazy(preds)) hits = orderedEntries(hits, after, limit)
+  else hits = cut(hits)
   return { preds, hits }
 }
 
@@ -402,7 +412,10 @@ async (filters, opts) => {
   // live entities only, matching the /query door and snapshot().
   let only = (named.map((i) => locate(db, i)).filter(Boolean) as string[])
     .filter((eid) => !buried(db, eid))
-  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  // `id=` already SELECTED — the addresses are the selection, and a remaining
+  // filter only SCREENS them. No remaining filter means no screen, so this
+  // caller states that before parsing (an empty QUERY would select nothing).
+  let preds = q.trim() ? resolveRefs(parseQuery(q), (id) => locate(db, id)) : []
   let read = (e: string) => eager(db, e)
   let kids = (eid: string, comp: string, prop: string) =>
     referrersOf(db, [eid], { comp, prop }).map(read)

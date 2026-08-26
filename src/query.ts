@@ -800,9 +800,18 @@ let segments = (q: string) => q.match(/(?:"[^"]*"|[^&])+/g) ?? []
 // A query string to preds. '&' separates first (an &-segment that IS one
 // dot-param keeps its spaces — the old grammar); a segment holding ` .`
 // or bare words splits on whitespace, quotes glue: that's how a search
-// box mixes terms and filters in one line. Empty: matches everything.
-export let parseQuery = (q: string): Pred[] =>
-  segments(q).map((t) => t.trim()).filter(Boolean).flatMap((seg) => {
+// box mixes terms and filters in one line.
+//
+// Empty: matches NOTHING. An empty query has selected nothing, so there is
+// nothing to return — the never-pred below compiles to a false SQL condition
+// and fails matchQuery, so every door (subs, boards, /query, MCP, CLI)
+// answers the empty set cheaply. The old empty-means-everything default was
+// how one blank board query staged the whole graph onto a socket. A caller
+// that means "all of a kind" states it: `.task!`, `.memory!`.
+export let NEVER = 'never'
+export let never = (): Pred => ({ comp: '', prop: '', op: NEVER, value: '' })
+export let parseQuery = (q: string): Pred[] => {
+  let out = segments(q).map((t) => t.trim()).filter(Boolean).flatMap((seg) => {
     if (seg.startsWith('.') && !/\s\./.test(seg)) {
       let p = preds(seg) // null = an opless dot-word (.env) — a term
       if (p) return p
@@ -815,6 +824,8 @@ export let parseQuery = (q: string): Pred[] =>
       return [text(tok.replace(/^"(.*)"$/s, '$1'))]
     })
   })
+  return out.length ? out : [never()]
+}
 
 let asNum = (v: unknown) =>
   typeof v == 'number'
@@ -1046,6 +1057,7 @@ export let matchQuery = (
   kids?: Kids,
 ) =>
   preds.every((p) => {
+    if (p.op == NEVER) return false // the empty query: selects nothing
     if (p.op == ORDER || p.op == AGG || p.op == PROJECT) return true
     if (p.refs) {
       // The multi-column reverse-union: read every {eid} column this bag

@@ -5,7 +5,7 @@
 // to types.ts and this interface grows a section, a column set, and a
 // form with zero edits — the same property every other surface holds.
 import { useEffect, useState } from 'preact/hooks'
-import { comps, type Ent, idOf, type PropType, uuid } from '../types.ts'
+import { comps, type Ent, idOf, kindOf, type PropType, uuid } from '../types.ts'
 import { base, census, ent, mutate, rows } from '../live.ts'
 import { block } from './ui.tsx'
 import {
@@ -106,8 +106,48 @@ let Index = (
   // remains editable, and cannot inherit an unrelated glance at this kind.
   let filter = `admin:${kind}${query ? `:${query}` : ''}`
   let pass = passOf(filter, query)
-  let all = inSection(rows(), kind).map((r) => ent(r.eid))
-    .filter((e) => pass(e.eid))
+  // The census is a DB renderer: each section FETCHES its rows from /query
+  // with an explicit selection — `.{kind}!`, presence of the component —
+  // newest-first, bounded to the page. The partial client cache is only a
+  // freshness overlay (a fetched row that is also live renders its live bag);
+  // before this the section listed whatever the cache happened to hold, which
+  // under a partial cache was routinely 0 of hundreds. The filter bar still
+  // screens against the cache, so it is best-effort on rows not yet live.
+  let [fetched, setFetched] = useState<Ent[]>([])
+  useEffect(() => {
+    let dead = false
+    setFetched([]) // never show the previous section's rows under this head
+    fetch(`/query?.${kind}!&limit=${CAP}`)
+      .then((r) => r.json())
+      .then(
+        (
+          rows: ({ kind?: string; entity?: { eid?: string; num?: number } })[],
+        ) => {
+          if (dead) return
+          setFetched(
+            rows.flatMap((r) =>
+              r.entity?.eid
+                ? [{
+                  ...r,
+                  eid: r.entity.eid,
+                  num: r.entity.num ?? 0,
+                  // idOf needs the derived kind; /query rows carry it, and a
+                  // row that doesn't gets it derived the same way.
+                  kind: r.kind ?? kindOf(r as Parameters<typeof kindOf>[0]),
+                } as unknown as Ent]
+                : []
+            ),
+          )
+        },
+      )
+      .catch(() => {})
+    return () => {
+      dead = true
+    }
+  }, [kind])
+  let live = new Set(inSection(rows(), kind).map((r) => r.eid))
+  let all = fetched.map((e) => live.has(e.eid) ? ent(e.eid) : e)
+    .filter((e) => !live.has(e.eid) || pass(e.eid))
   if (sort) {
     let col = cols.find((c) => c.key == sort!.key)!
     all.sort((a, b) => {
@@ -182,24 +222,15 @@ let Index = (
           </Table>
         )}
       {
-        // The footer is honest about the cache being partial. `total` is the
-        // graph-true count (server /census); the cache omits the entry
-        // partition, so a listing of loaded rows can be a fraction of it.
-        // Never present the loaded subset as the whole.
+        // The footer is honest about the page being a bounded fetch. `total`
+        // is the graph-true count (server /census); the section fetches the
+        // newest page of it. Never present the page as the whole.
         total != null && total > all.length
-          ? (
-            <More>
-              {`${shown.length} of ${total} — ${all.length} loaded here, the rest live in the entry partition (off the cache)`}
-            </More>
-          )
+          ? <More>{`newest ${shown.length} of ${total}`}</More>
           : all.length > CAP
           ? <More>showing {CAP} of {all.length}</More>
           : !all.length
-          ? (
-            total
-              ? <More>{total} in the graph, none loaded in this view</More>
-              : <More>nothing here yet</More>
-          )
+          ? <More>nothing here yet</More>
           : null
       }
     </Main>
