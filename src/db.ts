@@ -11,6 +11,7 @@ import { DatabaseSync, type StatementSync } from './sqlite.ts'
 import { tryBaton } from './baton.ts'
 import { initVector, loadVector } from './vector.ts'
 import { dirname, resolve } from 'node:path'
+import { statfsSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { sha } from './sha.ts'
 import {
@@ -2373,8 +2374,14 @@ let migrateToIdKeys = (db: DatabaseSync) => {
 //   `.stale.<ts>` — preserved for forensics, never deleted — then retry ONCE.
 //   The db reverts to its last checkpoint; loss is bounded to frames that were
 //   already unreadable.
-// - A second failure means the MAIN file is bad — not self-healable. Restore
-//   the wal/shm exactly as found and propagate.
+// - A MAIN-file failure is not self-healable: leave everything exactly as
+//   found and propagate. The live file itself is the evidence — never copy
+//   the multi-GB main on this path, and preserve the (small) WAL once per
+//   INCIDENT, not per retry: the supervisor re-runs this every ~30s, and the
+//   2026-08-26 outage was SUSTAINED by ~60 fresh 1.6GB evidence copies
+//   filling the disk to 0 bytes (T-22262). A `.refused` marker beside the db
+//   names the verdict last refused on; a retry seeing the same verdict copies
+//   nothing, and any successful open clears the marker.
 let stamp = () => new Date().toISOString().replaceAll(':', '-')
 let exists = (p: string) => {
   try {
@@ -2389,33 +2396,124 @@ let probe = (db: DatabaseSync) => {
   let verdict = row?.quick_check ?? Object.values(row ?? {})[0]
   if (verdict != 'ok') throw new Error(`quick_check: ${verdict}`)
 }
+// Copying evidence into a full disk sustains the outage it documents — and a
+// full disk is also the likeliest CAUSE of the corruption (ENOSPC mid-write).
+// Require 2× the copy's size free before writing one; when the volume lacks
+// it, skip the copy loudly — the original stays on disk as the evidence.
+// TASKS_EVIDENCE_MIN_FREE (bytes) overrides the floor so tests can force the
+// low-disk branch. A statfs failure fails OPEN: the guard itself must never
+// block a salvage.
+let headroom = (path: string, need: number) => {
+  try {
+    let env = Deno.env.get('TASKS_EVIDENCE_MIN_FREE')
+    let floor = env ? Number(env) : need * 2
+    let s = statfsSync(dirname(path))
+    return Number(s.bavail) * Number(s.bsize) >= floor
+  } catch {
+    return true
+  }
+}
+let evidence = (src: string, dst: string) => {
+  if (!headroom(src, Deno.statSync(src).size)) {
+    console.error(
+      `EVIDENCE COPY SKIPPED: no headroom on the volume for ${dst} ` +
+        `(T-22262 — copying into a full disk sustains the outage it ` +
+        `documents). ${src} stays on disk as the evidence.`,
+    )
+    return
+  }
+  Deno.copyFileSync(src, dst)
+}
+let refusedAt = (path: string) => `${path}.refused`
+// The marker's first line is a HASH of the verdict — quick_check verdicts are
+// multi-line, so the raw text can't be the compared line. The full verdict
+// follows for humans reading the marker.
+let sameRefusal = (path: string, verdict: string) => {
+  try {
+    return Deno.readTextFileSync(refusedAt(path)).split('\n')[0] == sha(verdict)
+  } catch {
+    return false
+  }
+}
+let clearRefusal = (path: string) => {
+  try {
+    Deno.removeSync(refusedAt(path))
+  } catch { /* none stood */ }
+}
 let healWal = (db: DatabaseSync, path: string): DatabaseSync => {
-  if (path == ':memory:' || !exists(`${path}-wal`)) return db
+  if (path == ':memory:') return db
+  if (!exists(`${path}-wal`)) {
+    clearRefusal(path)
+    return db
+  }
   try {
     probe(db)
+    clearRefusal(path)
     return db
   } catch (e) {
     let baton = tryBaton(path)
     if (!baton) throw e // a live process owns this graph — never salvage under it
-    let ts = stamp()
     try {
-      // Evidence copies FIRST — every later step may consume the originals.
-      Deno.copyFileSync(path, `${path}.pre-walrecover.${ts}`)
-      Deno.copyFileSync(`${path}-wal`, `${path}-wal.corrupt.${ts}`)
-      if (exists(`${path}-shm`)) {
-        Deno.copyFileSync(`${path}-shm`, `${path}-shm.stale.${ts}`)
+      // Which file is actually bad? Probe the MAIN alone FIRST — the
+      // immutable URI reads main and ignores wal/shm, consuming nothing —
+      // because the answer decides whether any multi-GB copy is warranted.
+      let alone = 'ok'
+      {
+        let solo = new DatabaseSync(`file:${path}?immutable=1`, {
+          readOnly: true,
+        })
+        try {
+          probe(solo)
+        } catch (bad) {
+          alone = String(bad)
+        } finally {
+          solo.close()
+        }
       }
-      // The WAL is salvageable only if the main file ALONE is healthy: probe
-      // it through an immutable URI, which reads main and ignores wal/shm
-      // entirely. Failure means main-db corruption — not self-healable, so
-      // propagate with everything still exactly as found (only copies exist).
-      let alone = new DatabaseSync(`file:${path}?immutable=1`, {
-        readOnly: true,
-      })
-      try {
-        probe(alone)
-      } finally {
-        alone.close()
+      if (alone != 'ok') {
+        // Main-db corruption — not self-healable. Propagate with everything
+        // exactly as found: the untouched live file IS the evidence. Preserve
+        // the small WAL once per incident (each crashed retry may rewrite
+        // it, so the first refusal's copy is the incident's WAL).
+        if (!sameRefusal(path, alone)) {
+          let ts = stamp()
+          evidence(`${path}-wal`, `${path}-wal.corrupt.${ts}`)
+          if (exists(`${path}-shm`)) {
+            evidence(`${path}-shm`, `${path}-shm.stale.${ts}`)
+          }
+          Deno.writeTextFileSync(
+            refusedAt(path),
+            `${sha(alone)}\nrefused ${ts}\n${alone}\n`,
+          )
+          console.error(
+            `SALVAGE REFUSED for ${path}: the MAIN file itself is corrupt ` +
+              `(${alone}) — not self-healable, left exactly as found. WAL ` +
+              `preserved beside it; ${refusedAt(path)} suppresses duplicate ` +
+              `evidence copies while the crash-loop retries.`,
+          )
+        }
+        // Deliberately NOT db.close(): close() checkpoints the wal into the
+        // corrupt main and deletes it — destroying the as-found evidence
+        // (proven by test). A refusal exits the process, which releases the
+        // handle without a checkpoint; the crash-loop is cross-process.
+        throw e
+      }
+      let ts = stamp()
+      // WAL-only damage: salvageable. The safety copy is LOAD-BEARING here —
+      // close() below checkpoints the corrupt frames INTO main and the copy
+      // is what restores it — so without headroom for it there is no safe
+      // salvage: leave everything as found and propagate.
+      if (!headroom(path, Deno.statSync(path).size)) {
+        throw new Error(
+          `cannot salvage ${path}: no headroom on the volume for the safety ` +
+            `copy the recovery depends on — free disk space and retry. ` +
+            `Original failure: ${e}`,
+        )
+      }
+      Deno.copyFileSync(path, `${path}.pre-walrecover.${ts}`)
+      evidence(`${path}-wal`, `${path}-wal.corrupt.${ts}`)
+      if (exists(`${path}-shm`)) {
+        evidence(`${path}-shm`, `${path}-shm.stale.${ts}`)
       }
       // Dispose of the corrupt-wal handle. close() runs a checkpoint that
       // copies the (checksum-valid, semantically stale) frames INTO main and
@@ -2435,6 +2533,7 @@ let healWal = (db: DatabaseSync, path: string): DatabaseSync => {
       }
       let healed = new DatabaseSync(path)
       probe(healed) // no wal now: reads serve from the proven-healthy main
+      clearRefusal(path)
       let n = 'unknown'
       try {
         n = String(

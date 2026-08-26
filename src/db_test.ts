@@ -4527,3 +4527,71 @@ slow('connect() refuses to salvage when the MAIN file is bad', () => {
   assertEquals(names.includes('g.db-wal'), true) // restored as found
   Deno.removeSync(dir, { recursive: true })
 })
+
+// The refuse-path crash loop must mint ONE evidence set, not one per retry —
+// 60 fresh 1.6GB copies filled the disk to 0 bytes and SUSTAINED the
+// 2026-08-26 outage (T-22262). The live corrupt file is the evidence; only
+// the small WAL is copied, once, and the `.refused` marker makes retries
+// copy-free. A successful open clears the marker. Each retry is a FRESH
+// PROCESS, as the real supervisor loop is — a refused handle is released by
+// process exit, never by close() (which would checkpoint into the evidence).
+let connectInChild = (path: string) => {
+  let out = new Deno.Command(Deno.execPath(), {
+    args: [
+      'run',
+      '-A',
+      '--unstable-worker-options',
+      '--config',
+      new URL('../deno.json', import.meta.url).pathname,
+      new URL('./testing/connect_once.ts', import.meta.url).pathname,
+      path,
+    ],
+    env: { DB_PATH: ':memory:', TASKS_SYNC: 'off', TASKS_EMBED: '0' },
+  }).outputSync()
+  return new TextDecoder().decode(out.stdout).trim()
+}
+
+slow('a refuse-loop preserves one evidence set, never the main', () => {
+  let dir = Deno.makeTempDirSync()
+  let { path, t1 } = walWreck(dir)
+  let bad = new Uint8Array(t1)
+  bad.fill(0xef, 8192, 12288)
+  Deno.writeFileSync(path, bad)
+  for (let i = 0; i < 3; i++) assertEquals(connectInChild(path), 'THREW')
+  // As-found means BYTE-identical: refusing must not checkpoint anything
+  // into the corrupt main — the live file is the evidence.
+  assertEquals(Deno.readFileSync(path), bad)
+  let names = [...Deno.readDirSync(dir)].map((e) => e.name)
+  let walCopies = names.filter((n) => n.startsWith('g.db-wal.corrupt.'))
+  assertEquals(walCopies.length, 1) // one incident, one set
+  assertEquals(names.some((n) => n.startsWith('g.db.pre-walrecover.')), false) // never the main
+  assertEquals(names.includes('g.db.refused'), true) // the marker stands
+  // Recovery (here: the wreck healed by hand — wal AND shm aside, as the
+  // incident runbook does) clears the marker on the next successful open.
+  Deno.writeFileSync(path, t1)
+  Deno.removeSync(`${path}-wal`)
+  try {
+    Deno.removeSync(`${path}-shm`)
+  } catch { /* not minted */ }
+  assertEquals(connectInChild(path), 'OK')
+  let after = [...Deno.readDirSync(dir)].map((e) => e.name)
+  assertEquals(after.includes('g.db.refused'), false)
+  Deno.removeSync(dir, { recursive: true })
+})
+
+// No headroom → no copies: a salvage that cannot afford its load-bearing
+// safety copy refuses loudly instead of writing into a full disk (T-22262).
+slow('salvage refuses when the volume lacks copy headroom', () => {
+  Deno.env.set('TASKS_EVIDENCE_MIN_FREE', '9007199254740991')
+  try {
+    let dir = Deno.makeTempDirSync()
+    let { path } = walWreck(dir)
+    assertThrows(() => connect(path), Error, 'headroom')
+    let names = [...Deno.readDirSync(dir)].map((e) => e.name)
+    assertEquals(names.includes('g.db-wal'), true) // as found
+    assertEquals(names.some((n) => n.startsWith('g.db.pre-walrecover.')), false)
+    Deno.removeSync(dir, { recursive: true })
+  } finally {
+    Deno.env.delete('TASKS_EVIDENCE_MIN_FREE')
+  }
+})
