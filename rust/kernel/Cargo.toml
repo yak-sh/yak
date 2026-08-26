@@ -3,7 +3,13 @@ name = "kernel"
 version = "0.1.0"
 edition = "2021"
 
+# `native` carries everything that cannot cross into wasm32 (sqlite, files).
+# kernel-wasm depends on this crate with default-features = false and gets
+# only the pure core: vocab, model, query, cache.
+[features]
+default = ["native"]
+native = ["dep:rusqlite"]
+
 [dependencies]
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"], optional = true }
 serde_json = { version = "1", features = ["preserve_order"] }
-chrono = { version = "0.4", default-features = false, features = ["clock"] }

@@ -4,7 +4,7 @@
 // Time phrases and path/reverse hops are NOT ported in the PoC — a filter
 // using them is refused loudly, never half-answered.
 
-use crate::store::{Row, Store};
+use crate::model::{Row, Source};
 use crate::vocab::{vocab, PropType};
 use serde_json::Value;
 
@@ -61,6 +61,21 @@ pub fn parse(args: &[String]) -> Result<(String, Vec<Pred>), String> {
             continue;
         }
         let (comp, prop) = route(path)?;
+        // A Time column compared against anything but a literal timestamp is
+        // a time PHRASE ("today", "1-week-ago") — not ported: refuse loudly
+        // rather than string-compare a phrase into a half-answer.
+        let timely = vocab()
+            .prop_type(&comp, &prop)
+            .map(|t| t == PropType::Time)
+            .unwrap_or(false);
+        let literal_stamp =
+            value.len() >= 4 && value[..4].chars().all(|c| c.is_ascii_digit());
+        if timely && !value.is_empty() && !literal_stamp {
+            return Err(format!(
+                "time phrases ('{value}') are not ported in the Rust PoC — \
+                 use a literal timestamp prefix"
+            ));
+        }
         preds.push(Pred { comp, prop, op, value });
     }
     if kind.is_empty() {
@@ -117,8 +132,9 @@ fn plural(kind: &str) -> String {
 }
 
 // Resolve reference VALUES (`.project=P-19`) before matching, like
-// resolveRefs does — an id in a filter compares as its eid.
-pub fn resolve_values(store: &Store, preds: &mut [Pred]) {
+// resolveRefs does — an id in a filter compares as its eid. Any Source
+// (sqlite store, delta-fed cache) resolves the same way.
+pub fn resolve_values<S: Source + ?Sized>(src: &S, preds: &mut [Pred]) {
     let v = vocab();
     for p in preds.iter_mut() {
         if p.value.is_empty() {
@@ -128,24 +144,37 @@ pub fn resolve_values(store: &Store, preds: &mut [Pred]) {
             .prop_type(&p.comp, &p.prop)
             .map(|t| t.is_ref())
             .unwrap_or(false);
-        if is_ref && !crate::store::is_uuid(&p.value.to_lowercase()) {
-            if let Some(eid) = store.resolve_id(&p.value) {
+        if is_ref && !crate::model::is_uuid(&p.value.to_lowercase()) {
+            if let Some(eid) = src.resolve_id(&p.value) {
                 p.value = eid;
             }
         }
     }
 }
 
-fn scalar(row: &Row, comp: &str, prop: &str) -> Option<Value> {
-    row.comps.get(comp)?.as_object()?.get(prop).cloned()
+fn scalar(
+    comps: &serde_json::Map<String, Value>,
+    comp: &str,
+    prop: &str,
+) -> Option<Value> {
+    comps.get(comp)?.as_object()?.get(prop).cloned()
 }
 
 pub fn matches(row: &Row, preds: &[Pred]) -> bool {
+    matches_comps(&row.comps, preds)
+}
+
+// The predicate test on a bare comps bag — lets a cache match BEFORE it
+// clones a row out, so a query pays only for its hits.
+pub fn matches_comps(
+    comps: &serde_json::Map<String, Value>,
+    preds: &[Pred],
+) -> bool {
     preds.iter().all(|p| {
         if p.op.is_empty() {
-            return row.comps.contains_key(&p.comp);
+            return comps.contains_key(&p.comp);
         }
-        let got = scalar(row, &p.comp, &p.prop);
+        let got = scalar(comps, &p.comp, &p.prop);
         let want_list: Vec<&str> = p.value.split(',').collect();
         let hit = |want: &str| -> bool {
             let Some(g) = &got else {

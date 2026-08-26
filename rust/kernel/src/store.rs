@@ -5,6 +5,8 @@
 // client connects, reads, and leaves the schema alone (D-22530 §1).
 
 use crate::vocab::vocab;
+pub use crate::model::{is_uuid, Dep, Row};
+use crate::model::Source;
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -12,21 +14,6 @@ use std::collections::{HashMap, HashSet};
 pub struct Store {
     pub conn: Connection,
     tables: HashSet<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Row {
-    pub eid: String,
-    pub num: Option<i64>,
-    pub kind: String,
-    pub comps: Map<String, Value>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Dep {
-    pub parent: String,
-    pub type_: String,
-    pub child: String,
 }
 
 fn q(id: &str) -> String {
@@ -411,19 +398,18 @@ impl<'a> Rows<'a> {
     }
 }
 
+// query.rs resolves filter values through any Source; the sqlite store's
+// resolution is resolve_id itself.
+impl Source for Store {
+    fn resolve_id(&self, id: &str) -> Option<String> {
+        Store::resolve_id(self, id)
+    }
+}
+
 fn regex_num(id: &str) -> Option<i64> {
     let (pre, num) = id.split_once('-')?;
     if pre.is_empty() || !pre.chars().all(|c| c.is_ascii_alphabetic()) {
         return None;
     }
     num.parse().ok()
-}
-
-pub fn is_uuid(s: &str) -> bool {
-    let b: Vec<&str> = s.split('-').collect();
-    b.len() == 5
-        && [8, 4, 4, 4, 12]
-            .iter()
-            .zip(&b)
-            .all(|(n, p)| p.len() == *n && p.chars().all(|c| c.is_ascii_hexdigit()))
 }
