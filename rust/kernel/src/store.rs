@@ -47,78 +47,7 @@ impl Store {
     // resolveId's grammar: prefixed num (prefix is display-only, num rules),
     // bare num, full uuid, short-eid prefix, alias slug.
     pub fn resolve_id(&self, id: &str) -> Option<String> {
-        let num_of = |n: i64| -> Option<String> {
-            self.conn
-                .query_row(
-                    "select eid from entity where num = ?1",
-                    [n],
-                    |r| r.get(0),
-                )
-                .optional()
-                .ok()
-                .flatten()
-        };
-        if let Some(c) = regex_num(id) {
-            return num_of(c);
-        }
-        if let Ok(n) = id.parse::<i64>() {
-            if let Some(hit) = num_of(n) {
-                return Some(hit);
-            }
-        }
-        let low = id.to_lowercase();
-        if is_uuid(&low) {
-            if let Some(hit) = self
-                .conn
-                .query_row(
-                    "select eid from entity where eid = ?1",
-                    [&low],
-                    |r| r.get::<_, String>(0),
-                )
-                .optional()
-                .ok()
-                .flatten()
-            {
-                return Some(hit);
-            }
-        }
-        if low.len() >= 6 && low.len() <= 8
-            && low.chars().all(|c| c.is_ascii_hexdigit())
-        {
-            let mut st = self
-                .conn
-                .prepare(
-                    "select eid from entity where eid >= ?1 and eid < ?2 \
-                     limit 2",
-                )
-                .ok()?;
-            let hi = format!("{low}\u{ffff}");
-            let hits: Vec<String> = st
-                .query_map([&low, &hi], |r| r.get(0))
-                .ok()?
-                .filter_map(|x| x.ok())
-                .collect();
-            if hits.len() == 1 {
-                return Some(hits[0].clone());
-            }
-        }
-        if self.has_table("alias") {
-            if let Some(hit) = self
-                .conn
-                .query_row(
-                    "select e.eid from alias a join entity e \
-                     on e.id = a.entity where a.slug = ?1",
-                    [&low],
-                    |r| r.get::<_, String>(0),
-                )
-                .optional()
-                .ok()
-                .flatten()
-            {
-                return Some(hit);
-            }
-        }
-        None
+        resolve(&self.conn, id)
     }
 
     // One component row for one entity, refs projected to eids (select()).
@@ -404,6 +333,82 @@ impl Source for Store {
     fn resolve_id(&self, id: &str) -> Option<String> {
         Store::resolve_id(self, id)
     }
+}
+
+// The id grammar as a free function, so the write path resolves against its
+// own connection with the same rules the read Store uses.
+pub fn resolve(conn: &Connection, id: &str) -> Option<String> {
+    let num_of = |n: i64| -> Option<String> {
+        conn.query_row("select eid from entity where num = ?1", [n], |r| r.get(0))
+            .optional()
+            .ok()
+            .flatten()
+    };
+    if let Some(c) = regex_num(id) {
+        return num_of(c);
+    }
+    if let Ok(n) = id.parse::<i64>() {
+        if let Some(hit) = num_of(n) {
+            return Some(hit);
+        }
+    }
+    let low = id.to_lowercase();
+    if is_uuid(&low) {
+        if let Some(hit) = conn
+            .query_row(
+                "select eid from entity where eid = ?1",
+                [&low],
+                |r| r.get::<_, String>(0),
+            )
+            .optional()
+            .ok()
+            .flatten()
+        {
+            return Some(hit);
+        }
+    }
+    if low.len() >= 6 && low.len() <= 8
+        && low.chars().all(|c| c.is_ascii_hexdigit())
+    {
+        let mut st = conn
+            .prepare("select eid from entity where eid >= ?1 and eid < ?2 limit 2")
+            .ok()?;
+        let hi = format!("{low}\u{ffff}");
+        let hits: Vec<String> = st
+            .query_map([&low, &hi], |r| r.get(0))
+            .ok()?
+            .filter_map(|x| x.ok())
+            .collect();
+        if hits.len() == 1 {
+            return Some(hits[0].clone());
+        }
+    }
+    let has_alias: bool = conn
+        .query_row(
+            "select 1 from sqlite_master where type = 'table' and name = 'alias'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .optional()
+        .ok()
+        .flatten()
+        .is_some();
+    if has_alias {
+        if let Some(hit) = conn
+            .query_row(
+                "select e.eid from alias a join entity e \
+                 on e.id = a.entity where a.slug = ?1",
+                [&low],
+                |r| r.get::<_, String>(0),
+            )
+            .optional()
+            .ok()
+            .flatten()
+        {
+            return Some(hit);
+        }
+    }
+    None
 }
 
 fn regex_num(id: &str) -> Option<i64> {

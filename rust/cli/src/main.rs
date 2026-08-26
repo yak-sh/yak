@@ -12,6 +12,11 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let verb = args.first().map(String::as_str).unwrap_or("");
     let rest = &args[1.min(args.len())..];
+    // The write door dispatches before the read-only Store opens: apply
+    // needs its own read-write connection (kernel::WriteStore).
+    if verb == "apply" {
+        std::process::exit(apply_cmd(rest));
+    }
     let path = db_path();
     let uri = format!("file:{path}?mode=ro");
     let store = match Store::open(&uri) {
@@ -26,11 +31,86 @@ fn main() {
         "show" => show(&store, rest),
         "search" => search_cmd(&store, rest),
         _ => {
-            eprintln!("task-rs <list|show|search> …");
+            eprintln!("task-rs <list|show|search|apply> …");
             2
         }
     };
     std::process::exit(code);
+}
+
+// task-rs apply [--db path] [--fed] [--writer w] [--batch json | reads stdin]
+// One batch through the kernel write path (T-22550): prints the effective
+// batch as JSON, or the refusal on stderr with exit 1 — the same all-or-
+// nothing contract apply() keeps on every other door.
+fn apply_cmd(args: &[String]) -> i32 {
+    let mut db = db_path();
+    let mut fed = false;
+    let mut writer: Option<String> = None;
+    let mut batch: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--db" => {
+                i += 1;
+                db = args.get(i).cloned().unwrap_or(db);
+            }
+            "--fed" => fed = true,
+            "--writer" => {
+                i += 1;
+                writer = args.get(i).cloned();
+            }
+            "--batch" => {
+                i += 1;
+                batch = args.get(i).cloned();
+            }
+            other => {
+                eprintln!("unknown flag {other}");
+                return 2;
+            }
+        }
+        i += 1;
+    }
+    let json = match batch {
+        Some(j) => j,
+        None => {
+            let mut buf = String::new();
+            use std::io::Read;
+            if std::io::stdin().read_to_string(&mut buf).is_err() {
+                eprintln!("apply: cannot read stdin");
+                return 2;
+            }
+            buf
+        }
+    };
+    let parsed: serde_json::Value = match serde_json::from_str(&json) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("apply: bad batch json — {e}");
+            return 2;
+        }
+    };
+    let Some(changes) = kernel::change::parse_batch(&parsed) else {
+        eprintln!("apply: a batch is an array of {{eid, name, comp}} changes");
+        return 2;
+    };
+    let store = match kernel::WriteStore::open(&db) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("cannot open {db} for writing: {e}");
+            return 1;
+        }
+    };
+    let opts = kernel::ApplyOpts { writer: writer.as_deref(), fed };
+    match kernel::apply(&store, changes, &opts, &kernel::default_gates()) {
+        Ok(out) => {
+            println!("{}", kernel::change::batch_json(&out));
+            0
+        }
+        Err(e) => {
+            eprintln!("{e}");
+            1
+        }
+    }
 }
 
 fn show(store: &Store, args: &[String]) -> i32 {

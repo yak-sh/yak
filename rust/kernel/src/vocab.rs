@@ -38,6 +38,12 @@ pub struct Vocab {
     pub statuses: Vec<String>,
     // Old spellings that still resolve — the compatibility promise in data.
     pub renames: Vec<(String, String)>,
+    // Every {eid} reference's declared death word, in comps declaration
+    // order: (comp, column, word). The write path's cascade worklists derive
+    // from these — the declarations ARE the reaper's list, TS deaths().
+    pub deaths: Vec<(String, String, String)>,
+    // The valid dependency words.
+    pub edges: Vec<String>,
 }
 
 pub fn vocab() -> &'static Vocab {
@@ -85,6 +91,24 @@ impl Vocab {
         } else {
             prop.into()
         }
+    }
+    // The reaper's worklist for one death word, (comp, column) pairs in
+    // declaration order — TS deaths().
+    pub fn deaths_of(&self, word: &str) -> Vec<(String, String)> {
+        self.deaths
+            .iter()
+            .filter(|(_, _, w)| w == word)
+            .map(|(c, col, _)| (c.clone(), col.clone()))
+            .collect()
+    }
+    // types.ts propRenames: the renames table minus the renderer's `view:`
+    // namespace — what admitted()'s rewrite applies.
+    pub fn prop_renames(&self) -> HashMap<String, String> {
+        self.renames
+            .iter()
+            .filter(|(k, _)| !k.starts_with("view:"))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
     pub fn kind_of(&self, has: &dyn Fn(&str) -> bool) -> String {
         self.kind_order

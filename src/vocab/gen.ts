@@ -432,8 +432,24 @@ export let emitRust = (a: ReturnType<typeof assemble>): string => {
     out.push(`        (${rq(k)}.into(), ${rq(a.renames[k])}.into()),`)
   }
   out.push('    ];')
+  // Death words, (comp, column, word) in declaration order — the write
+  // path's cascade worklists (write.rs) derive from these, TS deaths().
+  out.push('    let deaths = vec![')
+  for (let name of a.compOrder) {
+    for (let [col, t] of Object.entries(a.comps[name].cols ?? {})) {
+      if (typeof t == 'object' && 'eid' in t) {
+        out.push(
+          `        (${rq(name)}.into(), ${rq(col)}.into(), ${
+            rq(t.death)
+          }.into()),`,
+        )
+      }
+    }
+  }
+  out.push('    ];')
+  out.push(`    let edges = ${strVec(a.edges)};`)
   out.push(
-    '    Vocab { comps, stamped, kind_order, prefix, statuses, renames }',
+    '    Vocab { comps, stamped, kind_order, prefix, statuses, renames, deaths, edges }',
     '}',
     '',
   )
