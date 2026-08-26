@@ -15,7 +15,8 @@
 // session of its own — its run-record is telemetry, its output the graph
 // edits. SERVER-ONLY (imports db). The model call is injectable so tests never
 // spawn a provider (like recall.ts's recallFn).
-import { apply, db, human, locate, touch } from './db.ts'
+import { apply, human, locate, touch } from './db.ts'
+import { db } from './live_db.ts'
 import { type Change, uuid } from './types.ts'
 import { dispatch, trace } from './effects.ts'
 import { record as telemetry } from './telemetry.ts'

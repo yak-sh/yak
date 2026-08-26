@@ -10,7 +10,8 @@
 // comp on the scribe-desk entity carries on/off and the throttle values
 // (quiet/cooldown, seconds) as graph data, and each pass stamps its
 // decision there; absent that row, the code defaults below apply.
-import { apply, db, depsOf, locate } from './db.ts'
+import { apply, depsOf, locate } from './db.ts'
+import { db } from './live_db.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, type Dep } from './types.ts'
 import { DESK, find, type Row, spawnChanges, STUB } from './client.ts'

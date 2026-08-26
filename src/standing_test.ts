@@ -10,7 +10,8 @@ Deno.env.set('DB_PATH', ':memory:')
 
 import { assert, assertEquals } from '@std/assert'
 import { type Change } from './types.ts'
-import { apply, db } from './db.ts'
+import { apply } from './db.ts'
+import { db } from './live_db.ts'
 import {
   maintainStanding,
   maintainStandingFor,

@@ -15,7 +15,8 @@
 // and a mark that goes stale the same way is cleared by the sweep unspent.
 // ruled() is the effect shell (SERVER-ONLY: imports db); the decision table
 // above it is pure over Rows and fast-tier tested.
-import { apply, db, depsOf } from './db.ts'
+import { apply, depsOf } from './db.ts'
+import { db } from './live_db.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, type Dep, sessionActive } from './types.ts'
 import { type Row } from './client.ts'

@@ -14,7 +14,8 @@ Deno.mkdirSync(`${home}/.deno/bin`, { recursive: true })
 Deno.writeTextFileSync(`${home}/.deno/bin/task`, '')
 Deno.chmodSync(`${home}/.deno/bin/task`, 0o755)
 
-let { apply, db } = await import('./db.ts')
+let { apply } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let { scheduleArm, scheduleKnocked, scheduleSettled } = await import(
   './schedule.ts'
 )

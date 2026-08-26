@@ -20,7 +20,8 @@ Deno.mkdirSync(`${tasksHome}/.deno/bin`, { recursive: true })
 Deno.writeTextFileSync(`${tasksHome}/.deno/bin/task`, '')
 Deno.chmodSync(`${tasksHome}/.deno/bin/task`, 0o755)
 
-let { apply, db, journalOf, readComp } = await import('./db.ts')
+let { apply, journalOf, readComp } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let { append, readEntries } = await import('./entries.ts')
 let {
   nativeProviderArgs,

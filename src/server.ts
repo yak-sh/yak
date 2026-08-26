@@ -21,7 +21,6 @@ import {
   correct,
   cursorOf,
   cursorStale,
-  db,
   delta,
   depsOf,
   eager,
@@ -51,6 +50,7 @@ import {
   touch,
   vocabularyDoc,
 } from './db.ts'
+import { db } from './live_db.ts'
 import { published, withBackupLock } from './redaction.ts'
 import { bodied, bodyless, gaps, spread, type Step, step } from './subs.ts'
 import { dispatch, docs, on, relay, trace } from './effects.ts'

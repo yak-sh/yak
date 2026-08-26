@@ -17,7 +17,8 @@
 // the URL"), and it rides the existing archive path: freeze.ts store()
 // with scrub on, because these bytes come off the open web and must
 // render from themselves alone. Server-only.
-import { apply, db, human, locate, webAt } from './db.ts'
+import { apply, human, locate, webAt } from './db.ts'
+import { db } from './live_db.ts'
 import { dbReader } from './graph_query.ts'
 import { dispatch, trace } from './effects.ts'
 import { filing } from './commands.ts'

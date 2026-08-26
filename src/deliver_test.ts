@@ -5,7 +5,8 @@
 // disagree about one deliverable). T-15458.
 Deno.env.set('DB_PATH', ':memory:')
 import { assertEquals } from '@std/assert'
-import { apply, db, journalOf } from './db.ts'
+import { apply, journalOf } from './db.ts'
+import { db } from './live_db.ts'
 import { delivered, errored } from './deliver.ts'
 import { type Change, uuid } from './types.ts'
 

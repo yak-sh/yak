@@ -17,7 +17,8 @@
 //   - the self-wake itself firing (delivered) — so a run that never reaches
 //     a terminal stamp (T-20075) cannot stall the cadence.
 // SERVER-ONLY (imports db).
-import { apply, db, human } from './db.ts'
+import { apply, human } from './db.ts'
+import { db } from './live_db.ts'
 import { errored } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, sessionActive } from './types.ts'

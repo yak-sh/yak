@@ -2,7 +2,7 @@
 // newest-first with its filters and clamps, and the /mcp body classifier
 // tells tool traffic from handshake noise.
 Deno.env.set('DB_PATH', ':memory:')
-let { db } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let { outcome, record, recent, stats, toolCall } = await import(
   './telemetry.ts'
 )

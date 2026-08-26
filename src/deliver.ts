@@ -19,7 +19,8 @@
 // by aspect: `error` is a known/expected failure state, `exception` is a BUG
 // (something unexpected broke), and it is the self-healing trigger. excepted()
 // stamps it and fires the heal effect on the spot.
-import { db, record } from './db.ts'
+import { record } from './db.ts'
+import { db } from './live_db.ts'
 import { record as telemetry } from './telemetry.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change } from './types.ts'

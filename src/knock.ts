@@ -5,7 +5,8 @@
 // running session's channel plugin hears the broadcast the moment the
 // knock commits. Words never live in the knock — they ride as a plain
 // comment on the target in the same batch. SERVER-ONLY (imports db).
-import { apply, db, human } from './db.ts'
+import { apply, human } from './db.ts'
+import { db } from './live_db.ts'
 import { reachable } from './door.ts'
 import { delivered, errored, excepted, toOf } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'

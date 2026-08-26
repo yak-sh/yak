@@ -15,7 +15,8 @@ Deno.env.set('DB_PATH', ':memory:')
 // mint stops at the graph (the session + fixer marker) without a subprocess.
 Deno.env.set('TASKS_FIXER_PROVIDER', 'fake')
 Deno.env.set('TASKS_FIXER_MODEL', 'fake-fast')
-let { apply, db } = await import('./db.ts')
+let { apply } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let { exceptionChange, excepted, delivered } = await import('./deliver.ts')
 let {
   actionable,

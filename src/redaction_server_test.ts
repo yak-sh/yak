@@ -19,7 +19,8 @@ slow(
   'POST /redact forgets through the client without echoing the value',
   { sanitizeOps: false, sanitizeResources: false },
   async () => {
-    let { db, readComp } = await import('./db.ts')
+    let { readComp } = await import('./db.ts')
+    let { db } = await import('./live_db.ts')
     let { redact, send } = await import('./client.ts')
     let eid = crypto.randomUUID()
     let secret = "route'\ncredential-12696"

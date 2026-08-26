@@ -1,7 +1,7 @@
 // The native vector seam: a raw-vector write dirties the persisted ANN data,
 // refresh rebuilds it, and SQLite answers KNN from that rebuilt structure.
 Deno.env.set('DB_PATH', ':memory:')
-let { db } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let { DIM, refreshVector } = await import('./vector.ts')
 let { assertEquals } = await import('@std/assert')
 let { slow } = await import('./testing.ts')

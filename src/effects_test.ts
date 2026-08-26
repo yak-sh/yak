@@ -9,7 +9,8 @@ import { type Change } from './types.ts'
 import { dispatch, docs, on, relay, trace } from './effects.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db } = await import('./db.ts')
+let { apply } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 
 let uid = () => crypto.randomUUID()
 

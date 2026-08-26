@@ -4,7 +4,7 @@
 // Ranking rides the real vector extension: `vec(1, 0)` fixtures ride a dense
 // basis (testvec.ts) so the ANN index quantizes them like real embeddings.
 Deno.env.set('DB_PATH', ':memory:')
-let { db } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let { vectorDb } = await import('./testdb.ts')
 let { hash, prune, similar, similarTo, stale, stored, textOf } = await import(
   './embed.ts'

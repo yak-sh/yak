@@ -10,7 +10,8 @@ Deno.env.set('DB_PATH', `${tmp}/tasks.db`)
 Deno.env.set('LOGS_DIR', `${tmp}/logs`)
 Deno.env.set('POLL_MS', '5')
 
-let { apply, db } = await import('./db.ts')
+let { apply } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let { logsDir, recover, running } = await import('./sessions.ts')
 let { writeSession } = await import('./session_store.ts')
 

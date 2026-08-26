@@ -2,7 +2,8 @@
 // empty Codex composer; graph content stays in task_context and is never
 // copied through tmux. Every guard fails closed.
 // SERVER-ONLY (imports db).
-import { db, readComp } from './db.ts'
+import { readComp } from './db.ts'
+import { db } from './live_db.ts'
 import { delivery } from './door.ts'
 import { bus } from './client.ts'
 import { localQuery } from './graph_query.ts'

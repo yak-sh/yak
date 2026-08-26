@@ -12,7 +12,6 @@ let {
   correct,
   cursorOf,
   cursorStale,
-  db,
   delta,
   eager,
   epochOf,
@@ -50,6 +49,7 @@ let {
 } = await import(
   './db.ts'
 )
+let { db } = await import('./live_db.ts')
 let { assertEquals, assertMatch, assertNotEquals, assertThrows } = await import(
   '@std/assert'
 )

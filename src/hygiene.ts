@@ -3,7 +3,8 @@
 // for graph prose and one for telemetry. It never edits, archives, merges, or
 // supersedes authored graph data. SERVER-ONLY (imports db).
 import { createHash } from 'node:crypto'
-import { apply, db, human } from './db.ts'
+import { apply, human } from './db.ts'
+import { db } from './live_db.ts'
 import { dispatch, trace } from './effects.ts'
 import { FLOOR, similar, stored, textOf } from './embed.ts'
 import { personaGraph } from './graph_query.ts'

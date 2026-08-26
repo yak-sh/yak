@@ -7,7 +7,7 @@
 // from claims, context entries, and transcript references; neither a queued
 // route nor a successful wake-up notice may mint a human stamp.
 // SERVER-ONLY (imports db).
-import { db } from './db.ts'
+import { db } from './live_db.ts'
 import { commOf } from './proc.ts'
 import { type Seat, served } from './served.ts'
 import { sessionActive } from './types.ts'

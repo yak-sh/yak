@@ -2,7 +2,8 @@
 // derivation, fleet-only error aggregation, proposal-only writes, and keyed
 // readback/dedup. Model work is absent because this phase is deterministic.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db } = await import('./db.ts')
+let { apply } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let {
   candidates,
   HARD_SCOPE,

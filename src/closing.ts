@@ -16,7 +16,8 @@
 // Housekeeping, so it is allowed to miss: a close while the server is
 // down simply leaves the inbox noisier. No sweep, no reconcile.
 // SERVER-ONLY (imports db).
-import { apply, db } from './db.ts'
+import { apply } from './db.ts'
+import { db } from './live_db.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change } from './types.ts'
 

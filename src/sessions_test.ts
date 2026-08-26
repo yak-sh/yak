@@ -34,10 +34,10 @@ Deno.env.set('CODEX_HOME', `${tmp}/codex`)
 Deno.env.set('POLL_MS', '10') // tests wait on facts, never on the clock
 Deno.env.set('STOP_GRACE_MS', '1000')
 
-let { apply, db, delta, human, journalOf, snapshot, sweepSelect } =
-  await import(
-    './db.ts'
-  )
+let { apply, delta, human, journalOf, snapshot, sweepSelect } = await import(
+  './db.ts'
+)
+let { db } = await import('./live_db.ts')
 let { hookClaim, noticesFor, rows } = await import('./client.ts')
 let { childEnv, childPath } = await import('./agent_env.ts')
 let { append, readEntries } = await import('./entries.ts')

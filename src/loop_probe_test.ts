@@ -12,7 +12,8 @@
 // scenario. Runs under TASKS_SLOW.
 import { type Change } from './types.ts'
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db, open, depsOf, eager } = await import('./db.ts')
+let { apply, open, depsOf, eager } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let { reapLeases } = await import('./sessions.ts')
 let { unblocking } = await import('./unblock.ts')
 let { backlog, parkable } = await import('./dispatch.ts')

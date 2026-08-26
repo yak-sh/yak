@@ -3,7 +3,8 @@
 // in-memory db and a capture-script mailer (no network, no real mail).
 // The native path runs against a captured fetch; creds here are dummies.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db, open } = await import('./db.ts')
+let { apply, open } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let { addressOf, FANOUT_PENDING, fanout, mailed, named, rfcId } = await import(
   './mail.ts'
 )

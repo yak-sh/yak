@@ -19,7 +19,8 @@ slow(
   'POST /usage records telemetry without stamping an exception (T-20579)',
   { sanitizeOps: false, sanitizeResources: false },
   async () => {
-    let { apply, db } = await import('./db.ts')
+    let { apply } = await import('./db.ts')
+    let { db } = await import('./live_db.ts')
     let eid = crypto.randomUUID()
     apply(db, [{
       eid,

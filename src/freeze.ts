@@ -6,7 +6,8 @@
 // provenance, not storage, decides the trust. Server-only.
 import { parseHTML } from 'linkedom'
 import { type Change } from './types.ts'
-import { db, record } from './db.ts'
+import { record } from './db.ts'
+import { db } from './live_db.ts'
 import { errored, healthy } from './deliver.ts'
 
 // Freeze a pasted URL: monolith fetches the page and inlines every asset

@@ -8,7 +8,8 @@
 // heavy. The effect tests use the module db with an injected recall fn, so no
 // embedder and no KNN, and stay in the fast tier.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db } = await import('./db.ts')
+let { apply } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let { hash, MODEL } = await import('./embed.ts')
 let { recallEntry, recallFrom } = await import('./recall.ts')
 let { vectorDb } = await import('./testdb.ts')

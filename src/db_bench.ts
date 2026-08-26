@@ -3,9 +3,10 @@
 // sub-1ms bar the gate holds (a batch bench measures N ops at once — split into
 // the single-op cost instead). `deno task bench`.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, componentCounts, db, eager, journalOf, resolveId } = await import(
+let { apply, componentCounts, eager, journalOf, resolveId } = await import(
   './db.ts'
 )
+let { db } = await import('./live_db.ts')
 let { freshDb } = await import('./testdb.ts')
 
 let uid = () => crypto.randomUUID()

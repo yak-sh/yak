@@ -8,7 +8,8 @@
 // board, and its task is never re-asked until someone clears that session.
 // A sweep like the others (scribe.ts is the sibling) — graduates to a
 // `system` entity under T-3906.
-import { apply, db, depsOf, settingValue } from './db.ts'
+import { apply, depsOf, settingValue } from './db.ts'
+import { db } from './live_db.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, type Dep } from './types.ts'
 import { type Row, spawnChanges, spawnPlan } from './client.ts'

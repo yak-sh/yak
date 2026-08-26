@@ -3027,14 +3027,9 @@ export let migrate = (db: DatabaseSync) => {
 // because the caller is the one writer (first boot, revive, test, probe).
 export let open = (path = file) => migrate(connect(path))
 
-// The one live handle — the server shares it for the process lifetime. A --join
-// deploy successor must NOT migrate at import: its predecessor still holds the
-// graph, and migrating beside it is the two-writer write that corrupted the WAL
-// (T-20223). It connects read-capable now and migrates later — under the writer
-// baton, once server.ts has bound the port and the predecessor has released the
-// DB (becomeWriter in server.ts). Every other boot is the sole writer and opens
-// (connect + migrate) inline as before.
-export let db = Deno.args.includes('--join') ? connect() : open()
+// The one live handle moved to live_db.ts: importing THIS module runs nothing
+// — it is library code (D-22388), safe in the CLI's read arm and in any test —
+// while importing live_db.ts is the deliberate act of opening the live graph.
 
 // The sync allowlist: the shared vocabulary plus the spine (which has no
 // writable columns — num is server-owned, kind doesn't exist, and the
@@ -3051,14 +3046,18 @@ let edgeCols = ['type', 'child', 'ord', 'gone']
 
 // What the SCHEMA has, as opposed to what the wire may write — the
 // authority for telling a name that EXISTS from a name that doesn't.
-// Memoized per table; an empty set means no such table.
-let stored: Record<string, Set<string>> = {}
-let columnsOf = (table: string): Set<string> =>
-  stored[table] ??= new Set(
+// Memoized per table, per handle (a process can hold several graphs —
+// the live one and a probe's); an empty set means no such table.
+let stored = new WeakMap<DatabaseSync, Record<string, Set<string>>>()
+let columnsOf = (db: DatabaseSync, table: string): Set<string> => {
+  let mine = stored.get(db) ?? {}
+  stored.set(db, mine)
+  return mine[table] ??= new Set(
     (prep(db, 'select name from pragma_table_info(?)').all(table) as {
       name: string
     }[]).map((c) => c.name),
   )
+}
 
 // The effective batch says what landed. An unknown COMPONENT stays a
 // compatible no-op on purpose — that is the seam a plugin or a newer
@@ -3147,7 +3146,7 @@ export let renamed = (
     : { ...change, name, comp }
 }
 
-let admitted = (change: Change): Change | undefined => {
+let admitted = (db: DatabaseSync, change: Change): Change | undefined => {
   change = renamed(change)
   let table = change.name
   let cols = table == 'dependency' ? edgeCols : cmps[table]
@@ -3159,7 +3158,7 @@ let admitted = (change: Change): Change | undefined => {
   // now), so ignore it here rather than reading it as an unknown column when a
   // snapshot is replayed back through apply().
   let sent = Object.entries(change.comp).filter(([n]) => n != 'eid')
-  let real = columnsOf(table)
+  let real = columnsOf(db, table)
   let alien = sent.filter(([n]) => !cols.includes(n) && !real.has(n))
   if (alien.length) {
     throw new Error(
@@ -4131,7 +4130,7 @@ export let apply = (
     now: Date.now(),
     resolve: (id) => ident(db, id),
   }).flatMap((change) => {
-    let kept = admitted(change)
+    let kept = admitted(db, change)
     return kept ? [kept] : []
   })
   let dead = prep(db, 'select 1 from tombstone where eid = ?')
@@ -6401,7 +6400,7 @@ export let componentCounts = (db: DatabaseSync): Record<string, number> => {
   let out: Record<string, number> = {}
   let named: string[] = []
   for (let name of Object.keys(comps)) {
-    if (columnsOf(name).size) named.push(name)
+    if (columnsOf(db, name).size) named.push(name)
     else out[name] = 0
   }
   if (named.length) {
@@ -6484,6 +6483,7 @@ export let readComp = (
 
 // `deno task seed` (or a direct run) bootstraps the file without the server.
 if (import.meta.main) {
+  let db = open()
   let n = (q: string) => (prep(db, q).get() as { n: number }).n
   console.log(
     `seeded ${n('select count(*) as n from task')} tasks, ${

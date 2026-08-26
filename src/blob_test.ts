@@ -8,7 +8,8 @@ import { assert, assertEquals } from '@std/assert'
 Deno.env.set('DB_PATH', ':memory:')
 Deno.env.set('HOME', await Deno.makeTempDir())
 let { imageSize, landBlob, serveBlob } = await import('./blob.ts')
-let { apply, db } = await import('./db.ts')
+let { apply } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 
 // A minimal PNG: 8-byte signature, IHDR length+tag, then width/height as
 // big-endian u32 at offsets 16 and 20 — all imageSize reads.

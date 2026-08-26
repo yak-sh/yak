@@ -3,7 +3,8 @@
 // guard, per-entry idempotence), and the effect's skips (recall floaters,
 // empty content). Module db like recall_test — referencedEntry closes over it.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db } = await import('./db.ts')
+let { apply } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let {
   cites,
   historicalReferenced,

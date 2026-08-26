@@ -2,7 +2,8 @@
 // waiting. Against an in-memory db, no server.
 import { type Change } from './types.ts'
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db, open } = await import('./db.ts')
+let { apply, open } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let { closingTask } = await import('./closing.ts')
 let { assertEquals } = await import('@std/assert')
 

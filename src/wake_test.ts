@@ -5,7 +5,8 @@
 // — a wake owed while the process was gone is just an overdue row.
 import { type Change } from './types.ts'
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db, open } = await import('./db.ts')
+let { apply, open } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let { arm } = await import('./wake.ts')
 let { assertEquals, assertMatch, assertThrows } = await import('@std/assert')
 

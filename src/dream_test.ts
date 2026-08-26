@@ -4,7 +4,8 @@
 // shared :memory: db carries other tests' rows, so every db assertion screens
 // to the eids this test made.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db } = await import('./db.ts')
+let { apply } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let {
   advance,
   considerChanges,

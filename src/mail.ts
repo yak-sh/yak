@@ -12,7 +12,8 @@
 // native send was assigned). The comment relay mints mails for comments on
 // an addressed project's tasks — the graph's replacement for holdco's
 // delivery.js. SERVER-ONLY (imports db).
-import { apply, db, human, readComp } from './db.ts'
+import { apply, human, readComp } from './db.ts'
+import { db } from './live_db.ts'
 import { delivered, errored, settled, toOf } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Letter, logOut, native, send } from './mailer.ts'

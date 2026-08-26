@@ -9,7 +9,8 @@
 // here. Everything lands as DATA: unverified mail arrives verbatim with
 // its verdict on the row; nothing executes on content. SERVER-ONLY
 // (imports db).
-import { apply, db, readComp } from './db.ts'
+import { apply, readComp } from './db.ts'
+import { db } from './live_db.ts'
 import { dispatch, trace } from './effects.ts'
 import { named, rfcId } from './mail.ts'
 import { canon, fleetAddress } from './mailaddr.ts'

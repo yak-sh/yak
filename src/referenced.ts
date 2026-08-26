@@ -7,7 +7,8 @@
 // recall-floater entry is skipped here: its citations are the machinery's
 // own, already recorded as `recalled` edges.
 import { type DatabaseSync } from './sqlite.ts'
-import { apply, db, human, resolveId } from './db.ts'
+import { apply, human, resolveId } from './db.ts'
+import { db } from './live_db.ts'
 import { entityId, normalize } from './url.ts'
 import { type Change } from './types.ts'
 

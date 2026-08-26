@@ -8,7 +8,8 @@
 // vanishing. Firing MINTS A KNOCK and stops there — knock.ts owns the
 // ladder that finds a door, and a wake that re-implemented delivery
 // would be a second one to keep true. SERVER-ONLY (imports db).
-import { apply, db, human } from './db.ts'
+import { apply, human } from './db.ts'
+import { db } from './live_db.ts'
 import { delivered, errored, PENDING } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, uuid } from './types.ts'

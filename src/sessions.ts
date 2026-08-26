@@ -39,16 +39,8 @@ import {
   providerSpec,
   type Summary,
 } from './adapters.ts'
-import {
-  apply,
-  db,
-  depsOf,
-  eager,
-  human,
-  locate,
-  record,
-  resolveId,
-} from './db.ts'
+import { apply, depsOf, eager, human, locate, record, resolveId } from './db.ts'
+import { db } from './live_db.ts'
 import { evalGraph, personaGraph, rowed } from './graph_query.ts'
 import {
   delivered,

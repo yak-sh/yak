@@ -3,7 +3,8 @@
 // db, no server — the effect is a pure function of the graph a completion left.
 import { type Change } from './types.ts'
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db, open } = await import('./db.ts')
+let { apply, open } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let { unblocking } = await import('./unblock.ts')
 let { assertEquals } = await import('@std/assert')
 

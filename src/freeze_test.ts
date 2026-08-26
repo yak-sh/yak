@@ -8,7 +8,8 @@ import { assert, assertEquals } from '@std/assert'
 Deno.env.set('DB_PATH', ':memory:')
 Deno.env.set('HOME', await Deno.makeTempDir())
 let { freeze, store } = await import('./freeze.ts')
-let { apply, db, delta } = await import('./db.ts')
+let { apply, delta } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 
 let PAGE = `<html><head><title>Ten dots</title>
   <script src="https://evil.example/x.js"></script>

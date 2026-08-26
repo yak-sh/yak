@@ -12,7 +12,8 @@
 // and must land whatever the order does. Execution is the response to it,
 // post-commit, unable to reject the batch that carried it.
 
-import { apply, db } from './db.ts'
+import { apply } from './db.ts'
+import { db } from './live_db.ts'
 import { dbReader } from './graph_query.ts'
 import { dispatch, trace } from './effects.ts'
 import { providers } from './adapters.ts'

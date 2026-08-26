@@ -22,7 +22,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { db } = await import('./db.ts')
+let { db } = await import('./live_db.ts')
 let { append, settleGeneration, takeEntry } = await import('./entries.ts')
 
 // The server serves on import — the one heavy boot in this file. Every test

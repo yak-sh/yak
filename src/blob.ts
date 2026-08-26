@@ -9,7 +9,7 @@
 // HTML/SVG opened directly can never act as the app. Server-only.
 import { createHash } from 'node:crypto'
 import { type Change } from './types.ts'
-import { db } from './db.ts'
+import { db } from './live_db.ts'
 
 let blobs = `${Deno.env.get('HOME')}/.tasks/blobs`
 
