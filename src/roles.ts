@@ -1277,7 +1277,10 @@ let reconcileWake = async (
 // owner-mintable: while it is absent the handler runs on its code defaults and
 // nothing is stamped (there is nowhere to stamp) — exactly the pre-port sweep.
 
-export type SystemTuning = { quiet: number; cooldown: number }
+// cap is the concurrency ceiling for a system whose work SPAWNS (the fixer);
+// a system with no such notion (the scribe's one-in-flight is an invariant,
+// not a tunable) simply omits it from its defaults and never receives one.
+export type SystemTuning = { quiet: number; cooldown: number; cap?: number }
 export type SystemSpec = {
   alias: string // the role entity's alias slug, and the registry key
   defaults: SystemTuning // seconds; a null graph column falls back here
@@ -1304,10 +1307,16 @@ let reconcileSystem = (
   cast: Cast,
   deps: RoleDeps,
 ) => {
-  let row = db.prepare(`select state, quiet, cooldown from role where ${OWNED}`)
-    .get(eid) as
-      | { state: string; quiet: number | null; cooldown: number | null }
-      | undefined
+  let row = db.prepare(
+    `select state, quiet, cooldown, cap from role where ${OWNED}`,
+  ).get(eid) as
+    | {
+      state: string
+      quiet: number | null
+      cooldown: number | null
+      cap: number | null
+    }
+    | undefined
   if (!row) return
   if (row.state != 'running') {
     stamp(eid, {
@@ -1322,6 +1331,9 @@ let reconcileSystem = (
     let out = spec.run({
       quiet: Number(row.quiet ?? spec.defaults.quiet),
       cooldown: Number(row.cooldown ?? spec.defaults.cooldown),
+      ...(spec.defaults.cap != null
+        ? { cap: Number(row.cap ?? spec.defaults.cap) }
+        : {}),
     }, cast)
     stamp(eid, {
       decision: out.observed ? 'spawn' : 'skip',

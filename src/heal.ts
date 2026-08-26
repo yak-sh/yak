@@ -14,12 +14,13 @@
 // between the stamp and here heals at the next boot. Both paths run the SAME
 // handler, and the handler re-reads the graph, so it is idempotent: dedup and
 // the tri-state recovery check hold whoever calls it.
-import { apply, db, human, readComp } from './db.ts'
+import { apply, db, human, locate, readComp } from './db.ts'
 import { type Change, kindOf, sessionActive } from './types.ts'
 import { spawnChanges } from './client.ts'
 import { rowsFor } from './graph_query.ts'
 import { dispatch, trace } from './effects.ts'
 import { record as telemetry } from './telemetry.ts'
+import type { SystemSpec, SystemTuning } from './roles.ts'
 
 type Cast = (changes: Change[]) => void
 let now = () => new Date().toISOString()
@@ -201,6 +202,37 @@ export let FIXER_CAP = Number(Deno.env.get('TASKS_FIXER_CAP')) || 2
 // cycle. 30 minutes: long enough for a fixer to land, short enough to retry.
 export let FIXER_COOLDOWN_MS = 30 * 60 * 1000
 
+// The fixer as a SYSTEM ROLE (T-18729): cap/cooldown/mute live as graph data
+// on a role entity aliased `fixer`, read for BOTH doors — the live
+// created(bug) effect and the role's sweep — so one row tunes them alike.
+// Absent row = the code defaults above, exactly the pre-port gates. A present
+// row with state != running is the mute made role data (the global lever);
+// per-venture `nofix` markers still apply beneath it.
+export let FIXER_TUNING: SystemTuning = {
+  quiet: 0,
+  cooldown: FIXER_COOLDOWN_MS / 1000,
+  cap: FIXER_CAP,
+}
+
+type FixerGates = SystemTuning & { off?: boolean }
+
+export let fixerTuning = (): FixerGates => {
+  let eid = locate(db, 'fixer')
+  let row = eid
+    ? db.prepare(
+      `select state, cooldown, cap from role where ${OWNED}`,
+    ).get(eid) as
+      | { state: string; cooldown: number | null; cap: number | null }
+      | undefined
+    : undefined
+  return {
+    quiet: 0,
+    cooldown: Number(row?.cooldown ?? FIXER_TUNING.cooldown),
+    cap: Number(row?.cap ?? FIXER_TUNING.cap),
+    off: !!row && row.state != 'running',
+  }
+}
+
 // Auto-spawn muted for this scope? `nofix` on the bug's project mutes that
 // venture; `nofix` on the self-healing home (P-19) is the global switch.
 let hasNofix = (eid: string) =>
@@ -222,14 +254,14 @@ let activeFixers = (): number =>
 // Was a fixer already spawned for this fault key within the cooldown window?
 // The fault is reached through the fixer's requested_task → bug.fault, so it
 // lives in exactly one place (M-14942) and the marker stays presence-only.
-let coolingDown = (key: string): boolean =>
+let coolingDown = (key: string, cooldownMs = FIXER_COOLDOWN_MS): boolean =>
   !!db.prepare(
     `select 1 from fixer f
        join session s on s.entity = f.entity
        join bug b on b.entity = s.requested_task
        join created c on c.entity = f.entity
      where b.fault = ? and c.at >= ? limit 1`,
-  ).get(key, new Date(Date.now() - FIXER_COOLDOWN_MS).toISOString())
+  ).get(key, new Date(Date.now() - cooldownMs).toISOString())
 
 // The one gate: why a fixer won't spawn for this bug, or null to spawn. Pure
 // over graph state, so the guardrails are unit-testable without launching an
@@ -237,12 +269,15 @@ let coolingDown = (key: string): boolean =>
 export let fixerBlocked = (
   project: string | undefined,
   key: string,
+  t: FixerGates = fixerTuning(),
 ): string | null =>
-  muted(project)
+  t.off
+    ? 'stopped'
+    : muted(project)
     ? 'muted'
-    : activeFixers() >= FIXER_CAP
-    ? `at cap (${FIXER_CAP})`
-    : coolingDown(key)
+    : activeFixers() >= (t.cap ?? FIXER_CAP)
+    ? `at cap (${t.cap ?? FIXER_CAP})`
+    : coolingDown(key, t.cooldown * 1000)
     ? 'cooling down'
     : null
 
@@ -262,49 +297,58 @@ let hasFixer = (bug: string): boolean =>
 // telemetry, never a thrown effect (effects.ts contract): the bug is already
 // on the board. cast() alone would never launch the session (it does not
 // dispatch), so this fires created(session) = spawned() itself.
-export let ensureFixer =
-  (cast: Cast) => (bug: string, _comp?: Record<string, unknown>) => {
-    let task = db.prepare(
-      `select ${refEid('t.project')} as project, t.status as status,
+export let ensureFixer = (cast: Cast) =>
+(
+  bug: string,
+  _comp?: Record<string, unknown>,
+  t: FixerGates = fixerTuning(),
+): string | undefined => {
+  let task = db.prepare(
+    `select ${refEid('t.project')} as project, t.status as status,
               b.fault as fault
        from task t join bug b on b.entity = t.entity where t.${OWNED}`,
-    ).get(bug) as
-      | { project: string | null; status: string; fault: string | null }
-      | undefined
-    if (!task) return // no bug row (deleted in its own batch)
-    if (task.status != 'open' && task.status != 'wip') return // closed ticket
-    if (hasFixer(bug)) return // already summoned one
-    let why = fixerBlocked(task.project ?? undefined, String(task.fault ?? ''))
-    if (why) return // ticket stands; the boot sweep re-drives when it clears
-    try {
-      // spawnChanges resolves just the bug task (find + its project for the
-      // actor); read that one entity, never the whole graph (M-21143).
-      let { eid, changes } = spawnChanges(rowsFor(db, [bug]), {
-        task: bug,
-        provider: FIXER.provider,
-        model: FIXER.model,
-      })
-      let t = trace()
-      // The `fixer` mark rides the same batch: what the cap counts, the
-      // cooldown reaches, and how the sweep tells spawned from un-spawned.
-      let out = apply(db, [...changes, { eid, name: 'fixer', comp: {} }], t)
-      cast(out)
-      dispatch(out, t, (comp, e) =>
-        telemetry(db, {
-          source: 'srv',
-          name: `effect:${comp}`,
-          ok: false,
-          error: String(e),
-        }))
-    } catch (e) {
+  ).get(bug) as
+    | { project: string | null; status: string; fault: string | null }
+    | undefined
+  if (!task) return // no bug row (deleted in its own batch)
+  if (task.status != 'open' && task.status != 'wip') return // closed ticket
+  if (hasFixer(bug)) return // already summoned one
+  let why = fixerBlocked(
+    task.project ?? undefined,
+    String(task.fault ?? ''),
+    t,
+  )
+  if (why) return // ticket stands; the role sweep re-drives when it clears
+  try {
+    // spawnChanges resolves just the bug task (find + its project for the
+    // actor); read that one entity, never the whole graph (M-21143).
+    let { eid, changes } = spawnChanges(rowsFor(db, [bug]), {
+      task: bug,
+      provider: FIXER.provider,
+      model: FIXER.model,
+    })
+    let tr = trace()
+    // The `fixer` mark rides the same batch: what the cap counts, the
+    // cooldown reaches, and how the sweep tells spawned from un-spawned.
+    let out = apply(db, [...changes, { eid, name: 'fixer', comp: {} }], tr)
+    cast(out)
+    dispatch(out, tr, (comp, e) =>
       telemetry(db, {
         source: 'srv',
-        name: 'fixer spawn',
+        name: `effect:${comp}`,
         ok: false,
         error: String(e),
-      })
-    }
+      }))
+    return eid
+  } catch (e) {
+    telemetry(db, {
+      source: 'srv',
+      name: 'fixer spawn',
+      ok: false,
+      error: String(e),
+    })
   }
+}
 
 // The boot sweep predicate over the `bug` table: an OPEN bug ticket no fixer
 // has been spawned for yet. Idempotent to re-drive — ensureFixer re-checks and
@@ -315,6 +359,46 @@ export let FIXER_PENDING = `exists (select 1 from task t
      where t.entity = bug.entity and t.status in ('open', 'wip'))
    and not exists (select 1 from session s join fixer f on f.entity = s.entity
      where s.requested_task = bug.entity)`
+
+// The role's reconcile (T-18729): what the boot-only sweep did once, the
+// system tick now does continuously — every open, un-spawned bug re-drives
+// ensureFixer, so a ticket the cap/cooldown/mute suppressed gets its fixer
+// once the gate clears without waiting for a restart. The gates re-check per
+// bug; the tick's tuning (the role row's values via reconcileSystem) rides
+// through so one row governs both doors. off is settled by the caller: the
+// role's state gate already skipped a stopped role before run() was called.
+export let fixerRun = (
+  t: SystemTuning,
+  cast: Cast,
+): { reason: string; observed?: string } => {
+  let pending = db.prepare(
+    `select o.eid as eid from bug join entity o on o.id = bug.entity
+      where ${FIXER_PENDING} order by o.eid`,
+  ).all() as { eid: string }[]
+  if (!pending.length) return { reason: 'no pending bugs' }
+  let spawned: string | undefined
+  let n = 0
+  for (let { eid } of pending) {
+    let s = ensureFixer(cast)(eid, undefined, { ...t, off: false })
+    if (s) {
+      spawned = s
+      n++
+    }
+  }
+  return {
+    reason: `spawned ${n} of ${pending.length} pending bugs`,
+    ...(spawned ? { observed: spawned } : {}),
+  }
+}
+
+// The registration server.ts hands roles.ts: the fixer IS the system role
+// aliased `fixer` — mint a role row on that alias to tune cap/cooldown or
+// mute it (state != running); absent, the code defaults above hold.
+export let FIXER_ROLE: SystemSpec = {
+  alias: 'fixer',
+  defaults: FIXER_TUNING,
+  run: fixerRun,
+}
 
 // The created() handler, curried over cast like every effect. Re-reads the
 // graph each call: if the exception was already cleared (healed) or the

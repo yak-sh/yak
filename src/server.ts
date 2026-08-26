@@ -62,7 +62,7 @@ import { freeze, serveFrozen, store } from './freeze.ts'
 import { landBlob, serveBlob } from './blob.ts'
 import { filed } from './page.ts'
 import { PENDING } from './deliver.ts'
-import { ensureFixer, fileBug, FIXER_PENDING, HEAL_PENDING } from './heal.ts'
+import { ensureFixer, fileBug, FIXER_ROLE, HEAL_PENDING } from './heal.ts'
 import { recallEntry } from './recall.ts'
 import {
   historicalReferenced,
@@ -2143,14 +2143,14 @@ on('exception', {
 })
 on('bug', {
   created: ensureFixer(cast),
-  // Boot reconcile: every open bug no fixer was spawned for re-drives the
-  // spawn, gated the same way — so a ticket the cap or a mute suppressed live
-  // gets its fixer once the pressure clears, and a restart never doubles one.
-  sweep: { pending: FIXER_PENDING },
+  // No boot sweep here any more: the fixer system role's reconcile (T-18729,
+  // registered below) re-drives open, un-spawned bugs on the system tick —
+  // continuously, not just at boot — behind the same gates.
   doc: 'self-healing phase 2: a newly filed bug ticket summons ONE managed ' +
     'fixer session (requested_task = the bug), behind a mute lever, a hard ' +
-    'concurrency cap, and a per-fault cooldown — the boot sweep re-drives an ' +
-    'open, un-spawned ticket once a gate clears (D-17077)',
+    'concurrency cap, and a per-fault cooldown — the fixer system role ' +
+    're-drives an open, un-spawned ticket once a gate clears (D-17077, ' +
+    'T-18729)',
 })
 
 // Personas follow the graph into each repo's .tasks/ files: any change
@@ -2444,6 +2444,9 @@ console.log(
 // carries its time-based trigger; the throttle keeps it to one desk an
 // hour regardless.
 registerSystem(SCRIBE)
+// The fixer rides the same seam (T-18729): its cap/cooldown/mute are role
+// data on the `fixer` alias, and its sweep re-drives gated bugs continuously.
+registerSystem(FIXER_ROLE)
 tick('system', () => systemSweep(cast), 10 * 60_000)
 
 // Embeddings (embed.ts): every non-comment doc keeps a semantic vector,

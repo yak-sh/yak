@@ -1483,3 +1483,34 @@ Deno.test('system role: bare defaults, graph tunables, and the run record', asyn
   assertEquals(calls.length, ran)
   apply(db, [{ eid: role, name: 'entity', comp: null }])
 })
+
+Deno.test('system role: cap rides the tuning only for specs that declare it', async () => {
+  let calls: { quiet: number; cooldown: number; cap?: number }[] = []
+  registerSystem({
+    alias: 'test-capped',
+    defaults: { quiet: 0, cooldown: 60, cap: 2 },
+    run: (t) => {
+      calls.push(t)
+      return { reason: 'ok' }
+    },
+  })
+  // bare: the declared default cap rides through
+  systemSweep(cast, deps)
+  assertEquals(calls.at(-1), { quiet: 0, cooldown: 60, cap: 2 })
+
+  // a role row overrides it like quiet/cooldown
+  let role = uid()
+  apply(db, [
+    { eid: role, name: 'doc', comp: { title: 'capped', body: '' } },
+    { eid: role, name: 'alias', comp: { slug: 'test-capped' } },
+    {
+      eid: role,
+      name: 'role',
+      comp: { state: 'running', surface: 'native', cap: 5 },
+    },
+  ])
+  systemSweep(cast, deps)
+  await until(() => calls.length == 2, { label: 'the tuned cap pass' })
+  assertEquals(calls.at(-1), { quiet: 0, cooldown: 60, cap: 5 })
+  apply(db, [{ eid: role, name: 'entity', comp: null }])
+})

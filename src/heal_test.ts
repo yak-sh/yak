@@ -25,6 +25,8 @@ let {
   FIXER_CAP,
   FIXER_PENDING,
   fixerBlocked,
+  fixerRun,
+  fixerTuning,
   HEAL_PENDING,
 } = await import('./heal.ts')
 
@@ -371,6 +373,65 @@ Deno.test('ensureFixer is idempotent — never a second fixer for one bug', () =
   ensureFixer(cast)(bug)
   ensureFixer(cast)(bug) // a re-drive (boot sweep, or a duplicate created)
   assertEquals(fixersFor(bug).length, 1)
+})
+
+// ——— T-18729: cap/cooldown/mute as role data on the `fixer` alias ———
+
+Deno.test('fixer gates read the tuning handed in — cap and off', () => {
+  reset()
+  makeFixer(makeBug('one-runner')) // one running fixer
+  let base = { quiet: 0, cooldown: 1800 }
+  assertEquals(fixerBlocked(undefined, 'k', { ...base, cap: 1 }), 'at cap (1)')
+  assertEquals(fixerBlocked(undefined, 'k', { ...base, cap: 5 }), null)
+  // state != running on the role row is the mute made role data
+  assertEquals(
+    fixerBlocked(undefined, 'k', { ...base, cap: 5, off: true }),
+    'stopped',
+  )
+})
+
+Deno.test('fixerTuning reads the role row on the fixer alias', () => {
+  reset()
+  assertEquals(fixerTuning().off, false) // absent row: code defaults, live
+  assertEquals(fixerTuning().cap, FIXER_CAP)
+  let role = uid()
+  apply(db, [
+    { eid: role, name: 'doc', comp: { title: 'fixer', body: '' } },
+    { eid: role, name: 'alias', comp: { slug: 'fixer' } },
+    {
+      eid: role,
+      name: 'role',
+      comp: { state: 'stopped', surface: 'native', cooldown: 60, cap: 7 },
+    },
+  ])
+  let t = fixerTuning()
+  assertEquals(t.cap, 7)
+  assertEquals(t.cooldown, 60)
+  assertEquals(t.off, true)
+  // the live door respects the role mute: the ticket stands, no fixer
+  let bug = makeBug('role-muted-key')
+  ensureFixer(cast)(bug)
+  assertEquals(fixersFor(bug).length, 0)
+  apply(db, [{ eid: role, name: 'entity', comp: null }])
+  assertEquals(fixerTuning().off, false)
+})
+
+Deno.test('fixerRun re-drives pending bugs and reports the tally', () => {
+  reset()
+  // Close every earlier test's bug: reset() dropped their fixer marks, which
+  // would put them all back in the pending predicate.
+  db.exec(
+    `update task set status = 'done' where entity in (select entity from bug)`,
+  )
+  let bug = makeBug('sweep-me')
+  let out = fixerRun({ quiet: 0, cooldown: 1800, cap: 2 }, cast)
+  assertEquals(out.reason, 'spawned 1 of 1 pending bugs')
+  assertEquals(fixersFor(bug).length, 1)
+  assertEquals(out.observed, fixersFor(bug)[0].eid)
+  // nothing pending on the next pass — the spawned bug left the predicate
+  assertEquals(fixerRun({ quiet: 0, cooldown: 1800, cap: 2 }, cast), {
+    reason: 'no pending bugs',
+  })
 })
 
 Deno.test('the boot sweep re-drives only open, un-spawned tickets', () => {

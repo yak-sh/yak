@@ -305,6 +305,10 @@ export let comps: Record<string, Record<string, PropType>> = {
     // data; enforcement stays in the role's registered handler (roles.ts).
     quiet: 'number',
     cooldown: 'number',
+    // A concurrency ceiling for system roles whose work spawns (the fixer's
+    // hard cap, T-18729). A COUNT, not seconds — absent falls back to the
+    // handler's code default, like quiet/cooldown.
+    cap: 'number',
   },
   board: { query: 'query' }, // saved filter (query.ts grammar); '' = all
   // A tiling layout (D-14718): the doc names it, root its top pane.
@@ -1849,6 +1853,7 @@ export type Role = {
   retry_at?: string | null
   quiet?: number | null
   cooldown?: number | null
+  cap?: number | null
   decision?: string | null
   reason?: string | null
   observed?: string | null
