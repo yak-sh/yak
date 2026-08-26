@@ -115,8 +115,10 @@ import {
 } from './types.ts'
 import { cost, type Dim, group, report, roll, type Use, use } from './usage.ts'
 // `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
-// reaches for the SQLite driver, and the CLI has no business loading a db.
+// reaches for the SQLite driver, and the telemetry verb reads over HTTP —
+// the CLI's one deliberate db door is localread.ts, read-only (T-22497).
 import type { Log, Stat } from './telemetry.ts'
+import { armLocal } from './localread.ts'
 import type { JournalEntry } from './client.ts'
 import { local } from './time.ts'
 import { wakeList, wakeTitle } from './title.ts'
@@ -3381,6 +3383,10 @@ if (import.meta.main) {
   // registrars are in place when a verb runs (D-18663 seam 1). Inert by
   // default: no TASKS_PLUGINS means an empty list and no imports.
   await loadPlugins(pluginSpecifiers())
+  // Arm local reads before dispatch: every pure read below answers from the
+  // graph file itself when this box holds it (localread.ts decides), so a
+  // stopped server still shows the board. Writes stay on the wire regardless.
+  armLocal()
   let [cmd, ...rest] = Deno.args
   try {
     let asked = requestedHelp(Deno.args)

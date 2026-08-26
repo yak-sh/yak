@@ -136,7 +136,21 @@ export let integrity = async (): Promise<Anomalies | null> => {
   return res.json() as Promise<Anomalies>
 }
 
-export let query = async (
+// The local-read arm (T-22497, D-22388 step 2a): localread.ts arms these at
+// CLI boot when the process stands beside the graph file itself, and pure
+// reads answer from the db with no server in the path. Unset — the MCP server,
+// a remote TASKS_HOST, any process that never armed — each door runs its wire
+// form. Writes never ride the arm: /apply stays the one write door, so lease
+// checks, effects and broadcast keep one home. The armed functions carry their
+// own wire fallback and disarm on skew (localread.ts guarded), so these
+// routers stay one line.
+export let arm: {
+  query?: Querier
+  deps?: DepsFn
+  search?: SearchFn
+} = {}
+
+export let httpQuery = async (
   filters: string[],
   opts?: { after?: number; limit?: number },
 ) => {
@@ -153,11 +167,14 @@ export let query = async (
 }
 
 // How a filter line is ANSWERED — the /query door as a plain function. The
-// default runs it over HTTP (query, above); the server hands its own in-process
-// answerer (graph_query.ts localQuery) so a client.ts enumeration — reader diet,
-// inbox union — runs against the live graph with zero round-trips and one query
-// semantics. Every query-driven reader takes one so both callers exist.
-export type Querier = typeof query
+// default runs it over HTTP (httpQuery) unless the local arm is set; the
+// server hands its own in-process answerer (graph_query.ts localQuery) so a
+// client.ts enumeration — reader diet, inbox union — runs against the live
+// graph with zero round-trips and one query semantics. Every query-driven
+// reader takes one so both callers exist.
+export type Querier = typeof httpQuery
+export let query: Querier = (filters, opts) =>
+  arm.query ? arm.query(filters, opts) : httpQuery(filters, opts)
 
 // Entities BY ADDRESS — the narrow half of find(), which needs `all: Row[]`
 // and so opens every CLI verb with a whole-graph snapshot. Speaks the same
@@ -332,13 +349,16 @@ export let authoringLine = (all: Row[], row: Row) => {
 }
 
 // Full-text search, server-side (FTS5) — the graph's docs, ranked.
-export let search = async (q: string, limit = 20) => {
+export type SearchFn = (q: string, limit?: number) => Promise<Hit[]>
+export let httpSearch: SearchFn = async (q, limit = 20) => {
   let res = await request(
     `http://${host()}/search?q=${encodeURIComponent(q)}&limit=${limit}`,
   )
   if (!res.ok) throw new Error(`server said ${res.status}`)
   return res.json() as Promise<Hit[]>
 }
+export let search: SearchFn = (q, limit) =>
+  arm.search ? arm.search(q, limit) : httpSearch(q, limit)
 
 // The linked git worktree a path stands in, or undefined in the main checkout.
 // A linked worktree's `.git` is a FILE (a `gitdir:` pointer) while the main
@@ -1014,17 +1034,28 @@ export let dependents = async (eid: string): Promise<Row[]> => {
 // caller owns that error path (needed() pulls the graph there for a "did you
 // mean?"). (T-14926)
 export let around = async (id: string, quarantined = false) => {
-  let res = await request(
-    `http://${host()}/query?id=${encodeURIComponent(id)}&deps=1${
-      quarantined ? '&quarantined=1' : ''
-    }`,
-  )
-  if (!res.ok) throw new Error(`server said ${res.status}`)
-  let [hit] = await res.json() as Record<string, unknown>[]
-  if (!hit) return undefined
-  let { deps: raw, ...rest } = hit
-  let deps = (raw ?? []) as Dep[]
-  let row = rowOf(rest)
+  // Armed, the seed is two local reads (the row, its edges); the reveal ask
+  // stays on the wire — localQuery keeps the quarantine screen, the route's
+  // quarantined=1 is the one thing that lifts it.
+  let seed = arm.query && arm.deps && !quarantined
+    ? await (async () => {
+      let [row] = await arm.query!([`id=${id}`])
+      return row && { row, deps: await arm.deps!([row.eid]) }
+    })()
+    : await (async () => {
+      let res = await request(
+        `http://${host()}/query?id=${encodeURIComponent(id)}&deps=1${
+          quarantined ? '&quarantined=1' : ''
+        }`,
+      )
+      if (!res.ok) throw new Error(`server said ${res.status}`)
+      let [hit] = await res.json() as Record<string, unknown>[]
+      if (!hit) return undefined
+      let { deps: raw, ...rest } = hit
+      return { row: rowOf(rest), deps: (raw ?? []) as Dep[] }
+    })()
+  if (!seed) return undefined
+  let { row, deps } = seed
   let comments = await query([`.comment.target=${row.eid}`])
   let want = new Set<string>()
   for (let r of [row, ...comments]) for (let e of refsIn(r)) want.add(e)
