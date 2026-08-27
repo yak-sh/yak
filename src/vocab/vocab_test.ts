@@ -4,8 +4,9 @@
 // The byte-level stale check against the manifests is `deno task codegen
 // --check`, wired into `deno task check`; this test holds the semantic
 // line inside the fast tier.
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertFalse, assertStringIncludes } from '@std/assert'
 import { capture } from './fixture.ts'
+import { typesStaleDiagnostic } from './gen.ts'
 import * as types from '../types.ts'
 
 let fixture = JSON.parse(
@@ -14,4 +15,10 @@ let fixture = JSON.parse(
 
 Deno.test('types.ts matches the vocabulary fixture', () => {
   assertEquals(capture(types), fixture)
+})
+
+Deno.test('types.ts stale diagnostic names the current authority', () => {
+  assertStringIncludes(typesStaleDiagnostic, 'src/vocab/manifests/*.json')
+  assertStringIncludes(typesStaleDiagnostic, 'annotated Rust contract')
+  assertFalse(typesStaleDiagnostic.includes('.toml'))
 })

@@ -58,6 +58,10 @@ let refuse = (msg: string): never => {
   throw new Error(`vocab: ${msg}`)
 }
 
+export let typesStaleDiagnostic =
+  'src/types.ts is stale against generated src/vocab/manifests/*.json from ' +
+  'the annotated Rust contract — run `deno task codegen`'
+
 // ---- load + compose -------------------------------------------------------
 
 export let assemble = (manifests: Manifest[]) => {
@@ -604,9 +608,7 @@ if (import.meta.main) {
   let currentSchema = await Deno.readTextFile(schemaTarget).catch(() => '')
   if (check) {
     if (current != fresh) {
-      console.error(
-        'src/types.ts is stale against src/vocab/*.toml — run `deno task codegen`',
-      )
+      console.error(typesStaleDiagnostic)
       Deno.exit(1)
     }
     if (currentFixture != fixture) {
