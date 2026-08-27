@@ -54,9 +54,37 @@ const SCHEMA: &str = "
     id text unique,
     cwd text,
     actor integer,
+    persona integer,
+    requested_task integer,
+    serving_model text,
+    model text,
     latest_seq integer not null default 0,
     origin text,
     status text
+  );
+  create table spawn (
+    entity  integer primary key references entity(id),
+    provider text, model text, effort text, persona integer
+  );
+  create table model (
+    entity integer primary key references entity(id),
+    name   text not null
+  );
+  create table person (
+    entity integer primary key references entity(id)
+  );
+  create table mail (
+    entity      integer primary key references entity(id),
+    target      integer references entity(id),
+    reply_to    integer references entity(id),
+    \"from\"      text,
+    to_addr     text,
+    message_id  text,
+    received_at text,
+    verified    integer,
+    sent_id     text,
+    in_reply_to text,
+    headers     text
   );
   create table claim (
     entity integer primary key references entity(id),
@@ -237,18 +265,19 @@ fn native_safe_routes_plain_graph_and_proxies_the_rest() {
     assert!(ok(vec![ch(A, "entry", json!({"session": B}))]));
     assert!(ok(vec![ch(A, "wake", json!({"at": "soon"}))]));
     assert!(ok(vec![ch(A, "stop_request", json!({"target": B}))]));
+    // mail joined NATIVE_COMPS at rung 7b (the sender-actor from-derivation
+    // ported): a mail create commits native and derives its `from`.
+    assert!(ok(vec![ch(A, "mail", json!({"target": B}))]));
     // a transform-bearing comp still absent by design → proxy: setting (WHATWG
-    // url guard), mail (sender-actor from-derivation), session/spawn (the facet
-    // mirroring cluster — rung 7b).
+    // url guard — rung 6b), session/spawn (the facet-mirroring cluster — rung 7c).
     assert!(!ok(vec![ch(A, "setting", json!({"key": "k", "value": "v"}))]));
-    assert!(!ok(vec![ch(A, "mail", json!({"target": B}))]));
     assert!(!ok(vec![ch(A, "session", json!({"id": "S-1"}))]));
     assert!(!ok(vec![ch(A, "spawn", json!({"provider": "codex"}))]));
     // a MIXED batch proxies WHOLE — apply() is atomic, no splitting: one native
     // comp beside a transform-bearing one (a setting) still proxies.
     assert!(!ok(vec![ch(A, "doc", json!({"title": "x"})), ch(A, "setting", json!({"key": "k", "value": "v"}))]));
-    // even a native email beside an unported mail proxies whole (over-proxy bias).
-    assert!(!ok(vec![ch(A, "email", json!({"address": "x@y.com"})), ch(A, "mail", json!({"target": B}))]));
+    // a native mail beside an unported session proxies whole (over-proxy bias).
+    assert!(!ok(vec![ch(A, "mail", json!({"target": B})), ch(A, "session", json!({"id": "S-1"}))]));
     // an empty batch proxies (Deno owns the trivial answer).
     assert!(!ok(vec![]));
 }
@@ -288,6 +317,99 @@ fn deliver_at_address_mints_email_and_rewrites_to() {
     run(&s, vec![ch(B, "deliver", json!({ "to": format!("new_corr@{d}") }))]);
     let emails: i64 = one(&s, "select count(*) from email");
     assert_eq!(emails, 1, "the canonical address is minted once");
+}
+
+// Seed an entity wearing an address-book `email` comp — the shape the sender-
+// actor from-derivation looks the signer's address up in (D-14945).
+fn seed_email(s: &WriteStore, eid: &str, addr: &str) {
+    s.conn.execute("insert or ignore into entity (eid) values (?1)", [eid]).unwrap();
+    s.conn
+        .execute(
+            "insert into email (entity, address) values \
+             ((select id from entity where eid = ?1), ?2)",
+            rusqlite::params![eid, addr],
+        )
+        .unwrap();
+}
+
+// Point a session column (actor / persona) at a seeded entity.
+fn set_session_ref(s: &WriteStore, sess: &str, col: &str, target: &str) {
+    s.conn
+        .execute(
+            &format!(
+                "update session set {col} = (select id from entity where eid = ?2) \
+                 where entity = (select id from entity where eid = ?1)"
+            ),
+            rusqlite::params![sess, target],
+        )
+        .unwrap();
+}
+
+fn run_via(s: &WriteStore, writer: &str, changes: Vec<Change>) -> Vec<Change> {
+    apply(s, changes, &ApplyOpts { writer: Some(writer), fed: false }, &default_gates()).unwrap()
+}
+
+fn mail_from(s: &WriteStore, eid: &str) -> Option<String> {
+    one(
+        s,
+        &format!(
+            "select \"from\" from mail m join entity o on o.id = m.entity where o.eid = '{eid}'"
+        ),
+    )
+}
+
+#[test]
+fn mail_from_derives_through_session_actor() {
+    let s = store();
+    // an actor P wearing an address-book email, a session S standing for it.
+    seed_email(&s, A, "pp@bot.yak.sh");
+    seed_session(&s, B, "S-sender");
+    set_session_ref(&s, B, "actor", A);
+    // a mail created BY session S signs from P's address (senderActor actor arm),
+    // and the derived `from` rides the echoed change so a live cache hears it.
+    let out = run_via(&s, B, vec![ch(C, "mail", json!({ "target": A }))]);
+    assert_eq!(mail_from(&s, C).as_deref(), Some("pp@bot.yak.sh"));
+    let echoed = out.iter().any(|c| {
+        c.name == "mail"
+            && c.comp
+                .as_ref()
+                .and_then(|m| m.get("from"))
+                .and_then(|v| v.as_str())
+                == Some("pp@bot.yak.sh")
+    });
+    assert!(echoed, "the derived from rides the return batch");
+}
+
+#[test]
+fn mail_from_derives_from_persona_only_session() {
+    let s = store();
+    // A persona N wearing an address book email; the session names N as its
+    // persona and ALSO an actor with a DIFFERENT address. senderActor resolves
+    // `persona ?? actor`, so the letter must sign as the PERSONA — the case that
+    // would silently diverge if the chain stopped at the actor arm.
+    seed_email(&s, A, "persona@bot.yak.sh");
+    seed_email(&s, D, "actor@bot.yak.sh");
+    seed_session(&s, B, "S-persona");
+    set_session_ref(&s, B, "persona", A);
+    set_session_ref(&s, B, "actor", D);
+    run_via(&s, B, vec![ch(C, "mail", json!({ "target": A }))]);
+    assert_eq!(
+        mail_from(&s, C).as_deref(),
+        Some("persona@bot.yak.sh"),
+        "a persona-only session signs from the persona, not the actor"
+    );
+}
+
+#[test]
+fn mail_from_stays_empty_when_the_signer_has_no_address() {
+    let s = store();
+    // A session whose actor wears NO address-book email: the mail lands, but
+    // `from` stays empty (the refusal to send belongs at delivery, not apply).
+    s.conn.execute("insert into entity (eid) values (?1)", [A]).unwrap();
+    seed_session(&s, B, "S-addrless");
+    set_session_ref(&s, B, "actor", A);
+    run_via(&s, B, vec![ch(C, "mail", json!({ "target": A }))]);
+    assert_eq!(mail_from(&s, C), None, "no address ⇒ no from, batch still commits");
 }
 
 #[test]

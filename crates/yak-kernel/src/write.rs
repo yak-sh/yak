@@ -390,13 +390,23 @@ const SERVER_OWNED: [&str; 8] = [
 ];
 
 // Domains whose apply()-side transforms live in TS and are NOT ported.
-// `session`/`spawn` remain here (rung 7b): TS apply() mirrors every session
+// `session`/`spawn` remain here (rung 7c): TS apply() mirrors every session
 // write into its `spawn` twin (dualSpawn), projects the worktree/runtime facet
-// aliases both ways (dualFacet), links the lineage edge (mirrorLineage), and
-// derives a created mail's server-owned `from` through the session sender-actor
-// chain — a bare session/spawn/mail landed without those would silently diverge
-// the copies. Half-applying any unported domain would diverge the two writers,
-// so the kernel refuses it loudly.
+// aliases both ways (dualFacet), and links the lineage edge (mirrorLineage) —
+// the facet-mirroring cluster. A bare session/spawn landed without those would
+// silently diverge the two copies, so the kernel refuses it loudly until the
+// cluster is ported and parity-proven (T-22867 carved it to 7c: the shape space
+// — create-by-session-col, create-by-facet-col, one-side updates, facet delete,
+// parent link/unlink, canonical-wins conflict — is too large to prove in one
+// pass alongside mail, and a half-ported facet mirror on an allowlisted comp is
+// exactly the silent divergence the allowlist exists to prevent, M-14769).
+//
+// `mail` LEFT this list at rung 7b: its ONE in-apply transform — the server-
+// owned `from` derived through the session sender-actor chain (`sender_actor` /
+// `actor_for` below: persona ?? actor ?? venture ?? held-work ?? model) — is
+// ported and parity-proven, including the persona-only session that would
+// otherwise diverge. `mail` carries no facet mirroring, so it ports cleanly
+// ahead of the session cluster.
 //
 // `entry`, `wake`, and `stop_request` LEFT this list at rung 7a, once their
 // self-contained in-apply transforms were ported below: an entry's per-session
@@ -430,24 +440,30 @@ const UNPORTED: [&str; 2] = ["spawn", "session"];
 // was ported here (`canon`, `canon_email`, `mint_addresses` below): an
 // `email.address` write is canonicalized to its deliverable spelling, and a
 // `deliver.to` bearing an @-address is folded into its find-or-minted address-
-// book `email` entity. Two of rung 6's four domains are still absent by design:
-// `setting` — its guardSettings validates a url-typed value through WHATWG `new
-// URL()` (default-port + dot-segment + IPv4/IPv6/IDNA host canonicalization), a
-// transform a faithful port needs a full WHATWG URL parser for; and `mail` —
-// its server-owned `from` is derived through the session sender-actor chain
-// (persona/held-work/model fallbacks) that is rung-7b session-cluster work. Both
-// still PROXY, so no half-ported transform ever commits natively.
+// book `email` entity. `setting` is still absent by design: its guardSettings
+// validates a url-typed value through WHATWG `new URL()` (default-port + dot-
+// segment + IPv4/IPv6/IDNA host canonicalization), a transform a faithful port
+// needs a full WHATWG URL parser for (T-22862, rung 6b) — it still PROXIES, so
+// no half-ported transform ever commits natively.
 //
 // `entry`, `wake`, and `stop_request` joined at rung 7a, once the session/entry/
 // wake cluster's self-contained in-apply pieces were ported here: an `entry`
 // create assigns its per-session `seq` and advances `session.latest_seq`; an
 // untargeted `wake` create tombstones every pending untargeted predecessor
 // addressed to the same actor (`replace_wakes`, M-7323); a `stop_request` is
-// gated to a live managed session (`StopRequestGate`). The session-facet cluster
-// (`session`/`spawn`) and mail `from`-derivation stay proxied for rung 7b.
-pub const NATIVE_COMPS: [&str; 13] = [
+// gated to a live managed session (`StopRequestGate`).
+//
+// `mail` joined at rung 7b, once its ONE in-apply transform — the server-owned
+// `from` derived through the session sender-actor chain — was ported here
+// (`sender_actor`/`actor_for`, the full persona/actor/venture/held-work/model
+// cascade the mail create-completion loop stamps). A `mail` create signs from
+// its writer's address book entry byte-identically to Deno for every session
+// shape, the persona-only session included. The session-facet cluster
+// (`session`/`spawn`: dualSpawn/dualFacet/mirrorLineage) stays proxied for rung
+// 7c — mail carries none of it.
+pub const NATIVE_COMPS: [&str; 14] = [
     "doc", "task", "board", "project", "comment", "dependency", "claim", "entity", "email",
-    "deliver", "entry", "wake", "stop_request",
+    "deliver", "entry", "wake", "stop_request", "mail",
 ];
 
 // Can this whole batch commit through the rust kernel, or must the bridge proxy
@@ -1111,24 +1127,117 @@ impl Default for ApplyOpts<'_> {
     }
 }
 
-// writerActor's session/client/direct-actor arms. The venture-at-cwd,
-// held-work-project and model fallbacks are session-plugin resolution and
-// stay TS-side; a writer those would catch resolves to None here (an unowned
-// write names no one — machinery is not a person).
-fn writer_actor(conn: &Connection, writer: Option<&str>) -> Option<String> {
-    let w = writer?;
-    let s: Option<Option<String>> = conn
+// The box owner, IF there is exactly one person (db.ts ownerActor): the sole
+// human a bare browser tab is recorded as. With several people it goes dark
+// rather than guess; an agent or the server's own machinery never reaches it.
+fn owner_actor(conn: &Connection) -> Option<String> {
+    let mut st = conn
+        .prepare("select o.eid from person p join entity o on o.id = p.entity")
+        .ok()?;
+    let people: Vec<String> = st.query_map([], |r| r.get(0)).ok()?.flatten().collect();
+    if people.len() == 1 { people.into_iter().next() } else { None }
+}
+
+// The project a session's WORK names when its cwd doesn't (db.ts workProject,
+// D-21308): the project of a task it holds (newest lease first), else of the
+// task it was spawned for. `sid` is the session's `entity` int id, which is
+// what claim.session and session.requested_task key on.
+fn work_project(conn: &Connection, sid: i64) -> Option<String> {
+    let held: Option<Option<String>> = conn
         .query_row(
-            "select (select eid from entity where id = s.actor) from session s \
-             where s.id = ?1 or s.entity = (select id from entity where eid = ?1)",
-            [w],
+            "select (select eid from entity where id = t.project) \
+             from claim c join task t on t.entity = c.entity \
+             where c.session = ?1 and t.project is not null \
+             order by c.rowid desc limit 1",
+            [sid],
             |r| r.get(0),
         )
         .optional()
         .ok()
         .flatten();
-    if let Some(actor) = s {
-        return actor;
+    if let Some(eid) = held {
+        return eid;
+    }
+    conn.query_row(
+        "select (select eid from entity where id = t.project) \
+         from session s join task t on t.entity = s.requested_task \
+         where s.entity = ?1 and t.project is not null",
+        [sid],
+        |r| r.get(0),
+    )
+    .optional()
+    .ok()
+    .flatten()
+    .flatten()
+}
+
+// The cascade's terminal (db.ts modelActor, D-21308): the model ENTITY whose
+// name matches the wire spelling a session's model columns speak. A lookup,
+// never a mint — an unknown spelling leaves attribution None.
+fn model_actor(conn: &Connection, name: Option<&str>) -> Option<String> {
+    let name = name?;
+    conn.query_row(
+        "select (select eid from entity where id = m.entity) from model m \
+         where m.name = ?1 order by m.entity limit 1",
+        [name],
+        |r| r.get(0),
+    )
+    .optional()
+    .ok()
+    .flatten()
+    .flatten()
+}
+
+// The actor a write acts FOR, resolved from the writer the door named (db.ts
+// actorFor). A session speaks as the D-21308 attribution cascade: the most
+// specific persona in force, else its explicit actor, else the project it
+// stands in (its cwd's venture, then the project of the work it holds), else
+// the model that ran — persona and model backed by the spawn twin. A client
+// speaks as its person; a browser tab that named nobody resolves to the box
+// owner ONLY when `human` (provenance's inference — a signature is not allowed
+// it, T-9511). A writer naming an actor entity directly stands for itself.
+// A write that resolves to nobody stays blank — machinery is not a person.
+fn actor_for(conn: &Connection, writer: Option<&str>, human: bool) -> Option<String> {
+    let w = writer?;
+    struct Sess {
+        sid: i64,
+        cwd: Option<String>,
+        actor: Option<String>,
+        persona: Option<String>,
+        served: Option<String>,
+        model: Option<String>,
+    }
+    let s: Option<Sess> = conn
+        .query_row(
+            "select s.entity, s.cwd, \
+                    (select eid from entity where id = s.actor), \
+                    (select eid from entity where id = coalesce(s.persona, sp.persona)), \
+                    s.serving_model, \
+                    coalesce(s.model, sp.model) \
+             from session s left join spawn sp on sp.entity = s.entity \
+             where s.id = ?1 or s.entity = (select id from entity where eid = ?1)",
+            [w],
+            |r| {
+                Ok(Sess {
+                    sid: r.get(0)?,
+                    cwd: r.get(1)?,
+                    actor: r.get(2)?,
+                    persona: r.get(3)?,
+                    served: r.get(4)?,
+                    model: r.get(5)?,
+                })
+            },
+        )
+        .optional()
+        .ok()
+        .flatten();
+    if let Some(Sess { sid, cwd, actor, persona, served, model }) = s {
+        return persona
+            .or(actor)
+            .or_else(|| venture_at(conn, cwd.as_deref()))
+            .or_else(|| work_project(conn, sid))
+            .or_else(|| model_actor(conn, served.as_deref()))
+            .or_else(|| model_actor(conn, model.as_deref()));
     }
     let c: Option<Option<String>> = conn
         .query_row(
@@ -1141,7 +1250,7 @@ fn writer_actor(conn: &Connection, writer: Option<&str>) -> Option<String> {
         .ok()
         .flatten();
     if let Some(actor) = c {
-        return actor;
+        return actor.or_else(|| if human { owner_actor(conn) } else { None });
     }
     let a: Option<i64> = conn
         .query_row(
@@ -1154,6 +1263,20 @@ fn writer_actor(conn: &Connection, writer: Option<&str>) -> Option<String> {
         .ok()
         .flatten();
     a.map(|_| w.to_string())
+}
+
+// writerActor: who a write is RECORDED as (created.by, journal.actor). A bare
+// tab may be recorded as the box owner.
+fn writer_actor(conn: &Connection, writer: Option<&str>) -> Option<String> {
+    actor_for(conn, writer, true)
+}
+
+// senderActor: who a letter SIGNS as (mail.from). The same chain minus the
+// owner inference — the fleet's highest-trust byline, which a tab may not
+// claim (T-9511). Nothing resolved means nothing signed, and mail.ts refuses
+// to deliver an unsigned letter.
+fn sender_actor(conn: &Connection, writer: Option<&str>) -> Option<String> {
+    actor_for(conn, writer, false)
 }
 
 fn writer_via(conn: &Connection, writer: Option<&str>) -> Option<String> {
@@ -2240,6 +2363,44 @@ pub fn apply(
             }
             if let Some(row) = read_comp(conn, &c.name, &c.eid) {
                 extra.push(Change::new(&c.eid, &c.name, Some(row)));
+            }
+        }
+        // The mail SENDER, derived (db.ts:5093-5112). `from` is off the wire
+        // (types.ts), so this is its only writer: a created mail speaks as the
+        // actor that WROTE it — senderActor, created.by's chain MINUS the owner
+        // inference (T-9511: a tab may be RECORDED as the owner but never SIGN
+        // as them). An actor with no address book entry leaves `from` empty
+        // rather than failing the batch — the refusal to send belongs at
+        // delivery, where mailed() stamps the error, not here. Runs after the
+        // stamp/clocked echoes and before the create-completion pass, so the
+        // `mail`-from echo lands in `extra` exactly where Deno pushes it.
+        if has_table(conn, "mail") && has_table(conn, "email") {
+            if let Some(addr) = sender_actor(conn, opts.writer).and_then(|signer| {
+                conn.query_row(
+                    "select address from email where entity = \
+                     (select id from entity where eid = ?1)",
+                    [signer.as_str()],
+                    |r| r.get::<_, String>(0),
+                )
+                .optional()
+                .ok()
+                .flatten()
+            }) {
+                for key in &created_comps {
+                    let Some(eid) = key.strip_prefix("mail ") else { continue };
+                    if !alive(eid) {
+                        continue;
+                    }
+                    conn.execute(
+                        "update mail set \"from\" = ?1 where entity = \
+                         (select id from entity where eid = ?2)",
+                        rusqlite::params![addr, eid],
+                    )?;
+                    let mut m = Map::new();
+                    m.insert("eid".into(), Value::from(eid));
+                    m.insert("from".into(), Value::from(addr.as_str()));
+                    extra.push(Change::new(eid, "mail", Some(m)));
+                }
             }
         }
         // A create may omit columns SQLite defaults; make the last write for

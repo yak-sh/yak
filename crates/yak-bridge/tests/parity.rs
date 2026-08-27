@@ -878,12 +878,24 @@ fn write_mode() -> bool {
 // relies on). `route` is the bridge's `x-yak-apply` header (native | proxy),
 // None from the Deno server which never sends it.
 fn post_apply(base: &str, batch: &str) -> (u16, String, Option<String>) {
+    post_apply_via(base, batch, None)
+}
+
+// POST /apply naming the WRITER in x-via — the honesty header apply() resolves
+// to an actor (the CLI's reified session, a browser client). Both doors read
+// it, so a bridge write attributes exactly as the direct one; the mail
+// sender-actor derivation needs it to resolve a signer.
+fn post_apply_via(base: &str, batch: &str, via: Option<&str>) -> (u16, String, Option<String>) {
     let url = format!("{base}/apply");
     let agent = ureq::Agent::config_builder()
         .http_status_as_error(false)
         .build()
         .new_agent();
-    match agent.post(&url).header("content-type", "application/json").send(batch) {
+    let mut req = agent.post(&url).header("content-type", "application/json");
+    if let Some(v) = via {
+        req = req.header("x-via", v);
+    }
+    match req.send(batch) {
         Ok(mut r) => {
             let status = r.status().as_u16();
             let route = r
@@ -1228,12 +1240,28 @@ fn ref_cols(conn: &rusqlite::Connection, table: &str) -> std::collections::HashS
 // this batch as intended — a native-committed batch and a proxied one must BOTH
 // land byte-identically to direct-to-Deno, and each must have taken its door.
 fn assert_write(case: &str, ts: &str, br: &str, ts_db: &str, br_db: &str, batch: &str, route: &str) {
+    assert_write_via(case, ts, br, ts_db, br_db, batch, route, None)
+}
+
+// assert_write with the writer named in x-via — a batch whose in-apply
+// transform reads the writer (the mail sender-actor derivation).
+#[allow(clippy::too_many_arguments)]
+fn assert_write_via(
+    case: &str,
+    ts: &str,
+    br: &str,
+    ts_db: &str,
+    br_db: &str,
+    batch: &str,
+    route: &str,
+    via: Option<&str>,
+) {
     let base_a = journal_tip(ts_db);
     let base_b = journal_tip(br_db);
     let cbase_a = conflict_tip(ts_db);
     let cbase_b = conflict_tip(br_db);
-    let (sa, ba, _) = post_apply(ts, batch);
-    let (sb, bb, taken) = post_apply(br, batch);
+    let (sa, ba, _) = post_apply_via(ts, batch, via);
+    let (sb, bb, taken) = post_apply_via(br, batch, via);
     // The routing proof: the bridge stamped the door it took, and it must be the
     // one the predicate is meant to choose for this batch's comps.
     assert_eq!(
@@ -1542,24 +1570,81 @@ fn write_parity() {
         "proxy",
     );
 
-    // `mail` also still PROXIES: a create fires db.ts's server-owned `from`
-    // derivation through the session sender-actor chain (rung-7 session cluster),
-    // unported here. With no x-via the derivation resolves nothing on either copy,
-    // so a mail create aimed at a live entity lands identically and takes proxy.
-    if let Some(target) = an_eid(&ts, "task") {
+    // --- ROUTING: a mail's `from` is DERIVED natively (rung 7b) -----------------
+    // A created mail's server-owned `from` is stamped from senderActor(writer) —
+    // the session sender-actor chain (persona ?? actor ?? venture ?? held-work ??
+    // model). The session is created through the PROXIED session door on both
+    // copies (identical, session still UNPORTED), the signer wears an address-book
+    // `email` (native), then a mail POSTed with x-via = that session derives
+    // `from` from the signer's address — byte-identically on the native (bridge)
+    // and the Deno door, across the echo, journal and mail row.
+    {
+        // Persona-only session: it names a PERSONA and, to prove precedence, an
+        // actor with a DIFFERENT address. senderActor resolves `persona ?? actor`,
+        // so the letter signs from the PERSONA — the shape that would silently
+        // diverge if the port stopped at the actor arm. This is the acceptance
+        // case "from-derivation matches Deno for a PERSONA-ONLY session".
+        let pn = uuid_v4(); // the persona, wearing an address-book email
+        let an = uuid_v4(); // an actor, a different address
+        let ps = uuid_v4(); // the session naming both
+        g(&ts, &br, &format!("[{{\"eid\":\"{pn}\",\"name\":\"email\",\"comp\":{{\"address\":\"zqw{uid}p@bot.yak.sh\"}}}}]"));
+        g(&ts, &br, &format!("[{{\"eid\":\"{an}\",\"name\":\"email\",\"comp\":{{\"address\":\"zqw{uid}a@bot.yak.sh\"}}}}]"));
+        g(&ts, &br, &format!("[{{\"eid\":\"{ps}\",\"name\":\"session\",\"comp\":{{\"id\":\"zqw{uid}-psn\",\"persona\":\"{pn}\",\"actor\":\"{an}\"}}}}]"));
         let ml = uuid_v4();
-        assert_write(
-            "routing/mail-proxies",
-            &ts,
-            &br,
-            &ts_db,
-            &br_db,
-            &format!(
-                "[{{\"eid\":\"{ml}\",\"name\":\"mail\",\"comp\":{{\"target\":\"{target}\"}}}}]"
-            ),
-            "proxy",
+        assert_write_via(
+            "mail/from-persona-native",
+            &ts, &br, &ts_db, &br_db,
+            &format!("[{{\"eid\":\"{ml}\",\"name\":\"mail\",\"comp\":{{\"target\":\"{pn}\"}}}}]"),
+            "native",
+            Some(&ps),
         );
         g(&ts, &br, &format!("[{{\"eid\":\"{ml}\",\"name\":\"entity\",\"comp\":null}}]"));
+
+        // Actor-arm session: no persona, an actor wearing an address. The letter
+        // signs from the actor — a second proven session shape.
+        let asn = uuid_v4();
+        g(&ts, &br, &format!("[{{\"eid\":\"{asn}\",\"name\":\"session\",\"comp\":{{\"id\":\"zqw{uid}-asn\",\"actor\":\"{an}\"}}}}]"));
+        let ml2 = uuid_v4();
+        assert_write_via(
+            "mail/from-actor-native",
+            &ts, &br, &ts_db, &br_db,
+            &format!("[{{\"eid\":\"{ml2}\",\"name\":\"mail\",\"comp\":{{\"target\":\"{an}\"}}}}]"),
+            "native",
+            Some(&asn),
+        );
+        g(&ts, &br, &format!("[{{\"eid\":\"{ml2}\",\"name\":\"entity\",\"comp\":null}}]"));
+
+        // An addressless writer (no x-via) leaves `from` empty on both doors —
+        // native takes the door but derives nothing, byte-identical to Deno.
+        let ml3 = uuid_v4();
+        assert_write(
+            "mail/from-empty-native",
+            &ts, &br, &ts_db, &br_db,
+            &format!("[{{\"eid\":\"{ml3}\",\"name\":\"mail\",\"comp\":{{\"target\":\"{pn}\"}}}}]"),
+            "native",
+        );
+        g(&ts, &br, &format!("[{{\"eid\":\"{ml3}\",\"name\":\"entity\",\"comp\":null}}]"));
+
+        // cleanup the sessions + address-book entities on both copies.
+        g(&ts, &br, &format!("[{{\"eid\":\"{ps}\",\"name\":\"entity\",\"comp\":null}}]"));
+        g(&ts, &br, &format!("[{{\"eid\":\"{asn}\",\"name\":\"entity\",\"comp\":null}}]"));
+        g(&ts, &br, &format!("[{{\"eid\":\"{pn}\",\"name\":\"entity\",\"comp\":null}}]"));
+        g(&ts, &br, &format!("[{{\"eid\":\"{an}\",\"name\":\"entity\",\"comp\":null}}]"));
+    }
+
+    // `session`/`spawn` still PROXY: a session write fires db.ts's facet-mirroring
+    // cluster (dualSpawn / dualFacet / mirrorLineage), unported here (rung 7c), so
+    // the predicate must route it to Deno. A bare session create lands identically
+    // through the bridge as direct-to-Deno and takes the proxy door.
+    {
+        let sp = uuid_v4();
+        assert_write(
+            "routing/session-proxies",
+            &ts, &br, &ts_db, &br_db,
+            &format!("[{{\"eid\":\"{sp}\",\"name\":\"session\",\"comp\":{{\"id\":\"zqw{uid}-proxy\"}}}}]"),
+            "proxy",
+        );
+        g(&ts, &br, &format!("[{{\"eid\":\"{sp}\",\"name\":\"entity\",\"comp\":null}}]"));
     }
 
     // --- DELETE CASCADE → RELEASE → RESUME (native) --------------------------
@@ -1710,9 +1795,10 @@ fn write_parity() {
 
     eprintln!(
         "\nwrite parity OK (native-safe plain-graph, claim/entity-delete, address \
-         canonicalization, and the rung-7a entry-seq / replaceWakes / stop_request-\
-         gate batches commit through the bridge; transform batches proxy — both \
-         land identically to direct)"
+         canonicalization, the rung-7a entry-seq / replaceWakes / stop_request-gate \
+         batches, and the rung-7b mail `from` sender-actor derivation — persona-only \
+         and actor-arm sessions — commit through the bridge; session/spawn and \
+         setting still proxy — both land identically to direct)"
     );
 }
 
