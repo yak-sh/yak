@@ -138,13 +138,16 @@ impl WriteStore {
         conn.busy_timeout(Duration::from_millis(5000))?;
         conn.pragma_update(None, "journal_mode", "wal")?;
         conn.pragma_update(None, "synchronous", "normal")?;
-        let stored: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        // Read the version after BEGIN IMMEDIATE. A concurrent newer migrator
+        // may commit while this process waits for the write lock; a pre-lock
+        // read would then let this older process overwrite its version.
+        let stored: i64 = tx.pragma_query_value(None, "user_version", |r| r.get(0))?;
         if stored > SCHEMA_VERSION {
             return Err(rusqlite::Error::InvalidParameterName(format!(
                 "database schema version {stored} is newer than this binary's version {SCHEMA_VERSION}"
             )));
         }
-        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         apply_schema(&tx)?;
         mint_epoch(&tx)?;
         if stored != SCHEMA_VERSION {

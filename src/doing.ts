@@ -581,8 +581,8 @@ export let tick = (
 // The boot-time reconcile and the recurring sweeps — the doing owner's half.
 // Runs in the serving process (inline mode) or in effectsd (split mode),
 // strictly after migrations: the caller guarantees the schema is current
-// (the server via becomeWriter; the daemon by being spawned after the
-// server's READY beat).
+// (the server during its transactional boot; the daemon by being spawned after
+// the server's READY beat).
 export let bootDoing = (d: Doing, syncSoon: () => void) => {
   let { cast } = d
 

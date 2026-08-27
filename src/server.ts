@@ -327,7 +327,7 @@ let effect = (out: Change[], t: ReturnType<typeof trace>) => {
 // The journal feed (D-22388 step 1): the one path every JOURNALED commit takes
 // to the sockets and the effect registry — the server's own writes (their
 // doors call feed.settle() right after apply(), keeping today's synchronous
-// ordering) and a foreign process's (the -wal watcher wakes the same drain),
+// ordering) and a foreign process's (data_version polling wakes the same drain),
 // uniformly. Effects fire only for rows journaled with a fed() trace — the
 // doors that DEFERRED dispatch here — so the self-dispatching modules (heal,
 // wake, deliver, …) and the runner's deliberate effect-free applies are never

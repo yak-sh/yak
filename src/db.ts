@@ -2396,15 +2396,15 @@ let reportMigration = (reports: CopyReport[]) => {
 // the whole graph is remapped, then foreign_key_check proves no reference was
 // left dangling. Idempotent: an id-keyed (or brand-new) db returns at the door.
 let migrateToIdKeys = (db: DatabaseSync) => {
-  if (!tableExists(db, 'entity') || hasCol(db, 'entity', 'id')) return
+  if (!tableExists(db, 'entity') || hasCol(db, 'entity', 'id')) return []
   let scratch = open(':memory:')
   let ddlOf = (t: string) =>
     (scratch.prepare(
       `select sql from sqlite_master where type = 'table' and name = ?`,
     ).get(t) as { sql: string }).sql
-  db.exec('pragma foreign_keys = off')
+  let reports: CopyReport[]
   try {
-    let reports = atomic(db, () => {
+    reports = atomic(db, () => {
       // The spine first, so every reference below resolves against real ids.
       db.exec('alter table entity rename to __mig_entity')
       db.exec(ddlOf('entity'))
@@ -2448,9 +2448,6 @@ let migrateToIdKeys = (db: DatabaseSync) => {
       }
       return reports
     })
-    // Reported only after the reshape commits — never announce a clean that a
-    // later rollback would undo.
-    reportMigration(reports)
   } catch (e) {
     scratch.close()
     throw e
@@ -2462,7 +2459,7 @@ let migrateToIdKeys = (db: DatabaseSync) => {
       `eid→id migration left ${orphans.length} dangling reference(s)`,
     )
   }
-  db.exec('pragma foreign_keys = on')
+  return reports
 }
 
 // A WAL-present boot follows a crash or overlaps another healthy connection,
@@ -2583,17 +2580,15 @@ let schemaVersion = 1
 export let migrate = (db: DatabaseSync) => {
   // Migrations ALTER tables; a cached statement would strand against an
   // intermediate schema. Compile raw until the schema is final, then restore.
+  let wasCaching = caching
   caching = false
+  // The legacy reshape rebuilds tables whose old foreign keys name the old
+  // spine. This pragma must be set before BEGIN; SQLite deliberately ignores
+  // foreign_keys changes inside a transaction. Every other migration keeps FK
+  // enforcement enabled.
+  let legacy = tableExists(db, 'entity') && !hasCol(db, 'entity', 'id')
+  if (legacy) db.exec('pragma foreign_keys = off')
   try {
-    let stored = (db.prepare('pragma user_version').get() as {
-      user_version: number
-    }).user_version
-    if (stored > schemaVersion) {
-      throw new Error(
-        `database schema version ${stored} is newer than this binary's ` +
-          `version ${schemaVersion}; upgrade the serving process`,
-      )
-    }
     // WAL lets readers proceed during a write, removing the reader/writer
     // blocking of the default rollback journal. The fleet supports many
     // ordinary read-write connections; SQLite serializes their write
@@ -2616,15 +2611,28 @@ export let migrate = (db: DatabaseSync) => {
         console.warn(`journal_mode is ${got}, not wal`)
       }
     }
-    // The eid→id storage reshape (D-18866) runs FIRST: it reshapes an
-    // eid-keyed legacy graph to the canonical id-keyed spine every statement
-    // below assumes, so migrateRefs/schema/the backfills all see id-keyed
-    // tables. A no-op on an already-id-keyed or brand-new db.
-    migrateToIdKeys(db)
-    return atomic(db, () => {
+    let reports: CopyReport[] = []
+    let migrated = atomic(db, () => {
       // One SQLite transaction owns the schema transition. Concurrent openers
       // wait at BEGIN IMMEDIATE, then re-run the idempotent guards against the
       // schema the winner committed; no application sidecar lock is involved.
+      // The version check belongs after that wait: reading it before BEGIN lets
+      // an older waiter overwrite a newer migrator's version after it commits.
+      let stored = (db.prepare('pragma user_version').get() as {
+        user_version: number
+      }).user_version
+      if (stored > schemaVersion) {
+        throw new Error(
+          `database schema version ${stored} is newer than this binary's ` +
+            `version ${schemaVersion}; upgrade the serving process`,
+        )
+      }
+      // The eid→id storage reshape (D-18866) runs FIRST: it reshapes an
+      // eid-keyed legacy graph to the canonical id-keyed spine every statement
+      // below assumes, so migrateRefs/schema/the backfills all see id-keyed
+      // tables. Its focused atomic boundary becomes a savepoint inside this
+      // transaction. A no-op on an already-id-keyed or brand-new db.
+      reports = migrateToIdKeys(db)
       // This must precede schema: an old table may not yet have the canonical
       // columns named by a newly added index in the current DDL.
       migrateRefs(db)
@@ -3039,9 +3047,15 @@ export let migrate = (db: DatabaseSync) => {
       }
       return db
     }, true)
+    // Announce cleanup only after the encompassing schema transaction commits;
+    // a later migration failure must not report data whose reshape rolled back.
+    reportMigration(reports)
+    return migrated
   } finally {
-    // Runtime caches; a throwing migration still restores the flag.
-    caching = true
+    if (legacy) db.exec('pragma foreign_keys = on')
+    // Runtime caches; a throwing or recursively opened migration restores the
+    // state it inherited instead of enabling caching in its outer migration.
+    caching = wasCaching
   }
 }
 
