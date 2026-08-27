@@ -1,16 +1,20 @@
-// Semantic vectors beside FTS (T-3640, first slice): a local embedder —
-// bge-small over onnx via transformers.js, resident in the server
-// process — keeps one vector per non-comment doc, so a creation reply
-// can say "this already exists" (the dupe hint) and search can one day
-// bridge vocabulary. Everything here is DERIVED data: the sweep
-// (re)embeds docs whose text hash moved and prunes the dead, similar()
-// ranks neighbours with an indexed SQL KNN over the vector extension's
-// persisted ANN index (vector.ts knn) — no JS cosine scan, no per-handle
-// cache — and a box without the model just has no hints: the embedder dies
-// once, quietly, and every door degrades to silence. apply() never waits on
-// any of this.
+// Semantic vectors beside FTS (T-3640): embedding runs on the owner's GPU
+// Ollama server (`ollama.yak.sh`, /api/embed) rather than in-process CPU —
+// qwen3-embedding, MRL-truncated to DIM in the transport (ollama.ts) so the
+// blob shape and the KNN index are unchanged (D-22781). We keep one vector per
+// non-comment doc, so a creation reply can say "this already exists" (the dupe
+// hint) and search can one day bridge vocabulary. Everything here is DERIVED
+// data: the sweep (re)embeds docs whose text hash moved and prunes the dead,
+// similar() ranks neighbours with an indexed SQL KNN over the vector extension's
+// persisted ANN index (vector.ts knn) — no JS cosine scan. A box that cannot
+// reach the embedder just has no hints: every door degrades to silence, but the
+// fault is no longer invisible — it is stamped on embedHealth() and recorded to
+// telemetry (M-16612). apply() never waits on any of this.
 import type { DatabaseSync } from './sqlite.ts'
 import { DIM, knn, refreshVector, vectorReady } from './vector.ts'
+import { envConfig, type OllamaConfig, ollamaEmbed } from './ollama.ts'
+import { resolve } from './config.ts'
+import { record } from './telemetry.ts'
 // textOf and FLOOR live in twin.ts so the client may share them without pulling
 // this server-only module (and its vector.ts extension loader) into the browser
 // bundle. Re-exported here because embed.ts uses textOf internally and is the
@@ -18,7 +22,21 @@ import { DIM, knn, refreshVector, vectorReady } from './vector.ts'
 import { FLOOR, textOf } from './twin.ts'
 export { FLOOR, textOf }
 
-export let MODEL = 'Xenova/bge-small-en-v1.5'
+// The active embedding model, resolved OLLAMA_EMBED_MODEL override>env>default
+// (config.ts). It folds into hash() and rides the `model` column, so a change
+// invalidates every stored row and the KNN filter screens the old space out —
+// the two must move together (D-22781). This is an ES module live binding: the
+// server re-resolves it against the graph plane at boot via setModel(), and
+// every importer (hash, put, stored, the KNN filter) sees the new value.
+export let MODEL = resolve('OLLAMA_EMBED_MODEL', () => undefined).value!
+export let setModel = (m: string) => MODEL = m
+
+// The transport's config view (base + optional key), injected by the server so a
+// saved OLLAMA_BASE_URL/OLLAMA_API_KEY override reaches the next embed with no
+// restart. The default (envConfig) resolves env>default with no key — enough for
+// a bare client or a test, which never reaches the network (TASKS_EMBED=0).
+let config: OllamaConfig = envConfig
+export let setEmbedConfig = (c: OllamaConfig) => config = c
 
 // FNV-1a over model+text — names the exact embedding a row holds, so the
 // sweep can skip the unchanged without storing the text twice.
@@ -30,53 +48,33 @@ export let hash = (text: string) => {
   return h.toString(36)
 }
 
-// The resident pipeline: one lazy init, one verdict. A failed init (no
-// package, no network for the model download) marks the embedder dead
-// for the process — warn once, never retry-loop, never throw upward.
-type Extractor = (
-  text: string,
-  opts: { pooling: 'mean'; normalize: boolean },
-) => Promise<{ data: Float32Array }>
-let pipe: Extractor | null = null
-let dead = false
-let boot: Promise<void> | null = null
-let init = () =>
-  boot ??= (async () => {
-    // The model is 400MB and ~6s to load. A test never wants it (embed_test
-    // uses precomputed vectors), so TASKS_EMBED=0 marks the embedder dead
-    // before the import — every dupe-hint path degrades to silence, exactly
-    // as it does on a box that lacks the package. Production leaves it unset.
-    if (Deno.env.get('TASKS_EMBED') === '0') {
-      dead = true
-      return
-    }
-    try {
-      let { env, pipeline } = await import('@huggingface/transformers') // The default model cache is INSIDE the npm package dir — a cache
-       // clean or a version bump silently costs a 34MB re-download at
-      // boot. Pin it somewhere that survives both. (~/.tasks is a git
-      // repo — a re-downloadable model has no place in backups.)
-      ;(env as { cacheDir: string }).cacheDir = `${
-        Deno.env.get('HOME')
-      }/.cache/tasks/models`
-      pipe = await (pipeline as (
-        task: string,
-        model: string,
-        opts: { dtype: string },
-      ) => Promise<Extractor>)('feature-extraction', MODEL, { dtype: 'q8' })
-    } catch (e) {
-      dead = true
-      console.warn('embed: no embedder —', (e as Error).message)
-    }
-  })()
+// A test never wants the network (embed_test uses precomputed vectors), so
+// TASKS_EMBED=0 degrades every door to silence exactly as an unreachable box
+// does. Production leaves it unset.
+let off = () => Deno.env.get('TASKS_EMBED') === '0'
 
+// Durable health (M-16612): the last embed transport fault, cleared by the next
+// success. embed() still returns null on failure — the degrade-to-silence
+// contract is intact — but the fault is no longer invisible: embedHealth()
+// exposes it and the sweep records it to telemetry, a durable operator-visible
+// log. `at` is when it last failed; null means the last attempt worked.
+let health: { at: string; error: string } | null = null
+export let embedHealth = () => health
+
+// One vector for a text: the GPU box embeds it, the transport MRL-truncates to
+// DIM. Returns null (silence) when embedding is off or the box is unreachable —
+// the caller shows nothing, never an error — but a transport fault is stamped on
+// health for the sweep to record. apply() never waits on this.
 export let embed = async (text: string): Promise<Float32Array | null> => {
-  await init()
-  if (!pipe) return null
-  let out = await pipe(text.slice(0, 2000), {
-    pooling: 'mean',
-    normalize: true,
-  })
-  return Float32Array.from(out.data)
+  if (off()) return null
+  try {
+    let vec = await ollamaEmbed(text.slice(0, 2000), MODEL, DIM, config)
+    health = null
+    return vec
+  } catch (e) {
+    health = { at: new Date().toISOString(), error: (e as Error).message }
+    return null
+  }
 }
 
 // SQLite's trim() strips spaces only, so name the whitespace JS trims —
@@ -152,24 +150,43 @@ let put = (db: DatabaseSync, eid: string, text: string, vec: Float32Array) =>
        at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
   ).run(eid, MODEL, hash(text), new Uint8Array(vec.buffer), DIM)
 
-// The sweep: prune, then embed a bounded batch. An `await` only yields to the
-// microtask queue when inference resolves, so an unbounded backfill can starve
-// HTTP and retain inference state until V8's heap is exhausted. The batch is a
-// fixed memory ceiling; a macrotask between rows keeps the server responsive.
-// Interval-safe like the others: one sweep in flight, failures warn.
+// The sweep: prune, then re-embed every doc whose text hash moved. Embedding is
+// a REMOTE call now (ollama.ts), so the sweep holds no in-process inference
+// state and has no V8-heap ceiling — the old fixed batch cap of 100 WAS that
+// ceiling (a resident onnx model retaining state per row), and it is gone. What
+// keeps the server responsive is the macrotask yielded between rows; the remote
+// round-trip already yields the microtask queue. So the sweep drains its whole
+// backlog in one responsive pass — a model bump invalidates the corpus and this
+// clears all of it, ~one embed round-trip per doc, off the write path. The limit
+// stays a parameter for a caller that wants a bounded slice, but defaults to the
+// full backlog. Interval-safe like the others: one sweep in flight, failures warn.
 let sweeping = false
-export let embedSweep = async (db: DatabaseSync, limit = 100) => {
+export let embedSweep = async (db: DatabaseSync, limit = Infinity) => {
   // put() stores vectors through the extension's vector_as_f32, so with the
   // extension unavailable there is nothing the sweep can safely do — skip it
   // whole. Embeddings and their ANN index rebuild once a healthy index loads.
-  if (sweeping || dead || !vectorReady(db)) return 0
+  if (sweeping || off() || !vectorReady(db)) return 0
   sweeping = true
   let n = 0
   try {
     prune(db)
     for (let r of stale(db, limit)) {
       let vec = await embed(r.text)
-      if (!vec) break // the embedder died mid-sweep — stop quietly
+      if (!vec) {
+        // The box went unreachable mid-sweep — stop quietly (the rest stay
+        // stale for the next sweep), but record the fault durably so a dark
+        // embedder is an operator-visible fact, not silent (M-16612).
+        if (health) {
+          record(db, {
+            source: 'srv',
+            name: 'embed',
+            ok: false,
+            error: health.error,
+            detail: `embed sweep stopped at ${n} fresh — ${MODEL} unreachable`,
+          })
+        }
+        break
+      }
       put(db, r.eid, r.text, vec)
       n++
       await new Promise((resolve) => setTimeout(resolve, 0))
@@ -204,7 +221,7 @@ export let similar = (
   floor = 0,
 ) => {
   let live: { eid: string; score: number }[] = []
-  for (let h of knn(db, q, limit + STALE_SLACK)) {
+  for (let h of knn(db, q, limit + STALE_SLACK, MODEL)) {
     if (h.score < floor) break
     if (live.length == limit) break
     if (lives(db, h.eid)) live.push(h)

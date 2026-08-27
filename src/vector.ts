@@ -123,10 +123,20 @@ export let refreshVector = (db: DatabaseSync) => {
 // index quantizes it; a read that arrives while the index is dirty answers
 // from the last quantization — staler neighbours, never a write. An empty
 // corpus has no quantization table to scan, so it answers empty.
+//
+// `model`, when given, screens the scan to one embedding space. The ANN index
+// holds every row regardless of model, so during a re-embed window (a model
+// bump invalidates the whole corpus, which the async sweep replaces row by row)
+// the old and new vectors are incomparable spaces — an unfiltered scan would
+// rank across both and corrupt neighbours. The filter is applied AFTER the ANN
+// scan, so a window where many scanned rows are the old space returns fewer than
+// k; the caller over-fetches (embed.ts STALE_SLACK) and the window self-heals as
+// the sweep completes (D-22781).
 export let knn = (
   db: DatabaseSync,
   q: Float32Array,
   k: number,
+  model?: string,
 ): { eid: string; score: number }[] => {
   if (!ready.has(db)) return []
   if (!count(db)) return []
@@ -135,8 +145,12 @@ export let knn = (
     return (db.prepare(
       `select e.eid as eid, v.distance as distance
        from vector_quantize_scan('embedding', 'vec', ?, ?) v
-       join embedding e on e.rowid = v.id`,
-    ).all(bytes, k) as { eid: string; distance: number }[])
+       join embedding e on e.rowid = v.id
+       ${model == null ? '' : 'where e.model = ?'}`,
+    ).all(...(model == null ? [bytes, k] : [bytes, k, model])) as {
+      eid: string
+      distance: number
+    }[])
       .map((r) => ({ eid: r.eid, score: 1 - r.distance }))
   } catch (e) {
     // Vectors exist but nothing has quantized them yet — a fresh graph, or one

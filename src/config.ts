@@ -64,7 +64,7 @@ let invalid = (message: string): never => {
 
 // Normalize and constrain a base URL: http/https only, no embedded credentials,
 // no query, no fragment. The trailing slash is dropped so a provider appends its
-// path against a canonical origin (ollama_cloud.ts adds `/v1`). Idempotent, so
+// path against a canonical origin (ollama.ts adds `/v1`). Idempotent, so
 // re-normalizing a stored value is a no-op.
 export let normalizeUrl = (raw: string): string => {
   let text = raw.trim()
@@ -112,6 +112,20 @@ export let catalog: Spec[] = [
     help:
       'Bearer token for the hosted Ollama API. Optional for an unauthenticated ' +
       'endpoint. Stored by the server-only credential store, never in the graph.',
+  },
+  {
+    key: 'OLLAMA_EMBED_MODEL',
+    label: 'Ollama embedding model',
+    group: 'ollama',
+    type: 'text',
+    sensitive: false,
+    default: 'qwen3-embedding:0.6b',
+    help:
+      'The model the embed transport asks the Ollama server (/api/embed) for. ' +
+      'Folds into every stored vector row (embed.ts hash + model column), so a ' +
+      'change invalidates the corpus and the async sweep re-embeds it — an ' +
+      'incomparable space, so this must move in lockstep with the KNN model ' +
+      'filter. The output is MRL-truncated to the fixed vector DIM (384).',
   },
   {
     key: 'DISPATCH_SLOTS',

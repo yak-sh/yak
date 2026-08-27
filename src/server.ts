@@ -67,7 +67,7 @@ import { landBlob, serveBlob } from './blob.ts'
 import { filed } from './page.ts'
 import { historicalReferenced, references } from './referenced.ts'
 import { fleetRaw, mailIdOf } from './inbound.ts'
-import { similarTo } from './embed.ts'
+import { setEmbedConfig, setModel, similarTo } from './embed.ts'
 import { type IO, mcpServer } from './mcp.ts'
 import { drain as drainTurns } from './turn.ts'
 import { materialize } from './persona.ts'
@@ -83,11 +83,7 @@ import { combineTools, localTools, tasksTools } from './harness_tools.ts'
 import { managedCodex } from './managed_codex.ts'
 import { sessionRow as storedSession } from './session_store.ts'
 import { responses } from './responses.ts'
-import {
-  ollamaCloudTransport,
-  type OllamaConfig,
-  ollamaProbe,
-} from './ollama_cloud.ts'
+import { type OllamaConfig, ollamaProbe, ollamaTransport } from './ollama.ts'
 import { resolve, settingRows } from './config.ts'
 import { resolve as resolveAnchor } from './anchor.ts'
 import { codexGeneration } from './runner.ts'
@@ -617,6 +613,14 @@ let ollamaConfig: OllamaConfig = {
   key: () => credentials.secret('OLLAMA_API_KEY'),
 }
 
+// The embed transport shares that config view, and its model resolves through
+// the graph plane too (OLLAMA_EMBED_MODEL override>env>default). Injected once
+// at boot: the embed sweep and the /similar door run in this process, so a saved
+// override reaches them, and MODEL is fixed for the process (a change is a
+// deliberate corpus re-embed, T-22784 / D-22781).
+setEmbedConfig(ollamaConfig)
+setModel(resolve('OLLAMA_EMBED_MODEL', (key) => settingValue(db, key)).value!)
+
 // The adapter table stamped with live readiness: the graph-native Codex
 // transport is ready only when its account is signed in, so every server-side
 // spawn default (obey, MCP, CLI) routes graph-native → CLI fallback off this
@@ -634,7 +638,7 @@ let managed = managedCodex({
     retries: 1,
   }),
   generators: {
-    ollama: codexGeneration(ollamaCloudTransport({ retries: 1 }, ollamaConfig)),
+    ollama: codexGeneration(ollamaTransport({ retries: 1 }, ollamaConfig)),
   },
   tools: async (tree, session) => {
     let tasks = await tasksTools(graphIO, session)

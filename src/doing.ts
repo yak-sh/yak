@@ -729,9 +729,11 @@ export let bootDoing = (d: Doing, syncSoon: () => void) => {
     // non-owner. Both are inert without the extension (T-22622).
     ownVector()
     initVector(db)
-    // No boot pass: the first sweep loads the ~400MB onnx model and runs
-    // synchronous inference chunks that block the event loop for ~18s
-    // measured. Defer it a minute so a fresh process breathes first.
+    // Defer the first sweep a minute so a fresh process finishes booting before
+    // it runs. Embedding is a remote call now (ollama.ts), so this no longer
+    // loads a ~400MB onnx model or blocks the event loop — but a model bump can
+    // make that first sweep re-embed the WHOLE corpus (~one GPU round-trip per
+    // doc, yielding between rows), so letting boot settle first still pays.
     let embedding = tick('embed', () => embedSweep(db), 10 * 60_000, false)
     setTimeout(embedding, 60_000)
     let embedSoon = (() => {

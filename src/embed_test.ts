@@ -6,9 +6,8 @@
 Deno.env.set('DB_PATH', ':memory:')
 let { db } = await import('./live_db.ts')
 let { vectorDb } = await import('./testdb.ts')
-let { hash, prune, similar, similarTo, stale, stored, textOf } = await import(
-  './embed.ts'
-)
+let { hash, MODEL, prune, similar, similarTo, stale, stored, textOf } =
+  await import('./embed.ts')
 let { ownVector, refreshVector } = await import('./vector.ts')
 // This test process is the sole writer of its own :memory: graph, so it owns
 // the quantize the way the embed sweep's process does (T-22622).
@@ -41,7 +40,7 @@ let vec = (...xs: number[]) => axes(...xs)
 let put = (eid: string, text: string, v: Float32Array) => {
   db.prepare(
     'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
-  ).run(eid, 'Xenova/bge-small-en-v1.5', hash(text), new Uint8Array(v.buffer))
+  ).run(eid, MODEL, hash(text), new Uint8Array(v.buffer))
   refreshVector(db)
 }
 
@@ -188,6 +187,34 @@ slow('similar: dot-ranked, floored, limited', () => {
   assertEquals(top[0].eid, x)
 })
 
+// A model bump invalidates the corpus and the async sweep replaces it row by
+// row; during that window old and new vectors are incomparable spaces. similar()
+// passes MODEL to knn(), which screens the scan to the active space — so an
+// old-model row at the very query position never ranks (D-22781).
+slow(
+  'similar: the KNN model filter screens a foreign embedding space out',
+  () => {
+    let [mine, foreign] = [uid(), uid()]
+    doc(mine, 'active-space neighbour')
+    doc(foreign, 'foreign-space neighbour')
+    put(mine, 'active-space neighbour', vec(1, 0)) // stored under the active MODEL
+    // A row from a DIFFERENT model at the SAME position — the mixed-space hazard.
+    db.prepare(
+      'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
+    )
+      .run(
+        foreign,
+        'Xenova/bge-small-en-v1.5',
+        'h',
+        new Uint8Array(vec(1, 0).buffer),
+      )
+    refreshVector(db)
+    let hits = similar(db, vec(1, 0), 99, 0.5).map((h) => h.eid)
+    assertEquals(hits.includes(mine), true)
+    assertEquals(hits.includes(foreign), false)
+  },
+)
+
 // A re-embed writes in place (same rowid) and must answer with the NEW vector
 // once the index is rebuilt. The rebuild is the SWEEP's, never the reader's:
 // knn() is strictly read-only (T-22525/T-22622), so this drives refreshVector
@@ -206,7 +233,7 @@ slow('similar: an in-place re-embed answers with the new vector', () => {
        on conflict (eid) do update set vec = excluded.vec`,
     ).run(
       e,
-      'Xenova/bge-small-en-v1.5',
+      MODEL,
       hash('generation probe'),
       new Uint8Array(v.buffer),
     )
@@ -239,7 +266,7 @@ slow('similar: SQL KNN ranks the same neighbours the JS scan did', () => {
     d.prepare(
       'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
     )
-      .run(e, 'Xenova/bge-small-en-v1.5', hash(title), new Uint8Array(v.buffer))
+      .run(e, MODEL, hash(title), new Uint8Array(v.buffer))
     return e
   }
   // Distinct cosines to axes(1, 0), well separated so no near-tie can flip.
