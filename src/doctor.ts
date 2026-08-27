@@ -364,10 +364,15 @@ export let projectOrphans = (a: Anomalies | null): Report[] => {
     }]
   }
   if (!a.unrooted.length) return []
+  let shown = a.unrooted.slice(0, 12)
+  let rest = a.unrooted.length - shown.length
+  let sample = `${shown.join(', ')}${rest ? `; ${rest} more` : ''}`
   return [{
     level: 'fail',
     text: `${a.unrooted.length} governed entity(s) are outside every ` +
-      `project-rooted dependency closure: ${a.unrooted.join(', ')}`,
+      `project-rooted dependency closure: ${sample}. Inspect all: ` +
+      'curl -fsS "http://${TASKS_HOST:-127.0.0.1:5173}/integrity" | ' +
+      `jq -r '.unrooted[]'`,
   }]
 }
 

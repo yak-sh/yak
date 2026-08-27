@@ -305,6 +305,23 @@ Deno.test('projectOrphans: detached governed nodes and cycles are hard finds', (
   assertEquals(out[0].text.includes('A-8, M-9, N-10'), true)
 })
 
+Deno.test('projectOrphans: a large corpus is a bounded sample with a full inspection command', () => {
+  let unrooted = Array.from({ length: 100 }, (_, i) => `T-${i + 1}`)
+  let out = projectOrphans({ orphans: {}, dangling: {}, unrooted })
+  assertEquals(out.length, 1)
+  assertEquals(out[0].text.includes('100 governed entity(s)'), true)
+  assertEquals(out[0].text.includes('T-1, T-2'), true)
+  assertEquals(out[0].text.includes('T-100'), false)
+  assertEquals(out[0].text.includes('88 more'), true)
+  assertEquals(
+    out[0].text.includes(
+      'curl -fsS "http://${TASKS_HOST:-127.0.0.1:5173}/integrity" | jq -r \'.unrooted[]\'',
+    ),
+    true,
+  )
+  assertEquals(out[0].text.length < 500, true)
+})
+
 Deno.test('projectOrphans: clean is silent; absent scan is unverified', () => {
   assertEquals(projectOrphans({ orphans: {}, dangling: {}, unrooted: [] }), [])
   let out = projectOrphans({ orphans: {}, dangling: {} })
