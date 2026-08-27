@@ -22,8 +22,16 @@
 // lives — the serving/doing distribution, never a library consumer that
 // happens to call connect(). Loading it does not claim the WRITE: that is
 // ownVector(), taken by whichever process runs the embed sweep (doing.ts).
-import { connect, file, open } from './db.ts'
+// An app-plane reader (TASKS_PLANE=app, D-22804 §8) and a --join deploy
+// successor both open WITHOUT migrating — the schema stays the writer's, under
+// the writer baton, so neither co-writes the WAL that the sole writer owns
+// (T-20223). The app-plane reader also opens READ-ONLY: it serves the app
+// routes as a reader beside the Rust bridge writer, and never holds the writer
+// baton (server.ts becomeWriter declines it in this mode).
+import { appPlane, connect, file, open } from './db.ts'
 
-export let db = Deno.args.includes('--join')
+export let db = appPlane()
+  ? connect(file, true, true)
+  : Deno.args.includes('--join')
   ? connect(file, true)
   : open(file, true)

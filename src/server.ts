@@ -15,6 +15,7 @@ import { providers } from './adapters.ts'
 import { capabilities, type Change, type Dep, idOf, kindOf } from './types.ts'
 import {
   apply,
+  appPlane,
   bodies,
   buried,
   componentCounts,
@@ -265,6 +266,14 @@ export let maintain = (batch: Change[]) => {
 // The moving-time sweep (subserve.aged): every connection re-tests its own
 // moving-window members against the clock — inline directly, workers by
 // message. Exported for the subscription tests.
+// App-plane-only mode (TASKS_PLANE=app, D-22804 §8 strangler): this process is a
+// READER beside the Rust bridge writer over one WAL. It declines the writer
+// baton, never migrates, runs no boot write-reconcilers, fires no effects, and
+// its `db` handle is read-only (live_db.ts) — so writing is impossible, not
+// merely avoided. Read once here (before cast/wantHere, which consult it at
+// module load); the data plane (every write) is the bridge's /apply + /ws.
+let appOnly = appPlane()
+
 export let aged = (now = Date.now()) => {
   for (let s of served) {
     if (s.sock.readyState != WebSocket.OPEN) continue
@@ -292,7 +301,7 @@ let cast = (changes: Change[], except?: WebSocket, at?: number) => {
   // Native tmux delivery belongs to the doing owner: inline that's us; in
   // split mode the effects daemon's native tick sweeps, and two processes
   // driving send-keys would double-submit.
-  if (!splitEffects()) nativeSoon(cast)
+  if (!splitEffects() && !appOnly) nativeSoon(cast)
   // Maintain the native-session `standing` facet at the write edge (T-17855),
   // so SessionDot reads it O(1) instead of scanning the whole entry log per
   // render (157ms/dot). cast is the one door BOTH writers of turn-edge entries
@@ -301,7 +310,10 @@ let cast = (changes: Change[], except?: WebSocket, at?: number) => {
   // the session's log once and stamps it; everything else is a cheap name
   // check. The stamp casts back as a `session` change (not a turn-edge comp),
   // so this cannot recurse.
-  maintainStandingFor(changes, cast)
+  // The standing facet is a WRITE at the cast edge; the writer maintains it. An
+  // app-plane reader only rebroadcasts the bridge's committed rows to its
+  // sockets — it must not stamp (its handle is read-only anyway).
+  if (!appOnly) maintainStandingFor(changes, cast)
 }
 
 // The effect half of a write, run AFTER the casts: a slow or failing
@@ -310,7 +322,13 @@ let cast = (changes: Change[], except?: WebSocket, at?: number) => {
 // (TASKS_EFFECTS=daemon) this process fires only the `where:'serve'` rows
 // welded to its in-memory runner; the effects daemon owns the rest, off the
 // same journal rows through its own cursor.
-let wantHere: (w: Where) => boolean = splitEffects()
+// An app-plane reader fires NO effects: the worldly half (`where:'do'`) is the
+// effects daemon's, and the serve-side runner (`where:'serve'`) drives model
+// turns that WRITE, which belongs to the writer side — so this process just
+// broadcasts committed rows to its sockets and dispatches nothing.
+let wantHere: (w: Where) => boolean = appOnly
+  ? () => false
+  : splitEffects()
   ? (w) => w == 'serve'
   : () => true
 let effect = (out: Change[], t: ReturnType<typeof trace>) => {
@@ -359,6 +377,7 @@ let applyFrom = (
   id?: string,
 ) => {
   try {
+    if (appOnly) refuseWrite()
     apply(db, sent, fed(), writer)
   } catch (e) {
     console.error('sync: bad batch dropped —', e)
@@ -547,6 +566,7 @@ let graphIO: IO = {
     ),
   // deno-lint-ignore require-await
   write: async (changes, via) => {
+    if (appOnly) refuseWrite()
     let out = apply(db, changes, fed(), via)
     feed.settle()
     return out
@@ -554,6 +574,7 @@ let graphIO: IO = {
   // deno-lint-ignore require-await
   find: async (q, limit) => search(db, q, limit),
   upload: async (eid, html) => {
+    if (appOnly) refuseWrite()
     // store() journals its stamp (record); the feed carries it to the sockets.
     let res = await store(eid, html, () => feed.settle())
     if (!res.ok) throw new Error(await res.text())
@@ -562,6 +583,10 @@ let graphIO: IO = {
   // the new warmth (the apply wire refuses these rows).
   // deno-lint-ignore require-await
   touch: async (eids, confirm) => {
+    // Recall warmth is a WRITE (unjournaled, but still a row edit), so the
+    // read-only app-plane reader skips it silently — a read must never fail
+    // because it tried to bump recall stats. The writer owns warmth.
+    if (appOnly) return
     // Recall touches are deliberately NOT journaled (reading is not editing),
     // so they cannot ride the feed: the direct cast is their only delivery,
     // live-only by design.
@@ -574,6 +599,7 @@ let graphIO: IO = {
   // between) — the same atomicity the /undo route relies on.
   // deno-lint-ignore require-await
   undo: async ({ id, eid }, via) => {
+    if (appOnly) refuseWrite()
     let batch = id ?? (eid ? lastBatch(db, eid) : 0)
     if (!batch) {
       throw new Error(
@@ -779,6 +805,21 @@ let serving: Serving = { db: graph, epoch: epochOf(db), pid: Deno.pid }
 // probe) is a sole boot. This one flag steers both the port guard (bind.ts) and
 // the single-writer handoff (becomeWriter below).
 let joining = Deno.args.includes('--join')
+let refuseWrite = (): never => {
+  throw new Error(
+    'app-plane-only mode (TASKS_PLANE=app): writes go to the data-plane ' +
+      'writer (the Rust bridge /apply), not this Deno server',
+  )
+}
+// The graph-mutating HTTP doors, named once. /error and /usage are excluded on
+// purpose: they only record() telemetry, which swallows a read-only failure and
+// never touches the graph. /ws and /mcp are mixed read/write doors and refuse
+// writes at their own seams (applyFrom, subserve.write/undo/upload).
+let writeDoor = (method: string, path: string): boolean =>
+  method == 'POST' &&
+  (path == '/apply' || path == '/undo' || path == '/redact' ||
+    path == '/page' || path == '/upload' || path == '/blob' ||
+    path.startsWith('/backfill/'))
 let ownership: Deno.FsFile
 try {
   ownership = await guard(port, graph, joining)
@@ -824,6 +865,10 @@ let _writerBaton: Deno.FsFile | undefined
 // we can actually answer — so the handoff's dark gap is the predecessor's
 // shutdown plus our migrate, not the whole boot.
 let becomeWriter = async () => {
+  // App-plane-only never becomes the writer: it takes no baton and never
+  // migrates, so the Rust bridge holds `-writer.lock` exclusively (T-20223 stays
+  // closed). This is the single line that keeps Deno out of the writer role.
+  if (appOnly) return
   if (joining) await signalReady() // beat 1: bound — release the DB to me
   _writerBaton = await takeBaton(graph, { wait: joining })
   if (joining) migrate(db)
@@ -862,6 +907,18 @@ let handle = async (req: Request) => {
   // must hear whose graph is here without waiting out our migrations.
   if (path == '/graph') return Response.json(serving)
   await boot
+  // App-plane-only: the graph-mutating HTTP doors are closed here — this
+  // process is a reader beside the bridge writer (D-22804 §8). A clear 503 in
+  // front of an already-read-only handle; the data plane (writes) is the
+  // bridge's /apply. (/ws writes and MCP writes refuse at their own seams; the
+  // telemetry doors /error+/usage stay open — record() swallows on read-only.)
+  if (appOnly && writeDoor(req.method, path)) {
+    return new Response(
+      'app-plane-only mode (TASKS_PLANE=app): writes go to the data-plane ' +
+        'writer (the Rust bridge /apply), not this Deno server',
+      { status: 503 },
+    )
+  }
   if (path.startsWith('/accounts/codex')) {
     return accountHttp(codexAccount, req, path)
   }
@@ -1653,7 +1710,12 @@ tick('subs', () => aged(), 30_000, false)
 // runs bootDoing after this process's READY beat, and this server relays
 // only the `where:'serve'` sweeps its in-memory runner owns — the runner
 // re-boot row and the graph-native pending re-drives.
-if (splitEffects()) {
+if (appOnly) {
+  // App-plane-only owns NO doing: the boot reconcilers (reapLeases,
+  // standingBackfill, the outbox relay) all WRITE, and the serve-side runner
+  // drives model turns that WRITE — both belong to the writer side (the bridge)
+  // and the effects daemon (its own -effects.lock). This reader just serves.
+} else if (splitEffects()) {
   relay(
     (comp, pending) =>
       db.prepare(sweepSelect(comp, pending)).all() as Record<
@@ -1712,6 +1774,9 @@ watch()
 // loaded event loop. The server resolves the provider id through its unique
 // index and sends the ordinary graph change once it gets a turn.
 function turnSweep() {
+  // Draining the turn spool WRITES session.turn; the writer owns it. An
+  // app-plane reader leaves the spool for the writer side to drain.
+  if (appOnly) return
   if (Deno.env.get('DB_PATH')) return
   try {
     drainTurns(({ sid, turn }) => {

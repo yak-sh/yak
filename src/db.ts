@@ -2578,7 +2578,16 @@ let healWal = (db: DatabaseSync, path: string): DatabaseSync => {
 // serve reads while it waits for the predecessor to release the writer baton,
 // then migrate() alone once it holds it (T-20223, becomeWriter in server.ts).
 // Every sole-writer boot goes through open(), which is connect() + migrate().
-export let connect = (path = file, vector = false) => {
+// The app-plane-only boot switch (TASKS_PLANE=app, D-22804 §8 strangler). When
+// set, this Deno process serves READ routes beside the Rust bridge writer over
+// one WAL: it never takes the writer baton, never migrates, runs no boot
+// write-reconcilers, and opens the graph READ-ONLY — the data plane (every
+// write) is the bridge's. Read at boot like TASKS_EFFECTS/TASKS_SYNC, a pure
+// env predicate with no side effect (M-22673: two writers over one WAL is the
+// exact corruption this mode sidesteps by having Deno write NOTHING).
+export let appPlane = () => Deno.env.get('TASKS_PLANE') == 'app'
+
+export let connect = (path = file, vector = false, readOnly = false) => {
   // A test must NEVER open the owner's live graph. Under `deno test` the main
   // module is always a *_test.ts file; reaching the live path there means a
   // caller forgot DB_PATH (the `test` task sets :memory:). Refuse before we
@@ -2594,7 +2603,13 @@ export let connect = (path = file, vector = false) => {
     )
   }
   Deno.mkdirSync(dirname(path), { recursive: true })
-  let db = healWal(new DatabaseSync(path), path)
+  // readOnly (the app-plane reader, appPlane()): writing is made impossible at
+  // the SQLite layer, not merely avoided per-door — the structural guarantee
+  // that a Deno co-process beside the bridge writer never writes the shared WAL.
+  // healWal never salvages under it: a live writer holds the writer baton, so
+  // tryBaton fails and a corrupt-WAL verdict propagates rather than a reader
+  // moving the file a writer owns.
+  let db = healWal(new DatabaseSync(path, { readOnly }), path)
   // The vector extension is OPT-IN, because it is write-capable and connect()
   // is the LIBRARY door (D-22530: such an extension loads only in the
   // distribution that owns its write). Loading it here handed one to every
@@ -2620,7 +2635,9 @@ export let connect = (path = file, vector = false) => {
   // survives a crash, so the test task sets `off` and every file-backed open
   // drops from ~2s to ~10ms. Production never sets it and stays fully durable.
   let sync = Deno.env.get('TASKS_SYNC')
-  if (sync) db.exec(`pragma synchronous = ${sync}`)
+  // Durability is a writer's concern; a read-only handle never fsyncs, so skip
+  // the pragma rather than run a connection setting a reader has no use for.
+  if (sync && !readOnly) db.exec(`pragma synchronous = ${sync}`)
   return db
 }
 
