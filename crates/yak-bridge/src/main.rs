@@ -24,6 +24,7 @@ use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get, post};
 use axum::Router;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
@@ -33,7 +34,8 @@ use std::time::Duration;
 use yak_bridge::subserve::Subserve;
 use yak_bridge::{appread, front, journalr, live, read, snap};
 use yak_kernel::{
-    apply, default_gates, native_safe, parse_batch, ApplyOpts, Change, Store, WriteStore,
+    apply, default_gates, native_safe, normalize_literals, parse_batch, ApplyOpts, Change, Store,
+    WriteStore,
 };
 
 #[derive(Clone)]
@@ -502,44 +504,45 @@ async fn apply_route(State(app): State<App>, headers: HeaderMap, body: Bytes) ->
         .into_response()
 }
 
-// Classify one batch and route it: a native-safe plain-graph batch COMMITS
-// natively; anything else proxies. Parsing is part of the classification — a
-// body that is not a clean Change array is NOT native (Deno owns malformed-input
-// errors, so it proxies). No upstream + a proxy batch is the only 503; a native
-// batch commits regardless of upstream, since the WriteStore is always open. The
-// trailing tag is the door taken, for the response's `x-yak-apply` header.
+// Classify one mutation and route it. Flat Change[] remains byte-compatible;
+// `{entities:[…]}` compiles its request-local aliases through the generated
+// vocabulary, then commits the canonical batch through the SAME native apply
+// door. A compiled batch outside native_safe still proxies whole — its original
+// literal body, so Deno remains authority for a newly-added unported component.
 fn route_apply(
     write: &Mutex<WriteStore>,
     upstream: Option<&str>,
     via: Option<&str>,
     body: &[u8],
 ) -> (u16, String, String, &'static str) {
-    let batch = serde_json::from_slice::<serde_json::Value>(body)
-        .ok()
-        .as_ref()
-        .and_then(parse_batch)
-        .filter(|b| native_safe(b));
-    match batch {
-        Some(changes) => {
+    let parsed = serde_json::from_slice::<serde_json::Value>(body).ok();
+    if let Some(changes) = parsed.as_ref().and_then(parse_batch) {
+        if native_safe(&changes) {
             let (s, c, t) = native_apply(write, via, changes);
-            (s, c, t, "native")
+            return (s, c, t, "native");
         }
-        None => match upstream {
-            Some(u) => {
-                let (s, c, t) = proxy_apply(u, via, body);
-                (s, c, t, "proxy")
-            }
-            None => (
-                503,
-                "text/plain".into(),
-                "yak-bridge: /apply has no upstream for this batch — a \
+    } else if let Some(entities) =
+        parsed.as_ref().and_then(Value::as_object).and_then(|o| o.get("entities"))
+    {
+        if let Some((s, c, t)) = native_literal_apply(write, via, entities) {
+            return (s, c, t, "native");
+        }
+    }
+    match upstream {
+        Some(u) => {
+            let (s, c, t) = proxy_apply(u, via, body);
+            (s, c, t, "proxy")
+        }
+        None => (
+            503,
+            "text/plain".into(),
+            "yak-bridge: /apply has no upstream for this batch — a \
                  transform-bearing or delete batch must reach the Deno server; \
                  name it with --upstream or TASKS_UPSTREAM (never 5173 from a \
                  probe)."
-                    .into(),
-                "proxy",
-            ),
-        },
+                .into(),
+            "proxy",
+        ),
     }
 }
 
@@ -567,6 +570,40 @@ fn native_apply(
         }
         Err(e) => (400, "text/plain".into(), e.to_string()),
     }
+}
+
+// Compile and commit while holding one WriteStore guard. Compilation performs
+// no writes; once it succeeds, apply() owns the one SQLite transaction, so a
+// refused guard leaves every minted literal absent. None means the canonical
+// batch contains a not-yet-native component and the caller must proxy the
+// ORIGINAL body. Nested success adds aliases after the effective change batch;
+// flat success above retains its long-standing exact shape.
+fn native_literal_apply(
+    write: &Mutex<WriteStore>,
+    via: Option<&str>,
+    entities: &Value,
+) -> Option<(u16, String, String)> {
+    let store = write.lock().unwrap_or_else(|p| p.into_inner());
+    let plan = match normalize_literals(&store.conn, entities) {
+        Ok(plan) => plan,
+        Err(e) => return Some((400, "text/plain".into(), e)),
+    };
+    if !native_safe(&plan.changes) {
+        return None;
+    }
+    let opts = ApplyOpts { writer: via, fed: true };
+    Some(match apply(&store, plan.changes, &opts, &default_gates()) {
+        Ok(out) => {
+            let changes: Vec<Value> = out.iter().map(Change::to_value).collect();
+            let body = serde_json::json!({
+                "ok": true,
+                "changes": changes,
+                "aliases": plan.aliases,
+            });
+            (200, "application/json".into(), body.to_string())
+        }
+        Err(e) => (400, "text/plain".into(), e.to_string()),
+    })
 }
 
 // Forward one write batch to the Deno /apply and read back (status, content-type,

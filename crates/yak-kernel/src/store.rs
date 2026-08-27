@@ -1223,15 +1223,25 @@ impl Graph for Store {
 // The id grammar as a free function, so the write path resolves against its
 // own connection with the same rules the read Store uses.
 pub fn resolve(conn: &Connection, id: &str) -> Option<String> {
+    resolve_checked(conn, id).ok().flatten()
+}
+
+// resolveId with its ambiguity refusal intact. Most read callers ask the
+// Option-shaped Source question and cannot surface a resolver error; mutation
+// compilation can, and must not turn an ambiguous handle into a missing one or
+// let a local key shadow a secondary alias.
+pub fn resolve_checked(conn: &Connection, id: &str) -> Result<Option<String>, String> {
     let num_of = |n: i64| -> Option<String> {
         one(conn, "select eid from entity where num = ?1", [n], |r| r.get(0))
     };
     if let Some(c) = regex_num(id) {
-        return num_of(c);
+        return Ok(num_of(c));
     }
-    if let Ok(n) = id.parse::<i64>() {
-        if let Some(hit) = num_of(n) {
-            return Some(hit);
+    if !id.is_empty() && id.chars().all(|c| c.is_ascii_digit()) {
+        if let Ok(n) = id.parse::<i64>() {
+            if let Some(hit) = num_of(n) {
+                return Ok(Some(hit));
+            }
         }
     }
     let low = id.to_lowercase();
@@ -1239,7 +1249,7 @@ pub fn resolve(conn: &Connection, id: &str) -> Option<String> {
         if let Some(hit) =
             one(conn, "select eid from entity where eid = ?1", [&low], |r| r.get::<_, String>(0))
         {
-            return Some(hit);
+            return Ok(Some(hit));
         }
     }
     if low.len() >= 6 && low.len() <= 8 && low.chars().all(|c| c.is_ascii_hexdigit()) {
@@ -1250,8 +1260,17 @@ pub fn resolve(conn: &Connection, id: &str) -> Option<String> {
             [&low, &hi],
             |r| r.get(0),
         );
+        if hits.len() > 1 {
+            return Err(format!(
+                "{id} is an ambiguous id — matches {} and more; use more characters",
+                hits.iter()
+                    .map(|eid| eid.chars().take(8).collect::<String>())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
         if hits.len() == 1 {
-            return Some(hits[0].clone());
+            return Ok(Some(hits[0].clone()));
         }
     }
     let has_alias =
@@ -1263,14 +1282,15 @@ pub fn resolve(conn: &Connection, id: &str) -> Option<String> {
         if let Some(hit) = one(
             conn,
             "select e.eid from alias a join entity e \
-             on e.id = a.entity where a.slug = ?1",
-            [&low],
+             on e.id = a.entity where a.slug = ?1 \
+             or instr(' ' || coalesce(a.slugs, '') || ' ', ' ' || ?1 || ' ') > 0",
+            [id],
             |r| r.get::<_, String>(0),
         ) {
-            return Some(hit);
+            return Ok(Some(hit));
         }
     }
-    None
+    Ok(None)
 }
 
 fn regex_num(id: &str) -> Option<i64> {
@@ -1286,4 +1306,57 @@ fn regex_num(id: &str) -> Option<i64> {
 // applies the same screen unless a filter reveals.
 pub fn visible(r: &Row) -> bool {
     !r.comps.contains_key("quarantined")
+}
+
+#[cfg(test)]
+mod resolve_tests {
+    use super::*;
+
+    fn ids() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "create table entity (id integer primary key, eid text unique, num integer unique);
+             create table alias (entity integer primary key, slug text, slugs text);",
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn checked_resolution_includes_secondary_aliases() {
+        let conn = ids();
+        conn.execute(
+            "insert into entity (eid, num) values ('eeeeeeee-0000-4000-8000-000000000019', 19)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "insert into alias (entity, slug, slugs) values (1, 'main', 'old another')",
+            [],
+        )
+        .unwrap();
+        assert_eq!(
+            resolve_checked(&conn, "another").unwrap().as_deref(),
+            Some("eeeeeeee-0000-4000-8000-000000000019")
+        );
+    }
+
+    #[test]
+    fn checked_resolution_preserves_ambiguous_handle_refusal() {
+        let conn = ids();
+        conn.execute(
+            "insert into entity (eid) values ('abcdef01-0000-4000-8000-000000000001')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "insert into entity (eid) values ('abcdef02-0000-4000-8000-000000000002')",
+            [],
+        )
+        .unwrap();
+        assert_eq!(
+            resolve_checked(&conn, "abcdef").unwrap_err(),
+            "abcdef is an ambiguous id — matches abcdef01, abcdef02 and more; use more characters"
+        );
+    }
 }

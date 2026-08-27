@@ -1410,6 +1410,12 @@ fn setting_eid(db_path: &str, key: &str) -> Option<String> {
         .ok()
 }
 
+fn doc_title_count(db_path: &str, title: &str) -> i64 {
+    ro_conn(db_path)
+        .query_row("select count(*) from doc where title = ?1", [title], |r| r.get(0))
+        .unwrap_or(0)
+}
+
 // The (via, batch, trace) rows a batch committed, canonicalized and joined — one
 // string per surface (b) so a Vec compare pinpoints a differing row.
 fn journal_since(db_path: &str, base: i64) -> Vec<String> {
@@ -1707,6 +1713,22 @@ fn write_parity() {
         "native",
     );
 
+    // The same /apply door accepts component-shaped entity literals. Local
+    // keys resolve both dependency targets and {eid} component columns, while
+    // the response returns their request-local aliases beside apply()'s
+    // authoritative effective batch.
+    assert_write(
+        "routing/nested-literals",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!(
+            "{{\"entities\":[{{\"key\":\"goal\",\"comps\":{{\"doc\":{{\"title\":\"zqw{uid} nested goal\"}},\"task\":{{\"status\":\"open\",\"assignee\":\"{e1}\"}}}},\"was\":{{\"doc\":{{\"title\":null}}}},\"deps\":{{\"requires\":{{\"key\":\"step\",\"comps\":{{\"doc\":{{\"title\":\"zqw{uid} nested step\"}},\"task\":{{\"status\":\"open\",\"assignee\":\"goal\"}}}}}}}}}}]}}"
+        ),
+        "native",
+    );
+
     // --- REJECTION: `was` stale (message + hash) -----------------------------
     let e2 = uuid_v4();
     g(&ts, &br, &format!("[{{\"eid\":\"{e2}\",\"name\":\"doc\",\"comp\":{{\"title\":\"v1\"}}}}]"));
@@ -1733,6 +1755,23 @@ fn write_parity() {
         ),
         "native",
     );
+    // Literal compilation is pure and the whole canonical batch enters one
+    // apply transaction: the stale existing parent refuses its freshly-minted
+    // child and edge too.
+    let rolled_title = format!("zqw{uid} must roll back");
+    assert_write(
+        "reject/nested-was-stale",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!(
+            "{{\"entities\":[{{\"id\":\"{e2}\",\"comps\":{{\"doc\":{{\"title\":\"v4\"}}}},\"was\":{{\"doc\":{{\"title\":\"{sha_v1}\"}}}},\"deps\":{{\"requires\":{{\"key\":\"never\",\"comps\":{{\"doc\":{{\"title\":\"{rolled_title}\"}}}}}}}}}}]}}"
+        ),
+        "native",
+    );
+    assert_eq!(doc_title_count(&ts_db, &rolled_title), 0, "Deno left a refused literal child");
+    assert_eq!(doc_title_count(&br_db, &rolled_title), 0, "bridge left a refused literal child");
 
     // --- REJECTION: unknown column ------------------------------------------
     let e3 = uuid_v4();

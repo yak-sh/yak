@@ -20,6 +20,7 @@ pub mod feed;
 pub mod inbox;
 #[cfg(feature = "native")]
 pub mod journal;
+pub mod literal;
 pub mod model;
 #[cfg(feature = "native")]
 pub mod profiling;
@@ -49,6 +50,7 @@ pub mod write;
 pub use change::Change;
 #[cfg(feature = "native")]
 pub use feed::{cursor_of, data_version, journal_since, row_changes, Feed, JournalRow};
+pub use literal::{normalize_literals_with, LiteralPlan};
 pub use model::{Dep, Graph, Hit, Row, Source};
 #[cfg(feature = "remote")]
 pub mod remote;
@@ -56,6 +58,8 @@ pub mod remote;
 pub use baton::{take_baton, try_baton, Baton, BatonError, TakeOpts, EFFECTS_LOCK, WRITER_LOCK};
 #[cfg(feature = "native")]
 pub use change::parse_batch;
+#[cfg(feature = "native")]
+pub use literal::normalize_literals;
 #[cfg(feature = "remote")]
 pub use remote::Remote;
 #[cfg(feature = "native")]
