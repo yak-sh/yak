@@ -231,6 +231,167 @@ impl Store {
         self.fill(&format!("select entity from {}", q(kind)), order)
     }
 
+    // The indexed candidate path (T-22758): a listing narrows to the rows an
+    // index says CAN match before it materializes any, instead of bulk-loading
+    // the whole kind and filtering in Rust. `candidates::compile` turns the
+    // filters into a WHERE that selects a SUPERSET (a pred it cannot express
+    // exactly is dropped, which only widens a conjunction); `fill` materializes
+    // just that set; and the caller's `matches` refines it to the exact answer —
+    // so this returns byte-identically what `rows_of_kind().filter(matches)`
+    // did, having touched a fraction of the rows. On the live graph a filtered
+    // task board fell from ~180ms (all 4.4k tasks) to single-digit ms.
+    //
+    // No quarantine screen, the same as rows_of_kind: a listing screens one
+    // level up, where a `.quarantined` filter can lift it.
+    //
+    // Named apart from the `Graph::rows_matching` trait door on purpose: a
+    // concrete `&Store` would let an inherent method of the same name SHADOW the
+    // trait one, silently changing what every direct caller (read.rs) resolves
+    // to. `rows_matching` (trait) is the public door; this is its file body.
+    pub fn rows_narrowed(&self, kind: &str, preds: &[crate::query::Pred]) -> Vec<Row> {
+        if !self.has_table(kind) {
+            return vec![];
+        }
+        let n = crate::candidates::compile(preds);
+        // Nothing compiled — the candidate set IS the whole kind, so read it the
+        // cheap way (a membership subquery, no id list to carry) exactly as
+        // rows_of_kind does, then refine.
+        if !n.narrowed {
+            return self
+                .rows_of_kind(kind)
+                .into_iter()
+                .filter(|r| crate::query::matches(r, preds))
+                .collect();
+        }
+        let (ids, order) = self.candidate_ids(kind, &n, None, None, false);
+        if ids.is_empty() {
+            return vec![];
+        }
+        self.fill(&ids.join(","), order)
+            .into_iter()
+            .filter(|r| crate::query::matches(r, preds))
+            .collect()
+    }
+
+    // The evalFast-equivalent (sql.ts windowed()): a filtered/LIMITED large-kind
+    // read answered newest-num-first from the index, materializing at most
+    // `limit` rows — the door that closes the pure-limit case (`.kind=task&
+    // limit=1`), which narrowing alone cannot, because the window has to reach
+    // the SQL before rows are built. A LIMIT may ride the statement ONLY when the
+    // filter compiled EXACTLY: a predicate the matcher answers runs AFTER the
+    // limit and would under-fill the page (sql.ts's rule), so an inexact filter
+    // falls back to narrow → refine → cut-in-Rust, correct but unwindowed at the
+    // SQL. `reveal` lifts the quarantine screen the window otherwise applies IN
+    // the WHERE — the screen must ride the compiled statement, or a screened row
+    // in the newest N under-fills the page.
+    //
+    // Rows come back num-ASCENDING (the wire order); the window's "newest" is an
+    // ordering the SQL uses to pick the page, not the shape it returns.
+    pub fn rows_window(
+        &self,
+        kind: &str,
+        preds: &[crate::query::Pred],
+        after: Option<i64>,
+        limit: Option<i64>,
+        reveal: bool,
+    ) -> Vec<Row> {
+        if !self.has_table(kind) {
+            return vec![];
+        }
+        let n = crate::candidates::compile(preds);
+        let screen = !reveal;
+        // The exact path: push after/limit into the statement and materialize
+        // only the page. Safe only when every pred compiled — else the matcher's
+        // leftover work happens after the cut.
+        if n.exact {
+            let (ids, mut order) =
+                self.candidate_ids(kind, &n, after, limit, screen);
+            if ids.is_empty() {
+                return vec![];
+            }
+            let mut rows = self.fill(&ids.join(","), std::mem::take(&mut order));
+            rows.sort_by(|a, b| a.num.unwrap_or(0).cmp(&b.num.unwrap_or(0)));
+            return rows;
+        }
+        // The inexact fallback: narrow by the compilable subset, refine with the
+        // full matcher, screen, then cut the newest `limit` in Rust.
+        let mut rows: Vec<Row> = if n.narrowed {
+            let (ids, order) = self.candidate_ids(kind, &n, None, None, false);
+            if ids.is_empty() {
+                vec![]
+            } else {
+                self.fill(&ids.join(","), order)
+            }
+        } else {
+            self.rows_of_kind(kind)
+        };
+        rows.retain(|r| crate::query::matches(r, preds));
+        if screen {
+            rows.retain(crate::store::visible);
+        }
+        if let Some(a) = after {
+            rows.retain(|r| r.num.unwrap_or(0) < a);
+        }
+        if let Some(l) = limit {
+            let l = l.max(0) as usize;
+            if rows.len() > l {
+                rows.sort_by(|a, b| b.num.unwrap_or(0).cmp(&a.num.unwrap_or(0)));
+                rows.truncate(l);
+                rows.sort_by(|a, b| a.num.unwrap_or(0).cmp(&b.num.unwrap_or(0)));
+            }
+        }
+        rows
+    }
+
+    // Run a compiled candidate filter over a kind's membership and return the
+    // matching entity ids (for an inlined `fill` set) beside their (eid, num) in
+    // read order. `after`/`limit` bound the newest-num page; `screen` adds the
+    // quarantine screen in SQL (a windowed read must screen before it cuts).
+    fn candidate_ids(
+        &self,
+        kind: &str,
+        n: &crate::candidates::Narrowed,
+        after: Option<i64>,
+        limit: Option<i64>,
+        screen: bool,
+    ) -> (Vec<String>, Vec<(String, Option<i64>)>) {
+        let screen_sql = if screen { self.unscreened("e") } else { String::new() };
+        let mut after_sql = String::new();
+        if let Some(a) = after {
+            // a is an i64 read off the spine — no user text, safe to inline.
+            after_sql = format!(" and e.num < {a}");
+        }
+        let order_dir = if limit.is_some() { "desc" } else { "asc" };
+        let limit_sql = match limit {
+            Some(l) => format!(" limit {}", l.max(0)),
+            None => String::new(),
+        };
+        let sql = format!(
+            "select e.id, e.eid, e.num from {} t join entity e \
+             on e.id = t.entity{} where {}{}{} order by e.num {}{}",
+            q(kind),
+            n.joins,
+            n.cond,
+            screen_sql,
+            after_sql,
+            order_dir,
+            limit_sql,
+        );
+        let got: Vec<(i64, String, Option<i64>)> = collect(
+            &self.conn,
+            &sql,
+            rusqlite::params_from_iter(n.params.iter()),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        );
+        let mut ids = Vec::with_capacity(got.len());
+        let mut order = Vec::with_capacity(got.len());
+        for (id, eid, num) in got {
+            ids.push(id.to_string());
+            order.push((eid, num));
+        }
+        (ids, order)
+    }
+
     // The same bulk read for an arbitrary SET of eids — what a renderer
     // resolving many related entities needs (T-22589). Rows come back for
     // whichever eids the graph has, num order; the rest are simply absent,
@@ -554,18 +715,16 @@ impl Graph for Store {
     fn rows_of(&self, eids: &[String]) -> Vec<Row> {
         Store::rows_of(self, eids)
     }
-    // The file hands back everything of the kind; the caller's `visible()`
-    // screen is what reveal lifts, so nothing to do with it here.
+    // The file narrows through the index and refines the superset (T-22758);
+    // the caller's `visible()` screen is what reveal lifts one level up, so
+    // nothing to do with reveal here.
     fn rows_matching(
         &self,
         kind: &str,
         preds: &[crate::query::Pred],
         _reveal: bool,
     ) -> Result<Vec<Row>, String> {
-        Ok(Store::rows_of_kind(self, kind)
-            .into_iter()
-            .filter(|r| crate::query::matches(r, preds))
-            .collect())
+        Ok(Store::rows_narrowed(self, kind, preds))
     }
     fn deps_of(&self, eid: &str) -> Vec<Dep> {
         Store::deps_of(self, eid)

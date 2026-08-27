@@ -127,6 +127,17 @@ fn query_parity() {
         "/query?.kind=session&limit=3&deps=1".into(),
         // a VALID filter that matches nothing — the empty array, both ways
         "/query?.kind=task&.title~=zqzq_no_such_title_xyz".into(),
+        // The indexed candidate path (T-22758) narrows these through SQL where the
+        // old bulk read filtered in Rust; each exercises a different compiler arm,
+        // and every one must stay byte-identical to TS's evalFast answer.
+        "/query?.kind=task&.status=open,wip&limit=50".into(), // enum list
+        "/query?.kind=task&.priority<=1&limit=30".into(),      // numeric compare
+        "/query?.kind=task&.priority=0,2&limit=40".into(),     // numeric list
+        "/query?.kind=task&.status!=done&limit=100".into(),    // negation + NULL
+        "/query?.kind=task&.status=open&.priority=0&limit=15".into(), // AND, one join
+        "/query?.kind=task&.title~=port&limit=20".into(),      // contains (instr)
+        "/query?.kind=task&.assignee=&limit=20".into(),        // absence
+        "/query?.kind=task&.doc!&limit=20".into(),             // component presence
     ];
     // DOCUMENTED DIVERGENCE (grammar/validation, filed as a rung-2 follow-up):
     // the kernel's filter grammar (query.rs) and TS's parseQuery reject

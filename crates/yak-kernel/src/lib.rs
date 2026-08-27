@@ -9,6 +9,8 @@
 // schema alone.
 
 pub mod cache;
+#[cfg(feature = "native")]
+pub mod candidates;
 pub mod change;
 #[cfg(feature = "native")]
 pub mod feed;

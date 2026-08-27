@@ -64,7 +64,8 @@ pub trait Graph: Source {
     // cannot afford: unfiltered, a board is every task's full body serialized
     // into one response. The server speaks this very grammar, so the remote
     // impl hands the predicates over and lets the query run where the rows
-    // are; the file impl filters in process, where that IS the cheap thing.
+    // are; the file impl narrows through the index (candidates::compile) and
+    // materializes only the rows that can match, then refines (T-22758).
     //
     // A listing returns Result because "no rows" and "I could not ask" are
     // different answers that look identical once flattened: a refused request
