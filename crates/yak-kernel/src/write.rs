@@ -173,7 +173,7 @@ fn is_dead(conn: &Connection, eid: &str) -> bool {
 // A file may lack a plugin's tables (D-22530 §2: readable-but-inert); the
 // generic machinery — cascade walks, comp deletes — skips what isn't there
 // rather than erroring.
-fn has_table(conn: &Connection, t: &str) -> bool {
+pub(crate) fn has_table(conn: &Connection, t: &str) -> bool {
     conn.query_row(
         "select 1 from sqlite_master where type = 'table' and name = ?1",
         [t],
@@ -185,7 +185,7 @@ fn has_table(conn: &Connection, t: &str) -> bool {
     .is_some()
 }
 
-fn has_col(conn: &Connection, t: &str, c: &str) -> bool {
+pub(crate) fn has_col(conn: &Connection, t: &str, c: &str) -> bool {
     has_table(conn, t)
         && conn
             .query_row(

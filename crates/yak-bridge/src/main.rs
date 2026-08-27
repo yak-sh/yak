@@ -332,12 +332,19 @@ async fn main() {
     let mut port: Option<u16> = std::env::var("PORT").ok().and_then(|s| s.parse().ok());
     let mut upstream: Option<String> =
         std::env::var("TASKS_UPSTREAM").ok().filter(|s| !s.is_empty());
+    let mut migrate = false;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--db" => db = args.next(),
             "--port" => port = args.next().and_then(|s| s.parse().ok()),
             "--upstream" => upstream = args.next(),
+            // Deliberately CREATE or additively migrate the graph, then exit
+            // (D-22804 §8): the schema-authority capability the kernel now owns.
+            // A one-shot on purpose — the LIVE swap boot (a successor holding the
+            // writer baton, migrating, then serving) is the owner-gated rung-8
+            // step, filed as its own follow-on; this refuses the live graph.
+            "--migrate" => migrate = true,
             other if db.is_none() && !other.starts_with("--") => db = Some(other.to_string()),
             _ => {}
         }
@@ -346,6 +353,28 @@ async fn main() {
         eprintln!("yak-bridge: no db path (DB_PATH, --db, or a positional arg)");
         std::process::exit(2);
     });
+    if migrate {
+        // Never the live graph: bundled builds cannot co-write the live WAL
+        // across builds (M-22673), and the baton-guarded live swap is rung 8.
+        if yak_bridge::refuses_live(&db) || yak_kernel::writes_live_graph(&db) {
+            eprintln!(
+                "yak-bridge --migrate: refusing the live graph {db} — live \
+                 schema migration is the owner-gated rung-8 swap, under the \
+                 writer baton. Point --db at a fresh/probe path."
+            );
+            std::process::exit(2);
+        }
+        match yak_kernel::WriteStore::create_or_migrate(&db) {
+            Ok(_) => {
+                eprintln!("yak-bridge: created/migrated {db} (schema authority, D-22804 §8)");
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("yak-bridge --migrate: cannot create/migrate {db}: {e}");
+                std::process::exit(1);
+            }
+        }
+    }
     let port = port.unwrap_or_else(|| {
         eprintln!("yak-bridge: no port (PORT or --port); pick a PROBE port, never 5173");
         std::process::exit(2);

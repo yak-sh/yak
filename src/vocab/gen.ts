@@ -465,6 +465,85 @@ export let emitRust = (a: ReturnType<typeof assemble>): string => {
   return out.join('\n')
 }
 
+// ---- emit (Rust schema) ---------------------------------------------------
+// The kernel's schema authority (D-22804 §8): the ordered DDL a fresh
+// src/db.ts migrate() runs, classified as SchemaOp, so the Rust kernel replays
+// it to CREATE a fresh graph and ADDITIVELY migrate an old one — byte-identical
+// to Deno, with db.ts the one schema source. Captured out-of-process (see
+// captureSchema below) so it reflects the freshly-emitted types.ts.
+
+type SchemaOp =
+  | { kind: 'exec'; sql: string }
+  | { kind: 'addColumn'; table: string; col: string; sql: string }
+  | { kind: 'index'; name: string; sql: string }
+
+// A Rust raw string for arbitrary SQL. The DDL never contains '#', so a single
+// hash delimiter never collides; assert it rather than trust it.
+let rawStr = (s: string): string => {
+  if (s.includes('"#')) {
+    refuse(`schema DDL contains a raw-string terminator: ${s}`)
+  }
+  return `r#"${s}"#`
+}
+
+export let emitRustSchema = (ops: SchemaOp[]): string => {
+  let out: string[] = []
+  out.push(
+    '// GENERATED — do not edit. Emitted by `deno task codegen` from the ordered',
+    '// schema DDL a fresh src/db.ts migrate() runs (SchemaOp), captured through',
+    '// the live SQLite driver. Refused by the gate stale check (`deno task',
+    '// codegen --check`). The Rust kernel replays this to own schema CREATE +',
+    '// additive migration (D-22804 §8); db.ts stays the one schema source.',
+    '',
+    'use crate::schema::SchemaOp;',
+    '',
+    'pub static SCHEMA: &[SchemaOp] = &[',
+  )
+  for (let op of ops) {
+    if (op.kind === 'exec') {
+      out.push(`    SchemaOp::Exec(${rawStr(op.sql)}),`)
+    } else if (op.kind === 'addColumn') {
+      out.push(
+        `    SchemaOp::AddColumn { table: ${rq(op.table)}, col: ${
+          rq(op.col)
+        }, sql: ${rawStr(op.sql)} },`,
+      )
+    } else {
+      out.push(
+        `    SchemaOp::Index { name: ${rq(op.name)}, sql: ${rawStr(op.sql)} },`,
+      )
+    }
+  }
+  out.push('];', '')
+  return out.join('\n')
+}
+
+// Capture the classified schema DDL in a SUBPROCESS reading the on-disk
+// types.ts, so a vocabulary change lands in one codegen pass (importing db.ts
+// here would bind a stale types.ts cached before this run rewrote it).
+let captureSchema = async (): Promise<SchemaOp[]> => {
+  let tmp = `${dir}.schema.tmp.json`
+  let p = await new Deno.Command('deno', {
+    args: [
+      'run',
+      '--allow-read',
+      '--allow-write',
+      '--allow-env',
+      '--allow-ffi',
+      '--unstable-net',
+      `${dir}schema_capture.ts`,
+      tmp,
+    ],
+    env: { DB_PATH: ':memory:', TASKS_SYNC: 'off' },
+  }).output()
+  if (!p.success) {
+    refuse(`schema capture failed: ${new TextDecoder().decode(p.stderr)}`)
+  }
+  let ops = JSON.parse(Deno.readTextFileSync(tmp)) as SchemaOp[]
+  Deno.removeSync(tmp)
+  return ops
+}
+
 // ---- drive ----------------------------------------------------------------
 
 let loadManifests = (): Manifest[] => {
@@ -505,11 +584,13 @@ if (import.meta.main) {
 
   let rustTarget = `${dir}../../crates/yak-kernel/src/vocab_gen.rs`
   let rustBody = emitRust(assembled)
+  let schemaTarget = `${dir}../../crates/yak-kernel/src/schema_gen.rs`
 
   let current = await Deno.readTextFile(target).catch(() => '')
   let currentFixture = await Deno.readTextFile(`${dir}fixture.json`)
     .catch(() => '')
   let currentRust = await Deno.readTextFile(rustTarget).catch(() => '')
+  let currentSchema = await Deno.readTextFile(schemaTarget).catch(() => '')
   if (check) {
     if (current != fresh) {
       console.error(
@@ -529,16 +610,30 @@ if (import.meta.main) {
       )
       Deno.exit(1)
     }
+    // types.ts on disk is now known-current, so the capture reflects it.
+    let schemaRust = emitRustSchema(await captureSchema())
+    if (currentSchema != schemaRust) {
+      console.error(
+        'crates/yak-kernel/src/schema_gen.rs is stale — run `deno task codegen`',
+      )
+      Deno.exit(1)
+    }
     console.log(
-      'vocab: types.ts, fixture.json and vocab_gen.rs match the manifests',
+      'vocab: types.ts, fixture.json, vocab_gen.rs and schema_gen.rs match ' +
+        'the manifests',
     )
   } else {
+    // types.ts first, so the schema capture (a subprocess importing db.ts)
+    // reads the freshly-emitted vocabulary its derived columns derive from.
     await Deno.writeTextFile(target, fresh)
     await Deno.writeTextFile(`${dir}fixture.json`, fixture)
     await Deno.writeTextFile(rustTarget, rustBody)
+    let schemaRust = emitRustSchema(await captureSchema())
+    await Deno.writeTextFile(schemaTarget, schemaRust)
     console.log(
       `vocab: wrote types.ts (${fresh.length} bytes) + fixture.json + ` +
-        `vocab_gen.rs (${rustBody.length} bytes)`,
+        `vocab_gen.rs (${rustBody.length} bytes) + schema_gen.rs ` +
+        `(${schemaRust.length} bytes)`,
     )
   }
 }

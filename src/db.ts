@@ -3043,6 +3043,90 @@ export let migrate = (db: DatabaseSync) => {
 export let open = (path = file, vector = false) =>
   migrate(connect(path, vector))
 
+// One schema-shaping DDL statement, classified so a non-Deno kernel can replay
+// it (D-22804 §8). The classes are the whole guard surface: an idempotent
+// create/drop runs as-is; an `add column` runs only when the column is absent;
+// a bare `create index` runs only when the index is absent.
+export type SchemaOp =
+  | { kind: 'exec'; sql: string }
+  | { kind: 'addColumn'; table: string; col: string; sql: string }
+  | { kind: 'index'; name: string; sql: string }
+
+// The ordered schema-shaping DDL a fresh migrate() runs, classified — the ONE
+// source the codegen emits crates/yak-kernel/src/schema_gen.rs from, so the
+// Rust kernel owns schema CREATE + ADDITIVE migration off db.ts's own schema
+// (D-22804 §8), never a hand-kept copy. Captured by RECORDING db.exec over a
+// fresh :memory: migrate() through the SAME driver the live server writes with,
+// so the emitted DDL is byte-for-byte what this process would run; then
+// augmented with the derived-component add-columns. Those last are the one thing
+// the capture cannot see: addDerivedCols runs one `add column` per derived
+// column, but on a FRESH db the column is already present (tableDdl created the
+// table whole), so the guarded alter is a no-op and never reaches db.exec — yet
+// an OLD db that predates a newly-derived column needs it. They are spliced in
+// right after the derived table creates, before the index realization that may
+// name such a column. Additive only: the historical one-time reshapes
+// (migrateToIdKeys, board→project, the backfills/retirements) are no-ops on a
+// fresh db and never captured — the live graph is already past them, and
+// "anything shapier needs the owner" (M-17876).
+export let schemaDdl = (): SchemaOp[] => {
+  let recorded: string[] = []
+  let real = new DatabaseSync(':memory:')
+  let proxy = new Proxy(real, {
+    get(t, p, r) {
+      if (p === 'exec') {
+        return (sql: string) => {
+          recorded.push(sql)
+          return (t as unknown as { exec: (s: string) => unknown }).exec(sql)
+        }
+      }
+      let v = Reflect.get(t, p, r)
+      return typeof v === 'function'
+        ? (v as (...a: unknown[]) => unknown).bind(t)
+        : v
+    },
+  })
+  migrate(proxy as unknown as DatabaseSync)
+  real.close()
+
+  let classify = (sql: string): SchemaOp => {
+    let t = sql.trim()
+    let add = t.match(/^alter\s+table\s+(\S+)\s+add\s+column\s+(\S+)/i)
+    if (add) return { kind: 'addColumn', table: add[1], col: add[2], sql }
+    // A bare `create index NAME` (no `if not exists`) needs a presence guard;
+    // every other create/drop already carries its own `if [not] exists`.
+    let idx = t.match(
+      /^create\s+(?:unique\s+)?index\s+(?!if\s+not\s+exists)(\S+)\s+on/i,
+    )
+    if (idx) return { kind: 'index', name: idx[1], sql }
+    return { kind: 'exec', sql }
+  }
+  let ops = recorded
+    .filter((s) => /^\s*(?:create|alter|drop)\b/i.test(s))
+    .map(classify)
+
+  let derivedAdds: SchemaOp[] = []
+  for (let comp of derived) {
+    for (let { prop, ddl } of derivedCols(comp)) {
+      derivedAdds.push({
+        kind: 'addColumn',
+        table: comp,
+        col: prop,
+        sql: `alter table ${comp} add column ${ddl}`,
+      })
+    }
+  }
+  let createSqls = new Set(derived.map((c) => tableDdl(c) + ';'))
+  let lastCreate = -1
+  ops.forEach((op, i) => {
+    if (createSqls.has(op.sql)) lastCreate = i
+  })
+  if (lastCreate < 0) {
+    throw new Error('schemaDdl: derived table creates not found in capture')
+  }
+  ops.splice(lastCreate + 1, 0, ...derivedAdds)
+  return ops
+}
+
 // The one live handle moved to live_db.ts: importing THIS module runs nothing
 // — it is library code (D-22388), safe in the CLI's read arm and in any test —
 // while importing live_db.ts is the deliberate act of opening the live graph.

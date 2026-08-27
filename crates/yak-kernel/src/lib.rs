@@ -25,6 +25,10 @@ pub mod query;
 #[cfg(feature = "native")]
 pub mod reader;
 #[cfg(feature = "native")]
+pub mod schema;
+#[cfg(feature = "native")]
+mod schema_gen;
+#[cfg(feature = "native")]
 pub mod search;
 #[cfg(feature = "native")]
 pub mod store;
@@ -55,6 +59,8 @@ pub use change::parse_batch;
 pub use write::{
     apply, default_gates, native_safe, ApplyError, ApplyOpts, Gate, WriteStore, NATIVE_COMPS,
 };
+#[cfg(feature = "native")]
+pub use schema::{apply_schema, mint_epoch, SchemaOp};
 
 // The live graph the way every client resolves it: DB_PATH wins, else the
 // home pairing.
