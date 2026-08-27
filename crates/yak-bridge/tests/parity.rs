@@ -1604,15 +1604,115 @@ fn write_parity() {
         g(&ts, &br, &format!("[{{\"eid\":\"{tsk}\",\"name\":\"entity\",\"comp\":null}}]"));
     }
 
+    // --- ENTRY: per-session seq assigned NATIVELY (rung 7a) --------------------
+    // A fresh session (created through the proxied session door on both copies),
+    // then two entries appended natively: each gets `seq = max+1` per session and
+    // advances `session.latest_seq` in the same transaction, byte-identical across
+    // the {eid,seq} echo, the journal, and the entry + session rows. Deleting the
+    // session cascades its entries (entry.session death=cascade).
+    let esess = uuid_v4();
+    g(
+        &ts,
+        &br,
+        &format!("[{{\"eid\":\"{esess}\",\"name\":\"session\",\"comp\":{{\"id\":\"zqw{uid}-esess\"}}}}]"),
+    );
+    let en1 = uuid_v4();
+    assert_write(
+        "entry/seq-native",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!("[{{\"eid\":\"{en1}\",\"name\":\"entry\",\"comp\":{{\"session\":\"{esess}\"}}}}]"),
+        "native",
+    );
+    let en2 = uuid_v4();
+    assert_write(
+        "entry/seq-native-next",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!("[{{\"eid\":\"{en2}\",\"name\":\"entry\",\"comp\":{{\"session\":\"{esess}\"}}}}]"),
+        "native",
+    );
+    g(&ts, &br, &format!("[{{\"eid\":\"{esess}\",\"name\":\"entity\",\"comp\":null}}]"));
+
+    // --- WAKE: an untargeted self-wake supersedes its predecessors NATIVELY -----
+    // A fresh actor, a pending untargeted self-wake to it (wake + deliver, born
+    // together — itself a native create), then a SECOND untargeted self-wake to
+    // the same actor: replaceWakes (M-7323) tombstones the predecessor IN THE SAME
+    // transaction, so the batch's effective echo carries the superseded wake's
+    // entity-null and the resulting state shows it tombstoned — byte-identical to
+    // Deno. This is the "native untargeted-wake write proving replaceWakes removes
+    // the prior pending wake identically" acceptance case.
+    let wact = uuid_v4();
+    g(
+        &ts,
+        &br,
+        &format!(
+            "[{{\"eid\":\"{wact}\",\"name\":\"doc\",\"comp\":{{\"title\":\"zqw{uid} wact\"}}}},\
+              {{\"eid\":\"{wact}\",\"name\":\"project\",\"comp\":{{}}}}]"
+        ),
+    );
+    let w1 = uuid_v4();
+    assert_write(
+        "wake/create-native",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!(
+            "[{{\"eid\":\"{w1}\",\"name\":\"wake\",\"comp\":{{\"at\":\"2099-01-01T00:00:00.000Z\"}}}},\
+              {{\"eid\":\"{w1}\",\"name\":\"deliver\",\"comp\":{{\"to\":\"{wact}\"}}}}]"
+        ),
+        "native",
+    );
+    let w2 = uuid_v4();
+    assert_write(
+        "wake/replace-native",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!(
+            "[{{\"eid\":\"{w2}\",\"name\":\"wake\",\"comp\":{{\"at\":\"2099-02-01T00:00:00.000Z\"}}}},\
+              {{\"eid\":\"{w2}\",\"name\":\"deliver\",\"comp\":{{\"to\":\"{wact}\"}}}}]"
+        ),
+        "native",
+    );
+    g(&ts, &br, &format!("[{{\"eid\":\"{w2}\",\"name\":\"entity\",\"comp\":null}}]"));
+    g(&ts, &br, &format!("[{{\"eid\":\"{wact}\",\"name\":\"entity\",\"comp\":null}}]"));
+
+    // --- STOP_REQUEST: the liveness GATE rejects identically (rung 7a) ----------
+    // A stop_request is a lever only a live managed session accepts. Aimed at a
+    // GONE session (a target eid with no session row), the gate bounces the whole
+    // batch loudly — `stop_request refused: session is gone` — byte-identically on
+    // both copies, and the native door is the one that ran the gate (the batch is
+    // stop_request-only, so it routes native and the rejection carries x-yak-apply:
+    // native). This proves the GATE rejects identically native vs the Deno door.
+    let sr = uuid_v4();
+    let sr_gone = uuid_v4();
+    assert_write(
+        "stop_request/gate-rejects-gone",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!("[{{\"eid\":\"{sr}\",\"name\":\"stop_request\",\"comp\":{{\"target\":\"{sr_gone}\"}}}}]"),
+        "native",
+    );
+
     // clean up the surviving probe entities on BOTH copies.
     g(&ts, &br, &format!("[{{\"eid\":\"{t2}\",\"name\":\"entity\",\"comp\":null}}]"));
     g(&ts, &br, &format!("[{{\"eid\":\"{e1}\",\"name\":\"entity\",\"comp\":null}}]"));
     g(&ts, &br, &format!("[{{\"eid\":\"{e2}\",\"name\":\"entity\",\"comp\":null}}]"));
 
     eprintln!(
-        "\nwrite parity OK (native-safe plain-graph, claim and entity-delete \
-         batches commit through the bridge; transform batches proxy — both land \
-         identically to direct)"
+        "\nwrite parity OK (native-safe plain-graph, claim/entity-delete, address \
+         canonicalization, and the rung-7a entry-seq / replaceWakes / stop_request-\
+         gate batches commit through the bridge; transform batches proxy — both \
+         land identically to direct)"
     );
 }
 

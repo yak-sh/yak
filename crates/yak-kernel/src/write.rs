@@ -389,14 +389,22 @@ const SERVER_OWNED: [&str; 8] = [
     "lease", "usage", "imported", "resume", "delivered", "error", "exception", "redaction",
 ];
 
-// Domains whose apply()-side transforms live in TS and are NOT ported: an
-// entry's append/seq discipline, a wake's self-replacement, a spawn request's
-// validation and effects, a stop_request's liveness gate. Half-applying any
-// of these would diverge the two writers, so the kernel refuses them loudly.
-// `session` is here for a subtler reason than the others: TS apply() mirrors
-// every session write into its `spawn` twin (dualSpawn) and backfills actors;
-// a bare session landed without those would silently diverge the copies.
-const UNPORTED: [&str; 5] = ["entry", "stop_request", "wake", "spawn", "session"];
+// Domains whose apply()-side transforms live in TS and are NOT ported.
+// `session`/`spawn` remain here (rung 7b): TS apply() mirrors every session
+// write into its `spawn` twin (dualSpawn), projects the worktree/runtime facet
+// aliases both ways (dualFacet), links the lineage edge (mirrorLineage), and
+// derives a created mail's server-owned `from` through the session sender-actor
+// chain — a bare session/spawn/mail landed without those would silently diverge
+// the copies. Half-applying any unported domain would diverge the two writers,
+// so the kernel refuses it loudly.
+//
+// `entry`, `wake`, and `stop_request` LEFT this list at rung 7a, once their
+// self-contained in-apply transforms were ported below: an entry's per-session
+// seq (the entry create branch in the write loop), a wake's untargeted self-
+// replacement (`replace_wakes`), and the stop_request liveness gate
+// (`StopRequestGate`). None of the three is read or rewritten by the session-
+// facet mirrors, so they port cleanly ahead of the session cluster.
+const UNPORTED: [&str; 2] = ["spawn", "session"];
 
 // The comps the rust kernel commits NATIVELY, and the routing predicate the
 // bridge derives its Deno-vs-native decision from (D-22804 rung 4). Every comp
@@ -427,11 +435,19 @@ const UNPORTED: [&str; 5] = ["entry", "stop_request", "wake", "spawn", "session"
 // URL()` (default-port + dot-segment + IPv4/IPv6/IDNA host canonicalization), a
 // transform a faithful port needs a full WHATWG URL parser for; and `mail` —
 // its server-owned `from` is derived through the session sender-actor chain
-// (persona/held-work/model fallbacks) that is rung-7 session-cluster work. Both
+// (persona/held-work/model fallbacks) that is rung-7b session-cluster work. Both
 // still PROXY, so no half-ported transform ever commits natively.
-pub const NATIVE_COMPS: [&str; 10] = [
+//
+// `entry`, `wake`, and `stop_request` joined at rung 7a, once the session/entry/
+// wake cluster's self-contained in-apply pieces were ported here: an `entry`
+// create assigns its per-session `seq` and advances `session.latest_seq`; an
+// untargeted `wake` create tombstones every pending untargeted predecessor
+// addressed to the same actor (`replace_wakes`, M-7323); a `stop_request` is
+// gated to a live managed session (`StopRequestGate`). The session-facet cluster
+// (`session`/`spawn`) and mail `from`-derivation stay proxied for rung 7b.
+pub const NATIVE_COMPS: [&str; 13] = [
     "doc", "task", "board", "project", "comment", "dependency", "claim", "entity", "email",
-    "deliver",
+    "deliver", "entry", "wake", "stop_request",
 ];
 
 // Can this whole batch commit through the rust kernel, or must the bridge proxy
@@ -602,6 +618,78 @@ fn canon_email(changes: Vec<Change>) -> Vec<Change> {
             c
         })
         .collect()
+}
+
+// ---- the untargeted-wake self-replacement (db.ts replaceWakes, M-7323) ----
+//
+// A fresh untargeted self-wake supersedes every pending untargeted wake already
+// addressed to the same actor: one alarm clock, not a growing stack. An
+// untargeted wake create (a `wake` with a null target, born alongside a
+// `deliver.to` in the SAME batch) prepends an entity-delete for each prior
+// pending wake to that `to` — the death cascade then tombstones it, exactly as a
+// wire delete would. "Pending" = unacted (neither a `delivered` nor an `error`
+// facet, D-14945) and still addressed to that `to`; a due row (one a timer is
+// about to fire) is NOT special-cased here — schedule.ts guards that upstream.
+// An UPDATE to an existing wake (its row already present) never replaces, only a
+// create does — matching TS's `exists.get(change.eid)` guard. Runs inside the
+// transaction on normalized changes, where a `deliver.to` value is still an eid.
+fn replace_wakes(conn: &Connection, changes: Vec<Change>) -> Vec<Change> {
+    if !has_table(conn, "wake") || !has_table(conn, "deliver") {
+        return changes;
+    }
+    // The `to` each entity's deliver names in THIS batch (a self-wake mints its
+    // deliver beside the wake), keyed by owner eid.
+    let mut to_of: HashMap<String, String> = HashMap::new();
+    for c in &changes {
+        if c.name == "deliver" {
+            if let Some(to) = c.comp.as_ref().and_then(|m| m.get("to")).and_then(|v| v.as_str()) {
+                to_of.insert(c.eid.clone(), to.to_string());
+            }
+        }
+    }
+    let mut out: Vec<Change> = Vec::with_capacity(changes.len());
+    for change in changes {
+        let to = to_of.get(&change.eid).cloned();
+        let is_untargeted_wake = change.name == "wake"
+            && change.comp.as_ref().is_some_and(|m| {
+                m.get("target").map(|v| v.is_null()).unwrap_or(true)
+            });
+        let already: bool = conn
+            .query_row(
+                "select 1 from wake where entity = (select id from entity where eid = ?1)",
+                [&change.eid],
+                |_| Ok(()),
+            )
+            .optional()
+            .ok()
+            .flatten()
+            .is_some();
+        match to {
+            Some(to) if is_untargeted_wake && !already => {
+                let mut st = conn
+                    .prepare(
+                        "select o.eid from wake w \
+                         join entity o on o.id = w.entity \
+                         join deliver dl on dl.entity = w.entity \
+                         where dl.\"to\" = (select id from entity where eid = ?1) \
+                           and w.target is null and o.eid != ?2 \
+                           and not exists (select 1 from delivered d where d.entity = w.entity) \
+                           and not exists (select 1 from error e where e.entity = w.entity)",
+                    )
+                    .expect("replace_wakes pending query");
+                let drops: Vec<String> = st
+                    .query_map([&to, &change.eid], |r| r.get::<_, String>(0))
+                    .map(|rows| rows.flatten().collect())
+                    .unwrap_or_default();
+                for eid in drops {
+                    out.push(Change::new(&eid, "entity", None));
+                }
+                out.push(change);
+            }
+            _ => out.push(change),
+        }
+    }
+    out
 }
 
 fn renamed(v: &Vocab, change: Change) -> Result<Change> {
@@ -922,8 +1010,86 @@ impl Gate for AliasGate {
     }
 }
 
+// The statuses a managed session counts as "still going" (types.ts
+// sessionActive). A stop_request is a lever only these — or a live graph-native
+// entry — may be pulled on.
+const SESSION_ACTIVE: [&str; 3] = ["starting", "running", "stopping"];
+
+// The stop_request LIVENESS gate (db.ts:4477-4528): a stop_request is a lever,
+// not a note — it may only be pulled on a MANAGED session that is still going
+// (an active status, OR a live graph-native entry the run has not yet settled).
+// Anything else — a gone session, an external one, a finished managed one with
+// no live entry — bounces the whole batch loudly, like a taken claim. The stop
+// itself is a post-commit EFFECT; this is only the rule half.
+pub struct StopRequestGate;
+
+impl Gate for StopRequestGate {
+    fn on_change(&self, cx: &mut GateCx) -> Result<()> {
+        let c = cx.change;
+        if c.name != "stop_request" {
+            return Ok(());
+        }
+        let Some(comp) = &c.comp else { return Ok(()) };
+        let Some(target) = comp.get("target").and_then(|v| v.as_str()) else {
+            return Ok(());
+        };
+        // origin + status of the target session (its own eid names its row).
+        let s: Option<(Option<String>, Option<String>)> = cx
+            .conn
+            .query_row(
+                "select s.origin, s.status from session s \
+                 join entity o on o.id = s.entity where o.eid = ?1",
+                [target],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        // A managed session that is NOT active is still stoppable if it has a
+        // live graph-native entry — an unsettled generation or an open call, and
+        // not imported/errored/cancelled. Computed only when the status gate does
+        // not already pass, so a plugin-less file never needs the entry tables.
+        let active = matches!(&s, Some((Some(origin), Some(status)))
+            if origin == "managed" && SESSION_ACTIVE.contains(&status.as_str()));
+        let managed = matches!(&s, Some((Some(origin), _)) if origin == "managed");
+        let graph = if managed && !active && has_table(cx.conn, "entry") {
+            cx.conn
+                .query_row(
+                    "select 1 from entry e \
+                     where e.session = (select id from entity where eid = ?1) and ( \
+                       exists (select 1 from lease l where l.entity = e.entity) \
+                       or ( \
+                         not exists (select 1 from imported i where i.entity = e.entity) \
+                         and not exists (select 1 from error x where x.entity = e.entity) \
+                         and not exists (select 1 from cancel z where z.target = e.entity) \
+                         and ( \
+                           (exists (select 1 from generation g where g.entity = e.entity) \
+                            and not exists (select 1 from delivered d where d.entity = e.entity)) \
+                           or \
+                           (exists (select 1 from call k where k.entity = e.entity) \
+                            and not exists (select 1 from result r where r.call = e.entity)) \
+                         ) \
+                       ) \
+                     ) limit 1",
+                    [target],
+                    |_| Ok(()),
+                )
+                .optional()?
+                .is_some()
+        } else {
+            false
+        };
+        if !managed || (!active && !graph) {
+            let desc = match &s {
+                Some((_, status)) => status.clone().unwrap_or_else(|| "external".to_string()),
+                None => "gone".to_string(),
+            };
+            return Err(refuse(format!("stop_request refused: session is {desc}")));
+        }
+        Ok(())
+    }
+}
+
 pub fn default_gates() -> Vec<Box<dyn Gate>> {
-    vec![Box::new(ClaimGate), Box::new(AliasGate)]
+    vec![Box::new(ClaimGate), Box::new(AliasGate), Box::new(StopRequestGate)]
 }
 
 // ---- apply ----
@@ -1355,6 +1521,10 @@ pub fn apply(
         // release (its claim row gone by commit) still knows who held it — the
         // resume-stack rebuild below reads this against the FINAL claims.
         let prior = prior_claims(conn);
+        // An untargeted self-wake supersedes its pending predecessors in the same
+        // transaction (db.ts replaceWakes) — prepend their entity-deletes so the
+        // spine/kill pass and the cascade below see them like any wire delete.
+        changes = replace_wakes(conn, changes);
         // Mint spines in first-touch order before writing components.
         let mut killed: HashSet<String> = HashSet::new();
         for c in &changes {
@@ -1741,11 +1911,40 @@ pub fn apply(
                 vals.insert(0, Value::from(""));
             }
             conn.execute_batch("savepoint change")?;
+            // An entry create assigns its per-session seq below; the echo of
+            // {eid, seq} is pushed to `extra` after the savepoint closes.
+            let mut entry_echo: Option<(String, i64)> = None;
             let created: Result<()> = (|| {
                 if spine(conn, eid)? && !minted.contains(eid) {
                     minted.push(eid.clone());
                 }
-                if !sent.is_empty() {
+                if name == "entry" && !sent.is_empty() {
+                    // A log entry is an append-only fact (db.ts:4761-4782): seq =
+                    // max(seq)+1 for the session, and session.latest_seq advances
+                    // in the SAME transaction so the two can never drift. The
+                    // graph-native summary rides the snapshot's whole-row select,
+                    // not a per-entry broadcast — so only {eid, seq} is echoed.
+                    let session_eid =
+                        comp.get("session").and_then(|v| v.as_str()).unwrap_or_default();
+                    let sid = to_id(conn, session_eid);
+                    let seq: i64 = conn.query_row(
+                        "select coalesce(max(seq), 0) + 1 from entry where session = ?1",
+                        [sid],
+                        |r| r.get(0),
+                    )?;
+                    conn.execute(
+                        "insert into entry (entity, session, seq) values \
+                         ((select id from entity where eid = ?1), ?2, ?3)",
+                        rusqlite::params![eid, sid, seq],
+                    )
+                    .map_err(|e| refuse(format!("entry {} refused: {e}", human(conn, eid))))?;
+                    conn.execute(
+                        "update session set latest_seq = ?1 where entity = ?2",
+                        rusqlite::params![seq, sid],
+                    )?;
+                    created_comps.push(format!("{name} {eid}"));
+                    entry_echo = Some((eid.clone(), seq));
+                } else if !sent.is_empty() {
                     let sql = format!(
                         "insert into {} (entity{}) values \
                          ((select id from entity where eid = ?{}){})",
@@ -1781,6 +1980,14 @@ pub fn apply(
                     conn.execute_batch("rollback to change; release change")?;
                     return Err(e);
                 }
+            }
+            // The entry's seq echo rides `extra` (the generic completion loop
+            // later rewrites this entry change's own comp to {session}).
+            if let Some((e, seq)) = entry_echo {
+                let mut m = Map::new();
+                m.insert("eid".into(), Value::from(e.as_str()));
+                m.insert("seq".into(), Value::from(seq));
+                extra.push(Change::new(&e, "entry", Some(m)));
             }
         }
         // Components have landed: assign human numbers to this batch's births.

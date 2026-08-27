@@ -6,7 +6,7 @@
 use yak_kernel::change::Change;
 use yak_kernel::feed::{cursor_of, journal_since, row_changes, Feed};
 use yak_kernel::write::{apply, default_gates, native_safe, ApplyError, ApplyOpts, WriteStore};
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Map, Value};
 
 const SCHEMA: &str = "
@@ -53,7 +53,10 @@ const SCHEMA: &str = "
     entity integer primary key references entity(id),
     id text unique,
     cwd text,
-    actor integer
+    actor integer,
+    latest_seq integer not null default 0,
+    origin text,
+    status text
   );
   create table claim (
     entity integer primary key references entity(id),
@@ -99,6 +102,36 @@ const SCHEMA: &str = "
   create table deliver (
     entity integer primary key references entity(id),
     \"to\"   integer references entity(id)
+  );
+  create table entry (
+    entity  integer primary key references entity(id),
+    session integer not null references entity(id),
+    seq     integer not null,
+    unique (session, seq)
+  );
+  create table wake (
+    entity integer primary key references entity(id),
+    at     text,
+    target integer references entity(id),
+    note   text
+  );
+  create table stop_request (
+    entity integer primary key references entity(id),
+    target integer not null references entity(id)
+  );
+  create table delivered (entity integer primary key references entity(id));
+  create table error (entity integer primary key references entity(id));
+  create table lease (entity integer primary key references entity(id));
+  create table imported (entity integer primary key references entity(id));
+  create table cancel (
+    entity integer primary key references entity(id),
+    target integer references entity(id)
+  );
+  create table generation (entity integer primary key references entity(id));
+  create table call (entity integer primary key references entity(id));
+  create table result (
+    entity integer primary key references entity(id),
+    call   integer references entity(id)
   );
 ";
 
@@ -199,11 +232,18 @@ fn native_safe_routes_plain_graph_and_proxies_the_rest() {
     // ported): an email.address write and a deliver.to write commit native.
     assert!(ok(vec![ch(A, "email", json!({"address": "x@y.com"}))]));
     assert!(ok(vec![ch(A, "deliver", json!({"to": B}))]));
+    // entry + wake + stop_request joined NATIVE_COMPS at rung 7a (entry seq,
+    // replaceWakes, the stop_request gate ported): they commit native.
+    assert!(ok(vec![ch(A, "entry", json!({"session": B}))]));
+    assert!(ok(vec![ch(A, "wake", json!({"at": "soon"}))]));
+    assert!(ok(vec![ch(A, "stop_request", json!({"target": B}))]));
     // a transform-bearing comp still absent by design → proxy: setting (WHATWG
-    // url guard), mail (sender-actor from-derivation), session (spawn cluster).
+    // url guard), mail (sender-actor from-derivation), session/spawn (the facet
+    // mirroring cluster — rung 7b).
     assert!(!ok(vec![ch(A, "setting", json!({"key": "k", "value": "v"}))]));
     assert!(!ok(vec![ch(A, "mail", json!({"target": B}))]));
     assert!(!ok(vec![ch(A, "session", json!({"id": "S-1"}))]));
+    assert!(!ok(vec![ch(A, "spawn", json!({"provider": "codex"}))]));
     // a MIXED batch proxies WHOLE — apply() is atomic, no splitting: one native
     // comp beside a transform-bearing one (a setting) still proxies.
     assert!(!ok(vec![ch(A, "doc", json!({"title": "x"})), ch(A, "setting", json!({"key": "k", "value": "v"}))]));
@@ -328,9 +368,11 @@ fn enum_and_unported_refuse() {
         &default_gates(),
     );
     assert!(err.unwrap_err().to_string().contains("expects one of"));
+    // `session` stays UNPORTED (the facet-mirroring cluster, rung 7b): a bare
+    // session write refuses loudly rather than diverge from the TS door.
     let err = apply(
         &s,
-        vec![ch(A, "entry", json!({"session": B}))],
+        vec![ch(A, "session", json!({"id": "S-9"}))],
         &ApplyOpts::default(),
         &default_gates(),
     );
@@ -522,6 +564,132 @@ fn ghost_reference_refuses() {
         &default_gates(),
     );
     assert!(err.unwrap_err().to_string().contains("no such entity"));
+}
+
+// A session with an explicit origin + status, for the stop_request gate.
+fn seed_managed(s: &WriteStore, eid: &str, label: &str, origin: Option<&str>, status: Option<&str>) {
+    s.conn.execute("insert into entity (eid) values (?1)", [eid]).unwrap();
+    s.conn
+        .execute(
+            "insert into session (entity, id, origin, status) values \
+             ((select id from entity where eid = ?1), ?2, ?3, ?4)",
+            rusqlite::params![eid, label, origin, status],
+        )
+        .unwrap();
+}
+
+fn seq_of(s: &WriteStore, eid: &str) -> i64 {
+    s.conn
+        .query_row(
+            "select seq from entry where entity = (select id from entity where eid = ?1)",
+            [eid],
+            |r| r.get(0),
+        )
+        .unwrap()
+}
+
+fn is_dead(s: &WriteStore, eid: &str) -> bool {
+    s.conn
+        .query_row("select 1 from tombstone where eid = ?1", [eid], |_| Ok(()))
+        .optional()
+        .unwrap()
+        .is_some()
+}
+
+#[test]
+fn entry_create_assigns_per_session_seq() {
+    let s = store();
+    seed_session(&s, A, "S-1");
+    // two entries appended to the same session get seq 1 then 2, and
+    // session.latest_seq advances in lockstep (db.ts:4761-4782).
+    let out1 = run(&s, vec![ch(B, "entry", json!({ "session": A }))]);
+    let out2 = run(&s, vec![ch(C, "entry", json!({ "session": A }))]);
+    assert_eq!(seq_of(&s, B), 1);
+    assert_eq!(seq_of(&s, C), 2);
+    let latest: i64 =
+        one(&s, "select latest_seq from session where id = 'S-1'");
+    assert_eq!(latest, 2);
+    // the {eid, seq} echo rides the effective batch (a graph-native summary the
+    // snapshot reads back), distinct from the entry change rewritten to {session}.
+    assert!(out1.iter().any(|c| c.name == "entry"
+        && c.comp.as_ref().and_then(|m| m.get("seq")) == Some(&json!(1))));
+    assert!(out2.iter().any(|c| c.name == "entry"
+        && c.comp.as_ref().and_then(|m| m.get("seq")) == Some(&json!(2))));
+    // a second session numbers from 1 again — seq is per-session.
+    seed_session(&s, D, "S-2");
+    let e2 = "aaaaaaaa-0000-4000-8000-000000000005";
+    run(&s, vec![ch(e2, "entry", json!({ "session": D }))]);
+    assert_eq!(seq_of(&s, e2), 1);
+}
+
+#[test]
+fn replace_wakes_supersedes_pending_untargeted() {
+    let s = store();
+    // an actor to address the self-wakes to.
+    run(&s, vec![ch(A, "project", json!({}))]);
+    // a pending untargeted self-wake to A (wake + its deliver, born together).
+    run(&s, vec![ch(B, "wake", json!({ "at": "2099-01-01T00:00:00.000Z" })), ch(B, "deliver", json!({ "to": A }))]);
+    assert_eq!(one::<i64>(&s, "select count(*) from wake"), 1);
+    // a fresh untargeted self-wake to A supersedes the predecessor in the same
+    // transaction (db.ts replaceWakes, M-7323): B is tombstoned, only C remains.
+    let out = run(&s, vec![ch(C, "wake", json!({ "at": "2099-02-01T00:00:00.000Z" })), ch(C, "deliver", json!({ "to": A }))]);
+    assert_eq!(one::<i64>(&s, "select count(*) from wake"), 1);
+    assert!(is_dead(&s, B), "the superseded wake is tombstoned");
+    assert!(!is_dead(&s, C), "the fresh wake survives");
+    // the effective batch carries B's synthesized entity-null (the cascade).
+    assert!(out.iter().any(|c| c.eid == B && c.name == "entity" && c.comp.is_none()));
+}
+
+#[test]
+fn replace_wakes_spares_targeted_and_acted() {
+    let s = store();
+    run(&s, vec![ch(A, "project", json!({}))]);
+    // a pending untargeted wake to A.
+    run(&s, vec![ch(B, "wake", json!({ "at": "2099-01-01T00:00:00.000Z" })), ch(B, "deliver", json!({ "to": A }))]);
+    // a TARGETED wake to A does NOT supersede it (only untargeted self-wakes do).
+    run(&s, vec![ch(C, "wake", json!({ "at": "2099-02-01T00:00:00.000Z", "target": A })), ch(C, "deliver", json!({ "to": A }))]);
+    assert!(!is_dead(&s, B), "a targeted wake spares the pending untargeted one");
+    // mark B acted (a delivered facet — server-owned, seeded by SQL), then a new
+    // untargeted wake to A must SPARE it: replaceWakes only drops unacted wakes.
+    s.conn
+        .execute(
+            "insert into delivered (entity) values ((select id from entity where eid = ?1))",
+            [B],
+        )
+        .unwrap();
+    run(&s, vec![ch(D, "wake", json!({ "at": "2099-03-01T00:00:00.000Z" })), ch(D, "deliver", json!({ "to": A }))]);
+    assert!(!is_dead(&s, B), "an already-delivered wake is not superseded");
+}
+
+#[test]
+fn stop_request_gate_guards_liveness() {
+    let s = store();
+    let gate = |eid: &str, target: &str| {
+        apply(
+            &s,
+            vec![ch(eid, "stop_request", json!({ "target": target }))],
+            &ApplyOpts::default(),
+            &default_gates(),
+        )
+    };
+    // a gone session (no row): refused.
+    let gone = gate(A, B).unwrap_err().to_string();
+    assert!(gone.contains("session is gone"), "got: {gone}");
+    // an external session: refused (origin != managed), named by its status/external.
+    seed_managed(&s, C, "S-ext", Some("external"), None);
+    let ext = gate(A, C).unwrap_err().to_string();
+    assert!(ext.contains("session is external"), "got: {ext}");
+    // a managed session STILL GOING (active status): the stop_request commits.
+    seed_managed(&s, D, "S-run", Some("managed"), Some("running"));
+    let ok = run(&s, vec![ch(A, "stop_request", json!({ "target": D }))]);
+    assert!(ok.iter().any(|c| c.name == "stop_request"));
+    assert_eq!(one::<i64>(&s, "select count(*) from stop_request"), 1);
+    // a managed session that FINISHED with no live entry: refused, named by status.
+    let e5 = "aaaaaaaa-0000-4000-8000-000000000006";
+    seed_managed(&s, e5, "S-dead", Some("managed"), Some("exited"));
+    let e6 = "aaaaaaaa-0000-4000-8000-000000000007";
+    let dead = gate(e6, e5).unwrap_err().to_string();
+    assert!(dead.contains("session is exited"), "got: {dead}");
 }
 
 #[test]
