@@ -76,9 +76,12 @@ import {
   similarHint,
   spawnChanges,
   spawnPlan,
+  TASK_TREE_ADOPTION,
   taskChanges,
+  taskTreeExample,
   taskTreePlan,
   taskTreeText,
+  taskTreeWarning,
   undo,
   uniq,
 } from './client.ts'
@@ -295,6 +298,24 @@ let HINTS: Record<string, ToolAnnotations> = {
   task_spawn: { openWorldHint: true },
 }
 
+export let MCP_INSTRUCTIONS =
+  `Tool arguments are source data, never HTML. Pass <, >,
+and & literally; the renderer escapes them for its own output type.
+The graph renders bodies as markdown. ${DOC}
+
+Coordinators delegate all individual-contributor implementation. After
+compaction or resume, use durable task context to restore assignments and stay
+in orchestration and review.
+
+Work with ${TASK_TREE_ADOPTION.steps}+ steps defaults to task_tree, not a checklist in one task body.
+Exact dry run: ${taskTreeExample('mcp')}. Choose every relation explicitly;
+never infer edge meanings from prose. Keep leaf bodies to the irreducible ask
+and pointers.
+
+Call task_context first each session, and pass the same stable session
+id to every tool that takes one — it names the run for attribution, claims,
+and the comms bus.`
+
 export let mcpServer = (io: IO) => {
   // The io-backed Querier: client.ts's scoped readers (checkedRefs, sessionRow,
   // contextSnapshot, bus) run through whichever transport this mount has —
@@ -309,13 +330,7 @@ export let mcpServer = (io: IO) => {
   // agent's standing context — the strongest ambient steering the
   // protocol offers. Keep it to what every writer must know.
   let server = new McpServer({ name: 'tasks', version: VERSION }, {
-    instructions: `Tool arguments are source data, never HTML. Pass <, >,
-and & literally; the renderer escapes them for its own output type.
-The graph renders bodies as markdown. ${DOC}
-
-Call task_context first each session, and pass the same stable session
-id to every tool that takes one — it names the run for attribution, claims,
-and the comms bus.`,
+    instructions: MCP_INSTRUCTIONS,
   })
   let tool = <Shape extends z.ZodRawShape>(
     name: string,
@@ -477,6 +492,9 @@ task's dedicated title/body/status wins over the same property in its
 params; params carries every other writable property. The whole batch
 lands in one atomic apply. In a structured batch, parent names another
 item's key and relation names the semantic edge; project roots the plan.
+For ${TASK_TREE_ADOPTION.steps}+ steps use task_tree; exact dry run: ${
+      taskTreeExample('mcp')
+    }.
 Reference param values accept human ids
 (.project=P-19). ${GRAMMAR} ${BUS}`,
     {
@@ -580,6 +598,7 @@ Reference param values accept human ids
       }
       let minted: string[] = []
       let changes: Change[] = []
+      let written: { title: string; body: string }[] = []
       for (let t of want) {
         let ps = parseAll(t.params ?? [])
         if (
@@ -597,6 +616,10 @@ Reference param values accept human ids
         if (!grouped.task?.project && scope) {
           grouped.task = { ...grouped.task, project: scope }
         }
+        written.push({
+          title: String(grouped.doc.title ?? ''),
+          body: String(grouped.doc.body ?? ''),
+        })
         let eid = crypto.randomUUID()
         minted.push(eid)
         changes.push(...taskChanges(eid, grouped))
@@ -611,14 +634,16 @@ Reference param values accept human ids
       // plan, not a probe — hinting on each would drown the reply.
       let dupe = want.length == 1
         ? await similarHint(
-          `${want[0].title}\n${want[0].body ?? ''}`,
+          `${written[0].title}\n${written[0].body}`,
           minted[0],
         )
         : ''
       return bus(
         `created ${ids.join(', ')}${dupe ? `\n${dupe}` : ''}${
-          wall(want.find((t) => wall(t.body))?.body)
-        }`,
+          want.length == 1
+            ? `\n${taskTreeWarning(written[0].body, 0, 'mcp')}`.trimEnd()
+            : ''
+        }${wall(written.find((t) => wall(t.body))?.body)}`,
         session,
       )
     },

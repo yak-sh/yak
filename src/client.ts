@@ -1444,6 +1444,51 @@ export type TaskTreeInput = {
   nodes: TaskTreeNode[]
 }
 
+// One adoption vocabulary beside the compiler it teaches. The CLI manual,
+// MCP prompt, and post-create feedback all read these values, so the warm door
+// cannot drift from the feature. Length is deliberately the ONLY body signal:
+// prose is never parsed into steps or edge meanings.
+export let TASK_TREE_ADOPTION = {
+  steps: 3,
+  longBody: 480,
+  cli: 'task tree @plan.json --dry-run',
+} as const
+
+let taskTreeExampleInput: TaskTreeInput = {
+  project: 'P-19',
+  nodes: [
+    { key: 'goal', title: 'Outcome' },
+    {
+      key: 'gate',
+      title: 'Prerequisite',
+      parent: 'goal',
+      relation: 'requires',
+    },
+  ],
+}
+
+export let taskTreeExample = (surface: 'cli' | 'mcp') => {
+  let input = JSON.stringify(taskTreeExampleInput)
+  return surface == 'cli'
+    ? `plan.json: ${input}`
+    : `task_tree(${JSON.stringify({ ...taskTreeExampleInput, dry_run: true })})`
+}
+
+export let taskTreeWarning = (
+  body: unknown,
+  prerequisiteChildren: number,
+  surface: 'cli' | 'mcp',
+) => {
+  if (
+    typeof body != 'string' || body.length <= TASK_TREE_ADOPTION.longBody ||
+    prerequisiteChildren
+  ) return ''
+  let exact = surface == 'cli'
+    ? `\`${TASK_TREE_ADOPTION.cli}\`; ${taskTreeExample('cli')}`
+    : `\`${taskTreeExample('mcp')}\``
+  return `warning: this long leaf has no prerequisite children. If it carries ${TASK_TREE_ADOPTION.steps}+ steps, use ${exact}. Keep each leaf body to the irreducible ask + pointers.`
+}
+
 export type TaskTreeNodePlan = {
   key: string
   eid: string
