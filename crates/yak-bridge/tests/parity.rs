@@ -561,6 +561,11 @@ fn ws_sub_parity() {
         ("a-count", ".kind=task&.status=open&.count!"),
         ("a-tally", ".kind=task&.tally=task.status"),
         ("a-distinct", ".kind=task&.distinct=task.status"),
+        // FIELDS projection (T-22756): each member rides only its projected
+        // columns + spine, and the frame STATES the projection. A `~` column is
+        // volatile (delivered, wake:false); `.fields=eid` is the eids-only form.
+        ("f-pin", ".pin!&.fields=pin.x,pin.z~"),
+        ("f-eids", ".card!&.fields=eid"),
     ];
     for (name, q) in cases {
         same_sub(&mut ts_ws, &mut br_ws, name, q);
@@ -655,6 +660,32 @@ fn ws_sub_parity() {
     apply(&ts, &format!("[{{\"eid\":\"{eid3}\",\"name\":\"entity\",\"comp\":null}}]"));
     same_sub_delta(&mut ts_wm, &mut br_wm, "wm", "delete (window re-answer)");
     same_sub_delta(&mut ts_cm, &mut br_cm, "cm", "delete (count -1)");
+
+    // --- FIELDS projection MAINTAIN parity (T-22756) -------------------------
+    // On its own socket pair, a marker task sub projected to `task.status`: an
+    // ADD carries the projected column + spine (the doc, not projected, never
+    // rides); a patch to the PROJECTED column ships a projected update; a patch
+    // to a NON-projected column (priority) projects to nothing and both stay
+    // silent; a delete forwards entity-null.
+    let mut ts_fm = joined_ws(&ts);
+    let mut br_fm = joined_ws(&br);
+    let fmark = format!("zqfmark{}", &uuid_v4()[..8]);
+    same_sub(&mut ts_fm, &mut br_fm, "fm", &format!(".kind=task&.title~={fmark}&.fields=task.status"));
+    let feid = uuid_v4();
+    apply(
+        &ts,
+        &format!(
+            "[{{\"eid\":\"{feid}\",\"name\":\"doc\",\"comp\":{{\"title\":\"{fmark} f\"}}}},\
+              {{\"eid\":\"{feid}\",\"name\":\"task\",\"comp\":{{\"status\":\"open\",\"priority\":0}}}}]"
+        ),
+    );
+    same_sub_delta(&mut ts_fm, &mut br_fm, "fm", "create (projected add)");
+    apply(&ts, &format!("[{{\"eid\":\"{feid}\",\"name\":\"task\",\"comp\":{{\"status\":\"wip\"}}}}]"));
+    same_sub_delta(&mut ts_fm, &mut br_fm, "fm", "patch task.status (projected update)");
+    apply(&ts, &format!("[{{\"eid\":\"{feid}\",\"name\":\"task\",\"comp\":{{\"priority\":2}}}}]"));
+    same_sub_delta(&mut ts_fm, &mut br_fm, "fm", "patch task.priority (unprojected: both silent)");
+    apply(&ts, &format!("[{{\"eid\":\"{feid}\",\"name\":\"entity\",\"comp\":null}}]"));
+    same_sub_delta(&mut ts_fm, &mut br_fm, "fm", "delete (dead)");
 
     eprintln!("\nWS subscription parity OK");
 }

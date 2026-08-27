@@ -16,6 +16,17 @@ pub struct Pred {
     pub value: String,
 }
 
+// One projected column (query.ts Field): which component column a subscription
+// result row carries beyond its eid, and whether a change to it WAKES the sub.
+// `wake: false` (a `~`-suffixed field) is VOLATILE — its value still rides in
+// the payload, but a live layer excludes it from the change-signal it wakes on.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Field {
+    pub comp: String,
+    pub prop: String,
+    pub wake: bool,
+}
+
 // One dot token, parsed alone — either a kind screen (`.kind=x`) or a Pred.
 pub enum Dot {
     Kind(String),

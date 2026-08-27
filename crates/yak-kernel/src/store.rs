@@ -175,14 +175,29 @@ impl Store {
     }
 
     pub fn row(&self, eid: &str) -> Option<Row> {
+        self.row_opt(eid, false)
+    }
+
+    // Like row(), but WITHOUT the default quarantine screen: a quarantined
+    // entity comes back WITH its `quarantined` comp, and the caller decides.
+    // This is what a subscription's per-eid maintain needs — a live member that
+    // becomes quarantined mid-session must emit a REMOVE (drop), not a death
+    // (entity-null), so it reads the row unscreened and screens with the same
+    // `listed()`/reveal logic TS eager()+maintain apply (subserve.ts: eager()
+    // is unscreened, maintain's step() drops a member that stops matching).
+    pub fn row_revealed(&self, eid: &str) -> Option<Row> {
+        self.row_opt(eid, true)
+    }
+
+    fn row_opt(&self, eid: &str, reveal: bool) -> Option<Row> {
         // one probe answers all three: does it exist, is it screened, and
-        // what num does it wear — a quarantined entity reads as absent.
+        // what num does it wear — a quarantined entity reads as absent unless
+        // `reveal` lifts the screen (the maintain reader above).
+        let screen =
+            if reveal { String::new() } else { self.unscreened("e") };
         let num: Option<Option<i64>> = one(
             &self.conn,
-            &format!(
-                "select e.num from entity e where e.eid = ?1{}",
-                self.unscreened("e")
-            ),
+            &format!("select e.num from entity e where e.eid = ?1{screen}"),
             [eid],
             |r| r.get::<_, Option<i64>>(0),
         );

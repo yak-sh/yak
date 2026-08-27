@@ -19,10 +19,10 @@
 //     ships the diff. A moving-time sub re-tests its members on each tick.
 //
 // SCOPE (this rung): the membership/window/aggregate/route subscription kinds
-// over query.rs's list/show grammar subset. The `.edges` rider, the lazy
-// `entries:` partition, path/reverse-hop sub filters and `.fields` projection
-// are refused loudly by parse_query_line (the standing follow-up), never
-// half-served.
+// over query.rs's list/show grammar subset, PLUS the `.fields` projection
+// (T-22756: projected payloads + a stated projection). The `.edges` rider, the
+// lazy `entries:` partition and path/reverse-hop sub filters are still refused
+// loudly by parse_query_line (the standing follow-up), never half-served.
 
 use crate::emit::entity_changes;
 use crate::{live, snap};
@@ -31,7 +31,7 @@ use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc::UnboundedSender;
 use yak_kernel::change::Change;
 use yak_kernel::feed::{cursor_of, data_version, journal_since, row_changes};
-use yak_kernel::query::{self, Pred};
+use yak_kernel::query::{self, Field, Pred};
 use yak_kernel::subquery::{eval_agg, eval_sub, moving, parse_query_line, Parsed, SUB_CAP};
 use yak_kernel::vocab::{vocab, PropType};
 use yak_kernel::Store;
@@ -47,6 +47,7 @@ struct Sub {
     members: HashSet<String>,
     bodies: bool,           // a route/entries/card sub ships doc bodies
     only: Option<String>,   // a route sub's fixed id
+    fields: Option<Vec<Field>>, // the declared projection's cut (query.ts projected)
     has_window: bool,       // members are a bounded prefix — RE-ANSWER, not per-eid
     win_total: Option<i64>, // the total the window is a prefix of, restated on change
     agg: Option<Vec<(String, i64)>>, // an aggregate's standing value→count answer
@@ -151,9 +152,11 @@ impl Subserve {
         if let Some(eid) = name.strip_prefix("route:") {
             let mut members = HashSet::new();
             let mut changes: Vec<Value> = vec![];
-            if let Some(row) = store.row(eid) {
+            // Unscreened, like TS rowsFor→eager: a route sub loads ONE entity
+            // whole regardless of quarantine — it dies only with the row.
+            if let Some(row) = store.row_revealed(eid) {
                 members.insert(eid.to_string());
-                changes = carry(true, entity_changes(&row));
+                changes = carry(true, None, entity_changes(&row));
             }
             self.subs.push(Sub {
                 name: name.into(),
@@ -162,12 +165,13 @@ impl Subserve {
                 members,
                 bodies: true,
                 only: Some(eid.to_string()),
+                fields: None,
                 has_window: false,
                 win_total: None,
                 agg: None,
                 moving: false,
             });
-            return Ok(reply_frame(name, changes, vec![], cursor, shadow, None));
+            return Ok(reply_frame(name, changes, vec![], cursor, shadow, None, None));
         }
         if name.starts_with("entries:") {
             return Err("the entries: partition sub is not ported in this rung".into());
@@ -188,6 +192,7 @@ impl Subserve {
                 members: HashSet::new(),
                 bodies,
                 only: None,
+                fields: None,
                 has_window: false,
                 win_total: None,
                 agg: Some(counts),
@@ -195,12 +200,15 @@ impl Subserve {
             });
             return Ok(frame);
         }
+        // The declared projection, compiled once: every payload — the initial
+        // set, an ADD, a standing-match patch — rides through the same cut.
+        let fields = parsed.fields.clone();
         let answer = eval_sub(store, &parsed, SUB_CAP)?;
         let members: HashSet<String> =
             answer.hits.iter().map(|r| r.eid.clone()).collect();
         let mut changes: Vec<Value> = vec![];
         for r in &answer.hits {
-            changes.extend(carry(bodies, entity_changes(r)));
+            changes.extend(carry(bodies, fields.as_deref(), entity_changes(r)));
         }
         let win_total = answer.window.as_ref().and_then(|(_, t)| *t);
         self.subs.push(Sub {
@@ -210,12 +218,13 @@ impl Subserve {
             members,
             bodies,
             only: None,
+            fields: fields.clone(),
             has_window: answer.window.is_some(),
             win_total,
             agg: None,
             moving: moving_time,
         });
-        Ok(reply_frame(name, changes, vec![], cursor, shadow, answer.window))
+        Ok(reply_frame(name, changes, vec![], cursor, shadow, answer.window, fields.as_deref()))
     }
 
     // Poll the journal for foreign commits and fold each committed row into
@@ -301,9 +310,9 @@ impl Subserve {
                 let mut changes: Vec<Value> = vec![];
                 for r in &answer.hits {
                     if !sub.members.contains(&r.eid) {
-                        changes.extend(carry(sub.bodies, entity_changes(r)));
+                        changes.extend(carry(sub.bodies, sub.fields.as_deref(), entity_changes(r)));
                     } else if let Some(p) = patch.get(&r.eid) {
-                        changes.extend(carry(sub.bodies, p.clone()));
+                        changes.extend(carry(sub.bodies, sub.fields.as_deref(), p.clone()));
                     }
                 }
                 let mut drop: Vec<String> = vec![];
@@ -340,9 +349,11 @@ impl Subserve {
                 let row = if gone.contains(eid) {
                     None
                 } else {
+                    // Unscreened: a member that became quarantined must read as
+                    // ALIVE-but-not-listed → a REMOVE (drop), never a death.
                     reads
                         .entry(eid.clone())
-                        .or_insert_with(|| store.row(eid))
+                        .or_insert_with(|| store.row_revealed(eid))
                         .clone()
                 };
                 let alive = row.is_some();
@@ -366,10 +377,10 @@ impl Subserve {
                     }
                 } else if hit {
                     if was {
-                        changes.extend(carry(sub.bodies, patch.get(eid).cloned().unwrap_or_default()));
+                        changes.extend(carry(sub.bodies, sub.fields.as_deref(), patch.get(eid).cloned().unwrap_or_default()));
                     } else {
                         sub.members.insert(eid.clone());
-                        changes.extend(carry(sub.bodies, entity_changes(row.as_ref().unwrap())));
+                        changes.extend(carry(sub.bodies, sub.fields.as_deref(), entity_changes(row.as_ref().unwrap())));
                     }
                 } else if was {
                     sub.members.remove(eid);
@@ -402,7 +413,7 @@ impl Subserve {
             for eid in sub.members.clone() {
                 let row = reads
                     .entry(eid.clone())
-                    .or_insert_with(|| store.row(&eid))
+                    .or_insert_with(|| store.row_revealed(&eid))
                     .clone();
                 let alive = row.is_some();
                 let is_quar =
@@ -431,11 +442,73 @@ impl Subserve {
 
 // --- payload shaping ---------------------------------------------------------
 
-// carry (subserve.ts): a row payload passes through the body deferral (unless
-// the sub is bodied) and always drops any edge change — edges ride the .edges
-// rider, never a row payload.
-fn carry(bodies: bool, changes: Vec<Value>) -> Vec<Value> {
-    unedged(if bodies { changes } else { bodyless(changes) })
+// carry (subserve.ts): a row payload passes through the ONE cut, then always
+// drops any edge change — edges ride the .edges rider, never a row payload. A
+// declared PROJECTION wins over the body deferral where it names a column (a
+// caller asking for `.fields=doc.body` is asking for the body); absent a
+// projection, a bodied sub keeps everything and every other sub defers bodies.
+fn carry(bodies: bool, fields: Option<&[Field]>, changes: Vec<Value>) -> Vec<Value> {
+    unedged(match fields {
+        Some(f) => projected(f, changes),
+        None if bodies => changes,
+        None => bodyless(changes),
+    })
+}
+
+// projected (subs.ts): a batch cut to a PROJECTION — the columns a sub DECLARED
+// it reads. The SPINE (`entity`) and a comp deletion / entity death always ride
+// (membership news, not column news); a change touching no projected column
+// projects to nothing and is dropped. Changes are SPREAD (clone + rewrite comp),
+// never rebuilt, so a precondition riding beside `comp` survives.
+fn projected(fields: &[Field], changes: Vec<Value>) -> Vec<Value> {
+    let mut keep: HashMap<String, HashSet<String>> = HashMap::new();
+    for f in fields {
+        keep.entry(f.comp.clone()).or_default().insert(f.prop.clone());
+    }
+    let mut out = vec![];
+    for c in changes {
+        let name = c.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        // entity spine and a comp deletion (comp null/absent) pass whole.
+        if name == "entity" || !matches!(c.get("comp"), Some(Value::Object(_))) {
+            out.push(c);
+            continue;
+        }
+        let Some(cols) = keep.get(name) else { continue };
+        let Some(Value::Object(obj)) = c.get("comp") else { continue };
+        let mut m = Map::new();
+        for (k, v) in obj {
+            if cols.contains(k) {
+                m.insert(k.clone(), v.clone());
+            }
+        }
+        if m.is_empty() {
+            continue;
+        }
+        let mut nc = c.clone();
+        if let Value::Object(o) = &mut nc {
+            o.insert("comp".into(), Value::Object(m));
+        }
+        out.push(nc);
+    }
+    out
+}
+
+// The `fields` a projected sub's frame states — the client asked for it, but a
+// frame carrying the contract is one the client believes without re-deriving
+// it. Key order comp, prop, wake matches the TS object literal byte-for-byte.
+fn fields_value(fields: &[Field]) -> Value {
+    Value::Array(
+        fields
+            .iter()
+            .map(|f| {
+                let mut m = Map::new();
+                m.insert("comp".into(), Value::from(f.comp.as_str()));
+                m.insert("prop".into(), Value::from(f.prop.as_str()));
+                m.insert("wake".into(), Value::Bool(f.wake));
+                Value::Object(m)
+            })
+            .collect(),
+    )
 }
 
 // bodyless (subs.ts): a row's declared BODY columns are left behind (deferred
@@ -494,7 +567,8 @@ fn entity_null(eid: &str) -> Value {
 // --- frame envelopes ---------------------------------------------------------
 
 // A sub's initial reply (subserve.ts control): the key order matches the TS
-// JSON.stringify — sub, changes, drop, replace, cursor, shadow, [window].
+// JSON.stringify — sub, changes, drop, replace, cursor, shadow, [window],
+// [fields].
 fn reply_frame(
     name: &str,
     changes: Vec<Value>,
@@ -502,6 +576,7 @@ fn reply_frame(
     cursor: i64,
     shadow: bool,
     window: Option<(i64, Option<i64>)>,
+    fields: Option<&[Field]>,
 ) -> Value {
     let mut m = Map::new();
     m.insert("sub".into(), Value::from(name));
@@ -512,6 +587,12 @@ fn reply_frame(
     m.insert("shadow".into(), Value::Bool(shadow));
     if let Some(w) = window {
         m.insert("window".into(), window_value(w));
+    }
+    // A projected sub STATES its projection so the client believes the contract
+    // without re-deriving it (subserve.ts control). Present exactly when the
+    // query named `.fields=` — `Some([])` (the eids-only form) still states it.
+    if let Some(f) = fields {
+        m.insert("fields".into(), fields_value(f));
     }
     Value::Object(m)
 }

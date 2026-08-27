@@ -10,14 +10,15 @@
 //
 // SCOPE (the rung this crate is at): the filter grammar is query.rs's list/show
 // SUBSET, so a sub filter is kind-anchored (`.kind=task&…`) or component-presence
-// anchored (`.canvas!`) — the candidate set the JS matcher then refines. Path
-// hops, reverse hops, `.reaches`, `.fields`, `.edges` riders and the lazy entry
-// partition are the grammar query.rs still refuses, so a sub naming one is
-// REFUSED here rather than half-answered — the same loud boundary the /query
-// door draws, and the standing follow-up (see parse_query_line's Err arms).
+// anchored (`.canvas!`) — the candidate set the JS matcher then refines. The
+// `.fields` projection rides beside that filter (T-22756). Path hops, reverse
+// hops, `.reaches`, the `.edges` rider and the lazy entry partition are the
+// grammar this rung still refuses, so a sub naming one is REFUSED here rather
+// than half-answered — the same loud boundary the /query door draws, and the
+// standing follow-up (see parse_query_line's Err arms).
 
 use crate::model::Row;
-use crate::query::{self, Dot, Pred};
+use crate::query::{self, Dot, Field, Pred};
 use crate::store::{visible, Store};
 use crate::vocab::{vocab, PropType};
 
@@ -47,6 +48,10 @@ pub struct Parsed {
     pub win: Win,
     pub agg: Option<Agg>,
     pub order: Option<String>,
+    // A FIELD PROJECTION (query.ts fieldsOf): the columns each result row carries
+    // beyond its eid (`.fields=pin.x,pin.z~`). `Some(vec![])` is the eids-only
+    // form (`.fields=eid`); None is a plain membership sub carrying whole comps.
+    pub fields: Option<Vec<Field>>,
     // An empty query SELECTS NOTHING (query.ts NEVER): a blank sub answers the
     // empty set cheaply, never the whole graph.
     pub never: bool,
@@ -161,12 +166,35 @@ pub fn parse_query_line(line: &str) -> Result<Parsed, String> {
             out.agg = Some(Agg { op: "tally".into(), comp, prop });
             continue;
         }
+        // `.fields=pin.x,pin.z~` — a PROJECTION (query.ts fieldsOf), not a
+        // filter: the columns each result row carries beyond its eid, so a
+        // partial-cache sub reads live values without holding the whole graph. A
+        // trailing `~` marks a column VOLATILE (delivered, but excluded from the
+        // wake signal a live layer re-fires on). `.fields=eid` is the eids-only
+        // form: an empty projection, so a row carries its spine and nothing else.
+        // Each column routes like a bare prop (or explicit `pin.x`); a path is
+        // refused — a projection reads one entity's own columns.
+        if let Some(v) = seg.strip_prefix(".fields=") {
+            if v.is_empty() {
+                return Err(".fields names columns: .fields=pin.x,pin.y".into());
+            }
+            if v == "eid" {
+                out.fields = Some(vec![]);
+                continue;
+            }
+            let mut fields = vec![];
+            for part in v.split(',') {
+                let wake = !part.ends_with('~');
+                let col = if wake { part } else { &part[..part.len() - 1] };
+                let (comp, prop) = route_col(col)?;
+                fields.push(Field { comp, prop, wake });
+            }
+            out.fields = Some(fields);
+            continue;
+        }
         // Riders this rung refuses loudly (the standing follow-up, T-22747):
         if seg.starts_with(".edges") {
             return Err("the .edges rider is not ported in this rung".into());
-        }
-        if seg.starts_with(".fields=") {
-            return Err("the .fields projection is not ported in this rung".into());
         }
         if seg.starts_with(".reaches[") {
             return Err("the .reaches traversal is not ported in this rung".into());
@@ -409,13 +437,30 @@ mod tests {
     fn unported_grammar_is_refused_loudly() {
         for line in [
             ".kind=task&.edges!",
-            ".kind=task&.fields=task.status",
             ".comment.target.doc.title~=x",
             "some text term",
             ".reaches[requires,<=3]=T-42",
         ] {
             assert!(parse_query_line(line).is_err(), "should refuse: {line}");
         }
+    }
+
+    #[test]
+    fn parses_fields_projection() {
+        // A projection rides beside the filter — it is not a pred, and the
+        // filter still selects the membership.
+        let p =
+            parse_query_line(".pin!&.fields=pin.x,pin.z~").unwrap();
+        let fields = p.fields.unwrap();
+        assert_eq!(fields.len(), 2);
+        assert_eq!((fields[0].comp.as_str(), fields[0].prop.as_str(), fields[0].wake), ("pin", "x", true));
+        // a `~`-suffixed column is VOLATILE (wake:false)
+        assert_eq!((fields[1].comp.as_str(), fields[1].prop.as_str(), fields[1].wake), ("pin", "z", false));
+        assert_eq!(p.preds.len(), 1); // the `.pin!` anchor stays a pred
+        // `.fields=eid` is the eids-only form: an empty projection, still present
+        assert_eq!(parse_query_line(".card!&.fields=eid").unwrap().fields, Some(vec![]));
+        // an empty `.fields=` is a refusal (a caller who wrote no columns meant some)
+        assert!(parse_query_line(".card!&.fields=").is_err());
     }
 
     #[test]
