@@ -16,13 +16,9 @@ import { capabilities, type Change, type Dep, idOf, kindOf } from './types.ts'
 import {
   apply,
   appPlane,
-  bodies,
   buried,
-  componentCounts,
   correct,
   cursorOf,
-  cursorStale,
-  delta,
   depsOf,
   eager,
   epochOf,
@@ -38,7 +34,6 @@ import {
   recast,
   redact as redactValue,
   refsOf,
-  resolveId,
   rowsOf,
   scanAnomalies,
   search,
@@ -87,23 +82,12 @@ import { sessionRow as storedSession } from './session_store.ts'
 import { responses } from './responses.ts'
 import { type OllamaConfig, ollamaProbe, ollamaTransport } from './ollama.ts'
 import { resolve, settingRows } from './config.ts'
-import { resolve as resolveAnchor } from './anchor.ts'
 import { codexGeneration } from './runner.ts'
 import { type Observation, safeObservation } from './observations.ts'
 import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { serverFile } from './reload.ts'
-import {
-  actorRows,
-  addressed,
-  inboxFor,
-  inboxItem,
-  jsonOf,
-  readerAt,
-  readerFor,
-  readerRows,
-  type Row,
-} from './client.ts'
+import { jsonOf, readerFor, readerRows, type Row } from './client.ts'
 import { listed, matchQuery, parseQuery, resolveRefs } from './query.ts'
 import {
   dbReader,
@@ -849,10 +833,17 @@ let refuseWrite = (): never => {
 // never touches the graph. /ws and /mcp are mixed read/write doors and refuse
 // writes at their own seams (applyFrom, subserve.write/undo/upload).
 let writeDoor = (method: string, path: string): boolean =>
-  method == 'POST' &&
-  (path == '/apply' || path == '/undo' || path == '/redact' ||
-    path == '/page' || path == '/upload' || path == '/blob' ||
-    path.startsWith('/backfill/'))
+  (method == 'GET' && path == '/freeze') ||
+  (method == 'POST' &&
+    (path == '/apply' || path == '/undo' || path == '/redact' ||
+      path == '/page' || path == '/upload' || path == '/blob' ||
+      path.startsWith('/backfill/')))
+
+let methodNotAllowed = (allow: string) =>
+  Response.json({ error: { code: 'method_not_allowed' } }, {
+    status: 405,
+    headers: { allow },
+  })
 
 // The strangler write-proxy (T-22927): in TASKS_PLANE=app this reader forwards a
 // write to the data-plane writer (the Rust bridge) and hands its answer back
@@ -1045,126 +1036,10 @@ let handle = async (req: Request) => {
   // `spawn` without paying for a whole snapshot — and the reachability
   // HEAD the browser's reload gate pings.
   if (path == '/capabilities') return Response.json(capabilities)
-  // The admin census's graph-true counts: one COUNT per component table,
-  // authoritative for eager AND entry-partition components the cache omits.
-  if (path == '/census') return Response.json(componentCounts(db))
   // The graph's storage-integrity anomalies (D-18866): orphaned component rows
   // and dangling {eid} references — both wire-invisible, so the doctor cannot
   // see them through /query and reads this raw db scan instead. Read-only.
   if (path == '/integrity') return Response.json(scanAnomalies(db))
-  if (path == '/resolve') {
-    // The id-resolve fallback door (T-18102): a client whose working-set
-    // cache can't name a token resolves it here — the same resolveId every
-    // read door uses (T-3684). Naming-only: eid, num, kind — the immutable
-    // facts a link or crumb needs, never content (that rides subscriptions),
-    // so nothing folded from this answer can go stale. 404 = no such entity,
-    // so the client shows its honest Lost instead of a spinner that never
-    // settles; 400 = an ambiguous short-eid prefix, the typist's news.
-    let id = url.searchParams.get('id') ?? ''
-    let eid: string | undefined
-    try {
-      eid = id ? resolveId(db, id) : undefined
-    } catch (e) {
-      return new Response(String((e as Error).message ?? e), { status: 400 })
-    }
-    if (!eid) return new Response('no entity', { status: 404 })
-    let comps = eager(db, eid)
-    return Response.json({
-      eid,
-      num: Number(comps.entity?.num ?? 0) || null,
-      kind: kindOf(comps),
-    })
-  }
-  if (path == '/anchor') {
-    // The anchor-resolver door (D-21211, T-21317): one endpoint grades any
-    // anchor tri-state — fresh / moved (with the new range) / broken — and
-    // serves the current bytes from git's object store, never from the db.
-    // `?id=` resolves an entity's own anchor comp in its own repo context
-    // (the entity's repo, its project's, its memory scope's — falling back
-    // to this server's checkout, where the graph's own docs anchor);
-    // explicit ?path/&sha/&start/&end/&hunk grade an unsaved anchor, and
-    // ?repo= overrides the cwd either way. 404s speak, per M-16612.
-    let p = url.searchParams
-    let cwd = p.get('repo') ?? undefined
-    let a: Parameters<typeof resolveAnchor>[1]
-    let id = p.get('id')
-    if (id) {
-      let eid: string | undefined
-      try {
-        eid = resolveId(db, id)
-      } catch (e) {
-        return new Response(String((e as Error).message ?? e), {
-          status: 400,
-        })
-      }
-      if (!eid) return new Response('no entity', { status: 404 })
-      let comps = eager(db, eid)
-      if (!comps.anchor) {
-        return new Response(`${id} has no anchor`, { status: 404 })
-      }
-      a = comps.anchor as typeof a
-      // The repo an entity's anchor means: its own repo comp, else the one
-      // its project (task.project / memory.scope) wears.
-      let home = (owner?: unknown) =>
-        owner
-          ? eager(db, String(owner)).repo?.path as string | undefined
-          : undefined
-      cwd ??= (comps.repo?.path as string | undefined) ??
-        home(comps.task?.project) ?? home(comps.memory?.scope)
-    } else {
-      if (!p.get('path')) {
-        return new Response('need ?id= or ?path=', { status: 400 })
-      }
-      let num = (k: string) => (p.get(k) == null ? null : Number(p.get(k)))
-      a = {
-        paths: p.get('path'),
-        sha: p.get('sha'),
-        hunk: p.get('hunk'),
-        start: num('start'),
-        end: num('end'),
-      }
-    }
-    return Response.json(await resolveAnchor(cwd ?? repo, a))
-  }
-  if (path == '/body') {
-    // The bodies a bodyless payload deferred, for the eids a view is about
-    // to paint or edit (live.ts `want`). A Change batch, so it lands
-    // through applyLocal like any patch — no second intake path.
-    let eids = (url.searchParams.get('eids') ?? '').split(',').filter(Boolean)
-    return Response.json({ changes: bodies(db, eids) })
-  }
-  if (path == '/delta') {
-    // The returning client's catch-up: changes since its cursor. A cursor is
-    // only valid against the epoch and vocabulary that issued it, and only up
-    // to the journal's current tip — a mismatch means a different graph
-    // lineage, a shape change, or a rewind past the client's frontier, so 409
-    // tells the client to full-resnapshot rather than serve a misleading
-    // delta (cursorStale, db.ts).
-    let p = url.searchParams
-    if (
-      cursorStale(
-        db,
-        p.get('epoch'),
-        p.get('vocab'),
-        Number(p.get('since') ?? 0),
-      )
-    ) {
-      return new Response('stale', { status: 409 })
-    }
-    return Response.json(delta(db, Number(p.get('since') ?? 0)))
-  }
-  if (path == '/search') {
-    // a malformed filter is the typist's news, not a server error
-    try {
-      return Response.json(search(
-        db,
-        url.searchParams.get('q') ?? '',
-        Number(url.searchParams.get('limit') ?? 20),
-      ))
-    } catch (e) {
-      return new Response(String((e as Error).message ?? e), { status: 400 })
-    }
-  }
   if (path == '/similar') {
     // Semantic neighbors of arbitrary text — the dupe hint's door.
     // 503 = this box has no embedder; callers show nothing, not errors.
@@ -1193,6 +1068,7 @@ let handle = async (req: Request) => {
     }))
   }
   if (path == '/persona') {
+    if (req.method != 'GET') return methodNotAllowed('GET')
     // A persona materialized server-side — the SAME bytes a spawned session
     // reads as its system prompt (persona.ts materialize()), so the browser
     // must NOT render them from its own cache: under a partial cache the tier
@@ -1222,6 +1098,7 @@ let handle = async (req: Request) => {
     })
   }
   if (path == '/query') {
+    if (req.method != 'GET') return methodNotAllowed('GET')
     // The graph over plain GET: the query string IS the filter line —
     // the same grammar boards and task_list speak — and hits come back
     // Structured like every entity JSON door. Kind is a filter now, not a
@@ -1402,39 +1279,6 @@ let handle = async (req: Request) => {
       return new Response(String((e as Error).message ?? e), { status: 400 })
     }
   }
-  if (path == '/inbox') {
-    // The inbox as the SERVER enumerates it — the SAME client.ts predicate
-    // (inboxFor's union, screened by inboxItem/addressed over a readerFor|
-    // readerAt reader), run in-process against THIS graph so a partial-cache
-    // client reads its FINISHED inbox in one round-trip instead of scanning a
-    // whole-graph cache it no longer holds (T-18105). `session`(+`cwd`) builds
-    // the working reader; `actor` the browsing one. `mode=all` is the CLI's
-    // --all (direct address incl. archived, no watch/mute); repeated `f=` are
-    // dot-param filters, screening the union the way `task inbox <filters>`
-    // does. A malformed filter is the typist's news, not a server error.
-    try {
-      let p = url.searchParams
-      let mode: 'inbox' | 'all' = p.get('mode') == 'all' ? 'all' : 'inbox'
-      let session = p.get('session') ?? undefined
-      let actor = p.get('actor') ?? undefined
-      if (!session && !actor) {
-        return new Response('session or actor required', { status: 400 })
-      }
-      let local = localQuery(db)
-      let who = session
-        ? readerFor(
-          await readerRows(session, local),
-          session,
-          p.get('cwd') ?? undefined,
-        )
-        : readerAt(await actorRows(actor, local), actor)
-      let union = await inboxFor(who, p.getAll('f'), mode, local)
-      let keep = mode == 'all' ? addressed(who) : inboxItem(who)
-      return Response.json(union.filter(keep).map((r) => jsonOf(r)))
-    } catch (e) {
-      return new Response(String((e as Error).message ?? e), { status: 400 })
-    }
-  }
   if (path == '/references') {
     let eid = url.searchParams.get('eid') ?? ''
     if (!eid) return new Response('eid required', { status: 400 })
@@ -1461,7 +1305,8 @@ let handle = async (req: Request) => {
   }
   // HTTP writes (the CLI and MCP server): same apply, same allowlist,
   // same broadcast — an HTTP client is just a client without a socket.
-  if (path == '/apply' && req.method == 'POST') {
+  if (path == '/apply') {
+    if (req.method != 'POST') return methodNotAllowed('POST')
     let t0 = performance.now()
     let note = (ok: boolean, error?: string) =>
       record(db, {
@@ -1734,6 +1579,23 @@ let handle = async (req: Request) => {
   // modules the server did — a path prefix, not a bundler (D-18663 seam 1).
   // Reachable only when a plugin is configured; otherwise nothing links here.
   if (path.startsWith('/plugins/')) return file(repo.slice(0, -1), path)
+  // Retired data doors never masquerade as browser routes. Their capability
+  // lives in /query, /ws, or a local library now; serving index.html here
+  // would turn a caller bug into a convincing 200 response.
+  if (
+    ['/anchor', '/body', '/census', '/delta', '/inbox', '/resolve', '/search']
+      .includes(
+        path,
+      )
+  ) {
+    return new Response('retired: use /query or /ws', { status: 404 })
+  }
+  // Static files and SPA navigation are reads. Any unhandled mutating method
+  // is an API miss, never a request for index.html; returning the shell made a
+  // misspelled write look successful and hid wrong-method calls to known doors.
+  if (req.method != 'GET' && req.method != 'HEAD') {
+    return methodNotAllowed('GET, HEAD')
+  }
   // An extensionless path is a ROUTE (/T-123): the app boots and reads
   // the URL — same shell, different root card.
   let shell = path.includes('.') ? path : '/index.html'

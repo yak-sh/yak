@@ -1,6 +1,7 @@
 import { type Ent } from '../../types.ts'
 import { isUnread, type Row } from '../../client.ts'
-import { ent, inbox, mutate } from '../../live.ts'
+import { ent, mutate } from '../../live.ts'
+import { useInbox } from '../useInbox.ts'
 import { Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Id } from './Inline.tsx'
@@ -83,7 +84,7 @@ export let Inbox = ({ e, limit }: { e: Ent; limit?: number }) => {
   // screened by the SAME client.ts inboxItem the digest and TUI read — never a
   // scan of the whole-graph cache, which under a partial boot holds only a
   // working set (T-18105). Sort here; membership is the server's.
-  let items = [...inbox(e.eid)].sort(order)
+  let items = [...useInbox(e.eid)].sort(order)
   if (!items.length) {
     return (
       <ListFrame.Empty>

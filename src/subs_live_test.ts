@@ -81,6 +81,53 @@ let queried = async (q: string): Promise<string[]> => {
 }
 
 slow(
+  'API doors enforce methods instead of serving the SPA',
+  alone,
+  async () => {
+    for (
+      let [path, method, allow] of [
+        ['/query', 'POST', 'GET'],
+        ['/persona', 'POST', 'GET'],
+        ['/apply', 'GET', 'POST'],
+      ]
+    ) {
+      let res = await fetch(`http://${U}${path}`, { method })
+      assertEquals(res.status, 405, `${method} ${path}`)
+      assertEquals(res.headers.get('allow'), allow, `${method} ${path} allow`)
+      assertEquals(
+        res.headers.get('content-type')?.includes('text/html'),
+        false,
+      )
+    }
+  },
+)
+
+slow(
+  'text /query decorates rows with rank but /apply cannot persist it',
+  alone,
+  async () => {
+    let eid = uid(), word = `xylophone-${eid.slice(0, 8)}`
+    await post([{ eid, name: 'doc', comp: { title: word, body: 'music' } }])
+    let found = await fetch(`http://${U}/query?${encodeURIComponent(word)}`)
+    assertEquals(found.status, 200)
+    let [hit] = await found.json() as {
+      entity: { eid: string }
+      doc: { title: string }
+      rank: { open: string; title_hit: string }
+    }[]
+    assertEquals(hit.entity.eid, eid)
+    assertEquals(hit.doc.title, word)
+    assertEquals(hit.rank.open, eid)
+    assertEquals(hit.rank.title_hit.includes('\x01'), true)
+
+    await post([{ eid, name: 'rank', comp: { open: 'forged' } }])
+    let plain = await (await fetch(`http://${U}/query?id=${eid}`))
+      .json() as Record<string, unknown>[]
+    assertEquals(plain[0].rank, undefined)
+  },
+)
+
+slow(
   'query projects canonical Session nulls over stale aliases',
   alone,
   async () => {
@@ -461,8 +508,8 @@ slow(
 
 // Doc bodies are 44% of what a whole-graph subscription ships, and no board
 // or shape view paints one. So a board's frames carry none — and the two
-// doors that answer "give me this body" are the `card:` subscription (the
-// 2c card/route path) and /body (what a client asks when it holds a doc it
+// doors that answer "give me this body" are the `card:` subscription and an
+// addressed doc.body projection (what a client asks when it holds a doc it
 // was shipped no body for). A placeholder that neither could end would be
 // permanent, so this walks all three in one sentence.
 slow('bodies ride only where a body is read', alone, async () => {
@@ -496,15 +543,11 @@ slow('bodies ride only where a body is read', alone, async () => {
       'a later body',
     ])
 
-    // And the door for a body nobody subscribed: the answer IS a patch.
-    let res = await fetch(`http://${U}/body?eids=${a.eid}`)
-    assertEquals(await res.json(), {
-      changes: [{
-        eid: a.eid,
-        name: 'doc',
-        comp: { eid: a.eid, body: 'a later body' },
-      }],
-    })
+    // And the transient form for a body nobody kept: an addressed projection,
+    // through the same subscription protocol and patch shape.
+    let want = `want:${a.eid}`
+    await client.open(want, `id=${a.eid}&.fields=doc.body`)
+    assertEquals(doc(want).map((c) => c.body), ['a later body'])
   } finally {
     client.close()
   }

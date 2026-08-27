@@ -11,8 +11,8 @@
 //
 // localQuery is graph_query.ts's in-process /query answerer — the seam that
 // lets the client.ts enumeration run against the live db with no round-trip.
-// The fast tier proves the composition; the slow tier proves the HTTP /inbox
-// route wires it up (its set == the oracle over real SQLite).
+// The fast tier proves the composition; the slow tier proves the retired HTTP
+// door stays closed while the same rows remain available through /query.
 import { assertEquals } from '@std/assert'
 import {
   actorRows,
@@ -220,9 +220,9 @@ Deno.test('--all ignores watch/mute and keeps archived', async () => {
   assertEquals(ids(got).includes(Ct2), true)
 })
 
-// The HTTP door proves the wiring: /inbox returns the same set the oracle does,
-// over real SQLite. slow() — boots a server on an ephemeral port under the
-// heavy tier only, the same discipline the other real-server tests keep.
+// The HTTP boundary proves the wiring over SQLite: /inbox is retired and its
+// ordinary query arm remains available. slow() boots one ephemeral server only
+// under the heavy tier, the same discipline the other server tests keep.
 Deno.env.set('DB_PATH', ':memory:')
 let U = ''
 let alone = { sanitizeOps: false, sanitizeResources: false }
@@ -236,54 +236,60 @@ if (Deno.env.get('TASKS_SLOW')) {
   Deno.env.set('TASKS_HOST', U)
 }
 
-slow('the /inbox route returns the client-predicate set', alone, async () => {
-  let post = async (changes: Change[]) => {
-    let res = await fetch(`http://${U}/apply`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(changes),
-    })
-    if (!res.ok) throw new Error(`apply ${res.status}: ${await res.text()}`)
-  }
-  // A distinct id space from the fast tier's rows (the live :memory: server
-  // carries the demo seed too, so use the venture we mint here as the actor).
-  let RV = uid(100), RS = uid(101), RT = uid(102), RC = uid(103), RN = uid(104)
-  await post([
-    ...ent(RV, 100, {
-      doc: { title: 'Route venture', body: '' },
-      project: {},
-      repo: { path: '/route' },
-    }),
-    ...ent(RS, 101, {
-      doc: { title: 'Route session', body: '' },
-      session: { id: 'sess-route', cwd: '/route', actor: RV, operator: 1 },
-    }),
-    ...ent(RT, 102, {
-      doc: { title: 'Route task', body: '' },
-      task: { status: 'wip' },
-      claim: { session: RS },
-      created: { at: '2026-02-01', by: RV },
-    }),
-    ...ent(RC, 103, {
-      doc: { title: '', body: 'on route task' },
-      comment: { target: RT },
-      created: { at: '2026-02-02', by: RV },
-    }),
-    ...ent(RN, 104, {
-      doc: { title: '', body: 'about the venture' },
-      notice: { target: RV, event: 'lapse' },
-      created: { at: '2026-02-02', by: RV },
-    }),
-  ])
+slow(
+  'the retired /inbox route yields to ordinary /query reads',
+  alone,
+  async () => {
+    let post = async (changes: Change[]) => {
+      let res = await fetch(`http://${U}/apply`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(changes),
+      })
+      if (!res.ok) throw new Error(`apply ${res.status}: ${await res.text()}`)
+    }
+    // A distinct id space from the fast tier's rows (the live :memory: server
+    // carries the demo seed too, so use the venture we mint here as the actor).
+    let RV = uid(100),
+      RS = uid(101),
+      RT = uid(102),
+      RC = uid(103),
+      RN = uid(104)
+    await post([
+      ...ent(RV, 100, {
+        doc: { title: 'Route venture', body: '' },
+        project: {},
+        repo: { path: '/route' },
+      }),
+      ...ent(RS, 101, {
+        doc: { title: 'Route session', body: '' },
+        session: { id: 'sess-route', cwd: '/route', actor: RV, operator: 1 },
+      }),
+      ...ent(RT, 102, {
+        doc: { title: 'Route task', body: '' },
+        task: { status: 'wip' },
+        claim: { session: RS },
+        created: { at: '2026-02-01', by: RV },
+      }),
+      ...ent(RC, 103, {
+        doc: { title: '', body: 'on route task' },
+        comment: { target: RT },
+        created: { at: '2026-02-02', by: RV },
+      }),
+      ...ent(RN, 104, {
+        doc: { title: '', body: 'about the venture' },
+        notice: { target: RV, event: 'lapse' },
+        created: { at: '2026-02-02', by: RV },
+      }),
+    ])
 
-  // The client door parses the wire rows back to Row shape (rowOf), the same
-  // way live.ts will read this endpoint.
-  let { inboxDoor, query } = await import('./client.ts')
-  let got = ids(await inboxDoor({ actor: RV }))
+    let retired = await fetch(`http://${U}/inbox?actor=${RV}`)
+    assertEquals(retired.status, 404)
 
-  // Oracle: the current predicate over the whole graph the server holds.
-  let all = await query([])
-  let oracle = ids(all.filter(inboxItem(readerAt(all, RV))))
-  assertEquals(got, oracle)
-  assertEquals(got.includes(RN), true) // the venture notice reached the loop
-})
+    // The browser's corresponding subscription arm speaks the shared query
+    // grammar and receives the same ordinary row shape as every graph read.
+    let { query } = await import('./client.ts')
+    let got = ids(await query([`.notice.target=${RV}`, '.archived=']))
+    assertEquals(got.includes(RN), true) // the venture notice reached the loop
+  },
+)

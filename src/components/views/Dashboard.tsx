@@ -1,14 +1,10 @@
 import { awake, type Ent } from '../../types.ts'
-import {
-  boardsOver,
-  byWarmth,
-  ent,
-  sessionDetail,
-  unreadFor,
-} from '../../live.ts'
+import { boardsOver, byWarmth, ent, sessionDetail } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { Entity } from '../Entity.tsx'
 import { useQuery } from '../useQuery.ts'
+import { useInbox } from '../useInbox.ts'
+import { isUnread } from '../../client.ts'
 
 // The Project Cockpit (D-14587): a project's facets in a fixed grid —
 // Boards · Inbox · Roles · Sessions · Lately — the same vocabulary in the
@@ -98,7 +94,7 @@ export let Dashboard = ({ e }: { e: Ent }) => {
   let claims = useQuery('.claim!')
   let roles = useQuery(`.role.scope=${e.eid}`)
   let tasks = useQuery(`.task.project=${e.eid}`)
-  let unread = unreadFor(e.eid)
+  let unread = useInbox(e.eid).filter(isUnread).length
   return (
     <Frame>
       <Facet name='boards' ids={boardsOver(e.eid)} />

@@ -283,6 +283,20 @@ Deno.test('a route sub is never projected — it loads one entity whole', () => 
   db.close()
 })
 
+Deno.test('an addressed sub projects one row without a bespoke read door', () => {
+  let db = bareDb()
+  let eid = mint(db, { id: 's1', turn: 'busy', cwd: '/tmp' })
+  let { sv, frames } = dial(db)
+  sv.frame({ sub: `want:${eid}`, q: `id=${eid}&.fields=session.turn` })
+  assertEquals(frames[0].changes!.map((c) => c.name).sort(), [
+    'entity',
+    'session',
+  ])
+  let session = frames[0].changes!.find((c) => c.name == 'session')!.comp!
+  assertEquals(session.turn, 'busy')
+  db.close()
+})
+
 // The chrome projection the Tray actually opens must round-trip the wire, or
 // live.ts silently falls back to the in-memory resolver and the 6.22 MB comes
 // straight back — with nothing failing to say so.

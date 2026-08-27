@@ -6,7 +6,7 @@
 // form with zero edits — the same property every other surface holds.
 import { useEffect, useState } from 'preact/hooks'
 import { comps, type Ent, idOf, kindOf, type PropType, uuid } from '../types.ts'
-import { base, census, ent, mutate, rows } from '../live.ts'
+import { aggValue, dropAgg, ent, holdAgg, mutate, rows } from '../live.ts'
 import { block } from './ui.tsx'
 import {
   adminRoute,
@@ -397,22 +397,10 @@ export let Admin = () => {
   let url = new URL(route.value, 'http://x')
   let { kind, form } = adminRoute(url.pathname)
   let query = url.searchParams.get('q') ?? ''
-  // Graph-true counts from the server (/census), not a scan of the loaded
-  // cache — the cache omits the entry partition, so a presence-tally
-  // understates every entry-borne component (recalled, message, …). Refetched
-  // when the cached set changes so eager edits move the numbers; a debounced
-  // timer coalesces bursts and never leaks (cleared on unmount).
-  let [counts, setCounts] = useState<Record<string, number>>({})
-  let cached = census.value.length
-  useEffect(() => {
-    let id = setTimeout(() => {
-      fetch(`${base()}/census`)
-        .then((r) => r.json())
-        .then((c: Record<string, number>) => setCounts(c))
-        .catch(() => {})
-    }, 120)
-    return () => clearTimeout(id)
-  }, [cached])
+  let total = aggValue(
+    `admin:count:${kind}`,
+    `.${kind}!&.count!`,
+  )
   let link = (k: string) => (
     <Kind
       key={k}
@@ -425,20 +413,34 @@ export let Admin = () => {
       }}
     >
       {k}
-      <Count>{counts[k] ?? 0}</Count>
+      <CompCount comp={k} />
     </Kind>
   )
   return (
     <Frame>
       <Side>
         <Note>
-          counts: direct db read (graph-true) — not the loaded cache
+          counts: live query projections — not the loaded cache
         </Note>
         <Group>{censusComps().map(link)}</Group>
       </Side>
       {form
         ? <NewForm kind={kind} />
-        : <Index kind={kind} query={query} total={counts[kind]} />}
+        : <Index kind={kind} query={query} total={total} />}
     </Frame>
   )
+}
+
+// A census number is the count projection of the component's presence query.
+// It stays live over /ws and includes lazy partitions; the loaded browser cache
+// is neither enumerated nor treated as the graph.
+let CompCount = ({ comp }: { comp: string }) => {
+  let name = `admin:count:${comp}`
+  let line = `.${comp}!&.count!`
+  useEffect(() => {
+    holdAgg(name, line)
+    return () => dropAgg(name)
+  }, [name, line])
+  let n = aggValue(name, line)
+  return <Count>{n ?? '…'}</Count>
 }

@@ -1,5 +1,5 @@
 import { type Signal, useComputed, useSignal } from '@preact/signals'
-import { camera, ent, mutate, pinZ, toFront, unreadFor } from '../live.ts'
+import { camera, ent, mutate, pinZ, toFront } from '../live.ts'
 import { type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
 import { applicable } from './registry.ts'
@@ -17,6 +17,8 @@ import { Icon } from './icons.tsx'
 import { cardMenuAt } from './nav.tsx'
 import { overShelf, shelve } from './shelf.ts'
 import { useEntity } from './subscriptions.ts'
+import { useInbox } from './useInbox.ts'
+import { isUnread } from '../client.ts'
 
 // Each tab view wears an icon; the name moves into an anchored tooltip.
 // Exported: the fullscreen Screen bar (App.tsx) draws the same tabs.
@@ -49,13 +51,17 @@ let Badge = el('span', 'Tab_Badge')
 // and one you remember to check. Shared by all three tab rows (card, peek,
 // fullscreen) so a badge can never appear on one and not another.
 export let TabFace = ({ view, eid }: { view: string; eid: string }) => {
-  let n = view == 'Inbox' ? unreadFor(eid) : 0
   return (
     <>
       <Icon name={icons[view]} />
-      {n > 0 && <Badge>{n > 99 ? '99+' : n}</Badge>}
+      {view == 'Inbox' && <InboxBadge eid={eid} />}
     </>
   )
+}
+
+let InboxBadge = ({ eid }: { eid: string }) => {
+  let n = useInbox(eid).filter(isUnread).length
+  return n > 0 ? <Badge>{n > 99 ? '99+' : n}</Badge> : null
 }
 
 let Pin = el('div', 'Pin')

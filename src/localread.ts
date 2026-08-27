@@ -21,16 +21,9 @@
 // reports the local truth (a filter typo, not ECONNREFUSED).
 import { DatabaseSync } from './sqlite.ts'
 import { resolve } from 'node:path'
-import { depsOf, eager, liveDb, search as dbSearch } from './db.ts'
+import { depsOf, eager, liveDb } from './db.ts'
 import { localQuery } from './graph_query.ts'
-import {
-  arm,
-  type DepsFn,
-  httpDeps,
-  httpQuery,
-  httpSearch,
-  type SearchFn,
-} from './client.ts'
+import { arm, type DepsFn, httpDeps, httpQuery, httpSearch } from './client.ts'
 
 // Where the arm may read, or undefined for wire-only. Pure over its inputs —
 // no env defaults, so the decision table tests without an environment — and
@@ -107,9 +100,7 @@ export let armLocal = (path = envPath()): boolean => {
   }
   arm.query = guarded(localQuery(db), httpQuery)
   arm.deps = guarded(localDeps(db), httpDeps)
-  let localSearch: SearchFn =
-    // deno-lint-ignore require-await
-    async (q, limit) => dbSearch(db, q, limit)
-  arm.search = guarded(localSearch, httpSearch)
+  // Search is the text form of query, so the query arm above covers it too.
+  arm.search = undefined
   return true
 }

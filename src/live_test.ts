@@ -49,6 +49,7 @@ import {
   serverEid,
   serverName,
   sessionRows,
+  setInbox,
   shelfFor,
   sieve,
   socketStale,
@@ -156,32 +157,43 @@ Deno.test('findEid does not scan or subscribe after indexing', () => {
 })
 
 // The server id-resolve fallback (T-18102): a token the working-set cache
-// can't name resolves through /resolve, async and NAMING-ONLY. A cache hit
+// can't name resolves through an addressed subscription, async and NAMING-ONLY. A cache hit
 // never touches the wire; a miss returns "not yet" without blocking and
 // settles on the answer. resolveGen wakes the reader. Each test isolates the
-// module-level sidecar with clearResolved and restores the real fetch.
-let stubFetch = (
-  handler: (id: string) => Response | Promise<Response>,
+// module-level sidecar with clearResolved and restores the transport seam.
+let stubResolve = (
+  handler: (id: string, sub: string) =>
+    | { eid: string; num: number; kind: string }
+    | null
+    | undefined
+    | Promise<{ eid: string; num: number; kind: string } | null | undefined>,
 ) => {
-  let real = globalThis.fetch
   let calls: string[] = []
-  globalThis.fetch = (input: string | URL | Request) => {
-    let url = new URL(String(input), 'http://x')
-    let id = url.searchParams.get('id') ?? ''
+  let prior = useRoute((frame) => {
+    let f = frame as { sub?: string; q?: string }
+    if (!f.sub || !f.q?.startsWith('id=')) return
+    let id = f.q.slice(3).split('&')[0]
     calls.push(id)
-    return Promise.resolve(handler(id))
-  }
-  return { calls, restore: () => (globalThis.fetch = real) }
+    Promise.resolve(handler(id, f.sub)).then((n) => {
+      if (n === undefined) return
+      let changes = n
+        ? [
+          { eid: n.eid, name: 'entity', comp: { eid: n.eid, num: n.num } },
+          { eid: n.eid, name: n.kind, comp: { eid: n.eid } },
+        ]
+        : []
+      landSub({ sub: f.sub!, changes, drop: [], replace: true })
+    })
+  })
+  return { calls, restore: () => useRoute(prior) }
 }
 
-Deno.test('server-resolve: an unloaded id resolves via /resolve, async and once', async () => {
+Deno.test('server-resolve: an unloaded id resolves through one addressed sub', async () => {
   clearResolved()
   cache.value = {}
   let eid = 'aaaaaaaa-0000-4000-8000-000000000099'
-  let f = stubFetch((id) =>
-    id == 'T-99'
-      ? Response.json({ eid, num: 99, kind: 'task' })
-      : new Response(null, { status: 404 })
+  let f = stubResolve((id) =>
+    id == 'T-99' ? { eid, num: 99, kind: 'task' } : null
   )
   try {
     // A first miss KICKS the fetch and returns undefined — never blocks — and
@@ -208,7 +220,7 @@ Deno.test('server-resolve: a cache hit never touches the wire', () => {
     },
   }
   resetSignals()
-  let f = stubFetch(() => {
+  let f = stubResolve(() => {
     throw new Error('a cache hit must not reach the server')
   })
   try {
@@ -222,7 +234,7 @@ Deno.test('server-resolve: a cache hit never touches the wire', () => {
 Deno.test('server-resolve: a 404 is a genuine miss — Lost, and no retry storm', async () => {
   clearResolved()
   cache.value = {}
-  let f = stubFetch(() => new Response(null, { status: 404 }))
+  let f = stubResolve(() => null)
   try {
     let gen = resolveGen.value
     assertEquals(serverEid('T-404'), undefined)
@@ -242,13 +254,11 @@ Deno.test('server-resolve: a hanging server never stalls nav, and never storms',
   clearResolved()
   cache.value = {}
   let eid = 'cccccccc-0000-4000-8000-000000000007'
-  let release: (r: Response) => void = () => {}
-  let real = globalThis.fetch
-  let calls = 0
-  globalThis.fetch = () => {
-    calls++
-    return new Promise<Response>((res) => (release = res))
-  }
+  let sub = ''
+  let f = stubResolve((_id, name) => {
+    sub = name
+    return undefined
+  })
   try {
     // The read returns immediately though the wire hangs — routing/crumbs
     // never block on a slow resolve (the risk this leaf guards).
@@ -256,12 +266,20 @@ Deno.test('server-resolve: a hanging server never stalls nav, and never storms',
     assertEquals(resolvingId('T-7'), true)
     // Repeated reads while it hangs never launch a second request.
     for (let i = 0; i < 20; i++) serverEid('T-7')
-    assertEquals(calls, 1)
+    assertEquals(f.calls.length, 1)
     // Let it finally answer — settling clears the abort timer (no leak).
-    release(Response.json({ eid, num: 7, kind: 'task' }))
+    landSub({
+      sub,
+      replace: true,
+      drop: [],
+      changes: [
+        { eid, name: 'entity', comp: { eid, num: 7 } },
+        { eid, name: 'task', comp: { eid } },
+      ],
+    })
     await until(() => serverEid('T-7') == eid)
   } finally {
-    globalThis.fetch = real
+    f.restore()
   }
 })
 
@@ -269,7 +287,7 @@ Deno.test('server-resolve: a reconnect reseed clears the sidecar', async () => {
   clearResolved()
   cache.value = {}
   let eid = 'dddddddd-0000-4000-8000-000000000005'
-  let f = stubFetch(() => Response.json({ eid, num: 5, kind: 'task' }))
+  let f = stubResolve(() => ({ eid, num: 5, kind: 'task' }))
   try {
     serverEid('T-5')
     await until(() => serverName(eid) != null)
@@ -1283,62 +1301,22 @@ Deno.test("myMode: this actor's subscription, off the reverse index", () => {
   config.client = undefined
 })
 
-// The inbox is a SERVER query now (T-18105): unreadFor/inbox read GET /inbox,
-// never a whole-cache scan, so a partial-cache browser sees the same answer as
-// a full one. It stays live on a patch the inbox predicate reads (a comment
-// arriving) and asleep on one it doesn't (a task status move).
-Deno.test('inbox: the /inbox door, live on its own patches, asleep on others', async () => {
-  let flush = () => new Promise<void>((r) => setTimeout(r, 0))
-  // A /inbox answer in the wire shape the door returns (jsonOf → rowOf).
-  let item = (eid: string, num: number, opened = false) => ({
+// The inbox signal is only a test/host seam now. Production membership comes
+// from useInbox's ordinary query subscriptions, never an HTTP side door.
+Deno.test('inbox: planted rows retain the shared unread derivation', () => {
+  let item = (eid: string, opened = false) => ({
+    eid,
+    num: 1,
     kind: 'comment',
-    entity: { eid, num },
-    comment: { target: 'actor' },
-    created: { at: '2026-08-15T12:00:00.000Z' },
-    ...(opened ? { opened: {} } : {}),
+    comps: {
+      comment: { target: 'actor' },
+      ...(opened ? { opened: {} } : {}),
+    },
   })
-  let answer: Record<string, unknown>[] = [
-    item('c1', 1),
-    item('c2', 2),
-    item('c3', 3, true),
-  ]
-  let calls = 0
-  let orig = globalThis.fetch
-  globalThis.fetch = ((url: string | URL) => {
-    if (String(url).includes('/inbox')) {
-      calls++
-      return Promise.resolve(Response.json(answer))
-    }
-    return Promise.resolve(new Response('', { status: 404 }))
-  }) as typeof fetch
-  cache.value = {}
-  try {
-    // The first read mints an empty signal and kicks the fetch.
-    assertEquals(inbox('actor'), [])
-    await flush()
-    assertEquals(calls, 1)
-    // Parity: the set/count is exactly the server's answer.
-    assertEquals(inbox('actor').map((r) => r.eid), ['c1', 'c2', 'c3'])
-    assertEquals(unreadFor('actor'), 2)
-    // An unrelated patch (a task status move) touches nothing the inbox reads.
-    applyLocal([{
-      eid: 'tsk',
-      name: 'task',
-      comp: { status: 'wip', priority: 1 },
-    }])
-    await flush()
-    assertEquals(calls, 1) // asleep
-    // A newly-addressed comment refetches; the door now answers with one more.
-    answer = [...answer, item('c4', 4)]
-    applyLocal([{ eid: 'c4', name: 'comment', comp: { target: 'actor' } }])
-    await flush()
-    assertEquals(calls, 2) // live
-    assertEquals(inbox('actor').length, 4)
-    assertEquals(unreadFor('actor'), 3)
-  } finally {
-    globalThis.fetch = orig
-    cache.value = {}
-  }
+  setInbox('actor', [item('c1'), item('c2', true)])
+  assertEquals(inbox('actor').map((r) => r.eid), ['c1', 'c2'])
+  assertEquals(unreadFor('actor'), 1)
+  setInbox('actor', [])
 })
 
 Deno.test('relationship indices wake only their affected targets', () => {

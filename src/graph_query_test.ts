@@ -15,7 +15,7 @@ import {
 } from './graph_query.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, open } = await import('./db.ts')
+let { apply, eager, open } = await import('./db.ts')
 let { append } = await import('./entries.ts')
 let { freshDb } = await import('./testdb.ts')
 
@@ -208,6 +208,30 @@ Deno.test('evalCapped answers a declining query newest-first, bounded', () => {
   // The cap SELECTS the newest matches (a set — frame order is irrelevant).
   let titles = new Set(hits.map((h) => String(h.comps.doc?.title)))
   assertEquals(titles, new Set(['zap 5', 'zap 4', 'zap 3']))
+})
+
+Deno.test('text query returns ordinary rows with an ephemeral rank component', () => {
+  let db = freshDb()
+  let eid = uuid()
+  apply(db, [{ eid, name: 'doc', comp: { title: 'xylophone', body: 'music' } }])
+  let [hit] = evalGraph(db, 'xyloph', { limit: 5 }).hits
+  assertEquals(hit.eid, eid)
+  assertEquals(hit.comps.doc?.title, 'xylophone')
+  assertEquals(hit.comps.rank?.open, eid)
+  assertEquals(String(hit.comps.rank?.title_hit).includes('\x01'), true)
+  // Query decoration is not a component a caller can write back. The ordinary
+  // admission door drops it, and a later addressed read has no trace of it.
+  apply(db, [{
+    eid,
+    name: 'rank',
+    comp: { title: 'forged', open: 'elsewhere' },
+  }])
+  assertEquals(eager(db, eid).rank, undefined)
+  assertEquals(
+    db.prepare("select 1 from sqlite_schema where name = 'rank'").get(),
+    undefined,
+  )
+  db.close()
 })
 
 Deno.test('evalSub: exact for narrowing and aggregate queries, capped otherwise', () => {

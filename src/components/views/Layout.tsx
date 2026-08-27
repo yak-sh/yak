@@ -6,6 +6,7 @@ import { block } from '../ui.tsx'
 import { resolve } from '../registry.ts'
 import { Entity } from '../Entity.tsx'
 import { panEvents } from '../Canvas.tsx'
+import { hits as queryHits } from '../hits.ts'
 import { close, kids, resize, setContent, split } from '../../layout.ts'
 
 // The tiling container (D-14718): a layout entity rendered as its pane
@@ -116,8 +117,7 @@ let Fill = ({ eid, layout }: { eid: string; layout: string }) => {
   let seek = async (q: string) => {
     let found: Hit[] = []
     if (q.trim()) {
-      let r = await fetch(`/search?q=${encodeURIComponent(q)}`)
-      if (r.ok) found = await r.json()
+      found = await queryHits(q)
     }
     setHits(found)
   }

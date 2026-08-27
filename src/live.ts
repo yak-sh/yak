@@ -666,9 +666,6 @@ export let resetSignals = () =>
     }
     resetQueries()
     clearResolved() // a reseed may now hold what the server-resolve sidecar named
-    // A wholesale reseed (reconnect) is any-inbox-may-have-changed: refetch
-    // every mounted one rather than diffing what the new graph implies.
-    refreshInbox()
     refreshReferences()
   })
 
@@ -806,35 +803,10 @@ export let myMode = (target: string) => {
     : undefined
 }
 
-// The inbox as the SERVER enumerates it (T-18105). The whole-graph cache is
-// no longer scanned for inbox membership: GET /inbox?actor=<eid> returns the
-// FINISHED rows for the browsing reader (the client.ts readerAt path, already
-// screened by inboxItem), so the badge and the Inbox view read a partial cache
-// exactly as they read a full one. A per-actor signal holds those rows; the
-// first read kicks the fetch, and refreshInbox refetches on a relevant patch.
+// Tests and host integrations may plant finished inbox rows without a socket.
+// Production views use components/useInbox.ts: ordinary held subscriptions,
+// screened by client.ts's one inbox predicate.
 let inboxSignals = new Map<string, Signal<Row[]>>()
-// One fetch per eid in flight; a patch arriving mid-fetch sets `again` so the
-// door is asked once more when it settles — a burst collapses to one trailing
-// refetch rather than stacking a request per frame.
-let inboxLoading = new Set<string>()
-let inboxAgain = new Set<string>()
-let loadInbox = (eid: string) => {
-  if (inboxLoading.has(eid)) return void inboxAgain.add(eid)
-  inboxLoading.add(eid)
-  fetch(`${base()}/inbox?actor=${encodeURIComponent(eid)}`)
-    .then((r) => r.ok ? r.json() as Promise<Record<string, unknown>[]> : [])
-    .then((rs) => {
-      let sig = inboxSignals.get(eid)
-      if (sig) sig.value = rs.map(rowOf)
-    })
-    // A dead server is not an emptier inbox — keep the last answer and let the
-    // next relevant patch (or a reconnect reseed) retry.
-    .catch(() => {})
-    .finally(() => {
-      inboxLoading.delete(eid)
-      if (inboxAgain.delete(eid)) loadInbox(eid)
-    })
-}
 
 // The finished inbox rows for an entity, live. Minted once per eid so a patch
 // cannot wake an unrelated reader; refreshInbox refetches when the batch below
@@ -844,7 +816,6 @@ export let inbox = (eid: string): Row[] => {
   let sig = inboxSignals.get(eid)
   if (!sig) {
     inboxSignals.set(eid, sig = signal<Row[]>([]))
-    loadInbox(eid)
   }
   return sig.value
 }
@@ -863,40 +834,6 @@ export let setInbox = (eid: string, rows: Row[]) => {
 // SAME server door the Inbox view does, so a number on a tab can never promise
 // what the tab doesn't hold.
 export let unreadFor = (eid: string) => inbox(eid).filter(isUnread).length
-
-// Components an inbox item is made of, or whose edit changes membership or
-// read-state for the browsing reader (client.ts inboxItem/readerAt): the four
-// doors (comment/notice/knock with its `deliver` envelope/mail), the read+hide
-// stamps (opened/archived), and the standing instruction (subscription). A
-// batch naming none of these can't change any inbox, so every live one sleeps.
-let inboxComps = new Set(
-  [
-    'comment',
-    'notice',
-    'knock',
-    'deliver',
-    'mail',
-    'opened',
-    'archived',
-    'subscription',
-  ],
-)
-let inboxDoors = ['comment', 'notice', 'knock', 'mail']
-// Did this batch touch any live inbox? A cheap scan of the batch (never the
-// cache), so the O(1)-per-frame budget holds under a live patch stream. An
-// entity death counts only if the dead row WAS an inbox item — otherwise a
-// deleted item would linger in the badge.
-let inboxDirty = (changes: Change[], graph: Record<string, Comps>) =>
-  changes.some((c) =>
-    inboxComps.has(c.name) ||
-    (c.name == 'entity' && c.comp == null && !!graph[c.eid] &&
-      inboxDoors.some((n) => n in graph[c.eid]!))
-  )
-// Refetch every mounted inbox — used on a relevant live patch and on a
-// wholesale reseed (reconnect), where any inbox may have changed at once.
-let refreshInbox = () => {
-  for (let eid of inboxSignals.keys()) loadInbox(eid)
-}
 
 let referenceSignals = new Map<string, Signal<References>>()
 let referenceLoading = new Set<string>()
@@ -1089,11 +1026,6 @@ export let applyLocal = (changes: Change[]) => {
       if (live) live.value = z
     }
   })
-  // A live inbox is a server query, not a cache scan, so it can't ride the
-  // signal republish above — refetch it only when the batch names something
-  // its predicate reads. `graph` is the pre-batch cache, so a deleted item's
-  // row is still there for inboxDirty to recognise.
-  if (inboxSignals.size && inboxDirty(changes, graph)) refreshInbox()
   if (referenceSignals.size && changes.some((c) => c.name == 'dependency')) {
     refreshReferences()
   }
@@ -1137,14 +1069,15 @@ let queue = new Set<string>()
 let sweep = () => {
   let eids = [...queue]
   queue.clear()
-  for (let eid of eids) asked.add(eid)
-  fetch(`${base()}/body?eids=${encodeURIComponent(eids.join(','))}`)
-    .then((r) => r.json())
-    .then((b: { changes?: Change[] }) => applyLocal(b.changes ?? []))
-    // A dead server is not an answer: forget the ask so the next paint retries.
-    .catch(() => {
-      for (let eid of eids) asked.delete(eid)
-    })
+  for (let eid of eids) {
+    asked.add(eid)
+    oneShot(
+      `want:${eid}`,
+      `id=${eid}&.fields=doc.body`,
+      () => {},
+      () => asked.delete(eid),
+    )
+  }
 }
 export let want = (eid: string) => {
   if (asked.has(eid) || queue.has(eid)) return
@@ -1934,6 +1867,19 @@ export let landSub = (f: Sub) => {
     querySignals.get(f.sub)!.value = [...mine]
   }
   subVersion.value++
+  if (f.replace) {
+    let one = oneShots.get(f.sub)
+    if (one) {
+      oneShots.delete(f.sub)
+      clearTimeout(one.timer)
+      // Let this frame finish publishing before the unsubscribe can evict a
+      // row held only by the transient projection.
+      queueMicrotask(() => {
+        one.done()
+        unsubscribe(f.sub)
+      })
+    }
+  }
   return {
     eids: [
       ...new Set([
@@ -1997,6 +1943,29 @@ let control = (frame: object) => {
   route(frame)
 }
 export let subscribe = (sub: string, q: string) => control({ sub, q })
+
+// A transient projection still uses the subscription protocol: one initial
+// replace lands through the normal cache seam, then the hold is returned. This
+// is how a deferred body (and other one-shot browser reads) avoids inventing a
+// fetch-only endpoint while keeping timeout/retry behavior explicit.
+let oneShots = new Map<
+  string,
+  { done: () => void; fail: () => void; timer: ReturnType<typeof setTimeout> }
+>()
+let oneShot = (
+  sub: string,
+  q: string,
+  done: () => void,
+  fail: () => void,
+) => {
+  let timer = setTimeout(() => {
+    if (!oneShots.delete(sub)) return
+    unsubscribe(sub)
+    fail()
+  }, 5000)
+  oneShots.set(sub, { done, fail, timer })
+  subscribe(sub, q)
+}
 let shadow = (sub: string, q: string) => {
   shadows.add(sub)
   control({ sub, q, shadow: true })
@@ -2663,16 +2632,12 @@ let named = new Map<string, Named | null>() // token OR eid -> naming (null = go
 let resolvingIds = new Map<string, Promise<Named | null>>() // token -> in flight
 let resolveFailed = new Map<string, number>() // token -> when its resolve failed
 export let resolveGen = signal(0) // bumped when a resolve settles, to re-render
-let RESOLVE_MS = 5000
 let COOLDOWN_MS = 3000
 
 let kickResolve = (token: string): Promise<Named | null> => {
   let found = resolvingIds.get(token)
   if (found) return found
-  let ctrl = new AbortController()
-  let timer = setTimeout(() => ctrl.abort(), RESOLVE_MS)
   let settle = (n: Named | null) => {
-    clearTimeout(timer)
     resolvingIds.delete(token)
     resolveFailed.delete(token)
     named.set(token, n)
@@ -2680,23 +2645,24 @@ let kickResolve = (token: string): Promise<Named | null> => {
     resolveGen.value++
     return n
   }
-  let p = fetch(`${base()}/resolve?id=${encodeURIComponent(token)}`, {
-    signal: ctrl.signal,
-  })
-    .then(async (r) => {
-      if (r.status == 404) return settle(null) // genuine: no such entity
-      if (!r.ok) throw new Error(await r.text())
-      return settle((await r.json()) as Named)
-    })
-    // A slow or dead server is not "no such entity": don't poison the token —
-    // cool it so a later render (or a reconnect) retries, and say what failed.
-    .catch(() => {
-      clearTimeout(timer)
+  let sub = `resolve:${token}`
+  let p = new Promise<Named | null>((resolve) => {
+    oneShot(sub, `id=${token}`, () => {
+      let eid = [...(subEids(sub) ?? [])][0]
+      if (!eid) return resolve(settle(null))
+      let comps = cache.peek()[eid] ?? {}
+      resolve(settle({
+        eid,
+        num: Number(comps.entity?.num ?? 0),
+        kind: kindOf(comps),
+      }))
+    }, () => {
       resolvingIds.delete(token)
       resolveFailed.set(token, Date.now())
       resolveGen.value++
-      return null
+      resolve(null)
     })
+  })
   resolvingIds.set(token, p)
   return p
 }
@@ -3050,6 +3016,17 @@ export let dropAgg = (name: string) => {
   if (!set || --set.n > 0) return
   aggSets.delete(name)
   dropBoard(name)
+}
+
+// One aggregate value for a view that owns the corresponding hold. Undefined
+// until the server has answered; callers must not paint that as a confident 0.
+export let aggValue = (
+  name: string,
+  line: string,
+  value = '',
+): number | undefined => {
+  let set = aggQuery(name, line)
+  return set.live.value ? set.map.value[value] ?? 0 : undefined
 }
 
 // A board TILE renders status counts and nothing else, so it subscribes to the

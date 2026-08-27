@@ -364,15 +364,25 @@ export let authoringLine = (all: Row[], row: Row) => {
 
 // Full-text search, server-side (FTS5) — the graph's docs, ranked.
 export type SearchFn = (q: string, limit?: number) => Promise<Hit[]>
-export let httpSearch: SearchFn = async (q, limit = 20) => {
-  let res = await request(
-    `http://${host()}/search?q=${encodeURIComponent(q)}&limit=${limit}`,
-  )
-  if (!res.ok) throw new Error(`server said ${res.status}`)
-  return res.json() as Promise<Hit[]>
+export let hitOf = (r: Row): Hit => {
+  let rank = r.comps.rank ?? {}
+  return {
+    eid: r.eid,
+    num: r.num,
+    kind: r.kind,
+    title: String(rank.title ?? r.comps.doc?.title ?? ''),
+    title_hit: String(rank.title_hit ?? r.comps.doc?.title ?? ''),
+    snip: String(rank.snip ?? ''),
+    open: String(rank.open ?? r.eid),
+    ...(rank.open_id ? { open_id: String(rank.open_id) } : {}),
+    ...(rank.retired ? { retired: true } : {}),
+  }
 }
-export let search: SearchFn = (q, limit) =>
-  arm.search ? arm.search(q, limit) : httpSearch(q, limit)
+export let httpSearch: SearchFn = async (q, limit = 20) => {
+  return (await httpQuery([q], { limit })).map(hitOf)
+}
+export let search: SearchFn = async (q, limit = 20) =>
+  (await query([q], { limit })).map(hitOf)
 
 // The linked git worktree a path stands in, or undefined in the main checkout.
 // A linked worktree's `.git` is a FILE (a `gitdir:` pointer) while the main
@@ -2873,27 +2883,6 @@ export let inboxRows = async (
   let base = await readerRows(session, q)
   let who = readerFor(base, session, cwd)
   return { who, rows: await inboxFor(who, filters, mode, q) }
-}
-
-// The server's FINISHED inbox over HTTP — /inbox enumerates the union AND
-// applies the inboxItem/addressed screen in-process, so a client with no
-// whole-graph cache (the browser under a partial boot, T-18105) reads its inbox
-// in one round-trip instead of scanning a cache it no longer holds. `session`
-// (+`cwd`) is the working reader; `actor` the browsing one (readerAt).
-export let inboxDoor = async (
-  who: { session?: string; actor?: string; cwd?: string },
-  mode: 'inbox' | 'all' = 'inbox',
-  filters: string[] = [],
-): Promise<Row[]> => {
-  let args = new URLSearchParams()
-  if (who.session) args.set('session', who.session)
-  if (who.actor) args.set('actor', who.actor)
-  if (who.cwd) args.set('cwd', who.cwd)
-  if (mode == 'all') args.set('mode', 'all')
-  for (let f of filters) args.append('f', f)
-  let res = await request(`http://${host()}/inbox?${args}`)
-  if (!res.ok) throw new Error(`server said ${res.status}`)
-  return (await res.json() as Record<string, unknown>[]).map(rowOf)
 }
 
 // The bounded graph a context digest reads. The renderer remains pure over a

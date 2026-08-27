@@ -1,5 +1,5 @@
-// The browser's door to server search — the FTS5 `/search` seam Search.tsx
-// opened, factored out so every entity picker asks the GRAPH for its options
+// The browser's ranked text query, factored out so every entity picker asks
+// the GRAPH for its options
 // instead of scanning the loaded cache. A cache scan offers only what happens
 // to be resident, so under a partial cache a picker silently narrows to the
 // entities already loaded; the server answers over the whole graph. One raw
@@ -7,6 +7,7 @@
 // answer never repaints a newer query.
 import { useEffect, useState } from 'preact/hooks'
 import { base } from '../live.ts'
+import { hitOf, rowOf } from '../client.ts'
 import type { Hit } from '../types.ts'
 
 // One server search. A malformed filter answers 400 — the typist's news in
@@ -19,10 +20,11 @@ export let hits = async (
   signal?: AbortSignal,
 ): Promise<Hit[]> => {
   let r = await fetch(
-    `${base()}/search?q=${encodeURIComponent(q)}&limit=${limit}`,
+    `${base()}/query?${encodeURIComponent(q)}&limit=${limit}`,
     { signal },
   )
-  return r.ok ? (await r.json()) as Hit[] : []
+  if (!r.ok) throw new Error(await r.text())
+  return ((await r.json()) as Record<string, unknown>[]).map(rowOf).map(hitOf)
 }
 
 // A picker's query line: its standing component filter ANDed with what's

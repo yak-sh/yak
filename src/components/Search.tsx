@@ -7,6 +7,7 @@ import { block } from './ui.tsx'
 import { Icon } from './icons.tsx'
 import { useComplete } from './Complete.tsx'
 import { Entity } from './Entity.tsx'
+import { hits as queryHits } from './hits.ts'
 
 // `/` in normal mode opens the palette (the App shell owns the hotkey
 // and the mount, so any root can search; the `open` callback decides
@@ -125,12 +126,10 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     let found: Hit[] = []
     let bad = ''
     try {
-      let r = await fetch(`/search?q=${encodeURIComponent(q)}`, { signal })
-      if (r.ok) found = await r.json()
-      else bad = await r.text() // a malformed filter, said where you typed
+      found = await queryHits(q, 20, signal)
     } catch (e) {
       if (signal.aborted) return
-      throw e
+      bad = e instanceof Error ? e.message : String(e)
     }
     if (mine != seq.current) return // a newer keystroke owns the list
     setHits(found)

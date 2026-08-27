@@ -36,6 +36,7 @@ import {
   reaching,
   referrersOf,
   rowsOf,
+  search,
   vocabHash,
 } from './db.ts'
 import { aggregateSql, countSql, where, whereSome, windowed } from './sql.ts'
@@ -445,12 +446,30 @@ export let evalGraph = (
   // The LINE's own window (`.limit=`/`.after=`) is the default; an explicit
   // opts bound — the /query door's paging — overrides it, so a caller that
   // always passed a limit keeps doing exactly what it did.
-  let win = merged(
-    windowOf(resolveRefs(parseQuery(q), (id) => locate(db, id))),
-    opts,
-  )
+  let asked = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let win = merged(windowOf(asked), opts)
   let after = win.after ?? 0
   let limit = win.limit ?? ENTRY_PAGE
+  // Text retrieval is a query, not a second HTTP resource. FTS decides the
+  // order and contributes a query-result-only `rank` component; stored rows
+  // never wear it and `comps` never admits it on write. Keeping the metadata
+  // beside the ordinary components lets every /query consumer use one row
+  // shape while renderers still receive snippets and comment destinations.
+  if (asked.some((p) => p.op == 'text')) {
+    let hits = search(db, q, win.limit ?? ENTRY_PAGE).map((h) => {
+      let row = rowed({ eid: h.eid, comps: eager(db, h.eid) })
+      row.comps.rank = {
+        title: h.title,
+        title_hit: h.title_hit,
+        snip: h.snip,
+        open: h.open,
+        ...(h.open_id ? { open_id: h.open_id } : {}),
+        ...(h.retired ? { retired: true } : {}),
+      }
+      return row
+    })
+    return { preds: asked, hits }
+  }
   // An EXPLICIT limit bounds an eager answer too — the newest `limit` by num,
   // returned in num order, and `after` continues that window below a num.
   // Entry pages keep their own seq paging; a caller that named no window keeps

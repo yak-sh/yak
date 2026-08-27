@@ -353,10 +353,15 @@ export let dbKids = (
 // through the one payload path.
 let rowsFor = (
   db: DatabaseSync,
-  eid: string,
+  eids: Iterable<string>,
 ): { eid: string; comps: Record<string, Record<string, unknown>> }[] => {
-  let comps = eager(db, eid)
-  return comps.entity ? [{ eid, comps }] : []
+  let out: { eid: string; comps: Record<string, Record<string, unknown>> }[] =
+    []
+  for (let eid of eids) {
+    let comps = eager(db, eid)
+    if (comps.entity) out.push({ eid, comps })
+  }
+  return out
 }
 
 export type Subserve = ReturnType<typeof subserve>
@@ -388,17 +393,29 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
       let route = f.sub.startsWith('route:')
         ? f.sub.slice('route:'.length)
         : null
-      let details = route != null || f.sub.startsWith('entries:')
+      let line = f.q ?? ''
+      let parts = line.split('&').filter(Boolean)
+      let names = route == null
+        ? parts.filter((p) => p.startsWith('id='))
+          .flatMap((p) => p.slice(3).split(',')).filter(Boolean)
+        : []
+      let named = names.length
+        ? names
+          .map((id) => locate(db, id)).filter((eid): eid is string => !!eid)
+        : []
+      let addressed = route != null || names.length > 0
+      let only = route != null ? [route] : [...new Set(named)]
+      let queryLine = parts.filter((p) => !p.startsWith('id=')).join('&')
+      let details = addressed || f.sub.startsWith('entries:')
       // An aggregate sub answers a VALUE, so it never enumerates members — not
       // even once, at subscribe. Parse the line, and if it carries an AGG
       // projection let evalAgg answer it with one indexed statement; only a
       // membership sub pays evalSub's row set.
-      let line = f.q ?? ''
       let asked = route != null
         ? []
-        : resolveRefs(parseQuery(line), (id) => locate(db, id))
+        : resolveRefs(parseQuery(queryLine), (id) => locate(db, id))
       if (aggOf(asked)) {
-        let counts = evalAgg(db, line)?.values ?? new Map<string, number>()
+        let counts = evalAgg(db, queryLine)?.values ?? new Map<string, number>()
         map.set(f.sub, {
           preds: [],
           members: new Set(),
@@ -406,7 +423,7 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
           moving: false,
           bodies: false,
           details: false,
-          agg: { line, watch: predComps(asked), counts },
+          agg: { line: queryLine, watch: predComps(asked), counts },
         })
         send(JSON.stringify({
           sub: f.sub,
@@ -421,9 +438,9 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
       // never-pred), so an empty sub legitimately answers the empty set —
       // cheap, no error. Only a route sub carries meaning with no query: its
       // name scopes it to one entity.
-      let answer = route != null
-        ? { preds: [], hits: rowsFor(db, route) }
-        : evalSub(db, line, details)
+      let answer = addressed
+        ? { preds: asked, hits: rowsFor(db, only) }
+        : evalSub(db, queryLine, details)
       let { preds, hits } = answer
       let window = 'window' in answer ? answer.window : undefined
       // The declared projection, compiled once. A route sub never has one: it
@@ -433,9 +450,7 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
       // carry riders (`id=<eid>&.edges!`). `id=` is an ADDRESS, not a filter —
       // the same split localQuery makes — so strip it and parse whatever
       // remains, which is how a route sub declares it wants its edges too.
-      let rides = route == null ? preds : parseQuery(
-        line.split('&').filter((t) => !t.startsWith('id=')).join('&'),
-      )
+      let rides = route == null ? preds : parseQuery(queryLine)
       let members = new Set(hits.map((r) => r.eid))
       // The rider is opened with the member set, so its first frame carries
       // this query's edges and nothing else's — the scoped answer that replaces
@@ -453,7 +468,7 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         // standing-match updates too.
         details,
         ...(fields ? { fields, cut: projected(fields) } : {}),
-        ...(route != null ? { only: new Set([route]) } : {}),
+        ...(only.length ? { only: new Set(only) } : {}),
         ...(window
           ? {
             win: {
