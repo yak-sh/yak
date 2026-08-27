@@ -61,6 +61,22 @@ Deno.test('guarded: a local failure is answered by the wire and disarms', async 
   assertEquals(arm.query, undefined)
 })
 
+Deno.test('guarded: a caller may disarm its own local context', async () => {
+  let off = 0
+  arm.query = () => Promise.resolve([])
+  let g = guarded(
+    () => {
+      throw new Error('skew')
+    },
+    () => Promise.resolve(7),
+    () => off++,
+  )
+  assertEquals(await g(), 7)
+  assertEquals(off, 1)
+  assert(arm.query)
+  disarm()
+})
+
 Deno.test('guarded: both failing surfaces the LOCAL error', async () => {
   let g = guarded((): number => {
     throw new Error('not a filter: .typo')
@@ -76,20 +92,40 @@ Deno.test('armLocal: an unopenable path leaves the process wire-only', () => {
 
 // A real file, opened read-only, answering the armed doors with no server
 // anywhere: the win T-22497 exists for. The file is minted by open() (schema +
-// seed — the heavy part), then read back through armLocal + client.query.
+// seed — the heavy part), then read back through every armLocal reader.
 slow(
-  'armLocal: a file answers query/search read-only with no server',
+  'armLocal: a file answers graph, journal, telemetry, and integrity reads with no server',
   async () => {
     let dir = await Deno.makeTempDir()
     let path = `${dir}/graph.db`
-    let { open } = await import('./db.ts')
-    let { query, search } = await import('./client.ts')
+    let { apply, open } = await import('./db.ts')
+    let {
+      history,
+      historyBy,
+      integrity,
+      query,
+      readTelemetry,
+      readTelemetryStats,
+      search,
+    } = await import('./client.ts')
+    let { record } = await import('./telemetry.ts')
     let db = open(path)
-    db.prepare('insert into entity (eid, num) values (?, ?)').run('e-lr', 9001)
-    db.prepare(
-      `insert into doc (entity, title)
-       values ((select id from entity where eid = ?), ?)`,
-    ).run('e-lr', 'localread proof')
+    let session = crypto.randomUUID(), item = crypto.randomUUID()
+    apply(db, [{ eid: session, name: 'session', comp: { id: session } }])
+    apply(
+      db,
+      [{ eid: item, name: 'doc', comp: { title: 'localread proof' } }],
+      undefined,
+      session,
+    )
+    record(db, {
+      source: 'cli',
+      name: 'localread-proof',
+      session_id: session,
+      ok: false,
+      ms: 7,
+      error: 'proof',
+    })
     db.close()
     Deno.env.set('TASKS_HOST', '127.0.0.1:1') // nothing listens — the proof
     try {
@@ -98,7 +134,15 @@ slow(
       assertEquals(hits.length, 1)
       assertEquals(hits[0].comps.doc?.title, 'localread proof')
       let found = await search('localread')
-      assert(found.some((h) => h.eid == 'e-lr'))
+      assert(found.some((h) => h.eid == item))
+      assertEquals((await history(item))[0].via, session)
+      assertEquals((await historyBy(session))[0].changes[0].eid, item)
+      assertEquals(
+        (await readTelemetry({ only: 'errors' }))[0].name,
+        'localread-proof',
+      )
+      assertEquals((await readTelemetryStats({ only: 'errors' }))[0].p50, 7)
+      assertEquals((await integrity())?.orphans, {})
     } finally {
       Deno.env.delete('TASKS_HOST')
       disarm()

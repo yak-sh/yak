@@ -21,9 +21,27 @@
 // reports the local truth (a filter typo, not ECONNREFUSED).
 import { DatabaseSync } from './sqlite.ts'
 import { resolve } from 'node:path'
-import { depsOf, eager, liveDb } from './db.ts'
+import {
+  depsOf,
+  eager,
+  journalBy,
+  journalOf,
+  liveDb,
+  scanAnomalies,
+} from './db.ts'
 import { localQuery } from './graph_query.ts'
-import { arm, type DepsFn, httpDeps, httpQuery } from './client.ts'
+import {
+  arm,
+  type DepsFn,
+  httpDeps,
+  httpHistory,
+  httpHistoryBy,
+  httpIntegrity,
+  httpQuery,
+  httpTelemetry,
+  httpTelemetryStats,
+} from './client.ts'
+import { recent, stats } from './telemetry.ts'
 
 // Where the arm may read, or undefined for wire-only. Pure over its inputs —
 // no env defaults, so the decision table tests without an environment — and
@@ -57,6 +75,7 @@ export let localReadPath = envPath
 export let guarded = <A extends unknown[], R>(
   local: (...a: A) => R | Promise<R>,
   wire: (...a: A) => Promise<R>,
+  off = disarm,
 ) =>
 async (...a: A): Promise<R> => {
   try {
@@ -68,13 +87,21 @@ async (...a: A): Promise<R> => {
     } catch {
       throw e
     }
-    disarm()
+    off()
     return saved
   }
 }
 
 export let disarm = () => {
-  arm.query = arm.deps = arm.search = undefined
+  arm.query =
+    arm.deps =
+    arm.search =
+    arm.history =
+    arm.historyBy =
+    arm.integrity =
+    arm.telemetry =
+    arm.telemetryStats =
+      undefined
 }
 
 // The deps=1 layer's edge set, locally: the same depsOf + quarantine screen
@@ -105,6 +132,17 @@ export let armLocal = (path = envPath()): boolean => {
   }
   arm.query = guarded(localQuery(db), httpQuery)
   arm.deps = guarded(localDeps(db), httpDeps)
+  arm.history = guarded(
+    (eid, limit) => journalOf(db, eid, limit),
+    httpHistory,
+  )
+  arm.historyBy = guarded(
+    (via, limit) => journalBy(db, via, limit),
+    httpHistoryBy,
+  )
+  arm.integrity = guarded(() => scanAnomalies(db), httpIntegrity)
+  arm.telemetry = guarded((opts) => recent(db, opts), httpTelemetry)
+  arm.telemetryStats = guarded((opts) => stats(db, opts), httpTelemetryStats)
   // Search is the text form of query, so the query arm above covers it too.
   arm.search = undefined
   return true

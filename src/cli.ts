@@ -63,6 +63,8 @@ import {
   query,
   readerFor,
   readerRows,
+  readTelemetry,
+  readTelemetryStats,
   redact as redactValue,
   refsIn,
   replyChanges,
@@ -119,10 +121,6 @@ import {
   statuses,
 } from './types.ts'
 import { cost, type Dim, group, report, roll, type Use, use } from './usage.ts'
-// `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
-// reaches for the SQLite driver, and the telemetry verb reads over HTTP —
-// the CLI's one deliberate db door is localread.ts, read-only (T-22497).
-import type { Log, Stat } from './telemetry.ts'
 import { armLocal, localReadPath } from './localread.ts'
 import { type BackfillKind, landBackfill, readBackfill } from './backfill.ts'
 import type { JournalEntry } from './client.ts'
@@ -2843,16 +2841,15 @@ let probes = async (got: Got) => {
 // What the tools have been doing: MCP calls, HTTP writes and browser
 // crashes, newest first. --errors is the view you want most days.
 let telemetry = async (got: Got) => {
-  let q = new URLSearchParams()
-  if (got.flags.has('--errors')) q.set('only', 'errors')
-  if (got.opts['--since']) q.set('since', got.opts['--since'])
-  if (got.flags.has('--stats')) {
-    return telemetryStats(q, got.flags.has('--json'))
+  let opts = {
+    only: got.flags.has('--errors') ? 'errors' : undefined,
+    since: got.opts['--since'],
+    limit: got.opts['-n'] ? Number(got.opts['-n']) : undefined,
   }
-  if (got.opts['-n']) q.set('limit', got.opts['-n'])
-  let res = await request(`http://${host()}/telemetry?${q}`)
-  if (!res.ok) throw new Error(`server said ${res.status}`)
-  let rows = await res.json() as Log[]
+  if (got.flags.has('--stats')) {
+    return telemetryStats(opts, got.flags.has('--json'))
+  }
+  let rows = await readTelemetry(opts)
   if (got.flags.has('--json')) return print(jsonText(rows))
   if (!rows.length) return warn('(nothing recorded)')
   for (let r of rows) {
@@ -2873,13 +2870,13 @@ let telemetry = async (got: Got) => {
   }
 }
 
-// The latency view: p50/p95/p99 per door+tool, computed in SQL server-side
+// The latency view: p50/p95/p99 per door+tool, computed in SQLite
 // (telemetry.ts stats()). Busiest group first, milliseconds right-aligned.
-let telemetryStats = async (q: URLSearchParams, json: boolean) => {
-  q.set('stats', '1')
-  let res = await request(`http://${host()}/telemetry?${q}`)
-  if (!res.ok) throw new Error(`server said ${res.status}`)
-  let rows = await res.json() as Stat[]
+let telemetryStats = async (
+  opts: { since?: string; only?: string },
+  json: boolean,
+) => {
+  let rows = await readTelemetryStats(opts)
   if (json) return print(jsonText(rows))
   if (!rows.length) return warn('(nothing timed)')
   let ms = (n: number) => `${n}ms`.padStart(9)

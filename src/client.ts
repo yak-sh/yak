@@ -48,6 +48,7 @@ import { FLOOR } from './twin.ts'
 import { type Provider, spawnDefault } from './providers.ts'
 import { request } from './http.ts'
 import type { Anomalies } from './db.ts'
+import type { Log, Stat } from './telemetry.ts'
 import type { Published } from './redaction.ts'
 import { unmime } from './rfc2047.ts'
 import {
@@ -134,7 +135,7 @@ export let serverCaps = async (): Promise<string[]> => {
 // predates the route serves index.html for the extensionless path (200 text/html,
 // not a 404), so an unexpected non-JSON body is treated as "absent" too, never a
 // crash — the JSON content-type is the proof the route actually answered.
-export let integrity = async (): Promise<Anomalies | null> => {
+export let httpIntegrity = async (): Promise<Anomalies | null> => {
   let res = await request(`http://${host()}/integrity`)
   if (
     !res.ok || !res.headers.get('content-type')?.includes('application/json')
@@ -144,6 +145,43 @@ export let integrity = async (): Promise<Anomalies | null> => {
   }
   return res.json() as Promise<Anomalies>
 }
+
+export let integrity = (): Promise<Anomalies | null> =>
+  arm.integrity ? arm.integrity() : httpIntegrity()
+
+export type TelemetryOpts = {
+  since?: string
+  limit?: number
+  only?: string
+}
+
+export let httpTelemetry = async (opts: TelemetryOpts = {}): Promise<Log[]> => {
+  let q = new URLSearchParams()
+  if (opts.since) q.set('since', opts.since)
+  if (opts.limit) q.set('limit', String(opts.limit))
+  if (opts.only) q.set('only', opts.only)
+  let res = await request(`http://${host()}/telemetry?${q}`)
+  if (!res.ok) throw new Error(`server said ${res.status}`)
+  return res.json() as Promise<Log[]>
+}
+
+export let httpTelemetryStats = async (
+  opts: TelemetryOpts = {},
+): Promise<Stat[]> => {
+  let q = new URLSearchParams()
+  if (opts.since) q.set('since', opts.since)
+  if (opts.only) q.set('only', opts.only)
+  q.set('stats', '1')
+  let res = await request(`http://${host()}/telemetry?${q}`)
+  if (!res.ok) throw new Error(`server said ${res.status}`)
+  return res.json() as Promise<Stat[]>
+}
+
+export let readTelemetry = (opts: TelemetryOpts = {}): Promise<Log[]> =>
+  arm.telemetry ? arm.telemetry(opts) : httpTelemetry(opts)
+
+export let readTelemetryStats = (opts: TelemetryOpts = {}): Promise<Stat[]> =>
+  arm.telemetryStats ? arm.telemetryStats(opts) : httpTelemetryStats(opts)
 
 // The local-read arm (T-22497, D-22388 step 2a): localread.ts arms these at
 // CLI boot when the process stands beside the graph file itself, and pure
@@ -157,6 +195,11 @@ export let arm: {
   query?: Querier
   deps?: DepsFn
   search?: SearchFn
+  history?: typeof httpHistory
+  historyBy?: typeof httpHistoryBy
+  integrity?: typeof httpIntegrity
+  telemetry?: typeof httpTelemetry
+  telemetryStats?: typeof httpTelemetryStats
 } = {}
 
 export let httpQuery = async (
@@ -710,19 +753,25 @@ export type JournalEntry = {
   via?: string | null
   changes: Change[]
 }
-export let history = async (eid: string, limit = 50) => {
+export let httpHistory = async (eid: string, limit = 50) => {
   let res = await request(`http://${host()}/journal?eid=${eid}&limit=${limit}`)
   if (!res.ok) throw new Error(`server said ${res.status}`)
   return res.json() as Promise<JournalEntry[]>
 }
 
-export let historyBy = async (via: string, limit = 500) => {
+export let history = (eid: string, limit = 50): Promise<JournalEntry[]> =>
+  arm.history ? arm.history(eid, limit) : httpHistory(eid, limit)
+
+export let httpHistoryBy = async (via: string, limit = 500) => {
   let res = await request(
     `http://${host()}/journal?via=${encodeURIComponent(via)}&limit=${limit}`,
   )
   if (!res.ok) throw new Error(`server said ${res.status}`)
   return res.json() as Promise<JournalEntry[]>
 }
+
+export let historyBy = (via: string, limit = 500): Promise<JournalEntry[]> =>
+  arm.historyBy ? arm.historyBy(via, limit) : httpHistoryBy(via, limit)
 
 // The entities a journal excerpt names, for ledger humanization. Both the
 // changed eid and every typed reference may speak in ledger(), so gather the

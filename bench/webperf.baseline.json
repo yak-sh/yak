@@ -1,5 +1,5 @@
 {
-  "_comment": "CDP end-to-end tier of the perf ratchet (bin/webperf-gate.ts). The BULK of perf coverage is chrome-free and sub-1ms (bin/bench-gate.ts: db/read/render/pure-fn micro-benches); this tier keeps only load_to_interactive — a real cold load through paint+network, which a browser uniquely reveals. Wall-clock, so a wide 30% band: it is a COARSE backstop for big load regressions (the 14s-load / 22s-board class), while the chrome-free micro-benches catch fine per-op regressions. min-of-WEBPERF_RUNS (default 2). Baseline scales with graph size — re-accept (deno task bench:accept:web) when scale shifts materially. load is currently ~10s because the Session whole-transcript render is not yet virtualized; it drops when that lands.",
+  "_comment": "CDP end-to-end tier of the perf ratchet (bin/webperf-gate.ts). The BULK of perf coverage is chrome-free and sub-1ms (bin/bench-gate.ts: db/read/render/pure-fn micro-benches); this tier keeps only load_to_interactive — a real cold load through paint+network, which a browser uniquely reveals. Wall-clock, so a wide 30% band: it is a COARSE backstop for big load regressions (the 14s-load / 22s-board class), while the chrome-free micro-benches catch fine per-op regressions. min-of-WEBPERF_RUNS (default 2). Baseline scales with graph size — re-accept (deno task bench:accept:web) when scale shifts materially.",
   "tolerance_pct": 30,
-  "load_to_interactive": 9310
+  "load_to_interactive": 316
 }

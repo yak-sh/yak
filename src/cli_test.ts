@@ -1599,6 +1599,181 @@ slow(
   },
 )
 
+slow(
+  'local CLI history, telemetry, and doctor read SQLite with the server down',
+  async () => {
+    let dir = await Deno.makeTempDir()
+    let path = `${dir}/graph.db`
+    let { apply, human, open } = await import('./db.ts')
+    let { record } = await import('./telemetry.ts')
+    let db = open(path)
+    let project = crypto.randomUUID(), item = crypto.randomUUID()
+    apply(db, [
+      { eid: project, name: 'doc', comp: { title: 'local project' } },
+      { eid: project, name: 'project', comp: {} },
+      { eid: item, name: 'doc', comp: { title: 'local history proof' } },
+      {
+        eid: item,
+        name: 'task',
+        comp: { status: 'open', priority: 1, project },
+      },
+      {
+        eid: project,
+        name: 'dependency',
+        comp: { type: 'wants', child: item },
+      },
+    ])
+    let id = human(db, item)
+    record(db, {
+      source: 'cli',
+      name: 'local-cli-proof',
+      ok: false,
+      ms: 7,
+      error: 'proof',
+    })
+    db.close()
+
+    let run = (...args: string[]) =>
+      new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          ...args,
+        ],
+        clearEnv: true,
+        env: {
+          DB_PATH: path,
+          TASKS_HOST: '127.0.0.1:1',
+          TASKS_BACKOFF: '',
+        },
+      }).output()
+    try {
+      let history = await run('history', id, '--json')
+      assertEquals(history.code, 0, text(history.stderr))
+      assertEquals(JSON.parse(text(history.stdout))[0].changes[0].eid, item)
+
+      let telemetry = await run('telemetry', '--errors', '--json')
+      assertEquals(telemetry.code, 0, text(telemetry.stderr))
+      assertEquals(
+        JSON.parse(text(telemetry.stdout))[0].name,
+        'local-cli-proof',
+      )
+
+      let stats = await run('telemetry', '--errors', '--stats', '--json')
+      assertEquals(stats.code, 0, text(stats.stderr))
+      assertEquals(JSON.parse(text(stats.stdout))[0].p50, 7)
+
+      let doctor = await run('doctor')
+      assertStringIncludes(text(doctor.stdout), 'storage')
+      assertEquals(text(doctor.stdout).includes('check itself crashed'), false)
+      assertEquals(text(doctor.stderr).includes('127.0.0.1:1'), false)
+    } finally {
+      await Deno.remove(dir, { recursive: true })
+    }
+  },
+)
+
+slow(
+  'explicit remote CLI history, telemetry, and doctor stay on the wire',
+  async () => {
+    let eid = 'bbbbbbbb-0000-4000-8000-000000023321'
+    let snap: Snapshot = {
+      changes: [
+        { eid, name: 'entity', comp: { eid, num: 23321 } },
+        { eid, name: 'doc', comp: { eid, title: 'remote history proof' } },
+        {
+          eid,
+          name: 'task',
+          comp: { eid, status: 'open', priority: 1 },
+        },
+      ],
+      deps: [],
+    }
+    let answer = answers(snap)
+    let seen: string[] = []
+    let server = Deno.serve(
+      { hostname: '127.0.0.1', port: 0, onListen: () => {} },
+      (req) => {
+        let url = new URL(req.url)
+        seen.push(decodeURIComponent(`${url.pathname}${url.search}`))
+        if (url.pathname == '/query') {
+          return Response.json(answer(decodeURIComponent(url.search.slice(1))))
+        }
+        if (url.pathname == '/journal') {
+          return Response.json([{
+            id: 1,
+            ts: '2026-08-27T00:00:00.000Z',
+            actor: null,
+            via: null,
+            changes: [{ eid, name: 'doc', comp: { title: 'from wire' } }],
+          }])
+        }
+        if (url.pathname == '/telemetry') {
+          return Response.json(
+            url.searchParams.has('stats')
+              ? [{
+                source: 'cli',
+                name: 'remote-proof',
+                n: 1,
+                p50: 9,
+                p95: 9,
+                p99: 9,
+              }]
+              : [{
+                ts: '2026-08-27T00:00:00.000Z',
+                source: 'cli',
+                name: 'remote-proof',
+                session_id: null,
+                ok: 0,
+                ms: 9,
+                error: 'proof',
+                detail: null,
+              }],
+          )
+        }
+        if (url.pathname == '/integrity') {
+          return Response.json({
+            orphans: {},
+            dangling: {},
+            vector: { dirty: false, rows: 0, newest: null },
+            unrooted: [],
+          })
+        }
+        return new Response('not found', { status: 404 })
+      },
+    )
+    let host = `127.0.0.1:${(server.addr as Deno.NetAddr).port}`
+    let run = (...args: string[]) =>
+      new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          ...args,
+        ],
+        clearEnv: true,
+        env: { TASKS_HOST: host, TASKS_BACKOFF: '' },
+      }).output()
+    try {
+      let history = await run('history', 'T-23321', '--json')
+      assertEquals(history.code, 0, text(history.stderr))
+      assertEquals(JSON.parse(text(history.stdout))[0].changes[0].eid, eid)
+
+      let telemetry = await run('telemetry', '--errors', '--json')
+      assertEquals(telemetry.code, 0, text(telemetry.stderr))
+      assertEquals(JSON.parse(text(telemetry.stdout))[0].name, 'remote-proof')
+
+      await run('doctor')
+      assert(seen.some((path) => path.startsWith('/journal?')))
+      assert(seen.some((path) => path.startsWith('/telemetry?')))
+      assert(seen.some((path) => path == '/integrity'))
+    } finally {
+      await server.shutdown()
+    }
+  },
+)
+
 slow('task require writes the subject-first requires edge', async () => {
   let fake = graphServer()
   try {
