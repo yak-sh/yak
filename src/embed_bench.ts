@@ -27,7 +27,10 @@ let vecAt = (i: number) => {
 for (let i = 0; i < N; i++) {
   let e = uid()
   d.prepare('insert into entity (eid, num) values (?, ?)').run(e, 1_000_000 + i)
-  d.prepare('insert into doc (eid, title, body) values (?, ?, ?)')
+  d.prepare(
+    `insert into doc (entity, title, body)
+     values ((select id from entity where eid = ?), ?, ?)`,
+  )
     .run(e, `Doc ${i}`, '')
   d.prepare('insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)')
     .run(e, MODEL, hash(`Doc ${i}`), new Uint8Array(vecAt(i).buffer))
