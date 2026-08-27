@@ -12,6 +12,8 @@
 import { useEffect, useMemo } from 'preact/hooks'
 import {
   type Backlink,
+  derivedResult,
+  deriveSub,
   dropQuery,
   edgeSub,
   ent,
@@ -67,4 +69,21 @@ let REFERENCED = '.edges[referenced,entry.session]!'
 export let useReferences = (eid: string): References => {
   useEffect(() => edgeSub(eid, REFERENCED), [eid])
   return references(eid)
+}
+
+export type PersonaProjection = { text: string; scoped: string[] }
+
+// A persona's prompt bytes and scoped-memory ids are one registered derived
+// projection over ordinary addressed membership. The server computes it from
+// the spawn path's bounded personaGraph closure; the browser holds no tier walk.
+export let usePersonaProjection = (
+  eid: string,
+  enabled = true,
+): PersonaProjection | null | undefined => {
+  let value = derivedResult(eid, 'persona').value
+  useEffect(
+    () => enabled ? deriveSub(eid, 'persona') : undefined,
+    [eid, enabled],
+  )
+  return enabled ? value as PersonaProjection | null | undefined : undefined
 }

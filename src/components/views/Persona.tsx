@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'preact/hooks'
 import { type Change, type Ent } from '../../types.ts'
-import { base, byWarmth, ent, mutate, relations } from '../../live.ts'
+import { byWarmth, ent, mutate, relations } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { dragData } from '../drag.ts'
 import { Entity } from '../Entity.tsx'
+import { usePersonaProjection, useQuery } from '../useQuery.ts'
 
 let Frame = block('div', 'Persona', {
   Sec: 'div',
@@ -39,22 +39,14 @@ export let Persona = ({ e }: { e: Ent }) => {
   let pre = linked('contains')
   let idx = linked('reads')
   let tiered = new Set([...pre, ...idx].map((r) => r.eid))
-  // In scope = memories the server says share this persona's home (fleet
-  // personas draw from unscoped memories) — fetched over the WHOLE graph
-  // (/persona), not scanned from this client's cache, which would only ever
-  // discover the memories it happened to load (T-18104). Already-tiered ones
-  // show in their tier, so drop them here — live off `tiered`, so a drag
-  // re-tiers without another round trip.
-  let [scoped, setScoped] = useState<string[]>([])
-  useEffect(() => {
-    let abort = new AbortController()
-    fetch(`${base()}/persona?id=${e.eid}`, { signal: abort.signal })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setScoped(d.scoped))
-      .catch(() => {})
-    return () => abort.abort()
-  }, [e.eid])
-  let loose = scoped.map(ent)
+  // The derived projection discovers the exact scoped-memory eid set through
+  // an indexed memory.scope query. A second ordinary addressed sub loads only
+  // those rows, so neither discovery nor rendering scans the partial cache.
+  let scoped = new Set(usePersonaProjection(e.eid)?.scoped ?? [])
+  let scopedRows = useQuery(
+    e.persona?.home ? `.memory.scope=${e.persona.home}` : '.memory.scope=',
+  )
+  let loose = scopedRows.filter((r) => scoped.has(r.eid))
     .filter((r) => r.memory && r.doc && !tiered.has(r.eid))
     .toSorted(byWarmth(now))
   let both = pre.filter((r) => idx.some((x) => x.eid == r.eid))

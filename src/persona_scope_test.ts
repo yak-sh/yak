@@ -1,6 +1,6 @@
 // The bounded persona reads render the SAME BYTES as the whole-graph
-// snapshot — the parity line for converting /persona and the .tasks
-// projection off snapshot() (T-21230). Persona corruption is the failure
+// snapshot — the parity line for query derivation and the .tasks projection
+// off snapshot() (T-21230). Persona corruption is the failure
 // mode: a scoped walk that misses a tier member or a derived homeReads
 // edge silently ships a wrong prompt, so the proof is byte equality over
 // a graph with every shape that walk must reach — a contained base, an
@@ -9,6 +9,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { uuid } from './types.ts'
 import { personaGraph, projectionGraph } from './graph_query.ts'
+import { derive, derivedValues } from './derive.ts'
 import { filesFor, materialize, taskRoots } from './persona.ts'
 import { rows } from './client.ts'
 
@@ -56,7 +57,7 @@ let seed = () => {
   doc(m2, 'Indexed memory')
   apply(db, [{ eid: m2, name: 'memory', comp: {} }])
   edge(common, 'reads', m2)
-  let m3 = e() // in scope, on no tier — /persona's `scoped` list, not the text
+  let m3 = e() // in scope, on no tier — the derived scoped set, not the text
   doc(m3, 'Untiered memory')
   apply(db, [{ eid: m3, name: 'memory', comp: { scope: proj } }])
 
@@ -64,8 +65,26 @@ let seed = () => {
   doc(noise, 'A task')
   apply(db, [{ eid: noise, name: 'task', comp: { status: 'open' } }])
 
-  return { db, proj, common, spec }
+  return { db, proj, common, spec, m1, m3 }
 }
+
+Deno.test('persona derivation reuses the bounded spawn closure and scope index', () => {
+  let { db, common, m1, m3 } = seed()
+  let states = derive(db, ['persona'], [common], NOW)
+  let value = derivedValues(states)[common].persona as {
+    text: string
+    scoped: string[]
+  }
+  let graph = personaGraph(db, [common])
+  let persona = graph.all.find((r) => r.eid == common)!
+  assertEquals(value.text, materialize(graph.all, graph.deps, persona, NOW))
+  assertEquals(new Set(value.scoped), new Set([m1, m3]))
+
+  // Result data is not a component: a forged apply is discarded and a later
+  // graph read has no `derived` table/bag to return.
+  apply(db, [{ eid: common, name: 'derived', comp: { persona: value } }])
+  assertEquals(snapshot(db).changes.some((c) => c.name == 'derived'), false)
+})
 
 Deno.test('personaGraph materializes snapshot-identical bytes', () => {
   let { db, common, spec } = seed()

@@ -56,8 +56,8 @@ mod tests {
     fn target_joins_path_and_query() {
         let b = "http://127.0.0.1:5174";
         assert_eq!(
-            target_url(b, &uri("/persona?tier=base")),
-            "http://127.0.0.1:5174/persona?tier=base"
+            target_url(b, &uri("/frozen/N-3?plain=1")),
+            "http://127.0.0.1:5174/frozen/N-3?plain=1"
         );
         assert_eq!(target_url(b, &uri("/")), "http://127.0.0.1:5174/");
         assert_eq!(target_url(b, &uri("/blob/abc123")), "http://127.0.0.1:5174/blob/abc123");

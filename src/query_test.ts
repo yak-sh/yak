@@ -5,6 +5,8 @@ import {
   aggOf,
   bareRenamesOf,
   complete,
+  DERIVE,
+  derivesOf,
   distinctValues,
   edgeRider,
   EDGES,
@@ -604,6 +606,23 @@ Deno.test('.edges selects a stored type and projects endpoints through a ref', (
       ),
     Error,
   )
+})
+
+Deno.test('.derive names a registered transient projection', () => {
+  assertEquals(preds('.derive=persona'), [{
+    comp: '',
+    prop: '',
+    op: DERIVE,
+    value: '',
+    derive: 'persona',
+  }])
+  let ps = parseQuery('.persona!&.derive=persona')
+  assertEquals(derivesOf(ps), ['persona'])
+  assert(matchQuery({ persona: {} }, ps))
+  assert(!matchQuery({ doc: {} }, ps))
+  assertThrows(() => preds('.derive='), Error)
+  assertThrows(() => preds('.derive=unknown'), Error)
+  assertThrows(() => preds('.derive!'), Error)
 })
 
 Deno.test('the EDGES rider is a delivery, never a filter', () => {

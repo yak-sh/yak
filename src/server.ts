@@ -68,7 +68,6 @@ import { fleetRaw, mailIdOf } from './inbound.ts'
 import { setEmbedConfig, setModel, similarTo } from './embed.ts'
 import { type IO, mcpServer } from './mcp.ts'
 import { drain as drainTurns } from './turn.ts'
-import { materialize } from './persona.ts'
 import {
   maintainStandingFor,
   prepareWorktree,
@@ -89,15 +88,21 @@ import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { serverFile } from './reload.ts'
 import { jsonOf, type Row } from './client.ts'
-import { listed, matchQuery, parseQuery, resolveRefs } from './query.ts'
+import {
+  derivesOf,
+  listed,
+  matchQuery,
+  parseQuery,
+  resolveRefs,
+} from './query.ts'
 import {
   dbReader,
   evalAgg,
   evalGraph,
   localQuery,
-  personaGraph,
   rowed,
 } from './graph_query.ts'
+import { derive, derivedValues } from './derive.ts'
 import { nativeSoon } from './tmux.ts'
 import { loadPlugins, pluginSpecifiers } from './plugins.ts'
 import { stop as stopTimers } from './timers.ts'
@@ -976,6 +981,22 @@ let browserPlugins = specs
   .filter((s) => s.startsWith(`${repoUrl}plugins/`))
   .map((s) => `/${s.slice(repoUrl.length)}`)
 
+// Retired graph-data doors must answer as API misses instead of falling through
+// to the SPA's convincing 200. Their capabilities live at the generic graph
+// boundaries now; this one set is the route-retirement invariant and its test
+// names every removed door.
+export let retiredDataDoors = new Set([
+  '/anchor',
+  '/body',
+  '/census',
+  '/delta',
+  '/inbox',
+  '/persona',
+  '/references',
+  '/resolve',
+  '/search',
+])
+
 // The request handler, DEFINED here but not yet listening. The bind happens at
 // the bottom of boot (just before booted()): reusePort deals connections to
 // every listener on the port, so a successor that binds while it still has a
@@ -1068,36 +1089,6 @@ let handle = async (req: Request) => {
       }
     }))
   }
-  if (path == '/persona') {
-    if (req.method != 'GET') return methodNotAllowed('GET')
-    // A persona materialized server-side — the SAME bytes a spawned session
-    // reads as its system prompt (persona.ts materialize()), so the browser
-    // must NOT render them from its own cache: under a partial cache the tier
-    // walk misses memories and edges and quietly corrupts the very prompt.
-    // The read is the spawn path's own bounded walk (personaGraph: the tier
-    // closure from this root, derived homeReads included), never the
-    // whole-graph snapshot (M-21143). `id` addresses the persona (locate:
-    // T-3, num, uuid, slug). `scoped` is the in-scope memories the editor
-    // lists as untiered — a keyed memory.scope query, resolved here so
-    // discovery no longer depends on what the client happens to hold.
-    let eid = locate(db, url.searchParams.get('id') ?? '')
-    if (!eid) return new Response('no such entity', { status: 404 })
-    let { all, deps } = personaGraph(db, [eid])
-    let p = all.find((r) => r.eid == eid && r.comps.persona && r.comps.doc)
-    if (!p) return new Response('not a persona', { status: 404 })
-    let home = (p.comps.persona.home as string | null) ?? null
-    let scoped = evalGraph(
-      db,
-      home ? `.memory.scope=${home}` : '.memory.scope=',
-    )
-      .hits
-      .filter((r) => r.comps.memory && r.comps.doc)
-      .map((r) => r.eid)
-    return Response.json({
-      text: materialize(all, deps, p, Date.now()),
-      scoped,
-    })
-  }
   if (path == '/query') {
     if (req.method != 'GET') return methodNotAllowed('GET')
     // The graph over plain GET: the query string IS the filter line —
@@ -1149,6 +1140,10 @@ let handle = async (req: Request) => {
         !s.startsWith('id=')
       )
       let q = segs.join('&')
+      let asked = q.trim()
+        ? resolveRefs(parseQuery(q), (id) => locate(db, id))
+        : []
+      let derivations = derivesOf(asked)
       // An aggregate projection (`.count!` / `.distinct=col` / `.tally=col`)
       // answers with the reduction, not a row set — the census asks for values,
       // so rows, layers and id= addressing don't apply. Keys come back sorted
@@ -1184,8 +1179,13 @@ let handle = async (req: Request) => {
       // endpoint's id and status come from fetching it, and a caller
       // rendering edges is fetching those rows anyway.
       let layers = (hits: Row[]) => {
-        if (!backs && !edged) return hits.map((r) => jsonOf(r))
         let eids = hits.map((r) => r.eid)
+        let derived = derivations.length
+          ? derivedValues(derive(db, derivations, eids))
+          : {}
+        if (!backs && !edged && !derivations.length) {
+          return hits.map((r) => jsonOf(r))
+        }
         let deps = depsOf(db, eids).filter((d) =>
           reveal ||
           (!eager(db, d.parent).quarantined &&
@@ -1233,6 +1233,7 @@ let handle = async (req: Request) => {
         }
         return hits.map((r) => ({
           ...jsonOf(r),
+          ...(derivations.length ? { derived: derived[r.eid] } : {}),
           ...(edged ? { deps: mine.get(r.eid) ?? [] } : {}),
           ...(backs ? { backlinks: back.get(r.eid) ?? [] } : {}),
         }))
@@ -1249,9 +1250,7 @@ let handle = async (req: Request) => {
         // `id=` already SELECTED; a remaining filter only screens. No
         // remaining filter means no screen — an empty QUERY would select
         // nothing, so this door states its meaning before parsing.
-        let preds = q.trim()
-          ? resolveRefs(parseQuery(q), (id) => locate(db, id))
-          : []
+        let preds = asked
         let hits = [...only].map((eid) => rowed({ eid, comps: eager(db, eid) }))
           .filter((r) => reveal || listed(r.comps, preds))
           .filter((r) =>
@@ -1578,20 +1577,7 @@ let handle = async (req: Request) => {
   // Retired data doors never masquerade as browser routes. Their capability
   // lives in /query, /ws, or a local library now; serving index.html here
   // would turn a caller bug into a convincing 200 response.
-  if (
-    [
-      '/anchor',
-      '/body',
-      '/census',
-      '/delta',
-      '/inbox',
-      '/resolve',
-      '/search',
-    ]
-      .includes(
-        path,
-      )
-  ) {
+  if (retiredDataDoors.has(path)) {
     return new Response('retired: use /query, /ws, or the local library', {
       status: 404,
     })

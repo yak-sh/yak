@@ -27,6 +27,7 @@ import {
 } from './types.ts'
 import { isUnread, type Row } from './client.ts'
 import {
+  type Derivation,
   distinctValues,
   EXISTS,
   type Field,
@@ -1349,6 +1350,9 @@ export type Sub = {
   // initial frame replaces the whole tally; later frames are deltas (n=0
   // drops the key). No row changes ride these, so the cache is untouched.
   agg?: Record<string, number>
+  // Transient derived query results, keyed by selected eid. Null withdraws one
+  // eid's values; these never enter the component cache or persistence wire.
+  derived?: Record<string, Record<string, unknown> | null>
   // The frame's stated WINDOW (D-22567 §4): the members are the newest `limit`
   // of `total` matches. Present exactly when the answer is a PREFIX, so its
   // ABSENCE on an unwindowed sub is itself the statement that the set is whole.
@@ -1785,6 +1789,16 @@ export let landSub = (f: Sub) => {
     }
     return { eids: [], edges: [] }
   }
+  if (f.derived) {
+    let found = derivedSignals.get(f.sub)
+    if (found) {
+      let next = f.replace ? {} : { ...found.peek() }
+      for (let [eid, value] of Object.entries(f.derived)) {
+        value == null ? delete next[eid] : next[eid] = value
+      }
+      found.value = next
+    }
+  }
   if (f.replace && f.sub.startsWith('entries:')) {
     clearObservations(f.sub.slice('entries:'.length))
   }
@@ -2050,6 +2064,11 @@ export let assertAgree = (
 let boardUses = new Map<string, { n: number; q: string }>()
 let entryUses = new Map<string, number>()
 let edgeUses = new Map<string, number>()
+let derivedUses = new Map<string, number>()
+let derivedSignals = new Map<
+  string,
+  Signal<Record<string, Record<string, unknown>>>
+>()
 // A board whose query NAMES the lazy partition (`.entry.session=S-3`) can't be
 // answered from the root cache — entries are omitted from the snapshot. So the
 // board holds an entry subscription per scoped session (the same door a Session
@@ -2078,6 +2097,32 @@ export let edgeSub = (eid: string, rider: string) => {
     let held = (edgeUses.get(sub) ?? 1) - 1
     if (held > 0) return void edgeUses.set(sub, held)
     edgeUses.delete(sub)
+    dropBoard(sub)
+  }
+}
+
+let derivedKey = (eid: string, name: Derivation) => `derive:${eid}:${name}`
+
+// A derived value is held through the same addressed subscription transport as
+// rows, aggregates, and edge riders. The signal stores only transient result
+// data; graph entities continue to live exclusively in the component cache.
+export let derivedResult = (eid: string, name: Derivation) => {
+  let key = derivedKey(eid, name)
+  let found = derivedSignals.get(key)
+  if (!found) derivedSignals.set(key, found = signal({}))
+  return computed(() => found!.value[eid]?.[name])
+}
+
+export let deriveSub = (eid: string, name: Derivation) => {
+  let sub = derivedKey(eid, name)
+  let n = derivedUses.get(sub) ?? 0
+  derivedUses.set(sub, n + 1)
+  if (!n) ownBoard(sub, `id=${eid}&.derive=${name}`)
+  return () => {
+    let held = (derivedUses.get(sub) ?? 1) - 1
+    if (held > 0) return void derivedUses.set(sub, held)
+    derivedUses.delete(sub)
+    derivedSignals.delete(sub)
     dropBoard(sub)
   }
 }

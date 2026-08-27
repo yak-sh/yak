@@ -52,6 +52,7 @@ type Frame = {
   changes?: Change[]
   drop?: string[]
   replace?: boolean
+  derived?: Record<string, Record<string, unknown> | null>
   observe?: {
     session: string
     generation: string
@@ -87,7 +88,6 @@ slow(
     for (
       let [path, method, allow] of [
         ['/query', 'POST', 'GET'],
-        ['/persona', 'POST', 'GET'],
         ['/apply', 'GET', 'POST'],
       ]
     ) {
@@ -98,6 +98,23 @@ slow(
         res.headers.get('content-type')?.includes('text/html'),
         false,
       )
+    }
+  },
+)
+
+slow(
+  'retired graph-data doors are 404s for every method, never SPA routes',
+  alone,
+  async () => {
+    for (let path of ['/references', '/persona']) {
+      for (let method of ['GET', 'POST', 'HEAD']) {
+        let res = await fetch(`http://${U}${path}`, { method })
+        assertEquals(res.status, 404, `${method} ${path}`)
+        assertEquals(
+          res.headers.get('content-type')?.includes('text/html'),
+          false,
+        )
+      }
     }
   },
 )
@@ -166,6 +183,8 @@ let subscriber = async () => {
   let socket = new WebSocket(`ws://${U}/ws`)
   let sets = new Map<string, Set<string>>()
   let seen = new Map<string, Change[]>()
+  let projected = new Map<string, Record<string, Record<string, unknown>>>()
+  let frames = new Map<string, number>()
   let observations: NonNullable<Frame['observe']>[] = []
   let waiting = new Map<string, () => void>()
   socket.onmessage = (m) => {
@@ -175,6 +194,7 @@ let subscriber = async () => {
       return
     }
     if (!f || typeof f.sub != 'string') return
+    frames.set(f.sub, (frames.get(f.sub) ?? 0) + 1)
     let mine = f.replace ? new Set<string>() : sets.get(f.sub) ?? new Set()
     sets.set(f.sub, mine)
     seen.set(f.sub, [
@@ -186,6 +206,11 @@ let subscriber = async () => {
       else mine.add(c.eid)
     }
     for (let eid of f.drop ?? []) mine.delete(eid)
+    let values = f.replace ? {} : { ...(projected.get(f.sub) ?? {}) }
+    for (let [eid, value] of Object.entries(f.derived ?? {})) {
+      value == null ? delete values[eid] : values[eid] = value
+    }
+    projected.set(f.sub, values)
     waiting.get(f.sub)?.()
   }
   await new Promise((ok, no) => {
@@ -204,6 +229,8 @@ let subscriber = async () => {
     // What a frame CARRIED, not just which eids it named — the projection is
     // a claim about columns, so a test of it has to read them.
     carried: (sub: string) => seen.get(sub) ?? [],
+    derived: (sub: string) => projected.get(sub) ?? {},
+    frames: (sub: string) => frames.get(sub) ?? 0,
     // Every enqueued maintain frame is already on the wire ahead of this
     // subscribe's reply, so awaiting the reply awaits them all. The query must
     // PARSE (a bad one is caught server-side and never answered) and match
@@ -217,6 +244,78 @@ let subscriber = async () => {
     close: () => socket.close(),
   }
 }
+
+slow(
+  'persona derivation agrees across HTTP and WS and invalidates by dependency',
+  alone,
+  async () => {
+    let project = uid(), persona = uid(), tier = uid(), loose = uid()
+    await post([
+      { eid: project, name: 'doc', comp: { title: 'Project' } },
+      { eid: project, name: 'project', comp: {} },
+      { eid: persona, name: 'doc', comp: { title: 'Operator' } },
+      { eid: persona, name: 'persona', comp: { home: project } },
+      { eid: tier, name: 'doc', comp: { title: 'Rule', body: 'first body' } },
+      { eid: tier, name: 'memory', comp: { scope: project } },
+      { eid: loose, name: 'doc', comp: { title: 'Loose' } },
+      { eid: loose, name: 'memory', comp: { scope: project } },
+      {
+        eid: persona,
+        name: 'dependency',
+        comp: { type: 'contains', child: tier },
+      },
+    ])
+    let q = `id=${persona}&.derive=persona`
+    let http = async () => {
+      let wire = q.split('&').map(encodeURIComponent).join('&')
+      let res = await fetch(`http://${U}/query?${wire}`)
+      assertEquals(res.status, 200)
+      let [hit] = await res.json() as {
+        derived: { persona: { text: string; scoped: string[] } }
+      }[]
+      return hit.derived.persona
+    }
+    let client = await subscriber()
+    let sub = `persona:${persona}`
+    try {
+      let unknown = await fetch(
+        `http://${U}/query?id=${persona}&${
+          encodeURIComponent('.derive=unknown')
+        }`,
+      )
+      assertEquals(unknown.status, 400)
+      assertStringIncludes(await unknown.text(), 'registered projection')
+
+      await client.open(sub, q)
+      assertEquals(client.derived(sub)[persona].persona, await http())
+
+      let before = client.frames(sub)
+      await post([{
+        eid: uid(),
+        name: 'doc',
+        comp: { title: 'unrelated' },
+      }])
+      await client.settle()
+      assertEquals(client.frames(sub), before)
+
+      await post([{
+        eid: tier,
+        name: 'doc',
+        comp: { body: 'second body' },
+      }])
+      await client.settle()
+      let after = client.derived(sub)[persona].persona as {
+        text: string
+        scoped: string[]
+      }
+      assertStringIncludes(after.text, 'second body')
+      assertEquals(after, await http())
+      assertEquals(new Set(after.scoped), new Set([tier, loose]))
+    } finally {
+      client.close()
+    }
+  },
+)
 
 slow(
   'Session observations reach only partition watchers and write no graph',

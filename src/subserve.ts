@@ -11,6 +11,8 @@ import type { Change, Dep } from './types.ts'
 import { kindOrder } from './types.ts'
 import {
   aggOf,
+  type Derivation,
+  derivesOf,
   edgeRider,
   type EdgeSelector,
   type Field,
@@ -38,6 +40,12 @@ import {
   textMatches,
 } from './db.ts'
 import { evalAgg, evalSub, walker, workingSet } from './graph_query.ts'
+import {
+  derive,
+  deriveDirty,
+  type DerivedState,
+  derivedValues,
+} from './derive.ts'
 import { liveFrame } from './wire.ts'
 import {
   bodied,
@@ -93,6 +101,14 @@ type Sub = {
     line: string
     watch: Set<string> | null
     counts: Map<string, number>
+  }
+  // DERIVED projections are transient values beside ordinary membership. The
+  // registry owns their bounded read and invalidation; this standing state
+  // keeps dependency sets server-side so a tier edit can refresh one persona
+  // without enumerating members or graph rows.
+  derived?: {
+    names: Derivation[]
+    states: Map<string, Map<Derivation, DerivedState>>
   }
   // A WINDOWED sub (D-22567 §4): the members are a bounded PREFIX of the
   // query's matches — the newest `limit` by spine num — and the frame said so.
@@ -283,6 +299,40 @@ let selectedRiderDelta = (
   let again = touched.filter((e) => r.held.has(e) && !fresh.has(e))
   if (again.length) peers = [...peers, ...peerPayload(db, r.peers, again)]
   return { edges: add, unedges: cut, peers, unpeers }
+}
+
+let deriveDelta = (
+  db: DatabaseSync,
+  d: NonNullable<Sub['derived']>,
+  members: Set<string>,
+  batch: Change[],
+): Record<string, unknown> => {
+  let out: Record<string, unknown> = {}
+  for (let eid of [...d.states.keys()]) {
+    if (members.has(eid)) continue
+    d.states.delete(eid)
+    out[eid] = null
+  }
+  for (let eid of members) {
+    let old = d.states.get(eid)
+    let dirty = !old || d.names.some((name) => {
+      let state = old.get(name)
+      return !state || deriveDirty(db, name, state, batch)
+    })
+    if (!dirty) continue
+    let next = derive(db, d.names, [eid]).get(eid)!
+    d.states.set(eid, next)
+    let before = old && Object.fromEntries(
+      [...old].map(([name, state]) => [name, state.value]),
+    )
+    let after = Object.fromEntries(
+      [...next].map(([name, state]) => [name, state.value]),
+    )
+    if (!old || JSON.stringify(before) != JSON.stringify(after)) {
+      out[eid] = after
+    }
+  }
+  return out
 }
 
 // Did a delta actually MOVE anything? A rider that says nothing must not put a
@@ -517,6 +567,13 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
       // remains, which is how a route sub declares it wants its edges too.
       let rides = route == null ? preds : parseQuery(queryLine)
       let members = new Set(hits.map((r) => r.eid))
+      let derivations = derivesOf(rides)
+      let derived = derivations.length
+        ? {
+          names: derivations,
+          states: derive(db, derivations, members),
+        }
+        : undefined
       // The rider is opened with the member set, so its first frame carries
       // this query's edges and nothing else's — the scoped answer that replaces
       // the whole-graph dump a joining client used to be handed (T-22371).
@@ -526,7 +583,10 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         preds,
         members,
         shadow: !!f.shadow,
-        moving: gaps(preds).includes('moving-time'),
+        // Persona tier warmth decays against the clock, so a derived sub joins
+        // the existing aged() sweep even when its membership filter has no time
+        // phrase. Re-reading stays bounded to its addressed member closure.
+        moving: gaps(preds).includes('moving-time') || !!derived,
         bodies: bodied(f.sub),
         // Entry partitions and route entities are absent from both the root
         // snapshot and root live stream, so their shadow owns bodies and
@@ -546,6 +606,7 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
           }
           : {}),
         ...(ride ? { edges: ride.state } : {}),
+        ...(derived ? { derived } : {}),
       })
       let sub = map.get(f.sub)!
       let changes = hits.flatMap((r) => payload(sub, r.eid, r.comps))
@@ -566,6 +627,7 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
           // into the cache's column-level loaded/unloaded mark.
           ...(fields ? { fields } : {}),
           ...(ride ? ride.frame : {}),
+          ...(derived ? { derived: derivedValues(derived.states) } : {}),
         }),
       )
     } catch (e) {
@@ -722,7 +784,16 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
             touched,
           )
         let rode = ride && rider(ride)
-        if (changes.length || drop.length || moved || rode) {
+        let derived = sub.derived && deriveDelta(
+          db,
+          sub.derived,
+          sub.members,
+          batch,
+        )
+        if (
+          changes.length || drop.length || moved || rode ||
+          (derived && Object.keys(derived).length)
+        ) {
           send(JSON.stringify({
             sub: id,
             changes,
@@ -731,6 +802,7 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
             shadow: sub.shadow,
             window: win,
             ...(rode ? ride : {}),
+            ...(derived && Object.keys(derived).length ? { derived } : {}),
           }))
         }
         continue
@@ -779,7 +851,16 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
           touched,
         )
       let rode = ride && rider(ride)
-      if (changes.length || drop.length || rode) {
+      let derived = sub.derived && deriveDelta(
+        db,
+        sub.derived,
+        sub.members,
+        batch,
+      )
+      if (
+        changes.length || drop.length || rode ||
+        (derived && Object.keys(derived).length)
+      ) {
         send(JSON.stringify({
           sub: id,
           changes,
@@ -787,6 +868,7 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
           cursor: cur,
           shadow: sub.shadow,
           ...(rode ? ride : {}),
+          ...(derived && Object.keys(derived).length ? { derived } : {}),
         }))
       }
     }
@@ -829,13 +911,27 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         if (s == 'remove') drop.push(eid)
         else if (s == 'dead') changes.push({ eid, name: 'entity', comp: null })
       }
-      if (changes.length || drop.length) {
+      let derived = sub.derived && deriveDelta(
+        db,
+        sub.derived,
+        sub.members,
+        [...sub.members].map((eid) => ({
+          eid,
+          name: 'recall',
+          comp: {},
+        })),
+      )
+      if (
+        changes.length || drop.length ||
+        (derived && Object.keys(derived).length)
+      ) {
         send(JSON.stringify({
           sub: id,
           changes,
           drop,
           cursor: cur,
           shadow: sub.shadow,
+          ...(derived && Object.keys(derived).length ? { derived } : {}),
         }))
       }
     }

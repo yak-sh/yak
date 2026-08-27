@@ -18,6 +18,8 @@ import {
   commentsOn,
   config,
   deps,
+  derivedResult,
+  deriveSub,
   domains,
   dropQuery,
   edgeSub,
@@ -2559,6 +2561,40 @@ Deno.test('projected edge subs are refcounted and feed citation reads', () => {
     off()
     assertEquals(sent.at(-1), { unsub: sub })
     assertEquals(references(X), { out: [], in: [] })
+  } finally {
+    useRoute(restore)
+  }
+})
+
+Deno.test('derived subs are refcounted and stay outside the component cache', () => {
+  let X = 'dddd0000-0000-4000-8000-000000000021'
+  let sub = `derive:${X}:persona`
+  let sent: unknown[] = []
+  let restore = useRoute((frame) => sent.push(frame))
+  try {
+    let value = derivedResult(X, 'persona')
+    let off = deriveSub(X, 'persona')
+    let again = deriveSub(X, 'persona')
+    assertEquals(sent, [{
+      sub,
+      q: `id=${X}&.derive=persona`,
+      shadow: true,
+    }])
+    landSub({
+      sub,
+      changes: [],
+      replace: true,
+      shadow: true,
+      derived: {
+        [X]: { persona: { text: 'prompt\n', scoped: ['M1'] } },
+      },
+    })
+    assertEquals(value.value, { text: 'prompt\n', scoped: ['M1'] })
+    assertEquals(cache.peek()[X], undefined)
+    again()
+    assertEquals(sent.length, 1)
+    off()
+    assertEquals(sent.at(-1), { unsub: sub })
   } finally {
     useRoute(restore)
   }

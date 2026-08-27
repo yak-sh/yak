@@ -126,6 +126,10 @@ export type Pred = {
   // Empty for a bare `.edges!`. op is EDGES; edgeRider() reads the directive.
   peers?: Hop[]
   edge?: EdgeSelector
+  // A DERIVED result projection. The query still selects ordinary entities;
+  // each named projector contributes transient result data beside them. It is
+  // never a component and therefore cannot ride /apply or persistence.
+  derive?: Derivation
   // A bounded TRAVERSAL rather than a column read: `.reaches[requires,<=3]=T-42`
   // selects the entities that reach `value` through at most `depth` edges of one
   // type. op is REACHES. The cap is part of the grammar — an unbounded closure
@@ -237,8 +241,9 @@ for (let name of reverseAssocs.keys()) {
 // The reserved query WORDS — directives that are neither a column nor an
 // association: `.refs` (the multi-column reverse-union), the `.distinct` /
 // `.tally` aggregates, `.fields` (the projection), `.limit`/`.after` (the
-// window), `.edges` (the incident-edge rider) and `.reaches` (the bounded
-// traversal). Guarded here the way scopes and reverse assocs are, so a
+// window), `.edges` (the incident-edge rider), `.reaches` (the bounded
+// traversal), and `.derive` (registered result projections). Guarded here the
+// way scopes and reverse assocs are, so a
 // vocabulary that ever grows one of these as a real prop is a load error rather
 // than a silently dead directive.
 export let reserved = [
@@ -246,6 +251,7 @@ export let reserved = [
   'distinct',
   'tally',
   'fields',
+  'derive',
   'limit',
   'after',
   'edges',
@@ -390,6 +396,19 @@ export let orderOf = (preds: Pred[]) => preds.find((p) => p.op == ORDER)?.value
 // with aggOf() and computes it with tally() (or aggregateSql server-side).
 export let AGG = 'agg'
 
+// Derived projections are a registry-backed result layer over ordinary query
+// membership. The grammar owns the allowed names so malformed/unknown asks are
+// refused at every generic read boundary before a projector can run.
+export let DERIVE = 'derive'
+export let derivations = ['persona'] as const
+export type Derivation = (typeof derivations)[number]
+
+export let derivesOf = (preds: Pred[]): Derivation[] => [
+  ...new Set(
+    preds.filter((p) => p.op == DERIVE && p.derive).map((p) => p.derive!),
+  ),
+]
+
 // `count` names no column, so its `at` is the empty hop — a reader branches on
 // `op`, never on whether `at` is populated.
 export let aggOf = (
@@ -431,7 +450,9 @@ export let predComps = (preds: Pred[]): Set<string> | null => {
   let out = new Set<string>()
   for (let p of preds) {
     if (p.refs || p.at || p.rev) return null
-    if (p.op == NEVER || p.op == ORDER || p.op == PROJECT) continue
+    if (
+      p.op == NEVER || p.op == ORDER || p.op == PROJECT || p.op == DERIVE
+    ) continue
     if (p.op == WINDOW) continue
     // `.count!` aggregates the selection, naming no column of its own.
     if (p.op == AGG && !p.comp) continue
@@ -957,6 +978,26 @@ export let preds = (token: string): Pred[] | null => {
     })
     return [{ comp: '', prop: '', op: PROJECT, value: '', fields }]
   }
+  // `.derive=persona` asks a registered projector for transient data beside
+  // each selected row. Membership stays ordinary (`id=…`, filters, windows),
+  // and the value names registry code rather than an HTTP feature route.
+  if (path == 'derive' && !owned('derive')) {
+    if (
+      op != '=' || !value ||
+      !(derivations as readonly string[]).includes(value)
+    ) {
+      throw new Error(
+        `.derive names a registered projection (${derivations.join(', ')})`,
+      )
+    }
+    return [{
+      comp: '',
+      prop: '',
+      op: DERIVE,
+      value: '',
+      derive: value as Derivation,
+    }]
+  }
   // `.limit=200` / `.after=13882` — the WINDOW, a bound on the answer rather
   // than a filter on its members. `limit` is how many of the newest matches to
   // answer with; `after` continues that window below a spine num, so paging a
@@ -1384,7 +1425,10 @@ export let matchQuery = (
 ) =>
   preds.every((p) => {
     if (p.op == NEVER) return false // the empty query: selects nothing
-    if (p.op == ORDER || p.op == AGG || p.op == PROJECT || p.op == EDGES) {
+    if (
+      p.op == ORDER || p.op == AGG || p.op == PROJECT || p.op == EDGES ||
+      p.op == DERIVE
+    ) {
       return true
     }
     // A window bounds the ANSWER, never membership: every match still matches,
