@@ -842,13 +842,15 @@ fn ws_sub_parity() {
 // cascades (synthesized nulls, detached pointers, a session delete's
 // release→resume), and — rung 6 — the address canonicalization writes (an
 // `email.address` canonicalized in place, a `deliver.to` @-address folded into a
-// find-or-minted `email` entity) all take the `native` door; a transform-bearing
-// comp still PROXIES to copy-B's Deno (`setting`'s WHATWG url guard, `mail`'s
-// sender-actor from-derivation). Each case asserts the door the bridge took (its
-// `x-yak-apply` header) AND that the result is byte-identical to direct-to-Deno
-// on copy-A — so a native write that diverged from the port, OR a mis-routed
-// batch, surfaces here. The predicate is the kernel's `native_safe` (write.rs
-// `NATIVE_COMPS`), the single divergence-surface source.
+// find-or-minted `email` entity), and — rung 6b — the setting boundary (a url-
+// typed `setting.value` canonicalized through the WHATWG `url` crate, a bad value
+// or unknown key bounced identically) all take the `native` door. With `setting`
+// admitted EVERY wire comp now commits natively; only a comp ABSENT from the
+// allowlist (a new vocabulary word) still proxies. Each case asserts the door the
+// bridge took (its `x-yak-apply` header) AND that the result is byte-identical to
+// direct-to-Deno on copy-A — so a native write that diverged from the port, OR a
+// mis-routed batch, surfaces here. The predicate is the kernel's `native_safe`
+// (write.rs `NATIVE_COMPS`), the single divergence-surface source.
 //
 // Env (all four; the tests skip unless every one is set), same effects-OFF probe
 // setup the read harness documents above (TASKS_EFFECTS=daemon, no effectsd — so
@@ -1047,6 +1049,19 @@ fn new_conflicts(db_path: &str, base: i64) -> Vec<String> {
         .unwrap()
         .flatten()
         .collect()
+}
+
+// The eid of the `setting` row overriding a catalog key, or None. `setting.key`
+// is UNIQUE, so the snapshot may already hold an OLLAMA_BASE_URL override; the
+// setting write-parity case frees the key first (both copies share the eid).
+fn setting_eid(db_path: &str, key: &str) -> Option<String> {
+    ro_conn(db_path)
+        .query_row(
+            "select e.eid from setting s join entity e on e.id = s.entity where s.key = ?1",
+            [key],
+            |r| r.get::<_, String>(0),
+        )
+        .ok()
 }
 
 // The (via, batch, trace) rows a batch committed, canonicalized and joined — one
@@ -1550,25 +1565,65 @@ fn write_parity() {
     );
     g(&ts, &br, &format!("[{{\"eid\":\"{dv}\",\"name\":\"entity\",\"comp\":null}}]"));
 
-    // --- ROUTING: a TRANSFORM-BEARING comp still PROXIES -------------------------
-    // `setting` fires guardSettings, whose url-typed validation is WHATWG `new
-    // URL()` (default-port/dot-segment/IPv4/IPv6/IDNA host canonicalization) — a
-    // transform not ported here (a faithful port needs a full WHATWG URL parser),
-    // so the predicate must PROXY it, not commit it natively (which would skip
-    // validation). An unknown catalog key is refused by guardSettings identically
-    // on both copies, so the batch mutates nothing and proves the proxy door.
-    let e5 = uuid_v4();
-    assert_write(
-        "routing/setting-proxies",
-        &ts,
-        &br,
-        &ts_db,
-        &br_db,
-        &format!(
-            "[{{\"eid\":\"{e5}\",\"name\":\"setting\",\"comp\":{{\"key\":\"zqw{uid}_no_such_key\",\"value\":\"x\"}}}}]"
-        ),
-        "proxy",
-    );
+    // --- SETTING: guardSettings COMMITS NATIVELY with WHATWG url canon (rung 6b) -
+    // The LAST comp to leave the proxy default. A `setting` write names a known
+    // catalog key and a url-typed value is canonicalized through the `url` crate's
+    // WHATWG parser byte-identically to Deno's `new URL()` (default-port strip,
+    // trailing-slash drop, dot-segments, IPv4/IPv6/IDNA host); a bad value or an
+    // unknown key bounces the whole batch with the same 400 body. Each case
+    // asserts the NATIVE door AND byte-identity to the direct Deno write.
+    {
+        // Free the url-typed key on BOTH copies first: an OLLAMA_BASE_URL override
+        // may already sit in the snapshot (UNIQUE(key)), and both copies share its
+        // eid — deleting keeps them in lockstep so the fresh create can commit.
+        if let Some(prior) = setting_eid(&ts_db, "OLLAMA_BASE_URL") {
+            g(&ts, &br, &format!("[{{\"eid\":\"{prior}\",\"name\":\"entity\",\"comp\":null}}]"));
+        }
+        let st = uuid_v4();
+        // create: a non-canonical url (uppercase scheme+host, default :80, dot-
+        // segment, trailing slash) lands in its canonical form on both doors.
+        assert_write(
+            "setting/url-canon-native",
+            &ts, &br, &ts_db, &br_db,
+            &format!(
+                "[{{\"eid\":\"{st}\",\"name\":\"setting\",\"comp\":{{\"key\":\"OLLAMA_BASE_URL\",\"value\":\"HTTP://Ollama.YAK.sh:80/v1/../v1/\"}}}}]"
+            ),
+            "native",
+        );
+        // value-only patch: resolves the key from the existing row and re-canons.
+        assert_write(
+            "setting/url-canon-update-native",
+            &ts, &br, &ts_db, &br_db,
+            &format!(
+                "[{{\"eid\":\"{st}\",\"name\":\"setting\",\"comp\":{{\"value\":\"https://ollama.yak.sh/\"}}}}]"
+            ),
+            "native",
+        );
+        g(&ts, &br, &format!("[{{\"eid\":\"{st}\",\"name\":\"entity\",\"comp\":null}}]"));
+
+        // reject: an invalid url bounces the whole batch (the native door ran the
+        // guard), the 400 body byte-identical to Deno, nothing mutated.
+        let bad = uuid_v4();
+        assert_write(
+            "setting/reject-invalid-url-native",
+            &ts, &br, &ts_db, &br_db,
+            &format!(
+                "[{{\"eid\":\"{bad}\",\"name\":\"setting\",\"comp\":{{\"key\":\"OLLAMA_BASE_URL\",\"value\":\"ftp://nope/\"}}}}]"
+            ),
+            "native",
+        );
+        // reject: an unknown catalog key bounces identically — the guardSettings
+        // message, not a SQLite-layer error.
+        let unk = uuid_v4();
+        assert_write(
+            "setting/reject-unknown-key-native",
+            &ts, &br, &ts_db, &br_db,
+            &format!(
+                "[{{\"eid\":\"{unk}\",\"name\":\"setting\",\"comp\":{{\"key\":\"zqw{uid}_no_such_key\",\"value\":\"x\"}}}}]"
+            ),
+            "native",
+        );
+    }
 
     // --- ROUTING: a mail's `from` is DERIVED natively (rung 7b) -----------------
     // A created mail's server-owned `from` is stamped from senderActor(writer) —
@@ -1866,11 +1921,12 @@ fn write_parity() {
     eprintln!(
         "\nwrite parity OK (native-safe plain-graph, claim/entity-delete, address \
          canonicalization, the rung-7a entry-seq / replaceWakes / stop_request-gate \
-         batches, the rung-7b mail `from` sender-actor derivation, and the rung-7c \
+         batches, the rung-7b mail `from` sender-actor derivation, the rung-7c \
          session/spawn facet-mirroring cluster — create-by-session-col, create-by-\
          facet-col, one-side runtime update, canonical-wins conflict, facet delete, \
-         parent link/unlink, mint-missing twin — all commit through the bridge; only \
-         `setting` still proxies — every case lands identically to direct)"
+         parent link/unlink, mint-missing twin — and the rung-6b setting boundary \
+         (WHATWG url canon + guard rejections) all commit through the bridge; EVERY \
+         wire comp is now native — every case lands identically to direct)"
     );
 }
 

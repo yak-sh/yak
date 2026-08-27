@@ -30,7 +30,7 @@ exclude = ["*.ts"]
 # guarantee SQLite actually tests.
 [features]
 default = ["native", "remote", "bundled"]
-native = ["dep:rusqlite", "dep:chrono", "dep:sha2", "dep:uuid"]
+native = ["dep:rusqlite", "dep:chrono", "dep:sha2", "dep:uuid", "dep:url"]
 remote = ["dep:ureq"]
 bundled = ["rusqlite/bundled"]
 
@@ -41,3 +41,9 @@ serde_json = { version = "1", features = ["preserve_order"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"], optional = true }
 sha2 = { version = "0.10", optional = true }
 uuid = { version = "1", features = ["v4"], optional = true }
+# WHATWG URL (servo's rust-url) — guardSettings normalizes a url-typed setting
+# value through `new URL()` (default-port, dot-segment, IPv4/IPv6, IDNA host
+# canonicalization). Native-only (write.rs), never crosses into wasm. D-22804
+# rung 6b (T-22862), operator-decided (C-22864): a faithful port needs the full
+# WHATWG parser, not a hand-rolled subset that would silently diverge.
+url = { version = "2", optional = true }

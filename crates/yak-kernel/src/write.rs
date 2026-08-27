@@ -17,11 +17,12 @@
 // actor backfill (a cwd-bearing session with no actor gets the venture at its
 // cwd) are ported here as the apply() tail (rung 5). Every in-apply TS transform
 // is now ported — entry append/seq, replaceWakes, the stop_request gate, the
-// mail sender derivation, and the session-facet mirroring cluster (dual_spawn /
-// dual_facet / mirror_lineage) — so NATIVE_COMPS spans every wire comp but the
-// one deliberate hold-out (`setting`, rung 6b), and nothing refuses mid-write.
-// The bridge still PROXIES a batch touching a non-native comp; the allowlist,
-// not a refusal, is what keeps an unported semantic from diverging.
+// mail sender derivation, the session-facet mirroring cluster (dual_spawn /
+// dual_facet / mirror_lineage), and the setting boundary (guard_settings, the
+// WHATWG url canonicalization) — so NATIVE_COMPS now spans EVERY wire comp, and
+// nothing refuses mid-write. The bridge still PROXIES a batch touching a
+// non-native comp (a NEW vocabulary word absent from the allowlist); the
+// allowlist, not a refusal, is what keeps an unported semantic from diverging.
 
 use crate::change::{batch_json, Change};
 use crate::store::resolve;
@@ -427,11 +428,7 @@ const SERVER_OWNED: [&str; 8] = [
 // was ported here (`canon`, `canon_email`, `mint_addresses` below): an
 // `email.address` write is canonicalized to its deliverable spelling, and a
 // `deliver.to` bearing an @-address is folded into its find-or-minted address-
-// book `email` entity. `setting` is still absent by design: its guardSettings
-// validates a url-typed value through WHATWG `new URL()` (default-port + dot-
-// segment + IPv4/IPv6/IDNA host canonicalization), a transform a faithful port
-// needs a full WHATWG URL parser for (T-22862, rung 6b) — it still PROXIES, so
-// no half-ported transform ever commits natively.
+// book `email` entity.
 //
 // `entry`, `wake`, and `stop_request` joined at rung 7a, once the session/entry/
 // wake cluster's self-contained in-apply pieces were ported here: an `entry`
@@ -458,12 +455,21 @@ const SERVER_OWNED: [&str; 8] = [
 // conflict, and mint-missing. All four ride together because every one of them is
 // a door into the same mirror: a bare `worktree`/`runtime` write drives dualFacet
 // exactly as a `session` write does, so admitting session/spawn without them would
-// route half the cluster's writes to Deno. With them the divergence list is EMPTY:
-// every wire comp is native or proxies by this allowlist. `setting` is the lone
-// comp still absent by design (rung 6b, T-22862).
-pub const NATIVE_COMPS: [&str; 18] = [
+// route half the cluster's writes to Deno.
+//
+// `setting` joined at rung 6b — the LAST comp to leave the proxy default — once
+// db.ts's guardSettings was ported here (`guard_settings`/`validate_setting`/
+// `normalize_url`, the catalog table, the WHATWG url canonicalization via the
+// `url` crate). A `setting` write names a known, non-secret catalog key and its
+// url-typed value is normalized through `new URL()` byte-identically to Deno
+// (default-port strip, dot-segment collapse, IPv4/IPv6/IDNA host), a bad value
+// bouncing the whole batch with the same 400 body. With it admitted, EVERY wire
+// comp now commits natively or proxies by this allowlist — the native-write port
+// is complete, and the divergence list is empty (D-22804 rung 8's precondition).
+pub const NATIVE_COMPS: [&str; 19] = [
     "doc", "task", "board", "project", "comment", "dependency", "claim", "entity", "email",
     "deliver", "entry", "wake", "stop_request", "mail", "session", "spawn", "worktree", "runtime",
+    "setting",
 ];
 
 // Can this whole batch commit through the rust kernel, or must the bridge proxy
@@ -634,6 +640,172 @@ fn canon_email(changes: Vec<Change>) -> Vec<Change> {
             c
         })
         .collect()
+}
+
+// ---- the setting boundary (src/config.ts + db.ts guardSettings, rung 6b) ----
+//
+// A `setting` write must name a KNOWN catalog key, and a url-typed value is
+// normalized through WHATWG `new URL()` before it lands — the SAME transaction
+// as the write, so every door (CLI, MCP, web) is guarded and a bad value bounces
+// the whole batch (an Invalid → a 400 body) rather than storing garbage a
+// consumer reads back unvalidated. Byte-identical to Deno: the catalog table,
+// the canonical url form, and every rejection MESSAGE are mirrored from the TS.
+
+// The catalog (src/config.ts `catalog`): the whole vocabulary of settings, each
+// with the two facts the write boundary needs — is it url-typed (so its value is
+// normalized), and is it a secret (so it is REFUSED from the graph, its bytes
+// living behind credentials.ts). Hand-mirrored from config.ts because that
+// catalog has no generated manifest (T-22862); a new setting key is added in
+// both places until one is emitted. `is_url`/`sensitive`, nothing else, is all
+// guardSettings reads — the label/group/help/default are the UI's, not the wire's.
+struct SettingSpec {
+    is_url: bool,
+    sensitive: bool,
+}
+
+// The catalog key → spec, or None for an unknown key (config.ts `byKey.get`).
+fn setting_spec(key: &str) -> Option<SettingSpec> {
+    // (key, is_url, sensitive) — mirrors config.ts `catalog` order/values.
+    let table: [(&str, bool, bool); 5] = [
+        ("OLLAMA_BASE_URL", true, false),
+        ("OLLAMA_API_KEY", false, true),
+        ("OLLAMA_EMBED_MODEL", false, false),
+        ("DISPATCH_SLOTS", false, false),
+        ("DISPATCH_RECURSIVE", false, false),
+    ];
+    table
+        .iter()
+        .find(|(k, _, _)| *k == key)
+        .map(|(_, is_url, sensitive)| SettingSpec { is_url: *is_url, sensitive: *sensitive })
+}
+
+// Normalize and constrain a base URL through WHATWG `new URL()` (config.ts
+// `normalizeUrl`): http/https only, no embedded credentials, no query, no
+// fragment; the trailing slash(es) are dropped so a provider appends its own
+// path against a canonical origin. The `url` crate is the same WHATWG standard
+// V8's `new URL()` implements, so default-port stripping, dot-segment collapse,
+// and IPv4/IPv6/IDNA host canonicalization all match byte-for-byte (proven
+// against captured Deno ground truth in the tests below). Idempotent. Each
+// refusal message is byte-identical to the TS `Invalid`, since it becomes the
+// 400 body a client reads.
+fn normalize_url(raw: &str) -> Result<String> {
+    let text = raw.trim();
+    if text.is_empty() {
+        return Err(refuse("Enter a URL."));
+    }
+    let url = url::Url::parse(text)
+        .map_err(|_| refuse("Enter a valid URL, including https://."))?;
+    if url.scheme() != "http" && url.scheme() != "https" {
+        return Err(refuse("Use an http or https URL."));
+    }
+    // JS `url.username`/`url.password` are "" when absent; reject any non-empty.
+    if !url.username().is_empty() || url.password().is_some_and(|p| !p.is_empty()) {
+        return Err(refuse("Remove the username or password from the URL."));
+    }
+    // JS `url.search`/`url.hash` are "" for BOTH absent and empty (`?`/`#`), so a
+    // bare `?` or `#` is not a rejection — reject only a NON-empty component.
+    if url.query().is_some_and(|q| !q.is_empty()) {
+        return Err(refuse("Remove the query string from the URL."));
+    }
+    if url.fragment().is_some_and(|f| !f.is_empty()) {
+        return Err(refuse("Remove the # fragment from the URL."));
+    }
+    // `${url.origin}${path}` with trailing slashes stripped. Origin is rebuilt as
+    // scheme://host[:port] where `url.port()` is None for the scheme's default
+    // port — exactly JS `url.origin`, which drops the default port. `host_str`
+    // carries the IPv6 brackets and the canonicalized IPv4/IDNA host.
+    let scheme = url.scheme();
+    let host = url.host_str().unwrap_or("");
+    let origin = match url.port() {
+        Some(p) => format!("{scheme}://{host}:{p}"),
+        None => format!("{scheme}://{host}"),
+    };
+    let path = url.path().trim_end_matches('/');
+    Ok(format!("{origin}{path}"))
+}
+
+// Validate and normalize a candidate value for a catalog key (config.ts
+// `validate`): an unknown key or a secret key is refused; a url-typed value is
+// normalized, a text value is trimmed. Returns the canonical form to store.
+fn validate_setting(key: &str, value: &str) -> Result<String> {
+    match setting_spec(key) {
+        None => Err(refuse(format!("Unknown setting {}.", json_string(key)))),
+        Some(s) if s.sensitive => {
+            Err(refuse(format!("{key} is a secret and cannot be stored in the graph.")))
+        }
+        Some(s) if s.is_url => normalize_url(value),
+        Some(_) => Ok(value.trim().to_string()),
+    }
+}
+
+// The setting boundary (db.ts guardSettings): a `setting` write naming a key or
+// a value is validated + normalized IN PLACE, so storage and the echoed batch
+// are canonical. A value-only patch resolves its key from the existing row; a
+// key-only create still must be a known, non-secret catalog key. A bad write
+// throws (bounces the whole batch). Runs on normalized changes inside the txn,
+// the same point db.ts calls it (after replaceWakes, before the dual* mirrors).
+fn guard_settings(conn: &Connection, mut changes: Vec<Change>) -> Result<Vec<Change>> {
+    for c in changes.iter_mut() {
+        if c.name != "setting" {
+            continue;
+        }
+        let Some(comp) = c.comp.as_mut() else { continue };
+        let sets_key = comp.get("key").is_some_and(|v| !v.is_null());
+        let sets_value = comp.get("value").is_some_and(|v| !v.is_null());
+        if !sets_key && !sets_value {
+            continue;
+        }
+        let key = if sets_key {
+            js_string(comp.get("key").unwrap())
+        } else {
+            match setting_key_of(conn, &c.eid) {
+                Some(k) => k,
+                None => {
+                    return Err(refuse(format!(
+                        "setting {} names no catalog key",
+                        &c.eid[..8]
+                    )))
+                }
+            }
+        };
+        if sets_value {
+            // validate() checks the key is known + non-secret and normalizes.
+            let v = js_string(comp.get("value").unwrap());
+            let canon = validate_setting(&key, &v)?;
+            comp.insert("value".into(), Value::from(canon));
+        } else {
+            // A key-only create still must be a known, non-secret catalog key.
+            match setting_spec(&key) {
+                None => return Err(refuse(format!("unknown setting {}", json_string(&key)))),
+                Some(s) if s.sensitive => {
+                    return Err(refuse(format!(
+                        "{key} is a secret and cannot be stored in the graph"
+                    )))
+                }
+                Some(_) => {}
+            }
+        }
+    }
+    Ok(changes)
+}
+
+// The catalog key the existing `setting` row for this eid names (db.ts
+// guardSettings `keyOf`), or None — a value-only patch resolves its key here.
+fn setting_key_of(conn: &Connection, eid: &str) -> Option<String> {
+    conn.query_row(
+        "select key from setting where entity = (select id from entity where eid = ?1)",
+        [eid],
+        |r| r.get(0),
+    )
+    .optional()
+    .ok()
+    .flatten()
+}
+
+// JSON.stringify(key) for a string — the double-quoted, escaped spelling the TS
+// `Unknown setting …`/`unknown setting …` refusals show (config.ts/db.ts).
+fn json_string(s: &str) -> String {
+    Value::from(s).to_string()
 }
 
 // ---- the untargeted-wake self-replacement (db.ts replaceWakes, M-7323) ----
@@ -2124,8 +2296,13 @@ pub fn apply(
         // transaction (db.ts replaceWakes) — prepend their entity-deletes so the
         // spine/kill pass and the cascade below see them like any wire delete.
         changes = replace_wakes(conn, changes);
+        // The setting boundary (db.ts guardSettings): a `setting` write names a
+        // known catalog key and a url-typed value is normalized through WHATWG
+        // `new URL()` in place — a bad value bounces the whole batch. db.ts order:
+        // after replaceWakes, before the dual* mirrors.
+        changes = guard_settings(conn, changes)?;
         // The session-facet mirroring cluster (db.ts apply() order: after
-        // replaceWakes and the proxied guardSettings): mirror the launch spec
+        // replaceWakes and guardSettings): mirror the launch spec
         // between the `session` columns and the `spawn`/`worktree`/`runtime`
         // facets both ways under one lock, and link/unlink the lineage edge a
         // `session.parent` write implies. On normalized changes, so a facet
@@ -3168,5 +3345,105 @@ mod canon_tests {
         assert_eq!(id_local_num("AB12-3"), None); // digits in the prefix
         assert_eq!(id_local_num("-31"), None); // empty prefix
         assert_eq!(id_local_num("S-"), None); // empty num
+    }
+}
+
+// The setting-url canonicalization proven byte-identical to Deno's `new URL()`
+// (config.ts normalizeUrl). The (input, expected) corpus is CAPTURED from the
+// real TS impl (`deno run` over src/config.ts), the same ground-truth method
+// rung 6 used for canonEmail — default-port stripping, dot-segment resolution,
+// IPv4/IPv6 host forms, IDNA/unicode hosts, and every rejection message that
+// becomes a 400 body. If the `url` crate ever diverges from V8's WHATWG parser
+// on any of these shapes, this test goes red before `setting` can ship native.
+#[cfg(test)]
+mod setting_url_tests {
+    use super::*;
+
+    // normalize_url's result as the ground-truth generator prints it:
+    // "OK:<canonical>" or "ERR:<message>".
+    fn norm(input: &str) -> String {
+        match normalize_url(input) {
+            Ok(v) => format!("OK:{v}"),
+            Err(e) => format!("ERR:{e}"),
+        }
+    }
+
+    #[test]
+    fn normalize_url_matches_deno_new_url_byte_for_byte() {
+        // Captured from src/config.ts normalizeUrl via `deno run` (T-22862).
+        let cases: &[(&str, &str)] = &[
+            ("https://ollama.yak.sh/", "OK:https://ollama.yak.sh"),
+            ("http://example.com:80/", "OK:http://example.com"),
+            ("https://example.com:443/", "OK:https://example.com"),
+            ("http://example.com:443/", "OK:http://example.com:443"),
+            ("https://example.com:8080/v1", "OK:https://example.com:8080/v1"),
+            ("https://example.com:8080/v1/", "OK:https://example.com:8080/v1"),
+            ("HTTP://Example.COM/Path", "OK:http://example.com/Path"),
+            ("http://example.com", "OK:http://example.com"),
+            ("http://example.com/a/../b", "OK:http://example.com/b"),
+            ("http://example.com/a/./b/", "OK:http://example.com/a/b"),
+            ("http://example.com/../../x", "OK:http://example.com/x"),
+            ("http://example.com/foo//bar///", "OK:http://example.com/foo//bar"),
+            ("http://example.com/a/b/../../c/./d/", "OK:http://example.com/c/d"),
+            ("http://0x7f.1/", "OK:http://127.0.0.1"),
+            ("http://127.0.0.1:80/", "OK:http://127.0.0.1"),
+            ("http://0300.0.0.1/", "OK:http://192.0.0.1"),
+            ("http://0177.0.0.1/", "OK:http://127.0.0.1"),
+            ("http://016435757.0/", "ERR:Enter a valid URL, including https://."),
+            ("http://1.1/", "OK:http://1.0.0.1"),
+            ("http://[::1]/", "OK:http://[::1]"),
+            ("http://[0:0:0:0:0:0:0:1]/", "OK:http://[::1]"),
+            ("http://[::ffff:127.0.0.1]/", "OK:http://[::ffff:7f00:1]"),
+            ("http://[2001:db8::1]:8080/v1", "OK:http://[2001:db8::1]:8080/v1"),
+            ("http://[0:0:0:0:0:0:0:0]/", "OK:http://[::]"),
+            ("http://\u{fc}n\u{ef}code.example/", "OK:http://xn--ncode-cta3g.example"),
+            ("http://\u{4f8b}\u{3048}.jp/", "OK:http://xn--r8jz45g.jp"),
+            ("https://B\u{fc}cher.example/", "OK:https://xn--bcher-kva.example"),
+            ("http://xn--r8jz45g.jp/", "OK:http://xn--r8jz45g.jp"),
+            ("http://fa\u{df}.de/", "OK:http://xn--fa-hia.de"),
+            ("https://\u{2603}.net/", "OK:https://xn--n3h.net"),
+            ("http://B\u{fc}\u{308}cher.example/", "OK:http://xn--bcher-kva287a.example"),
+            ("http://example.com/a b", "OK:http://example.com/a%20b"),
+            ("http://example.com/%41", "OK:http://example.com/%41"),
+            ("http://EXAMPLE.COM./", "OK:http://example.com."),
+            ("http://example.com/?", "OK:http://example.com"),
+            ("http://example.com/#", "OK:http://example.com"),
+            ("", "ERR:Enter a URL."),
+            ("   ", "ERR:Enter a URL."),
+            ("not a url", "ERR:Enter a valid URL, including https://."),
+            ("example.com", "ERR:Enter a valid URL, including https://."),
+            ("ftp://example.com/", "ERR:Use an http or https URL."),
+            ("file:///etc/passwd", "ERR:Use an http or https URL."),
+            ("http://user:pass@example.com/", "ERR:Remove the username or password from the URL."),
+            ("http://user@example.com/", "ERR:Remove the username or password from the URL."),
+            ("http://:pass@example.com/", "ERR:Remove the username or password from the URL."),
+            ("http://example.com/?q=1", "ERR:Remove the query string from the URL."),
+            ("http://example.com/#frag", "ERR:Remove the # fragment from the URL."),
+            ("http:///foo", "OK:http://foo"),
+            ("https://", "ERR:Enter a valid URL, including https://."),
+            ("http://[::1", "ERR:Enter a valid URL, including https://."),
+        ];
+        for (input, want) in cases {
+            assert_eq!(&norm(input), want, "normalize_url({input:?})");
+        }
+    }
+
+    #[test]
+    fn validate_setting_dispatches_by_catalog_type_and_sensitivity() {
+        // url-typed key normalizes; text key trims; unknown + secret refuse with
+        // the byte-identical config.ts messages.
+        assert_eq!(
+            validate_setting("OLLAMA_BASE_URL", "https://x.example:443/").unwrap(),
+            "https://x.example"
+        );
+        assert_eq!(validate_setting("DISPATCH_SLOTS", "  3  ").unwrap(), "3");
+        assert_eq!(
+            validate_setting("OLLAMA_API_KEY", "sk-abc").unwrap_err().to_string(),
+            "OLLAMA_API_KEY is a secret and cannot be stored in the graph."
+        );
+        assert_eq!(
+            validate_setting("NOPE", "x").unwrap_err().to_string(),
+            "Unknown setting \"NOPE\"."
+        );
     }
 }

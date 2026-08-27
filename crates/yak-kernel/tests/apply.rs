@@ -179,6 +179,11 @@ const SCHEMA: &str = "
     entity integer primary key references entity(id),
     call   integer references entity(id)
   );
+  create table setting (
+    entity integer primary key references entity(id),
+    key   text not null unique,
+    value text
+  );
 ";
 
 fn store() -> WriteStore {
@@ -294,14 +299,14 @@ fn native_safe_routes_plain_graph_and_proxies_the_rest() {
     assert!(ok(vec![ch(A, "spawn", json!({"provider": "codex"}))]));
     assert!(ok(vec![ch(A, "worktree", json!({"cwd": "/tmp/x"}))]));
     assert!(ok(vec![ch(A, "runtime", json!({"pid": 5})) ]));
-    // the lone transform-bearing comp still absent by design → proxy: setting
-    // (its WHATWG url guard needs a full parser — rung 6b).
-    assert!(!ok(vec![ch(A, "setting", json!({"key": "k", "value": "v"}))]));
-    // a MIXED batch proxies WHOLE — apply() is atomic, no splitting: one native
-    // comp beside a transform-bearing one (a setting) still proxies.
-    assert!(!ok(vec![ch(A, "doc", json!({"title": "x"})), ch(A, "setting", json!({"key": "k", "value": "v"}))]));
-    // a native session beside the proxied setting proxies whole (over-proxy bias).
-    assert!(!ok(vec![ch(A, "session", json!({"id": "S-1"})), ch(A, "setting", json!({"key": "k", "value": "v"}))]));
+    // setting joined NATIVE_COMPS at rung 6b — the LAST comp to leave the proxy
+    // default — once guardSettings + the WHATWG url canonicalization were ported.
+    assert!(ok(vec![ch(A, "setting", json!({"key": "OLLAMA_BASE_URL", "value": "https://x/"}))]));
+    // With setting admitted the allowlist spans EVERY wire comp; only a NEW
+    // vocabulary word absent from the list still proxies.
+    assert!(!ok(vec![ch(A, "invented_comp", json!({"x": 1}))]));
+    // a MIXED batch with an unknown comp proxies WHOLE — apply() is atomic.
+    assert!(!ok(vec![ch(A, "doc", json!({"title": "x"})), ch(A, "invented_comp", json!({"x": 1}))]));
     // an empty batch proxies (Deno owns the trivial answer).
     assert!(!ok(vec![]));
 }
@@ -341,6 +346,87 @@ fn deliver_at_address_mints_email_and_rewrites_to() {
     run(&s, vec![ch(B, "deliver", json!({ "to": format!("new_corr@{d}") }))]);
     let emails: i64 = one(&s, "select count(*) from email");
     assert_eq!(emails, 1, "the canonical address is minted once");
+}
+
+// A helper: the refusal message a bounced batch carries (db.ts Invalid → 400).
+fn err_msg(s: &WriteStore, changes: Vec<Change>) -> String {
+    apply(s, changes, &ApplyOpts::default(), &default_gates())
+        .unwrap_err()
+        .to_string()
+}
+
+#[test]
+fn setting_write_normalizes_a_url_value_in_place() {
+    let s = store();
+    // A url-typed setting's value is canonicalized through WHATWG new URL()
+    // (guardSettings): default port stripped, trailing slash dropped — both in
+    // STORAGE and in the ECHOED batch (normalize-in-place).
+    let out = run(
+        &s,
+        vec![ch(A, "setting", json!({ "key": "OLLAMA_BASE_URL", "value": "HTTP://Example.COM:80/v1/" }))],
+    );
+    let stored: String = one(&s, "select value from setting");
+    assert_eq!(stored, "http://example.com/v1");
+    let echoed = out[0].comp.as_ref().unwrap().get("value").unwrap().as_str().unwrap();
+    assert_eq!(echoed, "http://example.com/v1", "the echoed batch is canonical too");
+    // A value-only patch resolves its key from the existing row and re-normalizes.
+    run(&s, vec![ch(A, "setting", json!({ "value": "https://ollama.yak.sh/" }))]);
+    let stored: String = one(&s, "select value from setting");
+    assert_eq!(stored, "https://ollama.yak.sh");
+}
+
+#[test]
+fn setting_write_trims_a_text_value() {
+    let s = store();
+    // A text-typed setting is trimmed, not url-normalized (config.ts validate).
+    run(&s, vec![ch(A, "setting", json!({ "key": "DISPATCH_SLOTS", "value": "  3  " }))]);
+    let stored: String = one(&s, "select value from setting");
+    assert_eq!(stored, "3");
+}
+
+#[test]
+fn setting_write_bounces_an_invalid_url_with_the_deno_message() {
+    let s = store();
+    // An invalid url-typed value bounces the WHOLE batch (atomic) with the
+    // byte-identical config.ts message — the 400 body a client reads.
+    let msg = err_msg(
+        &s,
+        vec![
+            ch(B, "doc", json!({ "title": "rides along" })),
+            ch(A, "setting", json!({ "key": "OLLAMA_BASE_URL", "value": "ftp://nope/" })),
+        ],
+    );
+    assert_eq!(msg, "Use an http or https URL.");
+    // The batch rolled back: neither the doc nor the setting landed.
+    let docs: i64 = one(&s, "select count(*) from doc");
+    let settings: i64 = one(&s, "select count(*) from setting");
+    assert_eq!((docs, settings), (0, 0), "an invalid setting rolls the batch back");
+}
+
+#[test]
+fn setting_write_refuses_secret_unknown_and_keyless() {
+    let s = store();
+    // A secret key can never enter the graph (validate) — note the trailing period.
+    assert_eq!(
+        err_msg(&s, vec![ch(A, "setting", json!({ "key": "OLLAMA_API_KEY", "value": "sk" }))]),
+        "OLLAMA_API_KEY is a secret and cannot be stored in the graph.",
+    );
+    // An unknown key with a value refuses through validate (capital U, period).
+    assert_eq!(
+        err_msg(&s, vec![ch(A, "setting", json!({ "key": "NOPE", "value": "x" }))]),
+        "Unknown setting \"NOPE\".",
+    );
+    // A key-only create must still be a known, non-secret catalog key — the
+    // guardSettings message (lowercase, no period).
+    assert_eq!(
+        err_msg(&s, vec![ch(A, "setting", json!({ "key": "NOPE" }))]),
+        "unknown setting \"NOPE\"",
+    );
+    // A value-only patch to an eid with no existing setting row names no key.
+    assert_eq!(
+        err_msg(&s, vec![ch(A, "setting", json!({ "value": "x" }))]),
+        format!("setting {} names no catalog key", &A[..8]),
+    );
 }
 
 // Seed an entity wearing an address-book `email` comp — the shape the sender-
