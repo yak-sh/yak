@@ -47,6 +47,7 @@ import {
   snapshot,
   sweepSelect,
   touch,
+  writerUrl,
 } from './db.ts'
 import { db } from './live_db.ts'
 import { catchup } from './catchup.ts'
@@ -376,8 +377,17 @@ let applyFrom = (
   sent: Change[],
   id?: string,
 ) => {
+  // App-plane-only: this reader can't commit, so the /ws write is forwarded to
+  // the bridge writer (T-22927). The forward is async (a network hop) and sends
+  // its own ack/reject on the socket, so fire it and return — the same shape as
+  // the local path, whose broadcast is likewise async (the feed watcher casts
+  // the bridge's committed rows to EVERY socket, this one included, so on
+  // success we only ack). This keeps the kept web UI writing on a demoted Deno.
+  if (appOnly) {
+    proxyApplyFrom(socket, writer, sent, id)
+    return
+  }
   try {
-    if (appOnly) refuseWrite()
     apply(db, sent, fed(), writer)
   } catch (e) {
     console.error('sync: bad batch dropped —', e)
@@ -390,6 +400,29 @@ let applyFrom = (
   }
   if (id) socket.send(JSON.stringify({ ack: id }))
   feed.settle()
+}
+
+// Forward a /ws write batch to the bridge /apply and relay the outcome to the
+// originating socket. Mirror of applyFrom's success/reject shape: the bridge
+// answers 200 with `{ok, changes}` (committed — the feed delivers those rows to
+// the sockets, so we just ack), or a 4xx/5xx whose body is the reason, which we
+// hand back beside this reader's own `correct()` of the sent rows.
+let proxyApplyFrom = async (
+  socket: WebSocket,
+  writer: string | null,
+  sent: Change[],
+  id?: string,
+) => {
+  let r = await postToWriter('/apply', writer, JSON.stringify(sent))
+  if (r.status >= 200 && r.status < 300) {
+    if (id) socket.send(JSON.stringify({ ack: id }))
+    // Nudge the feed to drain the bridge's just-committed rows promptly rather
+    // than waiting on the next watcher tick; the cast to every socket follows.
+    feed.settle()
+    return
+  }
+  console.error('sync: bridge rejected batch —', r.text)
+  socket.send(JSON.stringify({ error: r.text, changes: correct(db, sent), id }))
 }
 
 let workerN = 0
@@ -820,6 +853,65 @@ let writeDoor = (method: string, path: string): boolean =>
   (path == '/apply' || path == '/undo' || path == '/redact' ||
     path == '/page' || path == '/upload' || path == '/blob' ||
     path.startsWith('/backfill/'))
+
+// The strangler write-proxy (T-22927): in TASKS_PLANE=app this reader forwards a
+// write to the data-plane writer (the Rust bridge) and hands its answer back
+// untouched — the Deno→bridge mirror of the bridge's own proxy_apply (main.rs).
+// It is a NETWORK HOP, never a local write: the db handle stays read-only and
+// this process holds no writer baton, so the bridge remains the sole writer over
+// the shared WAL. `fetch` does not throw on a 4xx/5xx (unlike the bridge's ureq,
+// which needs http_status_as_error(false) to match), so a rejected batch's body
+// — the guard-stale reason, the claim bounce — relays like any other answer.
+let noWriter = () =>
+  'app-plane-only mode (TASKS_PLANE=app) has no data-plane writer to forward ' +
+  'to — set TASKS_WRITER_URL to the Rust bridge (never this reader itself)'
+// POST a body to one of the writer's doors, returning its raw reply as (status,
+// content-type, text) — the same three surfaces the bridge relays. x-via (the
+// honesty header apply resolves to an actor) and the content-type ride along.
+let postToWriter = async (
+  path: string,
+  via: string | null,
+  body: BodyInit,
+  contentType = 'application/json',
+): Promise<{ status: number; type: string; text: string }> => {
+  let base = writerUrl()
+  if (!base) return { status: 503, type: 'text/plain', text: noWriter() }
+  let url = base + path
+  let headers: Record<string, string> = { 'content-type': contentType }
+  if (via) headers['x-via'] = via
+  try {
+    let r = await fetch(url, { method: 'POST', headers, body })
+    return {
+      status: r.status,
+      type: r.headers.get('content-type') ?? 'application/json',
+      text: await r.text(),
+    }
+  } catch (e) {
+    let why = e instanceof Error ? e.message : String(e)
+    return {
+      status: 502,
+      type: 'text/plain',
+      text: `app-plane proxy to ${url} failed: ${why}`,
+    }
+  }
+}
+// The HTTP-door proxy: forward this request's raw body to the matching bridge
+// door and relay status + content-type + body verbatim. Only /apply has a bridge
+// door today; the other mutating doors have none yet (their follow-on), so the
+// caller keeps refusing them.
+let proxyWriteDoor = async (req: Request, path: string): Promise<Response> => {
+  let body = await req.arrayBuffer()
+  let r = await postToWriter(
+    path,
+    req.headers.get('x-via'),
+    body,
+    req.headers.get('content-type') ?? 'application/json',
+  )
+  return new Response(r.text, {
+    status: r.status,
+    headers: { 'content-type': r.type },
+  })
+}
 let ownership: Deno.FsFile
 try {
   ownership = await guard(port, graph, joining)
@@ -907,15 +999,18 @@ let handle = async (req: Request) => {
   // must hear whose graph is here without waiting out our migrations.
   if (path == '/graph') return Response.json(serving)
   await boot
-  // App-plane-only: the graph-mutating HTTP doors are closed here — this
-  // process is a reader beside the bridge writer (D-22804 §8). A clear 503 in
-  // front of an already-read-only handle; the data plane (writes) is the
-  // bridge's /apply. (/ws writes and MCP writes refuse at their own seams; the
-  // telemetry doors /error+/usage stay open — record() swallows on read-only.)
+  // App-plane-only: the graph-mutating HTTP doors don't write HERE — this
+  // process is a reader beside the bridge writer (D-22804 §8). /apply forwards
+  // to the bridge and relays its answer (T-22927), so the kept surfaces keep
+  // writing; the other mutating doors have no bridge route yet and still 503
+  // (their follow-on). (/ws writes proxy at applyFrom; MCP writes refuse at their
+  // own seam; the telemetry doors /error+/usage stay open — record() swallows on
+  // read-only.)
   if (appOnly && writeDoor(req.method, path)) {
+    if (path == '/apply') return proxyWriteDoor(req, path)
     return new Response(
-      'app-plane-only mode (TASKS_PLANE=app): writes go to the data-plane ' +
-        'writer (the Rust bridge /apply), not this Deno server',
+      'app-plane-only mode (TASKS_PLANE=app): this write door has no data-plane ' +
+        'route yet — writes go to the Rust bridge, not this Deno server',
       { status: 503 },
     )
   }

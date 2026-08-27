@@ -2587,6 +2587,17 @@ let healWal = (db: DatabaseSync, path: string): DatabaseSync => {
 // exact corruption this mode sidesteps by having Deno write NOTHING).
 export let appPlane = () => Deno.env.get('TASKS_PLANE') == 'app'
 
+// The data-plane writer's HTTP base URL (TASKS_WRITER_URL) — the Deno→bridge
+// direction of the strangler write-proxy (T-22927), the mirror of the bridge's
+// own --upstream/TASKS_UPSTREAM Deno target. In TASKS_PLANE=app the mutating
+// doors forward the write here (the Rust bridge, the sole writer) and relay its
+// answer, instead of refusing it (503). Absent, they still refuse rather than
+// guess a server — a wrong guess (this reader's own 5173) would proxy every
+// write straight back into the read-only process it came from. Read at the door,
+// not cached, so a probe can point a fresh reader at a fresh bridge per boot.
+export let writerUrl = () =>
+  Deno.env.get('TASKS_WRITER_URL')?.replace(/\/+$/, '') || undefined
+
 export let connect = (path = file, vector = false, readOnly = false) => {
   // A test must NEVER open the owner's live graph. Under `deno test` the main
   // module is always a *_test.ts file; reaching the live path there means a
