@@ -86,6 +86,12 @@ const SCHEMA: &str = "
     at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     \"by\" integer, via integer
   );
+  create table resume (
+    entity integer primary key references entity(id),
+    actor integer,
+    at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    rank real
+  );
 ";
 
 fn store() -> WriteStore {
@@ -177,15 +183,16 @@ fn native_safe_routes_plain_graph_and_proxies_the_rest() {
     assert!(ok(vec![ch(A, "project", json!({}))]));
     assert!(ok(vec![ch(A, "comment", json!({"target": B}))]));
     assert!(ok(vec![ch(A, "dependency", json!({"type": "requires", "child": B}))]));
+    // claim + entity delete joined NATIVE_COMPS at rung 5 (resume stack + actor
+    // backfill ported): a claim take/release and an entity delete commit native.
+    assert!(ok(vec![ch(A, "claim", json!({"session": B}))]));
+    assert!(ok(vec![ch(A, "entity", Value::Null)]));
     // a transform-bearing comp (setting/session/deliver/wake/entry) → proxy.
     assert!(!ok(vec![ch(A, "setting", json!({"key": "k", "value": "v"}))]));
     assert!(!ok(vec![ch(A, "session", json!({"id": "S-1"}))]));
-    // a claim (its release owes the unported resume stack) → proxy.
-    assert!(!ok(vec![ch(A, "claim", json!({"session": B}))]));
-    // an entity DELETE (cascade can reach claim→resume) → proxy.
-    assert!(!ok(vec![ch(A, "entity", Value::Null)]));
-    // a MIXED batch proxies whole — apply() is atomic, no splitting.
-    assert!(!ok(vec![ch(A, "doc", json!({"title": "x"})), ch(A, "claim", json!({"session": B}))]));
+    // a MIXED batch proxies WHOLE — apply() is atomic, no splitting: one native
+    // comp beside a transform-bearing one (a setting) still proxies.
+    assert!(!ok(vec![ch(A, "doc", json!({"title": "x"})), ch(A, "setting", json!({"key": "k", "value": "v"}))]));
     // an empty batch proxies (Deno owns the trivial answer).
     assert!(!ok(vec![]));
 }
@@ -369,6 +376,71 @@ fn delete_cascades_by_death_word() {
     // a tombstoned eid voids every later touch
     let out = run(&s, vec![ch(A, "doc", json!({"title": "ghost"}))]);
     assert!(out.iter().all(|c| c.name != "created"));
+}
+
+// Point a seeded session at an actor entity (and optionally a cwd), the way a
+// reified session carries them — the resume push reads the holder's actor here.
+fn session_actor(s: &WriteStore, session: &str, actor: &str) {
+    s.conn
+        .execute(
+            "update session set actor = (select id from entity where eid = ?1) \
+             where entity = (select id from entity where eid = ?2)",
+            [actor, session],
+        )
+        .unwrap();
+}
+
+#[test]
+fn release_pushes_resume_retake_and_settle_pop() {
+    let s = store();
+    run(&s, vec![ch(D, "project", json!({}))]); // D is the holder's actor
+    seed_session(&s, C, "sess");
+    session_actor(&s, C, D);
+    run(&s, vec![ch(A, "task", json!({}))]);
+    // claim (open → wip); no resume row is owed yet
+    run(&s, vec![ch(A, "claim", json!({"session": C}))]);
+    assert_eq!(one::<i64>(&s, "select count(*) from resume"), 0);
+    // RELEASE while unsettled → a resume row is pushed for D at rank 1, and the
+    // echo carries the resume comp with actor=eid, rank=integer.
+    let out = run(&s, vec![ch(A, "claim", Value::Null)]);
+    assert_eq!(one::<i64>(&s, "select count(*) from resume"), 1);
+    assert_eq!(one::<f64>(&s, "select rank from resume"), 1.0);
+    let pushed = out.iter().find(|c| c.name == "resume" && c.eid == A).unwrap();
+    let comp = pushed.comp.as_ref().unwrap();
+    assert_eq!(comp.get("actor"), Some(&json!(D)));
+    assert_eq!(comp.get("rank"), Some(&json!(1)));
+    // the stored actor is the int id, projected back on read
+    let stored: String =
+        one(&s, "select e.eid from resume r join entity e on e.id = r.actor");
+    assert_eq!(stored, D);
+    // RE-TAKE pops it (a claim change whose task still holds a final claim)
+    run(&s, vec![ch(A, "claim", json!({"session": C}))]);
+    assert_eq!(one::<i64>(&s, "select count(*) from resume"), 0);
+    // release again → rank is max(current rows)+1, and the pop emptied the table,
+    // so it resets to 1 rather than climbing (db.ts reads max off the live table)
+    run(&s, vec![ch(A, "claim", Value::Null)]);
+    assert_eq!(one::<f64>(&s, "select rank from resume"), 1.0);
+    // SETTLING the task pops it (a task change to a settled status)
+    let out = run(&s, vec![ch(A, "task", json!({"status": "done"}))]);
+    assert_eq!(one::<i64>(&s, "select count(*) from resume"), 0);
+    assert!(out.iter().any(|c| c.name == "resume" && c.eid == A && c.comp.is_none()));
+}
+
+#[test]
+fn deleting_a_session_releases_its_claim_and_pushes_resume() {
+    let s = store();
+    run(&s, vec![ch(D, "project", json!({}))]); // the holder's actor
+    seed_session(&s, C, "sess");
+    session_actor(&s, C, D);
+    run(&s, vec![ch(A, "task", json!({}))]);
+    run(&s, vec![ch(A, "claim", json!({"session": C}))]);
+    // deleting the SESSION releases its claim (claim.session death=release), and
+    // the now-claimless unsettled task pushes onto the resume stack for D.
+    let out = run(&s, vec![ch(C, "entity", Value::Null)]);
+    assert_eq!(one::<i64>(&s, "select count(*) from claim"), 0);
+    assert_eq!(one::<i64>(&s, "select count(*) from resume"), 1);
+    let pushed = out.iter().find(|c| c.name == "resume" && c.eid == A).unwrap();
+    assert_eq!(pushed.comp.as_ref().unwrap().get("actor"), Some(&json!(D)));
 }
 
 #[test]

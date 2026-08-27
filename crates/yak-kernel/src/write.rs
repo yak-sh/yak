@@ -12,11 +12,13 @@
 //
 // Domain rules ride the GATE REGISTRY (D-22530): in-transaction validators a
 // plugin registers against its comps. The claim lease (bounce + worked edge +
-// wip drag + conflict audit) and alias uniqueness ship as the first gates.
-// Domains whose TS transforms are NOT ported yet — entries (append/seq),
-// spawn requests, wakes, stop_request, mail sender derivation, the resume
-// stack, session facet aliases and actor backfill — REFUSE loudly or are
-// documented gaps rather than half-applying: an unported semantic must never
+// wip drag + conflict audit) and alias uniqueness ship as the first gates. The
+// resume stack (a release pushes the freed task, a re-take/settle pops it) and
+// actor backfill (a cwd-bearing session with no actor gets the venture at its
+// cwd) are ported here as the apply() tail (rung 5). Domains whose TS transforms
+// are still NOT ported — entries (append/seq), spawn requests, wakes,
+// stop_request, mail sender derivation, session facet aliases — REFUSE loudly or
+// are documented gaps rather than half-applying: an unported semantic must never
 // silently diverge between the two writers.
 
 use crate::change::{batch_json, Change};
@@ -411,13 +413,12 @@ const UNPORTED: [&str; 5] = ["entry", "stop_request", "wake", "spawn", "session"
 // LEAVES the proxy default (joins this list) only when its transform is ported
 // and its three-surface parity case is green — the later rungs' work.
 //
-// `entity` is deliberately ABSENT: an entity DELETE cascades, and a cascade that
-// releases a claim owes db.ts's unported resume-stack push (rung 5), so every
-// deletion proxies. `claim` is absent for the same reason (a release is the
-// interruption event the resume stack records). Both fall through to proxy with
-// no special case — they simply are not on the list.
-pub const NATIVE_COMPS: [&str; 6] =
-    ["doc", "task", "board", "project", "comment", "dependency"];
+// `claim` and `entity` joined the list at rung 5, once db.ts's resume-stack
+// rebuild and actor backfill were ported here (the resume push a release owes,
+// and the cascade→release→resume consequence of an entity delete). A claim
+// take/release and an entity delete now commit natively, byte-identical to Deno.
+pub const NATIVE_COMPS: [&str; 8] =
+    ["doc", "task", "board", "project", "comment", "dependency", "claim", "entity"];
 
 // Can this whole batch commit through the rust kernel, or must the bridge proxy
 // it to the Deno /apply? Whole-batch — apply() is atomic, so a batch that mixes
@@ -976,6 +977,162 @@ fn exec_change(
     st.execute(refs.as_slice())
 }
 
+// ---- the resume stack + actor backfill (db.ts apply() tail) ----
+
+// A settled task is off every stack (types.ts settled): done or cancelled.
+fn settled(status: &str) -> bool {
+    status == "done" || status == "cancelled"
+}
+
+// A claim as it stood BEFORE this batch — captured at the top of the
+// transaction so a release (the claim row gone by commit) still knows who held
+// it, from where, and in what nested order (db.ts priorClaims, src/db.ts:4183).
+#[derive(Clone)]
+struct PriorClaim {
+    eid: String,        // the CLAIMED entity (a task), keyed on resume.entity
+    claimed_at: String, // the lease's stamp — the outer sort key
+    claim_order: i64,   // the claim row's rowid — the tiebreak within one stamp
+    actor: Option<String>, // the holder session's actor eid, or None
+    cwd: Option<String>,   // the holder session's cwd, for the ventureAt fallback
+}
+
+fn prior_claims(conn: &Connection) -> Vec<PriorClaim> {
+    if !has_table(conn, "claim") {
+        return vec![];
+    }
+    let mut st = match conn.prepare(
+        "select co.eid, c.claimed_at, c.rowid, act.eid, s.cwd \
+         from claim c \
+         join entity co on co.id = c.entity \
+         left join session s on s.entity = c.session \
+         left join entity act on act.id = s.actor",
+    ) {
+        Ok(st) => st,
+        Err(_) => return vec![],
+    };
+    let rows = st.query_map([], |r| {
+        Ok(PriorClaim {
+            eid: r.get(0)?,
+            claimed_at: r.get(1)?,
+            claim_order: r.get(2)?,
+            actor: r.get(3)?,
+            cwd: r.get(4)?,
+        })
+    });
+    match rows {
+        Ok(rows) => rows.flatten().collect(),
+        Err(_) => vec![],
+    }
+}
+
+fn task_status(conn: &Connection, eid: &str) -> Option<String> {
+    conn.query_row(
+        "select status from task where entity = (select id from entity where eid = ?1)",
+        [eid],
+        |r| r.get(0),
+    )
+    .optional()
+    .ok()
+    .flatten()
+}
+
+// Path helpers mirroring node's, enough for ventureAt (client.ts ancestorAt +
+// db.ts worktreeGitdir). Fleet cwds are absolute, so `resolve` is normalize.
+fn clean_path(p: &str) -> String {
+    let t = p.trim_end_matches('/');
+    if t.is_empty() {
+        "/".into()
+    } else {
+        t.into()
+    }
+}
+
+fn dirname(p: &str) -> String {
+    let c = clean_path(p);
+    match c.rfind('/') {
+        Some(0) => "/".into(),
+        Some(i) => c[..i].into(),
+        None => c,
+    }
+}
+
+// path.resolve(base, rel): an absolute rel wins outright, else it joins onto
+// base (fleet .git files carry an absolute gitdir, so the first arm is the one
+// taken).
+fn resolve_path(base: &str, rel: &str) -> String {
+    if rel.starts_with('/') {
+        clean_path(rel)
+    } else {
+        clean_path(&format!("{}/{}", clean_path(base), rel))
+    }
+}
+
+// The deepest repo-root prefix of a path (client.ts ancestorAt).
+fn ancestor_at(roots: &[String], path: &str) -> Option<String> {
+    let mut best: Option<String> = None;
+    for root in roots {
+        let root = clean_path(root);
+        if (path == root || path.starts_with(&format!("{root}/")))
+            && root.len() > best.as_deref().map(str::len).unwrap_or(0)
+        {
+            best = Some(root);
+        }
+    }
+    best
+}
+
+// db.ts worktreeGitdir: walk up from cwd for a `.git` FILE naming a linked
+// worktree's gitdir. A `.git` DIRECTORY (the main checkout) has no `gitdir:`
+// line, so the walk continues past it, exactly as the TS `read().match` does.
+fn worktree_gitdir(cwd: &str) -> Option<String> {
+    let mut at = clean_path(cwd);
+    loop {
+        let content = std::fs::read_to_string(format!("{at}/.git")).unwrap_or_default();
+        let gitdir = content
+            .lines()
+            .find_map(|l| l.trim_start().strip_prefix("gitdir:").map(|s| s.trim()));
+        if let Some(g) = gitdir {
+            return Some(resolve_path(&at, g));
+        }
+        let parent = dirname(&at);
+        if parent == at {
+            return None;
+        }
+        at = parent;
+    }
+}
+
+// db.ts ventureAt: the repo a cwd stands in — the repo whose path prefixes it,
+// else the repo whose gitdir owns the linked worktree. Returns the repo's eid.
+// The one filesystem read in the write path, and it fires only for the venture
+// fallback of a session with a cwd but no actor.
+fn venture_at(conn: &Connection, cwd: Option<&str>) -> Option<String> {
+    let cwd = cwd.filter(|c| !c.is_empty())?;
+    if !has_table(conn, "repo") {
+        return None;
+    }
+    let mut st = conn
+        .prepare("select o.eid, r.path from repo r join entity o on o.id = r.entity")
+        .ok()?;
+    let repos: Vec<(String, String)> = st
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+        .ok()?
+        .flatten()
+        .collect();
+    let paths: Vec<String> = repos.iter().map(|(_, p)| p.clone()).collect();
+    if let Some(at) = ancestor_at(&paths, cwd) {
+        return repos.iter().find(|(_, p)| clean_path(p) == at).map(|(e, _)| e.clone());
+    }
+    let gitdir = worktree_gitdir(cwd)?;
+    let roots: Vec<String> =
+        repos.iter().map(|(_, p)| resolve_path(p, ".git/worktrees")).collect();
+    let common = ancestor_at(&roots, &gitdir)?;
+    repos
+        .iter()
+        .find(|(_, p)| resolve_path(p, ".git/worktrees") == common)
+        .map(|(e, _)| e.clone())
+}
+
 pub fn apply(
     store: &WriteStore,
     changes: Vec<Change>,
@@ -1013,6 +1170,10 @@ pub fn apply(
 
     conn.execute_batch("begin immediate").map_err(ApplyError::Db)?;
     let out: Result<Vec<Change>> = (|| {
+        // Snapshot the claims as they stand BEFORE this batch mutates them, so a
+        // release (its claim row gone by commit) still knows who held it — the
+        // resume-stack rebuild below reads this against the FINAL claims.
+        let prior = prior_claims(conn);
         // Mint spines in first-touch order before writing components.
         let mut killed: HashSet<String> = HashSet::new();
         for c in &changes {
@@ -1464,6 +1625,123 @@ pub fn apply(
         let alive = |eid: &str| -> bool {
             to_id(conn, eid).is_some() && !is_dead(conn, eid)
         };
+        // ---- the resume stack (db.ts:4877-4936) ----
+        // Taking a task again pops it; settling one removes it; releasing an
+        // unsettled task pushes it for the holder's actor. Guarded on the table
+        // existing so a plugin-less file simply skips it.
+        if has_table(conn, "resume") {
+            let final_claims: HashSet<String> = {
+                let mut st = conn
+                    .prepare("select co.eid from claim c join entity co on co.id = c.entity")?;
+                let set = st
+                    .query_map([], |r| r.get::<_, String>(0))?
+                    .flatten()
+                    .collect();
+                set
+            };
+            // Every claim/task the batch named: taken-again pops, settled pops;
+            // a released-and-unsettled one is left for the push below.
+            let mut clear: Vec<String> = vec![];
+            for c in &changes {
+                if (c.name == "claim" || c.name == "task") && !clear.contains(&c.eid) {
+                    clear.push(c.eid.clone());
+                }
+            }
+            for eid in &clear {
+                let task = task_status(conn, eid);
+                let released_unsettled = !final_claims.contains(eid)
+                    && task.as_deref().map(|s| !settled(s)).unwrap_or(false);
+                if released_unsettled {
+                    continue;
+                }
+                let n = conn.execute(
+                    "delete from resume where entity = \
+                     (select id from entity where eid = ?1)",
+                    [eid],
+                )?;
+                if n > 0 {
+                    took(&mut removed_log, eid, "resume");
+                    extra.push(Change::new(eid, "resume", None));
+                }
+            }
+            // The released set: prior claims whose task lost its claim and is
+            // unsettled, keyed by claimed_at then the claim's nested order.
+            let mut released: Vec<PriorClaim> = prior
+                .iter()
+                .filter(|c| !final_claims.contains(&c.eid))
+                .filter(|c| task_status(conn, &c.eid).map(|s| !settled(&s)).unwrap_or(false))
+                .map(|c| {
+                    let actor =
+                        c.actor.clone().or_else(|| venture_at(conn, c.cwd.as_deref()));
+                    PriorClaim { actor, ..c.clone() }
+                })
+                .filter(|c| c.actor.is_some())
+                .collect();
+            released.sort_by(|a, b| {
+                a.claimed_at.cmp(&b.claimed_at).then(a.claim_order.cmp(&b.claim_order))
+            });
+            let mut top: i64 = conn
+                .query_row("select coalesce(max(rank), 0) from resume", [], |r| {
+                    r.get::<_, f64>(0)
+                })
+                .map(|f| f as i64)
+                .unwrap_or(0);
+            for item in released {
+                top += 1;
+                let actor = item.actor.unwrap();
+                let actor_id = to_id(conn, &actor);
+                exec_change(
+                    conn,
+                    "insert into resume (entity, actor, at, rank) values \
+                     ((select id from entity where eid = ?1), ?2, ?3, ?4) \
+                     on conflict(entity) do update set actor = excluded.actor, \
+                     at = excluded.at, rank = excluded.rank",
+                    &[
+                        Value::from(item.eid.as_str()),
+                        actor_id.map(Value::from).unwrap_or(Value::Null),
+                        Value::from(now.as_str()),
+                        Value::from(top),
+                    ],
+                )?;
+                let mut m = Map::new();
+                m.insert("actor".into(), Value::from(actor));
+                m.insert("at".into(), Value::from(now.as_str()));
+                m.insert("rank".into(), Value::from(top));
+                extra.push(Change::new(&item.eid, "resume", Some(m)));
+            }
+        }
+        // ---- actor backfill (db.ts:4946-4967) ----
+        // A session that RAN somewhere but named no actor gets one from where it
+        // stands — the writing identity is never blank. Only a session with a
+        // cwd (a real run), and only to FILL a gap; a named actor is kept.
+        if has_table(conn, "session") {
+            for eid in &touched {
+                let row: Option<(Option<String>, Option<String>)> = conn
+                    .query_row(
+                        "select s.cwd, (select eid from entity where id = s.actor) \
+                         from session s join entity o on o.id = s.entity \
+                         where o.eid = ?1",
+                        [eid],
+                        |r| Ok((r.get(0)?, r.get(1)?)),
+                    )
+                    .optional()?;
+                let Some((cwd, actor)) = row else { continue };
+                if actor.is_some() || cwd.is_none() {
+                    continue;
+                }
+                if let Some(a) = venture_at(conn, cwd.as_deref()) {
+                    let aid = to_id(conn, &a);
+                    conn.execute(
+                        "update session set actor = ?1 where entity = \
+                         (select id from entity where eid = ?2)",
+                        rusqlite::params![aid, eid],
+                    )?;
+                    let mut m = Map::new();
+                    m.insert("actor".into(), Value::from(a));
+                    extra.push(Change::new(eid, "session", Some(m)));
+                }
+            }
+        }
         for eid in &minted {
             if !alive(eid) {
                 continue;

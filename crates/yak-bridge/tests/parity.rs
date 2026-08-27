@@ -836,14 +836,16 @@ fn ws_sub_parity() {
 //   (c) the resulting DB state: every touched entity read back off the read wire
 //       (refs already projected to ids, server-owned reads included)
 //
-// A native-safe batch now COMMITS through the bridge's own WriteStore on copy-B
-// (D-22804 rung 4): the create/update and the doc/task/comment rejections take
-// the `native` door, while a claim, an entity delete, or a transform-bearing
-// comp (a setting) still PROXIES to copy-B's Deno. Each case asserts the door
-// the bridge took (its `x-yak-apply` header) AND that the result is byte-
-// identical to direct-to-Deno on copy-A — so a native write that diverged from
-// the port, OR a mis-routed batch, surfaces here. The predicate is the kernel's
-// `native_safe` (write.rs `NATIVE_COMPS`), the single divergence-surface source.
+// A native-safe batch COMMITS through the bridge's own WriteStore on copy-B
+// (D-22804 rungs 4-5): the create/update and the doc/task/comment rejections,
+// the claim take/bounce/RELEASE (with its resume-stack push), and the entity
+// DELETE cascades (synthesized nulls, detached pointers, a session delete's
+// release→resume) all take the `native` door; a transform-bearing comp (a
+// setting) still PROXIES to copy-B's Deno. Each case asserts the door the bridge
+// took (its `x-yak-apply` header) AND that the result is byte-identical to
+// direct-to-Deno on copy-A — so a native write that diverged from the port, OR a
+// mis-routed batch, surfaces here. The predicate is the kernel's `native_safe`
+// (write.rs `NATIVE_COMPS`), the single divergence-surface source.
 //
 // Env (all four; the tests skip unless every one is set), same effects-OFF probe
 // setup the read harness documents above (TASKS_EFFECTS=daemon, no effectsd — so
@@ -1348,10 +1350,20 @@ fn write_parity() {
                   {{\"eid\":\"{tclaim}\",\"name\":\"task\",\"comp\":{{\"status\":\"open\"}}}}]"
             ),
         );
-        // first session claims it (lands wip + worked edge)
-        g(&ts, &br, &format!("[{{\"eid\":\"{tclaim}\",\"name\":\"claim\",\"comp\":{{\"session\":\"{sa}\"}}}}]"));
+        // first session claims it (lands wip + worked edge) — NATIVE at rung 5.
+        assert_write(
+            "claim/take",
+            &ts,
+            &br,
+            &ts_db,
+            &br_db,
+            &format!("[{{\"eid\":\"{tclaim}\",\"name\":\"claim\",\"comp\":{{\"session\":\"{sa}\"}}}}]"),
+            "native",
+        );
         // second session's claim BOUNCES — refused batch, but a conflict entity is
         // committed AFTER the rollback (its own journal row, its own minted eid).
+        // The claim path is NATIVE now, and the kernel mints the conflict off the
+        // rolled-back batch exactly as Deno does.
         assert_write(
             "reject/claim-bounce",
             &ts,
@@ -1359,9 +1371,21 @@ fn write_parity() {
             &ts_db,
             &br_db,
             &format!("[{{\"eid\":\"{tclaim}\",\"name\":\"claim\",\"comp\":{{\"session\":\"{sb}\"}}}}]"),
-            "proxy",
+            "native",
         );
-        // release + delete the probe task (keeps both copies in lockstep).
+        // RELEASE the held claim while the task is unsettled → a resume row is
+        // pushed for the holder session's actor (the rung-5 resume-stack rebuild),
+        // NATIVE, byte-identical to Deno across the echo, journal and resume row.
+        assert_write(
+            "claim/release-resume",
+            &ts,
+            &br,
+            &ts_db,
+            &br_db,
+            &format!("[{{\"eid\":\"{tclaim}\",\"name\":\"claim\",\"comp\":null}}]"),
+            "native",
+        );
+        // delete the probe task (keeps both copies in lockstep) — NATIVE cascade.
         g(&ts, &br, &format!("[{{\"eid\":\"{tclaim}\",\"name\":\"entity\",\"comp\":null}}]"));
     } else {
         eprintln!("write-parity [reject/claim-bounce]: skipped (need 2 sessions in the snapshot)");
@@ -1401,7 +1425,7 @@ fn write_parity() {
         &ts_db,
         &br_db,
         &format!("[{{\"eid\":\"{t}\",\"name\":\"entity\",\"comp\":null}}]"),
-        "proxy",
+        "native",
     );
     // a surviving task pointing at the project, then delete the project → its
     // `project` pointer is DETACHED (a null-column echo), the project tombstoned.
@@ -1421,7 +1445,7 @@ fn write_parity() {
         &ts_db,
         &br_db,
         &format!("[{{\"eid\":\"{p}\",\"name\":\"entity\",\"comp\":null}}]"),
-        "proxy",
+        "native",
     );
     // --- ROUTING: a TRANSFORM-BEARING comp proxies -------------------------------
     // A `setting` write fires guardSettings in db.ts apply() — a transform the
@@ -1442,14 +1466,57 @@ fn write_parity() {
         "proxy",
     );
 
+    // --- DELETE CASCADE → RELEASE → RESUME (native) --------------------------
+    // Deleting a SESSION that holds a claim on an unsettled task releases the
+    // claim (claim.session death=release) AND pushes the freed task onto the
+    // resume stack for the holder's actor — the rung-5 resume consequence of an
+    // entity delete, byte-identical to Deno across the cascade echo and the
+    // resume row. The session is created through the Deno door (session is still
+    // UNPORTED → proxied setup); only the DELETE is the native assertion.
+    if let Some(actor) = an_eid(&ts, "project") {
+        let ssess = uuid_v4();
+        let tsk = uuid_v4();
+        // a session standing for `actor`, a cwd outside any repo (so the
+        // ventureAt backfill never fires — the explicit actor is kept anyway).
+        g(
+            &ts,
+            &br,
+            &format!(
+                "[{{\"eid\":\"{ssess}\",\"name\":\"session\",\"comp\":{{\"id\":\"zqw{uid}-sess\",\"actor\":\"{actor}\",\"cwd\":\"/tmp/zqw{uid}\"}}}}]"
+            ),
+        );
+        g(
+            &ts,
+            &br,
+            &format!(
+                "[{{\"eid\":\"{tsk}\",\"name\":\"doc\",\"comp\":{{\"title\":\"zqw{uid} rtask\"}}}},\
+                  {{\"eid\":\"{tsk}\",\"name\":\"task\",\"comp\":{{\"status\":\"open\"}}}}]"
+            ),
+        );
+        // the session claims the task (native take, wip + worked edge)
+        g(&ts, &br, &format!("[{{\"eid\":\"{tsk}\",\"name\":\"claim\",\"comp\":{{\"session\":\"{ssess}\"}}}}]"));
+        assert_write(
+            "cascade/delete-session-resume",
+            &ts,
+            &br,
+            &ts_db,
+            &br_db,
+            &format!("[{{\"eid\":\"{ssess}\",\"name\":\"entity\",\"comp\":null}}]"),
+            "native",
+        );
+        // cleanup: delete the task (also pops its fresh resume row) on both.
+        g(&ts, &br, &format!("[{{\"eid\":\"{tsk}\",\"name\":\"entity\",\"comp\":null}}]"));
+    }
+
     // clean up the surviving probe entities on BOTH copies.
     g(&ts, &br, &format!("[{{\"eid\":\"{t2}\",\"name\":\"entity\",\"comp\":null}}]"));
     g(&ts, &br, &format!("[{{\"eid\":\"{e1}\",\"name\":\"entity\",\"comp\":null}}]"));
     g(&ts, &br, &format!("[{{\"eid\":\"{e2}\",\"name\":\"entity\",\"comp\":null}}]"));
 
     eprintln!(
-        "\nwrite parity OK (native-safe batches commit through the bridge; \
-         transform/claim/delete batches proxy — both land identically to direct)"
+        "\nwrite parity OK (native-safe plain-graph, claim and entity-delete \
+         batches commit through the bridge; transform batches proxy — both land \
+         identically to direct)"
     );
 }
 
