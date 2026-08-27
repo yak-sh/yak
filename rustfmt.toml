@@ -1,0 +1,23 @@
+# The crates/ workspace fmt policy (T-22755).
+#
+# The existing crates were hand-formatted and predate any rustfmt config, so
+# stable rustfmt disagrees with the tree in ~410 spots — inconsistently (some
+# the hand breaks where rustfmt would join, some the reverse). No config makes
+# `cargo fmt --check` green on the current tree; only a one-time `cargo fmt`
+# reformat can, and that is a tracked follow-up (it collides with in-flight
+# edits, so it can't run yet). This file sets the TARGET that reformat formats
+# to, chosen to sit as close to the existing house style as stable rustfmt
+# allows, so the one-time churn is minimal and the result reads like the code
+# already does.
+#
+# STABLE options only: the box has stable rustfmt (nightly's rustfmt component
+# isn't installed), and the gate must be deterministic on what it runs. Nightly-
+# only knobs (comment wrapping, import granularity) are deliberately omitted.
+
+edition = "2021"
+
+# Keep more expressions on one line than the default — the house style favors
+# single-expression chains, inline `let ... else { ... }`, and inline struct
+# literals rather than exploding them across lines.
+use_small_heuristics = "Max"
+single_line_let_else_max_width = 100
