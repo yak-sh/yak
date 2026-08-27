@@ -88,13 +88,7 @@ import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { serverFile } from './reload.ts'
 import { jsonOf, type Row } from './client.ts'
-import {
-  derivesOf,
-  listed,
-  matchQuery,
-  parseQuery,
-  resolveRefs,
-} from './query.ts'
+import { listed, matchQuery, parseQuery, resolveRefs } from './query.ts'
 import {
   dbReader,
   evalAgg,
@@ -102,7 +96,7 @@ import {
   localQuery,
   rowed,
 } from './graph_query.ts'
-import { derive, derivedValues } from './derive.ts'
+import { withResults } from './result_component.ts'
 import { nativeSoon } from './tmux.ts'
 import { loadPlugins, pluginSpecifiers } from './plugins.ts'
 import { stop as stopTimers } from './timers.ts'
@@ -1129,7 +1123,6 @@ let handle = async (req: Request) => {
       let asked = q.trim()
         ? resolveRefs(parseQuery(q), (id) => locate(db, id))
         : []
-      let derivations = derivesOf(asked)
       // An aggregate projection (`.count!` / `.distinct=col` / `.tally=col`)
       // answers with the reduction, not a row set — the census asks for values,
       // so rows, layers and id= addressing don't apply. Keys come back sorted
@@ -1166,10 +1159,7 @@ let handle = async (req: Request) => {
       // rendering edges is fetching those rows anyway.
       let layers = (hits: Row[]) => {
         let eids = hits.map((r) => r.eid)
-        let derived = derivations.length
-          ? derivedValues(derive(db, derivations, eids))
-          : {}
-        if (!backs && !edged && !derivations.length) {
+        if (!backs && !edged) {
           return hits.map((r) => jsonOf(r))
         }
         let deps = depsOf(db, eids).filter((d) =>
@@ -1219,7 +1209,6 @@ let handle = async (req: Request) => {
         }
         return hits.map((r) => ({
           ...jsonOf(r),
-          ...(derivations.length ? { derived: derived[r.eid] } : {}),
           ...(edged ? { deps: mine.get(r.eid) ?? [] } : {}),
           ...(backs ? { backlinks: back.get(r.eid) ?? [] } : {}),
         }))
@@ -1237,7 +1226,11 @@ let handle = async (req: Request) => {
         // remaining filter means no screen — an empty QUERY would select
         // nothing, so this door states its meaning before parsing.
         let preds = asked
-        let hits = [...only].map((eid) => rowed({ eid, comps: eager(db, eid) }))
+        let hits = withResults(
+          db,
+          preds,
+          [...only].map((eid) => rowed({ eid, comps: eager(db, eid) })),
+        )
           .filter((r) => reveal || listed(r.comps, preds))
           .filter((r) =>
             matchQuery(

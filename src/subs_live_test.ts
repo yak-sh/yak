@@ -52,7 +52,6 @@ type Frame = {
   changes?: Change[]
   drop?: string[]
   replace?: boolean
-  derived?: Record<string, Record<string, unknown> | null>
   observe?: {
     session: string
     generation: string
@@ -207,8 +206,11 @@ let subscriber = async () => {
     }
     for (let eid of f.drop ?? []) mine.delete(eid)
     let values = f.replace ? {} : { ...(projected.get(f.sub) ?? {}) }
-    for (let [eid, value] of Object.entries(f.derived ?? {})) {
-      value == null ? delete values[eid] : values[eid] = value
+    for (let c of f.changes ?? []) {
+      if (c.name != 'materialized') continue
+      let row = { ...values[c.eid] }
+      c.comp == null ? delete row[c.name] : row[c.name] = c.comp
+      Object.keys(row).length ? values[c.eid] = row : delete values[c.eid]
     }
     projected.set(f.sub, values)
     waiting.get(f.sub)?.()
@@ -229,7 +231,7 @@ let subscriber = async () => {
     // What a frame CARRIED, not just which eids it named — the projection is
     // a claim about columns, so a test of it has to read them.
     carried: (sub: string) => seen.get(sub) ?? [],
-    derived: (sub: string) => projected.get(sub) ?? {},
+    result: (sub: string) => projected.get(sub) ?? {},
     frames: (sub: string) => frames.get(sub) ?? 0,
     // Every enqueued maintain frame is already on the wire ahead of this
     // subscribe's reply, so awaiting the reply awaits them all. The query must
@@ -246,7 +248,7 @@ let subscriber = async () => {
 }
 
 slow(
-  'persona derivation agrees across HTTP and WS and invalidates by dependency',
+  'materialized component agrees across HTTP and WS and invalidates by dependency',
   alone,
   async () => {
     let project = uid(), persona = uid(), tier = uid(), loose = uid()
@@ -265,29 +267,29 @@ slow(
         comp: { type: 'contains', child: tier },
       },
     ])
-    let q = `id=${persona}&.derive=persona`
+    let q = `id=${persona}&.materialized!`
     let http = async () => {
       let wire = q.split('&').map(encodeURIComponent).join('&')
       let res = await fetch(`http://${U}/query?${wire}`)
       assertEquals(res.status, 200)
       let [hit] = await res.json() as {
-        derived: { persona: { text: string; scoped: string[] } }
+        materialized: { text: string; scoped: string[] }
       }[]
-      return hit.derived.persona
+      return hit.materialized
     }
     let client = await subscriber()
     let sub = `persona:${persona}`
     try {
       let unknown = await fetch(
         `http://${U}/query?id=${persona}&${
-          encodeURIComponent('.derive=unknown')
+          encodeURIComponent('.derive=persona')
         }`,
       )
       assertEquals(unknown.status, 400)
-      assertStringIncludes(await unknown.text(), 'registered projection')
+      assertStringIncludes(await unknown.text(), 'unknown prop')
 
       await client.open(sub, q)
-      assertEquals(client.derived(sub)[persona].persona, await http())
+      assertEquals(client.result(sub)[persona].materialized, await http())
 
       let before = client.frames(sub)
       await post([{
@@ -304,7 +306,7 @@ slow(
         comp: { body: 'second body' },
       }])
       await client.settle()
-      let after = client.derived(sub)[persona].persona as {
+      let after = client.result(sub)[persona].materialized as {
         text: string
         scoped: string[]
       }

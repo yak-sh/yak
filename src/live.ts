@@ -27,7 +27,6 @@ import {
 } from './types.ts'
 import { isUnread, type Row } from './client.ts'
 import {
-  type Derivation,
   distinctValues,
   EXISTS,
   type Field,
@@ -39,6 +38,8 @@ import {
   type Pred,
   PROJECT,
   resolveRefs,
+  type ResultComp,
+  resultComps,
   scopedSessions,
   TEXT,
   textual,
@@ -1350,9 +1351,6 @@ export type Sub = {
   // initial frame replaces the whole tally; later frames are deltas (n=0
   // drops the key). No row changes ride these, so the cache is untouched.
   agg?: Record<string, number>
-  // Transient derived query results, keyed by selected eid. Null withdraws one
-  // eid's values; these never enter the component cache or persistence wire.
-  derived?: Record<string, Record<string, unknown> | null>
   // The frame's stated WINDOW (D-22567 §4): the members are the newest `limit`
   // of `total` matches. Present exactly when the answer is a PREFIX, so its
   // ABSENCE on an unwindowed sub is itself the statement that the set is whole.
@@ -1789,15 +1787,17 @@ export let landSub = (f: Sub) => {
     }
     return { eids: [], edges: [] }
   }
-  if (f.derived) {
-    let found = derivedSignals.get(f.sub)
-    if (found) {
-      let next = f.replace ? {} : { ...found.peek() }
-      for (let [eid, value] of Object.entries(f.derived)) {
-        value == null ? delete next[eid] : next[eid] = value
-      }
-      found.value = next
+  let resultChanges = f.changes.filter((c) => c.name in resultComps)
+  let found = resultSignals.get(f.sub)
+  if (found && (f.replace || resultChanges.length)) {
+    let next = f.replace ? {} : { ...found.peek() }
+    for (let { eid, name, comp } of resultChanges) {
+      let row = { ...next[eid] }
+      if (comp == null) delete row[name]
+      else row[name] = comp
+      Object.keys(row).length ? next[eid] = row : delete next[eid]
     }
+    found.value = next
   }
   if (f.replace && f.sub.startsWith('entries:')) {
     clearObservations(f.sub.slice('entries:'.length))
@@ -1819,8 +1819,9 @@ export let landSub = (f: Sub) => {
   // joins `subMembers` (a useQuery result would wrongly gain it) and instead
   // rides its own held set, consulted by evict().
   let peered = f.peers?.length ? applyLocal(f.peers) : undefined
-  let touched = applyLocal(f.changes)
-  settleObservations(f.changes)
+  let graphChanges = f.changes.filter((c) => !(c.name in resultComps))
+  let touched = applyLocal(graphChanges)
+  settleObservations(graphChanges)
   // The server marks shadow-ness on every frame it sends, so believe the
   // frame: the local `shadows` set only knows what THIS client asked for,
   // and the two must not be able to disagree about who owns the cache.
@@ -2064,8 +2065,8 @@ export let assertAgree = (
 let boardUses = new Map<string, { n: number; q: string }>()
 let entryUses = new Map<string, number>()
 let edgeUses = new Map<string, number>()
-let derivedUses = new Map<string, number>()
-let derivedSignals = new Map<
+let resultUses = new Map<string, number>()
+let resultSignals = new Map<
   string,
   Signal<Record<string, Record<string, unknown>>>
 >()
@@ -2101,28 +2102,28 @@ export let edgeSub = (eid: string, rider: string) => {
   }
 }
 
-let derivedKey = (eid: string, name: Derivation) => `derive:${eid}:${name}`
+let resultKey = (eid: string, name: ResultComp) => `result:${eid}:${name}`
 
-// A derived value is held through the same addressed subscription transport as
-// rows, aggregates, and edge riders. The signal stores only transient result
-// data; graph entities continue to live exclusively in the component cache.
-export let derivedResult = (eid: string, name: Derivation) => {
-  let key = derivedKey(eid, name)
-  let found = derivedSignals.get(key)
-  if (!found) derivedSignals.set(key, found = signal({}))
+// A query-result component uses the same addressed subscription transport as
+// stored components. Its signal is sub-owned and transient: neither the graph
+// cache nor IndexedDB can mistake it for writable graph data.
+export let resultComponent = (eid: string, name: ResultComp) => {
+  let key = resultKey(eid, name)
+  let found = resultSignals.get(key)
+  if (!found) resultSignals.set(key, found = signal({}))
   return computed(() => found!.value[eid]?.[name])
 }
 
-export let deriveSub = (eid: string, name: Derivation) => {
-  let sub = derivedKey(eid, name)
-  let n = derivedUses.get(sub) ?? 0
-  derivedUses.set(sub, n + 1)
-  if (!n) ownBoard(sub, `id=${eid}&.derive=${name}`)
+export let resultSub = (eid: string, name: ResultComp) => {
+  let sub = resultKey(eid, name)
+  let n = resultUses.get(sub) ?? 0
+  resultUses.set(sub, n + 1)
+  if (!n) ownBoard(sub, `id=${eid}&.${name}!`)
   return () => {
-    let held = (derivedUses.get(sub) ?? 1) - 1
-    if (held > 0) return void derivedUses.set(sub, held)
-    derivedUses.delete(sub)
-    derivedSignals.delete(sub)
+    let held = (resultUses.get(sub) ?? 1) - 1
+    if (held > 0) return void resultUses.set(sub, held)
+    resultUses.delete(sub)
+    resultSignals.delete(sub)
     dropBoard(sub)
   }
 }

@@ -12,8 +12,6 @@
 import { useEffect, useMemo } from 'preact/hooks'
 import {
   type Backlink,
-  derivedResult,
-  deriveSub,
   dropQuery,
   edgeSub,
   ent,
@@ -23,8 +21,10 @@ import {
   queryEids,
   type References,
   references,
+  resultComponent,
+  resultSub,
 } from '../live.ts'
-import { parseQuery, resolveRefs } from '../query.ts'
+import { parseQuery, resolveRefs, type ResultComp } from '../query.ts'
 import type { Ent } from '../types.ts'
 
 let resolve = (query: string) => resolveRefs(parseQuery(query), findEid)
@@ -71,19 +71,22 @@ export let useReferences = (eid: string): References => {
   return references(eid)
 }
 
-export type PersonaProjection = { text: string; scoped: string[] }
+export type Materialized = { text: string; scoped: string[] }
 
-// A persona's prompt bytes and scoped-memory ids are one registered derived
-// projection over ordinary addressed membership. The server computes it from
-// the spawn path's bounded personaGraph closure; the browser holds no tier walk.
-export let usePersonaProjection = (
+// A transient result component is requested through the ordinary component
+// grammar. The server supplies its declared inputs; the browser owns no graph
+// walk and the returned value never enters the writable component cache.
+export let useResultComponent = (
   eid: string,
+  name: ResultComp,
   enabled = true,
-): PersonaProjection | null | undefined => {
-  let value = derivedResult(eid, 'persona').value
+): Record<string, unknown> | null | undefined => {
+  let value = resultComponent(eid, name).value
   useEffect(
-    () => enabled ? deriveSub(eid, 'persona') : undefined,
-    [eid, enabled],
+    () => enabled ? resultSub(eid, name) : undefined,
+    [eid, name, enabled],
   )
-  return enabled ? value as PersonaProjection | null | undefined : undefined
+  return enabled
+    ? value as Record<string, unknown> | null | undefined
+    : undefined
 }

@@ -8,8 +8,8 @@
 // must change nothing.
 import { assert, assertEquals } from '@std/assert'
 import { uuid } from './types.ts'
-import { personaGraph, projectionGraph } from './graph_query.ts'
-import { derive, derivedValues } from './derive.ts'
+import { evalGraph, personaGraph, projectionGraph } from './graph_query.ts'
+import { resultStates } from './result_component.ts'
 import { filesFor, materialize, taskRoots } from './persona.ts'
 import { rows } from './client.ts'
 
@@ -70,20 +70,29 @@ let seed = () => {
 
 Deno.test('persona derivation reuses the bounded spawn closure and scope index', () => {
   let { db, common, m1, m3 } = seed()
-  let states = derive(db, ['persona'], [common], NOW)
-  let value = derivedValues(states)[common].persona as {
-    text: string
-    scoped: string[]
-  }
+  let value = resultStates(db, ['materialized'], [common], NOW)
+    .get(common)!.get('materialized')!.comp as {
+      text: string
+      scoped: string[]
+    }
   let graph = personaGraph(db, [common])
   let persona = graph.all.find((r) => r.eid == common)!
   assertEquals(value.text, materialize(graph.all, graph.deps, persona, NOW))
   assertEquals(new Set(value.scoped), new Set([m1, m3]))
+  let hit = evalGraph(db, '.materialized!').hits.find((r) => r.eid == common)!
+  assert(hit.comps.materialized)
+  assertEquals(
+    new Set(hit.comps.materialized.scoped as string[]),
+    new Set([m1, m3]),
+  )
 
-  // Result data is not a component: a forged apply is discarded and a later
-  // graph read has no `derived` table/bag to return.
-  apply(db, [{ eid: common, name: 'derived', comp: { persona: value } }])
-  assertEquals(snapshot(db).changes.some((c) => c.name == 'derived'), false)
+  // Query-result components are not writable: a forged apply is discarded and
+  // a later graph read carries no materialized component.
+  apply(db, [{ eid: common, name: 'materialized', comp: value }])
+  assertEquals(
+    snapshot(db).changes.some((c) => c.name == 'materialized'),
+    false,
+  )
 })
 
 Deno.test('personaGraph materializes snapshot-identical bytes', () => {

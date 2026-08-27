@@ -18,8 +18,6 @@ import {
   commentsOn,
   config,
   deps,
-  derivedResult,
-  deriveSub,
   domains,
   dropQuery,
   edgeSub,
@@ -49,6 +47,8 @@ import {
   resetSignals,
   resolveGen,
   resolvingId,
+  resultComponent,
+  resultSub,
   row,
   serverEid,
   serverName,
@@ -2566,28 +2566,29 @@ Deno.test('projected edge subs are refcounted and feed citation reads', () => {
   }
 })
 
-Deno.test('derived subs are refcounted and stay outside the component cache', () => {
+Deno.test('result-component subs are refcounted and stay outside the cache', () => {
   let X = 'dddd0000-0000-4000-8000-000000000021'
-  let sub = `derive:${X}:persona`
+  let sub = `result:${X}:materialized`
   let sent: unknown[] = []
   let restore = useRoute((frame) => sent.push(frame))
   try {
-    let value = derivedResult(X, 'persona')
-    let off = deriveSub(X, 'persona')
-    let again = deriveSub(X, 'persona')
+    let value = resultComponent(X, 'materialized')
+    let off = resultSub(X, 'materialized')
+    let again = resultSub(X, 'materialized')
     assertEquals(sent, [{
       sub,
-      q: `id=${X}&.derive=persona`,
+      q: `id=${X}&.materialized!`,
       shadow: true,
     }])
     landSub({
       sub,
-      changes: [],
+      changes: [{
+        eid: X,
+        name: 'materialized',
+        comp: { text: 'prompt\n', scoped: ['M1'] },
+      }],
       replace: true,
       shadow: true,
-      derived: {
-        [X]: { persona: { text: 'prompt\n', scoped: ['M1'] } },
-      },
     })
     assertEquals(value.value, { text: 'prompt\n', scoped: ['M1'] })
     assertEquals(cache.peek()[X], undefined)

@@ -5,8 +5,6 @@ import {
   aggOf,
   bareRenamesOf,
   complete,
-  DERIVE,
-  derivesOf,
   distinctValues,
   edgeRider,
   EDGES,
@@ -608,21 +606,17 @@ Deno.test('.edges selects a stored type and projects endpoints through a ref', (
   )
 })
 
-Deno.test('.derive names a registered transient projection', () => {
-  assertEquals(preds('.derive=persona'), [{
-    comp: '',
+Deno.test('query-result components use ordinary component presence grammar', () => {
+  let ps = parseQuery('.materialized!')
+  assertEquals(ps, [{
+    comp: 'materialized',
     prop: '',
-    op: DERIVE,
+    op: EXISTS,
     value: '',
-    derive: 'persona',
   }])
-  let ps = parseQuery('.persona!&.derive=persona')
-  assertEquals(derivesOf(ps), ['persona'])
-  assert(matchQuery({ persona: {} }, ps))
-  assert(!matchQuery({ doc: {} }, ps))
-  assertThrows(() => preds('.derive='), Error)
-  assertThrows(() => preds('.derive=unknown'), Error)
-  assertThrows(() => preds('.derive!'), Error)
+  assert(matchQuery({ materialized: { text: 'prompt' } }, ps))
+  assert(!matchQuery({ persona: {} }, ps))
+  assertThrows(() => preds('.derive=persona'), Error)
 })
 
 Deno.test('the EDGES rider is a delivery, never a filter', () => {

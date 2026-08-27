@@ -126,10 +126,6 @@ export type Pred = {
   // Empty for a bare `.edges!`. op is EDGES; edgeRider() reads the directive.
   peers?: Hop[]
   edge?: EdgeSelector
-  // A DERIVED result projection. The query still selects ordinary entities;
-  // each named projector contributes transient result data beside them. It is
-  // never a component and therefore cannot ride /apply or persistence.
-  derive?: Derivation
   // A bounded TRAVERSAL rather than a column read: `.reaches[requires,<=3]=T-42`
   // selects the entities that reach `value` through at most `depth` edges of one
   // type. op is REACHES. The cap is part of the grammar — an unbounded closure
@@ -174,13 +170,31 @@ export let leafOf = (p: Pred): Hop => p.at ? p.at[p.at.length - 1] : p
 // shape of both a live-cache row and a client Row's `.comps`.
 type Comps = Record<string, Record<string, unknown> | undefined>
 
-// The readable routing table is the union of the wire and server vocabularies.
-// Keeping it derived means every column snapshot() exposes is immediately
-// filterable through `.component.prop`, without making that column writable.
+// Query-result-only components speak the same component grammar as stored
+// graph data. They are readable results, never members of the writable `comps`
+// vocabulary; the query engine supplies their declared inputs and values.
+export let resultComps = {
+  materialized: { text: true, scoped: true },
+} as const
+export type ResultComp = keyof typeof resultComps
+
+// The readable routing table is the union of the wire, server, and transient
+// result vocabularies. Keeping it derived means every readable column is
+// immediately filterable through `.component.prop` without becoming writable.
 let routes: Record<string, readonly string[]> = Object.fromEntries(
-  [...new Set([...Object.keys(comps), ...Object.keys(stamped)])].map((name) => [
+  [
+    ...new Set([
+      ...Object.keys(comps),
+      ...Object.keys(stamped),
+      ...Object.keys(resultComps),
+    ]),
+  ].map((name) => [
     name,
-    Object.keys({ ...comps[name], ...stamped[name] }),
+    Object.keys({
+      ...comps[name],
+      ...stamped[name],
+      ...resultComps[name as ResultComp],
+    }),
   ]),
 )
 
@@ -188,7 +202,7 @@ let routes: Record<string, readonly string[]> = Object.fromEntries(
 // before any scope. A scope may not shadow one, so this is how the pred seam
 // gives `.status`/`.project` priority over a same-named virtual prop.
 let owned = (name: string) =>
-  name in comps || Object.values(routes).some((cols) => cols.includes(name))
+  name in routes || Object.values(routes).some((cols) => cols.includes(name))
 
 // Every `{eid}` reference column in the vocabulary — wire-writable `comps`
 // UNION the server-stamped columns (a session's `requested_task` is a reference
@@ -242,8 +256,7 @@ for (let name of reverseAssocs.keys()) {
 // association: `.refs` (the multi-column reverse-union), the `.distinct` /
 // `.tally` aggregates, `.fields` (the projection), `.limit`/`.after` (the
 // window), `.edges` (the incident-edge rider), `.reaches` (the bounded
-// traversal), and `.derive` (registered result projections). Guarded here the
-// way scopes and reverse assocs are, so a
+// traversal). Guarded here the way scopes and reverse assocs are, so a
 // vocabulary that ever grows one of these as a real prop is a load error rather
 // than a silently dead directive.
 export let reserved = [
@@ -251,7 +264,6 @@ export let reserved = [
   'distinct',
   'tally',
   'fields',
-  'derive',
   'limit',
   'after',
   'edges',
@@ -357,7 +369,7 @@ export let route = (prop: string): { comp: string; prop: string } => {
   // A facet is itself filterable. Scalar and reference columns win above,
   // preserving `.project=P-3`; a component with no namesake column gets the
   // presence grammar (`=` absent, `~=` present) without a second vocabulary.
-  if (prop in comps) return { comp: prop, prop: '' }
+  if (prop in routes) return { comp: prop, prop: '' }
   // The rejection is the teaching moment: agents keep reaching for eid as a
   // filter prop — name what the asker meant. (.kind is a SCOPE handled before
   // route() and .id routes through session.id, so neither reaches here.)
@@ -395,19 +407,6 @@ export let orderOf = (preds: Pred[]) => preds.find((p) => p.op == ORDER)?.value
 // preds select the universe the aggregate reduces; a reader pulls the projection
 // with aggOf() and computes it with tally() (or aggregateSql server-side).
 export let AGG = 'agg'
-
-// Derived projections are a registry-backed result layer over ordinary query
-// membership. The grammar owns the allowed names so malformed/unknown asks are
-// refused at every generic read boundary before a projector can run.
-export let DERIVE = 'derive'
-export let derivations = ['persona'] as const
-export type Derivation = (typeof derivations)[number]
-
-export let derivesOf = (preds: Pred[]): Derivation[] => [
-  ...new Set(
-    preds.filter((p) => p.op == DERIVE && p.derive).map((p) => p.derive!),
-  ),
-]
 
 // `count` names no column, so its `at` is the empty hop — a reader branches on
 // `op`, never on whether `at` is populated.
@@ -451,7 +450,7 @@ export let predComps = (preds: Pred[]): Set<string> | null => {
   for (let p of preds) {
     if (p.refs || p.at || p.rev) return null
     if (
-      p.op == NEVER || p.op == ORDER || p.op == PROJECT || p.op == DERIVE
+      p.op == NEVER || p.op == ORDER || p.op == PROJECT
     ) continue
     if (p.op == WINDOW) continue
     // `.count!` aggregates the selection, naming no column of its own.
@@ -978,26 +977,6 @@ export let preds = (token: string): Pred[] | null => {
     })
     return [{ comp: '', prop: '', op: PROJECT, value: '', fields }]
   }
-  // `.derive=persona` asks a registered projector for transient data beside
-  // each selected row. Membership stays ordinary (`id=…`, filters, windows),
-  // and the value names registry code rather than an HTTP feature route.
-  if (path == 'derive' && !owned('derive')) {
-    if (
-      op != '=' || !value ||
-      !(derivations as readonly string[]).includes(value)
-    ) {
-      throw new Error(
-        `.derive names a registered projection (${derivations.join(', ')})`,
-      )
-    }
-    return [{
-      comp: '',
-      prop: '',
-      op: DERIVE,
-      value: '',
-      derive: value as Derivation,
-    }]
-  }
   // `.limit=200` / `.after=13882` — the WINDOW, a bound on the answer rather
   // than a filter on its members. `limit` is how many of the newest matches to
   // answer with; `after` continues that window below a spine num, so paging a
@@ -1057,7 +1036,7 @@ export let preds = (token: string): Pred[] | null => {
   // A trailing bang completes a component sentence. This must win over a
   // same-named column (`persona` is both a facet and a session reference);
   // the column's explicit spelling remains `.session.persona!`.
-  if (segs.length == 1 && !value && op == '!' && segs[0] in comps) {
+  if (segs.length == 1 && !value && op == '!' && segs[0] in routes) {
     p = { comp: segs[0], prop: '', op: OPS[op], value }
   } else {
     let groups = groupsOf(segs)
@@ -1426,8 +1405,7 @@ export let matchQuery = (
   preds.every((p) => {
     if (p.op == NEVER) return false // the empty query: selects nothing
     if (
-      p.op == ORDER || p.op == AGG || p.op == PROJECT || p.op == EDGES ||
-      p.op == DERIVE
+      p.op == ORDER || p.op == AGG || p.op == PROJECT || p.op == EDGES
     ) {
       return true
     }

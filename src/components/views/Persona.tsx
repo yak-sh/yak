@@ -3,7 +3,7 @@ import { byWarmth, ent, mutate, relations } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { dragData } from '../drag.ts'
 import { Entity } from '../Entity.tsx'
-import { usePersonaProjection, useQuery } from '../useQuery.ts'
+import { type Materialized, useQuery, useResultComponent } from '../useQuery.ts'
 
 let Frame = block('div', 'Persona', {
   Sec: 'div',
@@ -39,10 +39,13 @@ export let Persona = ({ e }: { e: Ent }) => {
   let pre = linked('contains')
   let idx = linked('reads')
   let tiered = new Set([...pre, ...idx].map((r) => r.eid))
-  // The derived projection discovers the exact scoped-memory eid set through
+  // The materialized result component discovers the exact scoped-memory eid set through
   // an indexed memory.scope query. A second ordinary addressed sub loads only
   // those rows, so neither discovery nor rendering scans the partial cache.
-  let scoped = new Set(usePersonaProjection(e.eid)?.scoped ?? [])
+  let materialized = useResultComponent(e.eid, 'materialized') as
+    | Materialized
+    | undefined
+  let scoped = new Set(materialized?.scoped ?? [])
   let scopedRows = useQuery(
     e.persona?.home ? `.memory.scope=${e.persona.home}` : '.memory.scope=',
   )

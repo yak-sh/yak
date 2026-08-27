@@ -16,7 +16,6 @@ import {
   capabilities,
   type Change,
   deaths,
-  type Dep,
   kindOf,
   sessionOf,
   type Snapshot,
@@ -35,7 +34,6 @@ import {
   matching,
   reaching,
   referrersOf,
-  rowsOf,
   search,
   textMatches,
   vocabHash,
@@ -61,6 +59,8 @@ import {
   type Win,
   windowOf,
 } from './query.ts'
+import { inputsOf, resultsOf, withResults } from './result_component.ts'
+export { personaGraph, projectionGraph } from './persona_graph.ts'
 
 // A filter of only rankings — or of nothing at all — selects EVERY entity, and
 // there the index has nothing to offer: matching() would read every row through
@@ -207,25 +207,31 @@ export let evalFast = (
   w?: Win,
 ) => {
   let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
-  if (!narrows(preds)) return null
+  let inputs = inputsOf(preds)
+  if (!narrows(inputs)) return null
   let entries = forceEntries || namesLazy(preds)
   // The statement carries the screens the JS filters below otherwise apply
   // AFTER it (query.ts screened) — which is the whole reason a LIMIT may ride
   // it: a filter that runs after the limit under-fills the page. The JS filters
   // stay for the rows matching() unions in from a SOURCE, which no statement saw.
-  let built = where(screened(preds, entries))
+  let built = where(screened(inputs, entries))
   if (!built) return null
   let win = merged(windowOf(preds), w)
   // Entries page by their own seq (orderedEntries), never by spine num, so a
   // lazy answer stays whole here and is windowed downstream.
   let bounded = !entries && (win.limit != null || win.after != null)
+  let hits = matching(db, bounded ? windowed(built, win) : built).map(rowed)
+    .filter((r) => entries || !r.comps.entry)
+  hits = withResults(db, preds, hits)
+    .filter((r) => listed(r.comps, preds))
+  if (resultsOf(preds).length) {
+    hits = hits.filter((r) => matchQuery(r.comps, preds))
+  }
   return {
     preds,
     entries,
     win,
-    hits: matching(db, bounded ? windowed(built, win) : built).map(rowed)
-      .filter((r) => entries || !r.comps.entry)
-      .filter((r) => listed(r.comps, preds)),
+    hits,
   }
 }
 
@@ -250,6 +256,7 @@ export let evalQuery = (
   limit = ENTRY_PAGE,
 ) => {
   let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let inputs = inputsOf(preds)
   let entries = namesLazy(preds)
   let ent = (e: string) => eager(db, e)
   // A reverse hop reads the children pointing back at each row, keyed off the
@@ -259,7 +266,7 @@ export let evalQuery = (
     referrersOf(db, [eid], { comp, prop }).map(ent)
   let walk = walker(db)
   let fts = (eid: string, p: Pred) => textMatches(db, eid, p)
-  let all = matching(db, whereSome(preds)).map(rowed)
+  let all = matching(db, whereSome(inputs)).map(rowed)
     // matching() reads every entity the subset selects, entry-partition rows
     // included (they keep a spine); snapshot() omitted ALL of them, so drop them
     // here too. entryUniverse is the one bounded entry source — keyed per
@@ -269,6 +276,7 @@ export let evalQuery = (
   if (entries) {
     all = [...all, ...entryUniverse(db, preds, after, limit)]
   }
+  all = withResults(db, preds, all)
   let hits = all.filter((r) =>
     listed(r.comps, preds) &&
     matchQuery(r.comps, preds, ent, undefined, kids, walk, fts)
@@ -296,6 +304,7 @@ export let evalCapped = (
   after?: number,
 ) => {
   let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let inputs = inputsOf(preds)
   let ent = (e: string) => eager(db, e)
   let kids = (eid: string, comp: string, prop: string) =>
     referrersOf(db, [eid], { comp, prop }).map(ent)
@@ -303,12 +312,15 @@ export let evalCapped = (
   // (query.ts screened), so the candidate window is spent on rows that can
   // actually match rather than on entry spines the JS pass drops afterwards.
   let room = cap * 2
-  let base = windowed(whereSome(screened(preds, false)), { limit: room, after })
+  let base = windowed(whereSome(screened(inputs, false)), {
+    limit: room,
+    after,
+  })
   // matching() reads the hit table in its own order — re-rank by num so the
   // slice keeps the NEWEST matches, not an arbitrary cap-full.
   let walk = walker(db)
   let fts = (eid: string, p: Pred) => textMatches(db, eid, p)
-  let raw = matching(db, base).map(rowed)
+  let raw = withResults(db, preds, matching(db, base).map(rowed))
   let hits = raw
     .filter((r) =>
       listed(r.comps, preds) &&
@@ -382,7 +394,9 @@ export let evalSub = (
       exact: true,
       window: {
         limit,
-        total: over ? countOf(db, screened(fast.preds, false)) : hits.length,
+        total: over
+          ? countOf(db, screened(inputsOf(fast.preds), false))
+          : hits.length,
       },
     }
   }
@@ -600,77 +614,15 @@ async (filters, opts) => {
     referrersOf(db, [eid], { comp, prop }).map(read)
   let walk = walker(db)
   let fts = (eid: string, p: Pred) => textMatches(db, eid, p)
-  return only.map((eid) => rowed({ eid, comps: eager(db, eid) }))
+  return withResults(
+    db,
+    preds,
+    only.map((eid) => rowed({ eid, comps: eager(db, eid) })),
+  )
     .filter((r) =>
       listed(r.comps, preds) &&
       matchQuery(r.comps, preds, read, undefined, kids, walk, fts)
     )
-}
-
-// The bounded persona subgraph a spawn or a role materializes — exactly the
-// rows+deps materialize()/wornPersona()/commonOf() walk, gathered by keyed
-// reads instead of the whole-graph snapshot (M-21143). BFS from `roots` (a
-// persona, an explicit --persona, the global base, or a project whose common
-// persona is the one it `contains`): each node is eager()-read so its
-// doc/persona/memory/recall comps ride out exactly as snapshot() served them,
-// and its OUTGOING contains/reads edges (depsOf) enqueue the tier members —
-// through sub-personas to any depth. The persona functions stay pure over
-// rows+deps; this only supplies a narrower universe than the whole graph, and
-// an unreachable edge or memory that never enters the walk could not have
-// changed the rendered text (a tier names only what it can reach from its root).
-// The walk is batched PER LEVEL, not per node: one rowsOf + one depsOf per
-// BFS generation instead of one eager + one depsOf per entity. A tier
-// closure holds thousands of memories, and per-node keyed reads cost ~90
-// statements each — the fleet-wide projection walked that way ran ~19s of
-// synchronous SQLite on a live-size graph, blocking the very event loop
-// the conversion off snapshot() was meant to relieve. Level-batching is
-// the same membership in ~tier-depth statement rounds.
-export let personaGraph = (
-  db: DatabaseSync,
-  roots: string[],
-): { all: Row[]; deps: Dep[] } => {
-  let all = new Map<string, Row>()
-  let deps: Dep[] = []
-  let seenDep = new Set<string>()
-  let seen = new Set<string>()
-  let frontier = [...new Set(roots.filter(Boolean))]
-  while (frontier.length) {
-    for (let e of frontier) seen.add(e)
-    let level = new Set(frontier)
-    for (let r of rowsOf(db, frontier)) {
-      if (!r.comps.entity) continue
-      all.set(r.eid, rowed(r))
-    }
-    let next = new Set<string>()
-    for (let d of depsOf(db, frontier)) {
-      if (!level.has(d.parent)) continue // only edges OUT drive the walk
-      if (d.type != 'contains' && d.type != 'reads') continue
-      let key = `${d.parent}\0${d.type}\0${d.child}`
-      if (!seenDep.has(key)) {
-        seenDep.add(key)
-        deps.push(d)
-      }
-      if (!seen.has(d.child)) next.add(d.child)
-    }
-    frontier = [...next]
-  }
-  return { all: [...all.values()], deps }
-}
-
-// The fleet-wide projection universe — client.ts projectionSnapshot's
-// in-process twin: every persona and every project as roots, closed over
-// their tiers by the same walk. filesFor/taskRoots see every managed
-// venture, commonOf every project's contains edge, and each persona its
-// full tier closure — including specialists reached only through the
-// derived homeReads edges depsOf folds in. A bounded read where the
-// whole-graph snapshot cost the graph (M-21143).
-export let projectionGraph = (db: DatabaseSync) => {
-  let roots = (db.prepare(
-    `select o.eid as eid from persona t join entity o on o.id = t.entity
-     union
-     select o.eid from project t join entity o on o.id = t.entity`,
-  ).all() as { eid: string }[]).map((r) => r.eid)
-  return personaGraph(db, roots)
 }
 
 // The colon-command executor's graph access, keyed off the live db — the
