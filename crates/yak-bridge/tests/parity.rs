@@ -837,15 +837,18 @@ fn ws_sub_parity() {
 //       (refs already projected to ids, server-owned reads included)
 //
 // A native-safe batch COMMITS through the bridge's own WriteStore on copy-B
-// (D-22804 rungs 4-5): the create/update and the doc/task/comment rejections,
-// the claim take/bounce/RELEASE (with its resume-stack push), and the entity
-// DELETE cascades (synthesized nulls, detached pointers, a session delete's
-// release→resume) all take the `native` door; a transform-bearing comp (a
-// setting) still PROXIES to copy-B's Deno. Each case asserts the door the bridge
-// took (its `x-yak-apply` header) AND that the result is byte-identical to
-// direct-to-Deno on copy-A — so a native write that diverged from the port, OR a
-// mis-routed batch, surfaces here. The predicate is the kernel's `native_safe`
-// (write.rs `NATIVE_COMPS`), the single divergence-surface source.
+// (D-22804 rungs 4-6): the create/update and the doc/task/comment rejections,
+// the claim take/bounce/RELEASE (with its resume-stack push), the entity DELETE
+// cascades (synthesized nulls, detached pointers, a session delete's
+// release→resume), and — rung 6 — the address canonicalization writes (an
+// `email.address` canonicalized in place, a `deliver.to` @-address folded into a
+// find-or-minted `email` entity) all take the `native` door; a transform-bearing
+// comp still PROXIES to copy-B's Deno (`setting`'s WHATWG url guard, `mail`'s
+// sender-actor from-derivation). Each case asserts the door the bridge took (its
+// `x-yak-apply` header) AND that the result is byte-identical to direct-to-Deno
+// on copy-A — so a native write that diverged from the port, OR a mis-routed
+// batch, surfaces here. The predicate is the kernel's `native_safe` (write.rs
+// `NATIVE_COMPS`), the single divergence-surface source.
 //
 // Env (all four; the tests skip unless every one is set), same effects-OFF probe
 // setup the read harness documents above (TASKS_EFFECTS=daemon, no effectsd — so
@@ -925,19 +928,49 @@ fn is_iso_ts(s: &str) -> bool {
         && b[..4].iter().all(u8::is_ascii_digit)
 }
 
-// One scalar string, canonicalized (a uuid → its stable placeholder, a stamp →
-// `<ts>`, anything else verbatim).
+// The stable placeholder for one uuid, first-seen order preserved in `seen`.
+fn uuid_slot(u: &str, seen: &mut Vec<String>) -> String {
+    let i = seen.iter().position(|x| x == u).unwrap_or_else(|| {
+        seen.push(u.to_string());
+        seen.len() - 1
+    });
+    format!("<u{i}>")
+}
+
+// Replace EVERY uuid-shaped substring with its placeholder — a bare uuid VALUE
+// and a uuid EMBEDDED in a larger string (a journal trace's `created` entry is
+// `"<comp> <eid>"`) alike. A server-minted uuid legitimately differs between the
+// two independent writers, so it must canonicalize wherever it appears; a client
+// uuid is identical on both, so it maps to the same slot. The preceding-byte
+// guard keeps a match from starting mid-hex-run; uuids in this data are always at
+// a boundary (start, or after a space).
+fn replace_uuids(s: &str, seen: &mut Vec<String>) -> String {
+    let bytes = s.as_bytes();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if i + 36 <= bytes.len()
+            && (i == 0 || !bytes[i - 1].is_ascii_hexdigit())
+            && is_uuid(&s[i..i + 36])
+        {
+            out.push_str(&uuid_slot(&s[i..i + 36], seen));
+            i += 36;
+        } else {
+            let ch = s[i..].chars().next().unwrap();
+            out.push(ch);
+            i += ch.len_utf8();
+        }
+    }
+    out
+}
+
+// One scalar string, canonicalized (a whole-string stamp → `<ts>`; every uuid
+// substring → its stable placeholder; anything else verbatim).
 fn canon_scalar(s: &str, seen: &mut Vec<String>) -> String {
-    if is_uuid(s) {
-        let i = seen.iter().position(|u| u == s).unwrap_or_else(|| {
-            seen.push(s.to_string());
-            seen.len() - 1
-        });
-        format!("<u{i}>")
-    } else if is_iso_ts(s) {
+    if is_iso_ts(s) {
         "<ts>".to_string()
     } else {
-        s.to_string()
+        replace_uuids(s, seen)
     }
 }
 
@@ -1447,12 +1480,55 @@ fn write_parity() {
         &format!("[{{\"eid\":\"{p}\",\"name\":\"entity\",\"comp\":null}}]"),
         "native",
     );
-    // --- ROUTING: a TRANSFORM-BEARING comp proxies -------------------------------
-    // A `setting` write fires guardSettings in db.ts apply() — a transform the
-    // rust kernel does not port (rung 6). The predicate must PROXY it, not commit
-    // it natively (which would skip validation). An unknown catalog key is refused
-    // by guardSettings identically on both copies, so the batch mutates nothing
-    // and proves the proxy door: same rejection, `x-yak-apply: proxy`.
+    // --- ROUTING: address canonicalization commits NATIVELY (rung 6) ------------
+    // canonEmail: a NON-canonical fleet email address (uppercase + underscore)
+    // must land in its deliverable spelling — `Zqw…_Corr@bot.yak.sh` →
+    // `zqw…corr@bot.yak.sh` — byte-identically on both copies, native door taken.
+    // The bridge and the probe Deno must share TASKS_MAIL_DOMAIN (both default to
+    // bot.yak.sh); under a non-default domain the address is off-domain and canon
+    // no-ops on both equally, so the parity still holds — it just stops exercising
+    // the underscore/lowercase rule. This is the "non-canonical address that must
+    // normalize identically" acceptance case.
+    let em = uuid_v4();
+    assert_write(
+        "email/canon-native",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!(
+            "[{{\"eid\":\"{em}\",\"name\":\"email\",\"comp\":{{\"address\":\"Zqw{uid}_Corr@bot.yak.sh\"}}}}]"
+        ),
+        "native",
+    );
+    g(&ts, &br, &format!("[{{\"eid\":\"{em}\",\"name\":\"entity\",\"comp\":null}}]"));
+
+    // mintAddresses: a raw @-address in deliver.to is folded into a find-or-minted
+    // address-book `email` entity (its OWN server-minted eid, which the harness
+    // canonicalizes to `<uN>` in first-seen order) and the ref rewritten to point
+    // at it — native, byte-identical across the echo (the prepended mint), the
+    // journal (the effective batch), and the resulting deliver + email rows.
+    let dv = uuid_v4();
+    assert_write(
+        "deliver/mint-native",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!(
+            "[{{\"eid\":\"{dv}\",\"name\":\"deliver\",\"comp\":{{\"to\":\"Zqw{uid}_New@bot.yak.sh\"}}}}]"
+        ),
+        "native",
+    );
+    g(&ts, &br, &format!("[{{\"eid\":\"{dv}\",\"name\":\"entity\",\"comp\":null}}]"));
+
+    // --- ROUTING: a TRANSFORM-BEARING comp still PROXIES -------------------------
+    // `setting` fires guardSettings, whose url-typed validation is WHATWG `new
+    // URL()` (default-port/dot-segment/IPv4/IPv6/IDNA host canonicalization) — a
+    // transform not ported here (a faithful port needs a full WHATWG URL parser),
+    // so the predicate must PROXY it, not commit it natively (which would skip
+    // validation). An unknown catalog key is refused by guardSettings identically
+    // on both copies, so the batch mutates nothing and proves the proxy door.
     let e5 = uuid_v4();
     assert_write(
         "routing/setting-proxies",
@@ -1465,6 +1541,26 @@ fn write_parity() {
         ),
         "proxy",
     );
+
+    // `mail` also still PROXIES: a create fires db.ts's server-owned `from`
+    // derivation through the session sender-actor chain (rung-7 session cluster),
+    // unported here. With no x-via the derivation resolves nothing on either copy,
+    // so a mail create aimed at a live entity lands identically and takes proxy.
+    if let Some(target) = an_eid(&ts, "task") {
+        let ml = uuid_v4();
+        assert_write(
+            "routing/mail-proxies",
+            &ts,
+            &br,
+            &ts_db,
+            &br_db,
+            &format!(
+                "[{{\"eid\":\"{ml}\",\"name\":\"mail\",\"comp\":{{\"target\":\"{target}\"}}}}]"
+            ),
+            "proxy",
+        );
+        g(&ts, &br, &format!("[{{\"eid\":\"{ml}\",\"name\":\"entity\",\"comp\":null}}]"));
+    }
 
     // --- DELETE CASCADE → RELEASE → RESUME (native) --------------------------
     // Deleting a SESSION that holds a claim on an unsettled task releases the

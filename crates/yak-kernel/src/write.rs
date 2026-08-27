@@ -417,8 +417,22 @@ const UNPORTED: [&str; 5] = ["entry", "stop_request", "wake", "spawn", "session"
 // rebuild and actor backfill were ported here (the resume push a release owes,
 // and the cascade→release→resume consequence of an entity delete). A claim
 // take/release and an entity delete now commit natively, byte-identical to Deno.
-pub const NATIVE_COMPS: [&str; 8] =
-    ["doc", "task", "board", "project", "comment", "dependency", "claim", "entity"];
+//
+// `email` and `deliver` joined at rung 6, once db.ts's address canonicalization
+// was ported here (`canon`, `canon_email`, `mint_addresses` below): an
+// `email.address` write is canonicalized to its deliverable spelling, and a
+// `deliver.to` bearing an @-address is folded into its find-or-minted address-
+// book `email` entity. Two of rung 6's four domains are still absent by design:
+// `setting` — its guardSettings validates a url-typed value through WHATWG `new
+// URL()` (default-port + dot-segment + IPv4/IPv6/IDNA host canonicalization), a
+// transform a faithful port needs a full WHATWG URL parser for; and `mail` —
+// its server-owned `from` is derived through the session sender-actor chain
+// (persona/held-work/model fallbacks) that is rung-7 session-cluster work. Both
+// still PROXY, so no half-ported transform ever commits natively.
+pub const NATIVE_COMPS: [&str; 10] = [
+    "doc", "task", "board", "project", "comment", "dependency", "claim", "entity", "email",
+    "deliver",
+];
 
 // Can this whole batch commit through the rust kernel, or must the bridge proxy
 // it to the Deno /apply? Whole-batch — apply() is atomic, so a batch that mixes
@@ -428,6 +442,166 @@ pub const NATIVE_COMPS: [&str; 8] =
 // corruption (a transform skipped).
 pub fn native_safe(changes: &[Change]) -> bool {
     !changes.is_empty() && changes.iter().all(|c| NATIVE_COMPS.contains(&c.name.as_str()))
+}
+
+// ---- fleet mail address canonicalization (src/mailaddr.ts, rung 6) ----
+//
+// The address book stores only the DELIVERABLE spelling of a fleet address:
+// Cloudflare Email Routing rejects an underscore in the fleet domain's local-
+// part at RCPT, so an `email.address` write and a `deliver.to` @-address are
+// canonicalized (lowercase, underscores shed) on the way in — the same rule the
+// TS door applies, so a book entry Cloudflare would bounce can never be stored.
+// Every off-domain address (the owner's own, a customer's) passes untouched.
+
+// The fleet mail domain — TASKS_MAIL_DOMAIN or the default (mailaddr.ts
+// mailDomain). Read per call, matching the TS reader (no cached env).
+pub fn mail_domain() -> String {
+    std::env::var("TASKS_MAIL_DOMAIN")
+        .ok()
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "bot.yak.sh".to_string())
+}
+
+// The local-part of a fleet address, or None off-domain (mailaddr.ts fleetLocal):
+// exactly one `@`, both halves non-empty, the domain (case-insensitively) ours.
+fn fleet_local(address: &str) -> Option<String> {
+    let parts: Vec<&str> = address.trim().split('@').collect();
+    if parts.len() == 2 && !parts[0].is_empty() && !parts[1].is_empty()
+        && parts[1].to_lowercase() == mail_domain()
+    {
+        Some(parts[0].to_string())
+    } else {
+        None
+    }
+}
+
+// The canonical, deliverable form of a fleet address (mailaddr.ts canon):
+// lowercase and shed underscores in the local-part; leave every other domain
+// untouched. Idempotent, so re-canonicalizing a stored value is a no-op.
+pub fn canon(to: &str) -> String {
+    match fleet_local(to) {
+        Some(local) => format!("{}@{}", local.to_lowercase().replace('_', ""), mail_domain()),
+        None => to.to_string(),
+    }
+}
+
+// `[A-Za-z]+-\d+` anchored (db.ts addressed's id-shape regex): the entity num
+// behind a fleet address that names one by its human id (`S-31@<fleet>`).
+fn id_local_num(local: &str) -> Option<i64> {
+    let (pre, num) = local.split_once('-')?;
+    if pre.is_empty() || !pre.chars().all(|c| c.is_ascii_alphabetic()) {
+        return None;
+    }
+    if num.is_empty() || !num.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    num.parse::<i64>().ok()
+}
+
+// The entity already wearing this address (db.ts addressed): an address-book
+// `email` (case-insensitive), or an id-shaped fleet address (`S-31@<fleet>`)
+// naming one by its human id — so a mint never SHADOWS an entity the graph
+// already knows. Read-only; runs before the write transaction like its TS twin.
+fn addressed(conn: &Connection, addr: &str) -> Option<String> {
+    let a = addr.trim();
+    let worn: Option<String> = conn
+        .query_row(
+            "select o.eid from email e join entity o on o.id = e.entity \
+             where e.address = ?1 collate nocase",
+            [a],
+            |r| r.get(0),
+        )
+        .optional()
+        .ok()
+        .flatten();
+    if worn.is_some() {
+        return worn;
+    }
+    let local = fleet_local(a)?;
+    let num = id_local_num(&local)?;
+    let eid: String = conn
+        .query_row("select eid from entity where num = ?1", [num], |r| r.get(0))
+        .optional()
+        .ok()
+        .flatten()?;
+    (human(conn, &eid).to_lowercase() == local.to_lowercase()).then_some(eid)
+}
+
+// A raw @-address in `deliver.to` names no eid the parser could resolve
+// (db.ts mintAddresses, D-14945) — fold it into its address-book `email` entity
+// (find-or-mint) and inject that mint so the reference lands with provenance.
+// Canonicalized before the dedup lookup AND the mint, so an underscore spelling
+// finds the canonical book entry and a fresh mint is born deliverable. Deduped
+// within the batch so two letters to one new address mint it once. knock/wake
+// never carry an @, so only outbound mail's deliver rows are ever touched.
+fn mint_addresses(conn: &Connection, changes: Vec<Change>) -> Vec<Change> {
+    let mut mints: Vec<Change> = vec![];
+    let mut seen: HashMap<String, String> = HashMap::new();
+    let mut out: Vec<Change> = Vec::with_capacity(changes.len());
+    for mut c in changes {
+        let addr = if c.name == "deliver" {
+            c.comp
+                .as_ref()
+                .and_then(|m| m.get("to"))
+                .and_then(|v| v.as_str())
+                .filter(|s| s.contains('@'))
+                .map(String::from)
+        } else {
+            None
+        };
+        if let Some(addr) = addr {
+            let a = canon(addr.trim());
+            let key = a.to_lowercase();
+            let eid = match seen.get(&key) {
+                Some(hit) => hit.clone(),
+                None => {
+                    let eid = addressed(conn, &a).unwrap_or_else(|| {
+                        let e = uuid::Uuid::new_v4().to_string();
+                        let mut m = Map::new();
+                        m.insert("address".into(), Value::from(a.clone()));
+                        mints.push(Change::new(&e, "email", Some(m)));
+                        e
+                    });
+                    seen.insert(key, eid.clone());
+                    eid
+                }
+            };
+            if let Some(m) = c.comp.as_mut() {
+                m.insert("to".into(), Value::from(eid));
+            }
+        }
+        out.push(c);
+    }
+    if mints.is_empty() {
+        out
+    } else {
+        [mints, out].concat()
+    }
+}
+
+// The address book stores only the deliverable spelling: an `email.address`
+// write is canonicalized here (db.ts canonEmail). Complements mint_addresses,
+// which canons the addresses it mints; this covers the direct address-book write
+// (a venture, a person) and re-canons the mints (idempotent).
+fn canon_email(changes: Vec<Change>) -> Vec<Change> {
+    changes
+        .into_iter()
+        .map(|mut c| {
+            if c.name == "email" {
+                let canoned = c
+                    .comp
+                    .as_ref()
+                    .and_then(|m| m.get("address"))
+                    .and_then(|v| v.as_str())
+                    .map(canon);
+                if let (Some(v), Some(m)) = (canoned, c.comp.as_mut()) {
+                    m.insert("address".into(), Value::from(v));
+                }
+            }
+            c
+        })
+        .collect()
 }
 
 fn renamed(v: &Vocab, change: Change) -> Result<Change> {
@@ -1141,6 +1315,13 @@ pub fn apply(
 ) -> Result<Vec<Change>> {
     let conn = &store.conn;
     let v = vocab();
+    // Pre-normalize address canonicalization (db.ts apply() head, rung 6): a raw
+    // @-address in `deliver.to` becomes its find-or-minted address-book `email`
+    // entity, then every `email.address` (the mints included) is canonicalized.
+    // Both run before normalize so the injected mints and rewritten refs pass
+    // through the value language and column allowlist like any other change.
+    let changes = mint_addresses(conn, changes);
+    let changes = canon_email(changes);
     let mut changes = normalize(conn, changes)?;
     // Unported domains refuse before any write (see UNPORTED above).
     for c in &changes {
@@ -2036,4 +2217,98 @@ fn check_ref(
         )));
     }
     Ok(())
+}
+
+// Pure address-canonicalization tests (rung 6). Private helpers are visible
+// here; the apply()-level wiring (mint + rewrite) is covered in tests/apply.rs,
+// and the full three-surface byte-parity in crates/yak-bridge/tests/parity.rs.
+#[cfg(test)]
+mod canon_tests {
+    use super::*;
+
+    // A domain guaranteed NOT to be the fleet domain, whatever the ambient env,
+    // so the off-domain cases are deterministic without mutating a shared env.
+    fn off_domain() -> String {
+        let fleet = mail_domain();
+        for d in ["example.invalid", "other.invalid"] {
+            if d != fleet {
+                return d.to_string();
+            }
+        }
+        unreachable!()
+    }
+
+    #[test]
+    fn canon_lowercases_and_sheds_underscores_on_the_fleet_domain() {
+        let d = mail_domain();
+        assert_eq!(canon(&format!("Foo_Bar@{d}")), format!("foobar@{d}"));
+        assert_eq!(canon(&format!("S_11310@{d}")), format!("s11310@{d}"));
+        // idempotent: a canonical address re-canonicalizes to itself.
+        let once = canon(&format!("A_B_c@{d}"));
+        assert_eq!(canon(&once), once);
+    }
+
+    #[test]
+    fn canon_leaves_off_domain_addresses_untouched() {
+        let o = off_domain();
+        // underscores and case are preserved off-domain — only the fleet domain
+        // is normalized (the Cloudflare RCPT rule is fleet-only).
+        assert_eq!(canon(&format!("Jeff_Doe@{o}")), format!("Jeff_Doe@{o}"));
+        // not an address at all → passthrough.
+        assert_eq!(canon("holdco"), "holdco");
+    }
+
+    #[test]
+    fn fleet_local_requires_exactly_one_at_and_our_domain() {
+        let d = mail_domain();
+        assert_eq!(fleet_local(&format!("bot@{d}")), Some("bot".to_string()));
+        // case-insensitive on the domain half.
+        assert_eq!(fleet_local(&format!("bot@{}", d.to_uppercase())), Some("bot".to_string()));
+        assert_eq!(fleet_local(&format!("a@b@{d}")), None); // two @
+        assert_eq!(fleet_local(&format!("@{d}")), None); // empty local
+        assert_eq!(fleet_local("bot@"), None); // empty domain
+        assert_eq!(fleet_local(&format!("x@{}", off_domain())), None); // off-domain
+    }
+
+    // The decisive cross-impl proof: these expected values are the byte output
+    // of the REAL TS `canon` (src/mailaddr.ts) over this corpus, captured with
+    // `deno run` at authoring. Rust `canon` must reproduce each exactly — the
+    // same address-normalization the write-parity harness exercises end to end.
+    // Skipped under a non-default TASKS_MAIL_DOMAIN (the fleet corpus is bot.yak.sh);
+    // the env-agnostic rules are covered by the tests above.
+    #[test]
+    fn canon_matches_ts_byte_for_byte() {
+        if mail_domain() != "bot.yak.sh" {
+            return;
+        }
+        let cases: &[(&str, &str)] = &[
+            ("Foo_Bar@bot.yak.sh", "foobar@bot.yak.sh"),
+            ("S_11310@bot.yak.sh", "s11310@bot.yak.sh"),
+            ("plain@bot.yak.sh", "plain@bot.yak.sh"),
+            ("MiXeD@BOT.YAK.SH", "mixed@bot.yak.sh"),
+            ("  spaced@bot.yak.sh  ", "spaced@bot.yak.sh"),
+            ("S-31@bot.yak.sh", "s-31@bot.yak.sh"),
+            ("jeff@yak.sh", "jeff@yak.sh"),
+            ("Jeff_Doe@example.com", "Jeff_Doe@example.com"),
+            ("holdco", "holdco"),
+            ("a@b@bot.yak.sh", "a@b@bot.yak.sh"),
+            ("@bot.yak.sh", "@bot.yak.sh"),
+            ("bot@", "bot@"),
+            ("__@bot.yak.sh", "@bot.yak.sh"),
+        ];
+        for (input, want) in cases {
+            assert_eq!(&canon(input), want, "canon({input:?})");
+        }
+    }
+
+    #[test]
+    fn id_local_num_matches_only_the_prefix_dash_digits_shape() {
+        assert_eq!(id_local_num("S-31"), Some(31));
+        assert_eq!(id_local_num("M-4066"), Some(4066));
+        assert_eq!(id_local_num("S31"), None); // no dash
+        assert_eq!(id_local_num("S-3-1"), None); // trailing non-digit run
+        assert_eq!(id_local_num("AB12-3"), None); // digits in the prefix
+        assert_eq!(id_local_num("-31"), None); // empty prefix
+        assert_eq!(id_local_num("S-"), None); // empty num
+    }
 }

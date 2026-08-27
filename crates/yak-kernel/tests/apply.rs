@@ -92,6 +92,14 @@ const SCHEMA: &str = "
     at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     rank real
   );
+  create table email (
+    entity  integer primary key references entity(id),
+    address text not null
+  );
+  create table deliver (
+    entity integer primary key references entity(id),
+    \"to\"   integer references entity(id)
+  );
 ";
 
 fn store() -> WriteStore {
@@ -187,14 +195,59 @@ fn native_safe_routes_plain_graph_and_proxies_the_rest() {
     // backfill ported): a claim take/release and an entity delete commit native.
     assert!(ok(vec![ch(A, "claim", json!({"session": B}))]));
     assert!(ok(vec![ch(A, "entity", Value::Null)]));
-    // a transform-bearing comp (setting/session/deliver/wake/entry) → proxy.
+    // email + deliver joined NATIVE_COMPS at rung 6 (address canonicalization
+    // ported): an email.address write and a deliver.to write commit native.
+    assert!(ok(vec![ch(A, "email", json!({"address": "x@y.com"}))]));
+    assert!(ok(vec![ch(A, "deliver", json!({"to": B}))]));
+    // a transform-bearing comp still absent by design → proxy: setting (WHATWG
+    // url guard), mail (sender-actor from-derivation), session (spawn cluster).
     assert!(!ok(vec![ch(A, "setting", json!({"key": "k", "value": "v"}))]));
+    assert!(!ok(vec![ch(A, "mail", json!({"target": B}))]));
     assert!(!ok(vec![ch(A, "session", json!({"id": "S-1"}))]));
     // a MIXED batch proxies WHOLE — apply() is atomic, no splitting: one native
     // comp beside a transform-bearing one (a setting) still proxies.
     assert!(!ok(vec![ch(A, "doc", json!({"title": "x"})), ch(A, "setting", json!({"key": "k", "value": "v"}))]));
+    // even a native email beside an unported mail proxies whole (over-proxy bias).
+    assert!(!ok(vec![ch(A, "email", json!({"address": "x@y.com"})), ch(A, "mail", json!({"target": B}))]));
     // an empty batch proxies (Deno owns the trivial answer).
     assert!(!ok(vec![]));
+}
+
+#[test]
+fn email_write_canonicalizes_the_address() {
+    use yak_kernel::write::{canon, mail_domain};
+    let s = store();
+    let d = mail_domain();
+    // a non-canonical fleet address (uppercase + underscore) must land in its
+    // deliverable spelling (db.ts canonEmail).
+    let input = format!("Foo_Bar@{d}");
+    run(&s, vec![ch(A, "email", json!({ "address": input.clone() }))]);
+    let stored: String = one(&s, "select address from email");
+    assert_eq!(stored, canon(&input));
+    assert_eq!(stored, format!("foobar@{d}"));
+}
+
+#[test]
+fn deliver_at_address_mints_email_and_rewrites_to() {
+    use yak_kernel::write::{canon, mail_domain};
+    let s = store();
+    let d = mail_domain();
+    // a raw @-address in deliver.to is folded into a find-or-minted email entity
+    // wearing the CANONICAL address, and the ref is rewritten to point at it.
+    let addr = format!("New_Corr@{d}");
+    run(&s, vec![ch(A, "deliver", json!({ "to": addr.clone() }))]);
+    let minted: String = one(&s, "select address from email");
+    assert_eq!(minted, canon(&addr));
+    let to_eid: String =
+        one(&s, "select o.eid from deliver dv join entity o on o.id = dv.\"to\"");
+    let email_eid: String =
+        one(&s, "select o.eid from email e join entity o on o.id = e.entity");
+    assert_eq!(to_eid, email_eid, "deliver.to points at the minted email entity");
+    // find-or-mint: a second deliver to the SAME address (any spelling that
+    // canonicalizes equal) reuses the entity — no second email is minted.
+    run(&s, vec![ch(B, "deliver", json!({ "to": format!("new_corr@{d}") }))]);
+    let emails: i64 = one(&s, "select count(*) from email");
+    assert_eq!(emails, 1, "the canonical address is minted once");
 }
 
 #[test]
