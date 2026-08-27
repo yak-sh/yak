@@ -120,6 +120,30 @@ fn add_empty_comp_tables(db: &str) {
     }
 }
 
+// Sessions of the actor carrying NEITHER a brief NOR a final_text — the rows
+// the bounded session load must never materialize (T-22787). They are stamped
+// NEWER than every briefed session, so a correct `previously` still skips them
+// (nothing to quote) and the read never pays to load them.
+fn add_unbriefed_sessions(db: &str, n: usize) {
+    let conn = Connection::open(db).unwrap();
+    for i in 0..n {
+        let id = 5000 + i as i64;
+        let eid = format!("bbbbbbbb-0000-0000-0000-{:012}", id);
+        conn.execute("insert into entity (id, eid, num) values (?1, ?2, ?1)", params![id, eid])
+            .unwrap();
+        conn.execute(
+            "insert into session (entity, id, actor) values (?1, ?2, 1)",
+            params![id, eid],
+        )
+        .unwrap();
+        conn.execute(
+            "insert into created (entity, at) values (?1, ?2)",
+            params![id, "2026-09-01T00:00:00.000Z"],
+        )
+        .unwrap();
+    }
+}
+
 fn run(db: &str, args: &[&str], profile: bool) -> Output {
     let mut c = Command::new(env!("CARGO_BIN_EXE_yak"));
     c.env("DB_PATH", db);
@@ -139,6 +163,22 @@ fn sql_count(stderr: &[u8]) -> usize {
         let f: Vec<&str> = l.split_whitespace().collect();
         if f.first() == Some(&"total") && f.len() == 4 {
             return f[1].parse().unwrap();
+        }
+    }
+    panic!("no SQL total row in profile:\n{text}");
+}
+
+// The `rows` column of the SQL `total` row — how many rows every statement
+// materialized in sum. Statement COUNT alone cannot see the session bound: the
+// full and bounded loads issue the same bulk statements, differing only in how
+// many rows those statements build. This is the number that must not scale
+// with the un-briefed population.
+fn sql_rows(stderr: &[u8]) -> usize {
+    let text = String::from_utf8_lossy(stderr);
+    for l in text.lines() {
+        let f: Vec<&str> = l.split_whitespace().collect();
+        if f.first() == Some(&"total") && f.len() == 4 {
+            return f[3].parse().unwrap();
         }
     }
     panic!("no SQL total row in profile:\n{text}");
@@ -217,5 +257,62 @@ fn context_read_does_not_scale_with_the_comp_table_surface() {
          {n_wide}): a digest section is materializing the whole comp surface \
          again, not reading projected",
         UNRENDERED_COMPS.len()
+    );
+}
+
+#[test]
+fn context_previously_skips_newer_unbriefed_sessions() {
+    // The bounded session load (T-22787) reads only the actor's BRIEFED
+    // sessions for `## previously`. Adding newer un-briefed sessions must not
+    // change the pick: the newest BRIEFED session still wins, because an
+    // un-briefed one carries nothing to quote. This is the correctness half of
+    // the bound — drop the briefed session and previously would go blank; keep
+    // the un-briefed ones and it would quote the wrong session.
+    let dir = std::env::temp_dir().join(format!("yak-ctx-skip-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = fixture(&dir, 3); // sessions 100-102 briefed; 102 is newest
+    add_unbriefed_sessions(&db, 5); // sessions 5000+, newer, un-briefed
+    let out = run(&db, &["context", "1"], false);
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert_eq!(out.status.code(), Some(0));
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("## previously"), "previously block missing:\n{text}");
+    assert!(
+        text.contains("brief from session 102"),
+        "newest BRIEFED session not rendered — a newer un-briefed session won:\n{text}"
+    );
+}
+
+#[test]
+fn context_bounds_the_session_load_to_briefed_and_claimholders() {
+    // The perf half of the bound: rows materialized must not scale with the
+    // actor's un-briefed session history. Same graph twice — one bare, one with
+    // 40 extra un-briefed sessions — read from the project so both render the
+    // same `## previously`. The full load would materialize all 40 across the
+    // session comp tables; the bounded load reads only the briefed set (plus
+    // claim holders, none here), so total rows grow by a small constant.
+    let dir = std::env::temp_dir().join(format!("yak-ctx-bound-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let lean = fixture(&dir.join("lean"), 3);
+    let wide = fixture(&dir.join("wide"), 3);
+    add_unbriefed_sessions(&wide, 40);
+
+    let a = run(&lean, &["context", "1"], true);
+    let b = run(&wide, &["context", "1"], true);
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert_eq!(a.status.code(), Some(0));
+    assert_eq!(b.status.code(), Some(0));
+    let (r_lean, r_wide) = (sql_rows(&a.stderr), sql_rows(&b.stderr));
+    // 40 un-briefed sessions across the session/created/entity reads are ~120
+    // extra rows under the full load (measured: +120). The bounded load skips
+    // them entirely (measured: +0), so the growth stays a small constant well
+    // under one per-session row — the threshold sits between the two.
+    let growth = r_wide.saturating_sub(r_lean);
+    assert!(
+        growth <= 40,
+        "bounded session load materialized the un-briefed sessions: \
+         rows {r_lean} → {r_wide} (+{growth})"
     );
 }

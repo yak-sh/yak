@@ -167,6 +167,37 @@ fn rows_wearing(store: &Store, comp: &str, sels: &[Sel]) -> Vec<Row> {
     store.rows_of_cols(&eids, sels).into_iter().filter(yak_kernel::store::visible).collect()
 }
 
+// The actor's BRIEFED sessions — those the `previously` block can ever pick.
+// `previously` scans the actor's sessions for the newest one carrying a brief
+// (brief.text, or session.final_text as the fallback brief_of() reads), so a
+// session wearing neither is filtered out no matter how recent. Loading only
+// the briefed ones is therefore output-identical to loading all ~1500 of them,
+// and it is what lets the digest read a handful of rows instead of the whole
+// actor history (T-22787). The membership is the same reverse-ref the full
+// path walked (session.actor = actor), screened to a brief being present.
+fn briefed_session_eids(store: &Store, actor: &str) -> Vec<String> {
+    if !store.has_table("session") {
+        return vec![];
+    }
+    let brief_present = if store.has_table("brief") {
+        "or exists (select 1 from brief b \
+         where b.entity = s.entity and coalesce(b.text, '') <> '')"
+    } else {
+        ""
+    };
+    let sql = format!(
+        "select e.eid from session s \
+         join entity e on e.id = s.entity \
+         join entity a on a.id = s.actor \
+         where a.eid = ?1 and (coalesce(s.final_text, '') <> '' {brief_present}) \
+         order by e.num"
+    );
+    let Ok(mut st) = store.conn.prepare(&sql) else { return vec![] };
+    st.query_map([actor], |r| r.get(0))
+        .map(|it| it.filter_map(|x| x.ok()).collect())
+        .unwrap_or_default()
+}
+
 // memories with NO scope — the fleet's shared principles
 fn fleet_memories(store: &Store) -> Vec<Row> {
     if !store.has_table("memory") {
@@ -383,14 +414,37 @@ pub fn context_digest(
         .map(|r| cs(r, "session", "actor"))
         .filter(|a| !a.is_empty())
         .or_else(|| scope.clone());
-    // the actor's sessions — resumptions' holder lookup and the briefs;
-    // the previously-thread's actor falls back to the SCOPE (actor ==
-    // project since T-19461), so a bare preview still shows the thread
+    // the sessions the digest actually reads — NOT the actor's whole history
+    // (~1500 rows to render ≤5). Two consumers, each with a bounded need
+    // (T-22787): `previously` picks the newest BRIEFED session, so it needs
+    // only briefed_session_eids; `resumptions` maps a candidate task's claim
+    // to its holder's actor, so it needs only the sessions HOLDING a claim on
+    // an open task. Their union is output-identical to the full load — a
+    // session in neither set was never read on either path. The
+    // previously-thread's actor falls back to the SCOPE (actor == project
+    // since T-19461), so a bare preview still shows the thread.
     let sessions: Vec<Row> = match &actor {
-        Some(a) => store.rows_of_cols(
-            &store.eids_where_ref("session", "actor", std::slice::from_ref(a)),
-            SESSION_SELS,
-        ),
+        Some(a) => {
+            let mut want: Vec<String> = briefed_session_eids(store, a);
+            for t in &tasks {
+                if settled(&status_of(t)) {
+                    continue;
+                }
+                let holder = cs(t, "claim", "session");
+                if !holder.is_empty() {
+                    want.push(holder);
+                }
+            }
+            want.sort();
+            want.dedup();
+            // The full path returned rows num-ascending (eids_where_ref orders
+            // by num); `previously` stable-sorts by edited_at, so equal-time
+            // ties break on that order. Restore it — an eid-keyed set loaded in
+            // >500-eid chunks would otherwise not be globally num-sorted.
+            let mut rows = store.rows_of_cols(&want, SESSION_SELS);
+            rows.sort_by_key(|r| r.num.unwrap_or(0));
+            rows
+        }
         None => vec![],
     };
     // my claims: entities wearing claim.session = my session entity
