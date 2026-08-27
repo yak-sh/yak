@@ -64,12 +64,22 @@ impl fmt::Display for ApplyError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ApplyError::Refused(m) => write!(f, "{m}"),
-            ApplyError::Stale { comp, col, id, value, .. } => write!(
-                f,
-                "{comp}.{col} on {id} has moved since you read it — batch \
-                 refused. Merge into the current value below and retry with \
-                 its hash.\n{value}"
-            ),
+            ApplyError::Stale { comp, col, id, value, .. } => {
+                // Byte-identical to db.ts `Stale` (src/db.ts): after the lead
+                // line the refusal shows `was:` the SHA of the value it prints
+                // (a caller can merge into it and re-guard without re-reading —
+                // it cannot hash for itself), then the current value in JS
+                // `String()` form under a header. A null value hashes to the
+                // literal `null` and prints as the empty tail (`value ?? ''`).
+                let was = if value.is_null() { "null".to_string() } else { sha(value) };
+                let shown = if value.is_null() { String::new() } else { js_string(value) };
+                write!(
+                    f,
+                    "{comp}.{col} on {id} has moved since you read it — batch \
+                     refused. Merge into the current value below and retry with \
+                     its hash.\nwas: {was}\n--- current {comp}.{col} ---\n{shown}"
+                )
+            }
             ApplyError::Db(e) => write!(f, "{e}"),
         }
     }
@@ -385,6 +395,39 @@ const SERVER_OWNED: [&str; 8] = [
 // every session write into its `spawn` twin (dualSpawn) and backfills actors;
 // a bare session landed without those would silently diverge the copies.
 const UNPORTED: [&str; 5] = ["entry", "stop_request", "wake", "spawn", "session"];
+
+// The comps the rust kernel commits NATIVELY, and the routing predicate the
+// bridge derives its Deno-vs-native decision from (D-22804 rung 4). Every comp
+// here is transform-free in db.ts apply() — none is read or rewritten by
+// mintAddresses/canonEmail, guardSettings, dualSpawn/dualFacet/mirrorLineage,
+// the resume-stack push, or actor backfill — AND proven byte-identical to the
+// Deno door by the write-parity harness (crates/yak-bridge/tests/parity.rs).
+//
+// This is an ALLOWLIST on purpose, and the allowlist is the anti-rot structure
+// M-14769 asks for rather than a denylist that silently rots: the DEFAULT for
+// every other comp is PROXY-to-Deno, so a comp cannot drift into an unguarded
+// native commit. A NEW vocabulary word is absent here and proxies; ADDING a
+// db.ts transform to a listed comp turns this harness's parity gate red. A comp
+// LEAVES the proxy default (joins this list) only when its transform is ported
+// and its three-surface parity case is green — the later rungs' work.
+//
+// `entity` is deliberately ABSENT: an entity DELETE cascades, and a cascade that
+// releases a claim owes db.ts's unported resume-stack push (rung 5), so every
+// deletion proxies. `claim` is absent for the same reason (a release is the
+// interruption event the resume stack records). Both fall through to proxy with
+// no special case — they simply are not on the list.
+pub const NATIVE_COMPS: [&str; 6] =
+    ["doc", "task", "board", "project", "comment", "dependency"];
+
+// Can this whole batch commit through the rust kernel, or must the bridge proxy
+// it to the Deno /apply? Whole-batch — apply() is atomic, so a batch that mixes
+// a native comp with a transform-bearing one (or a claim, or an entity delete)
+// proxies WHOLE. Empty batches proxy too (Deno owns that trivial answer). Biased
+// hard to over-proxy: over-proxy is slow-but-correct, under-proxy is silent
+// corruption (a transform skipped).
+pub fn native_safe(changes: &[Change]) -> bool {
+    !changes.is_empty() && changes.iter().all(|c| NATIVE_COMPS.contains(&c.name.as_str()))
+}
 
 fn renamed(v: &Vocab, change: Change) -> Result<Change> {
     let map = v.prop_renames();

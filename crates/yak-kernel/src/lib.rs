@@ -51,7 +51,10 @@ pub use remote::Remote;
 pub use store::{Rows, Store};
 pub use vocab::{vocab, PropType, Vocab};
 #[cfg(feature = "native")]
-pub use write::{apply, default_gates, ApplyError, ApplyOpts, Gate, WriteStore};
+pub use change::parse_batch;
+pub use write::{
+    apply, default_gates, native_safe, ApplyError, ApplyOpts, Gate, WriteStore, NATIVE_COMPS,
+};
 
 // The live graph the way every client resolves it: DB_PATH wins, else the
 // home pairing.

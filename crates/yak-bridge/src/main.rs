@@ -30,7 +30,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use yak_bridge::subserve::Subserve;
 use yak_bridge::{journalr, read, snap};
-use yak_kernel::{Store, WriteStore};
+use yak_kernel::{
+    apply, default_gates, native_safe, parse_batch, ApplyOpts, Change, Store, WriteStore,
+};
 
 #[derive(Clone)]
 struct App {
@@ -42,9 +44,8 @@ struct App {
     // at the live graph.
     upstream: Option<String>,
     // The bridge's READ_WRITE connection (D-22804 rung 1). Opened at boot to prove
-    // the same-build write rule holds and held for the native-write rungs (4+);
-    // rungs 1–3 proxy EVERY batch to Deno, so nothing writes through it yet.
-    #[allow(dead_code)]
+    // the same-build write rule holds; a native-safe batch (rung 4) COMMITS
+    // through it, a transform-bearing one still proxies to Deno.
     write: Arc<Mutex<WriteStore>>,
 }
 
@@ -117,39 +118,104 @@ async fn graph_route(State(app): State<App>) -> Response {
     json_response(&out)
 }
 
-// POST /apply — the write door (D-22804 rung 2), defaulting to PROXY-EVERYTHING.
-// Every batch is classified `proxy` for now: forward the RAW, UNPARSED body to
-// the Deno /apply verbatim, preserve the x-via attribution header, and relay the
-// status + body unchanged. A transparent write proxy — zero behavior change and
-// zero divergence risk — and the safety net that lands BEFORE any native write.
-// Classification is WHOLE-BATCH only (never per-change: apply() is atomic). A
-// domain leaves the proxy list only in a later rung, once its transform is
-// ported AND its three-surface parity test is green (write-parity harness).
+// POST /apply — the write door (D-22804). A native-safe batch (rung 4) COMMITS
+// through the bridge's own WriteStore; everything else PROXIES to the Deno
+// /apply verbatim. The route classifies WHOLE-BATCH (apply() is atomic) via the
+// kernel's `native_safe` — the single source of truth for the divergence
+// surface, biased hard to over-proxy — so a transform-bearing comp, a claim, an
+// entity delete, a malformed body, or an empty batch all fall through to proxy.
+// x-via (the honesty header the Deno apply resolves to an actor) rides both
+// paths, so a bridge write attributes exactly as a direct one.
 async fn apply_route(State(app): State<App>, headers: HeaderMap, body: Bytes) -> Response {
-    let Some(upstream) = app.upstream.clone() else {
-        return (
-            axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            "yak-bridge: /apply has no upstream — name the Deno server with \
-             --upstream or TASKS_UPSTREAM (never 5173 from a probe).",
-        )
-            .into_response();
-    };
-    // x-via is an honesty header the Deno apply resolves to an actor; carry it
-    // through unchanged so a proxied write attributes exactly as a direct one.
     let via = headers
         .get("x-via")
         .and_then(|v| v.to_str().ok())
         .map(String::from);
-    let out = tokio::task::spawn_blocking(move || proxy_apply(&upstream, via.as_deref(), &body))
-        .await
-        .unwrap_or_else(|e| (502, "text/plain".into(), format!("proxy panic: {e}")));
-    let (status, ctype, text) = out;
+    let write = app.write.clone();
+    let upstream = app.upstream.clone();
+    let out = tokio::task::spawn_blocking(move || {
+        route_apply(&write, upstream.as_deref(), via.as_deref(), &body)
+    })
+    .await
+    .unwrap_or_else(|e| (502, "text/plain".into(), format!("apply panic: {e}"), "native"));
+    let (status, ctype, text, route) = out;
     (
         axum::http::StatusCode::from_u16(status).unwrap_or(axum::http::StatusCode::BAD_GATEWAY),
-        [(axum::http::header::CONTENT_TYPE, ctype)],
+        [
+            (axum::http::header::CONTENT_TYPE, ctype),
+            // Which door this batch took — `native` (kernel WriteStore) or
+            // `proxy` (relayed to Deno). Deno never sends it, so it is out of the
+            // wire-parity surfaces; the harness reads it off the bridge's own
+            // response to PROVE the routing decision, and it is a plain
+            // observability aid otherwise.
+            (axum::http::HeaderName::from_static("x-yak-apply"), route.to_string()),
+        ],
         text,
     )
         .into_response()
+}
+
+// Classify one batch and route it: a native-safe plain-graph batch COMMITS
+// natively; anything else proxies. Parsing is part of the classification — a
+// body that is not a clean Change array is NOT native (Deno owns malformed-input
+// errors, so it proxies). No upstream + a proxy batch is the only 503; a native
+// batch commits regardless of upstream, since the WriteStore is always open. The
+// trailing tag is the door taken, for the response's `x-yak-apply` header.
+fn route_apply(
+    write: &Mutex<WriteStore>,
+    upstream: Option<&str>,
+    via: Option<&str>,
+    body: &[u8],
+) -> (u16, String, String, &'static str) {
+    let batch = serde_json::from_slice::<serde_json::Value>(body)
+        .ok()
+        .as_ref()
+        .and_then(parse_batch)
+        .filter(|b| native_safe(b));
+    match batch {
+        Some(changes) => {
+            let (s, c, t) = native_apply(write, via, changes);
+            (s, c, t, "native")
+        }
+        None => match upstream {
+            Some(u) => {
+                let (s, c, t) = proxy_apply(u, via, body);
+                (s, c, t, "proxy")
+            }
+            None => (
+                503,
+                "text/plain".into(),
+                "yak-bridge: /apply has no upstream for this batch — a \
+                 transform-bearing or delete batch must reach the Deno server; \
+                 name it with --upstream or TASKS_UPSTREAM (never 5173 from a \
+                 probe)."
+                    .into(),
+                "proxy",
+            ),
+        },
+    }
+}
+
+// Commit a native-safe batch through the bridge's WriteStore and shape the
+// answer like the Deno door: `{ok:true,changes:[…]}` on success, or the refusal
+// MESSAGE as a 400 body (byte-identical to Deno's — apply() is the same port).
+// `fed:true` journals the trace so effectsd fires the batch's effects exactly as
+// it does a Deno-committed row (at-most-once off the same journal); the bridge
+// itself fires none.
+fn native_apply(write: &Mutex<WriteStore>, via: Option<&str>, changes: Vec<Change>) -> (u16, String, String) {
+    // A poisoned lock means a prior apply PANICKED; SQLite already rolled that
+    // transaction back, so the WriteStore is sound — recover the guard rather
+    // than wedging the write door forever.
+    let store = write.lock().unwrap_or_else(|p| p.into_inner());
+    let opts = ApplyOpts { writer: via, fed: true };
+    match apply(&store, changes, &opts, &default_gates()) {
+        Ok(out) => {
+            let changes: Vec<serde_json::Value> = out.iter().map(Change::to_value).collect();
+            let body = serde_json::json!({ "ok": true, "changes": changes });
+            (200, "application/json".into(), body.to_string())
+        }
+        Err(e) => (400, "text/plain".into(), e.to_string()),
+    }
 }
 
 // Forward one write batch to the Deno /apply and read back (status, content-type,
@@ -331,10 +397,12 @@ async fn main() {
         write,
     };
     eprintln!(
-        "yak-bridge: write door {}",
+        "yak-bridge: write door — native-safe batches commit through the kernel; {}",
         match &upstream {
-            Some(u) => format!("proxying every batch → {u}/apply"),
-            None => "DISABLED (no --upstream/TASKS_UPSTREAM); /apply will 503".into(),
+            Some(u) => format!("everything else proxies → {u}/apply"),
+            None =>
+                "no upstream (--upstream/TASKS_UPSTREAM), so transform-bearing/delete batches 503"
+                    .into(),
         }
     );
     let router = Router::new()

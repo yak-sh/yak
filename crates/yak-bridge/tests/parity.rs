@@ -836,9 +836,14 @@ fn ws_sub_parity() {
 //   (c) the resulting DB state: every touched entity read back off the read wire
 //       (refs already projected to ids, server-owned reads included)
 //
-// Against PROXY-EVERYTHING this is green trivially — both doors reach a Deno — so
-// it proves the routing / seeding / normalization scaffold. It becomes the GATE
-// the moment a domain writes native on copy-B: a divergence then surfaces here.
+// A native-safe batch now COMMITS through the bridge's own WriteStore on copy-B
+// (D-22804 rung 4): the create/update and the doc/task/comment rejections take
+// the `native` door, while a claim, an entity delete, or a transform-bearing
+// comp (a setting) still PROXIES to copy-B's Deno. Each case asserts the door
+// the bridge took (its `x-yak-apply` header) AND that the result is byte-
+// identical to direct-to-Deno on copy-A — so a native write that diverged from
+// the port, OR a mis-routed batch, surfaces here. The predicate is the kernel's
+// `native_safe` (write.rs `NATIVE_COMPS`), the single divergence-surface source.
 //
 // Env (all four; the tests skip unless every one is set), same effects-OFF probe
 // setup the read harness documents above (TASKS_EFFECTS=daemon, no effectsd — so
@@ -862,17 +867,27 @@ fn write_mode() -> bool {
     ts_db().is_some() || br_db().is_some()
 }
 
-// POST /apply, returning (status, raw body) for a SUCCESS or a REJECTION alike —
-// `http_status_as_error(false)` keeps a 400's message body in hand instead of
-// folding it into a status-code error (exactly what the bridge proxy relies on).
-fn post_apply(base: &str, batch: &str) -> (u16, String) {
+// POST /apply, returning (status, raw body, route) for a SUCCESS or a REJECTION
+// alike — `http_status_as_error(false)` keeps a 400's message body in hand
+// instead of folding it into a status-code error (exactly what the bridge proxy
+// relies on). `route` is the bridge's `x-yak-apply` header (native | proxy),
+// None from the Deno server which never sends it.
+fn post_apply(base: &str, batch: &str) -> (u16, String, Option<String>) {
     let url = format!("{base}/apply");
     let agent = ureq::Agent::config_builder()
         .http_status_as_error(false)
         .build()
         .new_agent();
     match agent.post(&url).header("content-type", "application/json").send(batch) {
-        Ok(mut r) => (r.status().as_u16(), r.body_mut().read_to_string().unwrap_or_default()),
+        Ok(mut r) => {
+            let status = r.status().as_u16();
+            let route = r
+                .headers()
+                .get("x-yak-apply")
+                .and_then(|h| h.to_str().ok())
+                .map(String::from);
+            (status, r.body_mut().read_to_string().unwrap_or_default(), route)
+        }
         Err(e) => panic!("POST {url} failed: {e}"),
     }
 }
@@ -1171,15 +1186,26 @@ fn ref_cols(conn: &rusqlite::Connection, table: &str) -> std::collections::HashS
         .collect()
 }
 
-// Fire ONE batch at both copies (direct vs proxied) and assert all three surfaces
-// match. Returns the affected-eid count for the log line.
-fn assert_write(case: &str, ts: &str, br: &str, ts_db: &str, br_db: &str, batch: &str) {
+// Fire ONE batch at copy-A's Deno (direct) and copy-B's bridge, assert the
+// bridge took the EXPECTED door (native | proxy), and assert all three surfaces
+// match between the two copies regardless of door. Returns the affected-eid
+// count for the log line. `route` is the proof the divergence predicate routed
+// this batch as intended — a native-committed batch and a proxied one must BOTH
+// land byte-identically to direct-to-Deno, and each must have taken its door.
+fn assert_write(case: &str, ts: &str, br: &str, ts_db: &str, br_db: &str, batch: &str, route: &str) {
     let base_a = journal_tip(ts_db);
     let base_b = journal_tip(br_db);
     let cbase_a = conflict_tip(ts_db);
     let cbase_b = conflict_tip(br_db);
-    let (sa, ba) = post_apply(ts, batch);
-    let (sb, bb) = post_apply(br, batch);
+    let (sa, ba, _) = post_apply(ts, batch);
+    let (sb, bb, taken) = post_apply(br, batch);
+    // The routing proof: the bridge stamped the door it took, and it must be the
+    // one the predicate is meant to choose for this batch's comps.
+    assert_eq!(
+        taken.as_deref(),
+        Some(route),
+        "[{case}] bridge took the wrong door — expected {route}, got {taken:?}"
+    );
     // (a) the echoed answer — status first, then the body.
     assert_eq!(sa, sb, "[{case}] status differs (ts={sa} bridge={sb})\n ts={ba}\n br={bb}");
     assert_eq!(
@@ -1244,6 +1270,7 @@ fn write_parity() {
             "[{{\"eid\":\"{e1}\",\"name\":\"doc\",\"comp\":{{\"title\":\"zqw{uid} route\"}}}},\
               {{\"eid\":\"{e1}\",\"name\":\"task\",\"comp\":{{\"status\":\"open\",\"priority\":0}}}}]"
         ),
+        "native",
     );
     // an UPDATE to the same entity (provenance flips created→updated).
     assert_write(
@@ -1253,6 +1280,7 @@ fn write_parity() {
         &ts_db,
         &br_db,
         &format!("[{{\"eid\":\"{e1}\",\"name\":\"doc\",\"comp\":{{\"title\":\"zqw{uid} route 2\"}}}}]"),
+        "native",
     );
 
     // --- REJECTION: `was` stale (message + hash) -----------------------------
@@ -1279,6 +1307,7 @@ fn write_parity() {
         &format!(
             "[{{\"eid\":\"{e2}\",\"name\":\"doc\",\"comp\":{{\"title\":\"v3\"}},\"was\":{{\"title\":\"{sha_v1}\"}}}}]"
         ),
+        "native",
     );
 
     // --- REJECTION: unknown column ------------------------------------------
@@ -1290,6 +1319,7 @@ fn write_parity() {
         &ts_db,
         &br_db,
         &format!("[{{\"eid\":\"{e3}\",\"name\":\"task\",\"comp\":{{\"statuss\":\"done\"}}}}]"),
+        "native",
     );
 
     // --- REJECTION: ghost reference -----------------------------------------
@@ -1302,6 +1332,7 @@ fn write_parity() {
         &ts_db,
         &br_db,
         &format!("[{{\"eid\":\"{e4}\",\"name\":\"comment\",\"comp\":{{\"target\":\"{ghost}\"}}}}]"),
+        "native",
     );
 
     // --- REJECTION: claim bounce + minted conflict row ----------------------
@@ -1328,6 +1359,7 @@ fn write_parity() {
             &ts_db,
             &br_db,
             &format!("[{{\"eid\":\"{tclaim}\",\"name\":\"claim\",\"comp\":{{\"session\":\"{sb}\"}}}}]"),
+            "proxy",
         );
         // release + delete the probe task (keeps both copies in lockstep).
         g(&ts, &br, &format!("[{{\"eid\":\"{tclaim}\",\"name\":\"entity\",\"comp\":null}}]"));
@@ -1369,6 +1401,7 @@ fn write_parity() {
         &ts_db,
         &br_db,
         &format!("[{{\"eid\":\"{t}\",\"name\":\"entity\",\"comp\":null}}]"),
+        "proxy",
     );
     // a surviving task pointing at the project, then delete the project → its
     // `project` pointer is DETACHED (a null-column echo), the project tombstoned.
@@ -1388,13 +1421,36 @@ fn write_parity() {
         &ts_db,
         &br_db,
         &format!("[{{\"eid\":\"{p}\",\"name\":\"entity\",\"comp\":null}}]"),
+        "proxy",
     );
+    // --- ROUTING: a TRANSFORM-BEARING comp proxies -------------------------------
+    // A `setting` write fires guardSettings in db.ts apply() — a transform the
+    // rust kernel does not port (rung 6). The predicate must PROXY it, not commit
+    // it natively (which would skip validation). An unknown catalog key is refused
+    // by guardSettings identically on both copies, so the batch mutates nothing
+    // and proves the proxy door: same rejection, `x-yak-apply: proxy`.
+    let e5 = uuid_v4();
+    assert_write(
+        "routing/setting-proxies",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!(
+            "[{{\"eid\":\"{e5}\",\"name\":\"setting\",\"comp\":{{\"key\":\"zqw{uid}_no_such_key\",\"value\":\"x\"}}}}]"
+        ),
+        "proxy",
+    );
+
     // clean up the surviving probe entities on BOTH copies.
     g(&ts, &br, &format!("[{{\"eid\":\"{t2}\",\"name\":\"entity\",\"comp\":null}}]"));
     g(&ts, &br, &format!("[{{\"eid\":\"{e1}\",\"name\":\"entity\",\"comp\":null}}]"));
     g(&ts, &br, &format!("[{{\"eid\":\"{e2}\",\"name\":\"entity\",\"comp\":null}}]"));
 
-    eprintln!("\nwrite parity OK (proxy-everything: bridge lands identically to direct)");
+    eprintln!(
+        "\nwrite parity OK (native-safe batches commit through the bridge; \
+         transform/claim/delete batches proxy — both land identically to direct)"
+    );
 }
 
 // --- pure logic tests (always run, no servers) -------------------------------

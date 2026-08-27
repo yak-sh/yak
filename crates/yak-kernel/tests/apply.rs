@@ -5,7 +5,7 @@
 
 use yak_kernel::change::Change;
 use yak_kernel::feed::{cursor_of, journal_since, row_changes, Feed};
-use yak_kernel::write::{apply, default_gates, ApplyError, ApplyOpts, WriteStore};
+use yak_kernel::write::{apply, default_gates, native_safe, ApplyError, ApplyOpts, WriteStore};
 use rusqlite::Connection;
 use serde_json::{json, Map, Value};
 
@@ -164,6 +164,30 @@ fn create_stamps_numbers_and_journals() {
     // journal_touch: one row per touched eid
     let touched: i64 = one(&s, "select count(*) from journal_touch");
     assert_eq!(touched, 1);
+}
+
+#[test]
+fn native_safe_routes_plain_graph_and_proxies_the_rest() {
+    // The bridge's divergence predicate (D-22804 rung 4): a batch commits
+    // natively only if EVERY change names a transform-free NATIVE_COMPS comp.
+    let ok = |cs: Vec<Change>| native_safe(&cs);
+    // plain-graph creates/updates/edges → native.
+    assert!(ok(vec![ch(A, "doc", json!({"title": "x"})), ch(A, "task", json!({"status": "open"}))]));
+    assert!(ok(vec![ch(A, "board", json!({"query": ".task!"}))]));
+    assert!(ok(vec![ch(A, "project", json!({}))]));
+    assert!(ok(vec![ch(A, "comment", json!({"target": B}))]));
+    assert!(ok(vec![ch(A, "dependency", json!({"type": "requires", "child": B}))]));
+    // a transform-bearing comp (setting/session/deliver/wake/entry) → proxy.
+    assert!(!ok(vec![ch(A, "setting", json!({"key": "k", "value": "v"}))]));
+    assert!(!ok(vec![ch(A, "session", json!({"id": "S-1"}))]));
+    // a claim (its release owes the unported resume stack) → proxy.
+    assert!(!ok(vec![ch(A, "claim", json!({"session": B}))]));
+    // an entity DELETE (cascade can reach claim→resume) → proxy.
+    assert!(!ok(vec![ch(A, "entity", Value::Null)]));
+    // a MIXED batch proxies whole — apply() is atomic, no splitting.
+    assert!(!ok(vec![ch(A, "doc", json!({"title": "x"})), ch(A, "claim", json!({"session": B}))]));
+    // an empty batch proxies (Deno owns the trivial answer).
+    assert!(!ok(vec![]));
 }
 
 #[test]
