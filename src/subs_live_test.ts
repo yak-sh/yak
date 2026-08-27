@@ -106,7 +106,7 @@ slow(
   'retired graph-data doors are 404s for every method, never SPA routes',
   alone,
   async () => {
-    for (let path of ['/references', '/persona']) {
+    for (let path of ['/references', '/persona', '/undo']) {
       for (let method of ['GET', 'POST', 'HEAD']) {
         let res = await fetch(`http://${U}${path}`, { method })
         assertEquals(res.status, 404, `${method} ${path}`)

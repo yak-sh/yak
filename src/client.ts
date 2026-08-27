@@ -25,6 +25,7 @@ import {
   uuid,
   verdictName,
 } from './types.ts'
+import type { Mutation } from './mutation.ts'
 import { idOf, SHORT, shortId, slugsOf } from './types.ts'
 import { formatProp, parseProp, propAt, refOf } from './props.ts'
 import { local } from './time.ts'
@@ -455,19 +456,22 @@ export let me = (
 // actor it acts for (attribution, never auth). The CLI's standing
 // identity is me() — hooks and spawned agents get their writes
 // attributed without asking.
-export let send = async (changes: Change[], via = me()) => {
+export let mutate = async (mutation: Mutation, via = me()) => {
   let res = await request(`http://${host()}/apply`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       ...(via ? { 'x-via': via } : {}),
     },
-    body: JSON.stringify(changes),
+    body: JSON.stringify(mutation),
   })
   if (!res.ok) throw new Error(`apply failed: ${await res.text()}`)
   let out = await res.json() as { changes: Change[] }
   return out.changes
 }
+
+export let send = async (changes: Change[], via = me()) =>
+  await mutate(changes, via)
 
 export type RedactionReport = {
   changes: Change[]
@@ -830,15 +834,7 @@ export let historyLine = (e: JournalEntry) => {
 export let undo = async (
   ref: { id?: number; eid?: string },
   via = me(),
-): Promise<Change[]> => {
-  let q = ref.id != null ? `id=${ref.id}` : `eid=${ref.eid}`
-  let res = await request(`http://${host()}/undo?${q}`, {
-    method: 'POST',
-    headers: via ? { 'x-via': via } : {},
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return (await res.json() as { changes: Change[] }).changes
-}
+): Promise<Change[]> => await mutate({ mutation: 'undo', ...ref }, via)
 
 // ---- dot-params (the WRITE grammar: values are literal; the filter
 // grammar with operators/lists/ranges lives in query.ts) ----

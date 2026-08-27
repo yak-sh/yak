@@ -5,6 +5,7 @@ import { assertEquals, assertMatch, assertRejects } from '@std/assert'
 import { combineTools, localTools, tasksTools } from './harness_tools.ts'
 import { type IO } from './mcp.ts'
 import { type Change, type Snapshot } from './types.ts'
+import type { Mutation } from './mutation.ts'
 import { slow } from './testing.ts'
 
 let scratch = async () => await Deno.makeTempDir({ prefix: 'tasks-tools-' })
@@ -171,15 +172,15 @@ slow(
         return Promise.resolve([])
       },
       deps: () => Promise.resolve([]),
-      write: (changes, via) => {
-        writes.push({ changes, via })
-        return Promise.resolve(changes)
+      write: (mutation: Mutation, via) => {
+        if (!Array.isArray(mutation)) throw new Error('expected change batch')
+        writes.push({ changes: mutation, via })
+        return Promise.resolve(mutation)
       },
       find: () => Promise.resolve([]),
       upload: () => Promise.resolve(),
       touch: () => Promise.resolve(),
       history: () => Promise.resolve([]),
-      undo: () => Promise.resolve([]),
       providers: () => Promise.resolve([]),
     }
     let tasks = await tasksTools(io, 'managed-session-1')

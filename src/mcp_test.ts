@@ -9,11 +9,18 @@ import { CUT, elide, type IO, MCP_INSTRUCTIONS, mcpServer } from './mcp.ts'
 import { commandOut } from './commands.ts'
 import { sha } from './sha.ts'
 import { type Change, edges, statuses, uuid, verdicts } from './types.ts'
+import type { Mutation } from './mutation.ts'
 import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, depsOf, inverseBatch, journalOf, lastBatch, snapshot, touch } =
-  await import('./db.ts')
+let {
+  apply,
+  depsOf,
+  journalOf,
+  mutate: applyMutation,
+  snapshot,
+  touch,
+} = await import('./db.ts')
 let { freshDb } = await import('./testdb.ts')
 let { append } = await import('./entries.ts')
 
@@ -49,6 +56,11 @@ let all = rows({
     { eid: T, name: 'task', comp: { status: 'open' } },
   ],
 })
+
+let batch = (mutation: Mutation): Change[] => {
+  if (!Array.isArray(mutation)) throw new Error('expected change batch')
+  return mutation
+}
 let persona = all[0]
 
 Deno.test('elide: long text cuts with a marker naming the whole-doc door', () => {
@@ -150,9 +162,9 @@ Deno.test('task_context surfaces agent input without human read-state', async ()
   ])
   let writes: Change[][] = []
   let write = io.write
-  io.write = async (changes, via) => {
-    writes.push(changes)
-    return await write(changes, via)
+  io.write = async (mutation, via) => {
+    writes.push(batch(mutation))
+    return await write(mutation, via)
   }
   await protocol(io, async (client) => {
     let first = await client.callTool({
@@ -315,12 +327,11 @@ let blank = (): IO => ({
   query: () => Promise.resolve([]),
   get: () => Promise.resolve([]),
   deps: () => Promise.resolve([]),
-  write: (changes) => Promise.resolve(changes),
+  write: (mutation) => Promise.resolve(batch(mutation)),
   find: () => Promise.resolve([]),
   upload: () => Promise.resolve(),
   touch: () => Promise.resolve(),
   history: () => Promise.resolve([]),
-  undo: () => Promise.resolve([]),
   providers: () => Promise.resolve([{ name: 'test', models: ['test'] }]),
 })
 
@@ -340,8 +351,8 @@ let graph = () => {
         ? localQuery(db)([`id=${ids.join(',')}`, ...filters])
         : Promise.resolve([]),
     deps: (eids) => Promise.resolve(depsOf(db, eids)),
-    write: (changes, via) =>
-      Promise.resolve(apply(db, changes, undefined, via)),
+    write: (mutation, via) =>
+      Promise.resolve(applyMutation(db, mutation, undefined, via)),
     find: () => Promise.resolve([]),
     upload: (eid, html) => {
       pages.set(eid, html)
@@ -352,10 +363,6 @@ let graph = () => {
       return Promise.resolve()
     },
     history: (eid, limit) => Promise.resolve(journalOf(db, eid, limit)),
-    undo: ({ id, eid }, via) => {
-      let batch = id ?? (eid ? lastBatch(db, eid) : 0)
-      return Promise.resolve(apply(db, inverseBatch(db, batch), undefined, via))
-    },
     providers: () => Promise.resolve([{ name: 'test', models: ['test'] }]),
   }
   return { db, io, pages }

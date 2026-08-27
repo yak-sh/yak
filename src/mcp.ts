@@ -27,6 +27,7 @@ import {
   uuid,
   verdicts,
 } from './types.ts'
+import type { Mutation } from './mutation.ts'
 import { trouble } from './adapters.ts'
 import { type Dim, report, type Use, use } from './usage.ts'
 import { sha } from './sha.ts'
@@ -57,6 +58,7 @@ import {
   jsonOf,
   memoryChanges,
   memoryHead,
+  mutate,
   noticeBlock,
   param,
   patches,
@@ -70,7 +72,6 @@ import {
   rows,
   scopeFor,
   search,
-  send,
   serverCaps,
   sessionRow,
   similarHint,
@@ -82,7 +83,6 @@ import {
   taskTreePlan,
   taskTreeText,
   taskTreeWarning,
-  undo,
   uniq,
 } from './client.ts'
 import { noFilter, orderOf, parseQuery, pred, resolution } from './query.ts'
@@ -130,7 +130,7 @@ export type IO = {
   deps: (eids: string[], reveal?: boolean) => Promise<Dep[]>
   // `via` is journal attribution — the calling session's id, when the
   // tool knows it. Never auth.
-  write: (changes: Change[], via?: string) => Promise<Change[]>
+  write: (mutation: Mutation, via?: string) => Promise<Change[]>
   find: (q: string, limit?: number) => Promise<Hit[]>
   // Land an HTML page in the frozen store for an existing web entity.
   upload: (eid: string, html: string) => Promise<void>
@@ -140,12 +140,6 @@ export type IO = {
   // An entity's slice of the journal (db.ts journalOf in-process; GET
   // /journal over stdio) — the wire's write record, newest first.
   history: (eid: string, limit?: number) => Promise<JournalEntry[]>
-  // Reverse a journaled batch (inverseBatch+apply in-process; POST /undo over
-  // stdio) — the guarded inverse, refused loudly when the world moved.
-  undo: (
-    ref: { id?: number; eid?: string },
-    via?: string,
-  ) => Promise<Change[]>
   // The provider table (adapters in-process; GET /providers over stdio)
   // — task_spawn's last-resort default when neither the caller nor the
   // args name one.
@@ -1191,7 +1185,7 @@ it is a redo. ${BUS}`,
         if (!row) return err(`no entity: ${id}`)
         ref = { eid: row.eid }
       }
-      let out = await io.undo(ref, session)
+      let out = await io.write({ mutation: 'undo', ...ref }, session)
       let noise = new Set(['created', 'updated', 'resume', 'imported'])
       let what = out.filter((c) => !noise.has(c.name)).map((c) =>
         c.comp == null
@@ -2293,7 +2287,7 @@ if (import.meta.main) {
     query: (q, opts) => queryHttp(q.split('&').filter(Boolean), opts),
     get: (ids, filters = []) => fetched(ids, filters),
     deps: (eids, reveal) => httpDeps(eids, reveal),
-    write: send,
+    write: mutate,
     find: search,
     upload: async (eid, html) => {
       let res = await request(`http://${host()}/upload?eid=${eid}`, {
@@ -2308,7 +2302,6 @@ if (import.meta.main) {
     // mount (/mcp, the fleet's door) is where recall counts.
     touch: async () => {},
     history: (eid, limit) => history(eid, limit),
-    undo: (ref, via) => undo(ref, via),
     providers: async () => {
       let res = await request(`http://${host()}/providers`)
       if (!res.ok) throw new Error(`server said ${res.status}`)
