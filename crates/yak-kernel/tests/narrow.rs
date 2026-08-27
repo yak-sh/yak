@@ -210,7 +210,11 @@ const FILTERS: &[&[&str]] = &[
     &[".doc!"],
     &[".assignee="],
     &[".status=open", ".updated.at>=today"], // one compiles, one declines
-    &[".status=nope_no_such"],
+    // a VALID filter that matches nothing — an empty result through the numeric
+    // arm. (An out-of-enum status value is no longer a filter that matches
+    // nothing: dot_token now validates the value and 400s it, byte-parity with
+    // TS parseQuery — T-22759.)
+    &[".priority=99"],
 ];
 
 #[test]

@@ -631,6 +631,70 @@ impl Store {
         })
     }
 
+    // Who points AT these entities through a typed {eid} reference column — the
+    // reverse-reference layer db.ts refsOf() builds for `backlinks=1`. One keyed
+    // statement per ref column in the readable vocabulary (comps + stamped), the
+    // SAME order Object.entries(readable) walks — cmps declaration order, each
+    // component's columns in readable order — so the concatenated result is the
+    // route's. The targets are staged in a temp `hit` table (writable even on a
+    // read-only main db), exactly as stage() does, so the query planner reads
+    // the same plan — and thus the same unordered row order — the Deno server's
+    // node:sqlite reads over the SAME system libsqlite3. Each tuple is
+    // (from_eid, `comp.col`, to_eid); the caller screens quarantine on the
+    // source, the way the route filters `!eager(from).quarantined`.
+    pub fn refs_of(&self, eids: &[String]) -> Vec<(String, String, String)> {
+        if eids.is_empty() {
+            return vec![];
+        }
+        if self
+            .conn
+            .execute_batch(
+                "create temp table if not exists hit (eid text primary key); \
+                 delete from hit;",
+            )
+            .is_err()
+        {
+            return vec![];
+        }
+        {
+            let Ok(mut put) =
+                self.conn.prepare("insert or ignore into hit (eid) values (?1)")
+            else {
+                return vec![];
+            };
+            for e in eids {
+                let _ = put.execute([e]);
+            }
+        }
+        let v = vocab();
+        let mut out = vec![];
+        for (name, _) in &v.comps {
+            if !self.has_table(name) {
+                continue;
+            }
+            for (col, t) in v.readable(name) {
+                if !t.is_ref() {
+                    continue;
+                }
+                let sql = format!(
+                    "select o.eid, r.eid from {} t \
+                     join entity o on o.id = t.entity \
+                     join entity r on r.id = t.{} \
+                     where r.eid in (select eid from hit)",
+                    q(name),
+                    q(&col)
+                );
+                let via = format!("{name}.{col}");
+                for (from, to) in
+                    collect(&self.conn, &sql, [], |r| Ok((r.get(0)?, r.get(1)?)))
+                {
+                    out.push((from, via.clone(), to));
+                }
+            }
+        }
+        out
+    }
+
     // Comments aimed at an entity, birth order (bornAt sort).
     pub fn comments_on(&self, eid: &str) -> Vec<String> {
         let sql = format!(

@@ -51,7 +51,124 @@ pub fn dot_token(a: &str) -> Result<Dot, String> {
         return Ok(Dot::Kind(k));
     }
     let (comp, prop) = route(path)?;
+    // Validate/coerce the value against the leaf column's type BEFORE a row is
+    // scanned, the way TS preds() runs typedValue()→parseProp: an out-of-set
+    // enum, a non-numeric number/priority, a non-boolean bool is the typist's
+    // news (a 400), not a filter that silently matches nothing. `~=` (contains)
+    // is literal and the empty value is the absence test, so both skip — TS's
+    // own guard (`type && op != '~' && value != ''`).
+    let value = if op != "~=" && !value.is_empty() {
+        typed_value(&comp, &prop, &value)?
+    } else {
+        value
+    };
     Ok(Dot::P(Pred { comp, prop, op, value }))
+}
+
+// Coerce and VALIDATE a filter value against the leaf column's declared type
+// (props.ts typedValue → range → atom → parseProp). Only the CLOSED scalar
+// types validate here: an enum is canonicalized to its declared spelling
+// (case-folded match, oneOf()); number/priority/bool are checked but left
+// verbatim (resolve_values canonicalizes priority; matching reads them). eid,
+// time, text and url stay lenient — refs resolve at delivery, time phrases stay
+// authored, text is free — so a value of those types is returned untouched, as
+// TS's atom() does (eid catches, time keeps a parseable span, text passes).
+// NB: enum ALIASES are not ported here (the baked PropType carries variants,
+// not aliases), so an aliased value 400s where TS would resolve it — noted, not
+// in any read corpus.
+fn typed_value(comp: &str, prop: &str, value: &str) -> Result<String, String> {
+    let v = vocab();
+    let t = if comp.is_empty() {
+        v.bare_type(prop)
+    } else {
+        v.prop_type(comp, prop)
+    };
+    let Some(t) = t else { return Ok(value.into()) };
+    if !matches!(
+        t,
+        PropType::Enum(_)
+            | PropType::Number
+            | PropType::Priority
+            | PropType::Bool
+    ) {
+        return Ok(value.into());
+    }
+    let name = v.prop_name(comp, prop);
+    value
+        .split(',')
+        .map(|part| typed_range(&t, &name, part))
+        .collect::<Result<Vec<_>, _>>()
+        .map(|parts| parts.join(","))
+}
+
+// One comma atom, itself possibly a `lo..hi` / `lo...hi` range whose two ends
+// each coerce (props.ts range()). An open-ended side ('' before or after `..`)
+// coerces to nothing, like the absence atom.
+fn typed_range(t: &PropType, name: &str, part: &str) -> Result<String, String> {
+    if let Some(at) = part.find("..") {
+        let lo = &part[..at];
+        let (excl, hi) = match part[at + 2..].strip_prefix('.') {
+            Some(rest) => (true, rest),
+            None => (false, &part[at + 2..]),
+        };
+        Ok(format!(
+            "{}..{}{}",
+            typed_atom(t, name, lo)?,
+            if excl { "." } else { "" },
+            typed_atom(t, name, hi)?
+        ))
+    } else {
+        typed_atom(t, name, part)
+    }
+}
+
+// One scalar atom against a closed type. The error strings are byte-identical
+// to props.ts fail() (`{name} is {grammar} — got '{value}'`), so a /query 400
+// diffs against the Deno server's word for word.
+fn typed_atom(t: &PropType, name: &str, v: &str) -> Result<String, String> {
+    if v.is_empty() {
+        return Ok(v.into());
+    }
+    match t {
+        PropType::Enum(variants) => variants
+            .iter()
+            .find(|x| x.eq_ignore_ascii_case(v))
+            .cloned()
+            .ok_or_else(|| {
+                format!("{name} is one of {} — got '{v}'", variants.join(", "))
+            }),
+        PropType::Number => is_decimal(v).then(|| v.to_string()).ok_or_else(|| {
+            format!("{name} is a finite decimal number (1, -2.5, 6e3) — got '{v}'")
+        }),
+        PropType::Priority => {
+            let bare = v.trim().strip_prefix(['p', 'P']).unwrap_or(v.trim());
+            is_decimal(bare).then(|| v.to_string()).ok_or_else(|| {
+                format!(
+                    "{name} is a finite number, optionally P-prefixed \
+                     (P2, p02, 1.5) — got '{v}'"
+                )
+            })
+        }
+        PropType::Bool => {
+            let s = v.trim().to_lowercase();
+            matches!(s.as_str(), "true" | "1" | "yes" | "false" | "0" | "no")
+                .then(|| v.to_string())
+                .ok_or_else(|| {
+                    format!(
+                        "{name} is a boolean (true, false, 1, 0, yes, no) — \
+                         got '{v}'"
+                    )
+                })
+        }
+        _ => Ok(v.into()),
+    }
+}
+
+// props.ts DECIMAL + Number.isFinite: a signed decimal with an optional
+// exponent, finite. f64 parsing accepts the same shapes; the finite check
+// rejects the inf/nan words f64 also parses but DECIMAL never matches.
+fn is_decimal(s: &str) -> bool {
+    s.trim().parse::<f64>().map(|f| f.is_finite()).unwrap_or(false)
 }
 
 pub fn parse(args: &[String]) -> Result<(String, Vec<Pred>), String> {

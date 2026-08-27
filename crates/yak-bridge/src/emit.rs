@@ -126,14 +126,26 @@ pub fn dep_to_wire(d: &Dep) -> Value {
 }
 
 // A hit with its optional layers, exactly as the route spreads them:
-// `{ ...jsonOf(r), deps?, backlinks? }` — layer keys come AFTER the comps.
-pub fn hit_with_layers(row: &Row, deps: Option<Vec<Dep>>) -> Value {
+// `{ ...jsonOf(r), deps?, backlinks? }` — layer keys come AFTER the comps, and
+// `deps` before `backlinks` (server.ts spread order). Each is present exactly
+// when its flag was set, an empty array included, so `deps=1`/`backlinks=1`
+// always add their key.
+pub fn hit_with_layers(
+    row: &Row,
+    deps: Option<Vec<Dep>>,
+    backlinks: Option<Vec<Value>>,
+) -> Value {
     let mut v = row_to_wire(row);
-    if let (Some(deps), Value::Object(m)) = (deps, &mut v) {
-        m.insert(
-            "deps".into(),
-            Value::Array(deps.iter().map(dep_to_wire).collect()),
-        );
+    if let Value::Object(m) = &mut v {
+        if let Some(deps) = deps {
+            m.insert(
+                "deps".into(),
+                Value::Array(deps.iter().map(dep_to_wire).collect()),
+            );
+        }
+        if let Some(backlinks) = backlinks {
+            m.insert("backlinks".into(), Value::Array(backlinks));
+        }
     }
     v
 }

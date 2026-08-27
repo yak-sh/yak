@@ -138,25 +138,45 @@ fn query_parity() {
         "/query?.kind=task&.title~=port&limit=20".into(),      // contains (instr)
         "/query?.kind=task&.assignee=&limit=20".into(),        // absence
         "/query?.kind=task&.doc!&limit=20".into(),             // component presence
+        // AGGREGATE projections (T-22759): the value, not a row set. `.count!`
+        // is one number; `.tally=` the value→count map (keys ascending);
+        // `.distinct=` the sorted keys. The bridge reuses the kernel's one
+        // eval_agg (subquery.rs) — never a second evaluator.
+        "/query?.kind=task&.status=open&.count!".into(),
+        "/query?.kind=task&.tally=task.status".into(),
+        "/query?.kind=task&.distinct=task.status".into(),
+        "/query?.kind=memory&.tally=memory.scope".into(),
+        // GRAMMAR / VALIDATION edges (T-22759), reconciled to TS parseQuery in
+        // BOTH directions:
+        //   - an out-of-enum value 400s, the message byte-identical to props.ts
+        //     ("task.status is one of open, wip, done, cancelled — got 'x'").
+        "/query?.status=nonesuch".into(),
+        "/query?.kind=task&.status=open,nonesuch".into(),
+        "/query?.priority=notanum".into(),
+        //   - an opless dot-word is a TEXT term, not a filter: 200 [] where the
+        //     term matches nothing (the kernel used to 400 "unsupported
+        //     filter"). A no-match token, so it is byte-parity here — a term
+        //     that WOULD FTS-match is the standing text divergence, screened
+        //     out. `.zzz.zzz` itself now matches this task family's own bodies,
+        //     so the corpus uses a token no doc carries.
+        "/query?.zqx7kk3vqnomatch".into(),
+        "/query?.kind=task&.zqx7kk3vqnomatch.nope".into(),
     ];
-    // DOCUMENTED DIVERGENCE (grammar/validation, filed as a rung-2 follow-up):
-    // the kernel's filter grammar (query.rs) and TS's parseQuery reject
-    // different EDGE cases, in OPPOSITE directions — so an error-path answer is
-    // not byte-identical yet, though every VALID query above is:
-    //   - unknown comp/prop `.zzz.zzz`: TS answers 200 [] (an unknown column is
-    //     a filter that matches nothing); the kernel 400s "unsupported filter".
-    //   - an out-of-enum value `.status=nonesuch`: TS 400s via props.ts
-    //     coercion ("task.status is one of open, wip, done, cancelled — got
-    //     'nonesuch'"); the kernel is lenient and answers 200 [].
-    // Neither is a correctness bug in the VALUE returned for a valid query; both
-    // are reconciled when the kernel grammar reaches domain parity.
-    // id= addressing, deps=1, and after= paging, seeded from live ids.
+    // id= addressing, deps=1, backlinks=1, and after= paging, seeded from live
+    // ids.
     for kind in ["project", "task", "design", "memory"] {
         if let Some(id) = an_id(&ts, kind) {
             corpus.push(format!("/query?id={id}"));
             corpus.push(format!("/query?id={id}&deps=1"));
+            // backlinks=1 (T-22759): who points AT the hit — the reverse-ref
+            // layer over every {eid} column plus the incident edges.
+            corpus.push(format!("/query?id={id}&backlinks=1"));
+            corpus.push(format!("/query?id={id}&deps=1&backlinks=1"));
         }
     }
+    // backlinks over a whole (small) kind listing exercises the multi-hit
+    // grouping and ordering, not just one target.
+    corpus.push("/query?.kind=board&backlinks=1".into());
     if let (Some(a), Some(b)) = (an_id(&ts, "project"), an_id(&ts, "task")) {
         corpus.push(format!("/query?id={a},{b}"));
     }
