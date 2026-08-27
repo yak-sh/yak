@@ -360,8 +360,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
   let draining = false
   let expiry: ReturnType<typeof setTimeout> | undefined
 
-  // While an operation is in flight, keep its lease fresh so a booting
-  // successor (the reusePort handoff runs both processes at once) never
+  // While an operation is in flight, keep its lease fresh so a restart never
   // mistakes a turn that outlives the base TTL for a dead runner and reclaims
   // or fails an operation this process is still running. Renewal leaves the
   // holder+at CAS untouched, so this runner's own settle/valid path is

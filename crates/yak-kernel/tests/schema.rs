@@ -10,8 +10,8 @@
 //     Deno's fresh schema; these tests prove the guard behaviour it rides on:
 //     create stands up the whole schema, additive migration restores an old
 //     shape exactly, and a re-migrate writes nothing.
-// The cross-engine identity (Rust build vs Deno build) rests on the same-build
-// rule the read parity harness already assumes (M-22673).
+// Cross-engine schema identity is checked on disposable parity databases; the
+// production bridge refuses owner data.
 
 use rusqlite::Connection;
 use yak_kernel::{apply_schema, WriteStore};
@@ -132,6 +132,8 @@ fn create_produces_the_full_schema() {
     let epoch: String =
         c.query_row("select v from server_meta where k = 'epoch'", [], |r| r.get(0)).unwrap();
     assert!(!epoch.is_empty());
+    let version: i64 = c.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
+    assert_eq!(version, 1);
 }
 
 // Additive migration restores an OLD shape to the current one, byte-for-byte,

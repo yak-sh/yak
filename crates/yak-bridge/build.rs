@@ -1,7 +1,6 @@
-// yak-bridge links the SYSTEM libsqlite3 — never a bundled copy — because it
-// co-reads the live WAL graph beside the Deno server and must share its
-// SQLite build (M-22673, the T-22622 corruption). rusqlite is built here with
-// `bundled` OFF, so `-lsqlite3` has to resolve against a real .so on the box.
+// yak-bridge links the system libsqlite3 by default so parity exercises the
+// host SQLite. With rusqlite's `bundled` feature off, `-lsqlite3` has to resolve
+// against a shared library on the box.
 //
 // The box has no pkg-config and no unversioned `libsqlite3.so` on the default
 // linker path (only versioned `.so.0`), so libsqlite3-sys cannot find it on its

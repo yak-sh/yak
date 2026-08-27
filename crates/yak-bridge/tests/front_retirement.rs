@@ -76,7 +76,7 @@ impl Drop for Bridge {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
-        for suffix in ["", "-wal", "-shm", "-writer.lock"] {
+        for suffix in ["", "-wal", "-shm"] {
             let _ = std::fs::remove_file(format!("{}{suffix}", self.db.display()));
         }
     }

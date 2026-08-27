@@ -1,37 +1,26 @@
 // The ONE live handle — the server process's shared connection, opened at
 // import and held for the process lifetime. SERVER-SIDE ONLY: importing this
-// module OPENS (and, as sole writer, MIGRATES) the graph named by DB_PATH, so
-// it belongs to the process that IS the writer. Library consumers — the CLI's
+// module opens and transactionally migrates the graph named by DB_PATH. Library consumers — the CLI's
 // local-read arm (localread.ts), tests, anything that only needs db.ts's
 // functions — import db.ts, which runs nothing at module scope, and open their
 // own handle deliberately. This split is what lets db.ts be library code
-// (D-22388): the CLI importing eager()/search() must not boot a writer as a
-// side effect, which is exactly what happened when this export lived in db.ts
-// (T-22497 — every CLI invocation ran open() on the live graph, outside the
-// writer baton).
-//
-// A --join deploy successor must NOT migrate at import: its predecessor still
-// holds the graph, and migrating beside it is the two-writer write that
-// corrupted the WAL (T-20223). It connects read-capable now and migrates later
-// — under the writer baton, once server.ts has bound the port and the
-// predecessor has released the DB (becomeWriter in server.ts). Every other
-// boot is the sole writer and opens (connect + migrate) inline as before.
+// (D-22388): the CLI importing eager()/search() must not migrate as a side
+// effect (T-22497).
 //
 // This is also the ONE place the vector extension is asked for (the `true`
 // below). It is write-capable, so under D-22530 it loads only where its write
 // lives — the serving/doing distribution, never a library consumer that
 // happens to call connect(). Loading it does not claim the WRITE: that is
 // ownVector(), taken by whichever process runs the embed sweep (doing.ts).
-// An app-plane reader (TASKS_PLANE=app, D-22804 §8) and a --join deploy
-// successor both open WITHOUT migrating — the schema stays the writer's, under
-// the writer baton, so neither co-writes the WAL that the sole writer owns
-// (T-20223). The app-plane reader also opens READ-ONLY: it serves the app
-// routes as a reader beside the Rust bridge writer, and never holds the writer
-// baton (server.ts becomeWriter declines it in this mode).
-import { appPlane, connect, file, open } from './db.ts'
+// The app-plane compatibility process opens read-only. Production refuses that
+// mode on the owner graph; disposable parity copies may still exercise it.
+import { appPlane, connect, file, liveDb, open, sameGraphFile } from './db.ts'
 
-export let db = appPlane()
-  ? connect(file, true, true)
-  : Deno.args.includes('--join')
-  ? connect(file, true)
-  : open(file, true)
+if (appPlane() && sameGraphFile(file, liveDb())) {
+  throw new Error(
+    'TASKS_PLANE=app cannot open the owner graph: production runs one serving ' +
+      'process per database. Use a disposable DB_PATH for parity tests.',
+  )
+}
+
+export let db = appPlane() ? connect(file, true, true) : open(file, true)

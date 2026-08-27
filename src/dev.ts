@@ -1,9 +1,7 @@
-// The development and deployed server supervisor. Successors PREP beside their
-// predecessors (import + connect, no listener — reusePort would deal half of
-// all new connections to a listener still minutes from serving), the
-// predecessor serves through its own drain, and the successor binds the public
-// port only when READY; the dark gap is its predecessor's shutdown plus a
-// migrate, seconds, not a boot.
+// The development and deployed server supervisor. A replacement starts only
+// after the old process has drained and exited: one serving process and one
+// server connection set per owner database. Direct SQLite clients continue
+// through the brief HTTP downtime.
 import { devFile, serverFile } from './reload.ts'
 import { peer } from './bind.ts'
 
@@ -15,7 +13,7 @@ let deno = Deno.execPath()
 // empty), so the two get opposite handling in firstBoot() below.
 let port = Number(Deno.env.get('PORT') ?? 5173)
 
-// Where a successor's death reason is kept. Mirrors sessions.ts logsDir() (its
+// Where a child's death reason is kept. Mirrors sessions.ts logsDir() (its
 // LOGS_DIR lever included), replicated rather than imported so the supervisor
 // stays off the served module graph. A managed run's stdout file IS its log;
 // the supervisor's children get the same treatment, one shared append log.
@@ -24,7 +22,7 @@ let logsDir = () =>
 
 // Pump a child's stderr to a durable file AND relay it to ours. `inherit` sent
 // every diagnostic to whatever stdio the supervisor had — on the live box a
-// socket owned by a shell long gone — so four handoff deaths left no reason on
+// socket owned by a shell long gone — so four replacement deaths left no reason on
 // disk (T-14308). Both writes are best-effort and this never rejects: logging
 // the failure must not become one. Returns once the child's stderr closes,
 // which a caller awaits on the failure path so the reason is on disk before the
@@ -39,7 +37,7 @@ let record = async (stderr: ReadableStream<Uint8Array>, pid: number) => {
       write: true,
     })
     file.writeSync(
-      new TextEncoder().encode(`\n--- successor pid=${pid} ---\n`),
+      new TextEncoder().encode(`\n--- server pid=${pid} ---\n`),
     )
   } catch {
     // A log we cannot open is not a reason to lose the child's own output.
@@ -68,13 +66,6 @@ let args = [
   '--unstable-worker-options',
   'src/server.ts',
 ]
-
-// A SUCCESSOR — and only a successor — may bind an address that is already
-// serving; bind.ts refuses everyone else, so a second `deno task dev` against
-// the live port is refused rather than quietly doubling it. The first boot
-// and the relaunch after a death both expect an empty address, so neither
-// asks.
-let succeeding = [...args, '--join']
 
 let wait = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms))
@@ -124,18 +115,9 @@ let bootMs = Number(Deno.env.get('TASKS_BOOT_DEADLINE_MS') ?? 900_000)
 // child; in the environment it would outlive this supervisor in every
 // descendant shell.
 //
-// `onBound` turns this into the TWO-beat single-writer handoff (T-20223). A
-// --join successor signals TWICE: beat 1 "prepped" (imports done, DB connected
-// read-capable — NOT yet migrated, NOT yet listening: the predecessor stays
-// the port's only listener until the successor is ready), then beat 2 "ready"
-// (migrated under the writer baton, bound, fully up). onBound fires between them — it stops the
-// predecessor, whose exit releases the baton the successor is waiting on — so
-// the successor never migrates or writes beside a live predecessor. Without
-// onBound (a sole boot) the child signals once and this resolves on it.
 export let launch = async (
   path = deno,
   run = args,
-  onBound?: () => void,
 ) => {
   using listener = Deno.listen({ hostname: '127.0.0.1', port: 0 })
   let port = (listener.addr as Deno.NetAddr).port
@@ -154,9 +136,7 @@ export let launch = async (
   // Drain and durably record the child's stderr for its whole life. Piped
   // stderr MUST be consumed or a chatty child blocks on a full pipe.
   let recorded = record(child.stderr, child.pid)
-  // Shared across both beats: an exit before the beat we await is a failure.
-  // Promise.race keeps a handler on it for each race, so its later (normal)
-  // rejection when the child eventually exits is never unhandled.
+  // An exit before readiness is a failure.
   let died = child.status.then((status) => {
     throw new Error(
       `server pid ${child.pid} exited before ready (code ${status.code})`,
@@ -174,18 +154,7 @@ export let launch = async (
     }
   }
   try {
-    if (onBound) {
-      // Beat 1: PREPPED — fast (import + connect), so the sole-boot deadline.
-      await beat(60_000, 'prepped')
-      // Stop the predecessor; its exit frees the writer baton the successor is
-      // now waiting on. Reads/writes queue on the successor through the gap.
-      onBound()
-      // Beat 2: READY — the successor migrated under the baton. Bounded by the
-      // predecessor's drain (managed.settle caps at 300s), so a roomier wait.
-      await beat(bootMs, 'ready')
-    } else {
-      await beat(bootMs, 'ready')
-    }
+    await beat(bootMs, 'ready')
     // Boot duration on every success, so a creeping regression (2s → 10s → 60s)
     // is visible in the log LONG before it crosses the deadline and turns into
     // an unbounded respawn loop. Surfacing the slowdown early is what the
@@ -208,15 +177,12 @@ export let launch = async (
 // Condemned (we are retiring it) and departed (its status settled). A child
 // can be both; the pair is what tells a death we caused from one we must heal.
 let stopping = new WeakSet<Deno.ChildProcess>()
-let dead = new WeakSet<Deno.ChildProcess>()
-
 // The server this supervisor is answerable for.
 let current: Deno.ChildProcess | undefined
 
 // Every mint and retire runs here, one at a time. A crash-relaunch and an
-// edit-swap both replace `current`, and interleaved they lose a handle — the
-// orphan keeps the port under reusePort, so the address answers from a server
-// nobody can stop or reload.
+// edit-swap both replace `current`, and interleaved they can lose a handle to a
+// process nobody can stop or reload.
 let lock: Promise<unknown> = Promise.resolve()
 let serial = <T>(work: () => Promise<T>): Promise<T> => {
   let done = lock.then(work, work)
@@ -224,19 +190,19 @@ let serial = <T>(work: () => Promise<T>): Promise<T> => {
   return done
 }
 
-// Backoff for a successor that will not boot: climbs while boots keep
+// Backoff for a replacement that will not boot: climbs while boots keep
 // failing, resets on one that stands up. A bad commit should idle the box,
 // not spin it.
 const RETRY = [0, 1_000, 2_000, 5_000, 10_000, 30_000]
 
 // One attempt at a time, made once the edits stop arriving and made AGAIN —
 // on the same backoff a crash gets — until it reports success. An edit says
-// the tree is newer than the process, and a failed handoff does not make that
+// the tree is newer than the process, and a failed replacement does not make that
 // untrue, so the intent survives the failure. Dropping it is how a landed
-// change ran nowhere: one handoff failed — a boot past its readiness deadline
+// change ran nowhere: one replacement failed — a boot past its readiness deadline
 // is enough — the supervisor kept the old child, and the tree stayed ahead of
 // the process until some unrelated later edit happened to swap (T-14046). A
-// crashed child was already healed this way; a failed handoff was not.
+// crashed child was already healed this way; a failed replacement was not.
 export let insist = (
   work: () => Promise<boolean>,
   waits = RETRY,
@@ -288,7 +254,6 @@ let revive = async (departed: Deno.ChildProcess) => {
 
 let watch = (child: Deno.ChildProcess) => {
   child.status.then((status) => {
-    dead.add(child)
     if (stopping.has(child)) return
     console.error(`server stopped unexpectedly (${status.code}) — relaunching`)
     serial(() => revive(child))
@@ -306,51 +271,28 @@ let stop = async (child: Deno.ChildProcess) => {
   await child.status
 }
 
-// The single-writer handoff (T-20223). The successor is spawned to PREP beside
-// the predecessor — imports, DB connect, no listener — and it must NOT migrate
-// or write until the predecessor has released the DB. So the beats are ordered:
-// launch() waits for the successor to report PREPPED, then `onBound` here stops
-// the predecessor; its exit releases the writer baton; the successor migrates
-// under the baton, binds the port only now, and reports READY, which is when
-// launch() resolves. There is never a moment
-// when two processes write the one file.
-//
-// The predecessor is condemned only at "prepped", never before — so a successor
-// that fails to even start (a bad commit's import error, before "prepped")
-// leaves the predecessor untouched and serving old code, and insist() retries
-// on backoff (a bad commit idles the box, T-14046). A successor that fails
-// AFTER we condemned the predecessor is healed by a fresh boot, which claims
-// the now-free baton — a brief outage, not a two-writer window.
+// Sequential replacement. Stop and reap the old server before a new process
+// opens the graph, migrates, or binds. A bad replacement is retried as a fresh
+// boot; the graph remains available to direct SQLite clients meanwhile.
 let swap = async () => {
   let old = current!
-  let stopped: Promise<void> | undefined
   try {
-    current = watch(
-      await launch(deno, succeeding, () => {
-        stopped = stop(old)
-      }),
-    )
-    await stopped // the predecessor is fully gone before we call the swap done
+    await stop(old)
+    current = watch(await launch())
     return true
   } catch (e) {
-    console.error('server handoff failed —', e)
-    current = old
-    // If we condemned the predecessor, wait for it to go; a child whose status
-    // already settled is watched by nothing, so heal it here or hold a dead
-    // handle. If we never reached "bound", the predecessor is alive and stays
-    // ours — current = old keeps it serving and revive() is skipped.
-    if (stopped) await stopped.catch(() => {})
-    if (dead.has(old)) await revive(old)
+    console.error('server replacement failed —', e)
+    await revive(old)
     return false
   }
 }
 
 // The supervisor keeps the code it IMPORTED at its own start, and no process
 // can re-import itself — so a landing that moves this file or reload.ts leaves
-// the fleet supervised by the tree's predecessor, deciding handoffs and
+// the fleet supervised by the earlier tree, deciding replacements and
 // readiness by names and deadlines that main no longer has. It cannot fix
 // itself in place; it can only ask to be born again. Stop the child first (the
-// successor is a FIRST boot, not a join, and bind.ts refuses an occupied port
+// replacement is an ordinary boot, and bind.ts refuses an occupied port
 // to everyone else), then exit 42 — the repo's ask-to-be-relaunched code, the
 // TUI's too. Whoever supervises this must run `deno task dev`, whose loop is
 // what turns 42 into a relaunch: systemd would turn it into a `Restart=always`
@@ -404,12 +346,11 @@ let firstBoot = async (): Promise<Deno.ChildProcess> => {
 }
 
 // The effects daemon (effectsd.ts, D-22388 step 3) — the doing half of the
-// split the server env above declares. Spawned only after a server is READY
-// (schema migrated — the daemon connects with --join and never migrates),
+// split the server env above declares. Spawned only after a server is READY,
 // respawned on death with the same backoff a server crash gets, and replaced
-// after every successful handoff so it always runs the tree's code. No ready
+// after every successful replacement so it always runs the tree's code. No ready
 // beat: it binds nothing; its boot relay + feed pick up whatever queued.
-let effectsArgs = ['run', '-A', 'src/effectsd.ts', '--join']
+let effectsArgs = ['run', '-A', 'src/effectsd.ts']
 let effectsd: Deno.ChildProcess | undefined
 let effectsGen = 0
 let spawnEffects = () => {
@@ -442,37 +383,37 @@ let spawnEffects = () => {
   }
   boot(0)
 }
-let stopEffects = () => {
+let stopEffects = async () => {
   effectsGen++ // condemn: the status handler above stands down
+  let child = effectsd
+  effectsd = undefined
   try {
-    effectsd?.kill('SIGTERM')
+    child?.kill('SIGTERM')
   } catch {
     // already gone
   }
+  await child?.status
 }
-let replaceEffects = () => {
-  stopEffects()
-  spawnEffects()
-}
-
 let supervise = async () => {
   current = await firstBoot()
   spawnEffects()
-  let handoff = insist(() =>
-    serial(swap).then((ok) => {
-      // The successor is READY (migrated) — replace the daemon so effects run
-      // the same tree the server does. A failed handoff keeps both as they
-      // were: the old server serves and the old daemon dispatches.
-      if (ok) replaceEffects()
+  let reload = insist(() =>
+    serial(async () => {
+      // Stop every process that imports the served tree before replacement.
+      // The new server migrates first; only then does the effects worker open
+      // the settled schema.
+      await stopEffects()
+      let ok = await swap()
+      spawnEffects()
       return ok
     })
   )
   for await (let event of Deno.watchFs(src)) {
     if (event.paths.some(devFile)) {
-      stopEffects()
+      await stopEffects()
       return relaunch()
     }
-    if (event.paths.some(serverFile)) handoff()
+    if (event.paths.some(serverFile)) reload()
   }
 }
 

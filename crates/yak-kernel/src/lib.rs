@@ -4,12 +4,9 @@
 // read-only sqlite store, FTS, and since T-22550 the WRITE path — apply()
 // with its gate registry, the journal, and the catchup feed. The core
 // compiles to wasm32 (yak-wasm), so nothing outside `native` may touch
-// rusqlite, files, or the clock. Still no migration and no baton — a
-// library client connects, reads, writes through apply, and leaves the
-// schema alone.
+// rusqlite, files, or the clock. A library client does not migrate: it
+// connects, reads, writes through apply, and leaves the schema alone.
 
-#[cfg(feature = "native")]
-pub mod baton;
 pub mod cache;
 #[cfg(feature = "native")]
 pub mod candidates;
@@ -55,8 +52,6 @@ pub use model::{Dep, Graph, Hit, Row, Source};
 #[cfg(feature = "remote")]
 pub mod remote;
 #[cfg(feature = "native")]
-pub use baton::{take_baton, try_baton, Baton, BatonError, TakeOpts, EFFECTS_LOCK, WRITER_LOCK};
-#[cfg(feature = "native")]
 pub use change::parse_batch;
 #[cfg(feature = "native")]
 pub use literal::normalize_literals;
@@ -96,35 +91,13 @@ pub fn live_db() -> String {
 // The live file exists in production, so a target that will not canonicalize
 // is not it (`:memory:`, a scratch copy under a temp dir that was removed);
 // fall back to a plain string match only for the case the live file itself is
-// absent (a fresh box, the fast tier). This is the guard behind
-// `writes_live_graph`.
+// absent (a fresh box, the fast tier).
 #[cfg(feature = "native")]
 pub fn same_graph_file(target: &str, live: &str) -> bool {
     match (std::fs::canonicalize(target), std::fs::canonicalize(live)) {
         (Ok(a), Ok(b)) => a == b,
         _ => target == live,
     }
-}
-
-// Would opening `target` for writing land on the live graph? The bundled
-// binaries link their OWN SQLite build, so co-writing the live WAL file while
-// the Deno server holds it is the cross-build multi-writer that corrupted the
-// graph (T-22622 / C-22669). Every proof and probe must write a COPY on a free
-// port instead; this is the assertion that makes a forgetful one fail loudly.
-#[cfg(feature = "native")]
-pub fn writes_live_graph(target: &str) -> bool {
-    same_graph_file(target, &live_db())
-}
-
-// Did THIS build link the bundled SQLite rather than the system libsqlite3? A
-// service co-reading (or co-writing) the live WAL file must link the SAME build
-// the Deno server links — a bundled build shares the wal-index across two
-// different SQLite versions with no guard (M-22673, T-22622). Cargo feature
-// unification is why this must be asked of the KERNEL and not a downstream
-// crate's own feature: a whole-workspace build unifies a bundled sibling's
-// feature into this crate, so only the kernel knows what it actually linked.
-pub fn is_bundled() -> bool {
-    cfg!(feature = "bundled")
 }
 
 // The default the whole fleet means by "the server" (client.ts host()).
@@ -235,8 +208,7 @@ mod endpoint_tests {
     }
 }
 
-// The live-write guard (T-22622): the same file by any path is the live file;
-// a sibling copy and `:memory:` are not.
+// The same-file predicate used by owner-data service guards.
 #[cfg(all(test, feature = "native"))]
 mod live_guard_tests {
     use super::same_graph_file;

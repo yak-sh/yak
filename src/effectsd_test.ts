@@ -1,6 +1,6 @@
 // The effects daemon's dispatch model (D-22388 step 3): effects leave the
 // serving process for a leased journal consumer (effectsd.ts). effectsd is a
-// top-level script — it takes the `-effects.lock` baton and runs forever on
+// top-level script — it takes the temporary effects lease and runs forever on
 // import — so it can't be imported; what this file proves is the MODEL it is
 // assembled from, at the seam, WITHOUT ever launching a real agent (every
 // handler here is a stub and no `session` spawn row is committed):
@@ -15,10 +15,8 @@
 //      never replayed — the no-double-fire half of exactly-once. The lost-effect
 //      half (an intent whose effect died in the crash gap) is the boot relay's,
 //      proven in effects_test.ts (`split relay`).
-//   3. The `-effects.lock` baton is a single dispatcher fleet-wide, and it is
-//      independent of the `-writer.lock` — so the server (writer) and the daemon
-//      (effects) never contend, and the server keeps serving while the daemon
-//      dispatches.
+//   3. The temporary effects lease admits one dispatcher until durable
+//      per-effect claims replace process-level election.
 import {
   assert,
   assertEquals,
@@ -28,7 +26,7 @@ import {
 import { apply, journalSince, recast } from './db.ts'
 import { catchup } from './catchup.ts'
 import { dispatch, fed, on } from './effects.ts'
-import { takeBaton } from './baton.ts'
+import { takeEffectsLease } from './effects_lease.ts'
 import { bareDb } from './testdb.ts'
 import { slow } from './testing.ts'
 import type { Change } from './types.ts'
@@ -114,30 +112,22 @@ Deno.test('a daemon restart re-dispatches nothing past its cursor', () => {
 })
 
 slow(
-  'the -effects.lock baton is one dispatcher, independent of the writer',
+  'the temporary effects lease admits one dispatcher',
   async () => {
     let db = `${Deno.makeTempDirSync()}/graph.db`
     let now = () => Promise.resolve() // instant polls — prove the logic, not the wait
 
     // One dispatcher: the effects lease, once held, refuses a second taker.
-    let held = await takeBaton(db, { suffix: '-effects.lock' })
+    let held = await takeEffectsLease(db)
     try {
-      let e = await assertRejects(() =>
-        takeBaton(db, { suffix: '-effects.lock', rest: now })
-      )
+      let e = await assertRejects(() => takeEffectsLease(db, { rest: now }))
       assertStringIncludes((e as Error).message, 'already held')
-      assertStringIncludes((e as Error).message, '-effects.lock')
-
-      // Independent of the writer: the server holds -writer.lock on the SAME
-      // graph while the daemon holds -effects.lock — different sidecars, no
-      // contention, so the server keeps serving as the daemon dispatches.
-      let writer = await takeBaton(db, { suffix: '-writer.lock' })
-      writer!.close()
+      assertStringIncludes((e as Error).message, 'effects lease')
     } finally {
       held!.close()
     }
     // Released with the process — a successor daemon takes it next.
-    let next = await takeBaton(db, { suffix: '-effects.lock' })
+    let next = await takeEffectsLease(db)
     next!.close()
   },
 )

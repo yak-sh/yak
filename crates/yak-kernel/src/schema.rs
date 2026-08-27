@@ -17,13 +17,15 @@
 // are added — additive only, "anything shapier needs the owner" (M-17876).
 //
 // This is a DELIBERATE capability, never the default open. WriteStore::open
-// (the library/bridge door) still never creates and never migrates; the swap's
-// successor calls create_or_migrate ONCE, holding the writer baton, before it
-// serves — mirroring Deno's sole-writer open() (baton.ts, D-22804 §8).
+// (the library/bridge door) still never creates and never migrates. Production
+// does not run the bridge against owner data; disposable parity graphs may use
+// this transactional, idempotent migration door.
 
 use crate::write::{has_col, WriteStore};
-use rusqlite::{Connection, OpenFlags, OptionalExtension};
+use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior};
 use std::time::Duration;
+
+const SCHEMA_VERSION: i64 = 1;
 
 pub enum SchemaOp {
     // A create/drop that carries its own `if [not] exists` — idempotent, run
@@ -109,7 +111,7 @@ pub fn apply_schema(conn: &Connection) -> rusqlite::Result<()> {
 
 // Mint the durable sync epoch if absent (db.ts mintEpoch, T-20299) — the
 // cursor-lineage identity a delta client checks. A WRITE, so it belongs in the
-// migrate phase under the baton, never on a read path; `insert or ignore` keeps
+// migration transaction, never on a read path; `insert or ignore` keeps
 // a re-open a no-op. Its uuid is per-graph identity, so it is deliberately NOT
 // part of byte-parity (each fresh graph mints its own).
 pub fn mint_epoch(conn: &Connection) -> rusqlite::Result<()> {
@@ -123,11 +125,11 @@ pub fn mint_epoch(conn: &Connection) -> rusqlite::Result<()> {
 impl WriteStore {
     // Create a fresh graph, or additively migrate an existing one, then return a
     // read-write handle — the schema-authority door (D-22804 §8). DELIBERATE and
-    // caller-baton-guarded (unlike WriteStore::open, which never touches the
-    // schema). The pragmas mirror db.ts migrate()'s boot writes: WAL header flip
+    // transactional (unlike WriteStore::open, which never touches the schema).
+    // The pragmas mirror db.ts migrate()'s boot writes: WAL header flip
     // (a no-op `memory` on :memory:) and its crash-safe `synchronous = normal`.
     pub fn create_or_migrate(path: &str) -> rusqlite::Result<WriteStore> {
-        let conn = Connection::open_with_flags(
+        let mut conn = Connection::open_with_flags(
             path,
             OpenFlags::SQLITE_OPEN_READ_WRITE
                 | OpenFlags::SQLITE_OPEN_CREATE
@@ -136,8 +138,19 @@ impl WriteStore {
         conn.busy_timeout(Duration::from_millis(5000))?;
         conn.pragma_update(None, "journal_mode", "wal")?;
         conn.pragma_update(None, "synchronous", "normal")?;
-        apply_schema(&conn)?;
-        mint_epoch(&conn)?;
+        let stored: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
+        if stored > SCHEMA_VERSION {
+            return Err(rusqlite::Error::InvalidParameterName(format!(
+                "database schema version {stored} is newer than this binary's version {SCHEMA_VERSION}"
+            )));
+        }
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        apply_schema(&tx)?;
+        mint_epoch(&tx)?;
+        if stored != SCHEMA_VERSION {
+            tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+        }
+        tx.commit()?;
         Ok(WriteStore { conn })
     }
 }

@@ -168,10 +168,9 @@ export let knn = (
 // it creates the persisted ANN table on a graph that lacks it (a write, hence
 // migrate()), AND it establishes the extension's PER-CONNECTION context — the
 // thing `vector_quantize` looks up. A connection that skipped it fails with
-// "Vector context not found" no matter how healthy the file is, which is
-// exactly what a --join daemon hit (it connects, never migrates). So every
+// "Vector context not found" no matter how healthy the file is. So every
 // process that touches vector SQL calls this on ITS OWN handle; on a graph
-// already initialized and not dirty it is byte-identical (measured), so a join
+// already initialized and not dirty it is byte-identical (measured), so another
 // connection may call it freely.
 export let initVector = (db: DatabaseSync) => {
   if (!ready.has(db)) return

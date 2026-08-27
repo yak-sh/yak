@@ -19,18 +19,10 @@ exclude = ["*.ts"]
 # next line prints. ureq rides without default features on purpose: the wire
 # is `http://host:port` (client.ts host()), so TLS would be dead weight.
 #
-# `bundled` compiles SQLite IN. It is ON by default so the published crate and
-# the self-contained `yak` CLI stay dependency-free and portable. But a Rust
-# process that CO-WRITES a file a Deno process also opens (a future
-# write-capable service, D-22530) MUST NOT enable it: it depends on the kernel
-# with `default-features = false` + `["native", "remote"]` so rusqlite links
-# the SAME system libsqlite3 the Deno server links. Two SQLite BUILDS sharing
-# one WAL wal-index have no cross-build version guard and corrupt the graph —
-# that was the T-22622 corruption (C-22669). Same file, same build: the single
-# guarantee SQLite actually tests.
+# `bundled` compiles SQLite in so the published crate and CLI stay portable.
 [features]
 default = ["native", "remote", "bundled"]
-native = ["dep:rusqlite", "dep:chrono", "dep:sha2", "dep:uuid", "dep:url", "dep:libc"]
+native = ["dep:rusqlite", "dep:chrono", "dep:sha2", "dep:uuid", "dep:url"]
 remote = ["dep:ureq"]
 bundled = ["rusqlite/bundled"]
 
@@ -47,7 +39,3 @@ uuid = { version = "1", features = ["v4"], optional = true }
 # rung 6b (T-22862), operator-decided (C-22864): a faithful port needs the full
 # WHATWG parser, not a hand-rolled subset that would silently diverge.
 url = { version = "2", optional = true }
-# flock(2) for the writer baton (baton.rs, T-22890) — the SAME primitive Deno's
-# FsFile.tryLockSync takes on Linux, so a Rust swap successor and a Deno
-# predecessor serialize on one sidecar. Native-only (touches the OS), never wasm.
-libc = { version = "0.2", optional = true }

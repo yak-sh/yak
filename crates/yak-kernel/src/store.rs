@@ -1,8 +1,8 @@
 // The read-only store: open the live graph file, resolve human ids, read an
 // entity's components the way the TS select() layer projects them — every
 // {eid} reference joined back to its target's eid text, never the integer it
-// is stored as. Never migrates, never takes the writer baton: a library
-// client connects, reads, and leaves the schema alone (D-22530 §1).
+// is stored as. Never migrates: a library client connects, reads, and leaves
+// the schema alone (D-22530 §1).
 
 pub use crate::model::{is_uuid, Dep, Row};
 use crate::model::{Graph, Hit, Source};

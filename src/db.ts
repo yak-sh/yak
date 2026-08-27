@@ -8,10 +8,8 @@
 // Ids: `eid` is a UUID so ANY side (client included) can mint entities;
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
 import { DatabaseSync, type StatementSync } from './sqlite.ts'
-import { tryBaton } from './baton.ts'
 import { initVector, loadVector } from './vector.ts'
 import { dirname, resolve } from 'node:path'
-import { statfsSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { sha } from './sha.ts'
 import {
@@ -117,10 +115,51 @@ let rollback = (db: DatabaseSync) => {
   if (db.inTransaction) db.exec('rollback')
 }
 
+let savepoint = 0
+// Migrations compose: the outer BEGIN IMMEDIATE is the SQLite-owned schema
+// lock, while older focused migrations keep their all-or-nothing boundary as
+// savepoints. No process-level lock participates in database correctness.
+let atomic = <T>(
+  db: DatabaseSync,
+  run: () => T,
+  immediate = false,
+): T => {
+  let nested = db.inTransaction
+  let name = `tasks_${++savepoint}`
+  db.exec(
+    nested ? `savepoint ${name}` : immediate ? 'begin immediate' : 'begin',
+  )
+  try {
+    let value = run()
+    db.exec(nested ? `release ${name}` : 'commit')
+    return value
+  } catch (e) {
+    if (nested) {
+      db.exec(`rollback to ${name}`)
+      db.exec(`release ${name}`)
+    } else rollback(db)
+    throw e
+  }
+}
+
 // The owner's live graph — the one path a test must never open (open() below
 // refuses it under `deno test`). A function, not a constant, so it re-reads
 // HOME and the guard that holds this can't drift from a stale literal.
 export let liveDb = () => `${Deno.env.get('HOME')}/.tasks/tasks.db`
+
+// Same database by canonical path when it exists, normalized spelling when it
+// does not. Service-plane guards use this so a symlink cannot disguise owner
+// data as a disposable parity copy.
+export let sameGraphFile = (a: string, b: string) => {
+  let canonical = (path: string) => {
+    try {
+      return Deno.realPathSync(path)
+    } catch {
+      return resolve(path)
+    }
+  }
+  return canonical(a) == canonical(b)
+}
 
 // The db lives outside the repo (this is open source): a home-dir dotpath by
 // default, overridable with DB_PATH.
@@ -1191,8 +1230,7 @@ export let migrateRefs = (db: DatabaseSync) => {
     nextBody: renameTeaching(r.body),
   })).filter((r) => r.nextTitle != r.title || r.nextBody != r.body)
   if (!renames.length && !staleBoards.length && !staleDocs.length) return
-  db.exec('begin')
-  try {
+  atomic(db, () => {
     for (let { table, old, col } of renames) {
       if (hasCol(db, table, col)) {
         throw new Error(
@@ -1216,11 +1254,7 @@ export let migrateRefs = (db: DatabaseSync) => {
        where entity = (select id from entity where eid = ?)`,
     )
     for (let r of staleDocs) writeDoc.run(r.nextTitle, r.nextBody, r.eid)
-    db.exec('commit')
-  } catch (e) {
-    rollback(db)
-    throw e
-  }
+  })
 }
 
 // Journal bytes are audit history, so the migration never rewrites them. A
@@ -1248,22 +1282,22 @@ let ddlOf = (db: DatabaseSync, name: string) =>
   (prep(db, `select sql from sqlite_master where type = 'table' and name = ?`)
     .get(name) as { sql: string } | undefined)?.sql
 let rebuild = (db: DatabaseSync, name: string, ddl: string) => {
-  db.exec('begin')
-  db.exec(`alter table ${name} rename to ${name}_stale`)
-  db.exec(ddl)
-  // Copy BY NAME, over the columns common to both shapes — never `select *`.
-  // A rebuild whose new ddl adds a column (T-14133 added mail's 11th) leaves
-  // the fresh table wider than the stale one, so a positional `select *`
-  // supplies too few values ("N columns but M values"); one that drops a
-  // column supplies too many. Naming the intersection lets an added column
-  // take its default and a dropped one fall away, so widening the vocabulary
-  // never breaks the FK-era migration again (T-18475).
-  let fresh = new Set(colNames(db, name))
-  let cols = colNames(db, `${name}_stale`).filter((c) => fresh.has(c))
-  let list = cols.map(sqlName).join(', ')
-  db.exec(`insert into ${name} (${list}) select ${list} from ${name}_stale`)
-  db.exec(`drop table ${name}_stale`)
-  db.exec('commit')
+  atomic(db, () => {
+    db.exec(`alter table ${name} rename to ${name}_stale`)
+    db.exec(ddl)
+    // Copy BY NAME, over the columns common to both shapes — never `select *`.
+    // A rebuild whose new ddl adds a column (T-14133 added mail's 11th) leaves
+    // the fresh table wider than the stale one, so a positional `select *`
+    // supplies too few values ("N columns but M values"); one that drops a
+    // column supplies too many. Naming the intersection lets an added column
+    // take its default and a dropped one fall away, so widening the vocabulary
+    // never breaks the FK-era migration again (T-18475).
+    let fresh = new Set(colNames(db, name))
+    let cols = colNames(db, `${name}_stale`).filter((c) => fresh.has(c))
+    let list = cols.map(sqlName).join(', ')
+    db.exec(`insert into ${name} (${list}) select ${list} from ${name}_stale`)
+    db.exec(`drop table ${name}_stale`)
+  })
 }
 
 // The same shape for tool_call's source list: a row the CHECK doesn't know
@@ -1283,15 +1317,10 @@ export let mendCalls = (db: DatabaseSync) => {
 // column, so it runs once and no-ops thereafter.
 export let mendApply = (db: DatabaseSync) => {
   if (!hasCol(db, 'apply', 'change')) return
-  db.exec('begin')
-  try {
+  atomic(db, () => {
     db.exec('update apply set change = json_array(json(change))')
     db.exec('alter table apply rename column change to changes')
-    db.exec('commit')
-  } catch (e) {
-    rollback(db)
-    throw e
-  }
+  })
 }
 
 // The read→opened migration (T-7006): seed `opened` from every letter the
@@ -1352,17 +1381,16 @@ export let backfillJournalTouch = (db: DatabaseSync) => {
     n: number | null
   }).n
   if (!entries) return
-  db.exec('begin')
   try {
-    db.exec(
-      `insert into journal_touch (jrow, eid)
-       select distinct j.rowid, json_extract(je.value, '$.eid')
-       from journal j, json_each(j.batch) je
-       where json_extract(je.value, '$.eid') is not null`,
-    )
-    db.exec('commit')
+    atomic(db, () => {
+      db.exec(
+        `insert into journal_touch (jrow, eid)
+         select distinct j.rowid, json_extract(je.value, '$.eid')
+         from journal j, json_each(j.batch) je
+         where json_extract(je.value, '$.eid') is not null`,
+      )
+    })
   } catch (e) {
-    rollback(db)
     console.warn('journal_touch backfill skipped —', e)
   }
 }
@@ -1395,8 +1423,7 @@ export let retireProposal = (db: DatabaseSync) => {
     "select 1 from board where instr(query, '.proposal=true') > 0 limit 1",
   ).get()
   if (!legacy && !stale) return
-  db.exec('begin')
-  try {
+  atomic(db, () => {
     if (legacy) {
       db.exec(`
         insert or ignore into proposed (entity, at, "by", via)
@@ -1411,11 +1438,7 @@ export let retireProposal = (db: DatabaseSync) => {
       set query = replace(query, '.proposal=true', '.proposed~=')
       where instr(query, '.proposal=true') > 0`)
     if (legacy) db.exec('alter table task drop column proposal')
-    db.exec('commit')
-  } catch (e) {
-    rollback(db)
-    throw e
-  }
+  })
 }
 
 // A project's end is the same archived fact every entity can wear. Preserve
@@ -1441,8 +1464,7 @@ export let retireProjectRetiredAt = (db: DatabaseSync) => {
   let stale = boards.map((r) => ({ ...r, next: retireFilter(r.query) }))
     .filter((r) => r.next != r.query)
   if (!legacy && !stale.length) return
-  db.exec('begin')
-  try {
+  atomic(db, () => {
     if (legacy) {
       db.exec(`insert or ignore into archived (entity, at)
         select entity, retired_at from project where retired_at is not null`)
@@ -1453,11 +1475,7 @@ export let retireProjectRetiredAt = (db: DatabaseSync) => {
     )
     for (let r of stale) write.run(r.next, r.eid)
     if (legacy) db.exec('alter table project drop column retired_at')
-    db.exec('commit')
-  } catch (e) {
-    rollback(db)
-    throw e
-  }
+  })
 }
 
 // Give every session its canonical launch facet before graph-out can observe
@@ -1465,8 +1483,7 @@ export let retireProjectRetiredAt = (db: DatabaseSync) => {
 // existing canonical row wins — including explicit null — on every open.
 export let backfillSpawn = (db: DatabaseSync) => {
   let cols = ['provider', 'model', 'effort', 'persona']
-  db.exec('begin')
-  try {
+  atomic(db, () => {
     db.exec(
       `insert or ignore into spawn (entity, provider, model, effort, persona)
          select entity, provider, model, effort, persona from session`,
@@ -1501,11 +1518,7 @@ export let backfillSpawn = (db: DatabaseSync) => {
     `,
     ).get()
     if (missed) throw new Error('spawn backfill did not verify')
-    db.exec('commit')
-  } catch (e) {
-    rollback(db)
-    throw e
-  }
+  })
 }
 
 // Lineage rides an edge (T-16412, D-16328): `parent delegates child` is the
@@ -1526,8 +1539,7 @@ export let backfillLineage = (db: DatabaseSync) => {
 // never carried them. An existing canonical row wins — including its nulls —
 // so an interrupted rolling deploy can never revive a cleared legacy alias.
 export let backfillSessionFacets = (db: DatabaseSync) => {
-  db.exec('begin')
-  try {
+  atomic(db, () => {
     db.exec(`
       insert or ignore into worktree (entity, cwd, branch, base_revision)
       select entity, cwd, branch, base_revision from session
@@ -1635,11 +1647,7 @@ export let backfillSessionFacets = (db: DatabaseSync) => {
       ).get()
       if (missed) throw new Error(`${table} backfill did not verify`)
     }
-    db.exec('commit')
-  } catch (e) {
-    rollback(db)
-    throw e
-  }
+  })
 }
 
 // D-14945 phase 4: role/session diagnostics become the shared error facet.
@@ -1654,8 +1662,7 @@ export let migrateErrors = (db: DatabaseSync) => {
     session: `case when status in
       ('completed', 'failed', 'interrupted', 'lost') then finished_at end`,
   }
-  db.exec('begin')
-  try {
+  atomic(db, () => {
     for (let table of tables) {
       db.exec(
         `insert into error (entity, at, message)
@@ -1677,11 +1684,7 @@ export let migrateErrors = (db: DatabaseSync) => {
       if (missed) throw new Error(`${table} error migration did not verify`)
     }
     for (let table of tables) db.exec(`alter table ${table} drop column error`)
-    db.exec('commit')
-  } catch (e) {
-    rollback(db)
-    throw e
-  }
+  })
 }
 
 // D-14945 phase 1: the per-type delivery receipts become two shared
@@ -1978,8 +1981,7 @@ export let migrateBoardsToProjects = (db: DatabaseSync) => {
     query: string | null
   }[]
   let now = new Date().toISOString()
-  db.exec('begin')
-  try {
+  atomic(db, () => {
     for (let { eid, query } of boards) {
       if (!query) continue
       let preds
@@ -2026,11 +2028,7 @@ export let migrateBoardsToProjects = (db: DatabaseSync) => {
          values (?, (select num from entity where eid = ?), ?)`,
       ).run(eid, eid, now)
     }
-    db.exec('commit')
-  } catch (e) {
-    rollback(db)
-    throw e
-  }
+  })
 }
 
 // The heal for the graphs migrateDeliver already stranded before the split
@@ -2173,8 +2171,7 @@ export let healStored = (db: DatabaseSync) => {
     }
   }
   if (!fixes.length) return { changed: 0, invalid }
-  db.exec('begin')
-  try {
+  atomic(db, () => {
     for (let fix of fixes) {
       prep(
         db,
@@ -2185,11 +2182,7 @@ export let healStored = (db: DatabaseSync) => {
           } = ? where entity = (select id from entity where eid = ?)`,
       ).run(fix.value, fix.eid)
     }
-    db.exec('commit')
-  } catch (e) {
-    rollback(db)
-    throw e
-  }
+  })
   return { changed: fixes.length, invalid }
 }
 
@@ -2410,55 +2403,55 @@ let migrateToIdKeys = (db: DatabaseSync) => {
       `select sql from sqlite_master where type = 'table' and name = ?`,
     ).get(t) as { sql: string }).sql
   db.exec('pragma foreign_keys = off')
-  db.exec('begin')
   try {
-    // The spine first, so every reference below resolves against real ids.
-    db.exec('alter table entity rename to __mig_entity')
-    db.exec(ddlOf('entity'))
-    db.exec(
-      'insert into entity (id, eid, num) select rowid, eid, num from __mig_entity',
-    )
-    db.exec('drop table __mig_entity')
-    // D-18866 fidelity: a pre-flip death lives ONLY in `tombstone` — deletion
-    // removed its `entity` row — so seeding the spine from the old entity table
-    // alone leaves every old-tombstoned eid with no id. copyLegacyTable would
-    // then NULL each nullable reference history still holds to such an eid, and
-    // DROP the whole row for a NOT NULL one — losing journal/provenance/contention
-    // records D-18866 keeps valid, and baking a two-representation split (old
-    // deaths eid-only, post-cutover deaths spine-retained). Carry every tombstone
-    // eid into the spine as a RETAINED row instead: a fresh id STRICTLY above the
-    // live max (num never recycles, so no id collision), its grave `num` kept.
-    // A dead entity now has BOTH a spine row and a tombstone row — exactly the
-    // go-forward representation apply() maintains (T-18878). The `tombstone` table
-    // is untouched (never in graphTables, so the copy loop below skips it), so
-    // refToId still refuses writes AT these graves by reading it directly — history
-    // resolves without any grave becoming writable. Guarded for a legacy db that
-    // predates the tombstone table or its num column.
-    if (tableExists(db, 'tombstone')) {
-      let tnum = hasCol(db, 'tombstone', 'num') ? 'num' : 'null'
+    let reports = atomic(db, () => {
+      // The spine first, so every reference below resolves against real ids.
+      db.exec('alter table entity rename to __mig_entity')
+      db.exec(ddlOf('entity'))
       db.exec(
-        `insert into entity (id, eid, num)
-           select (select coalesce(max(id), 0) from entity)
-                    + row_number() over (order by eid),
-                  eid, ${tnum}
-             from tombstone
-            where eid not in (select eid from entity)`,
+        'insert into entity (id, eid, num) select rowid, eid, num from __mig_entity',
       )
-    }
-    let reports: CopyReport[] = []
-    for (let t of graphTables()) {
-      if (t == 'entity' || !tableExists(db, t)) continue
-      db.exec(`alter table ${sqlName(t)} rename to __mig_${t}`)
-      db.exec(ddlOf(t))
-      reports.push(copyLegacyTable(db, t, `__mig_${t}`))
-      db.exec(`drop table __mig_${t}`)
-    }
-    db.exec('commit')
+      db.exec('drop table __mig_entity')
+      // D-18866 fidelity: a pre-flip death lives ONLY in `tombstone` — deletion
+      // removed its `entity` row — so seeding the spine from the old entity table
+      // alone leaves every old-tombstoned eid with no id. copyLegacyTable would
+      // then NULL each nullable reference history still holds to such an eid, and
+      // DROP the whole row for a NOT NULL one — losing journal/provenance/contention
+      // records D-18866 keeps valid, and baking a two-representation split (old
+      // deaths eid-only, post-cutover deaths spine-retained). Carry every tombstone
+      // eid into the spine as a RETAINED row instead: a fresh id STRICTLY above the
+      // live max (num never recycles, so no id collision), its grave `num` kept.
+      // A dead entity now has BOTH a spine row and a tombstone row — exactly the
+      // go-forward representation apply() maintains (T-18878). The `tombstone` table
+      // is untouched (never in graphTables, so the copy loop below skips it), so
+      // refToId still refuses writes AT these graves by reading it directly — history
+      // resolves without any grave becoming writable. Guarded for a legacy db that
+      // predates the tombstone table or its num column.
+      if (tableExists(db, 'tombstone')) {
+        let tnum = hasCol(db, 'tombstone', 'num') ? 'num' : 'null'
+        db.exec(
+          `insert into entity (id, eid, num)
+             select (select coalesce(max(id), 0) from entity)
+                      + row_number() over (order by eid),
+                    eid, ${tnum}
+               from tombstone
+              where eid not in (select eid from entity)`,
+        )
+      }
+      let reports: CopyReport[] = []
+      for (let t of graphTables()) {
+        if (t == 'entity' || !tableExists(db, t)) continue
+        db.exec(`alter table ${sqlName(t)} rename to __mig_${t}`)
+        db.exec(ddlOf(t))
+        reports.push(copyLegacyTable(db, t, `__mig_${t}`))
+        db.exec(`drop table __mig_${t}`)
+      }
+      return reports
+    })
     // Reported only after the reshape commits — never announce a clean that a
     // later rollback would undo.
     reportMigration(reports)
   } catch (e) {
-    rollback(db)
     scratch.close()
     throw e
   }
@@ -2472,33 +2465,12 @@ let migrateToIdKeys = (db: DatabaseSync) => {
   db.exec('pragma foreign_keys = on')
 }
 
-// A writer killed mid-write (SIGKILL, SIGBUS — the vector the baton cannot
-// close, T-20223/T-21914) can leave `<db>-wal` malformed while the main file
-// stays healthy. Every boot then throws `database disk image is malformed` and
-// the supervisor's retry loops forever: the fleet substrate is down until a
-// human moves the WAL aside. healWal() does at boot exactly what the 2026-08-25
-// incident recovery did by hand — and ONLY then:
-//
-// - Probe only when a WAL file exists (a clean shutdown checkpoints and removes
-//   it, so healthy boots pay nothing). `pragma quick_check` costs ~2s on the
-//   live graph; a wal-present boot is a crash restart or a --join successor,
-//   where that price is right.
-// - Salvage only while holding the writer baton transiently (tryBaton): a
-//   --join successor probing beside a LIVE predecessor must never move the WAL
-//   that predecessor is writing. Baton held elsewhere → propagate, don't touch.
-// - Salvage = safety-copy the main db, rename wal → `.corrupt.<ts>` and shm →
-//   `.stale.<ts>` — preserved for forensics, never deleted — then retry ONCE.
-//   The db reverts to its last checkpoint; loss is bounded to frames that were
-//   already unreadable.
-// - A MAIN-file failure is not self-healable: leave everything exactly as
-//   found and propagate. The live file itself is the evidence — never copy
-//   the multi-GB main on this path, and preserve the (small) WAL once per
-//   INCIDENT, not per retry: the supervisor re-runs this every ~30s, and the
-//   2026-08-26 outage was SUSTAINED by ~60 fresh 1.6GB evidence copies
-//   filling the disk to 0 bytes (T-22262). A `.refused` marker beside the db
-//   names the verdict last refused on; a retry seeing the same verdict copies
-//   nothing, and any successful open clears the marker.
-let stamp = () => new Date().toISOString().replaceAll(':', '-')
+// A WAL-present boot follows a crash or overlaps another healthy connection,
+// so verify the complete SQLite view before migrations write anything. A
+// failed check is never repaired in place: WAL and SHM are live parts of the
+// database, and renaming either behind an open connection creates two WAL
+// generations. Recovery is an offline operation over a preserved copy of the
+// database/WAL/SHM set.
 let exists = (p: string) => {
   try {
     Deno.statSync(p)
@@ -2512,184 +2484,34 @@ let probe = (db: DatabaseSync) => {
   let verdict = row?.quick_check ?? Object.values(row ?? {})[0]
   if (verdict != 'ok') throw new Error(`quick_check: ${verdict}`)
 }
-// Copying evidence into a full disk sustains the outage it documents — and a
-// full disk is also the likeliest CAUSE of the corruption (ENOSPC mid-write).
-// Require 2× the copy's size free before writing one; when the volume lacks
-// it, skip the copy loudly — the original stays on disk as the evidence.
-// TASKS_EVIDENCE_MIN_FREE (bytes) overrides the floor so tests can force the
-// low-disk branch. A statfs failure fails OPEN: the guard itself must never
-// block a salvage.
-let headroom = (path: string, need: number) => {
-  try {
-    let env = Deno.env.get('TASKS_EVIDENCE_MIN_FREE')
-    let floor = env ? Number(env) : need * 2
-    let s = statfsSync(dirname(path))
-    return Number(s.bavail) * Number(s.bsize) >= floor
-  } catch {
-    return true
-  }
-}
-let evidence = (src: string, dst: string) => {
-  if (!headroom(src, Deno.statSync(src).size)) {
-    console.error(
-      `EVIDENCE COPY SKIPPED: no headroom on the volume for ${dst} ` +
-        `(T-22262 — copying into a full disk sustains the outage it ` +
-        `documents). ${src} stays on disk as the evidence.`,
-    )
-    return
-  }
-  Deno.copyFileSync(src, dst)
-}
-let refusedAt = (path: string) => `${path}.refused`
-// The marker's first line is a HASH of the verdict — quick_check verdicts are
-// multi-line, so the raw text can't be the compared line. The full verdict
-// follows for humans reading the marker.
-let sameRefusal = (path: string, verdict: string) => {
-  try {
-    return Deno.readTextFileSync(refusedAt(path)).split('\n')[0] == sha(verdict)
-  } catch {
-    return false
-  }
-}
-let clearRefusal = (path: string) => {
-  try {
-    Deno.removeSync(refusedAt(path))
-  } catch { /* none stood */ }
-}
-let healWal = (db: DatabaseSync, path: string): DatabaseSync => {
-  if (path == ':memory:') return db
-  if (!exists(`${path}-wal`)) {
-    clearRefusal(path)
-    return db
-  }
+let verifyWal = (db: DatabaseSync, path: string): DatabaseSync => {
+  if (path == ':memory:' || !exists(`${path}-wal`)) return db
   try {
     probe(db)
-    clearRefusal(path)
     return db
   } catch (e) {
-    let baton = tryBaton(path)
-    if (!baton) throw e // a live process owns this graph — never salvage under it
-    try {
-      // Which file is actually bad? Probe the MAIN alone FIRST — the
-      // immutable URI reads main and ignores wal/shm, consuming nothing —
-      // because the answer decides whether any multi-GB copy is warranted.
-      let alone = 'ok'
-      {
-        let solo = new DatabaseSync(`file:${path}?immutable=1`, {
-          readOnly: true,
-        })
-        try {
-          probe(solo)
-        } catch (bad) {
-          alone = String(bad)
-        } finally {
-          solo.close()
-        }
-      }
-      if (alone != 'ok') {
-        // Main-db corruption — not self-healable. Propagate with everything
-        // exactly as found: the untouched live file IS the evidence. Preserve
-        // the small WAL once per incident (each crashed retry may rewrite
-        // it, so the first refusal's copy is the incident's WAL).
-        if (!sameRefusal(path, alone)) {
-          let ts = stamp()
-          evidence(`${path}-wal`, `${path}-wal.corrupt.${ts}`)
-          if (exists(`${path}-shm`)) {
-            evidence(`${path}-shm`, `${path}-shm.stale.${ts}`)
-          }
-          Deno.writeTextFileSync(
-            refusedAt(path),
-            `${sha(alone)}\nrefused ${ts}\n${alone}\n`,
-          )
-          console.error(
-            `SALVAGE REFUSED for ${path}: the MAIN file itself is corrupt ` +
-              `(${alone}) — not self-healable, left exactly as found. WAL ` +
-              `preserved beside it; ${refusedAt(path)} suppresses duplicate ` +
-              `evidence copies while the crash-loop retries.`,
-          )
-        }
-        // Deliberately NOT db.close(): close() checkpoints the wal into the
-        // corrupt main and deletes it — destroying the as-found evidence
-        // (proven by test). A refusal exits the process, which releases the
-        // handle without a checkpoint; the crash-loop is cross-process.
-        throw e
-      }
-      let ts = stamp()
-      // WAL-only damage: salvageable. The safety copy is LOAD-BEARING here —
-      // close() below checkpoints the corrupt frames INTO main and the copy
-      // is what restores it — so without headroom for it there is no safe
-      // salvage: leave everything as found and propagate.
-      if (!headroom(path, Deno.statSync(path).size)) {
-        throw new Error(
-          `cannot salvage ${path}: no headroom on the volume for the safety ` +
-            `copy the recovery depends on — free disk space and retry. ` +
-            `Original failure: ${e}`,
-        )
-      }
-      Deno.copyFileSync(path, `${path}.pre-walrecover.${ts}`)
-      evidence(`${path}-wal`, `${path}-wal.corrupt.${ts}`)
-      if (exists(`${path}-shm`)) {
-        evidence(`${path}-shm`, `${path}-shm.stale.${ts}`)
-      }
-      // Dispose of the corrupt-wal handle. close() runs a checkpoint that
-      // copies the (checksum-valid, semantically stale) frames INTO main and
-      // deletes the wal — proven live — so the main file is corrupt after
-      // this line no matter what. That is fine: the safety copy taken above
-      // IS the healthy as-found main, and restoring it is byte-identical to
-      // the state the immutable probe just passed.
-      try {
-        db.close()
-      } catch { /* a corrupt wal may make close itself throw */ }
-      Deno.copyFileSync(`${path}.pre-walrecover.${ts}`, path)
-      if (exists(`${path}-wal`)) {
-        Deno.renameSync(`${path}-wal`, `${path}-wal.corrupt.${ts}`)
-      }
-      if (exists(`${path}-shm`)) {
-        Deno.renameSync(`${path}-shm`, `${path}-shm.stale.${ts}`)
-      }
-      let healed = new DatabaseSync(path)
-      probe(healed) // no wal now: reads serve from the proven-healthy main
-      clearRefusal(path)
-      let n = 'unknown'
-      try {
-        n = String(
-          (healed.prepare('select count(*) n from entity').get() as {
-            n: number
-          }).n,
-        )
-      } catch { /* pre-migrate graph: no entity table yet */ }
-      console.error(
-        `WAL SALVAGED for ${path}: boot found a malformed WAL (${e}) and ` +
-          `recovered by reverting to the last checkpoint. Preserved: ` +
-          `${path}-wal.corrupt.${ts}, ${path}-shm.stale.${ts}, safety copy ` +
-          `${path}.pre-walrecover.${ts}. Entities now: ${n}. Loss is bounded ` +
-          `to the un-checkpointed frames that were already unreadable.`,
-      )
-      return healed
-    } finally {
-      baton.close()
-    }
+    throw new Error(
+      `SQLite integrity check failed for ${path} while ${path}-wal exists: ` +
+        `${e}. Startup stopped without copying, renaming, or deleting the ` +
+        `database, WAL, or SHM files. Stop every process using this graph, ` +
+        `preserve the three files as one set, and diagnose or recover an ` +
+        `offline copy.`,
+      { cause: e },
+    )
   }
 }
 
-// Connect only — enough to READ the graph, taking NO write to it. The migrate
-// phase (which DOES write) is split out below so a --join deploy successor can
-// serve reads while it waits for the predecessor to release the writer baton,
-// then migrate() alone once it holds it (T-20223, becomeWriter in server.ts).
-// Every sole-writer boot goes through open(), which is connect() + migrate().
+// Connect without migration. open() composes this with migrate(); read-only
+// consumers use connect() directly.
 // The app-plane-only boot switch (TASKS_PLANE=app, D-22804 §8 strangler). When
-// set, this Deno process serves READ routes beside the Rust bridge writer over
-// one WAL: it never takes the writer baton, never migrates, runs no boot
-// write-reconcilers, and opens the graph READ-ONLY — the data plane (every
-// write) is the bridge's. Read at boot like TASKS_EFFECTS/TASKS_SYNC, a pure
-// env predicate with no side effect (M-22673: two writers over one WAL is the
-// exact corruption this mode sidesteps by having Deno write NOTHING).
+// set, this Deno process opens the graph read-only and forwards writes. This is
+// retained for disposable parity copies; live_db.ts refuses it on owner data.
 export let appPlane = () => Deno.env.get('TASKS_PLANE') == 'app'
 
 // The data-plane writer's HTTP base URL (TASKS_WRITER_URL) — the Deno→bridge
 // direction of the strangler write-proxy (T-22927), the mirror of the bridge's
 // own --upstream/TASKS_UPSTREAM Deno target. In TASKS_PLANE=app the mutating
-// doors forward the write here (the Rust bridge, the sole writer) and relay its
+// doors forward the write here (the Rust bridge) and relay its
 // answer, instead of refusing it (503). Absent, they still refuse rather than
 // guess a server — a wrong guess (this reader's own 5173) would proxy every
 // write straight back into the read-only process it came from. Read at the door,
@@ -2706,7 +2528,7 @@ export let connect = (path = file, vector = false, readOnly = false) => {
   // the owner's board (T-14260).
   if (
     Deno.mainModule.endsWith('_test.ts') &&
-    resolve(path) === resolve(liveDb())
+    sameGraphFile(path, liveDb())
   ) {
     throw new Error(
       `refusing to open the live graph (${path}) under a test — set DB_PATH`,
@@ -2714,12 +2536,8 @@ export let connect = (path = file, vector = false, readOnly = false) => {
   }
   Deno.mkdirSync(dirname(path), { recursive: true })
   // readOnly (the app-plane reader, appPlane()): writing is made impossible at
-  // the SQLite layer, not merely avoided per-door — the structural guarantee
-  // that a Deno co-process beside the bridge writer never writes the shared WAL.
-  // healWal never salvages under it: a live writer holds the writer baton, so
-  // tryBaton fails and a corrupt-WAL verdict propagates rather than a reader
-  // moving the file a writer owns.
-  let db = healWal(new DatabaseSync(path, { readOnly }), path)
+  // the SQLite layer, not merely avoided per-door.
+  let db = verifyWal(new DatabaseSync(path, { readOnly }), path)
   // The vector extension is OPT-IN, because it is write-capable and connect()
   // is the LIBRARY door (D-22530: such an extension loads only in the
   // distribution that owns its write). Loading it here handed one to every
@@ -2727,16 +2545,8 @@ export let connect = (path = file, vector = false, readOnly = false) => {
   // is what put a native writer in a second process (T-22622). Only
   // live_db.ts, the server-side handle, asks for it.
   if (vector) loadVector(db)
-  // Connection-local settings ONLY — nothing here writes shared data, so this
-  // is safe to run beside a predecessor that still holds the writer baton.
-  // busy_timeout and synchronous both live in the connection, never the file;
-  // the ONE persistent write that used to sit here — the journal_mode = wal
-  // header flip — moved into migrate() under the baton (T-20223), because a
-  // --join successor's connect() must leave the on-disk file byte-identical.
-  //
-  // Listener handoff overlaps two server processes. SQLite serializes their
-  // brief boot/write collision; waiting keeps a mutation on its accepting
-  // process instead of making the caller guess whether to replay it.
+  // Connection-local settings only: busy_timeout and synchronous both live in
+  // the connection; the persistent journal-mode setting stays in migrate().
   db.exec('pragma busy_timeout = 5000')
   // Durability is tunable for throwaway graphs (TASKS_SYNC, like TASKS_BACKOFF):
   // the default (unset) leaves SQLite's own `full`, which fsyncs every DDL
@@ -2752,43 +2562,50 @@ export let connect = (path = file, vector = false, readOnly = false) => {
 }
 
 // Mint the durable sync epoch (T-20299) if absent — the cursor-lineage identity
-// a delta client checks (epochOf). This is a WRITE, so it runs ONCE in migrate()
-// under the writer baton, never on a read path: a --join successor's connect()
-// must leave the file byte-identical, so the epoch must already exist before any
-// read reaches it. `insert or ignore` makes it idempotent — a no-op on a graph
+// a delta client checks (epochOf). This write runs once in transactional
+// migrate(), never on a read path. `insert or ignore` makes it idempotent — a no-op on a graph
 // that already carries the row, so a re-open writes nothing.
 export let mintEpoch = (db: DatabaseSync) =>
   db.exec(
     `insert or ignore into server_meta (k, v) values ('epoch', '${crypto.randomUUID()}')`,
   )
 
+// Bumped with every serving-schema change. Guards remain idempotent for
+// expand/contract upgrades; the version makes a newer database fail closed in
+// an older binary instead of letting that binary infer compatibility.
+let schemaVersion = 1
+
 // Migrate a connected handle in place: the eid→id reshape, ref migration, the
 // hand + derived schema, the additive column/index fills, and the vector index.
-// This is the WRITE phase — the caller MUST already hold the writer baton
-// (baton.ts), so a deploy successor never migrates beside its live predecessor
-// (T-20223). Idempotent: a no-op on an already-current graph. Returns the same
-// handle for the one-line open() below.
+// The schema work runs under one BEGIN IMMEDIATE and is idempotent: concurrent
+// openers serialize in SQLite, and a waiter rechecks every guard after the
+// winner commits. Returns the same handle for the one-line open() below.
 export let migrate = (db: DatabaseSync) => {
   // Migrations ALTER tables; a cached statement would strand against an
   // intermediate schema. Compile raw until the schema is final, then restore.
   caching = false
   try {
+    let stored = (db.prepare('pragma user_version').get() as {
+      user_version: number
+    }).user_version
+    if (stored > schemaVersion) {
+      throw new Error(
+        `database schema version ${stored} is newer than this binary's ` +
+          `version ${schemaVersion}; upgrade the serving process`,
+      )
+    }
     // WAL lets readers proceed during a write, removing the reader/writer
-    // blocking of the default rollback journal (journal_mode = delete) — the
-    // fleet runs many concurrent `task` readers against one writer, and the
-    // journal-native direction (D-22388) adds writer processes beside the
-    // server. Unconditional since T-19444 (validated live via T-13905); an
+    // blocking of the default rollback journal. The fleet supports many
+    // ordinary read-write connections; SQLite serializes their write
+    // transactions. Unconditional since T-19444 (validated live via T-13905); an
     // in-memory db answers `memory` and stays there — that is its only mode,
     // not a failure. WAL's -wal/-shm sidecars are gitignored, and bin/backup's
     // VACUUM INTO reads a consistent snapshot under WAL unchanged. Setting
     // synchronous = normal is WAL's crash-safe pairing (a checkpoint still
     // fsyncs), unless TASKS_SYNC already named a mode.
     //
-    // This is a PERSISTENT SHARED WRITE — it stamps the file header — so it
-    // lives HERE in the write phase, never in connect(): a --join successor
-    // must never flip the header beside its live predecessor, which is the very
-    // two-writer mode confusion the baton exists to kill (T-20223). It runs
-    // under the baton, on the sole writer, so no peer has the file open.
+    // This persistent setting lives in migrate(), never connect(). SQLite
+    // serializes the header change with every other connection.
     {
       let got = (db.prepare('pragma journal_mode = wal').get() as
         | { journal_mode: string }
@@ -2804,424 +2621,432 @@ export let migrate = (db: DatabaseSync) => {
     // below assumes, so migrateRefs/schema/the backfills all see id-keyed
     // tables. A no-op on an already-id-keyed or brand-new db.
     migrateToIdKeys(db)
-    // This must precede schema: an old table may not yet have the canonical
-    // columns named by a newly added index in the current DDL.
-    migrateRefs(db)
-    migratePrompt(db)
-    db.exec(schema)
-    let addCol = (table: string, col: string, ddl: string) => {
-      if (!hasCol(db, table, col)) {
-        db.exec(`alter table ${table} add column ${ddl}`)
+    return atomic(db, () => {
+      // One SQLite transaction owns the schema transition. Concurrent openers
+      // wait at BEGIN IMMEDIATE, then re-run the idempotent guards against the
+      // schema the winner committed; no application sidecar lock is involved.
+      // This must precede schema: an old table may not yet have the canonical
+      // columns named by a newly added index in the current DDL.
+      migrateRefs(db)
+      migratePrompt(db)
+      db.exec(schema)
+      let addCol = (table: string, col: string, ddl: string) => {
+        if (!hasCol(db, table, col)) {
+          db.exec(`alter table ${table} add column ${ddl}`)
+        }
       }
-    }
-    // The mirror of addCol, for a column whose mechanism is gone. A retired
-    // column that lingers still answers a schema read, so it keeps teaching a
-    // mechanism the code no longer has — the drop is what makes removal true.
-    let dropCol = (table: string, col: string) => {
-      if (hasCol(db, table, col)) {
-        db.exec(`alter table ${table} drop column ${col}`)
+      // The mirror of addCol, for a column whose mechanism is gone. A retired
+      // column that lingers still answers a schema read, so it keeps teaching a
+      // mechanism the code no longer has — the drop is what makes removal true.
+      let dropCol = (table: string, col: string) => {
+        if (hasCol(db, table, col)) {
+          db.exec(`alter table ${table} drop column ${col}`)
+        }
       }
-    }
-    // Retire an index whose name the derivation no longer spells — a hand-written
-    // `create index` line that has been superseded by its derived twin under a
-    // different name (subscription_one → subscription_actor_target). Guarded, so
-    // it runs once and a fresh db (which never had the legacy name) is a no-op.
-    let dropIdx = (name: string) => {
-      db.exec(`drop index if exists ${name}`)
-    }
-    // The DERIVED component tables (T-12764), planted beside the hand-written
-    // `schema` above from the same vocabulary `cmps`/`readable` read. Tables
-    // first — a fresh db gets them; then the additive column fill, the SAME alter
-    // path addCol runs for the hand tables, so a live db that predates a
-    // vocabulary edit grows the new column in place; then the indexes, which may
-    // name a column that fill just added. `migrateDelivery`/`migrateErrors` below
-    // pour into deliver/delivered/error, so those tables must already stand here.
-    for (let comp of derived) db.exec(tableDdl(comp) + ';')
-    for (let comp of derived) {
-      for (let { prop, ddl } of derivedCols(comp)) addCol(comp, prop, ddl)
-    }
-    // Favorite predates its clock. The insertion moment is unavailable for
-    // rows already standing, so preserve their relative age with the entity's
-    // creation stamp; anonymous legacy rows fall back to migration time.
-    db.exec(
-      `update favorite set at = coalesce(
+      // Retire an index whose name the derivation no longer spells — a hand-written
+      // `create index` line that has been superseded by its derived twin under a
+      // different name (subscription_one → subscription_actor_target). Guarded, so
+      // it runs once and a fresh db (which never had the legacy name) is a no-op.
+      let dropIdx = (name: string) => {
+        db.exec(`drop index if exists ${name}`)
+      }
+      // The DERIVED component tables (T-12764), planted beside the hand-written
+      // `schema` above from the same vocabulary `cmps`/`readable` read. Tables
+      // first — a fresh db gets them; then the additive column fill, the SAME alter
+      // path addCol runs for the hand tables, so a live db that predates a
+      // vocabulary edit grows the new column in place; then the indexes, which may
+      // name a column that fill just added. `migrateDelivery`/`migrateErrors` below
+      // pour into deliver/delivered/error, so those tables must already stand here.
+      for (let comp of derived) db.exec(tableDdl(comp) + ';')
+      for (let comp of derived) {
+        for (let { prop, ddl } of derivedCols(comp)) addCol(comp, prop, ddl)
+      }
+      // Favorite predates its clock. The insertion moment is unavailable for
+      // rows already standing, so preserve their relative age with the entity's
+      // creation stamp; anonymous legacy rows fall back to migration time.
+      db.exec(
+        `update favorite set at = coalesce(
         (select at from created where created.entity = favorite.entity),
         strftime('%Y-%m-%dT%H:%M:%fZ','now')
       ) where at is null`,
-    )
-    // num is a UI label, not identity (T-3684): a cheap/bulk entity (T-3683)
-    // needs none, so the spine's num goes NULLABLE. One in-place ALTER on SQLite
-    // 3.53+ (ALTER COLUMN landed in 3.53.0), guarded on the notnull flag so it
-    // runs once. UNIQUE stays — SQLite treats NULLs as distinct, so num-less
-    // entities coexist. No rebuild, no backfill: existing nums are untouched.
-    if (
-      (prep(
-        db,
-        `select "notnull" as nn from pragma_table_info('entity') where name = 'num'`,
-      ).get() as { nn: number } | undefined)?.nn
-    ) {
-      db.exec('alter table entity alter column num drop not null')
-    }
-    // Retired by per-item human notification state; agents derive attention
-    // from claims and transcript references instead of this session cursor.
-    dropCol('session', 'acked_at')
-    addCol('task', 'project', 'project integer references entity(id)')
-    addCol('task', 'assignee', 'assignee integer references entity(id)')
-    addCol('task', 'domain', 'domain text')
-    addCol('repo', 'url', 'url text')
-    // Off for every checkout the graph already knows: the permission to push
-    // is the owner's to grant per venture, never something a migration hands
-    // out (src/git.ts).
-    addCol('repo', 'push', 'push integer not null default 0')
-    // A missing gate refuses landing. There is no safe cross-language default,
-    // so the project names one complete command explicitly (src/land.ts).
-    addCol('repo', 'gate', 'gate text')
-    // Additional resolvable-only handles beside the primary `slug` (T-16673):
-    // a space-delimited set, every member globally unique (enforced in apply()).
-    addCol('alias', 'slugs', 'slugs text')
-    // A wake's note (T-17654): what the setter was mid-doing, relayed into the
-    // knock's words when it fires so a resumed session reconstitutes.
-    addCol('wake', 'note', 'note text')
-    // The crash-loop breaker's fresh-start fence (types.ts, src/roles.ts).
-    addCol('role', 'retry_at', 'retry_at text')
-    addCol('role', 'checkout', 'checkout integer references entity(id)')
-    addCol('role', 'schedule', 'schedule text')
-    addCol('role', 'wake_policy', "wake_policy text not null default 'always'")
-    addCol('role', 'wake_target', 'wake_target integer references entity(id)')
-    addCol('role', 'decision', 'decision text')
-    addCol('role', 'reason', 'reason text')
-    addCol('role', 'observed', 'observed integer')
-    addCol('role', 'decided_at', 'decided_at text')
-    addCol('role', 'quiet', 'quiet integer')
-    addCol('role', 'cooldown', 'cooldown integer')
-    addCol('role', 'cap', 'cap integer')
-    addCol('generation', 'serving_model', 'serving_model text')
-    addCol('session', 'cwd', 'cwd text')
-    addCol('session', 'pid', 'pid integer')
-    addCol('session', 'pane', 'pane text')
-    addCol('session', 'turn', 'turn text')
-    addCol('session', 'notice_at', 'notice_at text')
-    addCol('session', 'notice_accepted_at', 'notice_accepted_at text')
-    addCol('session', 'notice_token', 'notice_token text')
-    // A provider-owned transcript JSONL — an external session's log file.
-    addCol('session', 'transcript', 'transcript text')
-    // Self-reported at SessionStart (types.ts): what kind of session, how it booted.
-    addCol('session', 'agent_type', 'agent_type text')
-    addCol('session', 'source', 'source text')
-    addCol('session', 'operator', 'operator integer')
-    // The operator session a delegated agent descends from (types.ts): a child
-    // reifies as its own row rather than a second writer on the operator's.
-    addCol('session', 'parent', 'parent integer references entity(id)')
-    // Which way the decision went (D-21212); null reads as approved.
-    addCol('decided', 'verdict', 'verdict text')
-    for (
-      let table of ['created', 'updated', 'notified', 'opened', 'archived']
-    ) {
-      addCol(table, 'via', 'via integer')
-    }
-    addCol('journal', 'via', 'via text')
-    // What apply() learned that the batch JSON doesn't say (D-22388): which
-    // comp rows were CREATED and which rows deletes took — the effects.ts
-    // Trace, serialized, so the journal feed (catchup.ts) can fire the same
-    // effects the writer would have. Written only for a fed() trace — a
-    // writer that DEFERRED dispatch to the feed. NULL means dispatch already
-    // happened at the call site or was never asked for (a plain/absent
-    // trace, the record() stamp door), and the feed broadcasts without
-    // dispatching, so an effect can never fire twice for one row.
-    addCol('journal', 'trace', 'trace text')
-    // The managed-session lifecycle (src/sessions.ts): what it is doing and
-    // how it ended. The old launch aliases are planted before backfillSpawn()
-    // for live databases, then stay dormant as rollback input. The rest is
-    // server-owned and rides OUT in the snapshot.
-    // Listed once, planted in place; each ddl leads with its column name.
-    for (
-      let ddl of [
-        `origin text not null default 'external'`,
-        'provider text',
-        'model text',
-        'effort text',
-        'persona integer',
-        'requested_task integer',
-        'role integer',
-        'branch text',
-        'base_revision text',
-        'status text',
-        'provider_session_id text',
-        'serving_model text',
-        'latest_seq integer not null default 0',
-        'standing text',
-        'started_at text',
-        'stop_requested_at text',
-        'input_at text',
-        'finished_at text',
-        'exit_code integer',
-        'stop_reason text',
-        'final_text text',
-        'usage_json text',
-        // The process stderr tail, bounded — a graph facet now (T-16798), so
-        // every reader shows a process-backed run's diagnostics from the graph
-        // rather than a /logs file-read.
-        'stderr text',
-      ]
-    ) addCol('session', ddl.split(' ')[0], ddl)
-    // Managed prompts have always occupied seq 1. Materialize the facet for
-    // existing logs so deploy-time UI behavior matches newly appended runs.
-    db.exec(`
+      )
+      // num is a UI label, not identity (T-3684): a cheap/bulk entity (T-3683)
+      // needs none, so the spine's num goes NULLABLE. One in-place ALTER on SQLite
+      // 3.53+ (ALTER COLUMN landed in 3.53.0), guarded on the notnull flag so it
+      // runs once. UNIQUE stays — SQLite treats NULLs as distinct, so num-less
+      // entities coexist. No rebuild, no backfill: existing nums are untouched.
+      if (
+        (prep(
+          db,
+          `select "notnull" as nn from pragma_table_info('entity') where name = 'num'`,
+        ).get() as { nn: number } | undefined)?.nn
+      ) {
+        db.exec('alter table entity alter column num drop not null')
+      }
+      // Retired by per-item human notification state; agents derive attention
+      // from claims and transcript references instead of this session cursor.
+      dropCol('session', 'acked_at')
+      addCol('task', 'project', 'project integer references entity(id)')
+      addCol('task', 'assignee', 'assignee integer references entity(id)')
+      addCol('task', 'domain', 'domain text')
+      addCol('repo', 'url', 'url text')
+      // Off for every checkout the graph already knows: the permission to push
+      // is the owner's to grant per venture, never something a migration hands
+      // out (src/git.ts).
+      addCol('repo', 'push', 'push integer not null default 0')
+      // A missing gate refuses landing. There is no safe cross-language default,
+      // so the project names one complete command explicitly (src/land.ts).
+      addCol('repo', 'gate', 'gate text')
+      // Additional resolvable-only handles beside the primary `slug` (T-16673):
+      // a space-delimited set, every member globally unique (enforced in apply()).
+      addCol('alias', 'slugs', 'slugs text')
+      // A wake's note (T-17654): what the setter was mid-doing, relayed into the
+      // knock's words when it fires so a resumed session reconstitutes.
+      addCol('wake', 'note', 'note text')
+      // The crash-loop breaker's fresh-start fence (types.ts, src/roles.ts).
+      addCol('role', 'retry_at', 'retry_at text')
+      addCol('role', 'checkout', 'checkout integer references entity(id)')
+      addCol('role', 'schedule', 'schedule text')
+      addCol(
+        'role',
+        'wake_policy',
+        "wake_policy text not null default 'always'",
+      )
+      addCol('role', 'wake_target', 'wake_target integer references entity(id)')
+      addCol('role', 'decision', 'decision text')
+      addCol('role', 'reason', 'reason text')
+      addCol('role', 'observed', 'observed integer')
+      addCol('role', 'decided_at', 'decided_at text')
+      addCol('role', 'quiet', 'quiet integer')
+      addCol('role', 'cooldown', 'cooldown integer')
+      addCol('role', 'cap', 'cap integer')
+      addCol('generation', 'serving_model', 'serving_model text')
+      addCol('session', 'cwd', 'cwd text')
+      addCol('session', 'pid', 'pid integer')
+      addCol('session', 'pane', 'pane text')
+      addCol('session', 'turn', 'turn text')
+      addCol('session', 'notice_at', 'notice_at text')
+      addCol('session', 'notice_accepted_at', 'notice_accepted_at text')
+      addCol('session', 'notice_token', 'notice_token text')
+      // A provider-owned transcript JSONL — an external session's log file.
+      addCol('session', 'transcript', 'transcript text')
+      // Self-reported at SessionStart (types.ts): what kind of session, how it booted.
+      addCol('session', 'agent_type', 'agent_type text')
+      addCol('session', 'source', 'source text')
+      addCol('session', 'operator', 'operator integer')
+      // The operator session a delegated agent descends from (types.ts): a child
+      // reifies as its own row rather than a second writer on the operator's.
+      addCol('session', 'parent', 'parent integer references entity(id)')
+      // Which way the decision went (D-21212); null reads as approved.
+      addCol('decided', 'verdict', 'verdict text')
+      for (
+        let table of ['created', 'updated', 'notified', 'opened', 'archived']
+      ) {
+        addCol(table, 'via', 'via integer')
+      }
+      addCol('journal', 'via', 'via text')
+      // What apply() learned that the batch JSON doesn't say (D-22388): which
+      // comp rows were CREATED and which rows deletes took — the effects.ts
+      // Trace, serialized, so the journal feed (catchup.ts) can fire the same
+      // effects the writer would have. Written only for a fed() trace — a
+      // writer that DEFERRED dispatch to the feed. NULL means dispatch already
+      // happened at the call site or was never asked for (a plain/absent
+      // trace, the record() stamp door), and the feed broadcasts without
+      // dispatching, so an effect can never fire twice for one row.
+      addCol('journal', 'trace', 'trace text')
+      // The managed-session lifecycle (src/sessions.ts): what it is doing and
+      // how it ended. The old launch aliases are planted before backfillSpawn()
+      // for live databases, then stay dormant as rollback input. The rest is
+      // server-owned and rides OUT in the snapshot.
+      // Listed once, planted in place; each ddl leads with its column name.
+      for (
+        let ddl of [
+          `origin text not null default 'external'`,
+          'provider text',
+          'model text',
+          'effort text',
+          'persona integer',
+          'requested_task integer',
+          'role integer',
+          'branch text',
+          'base_revision text',
+          'status text',
+          'provider_session_id text',
+          'serving_model text',
+          'latest_seq integer not null default 0',
+          'standing text',
+          'started_at text',
+          'stop_requested_at text',
+          'input_at text',
+          'finished_at text',
+          'exit_code integer',
+          'stop_reason text',
+          'final_text text',
+          'usage_json text',
+          // The process stderr tail, bounded — a graph facet now (T-16798), so
+          // every reader shows a process-backed run's diagnostics from the graph
+          // rather than a /logs file-read.
+          'stderr text',
+        ]
+      ) addCol('session', ddl.split(' ')[0], ddl)
+      // Managed prompts have always occupied seq 1. Materialize the facet for
+      // existing logs so deploy-time UI behavior matches newly appended runs.
+      db.exec(`
       insert or ignore into prompt (entity)
       select e.entity from entry e
       join message m on m.entity = e.entity
       join session s on s.entity = e.session
       where e.seq = 1 and m.role = 'user' and s.origin = 'managed'
     `)
-    backfillSpawn(db)
-    backfillSessionFacets(db)
-    backfillLineage(db)
-    // The identity chain (types.ts): instruments point at who they act for.
-    addCol('client', 'actor', 'actor integer references entity(id)')
-    // Inbound provenance (inbound.ts): the fleet sweep's idempotency key
-    // (and the never-send mark), arrival time, and the edge's DKIM verdict
-    // — see stamped.mail in types.ts.
-    addCol('mail', 'message_id', 'message_id text')
-    addCol('mail', 'received_at', 'received_at text')
-    addCol('mail', 'verified', 'verified integer')
-    // Threading (mail.ts): the mail this one answers — no FK, like
-    // target (death 'keep' + tombstoned spines veto FK'd deletes,
-    // T-4593). sent_id is the sender-assigned Message-ID, server-stamped.
-    addCol('mail', 'reply_to', 'reply_to integer')
-    addCol('mail', 'sent_id', 'sent_id text')
-    addCol('mail', 'in_reply_to', 'in_reply_to text')
-    // The narrow routing-header set (T-14133) — last mail column, so it lands
-    // at the tail in both a fresh mailDdl and a live db, keeping mendMail's
-    // positional `insert select *` aligned. See stamped.mail in types.ts.
-    addCol('mail', 'headers', 'headers text')
-    addCol('session', 'actor', 'actor integer references entity(id)')
-    // board.query, project.color and the hook request columns (method/path/
-    // headers/sig_ok) were planted here before their tables were derived
-    // (T-12764); the addDerivedCols pass above now fills them from the vocabulary.
-    // A live table's check constraint is frozen at create; when the edge
-    // vocabulary outgrows the baked list (the 'about' verb shipped without
-    // this once — every about edge bounced off the old check), rebuild the
-    // table around the current one, rows copied whole.
-    let dep = ddlOf(db, 'dependency')
-    if (dep && edges.some((e) => !dep.includes(`'${e}'`))) {
-      rebuild(db, 'dependency', depDdl)
-    }
-    // A live edge table that predates the listing order grows the column in
-    // place (additive; null on every existing edge, unchanged behavior).
-    addCol('dependency', 'ord', 'ord integer')
-    // The per-type delivery receipts become the shared delivered/error
-    // components, and the per-type recipient columns the shared deliver.to.
-    migrateErrors(db)
-    migrateDelivery(db)
-    migrateDeliver(db)
-    // The FK-era mail rebuild (mendMail, T-4593) is retired: migrateToIdKeys
-    // rebuilds mail to the canonical ddl first, so no db can reach here still
-    // wearing the eid FK.
-    // Mend the inbound letters an earlier migrateDeliver stranded in deliver{to}
-    // (T-15110).
-    healInboundDeliver(db)
-    mendCalls(db)
-    mendApply(db)
-    // A legacy separate project-main-board collapses into its project — the
-    // project becomes its own board (T-17322). Idempotent; a no-op once every
-    // mirror is folded in.
-    migrateBoardsToProjects(db)
-    // A mail was briefly a 'send_request' (the intent idiom over-applied —
-    // the artifact deserved its name). Adopt the old table's rows once;
-    // `create if not exists mail` above already made the empty successor,
-    // so copy across and drop the stale name.
-    let sr = prep(
-      db,
-      `select 1 from sqlite_master where type = 'table' and name = 'send_request'`,
-    ).get()
-    if (sr) {
-      db.exec('begin')
-      db.exec('insert into mail select * from send_request')
-      db.exec('drop table send_request')
-      db.exec('commit')
-    }
-    // Nums already recycled before this column existed stay unknowable —
-    // monotonic from here on; old graves just don't raise the high-water.
-    addCol('tombstone', 'num', 'num integer')
-    // Both doc mirrors follow it by trigger from here on. Anything older,
-    // any out-of-band writer, or shadow-table damage (overlapping watcher
-    // restarts have managed it) shows up here as a failed integrity check
-    // or a count drift — one rebuild pass over the content table heals
-    // both, and at this scale it costs milliseconds on boot. A doc_gram
-    // that has never been built is exactly a count drift, so the index
-    // arrives filled on the first boot that knows about it.
-    let count = (t: string) =>
-      (prep(db, `select count(*) as n from ${t}`).get() as { n: number }).n
-    type FtsFault = {
-      operation: 'integrity-check' | 'count-check'
-      error: unknown
-    }
-    let diagnosis = (error: unknown) =>
-      error instanceof Error ? error.message : String(error)
-    let fault = (t: string): FtsFault | undefined => {
-      try {
-        db.exec(`insert into ${t} (${t}, rank) values ('integrity-check', 1)`)
-      } catch (error) {
-        return { operation: 'integrity-check', error }
+      backfillSpawn(db)
+      backfillSessionFacets(db)
+      backfillLineage(db)
+      // The identity chain (types.ts): instruments point at who they act for.
+      addCol('client', 'actor', 'actor integer references entity(id)')
+      // Inbound provenance (inbound.ts): the fleet sweep's idempotency key
+      // (and the never-send mark), arrival time, and the edge's DKIM verdict
+      // — see stamped.mail in types.ts.
+      addCol('mail', 'message_id', 'message_id text')
+      addCol('mail', 'received_at', 'received_at text')
+      addCol('mail', 'verified', 'verified integer')
+      // Threading (mail.ts): the mail this one answers — no FK, like
+      // target (death 'keep' + tombstoned spines veto FK'd deletes,
+      // T-4593). sent_id is the sender-assigned Message-ID, server-stamped.
+      addCol('mail', 'reply_to', 'reply_to integer')
+      addCol('mail', 'sent_id', 'sent_id text')
+      addCol('mail', 'in_reply_to', 'in_reply_to text')
+      // The narrow routing-header set (T-14133) — last mail column, so it lands
+      // at the tail in both a fresh mailDdl and a live db, keeping mendMail's
+      // positional `insert select *` aligned. See stamped.mail in types.ts.
+      addCol('mail', 'headers', 'headers text')
+      addCol('session', 'actor', 'actor integer references entity(id)')
+      // board.query, project.color and the hook request columns (method/path/
+      // headers/sig_ok) were planted here before their tables were derived
+      // (T-12764); the addDerivedCols pass above now fills them from the vocabulary.
+      // A live table's check constraint is frozen at create; when the edge
+      // vocabulary outgrows the baked list (the 'about' verb shipped without
+      // this once — every about edge bounced off the old check), rebuild the
+      // table around the current one, rows copied whole.
+      let dep = ddlOf(db, 'dependency')
+      if (dep && edges.some((e) => !dep.includes(`'${e}'`))) {
+        rebuild(db, 'dependency', depDdl)
       }
-      try {
-        let indexed = count(t), docs = count('doc')
-        if (indexed != docs) {
-          return {
-            operation: 'count-check',
-            error: new Error(
-              `${t} returned ${indexed} rows; doc returned ${docs}`,
-            ),
-          }
+      // A live edge table that predates the listing order grows the column in
+      // place (additive; null on every existing edge, unchanged behavior).
+      addCol('dependency', 'ord', 'ord integer')
+      // The per-type delivery receipts become the shared delivered/error
+      // components, and the per-type recipient columns the shared deliver.to.
+      migrateErrors(db)
+      migrateDelivery(db)
+      migrateDeliver(db)
+      // The FK-era mail rebuild (mendMail, T-4593) is retired: migrateToIdKeys
+      // rebuilds mail to the canonical ddl first, so no db can reach here still
+      // wearing the eid FK.
+      // Mend the inbound letters an earlier migrateDeliver stranded in deliver{to}
+      // (T-15110).
+      healInboundDeliver(db)
+      mendCalls(db)
+      mendApply(db)
+      // A legacy separate project-main-board collapses into its project — the
+      // project becomes its own board (T-17322). Idempotent; a no-op once every
+      // mirror is folded in.
+      migrateBoardsToProjects(db)
+      // A mail was briefly a 'send_request' (the intent idiom over-applied —
+      // the artifact deserved its name). Adopt the old table's rows once;
+      // `create if not exists mail` above already made the empty successor,
+      // so copy across and drop the stale name.
+      let sr = prep(
+        db,
+        `select 1 from sqlite_master where type = 'table' and name = 'send_request'`,
+      ).get()
+      if (sr) {
+        atomic(db, () => {
+          db.exec('insert into mail select * from send_request')
+          db.exec('drop table send_request')
+        })
+      }
+      // Nums already recycled before this column existed stay unknowable —
+      // monotonic from here on; old graves just don't raise the high-water.
+      addCol('tombstone', 'num', 'num integer')
+      // Both doc mirrors follow it by trigger from here on. Anything older,
+      // any out-of-band writer, or shadow-table damage (overlapping watcher
+      // restarts have managed it) shows up here as a failed integrity check
+      // or a count drift — one rebuild pass over the content table heals
+      // both, and at this scale it costs milliseconds on boot. A doc_gram
+      // that has never been built is exactly a count drift, so the index
+      // arrives filled on the first boot that knows about it.
+      let count = (t: string) =>
+        (prep(db, `select count(*) as n from ${t}`).get() as { n: number }).n
+      type FtsFault = {
+        operation: 'integrity-check' | 'count-check'
+        error: unknown
+      }
+      let diagnosis = (error: unknown) =>
+        error instanceof Error ? error.message : String(error)
+      let fault = (t: string): FtsFault | undefined => {
+        try {
+          db.exec(`insert into ${t} (${t}, rank) values ('integrity-check', 1)`)
+        } catch (error) {
+          return { operation: 'integrity-check', error }
         }
-      } catch (error) {
-        return { operation: 'count-check', error }
+        try {
+          let indexed = count(t), docs = count('doc')
+          if (indexed != docs) {
+            return {
+              operation: 'count-check',
+              error: new Error(
+                `${t} returned ${indexed} rows; doc returned ${docs}`,
+              ),
+            }
+          }
+        } catch (error) {
+          return { operation: 'count-check', error }
+        }
       }
-    }
-    let quick = () => {
-      try {
-        let row = prep(db, 'pragma quick_check(1)').get() as Record<
-          string,
-          string
-        >
-        return row?.quick_check ?? String(Object.values(row ?? {})[0])
-      } catch (error) {
-        return `failed: ${diagnosis(error)}`
+      let quick = () => {
+        try {
+          let row = prep(db, 'pragma quick_check(1)').get() as Record<
+            string,
+            string
+          >
+          return row?.quick_check ?? String(Object.values(row ?? {})[0])
+        } catch (error) {
+          return `failed: ${diagnosis(error)}`
+        }
       }
-    }
-    for (let t of ['doc_fts', 'doc_gram']) {
-      let before = fault(t)
-      if (!before) continue
-      try {
-        db.exec(`insert into ${t} (${t}) values ('rebuild')`)
-      } catch (error) {
-        // Keep BOTH SQLite errors: an FTS integrity failure often says only
-        // "database disk image is malformed", and dropping it made the later
-        // rebuild failure indistinguishable from damage to the main database.
-        // quick_check is paid only on this failed repair path; its verdict says
-        // whether SQLite sees a wider database problem or an FTS-only one.
-        throw new AggregateError(
-          [before.error, error],
-          `${t} rebuild failed after ${before.operation}; ` +
-            `${before.operation}: ${diagnosis(before.error)}; ` +
-            `rebuild: ${diagnosis(error)}; quick_check: ${quick()}`,
-        )
+      for (let t of ['doc_fts', 'doc_gram']) {
+        let before = fault(t)
+        if (!before) continue
+        try {
+          db.exec(`insert into ${t} (${t}) values ('rebuild')`)
+        } catch (error) {
+          // Keep BOTH SQLite errors: an FTS integrity failure often says only
+          // "database disk image is malformed", and dropping it made the later
+          // rebuild failure indistinguishable from damage to the main database.
+          // quick_check is paid only on this failed repair path; its verdict says
+          // whether SQLite sees a wider database problem or an FTS-only one.
+          throw new AggregateError(
+            [before.error, error],
+            `${t} rebuild failed after ${before.operation}; ` +
+              `${before.operation}: ${diagnosis(before.error)}; ` +
+              `rebuild: ${diagnosis(error)}; quick_check: ${quick()}`,
+          )
+        }
+        let after = fault(t)
+        if (after) {
+          throw new AggregateError(
+            [before.error, after.error],
+            `${t} ${after.operation} failed after rebuild; ` +
+              `before: ${diagnosis(before.error)}; ` +
+              `after: ${diagnosis(after.error)}; quick_check: ${quick()}`,
+          )
+        }
       }
-      let after = fault(t)
-      if (after) {
-        throw new AggregateError(
-          [before.error, after.error],
-          `${t} ${after.operation} failed after rebuild; ` +
-            `before: ${diagnosis(before.error)}; ` +
-            `after: ${diagnosis(after.error)}; quick_check: ${quick()}`,
-        )
+      let { n } = prep(db, 'select count(*) as n from task').get() as {
+        n: number
       }
-    }
-    let { n } = prep(db, 'select count(*) as n from task').get() as {
-      n: number
-    }
-    if (!n) seed(db)
-    // Provenance components (T-6670), now the ONLY home: birth and last-edit
-    // moved off the spine, and this is the last pass that reads the old
-    // columns before they go. Runs AFTER seed so the demo entities (direct
-    // inserts, not apply) get provenance too; insert-or-ignore keeps it a
-    // no-op once healed.
-    //
-    // `updated` is deliberately NOT re-derived. A minted entity took its
-    // created_at from spine()'s clock and its modified_at from apply()'s, a
-    // few ms later — so `modified_at <> created_at` reads a birth as an edit
-    // and would mint provenance for entities nothing ever touched (61 such
-    // rows in the live graph). apply() has stamped the component directly
-    // since T-6670 shipped, so there is nothing left for a derivation to
-    // recover and nothing but noise for it to invent.
-    if (hasCol(db, 'entity', 'created_at')) {
-      db.exec(`insert or ignore into created (eid, at, "by")
+      if (!n) seed(db)
+      // Provenance components (T-6670), now the ONLY home: birth and last-edit
+      // moved off the spine, and this is the last pass that reads the old
+      // columns before they go. Runs AFTER seed so the demo entities (direct
+      // inserts, not apply) get provenance too; insert-or-ignore keeps it a
+      // no-op once healed.
+      //
+      // `updated` is deliberately NOT re-derived. A minted entity took its
+      // created_at from spine()'s clock and its modified_at from apply()'s, a
+      // few ms later — so `modified_at <> created_at` reads a birth as an edit
+      // and would mint provenance for entities nothing ever touched (61 such
+      // rows in the live graph). apply() has stamped the component directly
+      // since T-6670 shipped, so there is nothing left for a derivation to
+      // recover and nothing but noise for it to invent.
+      if (hasCol(db, 'entity', 'created_at')) {
+        db.exec(`insert or ignore into created (eid, at, "by")
       select eid, created_at, null from entity`)
-    }
-    backfillVia(db)
-    backfillOpened(db)
-    // Fill the journal seek index once (T-13915) before its index is built
-    // below — insert-then-index is the cheaper order for the one-time ~26k-row
-    // load, and later boots skip both (populated table, existing index).
-    backfillJournalTouch(db)
-    // The dormant columns are migration INPUT, and every one of them has now
-    // been read for the last time (T-6670, T-7113, T-7006). A retired column
-    // that lingers still answers a schema read, so it keeps teaching a
-    // mechanism the code no longer has.
-    dropCol('entity', 'created_at')
-    dropCol('entity', 'modified_at')
-    dropCol('comment', 'author_eid')
-    // Machine comments are not a species of their own: the sweep noise that
-    // wanted marking is deleted, and everything else was always someone's
-    // words (T-7018). Nothing reads the mark now, so the column goes.
-    dropCol('comment', 'event')
-    dropCol('memory', 'source_eid')
-    dropCol('mail', 'read_at')
-    // Reads memory.type and drops it in the same breath, so it belongs with
-    // the retirements rather than the backfills above.
-    retireMemoryType(db)
-    retireProposal(db)
-    retireProjectRetiredAt(db)
-    healStored(db)
-    // Indexes LAST — over EVERY component, not just `derived` (T-17678). SQLite
-    // auto-indexes no foreign key, and the hand-written `schema` tables (comment,
-    // cancel, card, stop_request, review, camera, fold, mail, …) carry {eid} ref
-    // columns too, so realizing indexDdl only over `derived` left comment.target
-    // and its siblings unindexed — a server-side `.comment.target=x` full-SCANNED
-    // the table (the browser is unaffected: index.ts builds the reverse map in
-    // memory). indexDdl is the one vocabulary's index set (index.ts indexesFor),
-    // so this is the SQL realization the design always anticipated. Placed after
-    // every addCol/rebuild above: a ref column may be added by migration
-    // (task.project, role.checkout, mail.reply_to) and a table rebuild (mendMail,
-    // migrateDelivery) drops and recreates its rows without indexes. Guarded by
-    // hasIdx — a bare `create index if not exists` still opens an empty write
-    // transaction that bumps the file change counter (breaking open()'s byte-
-    // idempotency), so the guard makes a re-open pure reads, the SAME shape addCol
-    // takes with hasCol.
-    let depIndexName = `dependency_${depIndex.cols.join('_')}`
-    if (!hasIdx(db, depIndexName)) {
-      db.exec(indexDdlOne('dependency', depIndex) + ';')
-    }
-    // The journal seek index (T-13915): (eid, jrow desc) so a per-entity read is
-    // an index seek, newest-first, then a fetch by rowid. hasIdx-guarded like
-    // the rest — a bare `create index if not exists` bumps the file change
-    // counter and breaks open()'s byte-idempotency.
-    if (!hasIdx(db, 'journal_touch_eid')) {
-      db.exec(
-        'create index journal_touch_eid on journal_touch (eid, jrow desc);',
-      )
-    }
-    for (
-      let comp of new Set([...Object.keys(comps), ...Object.keys(stamped)])
-    ) {
-      for (let i of indexesFor(comp)) {
-        let name = `${comp}_${i.cols.join('_')}`
-        if (!hasIdx(db, name)) db.exec(indexDdlOne(comp, i) + ';')
       }
-    }
-    // The one hand index whose name diverges from its derived twin: `schema` used
-    // to name subscription(actor,target) `subscription_one`, but indexDdl derives
-    // `subscription_actor_target` from the columns, so both would coexist. Retire
-    // the legacy name once — the derived unique index above already holds the
-    // (actor,target) uniqueness the drop would otherwise lose.
-    dropIdx('subscription_one')
-    // Mint the durable sync epoch (T-20299) if the graph lacks it — a WRITE, so
-    // it belongs HERE in the write phase under the baton, never on a read path.
-    // After first boot the row stands, so every later epochOf() (snapshot, the
-    // successor's connect()) is a pure SELECT and a re-open writes nothing.
-    mintEpoch(db)
-    initVector(db)
-    return db
+      backfillVia(db)
+      backfillOpened(db)
+      // Fill the journal seek index once (T-13915) before its index is built
+      // below — insert-then-index is the cheaper order for the one-time ~26k-row
+      // load, and later boots skip both (populated table, existing index).
+      backfillJournalTouch(db)
+      // The dormant columns are migration INPUT, and every one of them has now
+      // been read for the last time (T-6670, T-7113, T-7006). A retired column
+      // that lingers still answers a schema read, so it keeps teaching a
+      // mechanism the code no longer has.
+      dropCol('entity', 'created_at')
+      dropCol('entity', 'modified_at')
+      dropCol('comment', 'author_eid')
+      // Machine comments are not a species of their own: the sweep noise that
+      // wanted marking is deleted, and everything else was always someone's
+      // words (T-7018). Nothing reads the mark now, so the column goes.
+      dropCol('comment', 'event')
+      dropCol('memory', 'source_eid')
+      dropCol('mail', 'read_at')
+      // Reads memory.type and drops it in the same breath, so it belongs with
+      // the retirements rather than the backfills above.
+      retireMemoryType(db)
+      retireProposal(db)
+      retireProjectRetiredAt(db)
+      healStored(db)
+      // Indexes LAST — over EVERY component, not just `derived` (T-17678). SQLite
+      // auto-indexes no foreign key, and the hand-written `schema` tables (comment,
+      // cancel, card, stop_request, review, camera, fold, mail, …) carry {eid} ref
+      // columns too, so realizing indexDdl only over `derived` left comment.target
+      // and its siblings unindexed — a server-side `.comment.target=x` full-SCANNED
+      // the table (the browser is unaffected: index.ts builds the reverse map in
+      // memory). indexDdl is the one vocabulary's index set (index.ts indexesFor),
+      // so this is the SQL realization the design always anticipated. Placed after
+      // every addCol/rebuild above: a ref column may be added by migration
+      // (task.project, role.checkout, mail.reply_to) and a table rebuild (mendMail,
+      // migrateDelivery) drops and recreates its rows without indexes. Guarded by
+      // hasIdx — a bare `create index if not exists` still opens an empty write
+      // transaction that bumps the file change counter (breaking open()'s byte-
+      // idempotency), so the guard makes a re-open pure reads, the SAME shape addCol
+      // takes with hasCol.
+      let depIndexName = `dependency_${depIndex.cols.join('_')}`
+      if (!hasIdx(db, depIndexName)) {
+        db.exec(indexDdlOne('dependency', depIndex) + ';')
+      }
+      // The journal seek index (T-13915): (eid, jrow desc) so a per-entity read is
+      // an index seek, newest-first, then a fetch by rowid. hasIdx-guarded like
+      // the rest — a bare `create index if not exists` bumps the file change
+      // counter and breaks open()'s byte-idempotency.
+      if (!hasIdx(db, 'journal_touch_eid')) {
+        db.exec(
+          'create index journal_touch_eid on journal_touch (eid, jrow desc);',
+        )
+      }
+      for (
+        let comp of new Set([...Object.keys(comps), ...Object.keys(stamped)])
+      ) {
+        for (let i of indexesFor(comp)) {
+          let name = `${comp}_${i.cols.join('_')}`
+          if (!hasIdx(db, name)) db.exec(indexDdlOne(comp, i) + ';')
+        }
+      }
+      // The one hand index whose name diverges from its derived twin: `schema` used
+      // to name subscription(actor,target) `subscription_one`, but indexDdl derives
+      // `subscription_actor_target` from the columns, so both would coexist. Retire
+      // the legacy name once — the derived unique index above already holds the
+      // (actor,target) uniqueness the drop would otherwise lose.
+      dropIdx('subscription_one')
+      // Mint the durable sync epoch (T-20299) if the graph lacks it. After first
+      // boot the row stands, so every later epochOf() is a pure SELECT.
+      mintEpoch(db)
+      initVector(db)
+      if (stored != schemaVersion) {
+        db.exec(`pragma user_version = ${schemaVersion}`)
+      }
+      return db
+    }, true)
   } finally {
     // Runtime caches; a throwing migration still restores the flag.
     caching = true
   }
 }
 
-// Open the file, migrate it in place, plant missing schema, and seed once if
-// the graph is empty. Returns a live handle held for the process lifetime. The
-// sole-writer door: connect() then migrate() with no window between, safe only
-// because the caller is the one writer (first boot, revive, test, probe).
+// Open the file, migrate it transactionally in place, plant missing schema,
+// and seed once if the graph is empty. SQLite serializes concurrent openers.
 export let open = (path = file, vector = false) =>
   migrate(connect(path, vector))
 
@@ -3254,14 +3079,16 @@ export let schemaDdl = (): SchemaOp[] => {
   let recorded: string[] = []
   let real = new DatabaseSync(':memory:')
   let proxy = new Proxy(real, {
-    get(t, p, r) {
+    get(t, p, _r) {
       if (p === 'exec') {
         return (sql: string) => {
           recorded.push(sql)
           return (t as unknown as { exec: (s: string) => unknown }).exec(sql)
         }
       }
-      let v = Reflect.get(t, p, r)
+      // Private-field accessors must receive the concrete DatabaseSync as
+      // `this`; using the proxy receiver breaks getters such as inTransaction.
+      let v = Reflect.get(t, p, t)
       return typeof v === 'function'
         ? (v as (...a: unknown[]) => unknown).bind(t)
         : v
@@ -6520,19 +6347,15 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
 // are insertion-ordered, so their JSON (and the hash) is stable across boots.
 // mintEpoch (the WRITE) lives up by migrate(), its only caller — a read path
 // must never write. epochOf is the READ — a pure SELECT (cached per handle), so
-// every read and snapshot path, including a successor's write-free connect(),
-// only reads. The row is present on any migrated graph; an un-minted graph
+// every read and snapshot path only reads. The row is present on any migrated graph; an un-minted graph
 // (never migrated, or a test that stripped server_meta) reads '' — distinct from
 // any real client's held epoch, so those clients reseed, the safe answer.
 let epochs = new WeakMap<DatabaseSync, string>()
 export let epochOf = (db: DatabaseSync): string => {
   let hit = epochs.get(db)
   if (hit) return hit
-  // The table itself may not exist yet: on the FIRST deploy of this code a
-  // --join successor connect()s to a graph the predecessor (older code) never
-  // migrated, so `server_meta` arrives only when this successor migrates under
-  // the baton. Absent table or absent row both read '' — never a throw on the
-  // write-free connect() path — and the row lands the moment migrate() runs.
+  // A never-migrated graph may not have the table. Absent table or row reads
+  // empty instead of making a read-only connection perform schema work.
   let got = !tableExists(db, 'server_meta') ? '' : (prep(
     db,
     `select v from server_meta where k = 'epoch'`,

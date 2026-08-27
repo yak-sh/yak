@@ -11,8 +11,7 @@ import { dirname } from 'node:path'
 import retiredDataDoorList from './retired_data_doors.json' with {
   type: 'json',
 }
-import { bound, guard, type Serving } from './bind.ts'
-import { takeBaton } from './baton.ts'
+import { guard, type Serving } from './bind.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
 import { capabilities, type Change, type Dep, idOf } from './types.ts'
@@ -31,7 +30,6 @@ import {
   journalBy,
   journalOf,
   locate,
-  migrate,
   mutate,
   recast,
   redact as redactValue,
@@ -252,12 +250,11 @@ export let maintain = (batch: Change[]) => {
 // The moving-time sweep (subserve.aged): every connection re-tests its own
 // moving-window members against the clock — inline directly, workers by
 // message. Exported for the subscription tests.
-// App-plane-only mode (TASKS_PLANE=app, D-22804 §8 strangler): this process is a
-// READER beside the Rust bridge writer over one WAL. It declines the writer
-// baton, never migrates, runs no boot write-reconcilers, fires no effects, and
-// its `db` handle is read-only (live_db.ts) — so writing is impossible, not
-// merely avoided. Read once here (before cast/wantHere, which consult it at
-// module load); the data plane (every write) is the bridge's /apply + /ws.
+// App-plane compatibility mode (TASKS_PLANE=app, D-22804 §8 strangler) exists
+// only for disposable parity databases; live_db.ts refuses owner data. Its
+// handle is read-only, it never migrates, runs no boot write-reconcilers, and
+// fires no effects. Read once here before cast/wantHere consult it at module
+// load; the parity data plane is the bridge's /apply + /ws.
 let appOnly = appPlane()
 
 export let aged = (now = Date.now()) => {
@@ -402,7 +399,7 @@ let proxyApplyFrom = async (
   if (r.status >= 200 && r.status < 300) {
     if (id) socket.send(JSON.stringify({ ack: id }))
     // Nudge the feed to drain the bridge's just-committed rows promptly rather
-    // than waiting on the next watcher tick; the cast to every socket follows.
+    // than waiting on the next poll; the cast to every socket follows.
     feed.settle()
     return
   }
@@ -411,10 +408,8 @@ let proxyApplyFrom = async (
 }
 
 let workerN = 0
-// Per-WS workers are ON by default (T-22658): the T-22622 corruption RCA closed
-// having FULLY exonerated them — they open read-only (readOnly:true) and cannot
-// write a page; the corruption was cross-build SQLite writes (M-22673), nothing
-// to do with workers — and the fd leak that made re-enabling wait is fixed above
+// Per-WS workers are ON by default (T-22658): they open read-only
+// (readOnly:true) and cannot write a page. The fd leak that made re-enabling wait is fixed above
 // (graceful {close} teardown). TASKS_WS_WORKERS=0 is the escape hatch back to
 // inline serving if one is ever needed.
 let workersWanted = Deno.env.get('TASKS_WS_WORKERS') != '0'
@@ -436,9 +431,8 @@ let ws = (req: Request) => {
   // worker — its own thread, its own read-only connection — and this process
   // only pumps frames and applies writes. ON by default; the 2026-08-26 live
   // corruption briefly forced this inline while workers were the suspect, but
-  // the T-22622 RCA closed EXONERATING them (read-only, cannot write; the
-  // corruption was cross-build SQLite writes, M-22673) and the teardown fd leak
-  // that remained is fixed (graceful {close} below). :memory: always serves
+  // their connections are read-only and the teardown fd leak is fixed
+  // (graceful {close} below). :memory: always serves
   // inline (a worker's separate connection would open a DIFFERENT empty graph),
   // as does any environment where the Worker fails to construct, and — loudly —
   // any socket whose worker reports its connection dead: the delegator closes
@@ -761,21 +755,14 @@ let cliUsage = async (req: Request) => {
   return new Response(null, { status: 204 })
 }
 
-// The handoff supervisor starts the successor before asking this process to
-// drain. reusePort makes those listeners overlap; shutdown() keeps every
-// request on the process that accepted it until its response is complete.
+// Requests become eligible only after boot reconciliation. The supervisor
+// starts no replacement until this process has drained and exited.
 let booted: () => void = () => {}
 let boot = new Promise<void>((resolve) => booted = resolve)
 let port = Number(Deno.env.get('PORT') ?? 5173)
-// Whose graph holds this address (src/bind.ts). An occupied port is refused
-// — a stranger's graph makes every reader a coin flip, and even our own file
-// twice over is a probe writing to the owner's board — unless `--join` says
-// a supervisor meant this process to succeed the one already there.
+// Whose graph holds this address (src/bind.ts). Any occupied port is refused:
+// one address has exactly one serving process.
 let serving: Serving = { db: graph, epoch: epochOf(db), pid: Deno.pid }
-// A --join successor of a live deploy; everyone else (first boot, revive, test,
-// probe) is a sole boot. This one flag steers both the port guard (bind.ts) and
-// the single-writer handoff (becomeWriter below).
-let joining = Deno.args.includes('--join')
 let refuseWrite = (): never => {
   throw new Error(
     'app-plane-only mode (TASKS_PLANE=app): writes go to the data-plane ' +
@@ -801,9 +788,9 @@ let methodNotAllowed = (allow: string) =>
 // The strangler write-proxy (T-22927): in TASKS_PLANE=app this reader forwards a
 // write to the data-plane writer (the Rust bridge) and hands its answer back
 // untouched — the Deno→bridge mirror of the bridge's own proxy_apply (main.rs).
-// It is a NETWORK HOP, never a local write: the db handle stays read-only and
-// this process holds no writer baton, so the bridge remains the sole writer over
-// the shared WAL. `fetch` does not throw on a 4xx/5xx (unlike the bridge's ureq,
+// It is a NETWORK HOP, never a local write: the db handle stays read-only.
+// Production refuses this mode on the owner graph; disposable parity copies
+// may exercise it. `fetch` does not throw on a 4xx/5xx (unlike the bridge's ureq,
 // which needs http_status_as_error(false) to match), so a rejected batch's body
 // — the guard-stale reason, the claim bounce — relays like any other answer.
 let noWriter = () =>
@@ -858,7 +845,7 @@ let proxyWriteDoor = async (req: Request, path: string): Promise<Response> => {
 }
 let ownership: Deno.FsFile
 try {
-  ownership = await guard(port, graph, joining)
+  ownership = await guard(port, graph)
 } catch (e) {
   console.error(`tasks: ${(e as Error).message}`)
   Deno.exit(1)
@@ -870,9 +857,7 @@ try {
 // probe server an agent spawns hours later — long after that supervisor is
 // gone, and after the port may belong to a stranger. Argv is scoped to the one
 // process meant to answer. Best effort: nobody listening (a hand-run server) is
-// normal, not a reason to die. Reused for BOTH beats of a --join handoff —
-// "bound" then "fully ready" — and for the single "ready" of a sole boot; the
-// supervisor (dev.ts) reads one or two by whether it launched us to join.
+// normal, not a reason to die. The server sends one beat after it is ready.
 let signalReady = async () => {
   let arg = Deno.args.find((a) => a.startsWith('--ready='))
   if (!arg) return
@@ -883,31 +868,6 @@ let signalReady = async () => {
   } catch (e) {
     console.warn('ready signal not delivered —', e)
   }
-}
-
-// The writer baton, held for this process's whole life (baton.ts): the kernel
-// releases it when we exit, however we exit, so a successor's wait can never
-// hang on a lock we forgot to drop. Parked in a module binding (never read,
-// never closed by hand) purely so its fd is not GC-finalized out from under us.
-let _writerBaton: Deno.FsFile | undefined
-// Become the graph's sole WRITER before any migration or write runs (T-20223).
-// A sole boot already migrated at import (db.ts) and only claims the baton —
-// free now — to hold the writer role for its life. A --join successor connected
-// the DB read-capable at import but has NOT migrated: it tells the supervisor it
-// is PREPPED (imports done, db connected — so the predecessor is stopped and, on
-// its exit, releases the baton), waits for the baton, then migrates as the
-// now-sole writer. This process is NOT yet listening — the predecessor keeps the
-// port through its settle, and the bind at the bottom of boot takes it only once
-// we can actually answer — so the handoff's dark gap is the predecessor's
-// shutdown plus our migrate, not the whole boot.
-let becomeWriter = async () => {
-  // App-plane-only never becomes the writer: it takes no baton and never
-  // migrates, so the Rust bridge holds `-writer.lock` exclusively (T-20223 stays
-  // closed). This is the single line that keeps Deno out of the writer role.
-  if (appOnly) return
-  if (joining) await signalReady() // beat 1: bound — release the DB to me
-  _writerBaton = await takeBaton(graph, { wait: joining })
-  if (joining) migrate(db)
 }
 
 // Load configured plugins into THIS process before serving, so a plugin's
@@ -935,13 +895,8 @@ let browserPlugins = specs
 export let retiredDataDoors = new Set(retiredDataDoorList)
 
 // The request handler, DEFINED here but not yet listening. The bind happens at
-// the bottom of boot (just before booted()): reusePort deals connections to
-// every listener on the port, so a successor that binds while it still has a
-// minutes-long boot ahead of it steals ~half of all new connections from its
-// perfectly healthy predecessor and parks them on `await boot` — under a busy
-// landing cadence that alone reads as the graph being down. Binding late keeps
-// the predecessor the ONLY listener until this process can actually answer,
-// and shrinks the dark gap to drain + migrate.
+// the bottom of boot (just before booted()), after migration and reconciliation,
+// so the first accepted request can be answered immediately.
 let handle = async (req: Request) => {
   let url = new URL(req.url)
   let path = url.pathname
@@ -1517,14 +1472,9 @@ let doingDeps: Doing = {
 }
 let { syncSoon } = wireDoing(doingDeps)
 
-// The single-writer gate. Everything below WRITES the graph — migrations (on a
-// --join successor), the reconcilers, the boot sweeps — so nothing below may run
-// until this process holds the writer baton and, if it is a successor, has
-// migrated (T-20223). The port has been listening since Deno.serve above, so
-// requests queue on `boot` through the brief wait rather than being refused; a
-// failure here rejects this top-level await, the process exits, and the
-// supervisor heals it with a fresh boot.
-await becomeWriter()
+// live_db.ts completed the transactional, idempotent migration before this
+// process reached any boot reconciler. The supervisor never starts this server
+// until the old process has exited.
 
 // A restart may occur after a hook queued its boundary but before the file
 // watcher observed it. Boot consumes that durable remainder.
@@ -1568,14 +1518,11 @@ if (appOnly) {
 //   {css: gen}  css-only edit — re-fetch the stylesheet, nothing else
 //   'reload'    a SHELL file (main.tsx, live.ts, index.html, vendor/) —
 //               the swap boundary itself moved; only a real reload applies
-// The supervisor (dev.ts) owns server-graph restarts as a start-before-drain
-// handoff: a successor binds beside this process and reaches READY before
-// dev.ts stops us, so the port always has a ready listener. We must NOT close
-// client sockets when we see a serverFile edit — that fired the browser's
-// reconnect-and-reload immediately, seconds before the successor was listening,
-// so the page reloaded into the handoff gap and bricked. Just stop this stale
-// watcher and keep serving; our eventual death (post-READY) drops the sockets,
-// and the client then reconnects/reloads onto the already-ready successor.
+// The supervisor (dev.ts) owns server-graph restarts. We must not close client
+// sockets merely because this watcher saw a serverFile edit: the supervisor
+// first asks this process to settle and exit, then starts the replacement.
+// Returning here leaves the existing process serving until that ordered stop;
+// clients retry through the deliberate restart gap.
 let shellish = (p: string) =>
   p.endsWith('/main.tsx') || p.endsWith('/live.ts') ||
   p.endsWith('/index.html') || p.includes('/vendor/')
@@ -1678,19 +1625,16 @@ let drain = async () => {
   // at the live db (T-19494).
   stopTimers()
   // Let in-flight graph-native generations/calls finish and settle BEFORE the
-  // listener closes: this drain is what keeps a source-edit handoff from
-  // killing a live codex turn, and it can run for minutes (settle caps at
-  // 300s). The successor binds only when READY (see the bind at the bottom of
-  // boot), so through this whole settle we are still the port's one listener —
-  // settling above shutdown() keeps the graph answering instead of dark for
-  // the duration.
+  // listener closes: this drain keeps a source-edit restart from killing a live
+  // codex turn, and it can run for minutes (settle caps at 300s). Through this
+  // settle we remain the port's one listener. The supervisor waits for our exit
+  // before it starts the replacement.
   await managed.settle()
   for (let { sock } of served) sock.close(1012, 'server restart')
   // shutdown() waits for EVERY in-flight response, and the streaming doors
-  // (a /logs tail) hold theirs open indefinitely — unbounded, this wait held
-  // the baton 13+ minutes while the prepped successor parked every request
-  // (observed live). Bound it: past the bound, the exit below is what frees
-  // the graph, and Deno.exit ends the straggler streams regardless.
+  // (a /logs tail) hold theirs open indefinitely. Bound it: past the bound,
+  // Deno.exit ends the straggler streams so the supervisor can start the
+  // replacement.
   await Promise.race([
     http.shutdown(),
     new Promise((r) => setTimeout(r, 15_000)),
@@ -1711,20 +1655,12 @@ let drain = async () => {
   Deno.exit(0)
 }
 
-// Bind LAST. Everything above — the baton, migrate, the boot reconcilers — is
-// done, so the first connection the kernel deals us is one we can answer NOW.
-// Until this line the predecessor was the port's only listener and served
-// through its settle; the dark gap is just its shutdown→exit plus our migrate,
-// seconds instead of the whole boot. reusePort stays: it is what lets this
-// bind land while the predecessor's closing listener still drains its last
-// accepted connections.
-let http = Deno.serve({ port, reusePort: true }, handle)
-bound(ownership)
-
+// Bind last, after migrations and boot reconciliation. The supervisor has
+// already stopped and reaped the old process, so the public port has one
+// serving process and needs no listener overlap.
+let http = Deno.serve({ port }, handle)
 Deno.addSignalListener('SIGINT', drain)
 Deno.addSignalListener('SIGTERM', drain)
 booted()
-// Beat 2 (or the sole "ready" of a non-join boot): fully up, migrated, serving.
-// A --join successor already sent beat 1 ("bound") from becomeWriter; this is
-// what tells the supervisor the handoff is COMPLETE and it may return.
+// One readiness beat: fully migrated and serving.
 await signalReady()

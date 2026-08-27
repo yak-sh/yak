@@ -234,7 +234,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
         // the boundary AND spares the whole-table load (M-17862). The `, e.eid`
         // tiebreak makes the recency sort a TOTAL order so the tie among rows
         // sharing one `at` (9 projects on one migration stamp) is deterministic
-        // across the two SQLite builds; db.ts carries the identical tiebreak.
+        // across the two implementations; db.ts carries the identical tiebreak.
         // A pred that DECLINES to compile (a time phrase) drops the whole screen
         // and the cap — exactly Deno's `built ? … : ''` — so the full set is
         // read and the Rust refine below cuts it, the rare slow path both share.

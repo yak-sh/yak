@@ -56,8 +56,8 @@ struct App {
     // native routes), so a proxied write reaches Deno's kept door and is bounced
     // BACK to the bridge's own /apply (T-22927) — one hop, never a loop.
     app_url: Option<String>,
-    // The bridge's READ_WRITE connection (D-22804 rung 1). Opened at boot to prove
-    // the same-build write rule holds; a native-safe batch (rung 4) COMMITS
+    // The bridge's READ_WRITE connection (D-22804 rung 1). A native-safe batch
+    // (rung 4) commits on disposable parity graphs
     // through it, a transform-bearing one still proxies to Deno.
     write: Arc<Mutex<WriteStore>>,
 }
@@ -661,7 +661,6 @@ async fn main() {
     // The demoted Deno the front proxy forwards unrouted paths to (T-22935).
     let mut app_url: Option<String> = std::env::var("TASKS_APP_URL").ok().filter(|s| !s.is_empty());
     let mut migrate = false;
-    let mut join = false;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -671,16 +670,9 @@ async fn main() {
             // The demoted Deno app-plane URL for the front proxy (T-22935): any
             // path the bridge does not natively route is forwarded there.
             "--app-url" => app_url = args.next(),
-            // Swap-boot as a SUCCESSOR (D-22804 §8): wait for the predecessor to
-            // release the writer baton, migrate as the now-sole writer, THEN
-            // serve — the live Deno→Rust handoff. Owner-gated on the live graph;
-            // refused here (mechanism only). Mirrors Deno's becomeWriter join path.
-            "--join" => join = true,
             // Deliberately CREATE or additively migrate the graph, then exit
             // (D-22804 §8): the schema-authority capability the kernel now owns.
-            // A one-shot on purpose — the LIVE swap boot (a successor holding the
-            // writer baton, migrating, then serving) is the owner-gated rung-8
-            // step, filed as its own follow-on; this refuses the live graph.
+            // A one-shot on purpose; owner data is served only by the Deno server.
             "--migrate" => migrate = true,
             other if db.is_none() && !other.starts_with("--") => db = Some(other.to_string()),
             _ => {}
@@ -691,13 +683,11 @@ async fn main() {
         std::process::exit(2);
     });
     if migrate {
-        // Never the live graph: bundled builds cannot co-write the live WAL
-        // across builds (M-22673), and the baton-guarded live swap is rung 8.
-        if yak_bridge::refuses_live(&db) || yak_kernel::writes_live_graph(&db) {
+        if yak_bridge::refuses_live(&db) {
             eprintln!(
-                "yak-bridge --migrate: refusing the live graph {db} — live \
-                 schema migration is the owner-gated rung-8 swap, under the \
-                 writer baton. Point --db at a fresh/probe path."
+                "yak-bridge --migrate: refusing the owner graph {db} — \
+                 production has one serving process. Point --db at a \
+                 disposable copy."
             );
             std::process::exit(2);
         }
@@ -722,96 +712,26 @@ async fn main() {
         eprintln!("yak-bridge: refusing port 5173 — that is the live server's port");
         std::process::exit(2);
     }
-    // The same-build boot assertion (M-22673): a bundled build must never open
-    // the live pairing — not read-only (shared wal-index, cross-build) and, now
-    // that the bridge holds a WRITE connection (D-22804 rung 1), least of all
-    // read-write, where two SQLite builds co-writing one WAL corrupt the graph
-    // (T-22622). The one predicate gates BOTH opens below: it runs first, so a
-    // bundled build never reaches the RW open on the live file. The default
-    // system-linked build reads AND writes the live file safely.
+    // Production owner data has one serving process. This bridge is for
+    // disposable parity copies, regardless of how SQLite was linked.
     if yak_bridge::refuses_live(&db) {
         eprintln!(
-            "yak-bridge: refusing the live graph {db} — this binary was built \
-             with `bundled` SQLite and would share the live WAL wal-index with \
-             a different build (M-22673), read OR write. Rebuild without \
-             --features bundled, or point --db at a COPY."
+            "yak-bridge: refusing the owner graph {db} — production runs one \
+             serving process per database. Point --db at a disposable copy."
         );
         std::process::exit(2);
     }
 
-    // The writer baton, held for this process's whole life when we are the swap
-    // SUCCESSOR (--join, D-22804 §8). Parked in a binding that lives to the end
-    // of main so its fd is never dropped out from under the serving loop —
-    // dropping it releases the writer role while still serving (baton.ts's
-    // module-binding trick, in Rust). None in shadow mode: a co-writing bridge
-    // serializes with the live Deno server through SQLite's own writer lock +
-    // begin-immediate, NOT the migration baton (D-22804), so it never takes it.
-    let _writer_baton: Option<yak_kernel::Baton>;
-
-    let write = if join {
-        // Swap-boot successor: hold the writer baton, migrate as the now-sole
-        // writer, THEN serve — the ORDER that closes the two-writer window
-        // (T-20223), mirroring Deno becomeWriter → migrate. Owner-gated on the
-        // live graph: this pass REFUSES it (mechanism only, like --migrate); the
-        // real flip is rung 8. writes_live_graph gates EVERY build here, because
-        // migrating the live schema IS the swap, not a build-safety question.
-        if yak_bridge::refuses_live(&db) || yak_kernel::writes_live_graph(&db) {
-            eprintln!(
-                "yak-bridge --join: refusing the live graph {db} — the \
-                 baton-guarded live swap boot (migrate as sole writer, then \
-                 serve) is the owner-gated rung-8 step. Point --db at a \
-                 fresh/probe COPY."
-            );
-            std::process::exit(2);
-        }
-        eprintln!(
-            "yak-bridge --join: waiting for the writer baton on {db}{} \
-             (the predecessor releases it on exit)…",
-            yak_kernel::WRITER_LOCK
-        );
-        // wait:true — poll until the predecessor's exit frees the baton, or the
-        // deadline names one that would not let go. Defaults mirror baton.ts.
-        _writer_baton = match yak_kernel::take_baton(
-            &db,
-            &yak_kernel::TakeOpts { wait: true, ..Default::default() },
-        ) {
-            Ok(b) => b,
-            Err(e) => {
-                eprintln!("yak-bridge --join: {e}");
-                std::process::exit(1);
-            }
-        };
-        eprintln!(
-            "yak-bridge --join: holding the writer baton — migrating as sole \
-             writer (create_or_migrate), then serving."
-        );
-        // Migrate/create UNDER the baton (no other writer can be mid-batch), and
-        // reuse the returned RW connection as the serving write store.
-        match yak_kernel::WriteStore::create_or_migrate(&db) {
-            Ok(w) => Arc::new(Mutex::new(w)),
-            Err(e) => {
-                eprintln!("yak-bridge --join: cannot create/migrate {db}: {e}");
-                std::process::exit(1);
-            }
-        }
-    } else {
-        _writer_baton = None;
-        // The READ_WRITE connection (rung 1): open it now — never migrate, never
-        // create — so a same-build failure or an unwritable file is a loud boot
-        // exit, not a surprise on the first native write. Held for rungs 4+;
-        // unused while every batch proxies.
-        match yak_bridge::open_write(&db) {
-            Ok(w) => Arc::new(Mutex::new(w)),
-            Err(e) => {
-                eprintln!("yak-bridge: cannot open {db} read-write: {e}");
-                std::process::exit(1);
-            }
+    let write = match yak_bridge::open_write(&db) {
+        Ok(w) => Arc::new(Mutex::new(w)),
+        Err(e) => {
+            eprintln!("yak-bridge: cannot open {db} read-write: {e}");
+            std::process::exit(1);
         }
     };
 
     let uri = ro_uri(&db);
     // Fail fast if the file will not open read-only, rather than 500 per request.
-    // (After a --join migrate the file now exists, so the RO open succeeds.)
     if let Err(e) = Store::open(&uri) {
         eprintln!("yak-bridge: cannot open {db} read-only: {e}");
         std::process::exit(1);

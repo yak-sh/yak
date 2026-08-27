@@ -379,8 +379,8 @@ export let projectOrphans = (a: Anomalies | null): Report[] => {
 // The ANN index has exactly ONE writer: the process running the embed sweep,
 // which claims it with ownVector() (D-22530 — a write-capable extension lives
 // only where its write does). The failure this exists for is the 2026-08-26
-// split-brain (T-22622): dispatch moved to its own daemon, the daemon's --join
-// connection had never run vector_init, and every rebuild it attempted threw
+// split-brain (T-22622): dispatch moved to its own daemon, whose connection had
+// never run vector_init, and every rebuild it attempted threw
 // "Vector context not found" — while the server, which HAD the context, kept
 // quantizing on its READ path. Silent from the outside: writes land, search
 // answers, the neighbours are just quietly frozen at the last good rebuild.

@@ -1,27 +1,20 @@
-// One address, one graph, one server that meant to be there. `reusePort`
-// turns the public port into an accept POOL: any process may join it, and the
-// kernel deals each connection to whichever listener it likes. An advisory
-// lock closes the check-then-bind gap: a first boot takes it exclusively,
-// then holds it shared so only a declared successor may overlap.
+// One address, one graph, one server. An advisory lock closes the
+// check-then-bind gap and stays exclusive for the serving process's lifetime.
 //
 // Two servers over DIFFERENT files is a coin flip per request, and the loser
 // answers `no entity: T-10093` for rows that plainly exist. That reads as a
 // deleted task, not as a wrong server, so the graph lies about its contents.
-// Two servers over the SAME file is quieter and likelier: both answer alike,
-// so nothing ever looks wrong, while a probe that forgot DB_PATH writes into
-// the owner's board. Only the deploy handoff wants that, and the handoff can
-// say so — so joining is opt-in (`--join`) and everything else is refused.
+// Two servers over the SAME file is quieter: both answer alike, so nothing ever
+// looks wrong. It is refused too; replacement is stop-old then start-new.
 //
-// Nothing downstream can repair either: a client has no way to ask which
-// graph answered. So the check belongs here, before the join — a server asks
-// the address who already serves it, and declines to be the second answer.
+// Nothing downstream can repair either, so the check belongs before bind.
 import { join as pathJoin, resolve } from 'node:path'
 
 // What /graph answers: which file this process serves, and who it is.
 export type Serving = { db: string; epoch: string; pid: number }
 
 // Two in-memory graphs share a NAME but no bytes, so ':memory:' never
-// matches itself — a test server must never count as the handoff peer.
+// matches itself — a test server must never count as an existing peer.
 export let same = (mine: string, theirs: string) =>
   mine != ':memory:' && resolve(mine) == resolve(theirs)
 
@@ -53,8 +46,8 @@ export let peer = async (
 // The port is the contested resource, independent of which graph hoped to
 // serve it. The uid keeps unrelated users out of one another's namespace
 // when XDG_RUNTIME_DIR is absent; the kernel releases its lock on every kind
-// of process exit. Never unlink the empty file: a successor may still hold
-// its inode, and a fresh path would let the next boot lock a different one.
+// of process exit. Never unlink the empty file: a process may still hold its
+// inode, and a fresh path would let the next boot lock a different one.
 let lock = (port: number) => {
   let dir = Deno.env.get('XDG_RUNTIME_DIR') ||
     Deno.env.get('TMPDIR') || '/tmp'
@@ -64,50 +57,15 @@ let lock = (port: number) => {
   )
 }
 
-let pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
-
 // Throws rather than exits: a function that kills the process cannot be
 // tested, and the caller wants one clean line on stderr, not a stack.
-//
-// `join` is the supervisor's signature — dev.ts appends `--join` to a
-// SUCCESSOR and to nothing else — and it permits ONLY a same-file peer: a
-// stranger's graph is refused however deliberate the boot. It rides argv
-// rather than the environment for the reason the ready port does: the server
-// spawns agents, and an env var would be inherited by every one of them and
-// by every probe they run, handing the mistake back its permission.
-//
-// A successor RETRIES a missing peer before it believes it: it is spawned only
-// to replace a live incumbent, and that incumbent is at its busiest exactly
-// when probed — server.ts's watcher fires on the same fs event and closes
-// every websocket before /graph can answer — so peer()'s deadline is asked of
-// a server mid-burst and times out into null. On a first boot the permissive
-// answer is safe (proceed alone); on the join path it is fatal (the successor
-// exits before ready, burning a whole boot every swap — T-14308), so here
-// "no answer" means "busy, ask again", not "gone". A genuinely absent
-// predecessor still fails after the patience runs out, and swap()'s catch
-// heals it as a fresh boot.
 export let alone = async (
   port: number,
   mine: string,
-  join = false,
   find = peer,
-  tries = 5,
-  rest = pause,
 ) => {
   let held = await find(port)
-  for (let n = 1; !held && join && n < tries; n++) {
-    await rest(1000)
-    held = await find(port)
-  }
-  if (!held) {
-    if (join) {
-      throw new Error(
-        `port ${port} has no predecessor to join; --join belongs only to ` +
-          `the dev supervisor's live handoff`,
-      )
-    }
-    return null
-  }
+  if (!held) return null
   if (!same(mine, held.db)) {
     throw new Error(
       `port ${port} already serves a different graph — ${held.db} ` +
@@ -116,62 +74,38 @@ export let alone = async (
         `for rows that exist. Set PORT to a free port, or stop that server.`,
     )
   }
-  if (!join) {
-    throw new Error(
-      `port ${port} already serves this same graph — ${held.db} ` +
-        `(pid ${held.pid}). Both servers would answer alike, so nothing ` +
-        `would look wrong while every write here landed in that graph. ` +
-        `Copy the file and take a free port: cp ${held.db} /tmp/probe.db ` +
-        `&& DB_PATH=/tmp/probe.db PORT=5199 deno run -A --unstable-net ` +
-        `--unstable-worker-options src/server.ts. (--join is the dev ` +
-        `supervisor's word for its own successors, not a way past this.)`,
-    )
-  }
-  // A join is never silent — the one case we allow still says so, because
-  // a second listener nobody can see is what made this class expensive.
-  console.warn(
-    `tasks: joining ${held.db} on port ${port} beside pid ${held.pid}`,
+  throw new Error(
+    `port ${port} already serves this same graph — ${held.db} ` +
+      `(pid ${held.pid}). Stop that server before starting its replacement. ` +
+      `For a probe, copy the file and use a free PORT.`,
   )
-  return held
 }
 
-// A normal boot takes the port lock EXCLUSIVELY before asking the address who
-// is there. That makes simultaneous empty answers impossible. It returns the
-// exclusive lock through the bind; bound() atomically downgrades that same
-// descriptor to SHARED for its lifetime. A successor may take a second shared
-// lock, and either generation keeps every fresh exclusive boot out across the
-// handoff. `alone()` still rejects old servers and strangers predating this.
+// A boot takes the port lock exclusively before asking the address who is
+// there. That makes simultaneous empty answers impossible, and keeping the
+// descriptor alive excludes every second serving process.
 export let guard = async (
   port: number,
   mine: string,
-  join = false,
   find = peer,
-  tries = 5,
-  rest = pause,
 ) => {
   let file = lock(port)
-  if (!file.tryLockSync(!join)) {
+  if (!file.tryLockSync(true)) {
     file.close()
     // Preserve the precise, actionable refusal once a peer can answer. In
     // the simultaneous boot window there is no answer yet, so name the claim.
-    if (!join) {
-      let held = await find(port)
-      if (held) await alone(port, mine, false, () => Promise.resolve(held))
-    }
+    let held = await find(port)
+    if (held) await alone(port, mine, () => Promise.resolve(held))
     throw new Error(
       `port ${port} is already being claimed by another server; wait for ` +
         `that boot or set PORT to a free port`,
     )
   }
   try {
-    await alone(port, mine, join, find, tries, rest)
+    await alone(port, mine, find)
     return file
   } catch (e) {
     file.close()
     throw e
   }
 }
-
-// The listener exists now, so a declared successor may sit beside it. Changing
-// the lock on one descriptor is atomic; close-and-reopen would restore the gap.
-export let bound = (file: Deno.FsFile) => file.lockSync(false)

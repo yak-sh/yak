@@ -39,6 +39,7 @@ let {
   resolveId,
   retireMemoryType,
   search,
+  sameGraphFile,
   senderActor,
   sha,
   snapshot,
@@ -233,9 +234,9 @@ slow('connect() + snapshot on a migrated graph write NOTHING (T-20223)', () => {
   let path = Deno.makeTempFileSync({ suffix: '.db' })
   open(path).close() // migrate mints the epoch row; the file now stands
   let before = Deno.readFileSync(path)
-  // A --join successor's path: connect() is write-free, and every read on it —
+  // A library reader's path: connect() is write-free, and every read on it —
   // epochOf (a pure SELECT now, not a mint) and snapshot — must leave the file
-  // byte-identical, or it reopens the two-writer window the baton closes.
+  // byte-identical.
   let reader = connect(path)
   epochOf(reader)
   snapshot(reader)
@@ -3049,6 +3050,28 @@ Deno.test('open() is idempotent and additive on live files', () => {
   assertMatch(String(fresh().prepare('select 1 as ok').get()?.ok), /1/)
 })
 
+slow('sameGraphFile recognizes a symlink to owner data', () => {
+  let root = Deno.makeTempDirSync()
+  let owner = `${root}/owner.db`
+  let alias = `${root}/parity.db`
+  Deno.writeFileSync(owner, new Uint8Array())
+  Deno.symlinkSync(owner, alias)
+  assertEquals(sameGraphFile(owner, alias), true)
+  assertEquals(sameGraphFile(owner, `${root}/copy.db`), false)
+  Deno.removeSync(root, { recursive: true })
+})
+
+Deno.test('migrate refuses a schema version from a newer binary', () => {
+  let newer = new DatabaseSync(':memory:')
+  newer.exec('pragma user_version = 2')
+  assertThrows(
+    () => migrate(newer),
+    Error,
+    "schema version 2 is newer than this binary's version 1",
+  )
+  newer.close()
+})
+
 slow('open migrates the legacy instruction marker to prompt once', () => {
   let root = Deno.makeTempDirSync({ prefix: 'tasks-prompt-' })
   let path = `${root}/tasks.db`
@@ -4695,7 +4718,7 @@ slow('migrateBoardsToProjects: a filtered board is left alone', () => {
   assertEquals(!!compOf(d, orphan, 'board'), true) // orphan survives
 })
 
-// The malformed-WAL salvage (T-21914). Build the incident state
+// Build a malformed WAL deterministically. Checkpoint a healthy main (T1),
 // deterministically: checkpoint a healthy main (T1), advance it via a later
 // checkpoint, keep fresh frames in the WAL, then revert the main file to T1
 // beside that newer WAL — the stale-main + newer-WAL mismatch a writer killed
@@ -4727,40 +4750,6 @@ let walWreck = (dir: string) => {
   return { path, t1 }
 }
 
-slow('connect() salvages a malformed WAL: aside, preserved, serving', () => {
-  let dir = Deno.makeTempDirSync()
-  let { path } = walWreck(dir)
-  let healed = connect(path)
-  healed.exec('select count(*) from t') // reads serve again
-  healed.close()
-  let names = [...Deno.readDirSync(dir)].map((e) => e.name)
-  assertEquals(names.some((n) => n.startsWith('g.db-wal.corrupt.')), true)
-  assertEquals(names.some((n) => n.startsWith('g.db.pre-walrecover.')), true)
-  Deno.removeSync(dir, { recursive: true })
-})
-
-slow('connect() refuses to salvage when the MAIN file is bad', () => {
-  let dir = Deno.makeTempDirSync()
-  let { path, t1 } = walWreck(dir)
-  // Trash a page inside the main file itself: now the WAL is not the (only)
-  // failing component, so salvage must restore the WAL as found and propagate
-  // — main-db corruption is not self-healable.
-  let bad = new Uint8Array(t1)
-  bad.fill(0xef, 8192, 12288)
-  Deno.writeFileSync(path, bad)
-  assertThrows(() => connect(path))
-  let names = [...Deno.readDirSync(dir)].map((e) => e.name)
-  assertEquals(names.includes('g.db-wal'), true) // restored as found
-  Deno.removeSync(dir, { recursive: true })
-})
-
-// The refuse-path crash loop must mint ONE evidence set, not one per retry —
-// 60 fresh 1.6GB copies filled the disk to 0 bytes and SUSTAINED the
-// 2026-08-26 outage (T-22262). The live corrupt file is the evidence; only
-// the small WAL is copied, once, and the `.refused` marker makes retries
-// copy-free. A successful open clears the marker. Each retry is a FRESH
-// PROCESS, as the real supervisor loop is — a refused handle is released by
-// process exit, never by close() (which would checkpoint into the evidence).
 let connectInChild = (path: string) => {
   let out = new Deno.Command(Deno.execPath(), {
     args: [
@@ -4777,47 +4766,72 @@ let connectInChild = (path: string) => {
   return new TextDecoder().decode(out.stdout).trim()
 }
 
-slow('a refuse-loop preserves one evidence set, never the main', () => {
+slow('connect() fails closed on a malformed WAL without mutating files', () => {
   let dir = Deno.makeTempDirSync()
-  let { path, t1 } = walWreck(dir)
-  let bad = new Uint8Array(t1)
-  bad.fill(0xef, 8192, 12288)
-  Deno.writeFileSync(path, bad)
-  for (let i = 0; i < 3; i++) assertEquals(connectInChild(path), 'THREW')
-  // As-found means BYTE-identical: refusing must not checkpoint anything
-  // into the corrupt main — the live file is the evidence.
-  assertEquals(Deno.readFileSync(path), bad)
-  let names = [...Deno.readDirSync(dir)].map((e) => e.name)
-  let walCopies = names.filter((n) => n.startsWith('g.db-wal.corrupt.'))
-  assertEquals(walCopies.length, 1) // one incident, one set
-  assertEquals(names.some((n) => n.startsWith('g.db.pre-walrecover.')), false) // never the main
-  assertEquals(names.includes('g.db.refused'), true) // the marker stands
-  // Recovery (here: the wreck healed by hand — wal AND shm aside, as the
-  // incident runbook does) clears the marker on the next successful open.
-  Deno.writeFileSync(path, t1)
-  Deno.removeSync(`${path}-wal`)
-  try {
-    Deno.removeSync(`${path}-shm`)
-  } catch { /* not minted */ }
-  assertEquals(connectInChild(path), 'OK')
-  let after = [...Deno.readDirSync(dir)].map((e) => e.name)
-  assertEquals(after.includes('g.db.refused'), false)
+  let { path } = walWreck(dir)
+  let main = Deno.readFileSync(path)
+  let wal = Deno.readFileSync(`${path}-wal`)
+  let result = connectInChild(path)
+  assertMatch(result, /^THREW Error: SQLite integrity check failed/)
+  assertMatch(result, /without copying, renaming, or deleting/)
+  assertMatch(result, /recover an offline copy/)
+  assertEquals(Deno.readFileSync(path), main)
+  assertEquals(Deno.readFileSync(`${path}-wal`), wal)
+  // SQLite may create or remove its own SHM pathname while opening. The
+  // application must mint no evidence/marker generation and must leave the
+  // durable main+WAL bytes untouched.
+  assertEquals(
+    [...Deno.readDirSync(dir)].map((e) => e.name).filter((n) => n != 'g.db-shm')
+      .sort(),
+    ['g.db', 'g.db-wal'],
+  )
   Deno.removeSync(dir, { recursive: true })
 })
 
-// No headroom → no copies: a salvage that cannot afford its load-bearing
-// safety copy refuses loudly instead of writing into a full disk (T-22262).
-slow('salvage refuses when the volume lacks copy headroom', () => {
-  Deno.env.set('TASKS_EVIDENCE_MIN_FREE', '9007199254740991')
-  try {
-    let dir = Deno.makeTempDirSync()
-    let { path } = walWreck(dir)
-    assertThrows(() => connect(path), Error, 'headroom')
-    let names = [...Deno.readDirSync(dir)].map((e) => e.name)
-    assertEquals(names.includes('g.db-wal'), true) // as found
-    assertEquals(names.some((n) => n.startsWith('g.db.pre-walrecover.')), false)
-    Deno.removeSync(dir, { recursive: true })
-  } finally {
-    Deno.env.delete('TASKS_EVIDENCE_MIN_FREE')
+slow('concurrent openers serialize one idempotent migration', async () => {
+  let dir = Deno.makeTempDirSync()
+  let path = `${dir}/g.db`
+  let script = new URL('./testing/open_once.ts', import.meta.url).pathname
+  let children = Array.from(
+    { length: 12 },
+    () =>
+      new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          '--unstable-worker-options',
+          '--config',
+          new URL('../deno.json', import.meta.url).pathname,
+          script,
+          path,
+        ],
+        env: { DB_PATH: ':memory:', TASKS_SYNC: 'off', TASKS_EMBED: '0' },
+        stdout: 'piped',
+        stderr: 'piped',
+      }).output(),
+  )
+  let results = await Promise.all(children)
+  for (let result of results) {
+    assertEquals(
+      result.success,
+      true,
+      new TextDecoder().decode(result.stderr),
+    )
   }
+  let migrated = open(path)
+  assertEquals(
+    (migrated.prepare('pragma integrity_check').get() as {
+      integrity_check: string
+    }).integrity_check,
+    'ok',
+  )
+  assertEquals(
+    (migrated.prepare('pragma user_version').get() as {
+      user_version: number
+    }).user_version,
+    1,
+  )
+  assertEquals(migrated.prepare('pragma foreign_key_check').all(), [])
+  migrated.close()
+  Deno.removeSync(dir, { recursive: true })
 })

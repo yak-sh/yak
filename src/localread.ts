@@ -13,8 +13,8 @@
 // ':memory:' never arms — a private empty db is not the server's memory graph
 // — and TASKS_LOCAL=0 turns the arm off outright.
 //
-// The db opens READ-ONLY (sqlite.ts Options) and never migrates: schema stays
-// under the writer baton (D-22388 — library clients connect, never migrate).
+// The db opens READ-ONLY (sqlite.ts Options) and never migrates: schema changes
+// belong to an explicit open() at process boot (D-22388).
 // Version skew needs no handshake — a query against a schema this build does
 // not know throws, guarded() answers it over the wire and disarms, and the
 // local error only surfaces when the wire fails too, so a dead server still

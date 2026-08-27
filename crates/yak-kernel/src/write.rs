@@ -45,9 +45,8 @@ pub struct WriteStore {
 }
 
 impl WriteStore {
-    // Read-write on an EXISTING file: a library client never creates, never
-    // migrates, never takes the writer baton (schema changes stay under it,
-    // D-22530 §1). busy_timeout + apply's `begin immediate` are what let this
+    // Read-write on an EXISTING file: a library client never creates or
+    // migrates (D-22530 §1). busy_timeout + apply's `begin immediate` let this
     // writer queue politely behind the server's short batches.
     pub fn open(path: &str) -> rusqlite::Result<WriteStore> {
         let conn = Connection::open_with_flags(

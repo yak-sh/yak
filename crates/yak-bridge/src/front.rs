@@ -9,7 +9,7 @@
 // verbatim, STREAMING the body (a /blob, /frozen, or mail attachment can be
 // large — never buffer one whole). It is the mirror of the write proxy
 // (T-22927): a write reaching a KEPT Deno door is proxied BACK to the bridge's
-// native /apply — the sole writer — so no write ever loops, because /apply and
+// native /apply, so no write ever loops, because /apply and
 // /ws are native routes the fallback never sees.
 
 use axum::http::Uri;

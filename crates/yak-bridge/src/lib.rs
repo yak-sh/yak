@@ -13,29 +13,20 @@ pub mod read;
 pub mod snap;
 pub mod subserve;
 
-// Would opening `db` land on the live graph while this binary carries a bundled
-// SQLite? That is the cross-build co-reader the same-build rule forbids
-// (M-22673, generalized from the T-22622 write-door refusal). A system-linked
-// bridge (the default, built `-p yak-bridge`) reads the live file safely; this
-// fires for a build that linked bundled SQLite — whether via yak-bridge's own
-// `bundled` feature or Cargo feature unification with a bundled workspace
-// sibling, both of which `yak_kernel::is_bundled()` reflects.
+// The owner graph has one serving process. The bridge remains available for
+// disposable parity copies, never as a co-serving production process.
 pub fn refuses_live(db: &str) -> bool {
-    yak_kernel::is_bundled() && yak_kernel::same_graph_file(db, &yak_kernel::live_db())
+    yak_kernel::same_graph_file(db, &yak_kernel::live_db())
 }
 
 // The bridge's READ_WRITE connection (D-22804 rung 1): a native write lands
-// through this in rung 4+; today it opens at boot only to prove the same-build
-// WRITE rule holds and to fail loudly if the file cannot be opened read-write.
-// `refuses_live` gates it exactly as it gates the read open — a bundled build
-// must NEVER co-write the live WAL across builds (M-22673, T-22622) — and
-// `WriteStore::open` itself encodes never-create/never-migrate, so a library
-// writer leaves the schema and the baton alone.
+// through this in rung 4+ on disposable graphs. WriteStore::open itself encodes
+// never-create/never-migrate.
 pub fn open_write(db: &str) -> Result<yak_kernel::WriteStore, String> {
     if refuses_live(db) {
         return Err(format!(
-            "refusing read-write on the live graph {db} — bundled SQLite cannot \
-             co-write the live WAL across builds (M-22673). Point --db at a COPY."
+            "refusing the owner graph {db}: production runs one serving process \
+             per database. Point --db at a disposable copy."
         ));
     }
     yak_kernel::WriteStore::open(db).map_err(|e| e.to_string())

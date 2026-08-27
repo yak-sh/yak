@@ -1,8 +1,8 @@
 // The journal feed's contract (D-22388 step 1): every journaled commit is
 // handed to the consumer exactly once, in rowid order — a consumer's own
 // writes and a foreign connection's uniformly — and only a fed() trace asks
-// the feed to dispatch effects. The watcher half (foreign wake) is heavy
-// (real fs events, a file db) and lives in the slow tier.
+// the feed to dispatch effects. The polling half (foreign wake) uses a file db
+// and lives in the slow tier.
 import { assert, assertEquals } from '@std/assert'
 import { apply, connect, journalSince, open, recast, record } from './db.ts'
 import { catchup } from './catchup.ts'
@@ -116,14 +116,14 @@ slow('data_version bumps for a foreign commit, never our own', () => {
 })
 
 slow(
-  'the watcher wakes a settle for a foreign write, then goes quiet',
+  'the data-version poll wakes a foreign write, then goes quiet',
   async () => {
     let path = Deno.makeTempDirSync({ prefix: 'catchup' }) + '/g.db'
     let mine = open(path)
     let rows: number[] = []
     let feed = catchup(mine, (r) => rows.push(r.rowid))
     feed.watch(path)
-    await new Promise((go) => setTimeout(go, 50)) // let the watcher arm
+    await new Promise((go) => setTimeout(go, 50)) // let the poll arm
     let peer = connect(path)
     apply(peer, [doc('foreign')], fed())
     await until(() => rows.length == 1, { label: 'the foreign row to settle' })

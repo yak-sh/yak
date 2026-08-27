@@ -4,7 +4,7 @@
 // query evaluation — serving exactly one client on its own thread, so one
 // client's expensive query can never stall another's event loop. Writes never
 // happen here: a client's batch posts back to the delegator, whose process
-// owns the write connection, the baton discipline, and the journal feed; the
+// owns the server connection and journal feed; the
 // commit returns as a {cast} message like every other commit. A Deno Worker
 // (not a subprocess) because workers are real threads with their own isolate —
 // full CPU isolation for eval and stringify — while sharing the module cache
@@ -38,7 +38,7 @@ self.onmessage = (m: MessageEvent<In>) => {
   try {
     if ('init' in d) {
       // connect()-style pragmas without connect(): the worker never migrates
-      // (schema stays under the writer baton) and never loads the vector
+      // and never loads the vector
       // extension (write-capable extensions live only in the owning process).
       db = new DatabaseSync(d.init, { readOnly: true })
       db.exec('pragma busy_timeout = 5000')

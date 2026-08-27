@@ -7,11 +7,9 @@
 // this process owns the worldly half: spawns, kills, mail, knocks, wakes,
 // sweeps, persona sync, embeddings, dispatch.
 //
-// Launched with `--join` so live_db connects WITHOUT migrating — schema stays
-// the server's, under the writer baton. The supervisor (dev.ts) spawns this
-// only after the server's READY beat, so the schema is always current here; a
-// bare manual start against a mid-migration file fails loudly and the
-// supervisor's backoff respawn is the retry loop.
+// The supervisor (dev.ts) starts this only after the server's READY beat, so a
+// deployment never opens a worker against a mid-migration schema. open() is
+// transactional and idempotent for manual starts; SQLite owns serialization.
 //
 // Casts are a no-op on purpose: every write a handler makes journals (apply()
 // or record()), and the SERVER's feed rebroadcasts journaled rows to its
@@ -21,7 +19,7 @@ import { db } from './live_db.ts'
 import { file as graph, recast } from './db.ts'
 import { catchup } from './catchup.ts'
 import { dispatch, type Where } from './effects.ts'
-import { takeBaton } from './baton.ts'
+import { takeEffectsLease } from './effects_lease.ts'
 import { bootDoing, type Doing, wireDoing } from './doing.ts'
 import { providers } from './adapters.ts'
 import { accountService } from './accounts.ts'
@@ -37,9 +35,9 @@ globalThis.addEventListener('unhandledrejection', (e) => {
   console.error('unhandled rejection —', e.reason)
 })
 
-// Exactly one dispatcher per graph file. A deploy successor waits here for
-// its predecessor's exit to free the flock; the kernel releases it on ANY end.
-let lease = await takeBaton(graph, { wait: true, suffix: '-effects.lock' })
+// Exactly one dispatcher per graph file. A replacement waits here for the old
+// worker's exit to free the flock; the kernel releases it on every exit.
+let lease = await takeEffectsLease(graph, { wait: true })
 void lease // held for the process lifetime, released by exit
 
 // Doing needs a codex-readiness probe and the provider table for dispatch —
@@ -95,7 +93,7 @@ setInterval(() => feed.settle(), 2_000)
 bootDoing(deps, syncSoon)
 
 // A clean stop: silence the reconcilers, then exit — the lease frees with
-// the process, and the pending journal rows wait for the successor's boot
+// the process, and the pending journal rows wait for the replacement's boot
 // relay + feed.
 Deno.addSignalListener('SIGTERM', () => {
   stopTimers()

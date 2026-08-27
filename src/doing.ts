@@ -723,8 +723,8 @@ export let bootDoing = (d: Doing, syncSoon: () => void) => {
   if (isLive()) {
     // The sweep is the ANN index's only writer, so THIS process owns the
     // native quantize (D-22530), and it must establish the extension's
-    // per-connection context itself: a --join daemon connects and never
-    // migrates, which is the one place initVector otherwise runs. Claim
+    // per-connection context itself: the effects process owns a separate
+    // connection, so it cannot inherit the server's vector context. Claim
     // before initVector — its trailing refreshVector is a no-op for a
     // non-owner. Both are inert without the extension (T-22622).
     ownVector()

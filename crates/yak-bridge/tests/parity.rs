@@ -1181,9 +1181,8 @@ fn canon_text(text: &str) -> String {
     }
 }
 
-// Open a copy read-only (its file, not `?mode=ro` on the server) for the journal
-// dump. A read-only cross-build reader of a WAL the Deno server writes is exactly
-// what the bridge itself is — safe; only co-WRITING across builds corrupts.
+// Open a disposable copy read-only (its file, not `?mode=ro` on the server) for
+// the journal dump.
 fn ro_conn(db_path: &str) -> rusqlite::Connection {
     rusqlite::Connection::open_with_flags(
         format!("file:{db_path}?mode=ro"),
