@@ -295,7 +295,9 @@ slow(
     // Text retrieval is the same /query row shape with a transient rank
     // component. No parallel search response contract survives the migration.
     let ranked = await (await fetch(
-      `http://${U}/query?q=${encodeURIComponent('Route')}`,
+      `http://${U}/query?${encodeURIComponent('Route')}&${
+        encodeURIComponent('.order=search')
+      }`,
     )).json() as Record<string, Record<string, unknown>>[]
     let task = ranked.find((r) =>
       (r.entity as { eid?: string } | undefined)?.eid == RT
