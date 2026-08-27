@@ -26,6 +26,7 @@ let {
   locate,
   mendCalls,
 
+  migrate,
   migrateBoardsToProjects,
   migrateErrors,
   mintEpoch,
@@ -243,6 +244,85 @@ slow('connect() + snapshot on a migrated graph write NOTHING (T-20223)', () => {
   assertEquals(Deno.readFileSync(path), before)
   Deno.removeSync(path)
 })
+
+// FTS is derived: damage and recovery are exercised on a byte copy of a
+// disposable graph. The source is never opened again, mirroring the recovery
+// rule for the owner's graph without putting owner data in a test's reach.
+let withFtsCopy = (run: (path: string) => void) => {
+  let dir = Deno.makeTempDirSync()
+  let source = `${dir}/source.db`, copy = `${dir}/copy.db`
+  open(source).close()
+  Deno.copyFileSync(source, copy)
+  try {
+    run(copy)
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+}
+
+slow(
+  'open rebuilds FTS-only external-content drift on a disposable copy',
+  () =>
+    withFtsCopy((path) => {
+      let raw = new DatabaseSync(path)
+      // Bypass only doc_fts's update trigger: the content table stays sound, but
+      // its derived token index no longer describes that content.
+      raw.exec('drop trigger doc_fts_au')
+      raw.prepare(
+        'update doc set title = title || ? where rowid = (select min(rowid) from doc)',
+      ).run(' ftsdriftproof')
+      assertEquals(raw.prepare('pragma quick_check(1)').get(), {
+        quick_check: 'ok',
+      })
+      let corrupt = assertThrows(() =>
+        raw.exec(
+          `insert into doc_fts (doc_fts, rank) values ('integrity-check', 1)`,
+        )
+      ) as Error & { errcode?: number }
+      assertMatch(corrupt.message, /database disk image is malformed/)
+      assertEquals(corrupt.errcode, 267) // SQLITE_CORRUPT_VTAB, not main-file damage
+      raw.close()
+
+      let healed = open(path)
+      healed.exec(
+        `insert into doc_fts (doc_fts, rank) values ('integrity-check', 1)`,
+      )
+      assertEquals(
+        (healed.prepare(
+          `select count(*) as n from doc_fts where doc_fts match 'ftsdriftproof'`,
+        ).get() as { n: number }).n,
+        1,
+      )
+      healed.close()
+    }),
+)
+
+slow(
+  'an unrepaired FTS failure names its index, operations, and diagnoses',
+  () =>
+    withFtsCopy((path) => {
+      let raw = new DatabaseSync(path)
+      raw.exec('drop table doc_gram_data')
+      let error = assertThrows(() => migrate(raw)) as AggregateError
+      assertEquals(error instanceof AggregateError, true)
+      assertMatch(
+        error.message,
+        /doc_gram rebuild failed after integrity-check/,
+      )
+      assertMatch(
+        error.message,
+        /integrity-check: fts5: corruption.*doc_gram/,
+      )
+      assertMatch(error.message, /rebuild: SQL logic error/)
+      assertMatch(error.message, /quick_check: fts5: corruption.*doc_gram/)
+      let causes = error.errors as (Error & {
+        errcode?: number
+      })[]
+      assertEquals(causes.length, 2)
+      assertEquals(causes.every((cause) => cause.errcode != null), true)
+      raw.close()
+    }),
+)
 
 slow('snapshot shares a walk until either database handle writes', () => {
   let path = Deno.makeTempFileSync({ suffix: '.db' })

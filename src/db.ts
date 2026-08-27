@@ -3052,16 +3052,70 @@ export let migrate = (db: DatabaseSync) => {
     // arrives filled on the first boot that knows about it.
     let count = (t: string) =>
       (prep(db, `select count(*) as n from ${t}`).get() as { n: number }).n
-    let sound = (t: string) => {
+    type FtsFault = {
+      operation: 'integrity-check' | 'count-check'
+      error: unknown
+    }
+    let diagnosis = (error: unknown) =>
+      error instanceof Error ? error.message : String(error)
+    let fault = (t: string): FtsFault | undefined => {
       try {
         db.exec(`insert into ${t} (${t}, rank) values ('integrity-check', 1)`)
-        return count(t) == count('doc')
-      } catch {
-        return false
+      } catch (error) {
+        return { operation: 'integrity-check', error }
+      }
+      try {
+        let indexed = count(t), docs = count('doc')
+        if (indexed != docs) {
+          return {
+            operation: 'count-check',
+            error: new Error(
+              `${t} returned ${indexed} rows; doc returned ${docs}`,
+            ),
+          }
+        }
+      } catch (error) {
+        return { operation: 'count-check', error }
+      }
+    }
+    let quick = () => {
+      try {
+        let row = prep(db, 'pragma quick_check(1)').get() as Record<
+          string,
+          string
+        >
+        return row?.quick_check ?? String(Object.values(row ?? {})[0])
+      } catch (error) {
+        return `failed: ${diagnosis(error)}`
       }
     }
     for (let t of ['doc_fts', 'doc_gram']) {
-      if (!sound(t)) db.exec(`insert into ${t} (${t}) values ('rebuild')`)
+      let before = fault(t)
+      if (!before) continue
+      try {
+        db.exec(`insert into ${t} (${t}) values ('rebuild')`)
+      } catch (error) {
+        // Keep BOTH SQLite errors: an FTS integrity failure often says only
+        // "database disk image is malformed", and dropping it made the later
+        // rebuild failure indistinguishable from damage to the main database.
+        // quick_check is paid only on this failed repair path; its verdict says
+        // whether SQLite sees a wider database problem or an FTS-only one.
+        throw new AggregateError(
+          [before.error, error],
+          `${t} rebuild failed after ${before.operation}; ` +
+            `${before.operation}: ${diagnosis(before.error)}; ` +
+            `rebuild: ${diagnosis(error)}; quick_check: ${quick()}`,
+        )
+      }
+      let after = fault(t)
+      if (after) {
+        throw new AggregateError(
+          [before.error, after.error],
+          `${t} ${after.operation} failed after rebuild; ` +
+            `before: ${diagnosis(before.error)}; ` +
+            `after: ${diagnosis(after.error)}; quick_check: ${quick()}`,
+        )
+      }
     }
     let { n } = prep(db, 'select count(*) as n from task').get() as {
       n: number
