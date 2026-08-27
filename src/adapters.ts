@@ -144,10 +144,10 @@ export type ProviderSpec = Pick<Adapter, 'models' | 'efforts' | 'labels'> & {
   fallback?: boolean
 }
 
-// Ollama Cloud is a direct HTTP provider, not an installed process adapter.
-// These are the model ids returned by https://ollama.com/api/tags; unlike the
-// local Ollama proxy, the hosted API does not use a `:cloud` suffix.
-export let ollamaCloud: ProviderSpec = {
+// The `ollama` provider is a direct HTTP provider (the owner's ollama server,
+// `ollama.yak.sh`), not an installed process adapter. These are the model ids
+// it offers; they carry no `:cloud` suffix.
+export let ollama: ProviderSpec = {
   models: [
     'kimi-k2.7-code',
     'glm-5.2',
@@ -194,10 +194,10 @@ export let ollamaCloud: ProviderSpec = {
 }
 
 export let providerSpec = (name: string): ProviderSpec | undefined =>
-  name == 'ollama' ? ollamaCloud : adapters[name]
+  name == 'ollama' ? ollama : adapters[name]
 
 export let providers = (ready?: (name: string) => boolean) =>
-  [...Object.entries(adapters), ['ollama', ollamaCloud] as const]
+  [...Object.entries(adapters), ['ollama', ollama] as const]
     .filter(([name]) => name != 'fake')
     .map(([name, a]) => ({
       name,

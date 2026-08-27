@@ -2,7 +2,7 @@
 // pasted from a live probe of the CLI it mimics (trimmed, same shape).
 // If a vendor changes dialect, these say exactly which reader went deaf.
 import { assertEquals, assertMatch, assertNotEquals } from '@std/assert'
-import { adapters, ollamaCloud, providers, trouble } from './adapters.ts'
+import { adapters, ollama, providers, trouble } from './adapters.ts'
 
 let { claude, codex } = adapters
 
@@ -221,18 +221,18 @@ Deno.test('codex-cli is the same process adapter under an explicit request', () 
   assertEquals(fallback.fallback, true)
 })
 
-Deno.test('ollama: direct cloud model ids are provider offers, not adapters', () => {
-  assertEquals(ollamaCloud.models[0], 'kimi-k2.7-code')
-  assertEquals(ollamaCloud.models.includes('gpt-oss:120b'), true)
+Deno.test('ollama: direct model ids are provider offers, not adapters', () => {
+  assertEquals(ollama.models[0], 'kimi-k2.7-code')
+  assertEquals(ollama.models.includes('gpt-oss:120b'), true)
   assertEquals(
-    ollamaCloud.models.some((model) => model.endsWith('-cloud')),
+    ollama.models.some((model) => model.endsWith('-cloud')),
     false,
   )
   assertEquals(
-    ollamaCloud.models.some((model) => model.endsWith(':cloud')),
+    ollama.models.some((model) => model.endsWith(':cloud')),
     false,
   )
-  assertEquals(ollamaCloud.labels['kimi-k2.7-code'], 'Kimi K2.7 Code')
+  assertEquals(ollama.labels['kimi-k2.7-code'], 'Kimi K2.7 Code')
   assertEquals('ollama' in adapters, false)
   assertEquals(
     trouble({ provider: 'ollama', model: 'kimi-k2.7-code' }),

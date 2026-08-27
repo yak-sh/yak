@@ -1806,7 +1806,7 @@ export let codexPending = `
     )
   )`
 
-// `codex` and Ollama Cloud are graph-native HTTP providers. `codex-cli` is an
+// `codex` and `ollama` are graph-native HTTP providers. `codex-cli` is an
 // explicit process request; the environment switch changes only the Codex
 // default at process birth without relabelling durable sessions.
 export let graphCodex = (
