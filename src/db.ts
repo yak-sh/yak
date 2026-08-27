@@ -41,6 +41,7 @@ import { type Trace } from './effects.ts'
 import { ancestorAt } from './client.ts'
 import { homeReads } from './persona.ts'
 import {
+  type EdgeSelector,
   ftsQuery,
   ftsTerm,
   leafOf,
@@ -7112,6 +7113,59 @@ export let depsOf = (db: DatabaseSync, eids: string[]): Dep[] =>
 // with a projected peer row for each.
 export let eagerDeps = (db: DatabaseSync, eids: string[]): Dep[] =>
   incident(db, eids, true)
+
+// Stored dependency edges incident to `eids` AFTER an optional endpoint
+// projection. The projection is one vocabulary `{eid}` column: an endpoint
+// wearing its component reads as the referenced entity, and membership is
+// tested in that projected graph. `endpoint` is built from two indexed seeks —
+// the member spine ids and the projection column's reverse index — then each
+// half seeks dependency by its own endpoint index. No component partition is
+// enumerated.
+export let selectedDeps = (
+  db: DatabaseSync,
+  eids: string[],
+  select: EdgeSelector,
+): Dep[] => {
+  if (!eids.length) return []
+  if (!select.via) {
+    return eagerDeps(db, eids).filter((d) => d.type == select.type)
+  }
+  stage(db, eids)
+  let table = sqlName(select.via.comp)
+  let col = sqlName(select.via.prop)
+  let rows = prep(
+    db,
+    `with endpoint(id) as (
+       select e.id from entity e
+        where e.eid in (select eid from hit)
+          and not exists (select 1 from ${table} v where v.entity = e.id)
+       union
+       select v.entity from ${table} v
+        where v.${col} in (
+          select e.id from entity e where e.eid in (select eid from hit)
+        )
+     ), picked(parent, type, child, ord) as (
+       select d.parent, d.type, d.child, d.ord from dependency d
+        where d.parent in (select id from endpoint) and d.type = ?
+       union
+       select d.parent, d.type, d.child, d.ord from dependency d
+        where d.child in (select id from endpoint) and d.type = ?
+     )
+     select distinct coalesce(pp.eid, p.eid) as parent,
+            d.type as type,
+            coalesce(pc.eid, c.eid) as child,
+            d.ord as ord
+       from picked d
+       join entity p on p.id = d.parent
+       join entity c on c.id = d.child
+       left join ${table} vp on vp.entity = d.parent
+       left join entity pp on pp.id = vp.${col}
+       left join ${table} vc on vc.entity = d.child
+       left join entity pc on pc.id = vc.${col}
+      order by parent, type, ord, child`,
+  ).all(select.type, select.type) as Dep[]
+  return rows.map(shedOrd)
+}
 
 // The bounded transitive closure `.reaches[type,<=N]=id` selects: the eids that
 // reach `target` through at most `depth` edges of one type, walking child→parent

@@ -11,11 +11,10 @@
 // SCOPE (the rung this crate is at): the filter grammar is query.rs's list/show
 // SUBSET, so a sub filter is kind-anchored (`.kind=task&…`) or component-presence
 // anchored (`.canvas!`) — the candidate set the JS matcher then refines. The
-// `.fields` projection, the `.reaches` bounded traversal, and the `.edges!`
-// rider ride beside that filter (T-22756). Path hops, reverse hops and the lazy
-// entry partition are the grammar this rung still refuses, so a sub naming one
-// is REFUSED here rather than half-answered — the same loud boundary the /query
-// door draws, and the standing follow-up (see parse_query_line's Err arms).
+// `.fields` projection, the `.reaches` bounded traversal, and the `.edges`
+// rider ride beside that filter (T-22756). Path hops, reverse hops and lazy
+// entry MEMBERSHIP are still refused; an edge endpoint may project through the
+// indexed entry.session column without selecting that partition.
 
 use crate::model::Row;
 use crate::query::{self, Ctx, Dot, Field, Hop, Pred, Reach};
@@ -40,6 +39,20 @@ pub struct Agg {
     pub prop: String,
 }
 
+// The EDGES rider's stored-dependency selector. `via` projects endpoints
+// through one `{eid}` column before testing incidence against the member set.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EdgeSelector {
+    pub type_: String,
+    pub via: Option<Hop>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct EdgeRider {
+    pub peers: Vec<Hop>,
+    pub select: Option<EdgeSelector>,
+}
+
 // A parsed subscription query line: the filter preds, the kind it anchors on (a
 // bare kind word or `.kind=`), and the directive riders.
 #[derive(Debug, Clone, Default)]
@@ -55,9 +68,10 @@ pub struct Parsed {
     pub fields: Option<Vec<Field>>,
     // The EDGES RIDER (query.ts edgeRider): `.edges!` asks a sub to also deliver
     // the dep triples INCIDENT to its members; `.edges.peers=status,title` names
-    // the far endpoint's columns to project beside them. `Some(vec![])` is a bare
-    // `.edges!`; None is a sub that asked for no edges.
-    pub edges: Option<Vec<Hop>>,
+    // the far endpoint's columns to project beside them. A selector optionally
+    // narrows one stored type and projects endpoints through a reference column;
+    // None is a sub that asked for no edges.
+    pub edges: Option<EdgeRider>,
     // An empty query SELECTS NOTHING (query.ts NEVER): a blank sub answers the
     // empty set cheaply, never the whole graph.
     pub never: bool,
@@ -148,6 +162,41 @@ fn parse_reaches(rest: &str) -> Result<Pred, String> {
         reach: Some(Reach { type_, depth }),
         ..Default::default()
     })
+}
+
+fn parse_edge_selector(seg: &str) -> Result<EdgeSelector, String> {
+    let malformed = || {
+        ".edges selects one edge type and an optional endpoint reference: \
+         .edges[referenced,entry.session]!"
+            .to_string()
+    };
+    let rest = seg.strip_prefix(".edges[").ok_or_else(malformed)?;
+    let bracket = rest.strip_suffix("]!").ok_or_else(malformed)?;
+    let mut parts = bracket.split(',').map(str::trim);
+    let type_ = parts.next().filter(|s| !s.is_empty()).ok_or_else(malformed)?.to_string();
+    let raw = parts.next();
+    if parts.next().is_some() {
+        return Err(malformed());
+    }
+    if !vocab().edges.iter().any(|e| e == &type_) {
+        return Err(format!(
+            ".edges selects one edge type ({}) — not {type_}",
+            vocab().edges.join(", ")
+        ));
+    }
+    let via = match raw {
+        None => None,
+        Some(spec) => {
+            let (comp, prop) = route_col(spec)?;
+            if !vocab().prop_type(&comp, &prop).is_some_and(|t| t.is_ref()) {
+                return Err(format!(
+                    ".edges endpoint projection must be one {{eid}} column: {spec}"
+                ));
+            }
+            Some(Hop { comp, prop })
+        }
+    };
+    Ok(EdgeSelector { type_, via })
 }
 
 // Pre-resolve every `.reaches` closure a pred list carries, keyed the way the
@@ -261,8 +310,17 @@ pub fn parse_query_line(line: &str) -> Result<Parsed, String> {
         // them. Each peer column routes like a bare prop (or explicit
         // `task.status`); a path is refused — a peer projection reads one
         // entity's own columns.
+        if seg.starts_with(".edges[") {
+            let select = parse_edge_selector(seg)?;
+            let edge = out.edges.get_or_insert_with(EdgeRider::default);
+            if edge.select.as_ref().is_some_and(|s| s != &select) {
+                return Err("one edge rider cannot mix selectors".into());
+            }
+            edge.select = Some(select);
+            continue;
+        }
         if seg == ".edges!" {
-            out.edges = Some(vec![]);
+            out.edges.get_or_insert_with(EdgeRider::default);
             continue;
         }
         if let Some(v) = seg.strip_prefix(".edges.peers=") {
@@ -274,7 +332,7 @@ pub fn parse_query_line(line: &str) -> Result<Parsed, String> {
                 let (comp, prop) = route_col(part)?;
                 peers.push(Hop { comp, prop });
             }
-            out.edges = Some(peers);
+            out.edges.get_or_insert_with(EdgeRider::default).peers.extend(peers);
             continue;
         }
         if seg.starts_with(".edges") {
@@ -528,16 +586,27 @@ mod tests {
     fn parses_edges_rider() {
         // a bare rider: an empty peer projection, but the rider IS present
         let bare = parse_query_line(".kind=board&.edges!").unwrap();
-        assert_eq!(bare.edges, Some(vec![]));
+        assert!(bare.edges.unwrap().peers.is_empty());
         // a peer projection routes each column like a bare prop
         let peers = parse_query_line(".kind=board&.edges.peers=title,status").unwrap();
-        let hops = peers.edges.unwrap();
+        let hops = peers.edges.unwrap().peers;
         assert_eq!(hops.len(), 2);
         assert_eq!((hops[0].comp.as_str(), hops[0].prop.as_str()), ("doc", "title"));
         assert_eq!((hops[1].comp.as_str(), hops[1].prop.as_str()), ("task", "status"));
         // `.edges` with no `!` or `.peers=` is refused
         assert!(parse_query_line(".kind=board&.edges").is_err());
         assert!(parse_query_line(".kind=board&.edges.peers=").is_err());
+
+        let selected = parse_query_line(".edges[referenced,entry.session]!").unwrap();
+        assert_eq!(
+            selected.edges.unwrap().select,
+            Some(EdgeSelector {
+                type_: "referenced".into(),
+                via: Some(Hop { comp: "entry".into(), prop: "session".into() }),
+            })
+        );
+        assert!(parse_query_line(".edges[alien]!").is_err());
+        assert!(parse_query_line(".edges[referenced,doc.title]!").is_err());
     }
 
     #[test]

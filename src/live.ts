@@ -54,7 +54,6 @@ import {
   reindexEdge,
 } from './index.ts'
 import { type MemoryResolver, memoryResolver } from './resolver.ts'
-import type { References } from './referenced.ts'
 import {
   clearIdb,
   type IdbResolver,
@@ -112,7 +111,6 @@ export let shown = (eid: string) =>
   !cache.value[eid]?.quarantined || revealed.value.has(eid)
 let canvasVersion = signal(0)
 let noRelations: Dep[] = []
-let refreshReferences = () => {}
 
 // Human ids are a hot lookup vocabulary, not a query. Keep them beside the
 // cache so rendering one reference never scans or subscribes to the graph.
@@ -675,7 +673,6 @@ export let resetSignals = () =>
     }
     resetQueries()
     clearResolved() // a reseed may now hold what the server-resolve sidecar named
-    refreshReferences()
   })
 
 // A z-only pin patch binds straight to its one DOM attribute. The fallback
@@ -839,39 +836,24 @@ export let setInbox = (eid: string, rows: Row[]) => {
 // the same fact from useInbox's ordinary subscriptions.
 export let unreadFor = (eid: string) => inbox(eid).filter(isUnread).length
 
-// Referenced citations are an indexed derived read. Keep this door until the
-// generic query grammar can select a Session's referenced edges without
-// enumerating its durable entry partition.
-let referenceSignals = new Map<string, Signal<References>>()
-let referenceLoading = new Set<string>()
-let referenceAgain = new Set<string>()
-let loadReferences = (eid: string) => {
-  if (referenceLoading.has(eid)) return void referenceAgain.add(eid)
-  referenceLoading.add(eid)
-  fetch(`${base()}/references?eid=${encodeURIComponent(eid)}`)
-    .then((r) => r.ok ? r.json() as Promise<References> : { out: [], in: [] })
-    .then((value) => {
-      let found = referenceSignals.get(eid)
-      if (found) found.value = value
-    })
-    .catch(() => {})
-    .finally(() => {
-      referenceLoading.delete(eid)
-      if (referenceAgain.delete(eid)) loadReferences(eid)
-    })
-}
+export type Reference = { eid: string }
+export type References = { out: Reference[]; in: Reference[] }
 
+// Citation reads are ordinary held edges. The selector that loaded them has
+// already projected entry endpoints to Sessions; this door only reads the two
+// endpoint indexes, so a render never sees or scans the durable entry partition.
 export let references = (eid: string): References => {
-  let found = referenceSignals.get(eid)
-  if (!found) {
-    referenceSignals.set(eid, found = signal({ out: [], in: [] }))
-    loadReferences(eid)
+  let named = (edges: Dep[], side: 'parent' | 'child'): Reference[] =>
+    [
+      ...new Set(
+        edges.filter((d) => d.type == 'referenced').map((d) => d[side]),
+      ),
+    ]
+      .map((eid) => ({ eid }))
+  return {
+    out: named(relations(eid).value, 'child'),
+    in: named(childRelations(eid).value, 'parent'),
   }
-  return found.value
-}
-
-refreshReferences = () => {
-  for (let eid of referenceSignals.keys()) loadReferences(eid)
 }
 
 // A live hand on the entity: its claim's session is awake — a managed
@@ -1033,9 +1015,6 @@ export let applyLocal = (changes: Change[]) => {
       if (live) live.value = z
     }
   })
-  if (referenceSignals.size && changes.some((c) => c.name == 'dependency')) {
-    refreshReferences()
-  }
   // The touched keys feed either the boot catch-up write, or the Web-Lock
   // leader's live persist. Followers and 2.1 fallback tabs never persist a
   // live frame.
@@ -2070,6 +2049,7 @@ export let assertAgree = (
 
 let boardUses = new Map<string, { n: number; q: string }>()
 let entryUses = new Map<string, number>()
+let edgeUses = new Map<string, number>()
 // A board whose query NAMES the lazy partition (`.entry.session=S-3`) can't be
 // answered from the root cache — entries are omitted from the snapshot. So the
 // board holds an entry subscription per scoped session (the same door a Session
@@ -2084,6 +2064,23 @@ let boardEntrySubs = new Map<string, Map<string, () => void>>()
 let ownBoard = (sub: string, q: string) =>
   owner ? owner.use(sub, q) : shadow(sub, q)
 let dropBoard = (sub: string) => owner ? owner.drop(sub) : unsubscribe(sub)
+
+// Hold one addressed edge-rider query for a component's lifetime. The rider is
+// query grammar, not a feature channel: callers may select any stored edge type
+// and endpoint projection the server understands, and the ordinary sub cache
+// owns/refcounts its triples exactly like every other `.edges` delivery.
+export let edgeSub = (eid: string, rider: string) => {
+  let sub = `edges:${eid}:${rider}`
+  let n = edgeUses.get(sub) ?? 0
+  edgeUses.set(sub, n + 1)
+  if (!n) ownBoard(sub, `id=${eid}&${rider}`)
+  return () => {
+    let held = (edgeUses.get(sub) ?? 1) - 1
+    if (held > 0) return void edgeUses.set(sub, held)
+    edgeUses.delete(sub)
+    dropBoard(sub)
+  }
+}
 
 // A fullscreen board opens a WINDOW over its membership, not the whole of it
 // (D-22567 §4). A board is a saved query, and the Everything board's `.task!`

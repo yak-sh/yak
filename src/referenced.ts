@@ -12,9 +12,6 @@ import { db } from './live_db.ts'
 import { entityId, normalize } from './url.ts'
 import { type Change } from './types.ts'
 
-export type Reference = { eid: string }
-export type References = { out: Reference[]; in: Reference[] }
-
 // Component tables key by the integer `entity` spine id (D-18866); this module
 // speaks eids, so raw SQL translates at the boundary, recall.ts's way.
 let OWNED = `entity = (select id from entity where eid = ?)`
@@ -127,34 +124,3 @@ export let historicalReferenced = (db: DatabaseSync): Change[] =>
       where not exists (select 1 from recalled r where r.entity = e.entity)`,
   ).all() as { eid: string; body: string }[])
     .flatMap((r) => referencedChanges(db, r.eid, r.body))
-
-// The cited entities on either side of one entity. Entry edges project to
-// their owning Session: transcript lines are storage detail, while the session
-// is the conversational entity a reader can open. Both directions are indexed
-// seeks (dependency parent PK / child index, entry.session index), never a log
-// scan in the render path.
-export let references = (db: DatabaseSync, eid: string): References => {
-  let direct = (side: 'parent' | 'child') =>
-    db.prepare(`
-      select distinct coalesce(s.eid, p.eid) as eid
-        from dependency d
-        join entity p on p.id = d.${side}
-        left join entry x on x.entity = d.${side}
-        left join entity s on s.id = x.session
-       where d.type = 'referenced'
-         and d.${side == 'parent' ? 'child' : 'parent'} = ${idOf}
-    `).all(eid) as { eid: string }[]
-  let own = db.prepare(`
-    select distinct c.eid as eid
-      from entry x
-      join dependency d on d.parent = x.entity and d.type = 'referenced'
-      join entity c on c.id = d.child
-     where x.session = ${idOf}
-    `).all(eid) as { eid: string }[]
-  let named = (rows: { eid: string }[]): Reference[] =>
-    [...new Set(rows.map((r) => r.eid))].map((eid) => ({ eid }))
-  return {
-    out: named([...direct('child'), ...own]),
-    in: named(direct('parent')),
-  }
-}

@@ -20,6 +20,7 @@ import {
   deps,
   domains,
   dropQuery,
+  edgeSub,
   ent,
   findEid,
   foldFor,
@@ -40,6 +41,7 @@ import {
   pinned,
   predsToQuery,
   projects,
+  references,
   relations,
   repoUrl,
   resetSignals,
@@ -2529,6 +2531,36 @@ Deno.test('reverse subs: held per open card, torn down on close (T-21489)', () =
     assertEquals(probe.subN(), n0)
   } finally {
     ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
+  }
+})
+
+Deno.test('projected edge subs are refcounted and feed citation reads', () => {
+  let X = 'dddd0000-0000-4000-8000-000000000011'
+  let Y = 'dddd0000-0000-4000-8000-000000000012'
+  let rider = '.edges[referenced,entry.session]!'
+  let sub = `edges:${X}:${rider}`
+  let sent: unknown[] = []
+  let restore = useRoute((frame) => sent.push(frame))
+  try {
+    let off = edgeSub(X, rider)
+    let again = edgeSub(X, rider)
+    assertEquals(sent, [{ sub, q: `id=${X}&${rider}`, shadow: true }])
+    landSub({
+      sub,
+      changes: [],
+      replace: true,
+      shadow: true,
+      edges: [{ parent: X, type: 'referenced', child: Y }],
+    })
+    assertEquals(references(X), { out: [{ eid: Y }], in: [] })
+    assertEquals(references(Y), { out: [], in: [{ eid: X }] })
+    again()
+    assertEquals(sent.length, 1)
+    off()
+    assertEquals(sent.at(-1), { unsub: sub })
+    assertEquals(references(X), { out: [], in: [] })
+  } finally {
+    useRoute(restore)
   }
 })
 

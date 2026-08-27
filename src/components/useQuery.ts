@@ -13,11 +13,14 @@ import { useEffect, useMemo } from 'preact/hooks'
 import {
   type Backlink,
   dropQuery,
+  edgeSub,
   ent,
   findEid,
   holdQuery,
   linksVia,
   queryEids,
+  type References,
+  references,
 } from '../live.ts'
 import { parseQuery, resolveRefs } from '../query.ts'
 import type { Ent } from '../types.ts'
@@ -55,3 +58,13 @@ export let useCommentsOn = (target: string): Ent[] =>
 // (linksVia), so a retarget wakes the face without a membership change.
 export let useBacklinks = (target: string): Backlink[] =>
   useQueryEids(`.refs=${target}`).flatMap((from) => linksVia(from, target))
+
+let REFERENCED = '.edges[referenced,entry.session]!'
+
+// Citations are a typed edge rider over one addressed entity. The server
+// projects entry endpoints to their Session through the indexed entry.session
+// column; this hook only owns the subscription and reads its scoped edge set.
+export let useReferences = (eid: string): References => {
+  useEffect(() => edgeSub(eid, REFERENCED), [eid])
+  return references(eid)
+}

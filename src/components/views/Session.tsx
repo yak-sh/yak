@@ -19,7 +19,6 @@ import {
   findEid,
   mutate,
   observation,
-  references,
   repoUrl,
   uuid,
 } from '../../live.ts'
@@ -33,6 +32,7 @@ import { Composer, Note } from '../Comments.tsx'
 import { Entity, resolve } from '../Entity.tsx'
 import { Markdown } from '../Markdown.tsx'
 import { mdMentions, type Mention } from '../../md.ts'
+import { useReferences } from '../useQuery.ts'
 import { UrlVal } from '../editors.tsx'
 import { Ansi } from '../Ansi.tsx'
 import { SessionDot, useSessionStanding } from '../session_status.tsx'
@@ -639,7 +639,7 @@ export let Session = ({ e }: { e: Ent }) => {
       x.row?.kind == 'say' && x.row.role == 'user' ? [x.row.text] : []
     ),
   )
-  let cited = new Set(references(e.eid).out.map((r) => r.eid))
+  let cited = new Set(useReferences(e.eid).out.map((r) => r.eid))
   let cs = commentsOn(e.eid).filter((c) => {
     let body = c.doc?.body ?? ''
     return !inputs.has(body) && !inputs.has(`${idOf(c)}: ${body}`)

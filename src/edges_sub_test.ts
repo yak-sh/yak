@@ -272,6 +272,86 @@ slow(
   },
 )
 
+slow(
+  'a typed rider projects entry endpoints to their session without loading entries',
+  alone,
+  async () => {
+    let target = uid(), session = uid(), one = uid(), two = uid()
+    assertEquals(await post(task(target, 'citation target')), 200)
+    assertEquals(
+      await post([
+        { eid: session, name: 'session', comp: { id: `s-${session}` } },
+        { eid: one, name: 'entry', comp: { session, seq: 1 } },
+        { eid: two, name: 'entry', comp: { session, seq: 2 } },
+        {
+          eid: one,
+          name: 'dependency',
+          comp: { type: 'referenced', child: target },
+        },
+        {
+          eid: two,
+          name: 'dependency',
+          comp: { type: 'referenced', child: target },
+        },
+      ]),
+      200,
+    )
+
+    let rider = '.edges[referenced,entry.session]!&.edges.peers=doc.title'
+    let { sock, next } = await dial(
+      `citations:${session}`,
+      `id=${session}&${rider}`,
+    )
+    let first = await next()
+    assertEquals(first.edges, [
+      { parent: session, type: 'referenced', child: target },
+    ])
+    assertEquals(peerOf(first, target).doc?.title, 'citation target')
+    assertEquals(
+      (first.changes ?? []).some((c) => c.eid == one || c.eid == two),
+      false,
+      'the entry partition never rides the result',
+    )
+
+    // Two stored sentences collapse to one projected sentence. Removing one
+    // keeps it; the target edit forces a frame so the empty edge diff is proven.
+    assertEquals(
+      await post([
+        {
+          eid: one,
+          name: 'dependency',
+          comp: { type: 'referenced', child: target, gone: true },
+        },
+        { eid: target, name: 'doc', comp: { title: 'still cited' } },
+      ]),
+      200,
+    )
+    let kept = await next()
+    assertEquals(kept.edges ?? [], [])
+    assertEquals(kept.unedges ?? [], [])
+    assertEquals(peerOf(kept, target).doc?.title, 'still cited')
+
+    assertEquals(
+      await post([
+        {
+          eid: two,
+          name: 'dependency',
+          comp: { type: 'referenced', child: target, gone: true },
+        },
+      ]),
+      200,
+    )
+    let cut = await next()
+    assertEquals(cut.unedges, [
+      { parent: session, type: 'referenced', child: target },
+    ])
+    assertEquals(cut.unpeers, [target])
+
+    sock.close()
+    await new Promise((r) => sock.onclose = r)
+  },
+)
+
 slow('a sub that never asks is delivered no edges at all', alone, async () => {
   let a = uid(), b = uid()
   assertEquals(await post(task(a, 'plain parent')), 200)

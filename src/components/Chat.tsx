@@ -9,7 +9,6 @@ import {
   ent,
   mutate,
   myActor,
-  references,
   routeSub,
   uuid,
 } from '../live.ts'
@@ -20,6 +19,7 @@ import { ComposerInput } from './Comments.tsx'
 import { Entity } from './Entity.tsx'
 import { ListFrame } from './ListFrame.tsx'
 import { liveBlocked, load, providers } from './Run.tsx'
+import { useReferences } from './useQuery.ts'
 
 let Frame = block('aside', 'Chat', {
   References: 'section',
@@ -159,7 +159,7 @@ export let Starter = (
 
 export let Chat = ({ e }: { e: Ent }) => {
   let actor = myActor()
-  let cited = references(e.eid)
+  let cited = useReferences(e.eid)
   let selected = actor ? chatFor(actor, e.eid) : undefined
   let [fresh, setFresh] = useState(false)
   return (

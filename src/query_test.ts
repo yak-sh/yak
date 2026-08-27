@@ -567,6 +567,45 @@ Deno.test('.edges parses to an EDGES rider, bare and with peers', () => {
   assertThrows(() => preds('.edges=x'), Error)
 })
 
+Deno.test('.edges selects a stored type and projects endpoints through a ref', () => {
+  assertEquals(preds('.edges[referenced,entry.session]!'), [
+    {
+      comp: '',
+      prop: '',
+      op: EDGES,
+      value: '',
+      peers: [],
+      edge: {
+        type: 'referenced',
+        via: { comp: 'entry', prop: 'session' },
+      },
+    },
+  ])
+  assertEquals(
+    edgeRider(
+      parseQuery(
+        '.task!&.edges[referenced,entry.session]!&.edges.peers=doc.title',
+      ),
+    ),
+    {
+      peers: [{ comp: 'doc', prop: 'title' }],
+      select: {
+        type: 'referenced',
+        via: { comp: 'entry', prop: 'session' },
+      },
+    },
+  )
+  assertThrows(() => preds('.edges[alien]!'), Error)
+  assertThrows(() => preds('.edges[referenced,doc.title]!'), Error)
+  assertThrows(
+    () =>
+      edgeRider(
+        parseQuery('.edges[reads]!&.edges[referenced,entry.session]!'),
+      ),
+    Error,
+  )
+})
+
 Deno.test('the EDGES rider is a delivery, never a filter', () => {
   // The other preds still decide membership; the rider passes every row it is
   // handed, so adding `.edges!` to a live board cannot move what the board holds.

@@ -36,7 +36,8 @@ use yak_kernel::change::Change;
 use yak_kernel::feed::{cursor_of, data_version, journal_since, row_changes};
 use yak_kernel::query::{self, Ctx, Field, Hop, Pred};
 use yak_kernel::subquery::{
-    eval_agg, eval_sub, moving, parse_query_line, reach_sets, Parsed, SUB_CAP,
+    eval_agg, eval_sub, moving, parse_query_line, reach_sets, EdgeRider, EdgeSelector, Parsed,
+    SUB_CAP,
 };
 use yak_kernel::vocab::{vocab, PropType};
 use yak_kernel::{Dep, Store};
@@ -67,6 +68,7 @@ struct Sub {
 // builds), remembered so a later write to one re-projects.
 struct Rider {
     peers: Vec<Hop>,
+    select: Option<EdgeSelector>,
     keys: Vec<(String, Dep)>,
     held: Vec<String>,
 }
@@ -234,8 +236,8 @@ impl Subserve {
         // its first frame carries THIS query's incident edges and their far-side
         // projection, and seeds the state every later delta speaks from.
         let (edges_state, ride_frame) = match parsed.edges.clone() {
-            Some(peers) => {
-                let (rider, deps, peer_changes) = rider_open(store, peers, &members);
+            Some(edge) => {
+                let (rider, deps, peer_changes) = rider_open(store, edge, &members);
                 (Some(rider), Some((deps, peer_changes)))
             }
             None => (None, None),
@@ -656,15 +658,28 @@ fn change_of(eid: &str, name: &str, comp: Value) -> Value {
 // from. Returns the standing Rider and the frame's `{edges, peers}`.
 fn rider_open(
     store: &Store,
-    peers: Vec<Hop>,
+    edge: EdgeRider,
     members: &HashSet<String>,
 ) -> (Rider, Vec<Dep>, Vec<Value>) {
+    let EdgeRider { peers, select } = edge;
     let member_vec: Vec<String> = members.iter().cloned().collect();
-    let deps = if members.is_empty() { vec![] } else { eager_deps(store, &member_vec) };
+    let deps =
+        if members.is_empty() { vec![] } else { rider_deps(store, &member_vec, select.as_ref()) };
     let held = outside(&deps, members);
     let keys: Vec<(String, Dep)> = deps.iter().map(|d| (dep_key(d), d.clone())).collect();
     let peer_changes = peer_payload(store, &peers, &held);
-    (Rider { peers, keys, held }, deps, peer_changes)
+    (Rider { peers, select, keys, held }, deps, peer_changes)
+}
+
+fn rider_deps(store: &Store, members: &[String], select: Option<&EdgeSelector>) -> Vec<Dep> {
+    let Some(select) = select else { return eager_deps(store, members) };
+    let Some(via) = &select.via else {
+        return eager_deps(store, members)
+            .into_iter()
+            .filter(|d| d.type_ == select.type_)
+            .collect();
+    };
+    store.projected_deps(members, &select.type_, &via.comp, &via.prop)
 }
 
 // What one committed batch does to a rider (subserve.ts riderDelta) — bounded by
@@ -695,6 +710,67 @@ fn lose(keys: &mut Vec<(String, Dep)>, cut: &mut Vec<Dep>, k: &str) {
     }
 }
 
+// Projected sentences can have several stored proofs (two entries in one
+// Session citing the same target). Re-answer the bounded indexed selector when
+// one of its inputs moves, then diff the standing projected set.
+fn selected_rider_delta(
+    store: &Store,
+    r: &mut Rider,
+    members: &HashSet<String>,
+    joined: &[String],
+    moved: bool,
+    batch: &[Change],
+    touched: &[String],
+) -> RiderDelta {
+    let select = r.select.as_ref().unwrap();
+    let dirty = !joined.is_empty()
+        || moved
+        || batch.iter().any(|c| {
+            select.via.as_ref().is_some_and(|v| c.name == v.comp)
+                || (c.name == "dependency" && comp_type(c).as_deref() == Some(&select.type_))
+                || (c.name == "entity" && c.comp.is_none())
+        });
+    let mut add = vec![];
+    let mut cut = vec![];
+    if dirty {
+        let member_vec: Vec<String> = members.iter().cloned().collect();
+        let deps =
+            if members.is_empty() { vec![] } else { rider_deps(store, &member_vec, Some(select)) };
+        let next: Vec<(String, Dep)> = deps.iter().map(|d| (dep_key(d), d.clone())).collect();
+        add = deps
+            .iter()
+            .filter(|d| !r.keys.iter().any(|(k, _)| k == &dep_key(d)))
+            .cloned()
+            .collect();
+        cut = r
+            .keys
+            .iter()
+            .filter(|(k, _)| !next.iter().any(|(n, _)| n == k))
+            .map(|(_, d)| d.clone())
+            .collect();
+        r.keys = next;
+    }
+    let mut peers = vec![];
+    let mut unpeers = vec![];
+    let mut fresh = vec![];
+    if !add.is_empty() || !cut.is_empty() {
+        let edges: Vec<Dep> = r.keys.iter().map(|(_, d)| d.clone()).collect();
+        let want = outside(&edges, members);
+        let want_set: HashSet<&String> = want.iter().collect();
+        let held_set: HashSet<&String> = r.held.iter().collect();
+        fresh = want.iter().filter(|e| !held_set.contains(*e)).cloned().collect();
+        unpeers = r.held.iter().filter(|e| !want_set.contains(*e)).cloned().collect();
+        r.held = want;
+        peers = peer_payload(store, &r.peers, &fresh);
+    }
+    let again: Vec<String> =
+        touched.iter().filter(|e| r.held.contains(*e) && !fresh.contains(*e)).cloned().collect();
+    if !again.is_empty() {
+        peers.extend(peer_payload(store, &r.peers, &again));
+    }
+    RiderDelta { edges: add, unedges: cut, peers, unpeers }
+}
+
 // Eight distinct graph inputs to compute one edge delta; bundling them into a
 // struct would only relocate the arity, not reduce it.
 #[allow(clippy::too_many_arguments)]
@@ -708,6 +784,9 @@ fn rider_delta(
     batch: &[Change],
     touched: &[String],
 ) -> RiderDelta {
+    if r.select.is_some() {
+        return selected_rider_delta(store, r, members, joined, moved, batch, touched);
+    }
     let mut add: Vec<Dep> = vec![];
     let mut cut: Vec<Dep> = vec![];
     // A member that JOINED brings its whole incident set (one keyed read).

@@ -63,7 +63,7 @@ import { registerManagedSource } from './source_managed.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { landBlob, serveBlob } from './blob.ts'
 import { filed } from './page.ts'
-import { historicalReferenced, references } from './referenced.ts'
+import { historicalReferenced } from './referenced.ts'
 import { fleetRaw, mailIdOf } from './inbound.ts'
 import { setEmbedConfig, setModel, similarTo } from './embed.ts'
 import { type IO, mcpServer } from './mcp.ts'
@@ -1281,13 +1281,6 @@ let handle = async (req: Request) => {
     } catch (e) {
       return new Response(String((e as Error).message ?? e), { status: 400 })
     }
-  }
-  if (path == '/references') {
-    let eid = url.searchParams.get('eid') ?? ''
-    if (!eid) return new Response('eid required', { status: 400 })
-    return Response.json(references(db, eid), {
-      headers: { 'cache-control': 'no-store' },
-    })
   }
   if (path == '/mcp' && req.method == 'POST') return mcp(req)
   if (path == '/error' && req.method == 'POST') return clientError(req)

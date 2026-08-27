@@ -3,14 +3,13 @@
 // guard, per-entry idempotence), and the effect's skips (recall floaters,
 // empty content). Module db like recall_test — referencedEntry closes over it.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply } = await import('./db.ts')
+let { apply, selectedDeps } = await import('./db.ts')
 let { db } = await import('./live_db.ts')
 let {
   cites,
   historicalReferenced,
   referencedChanges,
   referencedEntry,
-  references,
 } = await import('./referenced.ts')
 let { assertEquals } = await import('@std/assert')
 import type { Change } from './types.ts'
@@ -106,14 +105,22 @@ Deno.test('referencedChanges: a cited entity becomes an edge, once', () => {
   assertEquals(referencedChanges(db, e, `working ${t.id} now`), [])
 })
 
-Deno.test('references projects cited entry edges to their session both ways', () => {
+Deno.test('selectedDeps projects entry endpoints to their session and dedupes', () => {
   let target = task('association target')
   let session = sess()
-  let line = entry(session, target.id)
-  apply(db, referencedChanges(db, line, target.id))
-
-  assertEquals(references(db, session).out.map((r) => r.eid), [target.eid])
-  assertEquals(references(db, target.eid).in.map((r) => r.eid), [session])
+  let first = entry(session, target.id)
+  let second = entry(session, target.id)
+  apply(db, [
+    ...referencedChanges(db, first, target.id),
+    ...referencedChanges(db, second, target.id),
+  ])
+  let select = {
+    type: 'referenced',
+    via: { comp: 'entry', prop: 'session' },
+  }
+  let sentence = { parent: session, type: 'referenced', child: target.eid }
+  assertEquals(selectedDeps(db, [session], select), [sentence])
+  assertEquals(selectedDeps(db, [target.eid], select), [sentence])
 })
 
 Deno.test('referencedChanges: what does not resolve is skipped', () => {

@@ -71,6 +71,12 @@ import { type Span, span } from './time.ts'
 // leaf tested against op/value.
 export type Hop = { comp: string; prop: string }
 
+// A stored-edge selector carried by the EDGES rider. `type` narrows dependency
+// sentences; `via` replaces an endpoint wearing that component with the entity
+// its reference column names. The projection is what lets an entry-owned edge
+// read as session-owned without loading the entry partition.
+export type EdgeSelector = { type: string; via?: Hop }
+
 export type Pred = {
   comp: string
   prop: string
@@ -119,6 +125,7 @@ export type Pred = {
   // requires-tree renders (id, status) without subscribing every blocker row.
   // Empty for a bare `.edges!`. op is EDGES; edgeRider() reads the directive.
   peers?: Hop[]
+  edge?: EdgeSelector
   // A bounded TRAVERSAL rather than a column read: `.reaches[requires,<=3]=T-42`
   // selects the entities that reach `value` through at most `depth` edges of one
   // type. op is REACHES. The cap is part of the grammar — an unbounded closure
@@ -467,17 +474,18 @@ export let PROJECT = 'project'
 export let fieldsOf = (preds: Pred[]): Field[] | undefined =>
   preds.find((p) => p.op == PROJECT)?.fields
 
-// The EDGES RIDER — `.edges!`, optionally `.edges.peers=status,title`. It rides
-// the pred list like AGG/PROJECT (matchQuery passes it through, so the OTHER
-// preds still select the rows), and asks a subscription to deliver the dep
-// triples INCIDENT to its result set — the scoped replacement for shipping every
-// edge in the graph at boot. `peers` names the far endpoint's columns to project
-// beside them, so a requires-tree renders (id, status) without a sub per blocker.
+// The EDGES RIDER — `.edges!`, optionally `.edges.peers=status,title`. A typed
+// form (`.edges[referenced,entry.session]!`) selects stored sentences after
+// projecting endpoints through one reference column. It rides the pred list
+// like AGG/PROJECT and delivers triples INCIDENT to its result set — the scoped
+// replacement for shipping every edge at boot. `peers` names far-end columns.
 export let EDGES = 'edges'
 
 // The rider a query carries, or undefined for a plain membership query. Several
 // `.edges` tokens union their peer columns — one rider, one delivery.
-export let edgeRider = (preds: Pred[]): { peers: Hop[] } | undefined => {
+export type EdgeRider = { peers: Hop[]; select?: EdgeSelector }
+
+export let edgeRider = (preds: Pred[]): EdgeRider | undefined => {
   let asked = preds.filter((p) => p.op == EDGES)
   if (!asked.length) return undefined
   let seen = new Set<string>()
@@ -490,7 +498,11 @@ export let edgeRider = (preds: Pred[]): { peers: Hop[] } | undefined => {
       peers.push(h)
     }
   }
-  return { peers }
+  let selected = asked.flatMap((p) => p.edge ? [p.edge] : [])
+  let shapes = new Set(selected.map((s) => JSON.stringify(s)))
+  if (shapes.size > 1) throw new Error('one edge rider cannot mix selectors')
+  let select = selected[0]
+  return { peers, ...(select ? { select } : {}) }
 }
 
 // A BOUNDED TRAVERSAL pred — `.reaches[requires,<=3]=T-42` — is a real filter,
@@ -790,6 +802,8 @@ let revHop = (token: string): Pred | null => {
 // so an unbounded closure has no spelling to be refused later. Matched before
 // the dot-param pattern, which stops at the '['.
 let REACH = /^\.reaches\[([A-Za-z_]+)\s*,\s*<=\s*(\d+)\]=(.*)$/s
+let EDGE_SELECT =
+  /^\.edges\[([A-Za-z_]+)(?:\s*,\s*([A-Za-z_-]+(?:\.[A-Za-z_-]+)*))?\]!$/s
 
 export let preds = (token: string): Pred[] | null => {
   // Any `.reaches[…` spelling answers HERE, right or wrong: a malformed one that
@@ -819,6 +833,38 @@ export let preds = (token: string): Pred[] | null => {
       op: REACHES,
       value,
       reach: { type, depth: Number(depth) },
+    }]
+  }
+  // `.edges[referenced,entry.session]!` — select one STORED dependency type
+  // and optionally project either endpoint through one `{eid}` column. The
+  // member set is tested after projection, so a Session selects the referenced
+  // edges owned by its entries without selecting or enumerating those entries.
+  if (token.startsWith('.edges[') && !owned('edges')) {
+    let selected = token.match(EDGE_SELECT)
+    let [, type, raw] = selected ?? []
+    if (!selected || !(edges as readonly string[]).includes(type)) {
+      throw new Error(
+        `.edges selects one edge type (${edges.join(', ')}) and an optional ` +
+          'endpoint reference: .edges[referenced,entry.session]!',
+      )
+    }
+    let via: Hop | undefined
+    if (raw) {
+      let groups = groupsOf(raw.split('.'))
+      via = groups[groups.length - 1]
+      if (groups.length > 1 || !via.prop || !isRef(via.comp, via.prop)) {
+        throw new Error(
+          `.edges endpoint projection must be one {eid} column: ${raw}`,
+        )
+      }
+    }
+    return [{
+      comp: '',
+      prop: '',
+      op: EDGES,
+      value: '',
+      peers: [],
+      edge: { type, ...(via ? { via } : {}) },
     }]
   }
   let r = revHop(token)

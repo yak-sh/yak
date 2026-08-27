@@ -432,12 +432,11 @@ fn post(base: &str, path: &str) -> (u16, String) {
     }
 }
 
-// App-plane rung 2 (D-22920): the reader surfaces `/references`, `/delta` and
-// `/config/settings`, each byte-identical to the Deno server over one shared
-// copy. (/search and /inbox — the two kernel PoC completions — land in
-// app_plane_search_inbox_parity below, T-22946.) Body + status via same(); the
-// header-bearing routes via same_header(); the /delta success body — where the
-// held vocab legitimately differs — diffed directly per the note above.
+// App-plane rung 2 (D-22920): the reader surfaces `/delta` and
+// `/config/settings`, byte-identical to the Deno server over one shared copy.
+// Body + status via same(); header-bearing routes via same_header(); the /delta
+// success body — where the held vocab legitimately differs — is diffed directly
+// per the note above. Graph-shaped citations now ride generic edge subscriptions.
 #[test]
 fn app_plane_rung2_parity() {
     if write_mode() {
@@ -449,20 +448,6 @@ fn app_plane_rung2_parity() {
         return;
     };
     let _serial = serial();
-
-    // --- /references: the referenced-edge neighborhood, seeded from live ids.
-    // Empty out/in are byte-parity too; a project reliably carries incoming
-    // refs (persona reads, page captures), so at least one case is non-empty.
-    same(&ts, &br, "/references"); // 400 "eid required"
-    for kind in ["project", "task", "memory", "design", "board", "session"] {
-        if let Some(eid) = an_eid(&ts, kind) {
-            same(&ts, &br, &format!("/references?eid={eid}"));
-        }
-    }
-    // no-store is the route's contract (a live neighborhood a client must not cache).
-    if let Some(eid) = an_eid(&ts, "project") {
-        same_header(&ts, &br, &format!("/references?eid={eid}"), "cache-control");
-    }
 
     // --- /config/settings: the non-secret rows (plainKeys only), same bytes,
     // same headers, and the 405 on a non-GET (Deno's method guard).
@@ -966,6 +951,7 @@ fn ws_sub_parity() {
         ("e-board", ".kind=board&.edges!"),
         ("e-project", ".kind=project&.edges!"),
         ("e-peers", ".kind=board&.edges.peers=title"),
+        ("e-citations", ".kind=session&.limit=5&.edges[referenced,entry.session]!"),
     ];
     for (name, q) in cases {
         same_sub(&mut ts_ws, &mut br_ws, name, q);

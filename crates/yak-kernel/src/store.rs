@@ -908,6 +908,68 @@ impl Store {
         })
     }
 
+    // Stored edges incident to a member set AFTER projecting endpoints through
+    // one `{eid}` column (db.ts selectedDeps). The projection table's reverse
+    // index finds raw endpoints owned by members; dependency's parent PK and
+    // child index find the two edge halves. The lazy partition is never read as
+    // a result set — only its indexed ownership column is sought.
+    pub fn projected_deps(&self, eids: &[String], type_: &str, comp: &str, prop: &str) -> Vec<Dep> {
+        if eids.is_empty() || !self.has_table(comp) {
+            return vec![];
+        }
+        if self
+            .conn
+            .execute_batch(
+                "create temp table if not exists hit (eid text primary key); \
+                 delete from hit;",
+            )
+            .is_err()
+        {
+            return vec![];
+        }
+        {
+            let Ok(mut put) = self.conn.prepare("insert or ignore into hit (eid) values (?1)")
+            else {
+                return vec![];
+            };
+            for e in eids {
+                let _ = put.execute([e]);
+            }
+        }
+        let table = q(comp);
+        let col = q(prop);
+        let sql = format!(
+            "with endpoint(id) as ( \
+               select e.id from entity e \
+                where e.eid in (select eid from hit) \
+                  and not exists (select 1 from {table} v where v.entity = e.id) \
+               union \
+               select v.entity from {table} v \
+                where v.{col} in ( \
+                  select e.id from entity e where e.eid in (select eid from hit) \
+                ) \
+             ), picked(parent, type, child, ord) as ( \
+               select d.parent, d.type, d.child, d.ord from dependency d \
+                where d.parent in (select id from endpoint) and d.type = ?1 \
+               union \
+               select d.parent, d.type, d.child, d.ord from dependency d \
+                where d.child in (select id from endpoint) and d.type = ?1 \
+             ) \
+             select distinct coalesce(pp.eid, p.eid), d.type, coalesce(pc.eid, c.eid) \
+               from picked d \
+               join entity p on p.id = d.parent \
+               join entity c on c.id = d.child \
+               left join {table} vp on vp.entity = d.parent \
+               left join entity pp on pp.id = vp.{col} \
+               left join {table} vc on vc.entity = d.child \
+               left join entity pc on pc.id = vc.{col} \
+              order by 1, 2, d.ord, 3"
+        );
+        collect(&self.conn, &sql, [type_], |r| {
+            Ok(Dep { parent: r.get(0)?, type_: r.get(1)?, child: r.get(2)? })
+        })
+    }
+
     // The (persona, home) pairs whose persona OR home is in a SET — homeReads'
     // input for the edges rider, persona table order (db.ts homes with a set
     // WHERE). `home` is None for a fleet-shared persona.

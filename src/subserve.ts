@@ -12,6 +12,7 @@ import { kindOrder } from './types.ts'
 import {
   aggOf,
   edgeRider,
+  type EdgeSelector,
   type Field,
   fieldsOf,
   type Hop,
@@ -33,6 +34,7 @@ import {
   refValuesOf,
   rootChanges,
   rowsOf,
+  selectedDeps,
   textMatches,
 } from './db.ts'
 import { evalAgg, evalSub, walker, workingSet } from './graph_query.ts'
@@ -120,7 +122,12 @@ type Sub = {
   // one of them re-projects instead of going unnoticed.
   edges?: Rider
 }
-type Rider = { peers: Hop[]; keys: Map<string, Dep>; held: Set<string> }
+type Rider = {
+  peers: Hop[]
+  select?: EdgeSelector
+  keys: Map<string, Dep>
+  held: Set<string>
+}
 
 // What a subscription frame has to CARRY. A live subscription owns its
 // client's view of these rows, so it ships the components. A SHADOW one does
@@ -210,11 +217,21 @@ let peerPayload = (
 
 // Open a rider over a fresh member set: its incident edges, the far endpoints
 // they name, and the state every later delta speaks from.
-let riderOpen = (db: DatabaseSync, peers: Hop[], members: Set<string>) => {
-  let deps = members.size ? eagerDeps(db, [...members]) : []
+let riderOpen = (
+  db: DatabaseSync,
+  peers: Hop[],
+  members: Set<string>,
+  select?: EdgeSelector,
+) => {
+  let deps = members.size
+    ? select
+      ? selectedDeps(db, [...members], select)
+      : eagerDeps(db, [...members])
+    : []
   let held = outside(deps, members)
   let state: Rider = {
     peers,
+    ...(select ? { select } : {}),
     keys: new Map(deps.map((d) => [depKey(d), d])),
     held,
   }
@@ -222,6 +239,50 @@ let riderOpen = (db: DatabaseSync, peers: Hop[], members: Set<string>) => {
     state,
     frame: { edges: deps, peers: peerPayload(db, peers, [...held]) },
   }
+}
+
+// Several stored sentences may collapse to one projected sentence (many
+// entries in one Session can cite the same target). Re-answer the bounded,
+// indexed selector when its inputs move, then diff against the standing map:
+// removing one stored edge cannot withdraw a projection another still proves.
+let selectedRiderDelta = (
+  db: DatabaseSync,
+  r: Rider,
+  members: Set<string>,
+  joined: string[],
+  moved: boolean,
+  batch: Change[],
+  touched: string[],
+) => {
+  let select = r.select!
+  let dirty = !!joined.length || moved ||
+    batch.some((c) =>
+      c.name == select.via?.comp ||
+      (c.name == 'dependency' && c.comp?.type == select.type) ||
+      (c.name == 'entity' && c.comp == null)
+    )
+  let add: Dep[] = []
+  let cut: Dep[] = []
+  if (dirty) {
+    let deps = members.size ? selectedDeps(db, [...members], select) : []
+    let next = new Map(deps.map((d) => [depKey(d), d]))
+    add = deps.filter((d) => !r.keys.has(depKey(d)))
+    cut = [...r.keys].filter(([k]) => !next.has(k)).map(([, d]) => d)
+    r.keys = next
+  }
+  let peers: Change[] = []
+  let unpeers: string[] = []
+  let fresh = new Set<string>()
+  if (add.length || cut.length) {
+    let want = outside(r.keys.values(), members)
+    fresh = new Set([...want].filter((e) => !r.held.has(e)))
+    unpeers = [...r.held].filter((e) => !want.has(e))
+    r.held = want
+    peers = peerPayload(db, r.peers, [...fresh])
+  }
+  let again = touched.filter((e) => r.held.has(e) && !fresh.has(e))
+  if (again.length) peers = [...peers, ...peerPayload(db, r.peers, again)]
+  return { edges: add, unedges: cut, peers, unpeers }
 }
 
 // Did a delta actually MOVE anything? A rider that says nothing must not put a
@@ -248,6 +309,9 @@ let riderDelta = (
   batch: Change[],
   touched: string[],
 ) => {
+  if (r.select) {
+    return selectedRiderDelta(db, r, members, joined, moved, batch, touched)
+  }
   let add: Dep[] = []
   let cut: Dep[] = []
   let take = (d: Dep) => {
@@ -457,7 +521,7 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
       // this query's edges and nothing else's — the scoped answer that replaces
       // the whole-graph dump a joining client used to be handed (T-22371).
       let ask = edgeRider(rides)
-      let ride = ask ? riderOpen(db, ask.peers, members) : undefined
+      let ride = ask ? riderOpen(db, ask.peers, members, ask.select) : undefined
       map.set(f.sub, {
         preds,
         members,
