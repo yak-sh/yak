@@ -772,15 +772,26 @@ slow(
         `.doc.title~=${a.eid.slice(0, 8)}`,
         // the spine, which is the from table rather than a joined one
         `.entity.num=${await num(a.eid)}`,
-        // and the shapes that must FALL BACK: a ranking, and a filter that
-        // narrows nothing — neither may answer differently for it
+        // the shape that must FALL BACK: a ranking narrows nothing, so it
+        // selects EVERY entity and may not answer differently for it
         '.order=hot',
-        '',
       ]
     ) {
       let [fast, slow] = await bothWays(q)
       assertEquals(fast, slow, `paths disagreed on: ${q || '(empty)'}`)
     }
+    // The empty query is the one shape bothWays cannot probe. It selects
+    // NOTHING (the never-pred, 4b42e1c) — the opposite of a ranking, which
+    // selects everything — and its emptiness is a property of the whole
+    // STRING, not a pred in it. Appending the LEVER doesn't force that same
+    // question down the snapshot path; it makes a DIFFERENT, non-empty query
+    // (`.created.at!=…` alone, which matches everything). So pin the ruling
+    // directly: the index door — the only door the empty query ever reaches,
+    // since evalGraph answers it whole and never falls back — returns the
+    // empty set.
+    let empty = await fetch(`http://${U}/query?`)
+    if (!empty.ok) throw new Error(`empty query refused: ${await empty.text()}`)
+    assertEquals(await empty.json(), [], 'empty query selects nothing')
   },
 )
 
