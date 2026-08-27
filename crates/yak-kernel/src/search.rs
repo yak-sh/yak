@@ -4,6 +4,7 @@
 // hits to the tail. The PoC accepts TEXT terms only — a dot-filter mixed
 // into the line is refused, not half-applied.
 
+use crate::candidates;
 pub use crate::model::Hit;
 use crate::profiling;
 use crate::query;
@@ -11,9 +12,62 @@ use crate::store::Store;
 use crate::vocab::vocab;
 use rusqlite::OptionalExtension;
 
-// The search line's tokens, double-quote aware: a quoted phrase stays one
-// term (query.ts keeps "two words" a single text pred).
-fn tokens(q: &str) -> Vec<String> {
+// kindPreds (query.ts), in the kernel's op convention: the derived kind K is K
+// PRESENT and every EARLIER kindOrder comp ABSENT (op "" is presence here, op
+// "=" absence). db.ts search compiles this into the filters-only SQL so the cap
+// lands AFTER the kind screen; the kernel must do the same, or a whole-table
+// scan feeds a Rust kind-check the SQL cap could not bound.
+fn kind_preds(kind: &str) -> Vec<query::Pred> {
+    let order = &vocab().kind_order;
+    let mut out = vec![query::Pred { comp: kind.into(), ..Default::default() }];
+    if let Some(i) = order.iter().position(|k| k == kind) {
+        for earlier in &order[..i] {
+            out.push(query::Pred { comp: earlier.clone(), op: "=".into(), ..Default::default() });
+        }
+    }
+    out
+}
+
+// A search line is board grammar (query.ts parseQuery): `&` separates SEGMENTS
+// (quote-aware, `/(?:"[^"]*"|[^&])+/g`), and a segment that starts with `.` and
+// carries NO interior whitespace-then-dot is ONE predicate whose value may hold
+// spaces (`.title~=two words`) — so `.kind=task port` is a single `.kind=` pred
+// (an invalid kind, a 400), NOT a kind filter plus a text term. Only a segment
+// with an interior `\s.` (or no leading dot) is whitespace-tokenized.
+fn segments(q: &str) -> Vec<String> {
+    let mut out = vec![];
+    let mut cur = String::new();
+    let mut quoted = false;
+    for c in q.chars() {
+        match c {
+            '"' => {
+                quoted = !quoted;
+                cur.push(c);
+            }
+            '&' if !quoted => {
+                if !cur.is_empty() {
+                    out.push(std::mem::take(&mut cur));
+                }
+            }
+            c => cur.push(c),
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+// `/\s\./` — a whitespace immediately followed by a dot, the tell that a segment
+// carries more than one token and must be whitespace-split.
+fn has_ws_dot(s: &str) -> bool {
+    let cs: Vec<char> = s.chars().collect();
+    (1..cs.len()).any(|i| cs[i] == '.' && cs[i - 1].is_whitespace())
+}
+
+// Whitespace tokens within a segment, double-quote aware: a quoted phrase stays
+// one term (query.ts keeps "two words" a single text pred).
+fn ws_tokens(q: &str) -> Vec<String> {
     let mut out = vec![];
     let mut cur = String::new();
     let mut quoted = false;
@@ -34,6 +88,22 @@ fn tokens(q: &str) -> Vec<String> {
     out
 }
 
+// A token → a filter, a kind, or None when it is an opless dot-WORD (`.env`) —
+// which query.ts's preds() returns null for, and the caller reads as text. A
+// dot-token that DOES carry an operator but is invalid (`.kind=task port`, a bad
+// enum) still throws, the typist's 400.
+fn try_pred(s: &str) -> Result<Option<query::Dot>, String> {
+    if !s.starts_with('.') || s.len() < 2 {
+        return Ok(None);
+    }
+    // The operator set query.ts preds() recognizes; without one, a dot-word is a
+    // text term, not a filter (read.rs is_text_term, the /query door's twin).
+    if !s[1..].contains(['=', '!', '<', '>', '~']) {
+        return Ok(None);
+    }
+    query::dot_token(s).map(Some)
+}
+
 pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> {
     // The search line is board grammar: bare words are TEXT terms, dot
     // tokens are the same filter preds every list door takes, screening
@@ -41,14 +111,29 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
     let mut words: Vec<String> = vec![];
     let mut kind_screen: Option<String> = None;
     let mut filters: Vec<query::Pred> = vec![];
-    for tok in tokens(q) {
-        if tok.starts_with('.') && tok.len() > 1 {
-            match query::dot_token(&tok)? {
-                query::Dot::Kind(k) => kind_screen = Some(k),
-                query::Dot::P(p) => filters.push(p),
+    let mut take = |dot: query::Dot| match dot {
+        query::Dot::Kind(k) => kind_screen = Some(k),
+        query::Dot::P(p) => filters.push(p),
+    };
+    for seg in segments(q) {
+        let seg = seg.trim();
+        if seg.is_empty() {
+            continue;
+        }
+        // The single-pred segment arm: a leading-dot segment with no interior
+        // `\s.` is one predicate (its value may hold spaces), UNLESS it is an
+        // opless dot-word, which falls through to be read as text.
+        if seg.starts_with('.') && !has_ws_dot(seg) {
+            if let Some(dot) = try_pred(seg)? {
+                take(dot);
+                continue;
             }
-        } else {
-            words.push(tok);
+        }
+        for tok in ws_tokens(seg) {
+            match try_pred(&tok)? {
+                Some(dot) => take(dot),
+                None => words.push(tok),
+            }
         }
     }
     query::resolve_values(store, &mut filters);
@@ -74,10 +159,12 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
         )";
     // With filters the cap moves AFTER the screen, so hidden hits cannot
     // displace visible ones; without them the SQL cap stands as before.
-    let base: Vec<(String, String, String, Option<i64>)> = if !match_q.is_empty() {
+    type Base = (String, String, String, String, Option<i64>);
+    let base: Vec<Base> = if !match_q.is_empty() {
         let sql = format!(
             "
       select e.eid, d.title,
+        highlight(doc_fts, 0, char(1), char(2)) as title_hit,
         snippet(doc_fts, 1, char(1), char(2), '…', 10) as snip,
         e.num
       from doc_fts
@@ -93,35 +180,75 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
         );
         let t = profiling::sql(&sql);
         let mut st = store.conn.prepare(&sql).map_err(|e| e.to_string())?;
-        let map =
-            |r: &rusqlite::Row<'_>| -> rusqlite::Result<(String, String, String, Option<i64>)> {
-                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
-            };
+        let map = |r: &rusqlite::Row<'_>| -> rusqlite::Result<Base> {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+        };
         let it = if screened {
             st.query_map(rusqlite::params![match_q], map)
         } else {
             st.query_map(rusqlite::params![match_q, limit as i64], map)
         };
-        let got: Vec<(String, String, String, Option<i64>)> =
-            it.map_err(|e| e.to_string())?.filter_map(|x| x.ok()).collect();
+        let got: Vec<Base> = it.map_err(|e| e.to_string())?.filter_map(|x| x.ok()).collect();
         t.done(got.len());
         got
     } else {
-        // filters with no text: every visible doc, newest touch first
-        let sql = format!(
-            "
-      select e.eid, d.title, d.title as snip, e.num
+        // Filters with no text: the newest-touch window over the docs the
+        // filter selects. db.ts search compiles the filter with where() (EXACT
+        // or null) and, when it compiles, screens `and e.eid in (…)` and caps
+        // `limit ?` IN SQL; the kernel mirrors that so SQLite — not a Rust
+        // post-scan — orders and caps, which both matches Deno's tie-order at
+        // the boundary AND spares the whole-table load (M-17862). The `, e.eid`
+        // tiebreak makes the recency sort a TOTAL order so the tie among rows
+        // sharing one `at` (9 projects on one migration stamp) is deterministic
+        // across the two SQLite builds; db.ts carries the identical tiebreak.
+        // A pred that DECLINES to compile (a time phrase) drops the whole screen
+        // and the cap — exactly Deno's `built ? … : ''` — so the full set is
+        // read and the Rust refine below cuts it, the rare slow path both share.
+        let mut screen_preds = kind_screen.as_deref().map(kind_preds).unwrap_or_default();
+        screen_preds.extend(filters.iter().cloned());
+        let narrowed = candidates::compile(&screen_preds);
+        let (sql, params): (String, Vec<rusqlite::types::Value>) = if narrowed.exact {
+            (
+                format!(
+                    "
+      select e.eid, d.title, d.title as title_hit, '' as snip, e.num
+      from doc d
+      join entity e on e.id = d.entity
+      left join updated up on up.entity = e.id
+      left join created cr on cr.entity = e.id{joins}
+      where 1 {quarantine} and {cond}
+      order by coalesce(up.at, cr.at) desc, e.eid
+      limit ?",
+                    joins = narrowed.joins,
+                    cond = narrowed.cond
+                ),
+                {
+                    let mut p = narrowed.params;
+                    p.push(rusqlite::types::Value::Integer(limit as i64));
+                    p
+                },
+            )
+        } else {
+            (
+                format!(
+                    "
+      select e.eid, d.title, d.title as title_hit, '' as snip, e.num
       from doc d
       join entity e on e.id = d.entity
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id
       where 1 {quarantine}
-      order by coalesce(up.at, cr.at) desc"
-        );
+      order by coalesce(up.at, cr.at) desc, e.eid"
+                ),
+                vec![],
+            )
+        };
         let t = profiling::sql(&sql);
         let mut st = store.conn.prepare(&sql).map_err(|e| e.to_string())?;
-        let got: Vec<(String, String, String, Option<i64>)> = st
-            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+        let got: Vec<Base> = st
+            .query_map(rusqlite::params_from_iter(params), |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+            })
             .map_err(|e| e.to_string())?
             .filter_map(|x| x.ok())
             .collect();
@@ -131,9 +258,9 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
     // Screen ranked hits against the filters over full rows, then cap.
     let rows_cache = crate::store::Rows::new(store);
     let now = query::now_ms();
-    let base: Vec<(String, String, String, Option<i64>)> = if screened {
+    let base: Vec<Base> = if screened {
         base.into_iter()
-            .filter(|(eid, _, _, _)| {
+            .filter(|(eid, ..)| {
                 let Some(row) = rows_cache.get(eid) else { return false };
                 if let Some(k) = &kind_screen {
                     if row.kind != *k {
@@ -147,10 +274,10 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
     } else {
         base
     };
-    let base: Vec<(String, String, String, Option<i64>)> = match &addressed {
+    let base: Vec<Base> = match &addressed {
         Some(direct) => {
             let head = store.conn.query_row(
-                "select e.eid, d.title, '', e.num from doc d \
+                "select e.eid, d.title, d.title as title_hit, '' as snip, e.num from doc d \
                  join entity e on e.id = d.entity where e.eid = ?1 \
                  and not exists \
                    (select 1 from quarantined qq where qq.entity = e.id) \
@@ -158,12 +285,12 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
                    join quarantined q2 on q2.entity = c.target \
                    where c.entity = e.id)",
                 [direct],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
             );
             match head.optional().map_err(|e| e.to_string())? {
                 Some(h) => {
                     let mut out = vec![h];
-                    out.extend(base.into_iter().filter(|(eid, _, _, _)| eid != direct));
+                    out.extend(base.into_iter().filter(|(eid, ..)| eid != direct));
                     out.into_iter().take(limit).collect()
                 }
                 None => base,
@@ -208,7 +335,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
     let v = vocab();
     let mut hits: Vec<Hit> = base
         .into_iter()
-        .map(|(eid, title, snip, num)| {
+        .map(|(eid, title, title_hit, snip, num)| {
             let kind = v.kind_of(&|k| {
                 if !store.has_table(k) {
                     return false;
@@ -259,7 +386,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
                 }
                 None => (eid.clone(), None, title.clone()),
             };
-            Hit { eid, num, kind, title, snip, open, open_id, retired }
+            Hit { eid, num, kind, title, title_hit, snip, open, open_id, retired }
         })
         .collect();
     hits.sort_by_key(|h| h.retired);

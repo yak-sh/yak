@@ -243,6 +243,111 @@ async fn telemetry_route(
     .await
 }
 
+// Number(x ?? 20) for the /search limit (db.ts search default): absent → 20;
+// `?limit=` empty or non-numeric → 0 (JS Number('') is 0, Number('x') is NaN,
+// and a NaN cap yields the empty page). A fractional value truncates toward
+// zero, as ToInteger does for slice() and SQLite does for LIMIT.
+fn js_limit(raw: Option<&str>) -> usize {
+    match raw {
+        None => 20,
+        Some(s) => {
+            let t = s.trim();
+            if t.is_empty() {
+                return 0;
+            }
+            match t.parse::<f64>() {
+                Ok(f) if f.is_finite() && f >= 0.0 => f as usize,
+                _ => 0,
+            }
+        }
+    }
+}
+
+// /search — the FTS + dot-filter search, byte-identical to db.ts search. `q` is
+// the search line, `limit` the cap (js_limit). A malformed filter is the
+// typist's news (400 with the message), exactly as the Deno route's try/catch.
+async fn search_route(
+    State(app): State<App>,
+    axum::extract::RawQuery(raw): axum::extract::RawQuery,
+) -> Response {
+    let raw = raw.unwrap_or_default();
+    let mut q = String::new();
+    let mut limit: Option<String> = None;
+    for seg in raw.split('&').filter(|s| !s.is_empty()) {
+        if let Some(v) = seg.strip_prefix("q=") {
+            q = read::decode(v);
+        } else if let Some(v) = seg.strip_prefix("limit=") {
+            limit = Some(read::decode(v));
+        }
+    }
+    let limit = js_limit(limit.as_deref());
+    let uri = app.uri.clone();
+    let out = tokio::task::spawn_blocking(move || {
+        let store = open(&uri)?;
+        appread::search(&store, &q, limit)
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("panic: {e}")));
+    match out {
+        Ok(v) => json_response(&v),
+        Err(msg) => (axum::http::StatusCode::BAD_REQUEST, msg).into_response(),
+    }
+}
+
+// /inbox — the server-enumerated inbox (client.ts inboxFor + the route's keep).
+// `session`(+`cwd`) or `actor` names the reader (session wins); `mode=all` is
+// --all; repeated `f=` are dot-param filters. 400 when neither id is named or a
+// filter is malformed. Uses RawQuery to gather the REPEATED `f=` (a HashMap
+// collapses them), decoding each the way /query does.
+async fn inbox_route(
+    State(app): State<App>,
+    axum::extract::RawQuery(raw): axum::extract::RawQuery,
+) -> Response {
+    let raw = raw.unwrap_or_default();
+    let mut mode = String::new();
+    let (mut session, mut actor, mut cwd) = (None, None, None);
+    let mut filters: Vec<String> = vec![];
+    // Empty session/actor/cwd read as ABSENT (Deno's `?? undefined` then the
+    // falsy guard), so an empty param never forces the wrong reader arm.
+    let set = |slot: &mut Option<String>, v: &str| {
+        let d = read::decode(v);
+        if !d.is_empty() {
+            *slot = Some(d);
+        }
+    };
+    for seg in raw.split('&').filter(|s| !s.is_empty()) {
+        if let Some(v) = seg.strip_prefix("f=") {
+            filters.push(read::decode(v));
+        } else if let Some(v) = seg.strip_prefix("mode=") {
+            mode = read::decode(v);
+        } else if let Some(v) = seg.strip_prefix("session=") {
+            set(&mut session, v);
+        } else if let Some(v) = seg.strip_prefix("actor=") {
+            set(&mut actor, v);
+        } else if let Some(v) = seg.strip_prefix("cwd=") {
+            set(&mut cwd, v);
+        }
+    }
+    let uri = app.uri.clone();
+    let out = tokio::task::spawn_blocking(move || {
+        let store = open(&uri)?;
+        appread::inbox(
+            &store,
+            session.as_deref(),
+            actor.as_deref(),
+            cwd.as_deref(),
+            &mode,
+            &filters,
+        )
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("panic: {e}")));
+    match out {
+        Ok(v) => json_response(&v),
+        Err(msg) => (axum::http::StatusCode::BAD_REQUEST, msg).into_response(),
+    }
+}
+
 // /references — the `referenced`-edge neighborhood of `eid`: `{out, in}`.
 // An empty `eid` is the typist's news (400 "eid required"), matching the Deno
 // route; a hit carries `cache-control: no-store` (referenced.ts route header).
@@ -904,6 +1009,8 @@ async fn main() {
         .route("/resolve", get(resolve_route))
         .route("/telemetry", get(telemetry_route))
         // app-plane rung 2 (D-22920): reader surfaces
+        .route("/search", get(search_route))
+        .route("/inbox", get(inbox_route))
         .route("/references", get(references_route))
         .route("/delta", get(delta_route))
         .route("/config/settings", any(config_settings_route))

@@ -30,6 +30,10 @@ pub struct Hit {
     pub num: Option<i64>,
     pub kind: String,
     pub title: String,
+    // The TITLE with FTS hit-marks (highlight over doc_fts col 0), between
+    // `title` and `snip` on the wire; the plain `d.title` on a filters-only or
+    // addressed hit that never touched the index.
+    pub title_hit: String,
     pub snip: String,
     // A comment hit OPENS its target; for everything else open == eid.
     pub open: String,

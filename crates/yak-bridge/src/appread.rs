@@ -693,6 +693,77 @@ pub fn telemetry_stats(store: &Store, since: Option<&str>, only_errors: bool) ->
     Value::Array(out)
 }
 
+// --- /search (db.ts search) --------------------------------------------------
+//
+// The FTS + dot-filter search, serialized in `jsonOf`/Hit key order. The kernel
+// search.rs runs the ranked query, applies the quarantine and filter screens,
+// floats an addressed hit, sinks retired ones — this shapes each Hit as
+// `{eid, title, title_hit, snip, num, kind, open, [open_id], [retired]}`, the two
+// tail keys present exactly when Deno's object spread adds them (open_id on a
+// comment hit that opens its target, retired:true on a hit sunk under an archived
+// project). A malformed filter is the typist's news (Err → the route's 400).
+pub fn search(store: &Store, q: &str, limit: usize) -> Result<Value, String> {
+    let hits = yak_kernel::search::search(store, q, limit)?;
+    let out: Vec<Value> = hits
+        .into_iter()
+        .map(|h| {
+            let mut m = Map::new();
+            m.insert("eid".into(), Value::from(h.eid));
+            m.insert("title".into(), Value::from(h.title));
+            m.insert("title_hit".into(), Value::from(h.title_hit));
+            m.insert("snip".into(), Value::from(h.snip));
+            m.insert("num".into(), h.num.map(Value::from).unwrap_or(Value::Null));
+            m.insert("kind".into(), Value::from(h.kind));
+            m.insert("open".into(), Value::from(h.open));
+            if let Some(oid) = h.open_id {
+                m.insert("open_id".into(), Value::from(oid));
+            }
+            if h.retired {
+                m.insert("retired".into(), Value::from(true));
+            }
+            Value::Object(m)
+        })
+        .collect();
+    Ok(Value::Array(out))
+}
+
+// --- /inbox (client.ts inboxFor + the route's keep) --------------------------
+//
+// The inbox as the SERVER enumerates it: the candidate union (reader arms), then
+// the route's keep predicate (addressed in --all, inbox_item otherwise), each
+// surviving row as `jsonOf` (emit::row_to_wire). `session`(+`cwd`) builds the
+// working reader; `actor` the browsing one, and session WINS when both are named.
+// `mode=all` is the CLI's --all (direct address, archived included, watch/mute
+// ignored); repeated `f=` are dot-param filters screening the union. 400 (Err)
+// when neither id is named or a filter is malformed. READ-ONLY — no `notified`
+// stamp, matching Deno's read-only enumeration.
+pub fn inbox(
+    store: &Store,
+    session: Option<&str>,
+    actor: Option<&str>,
+    cwd: Option<&str>,
+    mode: &str,
+    filters: &[String],
+) -> Result<Value, String> {
+    if session.is_none() && actor.is_none() {
+        return Err("session or actor required".into());
+    }
+    let who = if let Some(sid) = session {
+        yak_kernel::reader::reader_for(store, Some(sid), cwd.unwrap_or(""), None)
+    } else {
+        yak_kernel::reader::reader_at(store, actor.unwrap_or(""))
+    };
+    let mode =
+        if mode == "all" { yak_kernel::inbox::Mode::All } else { yak_kernel::inbox::Mode::Inbox };
+    // The f= filters are the board grammar (parse validates + may 400); no kind
+    // is named on an inbox filter, so the default-task kind parse() returns is
+    // ignored — the inbox items are comments/mail, never tasks.
+    let mut preds = if filters.is_empty() { vec![] } else { yak_kernel::query::parse(filters)?.1 };
+    yak_kernel::query::resolve_values(store, &mut preds);
+    let rows = yak_kernel::inbox::inbox(store, &who, &preds, mode);
+    Ok(Value::Array(rows.iter().map(crate::emit::row_to_wire).collect()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

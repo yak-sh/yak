@@ -82,7 +82,12 @@ pub fn dot_token(a: &str) -> Result<Dot, String> {
     let path = &body[..at];
     let value = body[at + op.len()..].to_string();
     if path == "kind" {
-        let k = kind_word(&value).ok_or_else(|| format!("no kind '{value}'"))?;
+        // The scope resolver's refusal, byte-identical to query.ts (`no such
+        // ${scope}: ${value || '(empty)'}`) — a `.kind=` search line 400s with
+        // the SAME words on both servers.
+        let k = kind_word(&value).ok_or_else(|| {
+            format!("no such kind: {}", if value.is_empty() { "(empty)" } else { &value })
+        })?;
         return Ok(Dot::Kind(k));
     }
     let (comp, prop) = route(path)?;

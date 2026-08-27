@@ -6176,7 +6176,7 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id
       where 1 ${screen}
-      order by coalesce(up.at, cr.at) desc ${cap}
+      order by coalesce(up.at, cr.at) desc, e.eid ${cap}
     `,
     ).all(...params, ...(cap ? [limit] : [])) as (Omit<
       Hit,

@@ -225,6 +225,58 @@ pub fn scope_for(
     None
 }
 
+// subsOf (client.ts): an actor's standing watch/mute instructions, read off its
+// `subscription` rows — the mode routes each target to watching or muting. An
+// absent actor (or one wearing none) subscribes to nothing.
+fn subs_of(store: &Store, actor: Option<&str>) -> (HashSet<String>, HashSet<String>) {
+    let (mut watching, mut muting) = (HashSet::new(), HashSet::new());
+    let Some(a) = actor else { return (watching, muting) };
+    for eid in store.eids_where_ref("subscription", "actor", std::slice::from_ref(&a.to_string())) {
+        if let Some(r) = store.row(&eid) {
+            let target = s(comp(&r, "subscription", "target"));
+            if target.is_empty() {
+                continue;
+            }
+            if s(comp(&r, "subscription", "mode")) == "mute" {
+                muting.insert(target);
+            } else {
+                watching.insert(target);
+            }
+        }
+    }
+    (watching, muting)
+}
+
+// readerAt (client.ts): the reader a WEB client reads for. A browser has no
+// session — its identity is the actor its client entity names — and a person
+// browsing their own graph IS the loop, which is all `operator` has meant. No
+// claims (leases belong to sessions), no session; scope is the actor itself iff
+// it wears a `project` comp, and its subscriptions carry the standing watch/mute.
+pub fn reader_at(store: &Store, actor: &str) -> Reader {
+    let mut addrs = HashSet::new();
+    if !actor.is_empty() {
+        addrs.insert(actor.to_string());
+        if let Some(row) = store.row(actor) {
+            let mail = s(comp(&row, "email", "address"));
+            if !mail.is_empty() {
+                addrs.insert(mail);
+            }
+        }
+    }
+    let scope = store.row(actor).filter(|r| r.comps.contains_key("project")).map(|_| actor.into());
+    let (watching, muting) = subs_of(store, Some(actor));
+    Reader {
+        session: None,
+        actor: Some(actor.to_string()),
+        scope,
+        operator: true,
+        claims: HashSet::new(),
+        addrs,
+        watching,
+        muting,
+    }
+}
+
 // readerFor, resolved against the file instead of a row set.
 pub fn reader_for(
     store: &Store,
@@ -252,22 +304,7 @@ pub fn reader_for(
             .collect(),
         None => HashSet::new(),
     };
-    let (mut watching, mut muting) = (HashSet::new(), HashSet::new());
-    if let Some(a) = &actor {
-        for eid in store.eids_where_ref("subscription", "actor", std::slice::from_ref(a)) {
-            if let Some(r) = store.row(&eid) {
-                let target = s(comp(&r, "subscription", "target"));
-                if target.is_empty() {
-                    continue;
-                }
-                if s(comp(&r, "subscription", "mode")) == "mute" {
-                    muting.insert(target);
-                } else {
-                    watching.insert(target);
-                }
-            }
-        }
-    }
+    let (watching, muting) = subs_of(store, actor.as_deref());
     let cwd_eff = if cwd.is_empty() {
         sc.map(|m| s(m.get("cwd"))).unwrap_or_default()
     } else {

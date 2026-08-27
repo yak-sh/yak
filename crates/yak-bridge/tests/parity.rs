@@ -434,10 +434,10 @@ fn post(base: &str, path: &str) -> (u16, String) {
 
 // App-plane rung 2 (D-22920): the reader surfaces `/references`, `/delta` and
 // `/config/settings`, each byte-identical to the Deno server over one shared
-// copy. (/search and /inbox — the two kernel PoC completions — are the filed
-// remainder.) Body + status via same(); the header-bearing routes via
-// same_header(); the /delta success body — where the held vocab legitimately
-// differs — diffed directly per the note above.
+// copy. (/search and /inbox — the two kernel PoC completions — land in
+// app_plane_search_inbox_parity below, T-22946.) Body + status via same(); the
+// header-bearing routes via same_header(); the /delta success body — where the
+// held vocab legitimately differs — diffed directly per the note above.
 #[test]
 fn app_plane_rung2_parity() {
     if write_mode() {
@@ -507,6 +507,124 @@ fn app_plane_rung2_parity() {
     assert_eq!(ts_e, br_e, "/delta empty-window body differs");
 
     eprintln!("\napp-plane rung 2 parity OK (references, config/settings, delta)");
+}
+
+// The `session.id` string of some reified session, for the /inbox session
+// reader (reader_for resolves the actor/scope/claims behind it). Any session
+// serves — an empty inbox diffs byte-for-byte too.
+fn a_session_id(ts: &str) -> Option<String> {
+    let (_, body) = get(ts, "/query?.kind=session&limit=1");
+    let v: Value = serde_json::from_str(&body).ok()?;
+    v.as_array()?.first()?.get("session")?.get("id")?.as_str().map(String::from)
+}
+
+// App-plane rung 2 COMPLETION (T-22946): /search and /inbox, the two kernel-PoC
+// reader surfaces, each byte-identical to the Deno server over one shared copy.
+//
+// /search's crux is the FILTERS-ONLY tie-order: a filters-only-no-text query
+// orders by recency (`coalesce(updated.at, created.at) desc`), and the probe
+// carries 9 projects sharing ONE migration timestamp — a tie at the cap
+// boundary that a plan-nondeterministic sort resolves differently on the two
+// SQLite builds. db.ts search and the kernel BOTH carry a `, e.eid` stable
+// tiebreak (total order), and the kernel pushes the compiled filter screen +
+// LIMIT into SQL (never a whole-table Rust post-scan), so the window Deno caps
+// in SQL and the window the kernel reads are the identical rows in the identical
+// order. Text (bm25) and the `title_hit`/snippet hit-marks ride the FTS branch;
+// a lone id term floats its entity to the head; `.kind=task port` is a SINGLE
+// invalid-kind pred (a 400), not a kind filter + a text term (segment grammar).
+//
+// /inbox is the reader union screened by inbox_item/addressed then num-sorted
+// (client.ts uniq): multiple actors (a project reader carries mail/comments/
+// knocks AND its standing watch subscriptions; a person its address mail), a
+// session reader, mode=all, dot-filters, and the missing-id / bad-filter 400s.
+#[test]
+fn app_plane_search_inbox_parity() {
+    if write_mode() {
+        eprintln!("app_plane_search_inbox_parity: skipped (write mode)");
+        return;
+    }
+    let Some((ts, br)) = both() else {
+        eprintln!("app_plane_search_inbox_parity: skipped (set TS_URL and BRIDGE_URL)");
+        return;
+    };
+    let _serial = serial();
+
+    // --- /search. Spaces inside `q` are pre-encoded `%20` (the filter grammar's
+    // segment separator); `<`/`>` the wire() helper encodes.
+    let mut search: Vec<String> = vec![
+        // filters-only-no-text: the recency tie-order crux across kinds + preds
+        "/search?q=.kind=project".into(),
+        "/search?q=.kind=project&limit=5".into(),
+        "/search?q=.kind=project&limit=100".into(),
+        "/search?q=.kind=board".into(),
+        "/search?q=.kind=design".into(),
+        "/search?q=.kind=session&limit=5".into(),
+        "/search?q=.kind=task&limit=50".into(),
+        "/search?q=.kind=task%20.status=open&limit=30".into(),
+        "/search?q=.kind=task%20.priority<=1&limit=30".into(),
+        "/search?q=.kind=task%20.status=open,wip&limit=40".into(),
+        "/search?q=.status=open&limit=25".into(),
+        // FTS branch: text, two terms, prefix, text+filter — title_hit + snippet
+        // hit-marks (\x01…\x02) ride the wire.
+        "/search?q=port".into(),
+        "/search?q=port&limit=5".into(),
+        "/search?q=parity%20byte".into(),
+        "/search?q=brid*".into(),
+        "/search?q=port%20.kind=task".into(),
+        // a term that matches nothing — [] on both
+        "/search?q=zqx7kk3vqnomatch".into(),
+        // a leading-dot segment with a space value is ONE pred: an invalid kind,
+        // a 400 (NOT a kind filter + text term) — the parseQuery segment grammar
+        "/search?q=.kind=task%20port".into(),
+        // the limit grammar: absent → 20, empty → 0
+        "/search?q=.kind=task".into(),
+        "/search?q=.kind=task&limit=".into(),
+        // empty q → []
+        "/search?q=".into(),
+    ];
+    // addressed: a lone id term floats its entity to the head of the hits.
+    for kind in ["project", "task"] {
+        if let Some(id) = an_id(&ts, kind) {
+            search.push(format!("/search?q={id}"));
+        }
+    }
+    // a reference filter, filters-only, over a real project.
+    if let Some(p) = an_id(&ts, "project") {
+        search.push(format!("/search?q=.kind=memory%20.scope={p}&limit=10"));
+    }
+    for path in &search {
+        let (t, b) = same(&ts, &br, path);
+        eprintln!("ok  {path}   ts={t:?} bridge={b:?}");
+    }
+
+    // --- /inbox. Missing-id and bad-filter are 400 on both; readers diff their
+    // full union byte-for-byte (empty or not).
+    same(&ts, &br, "/inbox"); // 400 "session or actor required"
+    same(&ts, &br, "/inbox?mode=all"); // 400 (still no id)
+    let mut actors: Vec<String> = vec![];
+    for kind in ["project", "person"] {
+        if let Some(eid) = an_eid(&ts, kind) {
+            actors.push(eid);
+        }
+    }
+    for a in &actors {
+        same(&ts, &br, &format!("/inbox?actor={a}"));
+        same(&ts, &br, &format!("/inbox?actor={a}&mode=all"));
+        same(&ts, &br, &format!("/inbox?actor={a}&f=.received_at>=today"));
+        eprintln!("ok  /inbox actor {a}");
+    }
+    // the session reader (reader_for): resolves actor/scope/claims off the graph.
+    if let Some(sid) = a_session_id(&ts) {
+        same(&ts, &br, &format!("/inbox?session={sid}"));
+        same(&ts, &br, &format!("/inbox?session={sid}&mode=all"));
+        eprintln!("ok  /inbox session {sid}");
+    }
+    // a malformed filter is the typist's 400 on both.
+    if let Some(a) = actors.first() {
+        same(&ts, &br, &format!("/inbox?actor={a}&f=.status=notanum"));
+    }
+
+    eprintln!("\napp-plane rung 2 completion parity OK (/search, /inbox)");
 }
 
 // --- WS parity ---------------------------------------------------------------

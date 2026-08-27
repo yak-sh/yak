@@ -8,6 +8,7 @@ use crate::query::{self, Pred};
 use crate::reader::{self, Reader};
 use crate::store::{Row, Store};
 
+#[derive(Clone, Copy)]
 pub enum Mode {
     Inbox,
     All,
@@ -16,6 +17,29 @@ pub enum Mode {
 fn uniq(eids: Vec<String>) -> Vec<String> {
     let mut seen = std::collections::HashSet::new();
     eids.into_iter().filter(|e| seen.insert(e.clone())).collect()
+}
+
+// directMail (client.ts `.mail.message_id!`): the box/address arms admit only
+// ARRIVED mail — an outbound letter carries no message_id yet. The WATCHED mail
+// arm has no such screen (inboxFor), so a watched target's outbound letter still
+// enters the union and rides in on the watch override. Screening here (not just
+// in the keep) is load-bearing for ORDER: it decides which arm first-sees an eid,
+// and the union is emitted in arm order.
+fn inbound(store: &Store, eids: Vec<String>) -> Vec<String> {
+    eids.into_iter()
+        .filter(|e| {
+            store
+                .row(e)
+                .and_then(|r| {
+                    r.comps
+                        .get("mail")
+                        .and_then(|m| m.get("message_id"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| !s.is_empty())
+                })
+                .unwrap_or(false)
+        })
+        .collect()
 }
 
 // The union for a resolved reader: comments/notices at the session, its
@@ -61,14 +85,14 @@ pub fn inbox_rows(store: &Store, who: &Reader, filters: &[Pred], mode: Mode) -> 
     eids.extend(store.eids_where_ref("comment", "target", &comments));
     eids.extend(store.eids_where_ref("notice", "target", &comments));
     eids.extend(store.eids_where_ref("deliver", "to", &knocks));
-    eids.extend(store.eids_where_ref("mail", "target", &boxes));
-    eids.extend(store.eids_where_text("mail", "to_addr", &addrs));
+    eids.extend(inbound(store, store.eids_where_ref("mail", "target", &boxes)));
+    eids.extend(inbound(store, store.eids_where_text("mail", "to_addr", &addrs)));
     eids.extend(store.eids_where_ref("comment", "target", &watched));
     eids.extend(store.eids_where_ref("notice", "target", &watched));
     eids.extend(store.eids_where_ref("knock", "target", &watched));
     eids.extend(store.eids_where_ref("mail", "target", &watched));
     let now = query::now_ms();
-    uniq(eids)
+    let mut rows: Vec<Row> = uniq(eids)
         .into_iter()
         .filter_map(|e| store.row(&e))
         .filter(|r| {
@@ -78,6 +102,26 @@ pub fn inbox_rows(store: &Store, who: &Reader, filters: &[Pred], mode: Mode) -> 
                 && (matches!(mode, Mode::All) || reader::in_inbox(r))
                 && query::matches_at(r, filters, now)
         })
+        .collect();
+    // client.ts `uniq`: one row per eid, num ASCENDING — "a snapshot walks the
+    // entity table in num order, so a set stitched from several queries answers
+    // in that same order". The arms are gathered in arm order above; this is the
+    // final ordering the /inbox route (and the CLI bus) serialize in.
+    rows.sort_by_key(|r| r.num.unwrap_or(0));
+    rows
+}
+
+// The FINISHED inbox the server /inbox route serves: the candidate union, then
+// the route's own keep predicate (client.ts `union.filter(mode=='all' ?
+// addressed(who) : inboxItem(who))`). inbox_rows already screened archived,
+// quarantine and the caller's filters; this is the attention decision the bus
+// applies too — addressed-to (with watch/mute overriding in normal mode). Order
+// is the union's, preserved. READ-ONLY: nothing here stamps `notified`.
+pub fn inbox(store: &Store, who: &Reader, filters: &[Pred], mode: Mode) -> Vec<Row> {
+    let all = matches!(mode, Mode::All);
+    inbox_rows(store, who, filters, mode)
+        .into_iter()
+        .filter(|r| if all { reader::addressed(who, r) } else { reader::inbox_item(who, r) })
         .collect()
 }
 

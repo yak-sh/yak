@@ -260,6 +260,11 @@ impl Graph for Remote {
                     num: h.get("num").and_then(|n| n.as_i64()),
                     kind: h.get("kind").and_then(|k| k.as_str()).unwrap_or("entity").to_string(),
                     title: h.get("title").and_then(|t| t.as_str()).unwrap_or("").to_string(),
+                    title_hit: h
+                        .get("title_hit")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("")
+                        .to_string(),
                     snip: h.get("snip").and_then(|s| s.as_str()).unwrap_or("").to_string(),
                     open_id: h.get("open_id").and_then(|o| o.as_str()).map(String::from),
                     retired: h.get("retired").and_then(|r| r.as_bool()).unwrap_or(false),
