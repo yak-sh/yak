@@ -78,6 +78,19 @@ starts planning, and next sees a completed plan. It does not decide whether to
 delegate, remember another agent doing the work, or change identity when a
 different provider reduces the child.
 
+## Durable authority and restart
+
+The project-rooted `wants` and `requires` tree is the authority for intent and
+eligibility. No state needed to continue an evaluation may exist only in a
+provider transcript or session summary; those are inspectable history, not the
+execution record. After a restart, the evaluator reconstructs the eligible frame
+frontier and waiting continuations from graph state instead of reviving a
+provider conversation.
+
+The canonical evaluator implementation is Rust. It is project-wanted and begins
+only after its route-pruning and evaluator prerequisites are satisfied. The
+graph dependency tree, not this prose, owns their exact identities and state.
+
 ## The active frontier is the multitude
 
 The active frontier is the set of unresolved leaf frames. Parallel leaves may be
