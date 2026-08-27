@@ -2,8 +2,9 @@
 // tools for agents — no auth, no keys. The registry is transport- and
 // io-agnostic: the dev server mounts it at /mcp (statelessly, calling
 // apply/snapshot in-process — restarts can't strand a session), and
-// `deno run -A src/mcp.ts` serves the same tools over stdio, reading and
-// writing through HTTP like any other client.
+// `deno run -A src/mcp.ts` serves the same tools over stdio. Beside the graph
+// it reads SQLite directly through the same IO the HTTP mount uses; explicit
+// remote mode and service operations stay on HTTP.
 //
 // The dot-param grammar is shared with the CLI: '.title=Hello' routes by
 // prop through the component vocabulary; '.pin.x=12' is the explicit
@@ -15,6 +16,7 @@ import type {
   ToolAnnotations,
 } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
+import { DatabaseSync } from './sqlite.ts'
 import { VERSION } from './version.ts'
 import {
   type Change,
@@ -113,14 +115,18 @@ import { request } from './http.ts'
 import { entityUrl } from './url.ts'
 import { wakeList } from './title.ts'
 import {
+  backfillChanges,
   type BackfillKind,
   backfillKinds,
   landBackfill,
   readBackfill,
 } from './backfill.ts'
-import { localReadPath } from './localread.ts'
+import { depsOf, eager, journalOf, search as dbSearch, snapshot } from './db.ts'
+import { dbReader, localQuery } from './graph_query.ts'
+import { guarded, localReadPath } from './localread.ts'
 
-// How the tools reach the graph — in-process on the server, HTTP here.
+// How the tools reach the graph — database-backed in the server and local
+// stdio processes, HTTP only for an explicitly remote graph.
 export type IO = {
   // The whole eager graph. code_run's sandbox contract (graph.rows) and the
   // command tool's stdio-only fallback are its LAST callers — every other tool
@@ -129,7 +135,7 @@ export type IO = {
   // The authoritative filter-query — the whole graph, INCLUDING the lazy entry
   // partition when the filter names it (`.entry.session=…`), paged by seq, and
   // `id=` addressing (T-3, num, slug, uuid — locate, find()'s mirror). In-
-  // process it runs the server's localQuery; over stdio it is the /query GET.
+  // process it runs localQuery; explicitly remote stdio uses the /query GET.
   query: (
     q: string,
     opts?: { after?: number; limit?: number },
@@ -151,7 +157,7 @@ export type IO = {
   // apply wire); confirm also stamps memory.last_confirmed_at.
   touch: (eids: string[], confirm?: boolean) => Promise<void>
   // An entity's slice of the journal (db.ts journalOf in-process; GET
-  // /journal over stdio) — the wire's write record, newest first.
+  // journalOf locally, /journal remotely) — newest first.
   history: (eid: string, limit?: number) => Promise<JournalEntry[]>
   // The provider table (adapters in-process; GET /providers over stdio)
   // — task_spawn's last-resort default when neither the caller nor the
@@ -165,8 +171,50 @@ export type IO = {
   // it never pulls the whole graph (M-21143). `overlay` carries rows the
   // command minted but hasn't applied yet (a spec-line task), the same way
   // obey/page overlay them. Only the in-process mount (a db in hand) supplies
-  // it; over stdio there is no db, so the command tool falls back to read().
+  // it; explicitly remote stdio falls back to read().
   reader?: (overlay?: Row[]) => Reader
+}
+
+type DBReads = Required<
+  Pick<
+    IO,
+    | 'read'
+    | 'query'
+    | 'get'
+    | 'deps'
+    | 'find'
+    | 'history'
+    | 'backfill'
+    | 'reader'
+  >
+>
+
+// The database-backed half of MCP IO, shared by the server mount and local
+// stdio. This is one binding of the existing query/history implementations,
+// not another graph reader. Mutations and service operations deliberately do
+// not appear here.
+export let dbReads = (db: DatabaseSync): DBReads => {
+  let query = localQuery(db)
+  return {
+    read: () => Promise.resolve(snapshot(db)),
+    query: (q, opts) => query(q.split('&').filter(Boolean), opts),
+    reader: (overlay) => dbReader(db, overlay),
+    get: (ids, filters = []) =>
+      ids.length
+        ? query([`id=${ids.join(',')}`, ...filters])
+        : Promise.resolve([]),
+    deps: (eids, reveal = false) =>
+      Promise.resolve(
+        depsOf(db, eids).filter((d) =>
+          reveal ||
+          (!eager(db, d.parent).quarantined &&
+            !eager(db, d.child).quarantined)
+        ),
+      ),
+    find: (q, limit) => Promise.resolve(dbSearch(db, q, limit)),
+    history: (eid, limit) => Promise.resolve(journalOf(db, eid, limit)),
+    backfill: (kind) => Promise.resolve(backfillChanges(db, kind)),
+  }
 }
 
 // The teaching text lives in grammar.ts — derived from the vocabulary,
@@ -330,8 +378,8 @@ and the comms bus.`
 export let mcpServer = (io: IO) => {
   // The io-backed Querier: client.ts's scoped readers (checkedRefs, sessionRow,
   // contextSnapshot, bus) run through whichever transport this mount has —
-  // localQuery in-process, the /query GET over stdio — so no tool needs the
-  // whole graph to resolve a handle or assemble a corpus (T-22217).
+  // localQuery beside the graph, the /query GET remotely — so no tool needs
+  // the whole graph to resolve a handle or assemble a corpus (T-22217).
   let ioQ: Querier = (filters, opts) =>
     io.query(filters.filter(Boolean).join('&'), opts)
   // find() over the wire: the row an address names, or undefined — the same
@@ -941,7 +989,7 @@ ${
     ) => {
       // The scoped reader when the mount owns a db (the fleet's /mcp) — the
       // executor resolves ids and enumerations on demand, no whole-graph read
-      // (M-21143). Over stdio there is no db, so fall back to the HTTP snapshot.
+      // (M-21143). Only explicitly remote stdio falls back to the HTTP graph.
       let g = io.reader?.()
       let all = g ? [] : rows(await io.read())
       let byId = (id: string) => g ? g.find(id) : find(all, id)
@@ -1605,9 +1653,9 @@ empty. ${GRAMMAR} ${FILTERS}`,
       // the graph to validate it, so a `.entry.session=<uuid>` stays off it.
       let ps = query != null ? parseQuery(query) : parseFilters(filters)
       if (refHandles(ps).length) await checkedRefs(ps, ioQ)
-      // The authoritative matching happens in io.query (evalGraph in-process,
-      // /query over stdio), which reads the full graph including the lazy entry
-      // partition — not the snapshot()-only slice this tool used to screen.
+      // The authoritative matching happens in io.query (evalGraph locally,
+      // /query remotely), including the lazy entry partition — not the
+      // snapshot()-only slice this tool used to screen.
       let q = query != null ? query : filters.join('&')
       let hits = await io.query(q, { after, limit })
       let authored = hits.filter((r) => r.comps.task || r.comps.doc)
@@ -2360,45 +2408,100 @@ let readGraph = async (): Promise<Snapshot> => {
   return { changes, deps: [...deps.values()], capabilities }
 }
 
-// stdio entry: same tools, reaching the graph over HTTP like any client.
+// The wire half of stdio IO. Explicitly remote callers use it whole; local
+// callers retain it for mutations and named service capabilities.
+export let httpIO = (): IO => ({
+  read: readGraph,
+  // The authoritative filter-query is the /query GET, which runs the same
+  // evalGraph the in-process mount does — so the lazy entry partition is
+  // reachable over stdio too. A filter LINE splits into its `&` tokens, the
+  // encoding-safe unit client.query already speaks.
+  query: (q, opts) => queryHttp(q.split('&').filter(Boolean), opts),
+  get: (ids, filters = []) => fetched(ids, filters),
+  deps: (eids, reveal) => httpDeps(eids, reveal),
+  write: async (mutation, via) => mutationResult(await mutate(mutation, via)),
+  find: search,
+  upload: async (eid, html) => {
+    let res = await request(`http://${host()}/upload?eid=${eid}`, {
+      method: 'POST',
+      body: html,
+    })
+    if (!res.ok) throw new Error(`server said ${res.status}`)
+  },
+  // Recall stats are server-stamped and the apply wire refuses them by
+  // design — over HTTP there is no honest way to bump one, so the
+  // stdio transport reads memories without warming them. The in-process
+  // mount (/mcp, the fleet's door) is where recall counts.
+  touch: async () => {},
+  history: (eid, limit) => history(eid, limit),
+  providers: async () => {
+    let res = await request(`http://${host()}/providers`)
+    if (!res.ok) throw new Error(`server said ${res.status}`)
+    return res.json()
+  },
+  backfill: (kind) => {
+    let path = localReadPath()
+    if (!path) {
+      throw new Error(
+        'backfill requires a local graph (unset TASKS_HOST or set DB_PATH)',
+      )
+    }
+    return Promise.resolve(readBackfill(path, kind))
+  },
+})
+
+export type StdioIO = { io: IO; close: () => void }
+
+// A co-located stdio process owns no writer baton, but it can own a read-only
+// SQLite connection. Bind ordinary graph reads to that connection and leave
+// writes/uploads/provider readiness on the wire. A missing file stays remote;
+// a schema-skew failure falls back once, then permanently disarms this local
+// context. If the wire also fails, guarded() preserves the local diagnostic.
+export let stdioIO = (
+  wire: IO = httpIO(),
+  path: string | null | undefined = localReadPath(),
+): StdioIO => {
+  if (!path) return { io: wire, close: () => {} }
+  let db: DatabaseSync
+  try {
+    db = new DatabaseSync(path, { readOnly: true })
+    db.exec('pragma busy_timeout = 5000')
+  } catch {
+    return { io: wire, close: () => {} }
+  }
+  let local = dbReads(db)
+  let active = true
+  let io: IO
+  let close = () => {
+    if (!active) return
+    active = false
+    db.close()
+    io.reader = wire.reader
+  }
+  let protect = <A extends unknown[], R>(
+    read: (...args: A) => R | Promise<R>,
+    remote: (...args: A) => Promise<R>,
+  ) => {
+    let run = guarded(read, remote, close)
+    return (...args: A) => active ? run(...args) : remote(...args)
+  }
+  io = {
+    ...wire,
+    read: protect(local.read, wire.read),
+    query: protect(local.query, wire.query),
+    get: protect(local.get, wire.get),
+    deps: protect(local.deps, wire.deps),
+    find: protect(local.find, wire.find),
+    history: protect(local.history, wire.history),
+    backfill: protect(local.backfill, wire.backfill),
+    reader: local.reader,
+  }
+  return { io, close }
+}
+
+// stdio entry: direct SQLite reads when co-located, HTTP when explicitly
+// remote, and HTTP for service-owned operations in either mode.
 if (import.meta.main) {
-  await mcpServer({
-    read: readGraph,
-    // The authoritative filter-query is the /query GET, which runs the same
-    // evalGraph the in-process mount does — so the lazy entry partition is
-    // reachable over stdio too. A filter LINE splits into its `&` tokens, the
-    // encoding-safe unit client.query already speaks.
-    query: (q, opts) => queryHttp(q.split('&').filter(Boolean), opts),
-    get: (ids, filters = []) => fetched(ids, filters),
-    deps: (eids, reveal) => httpDeps(eids, reveal),
-    write: async (mutation, via) => mutationResult(await mutate(mutation, via)),
-    find: search,
-    upload: async (eid, html) => {
-      let res = await request(`http://${host()}/upload?eid=${eid}`, {
-        method: 'POST',
-        body: html,
-      })
-      if (!res.ok) throw new Error(`server said ${res.status}`)
-    },
-    // Recall stats are server-stamped and the apply wire refuses them by
-    // design — over HTTP there is no honest way to bump one, so the
-    // stdio transport reads memories without warming them. The in-process
-    // mount (/mcp, the fleet's door) is where recall counts.
-    touch: async () => {},
-    history: (eid, limit) => history(eid, limit),
-    providers: async () => {
-      let res = await request(`http://${host()}/providers`)
-      if (!res.ok) throw new Error(`server said ${res.status}`)
-      return res.json()
-    },
-    backfill: (kind) => {
-      let path = localReadPath()
-      if (!path) {
-        throw new Error(
-          'backfill requires a local graph (unset TASKS_HOST or set DB_PATH)',
-        )
-      }
-      return Promise.resolve(readBackfill(path, kind))
-    },
-  }).connect(new StdioServerTransport())
+  let mounted = stdioIO()
+  await mcpServer(mounted.io).connect(new StdioServerTransport())
 }

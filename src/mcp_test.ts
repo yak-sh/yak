@@ -2,16 +2,30 @@
 // results, command dereferencing, and bounded list rendering.
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertRejects,
+  assertThrows,
+} from '@std/assert'
 import { find, idOf, type Row, rows, TASK_TREE_ADOPTION } from './client.ts'
 import { localQuery } from './graph_query.ts'
-import { CUT, elide, type IO, MCP_INSTRUCTIONS, mcpServer } from './mcp.ts'
+import {
+  CUT,
+  elide,
+  type IO,
+  MCP_INSTRUCTIONS,
+  mcpServer,
+  stdioIO,
+} from './mcp.ts'
 import { commandOut } from './commands.ts'
 import { sha } from './sha.ts'
 import { type Change, comps, edges, statuses, uuid, verdicts } from './types.ts'
 import { type Mutation, mutationResult } from './mutation.ts'
 import { slow } from './testing.ts'
 import { backfillChanges } from './backfill.ts'
+import { DatabaseSync } from './sqlite.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let {
@@ -19,6 +33,7 @@ let {
   depsOf,
   journalOf,
   mutate: applyMutation,
+  open,
   snapshot,
   touch,
 } = await import('./db.ts')
@@ -390,6 +405,159 @@ let protocol = async (
     await server.close()
   }
 }
+
+slow(
+  'stdio MCP reads the local graph without an HTTP server',
+  async () => {
+    let dir = await Deno.makeTempDir()
+    let path = `${dir}/graph.db`
+    let eid = crypto.randomUUID()
+    let writer = open(path)
+    apply(writer, [
+      {
+        eid,
+        name: 'doc',
+        comp: { title: 'stdio local proof', body: 'direct sqlite history' },
+      },
+      { eid, name: 'task', comp: { status: 'open' } },
+    ])
+    let expected = await localQuery(writer)(['.title~=stdio local'])
+    let id = idOf(expected[0])
+    writer.close()
+
+    let wire = blank()
+    let calls = 0
+    let unavailable = () => {
+      calls++
+      return Promise.reject(new Error('HTTP must not run'))
+    }
+    wire.read = unavailable
+    wire.query = unavailable
+    wire.get = unavailable
+    wire.deps = unavailable
+    wire.find = unavailable
+    wire.history = unavailable
+    wire.backfill = unavailable
+    let services = 0
+    wire.write = (mutation) => {
+      services++
+      return Promise.resolve({ changes: batch(mutation), aliases: {} })
+    }
+    wire.upload = () => {
+      services++
+      return Promise.resolve()
+    }
+    wire.touch = () => {
+      services++
+      return Promise.resolve()
+    }
+    wire.providers = () => {
+      services++
+      return Promise.resolve([{ name: 'wire', models: [] }])
+    }
+    let mounted = stdioIO(wire, path)
+    try {
+      assert(mounted.io.reader)
+      assertEquals(await mounted.io.query('.title~=stdio local'), expected)
+      assertEquals((await mounted.io.get([id]))[0].eid, eid)
+      assertEquals(await mounted.io.deps([eid]), [])
+      assert(rows(await mounted.io.read()).some((r) => r.eid == eid))
+      await protocol(mounted.io, async (client) => {
+        let listed = await client.callTool({
+          name: 'graph_query',
+          arguments: { query: '.title~=stdio local' },
+        }) as ToolResult
+        assertEquals(JSON.parse(said(listed))[0].doc.title, 'stdio local proof')
+
+        let found = await client.callTool({
+          name: 'search',
+          arguments: { q: 'stdio local' },
+        }) as ToolResult
+        assertMatch(said(found), /stdio local proof/)
+
+        let past = await client.callTool({
+          name: 'history',
+          arguments: { id },
+        }) as ToolResult
+        assertMatch(said(past), /doc/)
+
+        let opened = await client.callTool({
+          name: 'command',
+          arguments: { line: `:open ${id}` },
+        }) as ToolResult
+        assertMatch(said(opened), new RegExp(`/${id}$`))
+      })
+      assertEquals(calls, 0)
+      assertEquals(await mounted.io.write([]), { changes: [], aliases: {} })
+      await mounted.io.upload(eid, '<p>service</p>')
+      await mounted.io.touch([eid])
+      assertEquals(await mounted.io.providers(), [{ name: 'wire', models: [] }])
+      assertEquals(services, 4)
+    } finally {
+      mounted.close()
+      await Deno.remove(dir, { recursive: true })
+    }
+  },
+)
+
+Deno.test('stdio MCP stays on the selected remote IO', async () => {
+  let wire = blank()
+  let calls = 0
+  wire.query = () => {
+    calls++
+    return Promise.resolve([])
+  }
+  let mounted = stdioIO(wire, null)
+  assertEquals(mounted.io, wire)
+  assertEquals(await mounted.io.query('.task!'), [])
+  assertEquals(calls, 1)
+})
+
+Deno.test('stdio MCP disarms a skewed local reader after wire fallback', async () => {
+  let dir = await Deno.makeTempDir()
+  let path = `${dir}/empty.db`
+  let empty = new DatabaseSync(path)
+  empty.close()
+  let wire = blank()
+  let calls = 0
+  wire.query = () => {
+    calls++
+    return Promise.resolve([])
+  }
+  let mounted = stdioIO(wire, path)
+  try {
+    assert(mounted.io.reader)
+    assertEquals(await mounted.io.query('.task!'), [])
+    assertEquals(calls, 1)
+    assertEquals(mounted.io.reader, wire.reader)
+    assertEquals(await mounted.io.query('.task!'), [])
+    assertEquals(calls, 2)
+  } finally {
+    mounted.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
+Deno.test('stdio MCP preserves the local error when local and wire fail', async () => {
+  let dir = await Deno.makeTempDir()
+  let path = `${dir}/empty.db`
+  let empty = new DatabaseSync(path)
+  empty.close()
+  let wire = blank()
+  wire.query = () => Promise.reject(new Error('wire failed'))
+  let mounted = stdioIO(wire, path)
+  try {
+    await assertRejects(
+      () => mounted.io.query('.task!'),
+      Error,
+      'no such table',
+    )
+    assert(mounted.io.reader)
+  } finally {
+    mounted.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})
 
 Deno.test('MCP entity JSON shares the component-shaped contract', async () => {
   let task = 'aaaaaaaa-0000-4000-8000-000000000041'

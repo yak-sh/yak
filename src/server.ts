@@ -35,10 +35,8 @@ import {
   refsOf,
   rowsOf,
   scanAnomalies,
-  search,
   settingEid,
   settingValue,
-  snapshot,
   sweepSelect,
   textMatches,
   touch,
@@ -62,10 +60,9 @@ import { registerManagedSource } from './source_managed.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { landBlob, serveBlob } from './blob.ts'
 import { filed } from './page.ts'
-import { backfillChanges, type BackfillKind } from './backfill.ts'
 import { fleetRaw, mailIdOf } from './inbound.ts'
 import { setEmbedConfig, setModel, similarTo } from './embed.ts'
-import { type IO, mcpServer } from './mcp.ts'
+import { dbReads, type IO, mcpServer } from './mcp.ts'
 import { drain as drainTurns } from './turn.ts'
 import {
   maintainStandingFor,
@@ -88,13 +85,7 @@ import { stamp } from './hot.ts'
 import { serverFile } from './reload.ts'
 import { jsonOf, type Row } from './client.ts'
 import { listed, matchQuery, parseQuery, resolveRefs } from './query.ts'
-import {
-  dbReader,
-  evalAgg,
-  evalGraph,
-  localQuery,
-  rowed,
-} from './graph_query.ts'
+import { evalAgg, evalGraph, rowed } from './graph_query.ts'
 import { withResults } from './result_component.ts'
 import { nativeSoon } from './tmux.ts'
 import { loadPlugins, pluginSpecifiers } from './plugins.ts'
@@ -549,37 +540,9 @@ let ws = (req: Request) => {
 // classifies the body — this route is the only place that sees both the
 // request and its reply).
 let graphIO: IO = {
-  // The whole eager graph — code_run's sandbox contract and the command tool's
-  // stdio-only fallback are the LAST callers (every other tool reads scoped,
-  // T-22217). Deleting it rides the epic's snapshot() subtraction once those
-  // two contracts are revisited.
-  // deno-lint-ignore require-await
-  read: async () => snapshot(db),
-  // The authoritative filter-query, in-process: localQuery routes `id=`
-  // addressing (locate: T-3, num, slug, uuid) and hands the rest to the same
-  // evalGraph the /query door runs — one Querier semantics on both transports,
-  // so client.ts's scoped readers (checkedRefs, contextSnapshot, bus) run here
-  // with zero round trips.
-  query: (q, opts) => localQuery(db)(q.split('&').filter(Boolean), opts),
-  // The colon-command executor's scoped reader — keyed off the live db, so the
-  // in-process `command` tool resolves ids/enumerations on demand instead of
-  // materializing the graph (M-21143). `overlay` carries a command's not-yet-
-  // applied rows (a spec-line task) for the spawn validation.
-  reader: (overlay) => dbReader(db, overlay),
-  // Entities BY ADDRESS — the same id= resolution the /query door runs, so a
-  // tool's `find(await io.get([id]), id)` resolves every form find() reads.
-  get: (ids, filters = []) =>
-    ids.length
-      ? localQuery(db)([`id=${ids.join(',')}`, ...filters])
-      : Promise.resolve([]),
-  // The dependency edges touching these entities, quarantine-screened the way
-  // the /query deps=1 layer is; `reveal` lifts the screen like quarantined=1.
-  // deno-lint-ignore require-await
-  deps: async (eids, reveal = false) =>
-    depsOf(db, eids).filter((d) =>
-      reveal ||
-      (!eager(db, d.parent).quarantined && !eager(db, d.child).quarantined)
-    ),
+  // Local and stdio MCP share these exact SQLite readers. The remaining
+  // capabilities below are service-owned mutations or external operations.
+  ...dbReads(db),
   // deno-lint-ignore require-await
   write: async (mutation, via) => {
     if (appOnly) refuseWrite()
@@ -587,8 +550,6 @@ let graphIO: IO = {
     feed.settle()
     return out
   },
-  // deno-lint-ignore require-await
-  find: async (q, limit) => search(db, q, limit),
   upload: async (eid, html) => {
     if (appOnly) refuseWrite()
     // store() journals its stamp (record); the feed carries it to the sockets.
@@ -609,13 +570,7 @@ let graphIO: IO = {
     let out = touch(db, eids, confirm)
     if (out.length) cast(out)
   },
-  // deno-lint-ignore require-await
-  history: async (eid, limit) => journalOf(db, eid, limit),
   providers: () => readyProviders(),
-  // Historical scans are local SQLite reads; the tool submits their Change[]
-  // through graphIO.write, the same capability as every other MCP mutation.
-  // deno-lint-ignore require-await
-  backfill: async (kind: BackfillKind) => backfillChanges(db, kind),
 }
 
 let codexAccount = accountService(codexStore(), codexIssuer())
