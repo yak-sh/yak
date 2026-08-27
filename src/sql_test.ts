@@ -23,7 +23,7 @@ import {
   type Walk,
 } from './query.ts'
 import { aggregateSql, select, where } from './sql.ts'
-import { open } from './db.ts'
+import { open, textMatches } from './db.ts'
 import { kindOf, kindOrder } from './types.ts'
 import { isRef } from './props.ts'
 
@@ -277,7 +277,15 @@ let byJs = (q: string) => {
   let preds = parseQuery(q)
   return Object.entries(world)
     .filter(([, comps]) =>
-      matchQuery(comps, preds, (e) => world[e], NOW, kids, walk)
+      matchQuery(
+        comps,
+        preds,
+        (e) => world[e],
+        NOW,
+        kids,
+        walk,
+        (eid, p) => textMatches(db, eid, p),
+      )
     )
     .map(([eid]) => eid).sort()
 }
@@ -358,10 +366,12 @@ let COMPILES = [
   // an order is a ranking, not a filter
   '.order=hot',
   '.task.status=open&.order=hot',
-  // the empty query is every entity
+  // the empty query selects nothing
   '',
-  // a bare word: the trigram index narrows, instr() decides — title, body,
-  // and the entities carrying no doc at all
+  // bare words are exact FTS terms (or explicit token prefixes)
+  'a',
+  'ab',
+  'café',
   'widget',
   'gamma',
   'first',
@@ -490,18 +500,14 @@ for (let q of COMPILES) {
 let DECLINES = [
   '.doc.body=', // a body is only ever narrowed by the index, never scanned
   '.task.domain>=1', // text column against a numeric operand
-  // shorter than a trigram: fts5 would answer these by decoding the whole
-  // index, slower than the scan the index was brought in to replace
+  // explicit substring filters shorter than a trigram still decline
   '.doc.body~=a',
   '.doc.body~=ab',
-  'a',
-  'ab',
   '.doc.body~=a%b', // wildcards leave no run of three
   // a non-ASCII needle: SQLite's lower() folds A-Z and no more, so the two
   // matchers do not mean the same thing by `~=café`
   '.doc.body~=café',
   '.doc.title~=café',
-  'café',
   // a body substring on a NON-doc body: sql.ts only ever narrows doc.body, so a
   // content-body scan declines and the matcher answers it over the partition
   '.content.body~=boom',

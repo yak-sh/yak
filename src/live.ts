@@ -25,7 +25,7 @@ import {
   slugsOf,
   type Snapshot,
 } from './types.ts'
-import { isUnread, type Row, rowOf } from './client.ts'
+import { isUnread, type Row } from './client.ts'
 import {
   distinctValues,
   EXISTS,
@@ -39,6 +39,8 @@ import {
   PROJECT,
   resolveRefs,
   scopedSessions,
+  TEXT,
+  textual,
   warm,
   windowOf,
 } from './query.ts'
@@ -273,6 +275,10 @@ let membersChanged = (a: Set<string>, b: Set<string>) =>
 // a reverse hop) FALLS BACK to mem rather than putting a wrong query on the wire.
 // Values are already eids; findEid passes an eid through verbatim.
 let predLine = (p: Pred): string | undefined => {
+  if (p.op == TEXT) {
+    let value = p.value.replaceAll('"', '')
+    return /\s/.test(value) ? `"${value}"` : value
+  }
   if (p.refs) return p.op == '' ? `.refs=${p.value}` : undefined
   // A window is a bound, not a filter, and it spells itself: without this a
   // `.limit=` query would fail the round-trip and fall back to a LOCAL scan of
@@ -337,7 +343,7 @@ let serverLine = (preds: Pred[]): string | undefined => predsToQuery(preds)
 let resetServerSets = () => {
   for (let s of queryUses.values()) {
     s.live = false
-    s.ids.value = mem.resolve(s.preds)
+    if (!textual(s.preds)) s.ids.value = mem.resolve(s.preds)
     seedWake(s, s.ids.peek())
   }
 }
@@ -359,6 +365,7 @@ let refreshServerSets = (eids: Set<string>) => {
   if (!queryUses.size) return
   let read = (t: string) => cache.peek()[t]
   for (let s of queryUses.values()) {
+    let serverOwned = textual(s.preds)
     let ids = s.ids.peek()
     let next = ids
     // A waking projected field of a STANDING member moved. Membership is
@@ -369,9 +376,11 @@ let refreshServerSets = (eids: Set<string>) => {
     let moved = false
     for (let eid of eids) {
       let r = read(eid)
-      let wants = !!r && listed(r, s.preds) &&
-        matchQuery(r, s.preds, read, undefined, kidsVia(read))
       let had = next.includes(eid)
+      // FTS5 membership belongs to SQLite. A local write may refresh projected
+      // values, but only the subscription frame may add or remove a text hit.
+      let wants = serverOwned ? had : !!r && listed(r, s.preds) &&
+        matchQuery(r, s.preds, read, undefined, kidsVia(read))
       if (had != wants) {
         next = wants ? [...next, eid] : next.filter((x) => x != eid)
         if (s.wake.length) {
@@ -410,7 +419,7 @@ let serverSet = (preds: Pred[], line: string): ServerSet => {
     let sub = `q:${key}`
     found = {
       n: 0,
-      ids: signal(mem.resolve(preds)),
+      ids: signal(textual(preds) ? [] : mem.resolve(preds)),
       sub,
       preds,
       live: false,
@@ -421,7 +430,7 @@ let serverSet = (preds: Pred[], line: string): ServerSet => {
     querySignals.set(sub, found.ids)
     seedWake(found, found.ids.peek())
     ownBoard(sub, line)
-  } else if (!found.live) {
+  } else if (!found.live && !textual(preds)) {
     // Unconfirmed by the server: the prime may predate cache churn a local
     // maintenance pass didn't see (a wholesale replacement) — re-prime.
     let ids = mem.resolve(preds)
@@ -808,10 +817,8 @@ export let myMode = (target: string) => {
 // screened by client.ts's one inbox predicate.
 let inboxSignals = new Map<string, Signal<Row[]>>()
 
-// The finished inbox rows for an entity, live. Minted once per eid so a patch
-// cannot wake an unrelated reader; refreshInbox refetches when the batch below
-// touches something the inbox predicate reads. Empty until the first fetch
-// lands — a badge that briefly shows nothing, never a stale count.
+// A planted inbox result for an entity. Minted once per eid so tests and host
+// integrations can supply one reader without waking another.
 export let inbox = (eid: string): Row[] => {
   let sig = inboxSignals.get(eid)
   if (!sig) {
@@ -820,21 +827,21 @@ export let inbox = (eid: string): Row[] => {
   return sig.value
 }
 
-// Tests and host integrations plant an entity's inbox rows directly — the same
-// seam cache.value is (the /inbox door is the browser's only other filler),
-// letting a render assert over a known inbox without a server round-trip.
+// Tests and host integrations plant an entity's inbox rows directly, letting a
+// render assert over a known inbox without a socket.
 export let setInbox = (eid: string, rows: Row[]) => {
   let sig = inboxSignals.get(eid)
   if (sig) sig.value = rows
   else inboxSignals.set(eid, signal<Row[]>(rows))
 }
 
-// How many unread items are waiting for this entity — a derived display fact
-// like gated() above, so it belongs here rather than in the view. Reads the
-// SAME server door the Inbox view does, so a number on a tab can never promise
-// what the tab doesn't hold.
+// How many unread items are in a planted result. Production components derive
+// the same fact from useInbox's ordinary subscriptions.
 export let unreadFor = (eid: string) => inbox(eid).filter(isUnread).length
 
+// Referenced citations are an indexed derived read. Keep this door until the
+// generic query grammar can select a Session's referenced edges without
+// enumerating its durable entry partition.
 let referenceSignals = new Map<string, Signal<References>>()
 let referenceLoading = new Set<string>()
 let referenceAgain = new Set<string>()
@@ -2610,11 +2617,11 @@ export let findEid = (id: string): string | undefined => {
   return aliasEids.get(id)
 }
 
-// The server id-resolve fallback (T-18102). Once the boot flip (T-18059)
+// The addressed-subscription id-resolve fallback (T-18102). Once boot
 // serves a WORKING SET, the cache is partial: a token naming a live-but-
 // unloaded entity misses the vocabulary above, and navigation or a crumb
-// would silently 404. This sidecar is the miss path — it asks the server's
-// /resolve door (the same resolveId every read door uses) for the eid and the
+// would silently 404. This sidecar is the miss path — it opens a one-row
+// subscription by address and reads the
 // two immutable facts a link or crumb needs: its num and kind. NAMING-ONLY,
 // never content — so nothing here reintroduces the content staleness a whole-
 // cache seed carried (jeff C-3528); content still rides subscriptions.
@@ -2622,8 +2629,8 @@ export let findEid = (id: string): string | undefined => {
 // The reads (serverEid/serverName) stay SYNC and O(1): they answer from this
 // sidecar and, on a first miss, KICK an async fetch and return "not yet". A
 // render therefore never blocks and a navigation never hangs on the wire —
-// resolveGen wakes the caller when an answer lands. A miss is BOUNDED: a slow
-// server is aborted after RESOLVE_MS, and a failure cools for COOLDOWN_MS so a
+// resolveGen wakes the caller when an answer lands. A miss is BOUNDED by the
+// one-shot subscription timeout, and a failure cools for COOLDOWN_MS so a
 // dead server can't drive a render→kick→fail retry storm, then heals on the
 // next render (or a reconnect, which clears the sidecar). null means the
 // server said "no such entity" — an honest Lost, not a pending spinner.
@@ -2667,7 +2674,7 @@ let kickResolve = (token: string): Promise<Named | null> => {
   return p
 }
 
-// The sync read: a token's naming if a prior /resolve landed it, null if the
+// The sync read: a token's naming if a prior addressed sub landed it, null if
 // server said it's gone, undefined while unknown or in flight — and a first
 // miss (never asked, not cooling) KICKS the fetch. Reading resolveGen keeps
 // the caller live to the landing.

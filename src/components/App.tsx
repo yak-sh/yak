@@ -67,7 +67,7 @@ let Lost = () => {
 
 // The id is real but outside the working set, and its server resolve is in
 // flight (nav.tsx screenResolving) — the honest interim between a cache miss
-// and the answer, so a slow /resolve reads as "loading", never a false 404
+// and the answer, so a slow addressed subscription reads as "loading", never a false 404
 // (M-16612). It settles to the entity or to Lost when the resolve lands.
 let Resolving = () => {
   let path = new URL(route.value, 'http://x').pathname
@@ -86,8 +86,8 @@ let Resolving = () => {
 // it), each a real anchor whose plain click is the deliberate in-place
 // return. A cached entity names itself; a trail eid the working set no
 // longer holds (once the boot flip serves a partial cache, T-18102) is
-// named by the server-resolve sidecar's num/kind, appearing once /resolve
-// lands. Dead entities (a null resolve) and still-resolving ones just drop
+// named by the addressed-sub sidecar's num/kind, appearing once its row
+// lands. Dead entities (a null result) and still-resolving ones just drop
 // out — the same "last 3 that render" the census filter gave before.
 let Crumbs = () => {
   let items = trail.value.flatMap((eid) => {

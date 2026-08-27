@@ -10,6 +10,7 @@ import {
   EDGES,
   EXISTS,
   fieldsOf,
+  ftsTerm,
   hot,
   kidsOf,
   kindPreds,
@@ -43,7 +44,7 @@ let row = (
   task: Record<string, unknown>,
   extra: Record<string, unknown> = {},
 ) => ({
-  entity: { num: 7 },
+  entity: { eid: 'fixture', num: 7 },
   created: { at: '2026-07-01' },
   updated: { at: '2026-07-16' },
   doc: { title: 'Fix the flux capacitor', body: '' },
@@ -58,7 +59,15 @@ let row = (
 })
 
 let hit = (q: string, task: Record<string, unknown> = {}) =>
-  matchQuery(row(task), parseQuery(q))
+  matchQuery(
+    row(task),
+    parseQuery(q),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    (_eid, p) => ['flux', 'the flux'].includes(p.value.toLowerCase()),
+  )
 
 Deno.test('quarantine needs an explicit facet before a row is listed', () => {
   let hidden = row({}, { quarantined: { at: '2026-08-10' } })
@@ -789,7 +798,7 @@ Deno.test('time: a string row named today stays a string', () => {
 
 // ---- text preds + the mixed line ----
 
-Deno.test('text: bare words search the doc, either column', () => {
+Deno.test('text: indexed membership composes with ordinary filters', () => {
   assertEquals(hit('flux'), true)
   assertEquals(hit('FLUX'), true) // case-insensitive
   assertEquals(hit('warp'), false)
@@ -916,6 +925,13 @@ Deno.test('.order=hot is a ranking, not a filter', () => {
   assertEquals(matchQuery(row({}), ps), true) // never screens
   assertEquals(adopt(ps, 'task'), { status: 'open' }) // never adopts
   assertEquals(orderOf(parseQuery('.status=open')), undefined)
+})
+
+Deno.test('bare text uses FTS token and explicit prefix membership', () => {
+  assertEquals(ftsTerm('widget'), '"widget"')
+  assertEquals(ftsTerm('idget'), '"idget"')
+  assertEquals(ftsTerm('wid*'), '"wid"*')
+  assertEquals(ftsTerm('widget alpha'), '"widget alpha"')
 })
 
 Deno.test('server-stamped recall columns filter without being writable', () => {

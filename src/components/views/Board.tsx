@@ -19,7 +19,7 @@ import { useBoardSub, useBoardTally } from '../subscriptions.ts'
 import { block } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
-import { filterLine, passOf } from '../Filter.tsx'
+import { filterLine, usePassOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
 import { Entity } from '../Entity.tsx'
 
@@ -157,7 +157,7 @@ export let Board = ({ e }: { e: Ent }) => {
   // query at read time only — drops and quick-adds still adopt from
   // board.query alone, so a glance never leaks into what a filed task
   // carries.
-  let pass = passOf(e.eid)
+  let pass = usePassOf(e.eid)
   let tasks: Ent[]
   try {
     tasks = boardTasks(e).filter((k) => pass(k.eid))

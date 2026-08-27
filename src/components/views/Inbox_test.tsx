@@ -5,9 +5,9 @@ import { parseHTML } from 'linkedom'
 import { cache, ent, rows, setInbox } from '../../live.ts'
 import { Inbox } from './Inbox.tsx'
 
-// The membership predicate now lives on the server (/inbox), so these
-// rendering tests plant the finished inbox rows directly — the doors addressed
-// here — and assert the view's own job: naming, order, unread count and limit.
+// Membership now comes from ordinary query subscriptions, so these rendering
+// tests plant finished rows directly and assert only the view's job: naming,
+// order, unread count and limit.
 let seedInbox = (eid: string) =>
   setInbox(eid, rows().filter((r) => r.comps.knock || r.comps.comment))
 

@@ -171,6 +171,36 @@ Deno.test('a full sub is unchanged by the projection machinery', () => {
   db.close()
 })
 
+Deno.test('a text sub uses SQLite FTS for incremental add and remove', () => {
+  let db = bareDb()
+  let eid = uuid()
+  let first: Change[] = [{
+    eid,
+    name: 'doc',
+    comp: { title: 'ộ', body: '' },
+  }]
+  apply(db, first)
+  let { sv, frames } = dial(db)
+  sv.frame({ sub: 'q:o', q: 'o' })
+  assertEquals(frames[0].changes, [])
+
+  frames.length = 0
+  let add: Change[] = [{ eid, name: 'doc', comp: { title: 'o' } }]
+  apply(db, add)
+  sv.maintain(add)
+  assertEquals(
+    frames[0].changes?.some((c) => c.eid == eid && c.name == 'entity'),
+    true,
+  )
+
+  frames.length = 0
+  let remove: Change[] = [{ eid, name: 'doc', comp: { title: 'ộ' } }]
+  apply(db, remove)
+  sv.maintain(remove)
+  assertEquals(frames[0].drop, [eid])
+  db.close()
+})
+
 Deno.test('a projected sub sleeps through an unprojected column', () => {
   let db = bareDb()
   let eid = mint(db, { id: 's1', turn: 'busy' })

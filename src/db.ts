@@ -40,6 +40,8 @@ import { type Trace } from './effects.ts'
 import { ancestorAt } from './client.ts'
 import { homeReads } from './persona.ts'
 import {
+  ftsQuery,
+  ftsTerm,
   leafOf,
   matchQuery,
   parseQuery,
@@ -6106,6 +6108,24 @@ export let touch = (
 export let findEid = (db: DatabaseSync, id: string): string | undefined =>
   resolveId(db, id)
 
+// One row's exact TEXT membership for incremental subscription maintenance.
+// The database tokenizer is the definition; JavaScript never approximates
+// unicode61 (its diacritic behavior has boundary cases JS normalization lacks).
+export let textMatches = (
+  db: DatabaseSync,
+  eid: string,
+  pred: Pred,
+): boolean => {
+  let term = ftsTerm(pred.value)
+  return !!term && !!prep(
+    db,
+    `select 1 from doc_fts
+      join doc d on d.rowid = doc_fts.rowid
+      join entity e on e.id = d.entity
+     where doc_fts match ? and e.eid = ?`,
+  ).get(term, eid)
+}
+
 export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
   let preds = parseQuery(q)
   let addressed = preds.length == 1 && preds[0].op == TEXT
@@ -6137,12 +6157,7 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
   }
   let cap = built ? 'limit ?' : ''
   let params = built?.params ?? []
-  let match = preds.filter((p) => p.op == TEXT)
-    .map((p) => {
-      let word = p.value.replace(/\*+$/, '').replaceAll('"', '')
-      return word && `"${word}"*`
-    })
-    .filter(Boolean).join(' ')
+  let match = ftsQuery(preds)
   if (!match && !filters.length) return []
   // Filters screen AFTER the rank, so cast a wider net before the cap.
   let rows = match
@@ -6152,6 +6167,9 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       select e.eid, d.title,
         highlight(doc_fts, 0, char(1), char(2)) as title_hit,
         snippet(doc_fts, 1, char(1), char(2), '…', 10) as snip,
+        -(bm25(doc_fts, 8.0, 1.0)
+          - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at))))
+          as score,
         e.num
       from doc_fts
       join doc d on d.rowid = doc_fts.rowid
@@ -6159,8 +6177,7 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id
       where doc_fts match ? ${screen}
-      order by bm25(doc_fts, 8.0, 1.0)
-        - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at)))
+      order by score desc
         ${cap}
     `,
     ).all(match, ...params, ...(cap ? [limit] : [])) as (Omit<
@@ -6170,13 +6187,14 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
     : prep(
       db,
       `
-      select e.eid, d.title, d.title as title_hit, '' as snip, e.num
+      select e.eid, d.title, d.title as title_hit, '' as snip,
+        coalesce(julianday(up.at), julianday(cr.at), 0) as score, e.num
       from doc d
       join entity e on e.id = d.entity
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id
       where 1 ${screen}
-      order by coalesce(up.at, cr.at) desc, e.eid ${cap}
+      order by score desc, e.eid ${cap}
     `,
     ).all(...params, ...(cap ? [limit] : [])) as (Omit<
       Hit,
@@ -6188,7 +6206,8 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
     let direct = prep(
       db,
       `
-      select e.eid, d.title, d.title as title_hit, '' as snip, e.num
+      select e.eid, d.title, d.title as title_hit, '' as snip,
+        1000000000 as score, e.num
       from doc d
       join entity e on e.id = d.entity
       where e.eid = ? ${screen}
@@ -6238,7 +6257,15 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       }))
     rows = rows
       .filter((r) =>
-        matchQuery(compsOf(r.eid), filters, compsOf, undefined, kids)
+        matchQuery(
+          compsOf(r.eid),
+          filters,
+          compsOf,
+          undefined,
+          kids,
+          undefined,
+          (eid, p) => textMatches(db, eid, p),
+        )
       )
       .slice(0, limit)
   }

@@ -23,7 +23,7 @@ import { DatabaseSync } from './sqlite.ts'
 import { resolve } from 'node:path'
 import { depsOf, eager, liveDb } from './db.ts'
 import { localQuery } from './graph_query.ts'
-import { arm, type DepsFn, httpDeps, httpQuery, httpSearch } from './client.ts'
+import { arm, type DepsFn, httpDeps, httpQuery } from './client.ts'
 
 // Where the arm may read, or undefined for wire-only. Pure over its inputs —
 // no env defaults, so the decision table tests without an environment — and

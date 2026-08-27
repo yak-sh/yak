@@ -214,11 +214,12 @@ Deno.test('text query returns ordinary rows with an ephemeral rank component', (
   let db = freshDb()
   let eid = uuid()
   apply(db, [{ eid, name: 'doc', comp: { title: 'xylophone', body: 'music' } }])
-  let [hit] = evalGraph(db, 'xyloph', { limit: 5 }).hits
+  let [hit] = evalGraph(db, 'xyloph*', { limit: 5 }).hits
   assertEquals(hit.eid, eid)
   assertEquals(hit.comps.doc?.title, 'xylophone')
   assertEquals(hit.comps.rank?.open, eid)
   assertEquals(String(hit.comps.rank?.title_hit).includes('\x01'), true)
+  assertEquals(typeof hit.comps.rank?.score, 'number')
   // Query decoration is not a component a caller can write back. The ordinary
   // admission door drops it, and a later addressed read has no trace of it.
   apply(db, [{
@@ -231,6 +232,59 @@ Deno.test('text query returns ordinary rows with an ephemeral rank component', (
     db.prepare("select 1 from sqlite_schema where name = 'rank'").get(),
     undefined,
   )
+  db.close()
+})
+
+Deno.test('search ordering is explicit query rank, recent first and retired last', () => {
+  let db = freshDb()
+  let live = uuid(),
+    retired = uuid(),
+    older = uuid(),
+    newer = uuid(),
+    sunk = uuid()
+  apply(db, [
+    { eid: live, name: 'project', comp: {} },
+    { eid: live, name: 'doc', comp: { title: 'live', body: '' } },
+    { eid: retired, name: 'project', comp: {} },
+    { eid: retired, name: 'doc', comp: { title: 'retired', body: '' } },
+    { eid: retired, name: 'archived', comp: {} },
+    { eid: older, name: 'task', comp: { status: 'open', project: live } },
+    { eid: older, name: 'doc', comp: { title: 'older', body: '' } },
+    { eid: newer, name: 'task', comp: { status: 'open', project: live } },
+    { eid: newer, name: 'doc', comp: { title: 'newer', body: '' } },
+    { eid: sunk, name: 'task', comp: { status: 'open', project: retired } },
+    { eid: sunk, name: 'doc', comp: { title: 'sunk', body: '' } },
+  ])
+  let at = (eid: string, value: string) =>
+    db.prepare(
+      'update created set at = ? where entity = (select id from entity where eid = ?)',
+    ).run(value, eid)
+  at(older, '2026-01-01T00:00:00Z')
+  at(newer, '2026-02-01T00:00:00Z')
+  at(sunk, '2026-03-01T00:00:00Z')
+  let hits = evalGraph(db, '.task!&.order=search').hits
+    .filter((r) => [older, newer, sunk].includes(r.eid))
+  assertEquals(hits.map((r) => r.eid), [newer, older, sunk])
+  assertEquals(hits.at(-1)?.comps.rank?.retired, true)
+  assertEquals(hits.every((r) => typeof r.comps.rank?.score == 'number'), true)
+  db.close()
+})
+
+Deno.test('text membership agrees across ranked queries and subscriptions', () => {
+  let db = freshDb(), exact = uuid(), inside = uuid()
+  apply(db, [
+    { eid: exact, name: 'doc', comp: { title: 'widget alpha', body: '' } },
+    { eid: inside, name: 'doc', comp: { title: 'midwidget beta', body: '' } },
+  ])
+  let ids = (q: string, sub = false) =>
+    (sub ? evalSubDoor(db, q).hits : evalGraph(db, q).hits)
+      .map((r) => r.eid).filter((eid) => eid == exact || eid == inside)
+  assertEquals(ids('widget'), [exact])
+  assertEquals(ids('widget', true), [exact])
+  assertEquals(ids('idget'), [])
+  assertEquals(ids('idget', true), [])
+  assertEquals(ids('wid*'), [exact])
+  assertEquals(ids('wid*', true), [exact])
   db.close()
 })
 

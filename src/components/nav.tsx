@@ -133,11 +133,11 @@ export let openAt = (eid: string, ev: MouseEvent) => {
 // order; undefined when unloaded, dead, or an ambiguous prefix. The slug
 // fallback is what lets a URL name an entity by handle (/home), matching the
 // CLI and MCP id doors.
-// Cache misses fall to serverEid — the server-resolve sidecar (live.ts) —
+// Cache misses fall to serverEid — live.ts's addressed-sub sidecar —
 // so a token naming a live-but-unloaded entity still navigates once the boot
 // flip (T-18059) serves a partial working set. The fallback is async: it
-// returns undefined the first miss and the real eid once /resolve lands (the
-// caller re-renders on resolveGen). A LOCAL ambiguity still refuses outright.
+// returns undefined the first miss and the eid once its one-row subscription
+// lands (the caller re-renders on resolveGen). A LOCAL ambiguity still refuses.
 export let eidOf = (id: string) => {
   let eids = census.value
   let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
@@ -156,7 +156,7 @@ export let eidOf = (id: string) => {
 }
 
 // Whether the route names an id the server is still resolving — the App shows
-// a resolving state instead of a premature Lost while /resolve is in flight.
+// a resolving state instead of a premature Lost while its one-row sub is open.
 export let screenResolving = (at = route.value) => {
   let id = decodeURIComponent(new URL(at, 'http://x').pathname.slice(1))
   return !!id && resolvingId(id)

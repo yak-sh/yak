@@ -7,7 +7,7 @@ export let entityUrl = (id: string) => `${origin}/${id}`
 
 // entityUrl's inverse: the id token a graph entity link names — undefined for
 // any other address. Only id-shaped path segments count (prefix-num, short
-// eid, uuid): every other path is a door (/search, /telemetry), and handing
+// eid, uuid): every other path is a capability (/query, /telemetry), and handing
 // one to the id resolver would let a slug or alias match something.
 export let entityId = (raw: string): string | undefined => {
   let u: URL

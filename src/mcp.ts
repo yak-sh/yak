@@ -80,14 +80,7 @@ import {
   undo,
   uniq,
 } from './client.ts'
-import {
-  noFilter,
-  orderOf,
-  parseQuery,
-  pred,
-  resolution,
-  resolveRefs,
-} from './query.ts'
+import { noFilter, orderOf, parseQuery, pred, resolution } from './query.ts'
 import {
   commandOut,
   commands,
@@ -1391,24 +1384,24 @@ recording someone's correction, and limit caps returned index lines
           session,
         )
       }
-      let preds
       try {
-        let raw = parseQuery(query ?? '')
-        let handles = refHandles(raw)
-        let resolved = handles.length ? await io.get(handles) : []
-        preds = resolveRefs(raw, (id) => find(resolved, id)?.eid)
+        parseQuery(query ?? '')
       } catch (e) {
         return err((e as Error).message)
       }
       // A tag comp has no column, so it screens HERE rather than through the
       // pred grammar — the same way the inbox reads `archived`. Its `by` is a
-      // column and does filter: '.feedback.by=jeff'. The pool is every memory
-      // — recallIndex screened for `.comps.memory` anyway, so the keyed
-      // enumeration is the same universe the whole-graph scan reduced to.
+      // column and does filter: '.feedback.by=jeff'. Text belongs to SQLite's
+      // FTS index, so the generic query screens the pool before recallIndex
+      // performs only its warm ordering and formatting.
       let pool = await io.query(
-        ['.memory!', ...(feedback ? ['.feedback!'] : [])].join('&'),
+        [
+          '.memory!',
+          ...(feedback ? ['.feedback!'] : []),
+          ...(query?.trim() ? [query] : []),
+        ].join('&'),
       )
-      let lines = recallIndex(pool, preds, Date.now(), limit ?? 20)
+      let lines = recallIndex(pool, [], Date.now(), limit ?? 20)
       return bus(lines.join('\n') || '(no memories)', session)
     },
   )

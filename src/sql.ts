@@ -24,6 +24,7 @@ import {
   EDGES,
   EXISTS,
   fieldsOf,
+  ftsTerm,
   NEVER,
   ORDER,
   type Pred,
@@ -319,19 +320,19 @@ let narrow = (cols: string[], needle: string, exact: Sql | null): Sql | null =>
     }
     : null
 
-// A bare word is a TEXT pred: contains over the doc, title OR body, the one
-// pred with two columns. JS reads a missing doc as no match at all — which is
-// the only thing an empty needle can turn on, since it is true of every string.
+// A bare word is an exact FTS membership test over doc title/body. The same
+// quoted-term builder drives ranked retrieval, so an initial subscription
+// cannot widen token matches into legacy substring matches.
 let text = (value: string): Sql | null => {
-  if (value == '') return { sql: `"doc"."entity" is not null`, params: [] }
-  let cols = ['title', 'body']
-  let [t, b] = cols.map((p) => has(col('doc', p), value))
-  return t && b
-    ? narrow(cols, value, {
-      sql: `(${t.sql} or ${b.sql})`,
-      params: [...t.params, ...b.params],
-    })
-    : null
+  let term = ftsTerm(value)
+  return term
+    ? {
+      sql: `"doc"."rowid" in (
+        select rowid from doc_fts where doc_fts match ?
+      )`,
+      params: [term],
+    }
+    : { sql: '0', params: [] }
 }
 
 // A body is never scanned. `~=` over doc.body goes through the index; every

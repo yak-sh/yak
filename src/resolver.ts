@@ -15,6 +15,7 @@ import {
   listed,
   matchQuery,
   type Pred,
+  textual,
 } from './query.ts'
 
 // A row as the resolver reads it — the merged-components bag both the live cache
@@ -104,6 +105,7 @@ export let memoryResolver = (store: Store): MemoryResolver => {
   // cache when no pred anchors — the board fallback), then listed + matchQuery
   // filter. O(result), never O(graph).
   let scan = (preds: Pred[]): string[] => {
+    if (textual(preds)) return []
     let cand = store.anchor(preds)
     let pool = cand ?? store.keys()
     let out: string[] = []
@@ -165,6 +167,7 @@ export let memoryResolver = (store: Store): MemoryResolver => {
   // the parents of any touched child, since their membership turns on it.
   let refresh = (eids: Set<string>) => {
     for (let s of sets.values()) {
+      let serverOwned = textual(s.preds)
       let extra = revParents(s.preds, eids)
       let test = extra.length ? new Set([...eids, ...extra]) : eids
       let ids = s.ids.peek()
@@ -172,7 +175,7 @@ export let memoryResolver = (store: Store): MemoryResolver => {
       let moved = false // a waking projected field of a standing member changed
       for (let eid of test) {
         let had = next.includes(eid)
-        let wants = matches(eid, s.preds)
+        let wants = serverOwned ? had : matches(eid, s.preds)
         if (had != wants) {
           next = wants ? [...next, eid] : next.filter((x) => x != eid)
           if (s.wake.length) {
@@ -197,6 +200,7 @@ export let memoryResolver = (store: Store): MemoryResolver => {
   // A wholesale cache replacement (seed/reset) re-scans every held query.
   let reset = () => {
     for (let s of sets.values()) {
+      if (textual(s.preds)) continue
       let ids = resolve(s.preds)
       seed(s, ids)
       s.ids.value = ids

@@ -1705,6 +1705,7 @@ export type Hit = {
   title: string
   title_hit?: string
   snip: string
+  score?: number // query-only relevance; larger ranks earlier
   open: string
   open_id?: string // open spoken (T-7) — only when it isn't the hit
   retired?: boolean // its project is over — the hit sank to the tail

@@ -33,6 +33,7 @@ import {
   refValuesOf,
   rootChanges,
   rowsOf,
+  textMatches,
 } from './db.ts'
 import { evalAgg, evalSub, walker, workingSet } from './graph_query.ts'
 import { liveFrame } from './wire.ts'
@@ -574,6 +575,7 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
     // same for every candidate eid, and re-resolving it per row would put a
     // recursive walk on the write path.
     let walk = walker(db)
+    let fts = (eid: string, p: Pred) => textMatches(db, eid, p)
     for (let [id, sub] of map) {
       // An aggregate sub speaks value→count deltas. The batch DIRTIES it only
       // if it touches a component the line reads (D-22567 §1) — an unrelated
@@ -681,7 +683,15 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         // A route sub matches its fixed id; a query sub runs the matcher.
         let hit = alive &&
           (sub.only ? sub.only.has(eid) : listed(c, sub.preds) &&
-            matchQuery(c, sub.preds, comps, undefined, dbKids(db, comps), walk))
+            matchQuery(
+              c,
+              sub.preds,
+              comps,
+              undefined,
+              dbKids(db, comps),
+              walk,
+              fts,
+            ))
         let s: Step = step(sub.members, eid, alive, hit)
         if (s == 'add') {
           changes.push(...payload(sub, eid, c))
@@ -735,6 +745,7 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
   let aged = (now = Date.now()) => {
     let cur = cursorOf(db)
     let walk = walker(db)
+    let fts = (eid: string, p: Pred) => textMatches(db, eid, p)
     let reads = new Map<string, Record<string, Record<string, unknown>>>()
     let comps = (eid: string) => {
       let hit = reads.get(eid)
@@ -749,7 +760,7 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         let c = comps(eid)
         let alive = !!c.entity
         let hit = alive && listed(c, sub.preds) &&
-          matchQuery(c, sub.preds, comps, now, dbKids(db, comps), walk)
+          matchQuery(c, sub.preds, comps, now, dbKids(db, comps), walk, fts)
         let s: Step = step(sub.members, eid, alive, hit)
         if (s == 'remove') drop.push(eid)
         else if (s == 'dead') changes.push({ eid, name: 'entity', comp: null })

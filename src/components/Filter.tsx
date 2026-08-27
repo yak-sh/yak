@@ -11,8 +11,9 @@
 // glance.
 import { useEffect, useRef } from 'preact/hooks'
 import { type Signal, signal } from '@preact/signals'
-import { sieve } from '../live.ts'
+import { parseQuery } from '../query.ts'
 import { useDraft } from './drafts.ts'
+import { useQueryEids } from './useQuery.ts'
 import { block } from './ui.tsx'
 import { useComplete } from './Complete.tsx'
 
@@ -35,12 +36,21 @@ export let filterable = new Set(['Board', 'List'])
 export let filterLine = (eid: string): string => lineOf(eid).value
 
 // the face's half: the current pass predicate for this entity's rows
-export let passOf = (eid: string, initial = ''): (eid: string) => boolean => {
+export let usePassOf = (
+  eid: string,
+  initial = '',
+): (eid: string) => boolean => {
+  let line = lineOf(eid, initial).value
+  let valid = true
   try {
-    return sieve(lineOf(eid, initial).value)
+    parseQuery(line)
   } catch {
-    return () => true // half a token yet — show everything
+    valid = false
   }
+  // Text membership is FTS5-owned, so even this transient screen reads the
+  // same server subscription as a saved board instead of tokenizing locally.
+  let hits = new Set(useQueryEids(valid ? line : ''))
+  return !line.trim() || !valid ? () => true : (row) => hits.has(row)
 }
 
 // the titlebar's half: the input + its completion dropdown. Uncontrolled

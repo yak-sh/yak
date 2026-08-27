@@ -291,5 +291,17 @@ slow(
     let { query } = await import('./client.ts')
     let got = ids(await query([`.notice.target=${RV}`, '.archived=']))
     assertEquals(got.includes(RN), true) // the venture notice reached the loop
+
+    // Text retrieval is the same /query row shape with a transient rank
+    // component. No parallel search response contract survives the migration.
+    let ranked = await (await fetch(
+      `http://${U}/query?q=${encodeURIComponent('Route')}`,
+    )).json() as Record<string, Record<string, unknown>>[]
+    let task = ranked.find((r) =>
+      (r.entity as { eid?: string } | undefined)?.eid == RT
+    )
+    assertEquals(typeof task?.rank?.score, 'number')
+    assertEquals(typeof task?.rank?.title_hit, 'string')
+    assertEquals(task?.rank?.open, RT)
   },
 )

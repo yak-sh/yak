@@ -31,6 +31,7 @@ import {
   type Pred,
   PROJECT,
   TEXT,
+  textual,
 } from '../query.ts'
 import { isRef } from '../props.ts'
 import type { Resolver } from '../resolver.ts'
@@ -491,6 +492,7 @@ export let idbResolver = (
   // the in-memory resolver uses — which is what makes the two answers identical.
   let scan = async (preds: Pred[]): Promise<string[]> => {
     if (gate) await gate
+    if (textual(preds)) return []
     let only = touched(preds) ?? names
     let [cand, qs] = await Promise.all([candidates(preds), quarantinedKeys()])
     let pool = cand ? [...cand] : await allEntityKeys()
@@ -520,10 +522,12 @@ export let idbResolver = (
           vals: new Map(),
         },
       )
-      scan(preds).then(async (r) => {
-        await seedVals(found!, r)
-        if (!sameSet(found!.ids.peek(), r)) found!.ids.value = r
-      })
+      if (!textual(preds)) {
+        scan(preds).then(async (r) => {
+          await seedVals(found!, r)
+          if (!sameSet(found!.ids.peek(), r)) found!.ids.value = r
+        })
+      }
     }
     return found
   }
@@ -531,6 +535,7 @@ export let idbResolver = (
   // The async truth. `resolve` (the sync seam) returns the latest settled value;
   // `ready` awaits the indexed reads and lands it.
   let ready = async (preds: Pred[]): Promise<string[]> => {
+    if (textual(preds)) return ensure(preds).ids.peek()
     let out = await scan(preds)
     let s = sets.get(queryKey(preds))
     if (s) {
@@ -617,6 +622,7 @@ export let idbResolver = (
   let refresh = async (eids: Set<string>) => {
     let ids = [...eids]
     for (let s of sets.values()) {
+      let serverOwned = textual(s.preds)
       let extra = await revParents(s.preds, ids)
       let list = extra.length ? [...new Set([...ids, ...extra])] : ids
       let { test, bags } = await membership(s.preds, list)
@@ -625,7 +631,7 @@ export let idbResolver = (
       let moved = false // a waking projected field of a standing member changed
       for (let e of list) {
         let had = next.includes(e)
-        let wants = test(e)
+        let wants = serverOwned ? had : test(e)
         if (had != wants) {
           next = wants ? [...next, e] : next.filter((x) => x != e)
           if (s.wake.length) {
@@ -649,6 +655,7 @@ export let idbResolver = (
 
   let reset = async () => {
     for (let s of sets.values()) {
+      if (textual(s.preds)) continue
       let r = await scan(s.preds)
       await seedVals(s, r)
       s.ids.value = r

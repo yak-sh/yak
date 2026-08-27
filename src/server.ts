@@ -41,6 +41,7 @@ import {
   settingValue,
   snapshot,
   sweepSelect,
+  textMatches,
   touch,
   writerUrl,
 } from './db.ts'
@@ -87,7 +88,7 @@ import { type Observation, safeObservation } from './observations.ts'
 import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { serverFile } from './reload.ts'
-import { jsonOf, readerFor, readerRows, type Row } from './client.ts'
+import { jsonOf, type Row } from './client.ts'
 import { listed, matchQuery, parseQuery, resolveRefs } from './query.ts'
 import {
   dbReader,
@@ -1260,6 +1261,8 @@ let handle = async (req: Request) => {
               (e) => eager(db, e),
               undefined,
               dbKids(db, (e: string) => eager(db, e)),
+              undefined,
+              (eid, p) => textMatches(db, eid, p),
             )
           )
         return Response.json(
@@ -1583,12 +1586,22 @@ let handle = async (req: Request) => {
   // lives in /query, /ws, or a local library now; serving index.html here
   // would turn a caller bug into a convincing 200 response.
   if (
-    ['/anchor', '/body', '/census', '/delta', '/inbox', '/resolve', '/search']
+    [
+      '/anchor',
+      '/body',
+      '/census',
+      '/delta',
+      '/inbox',
+      '/resolve',
+      '/search',
+    ]
       .includes(
         path,
       )
   ) {
-    return new Response('retired: use /query or /ws', { status: 404 })
+    return new Response('retired: use /query, /ws, or the local library', {
+      status: 404,
+    })
   }
   // Static files and SPA navigation are reads. Any unhandled mutating method
   // is an API miss, never a request for index.html; returning the shell made a

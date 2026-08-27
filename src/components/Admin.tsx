@@ -15,7 +15,7 @@ import {
   columnsFor,
   inSection,
 } from './admin.ts'
-import { FilterInput, passOf } from './Filter.tsx'
+import { FilterInput, usePassOf } from './Filter.tsx'
 import { pickLine, useHits } from './hits.ts'
 import { Prop } from './editors.tsx'
 import { Id } from './views/Inline.tsx'
@@ -105,7 +105,7 @@ let Index = (
   // A deep-linked query gets its own filter identity: it arrives filled,
   // remains editable, and cannot inherit an unrelated glance at this kind.
   let filter = `admin:${kind}${query ? `:${query}` : ''}`
-  let pass = passOf(filter, query)
+  let pass = usePassOf(filter, query)
   // The census is a DB renderer: each section FETCHES its rows from /query
   // with an explicit selection — `.{kind}!`, presence of the component —
   // newest-first, bounded to the page. The partial client cache is only a
@@ -223,8 +223,8 @@ let Index = (
         )}
       {
         // The footer is honest about the page being a bounded fetch. `total`
-        // is the graph-true count (server /census); the section fetches the
-        // newest page of it. Never present the page as the whole.
+        // is the graph-true aggregate subscription; the section fetches the
+        // newest page beside it. Never present the page as the whole.
         total != null && total > all.length
           ? <More>{`newest ${shown.length} of ${total}`}</More>
           : all.length > CAP

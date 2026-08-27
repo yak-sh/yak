@@ -2279,6 +2279,12 @@ Deno.test('predsToQuery round-trips membership shapes, refuses the rest', () => 
     `.board.query~=${E}`,
   )
   assertEquals(predsToQuery([refsTo(E)]), `.refs=${E}`)
+  assertEquals(predsToQuery(parseQuery('widget')), 'widget')
+  assertEquals(predsToQuery(parseQuery('wid*')), 'wid*')
+  assertEquals(
+    predsToQuery(parseQuery('"widget alpha" .task!')),
+    '"widget alpha"&.task!',
+  )
   assertEquals(
     predsToQuery([eq('fold', 'client', E), eq('fold', 'board', F)]),
     `.fold.client=${E}&.fold.board=${F}`,

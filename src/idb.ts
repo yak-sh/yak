@@ -30,7 +30,7 @@ let OUTBOX = 'outbox'
 
 // The invalidation + cursor record, one row per fixed key in `meta`.
 // `cursor` present ⇒ this tab has seeded ⇒ a returning visit; absent ⇒
-// first visit. `epoch`/`vocabHash` are the server stamps /delta checks.
+// first visit. `epoch`/`vocabHash` scope resumable websocket journal cursors.
 export type Meta = {
   cursor?: number
   epoch?: string

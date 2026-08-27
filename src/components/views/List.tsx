@@ -4,7 +4,7 @@ import { boardAll, boardWindow, byWarmth, pinned } from '../../live.ts'
 import { orderOf, parseQuery } from '../../query.ts'
 import { block } from '../ui.tsx'
 import { menuAt } from '../nav.tsx'
-import { filterLine, passOf } from '../Filter.tsx'
+import { filterLine, usePassOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
 import { useBoardSub, usePinTargets } from '../subscriptions.ts'
 import { Id } from './Inline.tsx'
@@ -19,7 +19,7 @@ let { Row } = ListFrame
 // Rows are native draggables: dropped on a canvas they carry their PIN,
 // so the existing card relocates there (the row IS that card, listed).
 export let List = ({ e }: { e: Ent }) => {
-  let pass = passOf(e.eid)
+  let pass = usePassOf(e.eid)
   // Each row paints a pin's TARGET with no Card around it, so this face holds
   // those rows itself — nothing else subscribes them (T-22371).
   let ps = pinned(e.eid)
@@ -54,7 +54,7 @@ let byModified = (a: Ent, b: Ent) =>
   (b.num - a.num)
 export let BoardList = ({ e }: { e: Ent }) => {
   useBoardSub(e)
-  let pass = passOf(e.eid)
+  let pass = usePassOf(e.eid)
   let rows: Ent[]
   let hot = false
   try {

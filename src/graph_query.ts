@@ -37,6 +37,7 @@ import {
   referrersOf,
   rowsOf,
   search,
+  textMatches,
   vocabHash,
 } from './db.ts'
 import { aggregateSql, countSql, where, whereSome, windowed } from './sql.ts'
@@ -257,6 +258,7 @@ export let evalQuery = (
   let kids = (eid: string, comp: string, prop: string) =>
     referrersOf(db, [eid], { comp, prop }).map(ent)
   let walk = walker(db)
+  let fts = (eid: string, p: Pred) => textMatches(db, eid, p)
   let all = matching(db, whereSome(preds)).map(rowed)
     // matching() reads every entity the subset selects, entry-partition rows
     // included (they keep a spine); snapshot() omitted ALL of them, so drop them
@@ -269,7 +271,7 @@ export let evalQuery = (
   }
   let hits = all.filter((r) =>
     listed(r.comps, preds) &&
-    matchQuery(r.comps, preds, ent, undefined, kids, walk)
+    matchQuery(r.comps, preds, ent, undefined, kids, walk, fts)
   )
   return { preds, hits, ent }
 }
@@ -305,11 +307,12 @@ export let evalCapped = (
   // matching() reads the hit table in its own order — re-rank by num so the
   // slice keeps the NEWEST matches, not an arbitrary cap-full.
   let walk = walker(db)
+  let fts = (eid: string, p: Pred) => textMatches(db, eid, p)
   let raw = matching(db, base).map(rowed)
   let hits = raw
     .filter((r) =>
       listed(r.comps, preds) &&
-      matchQuery(r.comps, preds, ent, undefined, kids, walk)
+      matchQuery(r.comps, preds, ent, undefined, kids, walk, fts)
     )
     .sort((a, b) => b.num - a.num)
   // A candidate read that came back SHORT of its own bound saw the whole
@@ -455,13 +458,14 @@ export let evalGraph = (
   // never wear it and `comps` never admits it on write. Keeping the metadata
   // beside the ordinary components lets every /query consumer use one row
   // shape while renderers still receive snippets and comment destinations.
-  if (asked.some((p) => p.op == 'text')) {
+  if (asked.some((p) => p.op == 'text') || orderOf(asked) == 'search') {
     let hits = search(db, q, win.limit ?? ENTRY_PAGE).map((h) => {
       let row = rowed({ eid: h.eid, comps: eager(db, h.eid) })
       row.comps.rank = {
         title: h.title,
         title_hit: h.title_hit,
         snip: h.snip,
+        score: Number(h.score ?? 0),
         open: h.open,
         ...(h.open_id ? { open_id: h.open_id } : {}),
         ...(h.retired ? { retired: true } : {}),
@@ -595,10 +599,11 @@ async (filters, opts) => {
   let kids = (eid: string, comp: string, prop: string) =>
     referrersOf(db, [eid], { comp, prop }).map(read)
   let walk = walker(db)
+  let fts = (eid: string, p: Pred) => textMatches(db, eid, p)
   return only.map((eid) => rowed({ eid, comps: eager(db, eid) }))
     .filter((r) =>
       listed(r.comps, preds) &&
-      matchQuery(r.comps, preds, read, undefined, kids, walk)
+      matchQuery(r.comps, preds, read, undefined, kids, walk, fts)
     )
 }
 

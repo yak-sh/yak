@@ -373,16 +373,17 @@ export let hitOf = (r: Row): Hit => {
     title: String(rank.title ?? r.comps.doc?.title ?? ''),
     title_hit: String(rank.title_hit ?? r.comps.doc?.title ?? ''),
     snip: String(rank.snip ?? ''),
+    score: Number(rank.score ?? 0),
     open: String(rank.open ?? r.eid),
     ...(rank.open_id ? { open_id: String(rank.open_id) } : {}),
     ...(rank.retired ? { retired: true } : {}),
   }
 }
 export let httpSearch: SearchFn = async (q, limit = 20) => {
-  return (await httpQuery([q], { limit })).map(hitOf)
+  return (await httpQuery([q, '.order=search'], { limit })).map(hitOf)
 }
 export let search: SearchFn = async (q, limit = 20) =>
-  (await query([q], { limit })).map(hitOf)
+  (await query([q, '.order=search'], { limit })).map(hitOf)
 
 // The linked git worktree a path stands in, or undefined in the main checkout.
 // A linked worktree's `.git` is a FILE (a `gitdir:` pointer) while the main
@@ -2819,9 +2820,8 @@ export let actorRows = async (actor?: string, q: Querier = query) => {
 // bounded reader diet as the bus. Each arm says one way an item can reach this
 // reader; the pure inboxItem/addressed predicate still makes the final decision
 // (the caller applies it), so assembly can only over-fetch, never invent a
-// second attention policy. Shared by the session door (inboxRows) and the
-// server /inbox route, so the CLI and a partial-cache browser read the SAME
-// policy off the same arms.
+// second attention policy. The CLI runs these arms through its SQLite-backed
+// query library; the browser holds equivalent query subscriptions.
 //
 // `mode: 'all'` is the CLI's --all: direct address including archived items,
 // with standing watch/mute instructions deliberately ignored. The normal mode

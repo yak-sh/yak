@@ -20,8 +20,9 @@
 //   .limit=200       a WINDOW: the newest 200 matches, not the whole set
 //   .after=13882     continue that window below a spine num (the next page)
 //
-// Bare words are TEXT preds — contains over the doc (title or body),
-// case-insensitive; "quoted words" stay one pred. Separators are '&' and
+// Bare words are TEXT preds — FTS5 terms over the doc (title or body), with a
+// trailing `*` for token-prefix matching; "quoted words" stay one phrase pred.
+// Separators are '&' and
 // whitespace both: an &-segment that is one dot-param keeps its spaces
 // (.title~=two words survives), a segment with embedded ` .` splits.
 //
@@ -368,9 +369,10 @@ let OPS: Record<string, string> = {
   '>=': '>=',
 }
 
-// '.order=hot' is a RANKING, not a filter: matchQuery lets it through,
-// adopt() ignores it, and orderOf() hands the value to whoever sorts.
-// One value today; the grammar grows values here, not mechanisms.
+// `.order=hot` and `.order=search` are rankings, not filters: matchQuery lets
+// them through, adopt() ignores them, and orderOf() hands the value to whoever
+// sorts. Search is explicit so a filter-only picker can request recent-first
+// results without changing ordinary query order.
 export let ORDER = 'order'
 
 export let orderOf = (preds: Pred[]) => preds.find((p) => p.op == ORDER)?.value
@@ -1029,8 +1031,8 @@ export let noFilter = (f: string) =>
     f.startsWith('kind=') ? `write it dotted: .${f}; ` : ''
   }${SKETCH}`
 
-// A bare word: contains over the doc, title or body. comp/prop are for
-// show — matchQuery treats TEXT specially (one pred, two columns).
+// A bare word: an FTS5 term over doc title/body. comp/prop are for show —
+// matchQuery treats TEXT specially (one pred, two columns).
 export let TEXT = 'text'
 let text = (value: string): Pred => ({
   comp: 'doc',
@@ -1038,6 +1040,30 @@ let text = (value: string): Pred => ({
   op: TEXT,
   value,
 })
+
+// The safe MATCH spelling shared by ranked retrieval and the membership SQL.
+// User text is always a quoted phrase, never FTS operator syntax; only a
+// trailing `*` has grammar meaning and prefix-matches the phrase's final token.
+export let ftsTerm = (value: string): string => {
+  let prefix = /\*+$/.test(value)
+  let phrase = value.replace(/\*+$/, '').replaceAll('"', '').trim()
+  return phrase ? `"${phrase}"${prefix ? '*' : ''}` : ''
+}
+
+export let ftsQuery = (preds: Pred[]): string =>
+  preds.filter((p) => p.op == TEXT).map((p) => ftsTerm(p.value))
+    .filter(Boolean).join(' ')
+
+// TEXT may sit inside a reverse association's child filter. A client without
+// SQLite must treat the WHOLE query as server-owned rather than locally
+// approximating only the top-level terms.
+export let textual = (preds: Pred[]): boolean =>
+  preds.some((p) => p.op == TEXT || !!p.rev && textual(p.rev.preds))
+
+// TEXT membership belongs to SQLite's unicode61 tokenizer. Callers with no
+// graph index cannot safely approximate it in JavaScript; they match no text
+// until an indexed answer arrives rather than inventing a wider membership.
+export type Fts = (eid: string, pred: Pred) => boolean
 
 // The '&' split, quote-aware: a quoted run is ONE value even when it
 // carries the separator. Quotes already glue a value across whitespace;
@@ -1308,6 +1334,7 @@ export let matchQuery = (
   now?: number,
   kids?: Kids,
   walk?: Walk,
+  fts?: Fts,
 ) =>
   preds.every((p) => {
     if (p.op == NEVER) return false // the empty query: selects nothing
@@ -1336,12 +1363,8 @@ export let matchQuery = (
       return vals.some((v) => String(v) == p.value)
     }
     if (p.op == TEXT) {
-      let d = c.doc as { title?: string; body?: string } | undefined
-      let needle = p.value.toLowerCase()
-      return !!d && (
-        String(d.title ?? '').toLowerCase().includes(needle) ||
-        String(d.body ?? '').toLowerCase().includes(needle)
-      )
+      let self = eidOf(c)
+      return !!self && !!fts && fts(self, p)
     }
     if (p.rev) {
       // The reverse hop: resolve the children pointing back at me, then collapse
@@ -1351,7 +1374,7 @@ export let matchQuery = (
       let children = self && kids ? kids(self, p.rev.comp, p.rev.prop) : []
       if (p.rev.count) return cmpCount(children.length, p.op, p.value)
       let hit = children.some((k) =>
-        !!k && matchQuery(k, p.rev!.preds, ent, now, kids, walk)
+        !!k && matchQuery(k, p.rev!.preds, ent, now, kids, walk, fts)
       )
       return p.rev.not ? !hit : hit
     }
@@ -1636,9 +1659,8 @@ export let complete = (
   if (m) {
     let [, path, op, value] = m
     if (path == ORDER) {
-      return starts('hot', value) && value != 'hot'
-        ? [{ text: '.order=hot', kind: 'rank' }]
-        : []
+      return ['hot', 'search'].filter((v) => starts(v, value) && v != value)
+        .map((v) => ({ text: `.order=${v}`, kind: 'rank' }))
     }
     let at = aimPath(path)
     return at ? values(`.${path}`, op, at, value, wells, ents) : []
@@ -1695,7 +1717,9 @@ export let complete = (
     ...bares().filter((c) =>
       starts(c.text.slice(1), pre) && c.text.slice(1) != pre
     ),
-    ...starts(ORDER, pre) ? [{ text: '.order=hot', kind: 'rank' }] : [],
+    ...starts(ORDER, pre)
+      ? ['hot', 'search'].map((v) => ({ text: `.order=${v}`, kind: 'rank' }))
+      : [],
     ...starts('limit', pre) ? [{ text: '.limit=', kind: 'window' }] : [],
     ...starts('after', pre) ? [{ text: '.after=', kind: 'window' }] : [],
   ]

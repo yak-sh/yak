@@ -2594,7 +2594,7 @@ Deno.test('recallIndex: warmest first, index lines only, filtered', () => {
   // said only what the line already carried.
   assertMatch(lines[0], /M-12 [\d.]+ feedback: warm fact/)
   assertMatch(lines[1], /M-11 [\d.]+ cold fact/)
-  assertEquals(recallIndex(mems, parseQuery('cold'), NOW).length, 1)
+  assertEquals(recallIndex(mems, parseQuery('.title~=cold'), NOW).length, 1)
 })
 
 Deno.test('derefParams: reference values resolve at the door', () => {

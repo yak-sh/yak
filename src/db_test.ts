@@ -2439,9 +2439,9 @@ Deno.test('fts: search finds, follows edits, forgets the dead', () => {
     '\x01Xylophone\x02 repair',
   )
   assertEquals(search(db, 'xylo*')[0]?.kind, 'task') // prefix + derived kind
-  // every term prefix-matches unasked — search is typed live
-  assertEquals(search(db, 'xylo')[0]?.eid, t)
-  assertEquals(search(db, 'xylophone repai')[0]?.eid, t)
+  // Prefix is explicit; an unstarred term is a whole token.
+  assertEquals(search(db, 'xylo').length, 0)
+  assertEquals(search(db, 'xylophone repai*')[0]?.eid, t)
   assertEquals(search(db, 'xylophone repairs').length, 0) // prefix ≠ fuzzy
   apply(db, [{ eid: t, name: 'doc', comp: { title: 'Glockenspiel repair' } }])
   assertEquals(search(db, 'xylophone').length, 0) // the edit moved the index

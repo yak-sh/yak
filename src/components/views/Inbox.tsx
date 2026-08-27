@@ -80,10 +80,9 @@ let Line = ({ r }: { r: Row }) => {
 }
 
 export let Inbox = ({ e, limit }: { e: Ent; limit?: number }) => {
-  // The FINISHED inbox from the server (live.ts `inbox`, GET /inbox), already
-  // screened by the SAME client.ts inboxItem the digest and TUI read — never a
-  // scan of the whole-graph cache, which under a partial boot holds only a
-  // working set (T-18105). Sort here; membership is the server's.
+  // Ordinary query subscriptions assemble the inbox and the SAME client.ts
+  // inboxItem used by digest/TUI screens it — never a whole-cache scan under a
+  // partial boot (T-18105). Sort here; membership stays query-derived.
   let items = [...useInbox(e.eid)].sort(order)
   if (!items.length) {
     return (

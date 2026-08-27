@@ -17,7 +17,10 @@ import { uuid } from './types.ts'
 import { evalFast, evalGraph, rowed } from './graph_query.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, open, snapshot, entriesOf, entriesScan } = await import('./db.ts')
+let { apply, open, snapshot, entriesOf, entriesScan, textMatches } =
+  await import(
+    './db.ts'
+  )
 let { append } = await import('./entries.ts')
 let { freshDb } = await import('./testdb.ts')
 let { rows, find } = await import('./client.ts')
@@ -52,7 +55,15 @@ let viaSnapshot = (db: DB, q: string, after = 0, limit = 500) => {
   let kids = kidsOf(byEid)
   return all.filter((r) =>
     listed(r.comps, preds) &&
-    matchQuery(r.comps, preds, (e) => byEid.get(e), undefined, kids)
+    matchQuery(
+      r.comps,
+      preds,
+      (e) => byEid.get(e),
+      undefined,
+      kids,
+      undefined,
+      (eid, p) => textMatches(db, eid, p),
+    )
   ).map((r) => r.eid)
 }
 
