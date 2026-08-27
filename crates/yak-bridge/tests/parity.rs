@@ -9,13 +9,29 @@
 //
 //   1. copy the live graph read-only:
 //        sqlite3 'file:$HOME/.tasks/tasks.db?mode=ro' "VACUUM INTO '/tmp/probe.db'"
-//   2. boot a probe Deno server on the copy (split effects, no spawns):
+//   2. boot a probe Deno server on the copy, EFFECTS OFF:
 //        TASKS_EFFECTS=daemon PORT=5271 DB_PATH=/tmp/probe.db \
 //          deno run -A --unstable-net --unstable-worker-options src/server.ts
 //   3. boot the bridge on the SAME copy, a different port:
 //        yak-bridge --db /tmp/probe.db --port 5272
 //   4. run:  TS_URL=http://127.0.0.1:5271 BRIDGE_URL=http://127.0.0.1:5272 \
 //              cargo test -p yak-bridge --test parity -- --nocapture
+//
+// EFFECTS OFF is load-bearing for the WS tests, and it is why step 2 sets
+// TASKS_EFFECTS=daemon and step 2 alone runs — do NOT also boot the effects
+// daemon (effectsd.ts). TASKS_EFFECTS=daemon splits the DOING half out of the
+// serving process; with no effectsd claiming that half, NO `where:'do'` effect
+// fires, so nothing WRITES to the copy and the journal stays quiescent. That
+// quiescence is the WS cursor comparison's precondition: every WS frame's
+// `cursor` is the journal's `max(rowid)` sampled at the instant that server
+// answered, and the TS and bridge samples are apples-to-apples only over a
+// journal no one is advancing. Boot effectsd (or run the server with inline
+// effects) and its effect writes advance the copy's journal UNDER the read-only
+// bridge — the TS side's cursor drifts ahead and the WS tests fail on an
+// off-by-one `cursor` that is a TEST-ISOLATION artifact, not a bridge bug (the
+// bridge computes the identical max(rowid) the Deno server does; T-22790).
+// `require_quiescent()` below asserts this precondition before the WS
+// comparisons, so a writing probe fails loudly with the cause instead.
 //
 // Documented intentional divergence (D-22692 rung 1): the WS reset snapshot's
 // `vocabHash` is the Deno server's own manifest hash, which the bridge cannot
@@ -307,12 +323,58 @@ fn strip_vocab_hash(mut v: Value) -> Value {
     v
 }
 
+// The probe TS journal's current tip (`max(rowid)`), read off a throwaway
+// join's reset `cursor` — the same value every WS frame stamps. -1 if the
+// server never answers (its death, not a tip).
+fn tip(base: &str) -> i64 {
+    let mut ws = Ws::open(base);
+    ws.send(JOIN);
+    let Some(reset) = ws.next_text(Duration::from_secs(5)) else { return -1 };
+    serde_json::from_str::<Value>(&reset)
+        .ok()
+        .and_then(|v| v["snapshot"]["cursor"].as_i64())
+        .unwrap_or(-1)
+}
+
+// The WS cursor comparison's PRECONDITION: the shared copy's journal must be
+// quiescent, or the TS and bridge cursor samples (each `max(rowid)` at its own
+// instant) are not apples-to-apples. Prove it holds — sample the TS tip twice
+// with a gap and require it to hold still — before any cross-server cursor
+// comparison runs. A moving tip means the probe TS server is WRITING to the
+// copy (effectsd booted, or inline effects), which drifts its cursor ahead of
+// the read-only bridge; fail loudly naming that cause, rather than surfacing it
+// downstream as a cryptic off-by-one `cursor` diff (T-22790). This is a
+// test-isolation artifact — the bridge computes the identical max(rowid) the
+// Deno server does — so the fix is the probe setup, not the wire.
+fn require_quiescent(ts: &str) {
+    for _ in 0..40 {
+        let a = tip(ts);
+        std::thread::sleep(Duration::from_millis(150));
+        let b = tip(ts);
+        if a >= 0 && a == b {
+            return;
+        }
+    }
+    panic!(
+        "probe TS journal at {ts} keeps advancing — the probe server is WRITING \
+         to the shared copy, so its WS `cursor` drifts ahead of the read-only \
+         bridge and the byte-parity comparison is not apples-to-apples. Run the \
+         probe TS server with effects OFF (TASKS_EFFECTS=daemon and do NOT boot \
+         effectsd) so the journal is quiescent. This is a test-isolation \
+         artifact, not a bridge cursor bug (the bridge computes the identical \
+         max(rowid) the Deno server does; T-22790)."
+    );
+}
+
 #[test]
 fn ws_join_and_live_parity() {
     let Some((ts, br)) = both() else {
         eprintln!("ws_join_and_live_parity: skipped (set TS_URL and BRIDGE_URL)");
         return;
     };
+    // The cursor comparisons below are apples-to-apples only over a quiescent
+    // journal — prove the probe copy is not being written before we start.
+    require_quiescent(&ts);
 
     // --- the JOIN handshake: a cold {since:0} resets both to the working set.
     let join = "{\"since\":0,\"live\":1,\"ws\":1}";
@@ -480,6 +542,9 @@ fn ws_sub_parity() {
         eprintln!("ws_sub_parity: skipped (set TS_URL and BRIDGE_URL)");
         return;
     };
+    // Sub replies and deltas each stamp a `cursor` sampled at answer time; the
+    // TS and bridge samples match only over a journal no one is advancing.
+    require_quiescent(&ts);
 
     // --- initial-answer parity across the ported sub kinds -------------------
     // Membership (kind-anchored subset grammar), windowed (`.limit=`), aggregate
