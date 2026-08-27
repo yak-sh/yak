@@ -109,6 +109,21 @@ impl Store {
         )
     }
 
+    // A tombstoned entity keeps its spine row — D-18866 retains it so the int id
+    // can never recycle — but it has LEFT the wire: every row reader must treat
+    // it as absent, the same exclusion snapshot() and the /query `id=` door apply
+    // in TS (`eid not in (select eid from tombstone)`, buried()). Unlike the
+    // quarantine screen this is NOT lifted by reveal — a tombstoned member reads
+    // as a DEATH (entity-null), never a not-listed drop, so row_revealed() must
+    // see it as gone too (subserve). The tombstone table keys by eid (text).
+    // Empty on a graph too old to have the table.
+    fn buried(&self, alias: &str) -> String {
+        if !self.has_table("tombstone") {
+            return String::new();
+        }
+        format!(" and not exists (select 1 from tombstone __t where __t.eid = {alias}.eid)")
+    }
+
     // resolveId's grammar: prefixed num (prefix is display-only, num rules),
     // bare num, full uuid, short-eid prefix, alias slug.
     pub fn resolve_id(&self, id: &str) -> Option<String> {
@@ -194,11 +209,13 @@ impl Store {
     fn row_opt(&self, eid: &str, reveal: bool) -> Option<Row> {
         // one probe answers all three: does it exist, is it screened, and
         // what num does it wear — a quarantined entity reads as absent unless
-        // `reveal` lifts the screen (the maintain reader above).
+        // `reveal` lifts the screen (the maintain reader above); a tombstoned
+        // spine reads as absent ALWAYS (reveal lifts quarantine, never death).
         let screen = if reveal { String::new() } else { self.unscreened("e") };
+        let grave = self.buried("e");
         let num: Option<Option<i64>> = one(
             &self.conn,
-            &format!("select e.num from entity e where e.eid = ?1{screen}"),
+            &format!("select e.num from entity e where e.eid = ?1{screen}{grave}"),
             [eid],
             |r| r.get::<_, Option<i64>>(0),
         );

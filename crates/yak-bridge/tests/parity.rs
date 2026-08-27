@@ -486,6 +486,22 @@ fn ws_join_and_live_parity() {
         );
         eprintln!("WS live: delete frame byte-parity OK");
     }
+
+    // --- READ parity for a TOMBSTONED eid (T-22834). The entity is now deleted,
+    // so its spine row is retained (D-18866) but it has left the wire. The
+    // /query `id=` door must answer the empty array on BOTH — Deno filters the
+    // buried eid out of its `id=` set (server.ts `!buried`), and the bridge's
+    // store.row now screens the tombstone in the same probe. Before the fix the
+    // bridge returned a tombstone stub `[{"kind":"entity","entity":{eid,num}}]`
+    // where Deno gave `[]`; this holds the two wires byte-identical on death.
+    let dead = same(&ts, &br, &format!("/query?id={eid}"));
+    eprintln!(
+        "READ tombstone: /query?id={eid} byte-parity OK  ts={:?} bridge={:?}",
+        dead.0, dead.1
+    );
+    // deps=1 / backlinks=1 on a dead eid must likewise carry no layers.
+    same(&ts, &br, &format!("/query?id={eid}&deps=1&backlinks=1"));
+    eprintln!("READ tombstone: layered /query?id= byte-parity OK");
 }
 
 // Read live frames until one mentions `eid`, returning that frame (envelope or
