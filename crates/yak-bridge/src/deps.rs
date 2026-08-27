@@ -5,61 +5,17 @@
 // edge lives in no table, so a reader off the dependency table alone misses it
 // (the two "reads" edges the first parity run surfaced).
 //
-// `store.deps_of` already returns the incident edges quarantine-screened and in
-// the route's order (parent.eid, type, ord, child.eid); homeReads is appended
-// after, exactly as the route concatenates it.
+// homeReads now lives in the kernel (Store::deps_of appends it — T-22640), so
+// both doors derive one edge set: the file (yak-cli show_md) and this wire
+// server share the same synthesis, and the deps=1 layer is just that call.
 
 use yak_kernel::{Dep, Store};
 
-fn quarantined(store: &Store, eid: &str) -> bool {
-    if !store.has_table("quarantined") {
-        return false;
-    }
-    store
-        .conn
-        .query_row(
-            "select 1 from quarantined q join entity e on e.id = q.entity \
-             where e.eid = ?1 limit 1",
-            [eid],
-            |r| r.get::<_, i64>(0),
-        )
-        .ok()
-        .is_some()
-}
-
-// homes(): the (persona, home) pairs whose persona OR home is `eid`, in persona
-// table order — homeReads' whole input, scoped to this hit.
-fn homes_touching(store: &Store, eid: &str) -> Vec<(String, Option<String>)> {
-    if !store.has_table("persona") {
-        return vec![];
-    }
-    let sql = "select o.eid, h.eid from persona t \
-               join entity o on o.id = t.entity \
-               left join entity h on h.id = t.home \
-               where o.eid = ?1 or h.eid = ?1";
-    let Ok(mut st) = store.conn.prepare(sql) else { return vec![] };
-    st.query_map([eid], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?)))
-        .map(|it| it.filter_map(|x| x.ok()).collect())
-        .unwrap_or_default()
-}
-
-// The deps=1 layer for one hit: incident edges then the synthetic persona
-// `reads` edges (homeReads), each screened for quarantine and deduped against a
-// contains/reads edge that already exists.
+// The deps=1 layer for one hit: incident edges plus the synthetic persona
+// `reads` edges (homeReads), quarantine-screened and deduped — all inside
+// Store::deps_of, so the wire and the file door can never disagree.
 pub fn deps_of(store: &Store, eid: &str) -> Vec<Dep> {
-    let sql = store.deps_of(eid);
-    let mut out = sql.clone();
-    for (persona, home) in homes_touching(store, eid) {
-        let Some(home) = home else { continue };
-        let dup = sql.iter().any(|d| {
-            d.parent == home && d.child == persona && (d.type_ == "contains" || d.type_ == "reads")
-        });
-        if dup || quarantined(store, &home) || quarantined(store, &persona) {
-            continue;
-        }
-        out.push(Dep { parent: home, type_: "reads".into(), child: persona });
-    }
-    out
+    store.deps_of(eid)
 }
 
 // The `.edges!` rider's incident set for a MEMBER set (db.ts eagerDeps =

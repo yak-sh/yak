@@ -789,9 +789,69 @@ impl Store {
             self.unscreened("pe"),
             self.unscreened("ce")
         );
-        collect(&self.conn, &sql, [eid], |r| {
+        let mut out = collect(&self.conn, &sql, [eid], |r| {
             Ok(Dep { parent: r.get(0)?, type_: r.get(1)?, child: r.get(2)? })
-        })
+        });
+        self.append_home_reads(eid, &mut out);
+        out
+    }
+
+    // A project's SPECIALIST personas ride a derived `reads` edge from their
+    // home (the project) to themselves — homeReads (db.ts depsOf appends
+    // `homeReads(homes(…), deps)`; persona.ts owns the rule). The edge lives in
+    // NO table: `home` is the one truth for ownership, so it is synthesized at
+    // read time and can never drift. A door reading the `dependency` table alone
+    // silently loses it, which is exactly how `yak show` diverged from the wire
+    // (T-22640) — so the deps=1 layer synthesizes it HERE, in the kernel, for
+    // BOTH doors: the file (yak-cli show_md) and the wire (yak-bridge serves
+    // this same Store::deps_of). Matching db.ts homeReads: skip a persona that
+    // already carries a stored `contains`/`reads` edge from its home (no double
+    // sentence — the common persona rides `contains`), and screen quarantine on
+    // either endpoint the way this layer screens its `dependency` edges above.
+    // The (persona, home) pairs read in persona-table order, keyed on either
+    // end, exactly as db.ts homes() with a per-eid WHERE.
+    fn append_home_reads(&self, eid: &str, out: &mut Vec<Dep>) {
+        if !self.has_table("persona") {
+            return;
+        }
+        let pairs: Vec<(String, Option<String>)> = collect(
+            &self.conn,
+            "select o.eid, h.eid from persona t \
+             join entity o on o.id = t.entity \
+             left join entity h on h.id = t.home \
+             where o.eid = ?1 or h.eid = ?1",
+            [eid],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?)),
+        );
+        for (persona, home) in pairs {
+            let Some(home) = home else { continue };
+            let dup = out.iter().any(|d| {
+                d.parent == home
+                    && d.child == persona
+                    && (d.type_ == "contains" || d.type_ == "reads")
+            });
+            if dup || self.is_quarantined(&home) || self.is_quarantined(&persona) {
+                continue;
+            }
+            out.push(Dep { parent: home, type_: "reads".into(), child: persona });
+        }
+    }
+
+    // Is one entity quarantined? The per-eid form of the `unscreened` screen —
+    // the synthetic `reads` edges above carry no join to screen in SQL, so each
+    // endpoint is checked here instead.
+    fn is_quarantined(&self, eid: &str) -> bool {
+        if !self.has_table("quarantined") {
+            return false;
+        }
+        one(
+            &self.conn,
+            "select 1 from quarantined q join entity e on e.id = q.entity \
+             where e.eid = ?1 limit 1",
+            [eid],
+            |r| r.get::<_, i64>(0),
+        )
+        .is_some()
     }
 
     // Every edge incident to a SET of entities, both directions, screened to the
