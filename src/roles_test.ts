@@ -52,6 +52,15 @@ let {
 let uid = () => crypto.randomUUID()
 let heard: Change[] = []
 let cast = (changes: Change[]) => heard.push(...changes)
+let wakeAttempts = (session: string) =>
+  Number(
+    (db.prepare(`
+    select count(*) as n from notice n
+    join deliver v on v.entity = n.entity
+    where n.target = (select id from entity where eid = ?)
+      and v."to" = n.target and n.event = 'wake'
+  `).get(session) as { n: number }).n,
+  )
 let dir = Deno.makeTempDirSync({ prefix: 'tasks-role-repo-' })
 // A fake tmux server: named sessions, and panes keyed by id carrying the @role
 // marker the reconciler reads (T-14297). A role's window IS its pane here — one
@@ -1092,11 +1101,7 @@ Deno.test('wake_policy attention advances an existing settled session when atten
   await rolesSweep(cast, { ...deps, now: () => new Date().toISOString() })
   // Advanced in place, not re-spawned: the same door got the wake stamp.
   assertEquals(mspawns(role), 1)
-  let woken = db.prepare(`select notice_at from session where entity = ${R}`)
-    .get(
-      run,
-    ) as { notice_at: string | null }
-  assert(woken.notice_at)
+  assertEquals(wakeAttempts(run), 1)
 })
 
 Deno.test('wake_policy scheduled does not pin and cold-spawns on pending attention', async () => {
@@ -1121,10 +1126,9 @@ Deno.test('wake_policy manual never auto-wakes: no cold spawn, no advance, no te
   let run = settled(role, project)
   ping(run)
   await rolesSweep(cast, { ...deps, now: () => new Date().toISOString() })
-  let s = db.prepare(
-    `select status, notice_at from session where entity = ${R}`,
-  ).get(run) as { status: string; notice_at: string | null }
-  assertEquals(s.notice_at, null) // not advanced
+  let s = db.prepare(`select status from session where entity = ${R}`)
+    .get(run) as { status: string }
+  assertEquals(wakeAttempts(run), 0) // not advanced
   assertEquals(s.status, 'completed') // not stopped
 })
 
@@ -1183,6 +1187,14 @@ Deno.test('graph-native role attention is content-free and coalesced', async () 
   )
   let wake = entries.find((row) => row.comps.attention)!
   assertEquals(journalOf(db, wake.eid)[0].via, runner)
+  assertEquals(wakeAttempts(run.eid), 1)
+  assertEquals(
+    db.prepare(`
+      select d.via from notice n join delivered d on d.entity = n.entity
+      where n.target = ${R} and n.event = 'wake'
+    `).get(run.eid),
+    { via: 'graph' },
+  )
 })
 
 // The colour must be a pure function of the VENTURE, matching holdco's own

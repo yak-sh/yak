@@ -28,6 +28,13 @@ import {
   graphBusy,
   graphSession,
 } from './managed_codex.ts'
+import {
+  acceptNotice,
+  beginNotice,
+  failNotice,
+  noticeDue,
+  noticeOf,
+} from './notice_attempt.ts'
 import { tmuxRun } from './tmux.ts'
 import { type Change, sessionActive, uuid } from './types.ts'
 
@@ -677,25 +684,6 @@ let stamp = (eid: string, patch: DbRow, cast: Cast) => {
   if (changes.length) cast(changes)
 }
 
-let stampSession = (eid: string, patch: DbRow, cast: Cast) => {
-  let prior = readComp(db, eid, 'session') as DbRow | undefined
-  if (!prior) return
-  let moved = Object.fromEntries(
-    Object.entries(patch).filter(([key, value]) => prior[key] !== value),
-  )
-  let cols = Object.keys(moved)
-  if (!cols.length) return
-  db.prepare(
-    `update session set ${
-      cols.map((c) => `"${c}" = ${bindOf('session', c)}`).join(', ')
-    }
-     where ${OWNED}`,
-  ).run(...cols.map((c) => moved[c] as string | number | null), eid)
-  let change = { eid, name: 'session', comp: moved }
-  record(db, [change])
-  cast([change])
-}
-
 let latest = (eid: string) =>
   db.prepare(`
     select s.*, e.eid as eid, x.message as error_message from session s
@@ -1073,26 +1061,39 @@ let serveAttention = async (
   let pending = await bus(String(session.id), undefined, localQuery(db))
   if (!pending.lines.length) return
   let newest = pending.at
-  let sent = String(session.notice_at ?? '')
-  let accepted = String(session.notice_accepted_at ?? '')
-  // One accepted wake per pending horizon. The transcript/context load is the
-  // attention record; a newer graph item opens a new horizon without needing
-  // per-item read-state.
-  if (sent && accepted >= sent && newest <= sent) return
-  let at = deps.now()
-  stampSession(String(session.eid), {
-    notice_at: at,
-    notice_accepted_at: null,
-    notice_token: uuid(),
-  }, cast)
+  let eid = String(session.eid)
+  let attempt = noticeOf(eid, {
+    notice_at: session.notice_at ? String(session.notice_at) : null,
+    notice_accepted_at: session.notice_accepted_at
+      ? String(session.notice_accepted_at)
+      : null,
+    notice_token: session.notice_token ? String(session.notice_token) : null,
+  })
+  // One accepted wake per pending horizon. A submitted but unaccepted attempt
+  // gets the same bounded retry window as the native TUI door; a newer graph
+  // item opens a fresh horizon immediately.
+  if (!noticeDue(attempt, Date.parse(deps.now()), newest)) return
+  let token = uuid()
+  beginNotice(eid, token, cast)
   if (graphSession(db, String(session.eid))) {
-    graphAttention(db, String(session.eid), cast)
+    try {
+      graphAttention(db, eid, cast)
+      // Appending the content-free attention entry is synchronous acceptance;
+      // no provider hook is needed to prove that this door took the wake.
+      acceptNotice(token, 'graph', cast)
+    } catch (e) {
+      failNotice(token, String(e), cast)
+      throw e
+    }
   } else {
     continueSession(
-      String(session.eid),
+      eid,
       'You have pending Tasks messages. Call task_context now.',
       cast,
-    ).catch((e) => stamp(c.eid, { error: String(e).slice(0, 2000) }, cast))
+    ).catch((e) => {
+      failNotice(token, String(e), cast)
+      stamp(c.eid, { error: String(e).slice(0, 2000) }, cast)
+    })
   }
 }
 

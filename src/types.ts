@@ -50,7 +50,7 @@ export let dirs = ['h', 'v'] as const
 export let subModes = ['watch', 'mute'] as const
 export let verdicts = ['approved', 'rejected', 'changes_requested'] as const
 export let grades = ['frontier', 'mid', 'small'] as const
-export let noticeKinds = ['lapse', 'sweep', 'scene'] as const
+export let noticeKinds = ['lapse', 'sweep', 'scene', 'wake'] as const
 
 // The graph-native Session-log vocabulary (comps marked log = true).
 export let sessionComps: Record<string, Record<string, PropType>> = {

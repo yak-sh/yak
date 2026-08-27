@@ -8,7 +8,7 @@ use yak_vocab_derive::Comp;
 
 // What a notice records — the kinds of thing that happened but nobody said
 // (D-13858). A closed set like statuses.
-venum!("kernel", "noticeKinds", 140, ["lapse", "sweep", "scene"]);
+venum!("kernel", "noticeKinds", 140, ["lapse", "sweep", "scene", "wake"]);
 
 // The edge vocabulary — every edge reads as a sentence, parent first. The LIST
 // is the source of truth: db.ts bakes it into the dependency check constraint.

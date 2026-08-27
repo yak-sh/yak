@@ -6,7 +6,8 @@
       "values": [
         "lapse",
         "sweep",
-        "scene"
+        "scene",
+        "wake"
       ]
     }
   },

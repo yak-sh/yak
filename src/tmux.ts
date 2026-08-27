@@ -7,6 +7,14 @@ import { db } from './live_db.ts'
 import { delivery } from './door.ts'
 import { bus } from './client.ts'
 import { localQuery } from './graph_query.ts'
+import {
+  acceptNotice,
+  beginNotice,
+  failNotice,
+  type NoticeAttempt,
+  noticeDue,
+  noticeOf,
+} from './notice_attempt.ts'
 import { descends } from './proc.ts'
 import type { Change } from './types.ts'
 
@@ -17,7 +25,6 @@ export const CODEX_NOTICE =
 // Codex treats Enter within 120ms of a fast character burst as pasted content.
 // Keep its paste protection enabled and cross that window before submitting.
 const SUBMIT_DELAY = 'sleep 0.15'
-const RETRY_MS = 5_000
 const STABLE_MS = 50
 
 export type NativeSession = {
@@ -28,6 +35,8 @@ export type NativeSession = {
   turn: string | null
   notice_at: string | null
   notice_accepted_at: string | null
+  notice_token: string | null
+  notice?: NoticeAttempt
 }
 
 export type Pane = {
@@ -45,7 +54,8 @@ export type NotifyDeps = {
   under: (pid: number, root: number) => boolean
   capture: (id: string) => Promise<string | null>
   wait: (ms: number) => Promise<void>
-  mark: (eid: string, at: string, token: string) => void
+  mark: (eid: string, token: string) => void
+  fail: (token: string, message: string) => void
   send: (id: string, text: string) => Promise<boolean>
   token: () => string
 }
@@ -145,16 +155,6 @@ let samePane = (pane: Pane | null, session: NativeSession) =>
   !!pane && pane.id == session.pane && !pane.dead && !pane.mode &&
   !!session.pid
 
-let due = (session: NativeSession, now: number, pendingAt: string) => {
-  let sent = Date.parse(session.notice_at ?? '')
-  if (!Number.isFinite(sent)) return true
-  let pending = Date.parse(pendingAt)
-  if (Number.isFinite(pending) && pending > sent) return true
-  let accepted = Date.parse(session.notice_accepted_at ?? '')
-  if (Number.isFinite(accepted) && accepted >= sent) return false
-  return now - sent >= RETRY_MS
-}
-
 // One guarded attempt. The last external read is capture3; after that we only
 // stamp the opaque attempt and issue one tmux command: literal text, then Enter.
 export let notify = async (
@@ -168,7 +168,7 @@ export let notify = async (
   if (route.state != 'queued' || route.transport != 'tmux') return 'none'
   let pending = await deps.pending(session.id)
   if (!pending) return 'none'
-  if (!due(session, deps.now(), pending)) return 'defer'
+  if (!noticeDue(session.notice, deps.now(), pending)) return 'defer'
 
   let pane1 = await deps.pane(session.pane)
   if (!samePane(pane1, session) || !deps.under(session.pid, pane1!.pid)) {
@@ -194,12 +194,11 @@ export let notify = async (
     capture3 == null || capture3 != capture2 || !emptyComposer(capture3)
   ) return 'defer'
 
-  deps.mark(
-    session.eid,
-    new Date(deps.now()).toISOString(),
-    deps.token(),
-  )
-  return await deps.send(session.pane, CODEX_NOTICE) ? 'sent' : 'defer'
+  let token = deps.token()
+  deps.mark(session.eid, token)
+  if (await deps.send(session.pane, CODEX_NOTICE)) return 'sent'
+  deps.fail(token, 'tmux did not accept the notice command')
+  return 'defer'
 }
 
 type Run = (args: string[]) => Promise<{
@@ -361,12 +360,8 @@ let systemDeps = (
   under: descends,
   capture: capturePane,
   wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  mark: (eid, at, token) =>
-    stamp(eid, {
-      notice_at: at,
-      notice_accepted_at: null,
-      notice_token: token,
-    }, cast),
+  mark: (eid, token) => beginNotice(eid, token, cast),
+  fail: (token, message) => failNotice(token, message, cast),
   send: sendNotice,
   token: () => crypto.randomUUID(),
 })
@@ -381,13 +376,16 @@ export let nativeSweep = (cast: Cast): Promise<void> => {
     // graph again: the scoped read is owed to work, never to the tick.
     let sessions = db.prepare(`
       select o.eid as eid, s.id, s.pid, s.pane, s.turn, s.notice_at,
-             s.notice_accepted_at
+             s.notice_accepted_at, s.notice_token
       from session s join entity o on o.id = s.entity
       where s.pane is not null and s.finished_at is null
     `).all() as NativeSession[]
     if (!sessions.length) return
     let deps = systemDeps(cast)
-    for (let session of sessions) await notify(session, deps)
+    for (let session of sessions) {
+      session.notice = noticeOf(session.eid, session)
+      await notify(session, deps)
+    }
   })().finally(() => sweeping = undefined)
   return sweeping
 }
@@ -411,17 +409,24 @@ export let noticeAccepted =
   (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
     if (comp.turn != 'busy') return
     let row = db.prepare(
-      `select notice_at, notice_accepted_at from session
+      `select notice_at, notice_accepted_at, notice_token, pane from session
        where entity = (select id from entity where eid = ?)`,
     ).get(eid) as {
       notice_at: string | null
       notice_accepted_at: string | null
+      notice_token: string | null
+      pane: string | null
     } | undefined
-    if (!row?.notice_at) return
-    let sent = Date.parse(row.notice_at)
-    let accepted = Date.parse(row.notice_accepted_at ?? '')
-    if (Number.isFinite(accepted) && accepted >= sent) return
-    stamp(eid, {
-      notice_accepted_at: new Date().toISOString(),
-    }, cast)
+    if (!row) return
+    let attempt = noticeOf(eid, row)
+    if (
+      !attempt || attempt.state == 'accepted' ||
+      attempt.state == 'legacy-accepted'
+    ) return
+    if ('eid' in attempt) acceptNotice(attempt.eid, row.pane ?? 'tmux', cast)
+    else {
+      stamp(eid, {
+        notice_accepted_at: new Date().toISOString(),
+      }, cast)
+    }
   }

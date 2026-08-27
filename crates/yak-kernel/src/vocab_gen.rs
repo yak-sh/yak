@@ -290,7 +290,7 @@ pub(crate) fn baked() -> Vocab {
         ]),
         ("notice".into(), vec![
             ("target".into(), PropType::Eid("entity".into())),
-            ("event".into(), PropType::Enum(vec!["lapse".into(), "sweep".into(), "scene".into()])),
+            ("event".into(), PropType::Enum(vec!["lapse".into(), "sweep".into(), "scene".into(), "wake".into()])),
         ]),
         ("meta".into(), vec![]),
         ("review".into(), vec![
