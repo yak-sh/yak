@@ -77,6 +77,8 @@ import {
   spawnChanges,
   spawnPlan,
   taskChanges,
+  taskTreePlan,
+  taskTreeText,
   undo,
   uniq,
 } from './client.ts'
@@ -470,37 +472,49 @@ filters must ALL match. ${FILTERS} ${BUS}`,
   tool(
     'task_new',
     `Create one task, or a batch with tasks:[{title, body?, status?,
-params?}]. The single-task fields and tasks mode are exclusive. A
+params?, key?, parent?, relation?}]. The single-task fields and tasks mode are exclusive. A
 task's dedicated title/body/status wins over the same property in its
 params; params carries every other writable property. The whole batch
-lands in one atomic apply. Reference param values accept human ids
+lands in one atomic apply. In a structured batch, parent names another
+item's key and relation names the semantic edge; project roots the plan.
+Reference param values accept human ids
 (.project=P-19). ${GRAMMAR} ${BUS}`,
     {
       title: title().optional(),
       body: body().optional(),
       status: z.enum(statuses).optional(),
       params: z.array(z.string()).optional(),
+      project: z.string().optional().describe(
+        'Project root for a tasks[] batch carrying parent/relation.',
+      ),
       tasks: z.array(
         z.object({
+          key: z.string().min(1).optional(),
           title: title(),
           body: body().optional(),
           status: z.enum(statuses).optional(),
           params: z.array(z.string()).optional(),
+          parent: z.string().optional(),
+          relation: z.enum(edges).optional(),
         }).strict(),
       ).min(1).optional(),
       session: z.string().optional(),
     },
     async (
-      { title, body, status, params, tasks, session }: {
+      { title, body, status, params, project, tasks, session }: {
         title?: string
         body?: string
         status?: string
         params?: string[]
+        project?: string
         tasks?: {
+          key?: string
           title: string
           body?: string
           status?: string
           params?: string[]
+          parent?: string
+          relation?: (typeof edges)[number]
         }[]
         session?: string
       },
@@ -539,12 +553,41 @@ lands in one atomic apply. Reference param values accept human ids
         ]),
         sess,
       )
+      let structured = want.some((t) => t.parent || t.relation)
+      if (structured) {
+        let root = project ?? scope
+        if (!root) {
+          return err('a structured tasks[] batch needs project or caller scope')
+        }
+        try {
+          let plan = await taskTreePlan({
+            project: root,
+            nodes: want.map((t, i) => ({
+              key: t.key ?? String(i + 1),
+              title: t.title,
+              body: t.body,
+              status: t.status,
+              params: t.params,
+              parent: t.parent,
+              relation: t.relation,
+            })),
+          }, ioQ)
+          let applied = await io.write(plan.changes, session)
+          return bus(taskTreeText(plan, applied), session)
+        } catch (e) {
+          return err((e as Error).message)
+        }
+      }
       let minted: string[] = []
       let changes: Change[] = []
       for (let t of want) {
-        let grouped = patches(
-          await derefedParams(parseAll(t.params ?? []), ioQ),
-        )
+        let ps = parseAll(t.params ?? [])
+        if (
+          project && !ps.some((p) => p.comp == 'task' && p.prop == 'project')
+        ) {
+          ps.push(param(`.project=${project}`)!)
+        }
+        let grouped = patches(await derefedParams(ps, ioQ))
         grouped.doc = {
           ...grouped.doc,
           title: t.title,
@@ -578,6 +621,49 @@ lands in one atomic apply. Reference param values accept human ids
         }`,
         session,
       )
+    },
+  )
+
+  tool(
+    'task_tree',
+    `Create a project-rooted task tree as one atomic apply. Nodes have unique
+local keys and either title/body/status/params for a new task, or id for an
+existing entity. parent names another local key; relation is the semantic edge
+from parent to child. Root nodes default to project wants. dry_run validates,
+resolves references, proves rootedness, and renders the plan without writing.
+No structure is inferred from prose. ${GRAMMAR} ${BUS}`,
+    {
+      project: z.string().describe('Project id or handle that roots the tree.'),
+      nodes: z.array(
+        z.object({
+          key: z.string().min(1).describe('Unique local key within this plan.'),
+          id: z.string().optional().describe(
+            'Existing entity; exclusive with authoring fields.',
+          ),
+          title: title().optional(),
+          body: body().optional(),
+          status: z.enum(statuses).optional(),
+          params: z.array(z.string()).optional(),
+          parent: z.string().optional().describe(
+            "Local key of this node's parent.",
+          ),
+          relation: z.enum(edges).optional().describe(
+            'Semantic edge from parent to this node.',
+          ),
+        }).strict(),
+      ).min(1),
+      dry_run: z.boolean().optional(),
+      session: z.string().optional(),
+    },
+    async ({ project, nodes, dry_run, session }) => {
+      try {
+        let plan = await taskTreePlan({ project, nodes }, ioQ)
+        if (dry_run) return text(`dry run\n${taskTreeText(plan)}`)
+        let applied = await io.write(plan.changes, session)
+        return bus(taskTreeText(plan, applied), session)
+      } catch (e) {
+        return err((e as Error).message)
+      }
     },
   )
 

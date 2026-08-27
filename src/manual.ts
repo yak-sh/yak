@@ -268,6 +268,24 @@ export let manuals = declare({
     // create() owns the more useful --flag → .param correction.
     passthrough: true,
   },
+  tree: {
+    about: 'author a typed task tree in one atomic batch',
+    body: 'text',
+    examples: [
+      'task tree @plan.json --dry-run',
+      'task tree @- < plan.json',
+    ],
+    detail: 'The input is JSON: {"project":"P-19","nodes":[...]}. Each ' +
+      'node has a unique key and either a title (new task) or id (existing ' +
+      'entity). A child names its parent key and an explicit semantic ' +
+      `relation (${edges.join(', ')}); a root defaults to project wants. ` +
+      'The compiler resolves every id and dot-param, proves every node has a ' +
+      'project path, then applies the tasks and edges together. It never ' +
+      'infers structure from prose.',
+    root: true,
+    args: [arg('text', text, true)],
+    opts: [flag('--dry-run')],
+  },
   set: {
     dots: 'params',
     body: 'body',

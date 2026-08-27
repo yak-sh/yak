@@ -505,6 +505,10 @@ let bases: Record<string, Record<string, unknown>> = {
   usage: {},
   task_list: {},
   task_new: {},
+  task_tree: {
+    project: 'P-1',
+    nodes: [{ key: 'root', title: 'Root' }],
+  },
   task_update: { id: 'T-1', params: ['.status=open'] },
   task_context: { session: 'test' },
   task_claim: { id: 'T-1', session: 'test' },
@@ -556,6 +560,13 @@ Deno.test('MCP tool inputs are strict at every declared object boundary', async 
         arguments: { tasks: [{ title: 'Task', unknown: true }] },
       },
       {
+        name: 'task_tree',
+        arguments: {
+          project: 'P-1',
+          nodes: [{ key: 'root', title: 'Task', unknown: true }],
+        },
+      },
+      {
         name: 'graph_apply',
         arguments: {
           changes: [{
@@ -587,6 +598,7 @@ Deno.test('MCP schemas document parameters and derive closed vocabularies', asyn
       let [name, field] of [
         ['search', 'limit'],
         ['task_new', 'title'],
+        ['task_tree', 'project'],
         ['task_update', 'comment'],
         ['task_spawn', 'persona'],
         ['history', 'limit'],
@@ -789,6 +801,80 @@ slow('MCP modes apply every accepted field and reject conflicts', async () => {
         { eid: memory, name: 'doc', comp: { title: 'Memory', body: 'Fact' } },
         { eid: memory, name: 'memory', comp: { scope: null } },
       ])
+      let projectRow = rows(snapshot(g.db)).find((r) => r.eid == project)!
+      let projectId = idOf(projectRow)
+
+      let beforeTree = rows(snapshot(g.db)).length
+      let preview = await client.callTool({
+        name: 'task_tree',
+        arguments: {
+          project: projectId,
+          dry_run: true,
+          nodes: [
+            { key: 'root', title: 'Tree root' },
+            {
+              key: 'leaf',
+              title: 'Tree leaf',
+              parent: 'root',
+              relation: 'requires',
+            },
+          ],
+        },
+      })
+      assertEquals(preview.isError, undefined)
+      assertMatch(said(preview), /dry run[\s\S]*wants \[root\]/)
+      assertEquals(rows(snapshot(g.db)).length, beforeTree)
+
+      let planted = await client.callTool({
+        name: 'task_tree',
+        arguments: {
+          project: projectId,
+          nodes: [
+            { key: 'root', title: 'Tree root' },
+            {
+              key: 'leaf',
+              title: 'Tree leaf',
+              parent: 'root',
+              relation: 'requires',
+            },
+          ],
+        },
+      })
+      assertEquals(planted.isError, undefined, said(planted))
+      assertMatch(said(planted), /wants T-\d+[\s\S]*requires T-\d+/)
+      let treeRows = rows(snapshot(g.db)).filter((r) =>
+        ['Tree root', 'Tree leaf'].includes(String(r.comps.doc?.title ?? ''))
+      )
+      let root = treeRows.find((r) => r.comps.doc?.title == 'Tree root')!
+      let leaf = treeRows.find((r) => r.comps.doc?.title == 'Tree leaf')!
+      assertEquals(root.comps.task?.project, project)
+      assertEquals(leaf.comps.task?.project, project)
+      assertEquals(
+        snapshot(g.db).deps.filter((d) =>
+          d.child == root.eid || d.child == leaf.eid
+        ),
+        [
+          { parent: project, type: 'wants', child: root.eid },
+          { parent: root.eid, type: 'requires', child: leaf.eid },
+        ],
+      )
+
+      let nested = await client.callTool({
+        name: 'task_new',
+        arguments: {
+          project: projectId,
+          tasks: [
+            { key: 'a', title: 'Nested root' },
+            {
+              key: 'b',
+              title: 'Nested leaf',
+              parent: 'a',
+              relation: 'requires',
+            },
+          ],
+        },
+      })
+      assertEquals(nested.isError, undefined, said(nested))
 
       let confirmed = await client.callTool({
         name: 'memory_save',

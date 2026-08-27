@@ -58,6 +58,8 @@ import {
   taskChanges,
   taskContextBlock,
   taskContextGraph,
+  taskTreePlan,
+  taskTreeText,
   threadOf,
   unreadMail,
   unreadPipe,
@@ -67,7 +69,12 @@ import {
 import { matchQuery, parseQuery, resolveRefs } from './query.ts'
 import { local } from './time.ts'
 import { type Change, type Dep, idOf, kindOf, type Snapshot } from './types.ts'
-import { assertEquals, assertMatch, assertThrows } from '@std/assert'
+import {
+  assertEquals,
+  assertMatch,
+  assertRejects,
+  assertThrows,
+} from '@std/assert'
 
 // A tiny graph: one board-ordered pair of tasks, a session, a claim.
 let S = 'aaaaaaaa-0000-4000-8000-000000000001'
@@ -628,6 +635,119 @@ Deno.test('taskChanges: defaults + grouped comps ride along', () => {
   assertEquals(cs.map((c) => c.name), ['doc', 'task', 'pin'])
   assertEquals(cs[0].comp, { body: '', title: 'x' })
   assertEquals(cs[1].comp?.status, 'open')
+})
+
+Deno.test('taskTreePlan: one rooted batch covers new and existing nodes', async () => {
+  let P = 'cccccccc-0000-4000-8000-000000000019'
+  let OLD = 'cccccccc-0000-4000-8000-000000000003'
+  let pool: Row[] = [
+    {
+      eid: P,
+      num: 19,
+      kind: 'project',
+      comps: { project: {}, doc: { title: 'Task Graph' } },
+    },
+    {
+      eid: OLD,
+      num: 3,
+      kind: 'task',
+      comps: {
+        task: { status: 'open', project: P },
+        doc: { title: 'Initiative' },
+      },
+    },
+  ]
+  let q = (filters: string[]) => {
+    let ids = filters[0].slice(3).split(',')
+    return Promise.resolve(
+      pool.filter((r) => ids.some((id) => find(pool, id) == r)),
+    )
+  }
+  let plan = await taskTreePlan({
+    project: 'P-19',
+    nodes: [
+      { key: 'initiative', id: 'T-3' },
+      {
+        key: 'build',
+        title: 'Build the primitive',
+        parent: 'initiative',
+        relation: 'requires',
+        params: ['.priority=P1'],
+      },
+    ],
+  }, q)
+  let made = plan.nodes.find((n) => n.key == 'build')!
+  assertEquals(
+    plan.changes.filter((c) => c.name == 'dependency'),
+    [
+      { eid: P, name: 'dependency', comp: { type: 'wants', child: OLD } },
+      {
+        eid: OLD,
+        name: 'dependency',
+        comp: { type: 'requires', child: made.eid },
+      },
+    ],
+  )
+  assertEquals(
+    plan.changes.find((c) => c.eid == made.eid && c.name == 'task')?.comp,
+    { status: 'open', project: P, priority: 1 },
+  )
+  assertEquals(
+    taskTreeText(plan),
+    'P-19 Task Graph\n└─ wants T-3 Initiative\n   └─ requires [build] Build the primitive',
+  )
+  assertEquals(
+    taskTreeText(plan, [
+      ...plan.changes,
+      {
+        eid: made.eid,
+        name: 'entity',
+        comp: { eid: made.eid, num: 42 },
+      },
+    ]),
+    'P-19 Task Graph\n└─ wants T-3 Initiative\n   └─ requires T-42 Build the primitive',
+  )
+})
+
+Deno.test('taskTreePlan: duplicate, dangling, and cyclic keys cannot write', async () => {
+  let P = 'dddddddd-0000-4000-8000-000000000019'
+  let project: Row = {
+    eid: P,
+    num: 19,
+    kind: 'project',
+    comps: { project: {}, doc: { title: 'Task Graph' } },
+  }
+  let q = () => Promise.resolve([project])
+  await assertRejects(
+    () =>
+      taskTreePlan({
+        project: 'P-19',
+        nodes: [{ key: 'x', title: 'A' }, { key: 'x', title: 'B' }],
+      }, q),
+    Error,
+    'duplicate tree key: x',
+  )
+  await assertRejects(
+    () =>
+      taskTreePlan({
+        project: 'P-19',
+        nodes: [{ key: 'x', title: 'A', parent: 'missing', relation: 'reads' }],
+      }, q),
+    Error,
+    'no tree key: missing',
+  )
+  await assertRejects(
+    () =>
+      taskTreePlan({
+        project: 'P-19',
+        nodes: [
+          { key: 'a', title: 'A', parent: 'b', relation: 'requires' },
+          { key: 'b', title: 'B', parent: 'a', relation: 'requires' },
+        ],
+      }, q),
+    Error,
+    'tree cycle',
+  )
 })
 
 Deno.test('sessionFor: reuse, mint, cwd + pid refresh', () => {

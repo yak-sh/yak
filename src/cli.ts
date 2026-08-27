@@ -84,6 +84,9 @@ import {
   subChanges,
   taskBlock,
   taskChanges,
+  type TaskTreeInput,
+  taskTreePlan,
+  taskTreeText,
   undo,
   unreadPipe,
   WORKING_SET,
@@ -726,6 +729,31 @@ let create = async (got: Got) => {
     eid,
   )
   if (hint) print(hint)
+}
+
+let tree = async (got: Got) => {
+  let source = got.body?.trim()
+  if (!source) throw new Error('task tree needs a JSON plan')
+  let input: TaskTreeInput
+  try {
+    input = JSON.parse(source) as TaskTreeInput
+  } catch (e) {
+    throw new Error(`task tree: invalid JSON: ${(e as Error).message}`)
+  }
+  if (!input || typeof input != 'object' || !Array.isArray(input.nodes)) {
+    throw new Error('task tree: expected {project, nodes:[...]}')
+  }
+  let plan = await taskTreePlan(input)
+  if (got.flags.has('--dry-run')) {
+    print(
+      `dry run: ${plan.nodes.filter((n) => !n.existing).length} new, ` +
+        `${plan.nodes.filter((n) => n.existing).length} existing, ` +
+        `${plan.nodes.length} edges\n${taskTreeText(plan)}`,
+    )
+    return
+  }
+  let applied = await send(plan.changes)
+  print(taskTreeText(plan, applied))
 }
 
 let set = async (got: Got) => {
@@ -3312,6 +3340,7 @@ export let verbs = bind({
   docs,
   stale,
   new: create,
+  tree,
   set,
   edit,
   redact,

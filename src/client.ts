@@ -12,6 +12,8 @@ import {
   comps,
   deaths,
   type Dep,
+  type Edge,
+  edges,
   type Hit,
   kindOf,
   sessionFacetNames,
@@ -1420,6 +1422,199 @@ export let taskChanges = (
     .filter(([n]) => n != 'doc' && n != 'task')
     .map(([name, comp]) => ({ eid, name, comp })),
 ]
+
+// A task TREE is authored as one structured plan and one apply batch. Local
+// keys name nodes before the server mints their human ids; existing nodes ride
+// by id and receive only the declared edge. Every node has exactly one parent
+// in the plan (the project for a root), which makes project reachability
+// provable before a write without pretending one edge type is structural.
+export type TaskTreeNode = {
+  key: string
+  id?: string
+  title?: string
+  body?: string
+  status?: string
+  params?: string[]
+  parent?: string
+  relation?: Edge
+}
+
+export type TaskTreeInput = {
+  project: string
+  nodes: TaskTreeNode[]
+}
+
+export type TaskTreeNodePlan = {
+  key: string
+  eid: string
+  existing?: Row
+  title: string
+  parent?: string
+  relation: Edge
+}
+
+export type TaskTreePlan = {
+  project: Row
+  nodes: TaskTreeNodePlan[]
+  changes: Change[]
+}
+
+let treeParams = (params: string[]) =>
+  params.map((raw) => {
+    let p = param(raw)
+    if (!p) throw new Error(`not a dot-param: ${raw}`)
+    return p
+  })
+
+// Compile first, write second. The compiler resolves every external id and
+// reference, rejects partial/ambiguous plans, and mints all ids client-side.
+// CLI and MCP share this exact function; neither grows its own tree semantics.
+export let taskTreePlan = async (
+  input: TaskTreeInput,
+  q: Querier = query,
+): Promise<TaskTreePlan> => {
+  if (!input.project?.trim()) throw new Error('a task tree needs a project')
+  if (!input.nodes.length) {
+    throw new Error('a task tree needs at least one node')
+  }
+  let keys = input.nodes.map((n) => n.key.trim())
+  if (keys.some((key) => !key)) throw new Error('every tree node needs a key')
+  let duplicate = keys.find((key, i) => keys.indexOf(key) != i)
+  if (duplicate) throw new Error(`duplicate tree key: ${duplicate}`)
+
+  let external = [
+    input.project,
+    ...input.nodes.flatMap((n) => n.id ? [n.id] : []),
+  ]
+  let found = await fetched(external, [], q)
+  let project = find(found, input.project)
+  if (!project?.comps.project) {
+    throw new Error(`not a project: ${input.project}`)
+  }
+
+  let plans: TaskTreeNodePlan[] = []
+  let changes: Change[] = []
+  let existingEids = new Set<string>()
+  for (let [i, node] of input.nodes.entries()) {
+    let key = keys[i]
+    let parent = node.parent?.trim()
+    if (parent && !keys.includes(parent)) {
+      throw new Error(`no tree key: ${parent} (parent of ${key})`)
+    }
+    if (parent && !node.relation) {
+      throw new Error(`${key} needs a relation to parent ${parent}`)
+    }
+    let relation = node.relation ?? 'wants'
+    if (!(edges as readonly string[]).includes(relation)) {
+      throw new Error(`edge type is one of: ${edges.join(', ')}`)
+    }
+
+    let existing = node.id ? find(found, node.id) : undefined
+    if (node.id && !existing) throw new Error(`no entity: ${node.id}`)
+    if (existing?.eid == project.eid) {
+      throw new Error(`${key} is the project root; omit it from nodes`)
+    }
+    if (existing && existingEids.has(existing.eid)) {
+      throw new Error(`duplicate tree entity: ${idOf(existing)}`)
+    }
+    if (existing) existingEids.add(existing.eid)
+    let authors = node.title != null || node.body != null ||
+      node.status != null ||
+      !!node.params?.length
+    if (existing && authors) {
+      throw new Error(
+        `${key} names existing ${node.id}; it cannot also author it`,
+      )
+    }
+    if (!existing && !node.title?.trim()) {
+      throw new Error(`${key} needs a title or an existing id`)
+    }
+    if (node.status && !(statuses as readonly string[]).includes(node.status)) {
+      throw new Error(`status is one of: ${statuses.join(', ')}`)
+    }
+
+    let eid = existing?.eid ?? uuid()
+    let title = String(existing?.comps.doc?.title ?? node.title ?? '')
+    plans.push({ key, eid, existing, title, parent, relation })
+    if (existing) continue
+
+    let grouped = patches(
+      await derefedParams(treeParams(node.params ?? []), q),
+    )
+    let asked = String(grouped.task?.project ?? '')
+    if (asked && asked != project.eid) {
+      throw new Error(
+        `${key} belongs to ${asked}, not tree project ${idOf(project)}`,
+      )
+    }
+    grouped.doc = {
+      ...grouped.doc,
+      title: node.title!.trim(),
+      ...(node.body != null ? { body: node.body } : {}),
+    }
+    grouped.task = {
+      ...grouped.task,
+      project: project.eid,
+      ...(node.status ? { status: node.status } : {}),
+    }
+    changes.push(...taskChanges(eid, grouped))
+  }
+
+  let byKey = new Map(plans.map((n) => [n.key, n]))
+  let visiting = new Set<string>()
+  let rooted = new Set<string>()
+  let prove = (node: TaskTreeNodePlan): void => {
+    if (rooted.has(node.key)) return
+    if (visiting.has(node.key)) throw new Error(`tree cycle at ${node.key}`)
+    visiting.add(node.key)
+    if (node.parent) prove(byKey.get(node.parent)!)
+    visiting.delete(node.key)
+    rooted.add(node.key)
+  }
+  for (let node of plans) prove(node)
+
+  for (let node of plans) {
+    let parent = node.parent ? byKey.get(node.parent)!.eid : project.eid
+    changes.push({
+      eid: parent,
+      name: 'dependency',
+      comp: { type: node.relation, child: node.eid },
+    })
+  }
+  return { project, nodes: plans, changes }
+}
+
+// Render the semantic sentences, not an invented containment tree. Dry-runs
+// use [local-key]; after apply, the echoed entity spines replace them with the
+// server-minted human ids without a second read.
+export let taskTreeText = (plan: TaskTreePlan, applied?: Change[]) => {
+  let name = (node: TaskTreeNodePlan) =>
+    node.existing
+      ? idOf(node.existing)
+      : applied
+      ? mintedIn(applied, node.eid)
+      : `[${node.key}]`
+  let children = (parent?: string) =>
+    plan.nodes.filter((n) => n.parent == parent)
+  let lines = [
+    `${idOf(plan.project)} ${plan.project.comps.doc?.title ?? ''}`.trim(),
+  ]
+  let walk = (parent: string | undefined, indent: string) => {
+    let kids = children(parent)
+    kids.forEach((node, i) => {
+      let last = i == kids.length - 1
+      lines.push(
+        `${indent}${last ? '└─' : '├─'} ${node.relation} ${
+          name(node)
+        } ${node.title}`
+          .trimEnd(),
+      )
+      walk(node.key, indent + (last ? '   ' : '│  '))
+    })
+  }
+  walk(undefined, '')
+  return lines.join('\n')
+}
 
 // Resolve 'T-3' / a bare num / a full eid / a SHORT-eid handle / an alias slug
 // to a row — the cache-side twin of db.ts resolveId (T-3684). Num first, then
