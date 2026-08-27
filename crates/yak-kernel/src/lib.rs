@@ -8,6 +8,8 @@
 // library client connects, reads, writes through apply, and leaves the
 // schema alone.
 
+#[cfg(feature = "native")]
+pub mod baton;
 pub mod cache;
 #[cfg(feature = "native")]
 pub mod candidates;
@@ -61,6 +63,8 @@ pub use write::{
 };
 #[cfg(feature = "native")]
 pub use schema::{apply_schema, mint_epoch, SchemaOp};
+#[cfg(feature = "native")]
+pub use baton::{take_baton, try_baton, Baton, BatonError, TakeOpts, EFFECTS_LOCK, WRITER_LOCK};
 
 // The live graph the way every client resolves it: DB_PATH wins, else the
 // home pairing.

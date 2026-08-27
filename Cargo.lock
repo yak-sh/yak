@@ -1463,6 +1463,7 @@ name = "yak-kernel"
 version = "0.1.1"
 dependencies = [
  "chrono",
+ "libc",
  "rusqlite",
  "serde_json",
  "sha2",

@@ -30,7 +30,7 @@ exclude = ["*.ts"]
 # guarantee SQLite actually tests.
 [features]
 default = ["native", "remote", "bundled"]
-native = ["dep:rusqlite", "dep:chrono", "dep:sha2", "dep:uuid", "dep:url"]
+native = ["dep:rusqlite", "dep:chrono", "dep:sha2", "dep:uuid", "dep:url", "dep:libc"]
 remote = ["dep:ureq"]
 bundled = ["rusqlite/bundled"]
 
@@ -47,3 +47,7 @@ uuid = { version = "1", features = ["v4"], optional = true }
 # rung 6b (T-22862), operator-decided (C-22864): a faithful port needs the full
 # WHATWG parser, not a hand-rolled subset that would silently diverge.
 url = { version = "2", optional = true }
+# flock(2) for the writer baton (baton.rs, T-22890) — the SAME primitive Deno's
+# FsFile.tryLockSync takes on Linux, so a Rust swap successor and a Deno
+# predecessor serialize on one sidecar. Native-only (touches the OS), never wasm.
+libc = { version = "0.2", optional = true }
