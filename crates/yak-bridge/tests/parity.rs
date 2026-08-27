@@ -37,10 +37,19 @@ fn both() -> Option<(String, String)> {
     Some((ts()?, br()?))
 }
 
+// A browser percent-encodes the URI-unsafe chars before it sends a URL; ureq's
+// http layer likewise REFUSES a raw `<`/`>` in the request target. Encode just
+// those two (the corpus's `<=`/`>=` filters) so the wire carries what a real
+// client sends — both servers decodeURIComponent each segment back, so the
+// answer is unchanged; this only lets the request leave the harness.
+fn wire(path: &str) -> String {
+    path.replace('<', "%3C").replace('>', "%3E")
+}
+
 // GET, returning (status, raw body). ureq folds a 4xx into an Err whose body is
 // the message — lift it so a 400 diffs like any other answer.
 fn get(base: &str, path: &str) -> (u16, String) {
-    let url = format!("{base}{path}");
+    let url = format!("{base}{}", wire(path));
     match ureq::get(&url).call() {
         Ok(mut r) => {
             let s = r.status().as_u16();
@@ -138,6 +147,24 @@ fn query_parity() {
         "/query?.kind=task&.title~=port&limit=20".into(),      // contains (instr)
         "/query?.kind=task&.assignee=&limit=20".into(),        // absence
         "/query?.kind=task&.doc!&limit=20".into(),             // component presence
+        // The WINDOWED pure-limit route (T-22777): an explicit `limit` pushes
+        // the newest-N window into SQL (rows_window) instead of bulk-loading and
+        // cutting in Rust. Each must stay byte-identical to the bulk-cut answer.
+        //   - a kind whose comp OVERLAPS an earlier kind (a `board` comp worn by
+        //     a project) proves the derived-kind screen rides the SQL BEFORE the
+        //     LIMIT — a screened row must not fill and then vacate the page.
+        "/query?.kind=board&limit=1".into(),
+        "/query?.kind=board&limit=3".into(),
+        "/query?.kind=project&limit=2".into(),
+        //   - a filter that compiles EXACTLY + limit: the window's exact path
+        //     (LIMIT in the statement).
+        "/query?.kind=task&.status=open&limit=1".into(),
+        "/query?.kind=task&.priority<=1&limit=1".into(),
+        //   - a filter that DECLINES to compile (a time phrase) + limit: the
+        //     window's inexact fallback (narrow → refine → screen → cut in Rust).
+        "/query?.kind=task&.updated.at>=today&limit=5".into(),
+        //   - a reference filter + limit, on a kind other than task.
+        "/query?.kind=memory&.scope=P-19&limit=3".into(),
         // AGGREGATE projections (T-22759): the value, not a row set. `.count!`
         // is one number; `.tally=` the value→count map (keys ascending);
         // `.distinct=` the sorted keys. The bridge reuses the kernel's one

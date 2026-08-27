@@ -140,6 +140,32 @@ fn is_text_term(seg: &str) -> bool {
         && !seg[1..].contains(['=', '!', '<', '>', '~'])
 }
 
+// The derived-kind screen as PREDS. `.kind=K` means kindOf(comps) == K — K
+// present AND every EARLIER kindOrder comp absent (TS `kindPreds`). The kind's
+// own base table already guarantees K present, so the screen is just the
+// earlier-comps-absent half, one absence pred each. Expressing it as preds (not
+// a post-hoc JS filter) is what lets the windowed path screen the derived kind
+// IN SQL, before its LIMIT: otherwise a row an earlier kind reclaims (a `board`
+// comp worn by a project) could fill the newest-N page and then be screened,
+// under-filling it. Absence is op "=" with an empty value here — the kernel's
+// presence/absence convention, which `candidates::compile` and `query::matches`
+// both read the same way (op "" is PRESENCE there, not absence).
+fn kind_screen(kind: &str) -> Vec<query::Pred> {
+    let order = &vocab().kind_order;
+    let Some(i) = order.iter().position(|k| k == kind) else {
+        return vec![];
+    };
+    order[..i]
+        .iter()
+        .map(|c| query::Pred {
+            comp: c.clone(),
+            prop: String::new(),
+            op: "=".into(),
+            value: String::new(),
+        })
+        .collect()
+}
+
 // evalGraph's `cut`: `after` keeps rows below that num; an explicit `limit`
 // keeps the NEWEST `limit` by num and returns them in num order. Input is
 // already num-ascending (rows_of_kind order), so the no-limit path is identity.
@@ -349,7 +375,6 @@ pub fn answer(store: &Store, raw: &str) -> Result<Value, String> {
         return Ok(Value::Array(vec![]));
     }
     query::resolve_values(store, &mut preds);
-    let rows = store.rows_matching(&kind, &preds, q.reveal)?;
     // rows_of_kind is candidate membership — every wearer of the kind's comp.
     // But `.kind=K` in the route means DERIVED kind == K (kindOf), so an entity
     // wearing a board comp whose derived kind is `project` (P-19) is NOT a board
@@ -360,6 +385,23 @@ pub fn answer(store: &Store, raw: &str) -> Result<Value, String> {
     let named_kind = q.filters.iter().any(|f| {
         f.starts_with(".kind=") || f == ".kind" || !f.starts_with('.')
     });
+    // The pure-limit HOT PATH: an explicit `limit` lets the kernel push the
+    // newest-N window into SQL (`rows_window`), materializing at most `limit`
+    // rows instead of bulk-loading the whole kind and cutting in Rust — flat
+    // 0.14ms where the bulk read grows with kind size (T-22758). The window
+    // already screens quarantine and applies the after/limit cut in the
+    // statement; folding the derived-kind screen in as absence preds screens it
+    // there too, so the SQL LIMIT rides a fully-screened order. Byte-identical
+    // to the bulk-cut path below — parity.rs holds the line.
+    if let Some(limit) = q.limit {
+        if named_kind {
+            preds.extend(kind_screen(&kind));
+        }
+        let rows =
+            store.rows_window(&kind, &preds, q.after, Some(limit), q.reveal);
+        return Ok(layers(store, rows, q.deps, q.backlinks, q.reveal));
+    }
+    let rows = store.rows_matching(&kind, &preds, q.reveal)?;
     // rows_of_kind does not screen quarantine (a listing screens one level up);
     // the route's default screen is a `.quarantined=` absent pred, so apply it
     // here unless revealed.
