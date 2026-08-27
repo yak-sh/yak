@@ -1641,22 +1641,40 @@ slow('a settled lifecycle stamp is one replayable moved patch', async () => {
   ).all(c0) as { batch: string }[]
   assertEquals(rows.length, 1)
   let changes = JSON.parse(rows[0].batch) as Change[]
-  assertEquals(changes, [{
-    eid,
-    name: 'session',
-    comp: {
-      status: 'failed',
-      stop_reason: 'exit unobserved: the child outlived the server',
-      finished_at: row(eid)?.finished_at,
+  let want: Change[] = [
+    {
+      eid,
+      name: 'session',
+      comp: {
+        status: 'failed',
+        stop_reason: 'exit unobserved: the child outlived the server',
+        finished_at: row(eid)?.finished_at,
+      },
     },
-  }])
+    { eid, name: 'run', comp: null },
+    {
+      eid,
+      name: 'settled',
+      comp: {
+        at: row(eid)?.finished_at,
+        status: 'failed',
+        exit_code: null,
+        stop_reason: 'exit unobserved: the child outlived the server',
+      },
+    },
+  ]
+  assertEquals(changes, want)
   assertEquals(
-    heard.filter((c) => c.eid == eid && c.name == 'session'),
-    changes,
+    heard.filter((c) =>
+      c.eid == eid && ['session', 'run', 'settled'].includes(c.name)
+    ),
+    want,
   )
   assertEquals(
-    delta(db, c0).changes.filter((c) => c.name == 'session'),
-    changes,
+    delta(db, c0).changes.filter((c) =>
+      c.eid == eid && ['session', 'run', 'settled'].includes(c.name)
+    ),
+    want,
   )
 })
 

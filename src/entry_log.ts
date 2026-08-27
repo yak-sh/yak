@@ -186,13 +186,15 @@ let raw = (row: EntryRow) =>
 // build — the per-row raw()/shown() mapping in graphLog that dominated the
 // 157ms dot render. busy and terminal are mutually exclusive (terminal
 // requires !busy), so one enum captures the log-derived standing: `busy` (a
-// generation/call in flight), `terminal` (the last generation delivered its
-// final answer, nothing pending), or `idle` (neither). graphLog reuses this,
+// generation/call in flight), `terminal` (the turn returned, failed, or was
+// interrupted with nothing pending), or `idle` (neither). graphLog reuses this,
 // so the dot's O(1) read and the full log can never drift. A server can
 // materialize this onto the session (a facet) so the dot never scans.
-export let standingOf = (
+export type SessionEnd = 'completed' | 'failed' | 'interrupted'
+
+export let sessionStateOf = (
   source: EntryRow[],
-): 'busy' | 'terminal' | 'idle' => {
+): { standing: 'busy' | 'terminal' | 'idle'; end?: SessionEnd } => {
   let rows = source.toSorted((a, b) => a.seq - b.seq)
   let cancelled = new Set(
     rows.flatMap((row) =>
@@ -218,7 +220,7 @@ export let standingOf = (
     }
     return !!c.call && !results.has(row.eid)
   })
-  if (busy) return 'busy'
+  if (busy) return { standing: 'busy' }
   let generation = rows.filter((row) => row.comps.generation).at(-1)
   let edge =
     rows.find((row) => row.eid == generation?.comps.generation?.through)?.seq ??
@@ -227,14 +229,30 @@ export let standingOf = (
     row.seq > edge && (row.comps.attention ||
       (row.comps.message?.role == 'user' && !row.comps.output))
   )
-  let terminal = !input &&
+  let completed = !input &&
     rows.some((row) =>
       row.comps.output?.source == generation?.eid &&
       row.comps.output?.phase == 'final_answer' &&
       row.comps.message?.role == 'agent'
     )
-  return terminal ? 'terminal' : 'idle'
+  if (completed) return { standing: 'terminal', end: 'completed' }
+  if (input) return { standing: 'idle' }
+  let turn = rows.filter((row) => row.seq >= edge)
+  let turnEids = new Set(turn.map((row) => row.eid))
+  if (
+    turn.some((row) =>
+      row.comps.cancel?.target &&
+      (row.comps.cancel.target == generation?.eid ||
+        turnEids.has(String(row.comps.cancel.target)))
+    )
+  ) return { standing: 'terminal', end: 'interrupted' }
+  if (turn.some((row) => row.comps.error)) {
+    return { standing: 'terminal', end: 'failed' }
+  }
+  return { standing: 'idle' }
 }
+
+export let standingOf = (source: EntryRow[]) => sessionStateOf(source).standing
 
 export let graphLog = (source: EntryRow[]): GraphLog => {
   let rows = source.toSorted((a, b) => a.seq - b.seq)

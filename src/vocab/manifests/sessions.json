@@ -328,6 +328,22 @@
         "rank": "number"
       }
     },
+    "run": {
+      "rank": 271,
+      "stamped_rank": 281,
+      "stamped": {
+        "status": {
+          "enum": [
+            "starting",
+            "running",
+            "stopping"
+          ]
+        },
+        "started_at": "time",
+        "stop_requested_at": "time",
+        "input_at": "time"
+      }
+    },
     "runner": {
       "rank": 540,
       "kind_rank": 170,
@@ -418,6 +434,23 @@
         "stderr": "body"
       }
     },
+    "settled": {
+      "rank": 272,
+      "stamped_rank": 282,
+      "stamped": {
+        "at": "time",
+        "status": {
+          "enum": [
+            "completed",
+            "failed",
+            "interrupted",
+            "lost"
+          ]
+        },
+        "exit_code": "number",
+        "stop_reason": "text"
+      }
+    },
     "spawn": {
       "rank": 580,
       "cols": {
@@ -487,6 +520,15 @@
         "branch": "text",
         "base_revision": "text"
       }
+    },
+    "yield": {
+      "rank": 273,
+      "stamped_rank": 283,
+      "stamped": {
+        "final_text": "body",
+        "usage_json": "text",
+        "stderr": "body"
+      }
     }
   },
   "session_active": [
@@ -501,6 +543,9 @@
   "session_facets": [
     "spawn",
     "worktree",
-    "runtime"
+    "runtime",
+    "run",
+    "settled",
+    "yield"
   ]
 }

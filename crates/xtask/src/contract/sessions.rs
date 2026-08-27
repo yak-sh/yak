@@ -12,7 +12,7 @@ inventory::submit! {
         plugin: "sessions",
         session_active: &["starting", "running", "stopping"],
         capabilities: &["spawn", "session-facets"],
-        session_facets: &["spawn", "worktree", "runtime"],
+        session_facets: &["spawn", "worktree", "runtime", "run", "settled", "yield"],
     }
 }
 
@@ -122,6 +122,50 @@ struct Runtime {
     provider_session_id: Text,
     #[stamped]
     serving_model: Text,
+}
+
+// The live half of a provider interaction. Presence means the Session can
+// still advance; terminal state moves atomically to `settled` instead.
+#[derive(Comp)]
+#[comp(plugin = "sessions", rank = 271, stamped_rank = 281)]
+struct Run {
+    #[stamped]
+    #[col(sel(starting, running, stopping))]
+    status: Sel,
+    #[stamped]
+    started_at: Time,
+    #[stamped]
+    stop_requested_at: Time,
+    #[stamped]
+    input_at: Time,
+}
+
+// How a provider interaction ended. `at` is the one Session-end clock; this is
+// deliberately distinct from a frame's semantic outcome.
+#[derive(Comp)]
+#[comp(plugin = "sessions", rank = 272, stamped_rank = 282)]
+struct Settled {
+    #[stamped]
+    at: Time,
+    #[stamped]
+    #[col(sel(completed, failed, interrupted, lost))]
+    status: Sel,
+    #[stamped]
+    exit_code: Number,
+    #[stamped]
+    stop_reason: Text,
+}
+
+// What a provider interaction produced, independently of how it ended.
+#[derive(Comp)]
+#[comp(plugin = "sessions", rank = 273, stamped_rank = 283)]
+struct Yield {
+    #[stamped]
+    final_text: Body,
+    #[stamped]
+    usage_json: Text,
+    #[stamped]
+    stderr: Body,
 }
 
 // --- The Session-log vocabulary (log = true → sessionComps) ---------------

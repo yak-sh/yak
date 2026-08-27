@@ -15,9 +15,16 @@ import { db } from './live_db.ts'
 import {
   maintainStanding,
   maintainStandingFor,
+  reapLeases,
   standingBackfill,
 } from './sessions.ts'
-import { append, cancelEntry, readEntries, takeEntry } from './entries.ts'
+import {
+  append,
+  cancelEntry,
+  failEntry,
+  readEntries,
+  takeEntry,
+} from './entries.ts'
 import { standingOf } from './entry_log.ts'
 import { runnerSessions } from './managed_codex.ts'
 import { sessionRow } from './session_store.ts'
@@ -38,9 +45,9 @@ let cast = (c: Change[]) => {
   maintainStandingFor(c, cast)
 }
 
-// A native (graph-born, managed-codex) session: origin managed, no lifecycle
-// status, provider codex. graphSession() also needs a non-imported entry, which
-// the turns below supply.
+// A native (graph-born, managed-codex) session starts without lifecycle state;
+// the first log edge materializes its run. graphSession() also needs a
+// non-imported entry, which the turns below supply.
 let native = () => {
   let eid = uid()
   apply(db, [{
@@ -191,7 +198,7 @@ Deno.test('standing over many turns matches the full-log scan (bounded window)',
   assertEquals(standing(eid), standingOf(readEntries(db, eid)))
 })
 
-Deno.test('cancelling a leased turn leaves its standing idle', () => {
+Deno.test('cancelling a leased turn settles it as interrupted', () => {
   let eid = native()
   let input = append(db, eid, [{ message: { role: 'user' } }]).eids[0]
   let gen = append(db, eid, [{
@@ -206,8 +213,91 @@ Deno.test('cancelling a leased turn leaves its standing idle', () => {
   cast(append(db, eid, [{ cancel: { target: gen } }]).changes)
   assertEquals(standing(eid), 'busy')
   cast(cancelEntry(db, lease.token))
-  assertEquals(standing(eid), 'idle')
+  assertEquals(standing(eid), 'terminal')
   assertEquals(standing(eid), standingOf(readEntries(db, eid)))
+  assertEquals(sessionRow(db, eid)?.status, 'interrupted')
+})
+
+Deno.test('a live native session keeps its claim across the boot reap', () => {
+  let eid = native()
+  let input = append(db, eid, [{ message: { role: 'user' } }]).eids[0]
+  cast(
+    append(db, eid, [{
+      generation: { through: input, provider: 'codex', model: 'm' },
+    }]).changes,
+  )
+  let task = uid()
+  apply(db, [
+    { eid: task, name: 'doc', comp: { title: 'held', body: '' } },
+    { eid: task, name: 'task', comp: { status: 'open' } },
+    { eid: task, name: 'claim', comp: { session: eid } },
+  ])
+
+  assertEquals(sessionRow(db, eid)?.status, 'running')
+  assertEquals(reapLeases(cast), [])
+  assert(
+    db.prepare(`select 1 from claim where ${OWNED}`).get(task),
+    'the native live claim survives reboot reconciliation',
+  )
+})
+
+Deno.test('a failed native turn settles, releases, and can reopen', () => {
+  let eid = native()
+  let input = append(db, eid, [{ message: { role: 'user' } }]).eids[0]
+  let gen = append(db, eid, [{
+    generation: { through: input, provider: 'codex', model: 'm' },
+  }]).eids[0]
+  let runner = uid()
+  apply(db, [{ eid: runner, name: 'runner', comp: { name: uid() } }])
+  let lease = takeEntry(db, gen, runner)!
+  cast(lease.changes)
+  let task = uid()
+  apply(db, [
+    { eid: task, name: 'doc', comp: { title: 'held', body: '' } },
+    { eid: task, name: 'task', comp: { status: 'open' } },
+    { eid: task, name: 'claim', comp: { session: eid } },
+  ])
+
+  cast(failEntry(db, lease.token, 'provider unavailable'))
+  assertEquals(standing(eid), 'terminal')
+  assertEquals(sessionRow(db, eid)?.status, 'failed')
+  assert(sessionRow(db, eid)?.finished_at)
+  assertEquals(
+    db.prepare(`select 1 from claim where ${OWNED}`).get(task),
+    undefined,
+  )
+
+  cast(append(db, eid, [{ message: { role: 'user' } }]).changes)
+  assertEquals(standing(eid), 'idle')
+  assertEquals(sessionRow(db, eid)?.status, 'running')
+  assertEquals(sessionRow(db, eid)?.finished_at, null)
+  assert(db.prepare(`select 1 from run where ${OWNED}`).get(eid))
+  assertEquals(
+    db.prepare(`select 1 from settled where ${OWNED}`).get(eid),
+    undefined,
+  )
+})
+
+Deno.test('boot standing backfill settles an uncast native failure', async () => {
+  let eid = native()
+  let input = append(db, eid, [{ message: { role: 'user' } }]).eids[0]
+  let gen = append(db, eid, [{
+    generation: { through: input, provider: 'codex', model: 'm' },
+  }]).eids[0]
+  let runner = uid()
+  apply(db, [{ eid: runner, name: 'runner', comp: { name: uid() } }])
+  let lease = takeEntry(db, gen, runner)!
+  failEntry(db, lease.token, 'server overloaded')
+  db.prepare(
+    `update session set status = null, finished_at = null where ${OWNED}`,
+  )
+    .run(eid)
+  db.prepare(`delete from run where ${OWNED}`).run(eid)
+  db.prepare(`delete from settled where ${OWNED}`).run(eid)
+
+  await standingBackfill(cast)
+  assertEquals(sessionRow(db, eid)?.status, 'failed')
+  assert(sessionRow(db, eid)?.finished_at)
 })
 
 Deno.test('the tool loop holds standing steady between edges', () => {

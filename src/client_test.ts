@@ -1535,14 +1535,13 @@ Deno.test('spawnPlan: readiness routes the default around a blocked provider', (
 })
 
 Deno.test('facetsFor: capability tokens gate the canonical facets', () => {
-  assertEquals(facetsFor(undefined), ['spawn', 'worktree', 'runtime'])
+  let facets = ['spawn', 'worktree', 'runtime', 'run', 'settled', 'yield']
+  assertEquals(facetsFor(undefined), facets)
   assertEquals(facetsFor(['spawn', 'session-facets']), [
-    'spawn',
-    'worktree',
-    'runtime',
+    ...facets,
   ])
   assertEquals(facetsFor(['spawn']), ['spawn'])
-  assertEquals(facetsFor(['session-facets']), ['worktree', 'runtime'])
+  assertEquals(facetsFor(['session-facets']), facets.slice(1))
   assertEquals(facetsFor([]), [])
 })
 

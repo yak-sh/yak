@@ -409,13 +409,13 @@ Deno.test('bounded standing window equals the whole-log scan', () => {
     row('call4', 6, { output: { source: 'gen4' }, call: { key: 'c4' } }),
   ], 'busy')
 
-  // A resolved (cancelled) lease closing the turn → idle, not busy.
+  // A resolved cancellation closes the provider interaction as interrupted.
   equiv([
     ...doneTurn(1),
     row('in4', 4, { message: { role: 'user' } }),
     row('gen4', 5, { generation: { through: 'in4' } }),
     row('cancel4', 6, { cancel: { target: 'gen4' } }),
-  ], 'idle')
+  ], 'terminal')
 
   // A terminal turn reopened by a trailing user message, no generation yet →
   // idle. The window keeps that whole last turn (the last generation is behind

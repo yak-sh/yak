@@ -155,6 +155,9 @@ pub(crate) fn baked() -> Vocab {
             ("pane".into(), PropType::Text),
             ("transcript".into(), PropType::Text),
         ]),
+        ("run".into(), vec![]),
+        ("settled".into(), vec![]),
+        ("yield".into(), vec![]),
         ("entry".into(), vec![
             ("session".into(), PropType::Eid("session".into())),
         ]),
@@ -515,6 +518,23 @@ pub(crate) fn baked() -> Vocab {
             ("provider_session_id".into(), PropType::Text),
             ("serving_model".into(), PropType::Text),
         ]),
+        ("run".into(), vec![
+            ("status".into(), PropType::Enum(vec!["starting".into(), "running".into(), "stopping".into()])),
+            ("started_at".into(), PropType::Time),
+            ("stop_requested_at".into(), PropType::Time),
+            ("input_at".into(), PropType::Time),
+        ]),
+        ("settled".into(), vec![
+            ("at".into(), PropType::Time),
+            ("status".into(), PropType::Enum(vec!["completed".into(), "failed".into(), "interrupted".into(), "lost".into()])),
+            ("exit_code".into(), PropType::Number),
+            ("stop_reason".into(), PropType::Text),
+        ]),
+        ("yield".into(), vec![
+            ("final_text".into(), PropType::Body),
+            ("usage_json".into(), PropType::Text),
+            ("stderr".into(), PropType::Body),
+        ]),
         ("entry".into(), vec![
             ("seq".into(), PropType::Number),
         ]),
@@ -623,6 +643,6 @@ pub(crate) fn baked() -> Vocab {
     let edges = vec!["requires".into(), "contains".into(), "reads".into(), "about".into(), "supervises".into(), "delegates".into(), "recalled".into(), "supersedes".into(), "worked".into(), "referenced".into(), "wants".into()];
     let governed = vec!["task".into(), "architecture".into(), "memory".into(), "persona".into()];
     let session_comps = vec!["entry".into(), "content".into(), "message".into(), "prompt".into(), "attention".into(), "generation".into(), "output".into(), "call".into(), "bash".into(), "fetch".into(), "patch".into(), "tool".into(), "task_context".into(), "graph_query".into(), "apply".into(), "result".into(), "exit".into(), "response".into(), "headers".into(), "stderr".into(), "timeout".into(), "checkpoint".into(), "cancel".into(), "reasoning".into(), "recalled".into(), "opaque".into(), "runner".into(), "lease".into(), "usage".into(), "imported".into()];
-    let session_facets = vec!["spawn".into(), "worktree".into(), "runtime".into()];
+    let session_facets = vec!["spawn".into(), "worktree".into(), "runtime".into(), "run".into(), "settled".into(), "yield".into()];
     Vocab { comps, stamped, kind_order, prefix, statuses, renames, deaths, edges, governed, session_comps, session_facets }
 }

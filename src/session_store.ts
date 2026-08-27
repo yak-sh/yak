@@ -16,6 +16,10 @@ import { readComp } from './db.ts'
 type Row = Record<string, unknown>
 type Facet = typeof sessionFacetNames[number]
 
+let active = new Set(['starting', 'running', 'stopping'])
+let terminal = new Set(['completed', 'failed', 'interrupted', 'lost'])
+let lifecycle = new Set<Facet>(['run', 'settled', 'yield'])
+
 let sql = (name: string) => `"${name.replaceAll('"', '""')}"`
 
 // The eid→id storage seam (D-18866): these tables key by the owner's int id and
@@ -34,7 +38,45 @@ let fields = (name: Facet) => [
 
 let facet = (row: Row, name: Facet) => {
   let cols = fields(name)
-  return Object.fromEntries(cols.map((col) => [col, row[col]]))
+  return Object.fromEntries(cols.map((col) => [
+    col,
+    row[name == 'settled' && col == 'at' ? 'finished_at' : col],
+  ]))
+}
+
+let remove = (db: DatabaseSync, eid: string, name: Facet): Change[] => {
+  let gone = db.prepare(
+    `delete from ${sql(name)} where entity = ${ownerId}`,
+  ).run(eid).changes
+  return gone ? [{ eid, name, comp: null }] : []
+}
+
+let writeFacet = (
+  db: DatabaseSync,
+  eid: string,
+  name: Facet,
+  values: Row,
+): Change[] => {
+  values = Object.fromEntries(
+    Object.entries(values).filter(([, value]) => value !== undefined),
+  )
+  let cols = Object.keys(values)
+  if (!cols.length) return []
+  let prior = readComp(db, eid, name) as Row | undefined
+  let moved = Object.fromEntries(
+    Object.entries(values).filter(([key, value]) =>
+      !prior || prior[key] !== value
+    ),
+  )
+  if (!Object.keys(moved).length) return []
+  db.prepare(
+    `insert into ${sql(name)} (entity, ${cols.map(sql).join(', ')})
+     values (${ownerId}, ${cols.map((col) => bindOf(name, col)).join(', ')})
+     on conflict(entity) do update set ${
+      cols.map((col) => `${sql(col)} = excluded.${sql(col)}`).join(', ')
+    }`,
+  ).run(eid, ...cols.map((col) => values[col] as SQLInputValue))
+  return [{ eid, name, comp: moved }]
 }
 
 export let sessionRow = (
@@ -94,27 +136,29 @@ export let writeSession = (
     changes.push({ eid, name: 'session', comp: moved })
   }
   for (let name of sessionFacetNames) {
-    let values = facet(patch, name)
-    values = Object.fromEntries(
-      Object.entries(values).filter(([, value]) => value !== undefined),
-    )
-    let cols = Object.keys(values)
-    if (!cols.length) continue
-    let prior = readComp(db, eid, name) as Row | undefined
-    let moved = Object.fromEntries(
-      Object.entries(values).filter(([key, value]) =>
-        !prior || prior[key] !== value
-      ),
-    )
-    if (!Object.keys(moved).length) continue
-    db.prepare(
-      `insert into ${sql(name)} (entity, ${cols.map(sql).join(', ')})
-       values (${ownerId}, ${cols.map((col) => bindOf(name, col)).join(', ')})
-       on conflict(entity) do update set ${
-        cols.map((col) => `${sql(col)} = excluded.${sql(col)}`).join(', ')
-      }`,
-    ).run(eid, ...cols.map((col) => values[col] as SQLInputValue))
-    changes.push({ eid, name, comp: moved })
+    if (lifecycle.has(name)) continue
+    changes.push(...writeFacet(db, eid, name, facet(patch, name)))
   }
+
+  let status = patch.status
+  let ending = terminal.has(String(status)) ||
+    ('finished_at' in patch && patch.finished_at != null)
+  let clearing = ('status' in patch && status == null) &&
+    ('finished_at' in patch && patch.finished_at == null)
+  let run = facet(patch, 'run')
+  let touchedRun = Object.values(run).some((value) => value !== undefined)
+  if (ending) {
+    changes.push(...remove(db, eid, 'run'))
+    changes.push(...writeFacet(db, eid, 'settled', facet(patch, 'settled')))
+  } else if (clearing) {
+    changes.push(...remove(db, eid, 'run'))
+    changes.push(...remove(db, eid, 'settled'))
+  } else if (touchedRun) {
+    if (active.has(String(status)) || patch.finished_at === null) {
+      changes.push(...remove(db, eid, 'settled'))
+    }
+    changes.push(...writeFacet(db, eid, 'run', run))
+  }
+  changes.push(...writeFacet(db, eid, 'yield', facet(patch, 'yield')))
   return changes
 }

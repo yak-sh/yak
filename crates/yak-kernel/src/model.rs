@@ -97,8 +97,8 @@ pub trait Graph: Source {
 }
 
 // sessionOf (types.ts): a session's rolling aliases are a PROJECTION, never a
-// second source of truth — `spawn`, `worktree` and `runtime` overlay the
-// session bag, canonical last. The server applies this before it serializes a
+// second source of truth — its canonical facets overlay the session bag,
+// canonical last. The server applies this before it serializes a
 // row, so a reader of the FILE must apply it too or the same session renders
 // with its agent on one door and without it on the other: provider/model/
 // effort live on `spawn` for a modern row and on `session` for an old one.
@@ -115,10 +115,22 @@ pub fn project_session(comps: &mut Map<String, Value>) {
         Some(Value::Object(m)) => m.clone(),
         _ => Map::new(),
     };
-    for over in ["spawn", "worktree", "runtime"] {
+    for over in ["spawn", "worktree", "runtime", "run", "yield"] {
         if let Some(Value::Object(m)) = comps.get(over) {
             for (k, v) in m {
                 merged.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    if let Some(Value::Object(m)) = comps.get("settled") {
+        for (source, target) in [
+            ("at", "finished_at"),
+            ("status", "status"),
+            ("exit_code", "exit_code"),
+            ("stop_reason", "stop_reason"),
+        ] {
+            if let Some(value) = m.get(source) {
+                merged.insert(target.into(), value.clone());
             }
         }
     }
@@ -132,4 +144,41 @@ pub fn is_uuid(s: &str) -> bool {
             .iter()
             .zip(&b)
             .all(|(n, p)| p.len() == *n && p.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn session_lifecycle_facets_override_rolling_aliases() {
+        let mut comps = json!({
+            "session": {
+                "status": "running",
+                "finished_at": "stale",
+                "final_text": "stale"
+            },
+            "settled": {
+                "at": "2026-08-27T12:00:00Z",
+                "status": "failed",
+                "exit_code": 2
+            },
+            "yield": { "final_text": "partial" }
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+
+        project_session(&mut comps);
+        assert_eq!(
+            comps["session"],
+            json!({
+                "status": "failed",
+                "finished_at": "2026-08-27T12:00:00Z",
+                "exit_code": 2,
+                "final_text": "partial"
+            })
+        );
+    }
 }

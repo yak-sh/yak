@@ -477,6 +477,29 @@ export type Runtime = {
   serving_model?: string | null
 }
 
+export type Run = {
+  eid: string
+  status?: 'starting' | 'running' | 'stopping' | null
+  started_at?: string | null
+  stop_requested_at?: string | null
+  input_at?: string | null
+}
+
+export type Settled = {
+  eid: string
+  at?: string | null
+  status?: 'completed' | 'failed' | 'interrupted' | 'lost' | null
+  exit_code?: number | null
+  stop_reason?: string | null
+}
+
+export type Yield = {
+  eid: string
+  final_text?: string | null
+  usage_json?: string | null
+  stderr?: string | null
+}
+
 // One ordered Session-log entity. Every other log shape is a facet on this
 // entity; seq is minted by the server within the Session partition.
 export type Entry = { eid: string; session: string; seq: number }
@@ -556,13 +579,29 @@ export let sessionOf = (e: {
   spawn?: Spawn
   worktree?: Worktree
   runtime?: Runtime
-}): Session | undefined =>
-  e.session && {
+  run?: Run
+  settled?: Settled
+  yield?: Yield
+}): Session | undefined => {
+  if (!e.session) return
+  let settlement = e.settled && Object.fromEntries([
+    ['status', 'status'],
+    ['at', 'finished_at'],
+    ['exit_code', 'exit_code'],
+    ['stop_reason', 'stop_reason'],
+  ].flatMap(([source, target]) =>
+    source in e.settled! ? [[target, e.settled![source as keyof Settled]]] : []
+  ))
+  return {
     ...e.session,
     ...e.spawn,
     ...e.worktree,
     ...e.runtime,
+    ...e.run,
+    ...settlement,
+    ...e.yield,
   }
+}
 
 // Desired fleet capacity. Runtime facts are server-stamped on the same row;
 // sessions point back through role instead of a mutable current pointer.

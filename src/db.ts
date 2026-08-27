@@ -352,6 +352,29 @@ let schema = `
     provider_session_id text,
     serving_model       text
   );
+  -- A Session's provider lifecycle is three cohesive, server-owned facets.
+  -- run and settled are mutually exclusive; yield is independent of
+  -- either because a failed interaction may still produce diagnostics.
+  create table if not exists run (
+    entity            integer primary key references entity(id),
+    status             text,
+    started_at         text,
+    stop_requested_at  text,
+    input_at           text
+  );
+  create table if not exists settled (
+    entity       integer primary key references entity(id),
+    at           text,
+    status       text,
+    exit_code    integer,
+    stop_reason  text
+  );
+  create table if not exists "yield" (
+    entity      integer primary key references entity(id),
+    final_text  text,
+    usage_json  text,
+    stderr      text
+  );
   -- A Session's ordered graph-native log (D-15656). seq is assigned inside
   -- apply()'s write transaction; every other table below is an independent
   -- facet worn by the same entry entity.
@@ -1499,8 +1522,8 @@ export let backfillLineage = (db: DatabaseSync) => {
   `)
 }
 
-// Lift the execution axes without inventing facets for sessions that never
-// carried either one. An existing canonical row wins — including its nulls —
+// Lift the remaining Session aspects without inventing facets for rows that
+// never carried them. An existing canonical row wins — including its nulls —
 // so an interrupted rolling deploy can never revive a cleared legacy alias.
 export let backfillSessionFacets = (db: DatabaseSync) => {
   db.exec('begin')
@@ -1519,42 +1542,94 @@ export let backfillSessionFacets = (db: DatabaseSync) => {
       where pid is not null or pane is not null or transcript is not null
         or provider_session_id is not null or serving_model is not null
     `)
-    let facets = {
-      worktree: ['cwd', 'branch', 'base_revision'],
-      runtime: [
-        'pid',
-        'pane',
-        'transcript',
-        'provider_session_id',
-        'serving_model',
-      ],
+    db.exec(`
+      insert or ignore into run (
+        entity, status, started_at, stop_requested_at, input_at
+      )
+      select entity, status, started_at, stop_requested_at, input_at
+      from session
+      where finished_at is null and (
+        status in ('starting', 'running', 'stopping')
+        or started_at is not null or stop_requested_at is not null
+        or input_at is not null
+      )
+    `)
+    db.exec(`
+      insert or ignore into settled (
+        entity, at, status, exit_code, stop_reason
+      )
+      select entity, finished_at, status, exit_code, stop_reason
+      from session
+      where finished_at is not null
+        or status in ('completed', 'failed', 'interrupted', 'lost')
+    `)
+    db.exec(`
+      insert or ignore into "yield" (entity, final_text, usage_json, stderr)
+      select entity, final_text, usage_json, stderr from session
+      where final_text is not null or usage_json is not null or stderr is not null
+    `)
+    let facets: Record<string, Record<string, string>> = {
+      worktree: {
+        cwd: 'cwd',
+        branch: 'branch',
+        base_revision: 'base_revision',
+      },
+      runtime: {
+        pid: 'pid',
+        pane: 'pane',
+        transcript: 'transcript',
+        provider_session_id: 'provider_session_id',
+        serving_model: 'serving_model',
+      },
+      run: {
+        status: 'status',
+        started_at: 'started_at',
+        stop_requested_at: 'stop_requested_at',
+        input_at: 'input_at',
+      },
+      settled: {
+        at: 'finished_at',
+        status: 'status',
+        exit_code: 'exit_code',
+        stop_reason: 'stop_reason',
+      },
+      yield: {
+        final_text: 'final_text',
+        usage_json: 'usage_json',
+        stderr: 'stderr',
+      },
     }
-    for (let [table, cols] of Object.entries(facets)) {
+    for (let [table, mapping] of Object.entries(facets)) {
+      let cols = Object.keys(mapping)
       // Difference-guarded like backfillSpawn: touch only the sessions whose
       // columns still disagree with the facet, so a settled backfill re-fires as
       // a true no-op — no page write, and none of the per-boot index maintenance
       // session's {eid} refs would otherwise incur (T-17678).
       let differ = cols.map((col) =>
-        `session.${sqlName(col)} is not ${table}.${sqlName(col)}`
+        `session.${sqlName(mapping[col])} is not ${sqlName(table)}.${
+          sqlName(col)
+        }`
       ).join(' or ')
       db.exec(
         `update session set ${
           cols.map((col) =>
-            `${sqlName(col)} = (select ${sqlName(col)} from ${table}
-            where ${table}.entity = session.entity)`
+            `${sqlName(mapping[col])} = (select ${sqlName(col)} from ${
+              sqlName(table)
+            }
+            where ${sqlName(table)}.entity = session.entity)`
           ).join(', ')
         } where exists (
-          select 1 from ${table}
-          where ${table}.entity = session.entity and (${differ})
+          select 1 from ${sqlName(table)}
+          where ${sqlName(table)}.entity = session.entity and (${differ})
         )`,
       )
       let different = cols.map((col) =>
-        `s.${sqlName(col)} is not f.${sqlName(col)}`
+        `s.${sqlName(mapping[col])} is not f.${sqlName(col)}`
       ).join(' or ')
       let missed = prep(
         db,
         `
-        select 1 from session s join ${table} f on f.entity = s.entity
+        select 1 from session s join ${sqlName(table)} f on f.entity = s.entity
         where ${different} limit 1
       `,
       ).get()

@@ -291,6 +291,9 @@ export let comps: Record<string, Record<string, PropType>> = {
     pane: 'text',
     transcript: 'text',
   },
+  run: {},
+  settled: {},
+  yield: {},
   entry: {
     session: { eid: 'session', death: 'cascade' },
   },
@@ -687,6 +690,23 @@ export let stamped: Record<string, Record<string, PropType>> = {
     provider_session_id: 'text',
     serving_model: 'text',
   },
+  run: {
+    status: { enum: ['starting', 'running', 'stopping'] },
+    started_at: 'time',
+    stop_requested_at: 'time',
+    input_at: 'time',
+  },
+  settled: {
+    at: 'time',
+    status: { enum: ['completed', 'failed', 'interrupted', 'lost'] },
+    exit_code: 'number',
+    stop_reason: 'text',
+  },
+  yield: {
+    final_text: 'body',
+    usage_json: 'text',
+    stderr: 'body',
+  },
   entry: {
     seq: 'number',
   },
@@ -815,7 +835,14 @@ export let sessionActive = ['starting', 'running', 'stopping']
 
 // Server capability advertisements (see the sessions manifest).
 export let capabilities = ['spawn', 'session-facets']
-export let sessionFacetNames = ['spawn', 'worktree', 'runtime'] as const
+export let sessionFacetNames = [
+  'spawn',
+  'worktree',
+  'runtime',
+  'run',
+  'settled',
+  'yield',
+] as const
 
 // What a prop IS — the detection layer editors and docs read. The
 // vocabulary stays deliberately tiny:
@@ -1290,6 +1317,29 @@ export type Runtime = {
   serving_model?: string | null
 }
 
+export type Run = {
+  eid: string
+  status?: 'starting' | 'running' | 'stopping' | null
+  started_at?: string | null
+  stop_requested_at?: string | null
+  input_at?: string | null
+}
+
+export type Settled = {
+  eid: string
+  at?: string | null
+  status?: 'completed' | 'failed' | 'interrupted' | 'lost' | null
+  exit_code?: number | null
+  stop_reason?: string | null
+}
+
+export type Yield = {
+  eid: string
+  final_text?: string | null
+  usage_json?: string | null
+  stderr?: string | null
+}
+
 // One ordered Session-log entity. Every other log shape is a facet on this
 // entity; seq is minted by the server within the Session partition.
 export type Entry = { eid: string; session: string; seq: number }
@@ -1369,13 +1419,29 @@ export let sessionOf = (e: {
   spawn?: Spawn
   worktree?: Worktree
   runtime?: Runtime
-}): Session | undefined =>
-  e.session && {
+  run?: Run
+  settled?: Settled
+  yield?: Yield
+}): Session | undefined => {
+  if (!e.session) return
+  let settlement = e.settled && Object.fromEntries([
+    ['status', 'status'],
+    ['at', 'finished_at'],
+    ['exit_code', 'exit_code'],
+    ['stop_reason', 'stop_reason'],
+  ].flatMap(([source, target]) =>
+    source in e.settled! ? [[target, e.settled![source as keyof Settled]]] : []
+  ))
+  return {
     ...e.session,
     ...e.spawn,
     ...e.worktree,
     ...e.runtime,
+    ...e.run,
+    ...settlement,
+    ...e.yield,
   }
+}
 
 // Desired fleet capacity. Runtime facts are server-stamped on the same row;
 // sessions point back through role instead of a mutable current pointer.

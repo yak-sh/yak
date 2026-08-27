@@ -35,7 +35,7 @@ const TASK_SELS: &[Sel] = &[
     Sel { comp: "quarantined", props: &[] },
 ];
 
-// A session row: its meta (session + the spawn/worktree/runtime facets
+// A session row: its meta (session + its canonical facets
 // project_session folds in), the brief the `previously` block quotes, its
 // title and timestamps.
 const SESSION_SELS: &[Sel] = &[
@@ -43,6 +43,9 @@ const SESSION_SELS: &[Sel] = &[
     Sel { comp: "spawn", props: &[] },
     Sel { comp: "worktree", props: &[] },
     Sel { comp: "runtime", props: &[] },
+    Sel { comp: "run", props: &[] },
+    Sel { comp: "settled", props: &[] },
+    Sel { comp: "yield", props: &[] },
     Sel { comp: "brief", props: &[] },
     Sel { comp: "doc", props: &["title"] },
     Sel { comp: "created", props: &[] },

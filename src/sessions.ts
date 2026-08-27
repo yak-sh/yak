@@ -56,7 +56,7 @@ import {
   importedLines,
   standingWindow,
 } from './entries.ts'
-import { standingOf } from './entry_log.ts'
+import { sessionStateOf } from './entry_log.ts'
 import {
   type Batch,
   ingestEntries,
@@ -225,18 +225,13 @@ let byteLength = (s: string) => utf8.encode(s).length
 
 // ---- the one writer ----
 
-let publish = (eid: string, comp: Row, cast: Cast, table = 'session') => {
-  let changes = [{ eid, name: table, comp }]
-  record(db, changes)
-  cast(changes)
-}
-
 // Update summary columns and tell everyone. A deleted row updates
 // nothing and says nothing — the tombstone wins, as everywhere else.
 let stamp = (
   eid: string,
   patch: Summary | Row,
   cast: Cast,
+  guard?: (session: Session) => boolean,
 ) => {
   let failure = Object.hasOwn(patch, 'error') ? (patch as Row).error : undefined
   // A BREAK rides beside the status (D-17081): `error` is a known/expected
@@ -257,13 +252,17 @@ let stamp = (
   // transition — the writer that stamps an ending is the only observer
   // there is. Prior row read first, so a re-stamp of the same ending
   // never says it twice.
-  let was = storedSession(db, eid)
-  if (!was) return
+  let was: Session | undefined
   let ending = SETTLED.includes(String(body.status))
   let changes: Change[] = []
   let exc: Change | undefined
-  db.exec('begin')
+  db.exec('begin immediate')
   try {
+    was = storedSession(db, eid)
+    if (!was || (guard && !guard(was))) {
+      db.exec('rollback')
+      return false
+    }
     changes.push(...writeSession(db, eid, body))
     if (failure !== undefined) {
       let change = failure
@@ -307,6 +306,7 @@ let stamp = (
   if (ending && was.status != body.status) {
     settled(eid, String(body.status), cast)
   }
+  return true
 }
 
 // A native (graph-born, managed-codex) session's SessionDot reads its `standing`
@@ -323,22 +323,23 @@ let stamp = (
 // recompute rides a rare turn edge off the render path — the whole point.
 export let maintainStanding = (eid: string, cast: Cast) => {
   if (!graphSession(db, eid)) return
-  let standing = standingOf(entriesFrom(db, eid, standingWindow(db, eid)))
-  // finished_at is stamped from the SAME log-derived fact so the dot reads a
-  // graph operator's lifecycle O(1) (T-17855 producer; the consumer gives
-  // finished_at precedence over the standing facet). It means DONE and not
-  // coming back, so it is set only for a truly-ended run: `terminal` (a
-  // delivered final answer, nothing pending) AND no wake armed to bring it
-  // back — a parked operator (terminal + pending wake) reads `idle`, never
-  // finished (M-7323). Busy, idle, or parked → cleared, exactly as watch()
-  // reopens a reawakened door. Preserve any existing stamp rather than
+  let entries = entriesFrom(db, eid, standingWindow(db, eid))
+  let { standing, end: ending } = sessionStateOf(entries)
+  // Settlement is stamped from the SAME log-derived fact so the dot reads a
+  // graph operator's lifecycle O(1). A completed, failed, or interrupted turn
+  // ends the Session only when no wake is armed to bring it back; otherwise
+  // the run facet keeps the resumable door visibly alive. This presence is
+  // also what boot lease reaping was missing when native Sessions were
+  // statusless. Busy, idle, or parked → reopened, exactly as watch() reopens
+  // an external door. Preserve any existing ending stamp rather than
   // recompute lastHeard: a fresh lastHeard each edge would move updated.at and
   // re-trigger; the first stamp of an already-shut door uses lastHeard, not
   // now(), so a boot backfill of a long-settled run stamps its true ending.
-  let done = standing == 'terminal' && !pendingWake(eid)
+  let done = ending != null && !pendingWake(eid)
   let was = storedSession(db, eid)
   stamp(eid, {
     standing,
+    status: done ? ending : 'running',
     finished_at: done ? (was?.finished_at ?? lastHeard(eid)) : null,
   }, cast)
 }
@@ -2298,16 +2299,15 @@ export let stopped =
     // group is a no-op, and `delivered` then says the signals were truly
     // sent, not merely intended.
     let stop_requested_at = now()
-    let hit = db.prepare(`
-      update session set status = 'stopping', stop_requested_at = ?
-      where ${OWNED} and status in ('starting', 'running')
-    `).run(stop_requested_at, target).changes
+    let hit = stamp(
+      target,
+      { status: 'stopping', stop_requested_at },
+      cast,
+      (session) => ['starting', 'running'].includes(String(session.status)),
+    )
     if (!hit) {
-      let s = db.prepare(`select status from session where ${OWNED}`)
-        .get(target) as { status: string | null } | undefined
-      if (!sessionActive.includes(String(s?.status))) return acted()
-    } else {
-      publish(target, { status: 'stopping', stop_requested_at }, cast)
+      let session = storedSession(db, target)
+      if (!sessionActive.includes(String(session?.status))) return acted()
     }
     let pid = running.get(target)?.pid || pidOf(target) // run.pid is 0 pre-birth
     if (!pid) {

@@ -152,6 +152,29 @@ pub static SCHEMA: &[SchemaOp] = &[
     provider_session_id text,
     serving_model       text
   );
+  -- A Session's provider lifecycle is three cohesive, server-owned facets.
+  -- run and settled are mutually exclusive; yield is independent of
+  -- either because a failed interaction may still produce diagnostics.
+  create table if not exists run (
+    entity            integer primary key references entity(id),
+    status             text,
+    started_at         text,
+    stop_requested_at  text,
+    input_at           text
+  );
+  create table if not exists settled (
+    entity       integer primary key references entity(id),
+    at           text,
+    status       text,
+    exit_code    integer,
+    stop_reason  text
+  );
+  create table if not exists "yield" (
+    entity      integer primary key references entity(id),
+    final_text  text,
+    usage_json  text,
+    stderr      text
+  );
   -- A Session's ordered graph-native log (D-15656). seq is assigned inside
   -- apply()'s write transaction; every other table below is an independent
   -- facet worn by the same entry entity.
