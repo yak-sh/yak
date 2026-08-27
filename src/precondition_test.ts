@@ -47,27 +47,30 @@ let post = async (changes: unknown[]) => {
   return { status: res.status, text: await res.text() }
 }
 
-// What is stored right now, read through a door of its own, so "the write did
-// not land" rests on the graph rather than on the response under test.
-let snap = async () => {
-  let res = await fetch(`http://${U}/snapshot`)
-  let out = await res.json() as {
-    changes: {
-      eid: string
-      name: string
-      comp: Record<string, unknown> | null
-    }[]
-  }
-  return out.changes
+let postMutation = async (mutation: unknown) => {
+  let res = await fetch(`http://${U}/apply`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(mutation),
+  })
+  return { status: res.status, text: await res.text() }
 }
 
-let stored = async (eid: string) =>
-  (await snap()).find((c) => c.eid == eid && c.name == 'doc')?.comp?.body
+// What is stored right now, read through the graph query door, so "the write
+// did not land" rests on the graph rather than on the response under test.
+let row = async (eid: string) => {
+  let res = await fetch(`http://${U}/query?id=${eid}`)
+  return (await res.json() as {
+    entity: { eid: string; num: number }
+    doc?: { body?: string }
+  }[])[0]
+}
+
+let stored = async (eid: string) => (await row(eid))?.doc?.body
 
 // The server-minted number behind the human id — what the refusal must
 // speak, read through the same door rather than parsed out of the message.
-let num = async (eid: string) =>
-  (await snap()).find((c) => c.eid == eid && c.name == 'entity')?.comp?.num
+let num = async (eid: string) => (await row(eid))?.entity.num
 
 // A doc holding a value the caller never read: it read ONE, someone else
 // wrote TWO, so ONE's hash is stale and a guard naming it must refuse.
@@ -118,6 +121,55 @@ slow(
     let ok = await post([{ eid, name: 'doc', comp: { body: 'CLOBBER' } }])
     assertEquals(ok.status, 200)
     assertEquals(await stored(eid), 'CLOBBER')
+  },
+)
+
+slow(
+  'guarded undo is a named /apply mutation; /undo is retired',
+  alone,
+  async () => {
+    let eid = uid()
+    await post([{ eid, name: 'doc', comp: { title: 'undo', body: 'ONE' } }])
+    await post([{ eid, name: 'doc', comp: { body: 'TWO' } }])
+    let undone = await postMutation({ mutation: 'undo', eid })
+    assertEquals(undone.status, 200)
+    assertEquals(await stored(eid), 'ONE')
+
+    let retired = await fetch(`http://${U}/undo?eid=${eid}`, { method: 'POST' })
+    assertEquals(retired.status, 404)
+    assertStringIncludes(await retired.text(), 'retired')
+
+    let telemetry = await (await fetch(`http://${U}/telemetry?only=undo`))
+      .json() as {
+        name: string
+        ok: number
+      }[]
+    assertEquals(telemetry.some((row) => row.name == 'undo' && !!row.ok), true)
+  },
+)
+
+slow(
+  'named /apply undo refuses when its guarded batch has moved',
+  alone,
+  async () => {
+    let eid = uid()
+    await post([{ eid, name: 'doc', comp: { title: 'undo', body: 'ONE' } }])
+    await post([{ eid, name: 'doc', comp: { body: 'TWO' } }])
+    let history = await (await fetch(`http://${U}/journal?eid=${eid}`))
+      .json() as {
+        id: number
+      }[]
+    let target = history[0].id
+    await post([{ eid, name: 'doc', comp: { body: 'THREE' } }])
+
+    let refused = await postMutation({ mutation: 'undo', id: target })
+    assertEquals(refused.status, 400)
+    assertStringIncludes(refused.text, 'has moved since you read it')
+    assertEquals(await stored(eid), 'THREE')
+
+    let telemetry = await (await fetch(`http://${U}/telemetry?only=undo`))
+      .json() as { name: string; ok: number }[]
+    assertEquals(telemetry.some((row) => row.name == 'undo' && !row.ok), true)
   },
 )
 

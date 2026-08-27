@@ -3,20 +3,41 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
-import { find, idOf, type Row, rows } from './client.ts'
+import { find, idOf, type Row, rows, TASK_TREE_ADOPTION } from './client.ts'
 import { localQuery } from './graph_query.ts'
-import { CUT, elide, type IO, mcpServer } from './mcp.ts'
+import { CUT, elide, type IO, MCP_INSTRUCTIONS, mcpServer } from './mcp.ts'
 import { commandOut } from './commands.ts'
 import { sha } from './sha.ts'
 import { type Change, edges, statuses, uuid, verdicts } from './types.ts'
+import type { Mutation } from './mutation.ts'
 import { slow } from './testing.ts'
 import { backfillChanges } from './backfill.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, depsOf, inverseBatch, journalOf, lastBatch, snapshot, touch } =
-  await import('./db.ts')
+let {
+  apply,
+  depsOf,
+  journalOf,
+  mutate: applyMutation,
+  snapshot,
+  touch,
+} = await import('./db.ts')
 let { freshDb } = await import('./testdb.ts')
 let { append } = await import('./entries.ts')
+
+Deno.test('MCP prompt makes task trees the default for multi-step work', () => {
+  assertMatch(MCP_INSTRUCTIONS, /3\+ steps defaults to task_tree/)
+  assertMatch(MCP_INSTRUCTIONS, /"dry_run":true/)
+  assertMatch(MCP_INSTRUCTIONS, /never infer .* from prose/i)
+  assertMatch(
+    MCP_INSTRUCTIONS,
+    /Coordinators delegate all individual-contributor implementation/,
+  )
+  assertMatch(
+    MCP_INSTRUCTIONS,
+    /After\ncompaction or resume, use durable task context to restore assignments/,
+  )
+})
 
 let N = 'aaaaaaaa-0000-4000-8000-000000000001'
 let P = 'aaaaaaaa-0000-4000-8000-000000000002'
@@ -36,6 +57,11 @@ let all = rows({
     { eid: T, name: 'task', comp: { status: 'open' } },
   ],
 })
+
+let batch = (mutation: Mutation): Change[] => {
+  if (!Array.isArray(mutation)) throw new Error('expected change batch')
+  return mutation
+}
 let persona = all[0]
 
 Deno.test('elide: long text cuts with a marker naming the whole-doc door', () => {
@@ -137,9 +163,9 @@ Deno.test('task_context surfaces agent input without human read-state', async ()
   ])
   let writes: Change[][] = []
   let write = io.write
-  io.write = async (changes, via) => {
-    writes.push(changes)
-    return await write(changes, via)
+  io.write = async (mutation, via) => {
+    writes.push(batch(mutation))
+    return await write(mutation, via)
   }
   await protocol(io, async (client) => {
     let first = await client.callTool({
@@ -302,12 +328,11 @@ let blank = (): IO => ({
   query: () => Promise.resolve([]),
   get: () => Promise.resolve([]),
   deps: () => Promise.resolve([]),
-  write: (changes) => Promise.resolve(changes),
+  write: (mutation) => Promise.resolve(batch(mutation)),
   find: () => Promise.resolve([]),
   upload: () => Promise.resolve(),
   touch: () => Promise.resolve(),
   history: () => Promise.resolve([]),
-  undo: () => Promise.resolve([]),
   providers: () => Promise.resolve([{ name: 'test', models: ['test'] }]),
   backfill: () => Promise.resolve([]),
 })
@@ -328,8 +353,8 @@ let graph = () => {
         ? localQuery(db)([`id=${ids.join(',')}`, ...filters])
         : Promise.resolve([]),
     deps: (eids) => Promise.resolve(depsOf(db, eids)),
-    write: (changes, via) =>
-      Promise.resolve(apply(db, changes, undefined, via)),
+    write: (mutation, via) =>
+      Promise.resolve(applyMutation(db, mutation, undefined, via)),
     find: () => Promise.resolve([]),
     upload: (eid, html) => {
       pages.set(eid, html)
@@ -340,10 +365,6 @@ let graph = () => {
       return Promise.resolve()
     },
     history: (eid, limit) => Promise.resolve(journalOf(db, eid, limit)),
-    undo: ({ id, eid }, via) => {
-      let batch = id ?? (eid ? lastBatch(db, eid) : 0)
-      return Promise.resolve(apply(db, inverseBatch(db, batch), undefined, via))
-    },
     providers: () => Promise.resolve([{ name: 'test', models: ['test'] }]),
     backfill: (kind) => Promise.resolve(backfillChanges(db, kind)),
   }
@@ -617,6 +638,8 @@ Deno.test('MCP schemas document parameters and derive closed vocabularies', asyn
     }
 
     let task = byName(tools, 'task_new')
+    assertMatch(task.description ?? '', /3\+ steps use task_tree/)
+    assertMatch(task.description ?? '', /"dry_run":true/)
     assertEquals(prop(task, 'status')?.enum, [...statuses])
     assertEquals(
       field(prop(task, 'tasks')?.items, 'status')?.enum,
@@ -646,7 +669,8 @@ Deno.test('backfill reads locally and submits bounded ordinary writes', async ()
     assertEquals(kind, 'worked')
     return Promise.resolve(pending)
   }
-  io.write = (changes, via) => {
+  io.write = (mutation, via) => {
+    let changes = batch(mutation)
     writes.push({ changes, via })
     return Promise.resolve(changes)
   }
@@ -811,6 +835,17 @@ slow('MCP modes apply every accepted field and reject conflicts', async () => {
       assertEquals(made?.comps.doc?.body, 'Dedicated <body> & words')
       assertEquals(made?.comps.task?.status, 'done')
       assertEquals(made?.comps.proposed?.at, '2026-08-01T00:00:00.000Z')
+
+      let sprawling = await client.callTool({
+        name: 'task_new',
+        arguments: {
+          title: 'Sprawling leaf',
+          body: 'x'.repeat(TASK_TREE_ADOPTION.longBody + 1),
+        },
+      })
+      assertMatch(said(sprawling), /warning: this long leaf/)
+      assertMatch(said(sprawling), /task_tree/)
+      assertMatch(said(sprawling), /"dry_run":true/)
 
       let batch = await client.callTool({
         name: 'task_new',
@@ -1511,17 +1546,28 @@ Deno.test('task_new honors an explicit project over the caller (T-16496)', async
 Deno.test('task_new without a placeable caller still creates the task', async () => {
   let g = graph()
   try {
+    let body = 'x'.repeat(TASK_TREE_ADOPTION.longBody + 1)
     await protocol(g.io, async (client) => {
       let out = await client.callTool({
         name: 'task_new',
-        arguments: { title: 'Loose' },
+        arguments: { title: 'Loose', params: [`.body=${body}`] },
       }) as ToolResult
       assert(!out.isError, said(out))
+      assertMatch(said(out), /warning: this long leaf/)
+      assertMatch(said(out), /"dry_run":true/)
     })
-    let made = rows(snapshot(g.db)).find((r) => r.comps.doc?.title == 'Loose')
-    assert(made, 'task created')
+    let made = rows(snapshot(g.db)).filter((r) => r.comps.doc?.title == 'Loose')
+    assertEquals(made.length, 1, 'warning never auto-splits')
+    assertEquals(made[0].comps.doc?.body, body)
+    assertEquals(
+      depsOf(g.db, [made[0].eid]).some((d) =>
+        d.parent == made[0].eid && d.type == 'requires'
+      ),
+      false,
+      'warning never invents prerequisite edges',
+    )
     assert(
-      !made?.comps.task?.project,
+      !made[0].comps.task?.project,
       'no project when the caller is unplaceable',
     )
   } finally {

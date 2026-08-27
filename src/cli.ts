@@ -87,6 +87,7 @@ import {
   type TaskTreeInput,
   taskTreePlan,
   taskTreeText,
+  taskTreeWarning,
   undo,
   unreadPipe,
   WORKING_SET,
@@ -730,6 +731,8 @@ let create = async (got: Got) => {
     eid,
   )
   if (hint) print(hint)
+  let treeHint = taskTreeWarning(grouped.doc.body, 0, 'cli')
+  if (treeHint) print(treeHint)
 }
 
 let tree = async (got: Got) => {

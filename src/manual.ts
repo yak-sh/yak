@@ -11,6 +11,7 @@ import {
   separated,
   type Stdin,
   stdin,
+  TASK_TREE_ADOPTION,
   WORKING_SET,
 } from './client.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
@@ -262,7 +263,9 @@ export let manuals = declare({
       '`-`/`@-` (read from piped stdin) — the safe doors for a long body, ' +
       'since shell substitution fails silently and an empty value CLEARS ' +
       'the column. `@@` escapes a value that genuinely starts with an @. ' +
-      'stdin is consumable once: a second `@-` in one command is refused.',
+      'stdin is consumable once: a second `@-` in one command is refused. ' +
+      `Work with ${TASK_TREE_ADOPTION.steps}+ steps defaults to a task tree: ` +
+      'start with `' + TASK_TREE_ADOPTION.cli + '`.',
     root: true,
     args: [arg('title', text, true, false)],
     // create() owns the more useful --flag → .param correction.
@@ -272,7 +275,7 @@ export let manuals = declare({
     about: 'author a typed task tree in one atomic batch',
     body: 'text',
     examples: [
-      'task tree @plan.json --dry-run',
+      TASK_TREE_ADOPTION.cli,
       'task tree @- < plan.json',
     ],
     detail: 'The input is JSON: {"project":"P-19","nodes":[...]}. Each ' +

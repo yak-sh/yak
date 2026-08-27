@@ -1454,6 +1454,38 @@ let busServer = () => fakeGraph(busGraph)
 
 let graphServer = (snap = graph) => fakeGraph(snap)
 
+slow('task undo sends a named mutation through generic /apply', async () => {
+  let eid = 'bbbbbbbb-0000-4000-8000-000000000091'
+  let snap: Snapshot = {
+    changes: [
+      { eid, name: 'entity', comp: { eid, num: 91 } },
+      { eid, name: 'doc', comp: { eid, title: 'undo me', body: '' } },
+      { eid, name: 'task', comp: { eid, status: 'open', priority: 1 } },
+    ],
+    deps: [],
+  }
+  let { server, seen, mutations, host } = graphServer(snap)
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'undo',
+        'T-91',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: host },
+    }).output()
+    assertEquals(out.code, 0, text(out.stderr))
+    assertEquals(text(out.stdout), 'undid T-91\n')
+    assertEquals(mutations, [{ mutation: 'undo', eid }])
+    assertEquals(seen.some((path) => path.startsWith('/undo')), false)
+  } finally {
+    await server.shutdown()
+  }
+})
+
 slow('task archive writes the inbox archived facet', async () => {
   let K = 'bbbbbbbb-0000-4000-8000-000000020995'
   let snap: Snapshot = {

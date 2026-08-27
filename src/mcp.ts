@@ -27,6 +27,7 @@ import {
   uuid,
   verdicts,
 } from './types.ts'
+import type { Mutation } from './mutation.ts'
 import { trouble } from './adapters.ts'
 import { type Dim, report, type Use, use } from './usage.ts'
 import { sha } from './sha.ts'
@@ -57,6 +58,7 @@ import {
   jsonOf,
   memoryChanges,
   memoryHead,
+  mutate,
   noticeBlock,
   param,
   patches,
@@ -70,16 +72,17 @@ import {
   rows,
   scopeFor,
   search,
-  send,
   serverCaps,
   sessionRow,
   similarHint,
   spawnChanges,
   spawnPlan,
+  TASK_TREE_ADOPTION,
   taskChanges,
+  taskTreeExample,
   taskTreePlan,
   taskTreeText,
-  undo,
+  taskTreeWarning,
   uniq,
 } from './client.ts'
 import { noFilter, orderOf, parseQuery, pred, resolution } from './query.ts'
@@ -134,7 +137,7 @@ export type IO = {
   deps: (eids: string[], reveal?: boolean) => Promise<Dep[]>
   // `via` is journal attribution — the calling session's id, when the
   // tool knows it. Never auth.
-  write: (changes: Change[], via?: string) => Promise<Change[]>
+  write: (mutation: Mutation, via?: string) => Promise<Change[]>
   find: (q: string, limit?: number) => Promise<Hit[]>
   // Land an HTML page in the frozen store for an existing web entity.
   upload: (eid: string, html: string) => Promise<void>
@@ -144,12 +147,6 @@ export type IO = {
   // An entity's slice of the journal (db.ts journalOf in-process; GET
   // /journal over stdio) — the wire's write record, newest first.
   history: (eid: string, limit?: number) => Promise<JournalEntry[]>
-  // Reverse a journaled batch (inverseBatch+apply in-process; POST /undo over
-  // stdio) — the guarded inverse, refused loudly when the world moved.
-  undo: (
-    ref: { id?: number; eid?: string },
-    via?: string,
-  ) => Promise<Change[]>
   // The provider table (adapters in-process; GET /providers over stdio)
   // — task_spawn's last-resort default when neither the caller nor the
   // args name one.
@@ -306,6 +303,24 @@ let HINTS: Record<string, ToolAnnotations> = {
   task_spawn: { openWorldHint: true },
 }
 
+export let MCP_INSTRUCTIONS =
+  `Tool arguments are source data, never HTML. Pass <, >,
+and & literally; the renderer escapes them for its own output type.
+The graph renders bodies as markdown. ${DOC}
+
+Coordinators delegate all individual-contributor implementation. After
+compaction or resume, use durable task context to restore assignments and stay
+in orchestration and review.
+
+Work with ${TASK_TREE_ADOPTION.steps}+ steps defaults to task_tree, not a checklist in one task body.
+Exact dry run: ${taskTreeExample('mcp')}. Choose every relation explicitly;
+never infer edge meanings from prose. Keep leaf bodies to the irreducible ask
+and pointers.
+
+Call task_context first each session, and pass the same stable session
+id to every tool that takes one — it names the run for attribution, claims,
+and the comms bus.`
+
 export let mcpServer = (io: IO) => {
   // The io-backed Querier: client.ts's scoped readers (checkedRefs, sessionRow,
   // contextSnapshot, bus) run through whichever transport this mount has —
@@ -320,13 +335,7 @@ export let mcpServer = (io: IO) => {
   // agent's standing context — the strongest ambient steering the
   // protocol offers. Keep it to what every writer must know.
   let server = new McpServer({ name: 'tasks', version: VERSION }, {
-    instructions: `Tool arguments are source data, never HTML. Pass <, >,
-and & literally; the renderer escapes them for its own output type.
-The graph renders bodies as markdown. ${DOC}
-
-Call task_context first each session, and pass the same stable session
-id to every tool that takes one — it names the run for attribution, claims,
-and the comms bus.`,
+    instructions: MCP_INSTRUCTIONS,
   })
   let tool = <Shape extends z.ZodRawShape>(
     name: string,
@@ -488,6 +497,9 @@ task's dedicated title/body/status wins over the same property in its
 params; params carries every other writable property. The whole batch
 lands in one atomic apply. In a structured batch, parent names another
 item's key and relation names the semantic edge; project roots the plan.
+For ${TASK_TREE_ADOPTION.steps}+ steps use task_tree; exact dry run: ${
+      taskTreeExample('mcp')
+    }.
 Reference param values accept human ids
 (.project=P-19). ${GRAMMAR} ${BUS}`,
     {
@@ -591,6 +603,7 @@ Reference param values accept human ids
       }
       let minted: string[] = []
       let changes: Change[] = []
+      let written: { title: string; body: string }[] = []
       for (let t of want) {
         let ps = parseAll(t.params ?? [])
         if (
@@ -608,6 +621,10 @@ Reference param values accept human ids
         if (!grouped.task?.project && scope) {
           grouped.task = { ...grouped.task, project: scope }
         }
+        written.push({
+          title: String(grouped.doc.title ?? ''),
+          body: String(grouped.doc.body ?? ''),
+        })
         let eid = crypto.randomUUID()
         minted.push(eid)
         changes.push(...taskChanges(eid, grouped))
@@ -622,14 +639,16 @@ Reference param values accept human ids
       // plan, not a probe — hinting on each would drown the reply.
       let dupe = want.length == 1
         ? await similarHint(
-          `${want[0].title}\n${want[0].body ?? ''}`,
+          `${written[0].title}\n${written[0].body}`,
           minted[0],
         )
         : ''
       return bus(
         `created ${ids.join(', ')}${dupe ? `\n${dupe}` : ''}${
-          wall(want.find((t) => wall(t.body))?.body)
-        }`,
+          want.length == 1
+            ? `\n${taskTreeWarning(written[0].body, 0, 'mcp')}`.trimEnd()
+            : ''
+        }${wall(written.find((t) => wall(t.body))?.body)}`,
         session,
       )
     },
@@ -1177,7 +1196,7 @@ it is a redo. ${BUS}`,
         if (!row) return err(`no entity: ${id}`)
         ref = { eid: row.eid }
       }
-      let out = await io.undo(ref, session)
+      let out = await io.write({ mutation: 'undo', ...ref }, session)
       let noise = new Set(['created', 'updated', 'resume', 'imported'])
       let what = out.filter((c) => !noise.has(c.name)).map((c) =>
         c.comp == null
@@ -2305,7 +2324,7 @@ if (import.meta.main) {
     query: (q, opts) => queryHttp(q.split('&').filter(Boolean), opts),
     get: (ids, filters = []) => fetched(ids, filters),
     deps: (eids, reveal) => httpDeps(eids, reveal),
-    write: send,
+    write: mutate,
     find: search,
     upload: async (eid, html) => {
       let res = await request(`http://${host()}/upload?eid=${eid}`, {
@@ -2320,7 +2339,6 @@ if (import.meta.main) {
     // mount (/mcp, the fleet's door) is where recall counts.
     touch: async () => {},
     history: (eid, limit) => history(eid, limit),
-    undo: (ref, via) => undo(ref, via),
     providers: async () => {
       let res = await request(`http://${host()}/providers`)
       if (!res.ok) throw new Error(`server said ${res.status}`)

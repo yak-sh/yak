@@ -3,6 +3,7 @@
 
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { commands } from './commands.ts'
+import { TASK_TREE_ADOPTION } from './client.ts'
 import {
   help,
   manuals,
@@ -27,6 +28,11 @@ Deno.test('every CLI route and palette command answers help from its table', () 
   for (let name of Object.keys(commands)) {
     assertMatch(requestedHelp([`:${name}`, '--help']) ?? '', /^task :/)
   }
+})
+
+Deno.test('task tree help takes its dry-run command from adoption metadata', () => {
+  assertEquals(manuals.tree.examples?.[0], TASK_TREE_ADOPTION.cli)
+  assertMatch(help(['new']), new RegExp(TASK_TREE_ADOPTION.cli))
 })
 
 Deno.test('every verb usage is rendered from its declaration', () => {

@@ -13,6 +13,7 @@ import { takeBaton } from './baton.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
 import { capabilities, type Change, type Dep, idOf, kindOf } from './types.ts'
+import type { Mutation } from './mutation.ts'
 import {
   apply,
   appPlane,
@@ -24,12 +25,11 @@ import {
   epochOf,
   file as graph,
   human,
-  inverseBatch,
   journalBy,
   journalOf,
-  lastBatch,
   locate,
   migrate,
+  mutate,
   recast,
   redact as redactValue,
   refsOf,
@@ -587,9 +587,9 @@ let graphIO: IO = {
       (!eager(db, d.parent).quarantined && !eager(db, d.child).quarantined)
     ),
   // deno-lint-ignore require-await
-  write: async (changes, via) => {
+  write: async (mutation, via) => {
     if (appOnly) refuseWrite()
-    let out = apply(db, changes, fed(), via)
+    let out = mutate(db, mutation, fed(), via)
     feed.settle()
     return out
   },
@@ -617,21 +617,6 @@ let graphIO: IO = {
   },
   // deno-lint-ignore require-await
   history: async (eid, limit) => journalOf(db, eid, limit),
-  // Build the inverse and apply it in one synchronous stretch (no await
-  // between) — the same atomicity the /undo route relies on.
-  // deno-lint-ignore require-await
-  undo: async ({ id, eid }, via) => {
-    if (appOnly) refuseWrite()
-    let batch = id ?? (eid ? lastBatch(db, eid) : 0)
-    if (!batch) {
-      throw new Error(
-        eid ? `${eid} has no history to undo` : 'undo needs id or eid',
-      )
-    }
-    let out = apply(db, inverseBatch(db, batch), fed(), via)
-    feed.settle()
-    return out
-  },
   providers: () => readyProviders(),
   // Historical scans are local SQLite reads; the tool submits their Change[]
   // through graphIO.write, the same capability as every other MCP mutation.
@@ -840,11 +825,11 @@ let refuseWrite = (): never => {
 // The graph-mutating HTTP doors, named once. /error and /usage are excluded on
 // purpose: they only record() telemetry, which swallows a read-only failure and
 // never touches the graph. /ws and /mcp are mixed read/write doors and refuse
-// writes at their own seams (applyFrom, subserve.write/undo/upload).
+// writes at their own seams (applyFrom, graphIO.write/upload).
 let writeDoor = (method: string, path: string): boolean =>
   (method == 'GET' && path == '/freeze') ||
   (method == 'POST' &&
-    (path == '/apply' || path == '/undo' || path == '/redact' ||
+    (path == '/apply' || path == '/redact' ||
       path == '/page' || path == '/upload' || path == '/blob'))
 
 let methodNotAllowed = (allow: string) =>
@@ -999,6 +984,7 @@ export let retiredDataDoors = new Set([
   '/references',
   '/resolve',
   '/search',
+  '/undo',
 ])
 
 // The request handler, DEFINED here but not yet listening. The bind happens at
@@ -1307,21 +1293,25 @@ let handle = async (req: Request) => {
   if (path == '/apply') {
     if (req.method != 'POST') return methodNotAllowed('POST')
     let t0 = performance.now()
+    let name = 'apply'
     let note = (ok: boolean, error?: string) =>
       record(db, {
         source: 'http',
-        name: 'apply',
+        name,
         ok,
         ms: performance.now() - t0,
         error,
       })
-    return req.json().then((changes: Change[]) => {
+    return req.json().then((mutation: Mutation) => {
+      if (!Array.isArray(mutation)) {
+        name = mutation?.mutation == 'undo' ? 'undo' : 'mutation'
+      }
       // Attribution is an honesty header, not auth: the CLI names its
       // session in x-via (the instrument), apply resolves it to the actor
       // it acts for, and an anonymous post falls back to the box owner.
-      let out = apply(
+      let out = mutate(
         db,
-        changes,
+        mutation,
         fed(),
         req.headers.get('x-via'),
       )
@@ -1388,45 +1378,6 @@ let handle = async (req: Request) => {
         ms: performance.now() - t0,
         error: why,
       })
-      return new Response(why, { status: 400 })
-    }
-  }
-  // Undo reverses a journaled batch: the server builds the guarded inverse
-  // (only it reads the journal) and applies it through the same door as any
-  // write. Build and apply share this one synchronous tick — no await
-  // between — so the world can't move after the inverse is priced and before
-  // it lands. ?id= names a journal batch; ?eid= its entity's latest batch.
-  if (path == '/undo' && req.method == 'POST') {
-    let t0 = performance.now()
-    let note = (ok: boolean, error?: string) =>
-      record(db, {
-        source: 'http',
-        name: 'undo',
-        ok,
-        ms: performance.now() - t0,
-        error,
-      })
-    try {
-      let idParam = url.searchParams.get('id')
-      let eid = url.searchParams.get('eid')
-      let id = idParam != null ? Number(idParam) : eid ? lastBatch(db, eid) : 0
-      if (!id) {
-        throw new Error(
-          eid ? `${eid} has no history to undo` : 'undo needs ?id= or ?eid=',
-        )
-      }
-      let out = apply(
-        db,
-        inverseBatch(db, id),
-        fed(),
-        req.headers.get('x-via'),
-      )
-      feed.settle()
-      note(true)
-      return Response.json({ ok: true, changes: out, id })
-    } catch (e) {
-      let why = e instanceof Error ? e.message : String(e)
-      note(false, why)
       return new Response(why, { status: 400 })
     }
   }

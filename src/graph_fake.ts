@@ -9,6 +9,7 @@
 import { find, jsonOf, rows } from './client.ts'
 import { kidsOf, matchQuery, parseQuery } from './query.ts'
 import type { Change, Snapshot } from './types.ts'
+import type { Mutation } from './mutation.ts'
 
 export let answers = (snap: Snapshot) => {
   let all = rows(snap)
@@ -53,6 +54,7 @@ export let answers = (snap: Snapshot) => {
 export let fakeGraph = (snap: Snapshot) => {
   let seen: string[] = []
   let acked: Change[] = []
+  let mutations: Mutation[] = []
   let answer = answers(snap)
   let server = Deno.serve({
     hostname: '127.0.0.1',
@@ -62,7 +64,9 @@ export let fakeGraph = (snap: Snapshot) => {
     let url = new URL(req.url)
     seen.push(decodeURIComponent(`${url.pathname}${url.search}`))
     if (req.method == 'POST' && url.pathname == '/apply') {
-      let changes = await req.json() as Change[]
+      let mutation = await req.json() as Mutation
+      mutations.push(mutation)
+      let changes = Array.isArray(mutation) ? mutation : []
       acked.push(...changes)
       return Response.json({ ok: true, changes })
     }
@@ -70,5 +74,5 @@ export let fakeGraph = (snap: Snapshot) => {
     return Response.json(answer(decodeURIComponent(url.search.slice(1))))
   })
   let port = (server.addr as Deno.NetAddr).port
-  return { server, seen, acked, host: `127.0.0.1:${port}` }
+  return { server, seen, acked, mutations, host: `127.0.0.1:${port}` }
 }

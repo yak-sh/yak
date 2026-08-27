@@ -37,6 +37,7 @@ import {
   stamped,
   uuid,
 } from './types.ts'
+import type { Mutation } from './mutation.ts'
 import { type Trace } from './effects.ts'
 import { ancestorAt } from './client.ts'
 import { homeReads } from './persona.ts'
@@ -5825,6 +5826,34 @@ export let inverseBatch = (db: DatabaseSync, id: number): Change[] => {
     }
   }
   return inverse
+}
+
+// The one database mutation capability. Named mutations live here only when
+// their read and guarded write must be indivisible; HTTP and in-process MCP
+// both call this function, so transport cannot weaken that boundary.
+export let mutate = (
+  db: DatabaseSync,
+  mutation: Mutation,
+  trace?: Trace,
+  via?: string | null,
+): Change[] => {
+  if (Array.isArray(mutation)) return apply(db, mutation, trace, via)
+  if (mutation.mutation != 'undo') throw new Error('unknown mutation')
+  if ((mutation.id == null) == (mutation.eid == null)) {
+    throw new Error('undo needs exactly one of id or eid')
+  }
+  if (
+    mutation.id != null &&
+    (!Number.isSafeInteger(mutation.id) || mutation.id < 1)
+  ) {
+    throw new Error('undo id must be a positive integer')
+  }
+  if (mutation.eid != null && !mutation.eid.trim()) {
+    throw new Error('undo eid must not be empty')
+  }
+  let id = mutation.id ?? lastBatch(db, mutation.eid!)
+  if (!id) throw new Error(`${mutation.eid} has no history to undo`)
+  return apply(db, inverseBatch(db, id), trace, via)
 }
 
 // The rowid of the latest batch that touched an entity — what `task undo <e>`

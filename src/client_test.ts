@@ -54,12 +54,15 @@ import {
   spec,
   STUB,
   subChanges,
+  TASK_TREE_ADOPTION,
   taskBlock,
   taskChanges,
   taskContextBlock,
   taskContextGraph,
+  taskTreeExample,
   taskTreePlan,
   taskTreeText,
+  taskTreeWarning,
   threadOf,
   unreadMail,
   unreadPipe,
@@ -748,6 +751,21 @@ Deno.test('taskTreePlan: duplicate, dangling, and cyclic keys cannot write', asy
     Error,
     'tree cycle',
   )
+})
+
+Deno.test('taskTreeWarning: only a long prerequisite-free leaf gets adoption feedback', () => {
+  let long = 'x'.repeat(TASK_TREE_ADOPTION.longBody + 1)
+  assertEquals(taskTreeWarning('short body', 0, 'cli'), '')
+  assertEquals(taskTreeWarning(long, 1, 'cli'), '')
+  let cli = taskTreeWarning(long, 0, 'cli')
+  assertMatch(cli, /warning: this long leaf has no prerequisite children/)
+  assertMatch(cli, /3\+ steps/)
+  assertEquals(cli.includes(TASK_TREE_ADOPTION.cli), true)
+  assertEquals(cli.includes(taskTreeExample('cli')), true)
+  let mcp = taskTreeWarning(long, 0, 'mcp')
+  assertMatch(mcp, /task_tree/)
+  assertMatch(mcp, /"dry_run":true/)
+  assertEquals(mcp.includes(TASK_TREE_ADOPTION.cli), false)
 })
 
 Deno.test('sessionFor: reuse, mint, cwd + pid refresh', () => {

@@ -4,7 +4,9 @@
 // entity. Every case drives real apply() batches so the journal, the was-guard,
 // and the tombstone rule are the ones under test, not a mock of them.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, inverseBatch, lastBatch, snapshot } = await import('./db.ts')
+let { apply, inverseBatch, lastBatch, mutate, snapshot } = await import(
+  './db.ts'
+)
 let { freshDb } = await import('./testdb.ts')
 let { assertEquals, assertNotEquals, assertThrows } = await import(
   '@std/assert'
@@ -37,6 +39,32 @@ Deno.test('undo restores a component update to its prior value', () => {
   assertEquals(compOf(db, t, 'task')?.status, 'open')
 })
 
+Deno.test('the mutation capability applies batches and guarded undo', () => {
+  let db = freshDb(), t = uid()
+  mutate(db, [
+    { eid: t, name: 'doc', comp: { title: 'x', body: '' } },
+    { eid: t, name: 'task', comp: { status: 'open' } },
+  ])
+  mutate(db, [{ eid: t, name: 'task', comp: { status: 'done' } }])
+  mutate(db, { mutation: 'undo', eid: t })
+  assertEquals(compOf(db, t, 'task')?.status, 'open')
+})
+
+Deno.test('named mutations reject ambiguous targets', () => {
+  let db = freshDb(), t = uid()
+  born(db, t)
+  assertThrows(
+    () => mutate(db, { mutation: 'undo' }),
+    Error,
+    'exactly one',
+  )
+  assertThrows(
+    () => mutate(db, { mutation: 'undo', id: lastBatch(db, t), eid: t }),
+    Error,
+    'exactly one',
+  )
+})
+
 Deno.test('undo of a component create deletes just that component', () => {
   let db = freshDb(), t = uid()
   apply(db, [{ eid: t, name: 'doc', comp: { title: 'x', body: '' } }])
@@ -66,6 +94,20 @@ Deno.test('undo refuses when a guarded column moved since', () => {
     'has moved since',
   )
   assertEquals(compOf(db, t, 'task')?.status, 'wip') // untouched by the refusal
+})
+
+Deno.test('the mutation capability preserves guarded undo refusal', () => {
+  let db = freshDb(), t = uid()
+  born(db, t, 'open')
+  mutate(db, [{ eid: t, name: 'task', comp: { status: 'done' } }])
+  let batch = lastBatch(db, t)
+  mutate(db, [{ eid: t, name: 'task', comp: { status: 'wip' } }])
+  assertThrows(
+    () => mutate(db, { mutation: 'undo', id: batch }),
+    Error,
+    'has moved since',
+  )
+  assertEquals(compOf(db, t, 'task')?.status, 'wip')
 })
 
 Deno.test('undo of a creation refuses when the entity was touched since', () => {
