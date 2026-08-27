@@ -31,6 +31,7 @@ import {
   me,
   memoryChanges,
   mintedIn,
+  normalizeLiterals,
   noticesFor,
   param,
   patches,
@@ -749,7 +750,165 @@ Deno.test('taskTreePlan: duplicate, dangling, and cyclic keys cannot write', asy
         ],
       }, q),
     Error,
-    'tree cycle',
+    'literal cycle',
+  )
+})
+
+Deno.test('normalizeLiterals: nested aliases compile to one canonical batch', () => {
+  let P = 'eeeeeeee-0000-4000-8000-000000000019'
+  let M = 'eeeeeeee-0000-4000-8000-000000000020'
+  let minted = [
+    'eeeeeeee-0000-4000-8000-000000000001',
+    'eeeeeeee-0000-4000-8000-000000000002',
+    'eeeeeeee-0000-4000-8000-000000000003',
+  ]
+  let known: Record<string, string> = { 'P-19': P, 'M-20': M }
+  let was = { title: 'old-title-hash' }
+  let plan = normalizeLiterals([
+    { key: 'project', id: 'P-19' },
+    { key: 'memory', id: 'M-20' },
+    {
+      key: 'goal',
+      comps: {
+        doc: { title: 'Goal' },
+        task: { status: 'open', project: 'project' },
+      },
+      was: { doc: was },
+      deps: {
+        requires: [{
+          key: 'gate',
+          comps: {
+            doc: { title: 'Gate' },
+            task: { status: 'open', project: 'project' },
+          },
+          deps: { reads: ['memory'] },
+        }],
+      },
+    },
+    {
+      key: 'recall',
+      comps: { recalled: { source: 'memory' } },
+      deps: { recalled: ['memory'] },
+    },
+  ], {
+    resolve: (id) => known[id],
+    mint: () => minted.shift()!,
+  })
+  assertEquals(plan.aliases, {
+    project: P,
+    memory: M,
+    goal: 'eeeeeeee-0000-4000-8000-000000000001',
+    gate: 'eeeeeeee-0000-4000-8000-000000000002',
+    recall: 'eeeeeeee-0000-4000-8000-000000000003',
+  })
+  assertEquals(plan.changes[0].was === was, true, 'was rides unchanged')
+  assertEquals(plan.changes, [
+    {
+      eid: plan.aliases.goal,
+      name: 'doc',
+      comp: { title: 'Goal' },
+      was: { title: 'old-title-hash' },
+    },
+    {
+      eid: plan.aliases.goal,
+      name: 'task',
+      comp: { status: 'open', project: P },
+    },
+    {
+      eid: plan.aliases.gate,
+      name: 'doc',
+      comp: { title: 'Gate' },
+    },
+    {
+      eid: plan.aliases.gate,
+      name: 'task',
+      comp: { status: 'open', project: P },
+    },
+    {
+      eid: plan.aliases.recall,
+      name: 'recalled',
+      comp: { source: M },
+    },
+    {
+      eid: plan.aliases.goal,
+      name: 'dependency',
+      comp: { type: 'requires', child: plan.aliases.gate },
+    },
+    {
+      eid: plan.aliases.gate,
+      name: 'dependency',
+      comp: { type: 'reads', child: M },
+    },
+    {
+      eid: plan.aliases.recall,
+      name: 'dependency',
+      comp: { type: 'recalled', child: M },
+    },
+  ])
+})
+
+Deno.test('normalizeLiterals: invalid aliases, references, keys, and cycles reject', () => {
+  let cases: [string, Record<string, unknown>[], string][] = [
+    [
+      'duplicate',
+      [{ key: 'same', comps: { doc: {} } }, {
+        key: 'same',
+        comps: { doc: {} },
+      }],
+      'duplicate literal key: same',
+    ],
+    [
+      'dangling edge',
+      [{ key: 'a', comps: { doc: {} }, deps: { reads: ['missing'] } }],
+      'no entity or literal key: missing',
+    ],
+    [
+      'dangling component reference',
+      [{ key: 'a', comps: { task: { project: 'missing' } } }],
+      'no entity or literal key: missing (.task.project)',
+    ],
+    [
+      'unknown component',
+      [{ key: 'a', comps: { invented: {} } }],
+      'unknown component: invented',
+    ],
+    [
+      'unknown dependency',
+      [{ key: 'a', deps: { invented: [] } }],
+      'unknown dependency: invented',
+    ],
+    [
+      'cycle',
+      [
+        {
+          key: 'a',
+          comps: { doc: {} },
+          deps: { requires: ['b'] },
+        },
+        {
+          key: 'b',
+          comps: { doc: {} },
+          deps: { requires: ['a'] },
+        },
+      ],
+      'literal cycle at a',
+    ],
+  ]
+  for (let [name, literals, message] of cases) {
+    assertThrows(
+      () => normalizeLiterals(literals, { mint: () => crypto.randomUUID() }),
+      Error,
+      message,
+      name,
+    )
+  }
+  assertThrows(
+    () =>
+      normalizeLiterals([{ key: 'taken', comps: { doc: {} } }], {
+        resolve: (id) => id == 'taken' ? T1 : undefined,
+      }),
+    Error,
+    'literal key is also an entity: taken',
   )
 })
 

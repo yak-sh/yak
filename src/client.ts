@@ -1419,6 +1419,230 @@ export let taskChanges = (
     .map(([name, comp]) => ({ eid, name, comp })),
 ]
 
+// A nested graph literal is the component-shaped wire with two request-local
+// additions: `key` names an entity before its eid exists, and `deps` nests or
+// references other literals through the generated edge vocabulary. `was`
+// stays beside each component patch, exactly where Change carries it.
+export type LiteralRef = string | number | EntityLiteral
+export type EntityLiteral = {
+  key?: string
+  id?: string
+  comps?: Record<string, Record<string, unknown> | null>
+  deps?: Partial<Record<Edge, LiteralRef | LiteralRef[]>>
+  was?: Record<string, Record<string, string | null>>
+}
+
+export type LiteralPlan = {
+  changes: Change[]
+  aliases: Record<string, string>
+}
+
+export type LiteralOptions = {
+  resolve?: (id: string) => string | undefined
+  mint?: () => string
+}
+
+type LiteralNode = {
+  key?: string
+  id?: string
+  eid: string
+  comps: Record<string, Record<string, unknown> | null>
+  deps: { type: Edge; target: string | number | LiteralNode }[]
+  was: Record<string, Record<string, string | null>>
+}
+
+let object = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v == 'object' && !Array.isArray(v)
+let owns = (v: object, key: string) =>
+  Object.prototype.hasOwnProperty.call(v, key)
+
+// Pure compile first, write later. The resolver is caller-owned (rows, SQL,
+// or another index); local aliases win only when they are unambiguous with
+// that external namespace. Components and dependency types come solely from
+// the generated vocabulary, so adding either expands this language without a
+// hand-kept parser edit.
+export let normalizeLiterals = (
+  literals: EntityLiteral[],
+  options: LiteralOptions = {},
+): LiteralPlan => {
+  if (!literals.length) throw new Error('at least one entity literal is needed')
+  let resolve = options.resolve ?? (() => undefined)
+  let mint = options.mint ?? uuid
+  let resolved = new Map<string, string | undefined>()
+  let external = (id: string) => {
+    if (!resolved.has(id)) resolved.set(id, resolve(id))
+    return resolved.get(id)
+  }
+  let nodes: LiteralNode[] = []
+  let keys = new Map<string, LiteralNode>()
+  let active = new Set<object>()
+  let seen = new Set<object>()
+
+  let visit = (literal: EntityLiteral): LiteralNode => {
+    if (!object(literal)) throw new Error('an entity literal must be an object')
+    if (active.has(literal)) throw new Error('entity literal object cycle')
+    if (seen.has(literal)) throw new Error('entity literal is used twice')
+    active.add(literal)
+    let alien = Object.keys(literal).find((name) =>
+      !['key', 'id', 'comps', 'deps', 'was'].includes(name)
+    )
+    if (alien) throw new Error(`unknown entity literal field: ${alien}`)
+
+    let key = literal.key?.trim()
+    if (literal.key != null && !key) {
+      throw new Error('a literal key cannot be empty')
+    }
+    if (key && keys.has(key)) throw new Error(`duplicate literal key: ${key}`)
+    let id = literal.id?.trim()
+    if (literal.id != null && !id) {
+      throw new Error('a literal id cannot be empty')
+    }
+    let declared = literal.comps ?? {}
+    if (!object(declared)) throw new Error('literal comps must be an object')
+    for (let [name, comp] of Object.entries(declared)) {
+      if (!owns(comps, name)) throw new Error(`unknown component: ${name}`)
+      if (comp != null && !object(comp)) {
+        throw new Error(`${name} component must be an object or null`)
+      }
+    }
+    let was = literal.was ?? {}
+    if (!object(was)) throw new Error('literal was must be an object')
+    for (let [name, guard] of Object.entries(was)) {
+      if (!owns(comps, name)) {
+        throw new Error(`unknown guarded component: ${name}`)
+      }
+      if (!owns(declared, name)) {
+        throw new Error(`was has no ${name} component patch`)
+      }
+      if (
+        !object(guard) ||
+        Object.values(guard).some((v) => v != null && typeof v != 'string')
+      ) throw new Error(`${name} was must map columns to hashes or null`)
+    }
+    let node: LiteralNode = { key, id, eid: '', comps: declared, deps: [], was }
+    nodes.push(node)
+    if (key) keys.set(key, node)
+    let declaredDeps = literal.deps ?? {}
+    if (!object(declaredDeps)) throw new Error('literal deps must be an object')
+    for (let name of Object.keys(declaredDeps)) {
+      if (!(edges as readonly string[]).includes(name)) {
+        throw new Error(`unknown dependency: ${name}`)
+      }
+    }
+    for (let type of edges) {
+      if (!owns(declaredDeps, type)) continue
+      let value = declaredDeps[type]
+      let targets = Array.isArray(value) ? value : [value]
+      for (let target of targets) {
+        if (typeof target == 'string' || typeof target == 'number') {
+          node.deps.push({ type, target })
+        } else if (object(target)) {
+          node.deps.push({ type, target: visit(target as EntityLiteral) })
+        } else {
+          throw new Error(`${type} dependency must name or nest an entity`)
+        }
+      }
+    }
+    if (!id && !Object.keys(declared).length) {
+      throw new Error('a new entity literal needs at least one component')
+    }
+    active.delete(literal)
+    seen.add(literal)
+    return node
+  }
+  for (let literal of literals) visit(literal)
+
+  for (let key of keys.keys()) {
+    if (external(key)) throw new Error(`literal key is also an entity: ${key}`)
+  }
+  let aliasEntries: [string, string][] = []
+  let eids = new Set<string>()
+  for (let node of nodes) {
+    let eid = node.id ? external(node.id) : mint()
+    if (node.id && !eid) throw new Error(`no entity: ${node.id}`)
+    if (!eid) throw new Error('literal mint returned no eid')
+    if (eids.has(eid)) throw new Error(`entity appears twice: ${eid}`)
+    eids.add(eid)
+    node.eid = eid
+    if (node.key) aliasEntries.push([node.key, eid])
+  }
+  let aliases = Object.fromEntries(aliasEntries)
+
+  let ref = (value: string | number, where = '') => {
+    let name = String(value)
+    let local = keys.get(name)?.eid
+    let found = external(name)
+    if (local && found) {
+      throw new Error(`ambiguous literal reference: ${name}`)
+    }
+    let eid = local ?? found
+    if (!eid) throw new Error(`no entity or literal key: ${name}${where}`)
+    return eid
+  }
+  let deps = nodes.flatMap((node) =>
+    node.deps.map(({ type, target }) => ({
+      parent: node,
+      type,
+      child: typeof target == 'object' ? target : undefined,
+      eid: typeof target == 'object' ? target.eid : ref(target),
+    }))
+  )
+  let byEid = new Map(nodes.map((node) => [node.eid, node]))
+  let outgoing = new Map<LiteralNode, LiteralNode[]>()
+  for (let dep of deps) {
+    let child = dep.child ?? byEid.get(dep.eid)
+    if (child) {
+      let children = outgoing.get(dep.parent) ?? []
+      children.push(child)
+      outgoing.set(dep.parent, children)
+    }
+  }
+  let visiting = new Set<LiteralNode>()
+  let rooted = new Set<LiteralNode>()
+  let prove = (node: LiteralNode): void => {
+    if (rooted.has(node)) return
+    if (visiting.has(node)) {
+      throw new Error(`literal cycle at ${node.key ?? node.id ?? node.eid}`)
+    }
+    visiting.add(node)
+    for (let child of outgoing.get(node) ?? []) prove(child)
+    visiting.delete(node)
+    rooted.add(node)
+  }
+  for (let node of nodes) prove(node)
+
+  let changes: Change[] = []
+  for (let node of nodes) {
+    for (let name of Object.keys(comps)) {
+      if (!owns(node.comps, name)) continue
+      let source = node.comps[name]
+      let comp = source == null ? null : Object.fromEntries(
+        Object.entries(source).map(([prop, value]) => {
+          if (refOf(name, prop) == null || value == null) return [prop, value]
+          if (typeof value != 'string' && typeof value != 'number') {
+            throw new Error(`.${name}.${prop} must name an entity`)
+          }
+          return [prop, ref(value, ` (.${name}.${prop})`)]
+        }),
+      )
+      changes.push({
+        eid: node.eid,
+        name,
+        comp,
+        ...(node.was[name] ? { was: node.was[name] } : {}),
+      })
+    }
+  }
+  for (let { parent, type, eid } of deps) {
+    changes.push({
+      eid: parent.eid,
+      name: 'dependency',
+      comp: { type, child: eid },
+    })
+  }
+  return { changes, aliases }
+}
+
 // A task TREE is authored as one structured plan and one apply batch. Local
 // keys name nodes before the server mints their human ids; existing nodes ride
 // by id and receive only the declared edge. Every node has exactly one parent
@@ -1534,7 +1758,9 @@ export let taskTreePlan = async (
   }
 
   let plans: TaskTreeNodePlan[] = []
-  let changes: Change[] = []
+  let literals: EntityLiteral[] = []
+  let literalByKey = new Map<string, EntityLiteral>()
+  let minted: string[] = []
   let existingEids = new Set<string>()
   for (let [i, node] of input.nodes.entries()) {
     let key = keys[i]
@@ -1577,7 +1803,12 @@ export let taskTreePlan = async (
     let eid = existing?.eid ?? uuid()
     let title = String(existing?.comps.doc?.title ?? node.title ?? '')
     plans.push({ key, eid, existing, title, parent, relation })
-    if (existing) continue
+    if (existing) {
+      let literal = { key, id: existing.eid }
+      literals.push(literal)
+      literalByKey.set(key, literal)
+      continue
+    }
 
     let grouped = patches(
       await derefedParams(treeParams(node.params ?? []), q),
@@ -1589,39 +1820,45 @@ export let taskTreePlan = async (
       )
     }
     grouped.doc = {
+      body: '',
       ...grouped.doc,
       title: node.title!.trim(),
       ...(node.body != null ? { body: node.body } : {}),
     }
     grouped.task = {
+      status: 'open',
       ...grouped.task,
       project: project.eid,
       ...(node.status ? { status: node.status } : {}),
     }
-    changes.push(...taskChanges(eid, grouped))
+    let literal = { key, comps: grouped }
+    literals.push(literal)
+    literalByKey.set(key, literal)
+    minted.push(eid)
   }
 
-  let byKey = new Map(plans.map((n) => [n.key, n]))
-  let visiting = new Set<string>()
-  let rooted = new Set<string>()
-  let prove = (node: TaskTreeNodePlan): void => {
-    if (rooted.has(node.key)) return
-    if (visiting.has(node.key)) throw new Error(`tree cycle at ${node.key}`)
-    visiting.add(node.key)
-    if (node.parent) prove(byKey.get(node.parent)!)
-    visiting.delete(node.key)
-    rooted.add(node.key)
+  let root: EntityLiteral = { id: project.eid }
+  let add = (literal: EntityLiteral, type: Edge, child: string) => {
+    let deps = literal.deps ??= {}
+    let current = deps[type]
+    deps[type] = current == null
+      ? [child]
+      : [...(Array.isArray(current) ? current : [current]), child]
   }
-  for (let node of plans) prove(node)
-
   for (let node of plans) {
-    let parent = node.parent ? byKey.get(node.parent)!.eid : project.eid
-    changes.push({
-      eid: parent,
-      name: 'dependency',
-      comp: { type: node.relation, child: node.eid },
-    })
+    add(
+      node.parent ? literalByKey.get(node.parent)! : root,
+      node.relation,
+      node.key,
+    )
   }
+  let { changes, aliases } = normalizeLiterals([root, ...literals], {
+    // Params are already dereferenced above. A UUID therefore names either a
+    // fetched existing entity or a reference that derefedParams just proved.
+    resolve: (id) => UUID.test(id) ? id : find(found, id)?.eid,
+    mint: () => minted.shift()!,
+  })
+  for (let node of plans) node.eid = aliases[node.key]
   return { project, nodes: plans, changes }
 }
 
