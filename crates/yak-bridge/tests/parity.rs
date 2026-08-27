@@ -1573,9 +1573,9 @@ fn write_parity() {
     // --- ROUTING: a mail's `from` is DERIVED natively (rung 7b) -----------------
     // A created mail's server-owned `from` is stamped from senderActor(writer) —
     // the session sender-actor chain (persona ?? actor ?? venture ?? held-work ??
-    // model). The session is created through the PROXIED session door on both
-    // copies (identical, session still UNPORTED), the signer wears an address-book
-    // `email` (native), then a mail POSTed with x-via = that session derives
+    // model). The signer session is created identically on both copies (now a
+    // native session write, rung 7c), wears an address-book `email` (native),
+    // then a mail POSTed with x-via = that session derives
     // `from` from the signer's address — byte-identically on the native (bridge)
     // and the Deno door, across the echo, journal and mail row.
     {
@@ -1632,19 +1632,89 @@ fn write_parity() {
         g(&ts, &br, &format!("[{{\"eid\":\"{an}\",\"name\":\"entity\",\"comp\":null}}]"));
     }
 
-    // `session`/`spawn` still PROXY: a session write fires db.ts's facet-mirroring
-    // cluster (dualSpawn / dualFacet / mirrorLineage), unported here (rung 7c), so
-    // the predicate must route it to Deno. A bare session create lands identically
-    // through the bridge as direct-to-Deno and takes the proxy door.
+    // --- SESSION/SPAWN facet mirroring commits NATIVELY (rung 7c) ---------------
+    // The last unported cluster: db.ts's dualSpawn / dualFacet / mirrorLineage,
+    // now ported into the kernel. Each shape the rung carved is asserted native
+    // AND byte-identical to direct-to-Deno across echo/journal/state. UNPORTED is
+    // empty once these pass — every wire comp is native or proxies by allowlist.
     {
-        let sp = uuid_v4();
+        // NB: the spec fields exercised here are `effort`/`cwd`/`pid`/`pane` —
+        // never `provider`. A committed `spawn.provider` is a LAUNCH request the
+        // Deno `created(session)` SERVE-effect acts on (it fires in the serving
+        // process even effects-off), which would spawn an agent and write failure
+        // rows on copy-A only — an effect divergence, not a write-path one. The
+        // mirror machinery is identical for every spawn column, so a provider-free
+        // spec proves it without launching anything.
+        //
+        // (1) create-by-session-col + MINT-MISSING twins: a session naming its
+        // spec on the SESSION columns mints a `spawn` twin with the same spec
+        // (dualSpawn) and a `worktree` twin aliased back onto session.cwd
+        // (dualFacet + syncFacetAliases). The twins did not exist — mint-missing.
+        let s1 = uuid_v4();
         assert_write(
-            "routing/session-proxies",
+            "session/create-by-session-col",
             &ts, &br, &ts_db, &br_db,
-            &format!("[{{\"eid\":\"{sp}\",\"name\":\"session\",\"comp\":{{\"id\":\"zqw{uid}-proxy\"}}}}]"),
-            "proxy",
+            &format!(
+                "[{{\"eid\":\"{s1}\",\"name\":\"session\",\"comp\":{{\"id\":\"zqw{uid}-s1\",\"effort\":\"high\",\"cwd\":\"/tmp/zqw{uid}-1\"}}}}]"
+            ),
+            "native",
         );
-        g(&ts, &br, &format!("[{{\"eid\":\"{sp}\",\"name\":\"entity\",\"comp\":null}}]"));
+        // (2) create-by-facet-col: writing the `spawn` facet directly on the same
+        // session mirrors its column back onto the session alias (spawn wins).
+        assert_write(
+            "session/create-by-facet-col",
+            &ts, &br, &ts_db, &br_db,
+            &format!("[{{\"eid\":\"{s1}\",\"name\":\"spawn\",\"comp\":{{\"effort\":\"low\"}}}}]"),
+            "native",
+        );
+        // (3) one-side runtime update: writing runtime.pid/pane mirrors to the
+        // session.pid/pane aliases and mints the runtime facet, the untouched
+        // columns projected from the existing row (`current`).
+        assert_write(
+            "session/runtime-update",
+            &ts, &br, &ts_db, &br_db,
+            &format!("[{{\"eid\":\"{s1}\",\"name\":\"runtime\",\"comp\":{{\"pid\":4242,\"pane\":\"%9\"}}}}]"),
+            "native",
+        );
+        // (4) CANONICAL-WINS conflict: one batch writes session.effort AND
+        // spawn.effort with DIFFERENT values — the canonical spawn value wins on
+        // both the spawn facet and the session alias, byte-identically.
+        assert_write(
+            "session/canonical-wins",
+            &ts, &br, &ts_db, &br_db,
+            &format!(
+                "[{{\"eid\":\"{s1}\",\"name\":\"session\",\"comp\":{{\"effort\":\"low\"}}}},\
+                  {{\"eid\":\"{s1}\",\"name\":\"spawn\",\"comp\":{{\"effort\":\"max\"}}}}]"
+            ),
+            "native",
+        );
+        // (5) FACET DELETE: deleting the worktree facet nulls the session.cwd
+        // alias and tombstones the worktree component.
+        assert_write(
+            "session/worktree-delete",
+            &ts, &br, &ts_db, &br_db,
+            &format!("[{{\"eid\":\"{s1}\",\"name\":\"worktree\",\"comp\":null}}]"),
+            "native",
+        );
+        // (6) PARENT LINK: a second session naming s1 as parent links the
+        // `s1 delegates s2` lineage edge from the column write (mirrorLineage).
+        let s2 = uuid_v4();
+        assert_write(
+            "session/parent-link",
+            &ts, &br, &ts_db, &br_db,
+            &format!("[{{\"eid\":\"{s2}\",\"name\":\"session\",\"comp\":{{\"id\":\"zqw{uid}-s2\",\"parent\":\"{s1}\"}}}}]"),
+            "native",
+        );
+        // (7) PARENT UNLINK: clearing s2.parent unlinks the old delegates edge.
+        assert_write(
+            "session/parent-unlink",
+            &ts, &br, &ts_db, &br_db,
+            &format!("[{{\"eid\":\"{s2}\",\"name\":\"session\",\"comp\":{{\"parent\":null}}}}]"),
+            "native",
+        );
+        // cleanup both sessions (native cascade drops their facets + edges).
+        g(&ts, &br, &format!("[{{\"eid\":\"{s2}\",\"name\":\"entity\",\"comp\":null}}]"));
+        g(&ts, &br, &format!("[{{\"eid\":\"{s1}\",\"name\":\"entity\",\"comp\":null}}]"));
     }
 
     // --- DELETE CASCADE → RELEASE → RESUME (native) --------------------------
@@ -1652,8 +1722,8 @@ fn write_parity() {
     // claim (claim.session death=release) AND pushes the freed task onto the
     // resume stack for the holder's actor — the rung-5 resume consequence of an
     // entity delete, byte-identical to Deno across the cascade echo and the
-    // resume row. The session is created through the Deno door (session is still
-    // UNPORTED → proxied setup); only the DELETE is the native assertion.
+    // resume row. The session setup is created identically on both copies (a
+    // native session write, rung 7c); the DELETE is the native assertion here.
     if let Some(actor) = an_eid(&ts, "project") {
         let ssess = uuid_v4();
         let tsk = uuid_v4();
@@ -1796,9 +1866,11 @@ fn write_parity() {
     eprintln!(
         "\nwrite parity OK (native-safe plain-graph, claim/entity-delete, address \
          canonicalization, the rung-7a entry-seq / replaceWakes / stop_request-gate \
-         batches, and the rung-7b mail `from` sender-actor derivation — persona-only \
-         and actor-arm sessions — commit through the bridge; session/spawn and \
-         setting still proxy — both land identically to direct)"
+         batches, the rung-7b mail `from` sender-actor derivation, and the rung-7c \
+         session/spawn facet-mirroring cluster — create-by-session-col, create-by-\
+         facet-col, one-side runtime update, canonical-wins conflict, facet delete, \
+         parent link/unlink, mint-missing twin — all commit through the bridge; only \
+         `setting` still proxies — every case lands identically to direct)"
     );
 }
 

@@ -15,11 +15,13 @@
 // wip drag + conflict audit) and alias uniqueness ship as the first gates. The
 // resume stack (a release pushes the freed task, a re-take/settle pops it) and
 // actor backfill (a cwd-bearing session with no actor gets the venture at its
-// cwd) are ported here as the apply() tail (rung 5). Domains whose TS transforms
-// are still NOT ported — entries (append/seq), spawn requests, wakes,
-// stop_request, mail sender derivation, session facet aliases — REFUSE loudly or
-// are documented gaps rather than half-applying: an unported semantic must never
-// silently diverge between the two writers.
+// cwd) are ported here as the apply() tail (rung 5). Every in-apply TS transform
+// is now ported — entry append/seq, replaceWakes, the stop_request gate, the
+// mail sender derivation, and the session-facet mirroring cluster (dual_spawn /
+// dual_facet / mirror_lineage) — so NATIVE_COMPS spans every wire comp but the
+// one deliberate hold-out (`setting`, rung 6b), and nothing refuses mid-write.
+// The bridge still PROXIES a batch touching a non-native comp; the allowlist,
+// not a refusal, is what keeps an unported semantic from diverging.
 
 use crate::change::{batch_json, Change};
 use crate::store::resolve;
@@ -389,32 +391,17 @@ const SERVER_OWNED: [&str; 8] = [
     "lease", "usage", "imported", "resume", "delivered", "error", "exception", "redaction",
 ];
 
-// Domains whose apply()-side transforms live in TS and are NOT ported.
-// `session`/`spawn` remain here (rung 7c): TS apply() mirrors every session
-// write into its `spawn` twin (dualSpawn), projects the worktree/runtime facet
-// aliases both ways (dualFacet), and links the lineage edge (mirrorLineage) —
-// the facet-mirroring cluster. A bare session/spawn landed without those would
-// silently diverge the two copies, so the kernel refuses it loudly until the
-// cluster is ported and parity-proven (T-22867 carved it to 7c: the shape space
-// — create-by-session-col, create-by-facet-col, one-side updates, facet delete,
-// parent link/unlink, canonical-wins conflict — is too large to prove in one
-// pass alongside mail, and a half-ported facet mirror on an allowlisted comp is
-// exactly the silent divergence the allowlist exists to prevent, M-14769).
-//
-// `mail` LEFT this list at rung 7b: its ONE in-apply transform — the server-
-// owned `from` derived through the session sender-actor chain (`sender_actor` /
-// `actor_for` below: persona ?? actor ?? venture ?? held-work ?? model) — is
-// ported and parity-proven, including the persona-only session that would
-// otherwise diverge. `mail` carries no facet mirroring, so it ports cleanly
-// ahead of the session cluster.
-//
-// `entry`, `wake`, and `stop_request` LEFT this list at rung 7a, once their
-// self-contained in-apply transforms were ported below: an entry's per-session
-// seq (the entry create branch in the write loop), a wake's untargeted self-
-// replacement (`replace_wakes`), and the stop_request liveness gate
-// (`StopRequestGate`). None of the three is read or rewritten by the session-
-// facet mirrors, so they port cleanly ahead of the session cluster.
-const UNPORTED: [&str; 2] = ["spawn", "session"];
+// There is no longer an UNPORTED refuse list: at rung 7c the LAST unported
+// cluster — the session-facet mirroring transforms (dual_spawn / dual_facet /
+// mirror_lineage above) — joined the native path, so `session` and `spawn` moved
+// into NATIVE_COMPS below and every wire comp now commits natively or PROXIES by
+// the allowlist, never refuses mid-write. The shape space that carved this rung
+// (T-22867 → T-22872) — create-by-session-col, create-by-facet-col, one-side
+// worktree/runtime updates, facet delete, parent link/unlink/rewrite, canonical-
+// wins conflict, and mint-missing (the twin absent) — is proven byte-identical by
+// the write-parity harness before session/spawn were admitted (M-14769: a half-
+// ported facet mirror on the fleet's most central entity is exactly the silent
+// divergence the allowlist exists to prevent).
 
 // The comps the rust kernel commits NATIVELY, and the routing predicate the
 // bridge derives its Deno-vs-native decision from (D-22804 rung 4). Every comp
@@ -458,12 +445,25 @@ const UNPORTED: [&str; 2] = ["spawn", "session"];
 // (`sender_actor`/`actor_for`, the full persona/actor/venture/held-work/model
 // cascade the mail create-completion loop stamps). A `mail` create signs from
 // its writer's address book entry byte-identically to Deno for every session
-// shape, the persona-only session included. The session-facet cluster
-// (`session`/`spawn`: dualSpawn/dualFacet/mirrorLineage) stays proxied for rung
-// 7c — mail carries none of it.
-pub const NATIVE_COMPS: [&str; 14] = [
+// shape, the persona-only session included.
+//
+// `session`, `spawn`, `worktree`, and `runtime` joined at rung 7c, once the
+// facet-mirroring cluster was ported here (`dual_spawn`/`dual_facet`/
+// `mirror_lineage`/`sync_facet_aliases` above): a session or facet write mirrors
+// the launch spec between the `session` columns and the `spawn`/`worktree`/
+// `runtime` facets both ways under one lock, syncs the facet's final row onto the
+// session aliases, and a `session.parent` write links the `delegates` lineage
+// edge — byte-identical to Deno across create-by-session-col, create-by-facet-col,
+// one-side facet updates, facet delete, parent link/unlink/rewrite, canonical-wins
+// conflict, and mint-missing. All four ride together because every one of them is
+// a door into the same mirror: a bare `worktree`/`runtime` write drives dualFacet
+// exactly as a `session` write does, so admitting session/spawn without them would
+// route half the cluster's writes to Deno. With them the divergence list is EMPTY:
+// every wire comp is native or proxies by this allowlist. `setting` is the lone
+// comp still absent by design (rung 6b, T-22862).
+pub const NATIVE_COMPS: [&str; 18] = [
     "doc", "task", "board", "project", "comment", "dependency", "claim", "entity", "email",
-    "deliver", "entry", "wake", "stop_request", "mail",
+    "deliver", "entry", "wake", "stop_request", "mail", "session", "spawn", "worktree", "runtime",
 ];
 
 // Can this whole batch commit through the rust kernel, or must the bridge proxy
@@ -706,6 +706,492 @@ fn replace_wakes(conn: &Connection, changes: Vec<Change>) -> Vec<Change> {
         }
     }
     out
+}
+
+// ---- the session/spawn facet mirroring cluster (db.ts dualSpawn / dualFacet /
+// mirrorLineage, rung 7c) --------------------------------------------------
+//
+// One session launch spec, several rolling-release homes. During a rolling
+// release the old session door writes launch fields onto the `session` row
+// (`session.provider`, `session.cwd`, `session.pid` …) while the new door
+// writes the canonical facets (`spawn`, `worktree`, `runtime`). apply() sees
+// the whole batch under one write lock, so it projects each aspect BOTH ways —
+// the canonical facet wins a conflict, then the same value is written back to
+// the session-column aliases — and a rollback server reading either door sees
+// the same launch. Coalesced so `created(session)` effects key off ONE Trace
+// row and fire once. This is the mirror image of the read-side backfill; the
+// column retires only when the rolling release proves out (T-16412).
+//
+// These run INSIDE the transaction on already-normalized changes (so a ref
+// value is an eid, a facet column is real), matching db.ts apply()'s order:
+// replaceWakes → [guardSettings, proxied] → dualSpawn → dualFacet(worktree) →
+// dualFacet(runtime) → mirrorLineage.
+
+// An insertion-ordered set of eids — JS `Set` semantics: `add` appends only
+// when absent (an existing member keeps its position), `delete` removes. The
+// per-session loops below iterate in this order, so the effective batch — and
+// thus the journal — matches db.ts change-for-change.
+struct EidSet {
+    order: Vec<String>,
+    seen: HashSet<String>,
+}
+impl EidSet {
+    fn new() -> EidSet {
+        EidSet { order: vec![], seen: HashSet::new() }
+    }
+    fn add(&mut self, eid: &str) {
+        if self.seen.insert(eid.to_string()) {
+            self.order.push(eid.to_string());
+        }
+    }
+    fn delete(&mut self, eid: &str) {
+        if self.seen.remove(eid) {
+            self.order.retain(|e| e != eid);
+        }
+    }
+}
+
+// The wire-writable columns of one comp, in vocabulary declaration order
+// (db.ts `Object.keys(comps[name])`).
+fn wire_col_names(v: &Vocab, name: &str) -> Vec<String> {
+    v.comp(name).map(|c| c.iter().map(|(n, _)| n.clone()).collect()).unwrap_or_default()
+}
+
+// A facet's full column set: its wire columns then its server-stamped ones, in
+// declaration order and NOT deduped (db.ts `facetCols` — the sets never
+// overlap). These are what dualFacet projects between the facet row and its
+// session-column aliases.
+fn facet_cols(v: &Vocab, name: &str) -> Vec<String> {
+    let mut out = wire_col_names(v, name);
+    if let Some(s) = v.stamped.get(name) {
+        for (n, _) in s {
+            out.push(n.clone());
+        }
+    }
+    out
+}
+
+fn has_session(conn: &Connection, eid: &str) -> bool {
+    conn.query_row(
+        "select 1 from session where entity = (select id from entity where eid = ?1)",
+        [eid],
+        |_| Ok(()),
+    )
+    .optional()
+    .ok()
+    .flatten()
+    .is_some()
+}
+
+// The eids this batch mirrors: every eid a session (or the paired facet) change
+// names that IS a session — a row already present, or created by a session
+// change in THIS batch (a create joins). A facet-only write to a non-session
+// eid never mints a session (db.ts "a task hint can never mint session"); a
+// session delete or an entity delete drops the eid.
+fn mirror_sessions(conn: &Connection, out: &[Change], paired: &str) -> EidSet {
+    let mut sessions = EidSet::new();
+    for c in out {
+        if (c.name == "session" || c.name == paired) && has_session(conn, &c.eid) {
+            sessions.add(&c.eid);
+        }
+    }
+    let mut killed: HashSet<String> = HashSet::new();
+    for c in out {
+        if c.name == "entity" && c.comp.is_none() {
+            killed.insert(c.eid.clone());
+            sessions.delete(&c.eid);
+        }
+        if killed.contains(&c.eid) || c.name != "session" {
+            continue;
+        }
+        if c.comp.is_none() {
+            sessions.delete(&c.eid);
+        } else {
+            sessions.add(&c.eid);
+        }
+    }
+    sessions
+}
+
+// dualSpawn (db.ts:3203-3268): mirror the launch spec (provider/model/effort/
+// persona) between the `session` columns and the `spawn` facet. The canonical
+// spawn fields win a conflict; every mirrored session grows a spawn twin (minted
+// when absent), and the twin's fields are echoed back onto the session columns —
+// so both doors read the same spec. A spawn delete clears the columns rather
+// than tombstoning the facet.
+fn dual_spawn(conn: &Connection, v: &Vocab, changes: Vec<Change>) -> Vec<Change> {
+    let mut out = changes;
+    let spawn_cols = wire_col_names(v, "spawn");
+    let sessions = mirror_sessions(conn, &out, "spawn");
+    for eid in sessions.order.clone() {
+        let mut si: Vec<usize> = vec![];
+        let mut pi: Vec<usize> = vec![];
+        let mut legacy: Map<String, Value> = Map::new();
+        let mut canonical: Map<String, Value> = Map::new();
+        let mut spawn_gone = false;
+        let mut spawn_at: Option<usize> = None;
+        for (i, c) in out.iter().enumerate() {
+            if c.eid != eid {
+                continue;
+            }
+            if c.name == "session" {
+                if let Some(comp) = &c.comp {
+                    si.push(i);
+                    for col in &spawn_cols {
+                        if let Some(val) = comp.get(col) {
+                            legacy.insert(col.clone(), val.clone());
+                        }
+                    }
+                }
+            }
+            if c.name == "spawn" {
+                spawn_at = Some(i);
+                match &c.comp {
+                    Some(comp) => {
+                        pi.push(i);
+                        for col in &spawn_cols {
+                            if let Some(val) = comp.get(col) {
+                                canonical.insert(col.clone(), val.clone());
+                            }
+                        }
+                        spawn_gone = false;
+                    }
+                    None => {
+                        canonical = Map::new();
+                        for col in &spawn_cols {
+                            canonical.insert(col.clone(), Value::Null);
+                        }
+                        spawn_gone = true;
+                    }
+                }
+            }
+        }
+        let mut spec: Map<String, Value> = Map::new();
+        for (k, val) in &legacy {
+            spec.insert(k.clone(), val.clone());
+        }
+        for (k, val) in &canonical {
+            spec.insert(k.clone(), val.clone());
+        }
+        for &i in si.iter().chain(pi.iter()) {
+            if let Some(comp) = out[i].comp.as_mut() {
+                for col in &spawn_cols {
+                    comp.remove(col);
+                }
+            }
+        }
+        let mut session_idx = si.last().copied();
+        if session_idx.is_none() && !canonical.is_empty() {
+            out.push(Change::new(&eid, "session", Some(Map::new())));
+            session_idx = Some(out.len() - 1);
+        }
+        if let Some(idx) = session_idx {
+            let comp = out[idx].comp.get_or_insert_with(Map::new);
+            for (k, val) in &spec {
+                comp.insert(k.clone(), val.clone());
+            }
+        }
+        let mut spawn_idx = if spawn_gone { spawn_at } else { pi.last().copied() };
+        if spawn_gone {
+            if let Some(idx) = spawn_idx {
+                out[idx].comp = Some(Map::new());
+            }
+        }
+        if spawn_idx.is_none() {
+            out.push(Change::new(&eid, "spawn", Some(Map::new())));
+            spawn_idx = Some(out.len() - 1);
+        }
+        if let Some(idx) = spawn_idx {
+            let comp = out[idx].comp.get_or_insert_with(Map::new);
+            for (k, val) in &spec {
+                comp.insert(k.clone(), val.clone());
+            }
+        }
+    }
+    out
+}
+
+// The existing facet row's columns as a map (db.ts `current`) — the base a
+// one-column facet update projects the untouched columns from. Absent row ⇒
+// empty, matching JS `{...undefined}`.
+fn read_facet_row(conn: &Connection, name: &str, eid: &str, cols: &[String]) -> Map<String, Value> {
+    let sql = format!(
+        "select {} from {} where entity = (select id from entity where eid = ?1)",
+        cols.iter().map(|c| q(c)).collect::<Vec<_>>().join(", "),
+        q(name),
+    );
+    conn.query_row(&sql, [eid], |row| {
+        let mut m = Map::new();
+        for (i, col) in cols.iter().enumerate() {
+            let val = match row.get_ref(i) {
+                Ok(rusqlite::types::ValueRef::Null) | Err(_) => Value::Null,
+                Ok(rusqlite::types::ValueRef::Integer(n)) => Value::from(n),
+                Ok(rusqlite::types::ValueRef::Real(f)) => Value::from(f),
+                Ok(rusqlite::types::ValueRef::Text(t)) => {
+                    Value::from(String::from_utf8_lossy(t).to_string())
+                }
+                Ok(rusqlite::types::ValueRef::Blob(b)) => Value::from(String::from_utf8_lossy(b).to_string()),
+            };
+            m.insert(col.clone(), val);
+        }
+        Ok(m)
+    })
+    .optional()
+    .ok()
+    .flatten()
+    .unwrap_or_default()
+}
+
+// dualFacet worktree/runtime (db.ts:3320-3407): project one facet (worktree or
+// runtime) between its canonical component and the matching session columns,
+// both directions, under one lock. The canonical facet write wins; its columns
+// that ARE session columns are echoed onto the session (aliases), the wire-
+// writable facet columns are (re)written from the merged spec, and untouched
+// columns come from the existing row (`current`). A facet delete nulls every
+// session alias and tombstones the facet component.
+fn dual_facet(conn: &Connection, v: &Vocab, changes: Vec<Change>, name: &str) -> Vec<Change> {
+    if !has_table(conn, name) {
+        return changes;
+    }
+    let mut out = changes;
+    let cols = facet_cols(v, name);
+    let session_cols = wire_col_names(v, "session");
+    let facet_wire = wire_col_names(v, name);
+    let sessions = mirror_sessions(conn, &out, name);
+    for eid in sessions.order.clone() {
+        let current = read_facet_row(conn, name, &eid, &cols);
+        let mut si: Vec<usize> = vec![];
+        let mut fi: Vec<usize> = vec![];
+        let mut legacy: Map<String, Value> = Map::new();
+        let mut canonical: Map<String, Value> = Map::new();
+        let mut legacy_touched = false;
+        let mut canonical_touched = false;
+        let mut gone = false;
+        for (i, c) in out.iter().enumerate() {
+            if c.eid != eid {
+                continue;
+            }
+            if c.name == "session" {
+                if let Some(comp) = &c.comp {
+                    si.push(i);
+                    for col in &cols {
+                        if let Some(val) = comp.get(col) {
+                            legacy.insert(col.clone(), val.clone());
+                            legacy_touched = true;
+                        }
+                    }
+                }
+            }
+            if c.name != name {
+                continue;
+            }
+            fi.push(i);
+            canonical_touched = true;
+            match &c.comp {
+                Some(comp) => {
+                    for col in &cols {
+                        if let Some(val) = comp.get(col) {
+                            canonical.insert(col.clone(), val.clone());
+                        }
+                    }
+                    gone = false;
+                }
+                None => {
+                    canonical = Map::new();
+                    for col in &cols {
+                        canonical.insert(col.clone(), Value::Null);
+                    }
+                    gone = true;
+                }
+            }
+        }
+        if !legacy_touched && !canonical_touched {
+            continue;
+        }
+        let mut spec: Map<String, Value> = Map::new();
+        for (k, val) in &current {
+            spec.insert(k.clone(), val.clone());
+        }
+        for (k, val) in &legacy {
+            spec.insert(k.clone(), val.clone());
+        }
+        for (k, val) in &canonical {
+            spec.insert(k.clone(), val.clone());
+        }
+        for &i in &si {
+            if let Some(comp) = out[i].comp.as_mut() {
+                for col in &cols {
+                    comp.remove(col);
+                }
+            }
+        }
+        let mut aliases: Map<String, Value> = Map::new();
+        for col in &session_cols {
+            if let Some(val) = spec.get(col) {
+                aliases.insert(col.clone(), val.clone());
+            }
+        }
+        let mut session_idx = si.last().copied();
+        if session_idx.is_none() {
+            out.push(Change::new(&eid, "session", Some(Map::new())));
+            session_idx = Some(out.len() - 1);
+        }
+        if let Some(idx) = session_idx {
+            let comp = out[idx].comp.get_or_insert_with(Map::new);
+            for (k, val) in &aliases {
+                comp.insert(k.clone(), val.clone());
+            }
+        }
+        let facet_idx = fi.last().copied();
+        if gone {
+            if let Some(idx) = facet_idx {
+                out[idx].comp = None;
+            }
+            continue;
+        }
+        let facet_idx = match facet_idx {
+            Some(idx) => idx,
+            None => {
+                out.push(Change::new(&eid, name, Some(Map::new())));
+                out.len() - 1
+            }
+        };
+        let mut writable: Map<String, Value> = Map::new();
+        for col in &facet_wire {
+            if let Some(val) = spec.get(col) {
+                writable.insert(col.clone(), val.clone());
+            }
+        }
+        let comp = out[facet_idx].comp.get_or_insert_with(Map::new);
+        for (k, val) in &writable {
+            comp.insert(k.clone(), val.clone());
+        }
+    }
+    out
+}
+
+// mirrorLineage (db.ts:3283-3314): a `session.parent` write also links (or, on a
+// rewrite/clear, unlinks) the `parent delegates child` edge, so edge readers see
+// lineage no matter which door wrote the column. The PRE-batch parent names the
+// outgoing edge — safe because apply() holds the whole batch under one lock.
+fn mirror_lineage(conn: &Connection, changes: Vec<Change>) -> Vec<Change> {
+    // The last parent each touched session names, in first-touch order (JS Map).
+    let mut order: Vec<String> = vec![];
+    let mut last: HashMap<String, Option<String>> = HashMap::new();
+    for c in &changes {
+        if c.name != "session" {
+            continue;
+        }
+        if let Some(comp) = &c.comp {
+            if !comp.contains_key("parent") {
+                continue;
+            }
+        }
+        let next = c
+            .comp
+            .as_ref()
+            .and_then(|m| m.get("parent"))
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        if !last.contains_key(&c.eid) {
+            order.push(c.eid.clone());
+        }
+        last.insert(c.eid.clone(), next);
+    }
+    if order.is_empty() {
+        return changes;
+    }
+    let mut out = changes;
+    for eid in &order {
+        let next = last.get(eid).cloned().flatten();
+        let prior: Option<String> = conn
+            .query_row(
+                "select p.eid from session s join entity p on p.id = s.parent \
+                 where s.entity = (select id from entity where eid = ?1)",
+                [eid],
+                |r| r.get(0),
+            )
+            .optional()
+            .ok()
+            .flatten();
+        if let Some(prior_eid) = &prior {
+            if Some(prior_eid) != next.as_ref() {
+                let mut m = Map::new();
+                m.insert("type".into(), Value::from("delegates"));
+                m.insert("child".into(), Value::from(eid.as_str()));
+                m.insert("gone".into(), Value::from(true));
+                out.push(Change::new(prior_eid, "dependency", Some(m)));
+            }
+        }
+        if let Some(next_eid) = &next {
+            if prior.as_ref() != Some(next_eid) {
+                let mut m = Map::new();
+                m.insert("type".into(), Value::from("delegates"));
+                m.insert("child".into(), Value::from(eid.as_str()));
+                out.push(Change::new(next_eid, "dependency", Some(m)));
+            }
+        }
+    }
+    out
+}
+
+// syncFacetAliases (db.ts:3409-3440): the POST-write half of the mirror. After
+// every component patch lands, each facet a batch TOUCHED has its FINAL row
+// (every facet column, stamped branch/base_revision/provider_session_id/
+// serving_model included) mirrored onto the session's alias columns and echoed
+// as a `session` change — so a rollback server and an old client read the same
+// launch without the facet gaining stamp authority. A deleted facet syncs
+// all-null. This is why dualFacet only aliases the WRITABLE session columns
+// while this covers the stamped ones too, off the persisted row. Runs on the
+// effective batch, before mint_num, so the echo lands ahead of the birth stamps.
+fn sync_facet_aliases(
+    conn: &Connection,
+    v: &Vocab,
+    changes: &[Change],
+    extra: &mut Vec<Change>,
+) -> Result<()> {
+    for name in ["worktree", "runtime"] {
+        if !has_table(conn, name) {
+            continue;
+        }
+        let cols = facet_cols(v, name);
+        // eids a facet-name change touched, in first-appearance order (JS Set).
+        let mut eids: Vec<String> = vec![];
+        let mut seen: HashSet<String> = HashSet::new();
+        for c in changes {
+            if c.name == name && seen.insert(c.eid.clone()) {
+                eids.push(c.eid.clone());
+            }
+        }
+        for eid in eids {
+            if !has_session(conn, &eid) {
+                continue;
+            }
+            // The facet's final row, every column present (null when the row is
+            // gone) so the session aliases and the echo carry the full spec.
+            let row = read_facet_row(conn, name, &eid, &cols);
+            let mut spec: Map<String, Value> = Map::new();
+            for col in &cols {
+                spec.insert(col.clone(), row.get(col).cloned().unwrap_or(Value::Null));
+            }
+            let set = cols
+                .iter()
+                .enumerate()
+                .map(|(i, c)| format!("{} = ?{}", q(c), i + 1))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let sql = format!(
+                "update session set {} where entity = (select id from entity where eid = ?{})",
+                set,
+                cols.len() + 1
+            );
+            let mut params: Vec<Value> = cols.iter().map(|c| spec[c].clone()).collect();
+            params.push(Value::from(eid.as_str()));
+            exec_change(conn, &sql, &params)?;
+            extra.push(Change::new(&eid, "session", Some(spec)));
+        }
+    }
+    Ok(())
 }
 
 fn renamed(v: &Vocab, change: Change) -> Result<Change> {
@@ -1612,16 +2098,6 @@ pub fn apply(
     let changes = mint_addresses(conn, changes);
     let changes = canon_email(changes);
     let mut changes = normalize(conn, changes)?;
-    // Unported domains refuse before any write (see UNPORTED above).
-    for c in &changes {
-        if UNPORTED.contains(&c.name.as_str()) {
-            return Err(refuse(format!(
-                "{} is not ported to the rust kernel write path yet — \
-                 write through the TS door",
-                c.name
-            )));
-        }
-    }
 
     let mut extra: Vec<Change> = vec![];
     let mut touched: Vec<String> = vec![];
@@ -1648,6 +2124,16 @@ pub fn apply(
         // transaction (db.ts replaceWakes) — prepend their entity-deletes so the
         // spine/kill pass and the cascade below see them like any wire delete.
         changes = replace_wakes(conn, changes);
+        // The session-facet mirroring cluster (db.ts apply() order: after
+        // replaceWakes and the proxied guardSettings): mirror the launch spec
+        // between the `session` columns and the `spawn`/`worktree`/`runtime`
+        // facets both ways under one lock, and link/unlink the lineage edge a
+        // `session.parent` write implies. On normalized changes, so a facet
+        // column and a `parent` ref are already values.
+        changes = dual_spawn(conn, v, changes);
+        changes = dual_facet(conn, v, changes, "worktree");
+        changes = dual_facet(conn, v, changes, "runtime");
+        changes = mirror_lineage(conn, changes);
         // Mint spines in first-touch order before writing components.
         let mut killed: HashSet<String> = HashSet::new();
         for c in &changes {
@@ -2113,6 +2599,10 @@ pub fn apply(
                 extra.push(Change::new(&e, "entry", Some(m)));
             }
         }
+        // Canonical session facets are the read truth: mirror each touched
+        // facet's final row onto the session aliases and echo it (db.ts
+        // syncFacetAliases), after every patch and before the birth stamps.
+        sync_facet_aliases(conn, v, &changes, &mut extra)?;
         // Components have landed: assign human numbers to this batch's births.
         for eid in &minted {
             mint_num(conn, eid)?;

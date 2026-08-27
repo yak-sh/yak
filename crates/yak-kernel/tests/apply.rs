@@ -57,7 +57,16 @@ const SCHEMA: &str = "
     persona integer,
     requested_task integer,
     serving_model text,
+    provider text,
     model text,
+    effort text,
+    pid integer,
+    pane text,
+    transcript text,
+    parent integer,
+    branch text,
+    base_revision text,
+    provider_session_id text,
     latest_seq integer not null default 0,
     origin text,
     status text
@@ -65,6 +74,15 @@ const SCHEMA: &str = "
   create table spawn (
     entity  integer primary key references entity(id),
     provider text, model text, effort text, persona integer
+  );
+  create table worktree (
+    entity integer primary key references entity(id),
+    cwd text, branch text, base_revision text
+  );
+  create table runtime (
+    entity integer primary key references entity(id),
+    pid integer, pane text, transcript text,
+    provider_session_id text, serving_model text
   );
   create table model (
     entity integer primary key references entity(id),
@@ -182,8 +200,9 @@ fn run(s: &WriteStore, changes: Vec<Change>) -> Vec<Change> {
     apply(s, changes, &ApplyOpts::default(), &default_gates()).unwrap()
 }
 
-// Session rows are seeded by SQL: the wire door for sessions is the TS
-// sessions plugin (dualSpawn etc.), so the kernel refuses them (UNPORTED).
+// Seed a session row by SQL — a pre-existing session the facet mirrors read
+// (dual_spawn/dual_facet consult the `session` table), distinct from a session
+// CREATE that arrives as a wire change (now native, rung 7c).
 fn seed_session(s: &WriteStore, eid: &str, label: &str) {
     s.conn
         .execute("insert into entity (eid) values (?1)", [eid])
@@ -268,16 +287,21 @@ fn native_safe_routes_plain_graph_and_proxies_the_rest() {
     // mail joined NATIVE_COMPS at rung 7b (the sender-actor from-derivation
     // ported): a mail create commits native and derives its `from`.
     assert!(ok(vec![ch(A, "mail", json!({"target": B}))]));
-    // a transform-bearing comp still absent by design → proxy: setting (WHATWG
-    // url guard — rung 6b), session/spawn (the facet-mirroring cluster — rung 7c).
+    // session + spawn + the worktree/runtime facets joined NATIVE_COMPS at rung
+    // 7c (the facet-mirroring cluster ported — dual_spawn/dual_facet/
+    // mirror_lineage/sync_facet_aliases): every door into the mirror is native.
+    assert!(ok(vec![ch(A, "session", json!({"id": "S-1"}))]));
+    assert!(ok(vec![ch(A, "spawn", json!({"provider": "codex"}))]));
+    assert!(ok(vec![ch(A, "worktree", json!({"cwd": "/tmp/x"}))]));
+    assert!(ok(vec![ch(A, "runtime", json!({"pid": 5})) ]));
+    // the lone transform-bearing comp still absent by design → proxy: setting
+    // (its WHATWG url guard needs a full parser — rung 6b).
     assert!(!ok(vec![ch(A, "setting", json!({"key": "k", "value": "v"}))]));
-    assert!(!ok(vec![ch(A, "session", json!({"id": "S-1"}))]));
-    assert!(!ok(vec![ch(A, "spawn", json!({"provider": "codex"}))]));
     // a MIXED batch proxies WHOLE — apply() is atomic, no splitting: one native
     // comp beside a transform-bearing one (a setting) still proxies.
     assert!(!ok(vec![ch(A, "doc", json!({"title": "x"})), ch(A, "setting", json!({"key": "k", "value": "v"}))]));
-    // a native mail beside an unported session proxies whole (over-proxy bias).
-    assert!(!ok(vec![ch(A, "mail", json!({"target": B})), ch(A, "session", json!({"id": "S-1"}))]));
+    // a native session beside the proxied setting proxies whole (over-proxy bias).
+    assert!(!ok(vec![ch(A, "session", json!({"id": "S-1"})), ch(A, "setting", json!({"key": "k", "value": "v"}))]));
     // an empty batch proxies (Deno owns the trivial answer).
     assert!(!ok(vec![]));
 }
@@ -481,7 +505,7 @@ fn unknown_column_refuses_server_owned_drops() {
 }
 
 #[test]
-fn enum_and_unported_refuse() {
+fn enum_refuses_out_of_domain() {
     let s = store();
     let err = apply(
         &s,
@@ -490,15 +514,39 @@ fn enum_and_unported_refuse() {
         &default_gates(),
     );
     assert!(err.unwrap_err().to_string().contains("expects one of"));
-    // `session` stays UNPORTED (the facet-mirroring cluster, rung 7b): a bare
-    // session write refuses loudly rather than diverge from the TS door.
-    let err = apply(
-        &s,
-        vec![ch(A, "session", json!({"id": "S-9"}))],
-        &ApplyOpts::default(),
-        &default_gates(),
-    );
-    assert!(err.unwrap_err().to_string().contains("not ported"));
+}
+
+// rung 7c: a session CREATE bearing a launch spec commits natively and mirrors
+// the spawn fields into a minted `spawn` twin (dual_spawn), while the session
+// columns keep the same spec — both doors read the same launch.
+#[test]
+fn session_create_mirrors_spawn_twin() {
+    let s = store();
+    let out = run(&s, vec![ch(A, "session", json!({"id": "S-9", "provider": "codex", "model": "gpt-5"}))]);
+    // the session row carries the spec…
+    let prov: String =
+        one(&s, "select provider from session s join entity e on e.id = s.entity where e.eid = '\
+            aaaaaaaa-0000-4000-8000-000000000001'");
+    assert_eq!(prov, "codex");
+    // …and a spawn twin was minted with the same spec (same eid, a facet).
+    let sp: String =
+        one(&s, "select provider from spawn s join entity e on e.id = s.entity where e.eid = '\
+            aaaaaaaa-0000-4000-8000-000000000001'");
+    assert_eq!(sp, "codex");
+    // the effective batch (echo) carries the spawn twin change.
+    assert!(out.iter().any(|c| c.name == "spawn" && c.eid == A));
+}
+
+// rung 7c: a session.parent write links the `parent delegates child` edge
+// (mirror_lineage), so edge readers see lineage from the column write.
+#[test]
+fn session_parent_links_delegates_edge() {
+    let s = store();
+    seed_session(&s, B, "parent");
+    run(&s, vec![ch(A, "session", json!({"id": "S-child", "parent": B}))]);
+    let n: i64 =
+        one(&s, "select count(*) from dependency where type = 'delegates'");
+    assert_eq!(n, 1);
 }
 
 #[test]
