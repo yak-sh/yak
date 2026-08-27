@@ -42,8 +42,7 @@ fn canon(name: &str, comp: &Map<String, Value>) -> Map<String, Value> {
 
 fn canon_change(change: &mut Value) {
     let Some(obj) = change.as_object_mut() else { return };
-    let name =
-        obj.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
+    let name = obj.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
     if let Some(Value::Object(m)) = obj.get("comp") {
         let fixed = canon(&name, m);
         obj.insert("comp".into(), Value::Object(fixed));
@@ -88,14 +87,11 @@ pub fn of_eid(store: &Store, eid: &str, limit: i64) -> Vec<Value> {
         .unwrap_or_default();
     rows.into_iter()
         .map(|(id, ts, actor, via, batch)| {
-            let mut changes: Vec<Value> =
-                serde_json::from_str(&batch).unwrap_or_default();
+            let mut changes: Vec<Value> = serde_json::from_str(&batch).unwrap_or_default();
             for c in &mut changes {
                 canon_change(c);
             }
-            changes.retain(|c| {
-                c.get("eid").and_then(|e| e.as_str()) == Some(eid)
-            });
+            changes.retain(|c| c.get("eid").and_then(|e| e.as_str()) == Some(eid));
             entry(id, ts, actor, via, changes)
         })
         .collect()
@@ -118,8 +114,7 @@ pub fn by_via(store: &Store, via: &str, limit: i64) -> Vec<Value> {
         .unwrap_or_default();
     rows.into_iter()
         .map(|(id, ts, actor, via, batch)| {
-            let mut changes: Vec<Value> =
-                serde_json::from_str(&batch).unwrap_or_default();
+            let mut changes: Vec<Value> = serde_json::from_str(&batch).unwrap_or_default();
             for c in &mut changes {
                 canon_change(c);
             }

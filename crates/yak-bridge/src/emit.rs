@@ -33,10 +33,7 @@ pub fn js_num(v: Value) -> Value {
     match &v {
         Value::Number(n) => {
             if let Some(f) = n.as_f64() {
-                if n.as_i64().is_none()
-                    && f.fract() == 0.0
-                    && f.abs() < 9_007_199_254_740_992.0
-                {
+                if n.as_i64().is_none() && f.fract() == 0.0 && f.abs() < 9_007_199_254_740_992.0 {
                     return Value::from(f as i64);
                 }
             }
@@ -130,18 +127,11 @@ pub fn dep_to_wire(d: &Dep) -> Value {
 // `deps` before `backlinks` (server.ts spread order). Each is present exactly
 // when its flag was set, an empty array included, so `deps=1`/`backlinks=1`
 // always add their key.
-pub fn hit_with_layers(
-    row: &Row,
-    deps: Option<Vec<Dep>>,
-    backlinks: Option<Vec<Value>>,
-) -> Value {
+pub fn hit_with_layers(row: &Row, deps: Option<Vec<Dep>>, backlinks: Option<Vec<Value>>) -> Value {
     let mut v = row_to_wire(row);
     if let Value::Object(m) = &mut v {
         if let Some(deps) = deps {
-            m.insert(
-                "deps".into(),
-                Value::Array(deps.iter().map(dep_to_wire).collect()),
-            );
+            m.insert("deps".into(), Value::Array(deps.iter().map(dep_to_wire).collect()));
         }
         if let Some(backlinks) = backlinks {
             m.insert("backlinks".into(), Value::Array(backlinks));

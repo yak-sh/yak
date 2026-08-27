@@ -38,11 +38,8 @@ fn unit(w: &str) -> Option<String> {
         return Some(s.into());
     }
     let stem = w.strip_suffix('s').unwrap_or(w);
-    matches!(
-        stem,
-        "second" | "minute" | "hour" | "day" | "week" | "month" | "year"
-    )
-    .then(|| stem.to_string())
+    matches!(stem, "second" | "minute" | "hour" | "day" | "week" | "month" | "year")
+        .then(|| stem.to_string())
 }
 
 // Local calendar date at a day offset -> epoch ms of local midnight.
@@ -52,20 +49,14 @@ fn local_midnight(y: i32, mo: u32, d: i64) -> Option<i64> {
     let base = NaiveDate::from_ymd_opt(y, mo, 1)?;
     let date = base.checked_add_signed(chrono::Duration::days(d - 1))?;
     let dt = date.and_hms_opt(0, 0, 0)?;
-    Local
-        .from_local_datetime(&dt)
-        .earliest()
-        .map(|t| t.timestamp_millis())
+    Local.from_local_datetime(&dt).earliest().map(|t| t.timestamp_millis())
 }
 
 fn local_at(y: i32, mo: u32, d: i64, h: u32, mi: u32, s: u32) -> Option<i64> {
     let base = NaiveDate::from_ymd_opt(y, mo, 1)?;
     let date = base.checked_add_signed(chrono::Duration::days(d - 1))?;
     let dt = date.and_hms_opt(h, mi, s)?;
-    Local
-        .from_local_datetime(&dt)
-        .earliest()
-        .map(|t| t.timestamp_millis())
+    Local.from_local_datetime(&dt).earliest().map(|t| t.timestamp_millis())
 }
 
 struct Clock {
@@ -81,14 +72,11 @@ fn clock(s: &str) -> Option<Clock> {
     if s == "midnight" {
         return Some(Clock { h: 0, m: 0, exact: true });
     }
-    let ampm = s.strip_suffix("am").map(|r| (r, 0)).or_else(|| {
-        s.strip_suffix("pm").map(|r| (r, 12))
-    });
+    let ampm =
+        s.strip_suffix("am").map(|r| (r, 0)).or_else(|| s.strip_suffix("pm").map(|r| (r, 12)));
     if let Some((rest, add)) = ampm {
         let (hh, mm, exact) = match rest.split_once(':') {
-            Some((h, m)) => {
-                (h.parse().ok()?, Some(m), true)
-            }
+            Some((h, m)) => (h.parse().ok()?, Some(m), true),
             None => (rest.parse::<u32>().ok()?, None, false),
         };
         let m = match mm {
@@ -117,18 +105,11 @@ pub fn span(s: &str, now: i64) -> Option<Span> {
     if let Some(sp) = iso_span(&raw, s) {
         return Some(sp);
     }
-    let t = raw
-        .replace(['-', '_'], " ")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
+    let t = raw.replace(['-', '_'], " ").split_whitespace().collect::<Vec<_>>().join(" ");
     let d = Local.timestamp_millis_opt(now).earliest()?;
     let (y, mo, dd) = (d.year(), d.month(), d.day() as i64);
     let days = |a: i64, b: i64| -> Option<Span> {
-        Some(Span {
-            start: local_midnight(y, mo, dd + a)?,
-            end: local_midnight(y, mo, dd + b)?,
-        })
+        Some(Span { start: local_midnight(y, mo, dd + a)?, end: local_midnight(y, mo, dd + b)? })
     };
     // month/year shifts keep the wall-clock fields, like the TS Date math
     let shift = |n: i64, u: &str| -> Option<i64> {
@@ -168,11 +149,7 @@ pub fn span(s: &str, now: i64) -> Option<Span> {
             "month" => {
                 let ms = |k: i64| {
                     let total = (y as i64) * 12 + (mo as i64 - 1) + k;
-                    local_midnight(
-                        total.div_euclid(12) as i32,
-                        total.rem_euclid(12) as u32 + 1,
-                        1,
-                    )
+                    local_midnight(total.div_euclid(12) as i32, total.rem_euclid(12) as u32 + 1, 1)
                 };
                 return Some(Span { start: ms(at)?, end: ms(at + 1)? });
             }
@@ -206,8 +183,7 @@ pub fn span(s: &str, now: i64) -> Option<Span> {
             (ws[1].to_string(), ws[2].to_string())
         } else {
             let rest = ws[1];
-            let digits: String =
-                rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+            let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
             (digits.clone(), rest[digits.len()..].to_string())
         };
         if let (Ok(n), Some(u)) = (ns.parse::<i64>(), unit(&us)) {
@@ -234,10 +210,7 @@ pub fn span(s: &str, now: i64) -> Option<Span> {
     };
     if let Some(c) = clock(&rest.join("")) {
         let start = local_at(y, mo, dd + day.unwrap_or(0), c.h, c.m, 0)?;
-        return Some(Span {
-            start,
-            end: start + if c.exact { 60_000 } else { 3_600_000 },
-        });
+        return Some(Span { start, end: start + if c.exact { 60_000 } else { 3_600_000 } });
     }
     None
 }
@@ -252,12 +225,13 @@ fn iso_span(raw: &str, original: &str) -> Option<Span> {
     let y: i32 = raw.get(0..4)?.parse().ok()?;
     let mo: u32 = raw.get(5..7)?.parse().ok()?;
     let dd: i64 = raw.get(8..10)?.parse().ok()?;
-    if !raw
-        .get(0..10)?
-        .chars()
-        .enumerate()
-        .all(|(i, c)| if i == 4 || i == 7 { c == '-' } else { c.is_ascii_digit() })
-    {
+    if !raw.get(0..10)?.chars().enumerate().all(|(i, c)| {
+        if i == 4 || i == 7 {
+            c == '-'
+        } else {
+            c.is_ascii_digit()
+        }
+    }) {
         return None;
     }
     if raw.len() == 10 {
@@ -294,12 +268,9 @@ fn iso_span(raw: &str, original: &str) -> Option<Span> {
             .map(|t| t.timestamp_millis())
             .or_else(|| {
                 // tolerate the compact zone form (+hhmm)
-                chrono::DateTime::parse_from_str(
-                    original.trim(),
-                    "%Y-%m-%dT%H:%M:%S%z",
-                )
-                .ok()
-                .map(|t| t.timestamp_millis())
+                chrono::DateTime::parse_from_str(original.trim(), "%Y-%m-%dT%H:%M:%S%z")
+                    .ok()
+                    .map(|t| t.timestamp_millis())
             })?
     } else {
         local_at(y, mo, dd, hh, mi, ss)?
@@ -310,25 +281,13 @@ fn iso_span(raw: &str, original: &str) -> Option<Span> {
 // Parse an ISO-8601 stamp (as stored on rows) to epoch ms — Date.parse's
 // role in inTime(). None mirrors NaN.
 pub fn parse_stamp(v: &str) -> Option<i64> {
-    chrono::DateTime::parse_from_rfc3339(v)
-        .ok()
-        .map(|t| t.timestamp_millis())
-        .or_else(|| {
-            let t = v.trim();
-            let naive =
-                chrono::NaiveDateTime::parse_from_str(t, "%Y-%m-%dT%H:%M:%S")
-                    .or_else(|_| {
-                        chrono::NaiveDateTime::parse_from_str(
-                            t,
-                            "%Y-%m-%dT%H:%M:%S%.f",
-                        )
-                    })
-                    .ok()?;
-            Local
-                .from_local_datetime(&naive)
-                .earliest()
-                .map(|x| x.timestamp_millis())
-        })
+    chrono::DateTime::parse_from_rfc3339(v).ok().map(|t| t.timestamp_millis()).or_else(|| {
+        let t = v.trim();
+        let naive = chrono::NaiveDateTime::parse_from_str(t, "%Y-%m-%dT%H:%M:%S")
+            .or_else(|_| chrono::NaiveDateTime::parse_from_str(t, "%Y-%m-%dT%H:%M:%S%.f"))
+            .ok()?;
+        Local.from_local_datetime(&naive).earliest().map(|x| x.timestamp_millis())
+    })
 }
 
 #[cfg(test)]

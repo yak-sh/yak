@@ -51,11 +51,7 @@ fn profiling_leaves_stdout_byte_identical() {
     // off is silent on stderr too
     assert_eq!(String::from_utf8_lossy(&plain.stderr), "");
 
-    for (how, out) in [
-        ("--profile", &flagged),
-        ("YAK_PROFILE", &yak),
-        ("TASKS_PROFILE", &alias),
-    ] {
+    for (how, out) in [("--profile", &flagged), ("YAK_PROFILE", &yak), ("TASKS_PROFILE", &alias)] {
         let err = String::from_utf8_lossy(&out.stderr);
         assert!(err.contains("── profile ──"), "{how}: {err}");
         assert!(err.contains("startup"), "{how}: {err}");

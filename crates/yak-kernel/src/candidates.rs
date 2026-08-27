@@ -60,9 +60,7 @@ impl Cols {
             Some(i) => self.aliases[i].clone(),
             None => {
                 let a = format!("c{}", self.aliases.len());
-                self.joins.push_str(&format!(
-                    " left join \"{comp}\" {a} on {a}.entity = e.id"
-                ));
+                self.joins.push_str(&format!(" left join \"{comp}\" {a} on {a}.entity = e.id"));
                 self.seen.push(comp.into());
                 self.aliases.push(a.clone());
                 a
@@ -129,10 +127,7 @@ fn one(cols: &mut Cols, p: &Pred, params: &mut Vec<Value>) -> Option<String> {
     // A component-presence pred: `.canvas!`/`~=` is has-comp, `=` (empty) is
     // absent. Exact, and no join — an EXISTS over the comp's own table.
     if p.prop.is_empty() {
-        let exists = format!(
-            "exists (select 1 from \"{}\" pc where pc.entity = e.id)",
-            p.comp
-        );
+        let exists = format!("exists (select 1 from \"{}\" pc where pc.entity = e.id)", p.comp);
         return Some(if p.op.is_empty() || p.op == "~=" {
             exists
         } else if p.op == "=" {
@@ -211,10 +206,7 @@ fn one(cols: &mut Cols, p: &Pred, params: &mut Vec<Value>) -> Option<String> {
         "!=" => {
             // Only a plain, non-empty value: absent (NULL) must READ as a match
             // (query::eq: a missing value != x is true), so `col is null or …`.
-            if p.value.is_empty()
-                || p.value.contains(',')
-                || p.value.contains("..")
-            {
+            if p.value.is_empty() || p.value.contains(',') || p.value.contains("..") {
                 return None;
             }
             if is_ref {
@@ -239,9 +231,7 @@ fn one(cols: &mut Cols, p: &Pred, params: &mut Vec<Value>) -> Option<String> {
                 return None;
             }
             params.push(Value::Text(p.value.clone()));
-            Some(format!(
-                "instr(lower(coalesce(cast({col} as text), '')), lower(?)) > 0"
-            ))
+            Some(format!("instr(lower(coalesce(cast({col} as text), '')), lower(?)) > 0"))
         }
         op @ ("<" | "<=" | ">" | ">=") => {
             // Ordered compare. A reference has no order; a numeric operand
@@ -282,11 +272,7 @@ pub fn compile(preds: &[Pred]) -> Narrowed {
         }
     }
     let narrowed = !terms.is_empty();
-    let cond = if terms.is_empty() {
-        "1".into()
-    } else {
-        terms.join(" and ")
-    };
+    let cond = if terms.is_empty() { "1".into() } else { terms.join(" and ") };
     Narrowed { joins: cols.joins, cond, params, exact, narrowed }
 }
 
@@ -296,9 +282,7 @@ mod tests {
     use crate::query::parse;
 
     fn preds(args: &[&str]) -> Vec<Pred> {
-        parse(&args.iter().map(|s| s.to_string()).collect::<Vec<_>>())
-            .unwrap()
-            .1
+        parse(&args.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap().1
     }
 
     #[test]

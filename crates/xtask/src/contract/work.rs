@@ -32,12 +32,7 @@ venum!(
 venum!("work", "ventureModes", 90, ["long-loop", "cold", "cron"]);
 
 // A review is a comment with one of these verdicts.
-venum!(
-    "work",
-    "verdicts",
-    120,
-    ["approved", "rejected", "changes_requested"]
-);
+venum!("work", "verdicts", 120, ["approved", "rejected", "changes_requested"]);
 
 #[derive(Comp)]
 #[comp(plugin = "work", rank = 20, kind_rank = 20, prefix = "T")]
@@ -131,6 +126,9 @@ struct Blocked {
 #[derive(Comp)]
 #[comp(plugin = "work", rank = 740, kind_rank = 280)]
 struct Review {
-    #[col(sel = "verdicts", alias(approve = "approved", reject = "rejected", changes = "changes_requested"))]
+    #[col(
+        sel = "verdicts",
+        alias(approve = "approved", reject = "rejected", changes = "changes_requested")
+    )]
     verdict: Sel,
 }

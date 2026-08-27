@@ -26,21 +26,14 @@ fn s(v: Option<&serde_json::Value>) -> String {
     }
 }
 
-fn comp<'a>(
-    r: &'a Row,
-    comp: &str,
-    prop: &str,
-) -> Option<&'a serde_json::Value> {
+fn comp<'a>(r: &'a Row, comp: &str, prop: &str) -> Option<&'a serde_json::Value> {
     r.comps.get(comp)?.as_object()?.get(prop)
 }
 
 // A stored bool reads back as INTEGER 1 — JS `== true` passes it, so the
 // port must too.
 pub fn truthy(v: Option<&serde_json::Value>) -> bool {
-    matches!(
-        v,
-        Some(serde_json::Value::Bool(true))
-    ) || v.and_then(|x| x.as_i64()) == Some(1)
+    matches!(v, Some(serde_json::Value::Bool(true))) || v.and_then(|x| x.as_i64()) == Some(1)
 }
 
 // isOperator (client.ts): absent session comp = a human CLI — operator.
@@ -64,12 +57,9 @@ pub fn is_unread(r: &Row) -> bool {
 
 // What an item is ABOUT — the eid watch/mute instructions aim at.
 pub fn about_of(r: &Row) -> String {
-    for (c, p) in [
-        ("comment", "target"),
-        ("notice", "target"),
-        ("mail", "target"),
-        ("knock", "target"),
-    ] {
+    for (c, p) in
+        [("comment", "target"), ("notice", "target"), ("mail", "target"), ("knock", "target")]
+    {
         let v = s(comp(r, c, p));
         if !v.is_empty() {
             return v;
@@ -95,9 +85,7 @@ pub fn addressed(who: &Reader, r: &Row) -> bool {
     }
     if r.comps.contains_key("knock") {
         let t = s(comp(r, "deliver", "to"));
-        return !t.is_empty()
-            && ((!sess.is_empty() && t == sess)
-                || (who.operator && t == actor));
+        return !t.is_empty() && ((!sess.is_empty() && t == sess) || (who.operator && t == actor));
     }
     if let Some(m) = r.comps.get("mail").and_then(|v| v.as_object()) {
         if s(m.get("message_id")).is_empty() {
@@ -111,8 +99,7 @@ pub fn addressed(who: &Reader, r: &Row) -> bool {
         }
         let to = s(m.get("to_addr"));
         return (!who.addrs.is_empty() && who.addrs.contains(&to))
-            || (who.scope.is_some()
-                && s(m.get("target")) == *who.scope.as_ref().unwrap());
+            || (who.scope.is_some() && s(m.get("target")) == *who.scope.as_ref().unwrap());
     }
     false
 }
@@ -135,7 +122,11 @@ pub fn inbox_item(who: &Reader, r: &Row) -> bool {
 
 fn clean_path(p: &str) -> String {
     let t = p.trim_end_matches('/');
-    if t.is_empty() { "/".into() } else { t.into() }
+    if t.is_empty() {
+        "/".into()
+    } else {
+        t.into()
+    }
 }
 
 // The deepest directory root containing a path (ancestorAt).
@@ -161,16 +152,11 @@ fn worktree_at(roots: &[String], path: &str) -> Option<String> {
             let Some(name) = root.split('/').next_back() else {
                 return false;
             };
-            [
-                format!("/tasks-worktrees/{name}/"),
-                format!("/worktrees/{name}/"),
-            ]
-            .iter()
-            .any(|marker| {
-                path.find(marker.as_str()).map(|i| {
-                    path.len() > i + marker.len()
-                }) == Some(true)
-            })
+            [format!("/tasks-worktrees/{name}/"), format!("/worktrees/{name}/")].iter().any(
+                |marker| {
+                    path.find(marker.as_str()).map(|i| path.len() > i + marker.len()) == Some(true)
+                },
+            )
         })
         .collect();
     (found.len() == 1).then(|| found[0].clone())
@@ -210,9 +196,7 @@ pub fn scope_for(
     let roots: Vec<String> = repos.iter().map(|(_, p)| p.clone()).collect();
     let at = ancestor_at(&roots, cwd).or_else(|| worktree_at(&roots, cwd));
     if let Some(at) = at {
-        if let Some((eid, _)) =
-            repos.iter().find(|(_, p)| clean_path(p) == at)
-        {
+        if let Some((eid, _)) = repos.iter().find(|(_, p)| clean_path(p) == at) {
             return Some(eid.clone());
         }
     }
@@ -249,10 +233,7 @@ pub fn reader_for(
     scope_arg: Option<&str>,
 ) -> Reader {
     let sess = session.and_then(|sid| store.session_row(sid));
-    let sc = sess
-        .as_ref()
-        .and_then(|r| r.comps.get("session"))
-        .and_then(|v| v.as_object());
+    let sc = sess.as_ref().and_then(|r| r.comps.get("session")).and_then(|v| v.as_object());
     let actor = sc.map(|m| s(m.get("actor"))).filter(|a| !a.is_empty());
     let mut addrs = HashSet::new();
     if let Some(a) = &actor {
@@ -265,16 +246,14 @@ pub fn reader_for(
         }
     }
     let claims: HashSet<String> = match &sess {
-        Some(sr) => store
-            .eids_where_ref("claim", "session", &[sr.eid.clone()])
-            .into_iter()
-            .collect(),
+        Some(sr) => {
+            store.eids_where_ref("claim", "session", &[sr.eid.clone()]).into_iter().collect()
+        }
         None => HashSet::new(),
     };
     let (mut watching, mut muting) = (HashSet::new(), HashSet::new());
     if let Some(a) = &actor {
-        for eid in store.eids_where_ref("subscription", "actor", &[a.clone()])
-        {
+        for eid in store.eids_where_ref("subscription", "actor", &[a.clone()]) {
             if let Some(r) = store.row(&eid) {
                 let target = s(comp(&r, "subscription", "target"));
                 if target.is_empty() {
@@ -312,10 +291,7 @@ mod tests {
     #[test]
     fn ancestor_respects_boundaries() {
         let roots = vec!["/code/app".to_string()];
-        assert_eq!(
-            ancestor_at(&roots, "/code/app/src"),
-            Some("/code/app".into())
-        );
+        assert_eq!(ancestor_at(&roots, "/code/app/src"), Some("/code/app".into()));
         assert_eq!(ancestor_at(&roots, "/code/apple"), None);
     }
 

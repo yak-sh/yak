@@ -39,11 +39,9 @@ pub enum SchemaOp {
 
 // Is this named index already present? The index twin of write.rs's has_col.
 fn has_idx(conn: &Connection, name: &str) -> bool {
-    conn.query_row(
-        "select 1 from sqlite_master where type = 'index' and name = ?1",
-        [name],
-        |r| r.get::<_, i64>(0),
-    )
+    conn.query_row("select 1 from sqlite_master where type = 'index' and name = ?1", [name], |r| {
+        r.get::<_, i64>(0)
+    })
     .optional()
     .ok()
     .flatten()

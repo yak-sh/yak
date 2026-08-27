@@ -3,11 +3,11 @@
 // schema lives with the TS migrator; the parity harness (scripts/parity)
 // drives both writers over a REAL migrated file. Here: the rules, sub-ms.
 
+use rusqlite::{Connection, OptionalExtension};
+use serde_json::{json, Map, Value};
 use yak_kernel::change::Change;
 use yak_kernel::feed::{cursor_of, journal_since, row_changes, Feed};
 use yak_kernel::write::{apply, default_gates, native_safe, ApplyError, ApplyOpts, WriteStore};
-use rusqlite::{Connection, OptionalExtension};
-use serde_json::{json, Map, Value};
 
 const SCHEMA: &str = "
   create table entity (
@@ -209,9 +209,7 @@ fn run(s: &WriteStore, changes: Vec<Change>) -> Vec<Change> {
 // (dual_spawn/dual_facet consult the `session` table), distinct from a session
 // CREATE that arrives as a wire change (now native, rung 7c).
 fn seed_session(s: &WriteStore, eid: &str, label: &str) {
-    s.conn
-        .execute("insert into entity (eid) values (?1)", [eid])
-        .unwrap();
+    s.conn.execute("insert into entity (eid) values (?1)", [eid]).unwrap();
     s.conn
         .execute(
             "insert into session (entity, id) values \
@@ -235,10 +233,7 @@ fn create_stamps_numbers_and_journals() {
     let s = store();
     let out = run(
         &s,
-        vec![
-            ch(A, "doc", json!({"title": "Hello"})),
-            ch(A, "task", json!({"status": "open"})),
-        ],
+        vec![ch(A, "doc", json!({"title": "Hello"})), ch(A, "task", json!({"status": "open"}))],
     );
     // num minted, created stamped, births + provenance ride the return
     let num: i64 = one(&s, "select num from entity where eid like 'aaaa%'");
@@ -249,12 +244,7 @@ fn create_stamps_numbers_and_journals() {
     // completed to the persisted shape (body default rides the batch)
     let batch: String = one(&s, "select batch from journal");
     let v: Value = serde_json::from_str(&batch).unwrap();
-    let doc = v
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|c| c["name"] == "doc")
-        .unwrap();
+    let doc = v.as_array().unwrap().iter().find(|c| c["name"] == "doc").unwrap();
     assert_eq!(doc["comp"]["body"], json!(""));
     assert!(!batch.contains("\"created\""));
     // trace is null unless the caller fed the journal
@@ -271,7 +261,10 @@ fn native_safe_routes_plain_graph_and_proxies_the_rest() {
     // natively only if EVERY change names a transform-free NATIVE_COMPS comp.
     let ok = |cs: Vec<Change>| native_safe(&cs);
     // plain-graph creates/updates/edges → native.
-    assert!(ok(vec![ch(A, "doc", json!({"title": "x"})), ch(A, "task", json!({"status": "open"}))]));
+    assert!(ok(vec![
+        ch(A, "doc", json!({"title": "x"})),
+        ch(A, "task", json!({"status": "open"}))
+    ]));
     assert!(ok(vec![ch(A, "board", json!({"query": ".task!"}))]));
     assert!(ok(vec![ch(A, "project", json!({}))]));
     assert!(ok(vec![ch(A, "comment", json!({"target": B}))]));
@@ -298,7 +291,7 @@ fn native_safe_routes_plain_graph_and_proxies_the_rest() {
     assert!(ok(vec![ch(A, "session", json!({"id": "S-1"}))]));
     assert!(ok(vec![ch(A, "spawn", json!({"provider": "codex"}))]));
     assert!(ok(vec![ch(A, "worktree", json!({"cwd": "/tmp/x"}))]));
-    assert!(ok(vec![ch(A, "runtime", json!({"pid": 5})) ]));
+    assert!(ok(vec![ch(A, "runtime", json!({"pid": 5}))]));
     // setting joined NATIVE_COMPS at rung 6b — the LAST comp to leave the proxy
     // default — once guardSettings + the WHATWG url canonicalization were ported.
     assert!(ok(vec![ch(A, "setting", json!({"key": "OLLAMA_BASE_URL", "value": "https://x/"}))]));
@@ -306,7 +299,10 @@ fn native_safe_routes_plain_graph_and_proxies_the_rest() {
     // vocabulary word absent from the list still proxies.
     assert!(!ok(vec![ch(A, "invented_comp", json!({"x": 1}))]));
     // a MIXED batch with an unknown comp proxies WHOLE — apply() is atomic.
-    assert!(!ok(vec![ch(A, "doc", json!({"title": "x"})), ch(A, "invented_comp", json!({"x": 1}))]));
+    assert!(!ok(vec![
+        ch(A, "doc", json!({"title": "x"})),
+        ch(A, "invented_comp", json!({"x": 1}))
+    ]));
     // an empty batch proxies (Deno owns the trivial answer).
     assert!(!ok(vec![]));
 }
@@ -336,10 +332,8 @@ fn deliver_at_address_mints_email_and_rewrites_to() {
     run(&s, vec![ch(A, "deliver", json!({ "to": addr.clone() }))]);
     let minted: String = one(&s, "select address from email");
     assert_eq!(minted, canon(&addr));
-    let to_eid: String =
-        one(&s, "select o.eid from deliver dv join entity o on o.id = dv.\"to\"");
-    let email_eid: String =
-        one(&s, "select o.eid from email e join entity o on o.id = e.entity");
+    let to_eid: String = one(&s, "select o.eid from deliver dv join entity o on o.id = dv.\"to\"");
+    let email_eid: String = one(&s, "select o.eid from email e join entity o on o.id = e.entity");
     assert_eq!(to_eid, email_eid, "deliver.to points at the minted email entity");
     // find-or-mint: a second deliver to the SAME address (any spelling that
     // canonicalizes equal) reuses the entity — no second email is minted.
@@ -350,9 +344,7 @@ fn deliver_at_address_mints_email_and_rewrites_to() {
 
 // A helper: the refusal message a bounced batch carries (db.ts Invalid → 400).
 fn err_msg(s: &WriteStore, changes: Vec<Change>) -> String {
-    apply(s, changes, &ApplyOpts::default(), &default_gates())
-        .unwrap_err()
-        .to_string()
+    apply(s, changes, &ApplyOpts::default(), &default_gates()).unwrap_err().to_string()
 }
 
 #[test]
@@ -363,7 +355,11 @@ fn setting_write_normalizes_a_url_value_in_place() {
     // STORAGE and in the ECHOED batch (normalize-in-place).
     let out = run(
         &s,
-        vec![ch(A, "setting", json!({ "key": "OLLAMA_BASE_URL", "value": "HTTP://Example.COM:80/v1/" }))],
+        vec![ch(
+            A,
+            "setting",
+            json!({ "key": "OLLAMA_BASE_URL", "value": "HTTP://Example.COM:80/v1/" }),
+        )],
     );
     let stored: String = one(&s, "select value from setting");
     assert_eq!(stored, "http://example.com/v1");
@@ -481,10 +477,7 @@ fn mail_from_derives_through_session_actor() {
     assert_eq!(mail_from(&s, C).as_deref(), Some("pp@bot.yak.sh"));
     let echoed = out.iter().any(|c| {
         c.name == "mail"
-            && c.comp
-                .as_ref()
-                .and_then(|m| m.get("from"))
-                .and_then(|v| v.as_str())
+            && c.comp.as_ref().and_then(|m| m.get("from")).and_then(|v| v.as_str())
                 == Some("pp@bot.yak.sh")
     });
     assert!(echoed, "the derived from rides the return batch");
@@ -526,8 +519,7 @@ fn mail_from_stays_empty_when_the_signer_has_no_address() {
 fn fed_trace_serializes_created_and_removed() {
     let s = store();
     let opts = ApplyOpts { writer: None, fed: true };
-    apply(&s, vec![ch(A, "doc", json!({"title": "x"}))], &opts, &default_gates())
-        .unwrap();
+    apply(&s, vec![ch(A, "doc", json!({"title": "x"}))], &opts, &default_gates()).unwrap();
     apply(&s, vec![ch(A, "doc", Value::Null)], &opts, &default_gates()).unwrap();
     let traces: Vec<String> = {
         let mut st = s.conn.prepare("select trace from journal order by rowid").unwrap();
@@ -608,16 +600,23 @@ fn enum_refuses_out_of_domain() {
 #[test]
 fn session_create_mirrors_spawn_twin() {
     let s = store();
-    let out = run(&s, vec![ch(A, "session", json!({"id": "S-9", "provider": "codex", "model": "gpt-5"}))]);
+    let out = run(
+        &s,
+        vec![ch(A, "session", json!({"id": "S-9", "provider": "codex", "model": "gpt-5"}))],
+    );
     // the session row carries the spec…
-    let prov: String =
-        one(&s, "select provider from session s join entity e on e.id = s.entity where e.eid = '\
-            aaaaaaaa-0000-4000-8000-000000000001'");
+    let prov: String = one(
+        &s,
+        "select provider from session s join entity e on e.id = s.entity where e.eid = '\
+            aaaaaaaa-0000-4000-8000-000000000001'",
+    );
     assert_eq!(prov, "codex");
     // …and a spawn twin was minted with the same spec (same eid, a facet).
-    let sp: String =
-        one(&s, "select provider from spawn s join entity e on e.id = s.entity where e.eid = '\
-            aaaaaaaa-0000-4000-8000-000000000001'");
+    let sp: String = one(
+        &s,
+        "select provider from spawn s join entity e on e.id = s.entity where e.eid = '\
+            aaaaaaaa-0000-4000-8000-000000000001'",
+    );
     assert_eq!(sp, "codex");
     // the effective batch (echo) carries the spawn twin change.
     assert!(out.iter().any(|c| c.name == "spawn" && c.eid == A));
@@ -630,8 +629,7 @@ fn session_parent_links_delegates_edge() {
     let s = store();
     seed_session(&s, B, "parent");
     run(&s, vec![ch(A, "session", json!({"id": "S-child", "parent": B}))]);
-    let n: i64 =
-        one(&s, "select count(*) from dependency where type = 'delegates'");
+    let n: i64 = one(&s, "select count(*) from dependency where type = 'delegates'");
     assert_eq!(n, 1);
 }
 
@@ -642,10 +640,7 @@ fn edges_link_and_unlink() {
     run(&s, vec![ch(A, "dependency", json!({"type": "requires", "child": B}))]);
     let n: i64 = one(&s, "select count(*) from dependency where type = 'requires'");
     assert_eq!(n, 1);
-    run(
-        &s,
-        vec![ch(A, "dependency", json!({"type": "requires", "child": B, "gone": true}))],
-    );
+    run(&s, vec![ch(A, "dependency", json!({"type": "requires", "child": B, "gone": true}))]);
     let n: i64 = one(&s, "select count(*) from dependency where type = 'requires'");
     assert_eq!(n, 0);
     // an unknown edge word refuses in normalize, like TS parseProp
@@ -721,7 +716,11 @@ fn delete_cascades_by_death_word() {
     }));
     let orphaned: Option<i64> = s
         .conn
-        .query_row("select project from task where entity = (select id from entity where eid = ?1)", [E], |r| r.get(0))
+        .query_row(
+            "select project from task where entity = (select id from entity where eid = ?1)",
+            [E],
+            |r| r.get(0),
+        )
         .unwrap();
     assert!(orphaned.is_none());
     // a tombstoned eid voids every later touch
@@ -761,8 +760,7 @@ fn release_pushes_resume_retake_and_settle_pop() {
     assert_eq!(comp.get("actor"), Some(&json!(D)));
     assert_eq!(comp.get("rank"), Some(&json!(1)));
     // the stored actor is the int id, projected back on read
-    let stored: String =
-        one(&s, "select e.eid from resume r join entity e on e.id = r.actor");
+    let stored: String = one(&s, "select e.eid from resume r join entity e on e.id = r.actor");
     assert_eq!(stored, D);
     // RE-TAKE pops it (a claim change whose task still holds a final claim)
     run(&s, vec![ch(A, "claim", json!({"session": C}))]);
@@ -797,10 +795,7 @@ fn deleting_a_session_releases_its_claim_and_pushes_resume() {
 #[test]
 fn alias_gate_refuses_a_taken_slug() {
     let s = store();
-    run(
-        &s,
-        vec![ch(A, "doc", json!({"title": "one"})), ch(A, "alias", json!({"slug": "one"}))],
-    );
+    run(&s, vec![ch(A, "doc", json!({"title": "one"})), ch(A, "alias", json!({"slug": "one"}))]);
     let err = apply(
         &s,
         vec![ch(B, "doc", json!({"title": "two"})), ch(B, "alias", json!({"slug": "one"}))],
@@ -823,7 +818,13 @@ fn ghost_reference_refuses() {
 }
 
 // A session with an explicit origin + status, for the stop_request gate.
-fn seed_managed(s: &WriteStore, eid: &str, label: &str, origin: Option<&str>, status: Option<&str>) {
+fn seed_managed(
+    s: &WriteStore,
+    eid: &str,
+    label: &str,
+    origin: Option<&str>,
+    status: Option<&str>,
+) {
     s.conn.execute("insert into entity (eid) values (?1)", [eid]).unwrap();
     s.conn
         .execute(
@@ -862,15 +863,16 @@ fn entry_create_assigns_per_session_seq() {
     let out2 = run(&s, vec![ch(C, "entry", json!({ "session": A }))]);
     assert_eq!(seq_of(&s, B), 1);
     assert_eq!(seq_of(&s, C), 2);
-    let latest: i64 =
-        one(&s, "select latest_seq from session where id = 'S-1'");
+    let latest: i64 = one(&s, "select latest_seq from session where id = 'S-1'");
     assert_eq!(latest, 2);
     // the {eid, seq} echo rides the effective batch (a graph-native summary the
     // snapshot reads back), distinct from the entry change rewritten to {session}.
-    assert!(out1.iter().any(|c| c.name == "entry"
-        && c.comp.as_ref().and_then(|m| m.get("seq")) == Some(&json!(1))));
-    assert!(out2.iter().any(|c| c.name == "entry"
-        && c.comp.as_ref().and_then(|m| m.get("seq")) == Some(&json!(2))));
+    assert!(out1.iter().any(
+        |c| c.name == "entry" && c.comp.as_ref().and_then(|m| m.get("seq")) == Some(&json!(1))
+    ));
+    assert!(out2.iter().any(
+        |c| c.name == "entry" && c.comp.as_ref().and_then(|m| m.get("seq")) == Some(&json!(2))
+    ));
     // a second session numbers from 1 again — seq is per-session.
     seed_session(&s, D, "S-2");
     let e2 = "aaaaaaaa-0000-4000-8000-000000000005";
@@ -884,11 +886,23 @@ fn replace_wakes_supersedes_pending_untargeted() {
     // an actor to address the self-wakes to.
     run(&s, vec![ch(A, "project", json!({}))]);
     // a pending untargeted self-wake to A (wake + its deliver, born together).
-    run(&s, vec![ch(B, "wake", json!({ "at": "2099-01-01T00:00:00.000Z" })), ch(B, "deliver", json!({ "to": A }))]);
+    run(
+        &s,
+        vec![
+            ch(B, "wake", json!({ "at": "2099-01-01T00:00:00.000Z" })),
+            ch(B, "deliver", json!({ "to": A })),
+        ],
+    );
     assert_eq!(one::<i64>(&s, "select count(*) from wake"), 1);
     // a fresh untargeted self-wake to A supersedes the predecessor in the same
     // transaction (db.ts replaceWakes, M-7323): B is tombstoned, only C remains.
-    let out = run(&s, vec![ch(C, "wake", json!({ "at": "2099-02-01T00:00:00.000Z" })), ch(C, "deliver", json!({ "to": A }))]);
+    let out = run(
+        &s,
+        vec![
+            ch(C, "wake", json!({ "at": "2099-02-01T00:00:00.000Z" })),
+            ch(C, "deliver", json!({ "to": A })),
+        ],
+    );
     assert_eq!(one::<i64>(&s, "select count(*) from wake"), 1);
     assert!(is_dead(&s, B), "the superseded wake is tombstoned");
     assert!(!is_dead(&s, C), "the fresh wake survives");
@@ -901,9 +915,21 @@ fn replace_wakes_spares_targeted_and_acted() {
     let s = store();
     run(&s, vec![ch(A, "project", json!({}))]);
     // a pending untargeted wake to A.
-    run(&s, vec![ch(B, "wake", json!({ "at": "2099-01-01T00:00:00.000Z" })), ch(B, "deliver", json!({ "to": A }))]);
+    run(
+        &s,
+        vec![
+            ch(B, "wake", json!({ "at": "2099-01-01T00:00:00.000Z" })),
+            ch(B, "deliver", json!({ "to": A })),
+        ],
+    );
     // a TARGETED wake to A does NOT supersede it (only untargeted self-wakes do).
-    run(&s, vec![ch(C, "wake", json!({ "at": "2099-02-01T00:00:00.000Z", "target": A })), ch(C, "deliver", json!({ "to": A }))]);
+    run(
+        &s,
+        vec![
+            ch(C, "wake", json!({ "at": "2099-02-01T00:00:00.000Z", "target": A })),
+            ch(C, "deliver", json!({ "to": A })),
+        ],
+    );
     assert!(!is_dead(&s, B), "a targeted wake spares the pending untargeted one");
     // mark B acted (a delivered facet — server-owned, seeded by SQL), then a new
     // untargeted wake to A must SPARE it: replaceWakes only drops unacted wakes.
@@ -913,7 +939,13 @@ fn replace_wakes_spares_targeted_and_acted() {
             [B],
         )
         .unwrap();
-    run(&s, vec![ch(D, "wake", json!({ "at": "2099-03-01T00:00:00.000Z" })), ch(D, "deliver", json!({ "to": A }))]);
+    run(
+        &s,
+        vec![
+            ch(D, "wake", json!({ "at": "2099-03-01T00:00:00.000Z" })),
+            ch(D, "deliver", json!({ "to": A })),
+        ],
+    );
     assert!(!is_dead(&s, B), "an already-delivered wake is not superseded");
 }
 

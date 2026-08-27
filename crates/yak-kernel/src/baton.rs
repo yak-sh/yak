@@ -79,7 +79,12 @@ pub struct TakeOpts<'a> {
 impl Default for TakeOpts<'_> {
     fn default() -> Self {
         // Mirrors baton.ts's defaults: 330s deadline, 50ms poll, writer sidecar.
-        TakeOpts { wait: false, deadline: Duration::from_millis(330_000), poll: Duration::from_millis(50), suffix: WRITER_LOCK }
+        TakeOpts {
+            wait: false,
+            deadline: Duration::from_millis(330_000),
+            poll: Duration::from_millis(50),
+            suffix: WRITER_LOCK,
+        }
     }
 }
 
@@ -145,7 +150,8 @@ pub fn take_baton(db: &str, opts: &TakeOpts) -> Result<Option<Baton>, BatonError
         return Ok(None);
     }
     let path = sidecar(db, opts.suffix);
-    let file = open_sidecar(&path).map_err(|e| BatonError(format!("cannot open baton {path}: {e}")))?;
+    let file =
+        open_sidecar(&path).map_err(|e| BatonError(format!("cannot open baton {path}: {e}")))?;
     match try_flock(&file) {
         Ok(true) => return Ok(Some(Baton { _file: file })),
         Err(e) => return Err(BatonError(format!("baton {path} flock failed: {e}"))),
@@ -181,7 +187,8 @@ mod tests {
     use super::*;
 
     fn tmp_db() -> String {
-        let dir = std::env::temp_dir().join(format!("baton-{}-{}", std::process::id(), fastrand_ish()));
+        let dir =
+            std::env::temp_dir().join(format!("baton-{}-{}", std::process::id(), fastrand_ish()));
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("graph.db").to_str().unwrap().to_string()
     }
@@ -193,13 +200,20 @@ mod tests {
 
     fn quick() -> TakeOpts<'static> {
         // Instant polls + a zero deadline for the wait cases that must trip.
-        TakeOpts { wait: false, deadline: Duration::from_millis(0), poll: Duration::from_millis(1), suffix: WRITER_LOCK }
+        TakeOpts {
+            wait: false,
+            deadline: Duration::from_millis(0),
+            poll: Duration::from_millis(1),
+            suffix: WRITER_LOCK,
+        }
     }
 
     #[test]
     fn memory_never_contends() {
         assert!(take_baton(":memory:", &TakeOpts::default()).unwrap().is_none());
-        assert!(take_baton(":memory:", &TakeOpts { wait: true, ..TakeOpts::default() }).unwrap().is_none());
+        assert!(take_baton(":memory:", &TakeOpts { wait: true, ..TakeOpts::default() })
+            .unwrap()
+            .is_none());
         assert!(try_baton(":memory:", WRITER_LOCK).is_none());
     }
 
@@ -250,7 +264,12 @@ mod tests {
         });
         let succ = take_baton(
             &db2,
-            &TakeOpts { wait: true, deadline: Duration::from_millis(5000), poll: Duration::from_millis(5), suffix: WRITER_LOCK },
+            &TakeOpts {
+                wait: true,
+                deadline: Duration::from_millis(5000),
+                poll: Duration::from_millis(5),
+                suffix: WRITER_LOCK,
+            },
         )
         .unwrap();
         assert!(succ.is_some());
@@ -263,7 +282,8 @@ mod tests {
         // taker coexist — the independence the split (D-22388) needs.
         let db = tmp_db();
         let w = take_baton(&db, &TakeOpts::default()).unwrap();
-        let ef = take_baton(&db, &TakeOpts { suffix: EFFECTS_LOCK, ..TakeOpts::default() }).unwrap();
+        let ef =
+            take_baton(&db, &TakeOpts { suffix: EFFECTS_LOCK, ..TakeOpts::default() }).unwrap();
         assert!(w.is_some() && ef.is_some());
         // Each still excludes a second taker of its OWN role.
         assert!(take_baton(&db, &quick()).is_err());

@@ -29,8 +29,7 @@ use yak_kernel::Store;
 // WS_SETS). `.session!` is deliberately absent — sessions are the unbounded
 // kind and stream when a view that needs them mounts.
 pub const WS_SETS: &[&str] = &[
-    "canvas", "pin", "card", "project", "favorite", "cursor", "camera", "fold",
-    "shelf", "client",
+    "canvas", "pin", "card", "project", "favorite", "cursor", "camera", "fold", "shelf", "client",
 ];
 
 // The server's advertised capabilities (types.ts `capabilities`).
@@ -63,9 +62,7 @@ pub fn epoch_of(store: &Store) -> String {
     }
     store
         .conn
-        .query_row("select v from server_meta where k = 'epoch'", [], |r| {
-            r.get::<_, String>(0)
-        })
+        .query_row("select v from server_meta where k = 'epoch'", [], |r| r.get::<_, String>(0))
         .unwrap_or_default()
 }
 

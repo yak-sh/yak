@@ -45,8 +45,9 @@ fn enc(s: &str) -> String {
     let mut out = String::new();
     for b in s.as_bytes() {
         match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.'
-            | b'~' => out.push(*b as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*b as char)
+            }
             _ => out.push_str(&format!("%{:02X}", b)),
         }
     }
@@ -66,22 +67,14 @@ impl Remote {
 
     fn get(&self, path: &str) -> Result<Value, String> {
         let url = format!("http://{}{}", self.host, path);
-        let mut res = self
-            .agent
-            .get(&url)
-            .call()
-            .map_err(|e| format!("{}: {e}", self.host))?;
+        let mut res = self.agent.get(&url).call().map_err(|e| format!("{}: {e}", self.host))?;
         // A 4xx carries the typist's news (a bad filter) as plain text; the
         // status is already folded into the error by ureq, so only the body
         // needs lifting here. Parsed with serde_json rather than ureq's own
         // json feature — one json implementation in this crate, not two.
-        let body = res
-            .body_mut()
-            .read_to_string()
-            .map_err(|e| format!("{}: {e}", self.host))?;
-        serde_json::from_str(&body).map_err(|e| {
-            format!("{}: bad json — {e} — {}", self.host, body.trim())
-        })
+        let body = res.body_mut().read_to_string().map_err(|e| format!("{}: {e}", self.host))?;
+        serde_json::from_str(&body)
+            .map_err(|e| format!("{}: bad json — {e} — {}", self.host, body.trim()))
     }
 
     // GET /query?<params> → rows. `params` is a ready query string.
@@ -199,13 +192,8 @@ impl Graph for Remote {
         if reveal {
             parts.push("quarantined=1".into());
         }
-        let qs =
-            parts.iter().map(|s| seg(s)).collect::<Vec<_>>().join("&");
-        Ok(self
-            .query(&qs)?
-            .into_iter()
-            .filter(|r| crate::query::matches(r, preds))
-            .collect())
+        let qs = parts.iter().map(|s| seg(s)).collect::<Vec<_>>().join("&");
+        Ok(self.query(&qs)?.into_iter().filter(|r| crate::query::matches(r, preds)).collect())
     }
 
     // deps=1 rides the row back; the route already orders the edges the way
@@ -213,8 +201,7 @@ impl Graph for Remote {
     // order is KEPT — re-sorting here would drop `ord`, which no client can
     // see and which orders a parent's children.
     fn deps_of(&self, eid: &str) -> Vec<Dep> {
-        let url =
-            format!("/query?{}&{}", seg(&format!("id={eid}")), seg("deps=1"));
+        let url = format!("/query?{}&{}", seg(&format!("id={eid}")), seg("deps=1"));
         let Ok(v) = self.get(&url) else {
             return vec![];
         };
@@ -238,8 +225,7 @@ impl Graph for Remote {
     // The file sorts these in sql (created.at, then num); the wire does not
     // promise an order, so the same sort is applied here rather than assumed.
     fn comments_on(&self, eid: &str) -> Vec<String> {
-        let Ok(rows) = self.query(&seg(&format!(".comment.target={eid}")))
-        else {
+        let Ok(rows) = self.query(&seg(&format!(".comment.target={eid}"))) else {
             return vec![];
         };
         let mut born: Vec<(String, i64, String)> = rows
@@ -269,36 +255,14 @@ impl Graph for Remote {
             .iter()
             .filter_map(|h| {
                 let eid = h.get("eid")?.as_str()?.to_string();
-                let open = h
-                    .get("open")
-                    .and_then(|o| o.as_str())
-                    .unwrap_or(&eid)
-                    .to_string();
+                let open = h.get("open").and_then(|o| o.as_str()).unwrap_or(&eid).to_string();
                 Some(Hit {
                     num: h.get("num").and_then(|n| n.as_i64()),
-                    kind: h
-                        .get("kind")
-                        .and_then(|k| k.as_str())
-                        .unwrap_or("entity")
-                        .to_string(),
-                    title: h
-                        .get("title")
-                        .and_then(|t| t.as_str())
-                        .unwrap_or("")
-                        .to_string(),
-                    snip: h
-                        .get("snip")
-                        .and_then(|s| s.as_str())
-                        .unwrap_or("")
-                        .to_string(),
-                    open_id: h
-                        .get("open_id")
-                        .and_then(|o| o.as_str())
-                        .map(String::from),
-                    retired: h
-                        .get("retired")
-                        .and_then(|r| r.as_bool())
-                        .unwrap_or(false),
+                    kind: h.get("kind").and_then(|k| k.as_str()).unwrap_or("entity").to_string(),
+                    title: h.get("title").and_then(|t| t.as_str()).unwrap_or("").to_string(),
+                    snip: h.get("snip").and_then(|s| s.as_str()).unwrap_or("").to_string(),
+                    open_id: h.get("open_id").and_then(|o| o.as_str()).map(String::from),
+                    retired: h.get("retired").and_then(|r| r.as_bool()).unwrap_or(false),
                     open,
                     eid,
                 })

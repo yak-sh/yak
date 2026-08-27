@@ -57,8 +57,7 @@ can answer — the wire takes over, as it does for the TS CLI.
 // The file door, for the verbs that cannot ride the wire.
 fn open_store() -> Result<Store, String> {
     let path = db_path();
-    Store::open(&format!("file:{path}?mode=ro"))
-        .map_err(|e| format!("cannot open {path}: {e}"))
+    Store::open(&format!("file:{path}?mode=ro")).map_err(|e| format!("cannot open {path}: {e}"))
 }
 
 fn main() {
@@ -241,9 +240,7 @@ fn apply_cmd(args: &[String]) -> i32 {
 // Only the PLURAL routes to list, and never over a registered verb —
 // mirrors cli.ts listing(): the singular stays a subject.
 fn plural_kind(word: &str) -> Option<String> {
-    let verbs = [
-        "list", "show", "search", "inbox", "history", "telemetry", "context",
-    ];
+    let verbs = ["list", "show", "search", "inbox", "history", "telemetry", "context"];
     if verbs.contains(&word) {
         return None;
     }
@@ -407,11 +404,7 @@ fn list(store: &dyn Graph, args: &[String]) -> i32 {
             handle,
             title,
             flag,
-            if authoring.is_empty() {
-                String::new()
-            } else {
-                format!(" · {authoring}")
-            },
+            if authoring.is_empty() { String::new() } else { format!(" · {authoring}") },
             w = wide
         );
     }
@@ -443,15 +436,12 @@ fn inbox(store: &Store, args: &[String]) -> i32 {
         return 0;
     }
     if args.first().map(String::as_str) == Some("archive") {
-        eprintln!(
-            "inbox archive writes — use the TS CLI (`task inbox archive`)"
-        );
+        eprintln!("inbox archive writes — use the TS CLI (`task inbox archive`)");
         return 2;
     }
     let every = args.iter().any(|a| a == "--all");
     let sent = args.iter().any(|a| a == "--sent");
-    let words: Vec<&String> =
-        args.iter().filter(|a| !a.starts_with("--")).collect();
+    let words: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
     let mut preds = vec![];
     for w in &words {
         if !w.starts_with('.') {
@@ -470,12 +460,7 @@ fn inbox(store: &Store, args: &[String]) -> i32 {
     query::resolve_values(store, &mut preds);
     let v = yak_kernel::vocab();
     let sid = me();
-    let who = yak_kernel::reader::reader_for(
-        store,
-        sid.as_deref(),
-        &cwd(),
-        None,
-    );
+    let who = yak_kernel::reader::reader_for(store, sid.as_deref(), &cwd(), None);
     let mut items: Vec<yak_kernel::Row> = if sent {
         // outbound: mail-comp wearers that never arrived from the edge.
         // rows_of_kind loads every mail row in bulk (one query per comp
@@ -486,23 +471,14 @@ fn inbox(store: &Store, args: &[String]) -> i32 {
             .into_iter()
             .filter(|r| {
                 r.comps.contains_key("mail")
-                    && r.comps
-                        .get("mail")
-                        .and_then(|m| m.get("message_id"))
-                        .is_none()
-                    && r.comps
-                        .get("deliver")
-                        .and_then(|d| d.get("to"))
-                        .is_some()
+                    && r.comps.get("mail").and_then(|m| m.get("message_id")).is_none()
+                    && r.comps.get("deliver").and_then(|d| d.get("to")).is_some()
                     && yak_kernel::query::matches_at(r, &preds, now)
             })
             .collect()
     } else {
-        let mode = if every {
-            yak_kernel::inbox::Mode::All
-        } else {
-            yak_kernel::inbox::Mode::Inbox
-        };
+        let mode =
+            if every { yak_kernel::inbox::Mode::All } else { yak_kernel::inbox::Mode::Inbox };
         let candidates = yak_kernel::inbox::inbox_rows(store, &who, &preds, mode);
         candidates
             .into_iter()
@@ -546,9 +522,7 @@ fn history(store: &Store, args: &[String]) -> i32 {
         eprintln!("task history <id> [-n N]");
         return 2;
     };
-    let n = flag_value(args, "-n")
-        .and_then(|v| v.parse::<usize>().ok())
-        .unwrap_or(50);
+    let n = flag_value(args, "-n").and_then(|v| v.parse::<usize>().ok()).unwrap_or(50);
     let Some(eid) = store.resolve_id(id) else {
         eprintln!("no such entity: {id}");
         return 1;
@@ -586,17 +560,13 @@ fn telemetry(store: &Store, args: &[String]) -> i32 {
         return 2;
     }
     if args.iter().any(|a| a == "--stats") {
-        let rows =
-            yak_kernel::telemetry::stats(store, since.as_deref(), errors);
+        let rows = yak_kernel::telemetry::stats(store, since.as_deref(), errors);
         if rows.is_empty() {
             eprintln!("(nothing timed)");
             return 0;
         }
         let ms = |n: f64| format!("{:>9}", format!("{n}ms"));
-        println!(
-            "{:<4} {:<14} {:>6} {:>9} {:>9} {:>9}",
-            "door", "tool", "n", "p50", "p95", "p99"
-        );
+        println!("{:<4} {:<14} {:>6} {:>9} {:>9} {:>9}", "door", "tool", "n", "p50", "p95", "p99");
         for r in rows {
             println!(
                 "{:<4} {:<14} {:>6} {} {} {}",
@@ -611,18 +581,16 @@ fn telemetry(store: &Store, args: &[String]) -> i32 {
         return 0;
     }
     let n = flag_value(args, "-n").and_then(|v| v.parse::<usize>().ok());
-    let rows =
-        yak_kernel::telemetry::recent(store, since.as_deref(), n, errors);
+    let rows = yak_kernel::telemetry::recent(store, since.as_deref(), n, errors);
     if rows.is_empty() {
         eprintln!("(nothing recorded)");
         return 0;
     }
     for r in rows {
         let cohort = match r.count {
-            Some(c) if c > 1 => format!(
-                "  {c}× since {}",
-                local_time(r.first.as_deref().unwrap_or(&r.ts))
-            ),
+            Some(c) if c > 1 => {
+                format!("  {c}× since {}", local_time(r.first.as_deref().unwrap_or(&r.ts)))
+            }
             _ => String::new(),
         };
         println!(
@@ -633,12 +601,7 @@ fn telemetry(store: &Store, args: &[String]) -> i32 {
             if r.ok { "ok " } else { "ERR" },
             r.ms.map(|m| format!("{m}ms")).unwrap_or_default(),
             r.session_id.as_deref().unwrap_or("-"),
-            r.error
-                .as_deref()
-                .unwrap_or("")
-                .chars()
-                .take(80)
-                .collect::<String>()
+            r.error.as_deref().unwrap_or("").chars().take(80).collect::<String>()
         );
     }
     0
@@ -667,18 +630,11 @@ fn context(store: &Store, args: &[String]) -> i32 {
             return 1;
         };
         if row.comps.contains_key("project") {
-            println!(
-                "{}",
-                digest::context_digest(store, None, now, Some(&eid))
-            );
+            println!("{}", digest::context_digest(store, None, now, Some(&eid)));
             return 0;
         }
         if let Some(sc) = row.comps.get("session") {
-            let sid = sc
-                .get("id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
+            let sid = sc.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let fm = digest::session_meta(store, &sid);
             let out = digest::context_digest(store, Some(&sid), now, None);
             if fm.is_empty() {
@@ -704,19 +660,14 @@ fn context(store: &Store, args: &[String]) -> i32 {
         _ => {
             // the preview: scoped to the repo you stand in
             let scope = yak_kernel::reader::scope_for(store, None, &cwd(), None);
-            println!(
-                "{}",
-                digest::context_digest(store, None, now, scope.as_deref())
-            );
+            println!("{}", digest::context_digest(store, None, now, scope.as_deref()));
         }
     }
     0
 }
 
 fn cwd() -> String {
-    std::env::current_dir()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_default()
+    std::env::current_dir().map(|p| p.to_string_lossy().to_string()).unwrap_or_default()
 }
 
 // me() — the CLI's standing identity (client.ts me()), env-resolved.
@@ -733,7 +684,11 @@ fn me() -> Option<String> {
         && env("TASKS_SESSION") == env("CLAUDE_CODE_SESSION_ID")
         && at.is_some()
         && at == env("TASKS_TREE");
-    if own { id } else { at.or(id) }
+    if own {
+        id
+    } else {
+        at.or(id)
+    }
 }
 
 fn worktree_root() -> Option<String> {
@@ -784,20 +739,13 @@ fn search_cmd(store: &dyn Graph, args: &[String]) -> i32 {
     let _p = span("render");
     for h in hits {
         let aim = if h.open != h.eid {
-            format!(
-                " → on {}",
-                h.open_id.clone().unwrap_or_else(|| h.open.clone())
-            )
+            format!(" → on {}", h.open_id.clone().unwrap_or_else(|| h.open.clone()))
         } else {
             String::new()
         };
         let snip = h.snip.replace('\u{1}', "[").replace('\u{2}', "]");
         let sunk = if h.retired { " · retired" } else { "" };
-        let title = if h.title.is_empty() {
-            "(untitled)".to_string()
-        } else {
-            h.title.clone()
-        };
+        let title = if h.title.is_empty() { "(untitled)".to_string() } else { h.title.clone() };
         println!(
             "{} {}: {}{} — {}{}",
             yak_kernel::vocab().id_of(&h.kind, &h.eid, h.num),

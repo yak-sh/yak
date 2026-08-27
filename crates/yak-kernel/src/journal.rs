@@ -21,11 +21,7 @@ pub struct Entry {
 fn canon(change: &mut Value) {
     let v = vocab();
     let Some(obj) = change.as_object_mut() else { return };
-    let name = obj
-        .get("name")
-        .and_then(|n| n.as_str())
-        .unwrap_or("")
-        .to_string();
+    let name = obj.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
     for key in ["comp", "was"] {
         let Some(Value::Object(m)) = obj.get_mut(key) else { continue };
         let renames: Vec<(String, String)> = m
@@ -59,14 +55,11 @@ pub fn journal_of(store: &Store, eid: &str, limit: usize) -> Vec<Entry> {
         .unwrap_or_default();
     rows.into_iter()
         .map(|(id, ts, actor, batch)| {
-            let mut changes: Vec<Value> =
-                serde_json::from_str(&batch).unwrap_or_default();
+            let mut changes: Vec<Value> = serde_json::from_str(&batch).unwrap_or_default();
             for c in &mut changes {
                 canon(c);
             }
-            changes.retain(|c| {
-                c.get("eid").and_then(|e| e.as_str()) == Some(eid)
-            });
+            changes.retain(|c| c.get("eid").and_then(|e| e.as_str()) == Some(eid));
             Entry { id, ts, actor, changes }
         })
         .collect()
@@ -93,11 +86,8 @@ pub fn what_of(e: &Entry) -> String {
                     }
                 }
                 Some(Value::Object(m)) => {
-                    let cols: Vec<&str> = m
-                        .keys()
-                        .filter(|k| k.as_str() != "eid")
-                        .map(|k| k.as_str())
-                        .collect();
+                    let cols: Vec<&str> =
+                        m.keys().filter(|k| k.as_str() != "eid").map(|k| k.as_str()).collect();
                     format!("{name}{{{}}}", cols.join(" "))
                 }
                 Some(_) => format!("{name}{{}}"),
@@ -114,11 +104,9 @@ pub fn seen(store: &Store, eid: &str) -> bool {
     }
     store
         .conn
-        .query_row(
-            "select 1 from journal_touch where eid = ?1 limit 1",
-            [eid],
-            |r| r.get::<_, i64>(0),
-        )
+        .query_row("select 1 from journal_touch where eid = ?1 limit 1", [eid], |r| {
+            r.get::<_, i64>(0)
+        })
         .optional()
         .ok()
         .flatten()

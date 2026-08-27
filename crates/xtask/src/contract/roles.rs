@@ -7,22 +7,12 @@ use yak_vocab_derive::Comp;
 
 // A role is desired capacity. `held` is the crash-loop breaker's verdict,
 // distinct from `stopped` (an owner's off switch).
-venum!(
-    "roles",
-    "roleStates",
-    50,
-    ["running", "stopped", "paused", "disabled", "retired", "held"]
-);
+venum!("roles", "roleStates", 50, ["running", "stopped", "paused", "disabled", "retired", "held"]);
 
 // Native owns an interactive provider TUI; managed owns a resumable session.
 venum!("roles", "roleSurfaces", 60, ["native", "managed"]);
 
-venum!(
-    "roles",
-    "wakePolicies",
-    70,
-    ["always", "attention", "scheduled", "manual"]
-);
+venum!("roles", "wakePolicies", 70, ["always", "attention", "scheduled", "manual"]);
 
 #[derive(Comp)]
 #[comp(plugin = "roles", rank = 60, kind_rank = 140, prefix = "R", by_name, stamped_rank = 250)]

@@ -51,20 +51,20 @@ pub use feed::{cursor_of, data_version, journal_since, row_changes, Feed, Journa
 pub use model::{Dep, Graph, Hit, Row, Source};
 #[cfg(feature = "remote")]
 pub mod remote;
+#[cfg(feature = "native")]
+pub use baton::{take_baton, try_baton, Baton, BatonError, TakeOpts, EFFECTS_LOCK, WRITER_LOCK};
+#[cfg(feature = "native")]
+pub use change::parse_batch;
 #[cfg(feature = "remote")]
 pub use remote::Remote;
 #[cfg(feature = "native")]
+pub use schema::{apply_schema, mint_epoch, SchemaOp};
+#[cfg(feature = "native")]
 pub use store::{Rows, Store};
 pub use vocab::{vocab, PropType, Vocab};
-#[cfg(feature = "native")]
-pub use change::parse_batch;
 pub use write::{
     apply, default_gates, native_safe, ApplyError, ApplyOpts, Gate, WriteStore, NATIVE_COMPS,
 };
-#[cfg(feature = "native")]
-pub use schema::{apply_schema, mint_epoch, SchemaOp};
-#[cfg(feature = "native")]
-pub use baton::{take_baton, try_baton, Baton, BatonError, TakeOpts, EFFECTS_LOCK, WRITER_LOCK};
 
 // The live graph the way every client resolves it: DB_PATH wins, else the
 // home pairing.
@@ -149,8 +149,7 @@ pub fn endpoint_of(
     disabled: bool,
     live: &str,
 ) -> Endpoint {
-    let wire =
-        || Endpoint::Wire(host.unwrap_or(DEFAULT_HOST).to_string());
+    let wire = || Endpoint::Wire(host.unwrap_or(DEFAULT_HOST).to_string());
     if disabled || db_path == Some(":memory:") {
         return wire();
     }
@@ -219,24 +218,15 @@ mod endpoint_tests {
         assert_eq!(f(None, None, false), Endpoint::File(live.into()));
         // an explicit file wins, host or no host
         assert_eq!(f(Some("/tmp/a.db"), None, false), Endpoint::File("/tmp/a.db".into()));
-        assert_eq!(
-            f(Some("/tmp/a.db"), Some("h:1"), false),
-            Endpoint::File("/tmp/a.db".into())
-        );
+        assert_eq!(f(Some("/tmp/a.db"), Some("h:1"), false), Endpoint::File("/tmp/a.db".into()));
         // a host alone names a server whose file we cannot know
         assert_eq!(f(None, Some("h:1"), false), Endpoint::Wire("h:1".into()));
         // ':memory:' is not the server's graph
         assert_eq!(f(Some(":memory:"), None, false), Endpoint::Wire(DEFAULT_HOST.into()));
         // TASKS_LOCAL=0 turns the arm off outright, whatever DB_PATH says
-        assert_eq!(
-            f(Some("/tmp/a.db"), None, true),
-            Endpoint::Wire(DEFAULT_HOST.into())
-        );
+        assert_eq!(f(Some("/tmp/a.db"), None, true), Endpoint::Wire(DEFAULT_HOST.into()));
         // …and it lands on the named host when one is set
-        assert_eq!(
-            f(Some("/tmp/a.db"), Some("h:1"), true),
-            Endpoint::Wire("h:1".into())
-        );
+        assert_eq!(f(Some("/tmp/a.db"), Some("h:1"), true), Endpoint::Wire("h:1".into()));
     }
 }
 

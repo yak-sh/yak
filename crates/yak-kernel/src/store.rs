@@ -4,10 +4,10 @@
 // is stored as. Never migrates, never takes the writer baton: a library
 // client connects, reads, and leaves the schema alone (D-22530 §1).
 
-use crate::vocab::{vocab, PropType};
 pub use crate::model::{is_uuid, Dep, Row};
 use crate::model::{Graph, Hit, Source};
 use crate::profiling;
+use crate::vocab::{vocab, PropType};
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -57,10 +57,8 @@ pub fn collect<T>(
 ) -> Vec<T> {
     let t = profiling::sql(sql);
     let Ok(mut st) = conn.prepare(sql) else { return vec![] };
-    let out: Vec<T> = st
-        .query_map(params, row)
-        .map(|it| it.filter_map(|x| x.ok()).collect())
-        .unwrap_or_default();
+    let out: Vec<T> =
+        st.query_map(params, row).map(|it| it.filter_map(|x| x.ok()).collect()).unwrap_or_default();
     t.done(out.len());
     out
 }
@@ -75,8 +73,7 @@ impl Store {
         conn.busy_timeout(std::time::Duration::from_millis(5000))?;
         let mut tables = HashSet::new();
         {
-            let sql =
-                "select name from sqlite_master where type in ('table','view')";
+            let sql = "select name from sqlite_master where type in ('table','view')";
             let t = profiling::sql(sql);
             let mut st = conn.prepare(sql)?;
             let mut rows = st.query([])?;
@@ -132,8 +129,7 @@ impl Store {
                  where e.eid = ?1",
                 q(comp)
             );
-            let present: Option<i64> =
-                one(&self.conn, &sql, [eid], |r| r.get(0));
+            let present: Option<i64> = one(&self.conn, &sql, [eid], |r| r.get(0));
             return present.map(|_| Map::new());
         }
         let mut joins = String::new();
@@ -141,10 +137,7 @@ impl Store {
         for (i, (name, t)) in cols.iter().enumerate() {
             if t.is_ref() {
                 let a = format!("__r{i}");
-                joins.push_str(&format!(
-                    " left join entity {a} on {a}.id = t.{}",
-                    q(name)
-                ));
+                joins.push_str(&format!(" left join entity {a} on {a}.id = t.{}", q(name)));
                 sel.push(format!("{a}.eid"));
             } else {
                 sel.push(format!("t.{}", q(name)));
@@ -202,8 +195,7 @@ impl Store {
         // one probe answers all three: does it exist, is it screened, and
         // what num does it wear — a quarantined entity reads as absent unless
         // `reveal` lifts the screen (the maintain reader above).
-        let screen =
-            if reveal { String::new() } else { self.unscreened("e") };
+        let screen = if reveal { String::new() } else { self.unscreened("e") };
         let num: Option<Option<i64>> = one(
             &self.conn,
             &format!("select e.num from entity e where e.eid = ?1{screen}"),
@@ -328,8 +320,7 @@ impl Store {
         // only the page. Safe only when every pred compiled — else the matcher's
         // leftover work happens after the cut.
         if n.exact {
-            let (ids, mut order) =
-                self.candidate_ids(kind, &n, after, limit, screen);
+            let (ids, mut order) = self.candidate_ids(kind, &n, after, limit, screen);
             if ids.is_empty() {
                 return vec![];
             }
@@ -401,12 +392,10 @@ impl Store {
             order_dir,
             limit_sql,
         );
-        let got: Vec<(i64, String, Option<i64>)> = collect(
-            &self.conn,
-            &sql,
-            rusqlite::params_from_iter(n.params.iter()),
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-        );
+        let got: Vec<(i64, String, Option<i64>)> =
+            collect(&self.conn, &sql, rusqlite::params_from_iter(n.params.iter()), |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            });
         let mut ids = Vec::with_capacity(got.len());
         let mut order = Vec::with_capacity(got.len());
         for (id, eid, num) in got {
@@ -474,10 +463,7 @@ impl Store {
         for (i, (name, t)) in cols.iter().enumerate() {
             if t.is_ref() {
                 let a = format!("__r{i}");
-                joins.push_str(&format!(
-                    " left join entity {a} on {a}.id = t.{}",
-                    q(name)
-                ));
+                joins.push_str(&format!(" left join entity {a} on {a}.id = t.{}", q(name)));
                 sel.push(format!("{a}.eid"));
             } else {
                 sel.push(format!("t.{}", q(name)));
@@ -547,12 +533,7 @@ impl Store {
     // no columns is a presence probe. The caller MUST name every comp its output
     // reads AND the comps kind_of/visible() consult (the id prefix, the
     // quarantine screen), or the projected row is not the row fill() would build.
-    fn fill_cols(
-        &self,
-        set: &str,
-        order: Vec<(String, Option<i64>)>,
-        sels: &[Sel],
-    ) -> Vec<Row> {
+    fn fill_cols(&self, set: &str, order: Vec<(String, Option<i64>)>, sels: &[Sel]) -> Vec<Row> {
         let v = vocab();
         let mut bags: HashMap<String, Map<String, Value>> = HashMap::new();
         for (eid, num) in &order {
@@ -573,9 +554,7 @@ impl Store {
             let cols: Vec<(String, PropType)> = if sel.props.is_empty() {
                 all
             } else {
-                all.into_iter()
-                    .filter(|(n, _)| sel.props.contains(&n.as_str()))
-                    .collect()
+                all.into_iter().filter(|(n, _)| sel.props.contains(&n.as_str())).collect()
             };
             self.load_comp(sel.comp, &cols, set, &mut bags);
         }
@@ -670,10 +649,7 @@ impl Store {
     // The (id-list, order) a set of eids resolves to — shared by rows_of and
     // rows_of_cols. Membership is named by entity.id, not eid: every comp table
     // is keyed on the integer, so an id list lets each per-comp query seek.
-    fn resolve_set(
-        &self,
-        eids: &[String],
-    ) -> (String, Vec<(String, Option<i64>)>) {
+    fn resolve_set(&self, eids: &[String]) -> (String, Vec<(String, Option<i64>)>) {
         if eids.is_empty() {
             return (String::new(), vec![]);
         }
@@ -682,19 +658,16 @@ impl Store {
         // Chunked because the eids are bound, and sqlite caps how many
         // parameters one statement takes.
         for batch in eids.chunks(500) {
-            let holes: Vec<String> =
-                (1..=batch.len()).map(|i| format!("?{i}")).collect();
+            let holes: Vec<String> = (1..=batch.len()).map(|i| format!("?{i}")).collect();
             let sql = format!(
                 "select e.id, e.eid, e.num from entity e where e.eid in ({}) \
                  order by e.num",
                 holes.join(",")
             );
-            let got: Vec<(i64, String, Option<i64>)> = collect(
-                &self.conn,
-                &sql,
-                rusqlite::params_from_iter(batch.iter()),
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-            );
+            let got: Vec<(i64, String, Option<i64>)> =
+                collect(&self.conn, &sql, rusqlite::params_from_iter(batch.iter()), |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+                });
             for (id, eid, num) in got {
                 ids.push(id);
                 order.push((eid, num));
@@ -720,12 +693,7 @@ impl Store {
     // Entities whose `comp.prop` REFERENCE points at one of `targets` —
     // the reverse lookup the inbox arms ride (comment.target=…). Ref
     // columns store integer ids, so the probe joins through entity twice.
-    pub fn eids_where_ref(
-        &self,
-        comp: &str,
-        prop: &str,
-        targets: &[String],
-    ) -> Vec<String> {
+    pub fn eids_where_ref(&self, comp: &str, prop: &str, targets: &[String]) -> Vec<String> {
         if targets.is_empty() || !self.has_table(comp) {
             return vec![];
         }
@@ -744,12 +712,7 @@ impl Store {
     }
 
     // Entities whose `comp.prop` TEXT column equals one of `values`.
-    pub fn eids_where_text(
-        &self,
-        comp: &str,
-        prop: &str,
-        values: &[String],
-    ) -> Vec<String> {
+    pub fn eids_where_text(&self, comp: &str, prop: &str, values: &[String]) -> Vec<String> {
         if values.is_empty() || !self.has_table(comp) {
             return vec![];
         }
@@ -839,8 +802,7 @@ impl Store {
             return vec![];
         }
         {
-            let Ok(mut put) =
-                self.conn.prepare("insert or ignore into hit (eid) values (?1)")
+            let Ok(mut put) = self.conn.prepare("insert or ignore into hit (eid) values (?1)")
             else {
                 return vec![];
             };
@@ -887,8 +849,7 @@ impl Store {
             return vec![];
         }
         {
-            let Ok(mut put) =
-                self.conn.prepare("insert or ignore into hit (eid) values (?1)")
+            let Ok(mut put) = self.conn.prepare("insert or ignore into hit (eid) values (?1)")
             else {
                 return vec![];
             };
@@ -921,9 +882,7 @@ impl Store {
            )
            select o.eid as eid from __reach join entity o on o.id = __reach.id
             where __reach.depth > 0";
-        collect(&self.conn, sql, rusqlite::params![target, depth, type_], |r| {
-            r.get(0)
-        })
+        collect(&self.conn, sql, rusqlite::params![target, depth, type_], |r| r.get(0))
     }
 
     // Who points AT these entities through a typed {eid} reference column — the
@@ -952,8 +911,7 @@ impl Store {
             return vec![];
         }
         {
-            let Ok(mut put) =
-                self.conn.prepare("insert or ignore into hit (eid) values (?1)")
+            let Ok(mut put) = self.conn.prepare("insert or ignore into hit (eid) values (?1)")
             else {
                 return vec![];
             };
@@ -980,9 +938,7 @@ impl Store {
                     q(&col)
                 );
                 let via = format!("{name}.{col}");
-                for (from, to) in
-                    collect(&self.conn, &sql, [], |r| Ok((r.get(0)?, r.get(1)?)))
-                {
+                for (from, to) in collect(&self.conn, &sql, [], |r| Ok((r.get(0)?, r.get(1)?))) {
                     out.push((from, via.clone(), to));
                 }
             }
@@ -1141,18 +1097,13 @@ pub fn resolve(conn: &Connection, id: &str) -> Option<String> {
     }
     let low = id.to_lowercase();
     if is_uuid(&low) {
-        if let Some(hit) = one(
-            conn,
-            "select eid from entity where eid = ?1",
-            [&low],
-            |r| r.get::<_, String>(0),
-        ) {
+        if let Some(hit) =
+            one(conn, "select eid from entity where eid = ?1", [&low], |r| r.get::<_, String>(0))
+        {
             return Some(hit);
         }
     }
-    if low.len() >= 6 && low.len() <= 8
-        && low.chars().all(|c| c.is_ascii_hexdigit())
-    {
+    if low.len() >= 6 && low.len() <= 8 && low.chars().all(|c| c.is_ascii_hexdigit()) {
         let hi = format!("{low}\u{ffff}");
         let hits: Vec<String> = collect(
             conn,
@@ -1164,13 +1115,11 @@ pub fn resolve(conn: &Connection, id: &str) -> Option<String> {
             return Some(hits[0].clone());
         }
     }
-    let has_alias = one(
-        conn,
-        "select 1 from sqlite_master where type = 'table' and name = 'alias'",
-        [],
-        |r| r.get::<_, i64>(0),
-    )
-    .is_some();
+    let has_alias =
+        one(conn, "select 1 from sqlite_master where type = 'table' and name = 'alias'", [], |r| {
+            r.get::<_, i64>(0)
+        })
+        .is_some();
     if has_alias {
         if let Some(hit) = one(
             conn,

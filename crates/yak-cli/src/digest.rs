@@ -135,7 +135,11 @@ fn born_at(r: &Row) -> String {
 }
 fn edited_at(r: &Row) -> String {
     let u = cs(r, "updated", "at");
-    if u.is_empty() { born_at(r) } else { u }
+    if u.is_empty() {
+        born_at(r)
+    } else {
+        u
+    }
 }
 
 fn title_of(r: &Row) -> String {
@@ -160,11 +164,7 @@ fn rows_wearing(store: &Store, comp: &str, sels: &[Sel]) -> Vec<Row> {
         .query_map([], |r| r.get(0))
         .map(|it| it.filter_map(|x| x.ok()).collect())
         .unwrap_or_default();
-    store
-        .rows_of_cols(&eids, sels)
-        .into_iter()
-        .filter(yak_kernel::store::visible)
-        .collect()
+    store.rows_of_cols(&eids, sels).into_iter().filter(yak_kernel::store::visible).collect()
 }
 
 // memories with NO scope — the fleet's shared principles
@@ -179,18 +179,12 @@ fn fleet_memories(store: &Store) -> Vec<Row> {
         .query_map([], |r| r.get(0))
         .map(|it| it.filter_map(|x| x.ok()).collect())
         .unwrap_or_default();
-    store
-        .rows_of_cols(&eids, MEMORY_SELS)
-        .into_iter()
-        .filter(yak_kernel::store::visible)
-        .collect()
+    store.rows_of_cols(&eids, MEMORY_SELS).into_iter().filter(yak_kernel::store::visible).collect()
 }
 
 // query.ts hot(): recency curve over the recall stamps
 fn hot(r: &Row, now: i64) -> f64 {
-    let mut count = comp(r, "recall", "count")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.0);
+    let mut count = comp(r, "recall", "count").and_then(|v| v.as_f64()).unwrap_or(0.0);
     let mut last = yak_kernel::time::parse_stamp(&cs(r, "recall", "last_at"));
     if count == 0.0 || last.is_none() {
         count = 1.0;
@@ -201,15 +195,9 @@ fn hot(r: &Row, now: i64) -> f64 {
         }
     }
     let last = last.unwrap();
-    let first = yak_kernel::time::parse_stamp(&cs(r, "recall", "first_at"))
-        .unwrap_or(last);
-    let mean = if count > 1.0 {
-        ((last - first).max(0)) as f64 / (count - 1.0)
-    } else {
-        0.0
-    };
-    let stability =
-        DAY as f64 * count * (1.0 + mean / (7.0 * DAY as f64));
+    let first = yak_kernel::time::parse_stamp(&cs(r, "recall", "first_at")).unwrap_or(last);
+    let mean = if count > 1.0 { ((last - first).max(0)) as f64 / (count - 1.0) } else { 0.0 };
+    let stability = DAY as f64 * count * (1.0 + mean / (7.0 * DAY as f64));
     (-((now - last).max(0) as f64) / stability).exp()
 }
 
@@ -218,23 +206,14 @@ fn verdict_name(v: &str) -> String {
 }
 
 // taskBlock: the task line plus its unresolved gates
-fn task_block(
-    store: &Store,
-    rows: &Rows,
-    r: &Row,
-    lines: &mut Vec<String>,
-) {
+fn task_block(store: &Store, rows: &Rows, r: &Row, lines: &mut Vec<String>) {
     let authoring = authoring_line(rows, r);
     let head = format!(
         "- {} {} — {}{}",
         id_of(r),
         if status_of(r).is_empty() { r.kind.clone() } else { status_of(r) },
         title_of(r),
-        if authoring.is_empty() {
-            String::new()
-        } else {
-            format!(" · {authoring}")
-        }
+        if authoring.is_empty() { String::new() } else { format!(" · {authoring}") }
     );
     lines.push(head);
     for d in store.deps_of(&r.eid) {
@@ -266,8 +245,7 @@ fn task_block(
 fn warm_faces(store: &Store, rows: &Rows, subjects: &[&Row]) {
     // wave one: the refs the subjects carry, plus the children of their
     // dependency edges (the same edges task_block renders).
-    let mut frontier: Vec<String> =
-        subjects.iter().flat_map(|r| face_refs(r)).collect();
+    let mut frontier: Vec<String> = subjects.iter().flat_map(|r| face_refs(r)).collect();
     for r in subjects {
         for d in store.deps_of(&r.eid) {
             if d.parent == r.eid && d.type_ != "reads" {
@@ -409,32 +387,24 @@ pub fn context_digest(
     // the previously-thread's actor falls back to the SCOPE (actor ==
     // project since T-19461), so a bare preview still shows the thread
     let sessions: Vec<Row> = match &actor {
-        Some(a) => store.rows_of_cols(
-            &store.eids_where_ref("session", "actor", &[a.clone()]),
-            SESSION_SELS,
-        ),
+        Some(a) => store
+            .rows_of_cols(&store.eids_where_ref("session", "actor", &[a.clone()]), SESSION_SELS),
         None => vec![],
     };
     // my claims: entities wearing claim.session = my session entity
     let mut mine: Vec<Row> = match &sess {
-        Some(sr) => store.rows_of_cols(
-            &store.eids_where_ref("claim", "session", &[sr.eid.clone()]),
-            TASK_SELS,
-        ),
+        Some(sr) => store
+            .rows_of_cols(&store.eids_where_ref("claim", "session", &[sr.eid.clone()]), TASK_SELS),
         None => vec![],
     };
-    mine.sort_by(|a, b| {
-        cs(b, "claim", "claimed_at").cmp(&cs(a, "claim", "claimed_at"))
-    });
+    mine.sort_by(|a, b| cs(b, "claim", "claimed_at").cmp(&cs(a, "claim", "claimed_at")));
     let mut lines: Vec<String> = vec![format!(
         "# {}{}",
         match session {
             Some(sid) => format!("tasks · session {sid}"),
             None => "tasks · a preview".into(),
         },
-        here.as_ref()
-            .map(|h| format!(" · {} {}", id_of(h), title_of(h)))
-            .unwrap_or_default()
+        here.as_ref().map(|h| format!(" · {} {}", id_of(h), title_of(h))).unwrap_or_default()
     )];
     if !mine.is_empty() {
         lines.push("claimed by you:".into());
@@ -471,18 +441,13 @@ pub fn context_digest(
     }
     // the unread count, preview only — the inbox's own predicate
     if session.is_none() {
-        let who: Reader =
-            yak_kernel::reader::reader_for(store, None, &cwd, scope.as_deref());
-        let unread = yak_kernel::inbox::inbox_rows(
-            store,
-            &who,
-            &[],
-            yak_kernel::inbox::Mode::Inbox,
-        )
-        .into_iter()
-        .filter(|r| yak_kernel::reader::inbox_item(&who, r))
-        .filter(yak_kernel::reader::is_unread)
-        .count();
+        let who: Reader = yak_kernel::reader::reader_for(store, None, &cwd, scope.as_deref());
+        let unread =
+            yak_kernel::inbox::inbox_rows(store, &who, &[], yak_kernel::inbox::Mode::Inbox)
+                .into_iter()
+                .filter(|r| yak_kernel::reader::inbox_item(&who, r))
+                .filter(yak_kernel::reader::is_unread)
+                .count();
         if unread > 0 {
             lines.push(format!("## inbox — {unread} unread (task inbox)"));
         }
@@ -521,10 +486,7 @@ pub fn context_digest(
                 lines.push(format!("> {l}"));
             }
             if told.len() > 18 {
-                lines.push(format!(
-                    "> … → `task show {}` for the rest",
-                    id_of(prev)
-                ));
+                lines.push(format!("> … → `task show {}` for the rest", id_of(prev)));
             }
         }
     }
@@ -555,10 +517,7 @@ fn resumptions(
     lines: &mut Vec<String>,
 ) {
     // the actor is the SESSION's — a bare preview holds no stack
-    let Some(actor) = sess
-        .as_ref()
-        .map(|r| cs(r, "session", "actor"))
-        .filter(|a| !a.is_empty())
+    let Some(actor) = sess.as_ref().map(|r| cs(r, "session", "actor")).filter(|a| !a.is_empty())
     else {
         return;
     };
@@ -566,10 +525,9 @@ fn resumptions(
         return;
     }
     let mine: std::collections::HashSet<String> = match sess {
-        Some(sr) => store
-            .eids_where_ref("claim", "session", &[sr.eid.clone()])
-            .into_iter()
-            .collect(),
+        Some(sr) => {
+            store.eids_where_ref("claim", "session", &[sr.eid.clone()]).into_iter().collect()
+        }
         None => Default::default(),
     };
     let by_eid: std::collections::HashMap<&str, &Row> =
@@ -580,7 +538,11 @@ fn resumptions(
             return x;
         }
         let c = cs(r, "claim", "claimed_at");
-        if !c.is_empty() { c } else { edited_at(r) }
+        if !c.is_empty() {
+            c
+        } else {
+            edited_at(r)
+        }
     };
     let mut hits: Vec<&Row> = tasks
         .iter()
@@ -601,13 +563,8 @@ fn resumptions(
         })
         .collect();
     hits.sort_by(|a, b| {
-        let rank = |r: &Row| {
-            comp(r, "resume", "rank").and_then(|v| v.as_f64()).unwrap_or(0.0)
-        };
-        rank(b)
-            .partial_cmp(&rank(a))
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then(at(b).cmp(&at(a)))
+        let rank = |r: &Row| comp(r, "resume", "rank").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        rank(b).partial_cmp(&rank(a)).unwrap_or(std::cmp::Ordering::Equal).then(at(b).cmp(&at(a)))
     });
     let hits: Vec<&&Row> = hits.iter().take((budget - 1) as usize).collect();
     if hits.is_empty() {
@@ -616,32 +573,16 @@ fn resumptions(
     lines.push("## resume — pop your stack".into());
     for r in hits {
         let holder = by_eid.get(cs(r, "claim", "session").as_str());
-        let held = holder
-            .map(|h| format!(" · ⚑ {}", id_of(h)))
-            .unwrap_or_default();
-        lines.push(format!(
-            "- {} {}{} — {}",
-            id_of(r),
-            status_of(r),
-            held,
-            snip(&title_of(r))
-        ));
+        let held = holder.map(|h| format!(" · ⚑ {}", id_of(h))).unwrap_or_default();
+        lines.push(format!("- {} {}{} — {}", id_of(r), status_of(r), held, snip(&title_of(r))));
     }
 }
 
-fn on_mine(
-    store: &Store,
-    rows: &Rows,
-    sess: &Row,
-    now: i64,
-    budget: i64,
-    lines: &mut Vec<String>,
-) {
+fn on_mine(store: &Store, rows: &Rows, sess: &Row, now: i64, budget: i64, lines: &mut Vec<String>) {
     if budget < 1 {
         return;
     }
-    let mine: Vec<String> =
-        store.eids_where_ref("claim", "session", &[sess.eid.clone()]);
+    let mine: Vec<String> = store.eids_where_ref("claim", "session", &[sess.eid.clone()]);
     if mine.is_empty() {
         return;
     }
@@ -683,19 +624,10 @@ fn on_mine(
                 .filter(|x| !x.is_empty())
                 .unwrap_or_else(|| "someone".into())
         };
-        let body: String = cs(r, "doc", "body")
-            .lines()
-            .next()
-            .unwrap_or("")
-            .chars()
-            .take(96)
-            .collect();
+        let body: String =
+            cs(r, "doc", "body").lines().next().unwrap_or("").chars().take(96).collect();
         let verdict = verdict_name(&cs(r, "review", "verdict"));
-        let words = if verdict.trim().is_empty() {
-            body
-        } else {
-            format!("[{verdict}] {body}")
-        };
+        let words = if verdict.trim().is_empty() { body } else { format!("[{verdict}] {body}") };
         lines.push(format!(
             "- {} 💬 {by}: {words}",
             target_row.map(|t| id_of(&t)).unwrap_or(target)
@@ -703,33 +635,17 @@ fn on_mine(
     }
 }
 
-fn pulse(
-    tasks: &[Row],
-    now: i64,
-    budget: i64,
-    scope: &str,
-    scoped: bool,
-    lines: &mut Vec<String>,
-) {
+fn pulse(tasks: &[Row], now: i64, budget: i64, scope: &str, scoped: bool, lines: &mut Vec<String>) {
     if budget < 2 {
         return;
     }
     let cutoff = now - 7 * DAY;
-    let fresh = |r: &Row| {
-        yak_kernel::time::parse_stamp(&edited_at(r))
-            .map(|t| t > cutoff)
-            .unwrap_or(false)
-    };
+    let fresh =
+        |r: &Row| yak_kernel::time::parse_stamp(&edited_at(r)).map(|t| t > cutoff).unwrap_or(false);
     let mut mine: Vec<&Row> = if scoped {
-        tasks
-            .iter()
-            .filter(|r| cs(r, "task", "project") == scope && fresh(r))
-            .collect()
+        tasks.iter().filter(|r| cs(r, "task", "project") == scope && fresh(r)).collect()
     } else {
-        tasks
-            .iter()
-            .filter(|r| !settled(&status_of(r)) && fresh(r))
-            .collect()
+        tasks.iter().filter(|r| !settled(&status_of(r)) && fresh(r)).collect()
     };
     mine.sort_by(|a, b| edited_at(b).cmp(&edited_at(a)));
     let cap = ((budget - 1) as usize).min(if scoped { 6 } else { 3 });
@@ -737,25 +653,13 @@ fn pulse(
     if hits.is_empty() {
         return;
     }
-    lines.push(
-        if scoped { "## lately" } else { "## fleet — nowhere placed" }.into(),
-    );
+    lines.push(if scoped { "## lately" } else { "## fleet — nowhere placed" }.into());
     for r in hits {
-        lines.push(format!(
-            "- {} {} — {}",
-            id_of(r),
-            status_of(r),
-            snip(&title_of(r))
-        ));
+        lines.push(format!("- {} {} — {}", id_of(r), status_of(r), snip(&title_of(r))));
     }
 }
 
-fn decisions(
-    store: &Store,
-    budget: i64,
-    scope: &str,
-    lines: &mut Vec<String>,
-) {
+fn decisions(store: &Store, budget: i64, scope: &str, lines: &mut Vec<String>) {
     if budget < 2 {
         return;
     }
@@ -764,8 +668,7 @@ fn decisions(
         .filter(|r| belongs(r, scope))
         .collect();
     hits.sort_by(|a, b| cs(b, "decided", "at").cmp(&cs(a, "decided", "at")));
-    let hits: Vec<Row> =
-        hits.into_iter().take((budget - 1) as usize).collect();
+    let hits: Vec<Row> = hits.into_iter().take((budget - 1) as usize).collect();
     if hits.is_empty() {
         return;
     }
@@ -776,12 +679,7 @@ fn decisions(
     }
 }
 
-fn fleet_memory(
-    store: &Store,
-    now: i64,
-    budget: i64,
-    lines: &mut Vec<String>,
-) {
+fn fleet_memory(store: &Store, now: i64, budget: i64, lines: &mut Vec<String>) {
     if budget < 3 {
         return;
     }
@@ -792,11 +690,8 @@ fn fleet_memory(
             (r, h)
         })
         .collect();
-    mems.sort_by(|a, b| {
-        b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-    });
-    let mems: Vec<(Row, f64)> =
-        mems.into_iter().take((budget - 1) as usize).collect();
+    mems.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    let mems: Vec<(Row, f64)> = mems.into_iter().take((budget - 1) as usize).collect();
     if mems.is_empty() {
         return;
     }
@@ -806,9 +701,7 @@ fn fleet_memory(
     );
     for (r, score) in &mems {
         let head = if r.comps.contains_key("feedback") { "feedback: " } else { "" };
-        let n = comp(r, "recall", "count")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0);
+        let n = comp(r, "recall", "count").and_then(|v| v.as_i64()).unwrap_or(0);
         let seen = {
             let c = cs(r, "memory", "last_confirmed_at");
             if c.is_empty() {

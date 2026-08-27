@@ -28,18 +28,12 @@ pub enum Prop {
     Query,
     // A closed set named once in the plugin's enums (aliases are input
     // spellings only — they never ride into the value list).
-    EnumNamed {
-        name: &'static str,
-        aliases: &'static [(&'static str, &'static str)],
-    },
+    EnumNamed { name: &'static str, aliases: &'static [(&'static str, &'static str)] },
     // A closed set spelled inline, for one-off two/three-value columns.
     EnumInline(&'static [&'static str]),
     // An association; `target` names the component the referent carries,
     // `death` what the reference means once that referent dies.
-    Eid {
-        target: &'static str,
-        death: &'static str,
-    },
+    Eid { target: &'static str, death: &'static str },
     // Open text with suggestions from a named well the browser registers.
     Well(&'static str),
 }
@@ -255,10 +249,7 @@ pub fn manifests() -> Vec<(String, Value)> {
             if !es.is_empty() {
                 let mut eo = Map::new();
                 for e in es {
-                    eo.insert(
-                        e.name.into(),
-                        json!({ "rank": e.rank, "values": e.values }),
-                    );
+                    eo.insert(e.name.into(), json!({ "rank": e.rank, "values": e.values }));
                 }
                 m.insert("enums".into(), Value::Object(eo));
             }

@@ -4,11 +4,11 @@
 // hits to the tail. The PoC accepts TEXT terms only — a dot-filter mixed
 // into the line is refused, not half-applied.
 
+pub use crate::model::Hit;
 use crate::profiling;
 use crate::query;
 use crate::store::Store;
 use crate::vocab::vocab;
-pub use crate::model::Hit;
 use rusqlite::OptionalExtension;
 
 // The search line's tokens, double-quote aware: a quoted phrase stays one
@@ -65,9 +65,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
     }
     // An address is identity, not prose: one lone term that resolves as an
     // id floats its entity to the head (db.ts `addressed`).
-    let addressed = (words.len() == 1 && !screened)
-        .then(|| store.resolve_id(&words[0]))
-        .flatten();
+    let addressed = (words.len() == 1 && !screened).then(|| store.resolve_id(&words[0])).flatten();
     let quarantine = "
         and not exists (select 1 from quarantined qq where qq.entity = e.id)
         and not exists (
@@ -76,9 +74,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
         )";
     // With filters the cap moves AFTER the screen, so hidden hits cannot
     // displace visible ones; without them the SQL cap stands as before.
-    let base: Vec<(String, String, String, Option<i64>)> = if !match_q
-        .is_empty()
-    {
+    let base: Vec<(String, String, String, Option<i64>)> = if !match_q.is_empty() {
         let sql = format!(
             "
       select e.eid, d.title,
@@ -97,12 +93,10 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
         );
         let t = profiling::sql(&sql);
         let mut st = store.conn.prepare(&sql).map_err(|e| e.to_string())?;
-        let map = |r: &rusqlite::Row<'_>| -> rusqlite::Result<(
-            String,
-            String,
-            String,
-            Option<i64>,
-        )> { Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)) };
+        let map =
+            |r: &rusqlite::Row<'_>| -> rusqlite::Result<(String, String, String, Option<i64>)> {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            };
         let it = if screened {
             st.query_map(rusqlite::params![match_q], map)
         } else {
@@ -127,9 +121,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
         let t = profiling::sql(&sql);
         let mut st = store.conn.prepare(&sql).map_err(|e| e.to_string())?;
         let got: Vec<(String, String, String, Option<i64>)> = st
-            .query_map([], |r| {
-                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
-            })
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
             .map_err(|e| e.to_string())?
             .filter_map(|x| x.ok())
             .collect();
@@ -171,9 +163,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
             match head.optional().map_err(|e| e.to_string())? {
                 Some(h) => {
                     let mut out = vec![h];
-                    out.extend(
-                        base.into_iter().filter(|(eid, _, _, _)| eid != direct),
-                    );
+                    out.extend(base.into_iter().filter(|(eid, _, _, _)| eid != direct));
                     out.into_iter().take(limit).collect()
                 }
                 None => base,
@@ -210,20 +200,14 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
                            left join doc td on td.entity = c.target \
                            where ce.eid = ?1";
             let t = profiling::sql(aim_sql);
-            let aim: Option<(String, Option<String>, Option<i64>, String)> =
-                store
-                    .conn
-                    .query_row(aim_sql, [&eid], |r| {
-                        Ok((
-                            r.get(0)?,
-                            r.get(1)?,
-                            r.get(2)?,
-                            r.get::<_, String>(3)?,
-                        ))
-                    })
-                    .optional()
-                    .ok()
-                    .flatten();
+            let aim: Option<(String, Option<String>, Option<i64>, String)> = store
+                .conn
+                .query_row(aim_sql, [&eid], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get::<_, String>(3)?))
+                })
+                .optional()
+                .ok()
+                .flatten();
             t.done(aim.is_some() as usize);
             let sunk_sql = "select 1 from project p \
                             join archived a on a.entity = p.entity \
@@ -243,10 +227,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
             t.done(retired as usize);
             let (open, open_id, title) = match &aim {
                 Some((teid, ttitle, tnum, _)) => {
-                    let tkind = store
-                        .row(teid)
-                        .map(|r| r.kind)
-                        .unwrap_or_else(|| "entity".into());
+                    let tkind = store.row(teid).map(|r| r.kind).unwrap_or_else(|| "entity".into());
                     (
                         teid.clone(),
                         Some(v.id_of(&tkind, teid, *tnum)),

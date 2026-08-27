@@ -26,8 +26,7 @@ pub struct JournalRow {
 }
 
 pub fn cursor_of(conn: &Connection) -> i64 {
-    conn.query_row("select coalesce(max(rowid), 0) from journal", [], |r| r.get(0))
-        .unwrap_or(0)
+    conn.query_row("select coalesce(max(rowid), 0) from journal", [], |r| r.get(0)).unwrap_or(0)
 }
 
 // PRAGMA data_version: bumped when ANOTHER connection commits, never by our
@@ -128,33 +127,19 @@ pub fn row_changes(r: &JournalRow) -> Vec<Change> {
         m.insert("eid".into(), Value::from(eid));
         m.insert("at".into(), Value::from(r.ts.as_str()));
         if !said {
-            m.insert(
-                "by".into(),
-                r.actor.as_deref().map(Value::from).unwrap_or(Value::Null),
-            );
+            m.insert("by".into(), r.actor.as_deref().map(Value::from).unwrap_or(Value::Null));
         }
-        m.insert(
-            "via".into(),
-            r.via.as_deref().map(Value::from).unwrap_or(Value::Null),
-        );
+        m.insert("via".into(), r.via.as_deref().map(Value::from).unwrap_or(Value::Null));
         m
     };
     for eid in &born {
-        changes.push(Change::new(
-            eid,
-            "created",
-            Some(envelope(eid, said_created.contains(eid))),
-        ));
+        changes.push(Change::new(eid, "created", Some(envelope(eid, said_created.contains(eid)))));
     }
     for eid in &touched {
         if born.contains(eid) || dead.contains(eid) {
             continue;
         }
-        changes.push(Change::new(
-            eid,
-            "updated",
-            Some(envelope(eid, said_updated.contains(eid))),
-        ));
+        changes.push(Change::new(eid, "updated", Some(envelope(eid, said_updated.contains(eid)))));
     }
     changes
 }

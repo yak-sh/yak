@@ -60,11 +60,8 @@ fn fixture(dir: &Path, sessions: usize) -> String {
     for i in 0..sessions {
         let id = 100 + i as i64;
         let eid = format!("aaaaaaaa-0000-0000-0000-{:012}", id);
-        conn.execute(
-            "insert into entity (id, eid, num) values (?1, ?2, ?1)",
-            params![id, eid],
-        )
-        .unwrap();
+        conn.execute("insert into entity (id, eid, num) values (?1, ?2, ?1)", params![id, eid])
+            .unwrap();
         // session.actor = the project (id 1); a brief so `## previously` has
         // something to render; a created.at so it sorts newest-first
         conn.execute(
@@ -94,18 +91,32 @@ fn fixture(dir: &Path, sessions: usize) -> String {
 // future digest section starts rendering one of these, this canary fires —
 // move the name out of the list and into the section's sel list.
 const UNRENDERED_COMPS: &[&str] = &[
-    "notified", "opened", "archived", "delivered", "error", "exception",
-    "blocked", "content", "message", "instruction", "bash", "tool", "output",
-    "imported", "opaque", "call", "stderr", "chat", "conflict", "redaction",
+    "notified",
+    "opened",
+    "archived",
+    "delivered",
+    "error",
+    "exception",
+    "blocked",
+    "content",
+    "message",
+    "instruction",
+    "bash",
+    "tool",
+    "output",
+    "imported",
+    "opaque",
+    "call",
+    "stderr",
+    "chat",
+    "conflict",
+    "redaction",
 ];
 
 fn add_empty_comp_tables(db: &str) {
     let conn = Connection::open(db).unwrap();
     for c in UNRENDERED_COMPS {
-        conn.execute_batch(&format!(
-            "create table \"{c}\" (entity integer primary key);"
-        ))
-        .unwrap();
+        conn.execute_batch(&format!("create table \"{c}\" (entity integer primary key);")).unwrap();
     }
 }
 
@@ -135,8 +146,7 @@ fn sql_count(stderr: &[u8]) -> usize {
 
 #[test]
 fn context_renders_previously_from_the_newest_brief() {
-    let dir = std::env::temp_dir()
-        .join(format!("yak-ctx-parity-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("yak-ctx-parity-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let db = fixture(&dir, 3);
     // resolve the project by num (1) → the project branch of the digest
@@ -145,21 +155,14 @@ fn context_renders_previously_from_the_newest_brief() {
 
     assert_eq!(out.status.code(), Some(0));
     let text = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        text.contains("## previously"),
-        "previously block missing:\n{text}"
-    );
+    assert!(text.contains("## previously"), "previously block missing:\n{text}");
     // the newest brief wins — session 102 has the latest created.at
-    assert!(
-        text.contains("brief from session 102"),
-        "newest brief not rendered:\n{text}"
-    );
+    assert!(text.contains("brief from session 102"), "newest brief not rendered:\n{text}");
 }
 
 #[test]
 fn context_reads_its_sessions_without_an_n_plus_1() {
-    let dir = std::env::temp_dir()
-        .join(format!("yak-ctx-n1-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("yak-ctx-n1-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let (few, many) = (4usize, 40usize);
     let small = run(&fixture(&dir.join("a"), few), &["context", "1"], true);
@@ -182,8 +185,7 @@ fn context_reads_its_sessions_without_an_n_plus_1() {
 
 #[test]
 fn context_read_does_not_scale_with_the_comp_table_surface() {
-    let dir = std::env::temp_dir()
-        .join(format!("yak-ctx-surface-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("yak-ctx-surface-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     // Same graph, twice: once bare, once with a slab of extra comp tables the
     // digest never renders. A projected read ignores them; the old full fill

@@ -31,8 +31,7 @@ pub fn root_changes(store: &Store, changes: Vec<Change>) -> Vec<Change> {
         }
     }
     if has_entry {
-        let mut candidates: Vec<String> =
-            changes.iter().map(|c| c.eid.clone()).collect();
+        let mut candidates: Vec<String> = changes.iter().map(|c| c.eid.clone()).collect();
         candidates.sort();
         candidates.dedup();
         for eid in candidates {

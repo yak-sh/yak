@@ -63,9 +63,7 @@ impl GraphCache {
                 continue;
             }
             let Some(patch) = c.comp.as_object() else { continue };
-            let slot = bag
-                .entry(c.name.clone())
-                .or_insert_with(|| Value::Object(Map::new()));
+            let slot = bag.entry(c.name.clone()).or_insert_with(|| Value::Object(Map::new()));
             let Some(m) = slot.as_object_mut() else { continue };
             for (k, v) in patch {
                 if v.is_null() {
@@ -86,10 +84,7 @@ impl GraphCache {
 
     fn to_row(&self, eid: &str, comps: &Map<String, Value>) -> Row {
         let v = vocab();
-        let num = comps
-            .get("entity")
-            .and_then(|e| e.get("num"))
-            .and_then(|n| n.as_i64());
+        let num = comps.get("entity").and_then(|e| e.get("num")).and_then(|n| n.as_i64());
         let kind = v.kind_of(&|k| comps.contains_key(k));
         Row { eid: eid.into(), num, kind, comps: comps.clone() }
     }
@@ -110,9 +105,7 @@ impl GraphCache {
         let mut out: Vec<Row> = self
             .rows
             .iter()
-            .filter(|(_, c)| {
-                c.contains_key(kind) && crate::query::matches_comps(c, preds)
-            })
+            .filter(|(_, c)| c.contains_key(kind) && crate::query::matches_comps(c, preds))
             .map(|(eid, c)| self.to_row(eid, c))
             .collect();
         out.sort_by_key(|r| r.num.unwrap_or(i64::MAX));
@@ -129,9 +122,7 @@ impl Source for GraphCache {
             return self.rows.contains_key(&low).then_some(low);
         }
         let num: i64 = match id.split_once('-') {
-            Some((pre, n)) if !pre.is_empty()
-                && pre.chars().all(|c| c.is_ascii_alphabetic()) =>
-            {
+            Some((pre, n)) if !pre.is_empty() && pre.chars().all(|c| c.is_ascii_alphabetic()) => {
                 n.parse().ok()?
             }
             _ => id.parse().ok()?,
@@ -139,10 +130,7 @@ impl Source for GraphCache {
         self.rows
             .iter()
             .find(|(_, c)| {
-                c.get("entity")
-                    .and_then(|e| e.get("num"))
-                    .and_then(|n| n.as_i64())
-                    == Some(num)
+                c.get("entity").and_then(|e| e.get("num")).and_then(|n| n.as_i64()) == Some(num)
             })
             .map(|(eid, _)| eid.clone())
     }
@@ -180,10 +168,7 @@ mod tests {
     #[test]
     fn comp_and_entity_deletes() {
         let mut g = GraphCache::new();
-        g.ingest(&[
-            ch(A, "doc", json!({"title": "x"})),
-            ch(A, "task", json!({"status": "open"})),
-        ]);
+        g.ingest(&[ch(A, "doc", json!({"title": "x"})), ch(A, "task", json!({"status": "open"}))]);
         g.ingest(&[ch(A, "task", Value::Null)]);
         assert!(!g.row(A).unwrap().comps.contains_key("task"));
         g.ingest(&[ch(A, "entity", Value::Null)]);
@@ -196,10 +181,7 @@ mod tests {
     #[test]
     fn resolves_ids_it_holds() {
         let mut g = GraphCache::new();
-        g.ingest(&[
-            ch(A, "entity", json!({"num": 19})),
-            ch(A, "project", json!({})),
-        ]);
+        g.ingest(&[ch(A, "entity", json!({"num": 19})), ch(A, "project", json!({}))]);
         assert_eq!(g.resolve_id("P-19").as_deref(), Some(A));
         assert_eq!(g.resolve_id("19").as_deref(), Some(A));
         assert_eq!(g.resolve_id(A).as_deref(), Some(A));

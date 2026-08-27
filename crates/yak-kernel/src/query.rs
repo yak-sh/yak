@@ -82,8 +82,7 @@ pub fn dot_token(a: &str) -> Result<Dot, String> {
     let path = &body[..at];
     let value = body[at + op.len()..].to_string();
     if path == "kind" {
-        let k =
-            kind_word(&value).ok_or_else(|| format!("no kind '{value}'"))?;
+        let k = kind_word(&value).ok_or_else(|| format!("no kind '{value}'"))?;
         return Ok(Dot::Kind(k));
     }
     let (comp, prop) = route(path)?;
@@ -93,11 +92,8 @@ pub fn dot_token(a: &str) -> Result<Dot, String> {
     // news (a 400), not a filter that silently matches nothing. `~=` (contains)
     // is literal and the empty value is the absence test, so both skip — TS's
     // own guard (`type && op != '~' && value != ''`).
-    let value = if op != "~=" && !value.is_empty() {
-        typed_value(&comp, &prop, &value)?
-    } else {
-        value
-    };
+    let value =
+        if op != "~=" && !value.is_empty() { typed_value(&comp, &prop, &value)? } else { value };
     Ok(Dot::P(Pred { comp, prop, op, value, ..Default::default() }))
 }
 
@@ -114,19 +110,9 @@ pub fn dot_token(a: &str) -> Result<Dot, String> {
 // in any read corpus.
 fn typed_value(comp: &str, prop: &str, value: &str) -> Result<String, String> {
     let v = vocab();
-    let t = if comp.is_empty() {
-        v.bare_type(prop)
-    } else {
-        v.prop_type(comp, prop)
-    };
+    let t = if comp.is_empty() { v.bare_type(prop) } else { v.prop_type(comp, prop) };
     let Some(t) = t else { return Ok(value.into()) };
-    if !matches!(
-        t,
-        PropType::Enum(_)
-            | PropType::Number
-            | PropType::Priority
-            | PropType::Bool
-    ) {
+    if !matches!(t, PropType::Enum(_) | PropType::Number | PropType::Priority | PropType::Bool) {
         return Ok(value.into());
     }
     let name = v.prop_name(comp, prop);
@@ -170,12 +156,10 @@ fn typed_atom(t: &PropType, name: &str, v: &str) -> Result<String, String> {
             .iter()
             .find(|x| x.eq_ignore_ascii_case(v))
             .cloned()
-            .ok_or_else(|| {
-                format!("{name} is one of {} — got '{v}'", variants.join(", "))
-            }),
-        PropType::Number => is_decimal(v).then(|| v.to_string()).ok_or_else(|| {
-            format!("{name} is a finite decimal number (1, -2.5, 6e3) — got '{v}'")
-        }),
+            .ok_or_else(|| format!("{name} is one of {} — got '{v}'", variants.join(", "))),
+        PropType::Number => is_decimal(v)
+            .then(|| v.to_string())
+            .ok_or_else(|| format!("{name} is a finite decimal number (1, -2.5, 6e3) — got '{v}'")),
         PropType::Priority => {
             let bare = v.trim().strip_prefix(['p', 'P']).unwrap_or(v.trim());
             is_decimal(bare).then(|| v.to_string()).ok_or_else(|| {
@@ -241,9 +225,7 @@ const EDGE_DOOR: &str = "a dependency is an EDGE, not a prop: link one with \
 // The names agents reach for that are EDGES (query.ts edgeish).
 fn edgeish(prop: &str) -> bool {
     let p = prop.to_lowercase();
-    ["block", "depend", "require", "parent", "child", "subtask"]
-        .iter()
-        .any(|w| p.contains(w))
+    ["block", "depend", "require", "parent", "child", "subtask"].iter().any(|w| p.contains(w))
 }
 
 // Spawn's legacy session aliases are one concept during the rolling window.
@@ -251,9 +233,7 @@ fn session_twin(owners: &[String]) -> bool {
     let v = vocab();
     owners.iter().any(|n| n == "session")
         && owners.iter().any(|n| v.session_facets.contains(n))
-        && owners
-            .iter()
-            .all(|n| n == "session" || v.session_facets.contains(n))
+        && owners.iter().all(|n| n == "session" || v.session_facets.contains(n))
 }
 
 // Same-named references that already read as one bare filter (query.ts
@@ -274,26 +254,19 @@ fn route(path: &str) -> Result<(String, String), String> {
     let v = vocab();
     if let Some((comp, prop)) = path.split_once('.') {
         if prop.contains('.') {
-            return Err(format!(
-                "path filters ('.{path}') are not ported in the Rust PoC"
-            ));
+            return Err(format!("path filters ('.{path}') are not ported in the Rust PoC"));
         }
         return Ok((comp.into(), prop.into()));
     }
     // Session-log columns are an explicitly addressed lazy partition — bare
     // props never route there.
-    let mut own: Vec<String> = v
-        .owners(path)
-        .into_iter()
-        .filter(|n| !v.session_comps.contains(n))
-        .collect();
+    let mut own: Vec<String> =
+        v.owners(path).into_iter().filter(|n| !v.session_comps.contains(n)).collect();
     // Bare routing keeps the writable spelling when a stamped lifecycle
     // field shares the name (session.status vs task.status).
     let writable: Vec<String> = own
         .iter()
-        .filter(|n| {
-            v.comp(n).map(|c| c.iter().any(|(p, _)| p == path)).unwrap_or(false)
-        })
+        .filter(|n| v.comp(n).map(|c| c.iter().any(|(p, _)| p == path)).unwrap_or(false))
         .cloned()
         .collect();
     if !writable.is_empty() {
@@ -311,11 +284,7 @@ fn route(path: &str) -> Result<(String, String), String> {
         return Ok(("".into(), path.into()));
     }
     if own.len() > 1 {
-        return Err(format!(
-            ".{path} is ambiguous ({}) — use .{}.{path}",
-            own.join(", "),
-            own[0]
-        ));
+        return Err(format!(".{path} is ambiguous ({}) — use .{}.{path}", own.join(", "), own[0]));
     }
     // A component with no namesake column gets the presence grammar
     // (`=` absent, `~=` present).
@@ -327,10 +296,7 @@ fn route(path: &str) -> Result<(String, String), String> {
          component props"
             .into()
     } else {
-        format!(
-            "unknown prop: .{path} — {}",
-            if edgeish(path) { EDGE_DOOR } else { SKETCH }
-        )
+        format!("unknown prop: .{path} — {}", if edgeish(path) { EDGE_DOOR } else { SKETCH })
     })
 }
 
@@ -338,9 +304,7 @@ pub fn kind_word(word: &str) -> Option<String> {
     let v = vocab();
     v.kind_order
         .iter()
-        .find(|k| {
-            *k == word || plural(k) == word || format!("{k}s") == word
-        })
+        .find(|k| *k == word || plural(k) == word || format!("{k}s") == word)
         .cloned()
 }
 
@@ -351,9 +315,7 @@ fn plural(kind: &str) -> String {
     if let Some(stem) = kind.strip_suffix('y') {
         return format!("{stem}ies");
     }
-    if kind.ends_with('s') || kind.ends_with('x') || kind.ends_with("ch")
-        || kind.ends_with("sh")
-    {
+    if kind.ends_with('s') || kind.ends_with('x') || kind.ends_with("ch") || kind.ends_with("sh") {
         return format!("{kind}es");
     }
     format!("{kind}s")
@@ -379,11 +341,8 @@ pub fn resolve_values<S: Source + ?Sized>(src: &S, preds: &mut [Pred]) {
             }
             continue;
         }
-        let t = if p.comp.is_empty() {
-            v.bare_type(&p.prop)
-        } else {
-            v.prop_type(&p.comp, &p.prop)
-        };
+        let t =
+            if p.comp.is_empty() { v.bare_type(&p.prop) } else { v.prop_type(&p.comp, &p.prop) };
         match t {
             Some(t) if t.is_ref() => {
                 if !crate::model::is_uuid(&p.value.to_lowercase()) {
@@ -398,9 +357,7 @@ pub fn resolve_values<S: Source + ?Sized>(src: &S, preds: &mut [Pred]) {
                     .split(',')
                     .map(|part| {
                         let t = part.trim();
-                        let bare = t
-                            .strip_prefix(['p', 'P'])
-                            .filter(|r| r.parse::<f64>().is_ok());
+                        let bare = t.strip_prefix(['p', 'P']).filter(|r| r.parse::<f64>().is_ok());
                         bare.unwrap_or(t).to_string()
                     })
                     .collect::<Vec<_>>()
@@ -414,16 +371,8 @@ pub fn resolve_values<S: Source + ?Sized>(src: &S, preds: &mut [Pred]) {
 // One column read. `updated.at` falls back to `created.at`: an entity made
 // and never touched since carries no `updated` row, and being made IS the
 // last time it changed (query.ts read()).
-fn scalar(
-    comps: &serde_json::Map<String, Value>,
-    comp: &str,
-    prop: &str,
-) -> Option<Value> {
-    let v = comps
-        .get(comp)
-        .and_then(|c| c.as_object())
-        .and_then(|c| c.get(prop))
-        .cloned();
+fn scalar(comps: &serde_json::Map<String, Value>, comp: &str, prop: &str) -> Option<Value> {
+    let v = comps.get(comp).and_then(|c| c.as_object()).and_then(|c| c.get(prop)).cloned();
     if v.is_none() && comp == "updated" && prop == "at" {
         return comps.get("created").and_then(|c| c.get("at")).cloned();
     }
@@ -513,10 +462,7 @@ pub fn matches(row: &Row, preds: &[Pred]) -> bool {
 
 // The predicate test on a bare comps bag — lets a cache match BEFORE it
 // clones a row out, so a query pays only for its hits.
-pub fn matches_comps(
-    comps: &serde_json::Map<String, Value>,
-    preds: &[Pred],
-) -> bool {
+pub fn matches_comps(comps: &serde_json::Map<String, Value>, preds: &[Pred]) -> bool {
     matches_comps_at(comps, preds, now_ms())
 }
 
@@ -549,9 +495,7 @@ pub fn matches_at(row: &Row, preds: &[Pred], now: i64) -> bool {
 // set membership with one lookup, never a per-row walk.
 #[derive(Default)]
 pub struct Ctx<'a> {
-    pub reaches: Option<
-        &'a std::collections::HashMap<String, std::collections::HashSet<String>>,
-    >,
+    pub reaches: Option<&'a std::collections::HashMap<String, std::collections::HashSet<String>>>,
 }
 
 // A traversal closure's memo key (query.ts walker): `type\0depth\0target`. The
@@ -563,22 +507,13 @@ pub fn reach_key(reach: &Reach, target: &str) -> String {
 // An entity's own eid, off any bag it wears (query.ts eidOf) — a reverse/reach
 // pred needs it to ask "am I among the reachers".
 fn eid_of(comps: &serde_json::Map<String, Value>) -> Option<String> {
-    if let Some(e) =
-        comps.get("entity").and_then(|c| c.get("eid")).and_then(|v| v.as_str())
-    {
+    if let Some(e) = comps.get("entity").and_then(|c| c.get("eid")).and_then(|v| v.as_str()) {
         return Some(e.to_string());
     }
-    comps
-        .values()
-        .find_map(|c| c.get("eid").and_then(|v| v.as_str()))
-        .map(String::from)
+    comps.values().find_map(|c| c.get("eid").and_then(|v| v.as_str())).map(String::from)
 }
 
-pub fn matches_comps_at(
-    comps: &serde_json::Map<String, Value>,
-    preds: &[Pred],
-    now: i64,
-) -> bool {
+pub fn matches_comps_at(comps: &serde_json::Map<String, Value>, preds: &[Pred], now: i64) -> bool {
     matches_comps_ctx(comps, preds, now, &Ctx::default())
 }
 
@@ -613,9 +548,7 @@ pub fn matches_comps_ctx(
         if p.comp.is_empty() {
             let vals: Vec<Value> = comps
                 .values()
-                .filter_map(|c| {
-                    c.as_object().and_then(|o| o.get(&p.prop)).cloned()
-                })
+                .filter_map(|c| c.as_object().and_then(|o| o.get(&p.prop)).cloned())
                 .filter(|v| !v.is_null())
                 .collect();
             if vals.is_empty() {
@@ -648,15 +581,10 @@ fn test(got: Option<Value>, p: &Pred, now: i64) -> bool {
             .unwrap_or(false);
             if timed {
                 if let Some(gv) = &gs {
-                    let spans: Vec<_> = p
-                        .value
-                        .split(',')
-                        .map(|part| crate::time::span(part, now))
-                        .collect();
+                    let spans: Vec<_> =
+                        p.value.split(',').map(|part| crate::time::span(part, now)).collect();
                     if !spans.is_empty() && spans.iter().all(|s| s.is_some()) {
-                        let hit = spans
-                            .iter()
-                            .any(|s| in_time(gv, "=", s.unwrap()));
+                        let hit = spans.iter().any(|s| in_time(gv, "=", s.unwrap()));
                         if p.op == "=" {
                             return hit;
                         }
@@ -673,11 +601,7 @@ fn test(got: Option<Value>, p: &Pred, now: i64) -> bool {
         match p.op.as_str() {
             "=" => eq(gs.as_deref(), &p.value),
             "!=" => !eq(gs.as_deref(), &p.value),
-            "~=" => gs
-                .map(|g| {
-                    g.to_lowercase().contains(&p.value.to_lowercase())
-                })
-                .unwrap_or(false),
+            "~=" => gs.map(|g| g.to_lowercase().contains(&p.value.to_lowercase())).unwrap_or(false),
             op @ ("<" | "<=" | ">" | ">=") => {
                 let Some(g) = gs else { return false };
                 let ord = cmp(&g, &p.value);
@@ -706,11 +630,7 @@ pub fn by_board(a: &Row, b: &Row) -> std::cmp::Ordering {
         v.statuses.iter().position(|x| x == s).map(|i| i as i64).unwrap_or(-1)
     };
     let pri = |r: &Row| {
-        r.comps
-            .get("task")
-            .and_then(|t| t.get("priority"))
-            .and_then(|p| p.as_f64())
-            .unwrap_or(0.0)
+        r.comps.get("task").and_then(|t| t.get("priority")).and_then(|p| p.as_f64()).unwrap_or(0.0)
     };
     slot(a)
         .cmp(&slot(b))
@@ -724,12 +644,9 @@ mod tests {
 
     #[test]
     fn parses_kind_and_preds() {
-        let (kind, preds) = parse(&[
-            ".project=P-19".into(),
-            ".status=open,wip".into(),
-            ".priority<=1".into(),
-        ])
-        .unwrap();
+        let (kind, preds) =
+            parse(&[".project=P-19".into(), ".status=open,wip".into(), ".priority<=1".into()])
+                .unwrap();
         assert_eq!(kind, "task");
         assert_eq!(preds.len(), 3);
         assert_eq!(preds[0].comp, "task");
@@ -794,8 +711,7 @@ mod tests {
 
     #[test]
     fn time_phrase_matches_a_stamp() {
-        let now = crate::time::parse_stamp("2026-08-26T13:00:00-04:00")
-            .unwrap();
+        let now = crate::time::parse_stamp("2026-08-26T13:00:00-04:00").unwrap();
         let row = task_row(serde_json::json!({
             "updated": { "at": "2026-08-26T11:00:00-04:00" }
         }));

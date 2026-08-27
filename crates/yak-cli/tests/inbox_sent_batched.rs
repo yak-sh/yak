@@ -36,19 +36,11 @@ fn fixture(dir: &Path, sent: usize) -> String {
     for i in 0..sent {
         let id = 100 + i as i64;
         let eid = format!("aaaaaaaa-0000-0000-0000-{:012}", id);
-        conn.execute(
-            "insert into entity (id, eid, num) values (?1, ?2, ?1)",
-            params![id, eid],
-        )
-        .unwrap();
-        // a mail comp with no message_id, and a deliver.to that resolves
-        conn.execute("insert into mail (entity) values (?1)", params![id])
+        conn.execute("insert into entity (id, eid, num) values (?1, ?2, ?1)", params![id, eid])
             .unwrap();
-        conn.execute(
-            "insert into deliver (entity, \"to\") values (?1, 1)",
-            params![id],
-        )
-        .unwrap();
+        // a mail comp with no message_id, and a deliver.to that resolves
+        conn.execute("insert into mail (entity) values (?1)", params![id]).unwrap();
+        conn.execute("insert into deliver (entity, \"to\") values (?1, 1)", params![id]).unwrap();
     }
     // a received letter — it wears a message_id, so `--sent` excludes it
     conn.execute(
@@ -57,13 +49,8 @@ fn fixture(dir: &Path, sent: usize) -> String {
         [],
     )
     .unwrap();
-    conn.execute(
-        "insert into mail (entity, message_id) values (9, '<in@example>')",
-        [],
-    )
-    .unwrap();
-    conn.execute("insert into deliver (entity, \"to\") values (9, 1)", [])
-        .unwrap();
+    conn.execute("insert into mail (entity, message_id) values (9, '<in@example>')", []).unwrap();
+    conn.execute("insert into deliver (entity, \"to\") values (9, 1)", []).unwrap();
     db.to_string_lossy().into_owned()
 }
 
@@ -93,18 +80,14 @@ fn sql_count(stderr: &[u8]) -> usize {
 
 #[test]
 fn sent_returns_the_outbound_letters_only() {
-    let dir = std::env::temp_dir()
-        .join(format!("yak-sent-parity-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("yak-sent-parity-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let db = fixture(&dir, 3);
     let out = run(&db, &["inbox", "--sent"], false);
     std::fs::remove_dir_all(&dir).ok();
 
     assert_eq!(out.status.code(), Some(0));
-    let lines: Vec<&str> = std::str::from_utf8(&out.stdout)
-        .unwrap()
-        .lines()
-        .collect();
+    let lines: Vec<&str> = std::str::from_utf8(&out.stdout).unwrap().lines().collect();
     // one line per outbound letter, and the received one is screened out
     assert_eq!(lines.len(), 3, "stdout: {lines:?}");
     for num in [100, 101, 102] {
@@ -121,8 +104,7 @@ fn sent_returns_the_outbound_letters_only() {
 
 #[test]
 fn sent_reads_its_mail_set_without_an_n_plus_1() {
-    let dir = std::env::temp_dir()
-        .join(format!("yak-sent-n1-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("yak-sent-n1-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let (few, many) = (2usize, 12usize);
     let small = run(&fixture(&dir.join("a"), few), &["inbox", "--sent"], true);

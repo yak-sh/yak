@@ -46,10 +46,7 @@ fn err_class(error: &str) -> String {
             if after_ok {
                 // extend left over [\w.$]
                 let start = head[..at]
-                    .rfind(|c: char| {
-                        !(c.is_alphanumeric() || c == '_' || c == '.'
-                            || c == '$')
-                    })
+                    .rfind(|c: char| !(c.is_alphanumeric() || c == '_' || c == '.' || c == '$'))
                     .map(|i| i + 1)
                     .unwrap_or(0);
                 if best.map(|(s, _)| start < s).unwrap_or(true) {
@@ -112,20 +109,13 @@ fn fingerprint(r: &Log) -> String {
     let body = if !cls.is_empty() || !fr.is_empty() {
         format!("{cls}\n{fr}")
     } else {
-        r.error
-            .as_deref()
-            .unwrap_or("")
-            .lines()
-            .next()
-            .unwrap_or("")
-            .to_string()
+        r.error.as_deref().unwrap_or("").lines().next().unwrap_or("").to_string()
     };
     format!("{}\n{}\n{}", r.source, r.name, body)
 }
 
 fn cohort(rows: Vec<Log>) -> Vec<Log> {
-    let mut seen: std::collections::HashMap<String, usize> =
-        std::collections::HashMap::new();
+    let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     let mut out: Vec<Log> = vec![];
     for r in rows {
         if r.ok {
@@ -179,11 +169,7 @@ pub fn recent(
     let sql = format!(
         "select ts, source, name, session_id, ok, ms, error, detail \
          from tool_call {} order by ts desc, rowid desc limit 500",
-        if wh.is_empty() {
-            String::new()
-        } else {
-            format!("where {}", wh.join(" and "))
-        }
+        if wh.is_empty() { String::new() } else { format!("where {}", wh.join(" and ")) }
     );
     let Ok(mut st) = store.conn.prepare(&sql) else { return vec![] };
     let rows: Vec<Log> = st
@@ -222,11 +208,7 @@ fn pct(sorted: &[f64], p: f64) -> f64 {
     (v * 10.0).round() / 10.0
 }
 
-pub fn stats(
-    store: &Store,
-    since: Option<&str>,
-    only_errors: bool,
-) -> Vec<Stat> {
+pub fn stats(store: &Store, since: Option<&str>, only_errors: bool) -> Vec<Stat> {
     if !store.has_table("tool_call") {
         return vec![];
     }
@@ -239,23 +221,15 @@ pub fn stats(
     if only_errors {
         wh.push("ok = 0");
     }
-    let sql = format!(
-        "select source, name, ms from tool_call where {}",
-        wh.join(" and ")
-    );
+    let sql = format!("select source, name, ms from tool_call where {}", wh.join(" and "));
     let Ok(mut st) = store.conn.prepare(&sql) else { return vec![] };
     let rows: Vec<(String, String, f64)> = st
-        .query_map(rusqlite::params_from_iter(&args), |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?))
-        })
+        .query_map(rusqlite::params_from_iter(&args), |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
         .map(|it| it.filter_map(|x| x.ok()).collect())
         .unwrap_or_default();
     let mut groups: Vec<(String, String, Vec<f64>)> = vec![];
     for (source, name, ms) in rows {
-        match groups
-            .iter_mut()
-            .find(|(s, n, _)| *s == source && *n == name)
-        {
+        match groups.iter_mut().find(|(s, n, _)| *s == source && *n == name) {
             Some((_, _, v)) => v.push(ms),
             None => groups.push((source, name, vec![ms])),
         }

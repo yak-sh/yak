@@ -2,17 +2,14 @@
 // Parity target: T-22534's comp-nested frontmatter (96b532a).
 
 use chrono::{DateTime, Local};
+use serde_json::Value;
 use yak_kernel::store::{Dep, Row, Rows};
 use yak_kernel::vocab::{vocab, PropType};
 use yak_kernel::Graph;
-use serde_json::Value;
 
 pub fn local_time(iso: &str) -> String {
     match DateTime::parse_from_rfc3339(iso) {
-        Ok(d) => d
-            .with_timezone(&Local)
-            .format("%Y-%m-%dT%H:%M:%S%:z")
-            .to_string(),
+        Ok(d) => d.with_timezone(&Local).format("%Y-%m-%dT%H:%M:%S%:z").to_string(),
         Err(_) => iso.to_string(),
     }
 }
@@ -95,12 +92,10 @@ fn b64(s: &str) -> Option<Vec<u8>> {
             _ => None,
         }
     };
-    let clean: Vec<u8> =
-        s.bytes().filter(|c| *c != b'=' && !c.is_ascii_whitespace()).collect();
+    let clean: Vec<u8> = s.bytes().filter(|c| *c != b'=' && !c.is_ascii_whitespace()).collect();
     let mut out = vec![];
     for chunk in clean.chunks(4) {
-        let vals: Vec<u8> =
-            chunk.iter().map(|c| idx(*c)).collect::<Option<_>>()?;
+        let vals: Vec<u8> = chunk.iter().map(|c| idx(*c)).collect::<Option<_>>()?;
         let mut buf: u32 = 0;
         for v in &vals {
             buf = (buf << 6) | *v as u32;
@@ -185,16 +180,10 @@ pub fn said(rows: &Rows, eid: &str) -> String {
     if t.is_empty() {
         t = s_of(comp_get(&r, "session", "id"));
     }
-    let title = if r.comps.contains_key("mail") {
-        clip(&unmime(&t), 64)
-    } else {
-        clip(&t, 64)
-    };
+    let title = if r.comps.contains_key("mail") { clip(&unmime(&t), 64) } else { clip(&t, 64) };
     let s = r.comps.get("session").and_then(|x| x.as_object());
     let model = s.map(|s| {
-        let get = |k: &str| {
-            s.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string()
-        };
+        let get = |k: &str| s.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
         let serving = get("serving_model");
         let m = if serving.is_empty() { get("model") } else { serving };
         [get("provider"), m, get("effort")]
@@ -203,11 +192,8 @@ pub fn said(rows: &Rows, eid: &str) -> String {
             .collect::<Vec<_>>()
             .join("/")
     });
-    let persona = s
-        .and_then(|s| s.get("persona"))
-        .and_then(|v| v.as_str())
-        .map(|p| face(rows, p))
-        .map(|f| {
+    let persona =
+        s.and_then(|s| s.get("persona")).and_then(|v| v.as_str()).map(|p| face(rows, p)).map(|f| {
             if f.1.is_empty() {
                 format!("persona {}", f.0)
             } else {
@@ -244,18 +230,12 @@ fn face_str(f: &(String, String)) -> String {
     }
 }
 
-pub fn format_prop(
-    t: &PropType,
-    v: &Value,
-    rows: &Rows,
-) -> Option<String> {
+pub fn format_prop(t: &PropType, v: &Value, rows: &Rows) -> Option<String> {
     match t {
         PropType::Priority => {
             let n = match v {
                 Value::Number(n) => n.as_f64()?,
-                Value::String(s) => {
-                    s.trim().trim_start_matches(['p', 'P']).parse().ok()?
-                }
+                Value::String(s) => s.trim().trim_start_matches(['p', 'P']).parse().ok()?,
                 _ => return None,
             };
             Some(format!("P{}", js_num(n)))
@@ -306,11 +286,7 @@ fn warm_page(rows: &Rows, row: &Row, deps: &[Dep], comments: &[String]) {
     // what the edge and comment blocks name: the far end of every dep, and
     // each comment
     for d in deps {
-        want.push(if d.parent == row.eid {
-            d.child.clone()
-        } else {
-            d.parent.clone()
-        });
+        want.push(if d.parent == row.eid { d.child.clone() } else { d.parent.clone() });
     }
     want.extend(comments.iter().cloned());
     rows.warm(&want);
@@ -321,9 +297,7 @@ fn warm_page(rows: &Rows, row: &Row, deps: &[Dep], comments: &[String]) {
         let mut next: Vec<String> = vec![];
         for e in &want {
             let Some(r) = rows.get(e) else { continue };
-            for (comp, prop) in
-                [("session", "persona"), ("created", "by"), ("created", "via")]
-            {
+            for (comp, prop) in [("session", "persona"), ("created", "by"), ("created", "via")] {
                 if let Some(x) = comp_get(&r, comp, prop) {
                     next.push(scalar_str(x));
                 }
@@ -341,8 +315,7 @@ pub fn show_md(store: &dyn Graph, row: &Row) -> String {
     let deps = store.deps_of(&row.eid);
     let comments = store.comments_on(&row.eid);
     warm_page(&rows, row, &deps, &comments);
-    let mut fm: Vec<String> =
-        vec![format!("id: {}", id_of(row)), format!("kind: {}", row.kind)];
+    let mut fm: Vec<String> = vec![format!("id: {}", id_of(row)), format!("kind: {}", row.kind)];
     if let Some(spine) = row.comps.get("entity").and_then(|x| x.as_object()) {
         if let Some(eid) = spine.get("eid").and_then(|x| x.as_str()) {
             fm.push("entity:".into());
@@ -428,37 +401,23 @@ pub fn show_md(store: &dyn Graph, row: &Row) -> String {
             let Some(c) = rows.get(&ceid) else { continue };
             let actor = s_of(comp_get(&c, "created", "by"));
             let instrument = s_of(comp_get(&c, "created", "via"));
-            let by = if actor.is_empty() {
-                String::new()
-            } else {
-                said(&rows, &actor)
-            };
-            let via = if instrument.is_empty() {
-                String::new()
-            } else {
-                said(&rows, &instrument)
-            };
-            let who = if !by.is_empty() && !via.is_empty() && actor != instrument
-            {
+            let by = if actor.is_empty() { String::new() } else { said(&rows, &actor) };
+            let via = if instrument.is_empty() { String::new() } else { said(&rows, &instrument) };
+            let who = if !by.is_empty() && !via.is_empty() && actor != instrument {
                 format!(" · {by} · via {via}")
             } else if !by.is_empty() || !via.is_empty() {
                 format!(" · {}", if by.is_empty() { &via } else { &by })
             } else {
                 String::new()
             };
-            let verdict = s_of(comp_get(&c, "review", "verdict"))
-                .replace('_', " ");
+            let verdict = s_of(comp_get(&c, "review", "verdict")).replace('_', " ");
             let born = s_of(comp_get(&c, "created", "at"));
             out.push(String::new());
             out.push(format!(
                 "— {}{}{}",
                 local_time(&born),
                 who,
-                if verdict.is_empty() {
-                    String::new()
-                } else {
-                    format!(" · {verdict}")
-                }
+                if verdict.is_empty() { String::new() } else { format!(" · {verdict}") }
             ));
             out.push(String::new());
             out.push(s_of(comp_get(&c, "doc", "body")));
@@ -472,9 +431,7 @@ pub fn claimant(rows: &Rows, r: &Row) -> Option<String> {
     if seid.is_empty() {
         return None;
     }
-    let sid = rows
-        .get(&seid)
-        .and_then(|s| comp_get(&s, "session", "id").map(scalar_str));
+    let sid = rows.get(&seid).and_then(|s| comp_get(&s, "session", "id").map(scalar_str));
     Some(sid.unwrap_or(seid))
 }
 
@@ -486,21 +443,11 @@ pub fn authoring_line(rows: &Rows, r: &Row) -> String {
             let bag = r.comps.get(*name)?.as_object()?;
             let by_eid = bag.get("by").and_then(|x| x.as_str()).unwrap_or("");
             let via_eid = bag.get("via").and_then(|x| x.as_str()).unwrap_or("");
-            let by = if by_eid.is_empty() {
-                String::new()
-            } else {
-                face_str(&face(rows, by_eid))
-            };
-            let via_row =
-                if via_eid.is_empty() { None } else { rows.get(via_eid) };
+            let by = if by_eid.is_empty() { String::new() } else { face_str(&face(rows, by_eid)) };
+            let via_row = if via_eid.is_empty() { None } else { rows.get(via_eid) };
             let via_face = via_row
                 .as_ref()
-                .map(|vr| {
-                    face_str(&(
-                        id_of(vr),
-                        s_of(comp_get(vr, "doc", "title")),
-                    ))
-                })
+                .map(|vr| face_str(&(id_of(vr), s_of(comp_get(vr, "doc", "title")))))
                 .unwrap_or_else(|| {
                     if via_eid.is_empty() {
                         String::new()
@@ -508,15 +455,10 @@ pub fn authoring_line(rows: &Rows, r: &Row) -> String {
                         via_eid.to_string()
                     }
                 });
-            let s = via_row
-                .as_ref()
-                .and_then(|vr| vr.comps.get("session"))
-                .and_then(|x| x.as_object());
+            let s =
+                via_row.as_ref().and_then(|vr| vr.comps.get("session")).and_then(|x| x.as_object());
             let get = |k: &str| {
-                s.and_then(|s| s.get(k))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string()
+                s.and_then(|s| s.get(k)).and_then(|v| v.as_str()).unwrap_or("").to_string()
             };
             let serving = get("serving_model");
             let model = if serving.is_empty() { get("model") } else { serving };
@@ -533,11 +475,7 @@ pub fn authoring_line(rows: &Rows, r: &Row) -> String {
             };
             let instrument = [
                 agent,
-                if persona.is_empty() {
-                    String::new()
-                } else {
-                    format!("persona {persona}")
-                },
+                if persona.is_empty() { String::new() } else { format!("persona {persona}") },
             ]
             .into_iter()
             .filter(|x| !x.is_empty())

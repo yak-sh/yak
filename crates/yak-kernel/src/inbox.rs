@@ -22,12 +22,7 @@ fn uniq(eids: Vec<String>) -> Vec<String> {
 // claims, and (operator) its actor; knocks via deliver.to; arrived mail at
 // the session or (operator) the scope and the reader's addresses; plus
 // watched targets in inbox mode.
-pub fn inbox_rows(
-    store: &Store,
-    who: &Reader,
-    filters: &[Pred],
-    mode: Mode,
-) -> Vec<Row> {
+pub fn inbox_rows(store: &Store, who: &Reader, filters: &[Pred], mode: Mode) -> Vec<Row> {
     let mut comments: Vec<String> = vec![];
     if let Some(s) = &who.session {
         comments.push(s.clone());
@@ -56,11 +51,8 @@ pub fn inbox_rows(
             boxes.push(sc.clone());
         }
     }
-    let addrs: Vec<String> = if who.operator {
-        who.addrs.iter().cloned().collect()
-    } else {
-        vec![]
-    };
+    let addrs: Vec<String> =
+        if who.operator { who.addrs.iter().cloned().collect() } else { vec![] };
     let watched: Vec<String> = match mode {
         Mode::Inbox => who.watching.iter().cloned().collect(),
         Mode::All => vec![],

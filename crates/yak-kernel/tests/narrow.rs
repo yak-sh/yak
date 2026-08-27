@@ -87,8 +87,7 @@ fn seed(n: usize) -> Fixture {
     use std::sync::atomic::{AtomicU64, Ordering};
     static SEQ: AtomicU64 = AtomicU64::new(0);
     let uniq = SEQ.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir()
-        .join(format!("yak-narrow-{}-{uniq}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("yak-narrow-{}-{uniq}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("g.db").to_string_lossy().into_owned();
     let _ = std::fs::remove_file(&path);
@@ -159,11 +158,8 @@ fn seed(n: usize) -> Fixture {
         [qid],
     )
     .unwrap();
-    conn.execute(
-        "insert into task (entity, status, priority) values (?1, 'open', 0)",
-        [qid],
-    )
-    .unwrap();
+    conn.execute("insert into task (entity, status, priority) values (?1, 'open', 0)", [qid])
+        .unwrap();
     conn.execute("insert into quarantined (entity) values (?1)", [qid]).unwrap();
 
     conn.execute_batch("commit").unwrap();
@@ -181,11 +177,7 @@ fn preds(store: &Store, line: &[&str]) -> (String, Vec<Pred>) {
 
 // The OLD bulk path, kept here as the oracle: fetch the kind, filter in Rust.
 fn bulk(store: &Store, kind: &str, ps: &[Pred]) -> Vec<Row> {
-    store
-        .rows_of_kind(kind)
-        .into_iter()
-        .filter(|r| query::matches(r, ps))
-        .collect()
+    store.rows_of_kind(kind).into_iter().filter(|r| query::matches(r, ps)).collect()
 }
 
 fn eids(rows: &[Row]) -> Vec<String> {
@@ -225,11 +217,7 @@ fn narrowed_equals_bulk_for_every_filter() {
         let (kind, ps) = preds(&store, line);
         let got = store.rows_narrowed(&kind, &ps);
         let want = bulk(&store, &kind, &ps);
-        assert_eq!(
-            eids(&got),
-            eids(&want),
-            "narrowed eids differ from bulk for {line:?}"
-        );
+        assert_eq!(eids(&got), eids(&want), "narrowed eids differ from bulk for {line:?}");
         // full-row byte equality, not just eids — the whole point is the SAME row
         assert_eq!(fp(&got), fp(&want), "narrowed ROW bytes differ from bulk for {line:?}");
     }
@@ -250,16 +238,16 @@ fn window_equals_bulk_cut_to_newest_page() {
     // extra row the oracle does not have); plus one inexact line for the Rust
     // fallback.
     for line in [
-        &[".status=open"][..],       // enum =
-        &[".status=open,wip"][..],   // enum list
-        &[".priority=1..3"][..],     // numeric range
-        &[".priority<=1"][..],       // numeric compare
-        &[".status!=done"][..],      // negation + NULL
-        &[".title~=widget"][..],     // contains
-        &[".doc!"][..],              // presence
-        &[".assignee="][..],         // absence
-        &[".project=1"][..],         // reference
-        &[".kind=task"][..],         // no filter (pure window)
+        &[".status=open"][..],                       // enum =
+        &[".status=open,wip"][..],                   // enum list
+        &[".priority=1..3"][..],                     // numeric range
+        &[".priority<=1"][..],                       // numeric compare
+        &[".status!=done"][..],                      // negation + NULL
+        &[".title~=widget"][..],                     // contains
+        &[".doc!"][..],                              // presence
+        &[".assignee="][..],                         // absence
+        &[".project=1"][..],                         // reference
+        &[".kind=task"][..],                         // no filter (pure window)
         &[".status=open", ".updated.at>=today"][..], // inexact → Rust fallback
     ] {
         let args: Vec<&str> = line.to_vec();
@@ -267,10 +255,7 @@ fn window_equals_bulk_cut_to_newest_page() {
         for limit in [1usize, 5, 10] {
             // rows_window screens quarantine (reveal=false); the oracle is the
             // bulk set, screened, then cut to the newest `limit`.
-            let want = cut(
-                bulk(&store, &kind, &ps).into_iter().filter(visible).collect(),
-                limit,
-            );
+            let want = cut(bulk(&store, &kind, &ps).into_iter().filter(visible).collect(), limit);
             let got = store.rows_window(&kind, &ps, None, Some(limit as i64), false);
             assert_eq!(
                 eids(&got),
@@ -317,9 +302,7 @@ fn scaling_bench() {
         let window_ms = ms(&|| {
             let _ = store.rows_window("task", &[], None, Some(1), false);
         });
-        println!(
-            "{n:>8}  {bulk_ms:>12.2}ms  {narrow_ms:>14.2}ms  {window_ms:>14.2}ms"
-        );
+        println!("{n:>8}  {bulk_ms:>12.2}ms  {narrow_ms:>14.2}ms  {window_ms:>14.2}ms");
         // The window read must NOT scale with the kind: at 16k it stays a small
         // fraction of the bulk read it replaces. (A generous bound so scheduler
         // noise never flakes it — the printed numbers show the real gap.)

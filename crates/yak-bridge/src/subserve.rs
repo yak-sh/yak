@@ -35,7 +35,9 @@ use tokio::sync::mpsc::UnboundedSender;
 use yak_kernel::change::Change;
 use yak_kernel::feed::{cursor_of, data_version, journal_since, row_changes};
 use yak_kernel::query::{self, Ctx, Field, Hop, Pred};
-use yak_kernel::subquery::{eval_agg, eval_sub, moving, parse_query_line, reach_sets, Parsed, SUB_CAP};
+use yak_kernel::subquery::{
+    eval_agg, eval_sub, moving, parse_query_line, reach_sets, Parsed, SUB_CAP,
+};
 use yak_kernel::vocab::{vocab, PropType};
 use yak_kernel::{Dep, Store};
 
@@ -48,11 +50,11 @@ struct Sub {
     parsed: Parsed,
     preds: Vec<Pred>, // resolved filter preds — the per-eid maintain re-test
     members: HashSet<String>,
-    bodies: bool,           // a route/entries/card sub ships doc bodies
-    only: Option<String>,   // a route sub's fixed id
-    fields: Option<Vec<Field>>, // the declared projection's cut (query.ts projected)
-    has_window: bool,       // members are a bounded prefix — RE-ANSWER, not per-eid
-    win_total: Option<i64>, // the total the window is a prefix of, restated on change
+    bodies: bool,                    // a route/entries/card sub ships doc bodies
+    only: Option<String>,            // a route sub's fixed id
+    fields: Option<Vec<Field>>,      // the declared projection's cut (query.ts projected)
+    has_window: bool,                // members are a bounded prefix — RE-ANSWER, not per-eid
+    win_total: Option<i64>,          // the total the window is a prefix of, restated on change
     agg: Option<Vec<(String, i64)>>, // an aggregate's standing value→count answer
     moving: bool,
     edges: Option<Rider>, // the .edges! rider: incident dep triples + peer projection
@@ -113,16 +115,15 @@ impl Subserve {
         let epoch_held = obj.get("epoch").and_then(|v| v.as_str());
         let vocab_held = obj.get("vocab").and_then(|v| v.as_str());
         self.envelope = obj.get("live").and_then(|v| v.as_i64()) == Some(1);
-        let frame = if since.is_none()
-            || cursor_stale(store, epoch_held, vocab_held, since.unwrap())
-        {
-            self.cursor = cursor_of(&store.conn);
-            snap::reset_frame(store).to_string()
-        } else {
-            let f = live::catchup_frame(store, since.unwrap());
-            self.cursor = f.get("cursor").and_then(|c| c.as_i64()).unwrap_or(self.cursor);
-            f.to_string()
-        };
+        let frame =
+            if since.is_none() || cursor_stale(store, epoch_held, vocab_held, since.unwrap()) {
+                self.cursor = cursor_of(&store.conn);
+                snap::reset_frame(store).to_string()
+            } else {
+                let f = live::catchup_frame(store, since.unwrap());
+                self.cursor = f.get("cursor").and_then(|c| c.as_i64()).unwrap_or(self.cursor);
+                f.to_string()
+            };
         let _ = tx.send(frame);
         self.joined = true;
     }
@@ -221,8 +222,7 @@ impl Subserve {
         // set, an ADD, a standing-match patch — rides through the same cut.
         let fields = parsed.fields.clone();
         let answer = eval_sub(store, &parsed, SUB_CAP)?;
-        let members: HashSet<String> =
-            answer.hits.iter().map(|r| r.eid.clone()).collect();
+        let members: HashSet<String> = answer.hits.iter().map(|r| r.eid.clone()).collect();
         let mut changes: Vec<Value> = vec![];
         for r in &answer.hits {
             changes.extend(carry(bodies, fields.as_deref(), entity_changes(r)));
@@ -233,8 +233,7 @@ impl Subserve {
         // projection, and seeds the state every later delta speaks from.
         let (edges_state, ride_frame) = match parsed.edges.clone() {
             Some(peers) => {
-                let (rider, deps, peer_changes) =
-                    rider_open(store, peers, &members);
+                let (rider, deps, peer_changes) = rider_open(store, peers, &members);
                 (Some(rider), Some((deps, peer_changes)))
             }
             None => (None, None),
@@ -343,8 +342,7 @@ impl Subserve {
                 // An exact window RE-ANSWERS: the rows that cross its edge are
                 // precisely the ones no batch mentions.
                 let Ok(answer) = eval_sub(store, &sub.parsed, SUB_CAP) else { continue };
-                let next: HashSet<String> =
-                    answer.hits.iter().map(|r| r.eid.clone()).collect();
+                let next: HashSet<String> = answer.hits.iter().map(|r| r.eid.clone()).collect();
                 let mut changes: Vec<Value> = vec![];
                 let mut entered: Vec<String> = vec![];
                 for r in &answer.hits {
@@ -369,9 +367,10 @@ impl Subserve {
                     }
                 }
                 sub.members = next;
-                let (limit, total) = answer
-                    .window
-                    .unwrap_or((sub.parsed.win.limit.unwrap_or(SUB_CAP), Some(answer.hits.len() as i64)));
+                let (limit, total) = answer.window.unwrap_or((
+                    sub.parsed.win.limit.unwrap_or(SUB_CAP),
+                    Some(answer.hits.len() as i64),
+                ));
                 let moved = total != sub.win_total;
                 sub.win_total = total;
                 // A window and a rider compose: the members are a bounded prefix,
@@ -409,10 +408,7 @@ impl Subserve {
                 } else {
                     // Unscreened: a member that became quarantined must read as
                     // ALIVE-but-not-listed → a REMOVE (drop), never a death.
-                    reads
-                        .entry(eid.clone())
-                        .or_insert_with(|| store.row_revealed(eid))
-                        .clone()
+                    reads.entry(eid.clone()).or_insert_with(|| store.row_revealed(eid)).clone()
                 };
                 let alive = row.is_some();
                 let is_quar =
@@ -435,11 +431,19 @@ impl Subserve {
                     }
                 } else if hit {
                     if was {
-                        changes.extend(carry(sub.bodies, sub.fields.as_deref(), patch.get(eid).cloned().unwrap_or_default()));
+                        changes.extend(carry(
+                            sub.bodies,
+                            sub.fields.as_deref(),
+                            patch.get(eid).cloned().unwrap_or_default(),
+                        ));
                     } else {
                         sub.members.insert(eid.clone());
                         entered.push(eid.clone());
-                        changes.extend(carry(sub.bodies, sub.fields.as_deref(), entity_changes(row.as_ref().unwrap())));
+                        changes.extend(carry(
+                            sub.bodies,
+                            sub.fields.as_deref(),
+                            entity_changes(row.as_ref().unwrap()),
+                        ));
                     }
                 } else if was {
                     sub.members.remove(eid);
@@ -450,13 +454,23 @@ impl Subserve {
             // edges, a departed one takes the edges no member holds (subserve.ts).
             let mut rider = sub.edges.take();
             let rd = rider.as_mut().map(|r| {
-                rider_delta(store, r, &sub.members, &entered, !drop.is_empty(), &gone, batch, &touched)
+                rider_delta(
+                    store,
+                    r,
+                    &sub.members,
+                    &entered,
+                    !drop.is_empty(),
+                    &gone,
+                    batch,
+                    &touched,
+                )
             });
             sub.edges = rider;
             let rode = rd.as_ref().map(rider_moved).unwrap_or(false);
             if !changes.is_empty() || !drop.is_empty() || rode {
                 let ride = rd.filter(rider_moved);
-                let _ = tx.send(delta_frame(&sub.name, changes, drop, cur, ride.as_ref()).to_string());
+                let _ =
+                    tx.send(delta_frame(&sub.name, changes, drop, cur, ride.as_ref()).to_string());
             }
         }
     }
@@ -481,10 +495,8 @@ impl Subserve {
             let mut changes: Vec<Value> = vec![];
             let mut drop: Vec<String> = vec![];
             for eid in sub.members.clone() {
-                let row = reads
-                    .entry(eid.clone())
-                    .or_insert_with(|| store.row_revealed(&eid))
-                    .clone();
+                let row =
+                    reads.entry(eid.clone()).or_insert_with(|| store.row_revealed(&eid)).clone();
                 let alive = row.is_some();
                 let is_quar =
                     row.as_ref().map(|r| r.comps.contains_key("quarantined")).unwrap_or(false);
@@ -607,9 +619,7 @@ fn peer_payload(store: &Store, peers: &[Hop], eids: &[String]) -> Vec<Value> {
         // comp — a hop on the kind comp merges into the same {} entry.
         let mut order: Vec<String> = vec![];
         let mut picked: HashMap<String, Map<String, Value>> = HashMap::new();
-        if let Some(kind) =
-            vocab().kind_order.iter().find(|c| row.comps.contains_key(*c))
-        {
+        if let Some(kind) = vocab().kind_order.iter().find(|c| row.comps.contains_key(*c)) {
             order.push(kind.clone());
             picked.insert(kind.clone(), Map::new());
         }
@@ -620,10 +630,7 @@ fn peer_payload(store: &Store, peers: &[Hop], eids: &[String]) -> Vec<Value> {
                 order.push(h.comp.clone());
                 picked.insert(h.comp.clone(), Map::new());
             }
-            picked
-                .get_mut(&h.comp)
-                .unwrap()
-                .insert(h.prop.clone(), js_num(v.clone()));
+            picked.get_mut(&h.comp).unwrap().insert(h.prop.clone(), js_num(v.clone()));
         }
         for name in &order {
             let comp = picked.remove(name).unwrap();
@@ -651,14 +658,9 @@ fn rider_open(
     members: &HashSet<String>,
 ) -> (Rider, Vec<Dep>, Vec<Value>) {
     let member_vec: Vec<String> = members.iter().cloned().collect();
-    let deps = if members.is_empty() {
-        vec![]
-    } else {
-        eager_deps(store, &member_vec)
-    };
+    let deps = if members.is_empty() { vec![] } else { eager_deps(store, &member_vec) };
     let held = outside(&deps, members);
-    let keys: Vec<(String, Dep)> =
-        deps.iter().map(|d| (dep_key(d), d.clone())).collect();
+    let keys: Vec<(String, Dep)> = deps.iter().map(|d| (dep_key(d), d.clone())).collect();
     let peer_changes = peer_payload(store, &peers, &held);
     (Rider { peers, keys, held }, deps, peer_changes)
 }
@@ -711,10 +713,8 @@ fn rider_delta(
     }
     // An edge WRITTEN in the batch: ask the same eager screen about its
     // endpoints and believe the answer (an unlink needs no ask — gone is gone).
-    let linked: Vec<&Change> = batch
-        .iter()
-        .filter(|c| c.name == "dependency" && c.comp.is_some())
-        .collect();
+    let linked: Vec<&Change> =
+        batch.iter().filter(|c| c.name == "dependency" && c.comp.is_some()).collect();
     let mut admits: HashSet<String> = HashSet::new();
     if linked.iter().any(|c| !comp_gone(c)) {
         let mut ends: Vec<String> = vec![];
@@ -758,19 +758,15 @@ fn rider_delta(
         let want = outside(&edges, members);
         let want_set: HashSet<&String> = want.iter().collect();
         let held_set: HashSet<&String> = r.held.iter().collect();
-        let fresh: Vec<String> =
-            want.iter().filter(|e| !held_set.contains(*e)).cloned().collect();
+        let fresh: Vec<String> = want.iter().filter(|e| !held_set.contains(*e)).cloned().collect();
         unpeers = r.held.iter().filter(|e| !want_set.contains(*e)).cloned().collect();
         r.held = want;
         peers = peer_payload(store, &r.peers, &fresh);
     }
     // A held peer someone WROTE to re-projects: it is nobody's member, so no
     // membership pass would have noticed the edit its edge exists to show.
-    let again: Vec<String> = touched
-        .iter()
-        .filter(|e| r.held.contains(*e) && !gone.contains(*e))
-        .cloned()
-        .collect();
+    let again: Vec<String> =
+        touched.iter().filter(|e| r.held.contains(*e) && !gone.contains(*e)).cloned().collect();
     if !again.is_empty() {
         peers.extend(peer_payload(store, &r.peers, &again));
     }
@@ -780,19 +776,12 @@ fn rider_delta(
 // Did a rider delta MOVE anything (subserve.ts rider)? A silent rider must not
 // put a frame on the wire.
 fn rider_moved(d: &RiderDelta) -> bool {
-    !d.edges.is_empty()
-        || !d.unedges.is_empty()
-        || !d.peers.is_empty()
-        || !d.unpeers.is_empty()
+    !d.edges.is_empty() || !d.unedges.is_empty() || !d.peers.is_empty() || !d.unpeers.is_empty()
 }
 
 // A committed dependency Change's fields (its comp is `{type, child, gone?}`).
 fn comp_gone(c: &Change) -> bool {
-    c.comp
-        .as_ref()
-        .and_then(|m| m.get("gone"))
-        .map(|v| v == &Value::Bool(true))
-        .unwrap_or(false)
+    c.comp.as_ref().and_then(|m| m.get("gone")).map(|v| v == &Value::Bool(true)).unwrap_or(false)
 }
 fn comp_type(c: &Change) -> Option<String> {
     c.comp.as_ref().and_then(|m| m.get("type")).and_then(|v| v.as_str()).map(String::from)

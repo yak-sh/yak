@@ -36,8 +36,8 @@ use yak_kernel::{
 
 #[derive(Clone)]
 struct App {
-    db: String,   // the raw db path (for /graph + worker opens)
-    uri: String,  // the read-only open URI
+    db: String,  // the raw db path (for /graph + worker opens)
+    uri: String, // the read-only open URI
     // The Deno /apply upstream every write is proxied to (D-22804 rung 2). None
     // until one is named (--upstream/TASKS_UPSTREAM) — /apply then refuses rather
     // than guessing a server, since a wrong guess (5173) would proxy probe writes
@@ -87,11 +87,8 @@ async fn journal_route(
     let uri = app.uri.clone();
     let via = p.get("via").cloned();
     let eid = p.get("eid").cloned();
-    let limit = p
-        .get("limit")
-        .and_then(|s| s.parse::<i64>().ok())
-        .filter(|n| *n != 0)
-        .unwrap_or(50);
+    let limit =
+        p.get("limit").and_then(|s| s.parse::<i64>().ok()).filter(|n| *n != 0).unwrap_or(50);
     let out = tokio::task::spawn_blocking(move || {
         let store = open(&uri)?;
         Ok::<_, String>(journalr::answer(&store, via.as_deref(), eid.as_deref(), limit))
@@ -127,10 +124,7 @@ async fn graph_route(State(app): State<App>) -> Response {
 // x-via (the honesty header the Deno apply resolves to an actor) rides both
 // paths, so a bridge write attributes exactly as a direct one.
 async fn apply_route(State(app): State<App>, headers: HeaderMap, body: Bytes) -> Response {
-    let via = headers
-        .get("x-via")
-        .and_then(|v| v.to_str().ok())
-        .map(String::from);
+    let via = headers.get("x-via").and_then(|v| v.to_str().ok()).map(String::from);
     let write = app.write.clone();
     let upstream = app.upstream.clone();
     let out = tokio::task::spawn_blocking(move || {
@@ -202,7 +196,11 @@ fn route_apply(
 // `fed:true` journals the trace so effectsd fires the batch's effects exactly as
 // it does a Deno-committed row (at-most-once off the same journal); the bridge
 // itself fires none.
-fn native_apply(write: &Mutex<WriteStore>, via: Option<&str>, changes: Vec<Change>) -> (u16, String, String) {
+fn native_apply(
+    write: &Mutex<WriteStore>,
+    via: Option<&str>,
+    changes: Vec<Change>,
+) -> (u16, String, String) {
     // A poisoned lock means a prior apply PANICKED; SQLite already rolled that
     // transaction back, so the WriteStore is sound — recover the guard rather
     // than wedging the write door forever.
@@ -225,10 +223,7 @@ fn native_apply(write: &Mutex<WriteStore>, via: Option<&str>, changes: Vec<Chang
 // rather than swallowing it into a status-code error.
 fn proxy_apply(upstream: &str, via: Option<&str>, body: &[u8]) -> (u16, String, String) {
     let url = format!("{}/apply", upstream.trim_end_matches('/'));
-    let agent = ureq::Agent::config_builder()
-        .http_status_as_error(false)
-        .build()
-        .new_agent();
+    let agent = ureq::Agent::config_builder().http_status_as_error(false).build().new_agent();
     let mut req = agent.post(&url).header("content-type", "application/json");
     if let Some(v) = via {
         req = req.header("x-via", v);
@@ -245,11 +240,7 @@ fn proxy_apply(upstream: &str, via: Option<&str>, body: &[u8]) -> (u16, String, 
             let text = r.body_mut().read_to_string().unwrap_or_default();
             (status, ctype, text)
         }
-        Err(e) => (
-            502,
-            "text/plain".into(),
-            format!("yak-bridge: proxy to {url} failed: {e}"),
-        ),
+        Err(e) => (502, "text/plain".into(), format!("yak-bridge: proxy to {url} failed: {e}")),
     }
 }
 
@@ -304,7 +295,11 @@ async fn serve_socket(mut socket: WebSocket, uri: String) {
 // unfiltered, the plain live stream — and ticks the moving-time windows. This is
 // the wake mechanism D-22388 leaves pluggable: a poll here; a wal-watch or a DO
 // alarm elsewhere.
-fn worker_loop(uri: String, rx: Receiver<ToWorker>, tx: tokio::sync::mpsc::UnboundedSender<String>) {
+fn worker_loop(
+    uri: String,
+    rx: Receiver<ToWorker>,
+    tx: tokio::sync::mpsc::UnboundedSender<String>,
+) {
     let store = match Store::open(&uri) {
         Ok(s) => s,
         Err(e) => {
@@ -485,12 +480,7 @@ async fn main() {
         eprintln!("yak-bridge: cannot open {db} read-only: {e}");
         std::process::exit(1);
     }
-    let app = App {
-        db: db.clone(),
-        uri,
-        upstream: upstream.clone(),
-        write,
-    };
+    let app = App { db: db.clone(), uri, upstream: upstream.clone(), write };
     eprintln!(
         "yak-bridge: write door — native-safe batches commit through the kernel; {}",
         match &upstream {

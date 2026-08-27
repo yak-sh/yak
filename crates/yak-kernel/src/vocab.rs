@@ -86,23 +86,17 @@ impl Vocab {
     // comp '' searches the vocabulary: the first owner's declaration
     // (props.ts bareType).
     pub fn bare_type(&self, prop: &str) -> Option<PropType> {
-        self.owners(prop)
-            .into_iter()
-            .find_map(|c| self.prop_type(&c, prop))
+        self.owners(prop).into_iter().find_map(|c| self.prop_type(&c, prop))
     }
     // propOwners: every component (wire or stamped) declaring the column.
     pub fn owners(&self, prop: &str) -> Vec<String> {
-        let mut names: Vec<String> =
-            self.comps.iter().map(|(n, _)| n.clone()).collect();
+        let mut names: Vec<String> = self.comps.iter().map(|(n, _)| n.clone()).collect();
         for k in self.stamped.keys() {
             if !names.iter().any(|n| n == k) {
                 names.push(k.clone());
             }
         }
-        names
-            .into_iter()
-            .filter(|c| self.readable(c).iter().any(|(n, _)| n == prop))
-            .collect()
+        names.into_iter().filter(|c| self.readable(c).iter().any(|(n, _)| n == prop)).collect()
     }
     // The qualified display name: bare while unique, comp.prop once shared.
     pub fn prop_name(&self, comp: &str, prop: &str) -> String {
@@ -131,11 +125,7 @@ impl Vocab {
             .collect()
     }
     pub fn kind_of(&self, has: &dyn Fn(&str) -> bool) -> String {
-        self.kind_order
-            .iter()
-            .find(|k| has(k))
-            .cloned()
-            .unwrap_or_else(|| "entity".into())
+        self.kind_order.iter().find(|k| has(k)).cloned().unwrap_or_else(|| "entity".into())
     }
     pub fn id_of(&self, kind: &str, eid: &str, num: Option<i64>) -> String {
         match num {
@@ -160,8 +150,10 @@ mod tests {
         assert!(v.comp("task").is_some());
         assert_eq!(v.statuses, ["open", "wip", "done", "cancelled"]);
         assert_eq!(v.prefix["task"], "T");
-        assert!(v.kind_order.iter().position(|k| k == "design").unwrap()
-            < v.kind_order.iter().position(|k| k == "task").unwrap());
+        assert!(
+            v.kind_order.iter().position(|k| k == "design").unwrap()
+                < v.kind_order.iter().position(|k| k == "task").unwrap()
+        );
     }
 
     #[test]
@@ -175,9 +167,6 @@ mod tests {
     #[test]
     fn renames_ride_the_contract() {
         let v = vocab();
-        assert!(v
-            .renames
-            .iter()
-            .any(|(from, to)| from == "view:Show" && to == "Full"));
+        assert!(v.renames.iter().any(|(from, to)| from == "view:Show" && to == "Full"));
     }
 }

@@ -9,10 +9,10 @@
 // query(filter line) -> {rows} | {error} · reset() · size() — the SPA's
 // future data engine in miniature (T-22559, D-22530 §5).
 
-use yak_kernel::cache::{Change, GraphCache};
-use yak_kernel::{query, vocab};
 use serde_json::Value;
 use std::sync::Mutex;
+use yak_kernel::cache::{Change, GraphCache};
+use yak_kernel::{query, vocab};
 
 static CACHE: Mutex<Option<GraphCache>> = Mutex::new(None);
 
@@ -36,10 +36,7 @@ pub extern "C" fn wasm_alloc(len: usize) -> *mut u8 {
 /// (ptr, len) must be a region handed out by wasm_alloc or a packed return.
 #[no_mangle]
 pub unsafe extern "C" fn wasm_free(ptr: *mut u8, len: usize) {
-    drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(
-        ptr,
-        len.max(1),
-    )));
+    drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(ptr, len.max(1))));
 }
 
 unsafe fn str_in<'a>(ptr: *const u8, len: usize) -> &'a str {
@@ -74,8 +71,7 @@ pub unsafe extern "C" fn ingest(ptr: *const u8, len: usize) -> i64 {
         return -1;
     };
     let Some(arr) = v.as_array() else { return -1 };
-    let changes: Vec<Change> =
-        arr.iter().filter_map(Change::from_value).collect();
+    let changes: Vec<Change> = arr.iter().filter_map(Change::from_value).collect();
     let n = changes.len() as i64;
     with_cache(|g| g.ingest(&changes));
     n
@@ -91,12 +87,8 @@ pub unsafe extern "C" fn ingest(ptr: *const u8, len: usize) -> i64 {
 #[no_mangle]
 pub unsafe extern "C" fn query(ptr: *const u8, len: usize) -> u64 {
     let line = str_in(ptr, len);
-    let args: Vec<String> = line
-        .split(['&', ' '])
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(String::from)
-        .collect();
+    let args: Vec<String> =
+        line.split(['&', ' ']).map(str::trim).filter(|s| !s.is_empty()).map(String::from).collect();
     let out = with_cache(|g| {
         let (kind, mut preds) = match query::parse(&args) {
             Ok(x) => x,
@@ -110,20 +102,14 @@ pub unsafe extern "C" fn query(ptr: *const u8, len: usize) -> u64 {
             .iter()
             .map(|r| {
                 let mut o = serde_json::Map::new();
-                o.insert(
-                    "id".into(),
-                    Value::from(v.id_of(&r.kind, &r.eid, r.num)),
-                );
+                o.insert("id".into(), Value::from(v.id_of(&r.kind, &r.eid, r.num)));
                 o.insert("eid".into(), Value::from(r.eid.as_str()));
                 o.insert("kind".into(), Value::from(r.kind.as_str()));
                 o.insert("comps".into(), Value::Object(r.comps.clone()));
                 Value::Object(o)
             })
             .collect();
-        Value::Object(
-            [("rows".to_string(), Value::from(items))].into_iter().collect(),
-        )
-        .to_string()
+        Value::Object([("rows".to_string(), Value::from(items))].into_iter().collect()).to_string()
     });
     str_out(out)
 }

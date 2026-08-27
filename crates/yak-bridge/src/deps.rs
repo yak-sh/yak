@@ -52,9 +52,7 @@ pub fn deps_of(store: &Store, eid: &str) -> Vec<Dep> {
     for (persona, home) in homes_touching(store, eid) {
         let Some(home) = home else { continue };
         let dup = sql.iter().any(|d| {
-            d.parent == home
-                && d.child == persona
-                && (d.type_ == "contains" || d.type_ == "reads")
+            d.parent == home && d.child == persona && (d.type_ == "contains" || d.type_ == "reads")
         });
         if dup || quarantined(store, &home) || quarantined(store, &persona) {
             continue;
@@ -77,9 +75,7 @@ pub fn eager_deps(store: &Store, eids: &[String]) -> Vec<Dep> {
     for (persona, home) in store.homes_for(eids) {
         let Some(home) = home else { continue };
         let dup = incident.iter().any(|d| {
-            d.parent == home
-                && d.child == persona
-                && (d.type_ == "contains" || d.type_ == "reads")
+            d.parent == home && d.child == persona && (d.type_ == "contains" || d.type_ == "reads")
         });
         if dup {
             continue;

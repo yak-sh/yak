@@ -83,9 +83,7 @@ pub fn disable() {
 pub fn arm(args: &mut Vec<String>, origin: Instant) -> bool {
     let flagged = args.iter().any(|a| a == "--profile");
     args.retain(|a| a != "--profile");
-    let set = |k: &str| {
-        std::env::var(k).map(|v| !v.is_empty() && v != "0").unwrap_or(false)
-    };
+    let set = |k: &str| std::env::var(k).map(|v| !v.is_empty() && v != "0").unwrap_or(false);
     if flagged || set("YAK_PROFILE") || set("TASKS_PROFILE") {
         enable(origin);
     }
@@ -183,9 +181,7 @@ pub fn report() -> Option<String> {
     let mut phases: Vec<Vec<String>> = l
         .phases
         .iter()
-        .map(|p| {
-            vec![format!("{}{}", "  ".repeat(p.depth), p.name), ms(p.dur)]
-        })
+        .map(|p| vec![format!("{}{}", "  ".repeat(p.depth), p.name), ms(p.dur)])
         .collect();
     // What the spans never claimed: process teardown, and anything on the
     // path nobody has wrapped yet — the honest half of a phase breakdown.
@@ -194,11 +190,8 @@ pub fn report() -> Option<String> {
 
     let mut order: Vec<&Stmt> = l.stmts.iter().collect();
     order.sort_by(|a, b| b.dur.cmp(&a.dur));
-    let row = |s: &Stmt| {
-        vec![clip(&s.sql, 58), s.n.to_string(), ms(s.dur), s.rows.to_string()]
-    };
-    let mut stmts: Vec<Vec<String>> =
-        order.iter().take(TOP).map(|s| row(s)).collect();
+    let row = |s: &Stmt| vec![clip(&s.sql, 58), s.n.to_string(), ms(s.dur), s.rows.to_string()];
+    let mut stmts: Vec<Vec<String>> = order.iter().take(TOP).map(|s| row(s)).collect();
     // The tail is folded, never dropped: the totals stay complete, and a
     // report that scrolls off the screen names nothing.
     if order.len() > TOP {
@@ -219,11 +212,7 @@ pub fn report() -> Option<String> {
     out.push_str(&table(&["phase", "ms"], &phases, &[false, true]));
     if !l.stmts.is_empty() {
         out.push('\n');
-        out.push_str(&table(
-            &["sql", "n", "ms", "rows"],
-            &stmts,
-            &[false, true, true, true],
-        ));
+        out.push_str(&table(&["sql", "n", "ms", "rows"], &stmts, &[false, true, true, true]));
     }
     Some(out)
 }
@@ -297,9 +286,7 @@ mod tests {
     // The log is per-process on purpose, so the tests take turns on it.
     fn turn() -> std::sync::MutexGuard<'static, ()> {
         static T: OnceLock<Mutex<()>> = OnceLock::new();
-        T.get_or_init(Default::default)
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+        T.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner())
     }
 
     #[test]
@@ -342,8 +329,11 @@ mod tests {
         assert!(init < r.find("render").unwrap(), "{r}");
         assert!(r.contains("unaccounted"), "{r}");
         // ms with µs precision
-        assert!(r.lines().any(|l| l.starts_with("total")
-            && l.split_whitespace().nth(1).unwrap().split('.').nth(1).unwrap().len() == 3), "{r}");
+        assert!(
+            r.lines().any(|l| l.starts_with("total")
+                && l.split_whitespace().nth(1).unwrap().split('.').nth(1).unwrap().len() == 3),
+            "{r}"
+        );
         // the two spellings squash to one statement, folded n=2 rows=7
         let sql_line = r
             .lines()
@@ -363,8 +353,7 @@ mod tests {
         assert_eq!(args, ["show", "T-1"]);
         disable();
 
-        let mut plain: Vec<String> =
-            ["show", "T-1"].iter().map(|s| s.to_string()).collect();
+        let mut plain: Vec<String> = ["show", "T-1"].iter().map(|s| s.to_string()).collect();
         assert!(!arm(&mut plain, Instant::now()));
         assert_eq!(plain, ["show", "T-1"]);
     }

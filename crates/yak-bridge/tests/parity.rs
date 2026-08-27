@@ -144,12 +144,7 @@ fn an_id(ts: &str, kind: &str) -> Option<String> {
 fn an_eid(ts: &str, kind: &str) -> Option<String> {
     let (_, body) = get(ts, &format!("/query?.kind={kind}&limit=1"));
     let v: Value = serde_json::from_str(&body).ok()?;
-    v.as_array()?
-        .first()?
-        .get("entity")?
-        .get("eid")?
-        .as_str()
-        .map(String::from)
+    v.as_array()?.first()?.get("entity")?.get("eid")?.as_str().map(String::from)
 }
 
 // The eid behind a human id (T-22548 → its uuid), read off the /query id= door.
@@ -196,13 +191,13 @@ fn query_parity() {
         // old bulk read filtered in Rust; each exercises a different compiler arm,
         // and every one must stay byte-identical to TS's evalFast answer.
         "/query?.kind=task&.status=open,wip&limit=50".into(), // enum list
-        "/query?.kind=task&.priority<=1&limit=30".into(),      // numeric compare
-        "/query?.kind=task&.priority=0,2&limit=40".into(),     // numeric list
-        "/query?.kind=task&.status!=done&limit=100".into(),    // negation + NULL
+        "/query?.kind=task&.priority<=1&limit=30".into(),     // numeric compare
+        "/query?.kind=task&.priority=0,2&limit=40".into(),    // numeric list
+        "/query?.kind=task&.status!=done&limit=100".into(),   // negation + NULL
         "/query?.kind=task&.status=open&.priority=0&limit=15".into(), // AND, one join
-        "/query?.kind=task&.title~=port&limit=20".into(),      // contains (instr)
-        "/query?.kind=task&.assignee=&limit=20".into(),        // absence
-        "/query?.kind=task&.doc!&limit=20".into(),             // component presence
+        "/query?.kind=task&.title~=port&limit=20".into(),     // contains (instr)
+        "/query?.kind=task&.assignee=&limit=20".into(),       // absence
+        "/query?.kind=task&.doc!&limit=20".into(),            // component presence
         // The WINDOWED pure-limit route (T-22777): an explicit `limit` pushes
         // the newest-N window into SQL (rows_window) instead of bulk-loading and
         // cutting in Rust. Each must stay byte-identical to the bulk-cut answer.
@@ -302,7 +297,12 @@ fn journal_parity() {
     if let Some(eid) = an_eid(&ts, "task") {
         let (_, body) = get(&ts, &format!("/journal?eid={eid}&limit=1"));
         if let Ok(v) = serde_json::from_str::<Value>(&body) {
-            if let Some(via) = v.as_array().and_then(|a| a.first()).and_then(|e| e.get("via")).and_then(|x| x.as_str()) {
+            if let Some(via) = v
+                .as_array()
+                .and_then(|a| a.first())
+                .and_then(|e| e.get("via"))
+                .and_then(|x| x.as_str())
+            {
                 corpus.push(format!("/journal?via={via}&limit=20"));
             }
         }
@@ -414,7 +414,9 @@ fn require_quiescent(ts: &str) {
 #[test]
 fn ws_join_and_live_parity() {
     if write_mode() {
-        eprintln!("ws_join_and_live_parity: skipped (write mode — read parity wants one shared copy)");
+        eprintln!(
+            "ws_join_and_live_parity: skipped (write mode — read parity wants one shared copy)"
+        );
         return;
     }
     let Some((ts, br)) = both() else {
@@ -437,7 +439,8 @@ fn ws_join_and_live_parity() {
     let ts_reset: Value =
         serde_json::from_str(&ts_ws.next_text(Duration::from_secs(5)).expect("ts reset")).unwrap();
     let br_reset: Value =
-        serde_json::from_str(&br_ws.next_text(Duration::from_secs(5)).expect("bridge reset")).unwrap();
+        serde_json::from_str(&br_ws.next_text(Duration::from_secs(5)).expect("bridge reset"))
+            .unwrap();
 
     // vocabHash is the one documented divergence — normalize it out, assert the
     // rest byte-for-byte (changes, deps, cursor, epoch, capabilities).
@@ -501,10 +504,7 @@ fn collect_live(ws: &mut Ws, eid: &str, deadline: Duration) -> Option<Value> {
 
 fn apply(base: &str, batch: &str) {
     let url = format!("{base}/apply");
-    ureq::post(&url)
-        .header("content-type", "application/json")
-        .send(batch)
-        .expect("apply");
+    ureq::post(&url).header("content-type", "application/json").send(batch).expect("apply");
 }
 
 // A v4 uuid without pulling a dep into the dev-deps.
@@ -741,7 +741,12 @@ fn ws_sub_parity() {
     let mut ts_fm = joined_ws(&ts);
     let mut br_fm = joined_ws(&br);
     let fmark = format!("zqfmark{}", &uuid_v4()[..8]);
-    same_sub(&mut ts_fm, &mut br_fm, "fm", &format!(".kind=task&.title~={fmark}&.fields=task.status"));
+    same_sub(
+        &mut ts_fm,
+        &mut br_fm,
+        "fm",
+        &format!(".kind=task&.title~={fmark}&.fields=task.status"),
+    );
     let feid = uuid_v4();
     apply(
         &ts,
@@ -751,7 +756,10 @@ fn ws_sub_parity() {
         ),
     );
     same_sub_delta(&mut ts_fm, &mut br_fm, "fm", "create (projected add)");
-    apply(&ts, &format!("[{{\"eid\":\"{feid}\",\"name\":\"task\",\"comp\":{{\"status\":\"wip\"}}}}]"));
+    apply(
+        &ts,
+        &format!("[{{\"eid\":\"{feid}\",\"name\":\"task\",\"comp\":{{\"status\":\"wip\"}}}}]"),
+    );
     same_sub_delta(&mut ts_fm, &mut br_fm, "fm", "patch task.status (projected update)");
     apply(&ts, &format!("[{{\"eid\":\"{feid}\",\"name\":\"task\",\"comp\":{{\"priority\":2}}}}]"));
     same_sub_delta(&mut ts_fm, &mut br_fm, "fm", "patch task.priority (unprojected: both silent)");
@@ -805,7 +813,12 @@ fn ws_sub_parity() {
         let mut ts_em = joined_ws(&ts);
         let mut br_em = joined_ws(&br);
         let emark = format!("zqemark{}", &uuid_v4()[..8]);
-        same_sub(&mut ts_em, &mut br_em, "em", &format!(".kind=task&.title~={emark}&.edges.peers=title"));
+        same_sub(
+            &mut ts_em,
+            &mut br_em,
+            "em",
+            &format!(".kind=task&.title~={emark}&.edges.peers=title"),
+        );
         let aid = uuid_v4();
         apply(
             &ts,
@@ -914,10 +927,7 @@ fn post_apply(base: &str, batch: &str) -> (u16, String, Option<String>) {
 // sender-actor derivation needs it to resolve a signer.
 fn post_apply_via(base: &str, batch: &str, via: Option<&str>) -> (u16, String, Option<String>) {
     let url = format!("{base}/apply");
-    let agent = ureq::Agent::config_builder()
-        .http_status_as_error(false)
-        .build()
-        .new_agent();
+    let agent = ureq::Agent::config_builder().http_status_as_error(false).build().new_agent();
     let mut req = agent.post(&url).header("content-type", "application/json");
     if let Some(v) = via {
         req = req.header("x-via", v);
@@ -925,11 +935,8 @@ fn post_apply_via(base: &str, batch: &str, via: Option<&str>) -> (u16, String, O
     match req.send(batch) {
         Ok(mut r) => {
             let status = r.status().as_u16();
-            let route = r
-                .headers()
-                .get("x-yak-apply")
-                .and_then(|h| h.to_str().ok())
-                .map(String::from);
+            let route =
+                r.headers().get("x-yak-apply").and_then(|h| h.to_str().ok()).map(String::from);
             (status, r.body_mut().read_to_string().unwrap_or_default(), route)
         }
         Err(e) => panic!("POST {url} failed: {e}"),
@@ -1068,12 +1075,11 @@ fn conflict_tip(db_path: &str) -> i64 {
 fn new_conflicts(db_path: &str, base: i64) -> Vec<String> {
     let conn = ro_conn(db_path);
     let mut st = conn
-        .prepare("select e.eid from conflict c join entity e on e.id = c.entity where c.entity > ?1")
+        .prepare(
+            "select e.eid from conflict c join entity e on e.id = c.entity where c.entity > ?1",
+        )
         .unwrap();
-    st.query_map([base], |r| r.get::<_, String>(0))
-        .unwrap()
-        .flatten()
-        .collect()
+    st.query_map([base], |r| r.get::<_, String>(0)).unwrap().flatten().collect()
 }
 
 // The eid of the `setting` row overriding a catalog key, or None. `setting.key`
@@ -1122,14 +1128,9 @@ fn journal_since(db_path: &str, base: i64) -> Vec<String> {
 // minted conflict eid, so surface (c) reads back exactly what moved.
 fn affected(db_path: &str, base: i64) -> Vec<String> {
     let conn = ro_conn(db_path);
-    let mut st = conn
-        .prepare("select batch from journal where rowid > ?1 order by rowid")
-        .unwrap();
-    let batches: Vec<String> = st
-        .query_map([base], |r| r.get::<_, String>(0))
-        .unwrap()
-        .filter_map(|x| x.ok())
-        .collect();
+    let mut st = conn.prepare("select batch from journal where rowid > ?1 order by rowid").unwrap();
+    let batches: Vec<String> =
+        st.query_map([base], |r| r.get::<_, String>(0)).unwrap().filter_map(|x| x.ok()).collect();
     let mut set = std::collections::BTreeSet::new();
     for b in batches {
         if let Ok(v) = serde_json::from_str::<Value>(&b) {
@@ -1173,9 +1174,7 @@ fn state_of(db_path: &str, eids: &[String]) -> String {
     let mut eid2id: std::collections::HashMap<String, i64> = Default::default();
     {
         let mut st = conn.prepare("select id, eid from entity").unwrap();
-        let rows = st
-            .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))
-            .unwrap();
+        let rows = st.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))).unwrap();
         for (id, eid) in rows.flatten() {
             id2eid.insert(id, eid.clone());
             eid2id.insert(eid, id);
@@ -1240,20 +1239,14 @@ fn comp_tables(conn: &rusqlite::Connection) -> Vec<String> {
     let mut st = conn
         .prepare("select name from sqlite_master where type='table' and name not like 'sqlite_%' order by name")
         .unwrap();
-    let names: Vec<String> = st
-        .query_map([], |r| r.get::<_, String>(0))
-        .unwrap()
-        .flatten()
-        .collect();
+    let names: Vec<String> =
+        st.query_map([], |r| r.get::<_, String>(0)).unwrap().flatten().collect();
     names
         .into_iter()
         .filter(|t| {
             let mut ti = conn.prepare(&format!("pragma table_info(\"{t}\")")).unwrap();
-            let cols: Vec<String> = ti
-                .query_map([], |r| r.get::<_, String>(1))
-                .unwrap()
-                .flatten()
-                .collect();
+            let cols: Vec<String> =
+                ti.query_map([], |r| r.get::<_, String>(1)).unwrap().flatten().collect();
             cols.iter().any(|c| c == "entity")
         })
         .collect()
@@ -1262,9 +1255,7 @@ fn comp_tables(conn: &rusqlite::Connection) -> Vec<String> {
 // The columns of `table` that reference the entity table — its refs, read from
 // the schema so it needs no vocabulary.
 fn ref_cols(conn: &rusqlite::Connection, table: &str) -> std::collections::HashSet<String> {
-    let mut st = conn
-        .prepare(&format!("pragma foreign_key_list(\"{table}\")"))
-        .unwrap();
+    let mut st = conn.prepare(&format!("pragma foreign_key_list(\"{table}\")")).unwrap();
     st.query_map([], |r| Ok((r.get::<_, String>(2)?, r.get::<_, String>(3)?)))
         .unwrap()
         .flatten()
@@ -1279,7 +1270,15 @@ fn ref_cols(conn: &rusqlite::Connection, table: &str) -> std::collections::HashS
 // count for the log line. `route` is the proof the divergence predicate routed
 // this batch as intended — a native-committed batch and a proxied one must BOTH
 // land byte-identically to direct-to-Deno, and each must have taken its door.
-fn assert_write(case: &str, ts: &str, br: &str, ts_db: &str, br_db: &str, batch: &str, route: &str) {
+fn assert_write(
+    case: &str,
+    ts: &str,
+    br: &str,
+    ts_db: &str,
+    br_db: &str,
+    batch: &str,
+    route: &str,
+) {
     assert_write_via(case, ts, br, ts_db, br_db, batch, route, None)
 }
 
@@ -1332,7 +1331,11 @@ fn assert_write_via(
         state_a, state_b,
         "[{case}] resulting DB state differs\n ts={state_a}\n br={state_b}"
     );
-    eprintln!("ok  write-parity [{case}]  status={sa}  journal={}  entities={}", ja.len(), ea.len());
+    eprintln!(
+        "ok  write-parity [{case}]  status={sa}  journal={}  entities={}",
+        ja.len(),
+        ea.len()
+    );
 }
 
 // Up to two existing session eids from the snapshot (real sessions, so a claim
@@ -1383,7 +1386,9 @@ fn write_parity() {
         &br,
         &ts_db,
         &br_db,
-        &format!("[{{\"eid\":\"{e1}\",\"name\":\"doc\",\"comp\":{{\"title\":\"zqw{uid} route 2\"}}}}]"),
+        &format!(
+            "[{{\"eid\":\"{e1}\",\"name\":\"doc\",\"comp\":{{\"title\":\"zqw{uid} route 2\"}}}}]"
+        ),
         "native",
     );
 
@@ -1459,7 +1464,9 @@ fn write_parity() {
             &br,
             &ts_db,
             &br_db,
-            &format!("[{{\"eid\":\"{tclaim}\",\"name\":\"claim\",\"comp\":{{\"session\":\"{sa}\"}}}}]"),
+            &format!(
+                "[{{\"eid\":\"{tclaim}\",\"name\":\"claim\",\"comp\":{{\"session\":\"{sa}\"}}}}]"
+            ),
             "native",
         );
         // second session's claim BOUNCES — refused batch, but a conflict entity is
@@ -1472,7 +1479,9 @@ fn write_parity() {
             &br,
             &ts_db,
             &br_db,
-            &format!("[{{\"eid\":\"{tclaim}\",\"name\":\"claim\",\"comp\":{{\"session\":\"{sb}\"}}}}]"),
+            &format!(
+                "[{{\"eid\":\"{tclaim}\",\"name\":\"claim\",\"comp\":{{\"session\":\"{sb}\"}}}}]"
+            ),
             "native",
         );
         // RELEASE the held claim while the task is unsettled → a resume row is
@@ -1518,7 +1527,14 @@ fn write_parity() {
     // deleting the task cascades the comment ABOUT it (synthesized entity-null in
     // the echo) and — if a session was claimable — releases the claim.
     if !sessions.is_empty() {
-        g(&ts, &br, &format!("[{{\"eid\":\"{t}\",\"name\":\"claim\",\"comp\":{{\"session\":\"{}\"}}}}]", sessions[0]));
+        g(
+            &ts,
+            &br,
+            &format!(
+                "[{{\"eid\":\"{t}\",\"name\":\"claim\",\"comp\":{{\"session\":\"{}\"}}}}]",
+                sessions[0]
+            ),
+        );
     }
     assert_write(
         "cascade/delete-task",
@@ -1674,7 +1690,10 @@ fn write_parity() {
         let ml = uuid_v4();
         assert_write_via(
             "mail/from-persona-native",
-            &ts, &br, &ts_db, &br_db,
+            &ts,
+            &br,
+            &ts_db,
+            &br_db,
             &format!("[{{\"eid\":\"{ml}\",\"name\":\"mail\",\"comp\":{{\"target\":\"{pn}\"}}}}]"),
             "native",
             Some(&ps),
@@ -1688,7 +1707,10 @@ fn write_parity() {
         let ml2 = uuid_v4();
         assert_write_via(
             "mail/from-actor-native",
-            &ts, &br, &ts_db, &br_db,
+            &ts,
+            &br,
+            &ts_db,
+            &br_db,
             &format!("[{{\"eid\":\"{ml2}\",\"name\":\"mail\",\"comp\":{{\"target\":\"{an}\"}}}}]"),
             "native",
             Some(&asn),
@@ -1700,7 +1722,10 @@ fn write_parity() {
         let ml3 = uuid_v4();
         assert_write(
             "mail/from-empty-native",
-            &ts, &br, &ts_db, &br_db,
+            &ts,
+            &br,
+            &ts_db,
+            &br_db,
             &format!("[{{\"eid\":\"{ml3}\",\"name\":\"mail\",\"comp\":{{\"target\":\"{pn}\"}}}}]"),
             "native",
         );
@@ -1744,7 +1769,10 @@ fn write_parity() {
         // session mirrors its column back onto the session alias (spawn wins).
         assert_write(
             "session/create-by-facet-col",
-            &ts, &br, &ts_db, &br_db,
+            &ts,
+            &br,
+            &ts_db,
+            &br_db,
             &format!("[{{\"eid\":\"{s1}\",\"name\":\"spawn\",\"comp\":{{\"effort\":\"low\"}}}}]"),
             "native",
         );
@@ -1762,7 +1790,10 @@ fn write_parity() {
         // both the spawn facet and the session alias, byte-identically.
         assert_write(
             "session/canonical-wins",
-            &ts, &br, &ts_db, &br_db,
+            &ts,
+            &br,
+            &ts_db,
+            &br_db,
             &format!(
                 "[{{\"eid\":\"{s1}\",\"name\":\"session\",\"comp\":{{\"effort\":\"low\"}}}},\
                   {{\"eid\":\"{s1}\",\"name\":\"spawn\",\"comp\":{{\"effort\":\"max\"}}}}]"
@@ -1773,7 +1804,10 @@ fn write_parity() {
         // alias and tombstones the worktree component.
         assert_write(
             "session/worktree-delete",
-            &ts, &br, &ts_db, &br_db,
+            &ts,
+            &br,
+            &ts_db,
+            &br_db,
             &format!("[{{\"eid\":\"{s1}\",\"name\":\"worktree\",\"comp\":null}}]"),
             "native",
         );
@@ -1789,7 +1823,10 @@ fn write_parity() {
         // (7) PARENT UNLINK: clearing s2.parent unlinks the old delegates edge.
         assert_write(
             "session/parent-unlink",
-            &ts, &br, &ts_db, &br_db,
+            &ts,
+            &br,
+            &ts_db,
+            &br_db,
             &format!("[{{\"eid\":\"{s2}\",\"name\":\"session\",\"comp\":{{\"parent\":null}}}}]"),
             "native",
         );
@@ -1826,7 +1863,13 @@ fn write_parity() {
             ),
         );
         // the session claims the task (native take, wip + worked edge)
-        g(&ts, &br, &format!("[{{\"eid\":\"{tsk}\",\"name\":\"claim\",\"comp\":{{\"session\":\"{ssess}\"}}}}]"));
+        g(
+            &ts,
+            &br,
+            &format!(
+                "[{{\"eid\":\"{tsk}\",\"name\":\"claim\",\"comp\":{{\"session\":\"{ssess}\"}}}}]"
+            ),
+        );
         assert_write(
             "cascade/delete-session-resume",
             &ts,
@@ -1850,7 +1893,9 @@ fn write_parity() {
     g(
         &ts,
         &br,
-        &format!("[{{\"eid\":\"{esess}\",\"name\":\"session\",\"comp\":{{\"id\":\"zqw{uid}-esess\"}}}}]"),
+        &format!(
+            "[{{\"eid\":\"{esess}\",\"name\":\"session\",\"comp\":{{\"id\":\"zqw{uid}-esess\"}}}}]"
+        ),
     );
     let en1 = uuid_v4();
     assert_write(

@@ -21,9 +21,8 @@ fn readonly_sees_foreign_commits() {
     .expect("open ro");
 
     rw.execute_batch("create table if not exists _walprobe(n integer)").ok();
-    let dv = |c: &Connection| -> i64 {
-        c.query_row("pragma data_version", [], |r| r.get(0)).unwrap()
-    };
+    let dv =
+        |c: &Connection| -> i64 { c.query_row("pragma data_version", [], |r| r.get(0)).unwrap() };
     let count = |c: &Connection| -> i64 {
         c.query_row("select count(*) from _walprobe", [], |r| r.get(0)).unwrap_or(-1)
     };

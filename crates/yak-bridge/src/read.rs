@@ -80,8 +80,7 @@ pub fn decode(seg: &str) -> String {
 // Split a raw query string (no leading '?') into decoded segments, dropping
 // empties — server.ts's `url.search.slice(1).split('&').filter(Boolean)`.
 pub fn parse_query(raw: &str) -> Query {
-    let segs: Vec<String> =
-        raw.split('&').filter(|s| !s.is_empty()).map(decode).collect();
+    let segs: Vec<String> = raw.split('&').filter(|s| !s.is_empty()).map(decode).collect();
     let mut q = Query {
         deps: false,
         reveal: false,
@@ -116,10 +115,7 @@ pub fn parse_query(raw: &str) -> Query {
             // An aggregate PROJECTION answers a value, not rows. Exactly the
             // three spellings, so a `.canvas!` presence filter (also `!`-tailed)
             // is never mistaken for one.
-            if s == ".count!"
-                || s.starts_with(".distinct=")
-                || s.starts_with(".tally=")
-            {
+            if s == ".count!" || s.starts_with(".distinct=") || s.starts_with(".tally=") {
                 q.aggregate = true;
             }
             q.filters.push(s);
@@ -135,9 +131,7 @@ pub fn parse_query(raw: &str) -> Query {
 // after the leading dot. (A bare word is likewise text in TS, but the kernel's
 // `parse()` reads it as a KIND, so only dot-tokens are screened here.)
 fn is_text_term(seg: &str) -> bool {
-    seg.starts_with('.')
-        && seg.len() > 1
-        && !seg[1..].contains(['=', '!', '<', '>', '~'])
+    seg.starts_with('.') && seg.len() > 1 && !seg[1..].contains(['=', '!', '<', '>', '~'])
 }
 
 // The derived-kind screen as PREDS. `.kind=K` means kindOf(comps) == K — K
@@ -190,16 +184,8 @@ fn cut(mut rows: Vec<Row>, after: Option<i64>, limit: Option<i64>) -> Vec<Row> {
 // layer screens them); `backlinks` are who points AT the hit (built once for
 // the whole set below). Both are keyed off the hit, so a one-entity question
 // costs one entity.
-fn layers(
-    store: &Store,
-    rows: Vec<Row>,
-    deps: bool,
-    backs: bool,
-    reveal: bool,
-) -> Value {
-    let back = backs
-        .then(|| backlinks_of(store, &rows, reveal))
-        .unwrap_or_default();
+fn layers(store: &Store, rows: Vec<Row>, deps: bool, backs: bool, reveal: bool) -> Value {
+    let back = backs.then(|| backlinks_of(store, &rows, reveal)).unwrap_or_default();
     Value::Array(
         rows.iter()
             .map(|r| {
@@ -236,11 +222,7 @@ fn quarantined(store: &Store, eid: &str) -> bool {
 // which carry the synthetic persona `reads` edges too. Each reference is
 // rendered `{ from: <id>, via, title }`, the source's human id and doc title
 // read once from a bulk `rows_of`, grouped per target.
-fn backlinks_of(
-    store: &Store,
-    hits: &[Row],
-    reveal: bool,
-) -> HashMap<String, Vec<Value>> {
+fn backlinks_of(store: &Store, hits: &[Row], reveal: bool) -> HashMap<String, Vec<Value>> {
     let eids: Vec<String> = hits.iter().map(|r| r.eid.clone()).collect();
     let mut refs: Vec<(String, String, String)> = store
         .refs_of(&eids)
@@ -258,17 +240,10 @@ fn backlinks_of(
     }
     // Resolve each distinct source once — its human id and doc title ride along
     // because a backlink is READ, not chased.
-    let froms: Vec<String> = refs
-        .iter()
-        .map(|(f, _, _)| f.clone())
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .collect();
-    let named: HashMap<String, Row> = store
-        .rows_of(&froms)
-        .into_iter()
-        .map(|r| (r.eid.clone(), r))
-        .collect();
+    let froms: Vec<String> =
+        refs.iter().map(|(f, _, _)| f.clone()).collect::<HashSet<_>>().into_iter().collect();
+    let named: HashMap<String, Row> =
+        store.rows_of(&froms).into_iter().map(|r| (r.eid.clone(), r)).collect();
     let mut back: HashMap<String, Vec<Value>> = HashMap::new();
     for (from, via, to) in &refs {
         let Some(r) = named.get(from) else { continue };
@@ -294,12 +269,7 @@ fn backlinks_of(
 // evaluator — over the same filter LINE the route joins (`segs.join('&')`).
 fn aggregate(store: &Store, filters: &[String]) -> Result<Value, String> {
     let parsed = parse_query_line(&filters.join("&"))?;
-    let op = parsed
-        .agg
-        .as_ref()
-        .ok_or("not an aggregate query")?
-        .op
-        .clone();
+    let op = parsed.agg.as_ref().ok_or("not an aggregate query")?.op.clone();
     let counts = subquery::eval_agg(store, &parsed)?;
     let mut out = Map::new();
     match op.as_str() {
@@ -310,9 +280,7 @@ fn aggregate(store: &Store, filters: &[String]) -> Result<Value, String> {
         "distinct" => {
             out.insert(
                 "distinct".into(),
-                Value::Array(
-                    counts.iter().map(|(k, _)| Value::from(k.as_str())).collect(),
-                ),
+                Value::Array(counts.iter().map(|(k, _)| Value::from(k.as_str())).collect()),
             );
         }
         _ => {
@@ -383,9 +351,8 @@ pub fn answer(store: &Store, raw: &str) -> Result<Value, String> {
     // (`.kind=…` or a bare kind word); a defaulted kind never adds that screen,
     // so `.status=open` alone spans every kind that wears the column, as it does
     // on the route.
-    let named_kind = q.filters.iter().any(|f| {
-        f.starts_with(".kind=") || f == ".kind" || !f.starts_with('.')
-    });
+    let named_kind =
+        q.filters.iter().any(|f| f.starts_with(".kind=") || f == ".kind" || !f.starts_with('.'));
     // The pure-limit HOT PATH: an explicit `limit` lets the kernel push the
     // newest-N window into SQL (`rows_window`), materializing at most `limit`
     // rows instead of bulk-loading the whole kind and cutting in Rust — flat
@@ -398,8 +365,7 @@ pub fn answer(store: &Store, raw: &str) -> Result<Value, String> {
         if named_kind {
             preds.extend(kind_screen(&kind));
         }
-        let rows =
-            store.rows_window(&kind, &preds, q.after, Some(limit), q.reveal);
+        let rows = store.rows_window(&kind, &preds, q.after, Some(limit), q.reveal);
         return Ok(layers(store, rows, q.deps, q.backlinks, q.reveal));
     }
     let rows = store.rows_matching(&kind, &preds, q.reveal)?;

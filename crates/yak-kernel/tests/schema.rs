@@ -30,20 +30,15 @@ fn snapshot(conn: &Connection) -> String {
         .unwrap();
     let rows = st
         .query_map([], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-            ))
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
         })
         .unwrap();
     for row in rows {
         let (t, n, s) = row.unwrap();
         out.push_str(&format!("--[{t} {n}]--\n{s}\n"));
     }
-    let mut ts = conn
-        .prepare("select name from sqlite_master where type='table' order by name")
-        .unwrap();
+    let mut ts =
+        conn.prepare("select name from sqlite_master where type='table' order by name").unwrap();
     let tables: Vec<String> =
         ts.query_map([], |r| r.get(0)).unwrap().filter_map(|x| x.ok()).collect();
     for t in tables {
@@ -76,20 +71,16 @@ fn snapshot(conn: &Connection) -> String {
 }
 
 fn has(conn: &Connection, kind: &str, name: &str) -> bool {
-    conn.query_row(
-        "select 1 from sqlite_master where type = ?1 and name = ?2",
-        [kind, name],
-        |r| r.get::<_, i64>(0),
-    )
+    conn.query_row("select 1 from sqlite_master where type = ?1 and name = ?2", [kind, name], |r| {
+        r.get::<_, i64>(0)
+    })
     .is_ok()
 }
 
 fn has_col(conn: &Connection, table: &str, col: &str) -> bool {
-    conn.query_row(
-        "select 1 from pragma_table_info(?1) where name = ?2",
-        [table, col],
-        |r| r.get::<_, i64>(0),
-    )
+    conn.query_row("select 1 from pragma_table_info(?1) where name = ?2", [table, col], |r| {
+        r.get::<_, i64>(0)
+    })
     .is_ok()
 }
 
@@ -101,12 +92,28 @@ fn create_produces_the_full_schema() {
     let ws = WriteStore::create_or_migrate(":memory:").unwrap();
     let c = &ws.conn;
     for t in [
-        "entity", "doc", "task", "session", "dependency", "journal",
-        "journal_touch", "server_meta", "mail", "comment", "claim",
+        "entity",
+        "doc",
+        "task",
+        "session",
+        "dependency",
+        "journal",
+        "journal_touch",
+        "server_meta",
+        "mail",
+        "comment",
+        "claim",
         // derived component tables
-        "project", "board", "notice", "error", "deliver", "anchor", "meta",
+        "project",
+        "board",
+        "notice",
+        "error",
+        "deliver",
+        "anchor",
+        "meta",
         // fts virtual tables
-        "doc_fts", "doc_gram",
+        "doc_fts",
+        "doc_gram",
     ] {
         assert!(has(c, "table", t), "missing table {t}");
     }
@@ -122,9 +129,8 @@ fn create_produces_the_full_schema() {
     assert!(has_col(c, "task", "domain"));
     assert!(has_col(c, "error", "message"));
     // the epoch row was minted.
-    let epoch: String = c
-        .query_row("select v from server_meta where k = 'epoch'", [], |r| r.get(0))
-        .unwrap();
+    let epoch: String =
+        c.query_row("select v from server_meta where k = 'epoch'", [], |r| r.get(0)).unwrap();
     assert!(!epoch.is_empty());
 }
 
@@ -140,8 +146,7 @@ fn additive_migration_restores_the_old_shape() {
     let fresh = snapshot(c);
 
     // regress to a db that predates the last hand column and a derived table.
-    c.execute_batch("alter table task drop column domain; drop table meta;")
-        .unwrap();
+    c.execute_batch("alter table task drop column domain; drop table meta;").unwrap();
     assert_ne!(snapshot(c), fresh, "the regression must change the schema");
     assert!(!has_col(c, "task", "domain"));
     assert!(!has(c, "table", "meta"));

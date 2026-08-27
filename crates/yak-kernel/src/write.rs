@@ -161,24 +161,20 @@ fn to_id(conn: &Connection, eid: &str) -> Option<i64> {
 }
 
 fn is_dead(conn: &Connection, eid: &str) -> bool {
-    conn.query_row("select 1 from tombstone where eid = ?1", [eid], |r| {
-        r.get::<_, i64>(0)
-    })
-    .optional()
-    .ok()
-    .flatten()
-    .is_some()
+    conn.query_row("select 1 from tombstone where eid = ?1", [eid], |r| r.get::<_, i64>(0))
+        .optional()
+        .ok()
+        .flatten()
+        .is_some()
 }
 
 // A file may lack a plugin's tables (D-22530 §2: readable-but-inert); the
 // generic machinery — cascade walks, comp deletes — skips what isn't there
 // rather than erroring.
 pub(crate) fn has_table(conn: &Connection, t: &str) -> bool {
-    conn.query_row(
-        "select 1 from sqlite_master where type = 'table' and name = ?1",
-        [t],
-        |r| r.get::<_, i64>(0),
-    )
+    conn.query_row("select 1 from sqlite_master where type = 'table' and name = ?1", [t], |r| {
+        r.get::<_, i64>(0)
+    })
     .optional()
     .ok()
     .flatten()
@@ -188,18 +184,20 @@ pub(crate) fn has_table(conn: &Connection, t: &str) -> bool {
 pub(crate) fn has_col(conn: &Connection, t: &str, c: &str) -> bool {
     has_table(conn, t)
         && conn
-            .query_row(
-                "select 1 from pragma_table_info(?1) where name = ?2",
-                [t, c],
-                |r| r.get::<_, i64>(0),
-            )
+            .query_row("select 1 from pragma_table_info(?1) where name = ?2", [t, c], |r| {
+                r.get::<_, i64>(0)
+            })
             .optional()
             .ok()
             .flatten()
             .is_some()
 }
 
-fn table_cols(conn: &Connection, cache: &mut HashMap<String, HashSet<String>>, t: &str) -> HashSet<String> {
+fn table_cols(
+    conn: &Connection,
+    cache: &mut HashMap<String, HashSet<String>>,
+    t: &str,
+) -> HashSet<String> {
     if let Some(hit) = cache.get(t) {
         return hit.clone();
     }
@@ -258,11 +256,9 @@ fn read_comp(conn: &Connection, name: &str, eid: &str) -> Option<Map<String, Val
     let v = vocab();
     if name == "entity" {
         let row: Option<(String, Option<i64>)> = conn
-            .query_row(
-                "select eid, num from entity where eid = ?1",
-                [eid],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )
+            .query_row("select eid, num from entity where eid = ?1", [eid], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
             .optional()
             .ok()
             .flatten();
@@ -388,9 +384,8 @@ fn parse_value(conn: &Connection, t: &PropType, name: &str, v: &Value) -> Result
 // Components the wire may not touch, whoever the caller (db.ts serverOwned):
 // their data is written only by trusted server code beside its own journal
 // record. Dropped from the batch in silence, delete included.
-const SERVER_OWNED: [&str; 8] = [
-    "lease", "usage", "imported", "resume", "delivered", "error", "exception", "redaction",
-];
+const SERVER_OWNED: [&str; 8] =
+    ["lease", "usage", "imported", "resume", "delivered", "error", "exception", "redaction"];
 
 // There is no longer an UNPORTED refuse list: at rung 7c the LAST unported
 // cluster — the session-facet mirroring transforms (dual_spawn / dual_facet /
@@ -467,8 +462,24 @@ const SERVER_OWNED: [&str; 8] = [
 // comp now commits natively or proxies by this allowlist — the native-write port
 // is complete, and the divergence list is empty (D-22804 rung 8's precondition).
 pub const NATIVE_COMPS: [&str; 19] = [
-    "doc", "task", "board", "project", "comment", "dependency", "claim", "entity", "email",
-    "deliver", "entry", "wake", "stop_request", "mail", "session", "spawn", "worktree", "runtime",
+    "doc",
+    "task",
+    "board",
+    "project",
+    "comment",
+    "dependency",
+    "claim",
+    "entity",
+    "email",
+    "deliver",
+    "entry",
+    "wake",
+    "stop_request",
+    "mail",
+    "session",
+    "spawn",
+    "worktree",
+    "runtime",
     "setting",
 ];
 
@@ -505,7 +516,9 @@ pub fn mail_domain() -> String {
 // exactly one `@`, both halves non-empty, the domain (case-insensitively) ours.
 fn fleet_local(address: &str) -> Option<String> {
     let parts: Vec<&str> = address.trim().split('@').collect();
-    if parts.len() == 2 && !parts[0].is_empty() && !parts[1].is_empty()
+    if parts.len() == 2
+        && !parts[0].is_empty()
+        && !parts[1].is_empty()
         && parts[1].to_lowercase() == mail_domain()
     {
         Some(parts[0].to_string())
@@ -693,8 +706,8 @@ fn normalize_url(raw: &str) -> Result<String> {
     if text.is_empty() {
         return Err(refuse("Enter a URL."));
     }
-    let url = url::Url::parse(text)
-        .map_err(|_| refuse("Enter a valid URL, including https://."))?;
+    let url =
+        url::Url::parse(text).map_err(|_| refuse("Enter a valid URL, including https://."))?;
     if url.scheme() != "http" && url.scheme() != "https" {
         return Err(refuse("Use an http or https URL."));
     }
@@ -761,10 +774,7 @@ fn guard_settings(conn: &Connection, mut changes: Vec<Change>) -> Result<Vec<Cha
             match setting_key_of(conn, &c.eid) {
                 Some(k) => k,
                 None => {
-                    return Err(refuse(format!(
-                        "setting {} names no catalog key",
-                        &c.eid[..8]
-                    )))
+                    return Err(refuse(format!("setting {} names no catalog key", &c.eid[..8])))
                 }
             }
         };
@@ -839,9 +849,10 @@ fn replace_wakes(conn: &Connection, changes: Vec<Change>) -> Vec<Change> {
     for change in changes {
         let to = to_of.get(&change.eid).cloned();
         let is_untargeted_wake = change.name == "wake"
-            && change.comp.as_ref().is_some_and(|m| {
-                m.get("target").map(|v| v.is_null()).unwrap_or(true)
-            });
+            && change
+                .comp
+                .as_ref()
+                .is_some_and(|m| m.get("target").map(|v| v.is_null()).unwrap_or(true));
         let already: bool = conn
             .query_row(
                 "select 1 from wake where entity = (select id from entity where eid = ?1)",
@@ -1102,7 +1113,9 @@ fn read_facet_row(conn: &Connection, name: &str, eid: &str, cols: &[String]) -> 
                 Ok(rusqlite::types::ValueRef::Text(t)) => {
                     Value::from(String::from_utf8_lossy(t).to_string())
                 }
-                Ok(rusqlite::types::ValueRef::Blob(b)) => Value::from(String::from_utf8_lossy(b).to_string()),
+                Ok(rusqlite::types::ValueRef::Blob(b)) => {
+                    Value::from(String::from_utf8_lossy(b).to_string())
+                }
             };
             m.insert(col.clone(), val);
         }
@@ -1486,12 +1499,7 @@ fn normalize(conn: &Connection, changes: Vec<Change>) -> Result<Vec<Change>> {
                             .map(|(_, t)| t.clone())
                     };
                     let val = match t {
-                        Some(t) => parse_value(
-                            conn,
-                            &t,
-                            &format!("{}.{col}", change.name),
-                            val,
-                        )?,
+                        Some(t) => parse_value(conn, &t, &format!("{}.{col}", change.name), val)?,
                         None => val.clone(),
                     };
                     parsed.insert(col.clone(), val);
@@ -1564,9 +1572,7 @@ impl Gate for ClaimGate {
                         |r| r.get(0),
                     )
                     .optional()?;
-                let holder_label = holder_id
-                    .clone()
-                    .unwrap_or_else(|| human(cx.conn, &holder_eid));
+                let holder_label = holder_id.clone().unwrap_or_else(|| human(cx.conn, &holder_eid));
                 cx.bounce = Some(Bounce {
                     target: c.eid.clone(),
                     loser: loser.unwrap_or_else(|| session.to_string()),
@@ -1642,10 +1648,7 @@ impl Gate for AliasGate {
             )
             .optional()?;
         let (cur_slug, cur_slugs) = cur.unwrap_or((None, None));
-        let slug = comp
-            .get("slug")
-            .and_then(|v| v.as_str().map(String::from))
-            .or(cur_slug);
+        let slug = comp.get("slug").and_then(|v| v.as_str().map(String::from)).or(cur_slug);
         let extra = if comp.contains_key("slugs") {
             comp.get("slugs").and_then(|v| v.as_str().map(String::from))
         } else {
@@ -1674,10 +1677,7 @@ impl Gate for AliasGate {
                 )
                 .optional()?;
             if let Some(owner) = owner {
-                return Err(refuse(format!(
-                    "alias {s} already names {}",
-                    human(cx.conn, &owner)
-                )));
+                return Err(refuse(format!("alias {s} already names {}", human(cx.conn, &owner))));
             }
         }
         Ok(())
@@ -1789,11 +1789,14 @@ impl Default for ApplyOpts<'_> {
 // human a bare browser tab is recorded as. With several people it goes dark
 // rather than guess; an agent or the server's own machinery never reaches it.
 fn owner_actor(conn: &Connection) -> Option<String> {
-    let mut st = conn
-        .prepare("select o.eid from person p join entity o on o.id = p.entity")
-        .ok()?;
+    let mut st =
+        conn.prepare("select o.eid from person p join entity o on o.id = p.entity").ok()?;
     let people: Vec<String> = st.query_map([], |r| r.get(0)).ok()?.flatten().collect();
-    if people.len() == 1 { people.into_iter().next() } else { None }
+    if people.len() == 1 {
+        people.into_iter().next()
+    } else {
+        None
+    }
 }
 
 // The project a session's WORK names when its cwd doesn't (db.ts workProject,
@@ -2015,9 +2018,8 @@ fn stamp_family(v: &Vocab) -> Vec<String> {
             let wire_via = cols.iter().any(|(n, _)| n == "via");
             let Some(st) = v.stamped.get(name) else { return false };
             let st_via = st.iter().any(|(n, _)| n == "via");
-            let union_has = |k: &str| {
-                cols.iter().any(|(n, _)| n == k) || st.iter().any(|(n, _)| n == k)
-            };
+            let union_has =
+                |k: &str| cols.iter().any(|(n, _)| n == k) || st.iter().any(|(n, _)| n == k);
             !wire_via && st_via && union_has("at") && union_has("by")
         })
         .map(|(n, _)| n.clone())
@@ -2029,22 +2031,13 @@ fn clocked_family(v: &Vocab) -> Vec<String> {
         .iter()
         .filter(|(name, cols)| {
             cols.is_empty()
-                && v.stamped
-                    .get(name)
-                    .map(|s| s.len() == 1 && s[0].0 == "at")
-                    .unwrap_or(false)
+                && v.stamped.get(name).map(|s| s.len() == 1 && s[0].0 == "at").unwrap_or(false)
         })
         .map(|(n, _)| n.clone())
         .collect()
 }
 
-fn ref_to_id(
-    conn: &Connection,
-    name: &str,
-    owner: &str,
-    col: &str,
-    v: &Value,
-) -> Result<Value> {
+fn ref_to_id(conn: &Connection, name: &str, owner: &str, col: &str, v: &Value) -> Result<Value> {
     if v.is_null() {
         return Ok(Value::Null);
     }
@@ -2070,11 +2063,7 @@ fn bind_value(t: Option<&PropType>, v: &Value) -> Value {
     }
 }
 
-fn exec_change(
-    conn: &Connection,
-    sql: &str,
-    params: &[Value],
-) -> rusqlite::Result<usize> {
+fn exec_change(conn: &Connection, sql: &str, params: &[Value]) -> rusqlite::Result<usize> {
     let mut st = conn.prepare_cached(sql)?;
     let bind: Vec<Box<dyn rusqlite::ToSql>> = params
         .iter()
@@ -2110,9 +2099,9 @@ fn settled(status: &str) -> bool {
 // it, from where, and in what nested order (db.ts priorClaims, src/db.ts:4183).
 #[derive(Clone)]
 struct PriorClaim {
-    eid: String,        // the CLAIMED entity (a task), keyed on resume.entity
-    claimed_at: String, // the lease's stamp — the outer sort key
-    claim_order: i64,   // the claim row's rowid — the tiebreak within one stamp
+    eid: String,           // the CLAIMED entity (a task), keyed on resume.entity
+    claimed_at: String,    // the lease's stamp — the outer sort key
+    claim_order: i64,      // the claim row's rowid — the tiebreak within one stamp
     actor: Option<String>, // the holder session's actor eid, or None
     cwd: Option<String>,   // the holder session's cwd, for the ventureAt fallback
 }
@@ -2209,9 +2198,8 @@ fn worktree_gitdir(cwd: &str) -> Option<String> {
     let mut at = clean_path(cwd);
     loop {
         let content = std::fs::read_to_string(format!("{at}/.git")).unwrap_or_default();
-        let gitdir = content
-            .lines()
-            .find_map(|l| l.trim_start().strip_prefix("gitdir:").map(|s| s.trim()));
+        let gitdir =
+            content.lines().find_map(|l| l.trim_start().strip_prefix("gitdir:").map(|s| s.trim()));
         if let Some(g) = gitdir {
             return Some(resolve_path(&at, g));
         }
@@ -2232,26 +2220,18 @@ fn venture_at(conn: &Connection, cwd: Option<&str>) -> Option<String> {
     if !has_table(conn, "repo") {
         return None;
     }
-    let mut st = conn
-        .prepare("select o.eid, r.path from repo r join entity o on o.id = r.entity")
-        .ok()?;
-    let repos: Vec<(String, String)> = st
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
-        .ok()?
-        .flatten()
-        .collect();
+    let mut st =
+        conn.prepare("select o.eid, r.path from repo r join entity o on o.id = r.entity").ok()?;
+    let repos: Vec<(String, String)> =
+        st.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).ok()?.flatten().collect();
     let paths: Vec<String> = repos.iter().map(|(_, p)| p.clone()).collect();
     if let Some(at) = ancestor_at(&paths, cwd) {
         return repos.iter().find(|(_, p)| clean_path(p) == at).map(|(e, _)| e.clone());
     }
     let gitdir = worktree_gitdir(cwd)?;
-    let roots: Vec<String> =
-        repos.iter().map(|(_, p)| resolve_path(p, ".git/worktrees")).collect();
+    let roots: Vec<String> = repos.iter().map(|(_, p)| resolve_path(p, ".git/worktrees")).collect();
     let common = ancestor_at(&roots, &gitdir)?;
-    repos
-        .iter()
-        .find(|(_, p)| resolve_path(p, ".git/worktrees") == common)
-        .map(|(e, _)| e.clone())
+    repos.iter().find(|(_, p)| resolve_path(p, ".git/worktrees") == common).map(|(e, _)| e.clone())
 }
 
 pub fn apply(
@@ -2279,11 +2259,12 @@ pub fn apply(
     let mut said_creator: HashSet<String> = HashSet::new();
     let mut said_editor: HashSet<String> = HashSet::new();
     let mut bounce: Option<Bounce> = None;
-    let took = |log: &mut Vec<(String, Vec<String>)>, eid: &str, name: &str| {
-        match log.iter_mut().find(|(e, _)| e == eid) {
-            Some((_, names)) => names.push(name.to_string()),
-            None => log.push((eid.to_string(), vec![name.to_string()])),
-        }
+    let took = |log: &mut Vec<(String, Vec<String>)>, eid: &str, name: &str| match log
+        .iter_mut()
+        .find(|(e, _)| e == eid)
+    {
+        Some((_, names)) => names.push(name.to_string()),
+        None => log.push((eid.to_string(), vec![name.to_string()])),
     };
 
     conn.execute_batch("begin immediate").map_err(ApplyError::Db)?;
@@ -2319,8 +2300,11 @@ pub fn apply(
                 continue;
             }
             let known = c.name == "dependency" || wire_cols(v, &c.name).is_some();
-            if c.comp.is_none() || c.name == "dependency" || !known
-                || killed.contains(&c.eid) || is_dead(conn, &c.eid)
+            if c.comp.is_none()
+                || c.name == "dependency"
+                || !known
+                || killed.contains(&c.eid)
+                || is_dead(conn, &c.eid)
             {
                 continue;
             }
@@ -2332,13 +2316,11 @@ pub fn apply(
         let kind_refs: Vec<(String, String, String)> = v
             .deaths
             .iter()
-            .filter_map(|(name, col, _)| {
-                match v.prop_type(name, col) {
-                    Some(PropType::Eid(target)) if target != "entity" => {
-                        Some((name.clone(), col.clone(), target))
-                    }
-                    _ => None,
+            .filter_map(|(name, col, _)| match v.prop_type(name, col) {
+                Some(PropType::Eid(target)) if target != "entity" => {
+                    Some((name.clone(), col.clone(), target))
                 }
+                _ => None,
             })
             .collect();
         let mut ref_writes: Vec<(usize, String)> = vec![]; // (kind_refs idx, owner eid)
@@ -2429,11 +2411,8 @@ pub fn apply(
                 continue;
             }
             for (i, (rname, rcol, target)) in kind_refs.iter().enumerate() {
-                let wrote = comp
-                    .as_ref()
-                    .and_then(|m| m.get(rcol))
-                    .map(|x| !x.is_null())
-                    .unwrap_or(false);
+                let wrote =
+                    comp.as_ref().and_then(|m| m.get(rcol)).map(|x| !x.is_null()).unwrap_or(false);
                 if rname == name && wrote {
                     ref_writes.push((i, eid.clone()));
                 }
@@ -2452,11 +2431,7 @@ pub fn apply(
                     if !real.contains(col) {
                         return Err(refuse(format!("unknown column: {name}.{col}")));
                     }
-                    let cur = row
-                        .as_ref()
-                        .and_then(|r| r.get(col))
-                        .cloned()
-                        .unwrap_or(Value::Null);
+                    let cur = row.as_ref().and_then(|r| r.get(col)).cloned().unwrap_or(Value::Null);
                     let want = want.as_str().map(String::from);
                     let have = if cur.is_null() { None } else { Some(sha(&cur)) };
                     if have == want {
@@ -2473,13 +2448,8 @@ pub fn apply(
             }
             // ---- gates: the plugins' in-transaction rules ----
             for g in gates {
-                let mut cx = GateCx {
-                    conn,
-                    change: &change,
-                    extra: vec![],
-                    touch: vec![],
-                    bounce: None,
-                };
+                let mut cx =
+                    GateCx { conn, change: &change, extra: vec![], touch: vec![], bounce: None };
                 let r = g.on_change(&mut cx);
                 for t in cx.touch {
                     push_touch(&mut touched, &t);
@@ -2609,10 +2579,7 @@ pub fn apply(
                             continue;
                         }
                         let n = conn
-                            .execute(
-                                &format!("delete from {} where entity = ?1", q(cname)),
-                                [did],
-                            )
+                            .execute(&format!("delete from {} where entity = ?1", q(cname)), [did])
                             .unwrap_or(0);
                         if n > 0 {
                             took(&mut removed_log, &d, cname);
@@ -2625,15 +2592,10 @@ pub fn apply(
                         if v.comp(cname).is_some() {
                             continue;
                         }
-                        let _ = conn.execute(
-                            &format!("delete from {} where entity = ?1", q(cname)),
-                            [did],
-                        );
+                        let _ = conn
+                            .execute(&format!("delete from {} where entity = ?1", q(cname)), [did]);
                     }
-                    conn.execute(
-                        "delete from dependency where parent = ?1 or child = ?1",
-                        [did],
-                    )?;
+                    conn.execute("delete from dependency where parent = ?1 or child = ?1", [did])?;
                 }
                 let stamp = now_iso();
                 for d in doomed {
@@ -2683,9 +2645,8 @@ pub fn apply(
                 );
                 let mut params = vals.clone();
                 params.push(Value::from(eid.as_str()));
-                hit = exec_change(conn, &sql, &params).map_err(|e| {
-                    refuse(format!("{name} {} refused: {e}", human(conn, eid)))
-                })?;
+                hit = exec_change(conn, &sql, &params)
+                    .map_err(|e| refuse(format!("{name} {} refused: {e}", human(conn, eid))))?;
             }
             if hit > 0 {
                 continue;
@@ -2741,9 +2702,8 @@ pub fn apply(
                     );
                     let mut params = vals.clone();
                     params.push(Value::from(eid.as_str()));
-                    exec_change(conn, &sql, &params).map_err(|e| {
-                        refuse(format!("{name} {} refused: {e}", human(conn, eid)))
-                    })?;
+                    exec_change(conn, &sql, &params)
+                        .map_err(|e| refuse(format!("{name} {} refused: {e}", human(conn, eid))))?;
                     created_comps.push(format!("{name} {eid}"));
                 } else {
                     let n = conn.execute(
@@ -2800,21 +2760,16 @@ pub fn apply(
         let via = writer_via(conn, opts.writer);
         let actor_id = actor.as_deref().and_then(|a| to_id(conn, a));
         let via_id = via.as_deref().and_then(|a| to_id(conn, a));
-        let alive = |eid: &str| -> bool {
-            to_id(conn, eid).is_some() && !is_dead(conn, eid)
-        };
+        let alive = |eid: &str| -> bool { to_id(conn, eid).is_some() && !is_dead(conn, eid) };
         // ---- the resume stack (db.ts:4877-4936) ----
         // Taking a task again pops it; settling one removes it; releasing an
         // unsettled task pushes it for the holder's actor. Guarded on the table
         // existing so a plugin-less file simply skips it.
         if has_table(conn, "resume") {
             let final_claims: HashSet<String> = {
-                let mut st = conn
-                    .prepare("select co.eid from claim c join entity co on co.id = c.entity")?;
-                let set = st
-                    .query_map([], |r| r.get::<_, String>(0))?
-                    .flatten()
-                    .collect();
+                let mut st =
+                    conn.prepare("select co.eid from claim c join entity co on co.id = c.entity")?;
+                let set = st.query_map([], |r| r.get::<_, String>(0))?.flatten().collect();
                 set
             };
             // Every claim/task the batch named: taken-again pops, settled pops;
@@ -2849,8 +2804,7 @@ pub fn apply(
                 .filter(|c| !final_claims.contains(&c.eid))
                 .filter(|c| task_status(conn, &c.eid).map(|s| !settled(&s)).unwrap_or(false))
                 .map(|c| {
-                    let actor =
-                        c.actor.clone().or_else(|| venture_at(conn, c.cwd.as_deref()));
+                    let actor = c.actor.clone().or_else(|| venture_at(conn, c.cwd.as_deref()));
                     PriorClaim { actor, ..c.clone() }
                 })
                 .filter(|c| c.actor.is_some())
@@ -2859,9 +2813,7 @@ pub fn apply(
                 a.claimed_at.cmp(&b.claimed_at).then(a.claim_order.cmp(&b.claim_order))
             });
             let mut top: i64 = conn
-                .query_row("select coalesce(max(rank), 0) from resume", [], |r| {
-                    r.get::<_, f64>(0)
-                })
+                .query_row("select coalesce(max(rank), 0) from resume", [], |r| r.get::<_, f64>(0))
                 .map(|f| f as i64)
                 .unwrap_or(0);
             for item in released {
@@ -3086,9 +3038,8 @@ pub fn apply(
                     row.insert(cname.clone(), val.clone());
                 }
             }
-            if let Some(i) = changes
-                .iter()
-                .rposition(|c| c.eid == eid && c.name == name && c.comp.is_some())
+            if let Some(i) =
+                changes.iter().rposition(|c| c.eid == eid && c.name == name && c.comp.is_some())
             {
                 changes[i].comp = Some(row);
             }
@@ -3174,10 +3125,7 @@ pub fn apply(
                 let audit: rusqlite::Result<()> = (|| {
                     conn.execute_batch("begin")?;
                     let ceid = uuid::Uuid::new_v4().to_string();
-                    conn.execute(
-                        "insert or ignore into entity (eid) values (?1)",
-                        [&ceid],
-                    )?;
+                    conn.execute("insert or ignore into entity (eid) values (?1)", [&ceid])?;
                     conn.execute(
                         "insert into conflict (entity, target, loser, holder) values \
                          ((select id from entity where eid = ?1), \
@@ -3238,9 +3186,7 @@ fn check_ref(
     }
     sql.push_str(" limit 1");
     let bad: Option<(String, String)> = conn
-        .query_row(&sql, rusqlite::params_from_iter(params), |r| {
-            Ok((r.get(0)?, r.get(1)?))
-        })
+        .query_row(&sql, rusqlite::params_from_iter(params), |r| Ok((r.get(0)?, r.get(1)?)))
         .optional()?;
     if let Some((owner_eid, target_eid)) = bad {
         let gone = is_dead(conn, &target_eid);

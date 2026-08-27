@@ -18,12 +18,7 @@ inventory::submit! {
 
 venum!("sessions", "turnStates", 20, ["idle", "busy"]);
 venum!("sessions", "messageRoles", 30, ["user", "agent"]);
-venum!(
-    "sessions",
-    "httpMethods",
-    40,
-    ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
-);
+venum!("sessions", "httpMethods", 40, ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]);
 
 // A session's identity and configuration. The tail launch/worktree/runtime
 // columns are rolling aliases apply() mirrors into the canonical facets; the

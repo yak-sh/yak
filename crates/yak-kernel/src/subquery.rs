@@ -133,17 +133,11 @@ fn parse_reaches(rest: &str) -> Result<Pred, String> {
     }
     let (ty, cap) = bracket.split_once(',').ok_or_else(malformed)?;
     let type_ = ty.trim().to_string();
-    let depth: i64 = cap
-        .trim()
-        .strip_prefix("<=")
-        .and_then(|n| n.trim().parse().ok())
-        .ok_or_else(malformed)?;
+    let depth: i64 =
+        cap.trim().strip_prefix("<=").and_then(|n| n.trim().parse().ok()).ok_or_else(malformed)?;
     let v = vocab();
     if !v.edges.iter().any(|e| e == &type_) {
-        return Err(format!(
-            ".reaches walks an edge type ({}) — not {type_}",
-            v.edges.join(", ")
-        ));
+        return Err(format!(".reaches walks an edge type ({}) — not {type_}", v.edges.join(", ")));
     }
     if depth < 1 {
         return Err(format!(".reaches needs at least one hop: got <={depth}"));
@@ -161,19 +155,13 @@ fn parse_reaches(rest: &str) -> Result<Pred, String> {
 // (type, depth, target), so a candidate row then tests membership with a Set
 // lookup. Rebuilt per evaluation pass — an edge landing between two answers must
 // move the closure — so a reach sub re-answers correctly as its graph changes.
-pub fn reach_sets(
-    store: &Store,
-    preds: &[Pred],
-) -> HashMap<String, HashSet<String>> {
+pub fn reach_sets(store: &Store, preds: &[Pred]) -> HashMap<String, HashSet<String>> {
     let mut m = HashMap::new();
     for p in preds {
         if let Some(reach) = &p.reach {
             let key = query::reach_key(reach, &p.value);
             m.entry(key).or_insert_with(|| {
-                store
-                    .reaching(&p.value, &reach.type_, reach.depth)
-                    .into_iter()
-                    .collect()
+                store.reaching(&p.value, &reach.type_, reach.depth).into_iter().collect()
             });
         }
     }
@@ -202,21 +190,15 @@ pub fn parse_query_line(line: &str) -> Result<Parsed, String> {
                 out.kind = Some(k);
                 continue;
             }
-            return Err(format!(
-                "bare-word (text) sub terms are not ported in this rung: '{seg}'"
-            ));
+            return Err(format!("bare-word (text) sub terms are not ported in this rung: '{seg}'"));
         }
         // Window directives.
         if let Some(v) = seg.strip_prefix(".limit=") {
-            out.win.limit = Some(
-                v.parse().map_err(|_| format!(".limit takes a number: {seg}"))?,
-            );
+            out.win.limit = Some(v.parse().map_err(|_| format!(".limit takes a number: {seg}"))?);
             continue;
         }
         if let Some(v) = seg.strip_prefix(".after=") {
-            out.win.after = Some(
-                v.parse().map_err(|_| format!(".after takes a number: {seg}"))?,
-            );
+            out.win.after = Some(v.parse().map_err(|_| format!(".after takes a number: {seg}"))?);
             continue;
         }
         if let Some(v) = seg.strip_prefix(".order=") {
@@ -296,11 +278,9 @@ pub fn parse_query_line(line: &str) -> Result<Parsed, String> {
             continue;
         }
         if seg.starts_with(".edges") {
-            return Err(
-                ".edges rides a query (.edges!) and may project the far endpoint \
+            return Err(".edges rides a query (.edges!) and may project the far endpoint \
                  (.edges.peers=status,title)"
-                    .into(),
-            );
+                .into());
         }
         // A plain filter token — dot_token refuses path/reverse hops, so those
         // reach the same loud boundary here.
@@ -333,10 +313,8 @@ fn candidates(store: &Store, p: &Parsed) -> Result<Vec<Row>, String> {
     }
     // A `.comp!` presence pred (prop empty, op present-or-empty) anchors the
     // candidate set to that component's wearers — the WS_SETS shape (`.canvas!`).
-    if let Some(anchor) = p
-        .preds
-        .iter()
-        .find(|pr| pr.prop.is_empty() && (pr.op.is_empty() || pr.op == "~="))
+    if let Some(anchor) =
+        p.preds.iter().find(|pr| pr.prop.is_empty() && (pr.op.is_empty() || pr.op == "~="))
     {
         return Ok(store.rows_of(&presence_eids(store, &anchor.comp)));
     }
@@ -352,9 +330,7 @@ fn presence_eids(store: &Store, comp: &str) -> Vec<String> {
     }
     crate::store::collect(
         &store.conn,
-        &format!(
-            "select e.eid from \"{comp}\" t join entity e on e.id = t.entity order by e.num"
-        ),
+        &format!("select e.eid from \"{comp}\" t join entity e on e.id = t.entity order by e.num"),
         [],
         |r| r.get(0),
     )
@@ -391,11 +367,8 @@ pub fn eval_sub(store: &Store, p: &Parsed, cap: i64) -> Result<SubAnswer, String
     let total = hits.len() as i64;
     let limit = p.win.limit.unwrap_or(cap);
     // Whole, and nobody asked for a window: the frame says nothing about bounds.
-    let window = if total <= limit && p.win.limit.is_none() {
-        None
-    } else {
-        Some((limit, Some(total)))
-    };
+    let window =
+        if total <= limit && p.win.limit.is_none() { None } else { Some((limit, Some(total))) };
     if hits.len() as i64 > limit {
         hits.truncate(limit.max(0) as usize);
     }
@@ -458,11 +431,8 @@ fn num_str(v: &serde_json::Value) -> String {
 pub fn moving(preds: &[Pred]) -> bool {
     let v = vocab();
     preds.iter().any(|p| {
-        let t = if p.comp.is_empty() {
-            v.bare_type(&p.prop)
-        } else {
-            v.prop_type(&p.comp, &p.prop)
-        };
+        let t =
+            if p.comp.is_empty() { v.bare_type(&p.prop) } else { v.prop_type(&p.comp, &p.prop) };
         if t != Some(PropType::Time) {
             return false;
         }
@@ -532,7 +502,10 @@ mod tests {
 
         let t = parse_query_line(".kind=task&.tally=task.status").unwrap();
         let agg = t.agg.unwrap();
-        assert_eq!((agg.op.as_str(), agg.comp.as_str(), agg.prop.as_str()), ("tally", "task", "status"));
+        assert_eq!(
+            (agg.op.as_str(), agg.comp.as_str(), agg.prop.as_str()),
+            ("tally", "task", "status")
+        );
     }
 
     #[test]
@@ -569,13 +542,12 @@ mod tests {
 
     #[test]
     fn parses_reaches_traversal() {
-        let p =
-            parse_query_line(".kind=task&.reaches[requires,<=3]=T-42").unwrap();
+        let p = parse_query_line(".kind=task&.reaches[requires,<=3]=T-42").unwrap();
         assert_eq!(p.preds.len(), 1);
         let reach = p.preds[0].reach.as_ref().unwrap();
         assert_eq!((reach.type_.as_str(), reach.depth), ("requires", 3));
         assert_eq!(p.preds[0].value, "T-42"); // resolved to an eid at delivery
-        // spaces around the cap are tolerated, like TS's regex
+                                              // spaces around the cap are tolerated, like TS's regex
         assert!(parse_query_line(".kind=task&.reaches[requires, <= 2]=T-1").is_ok());
         // an unknown edge type is refused (not silently walked)
         assert!(parse_query_line(".kind=task&.reaches[nope,<=3]=T-1").is_err());
@@ -589,15 +561,20 @@ mod tests {
     fn parses_fields_projection() {
         // A projection rides beside the filter — it is not a pred, and the
         // filter still selects the membership.
-        let p =
-            parse_query_line(".pin!&.fields=pin.x,pin.z~").unwrap();
+        let p = parse_query_line(".pin!&.fields=pin.x,pin.z~").unwrap();
         let fields = p.fields.unwrap();
         assert_eq!(fields.len(), 2);
-        assert_eq!((fields[0].comp.as_str(), fields[0].prop.as_str(), fields[0].wake), ("pin", "x", true));
+        assert_eq!(
+            (fields[0].comp.as_str(), fields[0].prop.as_str(), fields[0].wake),
+            ("pin", "x", true)
+        );
         // a `~`-suffixed column is VOLATILE (wake:false)
-        assert_eq!((fields[1].comp.as_str(), fields[1].prop.as_str(), fields[1].wake), ("pin", "z", false));
+        assert_eq!(
+            (fields[1].comp.as_str(), fields[1].prop.as_str(), fields[1].wake),
+            ("pin", "z", false)
+        );
         assert_eq!(p.preds.len(), 1); // the `.pin!` anchor stays a pred
-        // `.fields=eid` is the eids-only form: an empty projection, still present
+                                      // `.fields=eid` is the eids-only form: an empty projection, still present
         assert_eq!(parse_query_line(".card!&.fields=eid").unwrap().fields, Some(vec![]));
         // an empty `.fields=` is a refusal (a caller who wrote no columns meant some)
         assert!(parse_query_line(".card!&.fields=").is_err());

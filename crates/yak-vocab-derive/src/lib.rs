@@ -102,11 +102,9 @@ pub fn derive_comp(input: TokenStream) -> TokenStream {
                 } else if m.path.is_ident("rank") {
                     attrs.rank = Some(m.value()?.parse::<syn::LitInt>()?.base10_parse()?);
                 } else if m.path.is_ident("kind_rank") {
-                    attrs.kind_rank =
-                        Some(m.value()?.parse::<syn::LitInt>()?.base10_parse()?);
+                    attrs.kind_rank = Some(m.value()?.parse::<syn::LitInt>()?.base10_parse()?);
                 } else if m.path.is_ident("stamped_rank") {
-                    attrs.stamped_rank =
-                        Some(m.value()?.parse::<syn::LitInt>()?.base10_parse()?);
+                    attrs.stamped_rank = Some(m.value()?.parse::<syn::LitInt>()?.base10_parse()?);
                 } else if m.path.is_ident("by_name") {
                     attrs.by_name = true;
                 } else if m.path.is_ident("lazy") {
@@ -173,14 +171,12 @@ pub fn derive_comp(input: TokenStream) -> TokenStream {
                     // base type from the marker field type
                     let ty = &f.ty;
                     let id = match ty {
-                        syn::Type::Path(p) => {
-                            p.path.segments.last().map(|s| s.ident.to_string())
-                        }
+                        syn::Type::Path(p) => p.path.segments.last().map(|s| s.ident.to_string()),
                         _ => None,
                     };
-                    id.as_deref()
-                        .and_then(scalar_prop)
-                        .unwrap_or_else(|| panic!("field `{fname}` needs a marker type or #[col(...)]"))
+                    id.as_deref().and_then(scalar_prop).unwrap_or_else(|| {
+                        panic!("field `{fname}` needs a marker type or #[col(...)]")
+                    })
                 });
 
                 let lit = quote! {
