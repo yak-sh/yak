@@ -69,21 +69,24 @@ pub static SCHEMA: &[SchemaOp] = &[
     url text not null,
     frozen_at text
   );
-  -- An attached file's metadata (T-12781). The bytes live beside the db at
-  -- ~/.tasks/blobs/<sha>, content-addressed; only this row rides the graph.
-  -- Hand-written (not derived) for the integer-affine sizes/dims; blob_sha
-  -- indexes the reverse lookup serveBlob does (sha -> mime/name) so the
-  -- byte-serving path never scans (M-17862).
+  -- Immutable content. Its entity eid is the SHA-256; external bytes live at
+  -- ~/.tasks/blobs/<eid>. Attachments point here, so dedup is structural.
   create table if not exists blob (
     entity   integer primary key references entity(id),
-    mime  text,
-    name  text,
-    sha   text,
-    bytes integer,
+    bytes integer
+  );
+  create table if not exists attachment (
+    entity integer primary key references entity(id),
+    blob   integer not null references entity(id),
+    mime   text,
+    name   text
+  );
+  create index if not exists attachment_blob on attachment(blob);
+  create table if not exists image (
+    entity integer primary key references blob(entity),
     w     integer,
     h     integer
   );
-  create index if not exists blob_sha on blob(sha);
   create table if not exists card (
     entity        integer primary key references entity(id),
     target integer not null references entity(id),

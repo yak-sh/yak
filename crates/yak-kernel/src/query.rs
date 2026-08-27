@@ -339,7 +339,7 @@ pub fn resolve_values<S: Source + ?Sized>(src: &S, preds: &mut [Pred]) {
         // A traversal's target is one entity, no column to type it (query.ts
         // resolveRefs REACHES arm): resolve the id to its eid before matching.
         if p.reach.is_some() {
-            if !crate::model::is_uuid(&p.value.to_lowercase()) {
+            if !crate::model::is_eid(&p.value.to_lowercase()) {
                 if let Some(eid) = src.resolve_id(&p.value) {
                     p.value = eid;
                 }
@@ -350,7 +350,7 @@ pub fn resolve_values<S: Source + ?Sized>(src: &S, preds: &mut [Pred]) {
             if p.comp.is_empty() { v.bare_type(&p.prop) } else { v.prop_type(&p.comp, &p.prop) };
         match t {
             Some(t) if t.is_ref() => {
-                if !crate::model::is_uuid(&p.value.to_lowercase()) {
+                if !crate::model::is_eid(&p.value.to_lowercase()) {
                     if let Some(eid) = src.resolve_id(&p.value) {
                         p.value = eid;
                     }

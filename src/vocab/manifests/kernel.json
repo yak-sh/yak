@@ -55,16 +55,22 @@
         }
       }
     },
-    "blob": {
-      "rank": 140,
+    "attachment": {
+      "rank": 141,
       "kind_rank": 350,
       "cols": {
+        "blob": {
+          "eid": "blob",
+          "death": "cascade"
+        },
         "mime": "text",
-        "name": "text",
-        "sha": "text",
-        "bytes": "number",
-        "w": "number",
-        "h": "number"
+        "name": "text"
+      }
+    },
+    "blob": {
+      "rank": 140,
+      "cols": {
+        "bytes": "number"
       }
     },
     "comment": {
@@ -184,6 +190,13 @@
       "stamped_rank": 80,
       "stamped": {
         "at": "time"
+      }
+    },
+    "image": {
+      "rank": 142,
+      "cols": {
+        "w": "number",
+        "h": "number"
       }
     },
     "meta": {

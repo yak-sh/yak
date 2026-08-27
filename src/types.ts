@@ -212,10 +212,14 @@ export let comps: Record<string, Record<string, PropType>> = {
     url: 'url',
   },
   blob: {
+    bytes: 'number',
+  },
+  attachment: {
+    blob: { eid: 'blob', death: 'cascade' },
     mime: 'text',
     name: 'text',
-    sha: 'text',
-    bytes: 'number',
+  },
+  image: {
     w: 'number',
     h: 'number',
   },
@@ -782,7 +786,7 @@ export let kindOrder = [
   'person',
   'persona',
   'model',
-  'blob',
+  'attachment',
   'doc',
   'email',
   'alias',
@@ -1167,14 +1171,20 @@ export type Pane = {
 // server's frozen archive of it (one self-contained HTML file on disk),
 // stamped frozen_at when ready — frozen_at is server-owned, never wire-set.
 export type Web = { eid: string; url: string; frozen_at?: string | null }
-// An attached file's metadata (T-12781) — the bytes live at ~/.tasks/blobs/
-// <sha>, served at GET /blob/<sha>; this is all that rides the graph.
+// Immutable content: eid is its SHA-256; external bytes live beside the db.
 export type BlobComp = {
   eid: string
+  bytes?: number | null
+}
+// Per-use file metadata points at shared content.
+export type Attachment = {
+  eid: string
+  blob: string
   mime?: string | null
   name?: string | null
-  sha?: string | null
-  bytes?: number | null
+}
+export type Image = {
+  eid: string
   w?: number | null
   h?: number | null
 }
@@ -1839,6 +1849,8 @@ export type EntCore = {
   pane?: Pane
   web?: Web
   blob?: BlobComp
+  attachment?: Attachment
+  image?: Image
   card?: CardComp
   pin?: Pin
   client?: Client

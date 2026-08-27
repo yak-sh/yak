@@ -75,10 +75,14 @@ pub(crate) fn baked() -> Vocab {
             ("url".into(), PropType::Url),
         ]),
         ("blob".into(), vec![
+            ("bytes".into(), PropType::Number),
+        ]),
+        ("attachment".into(), vec![
+            ("blob".into(), PropType::Eid("blob".into())),
             ("mime".into(), PropType::Text),
             ("name".into(), PropType::Text),
-            ("sha".into(), PropType::Text),
-            ("bytes".into(), PropType::Number),
+        ]),
+        ("image".into(), vec![
             ("w".into(), PropType::Number),
             ("h".into(), PropType::Number),
         ]),
@@ -589,7 +593,7 @@ pub(crate) fn baked() -> Vocab {
         ("email".into(), "A".into()),
         ("memory".into(), "M".into()),
     ]);
-    let kind_order = vec!["design".into(), "task".into(), "project".into(), "layout".into(), "board".into(), "canvas".into(), "web".into(), "card".into(), "pane".into(), "client".into(), "camera".into(), "fold".into(), "cursor".into(), "role".into(), "session".into(), "entry".into(), "runner".into(), "claim".into(), "subscription".into(), "stop_request".into(), "knock".into(), "wake".into(), "dream".into(), "mail".into(), "hook".into(), "conflict".into(), "redaction".into(), "review".into(), "notice".into(), "comment".into(), "memory".into(), "person".into(), "persona".into(), "model".into(), "blob".into(), "doc".into(), "email".into(), "alias".into()];
+    let kind_order = vec!["design".into(), "task".into(), "project".into(), "layout".into(), "board".into(), "canvas".into(), "web".into(), "card".into(), "pane".into(), "client".into(), "camera".into(), "fold".into(), "cursor".into(), "role".into(), "session".into(), "entry".into(), "runner".into(), "claim".into(), "subscription".into(), "stop_request".into(), "knock".into(), "wake".into(), "dream".into(), "mail".into(), "hook".into(), "conflict".into(), "redaction".into(), "review".into(), "notice".into(), "comment".into(), "memory".into(), "person".into(), "persona".into(), "model".into(), "attachment".into(), "doc".into(), "email".into(), "alias".into()];
     let statuses = vec!["open".into(), "wip".into(), "done".into(), "cancelled".into()];
     let renames = vec![
         ("view:Debug.ListItem".into(), "Debug.Tile".into()),
@@ -608,6 +612,7 @@ pub(crate) fn baked() -> Vocab {
         ("pane".into(), "layout".into(), "cascade".into()),
         ("pane".into(), "parent".into(), "cascade".into()),
         ("pane".into(), "content".into(), "detach".into()),
+        ("attachment".into(), "blob".into(), "cascade".into()),
         ("card".into(), "target".into(), "cascade".into()),
         ("pin".into(), "canvas".into(), "cascade".into()),
         ("client".into(), "actor".into(), "detach".into()),

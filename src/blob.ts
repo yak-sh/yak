@@ -1,12 +1,8 @@
-// File attachments — the server-side blob store (T-12781). Any entity can
-// carry a `blob` component; its METADATA (mime, name, sha, byte size, image
-// w/h) rides the graph, but the BYTES live beside the db at
-// ~/.tasks/blobs/<sha>, content-addressed so the same file attached twice
-// costs once. Never base64 in a column, never in snapshot(), never in a client
-// cache — the db and every backup stay lean (the row-bytes bloat the backup
-// doc already paid for in git). Served back at GET /blob/<sha> under a sandbox
-// CSP, the same defense freeze.ts serves archives with, so an attached
-// HTML/SVG opened directly can never act as the app. Server-only.
+// File content and attachments — the server-side external CAS. Content is a
+// blob entity whose eid is its SHA-256; attachment entities point to it and
+// carry per-use name/MIME metadata. Image dimensions belong to the shared
+// content. Bytes stay beside the db at ~/.tasks/blobs/<sha>, never in a client
+// cache or graph snapshot. Server-only.
 import { createHash } from 'node:crypto'
 import { type Change } from './types.ts'
 import { db } from './live_db.ts'
@@ -61,11 +57,10 @@ export let imageSize = (b: Uint8Array): { w: number; h: number } | null => {
   return null
 }
 
-// Attach a file to an entity: content-address the bytes, land them beside the
-// db (skipping the write when the sha is already on disk — dedup), measure any
-// image, and RETURN the `blob` Change for the caller to run through apply() —
-// so a file lands, journals, broadcasts, and returns exactly like any wire
-// write. `name`/`mime` are the upload's (filename + content-type).
+// Attach a file to an entity: land one shared blob identity plus one attachment
+// reference. The batch order is structural: blob before image before the
+// attachment FK. apply() journals and broadcasts the same facts every other
+// graph write uses.
 export let landBlob = async (
   eid: string,
   name: string,
@@ -77,30 +72,25 @@ export let landBlob = async (
   let path = `${blobs}/${sha}`
   if (!(await onDisk(path))) await Deno.writeFile(path, bytes)
   let dim = imageSize(bytes)
-  return [{
-    eid,
-    name: 'blob',
-    comp: {
-      mime,
-      name,
-      sha,
-      bytes: bytes.length,
-      w: dim?.w ?? null,
-      h: dim?.h ?? null,
-    },
-  }]
+  return [
+    { eid: sha, name: 'blob', comp: { bytes: bytes.length } },
+    ...(dim ? [{ eid: sha, name: 'image', comp: dim }] : []),
+    { eid, name: 'attachment', comp: { blob: sha, mime, name } },
+  ]
 }
 
 // Serve a stored file. sha is validated to a bare 64-hex digest — no path
-// escapes. The mime + name come off any blob row that points at these bytes
-// (content is identical across every attachment of the same sha). A sandbox
+// escapes. The mime + name come off any attachment that points at these bytes.
+// A sandbox
 // CSP with no scripts plus nosniff keeps an HTML/SVG attachment inert when
 // opened directly in a tab; content-addressed bytes are immutable, so they
 // cache forever.
 export let serveBlob = async (sha: string) => {
   if (!/^[0-9a-f]{64}$/i.test(sha)) return new Response('no', { status: 400 })
-  let row = db.prepare('select mime, name from blob where sha = ? limit 1')
-    .get(sha) as { mime: string | null; name: string | null } | undefined
+  let row = db.prepare(
+    `select a.mime, a.name from attachment a
+     where a.blob = (select id from entity where eid = ?) limit 1`,
+  ).get(sha) as { mime: string | null; name: string | null } | undefined
   try {
     let bytes = await Deno.readFile(`${blobs}/${sha}`)
     return new Response(bytes, {

@@ -3,6 +3,7 @@
 // image shows inline (its own w/h reserve the box, so nothing reflows when it
 // loads); anything else is a download link with its name and size.
 import { type Ent } from '../../types.ts'
+import { ent } from '../../live.ts'
 import { block, el } from '../ui.tsx'
 
 let Img = el('img', 'Media')
@@ -20,21 +21,22 @@ let size = (n?: number | null) =>
     : `${(n / 1024 ** 2).toFixed(1)} MB`
 
 export let Media = ({ e }: { e: Ent }) => {
-  let b = e.blob!
-  let src = `/blob/${b.sha}`
-  return b.mime?.startsWith('image/')
+  let a = e.attachment!
+  let b = ent(a.blob)
+  let src = `/blob/${a.blob}`
+  return a.mime?.startsWith('image/')
     ? (
       <Img
         src={src}
-        alt={b.name ?? ''}
-        width={b.w ?? undefined}
-        height={b.h ?? undefined}
+        alt={a.name ?? ''}
+        width={b.image?.w ?? undefined}
+        height={b.image?.h ?? undefined}
       />
     )
     : (
-      <File href={src} download={b.name ?? undefined}>
-        <Name>{b.name ?? 'file'}</Name>
-        <Size>{size(b.bytes)}</Size>
+      <File href={src} download={a.name ?? undefined}>
+        <Name>{a.name ?? 'file'}</Name>
+        <Size>{size(b.blob?.bytes)}</Size>
       </File>
     )
 }

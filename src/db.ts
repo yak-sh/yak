@@ -309,21 +309,24 @@ let schema = `
     url text not null,
     frozen_at text
   );
-  -- An attached file's metadata (T-12781). The bytes live beside the db at
-  -- ~/.tasks/blobs/<sha>, content-addressed; only this row rides the graph.
-  -- Hand-written (not derived) for the integer-affine sizes/dims; blob_sha
-  -- indexes the reverse lookup serveBlob does (sha -> mime/name) so the
-  -- byte-serving path never scans (M-17862).
+  -- Immutable content. Its entity eid is the SHA-256; external bytes live at
+  -- ~/.tasks/blobs/<eid>. Attachments point here, so dedup is structural.
   create table if not exists blob (
     entity   integer primary key references entity(id),
-    mime  text,
-    name  text,
-    sha   text,
-    bytes integer,
+    bytes integer
+  );
+  create table if not exists attachment (
+    entity integer primary key references entity(id),
+    blob   integer not null references entity(id),
+    mime   text,
+    name   text
+  );
+  create index if not exists attachment_blob on attachment(blob);
+  create table if not exists image (
+    entity integer primary key references blob(entity),
     w     integer,
     h     integer
   );
-  create index if not exists blob_sha on blob(sha);
   create table if not exists card (
     entity        integer primary key references entity(id),
     target integer not null references entity(id),
@@ -962,6 +965,14 @@ export let numbered = (kind: string) => !unnumbered.has(kind)
 // kind — the kind is derived only when the exclusion is non-empty, so part 1
 // pays nothing for the lookup.
 let mintNum = (db: DatabaseSync, eid: string) => {
+  // A content hash is already the blob's durable human identity. Numbering
+  // every deduplicated body/file would create a second, meaningless name.
+  if (
+    prep(
+      db,
+      `select 1 from blob where entity = (select id from entity where eid = ?)`,
+    ).get(eid)
+  ) return
   if (unnumbered.size) {
     let kind = kindOrder.find((k) =>
       prep(
@@ -1869,6 +1880,7 @@ export let human = (db: DatabaseSync, eid: string): string => {
 
 let ADDR = /@/
 let UUIDRE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+let CONTENT_EID = /^[0-9a-f]{64}$/i
 
 // The entity already wearing this address: an address-book `email`, or an
 // id-shaped fleet address naming one by its human id (S-31@<fleet> → that
@@ -2489,6 +2501,67 @@ let migrateToIdKeys = (db: DatabaseSync) => {
   return reports
 }
 
+// The attachment table used to own both per-use metadata and the content
+// address. Split it once: each distinct SHA becomes the eid of one blob entity,
+// attachments point to it, and intrinsic image dimensions move to that shared
+// content. This runs after eid→id, so every reference is born in final form.
+let migrateBlobEntities = (db: DatabaseSync) => {
+  if (!tableExists(db, 'blob') || !hasCol(db, 'blob', 'sha')) return
+  let invalid = prep(
+    db,
+    `select count(*) n from blob
+     where sha is null or length(sha) != 64
+        or lower(sha) glob '*[^0-9a-f]*'`,
+  ).get() as { n: number }
+  if (invalid.n) {
+    throw new Error(
+      `cannot migrate ${invalid.n} blob row(s) without SHA-256 content identity`,
+    )
+  }
+  db.exec('savepoint blob_entities')
+  try {
+    db.exec(`
+      drop index if exists blob_sha;
+      alter table blob rename to __legacy_blob;
+      create table blob (
+        entity integer primary key references entity(id),
+        bytes integer
+      );
+      create table if not exists attachment (
+        entity integer primary key references entity(id),
+        blob integer not null references entity(id),
+        mime text,
+        name text
+      );
+      create table if not exists image (
+        entity integer primary key references blob(entity),
+        w integer,
+        h integer
+      );
+      insert or ignore into entity (eid)
+        select distinct lower(sha) from __legacy_blob;
+      insert into blob (entity, bytes)
+        select e.id, max(b.bytes) from __legacy_blob b
+        join entity e on e.eid = lower(b.sha)
+        group by e.id;
+      insert into attachment (entity, blob, mime, name)
+        select b.entity, e.id, b.mime, b.name from __legacy_blob b
+        join entity e on e.eid = lower(b.sha);
+      insert into image (entity, w, h)
+        select e.id, max(b.w), max(b.h) from __legacy_blob b
+        join entity e on e.eid = lower(b.sha)
+        where b.w is not null or b.h is not null
+        group by e.id;
+      drop table __legacy_blob;
+    `)
+    db.exec('release blob_entities')
+  } catch (e) {
+    db.exec('rollback to blob_entities')
+    db.exec('release blob_entities')
+    throw e
+  }
+}
+
 // A WAL-present boot follows a crash or overlaps another healthy connection,
 // so verify the complete SQLite view before migrations write anything. A
 // failed check is never repaired in place: WAL and SHM are live parts of the
@@ -2660,6 +2733,10 @@ export let migrate = (db: DatabaseSync) => {
       // tables. Its focused atomic boundary becomes a savepoint inside this
       // transaction. A no-op on an already-id-keyed or brand-new db.
       reports = migrateToIdKeys(db)
+      // Split the legacy blob table into content/attachment/image entities,
+      // minting each distinct SHA as a blob entity's eid. Runs after eid→id so
+      // every reference is born on the canonical id-keyed spine.
+      migrateBlobEntities(db)
       // This must precede schema: an old table may not yet have the canonical
       // columns named by a newly added index in the current DDL.
       migrateRefs(db)
@@ -4801,6 +4878,9 @@ export let apply = (
               `(comment identity reuse would displace the existing one)`,
           )
         }
+      }
+      if (name == 'blob' && comp && !CONTENT_EID.test(eid)) {
+        throw new Error('blob eid must be its SHA-256')
       }
       if (comp == null) {
         if (name != 'entity') {

@@ -477,6 +477,7 @@ let contract = (
 
 let contracts = [
   contract('task', 'project', 'project', { status: 'open' }),
+  contract('attachment', 'blob', 'blob'),
   contract('camera', 'client', 'client', (d) => ({
     canvas: tag(d, 'canvas'),
   })),

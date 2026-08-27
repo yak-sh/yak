@@ -4,7 +4,7 @@
 // is stored as. Never migrates: a library client connects, reads, and leaves
 // the schema alone (D-22530 §1).
 
-pub use crate::model::{is_uuid, Dep, Row};
+pub use crate::model::{is_eid, is_uuid, Dep, Row};
 use crate::model::{Graph, Hit, Source};
 use crate::profiling;
 use crate::vocab::{vocab, PropType};
@@ -1245,7 +1245,7 @@ pub fn resolve_checked(conn: &Connection, id: &str) -> Result<Option<String>, St
         }
     }
     let low = id.to_lowercase();
-    if is_uuid(&low) {
+    if is_eid(&low) {
         if let Some(hit) =
             one(conn, "select eid from entity where eid = ?1", [&low], |r| r.get::<_, String>(0))
         {

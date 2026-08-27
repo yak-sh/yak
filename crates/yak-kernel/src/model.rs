@@ -147,10 +147,28 @@ pub fn is_uuid(s: &str) -> bool {
             .all(|(n, p)| p.len() == *n && p.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
+// Most graph identities are UUIDs; immutable content uses its 64-hex SHA-256
+// directly. Both are EIDs at the wire boundary.
+pub fn is_eid(s: &str) -> bool {
+    is_uuid(s) || is_content_eid(s)
+}
+
+pub fn is_content_eid(s: &str) -> bool {
+    s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn content_hash_is_an_eid() {
+        let hash = "ab".repeat(32);
+        assert!(is_content_eid(&hash));
+        assert!(is_eid(&hash));
+        assert!(!is_content_eid("01980dfd-6f1d-7c39-8fc1-3f56be520584"));
+    }
 
     #[test]
     fn session_lifecycle_facets_override_rolling_aliases() {

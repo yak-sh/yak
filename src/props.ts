@@ -98,6 +98,7 @@ let fail = (p: Prop, grammar: string, v: unknown): never => {
 
 let DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i
 let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+let SHA = /^[0-9a-f]{64}$/i
 
 let number = (p: Prop, v: unknown): number => {
   let s = typeof v == 'string' ? v.trim() : String(v)
@@ -160,9 +161,9 @@ let oneOf = (p: Prop, v: unknown): string => {
 let noun = (p: Prop) => p.prop == 'eid' ? 'entity' : p.prop
 let eid = (p: Prop, v: unknown, ctx: PropContext): string => {
   let s = String(v).trim()
-  if (UUID.test(s)) return s.toLowerCase()
+  if (UUID.test(s) || SHA.test(s)) return s.toLowerCase()
   let found = ctx.resolve?.(s)
-  if (found && UUID.test(found)) return found.toLowerCase()
+  if (found && (UUID.test(found) || SHA.test(found))) return found.toLowerCase()
   let target = typeof p.type == 'object' && 'eid' in p.type ? p.type.eid : ''
   let near = ctx.near?.(s, target)
   if (near) throw new Error(`no ${noun(p)} '${s}' — did you mean ${near}?`)

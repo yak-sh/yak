@@ -70,15 +70,29 @@ struct Doc {
     body: Body,
 }
 
-// An attached file (T-12781): metadata only, the bytes live content-addressed
-// beside the db. A named file still reads as a blob (kind_rank ahead of doc).
+// One immutable content identity. Its eid is the SHA-256; external bytes live
+// beside the db while the component records their canonical length.
 #[derive(Comp)]
-#[comp(plugin = "kernel", rank = 140, kind_rank = 350)]
+#[comp(plugin = "kernel", rank = 140)]
 struct Blob {
+    bytes: Number,
+}
+
+// One use of content as a named file. Metadata belongs to the attachment, not
+// to the shared content entity: two names may address the same bytes.
+#[derive(Comp)]
+#[comp(plugin = "kernel", rank = 141, kind_rank = 350)]
+struct Attachment {
+    #[col(eid = "blob", death = "cascade")]
+    blob: Ref,
     mime: Text,
     name: Text,
-    sha: Text,
-    bytes: Number,
+}
+
+// Intrinsic dimensions belong to the shared content, never to an attachment.
+#[derive(Comp)]
+#[comp(plugin = "kernel", rank = 142)]
+struct Image {
     w: Number,
     h: Number,
 }

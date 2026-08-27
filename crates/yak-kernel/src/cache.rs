@@ -5,7 +5,7 @@
 // deletes the component, {name: "entity", comp: null} tombstones the entity
 // and voids every later patch for that eid.
 
-use crate::model::{is_uuid, Row, Source};
+use crate::model::{is_eid, Row, Source};
 use crate::vocab::vocab;
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -118,7 +118,7 @@ impl Source for GraphCache {
     // Short-eid prefixes and alias slugs stay native-only.
     fn resolve_id(&self, id: &str) -> Option<String> {
         let low = id.to_lowercase();
-        if is_uuid(&low) {
+        if is_eid(&low) {
             return self.rows.contains_key(&low).then_some(low);
         }
         let num: i64 = match id.split_once('-') {

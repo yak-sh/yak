@@ -165,11 +165,10 @@ define([
     Render: (props) => <Role {...props} />,
   },
   { view: 'Web', match: has('web'), Render: Web },
-  // Registered AFTER Full: a bare blob entity has no doc, so Media is its
-  // sole match and its default face; a task/comment that merely wears an
-  // attachment keeps its own face (the tie at score 1 breaks to the
-  // earlier-registered Full) while still offering a Media tab.
-  { view: 'Media', match: has('blob'), Render: Media },
+  // Registered AFTER Full: a bare attachment has no doc, so Media is its sole
+  // match; a task/comment that wears one keeps its own face while still
+  // offering a Media tab. Blob entities are shared content, not attachments.
+  { view: 'Media', match: has('attachment'), Render: Media },
   // Entry faces use the same specificity rules as every entity view. The
   // generic entry is the floor; facets such as bash and result override it.
   {

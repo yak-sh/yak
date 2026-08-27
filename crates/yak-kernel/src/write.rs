@@ -318,7 +318,7 @@ fn read_comp(conn: &Connection, name: &str, eid: &str) -> Option<Map<String, Val
 // ---- normalization: the value language + the column allowlist ----
 
 fn resolve_eid(conn: &Connection, s: &str) -> Result<String> {
-    if crate::store::is_uuid(&s.to_lowercase()) {
+    if crate::store::is_eid(&s.to_lowercase()) {
         return Ok(s.to_string());
     }
     resolve(conn, s).ok_or_else(|| refuse(format!("expects a human id / alias / UUID — got '{s}'")))
@@ -2460,6 +2460,9 @@ pub fn apply(
                     bounce = cx.bounce;
                 }
                 r?;
+            }
+            if name == "blob" && comp.is_some() && !crate::model::is_content_eid(eid) {
+                return Err(refuse("blob eid must be its SHA-256"));
             }
             // ---- deletes ----
             if comp.is_none() {

@@ -1,14 +1,13 @@
-// The blob store end to end against an in-memory db (T-12781): landBlob
-// content-addresses the bytes beside the db and returns the `blob` metadata to
-// ride apply(); serveBlob reads mime off the row and bytes off disk; a second
-// attach of identical bytes reuses the one file (dedup); imageSize reads a
-// header without a decoder.
-import { assert, assertEquals } from '@std/assert'
+// The blob store end to end against disposable databases (T-18875): the SHA is
+// one content entity, attachments point to it, and image dimensions belong to
+// the shared content. No test opens the owner's graph.
+import { assert, assertEquals, assertThrows } from '@std/assert'
+import { DatabaseSync } from 'node:sqlite'
 
 Deno.env.set('DB_PATH', ':memory:')
 Deno.env.set('HOME', await Deno.makeTempDir())
 let { imageSize, landBlob, serveBlob } = await import('./blob.ts')
-let { apply } = await import('./db.ts')
+let { apply, open, snapshot } = await import('./db.ts')
 let { db } = await import('./live_db.ts')
 
 // A minimal PNG: 8-byte signature, IHDR length+tag, then width/height as
@@ -53,28 +52,39 @@ Deno.test('imageSize reads PNG, GIF and JPEG headers', () => {
   assertEquals(imageSize(new Uint8Array([1, 2, 3])), null)
 })
 
-Deno.test('landBlob stores content-addressed bytes and returns blob metadata', async () => {
+Deno.test('landBlob makes one content entity and one attachment', async () => {
   let eid = crypto.randomUUID()
   let bytes = png(120, 80)
   let changes = await landBlob(eid, 'shot.png', 'image/png', bytes)
   apply(db, changes)
 
-  let c = changes[0]
-  assertEquals(c.name, 'blob')
-  assertEquals(c.comp?.mime, 'image/png')
-  assertEquals(c.comp?.name, 'shot.png')
-  assertEquals(c.comp?.bytes, bytes.length)
-  assertEquals(c.comp?.w, 120)
-  assertEquals(c.comp?.h, 80)
+  let sha = changes[0].eid
+  assertEquals(changes, [
+    { eid: sha, name: 'blob', comp: { bytes: bytes.length } },
+    { eid: sha, name: 'image', comp: { w: 120, h: 80 } },
+    {
+      eid,
+      name: 'attachment',
+      comp: { blob: sha, mime: 'image/png', name: 'shot.png' },
+    },
+  ])
 
-  // the metadata landed in the graph, queryable like anything else
+  // Content is shared while attachment metadata belongs to the use.
   let row = db.prepare(
-    'select mime, sha, w from blob where entity = (select id from entity where eid = ?)',
+    `select a.mime, ce.eid as blob, b.bytes, i.w from attachment a
+     join entity ce on ce.id = a.blob
+     join blob b on b.entity = ce.id
+     join image i on i.entity = ce.id
+     where a.entity = (select id from entity where eid = ?)`,
   ).get(eid)
-  assertEquals((row as { mime: string }).mime, 'image/png')
+  assertEquals(row, {
+    mime: 'image/png',
+    blob: sha,
+    bytes: bytes.length,
+    w: 120,
+  })
 
   // the bytes live at ~/.tasks/blobs/<sha>, NOT in the row
-  let sha = c.comp!.sha as string
   assertEquals(await Deno.readFile(`${blobsDir}/${sha}`), bytes)
 })
 
@@ -85,7 +95,7 @@ Deno.test('identical bytes dedup to one file; serveBlob returns them', async () 
   apply(db, await landBlob(a, 'a.png', 'image/png', bytes))
   let second = await landBlob(b, 'b.png', 'image/png', bytes)
   apply(db, second)
-  let sha = second[0].comp!.sha as string
+  let sha = second[0].eid
 
   // same content address, so the store holds exactly one file for both
   let files = [...Deno.readDirSync(blobsDir)].filter((f) => f.name == sha)
@@ -97,6 +107,100 @@ Deno.test('identical bytes dedup to one file; serveBlob returns them', async () 
   assert(res.headers.get('content-security-policy')?.includes('sandbox'))
   assertEquals(res.headers.get('x-content-type-options'), 'nosniff')
   assertEquals(new Uint8Array(await res.arrayBuffer()), bytes)
+})
+
+Deno.test('blob identity must be its content hash', () => {
+  assertThrows(
+    () =>
+      apply(db, [{
+        eid: crypto.randomUUID(),
+        name: 'blob',
+        comp: { bytes: 3 },
+      }]),
+    Error,
+    'SHA-256',
+  )
+})
+
+Deno.test('legacy attachment rows migrate to shared blob entities', async () => {
+  let path = await Deno.makeTempFile({ suffix: '.db' })
+  let raw = new DatabaseSync(path)
+  let a = crypto.randomUUID(), b = crypto.randomUUID()
+  let sha = 'ab'.repeat(32)
+  raw.exec(`
+    create table entity (
+      id integer primary key, eid text unique not null, num integer unique
+    );
+    create table blob (
+      entity integer primary key references entity(id), mime text, name text,
+      sha text, bytes integer, w integer, h integer
+    );
+    create index blob_sha on blob(sha);
+    insert into entity (id, eid, num) values (1, '${a}', 1), (2, '${b}', 2);
+    insert into blob values
+      (1, 'image/png', 'a.png', '${sha}', 24, 10, 20),
+      (2, 'image/png', 'b.png', '${sha}', 24, 10, 20);
+  `)
+  raw.close()
+  let migrated = open(path)
+  try {
+    assertEquals(
+      migrated.prepare('select count(*) n from blob').get(),
+      { n: 1 },
+    )
+    assertEquals(
+      migrated.prepare('select count(*) n from attachment').get(),
+      { n: 2 },
+    )
+    assertEquals(
+      migrated.prepare('select count(*) n from image').get(),
+      { n: 1 },
+    )
+    let changes = snapshot(migrated).changes
+    let attachments = changes.filter((c) => c.name == 'attachment')
+    assertEquals(attachments.map((c) => c.comp?.blob), [sha, sha])
+    assertEquals(
+      migrated.prepare('pragma foreign_key_check').all(),
+      [],
+    )
+  } finally {
+    migrated.close()
+    await Deno.remove(path)
+  }
+})
+
+Deno.test('legacy attachment migration refuses missing content identity', async () => {
+  let path = await Deno.makeTempFile({ suffix: '.db' })
+  let raw = new DatabaseSync(path)
+  raw.exec(`
+    create table entity (
+      id integer primary key, eid text unique not null, num integer unique
+    );
+    create table blob (
+      entity integer primary key references entity(id), mime text, name text,
+      sha text, bytes integer, w integer, h integer
+    );
+    insert into entity (id, eid, num)
+      values (1, '${crypto.randomUUID()}', 1);
+    insert into blob values (1, 'text/plain', 'lost.txt', null, 4, null, null);
+  `)
+  raw.close()
+  assertThrows(() => open(path), Error, 'without SHA-256 content identity')
+  let unchanged = new DatabaseSync(path)
+  try {
+    assertEquals(unchanged.prepare('select count(*) n from blob').get(), {
+      n: 1,
+    })
+    assertEquals(
+      unchanged.prepare(
+        `select count(*) n from pragma_table_info('blob') where name = 'sha'`,
+      ).get(),
+      { n: 1 },
+    )
+  } finally {
+    unchanged.close()
+    await Deno.remove(path)
+  }
 })
 
 Deno.test('serveBlob refuses a non-sha path and 404s a missing blob', async () => {
