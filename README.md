@@ -56,8 +56,9 @@ reserved key in the component namespace, so extensions must not register a
 component named `kind`.
 
 Beside the graph sit FTS5 full-text search over every doc and local semantic
-embeddings — one index behind `/` in the web UI, `task search`, MCP `search`,
-and `/search` + `/similar` over HTTP.
+embeddings. Both are ranked `/query` evaluations whose ordinary entity rows
+carry a result-only `rank` component; `/` in the web UI, `task search`, and MCP
+`search` are consumers of that graph boundary.
 
 ## The doors
 
@@ -107,7 +108,8 @@ and `/search` + `/similar` over HTTP.
   empty composer and types only a constant request to call `task_context`;
   graph-authored message text never crosses tmux.
 - **HTTP** — `/snapshot` (the whole graph in one gulp), `/apply`, `/ws`,
-  `/search`, `/similar`, `/query`, `/journal` (write history), `/telemetry`.
+  `/query`, `/journal` (write history), `/telemetry`, plus explicit non-graph
+  service boundaries for browser assets, remote access, auth, and external I/O.
 
 ## Agents in the graph
 

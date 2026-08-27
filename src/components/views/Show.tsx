@@ -408,7 +408,7 @@ export let Tasks = ({ e }: { e: Ent }) => {
   )
 }
 
-// Semantic kin — the dupe hint's other door (GET /similar, embed.ts):
+// Semantic kin — vector-neighbor rank through the generic /query door:
 // what the graph already says like this doc, above the twin floor,
 // score-stamped. Vectors are derived data the server holds, so this
 // section asks over HTTP per doc text; a box without the embedder
@@ -425,12 +425,20 @@ export let Similar = ({ e }: { e: Ent }) => {
       if (mine == seq.current) setKin(hits.filter((h) => h.eid != e.eid))
     }
     if (!text) return got([])
-    fetch(
-      `${base()}/similar?q=${
-        encodeURIComponent(text)
-      }&eid=${e.eid}&limit=5&floor=${FLOOR}`,
-    ).then((r) => (r.ok ? r.json() : []))
-      .then(got, () => got([]))
+    let q = [`.near=${e.eid}`, '.order=similar', 'limit=5']
+      .map(encodeURIComponent).join('&')
+    fetch(`${base()}/query?${q}`).then((r) => (r.ok ? r.json() : []))
+      .then((rows) =>
+        got(
+          (rows as Record<string, unknown>[]).map((row) => {
+            let entity = row.entity as { eid?: string } | undefined
+            let rank = row.rank as { score?: number } | undefined
+            return {
+              eid: String(entity?.eid ?? ''),
+              score: Number(rank?.score ?? 0),
+            }
+          }).filter((h) => h.eid && h.score >= FLOOR),
+        ), () => got([]))
   }, [text, e.eid])
   // A neighbor can die between sweeps — the cache, not the vector
   // table, says who still exists.

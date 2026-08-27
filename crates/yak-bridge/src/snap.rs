@@ -68,8 +68,8 @@ pub fn epoch_of(store: &Store) -> String {
 
 // A stable hash of the kernel's baked vocabulary — the bridge's own vocab
 // fingerprint. See the module note: NOT expected to equal the Deno server's
-// vocabHash yet. Public because /delta's cursorStale gate compares a client's
-// held vocab against it, the same fingerprint the WS reset frame carries.
+// vocabHash yet. Public because the WS reset frame carries this fingerprint
+// and returning sockets use it to decide whether their cursor is reusable.
 pub fn vocab_hash() -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};

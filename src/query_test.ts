@@ -16,6 +16,7 @@ import {
   kindPreds,
   listed,
   matchQuery,
+  nearOf,
   noFilter,
   orderOf,
   parseQuery,
@@ -979,6 +980,14 @@ Deno.test('.order=hot is a ranking, not a filter', () => {
   assertEquals(orderOf(parseQuery('.status=open')), undefined)
 })
 
+Deno.test('.near supplies similarity rank without becoming membership', () => {
+  let ps = parseQuery('.near=T-3&.order=similar&.status=open')
+  assertEquals(nearOf(ps), 'T-3')
+  assertEquals(orderOf(ps), 'similar')
+  assertEquals(matchQuery(row({}), ps), true)
+  assertEquals(adopt(ps, 'task'), { status: 'open' })
+})
+
 Deno.test('bare text uses FTS token and explicit prefix membership', () => {
   assertEquals(ftsTerm('widget'), '"widget"')
   assertEquals(ftsTerm('idget'), '"idget"')
@@ -1352,6 +1361,8 @@ let has: [string, string, string, string][] = [
   ['time phrases on _at', '.updated.at=', '.updated.at=today', 'time'],
   ['rank value', '.orde', '.order=hot', 'rank'],
   ['rank value completes', '.order=h', '.order=hot', 'rank'],
+  ['similar rank value', '.order=simi', '.order=similar', 'rank'],
+  ['similar rank input', '.nea', '.near=', 'rank'],
 ]
 for (let [name, token, text, kind] of has) {
   Deno.test(`complete: ${name}`, () => assertEquals(cand(token)[text], kind))

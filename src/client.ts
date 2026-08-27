@@ -3969,8 +3969,8 @@ let brief = (
   }]
 }
 
-// The dupe hint: after a create, ask the server what the graph already
-// says like this (GET /similar — embed.ts). One line naming the
+// The dupe hint: after a create, ask the embedding query evaluator what the
+// graph already says like this. One line naming the
 // neighbors above the twin floor (embed.ts FLOOR, where the empirical
 // rationale lives), or '' — and '' on EVERY failure: a box without the
 // embedder still creates, silently.
@@ -3980,22 +3980,16 @@ export let similarHint = async (
   floor = FLOOR,
 ) => {
   try {
-    let res = await request(
-      `http://${host()}/similar?q=${
-        encodeURIComponent(text.slice(0, 2000))
-      }&limit=4&floor=${floor}`,
-    )
-    if (!res.ok) return ''
-    let hits = await res.json() as {
-      eid: string
-      id: string
-      title: string
-      score: number
-    }[]
+    let filters = self
+      ? [`.near=${self}`, '.order=similar']
+      : [text.slice(0, 2000), '.order=similar']
+    let hits = (await httpQuery(filters, { limit: 4 })).map(hitOf)
+      .map((h) => ({ ...h, score: Number(h.score ?? 0) }))
     let close = hits.filter((h) => h.eid != self)
+      .filter((h) => h.score >= floor)
     if (!close.length) return ''
     return `similar already in the graph: ${
-      close.map((h) => `${h.id} “${h.title}” (${h.score.toFixed(2)})`)
+      close.map((h) => `${idOf(h)} “${h.title}” (${h.score.toFixed(2)})`)
         .join(' · ')
     } — possible duplicate; compare before keeping both`
   } catch {

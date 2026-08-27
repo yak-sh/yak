@@ -394,13 +394,20 @@ let OPS: Record<string, string> = {
   '>=': '>=',
 }
 
-// `.order=hot` and `.order=search` are rankings, not filters: matchQuery lets
+// `.order=hot`, `.order=search`, and `.order=similar` are rankings, not filters: matchQuery lets
 // them through, adopt() ignores them, and orderOf() hands the value to whoever
 // sorts. Search is explicit so a filter-only picker can request recent-first
-// results without changing ordinary query order.
+// results without changing ordinary query order. Similar asks the evaluator
+// that owns the embedding service for vector-neighbor rank.
 export let ORDER = 'order'
 
 export let orderOf = (preds: Pred[]) => preds.find((p) => p.op == ORDER)?.value
+
+// `.near=T-3` names the entity whose doc supplies a similarity query. It is a
+// ranking input beside ORDER, never graph membership: the evaluator resolves
+// it and projects transient rank onto the selected neighbors.
+export let NEAR = 'near'
+export let nearOf = (preds: Pred[]) => preds.find((p) => p.op == NEAR)?.value
 
 // An AGGREGATE directive rides the pred list like ORDER — `.distinct=domain`,
 // `.tally=domain`, `.count!`. matchQuery passes AGG through (true), so the OTHER
@@ -450,7 +457,7 @@ export let predComps = (preds: Pred[]): Set<string> | null => {
   for (let p of preds) {
     if (p.refs || p.at || p.rev) return null
     if (
-      p.op == NEVER || p.op == ORDER || p.op == PROJECT
+      p.op == NEVER || p.op == ORDER || p.op == NEAR || p.op == PROJECT
     ) continue
     if (p.op == WINDOW) continue
     // `.count!` aggregates the selection, naming no column of its own.
@@ -662,7 +669,7 @@ let facet = (comp: string) => comp == 'doc' || !kindOrder.includes(comp)
 // is what makes it safe to add: a legitimate "none" is unchanged.
 export let resolution = (preds: Pred[], kind?: string) => {
   let crossed = preds.filter((p) =>
-    p.op != ORDER && p.op != AGG && !p.refs &&
+    p.op != ORDER && p.op != NEAR && p.op != AGG && !p.refs &&
     p.comp && p.comp != kind && !facet(p.comp)
   )
   // The suggestion is composed through the routing table, so it can only
@@ -902,6 +909,9 @@ export let preds = (token: string): Pred[] | null => {
   value = value.replace(/^"(.*)"$/s, '$1')
   if (path == 'order' && op == '=') {
     return [{ comp: '', prop: 'order', op: ORDER, value }]
+  }
+  if (path == 'near' && op == '=') {
+    return [{ comp: '', prop: 'near', op: NEAR, value }]
   }
   // `.refs=T-3` — the multi-column reverse-union (this entity's backlinks of
   // T-3). Presence/absence read like a reverse association: `.refs!` references
@@ -1405,7 +1415,8 @@ export let matchQuery = (
   preds.every((p) => {
     if (p.op == NEVER) return false // the empty query: selects nothing
     if (
-      p.op == ORDER || p.op == AGG || p.op == PROJECT || p.op == EDGES
+      p.op == ORDER || p.op == NEAR || p.op == AGG || p.op == PROJECT ||
+      p.op == EDGES
     ) {
       return true
     }
@@ -1727,7 +1738,9 @@ export let complete = (
   if (m) {
     let [, path, op, value] = m
     if (path == ORDER) {
-      return ['hot', 'search'].filter((v) => starts(v, value) && v != value)
+      return ['hot', 'search', 'similar'].filter((v) =>
+        starts(v, value) && v != value
+      )
         .map((v) => ({ text: `.order=${v}`, kind: 'rank' }))
     }
     let at = aimPath(path)
@@ -1786,8 +1799,12 @@ export let complete = (
       starts(c.text.slice(1), pre) && c.text.slice(1) != pre
     ),
     ...starts(ORDER, pre)
-      ? ['hot', 'search'].map((v) => ({ text: `.order=${v}`, kind: 'rank' }))
+      ? ['hot', 'search', 'similar'].map((v) => ({
+        text: `.order=${v}`,
+        kind: 'rank',
+      }))
       : [],
+    ...starts('near', pre) ? [{ text: '.near=', kind: 'rank' }] : [],
     ...starts('limit', pre) ? [{ text: '.limit=', kind: 'window' }] : [],
     ...starts('after', pre) ? [{ text: '.after=', kind: 'window' }] : [],
   ]

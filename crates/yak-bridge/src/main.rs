@@ -32,7 +32,7 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::Duration;
 use yak_bridge::subserve::Subserve;
-use yak_bridge::{appread, front, journalr, live, read, snap};
+use yak_bridge::{appread, front, journalr, read, snap};
 use yak_kernel::{
     apply, default_gates, native_safe, normalize_literals, parse_batch, ApplyOpts, Change, Store,
     WriteStore,
@@ -93,10 +93,19 @@ fn open(uri: &str) -> Result<Store, String> {
 
 async fn query_route(
     State(app): State<App>,
+    method: Method,
+    uri: Uri,
+    headers: HeaderMap,
     axum::extract::RawQuery(raw): axum::extract::RawQuery,
 ) -> Response {
-    let uri = app.uri.clone();
     let raw = raw.unwrap_or_default();
+    if read::similarity(&raw) {
+        // TODO(T-23426): evaluate `.near` natively once the Rust runtime owns
+        // the embedding provider; this explicit external-I/O compatibility
+        // seam must disappear before T-23292 completes.
+        return front_route(State(app), method, uri, headers, Bytes::new()).await;
+    }
+    let uri = app.uri.clone();
     let out = tokio::task::spawn_blocking(move || {
         let store = open(&uri)?;
         read::answer(&store, &raw)
@@ -146,11 +155,7 @@ async fn graph_route(State(app): State<App>) -> Response {
     json_response(&out)
 }
 
-// --- app-plane rung 1 routes (D-22920) ---------------------------------------
-//
-// Trivial graph-authority reads, each byte-parity with the Deno server. They
-// share the read handler shape: open a read-only Store in the blocking pool,
-// call the pure answerer in appread.rs, and shape the response like Deno's.
+// --- explicit service boundaries --------------------------------------------
 
 // /capabilities — the advertised capability tokens (types.ts `capabilities`),
 // a build constant restated in snap.rs. The headless spawn door and the reload
@@ -177,52 +182,9 @@ async fn theme_css_route() -> Response {
         .into_response()
 }
 
-// /census — one COUNT per component table (db.ts componentCounts).
-async fn census_route(State(app): State<App>) -> Response {
-    read_json(&app, |store| Ok(appread::component_counts(store))).await
-}
-
 // /integrity — orphaned rows + dangling refs + vector state (db.ts scanAnomalies).
 async fn integrity_route(State(app): State<App>) -> Response {
     read_json(&app, appread::anomalies).await
-}
-
-// /body — the deferred doc bodies for the `eids` set, as a Change batch.
-async fn body_route(State(app): State<App>, Query(p): Query<HashMap<String, String>>) -> Response {
-    let eids: Vec<String> = p
-        .get("eids")
-        .map(|s| s.split(',').filter(|x| !x.is_empty()).map(String::from).collect())
-        .unwrap_or_default();
-    read_json(&app, move |store| Ok(appread::bodies(store, &eids))).await
-}
-
-// /resolve — an id/num/uuid/short-eid/slug → {eid,num,kind}. 400 on an ambiguous
-// short-eid prefix (the typist's news), 404 for no such entity.
-async fn resolve_route(
-    State(app): State<App>,
-    Query(p): Query<HashMap<String, String>>,
-) -> Response {
-    let id = p.get("id").cloned().unwrap_or_default();
-    let uri = app.uri.clone();
-    let out = tokio::task::spawn_blocking(move || {
-        let store = open(&uri)?;
-        Ok::<_, String>(match appread::resolve_named(&store, &id) {
-            appread::Resolved::Found(v) => (200u16, Some(v), String::new()),
-            appread::Resolved::Ambiguous(msg) => (400, None, msg),
-            appread::Resolved::None => (404, None, "no entity".into()),
-        })
-    })
-    .await
-    .unwrap_or_else(|e| Err(format!("panic: {e}")));
-    match out {
-        Ok((200, Some(v), _)) => json_response(&v),
-        Ok((code, _, msg)) => (
-            axum::http::StatusCode::from_u16(code).unwrap_or(axum::http::StatusCode::BAD_REQUEST),
-            msg,
-        )
-            .into_response(),
-        Err(msg) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, msg).into_response(),
-    }
 }
 
 // /telemetry — the tool_call log: recent rows, or ?stats=1 for the latency
@@ -243,135 +205,6 @@ async fn telemetry_route(
         })
     })
     .await
-}
-
-// Number(x ?? 20) for the /search limit (db.ts search default): absent → 20;
-// `?limit=` empty or non-numeric → 0 (JS Number('') is 0, Number('x') is NaN,
-// and a NaN cap yields the empty page). A fractional value truncates toward
-// zero, as ToInteger does for slice() and SQLite does for LIMIT.
-fn js_limit(raw: Option<&str>) -> usize {
-    match raw {
-        None => 20,
-        Some(s) => {
-            let t = s.trim();
-            if t.is_empty() {
-                return 0;
-            }
-            match t.parse::<f64>() {
-                Ok(f) if f.is_finite() && f >= 0.0 => f as usize,
-                _ => 0,
-            }
-        }
-    }
-}
-
-// /search — the FTS + dot-filter search, byte-identical to db.ts search. `q` is
-// the search line, `limit` the cap (js_limit). A malformed filter is the
-// typist's news (400 with the message), exactly as the Deno route's try/catch.
-async fn search_route(
-    State(app): State<App>,
-    axum::extract::RawQuery(raw): axum::extract::RawQuery,
-) -> Response {
-    let raw = raw.unwrap_or_default();
-    let mut q = String::new();
-    let mut limit: Option<String> = None;
-    for seg in raw.split('&').filter(|s| !s.is_empty()) {
-        if let Some(v) = seg.strip_prefix("q=") {
-            q = read::decode(v);
-        } else if let Some(v) = seg.strip_prefix("limit=") {
-            limit = Some(read::decode(v));
-        }
-    }
-    let limit = js_limit(limit.as_deref());
-    let uri = app.uri.clone();
-    let out = tokio::task::spawn_blocking(move || {
-        let store = open(&uri)?;
-        appread::search(&store, &q, limit)
-    })
-    .await
-    .unwrap_or_else(|e| Err(format!("panic: {e}")));
-    match out {
-        Ok(v) => json_response(&v),
-        Err(msg) => (axum::http::StatusCode::BAD_REQUEST, msg).into_response(),
-    }
-}
-
-// /inbox — the server-enumerated inbox (client.ts inboxFor + the route's keep).
-// `session`(+`cwd`) or `actor` names the reader (session wins); `mode=all` is
-// --all; repeated `f=` are dot-param filters. 400 when neither id is named or a
-// filter is malformed. Uses RawQuery to gather the REPEATED `f=` (a HashMap
-// collapses them), decoding each the way /query does.
-async fn inbox_route(
-    State(app): State<App>,
-    axum::extract::RawQuery(raw): axum::extract::RawQuery,
-) -> Response {
-    let raw = raw.unwrap_or_default();
-    let mut mode = String::new();
-    let (mut session, mut actor, mut cwd) = (None, None, None);
-    let mut filters: Vec<String> = vec![];
-    // Empty session/actor/cwd read as ABSENT (Deno's `?? undefined` then the
-    // falsy guard), so an empty param never forces the wrong reader arm.
-    let set = |slot: &mut Option<String>, v: &str| {
-        let d = read::decode(v);
-        if !d.is_empty() {
-            *slot = Some(d);
-        }
-    };
-    for seg in raw.split('&').filter(|s| !s.is_empty()) {
-        if let Some(v) = seg.strip_prefix("f=") {
-            filters.push(read::decode(v));
-        } else if let Some(v) = seg.strip_prefix("mode=") {
-            mode = read::decode(v);
-        } else if let Some(v) = seg.strip_prefix("session=") {
-            set(&mut session, v);
-        } else if let Some(v) = seg.strip_prefix("actor=") {
-            set(&mut actor, v);
-        } else if let Some(v) = seg.strip_prefix("cwd=") {
-            set(&mut cwd, v);
-        }
-    }
-    let uri = app.uri.clone();
-    let out = tokio::task::spawn_blocking(move || {
-        let store = open(&uri)?;
-        appread::inbox(
-            &store,
-            session.as_deref(),
-            actor.as_deref(),
-            cwd.as_deref(),
-            &mode,
-            &filters,
-        )
-    })
-    .await
-    .unwrap_or_else(|e| Err(format!("panic: {e}")));
-    match out {
-        Ok(v) => json_response(&v),
-        Err(msg) => (axum::http::StatusCode::BAD_REQUEST, msg).into_response(),
-    }
-}
-
-// /references — the `referenced`-edge neighborhood of `eid`: `{out, in}`.
-// An empty `eid` is the typist's news (400 "eid required"), matching the Deno
-// route; a hit carries `cache-control: no-store` (referenced.ts route header).
-async fn references_route(
-    State(app): State<App>,
-    Query(p): Query<HashMap<String, String>>,
-) -> Response {
-    let eid = p.get("eid").cloned().unwrap_or_default();
-    if eid.is_empty() {
-        return (axum::http::StatusCode::BAD_REQUEST, "eid required").into_response();
-    }
-    let uri = app.uri.clone();
-    let out = tokio::task::spawn_blocking(move || {
-        let store = open(&uri)?;
-        Ok::<_, String>(appread::references(&store, &eid))
-    })
-    .await
-    .unwrap_or_else(|e| Err(format!("panic: {e}")));
-    match out {
-        Ok(v) => json_no_store(&v),
-        Err(msg) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, msg).into_response(),
-    }
 }
 
 // GET /config/settings — the non-secret setting rows (config.ts settingRows),
@@ -402,44 +235,7 @@ async fn config_settings_route(State(app): State<App>, method: Method) -> Respon
     }
 }
 
-// /delta — the journal replayed as changes since a client's cursor
-// (db.ts delta), gated by cursorStale. Three ways the held cursor goes stale
-// (epoch lineage, vocab shape, or a frontier past the tip) — any one is a
-// 409 "stale" (text/plain), byte-identical to Deno; else `{changes, cursor}`.
-// The `since ?? 0` / `Number()` semantics match: missing or empty → 0.
-async fn delta_route(State(app): State<App>, Query(p): Query<HashMap<String, String>>) -> Response {
-    let epoch_held = p.get("epoch").cloned();
-    let vocab_held = p.get("vocab").cloned();
-    // Number(get('since') ?? 0): missing/empty/non-numeric coalesce to 0.
-    let since: i64 = p.get("since").and_then(|s| s.parse::<i64>().ok()).unwrap_or(0);
-    let uri = app.uri.clone();
-    let out = tokio::task::spawn_blocking(move || {
-        let store = open(&uri)?;
-        let stale = epoch_held.as_deref() != Some(snap::epoch_of(&store).as_str())
-            || vocab_held.as_deref() != Some(snap::vocab_hash().as_str())
-            || since > yak_kernel::feed::cursor_of(&store.conn);
-        if stale {
-            return Ok::<_, String>(None);
-        }
-        let (changes, cursor) = live::delta(&store, since);
-        let body = serde_json::json!({
-            "changes": changes.iter().map(|c| c.to_value()).collect::<Vec<_>>(),
-            "cursor": cursor,
-        });
-        Ok(Some(body))
-    })
-    .await
-    .unwrap_or_else(|e| Err(format!("panic: {e}")));
-    match out {
-        Ok(Some(v)) => json_response(&v),
-        // The stale cursor is the client's news to reseed on — 409, plain body.
-        Ok(None) => (axum::http::StatusCode::CONFLICT, "stale").into_response(),
-        Err(msg) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, msg).into_response(),
-    }
-}
-
-// A JSON body carrying `cache-control: no-store` (the /references and
-// /config/settings contract — a live read a client must never cache).
+// A JSON body carrying `cache-control: no-store` for /config/settings.
 fn json_no_store(v: &serde_json::Value) -> Response {
     (
         [
@@ -648,6 +444,24 @@ async fn front_route(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
+    // A fallback must not resurrect graph-data doors from an older app-plane
+    // process. These capabilities have one generic boundary now; the explicit
+    // miss is part of retirement, even while unrelated browser/service paths
+    // continue through the compatibility front.
+    if matches!(
+        uri.path(),
+        "/census"
+            | "/body"
+            | "/resolve"
+            | "/search"
+            | "/inbox"
+            | "/references"
+            | "/delta"
+            | "/similar"
+    ) {
+        return (StatusCode::NOT_FOUND, "retired: use /query, /ws, or the local library")
+            .into_response();
+    }
     let Some(base) = app.app_url.clone() else {
         return (
             StatusCode::NOT_FOUND,
@@ -1037,19 +851,11 @@ async fn main() {
         .route("/graph", get(graph_route))
         .route("/apply", post(apply_route))
         .route("/ws", get(ws_route))
-        // app-plane rung 1 (D-22920): trivial graph-authority reads
+        // Explicit non-graph service boundaries.
         .route("/capabilities", get(capabilities_route))
         .route("/theme.css", get(theme_css_route))
-        .route("/census", get(census_route))
         .route("/integrity", get(integrity_route))
-        .route("/body", get(body_route))
-        .route("/resolve", get(resolve_route))
         .route("/telemetry", get(telemetry_route))
-        // app-plane rung 2 (D-22920): reader surfaces
-        .route("/search", get(search_route))
-        .route("/inbox", get(inbox_route))
-        .route("/references", get(references_route))
-        .route("/delta", get(delta_route))
         .route("/config/settings", any(config_settings_route))
         // The strangler FRONT (T-22935): every path above is served NATIVELY;
         // anything else forwards to the demoted Deno app plane, its response

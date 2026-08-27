@@ -231,12 +231,11 @@ fn query_parity() {
         "/query?.status=nonesuch".into(),
         "/query?.kind=task&.status=open,nonesuch".into(),
         "/query?.priority=notanum".into(),
-        //   - an opless dot-word is a TEXT term, not a filter: 200 [] where the
-        //     term matches nothing (the kernel used to 400 "unsupported
-        //     filter"). A no-match token, so it is byte-parity here — a term
-        //     that WOULD FTS-match is the standing text divergence, screened
-        //     out. `.zzz.zzz` itself now matches this task family's own bodies,
-        //     so the corpus uses a token no doc carries.
+        //   - an opless dot-word is a TEXT term, not a filter. A no-match token
+        //     proves the parser accepts that shape here; the ranked-query test
+        //     below separately exercises a matching term and its rank facet.
+        //     `.zzz.zzz` itself now matches this task family's own bodies, so
+        //     the corpus uses a token no doc carries.
         "/query?.zqx7kk3vqnomatch".into(),
         "/query?.kind=task&.zqx7kk3vqnomatch.nope".into(),
     ];
@@ -314,7 +313,7 @@ fn journal_parity() {
     }
 }
 
-// --- app-plane rung 1 parity (D-22920) ---------------------------------------
+// --- explicit service-boundary parity ---------------------------------------
 
 // One response header, lowercased-name lookup (ureq folds names to lower). Used
 // to hold the content-bearing routes' mime + cache-control byte-identical to
@@ -332,97 +331,6 @@ fn same_header(ts: &str, br: &str, path: &str, name: &str) {
     eprintln!("ok  header {name} for {path} = {a:?}");
 }
 
-// The trivial graph-authority reads (D-22920 rung 1): `/capabilities`,
-// `/theme.css`, `/census`, `/integrity`, `/body`, `/resolve`, `/telemetry` —
-// each byte-identical to the Deno server over one shared copy. Body + status via
-// same(); the content-bearing routes' mime/cache headers via same_header().
-//
-// Documented divergence (consistent with the existing /query 400 route): a
-// plain-text error body (`/resolve` 400/404) rides axum's default
-// `content-type: text/plain; charset=utf-8`, where Deno's `new Response(text)`
-// emits the fetch-spec default `text/plain;charset=UTF-8`. The MIME is the same
-// (text/plain); only the charset spelling and header-name case differ, which are
-// HTTP-insignificant and outside the wire contract (which is body + status, plus
-// the mime of the content-bearing routes) — so the harness checks headers only
-// where they carry meaning.
-#[test]
-fn app_plane_parity() {
-    if write_mode() {
-        eprintln!("app_plane_parity: skipped (write mode)");
-        return;
-    }
-    let Some((ts, br)) = both() else {
-        eprintln!("app_plane_parity: skipped (set TS_URL and BRIDGE_URL)");
-        return;
-    };
-    let _serial = serial();
-
-    // static + graph-count reads
-    same(&ts, &br, "/capabilities");
-    same(&ts, &br, "/census");
-    same(&ts, &br, "/integrity");
-    // the user theme: body + the two headers that ARE its contract.
-    same(&ts, &br, "/theme.css");
-    same_header(&ts, &br, "/theme.css", "content-type");
-    same_header(&ts, &br, "/theme.css", "cache-control");
-    // JSON routes advertise application/json (Response.json), name and value.
-    same_header(&ts, &br, "/census", "content-type");
-
-    // telemetry: recent, the errors cohort, and the SQL-percentile stats.
-    same(&ts, &br, "/telemetry");
-    same(&ts, &br, "/telemetry?limit=30");
-    same(&ts, &br, "/telemetry?limit=200");
-    same(&ts, &br, "/telemetry?only=errors&limit=100");
-    same(&ts, &br, "/telemetry?stats=1");
-    same(&ts, &br, "/telemetry?stats=1&only=errors");
-
-    // resolve: every arm of resolveId's grammar, seeded from live ids, plus the
-    // 404 (no entity) — body AND status.
-    same(&ts, &br, "/resolve?id=T-2000000000"); // no entity → 404 "no entity"
-    for kind in ["project", "task", "design", "memory", "board"] {
-        if let Some(id) = an_id(&ts, kind) {
-            same(&ts, &br, &format!("/resolve?id={id}")); // prefixed num
-                                                          // the bare num behind the id
-            if let Some(num) = id.split('-').nth(1) {
-                same(&ts, &br, &format!("/resolve?id={num}"));
-            }
-        }
-        if let Some(eid) = an_eid(&ts, kind) {
-            same(&ts, &br, &format!("/resolve?id={eid}")); // full uuid
-            same(&ts, &br, &format!("/resolve?id={}", &eid[..8])); // short-eid prefix
-        }
-    }
-
-    // body: the deferred bodies for one eid, several eids, and the empty set.
-    same(&ts, &br, "/body");
-    same(&ts, &br, "/body?eids=");
-    let eids: Vec<String> =
-        ["task", "design", "memory", "project"].iter().filter_map(|k| an_eid(&ts, k)).collect();
-    if let Some(one) = eids.first() {
-        same(&ts, &br, &format!("/body?eids={one}"));
-    }
-    if eids.len() >= 2 {
-        same(&ts, &br, &format!("/body?eids={}", eids.join(",")));
-    }
-
-    eprintln!("\napp-plane rung 1 parity OK");
-}
-
-// A server's WS reset snapshot, whole — its `vocabHash`, `cursor` and `epoch`
-// are the three /delta cursor-gate inputs, sampled the same instant every WS
-// frame stamps them. The bridge's vocabHash is the ONE documented divergence
-// (see the module note), so /delta's success path is proven the WS way: each
-// server answered with ITS OWN held vocab, the two BODIES diffed — the stale
-// GATE's vocab input differs by the documented hash, the delta computation does
-// not.
-fn reset_snapshot(base: &str) -> Value {
-    let mut ws = Ws::open(base);
-    ws.send(JOIN);
-    let txt = ws.next_text(Duration::from_secs(5)).expect("reset frame");
-    serde_json::from_str::<Value>(&txt).expect("reset json")["snapshot"].clone()
-}
-
-// POST a path, returning (status, body) — for the /config/settings 405 guard.
 fn post(base: &str, path: &str) -> (u16, String) {
     let url = format!("{base}{}", wire(path));
     let agent = ureq::Agent::config_builder().http_status_as_error(false).build().new_agent();
@@ -432,184 +340,86 @@ fn post(base: &str, path: &str) -> (u16, String) {
     }
 }
 
-// App-plane rung 2 (D-22920): the reader surfaces `/delta` and
-// `/config/settings`, byte-identical to the Deno server over one shared copy.
-// Body + status via same(); header-bearing routes via same_header(); the /delta
-// success body — where the held vocab legitimately differs — is diffed directly
-// per the note above. Graph-shaped citations now ride generic edge subscriptions.
+// Non-graph service boundaries remain byte-compatible; graph reads belong to
+// /query and are covered separately above.
 #[test]
-fn app_plane_rung2_parity() {
+fn explicit_service_parity() {
     if write_mode() {
-        eprintln!("app_plane_rung2_parity: skipped (write mode)");
+        eprintln!("explicit_service_parity: skipped (write mode)");
         return;
     }
     let Some((ts, br)) = both() else {
-        eprintln!("app_plane_rung2_parity: skipped (set TS_URL and BRIDGE_URL)");
+        eprintln!("explicit_service_parity: skipped (set TS_URL and BRIDGE_URL)");
         return;
     };
     let _serial = serial();
 
-    // --- /config/settings: the non-secret rows (plainKeys only), same bytes,
-    // same headers, and the 405 on a non-GET (Deno's method guard).
-    same(&ts, &br, "/config/settings");
-    same_header(&ts, &br, "/config/settings", "content-type");
+    for path in [
+        "/capabilities",
+        "/integrity",
+        "/telemetry",
+        "/telemetry?limit=30",
+        "/telemetry?limit=200",
+        "/telemetry?only=errors&limit=100",
+        "/telemetry?stats=1",
+        "/telemetry?stats=1&only=errors",
+        "/config/settings",
+    ] {
+        same(&ts, &br, path);
+    }
+    same(&ts, &br, "/theme.css");
+    same_header(&ts, &br, "/theme.css", "content-type");
+    same_header(&ts, &br, "/theme.css", "cache-control");
     same_header(&ts, &br, "/config/settings", "cache-control");
-    let (ts_405, ts_body) = post(&ts, "/config/settings");
-    let (br_405, br_body) = post(&br, "/config/settings");
-    assert_eq!(ts_405, 405, "TS POST /config/settings should 405");
-    assert_eq!(br_405, 405, "bridge POST /config/settings should 405");
-    assert_eq!(ts_body, br_body, "405 body differs for POST /config/settings");
-
-    // --- /delta: the stale gate (byte-parity on 409 "stale"), then the success
-    // body. Stale cases need no vocab match — a garbage or absent vocab, a wrong
-    // epoch, or a frontier past the tip all 409 on BOTH.
-    same(&ts, &br, "/delta"); // no params → 409 stale (absent epoch/vocab)
-    same(&ts, &br, "/delta?epoch=WRONG&vocab=zzz&since=0"); // epoch + vocab both off
-    same(&ts, &br, "/delta?since=999999999"); // frontier past tip
-
-    // The success body: read each server's own held cursor gate off its WS
-    // reset, ask each with ITS OWN vocab (the documented divergence), diff the
-    // two bodies. Same epoch + same file, so the only differing request byte is
-    // the vocab param; the delta computation must be identical.
-    let ts_snap = reset_snapshot(&ts);
-    let br_snap = reset_snapshot(&br);
-    let epoch = ts_snap["epoch"].as_str().unwrap_or("");
-    assert_eq!(epoch, br_snap["epoch"].as_str().unwrap_or(""), "epoch differs (same file)");
-    let cursor = ts_snap["cursor"].as_i64().unwrap_or(0);
-    assert_eq!(cursor, br_snap["cursor"].as_i64().unwrap_or(0), "cursor differs (same file)");
-    let ts_vocab = ts_snap["vocabHash"].as_str().unwrap_or("");
-    let br_vocab = br_snap["vocabHash"].as_str().unwrap_or("");
-    // A small window near the tip (a full since=0 replays the whole journal).
-    let since = (cursor - 5).max(0);
-    let (ts_ds, ts_db) = get(&ts, &format!("/delta?epoch={epoch}&vocab={ts_vocab}&since={since}"));
-    let (br_ds, br_db) = get(&br, &format!("/delta?epoch={epoch}&vocab={br_vocab}&since={since}"));
-    assert_eq!(ts_ds, 200, "TS /delta success should 200 (vocab {ts_vocab})");
-    assert_eq!(br_ds, 200, "bridge /delta success should 200 (vocab {br_vocab})");
-    assert_eq!(ts_db, br_db, "/delta success body differs (beyond the documented vocab gate)");
-    // The empty window at the exact tip: `{changes:[],cursor}` on both.
-    let (_, ts_e) = get(&ts, &format!("/delta?epoch={epoch}&vocab={ts_vocab}&since={cursor}"));
-    let (_, br_e) = get(&br, &format!("/delta?epoch={epoch}&vocab={br_vocab}&since={cursor}"));
-    assert_eq!(ts_e, br_e, "/delta empty-window body differs");
-
-    eprintln!("\napp-plane rung 2 parity OK (references, config/settings, delta)");
+    let (ts_status, ts_body) = post(&ts, "/config/settings");
+    let (br_status, br_body) = post(&br, "/config/settings");
+    assert_eq!(ts_status, 405);
+    assert_eq!(br_status, 405);
+    assert_eq!(ts_body, br_body);
 }
 
-// The `session.id` string of some reified session, for the /inbox session
-// reader (reader_for resolves the actor/scope/claims behind it). Any session
-// serves — an empty inbox diffs byte-for-byte too.
-fn a_session_id(ts: &str) -> Option<String> {
-    let (_, body) = get(ts, "/query?.kind=session&limit=1");
-    let v: Value = serde_json::from_str(&body).ok()?;
-    v.as_array()?.first()?.get("session")?.get("id")?.as_str().map(String::from)
+fn without_scores(body: &str) -> Value {
+    let mut v: Value = serde_json::from_str(body).expect("ranked query json");
+    if let Some(rows) = v.as_array_mut() {
+        for row in rows {
+            if let Some(rank) = row.get_mut("rank").and_then(Value::as_object_mut) {
+                assert!(rank.get("score").and_then(Value::as_f64).is_some());
+                rank.insert("score".into(), Value::from("<score>"));
+            }
+        }
+    }
+    v
 }
 
-// App-plane rung 2 COMPLETION (T-22946): /search and /inbox, the two kernel-PoC
-// reader surfaces, each byte-identical to the Deno server over one shared copy.
-//
-// /search's crux is the FILTERS-ONLY tie-order: a filters-only-no-text query
-// orders by recency (`coalesce(updated.at, created.at) desc`), and the probe
-// carries 9 projects sharing ONE migration timestamp — a tie at the cap
-// boundary that a plan-nondeterministic sort resolves differently on the two
-// SQLite builds. db.ts search and the kernel BOTH carry a `, e.eid` stable
-// tiebreak (total order), and the kernel pushes the compiled filter screen +
-// LIMIT into SQL (never a whole-table Rust post-scan), so the window Deno caps
-// in SQL and the window the kernel reads are the identical rows in the identical
-// order. Text (bm25) and the `title_hit`/snippet hit-marks ride the FTS branch;
-// a lone id term floats its entity to the head; `.kind=task port` is a SINGLE
-// invalid-kind pred (a 400), not a kind filter + a text term (segment grammar).
-//
-// /inbox is the reader union screened by inbox_item/addressed then num-sorted
-// (client.ts uniq): multiple actors (a project reader carries mail/comments/
-// knocks AND its standing watch subscriptions; a person its address mail), a
-// session reader, mode=all, dot-filters, and the missing-id / bad-filter 400s.
+// Ranked retrieval stays on /query. FTS scores include SQLite's current time,
+// so the two sequential requests compare every byte except that moving scalar;
+// order, highlights, snippets and all ordinary components remain exact.
 #[test]
-fn app_plane_search_inbox_parity() {
+fn ranked_query_and_retired_doors() {
     if write_mode() {
-        eprintln!("app_plane_search_inbox_parity: skipped (write mode)");
+        eprintln!("ranked_query_and_retired_doors: skipped (write mode)");
         return;
     }
     let Some((ts, br)) = both() else {
-        eprintln!("app_plane_search_inbox_parity: skipped (set TS_URL and BRIDGE_URL)");
+        eprintln!("ranked_query_and_retired_doors: skipped (set TS_URL and BRIDGE_URL)");
         return;
     };
     let _serial = serial();
 
-    // --- /search. Spaces inside `q` are pre-encoded `%20` (the filter grammar's
-    // segment separator); `<`/`>` the wire() helper encodes.
-    let mut search: Vec<String> = vec![
-        // filters-only-no-text: the recency tie-order crux across kinds + preds
-        "/search?q=.kind=project".into(),
-        "/search?q=.kind=project&limit=5".into(),
-        "/search?q=.kind=project&limit=100".into(),
-        "/search?q=.kind=board".into(),
-        "/search?q=.kind=design".into(),
-        "/search?q=.kind=session&limit=5".into(),
-        "/search?q=.kind=task&limit=50".into(),
-        "/search?q=.kind=task%20.status=open&limit=30".into(),
-        "/search?q=.kind=task%20.priority<=1&limit=30".into(),
-        "/search?q=.kind=task%20.status=open,wip&limit=40".into(),
-        "/search?q=.status=open&limit=25".into(),
-        // FTS branch: text, two terms, prefix, text+filter — title_hit + snippet
-        // hit-marks (\x01…\x02) ride the wire.
-        "/search?q=port".into(),
-        "/search?q=port&limit=5".into(),
-        "/search?q=parity%20byte".into(),
-        "/search?q=brid*".into(),
-        "/search?q=port%20.kind=task".into(),
-        // a term that matches nothing — [] on both
-        "/search?q=zqx7kk3vqnomatch".into(),
-        // a leading-dot segment with a space value is ONE pred: an invalid kind,
-        // a 400 (NOT a kind filter + text term) — the parseQuery segment grammar
-        "/search?q=.kind=task%20port".into(),
-        // the limit grammar: absent → 20, empty → 0
-        "/search?q=.kind=task".into(),
-        "/search?q=.kind=task&limit=".into(),
-        // empty q → []
-        "/search?q=".into(),
-    ];
-    // addressed: a lone id term floats its entity to the head of the hits.
-    for kind in ["project", "task"] {
-        if let Some(id) = an_id(&ts, kind) {
-            search.push(format!("/search?q={id}"));
-        }
-    }
-    // a reference filter, filters-only, over a real project.
-    if let Some(p) = an_id(&ts, "project") {
-        search.push(format!("/search?q=.kind=memory%20.scope={p}&limit=10"));
-    }
-    for path in &search {
-        let (t, b) = same(&ts, &br, path);
-        eprintln!("ok  {path}   ts={t:?} bridge={b:?}");
-    }
+    same(&ts, &br, "/query?.kind=project&.order=search&limit=5");
+    let path = "/query?port&.order=search&limit=5";
+    let (ts_status, ts_body) = get(&ts, path);
+    let (br_status, br_body) = get(&br, path);
+    assert_eq!(ts_status, 200);
+    assert_eq!(br_status, 200);
+    assert_eq!(without_scores(&ts_body), without_scores(&br_body));
 
-    // --- /inbox. Missing-id and bad-filter are 400 on both; readers diff their
-    // full union byte-for-byte (empty or not).
-    same(&ts, &br, "/inbox"); // 400 "session or actor required"
-    same(&ts, &br, "/inbox?mode=all"); // 400 (still no id)
-    let mut actors: Vec<String> = vec![];
-    for kind in ["project", "person"] {
-        if let Some(eid) = an_eid(&ts, kind) {
-            actors.push(eid);
-        }
+    for path in
+        ["/census", "/body", "/resolve", "/search", "/inbox", "/references", "/delta", "/similar"]
+    {
+        assert_eq!(get(&ts, path).0, 404, "Deno still serves {path}");
+        assert_eq!(get(&br, path).0, 404, "Rust still serves {path}");
     }
-    for a in &actors {
-        same(&ts, &br, &format!("/inbox?actor={a}"));
-        same(&ts, &br, &format!("/inbox?actor={a}&mode=all"));
-        same(&ts, &br, &format!("/inbox?actor={a}&f=.received_at>=today"));
-        eprintln!("ok  /inbox actor {a}");
-    }
-    // the session reader (reader_for): resolves actor/scope/claims off the graph.
-    if let Some(sid) = a_session_id(&ts) {
-        same(&ts, &br, &format!("/inbox?session={sid}"));
-        same(&ts, &br, &format!("/inbox?session={sid}&mode=all"));
-        eprintln!("ok  /inbox session {sid}");
-    }
-    // a malformed filter is the typist's 400 on both.
-    if let Some(a) = actors.first() {
-        same(&ts, &br, &format!("/inbox?actor={a}&f=.status=notanum"));
-    }
-
-    eprintln!("\napp-plane rung 2 completion parity OK (/search, /inbox)");
 }
 
 // --- WS parity ---------------------------------------------------------------
@@ -2374,4 +2184,6 @@ fn parse_query_splits_flags_and_ids() {
     assert_eq!(q.after, Some(100));
     assert_eq!(q.ids, vec!["T-3".to_string(), "T-4".to_string()]);
     assert_eq!(q.filters, vec![".kind=task".to_string()]);
+    assert!(yak_bridge::read::similarity(".near=T-3&.order=similar"));
+    assert!(!yak_bridge::read::similarity("port&.order=search"));
 }

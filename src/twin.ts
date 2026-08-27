@@ -1,7 +1,7 @@
 // The near-duplicate ("twin") vocabulary that CLIENT and server must agree on,
 // kept platform-free so both may import it without dragging in the embedder.
-// The dupe hint runs on the client (client.ts, the doc view's Similar section)
-// and asks the server's /similar over HTTP; if the two halves disagreed on the
+// The dupe hint and the doc view ask for similarity-ranked /query results; if
+// the two halves disagreed on the
 // text a doc's vector means or on how close counts as the same, the hint would
 // lie. So those two facts live here, apart from embed.ts's server-only machinery
 // (the model, the vectors, the sweep) — which re-exports them for its own use.

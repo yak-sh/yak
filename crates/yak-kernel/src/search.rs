@@ -104,13 +104,21 @@ fn try_pred(s: &str) -> Result<Option<query::Dot>, String> {
     query::dot_token(s).map(Some)
 }
 
-pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> {
-    // The search line is board grammar: bare words are TEXT terms, dot
-    // tokens are the same filter preds every list door takes, screening
-    // the ranked hits before the cap (db.ts search()).
+struct Line {
+    words: Vec<String>,
+    kind: Option<String>,
+    filters: Vec<query::Pred>,
+    ordered: bool,
+}
+
+// Parse the search-shaped subset of the shared query grammar once. The
+// `.order=search` directive chooses this evaluator for a filters-only query;
+// it is not itself a stored-row predicate.
+fn line(q: &str) -> Result<Line, String> {
     let mut words: Vec<String> = vec![];
     let mut kind_screen: Option<String> = None;
     let mut filters: Vec<query::Pred> = vec![];
+    let mut ordered = false;
     let mut take = |dot: query::Dot| match dot {
         query::Dot::Kind(k) => kind_screen = Some(k),
         query::Dot::P(p) => filters.push(p),
@@ -118,6 +126,10 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
     for seg in segments(q) {
         let seg = seg.trim();
         if seg.is_empty() {
+            continue;
+        }
+        if seg == ".order=search" {
+            ordered = true;
             continue;
         }
         // The single-pred segment arm: a leading-dot segment with no interior
@@ -130,21 +142,42 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
             }
         }
         for tok in ws_tokens(seg) {
+            if tok == ".order=search" {
+                ordered = true;
+                continue;
+            }
             match try_pred(&tok)? {
                 Some(dot) => take(dot),
                 None => words.push(tok),
             }
         }
     }
+    Ok(Line { words, kind: kind_screen, filters, ordered })
+}
+
+// Whether /query must use ranked retrieval rather than ordinary membership.
+pub fn ranked(q: &str) -> Result<bool, String> {
+    let p = line(q)?;
+    Ok(p.ordered || !p.words.is_empty())
+}
+
+// query.ts ftsTerm: quote user prose so it cannot become FTS syntax; only an
+// explicitly trailing `*` asks for prefix matching.
+fn fts_term(word: &str) -> Option<String> {
+    let prefix = word.ends_with('*');
+    let phrase = word.trim_end_matches('*').replace('"', "");
+    let phrase = phrase.trim();
+    (!phrase.is_empty()).then(|| format!("\"{phrase}\"{}", if prefix { "*" } else { "" }))
+}
+
+pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> {
+    // The search line is board grammar: bare words are TEXT terms, dot
+    // tokens are the same filter preds every list door takes, screening
+    // the ranked hits before the cap (db.ts search()).
+    let Line { words, kind: kind_screen, mut filters, .. } = line(q)?;
     query::resolve_values(store, &mut filters);
     let screened = kind_screen.is_some() || !filters.is_empty();
-    let match_q = words
-        .iter()
-        .map(|w| w.trim_end_matches('*').replace('"', ""))
-        .filter(|w| !w.is_empty())
-        .map(|w| format!("\"{w}\"*"))
-        .collect::<Vec<_>>()
-        .join(" ");
+    let match_q = words.iter().filter_map(|w| fts_term(w)).collect::<Vec<_>>().join(" ");
     if match_q.is_empty() && !screened {
         return Ok(vec![]);
     }
@@ -159,13 +192,15 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
         )";
     // With filters the cap moves AFTER the screen, so hidden hits cannot
     // displace visible ones; without them the SQL cap stands as before.
-    type Base = (String, String, String, String, Option<i64>);
+    type Base = (String, String, String, String, f64, Option<i64>);
     let base: Vec<Base> = if !match_q.is_empty() {
         let sql = format!(
             "
       select e.eid, d.title,
         highlight(doc_fts, 0, char(1), char(2)) as title_hit,
         snippet(doc_fts, 1, char(1), char(2), '…', 10) as snip,
+        -(bm25(doc_fts, 8.0, 1.0)
+          - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at)))) as score,
         e.num
       from doc_fts
       join doc d on d.rowid = doc_fts.rowid
@@ -173,15 +208,14 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id
       where doc_fts match ?1 {quarantine}
-      order by bm25(doc_fts, 8.0, 1.0)
-        - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at)))
+      order by score desc
       {}",
             if screened { "" } else { "limit ?2" }
         );
         let t = profiling::sql(&sql);
         let mut st = store.conn.prepare(&sql).map_err(|e| e.to_string())?;
         let map = |r: &rusqlite::Row<'_>| -> rusqlite::Result<Base> {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
         };
         let it = if screened {
             st.query_map(rusqlite::params![match_q], map)
@@ -211,7 +245,8 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
             (
                 format!(
                     "
-      select e.eid, d.title, d.title as title_hit, '' as snip, e.num
+      select e.eid, d.title, d.title as title_hit, '' as snip,
+        coalesce(julianday(up.at), julianday(cr.at), 0) as score, e.num
       from doc d
       join entity e on e.id = d.entity
       left join updated up on up.entity = e.id
@@ -232,7 +267,8 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
             (
                 format!(
                     "
-      select e.eid, d.title, d.title as title_hit, '' as snip, e.num
+      select e.eid, d.title, d.title as title_hit, '' as snip,
+        coalesce(julianday(up.at), julianday(cr.at), 0) as score, e.num
       from doc d
       join entity e on e.id = d.entity
       left join updated up on up.entity = e.id
@@ -247,7 +283,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
         let mut st = store.conn.prepare(&sql).map_err(|e| e.to_string())?;
         let got: Vec<Base> = st
             .query_map(rusqlite::params_from_iter(params), |r| {
-                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
             })
             .map_err(|e| e.to_string())?
             .filter_map(|x| x.ok())
@@ -277,7 +313,8 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
     let base: Vec<Base> = match &addressed {
         Some(direct) => {
             let head = store.conn.query_row(
-                "select e.eid, d.title, d.title as title_hit, '' as snip, e.num from doc d \
+                "select e.eid, d.title, d.title as title_hit, '' as snip, \
+                 1000000000 as score, e.num from doc d \
                  join entity e on e.id = d.entity where e.eid = ?1 \
                  and not exists \
                    (select 1 from quarantined qq where qq.entity = e.id) \
@@ -285,7 +322,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
                    join quarantined q2 on q2.entity = c.target \
                    where c.entity = e.id)",
                 [direct],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
             );
             match head.optional().map_err(|e| e.to_string())? {
                 Some(h) => {
@@ -335,7 +372,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
     let v = vocab();
     let mut hits: Vec<Hit> = base
         .into_iter()
-        .map(|(eid, title, title_hit, snip, num)| {
+        .map(|(eid, title, title_hit, snip, score, num)| {
             let kind = v.kind_of(&|k| {
                 if !store.has_table(k) {
                     return false;
@@ -386,9 +423,22 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
                 }
                 None => (eid.clone(), None, title.clone()),
             };
-            Hit { eid, num, kind, title, title_hit, snip, open, open_id, retired }
+            Hit { eid, num, kind, title, title_hit, snip, score, open, open_id, retired }
         })
         .collect();
     hits.sort_by_key(|h| h.retired);
     Ok(hits)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fts_term;
+
+    #[test]
+    fn only_a_trailing_star_requests_prefix_matching() {
+        assert_eq!(fts_term("port").as_deref(), Some("\"port\""));
+        assert_eq!(fts_term("port*").as_deref(), Some("\"port\"*"));
+        assert_eq!(fts_term("\"two words\"").as_deref(), Some("\"two words\""));
+        assert_eq!(fts_term("***"), None);
+    }
 }

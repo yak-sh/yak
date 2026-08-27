@@ -22,7 +22,7 @@ pub struct Dep {
 }
 
 // One FTS hit. Lives here rather than in search.rs because a hit is a shape,
-// not a storage act: the sqlite FTS query and the server's /search route both
+// not a storage act: SQLite search and a remote /query rank projection both
 // produce these, so a renderer never learns which one answered.
 #[derive(Debug, Clone)]
 pub struct Hit {
@@ -35,6 +35,7 @@ pub struct Hit {
     // addressed hit that never touched the index.
     pub title_hit: String,
     pub snip: String,
+    pub score: f64,
     // A comment hit OPENS its target; for everything else open == eid.
     pub open: String,
     pub open_id: Option<String>,

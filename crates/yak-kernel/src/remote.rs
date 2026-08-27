@@ -1,6 +1,6 @@
 // The read surface answered over the wire: the same Graph the sqlite Store
 // implements, served by the running graph server's EXISTING JSON routes
-// (/query, /search) — no new endpoint, no framing of our own. This is what
+// (/query) — no new endpoint, no framing of our own. This is what
 // lets task-rs work on a box with no graph file (T-22576, D-22530).
 //
 // Every route here is one the TS client already speaks, so the two clients
@@ -10,7 +10,7 @@
 //   GET /query?id=<id[,id…]>       resolve/fetch by human id, uuid or slug
 //   GET /query?id=<eid>&deps=1     the row plus the edges touching it
 //   GET /query?.comment.target=…   the comments aimed at an entity
-//   GET /search?q=…&limit=N        FTS hits, \x01…\x02 marks intact
+//   GET /query?<text>&.order=search ranked hits, \x01…\x02 marks intact
 //
 // Parity note — the wire spells an absent column `null`, while the file
 // simply has no key (store.rs skips a NULL). `comps()` drops nulls on the way
@@ -38,9 +38,8 @@ fn seg(s: &str) -> String {
     enc(s)
 }
 
-// Percent-encode a VALUE for a normal query parameter (/search reads its `q`
-// through searchParams, not the segment path above). The reserved set is
-// deliberately wide — a filter may carry anything a human typed.
+// Percent-encode one query segment. The reserved set is deliberately wide —
+// a filter may carry anything a human typed.
 fn enc(s: &str) -> String {
     let mut out = String::new();
     for b in s.as_bytes() {
@@ -245,29 +244,37 @@ impl Graph for Remote {
         born.into_iter().map(|(_, _, eid)| eid).collect()
     }
 
-    // /search answers the same shape search.rs builds. `retired` rides as an
-    // optional flag (the route omits it when false) and the route has already
-    // sunk retired hits to the tail, so the order stands as sent.
+    // Ranked retrieval is an ordinary /query answer whose transient `rank`
+    // facet carries the search-only evidence. The route has already sunk
+    // retired hits to the tail, so the order stands as sent.
     fn search(&self, q: &str, limit: usize) -> Result<Vec<Hit>, String> {
-        let v = self.get(&format!("/search?q={}&limit={limit}", enc(q)))?;
-        let arr = v.as_array().ok_or("search: expected a json array")?;
-        Ok(arr
-            .iter()
-            .filter_map(|h| {
-                let eid = h.get("eid")?.as_str()?.to_string();
-                let open = h.get("open").and_then(|o| o.as_str()).unwrap_or(&eid).to_string();
+        let params = [seg(q), seg(".order=search"), format!("limit={limit}")].join("&");
+        Ok(self
+            .query(&params)?
+            .into_iter()
+            .filter_map(|r| {
+                let rank = r.comps.get("rank")?.as_object()?;
+                let doc = r.comps.get("doc").and_then(Value::as_object);
+                let eid = r.eid.clone();
+                let open = rank.get("open").and_then(Value::as_str).unwrap_or(&eid).to_string();
                 Some(Hit {
-                    num: h.get("num").and_then(|n| n.as_i64()),
-                    kind: h.get("kind").and_then(|k| k.as_str()).unwrap_or("entity").to_string(),
-                    title: h.get("title").and_then(|t| t.as_str()).unwrap_or("").to_string(),
-                    title_hit: h
-                        .get("title_hit")
-                        .and_then(|t| t.as_str())
+                    num: r.num,
+                    kind: r.kind,
+                    title: rank
+                        .get("title")
+                        .and_then(Value::as_str)
+                        .or_else(|| doc.and_then(|d| d.get("title")).and_then(Value::as_str))
                         .unwrap_or("")
                         .to_string(),
-                    snip: h.get("snip").and_then(|s| s.as_str()).unwrap_or("").to_string(),
-                    open_id: h.get("open_id").and_then(|o| o.as_str()).map(String::from),
-                    retired: h.get("retired").and_then(|r| r.as_bool()).unwrap_or(false),
+                    title_hit: rank
+                        .get("title_hit")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string(),
+                    snip: rank.get("snip").and_then(Value::as_str).unwrap_or("").to_string(),
+                    score: rank.get("score").and_then(Value::as_f64).unwrap_or(0.0),
+                    open_id: rank.get("open_id").and_then(Value::as_str).map(String::from),
+                    retired: rank.get("retired").and_then(Value::as_bool).unwrap_or(false),
                     open,
                     eid,
                 })

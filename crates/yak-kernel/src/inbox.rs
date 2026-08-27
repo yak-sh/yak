@@ -106,13 +106,13 @@ pub fn inbox_rows(store: &Store, who: &Reader, filters: &[Pred], mode: Mode) -> 
     // client.ts `uniq`: one row per eid, num ASCENDING — "a snapshot walks the
     // entity table in num order, so a set stitched from several queries answers
     // in that same order". The arms are gathered in arm order above; this is the
-    // final ordering the /inbox route (and the CLI bus) serialize in.
+    // final ordering the CLI bus and other library callers serialize in.
     rows.sort_by_key(|r| r.num.unwrap_or(0));
     rows
 }
 
-// The FINISHED inbox the server /inbox route serves: the candidate union, then
-// the route's own keep predicate (client.ts `union.filter(mode=='all' ?
+// The FINISHED inbox library answer: the candidate union, then
+// the caller's keep predicate (client.ts `union.filter(mode=='all' ?
 // addressed(who) : inboxItem(who))`). inbox_rows already screened archived,
 // quarantine and the caller's filters; this is the attention decision the bus
 // applies too — addressed-to (with watch/mute overriding in normal mode). Order

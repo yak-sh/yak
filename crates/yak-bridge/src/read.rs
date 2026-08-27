@@ -19,13 +19,10 @@
 // now match TS `parseQuery` (an out-of-enum value 400s; an unknown-column dot
 // token with no operator is a TEXT term, not a 400).
 //
-// STILL DEFERRED (documented divergences): FTS hot/text RANKING, the lazy entry
-// partition, and the path-hop / time grammar `query::parse` refuses. A bare
-// text term reaches this door as `Query.text` and — since the bridge does not
-// port FTS — answers the EMPTY set (200), which is byte-parity with the Deno
-// server for a term that matches nothing (a term that WOULD match is the
-// standing text divergence). The harness screens ranked text out and tests only
-// the no-match form.
+// Ranked text is answered by the kernel's FTS evaluator and projected as an
+// ordinary row carrying transient `rank`, matching Deno's /query shape. The
+// remaining documented divergences are the lazy entry partition and path-hop /
+// time grammar `query::parse` refuses.
 
 use crate::emit::hit_with_layers;
 use serde_json::{Map, Value};
@@ -44,7 +41,6 @@ pub struct Query {
     pub filters: Vec<String>, // the remaining filter segments, as parse() args
     pub backlinks: bool,      // backlinks=1 — the reverse-reference layer
     pub aggregate: bool,      // a `.count!`/`.distinct=`/`.tally=` projection
-    pub text: bool,           // a bare TEXT term rode the filter line (see note)
 }
 
 // Percent-decode one query segment the way decodeURIComponent does: %XX bytes,
@@ -90,7 +86,6 @@ pub fn parse_query(raw: &str) -> Query {
         filters: vec![],
         backlinks: false,
         aggregate: false,
-        text: false,
     };
     for s in segs {
         if s == "deps=1" {
@@ -105,12 +100,6 @@ pub fn parse_query(raw: &str) -> Query {
             q.limit = v.parse().ok();
         } else if let Some(v) = s.strip_prefix("id=") {
             q.ids.extend(v.split(',').filter(|x| !x.is_empty()).map(String::from));
-        } else if is_text_term(&s) {
-            // A `.`-token with no operator is, in TS parseQuery, a TEXT term
-            // (its preds() returns null), not a filter. It never reaches
-            // `query::parse` — that would 400 — and instead flags the query
-            // as carrying unranked text: the bridge answers the empty set.
-            q.text = true;
         } else {
             // An aggregate PROJECTION answers a value, not rows. Exactly the
             // three spellings, so a `.canvas!` presence filter (also `!`-tailed)
@@ -124,14 +113,15 @@ pub fn parse_query(raw: &str) -> Query {
     q
 }
 
-// TS parseQuery routes a `.`-token to preds(): a token carrying one of the
-// operators (`!= ~= <= >= < > = !`) is a filter (parse/validate, may 400);
-// one with NONE is an opless dot-word whose preds() returns null — a TEXT
-// term. Mirror that decision by the presence of an operator-introducing char
-// after the leading dot. (A bare word is likewise text in TS, but the kernel's
-// `parse()` reads it as a KIND, so only dot-tokens are screened here.)
-fn is_text_term(seg: &str) -> bool {
-    seg.starts_with('.') && seg.len() > 1 && !seg[1..].contains(['=', '!', '<', '>', '~'])
+// Similarity rank depends on the Deno app plane's embedding transport and
+// vector-enabled handle. The bridge keeps /query as the public boundary but
+// delegates this one evaluator instead of recreating an external-I/O service.
+pub fn similarity(raw: &str) -> bool {
+    parse_query(raw)
+        .filters
+        .iter()
+        .flat_map(|s| s.split_whitespace())
+        .any(|s| s == ".order=similar")
 }
 
 // The derived-kind screen as PREDS. `.kind=K` means kindOf(comps) == K — K
@@ -307,6 +297,34 @@ pub fn answer(store: &Store, raw: &str) -> Result<Value, String> {
         return aggregate(store, &q.filters);
     }
 
+    let line = q.filters.join("&");
+    if yak_kernel::search::ranked(&line)? {
+        let only: HashSet<String> = q.ids.iter().filter_map(|id| store.resolve_id(id)).collect();
+        let limit = q.limit.unwrap_or(500).max(0) as usize;
+        let mut rows = vec![];
+        for h in yak_kernel::search::search(store, &line, limit)? {
+            if !only.is_empty() && !only.contains(&h.eid) {
+                continue;
+            }
+            let Some(mut row) = store.row(&h.eid) else { continue };
+            let mut rank = Map::new();
+            rank.insert("title".into(), Value::from(h.title));
+            rank.insert("title_hit".into(), Value::from(h.title_hit));
+            rank.insert("snip".into(), Value::from(h.snip));
+            rank.insert("score".into(), Value::from(h.score));
+            rank.insert("open".into(), Value::from(h.open));
+            if let Some(open_id) = h.open_id {
+                rank.insert("open_id".into(), Value::from(open_id));
+            }
+            if h.retired {
+                rank.insert("retired".into(), Value::from(true));
+            }
+            row.comps.insert("rank".into(), Value::Object(rank));
+            rows.push(row);
+        }
+        return Ok(layers(store, rows, q.deps, q.backlinks, q.reveal));
+    }
+
     // id= FETCHES by address; a remaining filter only screens.
     if !q.ids.is_empty() {
         let mut preds = if q.filters.is_empty() {
@@ -328,9 +346,6 @@ pub fn answer(store: &Store, raw: &str) -> Result<Value, String> {
         // Distinct by eid: id= may name the same entity twice, and the route's
         // Set dedups before eager().
         rows.dedup_by(|a, b| a.eid == b.eid);
-        if q.text {
-            return Ok(Value::Array(vec![]));
-        }
         return Ok(layers(store, rows, q.deps, q.backlinks, q.reveal));
     }
 
@@ -338,11 +353,6 @@ pub fn answer(store: &Store, raw: &str) -> Result<Value, String> {
     // — and validates every value, so an out-of-enum filter 400s here even when
     // a text term rides alongside (TS parses each segment before answering).
     let (kind, mut preds) = query::parse(&q.filters)?;
-    // A bare TEXT term the bridge cannot FTS-rank → the empty set (200), after
-    // the filters above have had their chance to 400 (see module note).
-    if q.text {
-        return Ok(Value::Array(vec![]));
-    }
     query::resolve_values(store, &mut preds);
     // rows_of_kind is candidate membership — every wearer of the kind's comp.
     // But `.kind=K` in the route means DERIVED kind == K (kindOf), so an entity

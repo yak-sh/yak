@@ -464,6 +464,9 @@ export let evalGraph = (
   // opts bound — the /query door's paging — overrides it, so a caller that
   // always passed a limit keeps doing exactly what it did.
   let asked = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  if (orderOf(asked) == 'similar') {
+    throw new Error('similarity rank requires the embedding query evaluator')
+  }
   let win = merged(windowOf(asked), opts)
   let after = win.after ?? 0
   let limit = win.limit ?? ENTRY_PAGE

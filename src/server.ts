@@ -12,7 +12,7 @@ import { bound, guard, type Serving } from './bind.ts'
 import { takeBaton } from './baton.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
-import { capabilities, type Change, type Dep, idOf, kindOf } from './types.ts'
+import { capabilities, type Change, type Dep, idOf } from './types.ts'
 import { type Mutation, mutationResult } from './mutation.ts'
 import {
   apply,
@@ -61,7 +61,7 @@ import { freeze, serveFrozen, store } from './freeze.ts'
 import { landBlob, serveBlob } from './blob.ts'
 import { filed } from './page.ts'
 import { fleetRaw, mailIdOf } from './inbound.ts'
-import { setEmbedConfig, setModel, similarTo } from './embed.ts'
+import { FLOOR, setEmbedConfig, setModel, similarTo, textOf } from './embed.ts'
 import { dbReads, type IO, mcpServer } from './mcp.ts'
 import { drain as drainTurns } from './turn.ts'
 import {
@@ -84,7 +84,15 @@ import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { serverFile } from './reload.ts'
 import { jsonOf, type Row } from './client.ts'
-import { listed, matchQuery, parseQuery, resolveRefs } from './query.ts'
+import {
+  listed,
+  matchQuery,
+  nearOf,
+  orderOf,
+  parseQuery,
+  resolveRefs,
+  TEXT,
+} from './query.ts'
 import { evalAgg, evalGraph, rowed } from './graph_query.ts'
 import { withResults } from './result_component.ts'
 import { nativeSoon } from './tmux.ts'
@@ -601,7 +609,7 @@ let ollamaConfig: OllamaConfig = {
 
 // The embed transport shares that config view, and its model resolves through
 // the graph plane too (OLLAMA_EMBED_MODEL override>env>default). Injected once
-// at boot: the embed sweep and the /similar door run in this process, so a saved
+// at boot: the embed sweep and similarity-ranked /query run in this process, so a saved
 // override reaches them, and MODEL is fixed for the process (a change is a
 // deliberate corpus re-embed, T-22784 / D-22781).
 setEmbedConfig(ollamaConfig)
@@ -933,6 +941,7 @@ export let retiredDataDoors = new Set([
   '/references',
   '/resolve',
   '/search',
+  '/similar',
   '/undo',
 ])
 
@@ -1001,33 +1010,6 @@ let handle = async (req: Request) => {
   // and dangling {eid} references — both wire-invisible, so the doctor cannot
   // see them through /query and reads this raw db scan instead. Read-only.
   if (path == '/integrity') return Response.json(scanAnomalies(db))
-  if (path == '/similar') {
-    // Semantic neighbors of arbitrary text — the dupe hint's door.
-    // 503 = this box has no embedder; callers show nothing, not errors.
-    let q = url.searchParams.get('q') ?? ''
-    if (!q.trim()) return new Response('q required', { status: 400 })
-    let hits = await similarTo(
-      db,
-      q,
-      Number(url.searchParams.get('limit') ?? 8),
-      Number(url.searchParams.get('floor') ?? 0),
-      url.searchParams.get('eid') ?? undefined,
-    )
-    if (!hits) return new Response('no embedder here', { status: 503 })
-    return Response.json(hits.map((h) => {
-      let comps = eager(db, h.eid)
-      let entity = comps.entity
-      let kind = kindOf(comps)
-      return {
-        ...h,
-        id: entity
-          ? idOf({ eid: h.eid, kind, num: Number(entity.num) })
-          : h.eid,
-        kind,
-        title: String(comps.doc?.title ?? ''),
-      }
-    }))
-  }
   if (path == '/query') {
     if (req.method != 'GET') return methodNotAllowed('GET')
     // The graph over plain GET: the query string IS the filter line —
@@ -1104,6 +1086,35 @@ let handle = async (req: Request) => {
       // grammar rather than replacing it.
       let screen = (hits: Row[]) =>
         only ? hits.filter((r) => only.has(r.eid)) : hits
+
+      // Semantic retrieval is a ranking of ordinary entities, so it shares
+      // /query and projects the same transient rank facet as FTS. `.near=`
+      // lets an entity supply its current doc and reusable stored vector; bare
+      // text remains available for an arbitrary query. The embedding provider
+      // is external I/O, so this is deliberately the one query evaluator the
+      // Deno app plane owns while both runtimes keep ordinary reads local.
+      let semantic = orderOf(asked) == 'similar'
+      let semanticHits: Row[] | undefined = semantic
+        ? await (async () => {
+          let near = nearOf(asked)
+          let eid = near ? locate(db, near) : undefined
+          let comps = eid ? eager(db, eid) : undefined
+          let text = eid
+            ? textOf(comps?.doc?.title, comps?.doc?.body)
+            : asked.filter((p) => p.op == TEXT).map((p) => p.value).join(' ')
+          if (!text) return []
+          let found = await similarTo(db, text, limit ?? 8, FLOOR, eid)
+          return (found ?? []).map((h) => {
+            let row = rowed({ eid: h.eid, comps: eager(db, h.eid) })
+            row.comps.rank = {
+              score: h.score,
+              open: h.eid,
+              title: String(row.comps.doc?.title ?? ''),
+            }
+            return row
+          })
+        })()
+        : undefined
       // What a hit carries BESIDE its components: its own edges (deps=1)
       // and who points at it (backlinks=1). Both are keyed off the hits —
       // depsOf and refsOf read the edge table and each typed eid column by
@@ -1213,7 +1224,7 @@ let handle = async (req: Request) => {
       // in q now (`.kind=`), hot ranking and entry ordering/paging all settle
       // inside evalGraph, so this door and the in-process graph_query tool
       // read one answer.
-      let { hits } = evalGraph(db, q, { after, limit })
+      let hits = semanticHits ?? evalGraph(db, q, { after, limit }).hits
       return Response.json(layers(hits))
     } catch (e) {
       return new Response(String((e as Error).message ?? e), { status: 400 })

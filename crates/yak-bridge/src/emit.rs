@@ -75,7 +75,14 @@ pub fn row_to_wire(row: &Row) -> Value {
             }
             out.insert("entity".into(), Value::Object(spine));
         } else {
-            out.insert(name.clone(), comp_obj(name, &have));
+            // `rank` exists only in a query result, so it is deliberately not
+            // in the persisted vocabulary that comp_obj expands. Preserve its
+            // evidence verbatim while every stored component keeps the one-list
+            // readable projection above.
+            out.insert(
+                name.clone(),
+                if name == "rank" { Value::Object(have) } else { comp_obj(name, &have) },
+            );
         }
     }
     Value::Object(out)
