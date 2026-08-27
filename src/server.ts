@@ -24,7 +24,6 @@ import {
   eager,
   epochOf,
   file as graph,
-  historicalWorked,
   human,
   journalBy,
   journalOf,
@@ -63,7 +62,7 @@ import { registerManagedSource } from './source_managed.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { landBlob, serveBlob } from './blob.ts'
 import { filed } from './page.ts'
-import { historicalReferenced } from './referenced.ts'
+import { backfillChanges, type BackfillKind } from './backfill.ts'
 import { fleetRaw, mailIdOf } from './inbound.ts'
 import { setEmbedConfig, setModel, similarTo } from './embed.ts'
 import { type IO, mcpServer } from './mcp.ts'
@@ -613,6 +612,10 @@ let graphIO: IO = {
   // deno-lint-ignore require-await
   history: async (eid, limit) => journalOf(db, eid, limit),
   providers: () => readyProviders(),
+  // Historical scans are local SQLite reads; the tool submits their Change[]
+  // through graphIO.write, the same capability as every other MCP mutation.
+  // deno-lint-ignore require-await
+  backfill: async (kind: BackfillKind) => backfillChanges(db, kind),
 }
 
 let codexAccount = accountService(codexStore(), codexIssuer())
@@ -821,8 +824,7 @@ let writeDoor = (method: string, path: string): boolean =>
   (method == 'GET' && path == '/freeze') ||
   (method == 'POST' &&
     (path == '/apply' || path == '/redact' ||
-      path == '/page' || path == '/upload' || path == '/blob' ||
-      path.startsWith('/backfill/')))
+      path == '/page' || path == '/upload' || path == '/blob'))
 
 let methodNotAllowed = (allow: string) =>
   Response.json({ error: { code: 'method_not_allowed' } }, {
@@ -965,6 +967,8 @@ let browserPlugins = specs
 // boundaries now; this one set is the route-retirement invariant and its test
 // names every removed door.
 export let retiredDataDoors = new Set([
+  '/backfill/referenced',
+  '/backfill/worked',
   '/anchor',
   '/body',
   '/census',
@@ -1369,30 +1373,6 @@ let handle = async (req: Request) => {
       })
       return new Response(why, { status: 400 })
     }
-  }
-  // Historical materializations are deliberate operator work, never a
-  // boot sweep. Ordinary apply batches keep persistence, live broadcasts,
-  // and effects on the same path as every new edge.
-  if (path.startsWith('/backfill/') && req.method == 'POST') {
-    let mine = {
-      worked: historicalWorked,
-      referenced: historicalReferenced,
-    }[path.slice('/backfill/'.length)]
-    if (!mine) return new Response('no such backfill', { status: 404 })
-    let pending = mine(db)
-    let landed = 0
-    for (let i = 0; i < pending.length; i += 200) {
-      let out = apply(
-        db,
-        pending.slice(i, i + 200),
-        fed(),
-        req.headers.get('x-via'),
-      )
-      landed += out.filter((c) => c.name == 'dependency').length
-      feed.settle()
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    }
-    return Response.json({ found: pending.length, landed })
   }
   // The adapter table, for a browser that must offer what a spawn
   // request will be checked against (adapters.ts is server-only).

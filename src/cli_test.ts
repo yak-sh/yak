@@ -1521,6 +1521,84 @@ Deno.test('the CLI has no whole-graph read path', () => {
   assertEquals(source.includes('await snapshot()'), false)
 })
 
+slow(
+  'task backfill reads local SQLite and writes only through /apply',
+  async () => {
+    let path = await Deno.makeTempFile({ suffix: '.db' })
+    let { apply, open } = await import('./db.ts')
+    let db = open(path)
+    let session = crypto.randomUUID(), task = crypto.randomUUID()
+    apply(db, [
+      { eid: session, name: 'session', comp: { id: crypto.randomUUID() } },
+      { eid: task, name: 'doc', comp: { title: 'historical task' } },
+      { eid: task, name: 'task', comp: { status: 'open', priority: 1 } },
+    ])
+    apply(db, [{ eid: task, name: 'claim', comp: { session } }])
+    apply(db, [{ eid: task, name: 'claim', comp: null }])
+    db.prepare(`
+    delete from dependency
+    where parent = (select id from entity where eid = ?)
+      and type = 'worked'
+      and child = (select id from entity where eid = ?)
+  `).run(session, task)
+    db.close()
+
+    let fake = fakeGraph({ changes: [], deps: [] })
+    try {
+      let out = await new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          'backfill',
+          'worked',
+        ],
+        env: {
+          DB_PATH: path,
+          TASKS_HOST: fake.host,
+          TASKS_BACKOFF: '',
+        },
+      }).output()
+      assertEquals(out.code, 0, text(out.stderr))
+      assertEquals(text(out.stdout), 'worked: 1/1 historical edges landed\n')
+      assertEquals(fake.seen, ['/apply'])
+      assertEquals(fake.acked, [{
+        eid: session,
+        name: 'dependency',
+        comp: { type: 'worked', child: task },
+      }])
+    } finally {
+      await fake.server.shutdown()
+      await Deno.remove(path)
+    }
+  },
+)
+
+slow(
+  'task backfill refuses a remote-only graph without an HTTP fallback',
+  async () => {
+    let fake = fakeGraph({ changes: [], deps: [] })
+    try {
+      let out = await new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          'backfill',
+          'worked',
+        ],
+        clearEnv: true,
+        env: { TASKS_HOST: fake.host, TASKS_BACKOFF: '' },
+      }).output()
+      assertEquals(out.code, 1)
+      assertMatch(text(out.stderr), /backfill requires a local graph/)
+      assertEquals(fake.seen, [])
+    } finally {
+      await fake.server.shutdown()
+    }
+  },
+)
+
 slow('task require writes the subject-first requires edge', async () => {
   let fake = graphServer()
   try {

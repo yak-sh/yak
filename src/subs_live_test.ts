@@ -34,12 +34,15 @@ let U = ''
 let aged!: typeof import('./server.ts').aged
 let broadcastObservation!: typeof import('./server.ts').broadcastObservation
 let maintain!: typeof import('./server.ts').maintain
+let retiredDataDoors!: typeof import('./server.ts').retiredDataDoors
 if (Deno.env.get('TASKS_SLOW')) {
   let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
   let port = (seat.addr as Deno.NetAddr).port
   seat.close()
   Deno.env.set('PORT', String(port))
-  ;({ aged, broadcastObservation, maintain } = await import('./server.ts'))
+  ;({ aged, broadcastObservation, maintain, retiredDataDoors } = await import(
+    './server.ts'
+  ))
   U = `127.0.0.1:${port}`
 }
 let uid = () => crypto.randomUUID()
@@ -105,7 +108,7 @@ slow(
   'retired graph-data doors are 404s for every method, never SPA routes',
   alone,
   async () => {
-    for (let path of ['/references', '/persona', '/undo']) {
+    for (let path of retiredDataDoors) {
       for (let method of ['GET', 'POST', 'HEAD']) {
         let res = await fetch(`http://${U}${path}`, { method })
         assertEquals(res.status, 404, `${method} ${path}`)

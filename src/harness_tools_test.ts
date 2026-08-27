@@ -182,6 +182,7 @@ slow(
       touch: () => Promise.resolve(),
       history: () => Promise.resolve([]),
       providers: () => Promise.resolve([]),
+      backfill: () => Promise.resolve([]),
     }
     let tasks = await tasksTools(io, 'managed-session-1')
     try {

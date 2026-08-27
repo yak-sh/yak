@@ -503,16 +503,17 @@ export let manuals = declare({
   'backfill worked': {
     about: 'materialize historical session work as graph edges',
     detail:
-      'Explicit and idempotent. Scans historical claims once on request; ' +
-      'normal server boot and Session Tiles never read that history.',
+      'Explicit and idempotent. Reads historical claims from local SQLite, ' +
+      'then submits ordinary /apply batches; normal server boot and Session ' +
+      'Tiles never read that history.',
     args: [],
   },
   'backfill referenced': {
     about: 'mint referenced edges for the citations in stored entries',
     detail:
-      'Explicit and idempotent. Parses every stored entry once on request, ' +
-      'the same way the post-commit effect parses each new one; a rerun ' +
-      'lands only what the last run missed.',
+      'Explicit and idempotent. Parses stored entries from local SQLite, ' +
+      'then submits ordinary /apply batches; a rerun lands only what the ' +
+      'last run missed.',
     args: [],
   },
   watch: {

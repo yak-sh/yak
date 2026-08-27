@@ -5866,7 +5866,7 @@ export let lastBatch = (db: DatabaseSync, eid: string): number =>
     ).get(eid) as { id: number | null } | undefined)?.id ?? 0,
   )
 
-// History is paid for only by the explicit migration door. The result is
+// History is paid for only by the explicit local backfill operation. The result is
 // ordinary graph changes, so the caller can land and broadcast them through
 // apply() rather than growing a second persistence path.
 export let historicalWorked = (db: DatabaseSync): Change[] =>

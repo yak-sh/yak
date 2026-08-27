@@ -11,6 +11,7 @@ import { sha } from './sha.ts'
 import { type Change, edges, statuses, uuid, verdicts } from './types.ts'
 import type { Mutation } from './mutation.ts'
 import { slow } from './testing.ts'
+import { backfillChanges } from './backfill.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let {
@@ -333,6 +334,7 @@ let blank = (): IO => ({
   touch: () => Promise.resolve(),
   history: () => Promise.resolve([]),
   providers: () => Promise.resolve([{ name: 'test', models: ['test'] }]),
+  backfill: () => Promise.resolve([]),
 })
 
 // The graph as an address-resolving get over a Row[] — the same find() the
@@ -364,6 +366,7 @@ let graph = () => {
     },
     history: (eid, limit) => Promise.resolve(journalOf(db, eid, limit)),
     providers: () => Promise.resolve([{ name: 'test', models: ['test'] }]),
+    backfill: (kind) => Promise.resolve(backfillChanges(db, kind)),
   }
   return { db, io, pages }
 }
@@ -540,6 +543,7 @@ let bases: Record<string, Record<string, unknown>> = {
   transcript: { id: 'S-1' },
   history: { id: 'T-1' },
   undo: { id: 'T-1' },
+  backfill: { kind: 'worked' },
   task_comment: { id: 'T-1', session: 'test' },
   memory_save: { session: 'test' },
   memory_recall: {},
@@ -651,6 +655,36 @@ Deno.test('MCP schemas document parameters and derive closed vocabularies', asyn
       new RegExp(edges.join('\\|')),
     )
   })
+})
+
+Deno.test('backfill reads locally and submits bounded ordinary writes', async () => {
+  let pending: Change[] = Array.from({ length: 201 }, (_, i) => ({
+    eid: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    name: 'dependency',
+    comp: { type: 'worked', child: crypto.randomUUID() },
+  }))
+  let writes: { changes: Change[]; via?: string }[] = []
+  let io = blank()
+  io.backfill = (kind) => {
+    assertEquals(kind, 'worked')
+    return Promise.resolve(pending)
+  }
+  io.write = (mutation, via) => {
+    let changes = batch(mutation)
+    writes.push({ changes, via })
+    return Promise.resolve(changes)
+  }
+  await protocol(io, async (client) => {
+    let out = await client.callTool({
+      name: 'backfill',
+      arguments: { kind: 'worked', session: 'session-1' },
+    }) as ToolResult
+    assertEquals(said(out), 'worked: 201/201 historical edges landed')
+  })
+  assertEquals(writes.map((w) => [w.changes.length, w.via]), [
+    [200, 'session-1'],
+    [1, 'session-1'],
+  ])
 })
 
 Deno.test('MCP tools declare closed-world, save task_spawn (the agent launch)', async () => {

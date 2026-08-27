@@ -59,6 +59,7 @@ let ioFor = (db: ReturnType<typeof open>): IO => ({
   touch: () => Promise.resolve(),
   history: (eid, limit) => Promise.resolve(journalOf(db, eid, limit)),
   providers: () => Promise.resolve([]),
+  backfill: () => Promise.resolve([]),
 })
 
 slow(
