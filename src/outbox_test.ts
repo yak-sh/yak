@@ -2,7 +2,7 @@
 // confirms it landed, because the incident it answers was exactly the other
 // shape — fire-and-forget frames dying on a restarting socket while the
 // optimistic cache kept showing success, silently losing owner edits. The
-// slow tier drives the REAL /ws door: `{apply, id}` must come back as
+// slow tier drives the served /ws door: `{apply, id}` must come back as
 // `{ack, id}` only after the write is readable, a refusal must settle the
 // same id, and a bare array (an older tab) must still apply. The fast tier
 // holds the client half: mutate() parks the batch in the outbox, an ack —
@@ -14,7 +14,7 @@ import { slow } from './testing.ts'
 import { type Change } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { sha } = await import('./db.ts')
+let { readComp, sha } = await import('./db.ts')
 
 // The server serves on import — booted only under the heavy tier, on an
 // ephemeral port, exactly as precondition_test.ts does.
@@ -31,15 +31,8 @@ let uid = () => crypto.randomUUID()
 let alone = { sanitizeOps: false, sanitizeResources: false }
 
 let stored = async (eid: string) => {
-  let res = await fetch(`http://${U}/snapshot`)
-  let out = await res.json() as {
-    changes: {
-      eid: string
-      name: string
-      comp: Record<string, unknown> | null
-    }[]
-  }
-  return out.changes.find((c) => c.eid == eid && c.name == 'doc')?.comp?.body
+  let { db } = await import('./live_db.ts')
+  return readComp(db, eid, 'doc')?.body
 }
 
 // A joined socket that sends ONE frame — array or object — and returns every

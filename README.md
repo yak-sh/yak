@@ -107,9 +107,9 @@ carry a result-only `rank` component; `/` in the web UI, `task search`, and MCP
   When directly addressed activity is pending, the daemon waits for a stable
   empty composer and types only a constant request to call `task_context`;
   graph-authored message text never crosses tmux.
-- **HTTP** — `/snapshot` (the whole graph in one gulp), `/apply`, `/ws`,
-  `/query`, `/journal` (write history), `/telemetry`, plus explicit non-graph
-  service boundaries for browser assets, remote access, auth, and external I/O.
+- **HTTP** — `/apply`, `/ws`, `/query`, `/mcp`, `/journal` (write history),
+  `/telemetry`, plus explicit non-graph service boundaries for browser assets,
+  remote access, auth, and external I/O.
 
 ## Agents in the graph
 

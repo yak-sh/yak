@@ -119,6 +119,7 @@ mod tests {
                 "/resolve",
                 "/search",
                 "/similar",
+                "/snapshot",
                 "/undo",
             ]
         );
