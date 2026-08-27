@@ -171,6 +171,40 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
         }
         None => base,
     };
+    // Retirement sinks a hit that belongs to an archived project — it IS an
+    // archived project, or its task points at one. The whole hit set is known
+    // up front, so ONE query answers it for every hit at once; it was a
+    // 3-way join run per hit, second only to the FTS query in the profile.
+    let retired_set: std::collections::HashSet<String> = {
+        let eids: Vec<&String> = base.iter().map(|(eid, ..)| eid).collect();
+        if eids.is_empty() {
+            Default::default()
+        } else {
+            let marks = vec!["?"; eids.len()].join(",");
+            let sql = format!(
+                "select e.eid from entity e \
+                 left join task t on t.entity = e.id \
+                 where e.eid in ({marks}) and ( \
+                   e.id in (select p.entity from project p \
+                              join archived a on a.entity = p.entity) \
+                   or t.project in (select p.entity from project p \
+                                      join archived a on a.entity = p.entity))"
+            );
+            let tm = profiling::sql(&sql);
+            let set = store
+                .conn
+                .prepare(&sql)
+                .and_then(|mut st| {
+                    st.query_map(rusqlite::params_from_iter(eids.iter()), |r| r.get::<_, String>(0))
+                        .map(|it| {
+                            it.filter_map(|x| x.ok()).collect::<std::collections::HashSet<_>>()
+                        })
+                })
+                .unwrap_or_default();
+            tm.done(set.len());
+            set
+        }
+    };
     let v = vocab();
     let mut hits: Vec<Hit> = base
         .into_iter()
@@ -209,22 +243,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
                 .ok()
                 .flatten();
             t.done(aim.is_some() as usize);
-            let sunk_sql = "select 1 from project p \
-                            join archived a on a.entity = p.entity \
-                            left join task t on t.entity = \
-                              (select id from entity where eid = ?1) \
-                            where p.entity in \
-                              ((select id from entity where eid = ?1), \
-                               t.project)";
-            let t = profiling::sql(sunk_sql);
-            let retired: bool = store
-                .conn
-                .query_row(sunk_sql, [&eid], |r| r.get::<_, i64>(0))
-                .optional()
-                .ok()
-                .flatten()
-                .is_some();
-            t.done(retired as usize);
+            let retired = retired_set.contains(&eid);
             let (open, open_id, title) = match &aim {
                 Some((teid, ttitle, tnum, _)) => {
                     let tkind = store.row(teid).map(|r| r.kind).unwrap_or_else(|| "entity".into());
