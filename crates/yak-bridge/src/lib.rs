@@ -6,6 +6,7 @@
 pub mod appread;
 pub mod deps;
 pub mod emit;
+pub mod front;
 pub mod journalr;
 pub mod live;
 pub mod read;

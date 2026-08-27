@@ -17,19 +17,21 @@
 // filters and `.fields` projection are the standing follow-up — refused loudly,
 // never half-served.)
 
-use axum::body::Bytes;
+use axum::body::{Body, Bytes};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Query, State};
-use axum::http::HeaderMap;
+use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
 use std::collections::HashMap;
+use std::pin::Pin;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll};
 use std::time::Duration;
 use yak_bridge::subserve::Subserve;
-use yak_bridge::{appread, journalr, read, snap};
+use yak_bridge::{appread, front, journalr, read, snap};
 use yak_kernel::{
     apply, default_gates, native_safe, parse_batch, ApplyOpts, Change, Store, WriteStore,
 };
@@ -43,10 +45,37 @@ struct App {
     // than guessing a server, since a wrong guess (5173) would proxy probe writes
     // at the live graph.
     upstream: Option<String>,
+    // The demoted Deno's app-plane URL (`TASKS_APP_URL`/--app-url, T-22935). The
+    // strangler FRONT: any path the bridge does NOT natively route is forwarded
+    // here — the web UI + sucrase, /mcp, freeze, mail files, OAuth, and every
+    // not-yet-ported route. None → an unrouted path is a 404 rather than a guess
+    // at a Deno location (a wrong guess would proxy probe traffic at the live
+    // server). Distinct from `upstream`: this NEVER carries /apply or /ws (both
+    // native routes), so a proxied write reaches Deno's kept door and is bounced
+    // BACK to the bridge's own /apply (T-22927) — one hop, never a loop.
+    app_url: Option<String>,
     // The bridge's READ_WRITE connection (D-22804 rung 1). Opened at boot to prove
     // the same-build write rule holds; a native-safe batch (rung 4) COMMITS
     // through it, a transform-bearing one still proxies to Deno.
     write: Arc<Mutex<WriteStore>>,
+}
+
+// The front proxy's response HEAD, handed from the blocking forward thread to
+// the async handler the instant Deno answers: (status, end-to-end headers), or a
+// gateway-failure message if the forward never reached Deno.
+type ProxyHead = Result<(u16, Vec<(String, String)>), String>;
+
+// The async half of a streamed proxy body: an axum `Stream` that drains the
+// bounded channel the blocking forward thread fills. Bounded so a large /blob or
+// /frozen relays with BACKPRESSURE — never the whole body buffered in memory.
+// The Receiver is Unpin, so the pin projection is a plain field poll.
+struct ChanStream(tokio::sync::mpsc::Receiver<Result<Bytes, std::io::Error>>);
+
+impl futures_core::Stream for ChanStream {
+    type Item = Result<Bytes, std::io::Error>;
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.get_mut().0.poll_recv(cx)
+    }
 }
 
 fn ro_uri(db: &str) -> String {
@@ -362,6 +391,143 @@ fn proxy_apply(upstream: &str, via: Option<&str>, body: &[u8]) -> (u16, String, 
     }
 }
 
+// The FALLBACK: every request whose path the bridge does NOT natively route
+// (the web UI + sucrase, /mcp, freeze, mail files, OAuth, any not-yet-ported
+// route). Method, headers and body are preserved; the demoted Deno's response —
+// status, headers, and BODY — is relayed verbatim, the body STREAMED so a large
+// /blob or /frozen never buffers whole. No app-plane URL → a 404 with the
+// reason, never a guess at where Deno lives. /apply and /ws are native routes,
+// so the fallback never sees a write or a socket upgrade — no write loops here.
+async fn front_route(
+    State(app): State<App>,
+    method: Method,
+    uri: Uri,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let Some(base) = app.app_url.clone() else {
+        return (
+            StatusCode::NOT_FOUND,
+            format!(
+                "yak-bridge: no native route for {method} {} and no app-plane \
+                 upstream to forward to — set TASKS_APP_URL/--app-url to the \
+                 demoted Deno server (never 5173 from a probe).",
+                uri.path()
+            ),
+        )
+            .into_response();
+    };
+    let url = front::target_url(&base, &uri);
+    // Forward every request header except the hop-by-hop set (host/content-length
+    // the client re-derives). Collected as owned pairs so the blocking thread owns
+    // them; a header whose value is not valid UTF-8 (none on this wire) is dropped.
+    let fwd: Vec<(String, String)> = headers
+        .iter()
+        .filter(|(n, _)| !front::is_hop_by_hop(n.as_str()))
+        .filter_map(|(n, v)| v.to_str().ok().map(|v| (n.as_str().to_string(), v.to_string())))
+        .collect();
+
+    // The handshake: the blocking thread sends status + response headers over a
+    // oneshot the instant Deno answers, THEN streams the body into the bounded
+    // channel. We build the Response as soon as the head arrives; the body drains
+    // the channel with backpressure. Cap 16 × 64 KiB ≈ 1 MiB in flight, bounded.
+    let (head_tx, head_rx) = tokio::sync::oneshot::channel::<ProxyHead>();
+    let (body_tx, body_rx) = tokio::sync::mpsc::channel::<Result<Bytes, std::io::Error>>(16);
+    tokio::task::spawn_blocking(move || {
+        front_forward(method, &url, fwd, body, head_tx, body_tx);
+    });
+
+    match head_rx.await {
+        Ok(Ok((status, resp_headers))) => {
+            let mut builder = Response::builder()
+                .status(StatusCode::from_u16(status).unwrap_or(StatusCode::BAD_GATEWAY));
+            for (n, v) in resp_headers {
+                if let (Ok(hn), Ok(hv)) =
+                    (HeaderName::from_bytes(n.as_bytes()), HeaderValue::from_str(&v))
+                {
+                    builder = builder.header(hn, hv);
+                }
+            }
+            builder
+                .body(Body::from_stream(ChanStream(body_rx)))
+                .unwrap_or_else(|_| StatusCode::BAD_GATEWAY.into_response())
+        }
+        // Deno unreachable / a bad request target: the forward's own message,
+        // as a 502 (a gateway failure, not the client's fault).
+        Ok(Err(e)) => (StatusCode::BAD_GATEWAY, e).into_response(),
+        // The blocking task was dropped without answering — a panic in the
+        // forward. Report a gateway failure rather than hang.
+        Err(_) => {
+            (StatusCode::BAD_GATEWAY, "yak-bridge: front proxy task ended without a response")
+                .into_response()
+        }
+    }
+}
+
+// The blocking half of the front proxy: run the ureq request (connect + send +
+// read response head), hand the head back over `head_tx`, then pump the response
+// body into `body_tx` in 64 KiB chunks. A bounded `blocking_send` gives
+// backpressure — if the client is slow, this thread parks instead of buffering.
+// `http_status_as_error(false)` relays a Deno 4xx/5xx as an ordinary answer
+// (its body is the message the client must see), exactly as the write proxy does.
+fn front_forward(
+    method: Method,
+    url: &str,
+    req_headers: Vec<(String, String)>,
+    body: Bytes,
+    head_tx: tokio::sync::oneshot::Sender<ProxyHead>,
+    body_tx: tokio::sync::mpsc::Sender<Result<Bytes, std::io::Error>>,
+) {
+    let agent = ureq::Agent::config_builder().http_status_as_error(false).build().new_agent();
+    let mut builder = axum::http::Request::builder().method(method).uri(url);
+    for (n, v) in &req_headers {
+        builder = builder.header(n, v);
+    }
+    let req = match builder.body(body.to_vec()) {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = head_tx.send(Err(format!("yak-bridge: front proxy cannot build request: {e}")));
+            return;
+        }
+    };
+    let resp = match agent.run(req) {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = head_tx.send(Err(format!("yak-bridge: front proxy to {url} failed: {e}")));
+            return;
+        }
+    };
+    let status = resp.status().as_u16();
+    let resp_headers: Vec<(String, String)> = resp
+        .headers()
+        .iter()
+        .filter(|(n, _)| !front::is_hop_by_hop(n.as_str()))
+        .filter_map(|(n, v)| v.to_str().ok().map(|v| (n.as_str().to_string(), v.to_string())))
+        .collect();
+    // If the client already hung up, there is nobody to stream to — stop here.
+    if head_tx.send(Ok((status, resp_headers))).is_err() {
+        return;
+    }
+    // Unlimited reader (no artificial cap): the body is chunked out under the
+    // channel's backpressure, so a large /blob relays with bounded memory.
+    let mut reader = resp.into_body().into_reader();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        match std::io::Read::read(&mut reader, &mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                if body_tx.blocking_send(Ok(Bytes::copy_from_slice(&buf[..n]))).is_err() {
+                    break; // client gone
+                }
+            }
+            Err(e) => {
+                let _ = body_tx.blocking_send(Err(e));
+                break;
+            }
+        }
+    }
+}
+
 fn json_response(v: &serde_json::Value) -> Response {
     (
         [(axum::http::header::CONTENT_TYPE, "application/json")],
@@ -445,6 +611,8 @@ async fn main() {
     let mut port: Option<u16> = std::env::var("PORT").ok().and_then(|s| s.parse().ok());
     let mut upstream: Option<String> =
         std::env::var("TASKS_UPSTREAM").ok().filter(|s| !s.is_empty());
+    // The demoted Deno the front proxy forwards unrouted paths to (T-22935).
+    let mut app_url: Option<String> = std::env::var("TASKS_APP_URL").ok().filter(|s| !s.is_empty());
     let mut migrate = false;
     let mut join = false;
     let mut args = std::env::args().skip(1);
@@ -453,6 +621,9 @@ async fn main() {
             "--db" => db = args.next(),
             "--port" => port = args.next().and_then(|s| s.parse().ok()),
             "--upstream" => upstream = args.next(),
+            // The demoted Deno app-plane URL for the front proxy (T-22935): any
+            // path the bridge does not natively route is forwarded there.
+            "--app-url" => app_url = args.next(),
             // Swap-boot as a SUCCESSOR (D-22804 §8): wait for the predecessor to
             // release the writer baton, migrate as the now-sole writer, THEN
             // serve — the live Deno→Rust handoff. Owner-gated on the live graph;
@@ -598,7 +769,8 @@ async fn main() {
         eprintln!("yak-bridge: cannot open {db} read-only: {e}");
         std::process::exit(1);
     }
-    let app = App { db: db.clone(), uri, upstream: upstream.clone(), write };
+    let app =
+        App { db: db.clone(), uri, upstream: upstream.clone(), app_url: app_url.clone(), write };
     eprintln!(
         "yak-bridge: write door — native-safe batches commit through the kernel; {}",
         match &upstream {
@@ -606,6 +778,14 @@ async fn main() {
             None =>
                 "no upstream (--upstream/TASKS_UPSTREAM), so transform-bearing/delete batches 503"
                     .into(),
+        }
+    );
+    eprintln!(
+        "yak-bridge: front proxy — {}",
+        match &app_url {
+            Some(u) => format!("unrouted paths forward → {u} (the demoted Deno app plane)"),
+            None =>
+                "no app-plane upstream (--app-url/TASKS_APP_URL), so an unrouted path is 404".into(),
         }
     );
     let router = Router::new()
@@ -622,6 +802,11 @@ async fn main() {
         .route("/body", get(body_route))
         .route("/resolve", get(resolve_route))
         .route("/telemetry", get(telemetry_route))
+        // The strangler FRONT (T-22935): every path above is served NATIVELY;
+        // anything else forwards to the demoted Deno app plane, its response
+        // (status + headers + streamed body) relayed. /apply and /ws are native,
+        // so the fallback never fronts a write or a socket — no write loops.
+        .fallback(front_route)
         .with_state(app);
 
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));

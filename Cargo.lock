@@ -1440,6 +1440,7 @@ name = "yak-bridge"
 version = "0.1.1"
 dependencies = [
  "axum",
+ "futures-core",
  "rusqlite",
  "serde_json",
  "tokio",

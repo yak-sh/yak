@@ -36,10 +36,15 @@ serde_json = { version = "1", features = ["preserve_order"] }
 rusqlite = { version = "0.40" }
 axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "signal", "time"] }
-# The write proxy forwards each batch to the Deno /apply over plain HTTP; a
+# The write proxy AND the front proxy (T-22935) forward over plain HTTP; a
 # blocking call inside spawn_blocking, so no async client. default-features off
 # drops TLS the loopback wire never needs.
 ureq = { version = "3", default-features = false }
+# The front proxy streams the demoted Deno's response body back to the client
+# through a bounded channel; futures-core is the one trait (`Stream`) that lets
+# an axum `Body::from_stream` drain that channel. Already in the tree via axum —
+# a trait crate, no runtime, nothing new compiled.
+futures-core = { version = "0.3", default-features = false }
 
 [dev-dependencies]
 # The parity harness drives HTTP and a WS socket against BOTH servers.
