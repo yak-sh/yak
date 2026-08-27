@@ -86,6 +86,29 @@ fn fixture(dir: &Path, sessions: usize) -> String {
     db.to_string_lossy().into_owned()
 }
 
+// Real comp-table names the digest NEVER renders — a slice of the ~125 the
+// graph carries. A projected read (rows_of_cols/rows_of_kind_cols/row_cols,
+// T-22823) touches only the comps a section names, so creating these empty
+// tables must not add a single statement; the old full-entity fill queried
+// every existing comp table per section, so it would add one apiece. If a
+// future digest section starts rendering one of these, this canary fires —
+// move the name out of the list and into the section's sel list.
+const UNRENDERED_COMPS: &[&str] = &[
+    "notified", "opened", "archived", "delivered", "error", "exception",
+    "blocked", "content", "message", "instruction", "bash", "tool", "output",
+    "imported", "opaque", "call", "stderr", "chat", "conflict", "redaction",
+];
+
+fn add_empty_comp_tables(db: &str) {
+    let conn = Connection::open(db).unwrap();
+    for c in UNRENDERED_COMPS {
+        conn.execute_batch(&format!(
+            "create table \"{c}\" (entity integer primary key);"
+        ))
+        .unwrap();
+    }
+}
+
 fn run(db: &str, args: &[&str], profile: bool) -> Output {
     let mut c = Command::new(env!("CARGO_BIN_EXE_yak"));
     c.env("DB_PATH", db);
@@ -154,5 +177,43 @@ fn context_reads_its_sessions_without_an_n_plus_1() {
     assert!(
         n_large.saturating_sub(n_small) < (many - few),
         "query count scaled with sessions ({n_small} → {n_large}): an N+1"
+    );
+}
+
+#[test]
+fn context_read_does_not_scale_with_the_comp_table_surface() {
+    let dir = std::env::temp_dir()
+        .join(format!("yak-ctx-surface-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // Same graph, twice: once bare, once with a slab of extra comp tables the
+    // digest never renders. A projected read ignores them; the old full fill
+    // probed every existing comp table per section. Read from a SESSION (num
+    // 100, the first fixture session) not the project, so this exercises the
+    // digest's own reads and not the preview-only inbox count (which still
+    // materializes fully — a separate residual outside this fix).
+    let lean = fixture(&dir.join("lean"), 8);
+    let wide = fixture(&dir.join("wide"), 8);
+    add_empty_comp_tables(&wide);
+
+    let a = run(&lean, &["context", "100"], true);
+    let b = run(&wide, &["context", "100"], true);
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert_eq!(a.status.code(), Some(0));
+    assert_eq!(b.status.code(), Some(0));
+    let (n_lean, n_wide) = (sql_count(&a.stderr), sql_count(&b.stderr));
+    // Every DIGEST section reads projected, so it adds nothing per extra table.
+    // What little growth remains is two fixed full row() probes OUTSIDE this
+    // fix's lane — the CLI's arg classification (main.rs) and scope_for's
+    // actor-is-a-project check (reader.rs) — each O(1), not per-section. The
+    // old full-entity digest re-probed every comp table in ~9 sections, so it
+    // grew by ~9× the surface; the guard is that growth stays a small constant.
+    let growth = n_wide.saturating_sub(n_lean);
+    assert!(
+        growth <= 2 * UNRENDERED_COMPS.len(),
+        "{} extra comp tables grew the statement count by {growth} ({n_lean} → \
+         {n_wide}): a digest section is materializing the whole comp surface \
+         again, not reading projected",
+        UNRENDERED_COMPS.len()
     );
 }

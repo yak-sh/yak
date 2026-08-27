@@ -4,7 +4,7 @@
 // is stored as. Never migrates, never takes the writer baton: a library
 // client connects, reads, and leaves the schema alone (D-22530 §1).
 
-use crate::vocab::vocab;
+use crate::vocab::{vocab, PropType};
 pub use crate::model::{is_uuid, Dep, Row};
 use crate::model::{Graph, Hit, Source};
 use crate::profiling;
@@ -15,6 +15,15 @@ use std::collections::{HashMap, HashSet};
 pub struct Store {
     pub conn: Connection,
     tables: HashSet<String>,
+}
+
+// A projected-read request: one component, and the columns to pull from it.
+// `props` empty means every readable column (what fill() loads); a subset
+// narrows to those columns; and a component with no readable columns is a
+// presence probe. See `fill_cols`.
+pub struct Sel<'a> {
+    pub comp: &'a str,
+    pub props: &'a [&'a str],
 }
 
 fn q(id: &str) -> String {
@@ -412,40 +421,11 @@ impl Store {
     // whichever eids the graph has, num order; the rest are simply absent,
     // the way row() answers None.
     pub fn rows_of(&self, eids: &[String]) -> Vec<Row> {
-        if eids.is_empty() {
+        let (list, order) = self.resolve_set(eids);
+        if list.is_empty() {
             return vec![];
         }
-        // Membership is named by entity.id, not eid: every comp table is keyed
-        // on the integer, so an id list lets each per-comp query seek instead
-        // of scanning a table as long as the graph. Chunked because the eids
-        // are bound, and sqlite caps how many parameters one statement takes.
-        let mut order: Vec<(String, Option<i64>)> = vec![];
-        let mut ids: Vec<i64> = vec![];
-        for batch in eids.chunks(500) {
-            let holes: Vec<String> =
-                (1..=batch.len()).map(|i| format!("?{i}")).collect();
-            let sql = format!(
-                "select e.id, e.eid, e.num from entity e where e.eid in ({}) \
-                 order by e.num",
-                holes.join(",")
-            );
-            let got: Vec<(i64, String, Option<i64>)> = collect(
-                &self.conn,
-                &sql,
-                rusqlite::params_from_iter(batch.iter()),
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-            );
-            for (id, eid, num) in got {
-                ids.push(id);
-                order.push((eid, num));
-            }
-        }
-        if ids.is_empty() {
-            return vec![];
-        }
-        // integers straight from entity.id — nothing a caller spelled
-        let list: Vec<String> = ids.iter().map(|i| i.to_string()).collect();
-        self.fill(&list.join(","), order)
+        self.fill(&list, order)
     }
 
     // The bulk read both rows_of_kind and rows_of are made of: one query per
@@ -470,61 +450,83 @@ impl Store {
             if comp == "entity" || !self.has_table(comp) {
                 continue;
             }
-            let cols = v.readable(comp);
-            let mut joins = String::new();
-            let mut sel: Vec<String> = vec!["__o.eid".into()];
-            for (i, (name, t)) in cols.iter().enumerate() {
-                if t.is_ref() {
-                    let a = format!("__r{i}");
-                    joins.push_str(&format!(
-                        " left join entity {a} on {a}.id = t.{}",
-                        q(name)
-                    ));
-                    sel.push(format!("{a}.eid"));
-                } else {
-                    sel.push(format!("t.{}", q(name)));
-                }
-            }
-            let sql = format!(
-                "select {} from {} t join entity __o on __o.id = t.entity{} \
-                 where t.entity in ({})",
-                sel.join(", "),
-                q(comp),
-                joins,
-                set
-            );
-            let t = profiling::sql(&sql);
-            let mut got = 0usize;
-            let Ok(mut st) = self.conn.prepare(&sql) else { continue };
-            let mut rows = match st.query([]) {
-                Ok(r) => r,
-                Err(_) => continue,
-            };
-            while let Ok(Some(r)) = rows.next() {
-                got += 1;
-                let Ok(eid) = r.get::<_, String>(0) else { continue };
-                let mut m = Map::new();
-                for (i, (name, _)) in cols.iter().enumerate() {
-                    let v: Value = match r.get_ref(i + 1) {
-                        Ok(rusqlite::types::ValueRef::Integer(n)) => {
-                            Value::from(n)
-                        }
-                        Ok(rusqlite::types::ValueRef::Real(f)) => {
-                            Value::from(f)
-                        }
-                        Ok(rusqlite::types::ValueRef::Text(s)) => Value::from(
-                            String::from_utf8_lossy(s).to_string(),
-                        ),
-                        _ => continue,
-                    };
-                    m.insert(name.clone(), v);
-                }
-                if let Some(bag) = bags.get_mut(&eid) {
-                    bag.insert(comp.clone(), Value::Object(m));
-                }
-            }
-            t.done(got);
+            self.load_comp(comp, &v.readable(comp), set, &mut bags);
         }
+        Self::assemble(order, bags)
+    }
+
+    // Load ONE component's projected columns for a membership `set` into the
+    // per-eid bags — the single door both fill() (every readable column) and
+    // fill_cols() (a chosen subset) pour a comp through, so a row assembled
+    // either way is byte-for-byte the same row. `cols` empty means a
+    // presence-only probe: the select carries just the eid and the comp lands
+    // as an empty object, which is all `kind_of`/`visible()` read from a comp
+    // they never render (a `design` prefix, the quarantine screen).
+    fn load_comp(
+        &self,
+        comp: &str,
+        cols: &[(String, PropType)],
+        set: &str,
+        bags: &mut HashMap<String, Map<String, Value>>,
+    ) {
+        let mut joins = String::new();
+        let mut sel: Vec<String> = vec!["__o.eid".into()];
+        for (i, (name, t)) in cols.iter().enumerate() {
+            if t.is_ref() {
+                let a = format!("__r{i}");
+                joins.push_str(&format!(
+                    " left join entity {a} on {a}.id = t.{}",
+                    q(name)
+                ));
+                sel.push(format!("{a}.eid"));
+            } else {
+                sel.push(format!("t.{}", q(name)));
+            }
+        }
+        let sql = format!(
+            "select {} from {} t join entity __o on __o.id = t.entity{} \
+             where t.entity in ({})",
+            sel.join(", "),
+            q(comp),
+            joins,
+            set
+        );
+        let t = profiling::sql(&sql);
+        let mut got = 0usize;
+        let Ok(mut st) = self.conn.prepare(&sql) else { return };
+        let mut rows = match st.query([]) {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+        while let Ok(Some(r)) = rows.next() {
+            got += 1;
+            let Ok(eid) = r.get::<_, String>(0) else { continue };
+            let mut m = Map::new();
+            for (i, (name, _)) in cols.iter().enumerate() {
+                let v: Value = match r.get_ref(i + 1) {
+                    Ok(rusqlite::types::ValueRef::Integer(n)) => Value::from(n),
+                    Ok(rusqlite::types::ValueRef::Real(f)) => Value::from(f),
+                    Ok(rusqlite::types::ValueRef::Text(s)) => {
+                        Value::from(String::from_utf8_lossy(s).to_string())
+                    }
+                    _ => continue,
+                };
+                m.insert(name.clone(), v);
+            }
+            if let Some(bag) = bags.get_mut(&eid) {
+                bag.insert(comp.into(), Value::Object(m));
+            }
+        }
+        t.done(got);
+    }
+
+    // Turn the filled bags into Rows in the given order — project_session's
+    // facet merge, then the kind derived from whichever comps landed.
+    fn assemble(
+        order: Vec<(String, Option<i64>)>,
+        mut bags: HashMap<String, Map<String, Value>>,
+    ) -> Vec<Row> {
+        let v = vocab();
         order
             .into_iter()
             .filter_map(|(eid, num)| {
@@ -534,6 +536,172 @@ impl Store {
                 Some(Row { eid, num, kind, comps })
             })
             .collect()
+    }
+
+    // The PROJECTED bulk read (T-22823): fill only the comps a caller names,
+    // not all ~125 comp tables. The digest's every-boot cost was ~9 full-entity
+    // materializations — each one query per comp table, most returning nothing
+    // yet still costing a prepared scan — to render lines that read a title, a
+    // status and a num. A `Sel` names a comp and, optionally, the columns to
+    // pull from it (empty = every readable column, matching fill()); a comp with
+    // no columns is a presence probe. The caller MUST name every comp its output
+    // reads AND the comps kind_of/visible() consult (the id prefix, the
+    // quarantine screen), or the projected row is not the row fill() would build.
+    fn fill_cols(
+        &self,
+        set: &str,
+        order: Vec<(String, Option<i64>)>,
+        sels: &[Sel],
+    ) -> Vec<Row> {
+        let v = vocab();
+        let mut bags: HashMap<String, Map<String, Value>> = HashMap::new();
+        for (eid, num) in &order {
+            let mut spine = Map::new();
+            spine.insert("eid".into(), Value::from(eid.as_str()));
+            if let Some(n) = num {
+                spine.insert("num".into(), Value::from(*n));
+            }
+            let mut m = Map::new();
+            m.insert("entity".into(), Value::Object(spine));
+            bags.insert(eid.clone(), m);
+        }
+        for sel in sels {
+            if sel.comp == "entity" || !self.has_table(sel.comp) {
+                continue;
+            }
+            let all = v.readable(sel.comp);
+            let cols: Vec<(String, PropType)> = if sel.props.is_empty() {
+                all
+            } else {
+                all.into_iter()
+                    .filter(|(n, _)| sel.props.contains(&n.as_str()))
+                    .collect()
+            };
+            self.load_comp(sel.comp, &cols, set, &mut bags);
+        }
+        Self::assemble(order, bags)
+    }
+
+    // rows_of, projected: a chosen comp set over an arbitrary eid list.
+    pub fn rows_of_cols(&self, eids: &[String], sels: &[Sel]) -> Vec<Row> {
+        let (list, order) = self.resolve_set(eids);
+        if list.is_empty() {
+            return vec![];
+        }
+        self.fill_cols(&list, order, sels)
+    }
+
+    // rows_of_kind, projected: a chosen comp set over a kind's whole membership.
+    pub fn rows_of_kind_cols(&self, kind: &str, sels: &[Sel]) -> Vec<Row> {
+        if !self.has_table(kind) {
+            return vec![];
+        }
+        let sql = format!(
+            "select e.eid, e.num from {} t join entity e \
+             on e.id = t.entity order by e.num",
+            q(kind)
+        );
+        let order: Vec<(String, Option<i64>)> =
+            collect(&self.conn, &sql, [], |r| Ok((r.get(0)?, r.get(1)?)));
+        self.fill_cols(&format!("select entity from {}", q(kind)), order, sels)
+    }
+
+    // The projected read a FACE needs: an id (kind → prefix), a title, and — a
+    // session — its agent line. That is the ~dozen comps face()/said()/
+    // authoring_line render, PLUS every kind-defining comp as a presence probe
+    // so the derived kind, and thus the id prefix, is byte-identical to a full
+    // row() whatever the face turns out to be (a comment's target is any kind).
+    // One bulk read stands in for a full ~125-table probe per named face.
+    pub fn rows_of_faces(&self, eids: &[String]) -> Vec<Row> {
+        let v = vocab();
+        // kind_of reads only kind_order comps, so probing them all makes kind
+        // exact. `doc` is title-only (never the body a face never shows); a
+        // `session` face wants just its agent-line columns.
+        let session_cols: &[&str] =
+            &["id", "provider", "model", "effort", "serving_model", "persona"];
+        let mut sels: Vec<Sel> = Vec::with_capacity(v.kind_order.len() + 3);
+        for k in &v.kind_order {
+            let props: &[&str] = match k.as_str() {
+                "doc" => &["title"],
+                "session" => session_cols,
+                _ => &[],
+            };
+            sels.push(Sel { comp: k, props });
+        }
+        // the facets project_session folds into a session's agent line — not
+        // kind_order comps, so name them here (alias, an author's handle, is
+        // already covered as a kind_order comp).
+        for f in ["spawn", "worktree", "runtime"] {
+            sels.push(Sel { comp: f, props: &[] });
+        }
+        self.rows_of_cols(eids, &sels)
+    }
+
+    // row(), projected: one entity, a chosen comp set, and the same quarantine
+    // screen the per-entity door applies (the caller names `quarantined` so the
+    // screen can see it). A single full row() probes ~125 tables for a title —
+    // the digest's `here` and its session/persona lookups each paid that.
+    pub fn row_cols(&self, eid: &str, sels: &[Sel]) -> Option<Row> {
+        self.rows_of_cols(std::slice::from_ref(&eid.to_string()), sels)
+            .into_iter()
+            .next()
+            .filter(visible)
+    }
+
+    // session_row(), projected: resolve the sid to its eid, then a lean read.
+    pub fn session_row_cols(&self, sid: &str, sels: &[Sel]) -> Option<Row> {
+        if !self.has_table("session") {
+            return None;
+        }
+        let eid: Option<String> = self
+            .conn
+            .query_row(
+                "select e.eid from session s join entity e \
+                 on e.id = s.entity where s.id = ?1",
+                [sid],
+                |r| r.get(0),
+            )
+            .optional()
+            .ok()
+            .flatten();
+        eid.and_then(|e| self.row_cols(&e, sels))
+    }
+
+    // The (id-list, order) a set of eids resolves to — shared by rows_of and
+    // rows_of_cols. Membership is named by entity.id, not eid: every comp table
+    // is keyed on the integer, so an id list lets each per-comp query seek.
+    fn resolve_set(
+        &self,
+        eids: &[String],
+    ) -> (String, Vec<(String, Option<i64>)>) {
+        if eids.is_empty() {
+            return (String::new(), vec![]);
+        }
+        let mut order: Vec<(String, Option<i64>)> = vec![];
+        let mut ids: Vec<i64> = vec![];
+        // Chunked because the eids are bound, and sqlite caps how many
+        // parameters one statement takes.
+        for batch in eids.chunks(500) {
+            let holes: Vec<String> =
+                (1..=batch.len()).map(|i| format!("?{i}")).collect();
+            let sql = format!(
+                "select e.id, e.eid, e.num from entity e where e.eid in ({}) \
+                 order by e.num",
+                holes.join(",")
+            );
+            let got: Vec<(i64, String, Option<i64>)> = collect(
+                &self.conn,
+                &sql,
+                rusqlite::params_from_iter(batch.iter()),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            );
+            for (id, eid, num) in got {
+                ids.push(id);
+                order.push((eid, num));
+            }
+        }
+        let list: Vec<String> = ids.iter().map(|i| i.to_string()).collect();
+        (list.join(","), order)
     }
 
     // Every eid wearing the kind's defining comp, num order.
@@ -880,6 +1048,35 @@ impl<'a> Rows<'a> {
             cache.insert(r.eid.clone(), Some(r));
         }
         // an eid the graph does not have caches as a miss, the way get() does
+        for e in want {
+            cache.entry(e).or_insert(None);
+        }
+    }
+
+    // warm(), PROJECTED to a FACE: pre-load the eids a page names through only
+    // the ~dozen comps face()/said()/authoring_line render (an id, a title, a
+    // session's agent line), never the ~125 a full row() probes (T-22823). A
+    // miss still resolves through get(), so this is safe to keep approximate.
+    // Kind stays byte-identical to a full row() because rows_of_faces() probes
+    // every kind-defining comp — whatever the face turns out to be.
+    pub fn warm_faces(&self, store: &Store, eids: &[String]) {
+        let want: Vec<String> = {
+            let seen = self.cache.borrow();
+            let mut asked: HashSet<&str> = HashSet::new();
+            eids.iter()
+                .filter(|e| !e.is_empty() && !seen.contains_key(*e))
+                .filter(|e| asked.insert(e.as_str()))
+                .cloned()
+                .collect()
+        };
+        if want.is_empty() {
+            return;
+        }
+        let got = store.rows_of_faces(&want);
+        let mut cache = self.cache.borrow_mut();
+        for r in got {
+            cache.insert(r.eid.clone(), Some(r));
+        }
         for e in want {
             cache.entry(e).or_insert(None);
         }

@@ -6,12 +6,99 @@
 
 use yak_kernel::query;
 use yak_kernel::reader::{self, Reader};
-use yak_kernel::store::{Row, Rows};
+use yak_kernel::store::{Row, Rows, Sel};
 use yak_kernel::{vocab, Store};
 
 use crate::render::{authoring_line, claimant, id_of};
 
 const DAY: i64 = 86_400_000;
+
+// The comps each digest section actually renders — the projection every
+// bulk/single read below pulls instead of all ~125 comp tables (T-22823).
+// Each list names its rendered comps AND the comps kind_of/visible() read: a
+// `design` presence flips a task's id to D-, and `quarantined` is the screen
+// every listing applies. `doc` is title-only everywhere but the comment
+// section, which quotes the body — a digest names titles, never bodies.
+
+// A task LINE: id/status/priority/project, title, the authoring line
+// (created/proposed/decided), and the claim + resume-stack signals.
+const TASK_SELS: &[Sel] = &[
+    Sel { comp: "task", props: &[] },
+    Sel { comp: "doc", props: &["title"] },
+    Sel { comp: "created", props: &[] },
+    Sel { comp: "updated", props: &[] },
+    Sel { comp: "proposed", props: &[] },
+    Sel { comp: "decided", props: &[] },
+    Sel { comp: "claim", props: &[] },
+    Sel { comp: "resume", props: &[] },
+    Sel { comp: "design", props: &[] },
+    Sel { comp: "quarantined", props: &[] },
+];
+
+// A session row: its meta (session + the spawn/worktree/runtime facets
+// project_session folds in), the brief the `previously` block quotes, its
+// title and timestamps.
+const SESSION_SELS: &[Sel] = &[
+    Sel { comp: "session", props: &[] },
+    Sel { comp: "spawn", props: &[] },
+    Sel { comp: "worktree", props: &[] },
+    Sel { comp: "runtime", props: &[] },
+    Sel { comp: "brief", props: &[] },
+    Sel { comp: "doc", props: &["title"] },
+    Sel { comp: "created", props: &[] },
+    Sel { comp: "updated", props: &[] },
+    Sel { comp: "quarantined", props: &[] },
+];
+
+// A fleet memory: its title, the recall stamps `hot()` scores, the memory/
+// feedback marks the line prints.
+const MEMORY_SELS: &[Sel] = &[
+    Sel { comp: "memory", props: &[] },
+    Sel { comp: "recall", props: &[] },
+    Sel { comp: "feedback", props: &[] },
+    Sel { comp: "doc", props: &["title"] },
+    Sel { comp: "created", props: &[] },
+    Sel { comp: "updated", props: &[] },
+    Sel { comp: "quarantined", props: &[] },
+];
+
+// A decided entity — task, design, memory, persona or project — so belongs()
+// and the id prefix both need every kind-defining comp it might wear.
+const DECIDED_SELS: &[Sel] = &[
+    Sel { comp: "decided", props: &[] },
+    Sel { comp: "doc", props: &["title"] },
+    Sel { comp: "task", props: &[] },
+    Sel { comp: "memory", props: &[] },
+    Sel { comp: "persona", props: &[] },
+    Sel { comp: "project", props: &[] },
+    Sel { comp: "design", props: &[] },
+    Sel { comp: "quarantined", props: &[] },
+];
+
+// A comment on your work: its target, who wrote it, any review verdict, and
+// the body first line the line quotes.
+const COMMENT_SELS: &[Sel] = &[
+    Sel { comp: "comment", props: &[] },
+    Sel { comp: "doc", props: &["body"] },
+    Sel { comp: "created", props: &[] },
+    Sel { comp: "review", props: &[] },
+    Sel { comp: "quarantined", props: &[] },
+];
+
+// A face named by a line — its id (kind → prefix) and title.
+const FACE_SELS: &[Sel] = &[
+    Sel { comp: "doc", props: &["title"] },
+    Sel { comp: "persona", props: &[] },
+    Sel { comp: "project", props: &[] },
+    Sel { comp: "quarantined", props: &[] },
+];
+
+// The scope project in the H1: its title, and the kind for its P- prefix.
+const HERE_SELS: &[Sel] = &[
+    Sel { comp: "doc", props: &["title"] },
+    Sel { comp: "project", props: &[] },
+    Sel { comp: "quarantined", props: &[] },
+];
 
 fn s(v: Option<&serde_json::Value>) -> String {
     match v {
@@ -59,8 +146,8 @@ fn status_of(r: &Row) -> String {
     cs(r, "task", "status")
 }
 
-// every eid wearing a comp, loaded whole
-fn rows_wearing(store: &Store, comp: &str) -> Vec<Row> {
+// every eid wearing a comp, projected to the comps `sels` names
+fn rows_wearing(store: &Store, comp: &str, sels: &[Sel]) -> Vec<Row> {
     if !store.has_table(comp) {
         return vec![];
     }
@@ -74,7 +161,7 @@ fn rows_wearing(store: &Store, comp: &str) -> Vec<Row> {
         .map(|it| it.filter_map(|x| x.ok()).collect())
         .unwrap_or_default();
     store
-        .rows_of(&eids)
+        .rows_of_cols(&eids, sels)
         .into_iter()
         .filter(yak_kernel::store::visible)
         .collect()
@@ -93,7 +180,7 @@ fn fleet_memories(store: &Store) -> Vec<Row> {
         .map(|it| it.filter_map(|x| x.ok()).collect())
         .unwrap_or_default();
     store
-        .rows_of(&eids)
+        .rows_of_cols(&eids, MEMORY_SELS)
         .into_iter()
         .filter(yak_kernel::store::visible)
         .collect()
@@ -169,6 +256,67 @@ fn task_block(
     }
 }
 
+// Pre-load the faces the coming lines name — an authoring by/via, a claimant's
+// session, a dependency child (its own status/claimant/id), a comment's target
+// and author — so each resolves from one projected bulk read instead of a full
+// per-eid probe (T-22823). task_block's dep sub-lines were the worst offender:
+// one full ~125-table row() per edge, per rendered task. The waves fan out —
+// a dep child names its claiming session, a session names its persona — and a
+// miss still resolves through get(), so this only ever trades probes for speed.
+fn warm_faces(store: &Store, rows: &Rows, subjects: &[&Row]) {
+    // wave one: the refs the subjects carry, plus the children of their
+    // dependency edges (the same edges task_block renders).
+    let mut frontier: Vec<String> =
+        subjects.iter().flat_map(|r| face_refs(r)).collect();
+    for r in subjects {
+        for d in store.deps_of(&r.eid) {
+            if d.parent == r.eid && d.type_ != "reads" {
+                frontier.push(d.child.clone());
+            }
+        }
+    }
+    // three waves reach every face a digest line resolves: subject → dep child
+    // / authoring face → claiming session → persona.
+    for _ in 0..3 {
+        rows.warm_faces(store, &frontier);
+        let next: Vec<String> = frontier
+            .iter()
+            .filter_map(|e| rows.get(e))
+            .flat_map(|r| {
+                let mut v = face_refs(&r);
+                let p = cs(&r, "session", "persona");
+                if !p.is_empty() {
+                    v.push(p);
+                }
+                v
+            })
+            .collect();
+        if next.is_empty() {
+            break;
+        }
+        frontier = next;
+    }
+}
+
+// The reference eids a row names on a digest line: its authoring faces, a
+// claiming session, a comment's target.
+fn face_refs(r: &Row) -> Vec<String> {
+    [
+        ("created", "by"),
+        ("created", "via"),
+        ("proposed", "by"),
+        ("proposed", "via"),
+        ("decided", "by"),
+        ("decided", "via"),
+        ("claim", "session"),
+        ("comment", "target"),
+    ]
+    .iter()
+    .map(|(c, p)| cs(r, c, p))
+    .filter(|v| !v.is_empty())
+    .collect()
+}
+
 // belongs(): does a row belong to the scope, each kind its own way
 fn belongs(r: &Row, scope: &str) -> bool {
     if scope.is_empty() {
@@ -200,10 +348,12 @@ fn brief_of(r: &Row) -> String {
 
 // The session's meta as YAML frontmatter (client.ts sessionMeta).
 pub fn session_meta(store: &Store, sid: &str) -> String {
-    let Some(sess) = store.session_row(sid) else { return String::new() };
+    let Some(sess) = store.session_row_cols(sid, SESSION_SELS) else {
+        return String::new();
+    };
     let persona_eid = cs(&sess, "session", "persona");
     let persona = (!persona_eid.is_empty())
-        .then(|| store.row(&persona_eid))
+        .then(|| store.row_cols(&persona_eid, FACE_SELS))
         .flatten()
         .map(|p| format!("{} {}", id_of(&p), title_of(&p)).trim().to_string());
     let mut meta: Vec<(&str, String)> = vec![
@@ -237,16 +387,16 @@ pub fn context_digest(
 ) -> String {
     let v = vocab();
     let rows = Rows::new(store);
-    let sess = session.and_then(|sid| store.session_row(sid));
+    let sess = session.and_then(|sid| store.session_row_cols(sid, SESSION_SELS));
     let cwd = sess.as_ref().map(|r| cs(r, "session", "cwd")).unwrap_or_default();
     let scope = match scope_arg {
         Some(x) => Some(x.to_string()),
         None => reader::scope_for(store, sess.as_ref(), &cwd, None),
     };
     let scope_s = scope.clone().unwrap_or_default();
-    let here = scope.as_ref().and_then(|e| store.row(e));
+    let here = scope.as_ref().and_then(|e| store.row_cols(e, HERE_SELS));
     let tasks: Vec<Row> = store
-        .rows_of_kind("task")
+        .rows_of_kind_cols("task", TASK_SELS)
         .into_iter()
         .filter(yak_kernel::store::visible)
         .collect();
@@ -259,14 +409,18 @@ pub fn context_digest(
     // the previously-thread's actor falls back to the SCOPE (actor ==
     // project since T-19461), so a bare preview still shows the thread
     let sessions: Vec<Row> = match &actor {
-        Some(a) => store
-            .rows_of(&store.eids_where_ref("session", "actor", &[a.clone()])),
+        Some(a) => store.rows_of_cols(
+            &store.eids_where_ref("session", "actor", &[a.clone()]),
+            SESSION_SELS,
+        ),
         None => vec![],
     };
     // my claims: entities wearing claim.session = my session entity
     let mut mine: Vec<Row> = match &sess {
-        Some(sr) => store
-            .rows_of(&store.eids_where_ref("claim", "session", &[sr.eid.clone()])),
+        Some(sr) => store.rows_of_cols(
+            &store.eids_where_ref("claim", "session", &[sr.eid.clone()]),
+            TASK_SELS,
+        ),
         None => vec![],
     };
     mine.sort_by(|a, b| {
@@ -284,7 +438,9 @@ pub fn context_digest(
     )];
     if !mine.is_empty() {
         lines.push("claimed by you:".into());
-        for r in mine.iter().take(4) {
+        let subj: Vec<&Row> = mine.iter().take(4).collect();
+        warm_faces(store, &rows, &subj);
+        for r in subj {
             task_block(store, &rows, r, &mut lines);
         }
     } else {
@@ -307,6 +463,8 @@ pub fn context_digest(
         ));
         local.sort_by(|a, b| query::by_board(a, b));
         let picks: Vec<Row> = local.iter().take(5).map(|r| (*r).clone()).collect();
+        let subj: Vec<&Row> = picks.iter().collect();
+        warm_faces(store, &rows, &subj);
         for r in &picks {
             task_block(store, &rows, r, &mut lines);
         }
@@ -488,7 +646,7 @@ fn on_mine(
         return;
     }
     let mut hits: Vec<Row> = store
-        .rows_of(&store.eids_where_ref("comment", "target", &mine))
+        .rows_of_cols(&store.eids_where_ref("comment", "target", &mine), COMMENT_SELS)
         .into_iter()
         .filter(|r| {
             cs(r, "created", "via") != sess.eid
@@ -503,6 +661,7 @@ fn on_mine(
         return;
     }
     lines.push("## on your tasks".into());
+    warm_faces(store, rows, &hits.iter().collect::<Vec<_>>());
     for r in &hits {
         let target = cs(r, "comment", "target");
         let target_row = rows.get(&target);
@@ -600,7 +759,7 @@ fn decisions(
     if budget < 2 {
         return;
     }
-    let mut hits: Vec<Row> = rows_wearing(store, "decided")
+    let mut hits: Vec<Row> = rows_wearing(store, "decided", DECIDED_SELS)
         .into_iter()
         .filter(|r| belongs(r, scope))
         .collect();
