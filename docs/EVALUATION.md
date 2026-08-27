@@ -87,6 +87,10 @@ execution record. After a restart, the evaluator reconstructs the eligible frame
 frontier and waiting continuations from graph state instead of reviving a
 provider conversation.
 
+Native Deno and Rust tools operate on SQLite directly. HTTP and WebSocket are
+browser, remote-access, and synchronization boundaries, not a central service
+the evaluator needs in order to run or recover.
+
 The canonical evaluator implementation is Rust. It is project-wanted and begins
 only after its route-pruning and evaluator prerequisites are satisfied. The
 graph dependency tree, not this prose, owns their exact identities and state.
