@@ -1139,6 +1139,65 @@ export let neighborhoods = async (
   return { deps, rows: uniq([...hits, ...ends, ...refs]) }
 }
 
+// The task context supplier walks dependency PARENTS from the addressed work
+// until it reaches every project root. This is deliberately not a `contains`
+// tree: every semantic edge can establish ancestry, while its type still says
+// what inherited context means below. Caps bound both graph reads and prompt
+// size; a cycle merely revisits a seen eid and stops.
+export let taskContextGraph = async (
+  ids: string[],
+  candidates: Row[],
+  q: Querier = query,
+  depsFn: DepsFn = httpDeps,
+) => {
+  let byEid = new Map(candidates.map((r) => [r.eid, r]))
+  let seen = new Set(ids)
+  let frontier = [...seen]
+  let depIx = new Map<string, Dep>()
+  let addDeps = (found: Dep[]) => {
+    for (let d of found) depIx.set(`${d.parent} ${d.type} ${d.child}`, d)
+  }
+  while (frontier.length && seen.size < 96) {
+    let found = await depsFn(frontier)
+    addDeps(found)
+    let at = new Set(frontier)
+    let parents = found
+      .filter((d) => at.has(d.child) && !seen.has(d.parent))
+      .map((d) => d.parent)
+      .sort()
+    frontier = []
+    for (let eid of parents) {
+      if (seen.size >= 96) break
+      seen.add(eid)
+      frontier.push(eid)
+    }
+  }
+  let ends = new Set<string>()
+  for (let d of depIx.values()) ends.add(d.parent), ends.add(d.child)
+  let missing = [...ends].filter((eid) => !byEid.has(eid))
+  for (let r of await fetched(missing, [], q)) byEid.set(r.eid, r)
+
+  // Reads off a rooted ancestor carry governing decisions and memories. Ask
+  // those few endpoints for corrections so a superseded ruling never reaches
+  // a spawned session without the newer sentence beside it.
+  let inherited = [...depIx.values()]
+    .filter((d) => d.type == 'reads' && seen.has(d.parent))
+    .map((d) => d.child)
+  if (inherited.length) {
+    addDeps(await depsFn([...new Set(inherited)].slice(0, 48)))
+    let correctionEnds = new Set<string>()
+    for (let d of depIx.values()) {
+      if (d.type == 'supersedes' && inherited.includes(d.child)) {
+        correctionEnds.add(d.parent)
+        correctionEnds.add(d.child)
+      }
+    }
+    let correctionMissing = [...correctionEnds].filter((eid) => !byEid.has(eid))
+    for (let r of await fetched(correctionMissing, [], q)) byEid.set(r.eid, r)
+  }
+  return { deps: [...depIx.values()], rows: uniq([...byEid.values()]) }
+}
+
 export let deref = (all: Row[], v: string, where = '', comp = '') =>
   !v || UUID.test(v) ? v : need(all, v, where, comp).eid
 
@@ -2445,6 +2504,164 @@ let fleetMemory = (all: Row[], now: number, budget: number) => {
   ]
 }
 
+// The governed context inherited by one task. Project rows are roots and ALL
+// edge types can explain a route to the work; types become selective only when
+// asking what the rooted ancestors say (reads), wait on (requires), or correct
+// (supersedes). Each category has a small fixed allowance so one prolific
+// ancestor cannot turn a session start into a wall of derived graph state.
+export let taskContextBlock = (
+  all: Row[],
+  deps: Dep[],
+  task: Row,
+  budget = 6,
+  byIx?: Map<string, Row>,
+): string[] => {
+  if (budget < 1) return []
+  let byEid = byIx ?? new Map(all.map((r) => [r.eid, r]))
+  let outgoing = new Map<string, Dep[]>()
+  let incoming = new Map<string, Dep[]>()
+  for (let d of deps) {
+    outgoing.set(d.parent, [...(outgoing.get(d.parent) ?? []), d])
+    incoming.set(d.child, [...(incoming.get(d.child) ?? []), d])
+  }
+  let order = (a: string, b: string) => {
+    let ar = byEid.get(a), br = byEid.get(b)
+    return (ar?.num ?? Infinity) - (br?.num ?? Infinity) || a.localeCompare(b)
+  }
+  let reverse = new Set([task.eid])
+  let back = [task.eid]
+  while (back.length) {
+    let child = back.shift()!
+    for (let d of incoming.get(child) ?? []) {
+      if (reverse.has(d.parent)) continue
+      reverse.add(d.parent)
+      back.push(d.parent)
+    }
+  }
+  let roots = [...reverse]
+    .map((eid) => byEid.get(eid))
+    .filter((r): r is Row => !!r?.comps.project)
+    .sort((a, b) => order(a.eid, b.eid))
+  if (!roots.length) return []
+
+  let pathFrom = (root: Row) => {
+    let paths = new Map<string, string[]>([[root.eid, [root.eid]]])
+    let queue = [root.eid]
+    while (queue.length) {
+      let parent = queue.shift()!
+      if (parent == task.eid) return paths.get(parent)!
+      let edges = [...(outgoing.get(parent) ?? [])]
+        .filter((d) => reverse.has(d.child))
+        .sort((a, b) => order(a.child, b.child))
+      for (let d of edges) {
+        if (paths.has(d.child)) continue
+        paths.set(d.child, [...paths.get(parent)!, d.child])
+        queue.push(d.child)
+      }
+    }
+    return []
+  }
+  let paths = roots.map(pathFrom).filter((p) => p.length)
+  let pathText = (path: string[]) => {
+    let ids = path.map((eid) => idOf(byEid.get(eid)!))
+    if (ids.length > 8) ids = [...ids.slice(0, 4), '…', ...ids.slice(-3)]
+    if (ids.includes('…')) return ids.join(' → ')
+    let text = ids[0]
+    for (let i = 1; i < path.length; i++) {
+      let edge = (outgoing.get(path[i - 1]) ?? [])
+        .filter((d) => d.child == path[i])
+        .sort((a, b) => a.type.localeCompare(b.type))[0]
+      text += ` -${edge?.type ?? '?'}→ ${ids[i]}`
+    }
+    return text
+  }
+  let shownPaths = paths.slice(0, 3).map(pathText)
+  if (paths.length > shownPaths.length) {
+    shownPaths.push(`+${paths.length - shownPaths.length} more roots`)
+  }
+  let lines = [`  - path: ${shownPaths.join('; ')}`]
+
+  // A rooted ancestor is both reachable from a project and able to reach the
+  // task. This retains alternate governing branches rather than confusing the
+  // single shortest explanatory path with the whole ancestry.
+  let forward = new Set<string>()
+  let front = roots.map((r) => r.eid)
+  for (let eid of front) forward.add(eid)
+  while (front.length) {
+    let parent = front.shift()!
+    for (let d of outgoing.get(parent) ?? []) {
+      if (!reverse.has(d.child) || forward.has(d.child)) continue
+      forward.add(d.child)
+      front.push(d.child)
+    }
+  }
+  let inherited = [...deps]
+    .filter((d) => d.type == 'reads' && forward.has(d.parent))
+    .sort((a, b) => order(a.child, b.child))
+  let inheritedIds = new Set(inherited.map((d) => d.child))
+  let face = (r: Row) => {
+    let title = snip(String(r.comps.doc?.title ?? ''), 48)
+    let body = String(r.comps.doc?.body ?? '').replace(/\s+/g, ' ').trim()
+    return `${idOf(r)}${title ? ` — ${title}` : ''}${
+      body ? ` · ${snip(body, 64)}` : ''
+    }`
+  }
+  let decisions = inherited
+    .map((d) => byEid.get(d.child))
+    .filter((r): r is Row => !!r?.comps.decided)
+    .filter((r, i, a) => a.findIndex((x) => x.eid == r.eid) == i)
+    .slice(0, 2)
+    .map((r) =>
+      `  - decision [${String(r.comps.decided?.verdict ?? 'approved')}] ${
+        face(r)
+      }`
+    )
+  let rootIds = new Set(roots.map((r) => r.eid))
+  let memories = inherited
+    .map((d) => byEid.get(d.child))
+    .filter((r): r is Row =>
+      !!r?.comps.memory && rootIds.has(String(r.comps.memory.scope ?? ''))
+    )
+    .filter((r, i, a) => a.findIndex((x) => x.eid == r.eid) == i)
+    .slice(0, 1)
+    .map((r) => `  - memory ${face(r)}`)
+  let prerequisites = deps
+    .filter((d) =>
+      d.type == 'requires' && forward.has(d.parent) &&
+      d.parent != task.eid && !forward.has(d.child)
+    )
+    .map((d) => byEid.get(d.child))
+    .filter((r): r is Row =>
+      !!r?.comps.task && !settled(String(r.comps.task.status))
+    )
+    .filter((r, i, a) => a.findIndex((x) => x.eid == r.eid) == i)
+    .sort((a, b) => order(a.eid, b.eid))
+    .slice(0, 1)
+    .map((r) =>
+      `  - prerequisite ${idOf(r)} (${r.comps.task.status}) — ${
+        snip(String(r.comps.doc?.title ?? ''), 64)
+      }`
+    )
+  let corrections = deps
+    .filter((d) =>
+      d.type == 'supersedes' &&
+      (inheritedIds.has(d.child) || forward.has(d.child))
+    )
+    .sort((a, b) => order(a.parent, b.parent))
+    .slice(0, 1)
+    .flatMap((d) => {
+      let newer = byEid.get(d.parent), older = byEid.get(d.child)
+      if (!newer || !older) return []
+      return [
+        `  - correction ${idOf(newer)} supersedes ${idOf(older)} — ${
+          snip(String(newer.comps.doc?.title ?? ''), 64)
+        }`,
+      ]
+    })
+  lines.push(...decisions, ...memories, ...prerequisites, ...corrections)
+  return lines.slice(0, budget)
+}
+
 // One claimed task, rendered for the digest: its line plus the unresolved
 // gates beneath it (each with the status and who holds it). Shared by the
 // operator digest's "claimed by you" list and the subagent hook's lone task
@@ -2476,6 +2693,7 @@ export let taskBlock = (
       })`,
     )
   }
+  out.push(...taskContextBlock(all, deps, r, 6, byEid))
   return out
 }
 
@@ -2887,7 +3105,7 @@ export let inboxRows = async (
 
 // The bounded graph a context digest reads. The renderer remains pure over a
 // Snapshot-shaped value; this supplier asks the index for each semantic arm
-// and only chases dependencies for the task lines the 48-line digest can show.
+// and chases bounded rooted ancestry only for task lines the digest can show.
 export let contextSnapshot = async (
   session?: string,
   cwd?: string,
@@ -2974,7 +3192,12 @@ export let contextSnapshot = async (
   if (!local.length) local = available
   let shown = mine.length ? mine.slice(0, 4) : local.sort(byBoard).slice(0, 5)
   shown = uniq([...shown, ...explicit.filter((r) => r.comps.task)])
-  let near = await neighborhoods(shown.map((r) => r.eid), q, depsFn)
+  let near = await taskContextGraph(
+    shown.map((r) => r.eid),
+    preliminary,
+    q,
+    depsFn,
+  )
   let recent = sessions
     .filter((r) =>
       r.eid != sess?.eid && Date.now() - Date.parse(editedAt(r)) < 7 * DAY

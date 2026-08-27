@@ -56,6 +56,8 @@ import {
   subChanges,
   taskBlock,
   taskChanges,
+  taskContextBlock,
+  taskContextGraph,
   threadOf,
   unreadMail,
   unreadPipe,
@@ -64,7 +66,7 @@ import {
 } from './client.ts'
 import { matchQuery, parseQuery, resolveRefs } from './query.ts'
 import { local } from './time.ts'
-import { type Change, idOf, kindOf, type Snapshot } from './types.ts'
+import { type Change, type Dep, idOf, kindOf, type Snapshot } from './types.ts'
 import { assertEquals, assertMatch, assertThrows } from '@std/assert'
 
 // A tiny graph: one board-ordered pair of tasks, a session, a claim.
@@ -224,7 +226,7 @@ Deno.test('rootFirst: the containing doc leads, its contents follow by num', () 
   let root = doc('R', 10, 'the map')
   let leafA = doc('LA', 25, 'sessions')
   let leafB = doc('LB', 18, 'the wire')
-  let deps = [
+  let deps: Dep[] = [
     // P-19 contains the root — parent outside the set, so the root stays a root.
     { parent: 'P19', type: 'contains' as const, child: 'R' },
     { parent: 'R', type: 'contains' as const, child: 'LA' },
@@ -1467,6 +1469,187 @@ Deno.test('taskBlock: task line + unresolved gate, who holds it', () => {
   assertEquals(b[0], '- T-2 wip — First')
   assertEquals(b[1], '  - requires → T-3 (open)')
   assertEquals(b.length, 2)
+})
+
+let contextEntity = (
+  eid: string,
+  num: number,
+  comps: Record<string, Record<string, unknown>>,
+): Change[] => [
+  { eid, name: 'entity', comp: { eid, num } },
+  ...Object.entries(comps).map(([name, comp]) => ({ eid, name, comp })),
+]
+
+Deno.test('taskContextBlock: cycles terminate and every project root is explainable', () => {
+  let P1 = 'context-p1', P2 = 'context-p2'
+  let A = 'context-a', B = 'context-b', C = 'context-c', TARGET = 'context-t'
+  let changes = [
+    ...contextEntity(P1, 101, { doc: { title: 'One' }, project: {} }),
+    ...contextEntity(P2, 102, { doc: { title: 'Two' }, project: {} }),
+    ...contextEntity(A, 103, {
+      doc: { title: 'A' },
+      task: { status: 'open', project: P1 },
+    }),
+    ...contextEntity(B, 104, {
+      doc: { title: 'B' },
+      task: { status: 'open', project: P2 },
+    }),
+    ...contextEntity(C, 105, {
+      doc: { title: 'C' },
+      task: { status: 'open', project: P1 },
+    }),
+    ...contextEntity(TARGET, 106, {
+      doc: { title: 'Target' },
+      task: { status: 'wip', project: P1 },
+    }),
+  ]
+  let deps: Dep[] = [
+    { parent: P1, type: 'wants', child: A },
+    { parent: A, type: 'requires', child: TARGET },
+    { parent: P2, type: 'wants', child: B },
+    { parent: B, type: 'delegates', child: TARGET },
+    // A detached cycle hangs off a rooted ancestor; it must neither loop nor
+    // replace either shortest root→task explanation.
+    { parent: A, type: 'about', child: C },
+    { parent: C, type: 'about', child: A },
+  ]
+  let all = rows({ changes })
+  let target = all.find((r) => r.eid == TARGET)!
+  assertEquals(taskContextBlock(all, deps, target), [
+    '  - path: P-101 -wants→ T-103 -requires→ T-106; P-102 -wants→ T-104 -delegates→ T-106',
+  ])
+})
+
+Deno.test('taskContextBlock: inherited rulings, memory, gates, and corrections stay scoped and bounded', () => {
+  let P = 'governed-p', FOREIGN = 'governed-foreign'
+  let A = 'governed-a', TARGET = 'governed-target', BLOCK = 'governed-block'
+  let OLD = 'governed-old', NEW = 'governed-new', NO = 'governed-no'
+  let MEMORY = 'governed-memory', LEAK = 'governed-leak'
+  let changes = [
+    ...contextEntity(P, 201, { doc: { title: 'Ours' }, project: {} }),
+    ...contextEntity(FOREIGN, 202, { doc: { title: 'Theirs' }, project: {} }),
+    ...contextEntity(A, 203, {
+      doc: { title: 'Parent' },
+      task: { status: 'open', project: P },
+    }),
+    ...contextEntity(TARGET, 204, {
+      doc: { title: 'Target' },
+      task: { status: 'wip', project: P },
+    }),
+    ...contextEntity(BLOCK, 205, {
+      doc: { title: 'Open blocker' },
+      task: { status: 'open', project: P },
+    }),
+    ...contextEntity(OLD, 206, {
+      doc: { title: 'Old ruling', body: 'Use the stable door.' },
+      design: {},
+      decided: { at: '2026-01-01T00:00:00Z', verdict: 'approved' },
+    }),
+    ...contextEntity(NEW, 207, {
+      doc: { title: 'Correction', body: 'Use the replacement door.' },
+      design: {},
+      decided: { at: '2026-03-01T00:00:00Z', verdict: 'approved' },
+    }),
+    ...contextEntity(NO, 208, {
+      doc: { title: 'Declined shortcut', body: 'Do not bypass the graph.' },
+      design: {},
+      decided: { at: '2026-02-01T00:00:00Z', verdict: 'declined' },
+    }),
+    ...contextEntity(MEMORY, 209, {
+      doc: { title: 'Scoped lesson', body: 'Keep the project boundary.' },
+      memory: { scope: P },
+    }),
+    ...contextEntity(LEAK, 210, {
+      doc: { title: 'Foreign secret', body: 'Must not cross projects.' },
+      memory: { scope: FOREIGN },
+    }),
+  ]
+  let deps: Dep[] = [
+    { parent: P, type: 'wants', child: A },
+    { parent: A, type: 'delegates', child: TARGET },
+    { parent: A, type: 'reads', child: OLD },
+    { parent: A, type: 'reads', child: NO },
+    { parent: A, type: 'reads', child: MEMORY },
+    { parent: A, type: 'requires', child: BLOCK },
+    { parent: NEW, type: 'supersedes', child: OLD },
+    { parent: FOREIGN, type: 'reads', child: LEAK },
+  ]
+  let all = rows({ changes })
+  let target = all.find((r) => r.eid == TARGET)!
+  let out = taskContextBlock(all, deps, target).join('\n')
+  assertMatch(out, /path: P-201 -wants→ T-203 -delegates→ T-204/)
+  assertMatch(
+    out,
+    /decision \[approved\] D-206 — Old ruling · Use the stable door\./,
+  )
+  assertMatch(
+    out,
+    /decision \[declined\] D-208 — Declined shortcut · Do not bypass the graph\./,
+  )
+  assertMatch(out, /memory M-209 — Scoped lesson · Keep the project boundary\./)
+  assertMatch(out, /prerequisite T-205 \(open\) — Open blocker/)
+  assertMatch(out, /correction D-207 supersedes D-206 — Correction/)
+  assertEquals(out.includes('Foreign secret'), false)
+  assertEquals(out.split('\n').length, 6)
+})
+
+Deno.test('taskContextGraph: reverse ancestry and correction reads are bounded and cycle-safe', async () => {
+  let P = 'graph-p', A = 'graph-a', TARGET = 'graph-target'
+  let OLD = 'graph-old', NEW = 'graph-new'
+  let all = rows({
+    changes: [
+      ...contextEntity(P, 301, { project: {}, doc: { title: 'P' } }),
+      ...contextEntity(A, 302, {
+        task: { status: 'open', project: P },
+        doc: { title: 'A' },
+      }),
+      ...contextEntity(TARGET, 303, {
+        task: { status: 'open', project: P },
+        doc: { title: 'T' },
+      }),
+      ...contextEntity(OLD, 304, {
+        design: {},
+        doc: { title: 'Old' },
+        decided: { verdict: 'approved' },
+      }),
+      ...contextEntity(NEW, 305, {
+        design: {},
+        doc: { title: 'New' },
+        decided: { verdict: 'approved' },
+      }),
+    ],
+  })
+  let deps: Dep[] = [
+    { parent: P, type: 'wants', child: A },
+    { parent: A, type: 'requires', child: TARGET },
+    { parent: TARGET, type: 'about', child: A },
+    { parent: A, type: 'reads', child: OLD },
+    { parent: NEW, type: 'supersedes', child: OLD },
+  ]
+  let byEid = new Map(all.map((r) => [r.eid, r]))
+  let calls = 0
+  let q = (filters: string[]) => {
+    let ids = (filters.find((f) => f.startsWith('id=')) ?? '').slice(3).split(
+      ',',
+    )
+    return Promise.resolve(ids.flatMap((id) => byEid.get(id) ?? []))
+  }
+  let depsFn = (ids: string[]) => {
+    calls++
+    let set = new Set(ids)
+    return Promise.resolve(
+      deps.filter((d) => set.has(d.parent) || set.has(d.child)),
+    )
+  }
+  let graph = await taskContextGraph([TARGET], all, q, depsFn)
+  assertEquals(graph.deps.some((d) => d.type == 'supersedes'), true)
+  assertEquals(graph.rows.some((r) => r.eid == NEW), true)
+  let target = graph.rows.find((r) => r.eid == TARGET)!
+  let block = taskContextBlock(graph.rows, graph.deps, target).join('\n')
+  assertMatch(block, /P-301 -wants→ T-302 -requires→ T-303/)
+  assertMatch(block, /decision \[approved\] D-304 — Old/)
+  assertMatch(block, /correction D-305 supersedes D-304 — New/)
+  assertEquals(calls < 10, true)
 })
 
 // Read state derives, never stored: arrived-and-unmarked is unread,
