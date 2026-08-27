@@ -171,9 +171,9 @@ fn cut(mut rows: Vec<Row>, after: Option<i64>, limit: Option<i64>) -> Vec<Row> {
     if let Some(l) = limit {
         let l = l.max(0) as usize;
         if rows.len() > l {
-            rows.sort_by(|a, b| b.num.unwrap_or(0).cmp(&a.num.unwrap_or(0)));
+            rows.sort_by_key(|a| std::cmp::Reverse(a.num.unwrap_or(0)));
             rows.truncate(l);
-            rows.sort_by(|a, b| a.num.unwrap_or(0).cmp(&b.num.unwrap_or(0)));
+            rows.sort_by_key(|a| a.num.unwrap_or(0));
         }
     }
     rows
@@ -185,7 +185,7 @@ fn cut(mut rows: Vec<Row>, after: Option<i64>, limit: Option<i64>) -> Vec<Row> {
 // the whole set below). Both are keyed off the hit, so a one-entity question
 // costs one entity.
 fn layers(store: &Store, rows: Vec<Row>, deps: bool, backs: bool, reveal: bool) -> Value {
-    let back = backs.then(|| backlinks_of(store, &rows, reveal)).unwrap_or_default();
+    let back = if backs { backlinks_of(store, &rows, reveal) } else { Default::default() };
     Value::Array(
         rows.iter()
             .map(|r| {
@@ -324,7 +324,7 @@ pub fn answer(store: &Store, raw: &str) -> Result<Value, String> {
             .filter(|r| q.reveal || visible(r))
             .filter(|r| query::matches(r, &preds))
             .collect();
-        rows.sort_by(|a, b| a.num.unwrap_or(0).cmp(&b.num.unwrap_or(0)));
+        rows.sort_by_key(|a| a.num.unwrap_or(0));
         // Distinct by eid: id= may name the same entity twice, and the route's
         // Set dedups before eager().
         rows.dedup_by(|a, b| a.eid == b.eid);

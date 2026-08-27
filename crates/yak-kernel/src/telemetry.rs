@@ -251,7 +251,7 @@ pub fn stats(store: &Store, since: Option<&str>, only_errors: bool) -> Vec<Stat>
     // SQLite emits GROUP BY in group-key order, then sorts by n desc with
     // ties keeping that order — a stable sort over key-ordered groups.
     out.sort_by(|a, b| (&a.source, &a.name).cmp(&(&b.source, &b.name)));
-    out.sort_by(|a, b| b.n.cmp(&a.n));
+    out.sort_by_key(|a| std::cmp::Reverse(a.n));
     out
 }
 

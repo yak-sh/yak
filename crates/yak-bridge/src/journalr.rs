@@ -15,6 +15,9 @@ use serde_json::{Map, Value};
 use yak_kernel::vocab::vocab;
 use yak_kernel::Store;
 
+// One journal row as read from SQLite: (rowid, ts, actor, via, batch json).
+type JournalRow = (i64, String, Option<String>, Option<String>, String);
+
 // canonicalChanges' `record`, order-preserving: rewrite each `<col>_eid` key
 // whose stem is a readable column of `name` to the stem, keeping the original
 // key position and value.
@@ -79,7 +82,7 @@ pub fn of_eid(store: &Store, eid: &str, limit: i64) -> Vec<Value> {
                from journal_touch t join journal j on j.rowid = t.jrow \
                where t.eid = ?1 order by t.jrow desc limit ?2";
     let Ok(mut st) = store.conn.prepare(sql) else { return vec![] };
-    let rows: Vec<(i64, String, Option<String>, Option<String>, String)> = st
+    let rows: Vec<JournalRow> = st
         .query_map(rusqlite::params![eid, limit], |r| {
             Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
         })
@@ -106,7 +109,7 @@ pub fn by_via(store: &Store, via: &str, limit: i64) -> Vec<Value> {
     let sql = "select rowid, ts, actor, via, batch from journal \
                where via = ?1 order by rowid desc limit ?2";
     let Ok(mut st) = store.conn.prepare(sql) else { return vec![] };
-    let rows: Vec<(i64, String, Option<String>, Option<String>, String)> = st
+    let rows: Vec<JournalRow> = st
         .query_map(rusqlite::params![via, limit], |r| {
             Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
         })

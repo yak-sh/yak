@@ -115,15 +115,17 @@ impl Subserve {
         let epoch_held = obj.get("epoch").and_then(|v| v.as_str());
         let vocab_held = obj.get("vocab").and_then(|v| v.as_str());
         self.envelope = obj.get("live").and_then(|v| v.as_i64()) == Some(1);
-        let frame =
-            if since.is_none() || cursor_stale(store, epoch_held, vocab_held, since.unwrap()) {
-                self.cursor = cursor_of(&store.conn);
-                snap::reset_frame(store).to_string()
-            } else {
-                let f = live::catchup_frame(store, since.unwrap());
+        let frame = match since {
+            Some(s) if !cursor_stale(store, epoch_held, vocab_held, s) => {
+                let f = live::catchup_frame(store, s);
                 self.cursor = f.get("cursor").and_then(|c| c.as_i64()).unwrap_or(self.cursor);
                 f.to_string()
-            };
+            }
+            _ => {
+                self.cursor = cursor_of(&store.conn);
+                snap::reset_frame(store).to_string()
+            }
+        };
         let _ = tx.send(frame);
         self.joined = true;
     }
@@ -693,6 +695,9 @@ fn lose(keys: &mut Vec<(String, Dep)>, cut: &mut Vec<Dep>, k: &str) {
     }
 }
 
+// Eight distinct graph inputs to compute one edge delta; bundling them into a
+// struct would only relocate the arity, not reduce it.
+#[allow(clippy::too_many_arguments)]
 fn rider_delta(
     store: &Store,
     r: &mut Rider,
@@ -744,9 +749,9 @@ fn rider_delta(
     // set takes the edges no remaining member holds.
     if !gone.is_empty() || moved {
         for (k, d) in r.keys.clone() {
-            if gone.contains(&d.parent) || gone.contains(&d.child) {
-                lose(&mut r.keys, &mut cut, &k);
-            } else if !members.contains(&d.parent) && !members.contains(&d.child) {
+            let died = gone.contains(&d.parent) || gone.contains(&d.child);
+            let left = !members.contains(&d.parent) && !members.contains(&d.child);
+            if died || left {
                 lose(&mut r.keys, &mut cut, &k);
             }
         }
@@ -866,6 +871,9 @@ fn entity_null(eid: &str) -> Value {
 // A sub's initial reply (subserve.ts control): the key order matches the TS
 // JSON.stringify — sub, changes, drop, replace, cursor, shadow, [window],
 // [fields].
+// The eight args are the frame's eight fields, in the TS JSON.stringify order;
+// a struct would just duplicate that field list.
+#[allow(clippy::too_many_arguments)]
 fn reply_frame(
     name: &str,
     changes: Vec<Value>,

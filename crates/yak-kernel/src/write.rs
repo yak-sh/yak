@@ -24,6 +24,13 @@
 // non-native comp (a NEW vocabulary word absent from the allowlist); the
 // allowlist, not a refusal, is what keeps an unported semantic from diverging.
 
+// ApplyError is deliberately unboxed: it is `pub`, carries `rusqlite::Error`
+// and the Stale precondition context by value, and threads through the whole
+// crate and the bridge. Boxing it to shrink the Result would ripple a heap
+// allocation and a `Box` through the public signatures for a path taken only
+// on refusal — a behavior/API change out of scope for this hygiene pass.
+#![allow(clippy::result_large_err)]
+
 use crate::change::{batch_json, Change};
 use crate::store::resolve;
 use crate::vocab::{vocab, PropType, Vocab};
@@ -1768,6 +1775,7 @@ pub fn default_gates() -> Vec<Box<dyn Gate>> {
 
 // ---- apply ----
 
+#[derive(Default)]
 pub struct ApplyOpts<'a> {
     // Who's writing, when the door knows — a session id/eid, a client eid,
     // or an actor eid standing for itself. Resolved for the journal and the
@@ -1777,12 +1785,6 @@ pub struct ApplyOpts<'a> {
     // Trace is serialized into journal.trace (ecc2c5f). false = no effects
     // journaled — a foreign writer with no effect owner of its own.
     pub fed: bool,
-}
-
-impl Default for ApplyOpts<'_> {
-    fn default() -> Self {
-        ApplyOpts { writer: None, fed: false }
-    }
 }
 
 // The box owner, IF there is exactly one person (db.ts ownerActor): the sole
@@ -2326,8 +2328,8 @@ pub fn apply(
         let mut ref_writes: Vec<(usize, String)> = vec![]; // (kind_refs idx, owner eid)
         let mut target_drops: Vec<(usize, String)> = vec![]; // (kind_refs idx, dropped eid)
 
-        for ci in 0..changes.len() {
-            let change = changes[ci].clone();
+        for change in &changes {
+            let change = change.clone();
             let Change { eid, name, comp, was } = &change;
             // ---- edges: a TRIPLE, not a row ----
             if name == "dependency" {

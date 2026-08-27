@@ -363,7 +363,7 @@ pub fn eval_sub(store: &Store, p: &Parsed, cap: i64) -> Result<SubAnswer, String
     if let Some(a) = p.win.after {
         hits.retain(|r| r.num.unwrap_or(0) < a);
     }
-    hits.sort_by(|a, b| b.num.unwrap_or(0).cmp(&a.num.unwrap_or(0)));
+    hits.sort_by_key(|a| std::cmp::Reverse(a.num.unwrap_or(0)));
     let total = hits.len() as i64;
     let limit = p.win.limit.unwrap_or(cap);
     // Whole, and nobody asked for a window: the frame says nothing about bounds.

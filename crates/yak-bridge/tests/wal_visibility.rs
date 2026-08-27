@@ -15,7 +15,7 @@ fn readonly_sees_foreign_commits() {
     let rw = Connection::open(&path).expect("open rw");
     rw.busy_timeout(std::time::Duration::from_millis(5000)).unwrap();
     let ro = Connection::open_with_flags(
-        &format!("file:{path}?mode=ro"),
+        format!("file:{path}?mode=ro"),
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
     )
     .expect("open ro");

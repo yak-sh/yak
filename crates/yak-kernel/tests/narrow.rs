@@ -228,9 +228,9 @@ fn window_equals_bulk_cut_to_newest_page() {
     let fx = seed(120);
     let store = fx.open();
     let cut = |mut rows: Vec<Row>, limit: usize| -> Vec<Row> {
-        rows.sort_by(|a, b| b.num.unwrap_or(0).cmp(&a.num.unwrap_or(0)));
+        rows.sort_by_key(|a| std::cmp::Reverse(a.num.unwrap_or(0)));
         rows.truncate(limit);
-        rows.sort_by(|a, b| a.num.unwrap_or(0).cmp(&b.num.unwrap_or(0)));
+        rows.sort_by_key(|a| a.num.unwrap_or(0));
         rows
     };
     // Every EXACT compiler arm runs through the window's no-refine path, so each

@@ -949,7 +949,9 @@ fn replace_wakes_spares_targeted_and_acted() {
     assert!(!is_dead(&s, B), "an already-delivered wake is not superseded");
 }
 
+// The gate closure returns the deliberately-unboxed ApplyError (see write.rs).
 #[test]
+#[allow(clippy::result_large_err)]
 fn stop_request_gate_guards_liveness() {
     let s = store();
     let gate = |eid: &str, target: &str| {

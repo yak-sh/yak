@@ -456,7 +456,7 @@ fn ws_join_and_live_parity() {
     eprintln!("WS reset: snapshot byte-parity OK (vocabHash ts={ts_vh} bridge={br_vh} — documented divergence)");
 
     // --- a foreign write via Deno /apply, observed live on BOTH streams.
-    let eid = format!("{}", uuid_v4());
+    let eid = uuid_v4().to_string();
     let create = format!(
         "[{{\"eid\":\"{eid}\",\"name\":\"doc\",\"comp\":{{\"title\":\"parity-live-probe\"}}}}]"
     );

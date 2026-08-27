@@ -189,7 +189,7 @@ pub fn report() -> Option<String> {
     phases.push(vec!["total".into(), ms(wall)]);
 
     let mut order: Vec<&Stmt> = l.stmts.iter().collect();
-    order.sort_by(|a, b| b.dur.cmp(&a.dur));
+    order.sort_by_key(|a| std::cmp::Reverse(a.dur));
     let row = |s: &Stmt| vec![clip(&s.sql, 58), s.n.to_string(), ms(s.dur), s.rows.to_string()];
     let mut stmts: Vec<Vec<String>> = order.iter().take(TOP).map(|s| row(s)).collect();
     // The tail is folded, never dropped: the totals stay complete, and a

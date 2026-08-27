@@ -387,17 +387,21 @@ pub fn context_digest(
     // the previously-thread's actor falls back to the SCOPE (actor ==
     // project since T-19461), so a bare preview still shows the thread
     let sessions: Vec<Row> = match &actor {
-        Some(a) => store
-            .rows_of_cols(&store.eids_where_ref("session", "actor", &[a.clone()]), SESSION_SELS),
+        Some(a) => store.rows_of_cols(
+            &store.eids_where_ref("session", "actor", std::slice::from_ref(a)),
+            SESSION_SELS,
+        ),
         None => vec![],
     };
     // my claims: entities wearing claim.session = my session entity
     let mut mine: Vec<Row> = match &sess {
-        Some(sr) => store
-            .rows_of_cols(&store.eids_where_ref("claim", "session", &[sr.eid.clone()]), TASK_SELS),
+        Some(sr) => store.rows_of_cols(
+            &store.eids_where_ref("claim", "session", std::slice::from_ref(&sr.eid)),
+            TASK_SELS,
+        ),
         None => vec![],
     };
-    mine.sort_by(|a, b| cs(b, "claim", "claimed_at").cmp(&cs(a, "claim", "claimed_at")));
+    mine.sort_by_key(|a| std::cmp::Reverse(cs(a, "claim", "claimed_at")));
     let mut lines: Vec<String> = vec![format!(
         "# {}{}",
         match session {
@@ -465,7 +469,7 @@ pub fn context_digest(
                     && !brief_of(r).is_empty()
             })
             .collect();
-        briefed.sort_by(|x, y| edited_at(y).cmp(&edited_at(x)));
+        briefed.sort_by_key(|x| std::cmp::Reverse(edited_at(x)));
         let prev = briefed
             .iter()
             .find(|r| yak_kernel::reader::truthy(comp(r, "session", "operator")))
@@ -525,9 +529,10 @@ fn resumptions(
         return;
     }
     let mine: std::collections::HashSet<String> = match sess {
-        Some(sr) => {
-            store.eids_where_ref("claim", "session", &[sr.eid.clone()]).into_iter().collect()
-        }
+        Some(sr) => store
+            .eids_where_ref("claim", "session", std::slice::from_ref(&sr.eid))
+            .into_iter()
+            .collect(),
         None => Default::default(),
     };
     let by_eid: std::collections::HashMap<&str, &Row> =
@@ -582,7 +587,8 @@ fn on_mine(store: &Store, rows: &Rows, sess: &Row, now: i64, budget: i64, lines:
     if budget < 1 {
         return;
     }
-    let mine: Vec<String> = store.eids_where_ref("claim", "session", &[sess.eid.clone()]);
+    let mine: Vec<String> =
+        store.eids_where_ref("claim", "session", std::slice::from_ref(&sess.eid));
     if mine.is_empty() {
         return;
     }
@@ -596,7 +602,7 @@ fn on_mine(store: &Store, rows: &Rows, sess: &Row, now: i64, budget: i64, lines:
                     .unwrap_or(false)
         })
         .collect();
-    hits.sort_by(|a, b| born_at(b).cmp(&born_at(a)));
+    hits.sort_by_key(|a| std::cmp::Reverse(born_at(a)));
     let hits: Vec<Row> = hits.into_iter().take(budget as usize).collect();
     if hits.is_empty() {
         return;
@@ -647,7 +653,7 @@ fn pulse(tasks: &[Row], now: i64, budget: i64, scope: &str, scoped: bool, lines:
     } else {
         tasks.iter().filter(|r| !settled(&status_of(r)) && fresh(r)).collect()
     };
-    mine.sort_by(|a, b| edited_at(b).cmp(&edited_at(a)));
+    mine.sort_by_key(|a| std::cmp::Reverse(edited_at(a)));
     let cap = ((budget - 1) as usize).min(if scoped { 6 } else { 3 });
     let hits: Vec<&&Row> = mine.iter().take(cap).collect();
     if hits.is_empty() {
@@ -667,7 +673,7 @@ fn decisions(store: &Store, budget: i64, scope: &str, lines: &mut Vec<String>) {
         .into_iter()
         .filter(|r| belongs(r, scope))
         .collect();
-    hits.sort_by(|a, b| cs(b, "decided", "at").cmp(&cs(a, "decided", "at")));
+    hits.sort_by_key(|a| std::cmp::Reverse(cs(a, "decided", "at")));
     let hits: Vec<Row> = hits.into_iter().take((budget - 1) as usize).collect();
     if hits.is_empty() {
         return;

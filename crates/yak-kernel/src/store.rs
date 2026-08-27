@@ -202,7 +202,7 @@ impl Store {
             [eid],
             |r| r.get::<_, Option<i64>>(0),
         );
-        let Some(num) = num else { return None };
+        let num = num?;
         let v = vocab();
         let mut comps = Map::new();
         // entity comp first, the way the wire projects the spine
@@ -325,7 +325,7 @@ impl Store {
                 return vec![];
             }
             let mut rows = self.fill(&ids.join(","), std::mem::take(&mut order));
-            rows.sort_by(|a, b| a.num.unwrap_or(0).cmp(&b.num.unwrap_or(0)));
+            rows.sort_by_key(|a| a.num.unwrap_or(0));
             return rows;
         }
         // The inexact fallback: narrow by the compilable subset, refine with the
@@ -350,9 +350,9 @@ impl Store {
         if let Some(l) = limit {
             let l = l.max(0) as usize;
             if rows.len() > l {
-                rows.sort_by(|a, b| b.num.unwrap_or(0).cmp(&a.num.unwrap_or(0)));
+                rows.sort_by_key(|a| std::cmp::Reverse(a.num.unwrap_or(0)));
                 rows.truncate(l);
-                rows.sort_by(|a, b| a.num.unwrap_or(0).cmp(&b.num.unwrap_or(0)));
+                rows.sort_by_key(|a| a.num.unwrap_or(0));
             }
         }
         rows

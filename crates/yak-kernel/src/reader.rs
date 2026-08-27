@@ -246,14 +246,15 @@ pub fn reader_for(
         }
     }
     let claims: HashSet<String> = match &sess {
-        Some(sr) => {
-            store.eids_where_ref("claim", "session", &[sr.eid.clone()]).into_iter().collect()
-        }
+        Some(sr) => store
+            .eids_where_ref("claim", "session", std::slice::from_ref(&sr.eid))
+            .into_iter()
+            .collect(),
         None => HashSet::new(),
     };
     let (mut watching, mut muting) = (HashSet::new(), HashSet::new());
     if let Some(a) = &actor {
-        for eid in store.eids_where_ref("subscription", "actor", &[a.clone()]) {
+        for eid in store.eids_where_ref("subscription", "actor", std::slice::from_ref(a)) {
             if let Some(r) = store.row(&eid) {
                 let target = s(comp(&r, "subscription", "target"));
                 if target.is_empty() {
