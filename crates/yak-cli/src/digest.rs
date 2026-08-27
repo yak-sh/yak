@@ -73,8 +73,9 @@ fn rows_wearing(store: &Store, comp: &str) -> Vec<Row> {
         .query_map([], |r| r.get(0))
         .map(|it| it.filter_map(|x| x.ok()).collect())
         .unwrap_or_default();
-    eids.iter()
-        .filter_map(|e| store.row(e))
+    store
+        .rows_of(&eids)
+        .into_iter()
         .filter(yak_kernel::store::visible)
         .collect()
 }
@@ -91,8 +92,9 @@ fn fleet_memories(store: &Store) -> Vec<Row> {
         .query_map([], |r| r.get(0))
         .map(|it| it.filter_map(|x| x.ok()).collect())
         .unwrap_or_default();
-    eids.iter()
-        .filter_map(|e| store.row(e))
+    store
+        .rows_of(&eids)
+        .into_iter()
         .filter(yak_kernel::store::visible)
         .collect()
 }
@@ -258,19 +260,13 @@ pub fn context_digest(
     // project since T-19461), so a bare preview still shows the thread
     let sessions: Vec<Row> = match &actor {
         Some(a) => store
-            .eids_where_ref("session", "actor", &[a.clone()])
-            .iter()
-            .filter_map(|e| store.row(e))
-            .collect(),
+            .rows_of(&store.eids_where_ref("session", "actor", &[a.clone()])),
         None => vec![],
     };
     // my claims: entities wearing claim.session = my session entity
     let mut mine: Vec<Row> = match &sess {
         Some(sr) => store
-            .eids_where_ref("claim", "session", &[sr.eid.clone()])
-            .iter()
-            .filter_map(|e| store.row(e))
-            .collect(),
+            .rows_of(&store.eids_where_ref("claim", "session", &[sr.eid.clone()])),
         None => vec![],
     };
     mine.sort_by(|a, b| {
@@ -492,9 +488,8 @@ fn on_mine(
         return;
     }
     let mut hits: Vec<Row> = store
-        .eids_where_ref("comment", "target", &mine)
-        .iter()
-        .filter_map(|e| store.row(e))
+        .rows_of(&store.eids_where_ref("comment", "target", &mine))
+        .into_iter()
         .filter(|r| {
             cs(r, "created", "via") != sess.eid
                 && yak_kernel::time::parse_stamp(&born_at(r))
