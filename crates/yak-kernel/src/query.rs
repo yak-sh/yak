@@ -691,7 +691,7 @@ mod tests {
         assert!(parse(&[".comment.target.doc.title~=j".into()]).is_err());
     }
 
-    fn task_row(comps: serde_json::Value) -> Row {
+    fn entity_row(comps: serde_json::Value) -> Row {
         Row {
             eid: "e".into(),
             num: Some(1),
@@ -712,7 +712,7 @@ mod tests {
     #[test]
     fn time_phrase_matches_a_stamp() {
         let now = crate::time::parse_stamp("2026-08-26T13:00:00-04:00").unwrap();
-        let row = task_row(serde_json::json!({
+        let row = entity_row(serde_json::json!({
             "updated": { "at": "2026-08-26T11:00:00-04:00" }
         }));
         let p = |op: &str, value: &str| Pred {
