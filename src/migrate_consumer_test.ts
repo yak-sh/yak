@@ -9,9 +9,9 @@
 // deno-check over a join that matches nothing. The fast tier can't see it (pure
 // seams; sessions/heal/deliver/roles/closing/entries are probe-verified, not
 // fast-tested) and the type checker can't parse a SQL template string. Only
-// running a consumer against real data catches this class.
+// running a consumer against stored data catches this class.
 //
-// So this boots the REAL server and drives closing.ts end to end — the closing
+// So this boots the server and drives closing.ts end to end — the closing
 // effect runs `select eid from comment where target = ?` (closing.ts, a
 // reference-column filter over comment.target, an {eid} ref) to find the
 // correspondence a closed task should archive. Close a task that has a comment
@@ -22,26 +22,30 @@
 // binding the parity harness structurally cannot see.
 //
 // slow() + a server boot on an ephemeral port — the precondition_test.ts
-// pattern, the one heavy boot reached only over HTTP and only under TASKS_SLOW.
+// pattern. Writes enter through /apply; assertions read through the local query
+// library, so neither side can mistake its own return value for stored state.
 import { slow, until } from './testing.ts'
 import { assertEquals } from '@std/assert'
+import { localQuery } from './graph_query.ts'
+import type { Querier } from './client.ts'
 
-// DB_PATH must be set before db.ts is imported (its module-init opens the
-// default graph); a throwaway :memory: keeps that import off any real file, and
-// the server boots on its own fresh in-memory graph.
+// DB_PATH must be set before live_db.ts is imported. The server and the local
+// query below then share one fresh in-memory graph without touching owner data.
 Deno.env.set('DB_PATH', ':memory:')
-await import('./db.ts')
 
 // The server serves on import. Every test here is slow(), so the fast run (which
 // ignores them all) must never pay that boot nor claim a socket a parallel
 // worker would collide on: boot only under the heavy tier, on an ephemeral port
 // handed back before the server takes it.
 let U = ''
+let read: Querier | undefined
 if (Deno.env.get('TASKS_SLOW')) {
   let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
   let port = (seat.addr as Deno.NetAddr).port
   seat.close()
   Deno.env.set('PORT', String(port))
+  let { db } = await import('./live_db.ts')
+  read = localQuery(db)
   await import('./server.ts')
   U = `127.0.0.1:${port}`
 }
@@ -59,15 +63,10 @@ let post = (changes: unknown[]) =>
     body: JSON.stringify(changes),
   }).then((r) => r.text())
 
-// Read the stored graph through a door of its own, so "the consumer archived it"
-// rests on the graph, not on the response of the write under test.
-let snap = () =>
-  fetch(`http://${U}/snapshot`).then((r) => r.json()).then((o) =>
-    (o as { changes: { eid: string; name: string }[] }).changes
-  )
-
+// Read the stored graph through the supported direct query pipeline, so "the
+// consumer archived it" rests on graph state, not on /apply's response.
 let archived = async (eid: string) =>
-  (await snap()).some((c) => c.eid == eid && c.name == 'archived')
+  (await read!([`id=${eid}`, '.archived!'])).length > 0
 
 slow(
   'consumer: closing a task archives its correspondence (a ref-column filter)',
