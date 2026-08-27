@@ -150,6 +150,10 @@ fn eid_of_id(base: &str, id: &str) -> Option<String> {
 
 #[test]
 fn query_parity() {
+    if write_mode() {
+        eprintln!("query_parity: skipped (write mode — read parity wants one shared copy)");
+        return;
+    }
     let Some((ts, br)) = both() else {
         eprintln!("query_parity: skipped (set TS_URL and BRIDGE_URL)");
         return;
@@ -260,6 +264,10 @@ fn query_parity() {
 
 #[test]
 fn journal_parity() {
+    if write_mode() {
+        eprintln!("journal_parity: skipped (write mode — read parity wants one shared copy)");
+        return;
+    }
     let Some((ts, br)) = both() else {
         eprintln!("journal_parity: skipped (set TS_URL and BRIDGE_URL)");
         return;
@@ -386,6 +394,10 @@ fn require_quiescent(ts: &str) {
 
 #[test]
 fn ws_join_and_live_parity() {
+    if write_mode() {
+        eprintln!("ws_join_and_live_parity: skipped (write mode — read parity wants one shared copy)");
+        return;
+    }
     let Some((ts, br)) = both() else {
         eprintln!("ws_join_and_live_parity: skipped (set TS_URL and BRIDGE_URL)");
         return;
@@ -556,6 +568,10 @@ fn same_sub_delta(ts_ws: &mut Ws, br_ws: &mut Ws, name: &str, what: &str) {
 
 #[test]
 fn ws_sub_parity() {
+    if write_mode() {
+        eprintln!("ws_sub_parity: skipped (write mode — read parity wants one shared copy)");
+        return;
+    }
     let Some((ts, br)) = both() else {
         eprintln!("ws_sub_parity: skipped (set TS_URL and BRIDGE_URL)");
         return;
@@ -794,6 +810,591 @@ fn ws_sub_parity() {
     }
 
     eprintln!("\nWS subscription parity OK");
+}
+
+// --- WRITE parity: two fresh copies, three surfaces (D-22804 rung 3) ----------
+//
+// Writes MUTATE, so a write batch cannot be fired at two servers over ONE shared
+// copy — the first would move the graph the second reads. The write harness runs
+// over TWO fresh copies, each seeded from the SAME `VACUUM INTO` snapshot:
+//
+//   copy-A: a Deno server               → TS_URL  (fire the batch DIRECT here)
+//   copy-B: a Deno server + the bridge   → BRIDGE_URL (fire it at the bridge,
+//           which PROXIES to copy-B's Deno; boot the bridge --upstream that Deno).
+//
+// The batch reaches each copy through a DIFFERENT door — direct vs proxied — and
+// the harness diffs THREE surfaces the copies then present, canonicalized for the
+// two things that can never byte-match between independent writers: wall-clock
+// stamps (created/updated/claimed_at …) → `<ts>`, and server-minted uuids (a
+// conflict row's eid) → `<u0>`,`<u1>`,… in first-seen order. Everything else —
+// client eids (identical inputs), nums (lockstep minting), enum/text — rides
+// through untouched, so a real divergence still shows.
+//
+//   (a) the echoed /apply answer: status + `{ok,changes}` (or the rejection text)
+//   (b) the journal row(s) the batch produced: batch + trace since a baseline
+//       (`select via,batch,trace from journal where rowid>baseline`)
+//   (c) the resulting DB state: every touched entity read back off the read wire
+//       (refs already projected to ids, server-owned reads included)
+//
+// Against PROXY-EVERYTHING this is green trivially — both doors reach a Deno — so
+// it proves the routing / seeding / normalization scaffold. It becomes the GATE
+// the moment a domain writes native on copy-B: a divergence then surfaces here.
+//
+// Env (all four; the tests skip unless every one is set), same effects-OFF probe
+// setup the read harness documents above (TASKS_EFFECTS=daemon, no effectsd — so
+// nothing but the batch itself advances either journal):
+//   TS_URL / BRIDGE_URL  — copy-A's Deno / copy-B's bridge
+//   TS_DB  / BRIDGE_DB    — copy-A's / copy-B's FILE path (opened read-only here
+//                           for the journal dump only)
+//
+// WRITE MODE is "TS_DB or BRIDGE_DB set". The read-parity tests above compare one
+// SHARED copy through two doors and demand it stay quiescent, which a concurrent
+// writer breaks — so they skip in write mode, and this test skips outside it. The
+// operator runs the two modes as two separate `cargo test` invocations.
+
+fn ts_db() -> Option<String> {
+    std::env::var("TS_DB").ok().filter(|s| !s.is_empty())
+}
+fn br_db() -> Option<String> {
+    std::env::var("BRIDGE_DB").ok().filter(|s| !s.is_empty())
+}
+fn write_mode() -> bool {
+    ts_db().is_some() || br_db().is_some()
+}
+
+// POST /apply, returning (status, raw body) for a SUCCESS or a REJECTION alike —
+// `http_status_as_error(false)` keeps a 400's message body in hand instead of
+// folding it into a status-code error (exactly what the bridge proxy relies on).
+fn post_apply(base: &str, batch: &str) -> (u16, String) {
+    let url = format!("{base}/apply");
+    let agent = ureq::Agent::config_builder()
+        .http_status_as_error(false)
+        .build()
+        .new_agent();
+    match agent.post(&url).header("content-type", "application/json").send(batch) {
+        Ok(mut r) => (r.status().as_u16(), r.body_mut().read_to_string().unwrap_or_default()),
+        Err(e) => panic!("POST {url} failed: {e}"),
+    }
+}
+
+// Fire a setup/cleanup batch at BOTH copies, keeping them in lockstep (identical
+// batch sequence ⇒ identical num minting) — the result is not asserted.
+fn both_apply(ts: &str, br: &str, batch: &str) {
+    post_apply(ts, batch);
+    post_apply(br, batch);
+}
+
+fn is_uuid(s: &str) -> bool {
+    let b = s.as_bytes();
+    b.len() == 36
+        && b.iter().enumerate().all(|(i, &c)| {
+            if matches!(i, 8 | 13 | 18 | 23) {
+                c == b'-'
+            } else {
+                c.is_ascii_hexdigit()
+            }
+        })
+}
+
+fn is_iso_ts(s: &str) -> bool {
+    let b = s.as_bytes();
+    b.len() >= 20
+        && b.len() <= 30
+        && b[4] == b'-'
+        && b[7] == b'-'
+        && (b[10] == b'T' || b[10] == b' ')
+        && b[13] == b':'
+        && b[16] == b':'
+        && b[..4].iter().all(u8::is_ascii_digit)
+}
+
+// One scalar string, canonicalized (a uuid → its stable placeholder, a stamp →
+// `<ts>`, anything else verbatim).
+fn canon_scalar(s: &str, seen: &mut Vec<String>) -> String {
+    if is_uuid(s) {
+        let i = seen.iter().position(|u| u == s).unwrap_or_else(|| {
+            seen.push(s.to_string());
+            seen.len() - 1
+        });
+        format!("<u{i}>")
+    } else if is_iso_ts(s) {
+        "<ts>".to_string()
+    } else {
+        s.to_string()
+    }
+}
+
+fn canon_value(v: &Value, seen: &mut Vec<String>) -> Value {
+    match v {
+        Value::String(s) => Value::from(canon_scalar(s, seen)),
+        Value::Array(a) => Value::Array(a.iter().map(|x| canon_value(x, seen)).collect()),
+        Value::Object(o) => {
+            Value::Object(o.iter().map(|(k, x)| (k.clone(), canon_value(x, seen))).collect())
+        }
+        other => other.clone(),
+    }
+}
+
+// A wire text (a response body, a journal batch/trace) canonicalized. JSON is
+// walked; a plain rejection MESSAGE is compared raw — its embedded ids (a task's
+// num, a ghost eid echoed verbatim from the input) are deterministic across the
+// two identical copies.
+fn canon_text(text: &str) -> String {
+    match serde_json::from_str::<Value>(text) {
+        Ok(v) => {
+            let mut seen = vec![];
+            serde_json::to_string(&canon_value(&v, &mut seen)).unwrap()
+        }
+        Err(_) => text.to_string(),
+    }
+}
+
+// Open a copy read-only (its file, not `?mode=ro` on the server) for the journal
+// dump. A read-only cross-build reader of a WAL the Deno server writes is exactly
+// what the bridge itself is — safe; only co-WRITING across builds corrupts.
+fn ro_conn(db_path: &str) -> rusqlite::Connection {
+    rusqlite::Connection::open_with_flags(
+        format!("file:{db_path}?mode=ro"),
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
+    )
+    .unwrap_or_else(|e| panic!("open {db_path} read-only: {e}"))
+}
+
+fn journal_tip(db_path: &str) -> i64 {
+    ro_conn(db_path)
+        .query_row("select coalesce(max(rowid),0) from journal", [], |r| r.get(0))
+        .unwrap_or(0)
+}
+
+// A bounced claim's conflict entity is minted AFTER the batch rolls back, by a
+// direct write that does NOT journal — so it is invisible to the journal-derived
+// affected set. Baseline the conflict table and read back the eids minted since,
+// so surface (c) still checks the audit row.
+fn conflict_tip(db_path: &str) -> i64 {
+    ro_conn(db_path)
+        .query_row("select coalesce(max(entity),0) from conflict", [], |r| r.get(0))
+        .unwrap_or(0)
+}
+
+fn new_conflicts(db_path: &str, base: i64) -> Vec<String> {
+    let conn = ro_conn(db_path);
+    let mut st = conn
+        .prepare("select e.eid from conflict c join entity e on e.id = c.entity where c.entity > ?1")
+        .unwrap();
+    st.query_map([base], |r| r.get::<_, String>(0))
+        .unwrap()
+        .flatten()
+        .collect()
+}
+
+// The (via, batch, trace) rows a batch committed, canonicalized and joined — one
+// string per surface (b) so a Vec compare pinpoints a differing row.
+fn journal_since(db_path: &str, base: i64) -> Vec<String> {
+    let conn = ro_conn(db_path);
+    let mut st = conn
+        .prepare(
+            "select coalesce(via,''), batch, coalesce(trace,'') \
+             from journal where rowid > ?1 order by rowid",
+        )
+        .unwrap();
+    let rows = st
+        .query_map([base], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+        })
+        .unwrap();
+    rows.filter_map(|x| x.ok())
+        .map(|(via, batch, trace)| {
+            let mut seen = vec![];
+            format!(
+                "via={} | batch={} | trace={}",
+                canon_scalar(&via, &mut seen),
+                canon_text(&batch),
+                canon_text(&trace),
+            )
+        })
+        .collect()
+}
+
+// Every eid a committed batch touched — the union across the journal rows since
+// baseline. Captures the batch's own eids, cascade casualties, AND a bounce's
+// minted conflict eid, so surface (c) reads back exactly what moved.
+fn affected(db_path: &str, base: i64) -> Vec<String> {
+    let conn = ro_conn(db_path);
+    let mut st = conn
+        .prepare("select batch from journal where rowid > ?1 order by rowid")
+        .unwrap();
+    let batches: Vec<String> = st
+        .query_map([base], |r| r.get::<_, String>(0))
+        .unwrap()
+        .filter_map(|x| x.ok())
+        .collect();
+    let mut set = std::collections::BTreeSet::new();
+    for b in batches {
+        if let Ok(v) = serde_json::from_str::<Value>(&b) {
+            collect_eids(&v, &mut set);
+        }
+    }
+    set.into_iter().collect()
+}
+
+fn collect_eids(v: &Value, out: &mut std::collections::BTreeSet<String>) {
+    match v {
+        Value::Object(o) => {
+            if let Some(Value::String(e)) = o.get("eid") {
+                out.insert(e.clone());
+            }
+            for (_, x) in o {
+                collect_eids(x, out);
+            }
+        }
+        Value::Array(a) => {
+            for x in a {
+                collect_eids(x, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+// Surface (c): the resulting DB state — a normalized comp-row dump straight off
+// the copy file. Every component table (keyed on the `entity` int PK) is dumped
+// for the touched eids, each ref column projected back to its eid (int→eid via
+// the entity table), then canonicalized. Read from the FILE, not the read wire:
+// a tombstoned entity simply has no comp rows on either copy (clean parity),
+// whereas the read wire renders a tombstone stub on the bridge but nothing on
+// Deno — a read-wire difference this surface must not inherit. Ref-ness is read
+// from the schema's foreign keys (pragma foreign_key_list), so it needs no
+// vocabulary and catches server-owned refs (conflict.target, claim.session) too.
+fn state_of(db_path: &str, eids: &[String]) -> String {
+    let conn = ro_conn(db_path);
+    let mut id2eid: std::collections::HashMap<i64, String> = Default::default();
+    let mut eid2id: std::collections::HashMap<String, i64> = Default::default();
+    {
+        let mut st = conn.prepare("select id, eid from entity").unwrap();
+        let rows = st
+            .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))
+            .unwrap();
+        for (id, eid) in rows.flatten() {
+            id2eid.insert(id, eid.clone());
+            eid2id.insert(eid, id);
+        }
+    }
+    let ids: Vec<i64> = eids.iter().filter_map(|e| eid2id.get(e).copied()).collect();
+    let mut out: Vec<String> = vec![];
+    for comp in comp_tables(&conn) {
+        let refs = ref_cols(&conn, &comp);
+        let sql = format!("select * from \"{comp}\" where entity = ?1");
+        let mut st = match conn.prepare(&sql) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        let colnames: Vec<String> = st.column_names().iter().map(|s| s.to_string()).collect();
+        for &id in &ids {
+            let mut rows = st.query([id]).unwrap();
+            while let Some(row) = rows.next().unwrap() {
+                let mut seen = vec![];
+                let mut m = serde_json::Map::new();
+                for (i, col) in colnames.iter().enumerate() {
+                    let raw = cell(row, i);
+                    let projected = if col == "entity" || refs.contains(col) {
+                        match &raw {
+                            Value::Number(n) => n
+                                .as_i64()
+                                .and_then(|i| id2eid.get(&i))
+                                .map(|e| Value::from(e.clone()))
+                                .unwrap_or(Value::Null),
+                            other => other.clone(),
+                        }
+                    } else {
+                        raw
+                    };
+                    m.insert(col.clone(), canon_value(&projected, &mut seen));
+                }
+                out.push(format!("{comp} {}", serde_json::to_string(&Value::Object(m)).unwrap()));
+            }
+        }
+    }
+    out.sort();
+    out.join("\n")
+}
+
+// One column cell → a JSON value (blobs summarized by length; none ride the
+// tables this harness dumps).
+fn cell(row: &rusqlite::Row, i: usize) -> Value {
+    match row.get_ref(i) {
+        Ok(rusqlite::types::ValueRef::Null) | Err(_) => Value::Null,
+        Ok(rusqlite::types::ValueRef::Integer(n)) => Value::from(n),
+        Ok(rusqlite::types::ValueRef::Real(f)) => Value::from(f),
+        Ok(rusqlite::types::ValueRef::Text(t)) => {
+            Value::from(String::from_utf8_lossy(t).to_string())
+        }
+        Ok(rusqlite::types::ValueRef::Blob(b)) => Value::from(format!("<blob:{}>", b.len())),
+    }
+}
+
+// Every component table — one with an `entity` int-PK column (edges/journal/
+// tombstone/entity have none, so they fall out; edge deltas ride surface (b)).
+fn comp_tables(conn: &rusqlite::Connection) -> Vec<String> {
+    let mut st = conn
+        .prepare("select name from sqlite_master where type='table' and name not like 'sqlite_%' order by name")
+        .unwrap();
+    let names: Vec<String> = st
+        .query_map([], |r| r.get::<_, String>(0))
+        .unwrap()
+        .flatten()
+        .collect();
+    names
+        .into_iter()
+        .filter(|t| {
+            let mut ti = conn.prepare(&format!("pragma table_info(\"{t}\")")).unwrap();
+            let cols: Vec<String> = ti
+                .query_map([], |r| r.get::<_, String>(1))
+                .unwrap()
+                .flatten()
+                .collect();
+            cols.iter().any(|c| c == "entity")
+        })
+        .collect()
+}
+
+// The columns of `table` that reference the entity table — its refs, read from
+// the schema so it needs no vocabulary.
+fn ref_cols(conn: &rusqlite::Connection, table: &str) -> std::collections::HashSet<String> {
+    let mut st = conn
+        .prepare(&format!("pragma foreign_key_list(\"{table}\")"))
+        .unwrap();
+    st.query_map([], |r| Ok((r.get::<_, String>(2)?, r.get::<_, String>(3)?)))
+        .unwrap()
+        .flatten()
+        .filter(|(reftable, _)| reftable == "entity")
+        .map(|(_, from)| from)
+        .collect()
+}
+
+// Fire ONE batch at both copies (direct vs proxied) and assert all three surfaces
+// match. Returns the affected-eid count for the log line.
+fn assert_write(case: &str, ts: &str, br: &str, ts_db: &str, br_db: &str, batch: &str) {
+    let base_a = journal_tip(ts_db);
+    let base_b = journal_tip(br_db);
+    let cbase_a = conflict_tip(ts_db);
+    let cbase_b = conflict_tip(br_db);
+    let (sa, ba) = post_apply(ts, batch);
+    let (sb, bb) = post_apply(br, batch);
+    // (a) the echoed answer — status first, then the body.
+    assert_eq!(sa, sb, "[{case}] status differs (ts={sa} bridge={sb})\n ts={ba}\n br={bb}");
+    assert_eq!(
+        canon_text(&ba),
+        canon_text(&bb),
+        "[{case}] echoed answer differs\n ts={ba}\n br={bb}"
+    );
+    // (b) the journal row(s).
+    let ja = journal_since(ts_db, base_a);
+    let jb = journal_since(br_db, base_b);
+    assert_eq!(ja, jb, "[{case}] journal rows differ\n ts={ja:#?}\n br={jb:#?}");
+    // (c) the resulting DB state of everything the commit touched — the journal's
+    // eids PLUS any conflict row minted off-journal by a bounce.
+    let mut ea = affected(ts_db, base_a);
+    ea.extend(new_conflicts(ts_db, cbase_a));
+    let mut eb = affected(br_db, base_b);
+    eb.extend(new_conflicts(br_db, cbase_b));
+    let state_a = state_of(ts_db, &ea);
+    let state_b = state_of(br_db, &eb);
+    assert_eq!(
+        state_a, state_b,
+        "[{case}] resulting DB state differs\n ts={state_a}\n br={state_b}"
+    );
+    eprintln!("ok  write-parity [{case}]  status={sa}  journal={}  entities={}", ja.len(), ea.len());
+}
+
+// Up to two existing session eids from the snapshot (real sessions, so a claim
+// on one carries a stable label and no ghost-ref). Fewer than two ⇒ the
+// claim-bounce case is skipped.
+fn a_session_pair(ts: &str) -> Vec<String> {
+    let (_, body) = get(ts, "/query?.kind=session&limit=2");
+    serde_json::from_str::<Value>(&body)
+        .ok()
+        .and_then(|v| v.as_array().cloned())
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|row| row.get("entity")?.get("eid")?.as_str().map(String::from))
+        .collect()
+}
+
+#[test]
+fn write_parity() {
+    if !write_mode() {
+        eprintln!("write_parity: skipped (set TS_URL, BRIDGE_URL, TS_DB, BRIDGE_DB)");
+        return;
+    }
+    let (ts, br) = both().expect("write mode needs TS_URL and BRIDGE_URL");
+    let ts_db = ts_db().expect("TS_DB");
+    let br_db = br_db().expect("BRIDGE_DB");
+    let uid = &uuid_v4()[..8]; // marker so probe writes are recognizable
+    let g = |t: &str, b: &str, c: &str| both_apply(t, b, c);
+
+    // --- ROUTING: a plain create lands identically through the bridge as direct.
+    let e1 = uuid_v4();
+    assert_write(
+        "routing/create",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!(
+            "[{{\"eid\":\"{e1}\",\"name\":\"doc\",\"comp\":{{\"title\":\"zqw{uid} route\"}}}},\
+              {{\"eid\":\"{e1}\",\"name\":\"task\",\"comp\":{{\"status\":\"open\",\"priority\":0}}}}]"
+        ),
+    );
+    // an UPDATE to the same entity (provenance flips created→updated).
+    assert_write(
+        "routing/update",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!("[{{\"eid\":\"{e1}\",\"name\":\"doc\",\"comp\":{{\"title\":\"zqw{uid} route 2\"}}}}]"),
+    );
+
+    // --- REJECTION: `was` stale (message + hash) -----------------------------
+    let e2 = uuid_v4();
+    g(&ts, &br, &format!("[{{\"eid\":\"{e2}\",\"name\":\"doc\",\"comp\":{{\"title\":\"v1\"}}}}]"));
+    // land v2 with the correct guard so the row is now v2, then guard v3 with the
+    // STALE v1 hash — refused on both, byte-identical Stale message.
+    let sha_v1 = yak_kernel::write::sha(&serde_json::json!("v1"));
+    // land v2 guarded by the CORRECT v1 hash (guard passes, row becomes v2)…
+    g(
+        &ts,
+        &br,
+        &format!(
+            "[{{\"eid\":\"{e2}\",\"name\":\"doc\",\"comp\":{{\"title\":\"v2\"}},\"was\":{{\"title\":\"{sha_v1}\"}}}}]"
+        ),
+    );
+    // …then guard v3 with that SAME v1 hash, now STALE (stored is v2) → refused:
+    assert_write(
+        "reject/was-stale",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!(
+            "[{{\"eid\":\"{e2}\",\"name\":\"doc\",\"comp\":{{\"title\":\"v3\"}},\"was\":{{\"title\":\"{sha_v1}\"}}}}]"
+        ),
+    );
+
+    // --- REJECTION: unknown column ------------------------------------------
+    let e3 = uuid_v4();
+    assert_write(
+        "reject/unknown-column",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!("[{{\"eid\":\"{e3}\",\"name\":\"task\",\"comp\":{{\"statuss\":\"done\"}}}}]"),
+    );
+
+    // --- REJECTION: ghost reference -----------------------------------------
+    let e4 = uuid_v4();
+    let ghost = uuid_v4();
+    assert_write(
+        "reject/ghost-ref",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!("[{{\"eid\":\"{e4}\",\"name\":\"comment\",\"comp\":{{\"target\":\"{ghost}\"}}}}]"),
+    );
+
+    // --- REJECTION: claim bounce + minted conflict row ----------------------
+    let sessions = a_session_pair(&ts);
+    if sessions.len() >= 2 {
+        let (sa, sb) = (&sessions[0], &sessions[1]);
+        let tclaim = uuid_v4();
+        g(
+            &ts,
+            &br,
+            &format!(
+                "[{{\"eid\":\"{tclaim}\",\"name\":\"doc\",\"comp\":{{\"title\":\"zqw{uid} claim\"}}}},\
+                  {{\"eid\":\"{tclaim}\",\"name\":\"task\",\"comp\":{{\"status\":\"open\"}}}}]"
+            ),
+        );
+        // first session claims it (lands wip + worked edge)
+        g(&ts, &br, &format!("[{{\"eid\":\"{tclaim}\",\"name\":\"claim\",\"comp\":{{\"session\":\"{sa}\"}}}}]"));
+        // second session's claim BOUNCES — refused batch, but a conflict entity is
+        // committed AFTER the rollback (its own journal row, its own minted eid).
+        assert_write(
+            "reject/claim-bounce",
+            &ts,
+            &br,
+            &ts_db,
+            &br_db,
+            &format!("[{{\"eid\":\"{tclaim}\",\"name\":\"claim\",\"comp\":{{\"session\":\"{sb}\"}}}}]"),
+        );
+        // release + delete the probe task (keeps both copies in lockstep).
+        g(&ts, &br, &format!("[{{\"eid\":\"{tclaim}\",\"name\":\"entity\",\"comp\":null}}]"));
+    } else {
+        eprintln!("write-parity [reject/claim-bounce]: skipped (need 2 sessions in the snapshot)");
+    }
+
+    // --- DELETE CASCADE: synthesized entity-nulls + detach echoes ------------
+    let p = uuid_v4();
+    let t = uuid_v4();
+    let c = uuid_v4();
+    g(
+        &ts,
+        &br,
+        &format!(
+            "[{{\"eid\":\"{p}\",\"name\":\"doc\",\"comp\":{{\"title\":\"zqw{uid} proj\"}}}},\
+              {{\"eid\":\"{p}\",\"name\":\"project\",\"comp\":{{}}}}]"
+        ),
+    );
+    g(
+        &ts,
+        &br,
+        &format!(
+            "[{{\"eid\":\"{t}\",\"name\":\"doc\",\"comp\":{{\"title\":\"zqw{uid} t\"}}}},\
+              {{\"eid\":\"{t}\",\"name\":\"task\",\"comp\":{{\"status\":\"open\",\"project\":\"{p}\"}}}},\
+              {{\"eid\":\"{c}\",\"name\":\"doc\",\"comp\":{{\"title\":\"zqw{uid} note\"}}}},\
+              {{\"eid\":\"{c}\",\"name\":\"comment\",\"comp\":{{\"target\":\"{t}\"}}}}]"
+        ),
+    );
+    // deleting the task cascades the comment ABOUT it (synthesized entity-null in
+    // the echo) and — if a session was claimable — releases the claim.
+    if !sessions.is_empty() {
+        g(&ts, &br, &format!("[{{\"eid\":\"{t}\",\"name\":\"claim\",\"comp\":{{\"session\":\"{}\"}}}}]", sessions[0]));
+    }
+    assert_write(
+        "cascade/delete-task",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!("[{{\"eid\":\"{t}\",\"name\":\"entity\",\"comp\":null}}]"),
+    );
+    // a surviving task pointing at the project, then delete the project → its
+    // `project` pointer is DETACHED (a null-column echo), the project tombstoned.
+    let t2 = uuid_v4();
+    g(
+        &ts,
+        &br,
+        &format!(
+            "[{{\"eid\":\"{t2}\",\"name\":\"doc\",\"comp\":{{\"title\":\"zqw{uid} t2\"}}}},\
+              {{\"eid\":\"{t2}\",\"name\":\"task\",\"comp\":{{\"status\":\"open\",\"project\":\"{p}\"}}}}]"
+        ),
+    );
+    assert_write(
+        "cascade/delete-project-detaches",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!("[{{\"eid\":\"{p}\",\"name\":\"entity\",\"comp\":null}}]"),
+    );
+    // clean up the surviving probe entities on BOTH copies.
+    g(&ts, &br, &format!("[{{\"eid\":\"{t2}\",\"name\":\"entity\",\"comp\":null}}]"));
+    g(&ts, &br, &format!("[{{\"eid\":\"{e1}\",\"name\":\"entity\",\"comp\":null}}]"));
+    g(&ts, &br, &format!("[{{\"eid\":\"{e2}\",\"name\":\"entity\",\"comp\":null}}]"));
+
+    eprintln!("\nwrite parity OK (proxy-everything: bridge lands identically to direct)");
 }
 
 // --- pure logic tests (always run, no servers) -------------------------------

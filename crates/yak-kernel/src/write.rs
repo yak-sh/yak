@@ -961,7 +961,7 @@ pub fn apply(
     let mut said_creator: HashSet<String> = HashSet::new();
     let mut said_editor: HashSet<String> = HashSet::new();
     let mut bounce: Option<Bounce> = None;
-    let mut took = |log: &mut Vec<(String, Vec<String>)>, eid: &str, name: &str| {
+    let took = |log: &mut Vec<(String, Vec<String>)>, eid: &str, name: &str| {
         match log.iter_mut().find(|(e, _)| e == eid) {
             Some((_, names)) => names.push(name.to_string()),
             None => log.push((eid.to_string(), vec![name.to_string()])),

@@ -98,7 +98,7 @@ pub fn row_changes(r: &JournalRow) -> Vec<Change> {
     let mut touched: Vec<String> = vec![];
     let mut said_created: Vec<String> = vec![];
     let mut said_updated: Vec<String> = vec![];
-    let mut push = |list: &mut Vec<String>, eid: &str| {
+    let push = |list: &mut Vec<String>, eid: &str| {
         if !list.iter().any(|e| e == eid) {
             list.push(eid.to_string());
         }

@@ -36,6 +36,10 @@ serde_json = { version = "1", features = ["preserve_order"] }
 rusqlite = { version = "0.40" }
 axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "signal", "time"] }
+# The write proxy forwards each batch to the Deno /apply over plain HTTP; a
+# blocking call inside spawn_blocking, so no async client. default-features off
+# drops TLS the loopback wire never needs.
+ureq = { version = "3", default-features = false }
 
 [dev-dependencies]
 # The parity harness drives HTTP and a WS socket against BOTH servers.
