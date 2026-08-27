@@ -18,6 +18,7 @@ import { z } from 'zod'
 import { VERSION } from './version.ts'
 import {
   type Change,
+  comps,
   type Dep,
   edges,
   type Hit,
@@ -27,7 +28,12 @@ import {
   uuid,
   verdicts,
 } from './types.ts'
-import type { Mutation } from './mutation.ts'
+import {
+  type EntityLiteral,
+  type Mutation,
+  type MutationResult,
+  mutationResult,
+} from './mutation.ts'
 import { trouble } from './adapters.ts'
 import { type Dim, report, type Use, use } from './usage.ts'
 import { sha } from './sha.ts'
@@ -137,7 +143,7 @@ export type IO = {
   deps: (eids: string[], reveal?: boolean) => Promise<Dep[]>
   // `via` is journal attribution — the calling session's id, when the
   // tool knows it. Never auth.
-  write: (mutation: Mutation, via?: string) => Promise<Change[]>
+  write: (mutation: Mutation, via?: string) => Promise<MutationResult>
   find: (q: string, limit?: number) => Promise<Hit[]>
   // Land an HTML page in the frozen store for an existing web entity.
   upload: (eid: string, html: string) => Promise<void>
@@ -596,7 +602,7 @@ Reference param values accept human ids
             })),
           }, ioQ)
           let applied = await io.write(plan.changes, session)
-          return bus(taskTreeText(plan, applied), session)
+          return bus(taskTreeText(plan, applied.changes), session)
         } catch (e) {
           return err((e as Error).message)
         }
@@ -690,7 +696,7 @@ No structure is inferred from prose. ${GRAMMAR} ${BUS}`,
         let plan = await taskTreePlan({ project, nodes }, ioQ)
         if (dry_run) return text(`dry run\n${taskTreeText(plan)}`)
         let applied = await io.write(plan.changes, session)
-        return bus(taskTreeText(plan, applied), session)
+        return bus(taskTreeText(plan, applied.changes), session)
       } catch (e) {
         return err((e as Error).message)
       }
@@ -1198,7 +1204,7 @@ it is a redo. ${BUS}`,
       }
       let out = await io.write({ mutation: 'undo', ...ref }, session)
       let noise = new Set(['created', 'updated', 'resume', 'imported'])
-      let what = out.filter((c) => !noise.has(c.name)).map((c) =>
+      let what = out.changes.filter((c) => !noise.has(c.name)).map((c) =>
         c.comp == null
           ? c.name == 'entity' ? '†' : `-${c.name}`
           : `${c.name}{${
@@ -1229,7 +1235,7 @@ kind is idempotent: rerunning it finds only work not already landed.`,
       let pending = await io.backfill(kind)
       let out = await landBackfill(
         pending,
-        (batch) => io.write(batch, session),
+        async (batch) => (await io.write(batch, session)).changes,
       )
       return bus(
         `${kind}: ${out.landed}/${out.found} historical edges landed`,
@@ -1647,9 +1653,36 @@ empty. ${GRAMMAR} ${FILTERS}`,
     },
   )
 
+  let componentLiterals: Record<string, z.ZodTypeAny> = {}
+  let guardedLiterals: Record<string, z.ZodTypeAny> = {}
+  for (let name of Object.keys(comps)) {
+    componentLiterals[name] = z.record(z.unknown()).nullable().optional()
+    guardedLiterals[name] = z.record(z.string().nullable()).optional()
+  }
+  let dependencyLiterals: Record<string, z.ZodTypeAny> = {}
+  let literalRef = z.union([
+    z.string(),
+    z.number(),
+    z.record(z.unknown()).describe(
+      'Nested entity literal with the same key/id/comps/deps/was shape.',
+    ),
+  ])
+  for (let type of edges) {
+    dependencyLiterals[type] = z.union([literalRef, z.array(literalRef)])
+      .optional()
+  }
+  let entityLiteral = z.object({
+    key: z.string().optional(),
+    id: z.string().optional(),
+    comps: z.object(componentLiterals).strict().optional(),
+    deps: z.object(dependencyLiterals).strict().optional(),
+    was: z.object(guardedLiterals).strict().optional(),
+  }).strict()
+
   tool(
     'graph_apply',
-    `Raw wire access: apply a batch of changes atomically. A change is
+    `Raw wire access: apply a flat change batch OR nested entity literals
+atomically (exactly one of changes/entities). A change is
 {eid, name, comp} — comp is a PATCH (omitted columns untouched), comp:
 null deletes the component, {name:'entity', comp:null} deletes the
 entity. Mint uuids for new entities. eid and reference comp values accept
@@ -1664,7 +1697,9 @@ rides beside comp (never inside it), per column, so a stale guarded write
 is rejected while the newer value is preserved. Same allowlist and
 claim-lease rules as every other client; writes broadcast live to all
 screens. The result reports submitted intent and the authoritative
-effective batch returned by apply(). ${GRAMMAR}`,
+effective batch returned by apply(), plus request-local alias mappings for
+nested literals. A nested entity has optional key/id, generated comps, and
+generated deps whose values name, number, or nest another entity. ${GRAMMAR}`,
     {
       changes: z.array(
         z.object({
@@ -1677,23 +1712,35 @@ effective batch returned by apply(). ${GRAMMAR}`,
           // which is every caller's behavior today.
           was: z.record(z.string().nullable()).optional(),
         }).strict(),
-      ).min(1),
+      ).min(1).optional(),
+      entities: z.array(entityLiteral).min(1).optional(),
       session: z.string().optional(),
     },
     async (
-      { changes, session }: { changes: Change[]; session?: string },
+      { changes, entities, session }: {
+        changes?: Change[]
+        entities?: EntityLiteral[]
+        session?: string
+      },
     ) => {
-      let effective
+      if ((changes == null) == (entities == null)) {
+        return err('apply needs exactly one of changes or entities')
+      }
+      let result: MutationResult
       try {
-        effective = await io.write(changes, session)
+        result = await io.write(
+          changes ?? { entities: entities! },
+          session,
+        )
       } catch (e) {
         return err(`apply failed: ${(e as Error).message}`)
       }
       return text(JSON.stringify(
         {
-          submitted: changes.length,
-          effective: effective.length,
-          changes: effective,
+          submitted: (changes ?? entities!).length,
+          effective: result.changes.length,
+          changes: result.changes,
+          ...(entities ? { aliases: result.aliases } : {}),
         },
         null,
         2,
@@ -2162,7 +2209,7 @@ in milliseconds (default 10000, maximum 30000).`,
         try {
           let effective = await io.write(out.batch)
           applied = `${out.batch.length} submitted; ` +
-            `${effective.length} effective change(s)`
+            `${effective.changes.length} effective change(s)`
         } catch (e) {
           return err(JSON.stringify(
             {
@@ -2324,7 +2371,7 @@ if (import.meta.main) {
     query: (q, opts) => queryHttp(q.split('&').filter(Boolean), opts),
     get: (ids, filters = []) => fetched(ids, filters),
     deps: (eids, reveal) => httpDeps(eids, reveal),
-    write: mutate,
+    write: async (mutation, via) => mutationResult(await mutate(mutation, via)),
     find: search,
     upload: async (eid, html) => {
       let res = await request(`http://${host()}/upload?eid=${eid}`, {

@@ -25,7 +25,13 @@ import {
   uuid,
   verdictName,
 } from './types.ts'
-import type { Mutation } from './mutation.ts'
+import type {
+  EntityLiteral,
+  Mutation,
+  MutationOutput,
+  MutationResult,
+} from './mutation.ts'
+export type { EntityLiteral, LiteralRef } from './mutation.ts'
 import { idOf, SHORT, shortId, slugsOf } from './types.ts'
 import { formatProp, parseProp, propAt, refOf } from './props.ts'
 import { local } from './time.ts'
@@ -456,7 +462,10 @@ export let me = (
 // actor it acts for (attribution, never auth). The CLI's standing
 // identity is me() — hooks and spawned agents get their writes
 // attributed without asking.
-export let mutate = async (mutation: Mutation, via = me()) => {
+export let mutate = async <T extends Mutation>(
+  mutation: T,
+  via = me(),
+): Promise<MutationOutput<T>> => {
   let res = await request(`http://${host()}/apply`, {
     method: 'POST',
     headers: {
@@ -466,8 +475,12 @@ export let mutate = async (mutation: Mutation, via = me()) => {
     body: JSON.stringify(mutation),
   })
   if (!res.ok) throw new Error(`apply failed: ${await res.text()}`)
-  let out = await res.json() as { changes: Change[] }
-  return out.changes
+  let out = await res.json() as Partial<MutationResult> & { changes: Change[] }
+  return (
+    Array.isArray(mutation) || 'mutation' in mutation
+      ? out.changes
+      : { changes: out.changes, aliases: out.aliases ?? {} }
+  ) as MutationOutput<T>
 }
 
 export let send = async (changes: Change[], via = me()) =>
@@ -1423,15 +1436,6 @@ export let taskChanges = (
 // additions: `key` names an entity before its eid exists, and `deps` nests or
 // references other literals through the generated edge vocabulary. `was`
 // stays beside each component patch, exactly where Change carries it.
-export type LiteralRef = string | number | EntityLiteral
-export type EntityLiteral = {
-  key?: string
-  id?: string
-  comps?: Record<string, Record<string, unknown> | null>
-  deps?: Partial<Record<Edge, LiteralRef | LiteralRef[]>>
-  was?: Record<string, Record<string, string | null>>
-}
-
 export type LiteralPlan = {
   changes: Change[]
   aliases: Record<string, string>

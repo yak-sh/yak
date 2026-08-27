@@ -37,9 +37,9 @@ import {
   stamped,
   uuid,
 } from './types.ts'
-import type { Mutation } from './mutation.ts'
+import type { Mutation, MutationOutput } from './mutation.ts'
 import { type Trace } from './effects.ts'
-import { ancestorAt } from './client.ts'
+import { ancestorAt, normalizeLiterals } from './client.ts'
 import { homeReads } from './persona.ts'
 import {
   type EdgeSelector,
@@ -5831,13 +5831,24 @@ export let inverseBatch = (db: DatabaseSync, id: number): Change[] => {
 // The one database mutation capability. Named mutations live here only when
 // their read and guarded write must be indivisible; HTTP and in-process MCP
 // both call this function, so transport cannot weaken that boundary.
-export let mutate = (
+export let mutate = <T extends Mutation>(
   db: DatabaseSync,
-  mutation: Mutation,
+  mutation: T,
   trace?: Trace,
   via?: string | null,
-): Change[] => {
-  if (Array.isArray(mutation)) return apply(db, mutation, trace, via)
+): MutationOutput<T> => {
+  if (Array.isArray(mutation)) {
+    return apply(db, mutation, trace, via) as MutationOutput<T>
+  }
+  if ('entities' in mutation) {
+    let plan = normalizeLiterals(mutation.entities, {
+      resolve: (id) => resolveId(db, id),
+    })
+    return {
+      changes: apply(db, plan.changes, trace, via),
+      aliases: plan.aliases,
+    } as MutationOutput<T>
+  }
   if (mutation.mutation != 'undo') throw new Error('unknown mutation')
   if ((mutation.id == null) == (mutation.eid == null)) {
     throw new Error('undo needs exactly one of id or eid')
@@ -5853,7 +5864,7 @@ export let mutate = (
   }
   let id = mutation.id ?? lastBatch(db, mutation.eid!)
   if (!id) throw new Error(`${mutation.eid} has no history to undo`)
-  return apply(db, inverseBatch(db, id), trace, via)
+  return apply(db, inverseBatch(db, id), trace, via) as MutationOutput<T>
 }
 
 // The rowid of the latest batch that touched an entity — what `task undo <e>`

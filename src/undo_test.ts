@@ -4,7 +4,7 @@
 // entity. Every case drives real apply() batches so the journal, the was-guard,
 // and the tombstone rule are the ones under test, not a mock of them.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, inverseBatch, lastBatch, mutate, snapshot } = await import(
+let { apply, depsOf, inverseBatch, lastBatch, mutate, snapshot } = await import(
   './db.ts'
 )
 let { freshDb } = await import('./testdb.ts')
@@ -41,13 +41,81 @@ Deno.test('undo restores a component update to its prior value', () => {
 
 Deno.test('the mutation capability applies batches and guarded undo', () => {
   let db = freshDb(), t = uid()
-  mutate(db, [
+  let created = mutate(db, [
     { eid: t, name: 'doc', comp: { title: 'x', body: '' } },
     { eid: t, name: 'task', comp: { status: 'open' } },
   ])
+  assertEquals(Array.isArray(created), true)
   mutate(db, [{ eid: t, name: 'task', comp: { status: 'done' } }])
-  mutate(db, { mutation: 'undo', eid: t })
+  assertEquals(Array.isArray(mutate(db, { mutation: 'undo', eid: t })), true)
   assertEquals(compOf(db, t, 'task')?.status, 'open')
+})
+
+Deno.test('the mutation capability normalizes nested literals atomically', () => {
+  let db = freshDb()
+  let result = mutate(db, {
+    entities: [{
+      key: 'goal',
+      comps: {
+        doc: { title: 'goal' },
+        task: { status: 'open' },
+      },
+      deps: {
+        requires: {
+          key: 'step',
+          comps: {
+            doc: { title: 'step' },
+            task: { status: 'open' },
+          },
+        },
+      },
+    }],
+  })
+  assertNotEquals(result.aliases.goal, undefined)
+  assertNotEquals(result.aliases.step, undefined)
+  assertEquals(
+    depsOf(db, [result.aliases.goal]),
+    [{
+      parent: result.aliases.goal,
+      child: result.aliases.step,
+      type: 'requires',
+    }],
+  )
+  assertEquals(
+    result.changes.some((c) =>
+      c.eid == result.aliases.goal && c.name == 'dependency'
+    ),
+    true,
+  )
+})
+
+Deno.test('a stale nested literal rolls back every entity', () => {
+  let db = freshDb(), existing = uid()
+  born(db, existing)
+  apply(db, [{ eid: existing, name: 'doc', comp: { body: 'moved' } }])
+  assertThrows(
+    () =>
+      mutate(db, {
+        entities: [{
+          id: existing,
+          comps: { doc: { body: 'clobber' } },
+          was: { doc: { body: null } },
+          deps: {
+            requires: {
+              key: 'new',
+              comps: { doc: { title: 'must roll back' } },
+            },
+          },
+        }],
+      }),
+    Error,
+    'has moved since',
+  )
+  assertEquals(compOf(db, existing, 'doc')?.body, 'moved')
+  assertEquals(
+    snapshot(db).changes.some((c) => c.comp?.title == 'must roll back'),
+    false,
+  )
 })
 
 Deno.test('named mutations reject ambiguous targets', () => {

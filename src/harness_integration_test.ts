@@ -10,6 +10,7 @@ import { localQuery } from './graph_query.ts'
 import { combineTools, localTools, tasksTools } from './harness_tools.ts'
 import { managedCodex } from './managed_codex.ts'
 import { type IO } from './mcp.ts'
+import { mutationResult } from './mutation.ts'
 import { responses } from './responses.ts'
 import { attentionPrompt } from './runner.ts'
 import { sessionRow, writeSession } from './session_store.ts'
@@ -53,7 +54,7 @@ let ioFor = (db: ReturnType<typeof open>): IO => ({
       : Promise.resolve([]),
   deps: (eids) => Promise.resolve(depsOf(db, eids)),
   write: (mutation, via) =>
-    Promise.resolve(mutate(db, mutation, undefined, via)),
+    Promise.resolve(mutationResult(mutate(db, mutation, undefined, via))),
   find: () => Promise.resolve([]),
   upload: () => Promise.resolve(),
   touch: () => Promise.resolve(),
@@ -408,6 +409,43 @@ slow(
       let landed = rows(snapshot(db)).find((row) => row.eid == eid)
       assertEquals(landed?.comps.doc?.title, 'batched')
       assertEquals(landed?.comps.task?.status, 'open')
+
+      let nested = await tasks.call('graph_apply', {
+        entities: [{
+          key: 'goal',
+          comps: {
+            doc: { title: 'nested' },
+            task: { status: 'open' },
+          },
+          deps: {
+            requires: {
+              key: 'step',
+              comps: {
+                doc: { title: 'nested step' },
+                task: { status: 'open' },
+              },
+            },
+          },
+        }],
+      })
+      assertEquals(nested.failed, false)
+      let report = JSON.parse(nested.output) as {
+        aliases: Record<string, string>
+      }
+      let nestedRows = rows(snapshot(db))
+      assertEquals(
+        nestedRows.find((row) => row.eid == report.aliases.goal)?.comps.doc
+          ?.title,
+        'nested',
+      )
+      assertEquals(
+        depsOf(db, [report.aliases.goal]),
+        [{
+          parent: report.aliases.goal,
+          child: report.aliases.step,
+          type: 'requires',
+        }],
+      )
 
       // Atomic means both-or-NEITHER: a later change apply() refuses (an
       // unparseable board query fails the whole batch) must roll the earlier

@@ -8,8 +8,8 @@ import { localQuery } from './graph_query.ts'
 import { CUT, elide, type IO, MCP_INSTRUCTIONS, mcpServer } from './mcp.ts'
 import { commandOut } from './commands.ts'
 import { sha } from './sha.ts'
-import { type Change, edges, statuses, uuid, verdicts } from './types.ts'
-import type { Mutation } from './mutation.ts'
+import { type Change, comps, edges, statuses, uuid, verdicts } from './types.ts'
+import { type Mutation, mutationResult } from './mutation.ts'
 import { slow } from './testing.ts'
 import { backfillChanges } from './backfill.ts'
 
@@ -328,7 +328,8 @@ let blank = (): IO => ({
   query: () => Promise.resolve([]),
   get: () => Promise.resolve([]),
   deps: () => Promise.resolve([]),
-  write: (mutation) => Promise.resolve(batch(mutation)),
+  write: (mutation) =>
+    Promise.resolve({ changes: batch(mutation), aliases: {} }),
   find: () => Promise.resolve([]),
   upload: () => Promise.resolve(),
   touch: () => Promise.resolve(),
@@ -354,7 +355,9 @@ let graph = () => {
         : Promise.resolve([]),
     deps: (eids) => Promise.resolve(depsOf(db, eids)),
     write: (mutation, via) =>
-      Promise.resolve(applyMutation(db, mutation, undefined, via)),
+      Promise.resolve(
+        mutationResult(applyMutation(db, mutation, undefined, via)),
+      ),
     find: () => Promise.resolve([]),
     upload: (eid, html) => {
       pages.set(eid, html)
@@ -654,6 +657,15 @@ Deno.test('MCP schemas document parameters and derive closed vocabularies', asyn
       byName(tools, 'graph_apply').description ?? '',
       new RegExp(edges.join('\\|')),
     )
+    let literal = prop(byName(tools, 'graph_apply'), 'entities')?.items
+    assertEquals(
+      Object.keys(field(literal, 'comps')?.properties ?? {}),
+      Object.keys(comps),
+    )
+    assertEquals(
+      Object.keys(field(literal, 'deps')?.properties ?? {}),
+      [...edges],
+    )
   })
 })
 
@@ -672,7 +684,7 @@ Deno.test('backfill reads locally and submits bounded ordinary writes', async ()
   io.write = (mutation, via) => {
     let changes = batch(mutation)
     writes.push({ changes, via })
-    return Promise.resolve(changes)
+    return Promise.resolve({ changes, aliases: {} })
   }
   await protocol(io, async (client) => {
     let out = await client.callTool({
@@ -1252,6 +1264,52 @@ Deno.test('graph_apply reports the authoritative effective batch', async () => {
         effective: 0,
         changes: [],
       })
+    })
+  } finally {
+    g.db.close()
+  }
+})
+
+Deno.test('graph_apply accepts nested literals and reports aliases', async () => {
+  let g = graph()
+  try {
+    await protocol(g.io, async (client) => {
+      let out = await client.callTool({
+        name: 'graph_apply',
+        arguments: {
+          entities: [{
+            key: 'goal',
+            comps: {
+              doc: { title: 'nested goal' },
+              task: { status: 'open' },
+            },
+            deps: {
+              requires: {
+                key: 'step',
+                comps: {
+                  doc: { title: 'nested step' },
+                  task: { status: 'open' },
+                },
+              },
+            },
+          }],
+        },
+      })
+      assertEquals(out.isError, undefined)
+      let result = JSON.parse(said(out)) as {
+        aliases: Record<string, string>
+        changes: Change[]
+      }
+      assertEquals(typeof result.aliases.goal, 'string')
+      assertEquals(typeof result.aliases.step, 'string')
+      assertEquals(
+        depsOf(g.db, [result.aliases.goal]),
+        [{
+          parent: result.aliases.goal,
+          child: result.aliases.step,
+          type: 'requires',
+        }],
+      )
     })
   } finally {
     g.db.close()

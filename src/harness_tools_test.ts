@@ -159,7 +159,7 @@ let empty: Snapshot = {
 slow(
   'Tasks tools expose typed primitives and inject Session identity',
   async () => {
-    let writes: { changes: Change[]; via?: string }[] = []
+    let writes: { mutation: Mutation; via?: string }[] = []
     let reads = 0, gets = 0
     let io: IO = {
       read: () => {
@@ -173,9 +173,14 @@ slow(
       },
       deps: () => Promise.resolve([]),
       write: (mutation: Mutation, via) => {
-        if (!Array.isArray(mutation)) throw new Error('expected change batch')
-        writes.push({ changes: mutation, via })
-        return Promise.resolve(mutation)
+        writes.push({ mutation, via })
+        let aliases: Record<string, string> = 'entities' in mutation
+          ? { note: 'nested-eid' }
+          : {}
+        return Promise.resolve({
+          changes: Array.isArray(mutation) ? mutation : [],
+          aliases,
+        })
       },
       find: () => Promise.resolve([]),
       upload: () => Promise.resolve(),
@@ -196,6 +201,11 @@ slow(
         tasks.tools.find((tool) => tool.name == 'graph_apply')!.strict,
         false,
       )
+      let applyProperties = tasks.tools.find((tool) =>
+        tool.name == 'graph_apply'
+      )!.parameters.properties as Record<string, unknown>
+      assertEquals('changes' in applyProperties, true)
+      assertEquals('entities' in applyProperties, true)
       assertEquals(
         Object.keys(
           tasks.tools.find((tool) => tool.name == 'task_context')!.parameters
@@ -223,7 +233,14 @@ slow(
         },
       ]
       await tasks.call('graph_apply', { changes: batch })
-      assertEquals(writes, [{ changes: batch, via: 'managed-session-1' }])
+      assertEquals(writes, [{ mutation: batch, via: 'managed-session-1' }])
+      let entities = [{ key: 'note', comps: { doc: { title: 'nested' } } }]
+      let nested = await tasks.call('graph_apply', { entities })
+      assertMatch(nested.output, /"note": "nested-eid"/)
+      assertEquals(writes.at(-1), {
+        mutation: { entities },
+        via: 'managed-session-1',
+      })
       // The old single-`change` shape and a non-array are refused at the door,
       // so a batch can never silently collapse to one change.
       await assertRejects(
@@ -234,7 +251,7 @@ slow(
       await assertRejects(
         () => tasks.call('graph_apply', { changes: batch[0] }),
         Error,
-        'non-empty array',
+        'exactly one non-empty',
       )
     } finally {
       await tasks.close?.()

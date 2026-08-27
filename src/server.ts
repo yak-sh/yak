@@ -13,7 +13,7 @@ import { takeBaton } from './baton.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
 import { capabilities, type Change, type Dep, idOf, kindOf } from './types.ts'
-import type { Mutation } from './mutation.ts'
+import { type Mutation, mutationResult } from './mutation.ts'
 import {
   apply,
   appPlane,
@@ -583,7 +583,7 @@ let graphIO: IO = {
   // deno-lint-ignore require-await
   write: async (mutation, via) => {
     if (appOnly) refuseWrite()
-    let out = mutate(db, mutation, fed(), via)
+    let out = mutationResult(mutate(db, mutation, fed(), via))
     feed.settle()
     return out
   },
@@ -1296,21 +1296,25 @@ let handle = async (req: Request) => {
         error,
       })
     return req.json().then((mutation: Mutation) => {
-      if (!Array.isArray(mutation)) {
+      if (!Array.isArray(mutation) && 'mutation' in mutation) {
         name = mutation?.mutation == 'undo' ? 'undo' : 'mutation'
       }
       // Attribution is an honesty header, not auth: the CLI names its
       // session in x-via (the instrument), apply resolves it to the actor
       // it acts for, and an anonymous post falls back to the box owner.
-      let out = mutate(
+      let out = mutationResult(mutate(
         db,
         mutation,
         fed(),
         req.headers.get('x-via'),
-      )
+      ))
       feed.settle()
       note(true)
-      return Response.json({ ok: true, changes: out })
+      return Response.json(
+        !Array.isArray(mutation) && 'entities' in mutation
+          ? { ok: true, ...out }
+          : { ok: true, changes: out.changes },
+      )
     }).catch((e) => {
       // The MESSAGE, not String(e) — a rejection is read by a person or
       // an agent, and `String(new Error(x))` prefixes a stray "Error:"

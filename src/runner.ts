@@ -225,15 +225,21 @@ let callShape = (
       }
     }
     if (name == 'graph_apply') {
-      exact(args, ['changes'])
+      exact(args, ['changes', 'entities'])
       let changes = args.changes
+      let entities = args.entities
+      let batch = changes ?? entities
       if (
-        !Array.isArray(changes) || !changes.length || !changes.every(object)
+        (changes == null) == (entities == null) ||
+        !Array.isArray(batch) || !batch.length || !batch.every(object)
       ) {
-        throw new Error('changes must be a non-empty array of changes')
+        throw new Error(
+          'graph_apply needs exactly one non-empty changes or entities array',
+        )
       }
+      let mutation = changes ?? { entities }
       return {
-        spec: { ...base, apply: { changes: json(changes) } },
+        spec: { ...base, apply: { changes: json(mutation) } },
         request: { name, args },
       }
     }
@@ -437,7 +443,8 @@ let callArgs = (row: EntryRow): Record<string, unknown> => {
   }
   if (row.comps.apply) {
     try {
-      return { changes: JSON.parse(String(row.comps.apply.changes)) }
+      let parsed = JSON.parse(String(row.comps.apply.changes))
+      return Array.isArray(parsed) ? { changes: parsed } : parsed
     } catch {
       return {}
     }
@@ -746,8 +753,12 @@ let requestOf = (row: EntryRow) => {
   let name = callName(row)
   if (name == 'tool') throw new Error('unsupported recorded tool')
   let args = callArgs(row)
-  if (name == 'graph_apply' && !Array.isArray(args.changes)) {
-    throw new Error('recorded graph change is malformed')
+  if (
+    name == 'graph_apply' &&
+    ((args.changes == null) == (args.entities == null) ||
+      !Array.isArray(args.changes ?? args.entities))
+  ) {
+    throw new Error('recorded graph application is malformed')
   }
   return { name, args }
 }

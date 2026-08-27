@@ -325,27 +325,24 @@ let taskDefinitions = (listed: Tool[]): ToolDefinition[] => {
       strict,
     }
   }
+  let publicSchema = (name: string) => {
+    let tool = byName.get(name)
+    if (!tool) throw new Error(`Tasks MCP tool unavailable: ${name}`)
+    let input = structuredClone(tool.inputSchema) as Record<string, unknown>
+    let properties = input.properties as Record<string, unknown> | undefined
+    if (properties) delete properties.session
+    let required = input.required as string[] | undefined
+    if (required) {
+      input.required = required.filter((field) => field != 'session')
+    }
+    return input
+  }
   return [
     make('task_context', schema({})),
     make('graph_query', schema({ query: { type: 'string' } }, ['query'])),
     make(
       'graph_apply',
-      schema({
-        changes: {
-          type: 'array',
-          minItems: 1,
-          items: {
-            type: 'object',
-            properties: {
-              eid: { type: 'string' },
-              name: { type: 'string' },
-              comp: { type: ['object', 'null'], additionalProperties: true },
-            },
-            required: ['eid', 'name', 'comp'],
-            additionalProperties: false,
-          },
-        },
-      }, ['changes']),
+      publicSchema('graph_apply'),
       false,
     ),
   ]
@@ -374,22 +371,27 @@ export let tasksTools = async (io: IO, session: string): Promise<ToolHost> => {
         args,
         name == 'task_context'
           ? []
-          : [name == 'graph_apply' ? 'changes' : 'query'],
+          : name == 'graph_apply'
+          ? ['changes', 'entities']
+          : ['query'],
       )
       let call = name == 'task_context'
         ? { name, arguments: { session: identity } }
         : name == 'graph_query'
         ? { name, arguments: { query: args.query } }
         : name == 'graph_apply'
-        ? { name, arguments: { changes: args.changes, session } }
+        ? { name, arguments: { ...args, session } }
         : undefined
       if (!call) throw new Error(`unknown Tasks tool: ${name}`)
+      let batch = args.changes ?? args.entities
       if (
         name == 'graph_apply' &&
-        (!Array.isArray(args.changes) || !args.changes.length ||
-          !args.changes.every(object))
+        ((args.changes == null) == (args.entities == null) ||
+          !Array.isArray(batch) || !batch.length || !batch.every(object))
       ) {
-        throw new Error('changes must be a non-empty array of changes')
+        throw new Error(
+          'graph_apply needs exactly one non-empty changes or entities array',
+        )
       }
       let result = await client.callTool(call) as CallToolResult
       return { output: resultText(result), failed: !!result.isError }

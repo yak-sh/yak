@@ -158,6 +158,44 @@ Deno.test('malformed and unsupported calls remain evidence and receive errors', 
   assertEquals(work.specs.every((spec) => !!spec.opaque), true)
 })
 
+Deno.test('nested graph applications survive durable call replay', async () => {
+  let entities = [{ key: 'note', comps: { doc: { title: 'nested' } } }]
+  let work = generationEntries(
+    result([{
+      type: 'function_call',
+      call_id: 'nested-1',
+      name: 'graph_apply',
+      arguments: JSON.stringify({ entities }),
+    }]),
+    'generation-1',
+  )
+  assertEquals(JSON.parse(String(work.specs[0].apply?.changes)), { entities })
+  let called: unknown
+  let tools: ToolHost = {
+    tools: [],
+    call: (_name, args) => {
+      called = args
+      return Promise.resolve({ output: 'ok' })
+    },
+  }
+  await executeCall(row('nested-call', 1, work.specs[0]), tools)
+  assertEquals(called, { entities })
+
+  let changes = [{ eid: 'flat', name: 'doc', comp: { title: 'flat' } }]
+  let flat = generationEntries(
+    result([{
+      type: 'function_call',
+      call_id: 'flat-1',
+      name: 'graph_apply',
+      arguments: JSON.stringify({ changes }),
+    }]),
+    'generation-2',
+  )
+  assertEquals(JSON.parse(String(flat.specs[0].apply?.changes)), changes)
+  await executeCall(row('flat-call', 1, flat.specs[0]), tools)
+  assertEquals(called, { changes })
+})
+
 Deno.test('refusals stay typed and replay their provider shape', () => {
   let work = generationEntries(
     result([{

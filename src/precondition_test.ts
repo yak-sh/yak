@@ -15,7 +15,7 @@
 
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { normalizeChanges } from './props.ts'
-import { derefChanges } from './client.ts'
+import { derefChanges, mutate as clientMutate } from './client.ts'
 import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -34,6 +34,7 @@ if (Deno.env.get('TASKS_SLOW')) {
   Deno.env.set('PORT', String(port))
   await import('./server.ts')
   U = `127.0.0.1:${port}`
+  Deno.env.set('TASKS_HOST', U)
 }
 let uid = () => crypto.randomUUID()
 let alone = { sanitizeOps: false, sanitizeResources: false }
@@ -120,7 +121,58 @@ slow(
     let { eid } = await stale()
     let ok = await post([{ eid, name: 'doc', comp: { body: 'CLOBBER' } }])
     assertEquals(ok.status, 200)
+    assertEquals(Object.keys(JSON.parse(ok.text)).sort(), ['changes', 'ok'])
     assertEquals(await stored(eid), 'CLOBBER')
+  },
+)
+
+slow(
+  'the headless client applies nested literals over HTTP',
+  alone,
+  async () => {
+    let flat = uid()
+    let effective = await clientMutate([{
+      eid: flat,
+      name: 'doc',
+      comp: { title: 'flat client', body: 'compatible' },
+    }])
+    assertEquals(Array.isArray(effective), true)
+    assertEquals(await stored(flat), 'compatible')
+
+    let out = await clientMutate({
+      entities: [{
+        key: 'note',
+        comps: { doc: { title: 'nested client', body: 'from client' } },
+      }],
+    })
+    assertEquals(await stored(out.aliases.note), 'from client')
+    assertEquals(
+      out.changes.some((c) => c.eid == out.aliases.note && c.name == 'doc'),
+      true,
+    )
+  },
+)
+
+slow(
+  'POST /apply accepts nested literals and returns aliases',
+  alone,
+  async () => {
+    let result = await postMutation({
+      entities: [{
+        key: 'note',
+        comps: { doc: { title: 'nested over HTTP', body: 'kept' } },
+      }],
+    })
+    assertEquals(result.status, 200)
+    let out = JSON.parse(result.text) as {
+      changes: { eid: string; name: string }[]
+      aliases: Record<string, string>
+    }
+    assertEquals(await stored(out.aliases.note), 'kept')
+    assertEquals(
+      out.changes.some((c) => c.eid == out.aliases.note && c.name == 'doc'),
+      true,
+    )
   },
 )
 
