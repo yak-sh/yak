@@ -314,6 +314,100 @@ fn journal_parity() {
     }
 }
 
+// --- app-plane rung 1 parity (D-22920) ---------------------------------------
+
+// One response header, lowercased-name lookup (ureq folds names to lower). Used
+// to hold the content-bearing routes' mime + cache-control byte-identical to
+// Deno — where the header is the contract (a css file, a no-cache theme).
+fn header(base: &str, path: &str, name: &str) -> Option<String> {
+    let url = format!("{base}{}", wire(path));
+    let r = ureq::get(&url).call().ok()?;
+    r.headers().get(name).and_then(|h| h.to_str().ok()).map(String::from)
+}
+
+fn same_header(ts: &str, br: &str, path: &str, name: &str) {
+    let a = header(ts, path, name);
+    let b = header(br, path, name);
+    assert_eq!(a, b, "header {name} differs for {path}");
+    eprintln!("ok  header {name} for {path} = {a:?}");
+}
+
+// The trivial graph-authority reads (D-22920 rung 1): `/capabilities`,
+// `/theme.css`, `/census`, `/integrity`, `/body`, `/resolve`, `/telemetry` —
+// each byte-identical to the Deno server over one shared copy. Body + status via
+// same(); the content-bearing routes' mime/cache headers via same_header().
+//
+// Documented divergence (consistent with the existing /query 400 route): a
+// plain-text error body (`/resolve` 400/404) rides axum's default
+// `content-type: text/plain; charset=utf-8`, where Deno's `new Response(text)`
+// emits the fetch-spec default `text/plain;charset=UTF-8`. The MIME is the same
+// (text/plain); only the charset spelling and header-name case differ, which are
+// HTTP-insignificant and outside the wire contract (which is body + status, plus
+// the mime of the content-bearing routes) — so the harness checks headers only
+// where they carry meaning.
+#[test]
+fn app_plane_parity() {
+    if write_mode() {
+        eprintln!("app_plane_parity: skipped (write mode)");
+        return;
+    }
+    let Some((ts, br)) = both() else {
+        eprintln!("app_plane_parity: skipped (set TS_URL and BRIDGE_URL)");
+        return;
+    };
+    let _serial = serial();
+
+    // static + graph-count reads
+    same(&ts, &br, "/capabilities");
+    same(&ts, &br, "/census");
+    same(&ts, &br, "/integrity");
+    // the user theme: body + the two headers that ARE its contract.
+    same(&ts, &br, "/theme.css");
+    same_header(&ts, &br, "/theme.css", "content-type");
+    same_header(&ts, &br, "/theme.css", "cache-control");
+    // JSON routes advertise application/json (Response.json), name and value.
+    same_header(&ts, &br, "/census", "content-type");
+
+    // telemetry: recent, the errors cohort, and the SQL-percentile stats.
+    same(&ts, &br, "/telemetry");
+    same(&ts, &br, "/telemetry?limit=30");
+    same(&ts, &br, "/telemetry?limit=200");
+    same(&ts, &br, "/telemetry?only=errors&limit=100");
+    same(&ts, &br, "/telemetry?stats=1");
+    same(&ts, &br, "/telemetry?stats=1&only=errors");
+
+    // resolve: every arm of resolveId's grammar, seeded from live ids, plus the
+    // 404 (no entity) — body AND status.
+    same(&ts, &br, "/resolve?id=T-2000000000"); // no entity → 404 "no entity"
+    for kind in ["project", "task", "design", "memory", "board"] {
+        if let Some(id) = an_id(&ts, kind) {
+            same(&ts, &br, &format!("/resolve?id={id}")); // prefixed num
+                                                          // the bare num behind the id
+            if let Some(num) = id.split('-').nth(1) {
+                same(&ts, &br, &format!("/resolve?id={num}"));
+            }
+        }
+        if let Some(eid) = an_eid(&ts, kind) {
+            same(&ts, &br, &format!("/resolve?id={eid}")); // full uuid
+            same(&ts, &br, &format!("/resolve?id={}", &eid[..8])); // short-eid prefix
+        }
+    }
+
+    // body: the deferred bodies for one eid, several eids, and the empty set.
+    same(&ts, &br, "/body");
+    same(&ts, &br, "/body?eids=");
+    let eids: Vec<String> =
+        ["task", "design", "memory", "project"].iter().filter_map(|k| an_eid(&ts, k)).collect();
+    if let Some(one) = eids.first() {
+        same(&ts, &br, &format!("/body?eids={one}"));
+    }
+    if eids.len() >= 2 {
+        same(&ts, &br, &format!("/body?eids={}", eids.join(",")));
+    }
+
+    eprintln!("\napp-plane rung 1 parity OK");
+}
+
 // --- WS parity ---------------------------------------------------------------
 
 // A minimal blocking WS client: HTTP upgrade, then read/write unmasked-agnostic

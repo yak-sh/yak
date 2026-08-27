@@ -29,7 +29,7 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use yak_bridge::subserve::Subserve;
-use yak_bridge::{journalr, read, snap};
+use yak_bridge::{appread, journalr, read, snap};
 use yak_kernel::{
     apply, default_gates, native_safe, parse_batch, ApplyOpts, Change, Store, WriteStore,
 };
@@ -113,6 +113,124 @@ async fn graph_route(State(app): State<App>) -> Response {
     .await
     .unwrap_or(serde_json::json!({ "db": app.db, "epoch": "", "pid": 0 }));
     json_response(&out)
+}
+
+// --- app-plane rung 1 routes (D-22920) ---------------------------------------
+//
+// Trivial graph-authority reads, each byte-parity with the Deno server. They
+// share the read handler shape: open a read-only Store in the blocking pool,
+// call the pure answerer in appread.rs, and shape the response like Deno's.
+
+// /capabilities — the advertised capability tokens (types.ts `capabilities`),
+// a build constant restated in snap.rs. The headless spawn door and the reload
+// gate's reachability probe read it.
+async fn capabilities_route() -> Response {
+    let v: Vec<&str> = snap::CAPABILITIES.to_vec();
+    json_response(&serde_json::json!(v))
+}
+
+// /theme.css — the user's theme stylesheet from their vault (~/.tasks/theme.css,
+// outside the repo). Absent is the NORMAL case: an empty stylesheet, never a 404
+// the log would cry about. no-cache so a save hot-swaps.
+async fn theme_css_route() -> Response {
+    let path = format!("{}/.tasks/theme.css", std::env::var("HOME").unwrap_or_default());
+    // A tiny vault file; a plain blocking read is cheaper than a fs-feature dep.
+    let css = std::fs::read_to_string(&path).unwrap_or_default();
+    (
+        [
+            (axum::http::header::CONTENT_TYPE, "text/css; charset=utf-8"),
+            (axum::http::header::CACHE_CONTROL, "no-cache"),
+        ],
+        css,
+    )
+        .into_response()
+}
+
+// /census — one COUNT per component table (db.ts componentCounts).
+async fn census_route(State(app): State<App>) -> Response {
+    read_json(&app, |store| Ok(appread::component_counts(store))).await
+}
+
+// /integrity — orphaned rows + dangling refs + vector state (db.ts scanAnomalies).
+async fn integrity_route(State(app): State<App>) -> Response {
+    read_json(&app, |store| Ok(appread::anomalies(store))).await
+}
+
+// /body — the deferred doc bodies for the `eids` set, as a Change batch.
+async fn body_route(State(app): State<App>, Query(p): Query<HashMap<String, String>>) -> Response {
+    let eids: Vec<String> = p
+        .get("eids")
+        .map(|s| s.split(',').filter(|x| !x.is_empty()).map(String::from).collect())
+        .unwrap_or_default();
+    read_json(&app, move |store| Ok(appread::bodies(store, &eids))).await
+}
+
+// /resolve — an id/num/uuid/short-eid/slug → {eid,num,kind}. 400 on an ambiguous
+// short-eid prefix (the typist's news), 404 for no such entity.
+async fn resolve_route(
+    State(app): State<App>,
+    Query(p): Query<HashMap<String, String>>,
+) -> Response {
+    let id = p.get("id").cloned().unwrap_or_default();
+    let uri = app.uri.clone();
+    let out = tokio::task::spawn_blocking(move || {
+        let store = open(&uri)?;
+        Ok::<_, String>(match appread::resolve_named(&store, &id) {
+            appread::Resolved::Found(v) => (200u16, Some(v), String::new()),
+            appread::Resolved::Ambiguous(msg) => (400, None, msg),
+            appread::Resolved::None => (404, None, "no entity".into()),
+        })
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("panic: {e}")));
+    match out {
+        Ok((200, Some(v), _)) => json_response(&v),
+        Ok((code, _, msg)) => (
+            axum::http::StatusCode::from_u16(code).unwrap_or(axum::http::StatusCode::BAD_REQUEST),
+            msg,
+        )
+            .into_response(),
+        Err(msg) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, msg).into_response(),
+    }
+}
+
+// /telemetry — the tool_call log: recent rows, or ?stats=1 for the latency
+// distribution. `?only=errors` screens both; `?since=`, `?limit=` page recent.
+async fn telemetry_route(
+    State(app): State<App>,
+    Query(p): Query<HashMap<String, String>>,
+) -> Response {
+    let since = p.get("since").cloned();
+    let only_errors = p.get("only").map(|s| s == "errors").unwrap_or(false);
+    let want_stats = p.get("stats").is_some_and(|s| !s.is_empty());
+    let limit = p.get("limit").and_then(|s| s.parse::<usize>().ok());
+    read_json(&app, move |store| {
+        Ok(if want_stats {
+            appread::telemetry_stats(store, since.as_deref(), only_errors)
+        } else {
+            appread::telemetry_recent(store, since.as_deref(), limit, only_errors)
+        })
+    })
+    .await
+}
+
+// The shared shape for a read route that answers JSON off a read-only Store: run
+// the answerer in the blocking pool, 500 on a store-open failure.
+async fn read_json<F>(app: &App, f: F) -> Response
+where
+    F: FnOnce(&Store) -> Result<serde_json::Value, String> + Send + 'static,
+{
+    let uri = app.uri.clone();
+    let out = tokio::task::spawn_blocking(move || {
+        let store = open(&uri)?;
+        f(&store)
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("panic: {e}")));
+    match out {
+        Ok(v) => json_response(&v),
+        Err(msg) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, msg).into_response(),
+    }
 }
 
 // POST /apply — the write door (D-22804). A native-safe batch (rung 4) COMMITS
@@ -496,6 +614,14 @@ async fn main() {
         .route("/graph", get(graph_route))
         .route("/apply", post(apply_route))
         .route("/ws", get(ws_route))
+        // app-plane rung 1 (D-22920): trivial graph-authority reads
+        .route("/capabilities", get(capabilities_route))
+        .route("/theme.css", get(theme_css_route))
+        .route("/census", get(census_route))
+        .route("/integrity", get(integrity_route))
+        .route("/body", get(body_route))
+        .route("/resolve", get(resolve_route))
+        .route("/telemetry", get(telemetry_route))
         .with_state(app);
 
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));

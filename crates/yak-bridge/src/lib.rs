@@ -3,6 +3,7 @@
 // server (D-22692 rung 1). The library exposes the pure answerers so the parity
 // harness can drive them directly; `main.rs` wraps them in axum + tokio.
 
+pub mod appread;
 pub mod deps;
 pub mod emit;
 pub mod journalr;

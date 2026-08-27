@@ -205,7 +205,62 @@ fn pct(sorted: &[f64], p: f64) -> f64 {
     } else {
         sorted[lo] + (rank - lo as f64) * (sorted[hi] - sorted[lo])
     };
-    (v * 10.0).round() / 10.0
+    round1(v)
+}
+
+// round(x, 1) as SQLite's own round() does it: round the TRUE stored value to
+// one decimal, ties AWAY from zero. NOT `(x*10).round()/10` — the ×10 corrupts
+// the boundary, floating 107.44999999999999 (just under .45, so → 107.4) up to
+// exactly 1074.5, a fabricated tie that rounds away to 107.5. SQLite formats the
+// double to its EXACT decimal and rounds that; we mirror it with a high-precision
+// format (which spells the true value, not the shortest round-trip — the shortest
+// form prints 9.95 for a stored 9.9499…, and SQLite rounds that DOWN to 9.9),
+// then decide on the hundredths digit: `>= 5` rounds the tenths up, so a genuine
+// tie (2615.25 → 2615.3) rounds away while a value just under the midpoint
+// (9.9499… → 9.9, 107.4499… → 107.4) rounds down. Forty places is far more than
+// any f64 in the ms range needs to sit off a two-decimal midpoint.
+fn round1(v: f64) -> f64 {
+    if !v.is_finite() {
+        return v;
+    }
+    let neg = v.is_sign_negative();
+    let s = format!("{:.40}", v.abs());
+    let (int_part, frac) = s.split_once('.').unwrap_or((s.as_str(), ""));
+    let mut digits: Vec<u8> = int_part.bytes().map(|b| b - b'0').collect();
+    let d1 = frac.as_bytes().first().map(|b| b - b'0').unwrap_or(0);
+    // The hundredths digit decides: the remainder past the tenths is >= 0.5
+    // exactly when it is >= 5, and a tie (a lone trailing 5) rounds away — up.
+    let d2 = frac.as_bytes().get(1).map(|b| b - b'0').unwrap_or(0);
+    let round_up = d2 >= 5;
+    let mut tenths = d1;
+    if round_up {
+        tenths += 1;
+        if tenths == 10 {
+            tenths = 0;
+            // carry through the integer digits
+            let mut i = digits.len();
+            loop {
+                if i == 0 {
+                    digits.insert(0, 1);
+                    break;
+                }
+                i -= 1;
+                if digits[i] == 9 {
+                    digits[i] = 0;
+                } else {
+                    digits[i] += 1;
+                    break;
+                }
+            }
+        }
+    }
+    let int_str: String = digits.iter().map(|d| (d + b'0') as char).collect();
+    let out: f64 = format!("{int_str}.{tenths}").parse().unwrap_or(v.abs());
+    if neg {
+        -out
+    } else {
+        out
+    }
 }
 
 pub fn stats(store: &Store, since: Option<&str>, only_errors: bool) -> Vec<Stat> {
@@ -270,7 +325,29 @@ mod tests {
     fn percentile_interpolates_like_sql() {
         let v = [1.0, 2.0, 3.0, 4.0];
         assert_eq!(pct(&v, 0.5), 2.5);
-        assert_eq!(pct(&v, 0.95), 3.9);
+        // percentile_cont here interpolates to 3.8499999999999996 (just under
+        // 3.85) — SQLite's round(x,1) yields 3.8, NOT 3.9. The old `(v*10).round`
+        // path returned 3.9 because 3.8499999999999996 * 10.0 floats up to
+        // exactly 38.5, a fabricated tie; round1 rounds the true value like the
+        // SQL, so this now matches what `select round(percentile_cont(ms,0.95),1)`
+        // returns on [1,2,3,4].
+        assert_eq!(pct(&v, 0.95), 3.8);
+    }
+
+    #[test]
+    fn round1_matches_sqlite_round_at_boundaries() {
+        // Each value verified against `select round(x,1)` in SQLite. Ties away
+        // from zero, decided on the TRUE value (never a ×10 product), so a stored
+        // 9.9499… (shortest form "9.95") rounds DOWN to 9.9, as the SQL does.
+        assert_eq!(round1(2615.25), 2615.3); // exact tie → away (up)
+        assert_eq!(round1(107.44999999999999), 107.4); // just under .45 → down
+        assert_eq!(round1(3.8499999999999996), 3.8); // just under .85 → down
+        assert_eq!(round1(9.95), 9.9); // stored just under .95 → down
+        assert_eq!(round1(0.35), 0.3); // stored just under .35 → down
+        assert_eq!(round1(1.05), 1.1); // stored just over .05 → up
+        assert_eq!(round1(164.0), 164.0); // integer-valued
+        assert_eq!(round1(539.5), 539.5); // one decimal already
+        assert_eq!(round1(9.99), 10.0); // carry through the integer part
     }
 
     #[test]
