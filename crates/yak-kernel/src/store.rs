@@ -646,6 +646,98 @@ impl Store {
         })
     }
 
+    // Every edge incident to a SET of entities, both directions, screened to the
+    // EAGER graph — a lazy endpoint's edge is dropped, because a client never
+    // holds a lazy entity and the triple would dangle (db.ts incident(eids,
+    // eagerOnly=true), the `.edges!` rider's eagerDeps). Ordered parent.eid,
+    // type, ord, child.eid; ord is dropped from the Dep (shedOrd). NO quarantine
+    // screen: incident() carries none — the deps=1 ROUTE screens quarantine in a
+    // separate localDeps layer, but the RIDER delivers every incident triple,
+    // quarantined endpoints included (a quarantined card's `about` edge to a live
+    // project rides). The synthetic persona `reads` edges (homeReads) are appended
+    // by the caller (deps::eager_deps).
+    pub fn incident_eager(&self, eids: &[String]) -> Vec<Dep> {
+        if eids.is_empty() {
+            return vec![];
+        }
+        if self
+            .conn
+            .execute_batch(
+                "create temp table if not exists hit (eid text primary key); \
+                 delete from hit;",
+            )
+            .is_err()
+        {
+            return vec![];
+        }
+        {
+            let Ok(mut put) =
+                self.conn.prepare("insert or ignore into hit (eid) values (?1)")
+            else {
+                return vec![];
+            };
+            for e in eids {
+                let _ = put.execute([e]);
+            }
+        }
+        // Today the only lazy partition is `entry` (db.ts lazyTables); screen an
+        // endpoint that wears it, exactly as notLazy() does, when the table exists.
+        let lazy = if self.has_table("entry") {
+            " and not exists (select 1 from entry lz where lz.entity = d.parent) \
+              and not exists (select 1 from entry lz where lz.entity = d.child)"
+        } else {
+            ""
+        };
+        let mine = "in (select e.id from entity e where e.eid in (select eid from hit))";
+        let sql = format!(
+            "select p.eid, d.type, c.eid from dependency d \
+             join entity p on p.id = d.parent \
+             join entity c on c.id = d.child \
+             where (d.parent {mine} or d.child {mine}){lazy} \
+             order by p.eid, d.type, d.ord, c.eid"
+        );
+        collect(&self.conn, &sql, [], |r| {
+            Ok(Dep { parent: r.get(0)?, type_: r.get(1)?, child: r.get(2)? })
+        })
+    }
+
+    // The (persona, home) pairs whose persona OR home is in a SET — homeReads'
+    // input for the edges rider, persona table order (db.ts homes with a set
+    // WHERE). `home` is None for a fleet-shared persona.
+    pub fn homes_for(&self, eids: &[String]) -> Vec<(String, Option<String>)> {
+        if eids.is_empty() || !self.has_table("persona") {
+            return vec![];
+        }
+        if self
+            .conn
+            .execute_batch(
+                "create temp table if not exists hit (eid text primary key); \
+                 delete from hit;",
+            )
+            .is_err()
+        {
+            return vec![];
+        }
+        {
+            let Ok(mut put) =
+                self.conn.prepare("insert or ignore into hit (eid) values (?1)")
+            else {
+                return vec![];
+            };
+            for e in eids {
+                let _ = put.execute([e]);
+            }
+        }
+        let sql = "select o.eid, h.eid from persona t \
+                   join entity o on o.id = t.entity \
+                   left join entity h on h.id = t.home \
+                   where o.eid in (select eid from hit) \
+                      or h.eid in (select eid from hit)";
+        collect(&self.conn, sql, [], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?))
+        })
+    }
+
     // The bounded transitive closure `.reaches[type,<=N]=id` selects: the eids
     // that reach `target` through at most `depth` edges of one type, walking
     // child→parent so every step is a `dependency_child` seek. The target itself

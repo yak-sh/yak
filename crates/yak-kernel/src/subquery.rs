@@ -11,14 +11,14 @@
 // SCOPE (the rung this crate is at): the filter grammar is query.rs's list/show
 // SUBSET, so a sub filter is kind-anchored (`.kind=task&…`) or component-presence
 // anchored (`.canvas!`) — the candidate set the JS matcher then refines. The
-// `.fields` projection and the `.reaches` bounded traversal ride beside that
-// filter (T-22756). Path hops, reverse hops, the `.edges` rider and the lazy
+// `.fields` projection, the `.reaches` bounded traversal, and the `.edges!`
+// rider ride beside that filter (T-22756). Path hops, reverse hops and the lazy
 // entry partition are the grammar this rung still refuses, so a sub naming one
 // is REFUSED here rather than half-answered — the same loud boundary the /query
 // door draws, and the standing follow-up (see parse_query_line's Err arms).
 
 use crate::model::Row;
-use crate::query::{self, Ctx, Dot, Field, Pred, Reach};
+use crate::query::{self, Ctx, Dot, Field, Hop, Pred, Reach};
 use crate::store::{visible, Store};
 use crate::vocab::{vocab, PropType};
 use std::collections::{HashMap, HashSet};
@@ -53,6 +53,11 @@ pub struct Parsed {
     // beyond its eid (`.fields=pin.x,pin.z~`). `Some(vec![])` is the eids-only
     // form (`.fields=eid`); None is a plain membership sub carrying whole comps.
     pub fields: Option<Vec<Field>>,
+    // The EDGES RIDER (query.ts edgeRider): `.edges!` asks a sub to also deliver
+    // the dep triples INCIDENT to its members; `.edges.peers=status,title` names
+    // the far endpoint's columns to project beside them. `Some(vec![])` is a bare
+    // `.edges!`; None is a sub that asked for no edges.
+    pub edges: Option<Vec<Hop>>,
     // An empty query SELECTS NOTHING (query.ts NEVER): a blank sub answers the
     // empty set cheaply, never the whole graph.
     pub never: bool,
@@ -268,9 +273,34 @@ pub fn parse_query_line(line: &str) -> Result<Parsed, String> {
             out.preds.push(parse_reaches(rest)?);
             continue;
         }
-        // Riders this rung refuses loudly (the standing follow-up, T-22747):
+        // `.edges!` / `.edges.peers=status,title` — the RIDER (query.ts
+        // edgeRider): deliver the dep triples incident to whatever the other
+        // preds select, and optionally the far endpoint's named columns beside
+        // them. Each peer column routes like a bare prop (or explicit
+        // `task.status`); a path is refused — a peer projection reads one
+        // entity's own columns.
+        if seg == ".edges!" {
+            out.edges = Some(vec![]);
+            continue;
+        }
+        if let Some(v) = seg.strip_prefix(".edges.peers=") {
+            if v.is_empty() {
+                return Err(".edges.peers names columns: .edges.peers=status,title".into());
+            }
+            let mut peers = vec![];
+            for part in v.split(',') {
+                let (comp, prop) = route_col(part)?;
+                peers.push(Hop { comp, prop });
+            }
+            out.edges = Some(peers);
+            continue;
+        }
         if seg.starts_with(".edges") {
-            return Err("the .edges rider is not ported in this rung".into());
+            return Err(
+                ".edges rides a query (.edges!) and may project the far endpoint \
+                 (.edges.peers=status,title)"
+                    .into(),
+            );
         }
         // A plain filter token — dot_token refuses path/reverse hops, so those
         // reach the same loud boundary here.
@@ -514,12 +544,27 @@ mod tests {
     #[test]
     fn unported_grammar_is_refused_loudly() {
         for line in [
-            ".kind=task&.edges!",
-            ".comment.target.doc.title~=x",
-            "some text term",
+            ".comment.target.doc.title~=x", // path hop
+            "some text term",               // bare text (FTS)
         ] {
             assert!(parse_query_line(line).is_err(), "should refuse: {line}");
         }
+    }
+
+    #[test]
+    fn parses_edges_rider() {
+        // a bare rider: an empty peer projection, but the rider IS present
+        let bare = parse_query_line(".kind=board&.edges!").unwrap();
+        assert_eq!(bare.edges, Some(vec![]));
+        // a peer projection routes each column like a bare prop
+        let peers = parse_query_line(".kind=board&.edges.peers=title,status").unwrap();
+        let hops = peers.edges.unwrap();
+        assert_eq!(hops.len(), 2);
+        assert_eq!((hops[0].comp.as_str(), hops[0].prop.as_str()), ("doc", "title"));
+        assert_eq!((hops[1].comp.as_str(), hops[1].prop.as_str()), ("task", "status"));
+        // `.edges` with no `!` or `.peers=` is refused
+        assert!(parse_query_line(".kind=board&.edges").is_err());
+        assert!(parse_query_line(".kind=board&.edges.peers=").is_err());
     }
 
     #[test]

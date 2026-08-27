@@ -31,6 +31,15 @@ pub struct Pred {
     pub reach: Option<Reach>,
 }
 
+// One rung of a path/projection (query.ts Hop): a component column. The
+// `.edges.peers=` rider reads it on a far endpoint; `.fields` reads it on a
+// member. comp/prop, nothing more.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Hop {
+    pub comp: String,
+    pub prop: String,
+}
+
 // One projected column (query.ts Field): which component column a subscription
 // result row carries beyond its eid, and whether a change to it WAKES the sub.
 // `wake: false` (a `~`-suffixed field) is VOLATILE — its value still rides in

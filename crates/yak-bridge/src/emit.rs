@@ -29,7 +29,7 @@ use yak_kernel::{Dep, Row};
 // integer-valued real. Normalize on the way out: a float with no fractional
 // part and within the exact-integer range becomes an integer, matching JS; a
 // genuine fraction (a camera's 1.5) is untouched.
-fn js_num(v: Value) -> Value {
+pub fn js_num(v: Value) -> Value {
     match &v {
         Value::Number(n) => {
             if let Some(f) = n.as_f64() {

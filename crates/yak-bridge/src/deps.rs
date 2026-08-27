@@ -63,3 +63,28 @@ pub fn deps_of(store: &Store, eid: &str) -> Vec<Dep> {
     }
     out
 }
+
+// The `.edges!` rider's incident set for a MEMBER set (db.ts eagerDeps =
+// incident(eids, eagerOnly=true)): the incident edges screened to the eager
+// graph (store.incident_eager) then the synthetic persona `reads` edges
+// (homeReads) over the set's homes, deduped against a contains/reads edge that
+// already exists. NO quarantine screen — incident()+homeReads carry none (unlike
+// the deps=1 route's localDeps), so the rider delivers every incident triple,
+// quarantined endpoints included. Byte-for-byte incident(eids, eagerOnly=true).
+pub fn eager_deps(store: &Store, eids: &[String]) -> Vec<Dep> {
+    let incident = store.incident_eager(eids);
+    let mut out = incident.clone();
+    for (persona, home) in store.homes_for(eids) {
+        let Some(home) = home else { continue };
+        let dup = incident.iter().any(|d| {
+            d.parent == home
+                && d.child == persona
+                && (d.type_ == "contains" || d.type_ == "reads")
+        });
+        if dup {
+            continue;
+        }
+        out.push(Dep { parent: home, type_: "reads".into(), child: persona });
+    }
+    out
+}

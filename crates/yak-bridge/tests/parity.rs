@@ -9,9 +9,14 @@
 //
 //   1. copy the live graph read-only:
 //        sqlite3 'file:$HOME/.tasks/tasks.db?mode=ro' "VACUUM INTO '/tmp/probe.db'"
-//   2. boot a probe Deno server on the copy, EFFECTS OFF:
-//        TASKS_EFFECTS=daemon PORT=5271 DB_PATH=/tmp/probe.db \
+//   2. boot a probe Deno server on the copy, EFFECTS OFF and EMBED OFF:
+//        TASKS_EFFECTS=daemon TASKS_EMBED=0 PORT=5271 DB_PATH=/tmp/probe.db \
 //          deno run -A --unstable-net --unstable-worker-options src/server.ts
+//      TASKS_EMBED=0 is load-bearing for the WS tests alongside effects-off: the
+//      embed sweep WRITES embedding columns on a timer, advancing the probe's
+//      journal minutes into a run and drifting the TS WS `cursor` ahead of the
+//      read-only bridge — the same T-22790 cursor artifact require_quiescent
+//      guards, surfacing only once the sweep first fires (T-22756).
 //   3. boot the bridge on the SAME copy, a different port:
 //        yak-bridge --db /tmp/probe.db --port 5272
 //   4. run:  TS_URL=http://127.0.0.1:5271 BRIDGE_URL=http://127.0.0.1:5272 \
@@ -584,6 +589,13 @@ fn ws_sub_parity() {
         // Set lookup, resolved once per pass from the recursive CTE.
         ("r-reach", ".kind=task&.reaches[requires,<=3]=T-22548"),
         ("r-reach1", ".kind=task&.reaches[requires,<=1]=T-22548"),
+        // EDGES rider (T-22756): the dep triples incident to the member set ride
+        // beside the rows (`.edges!`), and `.edges.peers=` projects the far
+        // endpoint's named columns — a bare rider and a peer-projecting one, over
+        // a small kind whose members carry incident edges (boards, projects).
+        ("e-board", ".kind=board&.edges!"),
+        ("e-project", ".kind=project&.edges!"),
+        ("e-peers", ".kind=board&.edges.peers=title"),
     ];
     for (name, q) in cases {
         same_sub(&mut ts_ws, &mut br_ws, name, q);
@@ -740,6 +752,45 @@ fn ws_sub_parity() {
         same_sub_delta(&mut ts_rm, &mut br_rm, "rm", "unlink (reach remove)");
         apply(&ts, &format!("[{{\"eid\":\"{reid}\",\"name\":\"entity\",\"comp\":null}}]"));
         same_sub_delta(&mut ts_rm, &mut br_rm, "rm", "delete (both silent)");
+    }
+
+    // --- EDGES rider MAINTAIN parity (T-22756) -------------------------------
+    // A `.kind=task&.title~=<marker>&.edges.peers=title` sub: a new marker task
+    // ADDs (rider silent, no edges yet); LINKING it `requires` a live task adds
+    // the incident edge and projects the far endpoint's title (a held peer);
+    // UNLINKING withdraws the edge and unpeers; deleting the member forwards
+    // entity-null. Composes membership, the incident set, and the peer projection.
+    if let Some(peer) = an_id(&ts, "task") {
+        let mut ts_em = joined_ws(&ts);
+        let mut br_em = joined_ws(&br);
+        let emark = format!("zqemark{}", &uuid_v4()[..8]);
+        same_sub(&mut ts_em, &mut br_em, "em", &format!(".kind=task&.title~={emark}&.edges.peers=title"));
+        let aid = uuid_v4();
+        apply(
+            &ts,
+            &format!(
+                "[{{\"eid\":\"{aid}\",\"name\":\"doc\",\"comp\":{{\"title\":\"{emark} a\"}}}},\
+                  {{\"eid\":\"{aid}\",\"name\":\"task\",\"comp\":{{\"status\":\"open\"}}}}]"
+            ),
+        );
+        same_sub_delta(&mut ts_em, &mut br_em, "em", "create member (add, rider silent)");
+        let peer_eid = eid_of_id(&ts, &peer).expect("peer eid");
+        apply(
+            &ts,
+            &format!(
+                "[{{\"eid\":\"{aid}\",\"name\":\"dependency\",\"comp\":{{\"type\":\"requires\",\"child\":\"{peer_eid}\"}}}}]"
+            ),
+        );
+        same_sub_delta(&mut ts_em, &mut br_em, "em", "link requires (edge + peer projection)");
+        apply(
+            &ts,
+            &format!(
+                "[{{\"eid\":\"{aid}\",\"name\":\"dependency\",\"comp\":{{\"type\":\"requires\",\"child\":\"{peer_eid}\",\"gone\":true}}}}]"
+            ),
+        );
+        same_sub_delta(&mut ts_em, &mut br_em, "em", "unlink (unedge + unpeer)");
+        apply(&ts, &format!("[{{\"eid\":\"{aid}\",\"name\":\"entity\",\"comp\":null}}]"));
+        same_sub_delta(&mut ts_em, &mut br_em, "em", "delete member (dead)");
     }
 
     eprintln!("\nWS subscription parity OK");

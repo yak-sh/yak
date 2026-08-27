@@ -19,24 +19,25 @@
 //     ships the diff. A moving-time sub re-tests its members on each tick.
 //
 // SCOPE (this rung): the membership/window/aggregate/route subscription kinds
-// over query.rs's list/show grammar subset, PLUS the `.fields` projection and
-// the `.reaches` bounded traversal (T-22756: projected payloads + a stated
-// projection; a depth-capped closure the matcher tests with a Set lookup). The
-// `.edges` rider, the lazy `entries:` partition and path/reverse-hop sub filters
-// are still refused loudly by parse_query_line (the standing follow-up), never
-// half-served.
+// over query.rs's list/show grammar subset, PLUS (T-22756) the `.fields`
+// projection, the `.reaches` bounded traversal, and the `.edges!` rider —
+// incident dep triples + `.edges.peers=` far-endpoint projection, composed with
+// membership and window maintenance (riderOpen/riderDelta/peerPayload/outside).
+// The lazy `entries:` partition and path/reverse-hop sub filters are still
+// refused loudly by parse_query_line (the standing follow-up), never half-served.
 
-use crate::emit::entity_changes;
+use crate::deps::eager_deps;
+use crate::emit::{change_comp, dep_to_wire, entity_changes, js_num};
 use crate::{live, snap};
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc::UnboundedSender;
 use yak_kernel::change::Change;
 use yak_kernel::feed::{cursor_of, data_version, journal_since, row_changes};
-use yak_kernel::query::{self, Ctx, Field, Pred};
+use yak_kernel::query::{self, Ctx, Field, Hop, Pred};
 use yak_kernel::subquery::{eval_agg, eval_sub, moving, parse_query_line, reach_sets, Parsed, SUB_CAP};
 use yak_kernel::vocab::{vocab, PropType};
-use yak_kernel::Store;
+use yak_kernel::{Dep, Store};
 
 type Send = UnboundedSender<String>;
 
@@ -54,6 +55,18 @@ struct Sub {
     win_total: Option<i64>, // the total the window is a prefix of, restated on change
     agg: Option<Vec<(String, i64)>>, // an aggregate's standing value→count answer
     moving: bool,
+    edges: Option<Rider>, // the .edges! rider: incident dep triples + peer projection
+}
+
+// The `.edges!` rider's standing state (subserve.ts Rider). `keys` is the
+// incident set this client currently holds (insertion-ordered like a JS Map, so
+// a delta's `want`/`unpeers` order matches); `held` the far endpoints whose
+// projected columns rode along (insertion-ordered like the JS Set outside()
+// builds), remembered so a later write to one re-projects.
+struct Rider {
+    peers: Vec<Hop>,
+    keys: Vec<(String, Dep)>,
+    held: Vec<String>,
 }
 
 pub struct Subserve {
@@ -172,8 +185,9 @@ impl Subserve {
                 win_total: None,
                 agg: None,
                 moving: false,
+                edges: None,
             });
-            return Ok(reply_frame(name, changes, vec![], cursor, shadow, None, None));
+            return Ok(reply_frame(name, changes, vec![], cursor, shadow, None, None, None));
         }
         if name.starts_with("entries:") {
             return Err("the entries: partition sub is not ported in this rung".into());
@@ -199,6 +213,7 @@ impl Subserve {
                 win_total: None,
                 agg: Some(counts),
                 moving: moving_time,
+                edges: None,
             });
             return Ok(frame);
         }
@@ -213,6 +228,17 @@ impl Subserve {
             changes.extend(carry(bodies, fields.as_deref(), entity_changes(r)));
         }
         let win_total = answer.window.as_ref().and_then(|(_, t)| *t);
+        // Open the edges rider over the member set, if the query asked for one:
+        // its first frame carries THIS query's incident edges and their far-side
+        // projection, and seeds the state every later delta speaks from.
+        let (edges_state, ride_frame) = match parsed.edges.clone() {
+            Some(peers) => {
+                let (rider, deps, peer_changes) =
+                    rider_open(store, peers, &members);
+                (Some(rider), Some((deps, peer_changes)))
+            }
+            None => (None, None),
+        };
         self.subs.push(Sub {
             name: name.into(),
             parsed,
@@ -225,8 +251,18 @@ impl Subserve {
             win_total,
             agg: None,
             moving: moving_time,
+            edges: edges_state,
         });
-        Ok(reply_frame(name, changes, vec![], cursor, shadow, answer.window, fields.as_deref()))
+        Ok(reply_frame(
+            name,
+            changes,
+            vec![],
+            cursor,
+            shadow,
+            answer.window,
+            fields.as_deref(),
+            ride_frame,
+        ))
     }
 
     // Poll the journal for foreign commits and fold each committed row into
@@ -310,18 +346,22 @@ impl Subserve {
                 let next: HashSet<String> =
                     answer.hits.iter().map(|r| r.eid.clone()).collect();
                 let mut changes: Vec<Value> = vec![];
+                let mut entered: Vec<String> = vec![];
                 for r in &answer.hits {
                     if !sub.members.contains(&r.eid) {
                         changes.extend(carry(sub.bodies, sub.fields.as_deref(), entity_changes(r)));
+                        entered.push(r.eid.clone());
                     } else if let Some(p) = patch.get(&r.eid) {
                         changes.extend(carry(sub.bodies, sub.fields.as_deref(), p.clone()));
                     }
                 }
                 let mut drop: Vec<String> = vec![];
+                let mut left = false;
                 for eid in &sub.members {
                     if next.contains(eid) {
                         continue;
                     }
+                    left = true;
                     if gone.contains(eid) {
                         changes.push(entity_null(eid));
                     } else {
@@ -334,9 +374,20 @@ impl Subserve {
                     .unwrap_or((sub.parsed.win.limit.unwrap_or(SUB_CAP), Some(answer.hits.len() as i64)));
                 let moved = total != sub.win_total;
                 sub.win_total = total;
-                if !changes.is_empty() || !drop.is_empty() || moved {
+                // A window and a rider compose: the members are a bounded prefix,
+                // and the edges are the ones incident to THAT prefix — a row
+                // scrolling out takes its edges exactly as a departure does.
+                let mut rider = sub.edges.take();
+                let rd = rider.as_mut().map(|r| {
+                    rider_delta(store, r, &sub.members, &entered, left, &gone, batch, &touched)
+                });
+                sub.edges = rider;
+                let rode = rd.as_ref().map(rider_moved).unwrap_or(false);
+                if !changes.is_empty() || !drop.is_empty() || moved || rode {
+                    let ride = rd.filter(rider_moved);
                     let _ = tx.send(
-                        window_delta(&sub.name, changes, drop, cur, (limit, total)).to_string(),
+                        window_delta(&sub.name, changes, drop, cur, (limit, total), ride.as_ref())
+                            .to_string(),
                     );
                 }
                 continue;
@@ -349,6 +400,7 @@ impl Subserve {
             let ctx = Ctx { reaches: Some(&reaches) };
             let mut changes: Vec<Value> = vec![];
             let mut drop: Vec<String> = vec![];
+            let mut entered: Vec<String> = vec![];
             for eid in &touched {
                 // store.row already screens a quarantined/tombstoned entity to
                 // None; `gone` is the batch's own entity-null.
@@ -386,6 +438,7 @@ impl Subserve {
                         changes.extend(carry(sub.bodies, sub.fields.as_deref(), patch.get(eid).cloned().unwrap_or_default()));
                     } else {
                         sub.members.insert(eid.clone());
+                        entered.push(eid.clone());
                         changes.extend(carry(sub.bodies, sub.fields.as_deref(), entity_changes(row.as_ref().unwrap())));
                     }
                 } else if was {
@@ -393,8 +446,17 @@ impl Subserve {
                     drop.push(eid.clone());
                 }
             }
-            if !changes.is_empty() || !drop.is_empty() {
-                let _ = tx.send(delta_frame(&sub.name, changes, drop, cur).to_string());
+            // The rider composes with membership: an entered member brings its
+            // edges, a departed one takes the edges no member holds (subserve.ts).
+            let mut rider = sub.edges.take();
+            let rd = rider.as_mut().map(|r| {
+                rider_delta(store, r, &sub.members, &entered, !drop.is_empty(), &gone, batch, &touched)
+            });
+            sub.edges = rider;
+            let rode = rd.as_ref().map(rider_moved).unwrap_or(false);
+            if !changes.is_empty() || !drop.is_empty() || rode {
+                let ride = rd.filter(rider_moved);
+                let _ = tx.send(delta_frame(&sub.name, changes, drop, cur, ride.as_ref()).to_string());
             }
         }
     }
@@ -442,7 +504,9 @@ impl Subserve {
                 }
             }
             if !changes.is_empty() || !drop.is_empty() {
-                let _ = tx.send(delta_frame(&sub.name, changes, drop, cur).to_string());
+                // aged() drops moving members only; the rider does not re-fire on
+                // the clock (subserve.ts aged carries no ride).
+                let _ = tx.send(delta_frame(&sub.name, changes, drop, cur, None).to_string());
             }
         }
     }
@@ -499,6 +563,242 @@ fn projected(fields: &[Field], changes: Vec<Value>) -> Vec<Value> {
         out.push(nc);
     }
     out
+}
+
+// --- the .edges! rider (subserve.ts) -----------------------------------------
+
+// An edge's identity is its whole sentence — a triple has no row key (subserve.ts
+// depKey).
+fn dep_key(d: &Dep) -> String {
+    format!("{}\0{}\0{}", d.parent, d.type_, d.child)
+}
+
+// The far endpoints a set of edges names that the member set does not hold
+// (subserve.ts outside) — insertion-ordered and unique, the JS Set's order.
+fn outside(deps: &[Dep], members: &HashSet<String>) -> Vec<String> {
+    let mut out = vec![];
+    let mut seen = HashSet::new();
+    for d in deps {
+        for e in [&d.parent, &d.child] {
+            if !members.contains(e) && seen.insert(e.clone()) {
+                out.push(e.clone());
+            }
+        }
+    }
+    out
+}
+
+// A peer row cut to its PROJECTION (subserve.ts peerPayload): the spine (so the
+// client can name it) + its kind comp (so kindOf resolves) + the `.edges.peers=`
+// columns and nothing else — never a body. One batched read for the whole set.
+// The comp values are RAW (js_num'd), NOT the eager change shape: entity is
+// `{eid,num}`, the kind comp is `{}`, a peer hop comp is `{prop: v, …}`.
+fn peer_payload(store: &Store, peers: &[Hop], eids: &[String]) -> Vec<Value> {
+    if eids.is_empty() || peers.is_empty() {
+        return vec![];
+    }
+    let mut out = vec![];
+    for row in store.rows_of(eids) {
+        let Some(Value::Object(entity)) = row.comps.get("entity") else {
+            continue;
+        };
+        out.push(change_of(&row.eid, "entity", change_comp(&row.eid, "entity", entity)));
+        // picked, insertion-ordered: the kind comp first (empty), then each peer
+        // comp — a hop on the kind comp merges into the same {} entry.
+        let mut order: Vec<String> = vec![];
+        let mut picked: HashMap<String, Map<String, Value>> = HashMap::new();
+        if let Some(kind) =
+            vocab().kind_order.iter().find(|c| row.comps.contains_key(*c))
+        {
+            order.push(kind.clone());
+            picked.insert(kind.clone(), Map::new());
+        }
+        for h in peers {
+            let v = row.comps.get(&h.comp).and_then(|c| c.get(&h.prop));
+            let Some(v) = v.filter(|v| !v.is_null()) else { continue };
+            if !picked.contains_key(&h.comp) {
+                order.push(h.comp.clone());
+                picked.insert(h.comp.clone(), Map::new());
+            }
+            picked
+                .get_mut(&h.comp)
+                .unwrap()
+                .insert(h.prop.clone(), js_num(v.clone()));
+        }
+        for name in &order {
+            let comp = picked.remove(name).unwrap();
+            out.push(change_of(&row.eid, name, Value::Object(comp)));
+        }
+    }
+    out
+}
+
+// A `{eid, name, comp}` change value.
+fn change_of(eid: &str, name: &str, comp: Value) -> Value {
+    let mut m = Map::new();
+    m.insert("eid".into(), Value::from(eid));
+    m.insert("name".into(), Value::from(name));
+    m.insert("comp".into(), comp);
+    Value::Object(m)
+}
+
+// Open a rider over a fresh member set (subserve.ts riderOpen): its incident
+// edges, the far endpoints they name, and the state every later delta speaks
+// from. Returns the standing Rider and the frame's `{edges, peers}`.
+fn rider_open(
+    store: &Store,
+    peers: Vec<Hop>,
+    members: &HashSet<String>,
+) -> (Rider, Vec<Dep>, Vec<Value>) {
+    let member_vec: Vec<String> = members.iter().cloned().collect();
+    let deps = if members.is_empty() {
+        vec![]
+    } else {
+        eager_deps(store, &member_vec)
+    };
+    let held = outside(&deps, members);
+    let keys: Vec<(String, Dep)> =
+        deps.iter().map(|d| (dep_key(d), d.clone())).collect();
+    let peer_changes = peer_payload(store, &peers, &held);
+    (Rider { peers, keys, held }, deps, peer_changes)
+}
+
+// What one committed batch does to a rider (subserve.ts riderDelta) — bounded by
+// the delta, never by the graph. Mutates the rider's keys/held; returns the four
+// streams a frame carries. `joined` are members that just entered, `moved` says a
+// member left (so held edges may need re-screening), `touched` the batch's eids.
+struct RiderDelta {
+    edges: Vec<Dep>,
+    unedges: Vec<Dep>,
+    peers: Vec<Value>,
+    unpeers: Vec<String>,
+}
+
+// take: add an edge we don't already hold; lose: drop one we do — the rider's
+// keys are an insertion-ordered map (subserve.ts take/lose).
+fn take(keys: &mut Vec<(String, Dep)>, add: &mut Vec<Dep>, d: Dep) {
+    let k = dep_key(&d);
+    if keys.iter().any(|(kk, _)| kk == &k) {
+        return;
+    }
+    keys.push((k, d.clone()));
+    add.push(d);
+}
+fn lose(keys: &mut Vec<(String, Dep)>, cut: &mut Vec<Dep>, k: &str) {
+    if let Some(pos) = keys.iter().position(|(kk, _)| kk == k) {
+        let (_, d) = keys.remove(pos);
+        cut.push(d);
+    }
+}
+
+fn rider_delta(
+    store: &Store,
+    r: &mut Rider,
+    members: &HashSet<String>,
+    joined: &[String],
+    moved: bool,
+    gone: &HashSet<String>,
+    batch: &[Change],
+    touched: &[String],
+) -> RiderDelta {
+    let mut add: Vec<Dep> = vec![];
+    let mut cut: Vec<Dep> = vec![];
+    // A member that JOINED brings its whole incident set (one keyed read).
+    if !joined.is_empty() {
+        for d in eager_deps(store, joined) {
+            take(&mut r.keys, &mut add, d);
+        }
+    }
+    // An edge WRITTEN in the batch: ask the same eager screen about its
+    // endpoints and believe the answer (an unlink needs no ask — gone is gone).
+    let linked: Vec<&Change> = batch
+        .iter()
+        .filter(|c| c.name == "dependency" && c.comp.is_some())
+        .collect();
+    let mut admits: HashSet<String> = HashSet::new();
+    if linked.iter().any(|c| !comp_gone(c)) {
+        let mut ends: Vec<String> = vec![];
+        for c in &linked {
+            ends.push(c.eid.clone());
+            if let Some(child) = comp_child(c) {
+                ends.push(child);
+            }
+        }
+        for d in eager_deps(store, &ends) {
+            admits.insert(dep_key(&d));
+        }
+    }
+    for c in &linked {
+        let Some(ty) = comp_type(c) else { continue };
+        let Some(child) = comp_child(c) else { continue };
+        let d = Dep { parent: c.eid.clone(), type_: ty, child };
+        let ours = members.contains(&d.parent) || members.contains(&d.child);
+        let k = dep_key(&d);
+        if comp_gone(c) || !ours || !admits.contains(&k) {
+            lose(&mut r.keys, &mut cut, &k);
+        } else {
+            take(&mut r.keys, &mut add, d);
+        }
+    }
+    // A member that DIED takes every edge touching it; one that merely LEFT the
+    // set takes the edges no remaining member holds.
+    if !gone.is_empty() || moved {
+        for (k, d) in r.keys.clone() {
+            if gone.contains(&d.parent) || gone.contains(&d.child) {
+                lose(&mut r.keys, &mut cut, &k);
+            } else if !members.contains(&d.parent) && !members.contains(&d.child) {
+                lose(&mut r.keys, &mut cut, &k);
+            }
+        }
+    }
+    let mut peers: Vec<Value> = vec![];
+    let mut unpeers: Vec<String> = vec![];
+    if !add.is_empty() || !cut.is_empty() {
+        let edges: Vec<Dep> = r.keys.iter().map(|(_, d)| d.clone()).collect();
+        let want = outside(&edges, members);
+        let want_set: HashSet<&String> = want.iter().collect();
+        let held_set: HashSet<&String> = r.held.iter().collect();
+        let fresh: Vec<String> =
+            want.iter().filter(|e| !held_set.contains(*e)).cloned().collect();
+        unpeers = r.held.iter().filter(|e| !want_set.contains(*e)).cloned().collect();
+        r.held = want;
+        peers = peer_payload(store, &r.peers, &fresh);
+    }
+    // A held peer someone WROTE to re-projects: it is nobody's member, so no
+    // membership pass would have noticed the edit its edge exists to show.
+    let again: Vec<String> = touched
+        .iter()
+        .filter(|e| r.held.contains(*e) && !gone.contains(*e))
+        .cloned()
+        .collect();
+    if !again.is_empty() {
+        peers.extend(peer_payload(store, &r.peers, &again));
+    }
+    RiderDelta { edges: add, unedges: cut, peers, unpeers }
+}
+
+// Did a rider delta MOVE anything (subserve.ts rider)? A silent rider must not
+// put a frame on the wire.
+fn rider_moved(d: &RiderDelta) -> bool {
+    !d.edges.is_empty()
+        || !d.unedges.is_empty()
+        || !d.peers.is_empty()
+        || !d.unpeers.is_empty()
+}
+
+// A committed dependency Change's fields (its comp is `{type, child, gone?}`).
+fn comp_gone(c: &Change) -> bool {
+    c.comp
+        .as_ref()
+        .and_then(|m| m.get("gone"))
+        .map(|v| v == &Value::Bool(true))
+        .unwrap_or(false)
+}
+fn comp_type(c: &Change) -> Option<String> {
+    c.comp.as_ref().and_then(|m| m.get("type")).and_then(|v| v.as_str()).map(String::from)
+}
+fn comp_child(c: &Change) -> Option<String> {
+    c.comp.as_ref().and_then(|m| m.get("child")).and_then(|v| v.as_str()).map(String::from)
 }
 
 // The `fields` a projected sub's frame states — the client asked for it, but a
@@ -585,6 +885,7 @@ fn reply_frame(
     shadow: bool,
     window: Option<(i64, Option<i64>)>,
     fields: Option<&[Field]>,
+    ride: Option<(Vec<Dep>, Vec<Value>)>,
 ) -> Value {
     let mut m = Map::new();
     m.insert("sub".into(), Value::from(name));
@@ -602,29 +903,57 @@ fn reply_frame(
     if let Some(f) = fields {
         m.insert("fields".into(), fields_value(f));
     }
+    // The edges rider's opening frame: the incident edges and their far-side
+    // projection (subserve.ts `...ride.frame`), keys `edges` then `peers`.
+    if let Some((edges, peers)) = ride {
+        m.insert("edges".into(), Value::Array(edges.iter().map(dep_to_wire).collect()));
+        m.insert("peers".into(), Value::Array(peers));
+    }
     Value::Object(m)
 }
 
-// A maintain delta (subserve.ts): sub, changes, drop, cursor, shadow. Shadow is
-// always false in this rung (no shadow subs), stated for byte-parity.
-fn delta_frame(name: &str, changes: Vec<Value>, drop: Vec<String>, cur: i64) -> Value {
+// A maintain delta (subserve.ts): sub, changes, drop, cursor, shadow, then the
+// rider's four streams when it moved. Shadow is always false in this rung (no
+// shadow subs), stated for byte-parity.
+fn delta_frame(
+    name: &str,
+    changes: Vec<Value>,
+    drop: Vec<String>,
+    cur: i64,
+    ride: Option<&RiderDelta>,
+) -> Value {
     let mut m = Map::new();
     m.insert("sub".into(), Value::from(name));
     m.insert("changes".into(), Value::Array(changes));
     m.insert("drop".into(), Value::Array(drop.into_iter().map(Value::from).collect()));
     m.insert("cursor".into(), Value::from(cur));
     m.insert("shadow".into(), Value::Bool(false));
+    add_ride(&mut m, ride);
     Value::Object(m)
 }
 
+// A moved rider's four streams appended to a delta frame (subserve.ts `...ride`):
+// edges, unedges (dep triples), peers (far-endpoint changes), unpeers (eids).
+fn add_ride(m: &mut Map<String, Value>, ride: Option<&RiderDelta>) {
+    let Some(rd) = ride else { return };
+    m.insert("edges".into(), Value::Array(rd.edges.iter().map(dep_to_wire).collect()));
+    m.insert("unedges".into(), Value::Array(rd.unedges.iter().map(dep_to_wire).collect()));
+    m.insert("peers".into(), Value::Array(rd.peers.clone()));
+    m.insert(
+        "unpeers".into(),
+        Value::Array(rd.unpeers.iter().map(|e| Value::from(e.as_str())).collect()),
+    );
+}
+
 // A windowed sub's delta restates its bound: sub, changes, drop, cursor,
-// shadow, window.
+// shadow, window, then the rider's streams when it moved.
 fn window_delta(
     name: &str,
     changes: Vec<Value>,
     drop: Vec<String>,
     cur: i64,
     window: (i64, Option<i64>),
+    ride: Option<&RiderDelta>,
 ) -> Value {
     let mut m = Map::new();
     m.insert("sub".into(), Value::from(name));
@@ -633,6 +962,7 @@ fn window_delta(
     m.insert("cursor".into(), Value::from(cur));
     m.insert("shadow".into(), Value::Bool(false));
     m.insert("window".into(), window_value(window));
+    add_ride(&mut m, ride);
     Value::Object(m)
 }
 
