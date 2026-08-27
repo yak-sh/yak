@@ -182,7 +182,7 @@ async fn census_route(State(app): State<App>) -> Response {
 
 // /integrity — orphaned rows + dangling refs + vector state (db.ts scanAnomalies).
 async fn integrity_route(State(app): State<App>) -> Response {
-    read_json(&app, |store| Ok(appread::anomalies(store))).await
+    read_json(&app, appread::anomalies).await
 }
 
 // /body — the deferred doc bodies for the `eids` set, as a Change batch.

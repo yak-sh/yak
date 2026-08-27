@@ -26,6 +26,7 @@ pub mod profiling;
 pub mod query;
 #[cfg(feature = "native")]
 pub mod reader;
+pub mod rooted;
 #[cfg(feature = "native")]
 pub mod schema;
 #[cfg(feature = "native")]

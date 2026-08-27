@@ -46,6 +46,7 @@ type Manifest = {
   comps?: Record<string, CompSpec>
   renames?: Record<string, string>
   edges?: string[]
+  governed?: string[]
   session_active?: string[]
   capabilities?: string[]
   session_facets?: string[]
@@ -66,6 +67,7 @@ export let assemble = (manifests: Manifest[]) => {
   let enums: Record<string, { rank: number; values: string[] }> = {}
   let renames: Record<string, string> = {}
   let edges: string[] | undefined
+  let governed: string[] | undefined
   let sessionActive: string[] | undefined
   let capabilities: string[] | undefined
   let sessionFacets: string[] | undefined
@@ -99,6 +101,7 @@ export let assemble = (manifests: Manifest[]) => {
       return next ?? cur
     }
     edges = one(edges, m.edges, 'edges')
+    governed = one(governed, m.governed, 'governed')
     sessionActive = one(sessionActive, m.session_active, 'session_active')
     capabilities = one(capabilities, m.capabilities, 'capabilities')
     sessionFacets = one(sessionFacets, m.session_facets, 'session_facets')
@@ -149,12 +152,16 @@ export let assemble = (manifests: Manifest[]) => {
       ) refuse(`${name}.${col} names unknown enum '${t.enum}'`)
     }
   }
+  for (let name of governed ?? []) {
+    if (!comps[name]) refuse(`governed comp '${name}' is not declared`)
+  }
 
   return {
     comps,
     enums,
     renames,
     edges: edges ?? refuse('no manifest declares edges'),
+    governed: governed ?? refuse('no manifest declares governed comps'),
     sessionActive: sessionActive ?? refuse('no session_active'),
     capabilities: capabilities ?? refuse('no capabilities'),
     sessionFacets: sessionFacets ?? refuse('no session_facets'),
@@ -338,6 +345,9 @@ export let emit = (a: ReturnType<typeof assemble>): string => {
     ...a.edges.map((e) => `  ${q(e)},`),
     '] as const',
     '',
+    '// Durable work/knowledge facets governed by project-rooted dependency paths.',
+    `export let governed = [${strList(a.governed)}] as const`,
+    '',
     '// A managed session is still going in exactly these statuses.',
     `export let sessionActive = [${strList(a.sessionActive)}]`,
     '',
@@ -453,12 +463,13 @@ export let emitRust = (a: ReturnType<typeof assemble>): string => {
   }
   out.push('    ];')
   out.push(`    let edges = ${strVec(a.edges)};`)
+  out.push(`    let governed = ${strVec(a.governed)};`)
   // The session-log partition + facets — bare-prop routing (query.rs
   // route()) needs both, same derivations as sessionComps/sessionFacetNames.
   out.push(`    let session_comps = ${strVec(a.logOrder)};`)
   out.push(`    let session_facets = ${strVec(a.sessionFacets)};`)
   out.push(
-    '    Vocab { comps, stamped, kind_order, prefix, statuses, renames, deaths, edges, session_comps, session_facets }',
+    '    Vocab { comps, stamped, kind_order, prefix, statuses, renames, deaths, edges, governed, session_comps, session_facets }',
     '}',
     '',
   )

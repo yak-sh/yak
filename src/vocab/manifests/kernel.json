@@ -302,5 +302,11 @@
     "worked",
     "referenced",
     "wants"
+  ],
+  "governed": [
+    "task",
+    "architecture",
+    "memory",
+    "persona"
   ]
 }

@@ -21,6 +21,7 @@ import {
   deaths,
   type Dep,
   edges,
+  governed,
   type Hit,
   idOf,
   kindOrder,
@@ -6678,7 +6679,55 @@ export type Anomalies = {
   // The ANN index's maintenance state — the split-brain tell (T-22622). Absent
   // from a server too old to report it, which the doctor treats as unverified.
   vector?: { dirty: boolean; rows: number; newest: string | null }
+  // Governed durable work/knowledge outside every project-rooted dependency
+  // closure. Human ids because doctor output is agent-facing.
+  unrooted?: string[]
 }
+
+export type ProjectReachability = {
+  reachable: string[]
+  orphans: string[]
+}
+
+// One cycle-safe project-root closure over every semantic edge. UNION is the
+// visited set: detached cycles terminate and remain outside the closure. The
+// recursive step reads dependency's parent-leading primary key; edge type is
+// deliberately absent because no relation, including contains, is structural.
+// The governed facet list is generated vocabulary shared with later readers and
+// write gates, so the corpus boundary cannot drift between doors.
+export let projectReachability = (db: DatabaseSync): ProjectReachability => {
+  let idKeyed = hasCol(db, 'entity', 'id')
+  let spineKey = idKeyed ? 'id' : 'eid'
+  let ownerCol = idKeyed ? 'entity' : 'eid'
+  let corpus = governed.map((name) =>
+    `select ${sqlName(ownerCol)} from ${sqlName(name)}`
+  ).join(' union ')
+  let rows = prep(
+    db,
+    `with recursive rooted(entity) as (
+       select ${sqlName(ownerCol)} from project
+       union
+       select d.child from dependency d join rooted r on r.entity = d.parent
+     ), corpus(entity) as (
+       ${corpus}
+     )
+     select e.eid, 1 as reachable
+       from corpus c join rooted r on r.entity = c.entity
+       join entity e on e.${sqlName(spineKey)} = c.entity
+     union all
+     select e.eid, 0 as reachable
+       from corpus c join entity e on e.${sqlName(spineKey)} = c.entity
+      where not exists (
+        select 1 from rooted r where r.entity = e.${sqlName(spineKey)}
+      )
+     order by eid`,
+  ).all() as { eid: string; reachable: number }[]
+  return {
+    reachable: rows.filter((r) => r.reachable).map((r) => r.eid),
+    orphans: rows.filter((r) => !r.reachable).map((r) => r.eid),
+  }
+}
+
 export let scanAnomalies = (db: DatabaseSync): Anomalies => {
   let idKeyed = hasCol(db, 'entity', 'id')
   let spineKey = idKeyed ? 'id' : 'eid'
@@ -6709,7 +6758,8 @@ export let scanAnomalies = (db: DatabaseSync): Anomalies => {
       if (n) dangling[`${t}.${c}`] = n
     }
   }
-  return { orphans, dangling, vector: vectorState(db) }
+  let unrooted = projectReachability(db).orphans.map((eid) => human(db, eid))
+  return { orphans, dangling, vector: vectorState(db), unrooted }
 }
 
 // The ANN index's maintenance state, read from plain tables — no extension

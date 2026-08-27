@@ -351,6 +351,26 @@ export let integrityReport = (a: Anomalies | null): Report[] => {
   return out
 }
 
+// Governed durable work and knowledge must be reachable from a project through
+// dependency parent→child edges. The raw recursive scan is server-side because
+// detached cycles look internally connected to any client-side local walk; the
+// project-root seed is what proves they are orphans.
+export let projectOrphans = (a: Anomalies | null): Report[] => {
+  if (!a?.unrooted) {
+    return [{
+      level: 'warn',
+      text: 'this server does not report project reachability — the governed ' +
+        'corpus check is UNVERIFIED (upgrade the server to run it)',
+    }]
+  }
+  if (!a.unrooted.length) return []
+  return [{
+    level: 'fail',
+    text: `${a.unrooted.length} governed entity(s) are outside every ` +
+      `project-rooted dependency closure: ${a.unrooted.join(', ')}`,
+  }]
+}
+
 // The ANN index has exactly ONE writer: the process running the embed sweep,
 // which claims it with ownVector() (D-22530 — a write-capable extension lives
 // only where its write does). The failure this exists for is the 2026-08-26
@@ -453,6 +473,11 @@ export let checks: Check[] = [
     name: 'storage',
     about: 'no orphaned component rows or dangling entity references',
     run: async () => integrityReport(await integrity()),
+  },
+  {
+    name: 'project-root',
+    about: 'all durable work and knowledge is reachable from a project',
+    run: async () => projectOrphans(await integrity()),
   },
   {
     name: 'vector',

@@ -10,6 +10,7 @@ import {
   integrityReport,
   mailCheck,
   mailWithoutFrom,
+  projectOrphans,
   type Rules,
   run,
   staleClaims,
@@ -288,6 +289,25 @@ Deno.test('integrityReport: a clean scan is silent', () => {
 
 Deno.test('integrityReport: no /integrity route is an unverified warn', () => {
   let out = integrityReport(null)
+  assertEquals(out.length, 1)
+  assertEquals(out[0].level, 'warn')
+  assertEquals(out[0].text.includes('UNVERIFIED'), true)
+})
+
+Deno.test('projectOrphans: detached governed nodes and cycles are hard finds', () => {
+  let out = projectOrphans({
+    orphans: {},
+    dangling: {},
+    unrooted: ['A-8', 'M-9', 'N-10'],
+  })
+  assertEquals(out.length, 1)
+  assertEquals(out[0].level, 'fail')
+  assertEquals(out[0].text.includes('A-8, M-9, N-10'), true)
+})
+
+Deno.test('projectOrphans: clean is silent; absent scan is unverified', () => {
+  assertEquals(projectOrphans({ orphans: {}, dangling: {}, unrooted: [] }), [])
+  let out = projectOrphans({ orphans: {}, dangling: {} })
   assertEquals(out.length, 1)
   assertEquals(out[0].level, 'warn')
   assertEquals(out[0].text.includes('UNVERIFIED'), true)

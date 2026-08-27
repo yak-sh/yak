@@ -89,6 +89,14 @@ pub struct EdgesDef {
 }
 inventory::collect!(EdgesDef);
 
+// The durable facets whose wearers must belong to a project-rooted dependency
+// closure. One policy list feeds every reader and later every write gate.
+pub struct GovernedDef {
+    pub plugin: &'static str,
+    pub comps: &'static [&'static str],
+}
+inventory::collect!(GovernedDef);
+
 // The sessions-owned capability/active/facet lists — one submit each.
 pub struct SessionListsDef {
     pub plugin: &'static str,
@@ -234,6 +242,9 @@ pub fn manifests() -> Vec<(String, Value)> {
     for e in inventory::iter::<EdgesDef>() {
         note(e.plugin, &mut plugins);
     }
+    for g in inventory::iter::<GovernedDef>() {
+        note(g.plugin, &mut plugins);
+    }
     for s in inventory::iter::<SessionListsDef>() {
         note(s.plugin, &mut plugins);
     }
@@ -275,6 +286,11 @@ pub fn manifests() -> Vec<(String, Value)> {
             for e in inventory::iter::<EdgesDef>() {
                 if e.plugin == p {
                     m.insert("edges".into(), json!(e.edges));
+                }
+            }
+            for g in inventory::iter::<GovernedDef>() {
+                if g.plugin == p {
+                    m.insert("governed".into(), json!(g.comps));
                 }
             }
             for s in inventory::iter::<SessionListsDef>() {

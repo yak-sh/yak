@@ -31,6 +31,7 @@ let {
   mintEpoch,
   numbered,
   open,
+  projectReachability,
   readComp,
   refsOf,
   renamed,
@@ -2805,6 +2806,59 @@ Deno.test('edges: ord round-trips, patches on re-link, untouched when absent (T-
     snapshot(db).deps.find((d) => d.parent == p && d.child == c2),
     { parent: p, type: 'contains', child: c2 },
   )
+})
+
+Deno.test('project reachability crosses every edge type and reports detached cycles', () => {
+  let d = fresh()
+  let p = uid(), task = uid(), design = uid(), architecture = uid()
+  let persona = uid(), memory = uid(), peer = uid(), note = uid()
+  apply(d, [
+    { eid: p, name: 'project', comp: {} },
+    { eid: task, name: 'task', comp: {} },
+    { eid: design, name: 'task', comp: {} },
+    { eid: design, name: 'design', comp: {} },
+    { eid: architecture, name: 'architecture', comp: {} },
+    { eid: persona, name: 'persona', comp: {} },
+    { eid: memory, name: 'memory', comp: {} },
+    { eid: peer, name: 'memory', comp: {} },
+    { eid: note, name: 'doc', comp: { title: 'ungoverned' } },
+    { eid: p, name: 'dependency', comp: { type: 'wants', child: task } },
+    {
+      eid: task,
+      name: 'dependency',
+      comp: { type: 'requires', child: design },
+    },
+    {
+      eid: design,
+      name: 'dependency',
+      comp: { type: 'reads', child: architecture },
+    },
+    {
+      eid: architecture,
+      name: 'dependency',
+      comp: { type: 'contains', child: persona },
+    },
+    {
+      eid: memory,
+      name: 'dependency',
+      comp: { type: 'supersedes', child: peer },
+    },
+    {
+      eid: peer,
+      name: 'dependency',
+      comp: { type: 'about', child: memory },
+    },
+  ])
+
+  let r = projectReachability(d)
+  assertEquals(
+    new Set(r.reachable),
+    new Set([task, design, architecture, persona]),
+  )
+  assertEquals(new Set(r.orphans), new Set([memory, peer]))
+  // A detached generic doc is outside the governed durable corpus.
+  assertEquals(r.orphans.includes(note), false)
+  d.close()
 })
 
 // Every verb in the vocabulary must clear the table's baked check — the

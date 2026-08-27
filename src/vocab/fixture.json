@@ -18,6 +18,7 @@
   "noticeKinds": "[\"lapse\",\"sweep\",\"scene\"]",
   "kindOrder": "[\"design\",\"task\",\"project\",\"layout\",\"board\",\"canvas\",\"web\",\"card\",\"pane\",\"client\",\"camera\",\"fold\",\"cursor\",\"role\",\"session\",\"entry\",\"runner\",\"claim\",\"subscription\",\"stop_request\",\"knock\",\"wake\",\"dream\",\"mail\",\"hook\",\"conflict\",\"redaction\",\"review\",\"notice\",\"comment\",\"memory\",\"person\",\"persona\",\"model\",\"blob\",\"doc\",\"email\",\"alias\"]",
   "edges": "[\"requires\",\"contains\",\"reads\",\"about\",\"supervises\",\"delegates\",\"recalled\",\"supersedes\",\"worked\",\"referenced\",\"wants\"]",
+  "governed": "[\"task\",\"architecture\",\"memory\",\"persona\"]",
   "capabilities": "[\"spawn\",\"session-facets\"]",
   "sessionFacetNames": "[\"spawn\",\"worktree\",\"runtime\"]",
   "sessionActive": "[\"starting\",\"running\",\"stopping\"]",

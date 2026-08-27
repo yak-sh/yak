@@ -807,6 +807,9 @@ export let edges = [
   'wants',
 ] as const
 
+// Durable work/knowledge facets governed by project-rooted dependency paths.
+export let governed = ['task', 'architecture', 'memory', 'persona'] as const
+
 // A managed session is still going in exactly these statuses.
 export let sessionActive = ['starting', 'running', 'stopping']
 

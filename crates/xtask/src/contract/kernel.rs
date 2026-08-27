@@ -31,6 +31,15 @@ inventory::submit! {
     }
 }
 
+// Durable work and knowledge governed by project-rooted dependency paths.
+// Designs also wear task, so task covers both without a second kind rule.
+inventory::submit! {
+    yak_vocab::GovernedDef {
+        plugin: "kernel",
+        comps: &["task", "architecture", "memory", "persona"],
+    }
+}
+
 // Old spellings that still resolve — the compatibility promise in data. A
 // rename ADDS a row here and NEVER removes one.
 inventory::submit! { yak_vocab::RenameDef { plugin: "kernel", from: "view:Show", to: "Full" } }

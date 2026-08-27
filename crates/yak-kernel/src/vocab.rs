@@ -46,6 +46,8 @@ pub struct Vocab {
     pub deaths: Vec<(String, String, String)>,
     // The valid dependency words.
     pub edges: Vec<String>,
+    // Durable work/knowledge facets governed by project-rooted dependency paths.
+    pub governed: Vec<String>,
     // The session-log lazy partition's comps — bare props never route here.
     pub session_comps: Vec<String>,
     // Session facets (the spawn twin window) — share bare filters with

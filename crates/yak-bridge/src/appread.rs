@@ -103,7 +103,7 @@ fn count_where(store: &Store, table: &str, where_: &str) -> i64 {
 // doctor reads this raw scan instead of /query. Shape-agnostic: it reads an
 // id-keyed graph (owner col `entity`, spine key `id`) or the pre-cutover
 // eid-keyed one (`eid`/`eid`) by probing the spine's columns, exactly as TS does.
-pub fn anomalies(store: &Store) -> Value {
+pub fn anomalies(store: &Store) -> Result<Value, String> {
     let id_keyed = col_names(store, "entity").iter().any(|c| c == "id");
     let spine_key = if id_keyed { "id" } else { "eid" };
     let owner_col = if id_keyed { "entity" } else { "eid" };
@@ -149,7 +149,15 @@ pub fn anomalies(store: &Store) -> Value {
     if let Some(vector) = vector_state(store) {
         out.insert("vector".into(), vector);
     }
-    Value::Object(out)
+    let reach = yak_kernel::rooted::project_reachability(&store.conn)
+        .map_err(|e| format!("project reachability: {e}"))?;
+    let unrooted = reach
+        .orphans
+        .iter()
+        .map(|eid| Value::from(yak_kernel::write::human(&store.conn, eid)))
+        .collect::<Vec<_>>();
+    out.insert("unrooted".into(), Value::Array(unrooted));
+    Ok(Value::Object(out))
 }
 
 // The ANN index's maintenance state (db.ts vectorState), read from plain tables

@@ -32,6 +32,7 @@ let plain = [
   'noticeKinds',
   'kindOrder',
   'edges',
+  'governed',
   'capabilities',
   'sessionFacetNames',
   'sessionActive',
