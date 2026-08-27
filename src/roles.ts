@@ -23,6 +23,7 @@ import { commitEffects } from './effects.ts'
 import { actorRows, bus, busRows, notices, readerAt, uniq } from './client.ts'
 import { materialize } from './persona.ts'
 import { continueSession } from './sessions.ts'
+import { writeSession } from './session_store.ts'
 import {
   attention as graphAttention,
   graphBusy,
@@ -363,6 +364,60 @@ let rolePanes = async (
     .map(([, pane, dead]) => ({ pane, dead: dead == '1' }))
 }
 
+// A native provider is not our child, but its tmux pane is our one diagnostic
+// resource. remain-on-exit keeps a dead pane until this reconcile pass can
+// preserve its status and screen output on the seq-0 session row. The session
+// watcher still owns the stable exception stamp; this only fills the evidence
+// that watcher cannot observe from a foreign process.
+let preserveDeadPane = async (
+  c: RoleConfig,
+  session: DbRow | undefined,
+  cast: Cast,
+  deps: RoleDeps,
+) => {
+  if (!session || Number(session.latest_seq ?? 0) != 0) return
+  let pane = String(session.pane ?? '')
+  if (!pane) return
+  let dead = (await rolePanes(c.eid, deps)).some((p) =>
+    p.pane == pane && p.dead
+  )
+  if (!dead) return
+  let [meta, ...captures] = await Promise.all([
+    deps.command([
+      'display-message',
+      '-p',
+      '-t',
+      pane,
+      '#{pane_dead_status}',
+    ]),
+    deps.command(['capture-pane', '-p', '-t', pane, '-S', '-100']),
+    deps.command(['capture-pane', '-a', '-p', '-t', pane]),
+  ])
+  let raw = tmuxText(meta)
+  let code = /^\d+$/.test(raw) ? Number(raw) : null
+  let stderr = [...new Set(captures.map(tmuxText).filter(Boolean))].join('\n')
+  let patch = {
+    // Repeating an observed ending makes writeSession update the canonical
+    // settled facet too. If capture beats the lifecycle watcher, the rolling
+    // alias holds the code until that watcher creates settled; yield can take
+    // stderr immediately either way.
+    ...(session.finished_at ? { finished_at: session.finished_at } : {}),
+    ...(code == null ? {} : { exit_code: code }),
+    ...(stderr ? { stderr: stderr.slice(0, 20_000) } : {}),
+  }
+  let changes: Change[] = []
+  db.exec('begin immediate')
+  try {
+    changes = writeSession(db, String(session.eid), patch)
+    if (changes.length) record(db, changes)
+    db.exec('commit')
+  } catch (e) {
+    db.exec('rollback')
+    throw e
+  }
+  if (changes.length) cast(changes)
+}
+
 let tmuxHas = async (eid: string, deps: RoleDeps) =>
   (await rolePanes(eid, deps)).some((p) => !p.dead)
 
@@ -457,14 +512,10 @@ let tmuxStart = async (c: RoleConfig, file: string, deps: RoleDeps) => {
       let text = [...new Set(captures.map(tmuxText).filter(Boolean))].join('\n')
       throw new Error(text || 'provider exited during launch')
     }
-    await deps.command([
-      'set-option',
-      '-w',
-      '-t',
-      pane,
-      'remain-on-exit',
-      'off',
-    ])
+    // Leave remain-on-exit armed. A provider can pass this 300ms probe and
+    // still die before its first turn (S-22959 lived 8s); disabling it here
+    // destroyed the exit status and alternate-screen error before either
+    // lifecycle watcher could preserve them. The next reconcile removes it.
   } catch (e) {
     await tmuxKill(c.eid, deps)
     throw e
@@ -1024,6 +1075,10 @@ let reconcileNative = async (
       )
     }
     await tmuxKill(c.eid, deps)
+  }
+  if (!has) {
+    await preserveDeadPane(c, session, cast, deps)
+    // tmuxStart sweeps the retained dead pane before opening its replacement.
   }
   let file = instructionPath(c.eid)
   deps.write(file, roleText(c))

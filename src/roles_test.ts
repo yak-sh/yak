@@ -494,6 +494,60 @@ Deno.test('an early-dead native provider is captured, not marked applied', async
   )
 })
 
+Deno.test('a seq-0 native death preserves retained pane diagnostics before relaunch', async () => {
+  commands = []
+  sessions.clear()
+  let { role } = seed('native')
+  await rolesSweep(cast, deps)
+  assertEquals(
+    commands.some((a) =>
+      a[0] == 'set-option' && a.includes('remain-on-exit') && a.at(-1) == 'off'
+    ),
+    false,
+    'the launch leaves tmux retaining a later startup death',
+  )
+  let pane = panesOf(role)[0]
+  let run = uid()
+  apply(db, [{ eid: run, name: 'session', comp: { id: uid(), role } }])
+  db.prepare(
+    `update session set origin = 'external', pane = ?, latest_seq = 0,
+       finished_at = ? where entity = ${R}`,
+  ).run(pane, new Date().toISOString(), run)
+  panes.get(pane)!.dead = true
+  let diagnostic = {
+    ...deps,
+    command: (args: string[]) => {
+      if (args[0] == 'display-message') {
+        return Promise.resolve({
+          ...ok(),
+          stdout: new TextEncoder().encode('17\n'),
+        })
+      }
+      if (args[0] == 'capture-pane') {
+        return Promise.resolve({
+          ...ok(),
+          stdout: new TextEncoder().encode(
+            args.includes('-a') ? 'provider: bad startup config\n' : '',
+          ),
+        })
+      }
+      return deps.command(args)
+    },
+  }
+  await rolesSweep(cast, diagnostic)
+  assertEquals(
+    db.prepare(`select exit_code, stderr from session where entity = ${R}`)
+      .get(run),
+    { exit_code: 17, stderr: 'provider: bad startup config' },
+  )
+  assertEquals(readComp(db, run, 'settled')?.exit_code, 17)
+  assertEquals(
+    readComp(db, run, 'yield')?.stderr,
+    'provider: bad startup config',
+  )
+  assertEquals(spawns(role), 2, 'the dead pane is still replaced')
+})
+
 Deno.test('managed role mints one operator session and stops through the graph', async () => {
   commands = []
   sessions.clear()
