@@ -278,7 +278,10 @@ fn read_comp(conn: &Connection, name: &str, eid: &str) -> Option<Map<String, Val
     let mut joins = String::new();
     let mut sel: Vec<String> = vec!["__o.eid".into()];
     for (i, (cname, t)) in cols.iter().enumerate() {
-        if t.is_ref() {
+        if name == "doc" && cname == "body" {
+            joins.push_str(" join blob_text __body on __body.entity = t.body");
+            sel.push("__body.value".into());
+        } else if t.is_ref() {
             let a = format!("__r{i}");
             joins.push_str(&format!(" left join entity {a} on {a}.id = t.{}", q(cname)));
             sel.push(format!("{a}.eid"));
@@ -322,6 +325,71 @@ fn resolve_eid(conn: &Connection, s: &str) -> Result<String> {
         return Ok(s.to_string());
     }
     resolve(conn, s).ok_or_else(|| refuse(format!("expects a human id / alias / UUID — got '{s}'")))
+}
+
+// The in-db text backend of one blob identity. The doc wire continues to
+// speak text; only the component table stores this integer reference.
+fn text_blob(conn: &Connection, value: &str) -> Result<i64> {
+    let eid = sha(&Value::from(value));
+    spine(conn, &eid)?;
+    let id: i64 = conn.query_row("select id from entity where eid = ?1", [&eid], |r| r.get(0))?;
+    conn.execute(
+        "insert or ignore into blob (entity, bytes) values (?1, ?2)",
+        rusqlite::params![id, value.len() as i64],
+    )?;
+    conn.execute(
+        "insert or ignore into blob_text (entity, value) values (?1, ?2)",
+        rusqlite::params![id, value],
+    )?;
+    Ok(id)
+}
+
+fn cas_bodies(conn: &Connection, mut changes: Vec<Change>) -> Result<Vec<Change>> {
+    let mut seen: HashSet<String> =
+        changes.iter().filter(|c| c.name == "blob").map(|c| c.eid.clone()).collect();
+    let mut blobs = vec![];
+    for change in &changes {
+        if change.name != "doc" {
+            continue;
+        }
+        let Some(comp) = change.comp.as_ref() else {
+            continue;
+        };
+        let body = if let Some(body) = comp.get("body").and_then(Value::as_str) {
+            body
+        } else {
+            let exists = conn
+                .query_row(
+                    "select 1 from doc where entity = (select id from entity where eid = ?1)",
+                    [&change.eid],
+                    |r| r.get::<_, i64>(0),
+                )
+                .optional()?
+                .is_some();
+            if exists {
+                continue;
+            }
+            ""
+        };
+        let eid = sha(&Value::from(body));
+        if !seen.insert(eid.clone())
+            || conn
+                .query_row(
+                    "select 1 from blob where entity = (select id from entity where eid = ?1)",
+                    [&eid],
+                    |r| r.get::<_, i64>(0),
+                )
+                .optional()?
+                .is_some()
+        {
+            continue;
+        }
+        let mut comp = Map::new();
+        comp.insert("bytes".into(), Value::from(body.len() as i64));
+        blobs.push(Change::new(&eid, "blob", Some(comp)));
+    }
+    blobs.append(&mut changes);
+    Ok(blobs)
 }
 
 // The parseProp subset this kernel speaks. Times take canonical ISO stamps
@@ -1967,6 +2035,19 @@ fn spine(conn: &Connection, eid: &str) -> Result<bool> {
 const UNNUMBERED: [&str; 2] = ["entry", "wake"];
 
 fn mint_num(conn: &Connection, eid: &str) -> Result<()> {
+    // A content hash is already the blob's durable human identity. Numbering
+    // every deduplicated body/file would create a second, meaningless name.
+    if conn
+        .query_row(
+            "select 1 from blob where entity = (select id from entity where eid = ?1)",
+            [eid],
+            |r| r.get::<_, i64>(0),
+        )
+        .optional()?
+        .is_some()
+    {
+        return Ok(());
+    }
     let v = vocab();
     let kind = v
         .kind_order
@@ -2293,6 +2374,7 @@ pub fn apply(
         changes = dual_facet(conn, v, changes, "worktree");
         changes = dual_facet(conn, v, changes, "runtime");
         changes = mirror_lineage(conn, changes);
+        changes = cas_bodies(conn, changes)?;
         // Mint spines in first-touch order before writing components.
         let mut killed: HashSet<String> = HashSet::new();
         for c in &changes {
@@ -2629,9 +2711,13 @@ pub fn apply(
             for c in &sent {
                 let t = cols.iter().find(|(n, _)| n == c).map(|(_, t)| t);
                 let raw = comp.get(c).unwrap();
-                let bound = match t {
-                    Some(PropType::Eid(_)) => ref_to_id(conn, name, eid, c, raw)?,
-                    other => bind_value(other, raw),
+                let bound = if name == "doc" && c == "body" && !raw.is_null() {
+                    Value::from(text_blob(conn, raw.as_str().unwrap_or_default())?)
+                } else {
+                    match t {
+                        Some(PropType::Eid(_)) => ref_to_id(conn, name, eid, c, raw)?,
+                        other => bind_value(other, raw),
+                    }
                 };
                 vals.push(bound);
             }
@@ -2655,11 +2741,17 @@ pub fn apply(
             if hit > 0 {
                 continue;
             }
-            // doc is title-optional on CREATE (T-10397): supply the empty
-            // title at the sole doc writer.
-            if name == "doc" && !comp.contains_key("title") {
-                sent.insert(0, "title".into());
-                vals.insert(0, Value::from(""));
+            // doc defaults are dynamic at the sole writer: body stores the
+            // empty text blob id, while the wire still reads an empty string.
+            if name == "doc" {
+                if !comp.contains_key("title") {
+                    sent.insert(0, "title".into());
+                    vals.insert(0, Value::from(""));
+                }
+                if !comp.contains_key("body") {
+                    sent.push("body".into());
+                    vals.push(Value::from(text_blob(conn, "")?));
+                }
             }
             conn.execute_batch("savepoint change")?;
             // An entry create assigns its per-session seq below; the echo of

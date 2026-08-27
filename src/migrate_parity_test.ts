@@ -487,7 +487,7 @@ slow(
       )
       assertEquals(
         n(
-          `select count(*) as n from doc t join entity e on e.id = t.entity
+          `select count(*) as n from doc_value t join entity e on e.id = t.entity
            where e.eid = ?`,
           orphan,
         ),

@@ -166,7 +166,7 @@ slow(
             exists(select 1 from archived a where a.entity = doc.entity) as archived,
             exists(select 1 from dependency d
               where d.child = doc.entity and d.type = 'supersedes') as superseded
-       from doc where doc.entity = (select id from entity where eid = ?)`,
+       from doc_value doc where doc.entity = (select id from entity where eid = ?)`,
     ).get(m)
     assertEquals(source, {
       body: 'x'.repeat(5000),

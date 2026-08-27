@@ -287,7 +287,7 @@ Deno.test('fanout: mints to the project REFERENCE, once, with the receipt', () =
   let num = (db.prepare('select num from entity where eid = ?').get(task) as {
     num: number
   }).num
-  let doc = db.prepare(`select title, body from doc where ${OWNED}`).get(
+  let doc = db.prepare(`select title, body from doc_value where ${OWNED}`).get(
     made[0].eid,
   ) as { title: string; body: string }
   assertMatch(doc.title, new RegExp(`\\[T-${num}\\] the work`))

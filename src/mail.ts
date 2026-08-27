@@ -203,9 +203,10 @@ export let mailed =
     if (row.message_id) return
     if (flying.has(eid)) return // a concurrent fire is already delivering
     flying.add(eid)
-    let doc = db.prepare(`select title, body from doc where ${OWNED}`).get(
-      eid,
-    ) as { title: string; body: string } | undefined
+    let doc = db.prepare(`select title, body from doc_value where ${OWNED}`)
+      .get(
+        eid,
+      ) as { title: string; body: string } | undefined
     // WHERE it goes rides the shared `deliver {to}` facet now, resolved to an
     // address by the same book rule (an eid → its email, a raw address →
     // itself for the legacy rows migration carried over verbatim).
@@ -393,12 +394,13 @@ export let fanout =
     let num = (db.prepare('select num from entity where eid = ?').get(
       target,
     ) as { num: number } | undefined)?.num
-    let title = (db.prepare(`select title from doc where ${OWNED}`).get(
+    let title = (db.prepare(`select title from doc_value where ${OWNED}`).get(
       target,
     ) as { title: string } | undefined)?.title ?? ''
-    let said = (db.prepare(`select body from doc where ${OWNED}`).get(eid) as
-      | { body: string }
-      | undefined)?.body ?? ''
+    let said =
+      (db.prepare(`select body from doc_value where ${OWNED}`).get(eid) as
+        | { body: string }
+        | undefined)?.body ?? ''
     let sid = crypto.randomUUID()
     let t2 = trace()
     try {

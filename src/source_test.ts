@@ -161,7 +161,7 @@ Deno.test('graduation: a write to an ephemeral entity persists it, eid stable', 
       'grad-sid',
     )
     assertEquals(
-      (db.prepare(`select title from doc where ${OWNED}`).get(gid) as {
+      (db.prepare(`select title from doc_value where ${OWNED}`).get(gid) as {
         title: string
       }).title,
       'Session grad-sid',

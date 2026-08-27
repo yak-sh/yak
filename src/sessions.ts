@@ -1853,7 +1853,7 @@ export let spawned =
       select ${refEid('t.project')} as project, e.num, d.title, d.body
       from task t
       join entity e on e.id = t.entity
-      left join doc d on d.entity = t.entity
+      left join doc_value d on d.entity = t.entity
       where t.${OWNED}
     `).get(String(row.requested_task)) as
         | {
@@ -1869,7 +1869,7 @@ export let spawned =
         select ${refEid('r.scope')} as scope, e.num, d.title, d.body
         from role r
         join entity e on e.id = r.entity
-        left join doc d on d.entity = r.entity
+        left join doc_value d on d.entity = r.entity
         where r.${OWNED}
       `).get(String(row.role)) as
         | { scope: string | null; num: number; title: string; body: string }
@@ -1964,7 +1964,7 @@ export let spawned =
     let prompt = [
       !task && !role ? CHAT : repo ? undefined : NO_CODE,
       !task && !role
-        ? (db.prepare(`select body from doc where ${OWNED}`).get(eid) as
+        ? (db.prepare(`select body from doc_value where ${OWNED}`).get(eid) as
           | { body: string }
           | undefined)?.body
         : undefined,
@@ -2387,7 +2387,7 @@ let unheard = (eid: string) =>
   (db.prepare(
     `select o.eid as eid, d.body from comment c
      join entity o on o.id = c.entity
-     join doc d on d.entity = c.entity
+     join doc_value d on d.entity = c.entity
      join created b on b.entity = c.entity
      where (
        c.target = ${idOf}

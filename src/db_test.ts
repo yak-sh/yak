@@ -44,6 +44,7 @@ let {
   sha,
   snapshot,
   Stale,
+  textBlob,
   touch,
   vocabHash,
   vocabHashOf,
@@ -270,7 +271,7 @@ slow(
       // its derived token index no longer describes that content.
       raw.exec('drop trigger doc_fts_au')
       raw.prepare(
-        'update doc set title = title || ? where rowid = (select min(rowid) from doc)',
+        'update doc set title = title || ? where rowid = (select min(rowid) from doc_value)',
       ).run(' ftsdriftproof')
       assertEquals(raw.prepare('pragma quick_check(1)').get(), {
         quick_check: 'ok',
@@ -622,7 +623,7 @@ Deno.test('comment: distinct writes are distinct, reuse is refused, edits allowe
   let bodies = () =>
     d.prepare(
       `select doc.body as body from comment
-       join doc on doc.entity = comment.entity
+       join doc_value doc on doc.entity = comment.entity
        where comment.target = (select id from entity where eid = ?)`,
     ).all(target).map((r) => (r as { body: string }).body).sort()
 
@@ -724,8 +725,11 @@ let outsideVocabulary: Record<string, string> = {
   tombstone: 'death record: the eid is dead, nothing reads a component back',
   journal: 'the write log: append-only audit, never walked by snapshot()',
   journal_touch: "the journal's seek index (jrow, eid): log data, never synced",
+  blob_text:
+    'the in-db text backend of blob identity, resolved through doc_value',
   tool_call: 'telemetry: no eid, no components — read at /telemetry',
-  embedding: 'semantic vectors: rebuilt from doc on the sweep, never synced',
+  embedding:
+    'semantic vectors: rebuilt from doc_value on the sweep, never synced',
   embedding_index: 'dirty state for the derived vector index, never synced',
   server_meta: 'server-local key/value (the durable sync epoch): never synced',
 }
@@ -3308,14 +3312,18 @@ slow('open renames every reference key, its filters, and its history', () => {
     },
   )
   assertEquals(
-    healed.prepare(`select title, body from doc where ${OWNED}`).get(memory),
+    healed.prepare(`select title, body from doc_value where ${OWNED}`).get(
+      memory,
+    ),
     {
       title: 'memory.scope guide',
       body: 'Use session.parent and envelope.to.',
     },
   )
   assertEquals(
-    healed.prepare(`select title, body from doc where ${OWNED}`).get(persona),
+    healed.prepare(`select title, body from doc_value where ${OWNED}`).get(
+      persona,
+    ),
     {
       title: 'persona',
       body:
@@ -3820,7 +3828,10 @@ Deno.test('journalBy: cuts the ledger by session, not its resolved actor', () =>
   assertEquals(rows.length, 1)
   assertEquals(rows[0].actor, actor)
   assertEquals(rows[0].via, one)
-  assertEquals(rows[0].changes[0].eid, first)
+  assertEquals(
+    rows[0].changes.some((c) => c.eid == first && c.name == 'doc'),
+    true,
+  )
 })
 
 Deno.test('claim leaves one durable worked edge after its lease is released', () => {
@@ -4042,8 +4053,8 @@ Deno.test('journal_touch: a multi-entity batch is seekable from each eid', () =>
   assertEquals(lastBatch(db, b), batch) // one batch, both entities see it
   assertEquals(journalOf(db, a)[0].id, batch)
   assertEquals(journalOf(db, b)[0].id, batch)
-  // one row per (batch, eid) — no duplicate even though the batch had two
-  // changes; each eid appears once.
+  // one row per (batch, eid). The already-present empty-body content identity
+  // is reused, not journaled as a fresh touch.
   let rows = db.prepare(
     'select count(*) as n from journal_touch where jrow = ?',
   ).get(batch) as { n: number }
@@ -4680,8 +4691,8 @@ Deno.test('a deleted number is never reused — remint is strictly higher', () =
 Deno.test('a num-less entity: short-eid handle renders and resolves', () => {
   let e = 'dead1234-0000-4000-8000-00000000cafe'
   db.prepare('insert into entity (eid) values (?)').run(e)
-  db.prepare(`insert into doc (entity, title) values (${idOf}, ?)`)
-    .run(e, 'cheap')
+  db.prepare(`insert into doc (entity, title, body) values (${idOf}, ?, ?)`)
+    .run(e, 'cheap', textBlob(db, ''))
   assertEquals(human(db, e), 'dead1234') // the 8-hex handle, never T-0
   assertEquals(human(db, e), shortId(e))
   // the handle round-trips through the shared resolver and its doors

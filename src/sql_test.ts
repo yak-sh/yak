@@ -23,7 +23,7 @@ import {
   type Walk,
 } from './query.ts'
 import { aggregateSql, select, where } from './sql.ts'
-import { open, textMatches } from './db.ts'
+import { open, textBlob, textMatches } from './db.ts'
 import { kindOf, kindOrder } from './types.ts'
 import { isRef } from './props.ts'
 
@@ -46,6 +46,9 @@ let put = (eid: string, rows: Record<string, Record<string, Cell>>) => {
   db.prepare('insert into entity (eid, num) values (?, ?)')
     .run(eid, base + ++n)
   for (let [comp, cols] of Object.entries(rows)) {
+    if (comp == 'doc') {
+      cols = { ...cols, body: textBlob(db, String(cols.body ?? '')) }
+    }
     // Component tables are id-keyed now (owner `entity` int → entity(id)), and a
     // reference column stores the referent's int id. Resolve the owner eid and
     // each ref value eid→id in SQL; plain scalars bind straight (a null ref value
@@ -260,7 +263,8 @@ let graph = () => {
     for (
       let r of db.prepare(
         `select o.eid as eid${proj.length ? ', ' + proj.join(', ') : ''}
-         from "${comp}" join entity o on o.id = "${comp}".entity`,
+         from "${comp == 'doc' ? 'doc_value' : comp}" as "${comp}"
+         join entity o on o.id = "${comp}".entity`,
       ).all() as Record<string, unknown>[]
     ) {
       out[String(r.eid)][comp] = r

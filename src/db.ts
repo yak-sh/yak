@@ -256,8 +256,18 @@ let schema = `
   create table if not exists doc (
     entity   integer primary key references entity(id),
     title text not null,
-    body  text not null default ''
+    body  integer not null references blob(entity)
   );
+  -- Canonical in-db bytes for text content. Identity and length live on the
+  -- blob entity; this is one storage backend attached to that identity, not a
+  -- second CAS. doc_value is the direct-SQL projection of component values.
+  create table if not exists blob_text (
+    entity integer primary key references blob(entity),
+    value text not null
+  );
+  create view if not exists doc_value as
+    select d.entity as rowid, d.entity, d.title, b.value as body
+    from doc d join blob_text b on b.entity = d.body;
   create table if not exists task (
     entity    integer primary key references entity(id),
     status text not null default 'open',
@@ -839,21 +849,25 @@ let schema = `
   create trigger if not exists embedding_index_ad after delete on embedding
   begin update embedding_index set dirty = 1 where id = 1; end;
   create virtual table if not exists doc_fts using fts5(
-    title, body, content='doc', content_rowid='rowid'
+    title, body, content='doc_value', content_rowid='rowid'
   );
   create trigger if not exists doc_fts_ai after insert on doc begin
     insert into doc_fts (rowid, title, body)
-    values (new.rowid, new.title, new.body);
+    values (new.rowid, new.title,
+      (select value from blob_text where entity = new.body));
   end;
   create trigger if not exists doc_fts_ad after delete on doc begin
     insert into doc_fts (doc_fts, rowid, title, body)
-    values ('delete', old.rowid, old.title, old.body);
+    values ('delete', old.rowid, old.title,
+      (select value from blob_text where entity = old.body));
   end;
   create trigger if not exists doc_fts_au after update on doc begin
     insert into doc_fts (doc_fts, rowid, title, body)
-    values ('delete', old.rowid, old.title, old.body);
+    values ('delete', old.rowid, old.title,
+      (select value from blob_text where entity = old.body));
     insert into doc_fts (rowid, title, body)
-    values (new.rowid, new.title, new.body);
+    values (new.rowid, new.title,
+      (select value from blob_text where entity = new.body));
   end;
   -- The SUBSTRING index, and the reason it cannot be doc_fts: doc_fts indexes
   -- TOKENS, so a search for idget finds none of the rows holding widget — a
@@ -863,21 +877,25 @@ let schema = `
   -- than by lowercasing every body in the graph. Derived like doc_fts: never
   -- on the wire, never dumped (bin/backup), healed by the same check below.
   create virtual table if not exists doc_gram using fts5(
-    title, body, content='doc', content_rowid='rowid', tokenize='trigram'
+    title, body, content='doc_value', content_rowid='rowid', tokenize='trigram'
   );
   create trigger if not exists doc_gram_ai after insert on doc begin
     insert into doc_gram (rowid, title, body)
-    values (new.rowid, new.title, new.body);
+    values (new.rowid, new.title,
+      (select value from blob_text where entity = new.body));
   end;
   create trigger if not exists doc_gram_ad after delete on doc begin
     insert into doc_gram (doc_gram, rowid, title, body)
-    values ('delete', old.rowid, old.title, old.body);
+    values ('delete', old.rowid, old.title,
+      (select value from blob_text where entity = old.body));
   end;
   create trigger if not exists doc_gram_au after update on doc begin
     insert into doc_gram (doc_gram, rowid, title, body)
-    values ('delete', old.rowid, old.title, old.body);
+    values ('delete', old.rowid, old.title,
+      (select value from blob_text where entity = old.body));
     insert into doc_gram (rowid, title, body)
-    values (new.rowid, new.title, new.body);
+    values (new.rowid, new.title,
+      (select value from blob_text where entity = new.body));
   end;
 `
 
@@ -994,6 +1012,24 @@ let mintNum = (db: DatabaseSync, eid: string) => {
     .run(n, eid)
 }
 
+let utf8 = new TextEncoder()
+
+// Land one internal text backend under the same blob identity attachments use.
+// The caller stores only the returned integer id; graph-out resolves the text
+// through blob_text, so the wire continues to speak the component value.
+export let textBlob = (db: DatabaseSync, value: string): number => {
+  let eid = sha(value)
+  spine(db, eid)
+  let { id } = prep(db, 'select id from entity where eid = ?').get(eid) as {
+    id: number
+  }
+  prep(db, 'insert or ignore into blob (entity, bytes) values (?, ?)')
+    .run(id, utf8.encode(value).byteLength)
+  prep(db, 'insert or ignore into blob_text (entity, value) values (?, ?)')
+    .run(id, value)
+  return id
+}
+
 // Mint a bare entity; components hang off the returned eid.
 let ent = (db: DatabaseSync) => {
   let eid = crypto.randomUUID()
@@ -1007,7 +1043,7 @@ let ent = (db: DatabaseSync) => {
 let ID = '(select id from entity where eid = ?)'
 let doc = (db: DatabaseSync, eid: string, title: string, body = '') =>
   prep(db, `insert into doc (entity, title, body) values (${ID}, ?, ?)`)
-    .run(eid, title, body)
+    .run(eid, title, textBlob(db, body))
 
 let addTask = (db: DatabaseSync, title: string, status: string, body = '') => {
   let eid = ent(db)
@@ -1255,7 +1291,7 @@ export let migrateRefs = (db: DatabaseSync) => {
     ? prep(
       db,
       `select o.eid as eid, d.title, d.body
-       from doc d join entity o on o.id = d.entity where ${
+       from doc_value d join entity o on o.id = d.entity where ${
         kinds.map((table) =>
           `exists (select 1 from ${table} where ${table}.entity = d.entity)`
         ).join(' or ')
@@ -1291,7 +1327,9 @@ export let migrateRefs = (db: DatabaseSync) => {
       `update doc set title = ?, body = ?
        where entity = (select id from entity where eid = ?)`,
     )
-    for (let r of staleDocs) writeDoc.run(r.nextTitle, r.nextBody, r.eid)
+    for (let r of staleDocs) {
+      writeDoc.run(r.nextTitle, textBlob(db, r.nextBody), r.eid)
+    }
   })
 }
 
@@ -2187,6 +2225,9 @@ export let healStored = (db: DatabaseSync) => {
         table == 'entity'
           ? `select eid, ${sqlName(col)} as value from entity
              where ${sqlName(col)} is not null`
+          : table == 'doc' && col == 'body'
+          ? `select o.eid as eid, t.body as value from doc_value t
+             join entity o on o.id = t.entity`
           : `select o.eid as eid, t.${sqlName(col)} as value from ${
             sqlName(table)
           } t
@@ -2212,6 +2253,13 @@ export let healStored = (db: DatabaseSync) => {
   if (!fixes.length) return { changed: 0, invalid }
   atomic(db, () => {
     for (let fix of fixes) {
+      if (fix.table == 'doc' && fix.col == 'body') {
+        prep(
+          db,
+          'update doc set body = ? where entity = (select id from entity where eid = ?)',
+        ).run(textBlob(db, String(fix.value ?? '')), fix.eid)
+        continue
+      }
       prep(
         db,
         fix.table == 'entity'
@@ -2562,6 +2610,68 @@ let migrateBlobEntities = (db: DatabaseSync) => {
   }
 }
 
+// doc.body is a wire value and a storage reference. Move legacy inline text to
+// the internal blob backend atomically, keeping doc's owner rowids stable so
+// every component/reference join still addresses the same entity. FTS/gram are
+// derived and are rebuilt from the resolved projection by the current schema.
+let migrateDocBodies = (db: DatabaseSync) => {
+  if (!tableExists(db, 'doc') || !hasCol(db, 'doc', 'body')) return
+  let col = prep(
+    db,
+    `select lower(type) as type from pragma_table_info('doc') where name = 'body'`,
+  ).get() as { type: string } | undefined
+  if (col?.type == 'integer') return
+  db.exec('savepoint doc_bodies')
+  try {
+    db.exec(`
+      drop trigger if exists doc_ai;
+      drop trigger if exists doc_ad;
+      drop trigger if exists doc_au;
+      drop trigger if exists doc_fts_ai;
+      drop trigger if exists doc_fts_ad;
+      drop trigger if exists doc_fts_au;
+      drop trigger if exists doc_gram_ai;
+      drop trigger if exists doc_gram_ad;
+      drop trigger if exists doc_gram_au;
+      drop table if exists doc_fts;
+      drop table if exists doc_gram;
+      drop view if exists doc_value;
+      create table if not exists blob (
+        entity integer primary key references entity(id),
+        bytes integer
+      );
+      create table if not exists blob_text (
+        entity integer primary key references blob(entity),
+        value text not null
+      );
+      alter table doc rename to __legacy_doc;
+      create table doc (
+        entity integer primary key references entity(id),
+        title text not null,
+        body integer not null references blob(entity)
+      );
+    `)
+    let rows = prep(
+      db,
+      'select entity, title, body from __legacy_doc order by entity',
+    )
+      .all() as { entity: number; title: string; body: string }[]
+    let put = prep(db, 'insert into doc (entity, title, body) values (?, ?, ?)')
+    for (let row of rows) put.run(row.entity, row.title, textBlob(db, row.body))
+    db.exec(`
+      drop table __legacy_doc;
+      create view doc_value as
+        select d.entity as rowid, d.entity, d.title, b.value as body
+        from doc d join blob_text b on b.entity = d.body;
+      release doc_bodies;
+    `)
+  } catch (e) {
+    db.exec('rollback to doc_bodies')
+    db.exec('release doc_bodies')
+    throw e
+  }
+}
+
 // A WAL-present boot follows a crash or overlaps another healthy connection,
 // so verify the complete SQLite view before migrations write anything. A
 // failed check is never repaired in place: WAL and SHM are live parts of the
@@ -2737,6 +2847,10 @@ export let migrate = (db: DatabaseSync) => {
       // minting each distinct SHA as a blob entity's eid. Runs after eid→id so
       // every reference is born on the canonical id-keyed spine.
       migrateBlobEntities(db)
+      // Move legacy inline doc bodies to the internal blob text backend, so
+      // doc.body becomes a content-addressed reference. FTS/gram are rebuilt
+      // from the resolved projection by the schema below.
+      migrateDocBodies(db)
       // This must precede schema: an old table may not yet have the canonical
       // columns named by a newly added index in the current DDL.
       migrateRefs(db)
@@ -3681,6 +3795,10 @@ let select = (name: string): string => {
   let joins: string[] = []
   let cols = readable[name].map((c) => {
     if (c == 'eid') return `__o.eid as eid`
+    if (name == 'doc' && c == 'body') {
+      joins.push('join blob_text __body on __body.entity = t.body')
+      return '__body.value as body'
+    }
     if (isRef(name, c)) {
       let a = `__r_${c.replace(/[^A-Za-z0-9]/g, '_')}`
       joins.push(`left join entity ${a} on ${a}.id = t.${sqlName(c)}`)
@@ -3706,6 +3824,12 @@ export let sweepSelect = (name: string, pending: string): string => {
   let joins: string[] = []
   let cols = readable[name].map((c) => {
     if (c == 'eid') return `__o.eid as eid`
+    if (name == 'doc' && c == 'body') {
+      joins.push(
+        `join blob_text __body on __body.entity = ${base}.body`,
+      )
+      return '__body.value as body'
+    }
     if (isRef(name, c)) {
       let a = `__r_${c.replace(/[^A-Za-z0-9]/g, '_')}`
       joins.push(`left join entity ${a} on ${a}.id = ${base}.${sqlName(c)}`)
@@ -4401,6 +4525,40 @@ export let settingEid = (
     eid?: string
   } | undefined)?.eid ?? undefined
 
+// A doc write speaks text but stores a blob reference. Materialize the blob as
+// an ordinary graph change before the doc so lifecycle, journal, and caches all
+// see a newly-created content entity; repeated values collapse by hash.
+let casBodies = (db: DatabaseSync, changes: Change[]): Change[] => {
+  let spoken = new Set(
+    changes.filter((c) => c.name == 'blob').map((c) => c.eid),
+  )
+  let blobs: Change[] = []
+  for (let change of changes) {
+    if (change.name != 'doc' || !change.comp) continue
+    let body = typeof change.comp.body == 'string' ? change.comp.body : !prep(
+        db,
+        'select 1 from doc where entity = (select id from entity where eid = ?)',
+      ).get(change.eid)
+      ? ''
+      : undefined
+    if (body == null) continue
+    let eid = sha(body)
+    if (
+      spoken.has(eid) || prep(
+        db,
+        'select 1 from blob where entity = (select id from entity where eid = ?)',
+      ).get(eid)
+    ) continue
+    spoken.add(eid)
+    blobs.push({
+      eid,
+      name: 'blob',
+      comp: { bytes: utf8.encode(body).byteLength },
+    })
+  }
+  return [...blobs, ...changes]
+}
+
 export let apply = (
   db: DatabaseSync,
   changes: Change[],
@@ -4488,6 +4646,7 @@ export let apply = (
     // a hydrated session.provider is never promoted to a spawn request; a
     // historical session must not launch an agent.
     if (hasSources()) changes = graduate(db, changes)
+    changes = casBodies(db, changes)
     // A log entry is an append-only fact. Every request/content facet is
     // born in the same batch as entry membership and can never be revised,
     // removed, or attached later. Outcomes use server-owned facets instead.
@@ -5024,7 +5183,9 @@ export let apply = (
       // tombstone), exactly what the old entity(eid) FK bounced. Plain scalars
       // keep their bound value.
       let vals = sent.map((c) =>
-        isRef(name, c)
+        name == 'doc' && c == 'body' && comp[c] != null
+          ? textBlob(db, String(comp[c]))
+          : isRef(name, c)
           ? refToId(db, name, eid, c, comp[c])
           : bound(name, c, comp[c])
       )
@@ -5047,16 +5208,19 @@ export let apply = (
         }
       }
       if (hit) continue
-      // A doc is title-optional: comments and session briefs are body-first,
-      // and an entity's display name is derived (kindOf), not its title. But
-      // doc.title is NOT NULL with no default (unlike body), so a body-only
-      // CREATE would raise a raw SQLite constraint the caller can't read
-      // (T-10397). Supply the empty title here, at the sole doc writer, and on
-      // CREATE only — the update above already ran, so an existing title is
-      // never clobbered. Empty is the natural absent title, mirroring body.
-      if (name == 'doc' && comp && !('title' in comp)) {
-        sent = ['title', ...sent]
-        vals = ['', ...vals]
+      // Both doc values are wire-defaulted at the sole writer. Storage cannot
+      // express a dynamic default for body (the empty string's blob id), so a
+      // title-only create lands that reference here. This runs only after the
+      // update missed; a patch never clobbers the other value.
+      if (name == 'doc' && comp) {
+        if (!('title' in comp)) {
+          sent = ['title', ...sent]
+          vals = ['', ...vals]
+        }
+        if (!('body' in comp)) {
+          sent.push('body')
+          vals.push(textBlob(db, ''))
+        }
       }
       // No row: this change CREATES — spine + comp together, in a savepoint.
       // A known component that reaches SQL must land or fail its whole
@@ -5539,7 +5703,7 @@ export let vocabularyDoc = (db: DatabaseSync, body: string): void => {
     `
     select ae.eid as eid, d.body from alias a
     join entity ae on ae.id = a.entity
-    left join doc d on d.entity = a.entity
+    left join doc_value d on d.entity = a.entity
     where a.slug = 'vocabulary'
   `,
   ).get() as { eid: string; body: string | null } | undefined
@@ -5646,7 +5810,7 @@ export let redact = (
 
     let doc = prep(
       db,
-      `select d.title, d.body from doc d
+      `select d.title, d.body from doc_value d
        where d.entity = ?`,
     ).get(targetId) as { title: string; body: string } | undefined
     let named: DocColumn | undefined = selector == '.title' ||
@@ -5714,8 +5878,13 @@ export let redact = (
       let old = doc[column]
       let clean = named ? REDACTED : old.replaceAll(value, REDACTED)
       if (clean != old) {
-        prep(db, `update doc set ${sqlName(column)} = ? where entity = ?`)
-          .run(clean, targetId)
+        if (column == 'body') {
+          prep(db, 'update doc set body = ? where entity = ?')
+            .run(textBlob(db, clean), targetId)
+        } else {
+          prep(db, 'update doc set title = ? where entity = ?')
+            .run(clean, targetId)
+        }
         docChange = { eid: target, name: 'doc', comp: { [column]: clean } }
       }
     }
@@ -5978,7 +6147,16 @@ export let inverseBatch = (db: DatabaseSync, id: number): Change[] => {
   }
 
   let inverse: Change[] = []
-  for (let eid of born) {
+  // Content identities are synthesized before the docs/attachments that point
+  // at them. Undo those owners first so their physical FK cannot strand the
+  // content deletion; retain the batch order for every ordinary entity.
+  let content = new Set(
+    batch.filter((c) => c.name == 'blob').map((c) => c.eid),
+  )
+  let bornOrder = [...born].sort((a, b) =>
+    Number(content.has(a)) - Number(content.has(b))
+  )
+  for (let eid of bornOrder) {
     if (touchedSince.get(eid, id)) {
       throw new Error(
         `${human(db, eid)} was modified after #${id} — undo refused`,
@@ -6353,7 +6531,7 @@ export let textMatches = (
   return !!term && !!prep(
     db,
     `select 1 from doc_fts
-      join doc d on d.rowid = doc_fts.rowid
+      join doc_value d on d.rowid = doc_fts.rowid
       join entity e on e.id = d.entity
      where doc_fts match ? and e.eid = ?`,
   ).get(term, eid)
@@ -6405,7 +6583,7 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
           as score,
         e.num
       from doc_fts
-      join doc d on d.rowid = doc_fts.rowid
+      join doc_value d on d.rowid = doc_fts.rowid
       join entity e on e.id = d.entity
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id
@@ -6422,7 +6600,7 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       `
       select e.eid, d.title, d.title as title_hit, '' as snip,
         coalesce(julianday(up.at), julianday(cr.at), 0) as score, e.num
-      from doc d
+      from doc_value d
       join entity e on e.id = d.entity
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id
@@ -6441,7 +6619,7 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       `
       select e.eid, d.title, d.title as title_hit, '' as snip,
         1000000000 as score, e.num
-      from doc d
+      from doc_value d
       join entity e on e.id = d.entity
       where e.eid = ? ${screen}
     `,
@@ -6510,7 +6688,7 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
     `
     select ${refEid('c.target')} as target, td.title from comment c
     join entity ce on ce.id = c.entity
-    left join doc td on td.entity = c.target
+    left join doc_value td on td.entity = c.target
     where ce.eid = ?
   `,
   )
@@ -6662,15 +6840,20 @@ export let bodies = (db: DatabaseSync, eids: string[]): Change[] => {
   for (let name of Object.keys(readable)) {
     let cut = bodyCols(name).filter((c) => readable[name].includes(c))
     if (!cut.length) continue
-    // Body columns are never references (long markdown), so they read straight
-    // off the base row; only the owner eid needs projecting through the spine.
+    // doc.body is storage-addressed but wire-transparent; every other body
+    // remains an inline append-only value. Both leave this door as text.
     let rows = prep(
       db,
       `select o.eid as eid, ${
-        cut.map((c) => `t.${sqlName(c)} as ${sqlName(c)}`)
+        cut.map((c) =>
+          name == 'doc' && c == 'body'
+            ? '__body.value as body'
+            : `t.${sqlName(c)} as ${sqlName(c)}`
+        )
           .join(', ')
       } from ${sqlName(name)} t
        join entity o on o.id = t.entity
+       ${name == 'doc' ? 'join blob_text __body on __body.entity = t.body' : ''}
        where o.eid in (${holes})`,
     ).all(...eids) as Record<string, unknown>[]
     for (let row of rows) out.push({ eid: String(row.eid), name, comp: row })

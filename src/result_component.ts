@@ -35,12 +35,12 @@ let materializedRead = (
   let scopeSql = home
     ? `select e.eid from entity s
          join memory m on m.scope = s.id
-         join doc d on d.entity = m.entity
+         join doc_value d on d.entity = m.entity
          join entity e on e.id = m.entity
          left join quarantined q on q.entity = m.entity
         where s.eid = ? and q.entity is null`
     : `select e.eid from memory m
-         join doc d on d.entity = m.entity
+         join doc_value d on d.entity = m.entity
          join entity e on e.id = m.entity
          left join quarantined q on q.entity = m.entity
         where m.scope is null and q.entity is null`

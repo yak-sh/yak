@@ -131,7 +131,7 @@ Deno.test('an addressed person: the knock rides mail, words and all', () => {
   let k = knock(task, jeff)
   assertMatch(String(drow(k)?.via), /^mailed U-\d+$/)
   let m = db.prepare(
-    'select d.title, d.body from mail m join doc d on d.entity = m.entity',
+    'select d.title, d.body from mail m join doc_value d on d.entity = m.entity',
   ).get() as { title: string; body: string }
   assertMatch(m.title, /^knock: T-\d+/)
   assertEquals(m.body, 'need this today')
@@ -240,7 +240,7 @@ Deno.test('a settled managed session: the knock rides its input door', () => {
   assertMatch(String(drow(k)?.via), /^commented S-/)
   // The comment landed ON the session — that IS the input.
   let input = db.prepare(
-    `select d.body from comment c join doc d on d.entity = c.entity
+    `select d.body from comment c join doc_value d on d.entity = c.entity
      where c.target = ${idOf} order by c.rowid desc limit 1`,
   ).get(sess) as { body: string }
   assertMatch(input.body, /^knock: T-\d+ — the key expires today$/)

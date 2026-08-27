@@ -894,7 +894,7 @@ Deno.test('unify migration is reversible: comps move onto the project and back, 
   ])
   assert(enumerated().includes(project))
   assert(!enumerated().includes(role)) // no longer a role, but NOT tombstoned
-  assert(db.prepare(`select 1 from doc where entity = ${R}`).get(role)) // doc lives
+  assert(db.prepare(`select 1 from doc_value where entity = ${R}`).get(role)) // doc lives
   await rolesSweep(cast, deps)
   await rolesSweep(cast, deps)
   let unified = db.prepare(

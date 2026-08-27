@@ -32,8 +32,13 @@ fn fixture(dir: &Path, sessions: usize) -> String {
         "create table entity (id integer primary key, eid text unique, \
            num integer, at text);
          create table project (entity integer primary key, color text);
+         create table blob (entity integer primary key, bytes integer not null);
+         create table blob_text (entity integer primary key, value text not null);
          create table doc (entity integer primary key, title text not null, \
-           body text not null default '');
+           body integer not null);
+         create view doc_value as
+           select d.entity as rowid, d.entity, d.title, b.value as body
+           from doc d join blob_text b on b.entity = d.body;
          create table brief (entity integer primary key, text text not null);
          create table created (entity integer primary key, at text, \
            \"by\" integer, via integer);
@@ -52,9 +57,12 @@ fn fixture(dir: &Path, sessions: usize) -> String {
            final_text text, usage_json text, stderr text, actor integer);
          -- the project the digest is scoped to; every session's actor
          insert into entity (id, eid, num) \
-           values (1, '00000000-0000-0000-0000-000000000001', 1);
+           values (1, '00000000-0000-0000-0000-000000000001', 1),
+                  (2, 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', null);
          insert into project (entity) values (1);
-         insert into doc (entity, title) values (1, 'Test Project');",
+         insert into blob (entity, bytes) values (2, 0);
+         insert into blob_text (entity, value) values (2, '');
+         insert into doc (entity, title, body) values (1, 'Test Project', 2);",
     )
     .unwrap();
     for i in 0..sessions {

@@ -13,6 +13,7 @@ use rusqlite::Connection;
 use yak_kernel::query::{self, Pred};
 use yak_kernel::store::{visible, Store};
 use yak_kernel::vocab::{vocab, PropType};
+use yak_kernel::write::sha;
 use yak_kernel::Row;
 
 // Row is not Serialize; its identity for parity is (eid, num, kind, comps) — and
@@ -47,6 +48,10 @@ fn affinity(t: &PropType) -> &'static str {
 // readable column the vocabulary declares — so fill()/comp_row() find exactly
 // the columns they select.
 fn ddl_for(comp: &str) -> String {
+    if comp == "doc" {
+        return "create table doc (entity integer primary key, title text, body integer);"
+            .to_string();
+    }
     let cols: Vec<String> = vocab()
         .readable(comp)
         .iter()
@@ -58,6 +63,23 @@ fn ddl_for(comp: &str) -> String {
         format!("entity integer primary key, {}", cols.join(", "))
     };
     format!("create table \"{comp}\" ({body});")
+}
+
+fn text_blob(conn: &Connection, value: &str) -> i64 {
+    let eid = sha(&serde_json::Value::from(value));
+    conn.execute("insert or ignore into entity (eid) values (?1)", [&eid]).unwrap();
+    let id = conn.query_row("select id from entity where eid = ?1", [&eid], |r| r.get(0)).unwrap();
+    conn.execute(
+        "insert or ignore into blob (entity, bytes) values (?1, ?2)",
+        rusqlite::params![id, value.len() as i64],
+    )
+    .unwrap();
+    conn.execute(
+        "insert or ignore into blob_text (entity, value) values (?1, ?2)",
+        rusqlite::params![id, value],
+    )
+    .unwrap();
+    id
 }
 
 // A seeded read Store over a temp file: write with a RW connection, then open the
@@ -93,13 +115,19 @@ fn seed(n: usize) -> Fixture {
     let _ = std::fs::remove_file(&path);
     let conn = Connection::open(&path).unwrap();
     let mut schema = String::from(
-        "create table entity (id integer primary key, eid text not null unique, num integer unique);",
+        "create table entity (id integer primary key, eid text not null unique, num integer unique); \
+         create table blob (entity integer primary key, bytes integer not null); \
+         create table blob_text (entity integer primary key, value text not null);",
     );
     // Generate every comp table (quarantined included — it carries stamped
     // at/by columns fill() selects) from the vocabulary, so nothing drifts.
     for comp in ["doc", "task", "project", "created", "updated", "quarantined"] {
         schema.push_str(&ddl_for(comp));
     }
+    schema.push_str(
+        "create view doc_value as select d.entity as rowid, d.entity, d.title, b.value as body \
+         from doc d join blob_text b on b.entity = d.body;",
+    );
     conn.execute_batch(&schema).unwrap();
     conn.execute_batch("begin").unwrap(); // one fsync, not one per row
 
@@ -119,9 +147,10 @@ fn seed(n: usize) -> Fixture {
     let mut proj_ids = vec![];
     for i in 0..2 {
         let id = mint(&conn, 900_000 + i);
+        let body = text_blob(&conn, "");
         conn.execute(
-            "insert into doc (entity, title, body) values (?1, ?2, '')",
-            rusqlite::params![id, format!("Project {i}")],
+            "insert into doc (entity, title, body) values (?1, ?2, ?3)",
+            rusqlite::params![id, format!("Project {i}"), body],
         )
         .unwrap();
         conn.execute("insert into project (entity) values (?1)", [id]).unwrap();
@@ -132,9 +161,10 @@ fn seed(n: usize) -> Fixture {
     for i in 0..n {
         let id = mint(&conn, i);
         let title = format!("Task {i} widget");
+        let body = text_blob(&conn, &format!("body of {i}"));
         conn.execute(
             "insert into doc (entity, title, body) values (?1, ?2, ?3)",
-            rusqlite::params![id, title, format!("body of {i}")],
+            rusqlite::params![id, title, body],
         )
         .unwrap();
         let status = &statuses[i % statuses.len()];
@@ -153,9 +183,10 @@ fn seed(n: usize) -> Fixture {
     }
     // one quarantined task, newest num, so a windowed read would grab it first
     let qid = mint(&conn, 999_999);
+    let body = text_blob(&conn, "");
     conn.execute(
-        "insert into doc (entity, title, body) values (?1, 'Quarantined widget', '')",
-        [qid],
+        "insert into doc (entity, title, body) values (?1, 'Quarantined widget', ?2)",
+        [qid, body],
     )
     .unwrap();
     conn.execute("insert into task (entity, status, priority) values (?1, 'open', 0)", [qid])

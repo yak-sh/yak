@@ -52,7 +52,7 @@ let status = (eid: string) =>
 // here, and nothing else should be.
 let replies = (target: string) =>
   db.prepare(
-    `select d.body from comment c join doc d on d.entity = c.entity
+    `select d.body from comment c join doc_value d on d.entity = c.entity
      where c.target = (select id from entity where eid = ?) order by c.rowid`,
   ).all(target) as { body: string }[]
 
@@ -162,7 +162,7 @@ Deno.test('a worded :fix files its task and spawns onto it', () => {
   say(t, ':fix the toolbar clips at small widths')
   // The task landed…
   let filed = db.prepare(
-    `select o.eid as eid from task k join doc d on d.entity = k.entity
+    `select o.eid as eid from task k join doc_value d on d.entity = k.entity
      join entity o on o.id = k.entity where d.title = ?`,
   ).get('the toolbar clips at small widths') as { eid: string } | undefined
   assertEquals(!!filed, true)

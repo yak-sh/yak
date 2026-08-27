@@ -8,6 +8,7 @@
 // measure. `deno task bench`; gated by bin/bench-gate.ts.
 Deno.env.set('DB_PATH', ':memory:')
 let { MODEL, hash, similar } = await import('./embed.ts')
+let { textBlob } = await import('./db.ts')
 let { vectorDb } = await import('./testdb.ts')
 
 let d = vectorDb()
@@ -31,7 +32,7 @@ for (let i = 0; i < N; i++) {
     `insert into doc (entity, title, body)
      values ((select id from entity where eid = ?), ?, ?)`,
   )
-    .run(e, `Doc ${i}`, '')
+    .run(e, `Doc ${i}`, textBlob(d, ''))
   d.prepare('insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)')
     .run(e, MODEL, hash(`Doc ${i}`), new Uint8Array(vecAt(i).buffer))
 }

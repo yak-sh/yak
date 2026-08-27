@@ -112,7 +112,7 @@ let knockArchived = (eid: string) =>
 // :knock's words use (knock.ts wordsFor, channel.ts commentOn).
 let saidOn = (target: string) =>
   db.prepare(
-    `select d.body from comment c join doc d on d.entity = c.entity
+    `select d.body from comment c join doc_value d on d.entity = c.entity
      where c.target = ${idOf} order by d.body`,
   ).all(target) as { body: string }[]
 

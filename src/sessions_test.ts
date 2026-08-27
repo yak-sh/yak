@@ -226,7 +226,7 @@ let say = (target: string, body: string) => {
 // from re-entering commented() and refusing forever.
 let refusals = (target: string) =>
   (db.prepare(
-    `select d.body from comment c join doc d on d.entity = c.entity
+    `select d.body from comment c join doc_value d on d.entity = c.entity
      join created cr on cr.entity = c.entity
      where c.target = (select id from entity where eid = ?)
        and cr.via = (select id from entity where eid = ?)`,
@@ -886,7 +886,7 @@ slow('a fake session runs end to end', async () => {
   // doc.body (no doc row here, so the body is simply absent).
   assert(
     (db.prepare(
-      'select body from doc where entity = (select id from entity where eid = ?)',
+      'select body from doc_value where entity = (select id from entity where eid = ?)',
     ).get(eid) as {
       body?: string
     })?.body !== s.final_text,
@@ -1233,7 +1233,7 @@ slow(
 // session — cast like any wire write, exactly once per settle.
 let settleComments = (task: string, via: string) =>
   (db.prepare(
-    `select d.body from comment c join doc d on d.entity = c.entity
+    `select d.body from comment c join doc_value d on d.entity = c.entity
      join created b on b.entity = c.entity
      where c.target = (select id from entity where eid = ?)
        and b.via = (select id from entity where eid = ?)`,
@@ -1243,7 +1243,7 @@ let settleComments = (task: string, via: string) =>
 // the task, not a comment — same target, same instrument, off the thread.
 let settleNotices = (task: string, via: string) =>
   (db.prepare(
-    `select d.body from notice n join doc d on d.entity = n.entity
+    `select d.body from notice n join doc_value d on d.entity = n.entity
      join created b on b.entity = n.entity
      where n.target = (select id from entity where eid = ?)
        and b.via = (select id from entity where eid = ?)`,

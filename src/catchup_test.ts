@@ -41,7 +41,8 @@ Deno.test('only a fed() trace journals an effect ask', () => {
   let rows = journalSince(db, since)
   assertEquals(rows.length, 4)
   assert(rows[0].trace, 'fed() journals the trace')
-  assert(rows[0].trace!.created.has(`doc ${rows[0].batch[0].eid}`))
+  let createdDoc = rows[0].batch.find((c) => c.name == 'doc')!
+  assert(rows[0].trace!.created.has(`doc ${createdDoc.eid}`))
   assertEquals(rows[1].trace, null, 'a plain trace dispatched at its site')
   assertEquals(rows[2].trace, null, 'no trace, no effects')
   assertEquals(rows[3].trace, null, 'the stamp door never dispatches')

@@ -542,7 +542,7 @@ let passRecord = (to: string, r: Pass, cast: Cast): string => {
   let row = db.prepare(
     `select d.body from notice n
       join entity e on e.id = n.entity
-      join doc d on d.entity = n.entity
+      join doc_value d on d.entity = n.entity
      where e.eid = ? and n.target = ${idOf}`,
   ).get(eid, to) as { body: string } | undefined
   if (row?.body != body) {

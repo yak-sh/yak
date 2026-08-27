@@ -48,6 +48,8 @@ export type Sql = { sql: string; params: Bind[] }
 // it. So every membership query over the spine excludes the graves, or it would
 // return dead eids the fallback never would (a break of the exactness contract).
 let LIVE = ` and "entity"."eid" not in (select eid from tombstone)`
+let table = (name: string) =>
+  name == 'doc' ? '"doc_value" as "doc"' : `"${name}"`
 
 // A column reference, quoted. The table is the component's own table, joined on
 // the int owner key (D-18866), so `.task.status` is `"task"."status"`. Two
@@ -457,7 +459,7 @@ let build = (
   let key = base == 'entity' ? `"entity"."id"` : `"${base}"."entity"`
   let joins = [...tables]
     .filter((t) => t != 'entity')
-    .map((t) => ` left join "${t}" on "${t}"."entity" = ${key}`)
+    .map((t) => ` left join ${table(t)} on "${t}"."entity" = ${key}`)
     .join('')
   let cond = parts.length ? parts.map((p) => p.sql).join(' and ') : '1'
   return { joins, cond, params: parts.flatMap((p) => p.params) }

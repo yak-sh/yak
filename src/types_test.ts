@@ -100,6 +100,8 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'cursor.client',
       // the lazy partition has no life after its owning Session
       'entry.session',
+      // an attachment cannot survive without the content it names
+      'attachment.blob',
     ]),
   )
   assertEquals(

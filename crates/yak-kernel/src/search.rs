@@ -203,7 +203,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
           - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at)))) as score,
         e.num
       from doc_fts
-      join doc d on d.rowid = doc_fts.rowid
+      join doc_value d on d.rowid = doc_fts.rowid
       join entity e on e.id = d.entity
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id
@@ -247,7 +247,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
                     "
       select e.eid, d.title, d.title as title_hit, '' as snip,
         coalesce(julianday(up.at), julianday(cr.at), 0) as score, e.num
-      from doc d
+      from doc_value d
       join entity e on e.id = d.entity
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id{joins}
@@ -269,7 +269,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
                     "
       select e.eid, d.title, d.title as title_hit, '' as snip,
         coalesce(julianday(up.at), julianday(cr.at), 0) as score, e.num
-      from doc d
+      from doc_value d
       join entity e on e.id = d.entity
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id
@@ -314,7 +314,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
         Some(direct) => {
             let head = store.conn.query_row(
                 "select e.eid, d.title, d.title as title_hit, '' as snip, \
-                 1000000000 as score, e.num from doc d \
+                 1000000000 as score, e.num from doc_value d \
                  join entity e on e.id = d.entity where e.eid = ?1 \
                  and not exists \
                    (select 1 from quarantined qq where qq.entity = e.id) \
@@ -395,7 +395,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
             let aim_sql = "select te.eid, td.title, te.num, '' from comment c \
                            join entity ce on ce.id = c.entity \
                            join entity te on te.id = c.target \
-                           left join doc td on td.entity = c.target \
+                           left join doc_value td on td.entity = c.target \
                            where ce.eid = ?1";
             let t = profiling::sql(aim_sql);
             let aim: Option<(String, Option<String>, Option<i64>, String)> = store

@@ -3,6 +3,7 @@
 // the shared content. No test opens the owner's graph.
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { DatabaseSync } from 'node:sqlite'
+import { sha as hash } from './sha.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 Deno.env.set('HOME', await Deno.makeTempDir())
@@ -122,6 +123,100 @@ Deno.test('blob identity must be its content hash', () => {
   )
 })
 
+Deno.test('doc bodies deduplicate behind their wire projection', () => {
+  let a = crypto.randomUUID(), b = crypto.randomUUID()
+  let body = `shared body ${crypto.randomUUID()}`
+  let content = hash(body)
+  apply(db, [
+    { eid: a, name: 'doc', comp: { title: 'one', body } },
+    { eid: b, name: 'doc', comp: { title: 'two', body } },
+  ])
+
+  let rows = db.prepare(
+    `select e.eid, d.body as ref, v.body
+     from doc d join doc_value v on v.entity = d.entity
+     join entity e on e.id = d.entity
+     where e.eid in (?, ?) order by e.eid`,
+  ).all(a, b) as { eid: string; ref: number; body: string }[]
+  assertEquals(rows.map((r) => r.body), [body, body])
+  assertEquals(rows[0].ref, rows[1].ref)
+  assertEquals(
+    db.prepare(
+      `select b.bytes, t.value, e.num from blob b
+       join blob_text t on t.entity = b.entity
+       join entity e on e.id = b.entity where e.eid = ?`,
+    ).get(content),
+    {
+      bytes: new TextEncoder().encode(body).byteLength,
+      value: body,
+      num: null,
+    },
+  )
+  let docs = snapshot(db).changes.filter((c) =>
+    c.name == 'doc' && (c.eid == a || c.eid == b)
+  )
+  assertEquals(docs.map((c) => c.comp?.body), [body, body])
+})
+
+Deno.test('legacy inline doc bodies migrate atomically to shared content', async () => {
+  let path = await Deno.makeTempFile({ suffix: '.db' })
+  let raw = new DatabaseSync(path)
+  let a = crypto.randomUUID(), b = crypto.randomUUID()
+  raw.exec(`
+    create table entity (
+      id integer primary key, eid text unique not null, num integer unique
+    );
+    create table doc (
+      entity integer primary key references entity(id),
+      title text not null, body text not null default ''
+    );
+    insert into entity (id, eid, num)
+      values (1, '${a}', 1), (2, '${b}', 2);
+    insert into doc (entity, title, body)
+      values (1, 'one', 'shared body'), (2, 'two', 'shared body');
+  `)
+  raw.close()
+
+  let migrated = open(path)
+  try {
+    assertEquals(
+      migrated.prepare(
+        `select lower(type) type from pragma_table_info('doc')
+         where name = 'body'`,
+      ).get(),
+      { type: 'integer' },
+    )
+    assertEquals(
+      migrated.prepare(
+        `select count(distinct d.body) n from doc d join entity e on e.id = d.entity
+         where e.eid in (?, ?)`,
+      ).get(a, b),
+      { n: 1 },
+    )
+    assertEquals(
+      migrated.prepare(
+        `select d.title, d.body from doc_value d join entity e on e.id = d.entity
+         where e.eid in (?, ?) order by d.title`,
+      ).all(a, b),
+      [{ title: 'one', body: 'shared body' }, {
+        title: 'two',
+        body: 'shared body',
+      }],
+    )
+    assertEquals(
+      migrated.prepare(
+        `select e.eid, e.num from blob b join entity e on e.id = b.entity
+         where e.eid = ?`,
+      ).all(hash('shared body')),
+      [{ eid: hash('shared body'), num: null }],
+    )
+    assertEquals(migrated.prepare('pragma foreign_key_check').all(), [])
+  } finally {
+    migrated.close()
+    await Deno.remove(path)
+  }
+})
+
 Deno.test('legacy attachment rows migrate to shared blob entities', async () => {
   let path = await Deno.makeTempFile({ suffix: '.db' })
   let raw = new DatabaseSync(path)
@@ -145,7 +240,9 @@ Deno.test('legacy attachment rows migrate to shared blob entities', async () => 
   let migrated = open(path)
   try {
     assertEquals(
-      migrated.prepare('select count(*) n from blob').get(),
+      migrated.prepare(
+        'select count(*) n from blob join entity e on e.id = blob.entity where e.eid = ?',
+      ).get(sha),
       { n: 1 },
     )
     assertEquals(

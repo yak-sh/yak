@@ -83,7 +83,7 @@ Deno.test('a single break files one keyed, pointed, open ticket', () => {
     `select 1 from dependency where parent = ${idOf} and type = 'about' and child = ${idOf}`,
   ).get(mine[0].eid, eid)
   assert(edge, 'bug points at the broken entity')
-  let body = (db.prepare(`select body from doc where ${OWNED}`)
+  let body = (db.prepare(`select body from doc_value where ${OWNED}`)
     .get(mine[0].eid) as { body: string }).body
   assert(body.includes(msg), 'body carries the message')
 })
@@ -122,7 +122,7 @@ Deno.test('a storm — identical and volatile-differing — files ONE ticket', (
   assertEquals(mine[0].hits, 2 * N) // the recurrence tally
 
   // the footer records the recurrence, refreshed in place (one line, not 2N)
-  let body = (db.prepare(`select body from doc where ${OWNED}`)
+  let body = (db.prepare(`select body from doc_value where ${OWNED}`)
     .get(mine[0].eid) as { body: string }).body
   assertEquals(body.match(/recurred/g)?.length, 1)
   assert(body.includes(`recurred ${2 * N}×`))

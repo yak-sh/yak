@@ -223,7 +223,7 @@ slow(
     let task = db.prepare(
       `select t.status, (select eid from entity where id = t.project) as project,
               doc.title from task t
-       join doc on doc.entity = t.entity
+       join doc_value doc on doc.entity = t.entity
        join dependency dep on dep.parent = t.entity
       where dep.type = 'about' and dep.child = (select id from entity where eid = ?)`,
     ).get(s.eid) as
@@ -247,7 +247,7 @@ slow(
     assertEquals(!!wake, true)
     // The pass itself is graph data, written only after its outcomes read back.
     let pass = db.prepare(
-      `select doc.body from notice n join doc on doc.entity = n.entity
+      `select doc.body from notice n join doc_value doc on doc.entity = n.entity
        where n.target = (select id from entity where eid = ?)
          and n.event = 'sweep'`,
     ).get(d) as { body: string } | undefined
@@ -293,7 +293,7 @@ slow(
     await dreamComb(noop, fake as never)(k)
     let mem = db.prepare(
       `select dc.at as decided from memory m
-       join doc on doc.entity = m.entity
+       join doc_value doc on doc.entity = m.entity
        join decided dc on dc.entity = m.entity
       where doc.title = ?`,
     ).get('ADAPT complete() over batch') as { decided: string } | undefined
@@ -404,12 +404,14 @@ slow(
     // A memory, scoped to the venture; no "consider:" task with that title.
     let mem = db.prepare(
       `select (select eid from entity where id = m.scope) as scope
-       from memory m join doc on doc.entity = m.entity
+       from memory m join doc_value doc on doc.entity = m.entity
       where doc.title = ?`,
     ).get(title) as { scope: string } | undefined
     assertEquals(!!mem, true)
     assertEquals(mem!.scope, p)
-    let considers = db.prepare('select count(*) as n from doc where title = ?')
+    let considers = db.prepare(
+      'select count(*) as n from doc_value where title = ?',
+    )
       .get(`consider: ${title}`) as { n: number }
     assertEquals(considers.n, 0)
   },
@@ -432,7 +434,9 @@ slow(
     }))
     await dreamComb(noop, reply as never)(knock(d))
     // Both sessions combed, but the shared finding lands ONE task, not two.
-    let considers = db.prepare('select count(*) as n from doc where title = ?')
+    let considers = db.prepare(
+      'select count(*) as n from doc_value where title = ?',
+    )
       .get('consider: unify the widget path') as { n: number }
     assertEquals(considers.n, 1)
   },
@@ -472,7 +476,9 @@ slow(
     let near = () => Promise.resolve(vec(0, -1))
     await dreamComb(noop, reply as never, near as never)(knock(d))
     // Nothing new filed under the finding's title — no twin memory, no task.
-    let filed = db.prepare('select count(*) as n from doc where title = ?')
+    let filed = db.prepare(
+      'select count(*) as n from doc_value where title = ?',
+    )
       .get(title) as { n: number }
     assertEquals(filed.n, 0)
     // The matched memory was reinforced: recall bumped, last_confirmed_at stamped.
@@ -507,7 +513,9 @@ slow(
     let far = () => Promise.resolve(vec(-1, -1)) // near no memory
     await dreamComb(noop, reply as never, far as never)(knock(d))
     // The gate let it through: a consider task filed, exactly one.
-    let considers = db.prepare('select count(*) as n from doc where title = ?')
+    let considers = db.prepare(
+      'select count(*) as n from doc_value where title = ?',
+    )
       .get('consider: add a widget-purge verb') as { n: number }
     assertEquals(considers.n, 1)
   },

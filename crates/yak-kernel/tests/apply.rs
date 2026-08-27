@@ -32,11 +32,22 @@ const SCHEMA: &str = "
     actor text, via text, batch text not null, trace text
   );
   create table journal_touch (jrow integer not null, eid text not null);
+  create table blob (
+    entity integer primary key references entity(id),
+    bytes integer not null
+  );
+  create table blob_text (
+    entity integer primary key references blob(entity),
+    value text not null
+  );
   create table doc (
     entity integer primary key references entity(id),
     title text not null,
-    body  text not null default ''
+    body  integer not null references blob(entity)
   );
+  create view doc_value as
+    select d.entity as rowid, d.entity, d.title, b.value as body
+    from doc d join blob_text b on b.entity = d.body;
   create table task (
     entity integer primary key references entity(id),
     status text not null default 'open',
@@ -264,9 +275,32 @@ fn create_stamps_numbers_and_journals() {
     // trace is null unless the caller fed the journal
     let trace: Option<String> = one(&s, "select trace from journal");
     assert!(trace.is_none());
-    // journal_touch: one row per touched eid
+    // journal_touch: the document and its synthesized empty-body blob.
     let touched: i64 = one(&s, "select count(*) from journal_touch");
-    assert_eq!(touched, 1);
+    assert_eq!(touched, 2);
+}
+
+#[test]
+fn doc_bodies_share_content_identity_but_read_as_text() {
+    let s = store();
+    let out = run(
+        &s,
+        vec![
+            ch(A, "doc", json!({"title": "one", "body": "shared body"})),
+            ch(B, "doc", json!({"title": "two", "body": "shared body"})),
+        ],
+    );
+    let refs: i64 = one(&s, "select count(distinct body) from doc");
+    assert_eq!(refs, 1);
+    let bodies: i64 = one(&s, "select count(*) from doc_value where body = 'shared body'");
+    assert_eq!(bodies, 2);
+    let content = yak_kernel::write::sha(&json!("shared body"));
+    assert!(out.iter().any(|c| c.eid == content && c.name == "blob"));
+    let num: Option<i64> = s
+        .conn
+        .query_row("select num from entity where eid = ?1", [&content], |r| r.get(0))
+        .unwrap();
+    assert_eq!(num, None);
 }
 
 #[test]
@@ -408,7 +442,7 @@ fn setting_write_bounces_an_invalid_url_with_the_deno_message() {
     );
     assert_eq!(msg, "Use an http or https URL.");
     // The batch rolled back: neither the doc nor the setting landed.
-    let docs: i64 = one(&s, "select count(*) from doc");
+    let docs: i64 = one(&s, "select count(*) from doc_value");
     let settings: i64 = one(&s, "select count(*) from setting");
     assert_eq!((docs, settings), (0, 0), "an invalid setting rolls the batch back");
 }
@@ -556,14 +590,14 @@ fn was_guard_passes_and_refuses() {
     was.insert("title".into(), Value::from(yak_kernel::write::sha(&json!("v1"))));
     c.was = Some(was.clone());
     run(&s, vec![c]);
-    let title: String = one(&s, "select title from doc");
+    let title: String = one(&s, "select title from doc_value");
     assert_eq!(title, "v2");
     // the same stale hash now refuses the whole batch
     let mut c = ch(A, "doc", json!({"title": "v3"}));
     c.was = Some(was);
     let err = apply(&s, vec![c], &ApplyOpts::default(), &default_gates());
     assert!(matches!(err, Err(ApplyError::Stale { .. })));
-    let title: String = one(&s, "select title from doc");
+    let title: String = one(&s, "select title from doc_value");
     assert_eq!(title, "v2");
 }
 

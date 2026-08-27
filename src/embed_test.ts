@@ -5,6 +5,7 @@
 // basis (testvec.ts) so the ANN index quantizes them like real embeddings.
 Deno.env.set('DB_PATH', ':memory:')
 let { db } = await import('./live_db.ts')
+let { textBlob } = await import('./db.ts')
 let { vectorDb } = await import('./testdb.ts')
 let { hash, MODEL, prune, similar, similarTo, stale, stored, textOf } =
   await import('./embed.ts')
@@ -30,7 +31,7 @@ let doc = (eid: string, title: string, body = '') => {
     .run(
       eid,
       title,
-      body,
+      textBlob(db, body),
     )
 }
 let vec = (...xs: number[]) => axes(...xs)
@@ -102,7 +103,8 @@ Deno.test('prune: every route out of eligibility takes its vector along', () => 
     ]
   ) put(eid, text, vec(1, 0))
 
-  db.prepare(`update doc set title = '', body = '' where ${OWNED}`).run(emptied)
+  db.prepare(`update doc set title = '', body = ? where ${OWNED}`)
+    .run(textBlob(db, ''), emptied)
   db.prepare(`insert into comment (entity, target) values (${idOf}, ${idOf})`)
     .run(
       spoke,
@@ -226,7 +228,7 @@ slow('similar: an in-place re-embed answers with the new vector', () => {
   d.prepare('insert into entity (eid, num) values (?, ?)')
     .run(e, Math.floor(Math.random() * 1e9))
   d.prepare(`insert into doc (entity, title, body) values (${idOf}, ?, ?)`)
-    .run(e, 'generation probe', '')
+    .run(e, 'generation probe', textBlob(d, ''))
   let store = (v: Float32Array) =>
     d.prepare(
       `insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)
@@ -262,7 +264,7 @@ slow('similar: SQL KNN ranks the same neighbours the JS scan did', () => {
     d.prepare('insert into entity (eid, num) values (?, ?)')
       .run(e, Math.floor(Math.random() * 1e9))
     d.prepare(`insert into doc (entity, title, body) values (${idOf}, ?, ?)`)
-      .run(e, title, '')
+      .run(e, title, textBlob(d, ''))
     d.prepare(
       'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
     )

@@ -1,5 +1,6 @@
 // Schema authority (D-22804 §8): the kernel creates a fresh graph and
-// additively migrates an old one off db.ts's own captured DDL (schema_gen.rs).
+// migrates an old one off db.ts's own captured DDL (schema_gen.rs), including
+// the explicit doc.body content-addressing reshape.
 //
 // Byte-parity vs Deno is proven in TWO halves, each within ONE SQLite engine so
 // no cross-version skew can flap:
@@ -197,4 +198,55 @@ fn migration_preserves_the_legacy_prompt_marker_and_frees_instruction() {
         .query_row("select e.eid from prompt p join entity e on e.id = p.entity", [], |r| r.get(0))
         .unwrap();
     assert_eq!(preserved, eid);
+}
+
+#[test]
+fn migration_moves_inline_doc_bodies_to_shared_content() {
+    let c = Connection::open_in_memory().unwrap();
+    c.execute_batch(
+        "create table entity (
+           id integer primary key, eid text not null unique, num integer unique
+         );
+         create table doc (
+           entity integer primary key references entity(id),
+           title text not null,
+           body text not null default ''
+         );
+         insert into entity (id, eid, num) values
+           (1, 'aaaaaaaa-0000-4000-8000-000000000001', 1),
+           (2, 'aaaaaaaa-0000-4000-8000-000000000002', 2);
+         insert into doc (entity, title, body) values
+           (1, 'one', 'shared body'), (2, 'two', 'shared body');",
+    )
+    .unwrap();
+
+    apply_schema(&c).unwrap();
+
+    let body_type: String = c
+        .query_row(
+            "select lower(type) from pragma_table_info('doc') where name = 'body'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(body_type, "integer");
+    let refs: i64 = c.query_row("select count(distinct body) from doc", [], |r| r.get(0)).unwrap();
+    assert_eq!(refs, 1, "equal bodies share one content identity");
+    let values: i64 = c.query_row("select count(*) from blob_text", [], |r| r.get(0)).unwrap();
+    assert_eq!(values, 1);
+    let body: String =
+        c.query_row("select body from doc_value where title = 'one'", [], |r| r.get(0)).unwrap();
+    assert_eq!(body, "shared body");
+    let numbered: Option<i64> = c
+        .query_row("select e.num from blob b join entity e on e.id = b.entity", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(numbered, None);
+    assert!(c
+        .prepare("pragma foreign_key_check")
+        .unwrap()
+        .query([])
+        .unwrap()
+        .next()
+        .unwrap()
+        .is_none());
 }

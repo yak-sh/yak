@@ -16,8 +16,18 @@ pub static SCHEMA: &[SchemaOp] = &[
   create table if not exists doc (
     entity   integer primary key references entity(id),
     title text not null,
-    body  text not null default ''
+    body  integer not null references blob(entity)
   );
+  -- Canonical in-db bytes for text content. Identity and length live on the
+  -- blob entity; this is one storage backend attached to that identity, not a
+  -- second CAS. doc_value is the direct-SQL projection of component values.
+  create table if not exists blob_text (
+    entity integer primary key references blob(entity),
+    value text not null
+  );
+  create view if not exists doc_value as
+    select d.entity as rowid, d.entity, d.title, b.value as body
+    from doc d join blob_text b on b.entity = d.body;
   create table if not exists task (
     entity    integer primary key references entity(id),
     status text not null default 'open',
@@ -627,21 +637,25 @@ pub static SCHEMA: &[SchemaOp] = &[
   create trigger if not exists embedding_index_ad after delete on embedding
   begin update embedding_index set dirty = 1 where id = 1; end;
   create virtual table if not exists doc_fts using fts5(
-    title, body, content='doc', content_rowid='rowid'
+    title, body, content='doc_value', content_rowid='rowid'
   );
   create trigger if not exists doc_fts_ai after insert on doc begin
     insert into doc_fts (rowid, title, body)
-    values (new.rowid, new.title, new.body);
+    values (new.rowid, new.title,
+      (select value from blob_text where entity = new.body));
   end;
   create trigger if not exists doc_fts_ad after delete on doc begin
     insert into doc_fts (doc_fts, rowid, title, body)
-    values ('delete', old.rowid, old.title, old.body);
+    values ('delete', old.rowid, old.title,
+      (select value from blob_text where entity = old.body));
   end;
   create trigger if not exists doc_fts_au after update on doc begin
     insert into doc_fts (doc_fts, rowid, title, body)
-    values ('delete', old.rowid, old.title, old.body);
+    values ('delete', old.rowid, old.title,
+      (select value from blob_text where entity = old.body));
     insert into doc_fts (rowid, title, body)
-    values (new.rowid, new.title, new.body);
+    values (new.rowid, new.title,
+      (select value from blob_text where entity = new.body));
   end;
   -- The SUBSTRING index, and the reason it cannot be doc_fts: doc_fts indexes
   -- TOKENS, so a search for idget finds none of the rows holding widget — a
@@ -651,21 +665,25 @@ pub static SCHEMA: &[SchemaOp] = &[
   -- than by lowercasing every body in the graph. Derived like doc_fts: never
   -- on the wire, never dumped (bin/backup), healed by the same check below.
   create virtual table if not exists doc_gram using fts5(
-    title, body, content='doc', content_rowid='rowid', tokenize='trigram'
+    title, body, content='doc_value', content_rowid='rowid', tokenize='trigram'
   );
   create trigger if not exists doc_gram_ai after insert on doc begin
     insert into doc_gram (rowid, title, body)
-    values (new.rowid, new.title, new.body);
+    values (new.rowid, new.title,
+      (select value from blob_text where entity = new.body));
   end;
   create trigger if not exists doc_gram_ad after delete on doc begin
     insert into doc_gram (doc_gram, rowid, title, body)
-    values ('delete', old.rowid, old.title, old.body);
+    values ('delete', old.rowid, old.title,
+      (select value from blob_text where entity = old.body));
   end;
   create trigger if not exists doc_gram_au after update on doc begin
     insert into doc_gram (doc_gram, rowid, title, body)
-    values ('delete', old.rowid, old.title, old.body);
+    values ('delete', old.rowid, old.title,
+      (select value from blob_text where entity = old.body));
     insert into doc_gram (rowid, title, body)
-    values (new.rowid, new.title, new.body);
+    values (new.rowid, new.title,
+      (select value from blob_text where entity = new.body));
   end;
 "#),
     SchemaOp::Exec(r#"create table if not exists "project" (

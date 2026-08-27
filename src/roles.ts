@@ -590,8 +590,8 @@ let config = (eid: string): RoleConfig => {
            ${refEid('p.persona')} as persona, repo.path, repo.base_branch,
            scope.title as venture_title, venture.color as venture_color
     from role r
-    left join doc d on d.entity = r.entity
-    left join doc scope on scope.entity = coalesce(r.scope, r.entity)
+    left join doc_value d on d.entity = r.entity
+    left join doc_value scope on scope.entity = coalesce(r.scope, r.entity)
     left join project venture on venture.entity = coalesce(r.scope, r.entity)
     left join spawn p on p.entity = r.entity
     left join repo on repo.entity = coalesce(r.checkout, r.scope, r.entity)

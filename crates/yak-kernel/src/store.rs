@@ -150,7 +150,10 @@ impl Store {
         let mut joins = String::new();
         let mut sel: Vec<String> = vec![];
         for (i, (name, t)) in cols.iter().enumerate() {
-            if t.is_ref() {
+            if comp == "doc" && name == "body" {
+                joins.push_str(" join blob_text __body on __body.entity = t.body");
+                sel.push("__body.value".into());
+            } else if t.is_ref() {
                 let a = format!("__r{i}");
                 joins.push_str(&format!(" left join entity {a} on {a}.id = t.{}", q(name)));
                 sel.push(format!("{a}.eid"));
@@ -478,7 +481,10 @@ impl Store {
         let mut joins = String::new();
         let mut sel: Vec<String> = vec!["__o.eid".into()];
         for (i, (name, t)) in cols.iter().enumerate() {
-            if t.is_ref() {
+            if comp == "doc" && name == "body" {
+                joins.push_str(" join blob_text __body on __body.entity = t.body");
+                sel.push("__body.value".into());
+            } else if t.is_ref() {
                 let a = format!("__r{i}");
                 joins.push_str(&format!(" left join entity {a} on {a}.id = t.{}", q(name)));
                 sel.push(format!("{a}.eid"));

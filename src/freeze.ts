@@ -6,7 +6,7 @@
 // provenance, not storage, decides the trust. Server-only.
 import { parseHTML } from 'linkedom'
 import { type Change } from './types.ts'
-import { record } from './db.ts'
+import { record, textBlob } from './db.ts'
 import { db } from './live_db.ts'
 import { errored, healthy } from './deliver.ts'
 
@@ -100,10 +100,10 @@ let land = (
   ]
   db.prepare(`update web set frozen_at = ? where ${OWNED}`)
     .run(changes[0].comp!.frozen_at as string, eid)
-  let hasDoc = db.prepare(`select 1 from doc where ${OWNED}`).get(eid)
+  let hasDoc = db.prepare(`select 1 from doc_value where ${OWNED}`).get(eid)
   if (title && !hasDoc) {
-    db.prepare(`insert into doc (entity, title) values (${idOf}, ?)`)
-      .run(eid, title)
+    db.prepare(`insert into doc (entity, title, body) values (${idOf}, ?, ?)`)
+      .run(eid, title, textBlob(db, ''))
     changes.push({ eid, name: 'doc', comp: { title } })
   }
   // The stamp must reach the journal as well as the sockets: a tab that

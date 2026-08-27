@@ -83,7 +83,7 @@ let memories = (project: string): MemoryRow[] =>
             ) as retired
        from memory m
        join entity e on e.id = m.entity
-       join doc d on d.entity = m.entity
+       join doc_value d on d.entity = m.entity
        join created c on c.entity = m.entity
        left join recall r on r.entity = m.entity
       where (m.scope = ${idOf} or (? and (
@@ -268,7 +268,7 @@ let filed = (key: string) =>
        from finding f
        join entity e on e.id = f.entity
        join task t on t.entity = f.entity
-       join doc d on d.entity = f.entity
+       join doc_value d on d.entity = f.entity
       where f.key = ? limit 1`,
   ).get(key) as
     | {

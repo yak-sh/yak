@@ -19,10 +19,13 @@
 // This is a DELIBERATE capability, never the default open. WriteStore::open
 // (the library/bridge door) still never creates and never migrates. Production
 // does not run the bridge against owner data; disposable parity graphs may use
-// this transactional, idempotent migration door.
+// this transactional, idempotent migration door. The doc.body content-addressing
+// reshape is the one explicit non-additive pass; it precedes the generated
+// current schema and is tested against legacy data.
 
-use crate::write::{has_col, WriteStore};
+use crate::write::{has_col, sha, WriteStore};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior};
+use serde_json::Value;
 use std::time::Duration;
 
 const SCHEMA_VERSION: i64 = 1;
@@ -80,10 +83,101 @@ fn migrate_prompt(conn: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
+// doc.body speaks text on the wire but stores the id of the blob entity whose
+// eid hashes those bytes. This one-time reshape mirrors db.ts and runs before
+// the generated current schema creates the resolved view and derived indexes.
+fn migrate_doc_bodies(conn: &Connection) -> rusqlite::Result<()> {
+    let body_type = conn
+        .query_row(
+            "select lower(type) from pragma_table_info('doc') where name = 'body'",
+            [],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()?;
+    if body_type.as_deref().map(|t| t == "integer").unwrap_or(true) {
+        return Ok(());
+    }
+
+    conn.execute_batch("savepoint doc_bodies")?;
+    let migrated = (|| -> rusqlite::Result<()> {
+        conn.execute_batch(
+            "drop trigger if exists doc_ai;
+             drop trigger if exists doc_ad;
+             drop trigger if exists doc_au;
+             drop trigger if exists doc_fts_ai;
+             drop trigger if exists doc_fts_ad;
+             drop trigger if exists doc_fts_au;
+             drop trigger if exists doc_gram_ai;
+             drop trigger if exists doc_gram_ad;
+             drop trigger if exists doc_gram_au;
+             drop table if exists doc_fts;
+             drop table if exists doc_gram;
+             drop view if exists doc_value;
+             create table if not exists blob (
+               entity integer primary key references entity(id),
+               bytes integer
+             );
+             create table if not exists blob_text (
+               entity integer primary key references blob(entity),
+               value text not null
+             );
+             alter table doc rename to __legacy_doc;
+             create table doc (
+               entity integer primary key references entity(id),
+               title text not null,
+               body integer not null references blob(entity)
+             );",
+        )?;
+        let rows = {
+            let mut st =
+                conn.prepare("select entity, title, body from __legacy_doc order by entity")?;
+            let rows = st
+                .query_map([], |r| {
+                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            rows
+        };
+        for (entity, title, body) in rows {
+            let eid = sha(&Value::from(body.as_str()));
+            conn.execute("insert or ignore into entity (eid) values (?1)", [&eid])?;
+            let blob: i64 =
+                conn.query_row("select id from entity where eid = ?1", [&eid], |r| r.get(0))?;
+            conn.execute(
+                "insert or ignore into blob (entity, bytes) values (?1, ?2)",
+                (blob, body.len() as i64),
+            )?;
+            conn.execute(
+                "insert or ignore into blob_text (entity, value) values (?1, ?2)",
+                (blob, body.as_str()),
+            )?;
+            conn.execute(
+                "insert into doc (entity, title, body) values (?1, ?2, ?3)",
+                (entity, title, blob),
+            )?;
+        }
+        conn.execute_batch(
+            "drop table __legacy_doc;
+             create view doc_value as
+               select d.entity as rowid, d.entity, d.title, b.value as body
+               from doc d join blob_text b on b.entity = d.body;",
+        )?;
+        Ok(())
+    })();
+    match migrated {
+        Ok(()) => conn.execute_batch("release doc_bodies"),
+        Err(e) => {
+            let _ = conn.execute_batch("rollback to doc_bodies; release doc_bodies;");
+            Err(e)
+        }
+    }
+}
+
 // Replay the emitted DDL against a connection, applying each statement's guard.
 // Idempotent: a re-run over an already-current graph writes nothing.
 pub fn apply_schema(conn: &Connection) -> rusqlite::Result<()> {
     migrate_prompt(conn)?;
+    migrate_doc_bodies(conn)?;
     for op in crate::schema_gen::SCHEMA {
         match op {
             SchemaOp::Exec(sql) => conn.execute_batch(sql)?,

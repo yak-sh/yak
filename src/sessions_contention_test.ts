@@ -76,7 +76,7 @@ slow('a graph mutation waits out a handoff writer', async () => {
   assert(Date.now() - began >= 40)
   assertEquals(
     db.prepare(
-      'select d.title from doc d join entity o on o.id = d.entity where o.eid = ?',
+      'select d.title from doc_value d join entity o on o.id = d.entity where o.eid = ?',
     ).get(eid),
     { title: 'waited' },
   )

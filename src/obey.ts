@@ -121,7 +121,9 @@ export let obeyed =
   async (ceid: string, comp: Record<string, unknown>) => {
     let target = String(comp.target ?? '')
     if (!target) return
-    let doc = db.prepare(`select body from doc where ${OWNED}`).get(ceid) as
+    let doc = db.prepare(`select body from doc_value where ${OWNED}`).get(
+      ceid,
+    ) as
       | { body: string | null }
       | undefined
     let line = orderIn(String(doc?.body ?? ''))

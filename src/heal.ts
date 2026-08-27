@@ -167,7 +167,7 @@ let openBug = (key: string) =>
      from bug b
      join entity o on o.id = b.entity
      join task t on t.entity = b.entity
-     join doc d on d.entity = b.entity
+     join doc_value d on d.entity = b.entity
      where b.fault = ? and t.status in ('open', 'wip') limit 1`,
   ).get(key) as { eid: string; hits: number; body: string } | undefined
 

@@ -103,7 +103,7 @@ let ELIGIBLE =
 
 let lives = (db: DatabaseSync, eid: string) =>
   !!db.prepare(
-    `select o.eid as eid from doc join entity o on o.id = doc.entity
+    `select o.eid as eid from doc_value doc join entity o on o.id = doc.entity
      where o.eid = ? and ${ELIGIBLE}`,
   )
     .get(eid, WS)
@@ -112,11 +112,11 @@ let lives = (db: DatabaseSync, eid: string) =>
 // names their text. Pure SQL + hash — the testable half of the sweep.
 export let stale = (db: DatabaseSync, limit = Infinity) =>
   (db.prepare(
-    `select o.eid as eid, d.title, d.body, e.hash as had from doc d
+    `select o.eid as eid, d.title, d.body, e.hash as had from doc_value d
      join entity o on o.id = d.entity
      left join embedding e on e.eid = o.eid
      where o.eid in (
-       select o2.eid from doc join entity o2 on o2.id = doc.entity
+       select o2.eid from doc_value doc join entity o2 on o2.id = doc.entity
        where ${ELIGIBLE}
      )`,
   ).all(WS) as {
@@ -136,7 +136,7 @@ export let prune = (db: DatabaseSync) =>
   db.prepare(
     `delete from embedding
      where eid not in (
-       select o.eid from doc join entity o on o.id = doc.entity
+       select o.eid from doc_value doc join entity o on o.id = doc.entity
        where ${ELIGIBLE}
      )`,
   ).run(WS)

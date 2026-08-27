@@ -30,7 +30,7 @@ let refEid = (col: string) => `(select eid from entity where id = ${col})`
 let wordsFor = (target: string): string => {
   let r = db.prepare(
     `select d.body from comment c
-     join doc d on d.entity = c.entity
+     join doc_value d on d.entity = c.entity
      join created cr on cr.entity = c.entity
      where c.target = ${idOf}
      and cr.at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 minute')
