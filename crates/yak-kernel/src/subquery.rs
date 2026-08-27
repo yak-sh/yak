@@ -11,16 +11,17 @@
 // SCOPE (the rung this crate is at): the filter grammar is query.rs's list/show
 // SUBSET, so a sub filter is kind-anchored (`.kind=task&…`) or component-presence
 // anchored (`.canvas!`) — the candidate set the JS matcher then refines. The
-// `.fields` projection rides beside that filter (T-22756). Path hops, reverse
-// hops, `.reaches`, the `.edges` rider and the lazy entry partition are the
-// grammar this rung still refuses, so a sub naming one is REFUSED here rather
-// than half-answered — the same loud boundary the /query door draws, and the
-// standing follow-up (see parse_query_line's Err arms).
+// `.fields` projection and the `.reaches` bounded traversal ride beside that
+// filter (T-22756). Path hops, reverse hops, the `.edges` rider and the lazy
+// entry partition are the grammar this rung still refuses, so a sub naming one
+// is REFUSED here rather than half-answered — the same loud boundary the /query
+// door draws, and the standing follow-up (see parse_query_line's Err arms).
 
 use crate::model::Row;
-use crate::query::{self, Dot, Field, Pred};
+use crate::query::{self, Ctx, Dot, Field, Pred, Reach};
 use crate::store::{visible, Store};
 use crate::vocab::{vocab, PropType};
+use std::collections::{HashMap, HashSet};
 
 // A window bound (query.ts Win): how many of the newest matches to answer with,
 // and where to continue below a spine num.
@@ -108,6 +109,72 @@ fn route_col(spec: &str) -> Result<(String, String), String> {
     }
 }
 
+// Parse `.reaches[TYPE,<=N]=VALUE` (query.ts preds() REACH arm), given the
+// tail after `.reaches[`. The type must be a real edge word and the cap at least
+// one hop — an unbounded closure is refused, never silently walked (M-17862).
+// A sub error produces no frame (control() warns), so the messages need not be
+// byte-exact, but they mirror TS so a future /query port inherits them.
+fn parse_reaches(rest: &str) -> Result<Pred, String> {
+    let malformed = || {
+        ".reaches names an edge type, a depth cap and an entity: \
+         .reaches[requires,<=3]=T-42"
+            .to_string()
+    };
+    let close = rest.find(']').ok_or_else(malformed)?;
+    let bracket = &rest[..close];
+    let value = rest[close + 1..].strip_prefix('=').ok_or_else(malformed)?;
+    if value.is_empty() {
+        return Err(malformed());
+    }
+    let (ty, cap) = bracket.split_once(',').ok_or_else(malformed)?;
+    let type_ = ty.trim().to_string();
+    let depth: i64 = cap
+        .trim()
+        .strip_prefix("<=")
+        .and_then(|n| n.trim().parse().ok())
+        .ok_or_else(malformed)?;
+    let v = vocab();
+    if !v.edges.iter().any(|e| e == &type_) {
+        return Err(format!(
+            ".reaches walks an edge type ({}) — not {type_}",
+            v.edges.join(", ")
+        ));
+    }
+    if depth < 1 {
+        return Err(format!(".reaches needs at least one hop: got <={depth}"));
+    }
+    Ok(Pred {
+        op: "reaches".into(),
+        value: value.into(),
+        reach: Some(Reach { type_, depth }),
+        ..Default::default()
+    })
+}
+
+// Pre-resolve every `.reaches` closure a pred list carries, keyed the way the
+// matcher looks them up (query.ts walker memo): one recursive walk per distinct
+// (type, depth, target), so a candidate row then tests membership with a Set
+// lookup. Rebuilt per evaluation pass — an edge landing between two answers must
+// move the closure — so a reach sub re-answers correctly as its graph changes.
+pub fn reach_sets(
+    store: &Store,
+    preds: &[Pred],
+) -> HashMap<String, HashSet<String>> {
+    let mut m = HashMap::new();
+    for p in preds {
+        if let Some(reach) = &p.reach {
+            let key = query::reach_key(reach, &p.value);
+            m.entry(key).or_insert_with(|| {
+                store
+                    .reaching(&p.value, &reach.type_, reach.depth)
+                    .into_iter()
+                    .collect()
+            });
+        }
+    }
+    m
+}
+
 // Parse a subscription filter LINE into its preds + directives. A directive
 // rides beside the filter (window, aggregate, order); a plain token routes
 // through query.rs's dot_token. Grammar this rung does not port is REFUSED.
@@ -192,12 +259,18 @@ pub fn parse_query_line(line: &str) -> Result<Parsed, String> {
             out.fields = Some(fields);
             continue;
         }
+        // `.reaches[requires,<=3]=T-42` — a bounded TRAVERSAL filter (query.ts
+        // Pred.reach): the entities that reach `value` through at most `depth`
+        // edges of ONE type. The bracket carries what a dot-param cannot — which
+        // edge type to walk and how far — and the cap is required by the shape,
+        // so an unbounded closure has no spelling to be refused later.
+        if let Some(rest) = seg.strip_prefix(".reaches[") {
+            out.preds.push(parse_reaches(rest)?);
+            continue;
+        }
         // Riders this rung refuses loudly (the standing follow-up, T-22747):
         if seg.starts_with(".edges") {
             return Err("the .edges rider is not ported in this rung".into());
-        }
-        if seg.starts_with(".reaches[") {
-            return Err("the .reaches traversal is not ported in this rung".into());
         }
         // A plain filter token — dot_token refuses path/reverse hops, so those
         // reach the same loud boundary here.
@@ -271,11 +344,14 @@ pub fn eval_sub(store: &Store, p: &Parsed, cap: i64) -> Result<SubAnswer, String
     query::resolve_values(store, &mut preds);
     let reveal = reveals(&preds);
     let now = query::now_ms();
+    // Any `.reaches` closure resolved once for this pass (query.ts walker memo).
+    let reaches = reach_sets(store, &preds);
+    let ctx = Ctx { reaches: Some(&reaches) };
     let mut hits: Vec<Row> = candidates(store, p)?
         .into_iter()
         .filter(|r| reveal || visible(r))
         .filter(|r| p.kind.as_ref().map(|k| &r.kind == k).unwrap_or(true))
-        .filter(|r| query::matches_comps_at(&r.comps, &preds, now))
+        .filter(|r| query::matches_comps_ctx(&r.comps, &preds, now, &ctx))
         .collect();
     // after= continues the window below a num, before the newest cut.
     if let Some(a) = p.win.after {
@@ -308,10 +384,12 @@ pub fn eval_agg(store: &Store, p: &Parsed) -> Result<Vec<(String, i64)>, String>
     let mut preds = p.preds.clone();
     query::resolve_values(store, &mut preds);
     let now = query::now_ms();
+    let reaches = reach_sets(store, &preds);
+    let ctx = Ctx { reaches: Some(&reaches) };
     let hits: Vec<Row> = candidates(store, p)?
         .into_iter()
         .filter(|r| p.kind.as_ref().map(|k| &r.kind == k).unwrap_or(true))
-        .filter(|r| query::matches_comps_at(&r.comps, &preds, now))
+        .filter(|r| query::matches_comps_ctx(&r.comps, &preds, now, &ctx))
         .collect();
     if agg.op == "count" {
         return Ok(vec![(String::new(), hits.len() as i64)]);
@@ -439,10 +517,27 @@ mod tests {
             ".kind=task&.edges!",
             ".comment.target.doc.title~=x",
             "some text term",
-            ".reaches[requires,<=3]=T-42",
         ] {
             assert!(parse_query_line(line).is_err(), "should refuse: {line}");
         }
+    }
+
+    #[test]
+    fn parses_reaches_traversal() {
+        let p =
+            parse_query_line(".kind=task&.reaches[requires,<=3]=T-42").unwrap();
+        assert_eq!(p.preds.len(), 1);
+        let reach = p.preds[0].reach.as_ref().unwrap();
+        assert_eq!((reach.type_.as_str(), reach.depth), ("requires", 3));
+        assert_eq!(p.preds[0].value, "T-42"); // resolved to an eid at delivery
+        // spaces around the cap are tolerated, like TS's regex
+        assert!(parse_query_line(".kind=task&.reaches[requires, <= 2]=T-1").is_ok());
+        // an unknown edge type is refused (not silently walked)
+        assert!(parse_query_line(".kind=task&.reaches[nope,<=3]=T-1").is_err());
+        // a depth below one hop is refused
+        assert!(parse_query_line(".kind=task&.reaches[requires,<=0]=T-1").is_err());
+        // a missing target is refused
+        assert!(parse_query_line(".kind=task&.reaches[requires,<=3]=").is_err());
     }
 
     #[test]

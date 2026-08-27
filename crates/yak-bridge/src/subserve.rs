@@ -19,10 +19,12 @@
 //     ships the diff. A moving-time sub re-tests its members on each tick.
 //
 // SCOPE (this rung): the membership/window/aggregate/route subscription kinds
-// over query.rs's list/show grammar subset, PLUS the `.fields` projection
-// (T-22756: projected payloads + a stated projection). The `.edges` rider, the
-// lazy `entries:` partition and path/reverse-hop sub filters are still refused
-// loudly by parse_query_line (the standing follow-up), never half-served.
+// over query.rs's list/show grammar subset, PLUS the `.fields` projection and
+// the `.reaches` bounded traversal (T-22756: projected payloads + a stated
+// projection; a depth-capped closure the matcher tests with a Set lookup). The
+// `.edges` rider, the lazy `entries:` partition and path/reverse-hop sub filters
+// are still refused loudly by parse_query_line (the standing follow-up), never
+// half-served.
 
 use crate::emit::entity_changes;
 use crate::{live, snap};
@@ -31,8 +33,8 @@ use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc::UnboundedSender;
 use yak_kernel::change::Change;
 use yak_kernel::feed::{cursor_of, data_version, journal_since, row_changes};
-use yak_kernel::query::{self, Field, Pred};
-use yak_kernel::subquery::{eval_agg, eval_sub, moving, parse_query_line, Parsed, SUB_CAP};
+use yak_kernel::query::{self, Ctx, Field, Pred};
+use yak_kernel::subquery::{eval_agg, eval_sub, moving, parse_query_line, reach_sets, Parsed, SUB_CAP};
 use yak_kernel::vocab::{vocab, PropType};
 use yak_kernel::Store;
 
@@ -339,8 +341,12 @@ impl Subserve {
                 }
                 continue;
             }
-            // A plain membership sub: re-test each touched eid.
+            // A plain membership sub: re-test each touched eid. Any `.reaches`
+            // closure is resolved FRESH for this batch (an edge just committed
+            // may move who reaches the target), the way TS rebuilds walker(db).
             let reveal = sub.preds.iter().any(|p| p.comp == "quarantined");
+            let reaches = reach_sets(store, &sub.preds);
+            let ctx = Ctx { reaches: Some(&reaches) };
             let mut changes: Vec<Value> = vec![];
             let mut drop: Vec<String> = vec![];
             for eid in &touched {
@@ -365,7 +371,7 @@ impl Subserve {
                         Some(id) => id == eid,
                         None => {
                             (reveal || !is_quar)
-                                && query::matches_comps_at(&r.comps, &sub.preds, now)
+                                && query::matches_comps_ctx(&r.comps, &sub.preds, now, &ctx)
                         }
                     },
                 };
@@ -408,6 +414,8 @@ impl Subserve {
                 continue;
             }
             let reveal = sub.preds.iter().any(|p| p.comp == "quarantined");
+            let reaches = reach_sets(store, &sub.preds);
+            let ctx = Ctx { reaches: Some(&reaches) };
             let mut changes: Vec<Value> = vec![];
             let mut drop: Vec<String> = vec![];
             for eid in sub.members.clone() {
@@ -422,7 +430,7 @@ impl Subserve {
                     None => false,
                     Some(r) => {
                         (reveal || !is_quar)
-                            && query::matches_comps_at(&r.comps, &sub.preds, now)
+                            && query::matches_comps_ctx(&r.comps, &sub.preds, now, &ctx)
                     }
                 };
                 if !alive {

@@ -8,12 +8,27 @@ use crate::model::{Row, Source};
 use crate::vocab::{vocab, PropType};
 use serde_json::Value;
 
-#[derive(Debug, Clone)]
+// A bounded traversal `.reaches[requires,<=3]=T-42` (query.ts Pred.reach): the
+// entities that reach `value` through at most `depth` edges of one type. The cap
+// is part of the grammar — an unbounded closure is refused, never walked.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Reach {
+    pub type_: String,
+    pub depth: i64,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct Pred {
     pub comp: String,
     pub prop: String,
     pub op: String, // "", "=", "!=", "~=", "<", "<=", ">", ">="; "" = has-comp
     pub value: String,
+    // A bounded TRAVERSAL rather than a column read (query.ts Pred.reach): op is
+    // REACHES, `value` is the (resolved) target eid, `reach` the type + depth
+    // cap. Set only by the SUB grammar (subquery.rs parse_query_line); the /query
+    // filter door (query.rs dot_token) never produces one, so the accessorless
+    // matcher never has to answer it there.
+    pub reach: Option<Reach>,
 }
 
 // One projected column (query.ts Field): which component column a subscription
@@ -44,6 +59,7 @@ pub fn dot_token(a: &str) -> Result<Dot, String> {
             prop: "".into(),
             op: "".into(),
             value: "".into(),
+            ..Default::default()
         }));
     }
     let ops = ["!=", "~=", "<=", ">=", "=", "<", ">"];
@@ -73,7 +89,7 @@ pub fn dot_token(a: &str) -> Result<Dot, String> {
     } else {
         value
     };
-    Ok(Dot::P(Pred { comp, prop, op, value }))
+    Ok(Dot::P(Pred { comp, prop, op, value, ..Default::default() }))
 }
 
 // Coerce and VALIDATE a filter value against the leaf column's declared type
@@ -344,6 +360,16 @@ pub fn resolve_values<S: Source + ?Sized>(src: &S, preds: &mut [Pred]) {
         if p.value.is_empty() {
             continue;
         }
+        // A traversal's target is one entity, no column to type it (query.ts
+        // resolveRefs REACHES arm): resolve the id to its eid before matching.
+        if p.reach.is_some() {
+            if !crate::model::is_uuid(&p.value.to_lowercase()) {
+                if let Some(eid) = src.resolve_id(&p.value) {
+                    p.value = eid;
+                }
+            }
+            continue;
+        }
         let t = if p.comp.is_empty() {
             v.bare_type(&p.prop)
         } else {
@@ -506,12 +532,67 @@ pub fn matches_at(row: &Row, preds: &[Pred], now: i64) -> bool {
     matches_comps_at(&row.comps, preds, now)
 }
 
+// The matcher's optional accessors (query.ts matchQuery's ent/kids/walk). The
+// /query filter door has none, so it evaluates through matches_comps_at with the
+// default (empty) ctx, where a `.reaches` pred — which that door never
+// produces — reads as absent. The SUB path (subquery.rs) fills `reaches` with
+// each traversal closure resolved once against the store, so a reach pred tests
+// set membership with one lookup, never a per-row walk.
+#[derive(Default)]
+pub struct Ctx<'a> {
+    pub reaches: Option<
+        &'a std::collections::HashMap<String, std::collections::HashSet<String>>,
+    >,
+}
+
+// A traversal closure's memo key (query.ts walker): `type\0depth\0target`. The
+// matcher and whoever pre-resolves the closures must agree, so it lives here.
+pub fn reach_key(reach: &Reach, target: &str) -> String {
+    format!("{}\0{}\0{}", reach.type_, reach.depth, target)
+}
+
+// An entity's own eid, off any bag it wears (query.ts eidOf) — a reverse/reach
+// pred needs it to ask "am I among the reachers".
+fn eid_of(comps: &serde_json::Map<String, Value>) -> Option<String> {
+    if let Some(e) =
+        comps.get("entity").and_then(|c| c.get("eid")).and_then(|v| v.as_str())
+    {
+        return Some(e.to_string());
+    }
+    comps
+        .values()
+        .find_map(|c| c.get("eid").and_then(|v| v.as_str()))
+        .map(String::from)
+}
+
 pub fn matches_comps_at(
     comps: &serde_json::Map<String, Value>,
     preds: &[Pred],
     now: i64,
 ) -> bool {
+    matches_comps_ctx(comps, preds, now, &Ctx::default())
+}
+
+pub fn matches_comps_ctx(
+    comps: &serde_json::Map<String, Value>,
+    preds: &[Pred],
+    now: i64,
+    ctx: &Ctx,
+) -> bool {
     preds.iter().all(|p| {
+        // A bounded traversal (query.ts matchQuery REACHES): the closure is
+        // resolved ONCE by the caller (ctx.reaches) and tested here with a Set
+        // lookup. No accessor → no closure → no match (the graceful absence a
+        // missing walk gives in TS).
+        if let Some(reach) = &p.reach {
+            let Some(self_eid) = eid_of(comps) else { return false };
+            let key = reach_key(reach, &p.value);
+            return ctx
+                .reaches
+                .and_then(|m| m.get(&key))
+                .map(|set| set.contains(&self_eid))
+                .unwrap_or(false);
+        }
         // A bare component name is a presence test: `!`/`~=` hold when the
         // row wears it, `=` when it does not (query.ts present()).
         if p.prop.is_empty() {
@@ -714,6 +795,7 @@ mod tests {
             prop: "at".into(),
             op: op.into(),
             value: value.into(),
+            ..Default::default()
         };
         assert!(matches_at(&row, &[p("=", "today")], now));
         assert!(!matches_at(&row, &[p("=", "yesterday")], now));

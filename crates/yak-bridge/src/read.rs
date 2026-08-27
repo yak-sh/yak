@@ -162,6 +162,7 @@ fn kind_screen(kind: &str) -> Vec<query::Pred> {
             prop: String::new(),
             op: "=".into(),
             value: String::new(),
+            ..Default::default()
         })
         .collect()
 }

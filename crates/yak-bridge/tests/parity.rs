@@ -130,6 +130,19 @@ fn an_eid(ts: &str, kind: &str) -> Option<String> {
         .map(String::from)
 }
 
+// The eid behind a human id (T-22548 → its uuid), read off the /query id= door.
+fn eid_of_id(base: &str, id: &str) -> Option<String> {
+    let (_, body) = get(base, &format!("/query?id={id}"));
+    serde_json::from_str::<Value>(&body)
+        .ok()?
+        .as_array()?
+        .first()?
+        .get("entity")?
+        .get("eid")?
+        .as_str()
+        .map(String::from)
+}
+
 #[test]
 fn query_parity() {
     let Some((ts, br)) = both() else {
@@ -566,6 +579,11 @@ fn ws_sub_parity() {
         // volatile (delivered, wake:false); `.fields=eid` is the eids-only form.
         ("f-pin", ".pin!&.fields=pin.x,pin.z~"),
         ("f-eids", ".card!&.fields=eid"),
+        // REACHES traversal (T-22756): the tasks that reach T-22548 through at
+        // most 3 `requires` edges — a bounded closure the matcher tests with a
+        // Set lookup, resolved once per pass from the recursive CTE.
+        ("r-reach", ".kind=task&.reaches[requires,<=3]=T-22548"),
+        ("r-reach1", ".kind=task&.reaches[requires,<=1]=T-22548"),
     ];
     for (name, q) in cases {
         same_sub(&mut ts_ws, &mut br_ws, name, q);
@@ -686,6 +704,43 @@ fn ws_sub_parity() {
     same_sub_delta(&mut ts_fm, &mut br_fm, "fm", "patch task.priority (unprojected: both silent)");
     apply(&ts, &format!("[{{\"eid\":\"{feid}\",\"name\":\"entity\",\"comp\":null}}]"));
     same_sub_delta(&mut ts_fm, &mut br_fm, "fm", "delete (dead)");
+
+    // --- REACHES traversal MAINTAIN parity (T-22756) -------------------------
+    // A `.reaches[requires,<=3]=T-22548` sub: creating a task does not reach the
+    // target (both silent); LINKING a `requires` edge to the target makes it
+    // reach (ADD); UNLINKING drops it (REMOVE). The closure is rebuilt per batch,
+    // so an edge landing moves membership even though the batch mentions only the
+    // edge's own parent.
+    if let Some(target) = eid_of_id(&ts, "T-22548") {
+        let mut ts_rm = joined_ws(&ts);
+        let mut br_rm = joined_ws(&br);
+        same_sub(&mut ts_rm, &mut br_rm, "rm", ".kind=task&.reaches[requires,<=3]=T-22548");
+        let reid = uuid_v4();
+        apply(
+            &ts,
+            &format!(
+                "[{{\"eid\":\"{reid}\",\"name\":\"doc\",\"comp\":{{\"title\":\"zqreach probe\"}}}},\
+                  {{\"eid\":\"{reid}\",\"name\":\"task\",\"comp\":{{\"status\":\"open\"}}}}]"
+            ),
+        );
+        same_sub_delta(&mut ts_rm, &mut br_rm, "rm", "create task (no edge: both silent)");
+        apply(
+            &ts,
+            &format!(
+                "[{{\"eid\":\"{reid}\",\"name\":\"dependency\",\"comp\":{{\"type\":\"requires\",\"child\":\"{target}\"}}}}]"
+            ),
+        );
+        same_sub_delta(&mut ts_rm, &mut br_rm, "rm", "link requires (reach add)");
+        apply(
+            &ts,
+            &format!(
+                "[{{\"eid\":\"{reid}\",\"name\":\"dependency\",\"comp\":{{\"type\":\"requires\",\"child\":\"{target}\",\"gone\":true}}}}]"
+            ),
+        );
+        same_sub_delta(&mut ts_rm, &mut br_rm, "rm", "unlink (reach remove)");
+        apply(&ts, &format!("[{{\"eid\":\"{reid}\",\"name\":\"entity\",\"comp\":null}}]"));
+        same_sub_delta(&mut ts_rm, &mut br_rm, "rm", "delete (both silent)");
+    }
 
     eprintln!("\nWS subscription parity OK");
 }

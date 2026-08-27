@@ -646,6 +646,26 @@ impl Store {
         })
     }
 
+    // The bounded transitive closure `.reaches[type,<=N]=id` selects: the eids
+    // that reach `target` through at most `depth` edges of one type, walking
+    // child→parent so every step is a `dependency_child` seek. The target itself
+    // is excluded — reaching is a path of at least one hop. Byte-for-byte the
+    // JS matcher's half of the closure the compiler emits (db.ts reaching): the
+    // `+d.type` bans the type index so the walk drives off dependency_child.
+    pub fn reaching(&self, target: &str, type_: &str, depth: i64) -> Vec<String> {
+        let sql = "with recursive __reach(id, depth) as (
+             select id, 0 from entity where eid = ?1
+             union select d.parent, __reach.depth + 1 from dependency d
+               join __reach on d.child = __reach.id
+               where __reach.depth < ?2 and +d.type = ?3
+           )
+           select o.eid as eid from __reach join entity o on o.id = __reach.id
+            where __reach.depth > 0";
+        collect(&self.conn, sql, rusqlite::params![target, depth, type_], |r| {
+            r.get(0)
+        })
+    }
+
     // Who points AT these entities through a typed {eid} reference column — the
     // reverse-reference layer db.ts refsOf() builds for `backlinks=1`. One keyed
     // statement per ref column in the readable vocabulary (comps + stamped), the
