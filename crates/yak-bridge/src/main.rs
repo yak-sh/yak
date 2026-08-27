@@ -22,7 +22,7 @@ use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Query, State};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{any, get, post};
 use axum::Router;
 use std::collections::HashMap;
 use std::pin::Pin;
@@ -31,7 +31,7 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::Duration;
 use yak_bridge::subserve::Subserve;
-use yak_bridge::{appread, front, journalr, read, snap};
+use yak_bridge::{appread, front, journalr, live, read, snap};
 use yak_kernel::{
     apply, default_gates, native_safe, parse_batch, ApplyOpts, Change, Store, WriteStore,
 };
@@ -241,6 +241,107 @@ async fn telemetry_route(
         })
     })
     .await
+}
+
+// /references — the `referenced`-edge neighborhood of `eid`: `{out, in}`.
+// An empty `eid` is the typist's news (400 "eid required"), matching the Deno
+// route; a hit carries `cache-control: no-store` (referenced.ts route header).
+async fn references_route(
+    State(app): State<App>,
+    Query(p): Query<HashMap<String, String>>,
+) -> Response {
+    let eid = p.get("eid").cloned().unwrap_or_default();
+    if eid.is_empty() {
+        return (axum::http::StatusCode::BAD_REQUEST, "eid required").into_response();
+    }
+    let uri = app.uri.clone();
+    let out = tokio::task::spawn_blocking(move || {
+        let store = open(&uri)?;
+        Ok::<_, String>(appread::references(&store, &eid))
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("panic: {e}")));
+    match out {
+        Ok(v) => json_no_store(&v),
+        Err(msg) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, msg).into_response(),
+    }
+}
+
+// GET /config/settings — the non-secret setting rows (config.ts settingRows),
+// `cache-control: no-store`. A non-GET is 405 with the Deno route's JSON error
+// body and the same no-store header. plainKeys only — never a secret.
+async fn config_settings_route(State(app): State<App>, method: Method) -> Response {
+    if method != Method::GET {
+        return (
+            axum::http::StatusCode::METHOD_NOT_ALLOWED,
+            [
+                (axum::http::header::CONTENT_TYPE, "application/json"),
+                (axum::http::header::CACHE_CONTROL, "no-store"),
+            ],
+            "{\"error\":{\"code\":\"method_not_allowed\"}}",
+        )
+            .into_response();
+    }
+    let uri = app.uri.clone();
+    let out = tokio::task::spawn_blocking(move || {
+        let store = open(&uri)?;
+        Ok::<_, String>(appread::setting_rows(&store))
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("panic: {e}")));
+    match out {
+        Ok(v) => json_no_store(&v),
+        Err(msg) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, msg).into_response(),
+    }
+}
+
+// /delta — the journal replayed as changes since a client's cursor
+// (db.ts delta), gated by cursorStale. Three ways the held cursor goes stale
+// (epoch lineage, vocab shape, or a frontier past the tip) — any one is a
+// 409 "stale" (text/plain), byte-identical to Deno; else `{changes, cursor}`.
+// The `since ?? 0` / `Number()` semantics match: missing or empty → 0.
+async fn delta_route(State(app): State<App>, Query(p): Query<HashMap<String, String>>) -> Response {
+    let epoch_held = p.get("epoch").cloned();
+    let vocab_held = p.get("vocab").cloned();
+    // Number(get('since') ?? 0): missing/empty/non-numeric coalesce to 0.
+    let since: i64 = p.get("since").and_then(|s| s.parse::<i64>().ok()).unwrap_or(0);
+    let uri = app.uri.clone();
+    let out = tokio::task::spawn_blocking(move || {
+        let store = open(&uri)?;
+        let stale = epoch_held.as_deref() != Some(snap::epoch_of(&store).as_str())
+            || vocab_held.as_deref() != Some(snap::vocab_hash().as_str())
+            || since > yak_kernel::feed::cursor_of(&store.conn);
+        if stale {
+            return Ok::<_, String>(None);
+        }
+        let (changes, cursor) = live::delta(&store, since);
+        let body = serde_json::json!({
+            "changes": changes.iter().map(|c| c.to_value()).collect::<Vec<_>>(),
+            "cursor": cursor,
+        });
+        Ok(Some(body))
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("panic: {e}")));
+    match out {
+        Ok(Some(v)) => json_response(&v),
+        // The stale cursor is the client's news to reseed on — 409, plain body.
+        Ok(None) => (axum::http::StatusCode::CONFLICT, "stale").into_response(),
+        Err(msg) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, msg).into_response(),
+    }
+}
+
+// A JSON body carrying `cache-control: no-store` (the /references and
+// /config/settings contract — a live read a client must never cache).
+fn json_no_store(v: &serde_json::Value) -> Response {
+    (
+        [
+            (axum::http::header::CONTENT_TYPE, "application/json"),
+            (axum::http::header::CACHE_CONTROL, "no-store"),
+        ],
+        serde_json::to_string(v).unwrap_or_else(|_| "null".into()),
+    )
+        .into_response()
 }
 
 // The shared shape for a read route that answers JSON off a read-only Store: run
@@ -802,6 +903,10 @@ async fn main() {
         .route("/body", get(body_route))
         .route("/resolve", get(resolve_route))
         .route("/telemetry", get(telemetry_route))
+        // app-plane rung 2 (D-22920): reader surfaces
+        .route("/references", get(references_route))
+        .route("/delta", get(delta_route))
+        .route("/config/settings", any(config_settings_route))
         // The strangler FRONT (T-22935): every path above is served NATIVELY;
         // anything else forwards to the demoted Deno app plane, its response
         // (status + headers + streamed body) relayed. /apply and /ws are native,

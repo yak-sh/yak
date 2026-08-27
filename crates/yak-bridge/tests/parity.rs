@@ -408,6 +408,107 @@ fn app_plane_parity() {
     eprintln!("\napp-plane rung 1 parity OK");
 }
 
+// A server's WS reset snapshot, whole — its `vocabHash`, `cursor` and `epoch`
+// are the three /delta cursor-gate inputs, sampled the same instant every WS
+// frame stamps them. The bridge's vocabHash is the ONE documented divergence
+// (see the module note), so /delta's success path is proven the WS way: each
+// server answered with ITS OWN held vocab, the two BODIES diffed — the stale
+// GATE's vocab input differs by the documented hash, the delta computation does
+// not.
+fn reset_snapshot(base: &str) -> Value {
+    let mut ws = Ws::open(base);
+    ws.send(JOIN);
+    let txt = ws.next_text(Duration::from_secs(5)).expect("reset frame");
+    serde_json::from_str::<Value>(&txt).expect("reset json")["snapshot"].clone()
+}
+
+// POST a path, returning (status, body) — for the /config/settings 405 guard.
+fn post(base: &str, path: &str) -> (u16, String) {
+    let url = format!("{base}{}", wire(path));
+    let agent = ureq::Agent::config_builder().http_status_as_error(false).build().new_agent();
+    match agent.post(&url).send_empty() {
+        Ok(mut r) => (r.status().as_u16(), r.body_mut().read_to_string().unwrap_or_default()),
+        Err(e) => panic!("POST {url} failed: {e}"),
+    }
+}
+
+// App-plane rung 2 (D-22920): the reader surfaces `/references`, `/delta` and
+// `/config/settings`, each byte-identical to the Deno server over one shared
+// copy. (/search and /inbox — the two kernel PoC completions — are the filed
+// remainder.) Body + status via same(); the header-bearing routes via
+// same_header(); the /delta success body — where the held vocab legitimately
+// differs — diffed directly per the note above.
+#[test]
+fn app_plane_rung2_parity() {
+    if write_mode() {
+        eprintln!("app_plane_rung2_parity: skipped (write mode)");
+        return;
+    }
+    let Some((ts, br)) = both() else {
+        eprintln!("app_plane_rung2_parity: skipped (set TS_URL and BRIDGE_URL)");
+        return;
+    };
+    let _serial = serial();
+
+    // --- /references: the referenced-edge neighborhood, seeded from live ids.
+    // Empty out/in are byte-parity too; a project reliably carries incoming
+    // refs (persona reads, page captures), so at least one case is non-empty.
+    same(&ts, &br, "/references"); // 400 "eid required"
+    for kind in ["project", "task", "memory", "design", "board", "session"] {
+        if let Some(eid) = an_eid(&ts, kind) {
+            same(&ts, &br, &format!("/references?eid={eid}"));
+        }
+    }
+    // no-store is the route's contract (a live neighborhood a client must not cache).
+    if let Some(eid) = an_eid(&ts, "project") {
+        same_header(&ts, &br, &format!("/references?eid={eid}"), "cache-control");
+    }
+
+    // --- /config/settings: the non-secret rows (plainKeys only), same bytes,
+    // same headers, and the 405 on a non-GET (Deno's method guard).
+    same(&ts, &br, "/config/settings");
+    same_header(&ts, &br, "/config/settings", "content-type");
+    same_header(&ts, &br, "/config/settings", "cache-control");
+    let (ts_405, ts_body) = post(&ts, "/config/settings");
+    let (br_405, br_body) = post(&br, "/config/settings");
+    assert_eq!(ts_405, 405, "TS POST /config/settings should 405");
+    assert_eq!(br_405, 405, "bridge POST /config/settings should 405");
+    assert_eq!(ts_body, br_body, "405 body differs for POST /config/settings");
+
+    // --- /delta: the stale gate (byte-parity on 409 "stale"), then the success
+    // body. Stale cases need no vocab match — a garbage or absent vocab, a wrong
+    // epoch, or a frontier past the tip all 409 on BOTH.
+    same(&ts, &br, "/delta"); // no params → 409 stale (absent epoch/vocab)
+    same(&ts, &br, "/delta?epoch=WRONG&vocab=zzz&since=0"); // epoch + vocab both off
+    same(&ts, &br, "/delta?since=999999999"); // frontier past tip
+
+    // The success body: read each server's own held cursor gate off its WS
+    // reset, ask each with ITS OWN vocab (the documented divergence), diff the
+    // two bodies. Same epoch + same file, so the only differing request byte is
+    // the vocab param; the delta computation must be identical.
+    let ts_snap = reset_snapshot(&ts);
+    let br_snap = reset_snapshot(&br);
+    let epoch = ts_snap["epoch"].as_str().unwrap_or("");
+    assert_eq!(epoch, br_snap["epoch"].as_str().unwrap_or(""), "epoch differs (same file)");
+    let cursor = ts_snap["cursor"].as_i64().unwrap_or(0);
+    assert_eq!(cursor, br_snap["cursor"].as_i64().unwrap_or(0), "cursor differs (same file)");
+    let ts_vocab = ts_snap["vocabHash"].as_str().unwrap_or("");
+    let br_vocab = br_snap["vocabHash"].as_str().unwrap_or("");
+    // A small window near the tip (a full since=0 replays the whole journal).
+    let since = (cursor - 5).max(0);
+    let (ts_ds, ts_db) = get(&ts, &format!("/delta?epoch={epoch}&vocab={ts_vocab}&since={since}"));
+    let (br_ds, br_db) = get(&br, &format!("/delta?epoch={epoch}&vocab={br_vocab}&since={since}"));
+    assert_eq!(ts_ds, 200, "TS /delta success should 200 (vocab {ts_vocab})");
+    assert_eq!(br_ds, 200, "bridge /delta success should 200 (vocab {br_vocab})");
+    assert_eq!(ts_db, br_db, "/delta success body differs (beyond the documented vocab gate)");
+    // The empty window at the exact tip: `{changes:[],cursor}` on both.
+    let (_, ts_e) = get(&ts, &format!("/delta?epoch={epoch}&vocab={ts_vocab}&since={cursor}"));
+    let (_, br_e) = get(&br, &format!("/delta?epoch={epoch}&vocab={br_vocab}&since={cursor}"));
+    assert_eq!(ts_e, br_e, "/delta empty-window body differs");
+
+    eprintln!("\napp-plane rung 2 parity OK (references, config/settings, delta)");
+}
+
 // --- WS parity ---------------------------------------------------------------
 
 // A minimal blocking WS client: HTTP upgrade, then read/write unmasked-agnostic
