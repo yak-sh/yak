@@ -448,17 +448,7 @@ async fn front_route(
     // process. These capabilities have one generic boundary now; the explicit
     // miss is part of retirement, even while unrelated browser/service paths
     // continue through the compatibility front.
-    if matches!(
-        uri.path(),
-        "/census"
-            | "/body"
-            | "/resolve"
-            | "/search"
-            | "/inbox"
-            | "/references"
-            | "/delta"
-            | "/similar"
-    ) {
+    if front::is_retired_data_door(uri.path()) {
         return (StatusCode::NOT_FOUND, "retired: use /query, /ws, or the local library")
             .into_response();
     }

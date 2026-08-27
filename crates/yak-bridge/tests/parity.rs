@@ -48,6 +48,7 @@ use serde_json::Value;
 use std::net::TcpStream;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
+use yak_bridge::front::retired_data_doors;
 
 // One shared VACUUM-INTO copy, but the server-touching tests here fire foreign
 // /apply writes to observe live WS deltas — writes that advance the copy's
@@ -340,6 +341,12 @@ fn post(base: &str, path: &str) -> (u16, String) {
     }
 }
 
+fn head(base: &str, path: &str) -> u16 {
+    let url = format!("{base}{}", wire(path));
+    let agent = ureq::Agent::config_builder().http_status_as_error(false).build().new_agent();
+    agent.head(&url).call().unwrap().status().as_u16()
+}
+
 // Non-graph service boundaries remain byte-compatible; graph reads belong to
 // /query and are covered separately above.
 #[test]
@@ -414,11 +421,15 @@ fn ranked_query_and_retired_doors() {
     assert_eq!(br_status, 200);
     assert_eq!(without_scores(&ts_body), without_scores(&br_body));
 
-    for path in
-        ["/census", "/body", "/resolve", "/search", "/inbox", "/references", "/delta", "/similar"]
-    {
-        assert_eq!(get(&ts, path).0, 404, "Deno still serves {path}");
-        assert_eq!(get(&br, path).0, 404, "Rust still serves {path}");
+    for path in retired_data_doors() {
+        for (method, ts_status, br_status) in [
+            ("GET", get(&ts, path).0, get(&br, path).0),
+            ("POST", post(&ts, path).0, post(&br, path).0),
+            ("HEAD", head(&ts, path), head(&br, path)),
+        ] {
+            assert_eq!(ts_status, 404, "Deno still serves {method} {path}");
+            assert_eq!(br_status, 404, "Rust still serves {method} {path}");
+        }
     }
 }
 

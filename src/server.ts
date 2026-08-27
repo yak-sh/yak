@@ -8,6 +8,9 @@
 // stylesheet, and only shell/server edits still cost a real reload.
 import { transform } from 'sucrase'
 import { dirname } from 'node:path'
+import retiredDataDoorList from './retired_data_doors.json' with {
+  type: 'json',
+}
 import { bound, guard, type Serving } from './bind.ts'
 import { takeBaton } from './baton.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
@@ -927,23 +930,9 @@ let browserPlugins = specs
 
 // Retired graph-data doors must answer as API misses instead of falling through
 // to the SPA's convincing 200. Their capabilities live at the generic graph
-// boundaries now; this one set is the route-retirement invariant and its test
-// names every removed door.
-export let retiredDataDoors = new Set([
-  '/backfill/referenced',
-  '/backfill/worked',
-  '/anchor',
-  '/body',
-  '/census',
-  '/delta',
-  '/inbox',
-  '/persona',
-  '/references',
-  '/resolve',
-  '/search',
-  '/similar',
-  '/undo',
-])
+// boundaries now. The shared manifest is also compiled into yak-bridge, so an
+// older app-plane process behind its fallback cannot revive one of them.
+export let retiredDataDoors = new Set(retiredDataDoorList)
 
 // The request handler, DEFINED here but not yet listening. The bind happens at
 // the bottom of boot (just before booted()): reusePort deals connections to

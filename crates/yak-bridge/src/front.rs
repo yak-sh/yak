@@ -13,6 +13,23 @@
 // /ws are native routes the fallback never sees.
 
 use axum::http::Uri;
+use std::sync::LazyLock;
+
+// One manifest owns route retirement on both sides of the compatibility
+// boundary. In particular, the bridge must refuse these paths before it asks an
+// older app plane, whose router may still know how to serve them.
+static RETIRED_DATA_DOORS: LazyLock<Vec<String>> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../../src/retired_data_doors.json"))
+        .expect("src/retired_data_doors.json must be a JSON string array")
+});
+
+pub fn retired_data_doors() -> &'static [String] {
+    &RETIRED_DATA_DOORS
+}
+
+pub fn is_retired_data_door(path: &str) -> bool {
+    RETIRED_DATA_DOORS.iter().any(|retired| retired == path)
+}
 
 // The demoted Deno's URL for THIS request: its app-plane base with the incoming
 // path AND query appended verbatim, so `?…` filters and slugs ride through
@@ -82,6 +99,34 @@ mod tests {
     fn end_to_end_headers_ride_through() {
         for h in ["content-type", "x-via", "cookie", "authorization", "accept", "location"] {
             assert!(!is_hop_by_hop(h), "{h} must be forwarded end-to-end");
+        }
+    }
+
+    #[test]
+    fn retired_doors_match_only_the_complete_shared_set() {
+        assert_eq!(
+            retired_data_doors(),
+            [
+                "/backfill/referenced",
+                "/backfill/worked",
+                "/anchor",
+                "/body",
+                "/census",
+                "/delta",
+                "/inbox",
+                "/persona",
+                "/references",
+                "/resolve",
+                "/search",
+                "/similar",
+                "/undo",
+            ]
+        );
+        for path in retired_data_doors() {
+            assert!(is_retired_data_door(path));
+        }
+        for path in ["/", "/T-123", "/anchor/child", "/searchable", "/asset.js"] {
+            assert!(!is_retired_data_door(path), "{path} is a valid fallback path");
         }
     }
 }
