@@ -46,7 +46,24 @@
 
 use serde_json::Value;
 use std::net::TcpStream;
+use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
+
+// One shared VACUUM-INTO copy, but the server-touching tests here fire foreign
+// /apply writes to observe live WS deltas — writes that advance the copy's
+// journal. Under cargo's default parallelism two such tests overlap, and one's
+// writes move the journal between another's require_quiescent() check and its
+// cursor sample: the T-22790 off-by-one `cursor` artifact — a test-isolation
+// RACE, not a bridge divergence (serialized, the whole corpus is byte-green).
+// So every server-touching test locks this at entry and runs alone. A plain
+// static Mutex, not a --test-threads=1 flag, so a developer's bare `cargo test`
+// is deterministic too, not only the gate. The lock guards ORDERING, not shared
+// state, so a panicking test that poisons it is recovered, never propagated.
+static PARITY_LOCK: Mutex<()> = Mutex::new(());
+
+fn serial() -> MutexGuard<'static, ()> {
+    PARITY_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 fn ts() -> Option<String> {
     std::env::var("TS_URL").ok().filter(|s| !s.is_empty())
@@ -158,6 +175,7 @@ fn query_parity() {
         eprintln!("query_parity: skipped (set TS_URL and BRIDGE_URL)");
         return;
     };
+    let _serial = serial();
     let mut corpus: Vec<String> = vec![
         "/query?.kind=project".into(),
         "/query?.kind=project&deps=1".into(),
@@ -272,6 +290,7 @@ fn journal_parity() {
         eprintln!("journal_parity: skipped (set TS_URL and BRIDGE_URL)");
         return;
     };
+    let _serial = serial();
     let mut corpus: Vec<String> = vec![];
     for kind in ["task", "project", "memory", "design"] {
         if let Some(eid) = an_eid(&ts, kind) {
@@ -402,6 +421,9 @@ fn ws_join_and_live_parity() {
         eprintln!("ws_join_and_live_parity: skipped (set TS_URL and BRIDGE_URL)");
         return;
     };
+    // Hold the serial lock across the quiescence check AND the cursor samples, so
+    // no sibling parity test's writes can advance the journal between them.
+    let _serial = serial();
     // The cursor comparisons below are apples-to-apples only over a quiescent
     // journal — prove the probe copy is not being written before we start.
     require_quiescent(&ts);
@@ -576,6 +598,9 @@ fn ws_sub_parity() {
         eprintln!("ws_sub_parity: skipped (set TS_URL and BRIDGE_URL)");
         return;
     };
+    // Hold the serial lock across the quiescence check AND every cursor sample, so
+    // no sibling parity test's writes can advance the journal mid-comparison.
+    let _serial = serial();
     // Sub replies and deltas each stamp a `cursor` sampled at answer time; the
     // TS and bridge samples match only over a journal no one is advancing.
     require_quiescent(&ts);
@@ -1330,6 +1355,7 @@ fn write_parity() {
         eprintln!("write_parity: skipped (set TS_URL, BRIDGE_URL, TS_DB, BRIDGE_DB)");
         return;
     }
+    let _serial = serial();
     let (ts, br) = both().expect("write mode needs TS_URL and BRIDGE_URL");
     let ts_db = ts_db().expect("TS_DB");
     let br_db = br_db().expect("BRIDGE_DB");
