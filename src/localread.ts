@@ -46,6 +46,11 @@ let envPath = () =>
     live: liveDb(),
   })
 
+// Operator libraries use the same locality decision as the read arm. They may
+// open this path read-only, but an explicit remote host has no local graph to
+// inspect and must fail rather than silently reading the owner's default db.
+export let localReadPath = envPath
+
 // Local answers; on a local failure the wire answers instead and the arm
 // disarms (skew is permanent for this process); when the wire fails too the
 // LOCAL error surfaces. Exported for its seam test only.

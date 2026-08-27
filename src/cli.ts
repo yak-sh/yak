@@ -122,7 +122,8 @@ import { cost, type Dim, group, report, roll, type Use, use } from './usage.ts'
 // reaches for the SQLite driver, and the telemetry verb reads over HTTP —
 // the CLI's one deliberate db door is localread.ts, read-only (T-22497).
 import type { Log, Stat } from './telemetry.ts'
-import { armLocal } from './localread.ts'
+import { armLocal, localReadPath } from './localread.ts'
+import { type BackfillKind, landBackfill, readBackfill } from './backfill.ts'
 import type { JournalEntry } from './client.ts'
 import { local } from './time.ts'
 import { wakeList, wakeTitle } from './title.ts'
@@ -3318,14 +3319,19 @@ let bind = (runs: Record<string, Run>): Record<string, Verb> => {
   )
 }
 
-let backfillRun = (kind: string) => async () => {
-  let via = me()
-  let res = await request(`http://${host()}/backfill/${kind}`, {
-    method: 'POST',
-    headers: via ? { 'x-via': via } : undefined,
+let backfillRun = (kind: BackfillKind) => async () => {
+  let path = localReadPath()
+  if (!path) {
+    throw new Error(
+      'backfill requires a local graph (unset TASKS_HOST or set DB_PATH)',
+    )
+  }
+  let pending = readBackfill(path, kind)
+  let out = await landBackfill(pending, (batch) => send(batch), (p) => {
+    if (p.submitted && p.submitted < p.found) {
+      console.error(`${kind}: ${p.submitted}/${p.found} changes submitted`)
+    }
   })
-  if (!res.ok) throw new Error(`backfill failed: ${await res.text()}`)
-  let out = await res.json() as { found: number; landed: number }
   console.log(`${kind}: ${out.landed}/${out.found} historical edges landed`)
 }
 

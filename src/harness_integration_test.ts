@@ -75,6 +75,7 @@ let ioFor = (db: ReturnType<typeof open>): IO => ({
       ),
     ),
   providers: () => Promise.resolve([]),
+  backfill: () => Promise.resolve([]),
 })
 
 slow(

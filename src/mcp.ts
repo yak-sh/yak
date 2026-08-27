@@ -103,6 +103,13 @@ import {
 import { request } from './http.ts'
 import { entityUrl } from './url.ts'
 import { wakeList } from './title.ts'
+import {
+  type BackfillKind,
+  backfillKinds,
+  landBackfill,
+  readBackfill,
+} from './backfill.ts'
+import { localReadPath } from './localread.ts'
 
 // How the tools reach the graph — in-process on the server, HTTP here.
 export type IO = {
@@ -147,6 +154,9 @@ export type IO = {
   // — task_spawn's last-resort default when neither the caller nor the
   // args name one.
   providers: () => Promise<{ name: string; models: string[] }[]>
+  // Explicit historical scans are local SQLite reads. The returned changes
+  // still land through write(), so this capability never becomes a writer.
+  backfill: (kind: BackfillKind) => Promise<Change[]>
   // The colon-command executor's graph access, keyed off the LIVE graph — a
   // scoped reader the `command` tool resolves ids and enumerations through, so
   // it never pulls the whole graph (M-21143). `overlay` carries rows the
@@ -292,6 +302,7 @@ let HINTS: Record<string, ToolAnnotations> = {
   graph_apply: { destructiveHint: true },
   card_close: { destructiveHint: true },
   command: { destructiveHint: true },
+  backfill: { idempotentHint: true },
   task_spawn: { openWorldHint: true },
 }
 
@@ -1177,6 +1188,32 @@ it is a redo. ${BUS}`,
       ).join(' · ')
       return bus(
         `undid ${m ? `#${m[1]}` : id}${what ? ` · ${what}` : ''}`,
+        session,
+      )
+    },
+  )
+
+  tool(
+    'backfill',
+    `Run an explicit historical materialization from the co-located SQLite
+graph. The scan is read-only; generated dependency changes are submitted in
+bounded batches through the ordinary graph write boundary, so validation,
+effects, attribution, and live delivery stay identical to graph_apply. Each
+kind is idempotent: rerunning it finds only work not already landed.`,
+    {
+      kind: z.enum(backfillKinds),
+      session: z.string().optional(),
+    },
+    async (
+      { kind, session }: { kind: BackfillKind; session?: string },
+    ) => {
+      let pending = await io.backfill(kind)
+      let out = await landBackfill(
+        pending,
+        (batch) => io.write(batch, session),
+      )
+      return bus(
+        `${kind}: ${out.landed}/${out.found} historical edges landed`,
         session,
       )
     },
@@ -2288,6 +2325,15 @@ if (import.meta.main) {
       let res = await request(`http://${host()}/providers`)
       if (!res.ok) throw new Error(`server said ${res.status}`)
       return res.json()
+    },
+    backfill: (kind) => {
+      let path = localReadPath()
+      if (!path) {
+        throw new Error(
+          'backfill requires a local graph (unset TASKS_HOST or set DB_PATH)',
+        )
+      }
+      return Promise.resolve(readBackfill(path, kind))
     },
   }).connect(new StdioServerTransport())
 }
