@@ -1027,7 +1027,7 @@ let stderrs = new Map<string, string>()
 
 let inputBatch = (type: unknown, text: unknown): Batch => ({
   specs: [{
-    ...(type == 'session.prompt' ? { instruction: {} } : {}),
+    ...(type == 'session.prompt' ? { prompt: {} } : {}),
     message: { role: 'user' },
     content: { body: scrub(text) },
   }],

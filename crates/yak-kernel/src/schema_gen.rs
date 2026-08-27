@@ -667,7 +667,7 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::Exec(r#"create table if not exists "attention" (
     entity integer primary key references entity(id)
   );"#),
-    SchemaOp::Exec(r#"create table if not exists "instruction" (
+    SchemaOp::Exec(r#"create table if not exists "prompt" (
     entity integer primary key references entity(id)
   );"#),
     SchemaOp::Exec(r#"create table if not exists "task_context" (

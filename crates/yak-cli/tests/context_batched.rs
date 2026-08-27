@@ -100,7 +100,7 @@ const UNRENDERED_COMPS: &[&str] = &[
     "blocked",
     "content",
     "message",
-    "instruction",
+    "prompt",
     "bash",
     "tool",
     "output",

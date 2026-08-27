@@ -178,3 +178,21 @@ fn migrate_is_idempotent() {
     apply_schema(c).unwrap();
     assert_eq!(snapshot(c), before, "a second migrate is a no-op on the schema");
 }
+
+#[test]
+fn migration_preserves_the_legacy_prompt_marker_and_frees_instruction() {
+    let ws = WriteStore::create_or_migrate(":memory:").unwrap();
+    let c = &ws.conn;
+    let eid = "aaaaaaaa-0000-4000-8000-000000000001";
+    c.execute("insert into entity (eid) values (?1)", [eid]).unwrap();
+    c.execute("insert into prompt (entity) select id from entity where eid = ?1", [eid]).unwrap();
+    c.execute_batch("alter table prompt rename to instruction;").unwrap();
+
+    apply_schema(c).unwrap();
+    assert!(has(c, "table", "prompt"));
+    assert!(!has(c, "table", "instruction"));
+    let preserved: String = c
+        .query_row("select e.eid from prompt p join entity e on e.id = p.entity", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(preserved, eid);
+}

@@ -32,7 +32,7 @@ let Frame = block('div', 'Entry', {
   Part: 'section',
   PartName: 'div',
 })
-let Instruction = block('details', 'Instruction', {
+let Prompt = block('details', 'Prompt', {
   Gist: 'summary',
   Body: 'div',
 })
@@ -326,17 +326,17 @@ export let MessageSummary = ({ e }: { e: Ent }) => (
   </Frame>
 )
 
-export let InstructionSummary = ({ e }: { e: Ent }) => {
+export let PromptSummary = ({ e }: { e: Ent }) => {
   let n = lines(body(e)).length
   return (
-    <Instruction>
-      <Instruction.Gist>
+    <Prompt>
+      <Prompt.Gist>
         persona · {n} {n == 1 ? 'line' : 'lines'}
-      </Instruction.Gist>
-      <Instruction.Body>
+      </Prompt.Gist>
+      <Prompt.Body>
         <MessageSummary e={e} />
-      </Instruction.Body>
-    </Instruction>
+      </Prompt.Body>
+    </Prompt>
   )
 }
 

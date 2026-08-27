@@ -817,7 +817,7 @@ export let derived = [
   'favorite',
   'worktree',
   'attention',
-  'instruction',
+  'prompt',
   'task_context',
   'reasoning',
   'recalled',
@@ -1030,6 +1030,25 @@ export let hasCol = (db: DatabaseSync, table: string, col: string) =>
 let colNames = (db: DatabaseSync, table: string) =>
   (prep(db, 'select name from pragma_table_info(?)')
     .all(table) as { name: string }[]).map((c) => c.name)
+
+// `instruction` used to be the empty marker on a Session's assembled prompt.
+// The evaluator now needs that name for executable instructions, so migrate
+// the marker TABLE before the current schema is planted. Shape is the guard:
+// a future executable instruction table has contract columns and must never be
+// mistaken for this retired one-column marker. The two-table arm makes an
+// interrupted/rolling migration idempotent without keeping two writable names.
+export let migratePrompt = (db: DatabaseSync) => {
+  let legacy = colNames(db, 'instruction')
+  if (legacy.length != 1 || legacy[0] != 'entity') return
+  if (!colNames(db, 'prompt').length) {
+    db.exec('alter table instruction rename to prompt')
+    return
+  }
+  db.exec(`
+    insert or ignore into prompt (entity) select entity from instruction;
+    drop table instruction;
+  `)
+}
 
 // The index twin of hasCol: is this named index already present? A bare
 // `create index if not exists` on an existing index opens an empty write
@@ -2713,6 +2732,7 @@ export let migrate = (db: DatabaseSync) => {
     // This must precede schema: an old table may not yet have the canonical
     // columns named by a newly added index in the current DDL.
     migrateRefs(db)
+    migratePrompt(db)
     db.exec(schema)
     let addCol = (table: string, col: string, ddl: string) => {
       if (!hasCol(db, table, col)) {
@@ -2872,7 +2892,7 @@ export let migrate = (db: DatabaseSync) => {
     // Managed prompts have always occupied seq 1. Materialize the facet for
     // existing logs so deploy-time UI behavior matches newly appended runs.
     db.exec(`
-      insert or ignore into instruction (entity)
+      insert or ignore into prompt (entity)
       select e.entity from entry e
       join message m on m.entity = e.entity
       join session s on s.entity = e.session

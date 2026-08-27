@@ -48,9 +48,40 @@ fn has_idx(conn: &Connection, name: &str) -> bool {
     .is_some()
 }
 
+// `instruction` was the empty Session-prompt marker before executable
+// instructions claimed that name. Move only that one-column legacy shape;
+// contract-bearing instruction tables belong to the evaluator and must remain.
+// Running before SCHEMA lets the ordinary generated `prompt` create serve both
+// fresh databases and a renamed legacy table.
+fn migrate_prompt(conn: &Connection) -> rusqlite::Result<()> {
+    let mut st = conn.prepare("select name from pragma_table_info('instruction') order by cid")?;
+    let cols: Vec<String> = st.query_map([], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    if cols.len() != 1 || cols[0] != "entity" {
+        return Ok(());
+    }
+    let prompt = conn
+        .query_row(
+            "select 1 from sqlite_master where type = 'table' and name = 'prompt'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .optional()?
+        .is_some();
+    if prompt {
+        conn.execute_batch(
+            "insert or ignore into prompt (entity) select entity from instruction; \
+             drop table instruction;",
+        )?;
+    } else {
+        conn.execute_batch("alter table instruction rename to prompt;")?;
+    }
+    Ok(())
+}
+
 // Replay the emitted DDL against a connection, applying each statement's guard.
 // Idempotent: a re-run over an already-current graph writes nothing.
 pub fn apply_schema(conn: &Connection) -> rusqlite::Result<()> {
+    migrate_prompt(conn)?;
     for op in crate::schema_gen::SCHEMA {
         match op {
             SchemaOp::Exec(sql) => conn.execute_batch(sql)?,
@@ -66,6 +97,13 @@ pub fn apply_schema(conn: &Connection) -> rusqlite::Result<()> {
             }
         }
     }
+    conn.execute_batch(
+        "insert or ignore into prompt (entity) \
+         select e.entity from entry e \
+         join message m on m.entity = e.entity \
+         join session s on s.entity = e.session \
+         where e.seq = 1 and m.role = 'user' and s.origin = 'managed';",
+    )?;
     Ok(())
 }
 

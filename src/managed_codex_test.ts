@@ -208,7 +208,7 @@ slow(
     await service.start(sid, job(tree))
     let rows = readEntries(db, sid)
     assertEquals(rows.map((row) => row.seq), [1, 2, 3, 4, 5, 6])
-    assert(rows[0].comps.instruction)
+    assert(rows[0].comps.prompt)
     assertEquals(rows[0].comps.content.body, 'Do the task.')
     assertEquals(rows[2].comps.call.key, 'call-1')
     assertEquals(rows[3].comps.result.call, rows[2].eid)
@@ -273,9 +273,9 @@ slow(
     assertEquals(users.length, 2)
     assertEquals(users[0].comps.content.body, 'You are the voice.')
     assertEquals(users[1].comps.content.body, 'T-1: do the thing')
-    // Only the persona wears the `instruction` facet, so only it collapses.
-    assert(users[0].comps.instruction)
-    assertEquals(users[1].comps.instruction, undefined)
+    // Only the persona wears the `prompt` facet, so only it collapses.
+    assert(users[0].comps.prompt)
+    assertEquals(users[1].comps.prompt, undefined)
     assert(users[0].seq < users[1].seq)
     // The generation reads `through` the prompt, so its window spans both.
     let generation = rows.find((row) => row.comps.generation)

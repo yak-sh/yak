@@ -205,6 +205,20 @@ fn run(s: &WriteStore, changes: Vec<Change>) -> Vec<Change> {
     apply(s, changes, &ApplyOpts::default(), &default_gates()).unwrap()
 }
 
+#[test]
+fn retired_instruction_marker_is_not_admitted() {
+    let s = store();
+    let out = run(&s, vec![ch(A, "instruction", json!({}))]);
+    assert!(out.is_empty());
+    assert_eq!(
+        s.conn
+            .query_row("select 1 from entity where eid = ?1", [A], |r| r.get::<_, i64>(0))
+            .optional()
+            .unwrap(),
+        None,
+    );
+}
+
 // Seed a session row by SQL — a pre-existing session the facet mirrors read
 // (dual_spawn/dual_facet consult the `session` table), distinct from a session
 // CREATE that arrives as a wire change (now native, rung 7c).

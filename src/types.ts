@@ -63,7 +63,7 @@ export let sessionComps: Record<string, Record<string, PropType>> = {
   message: {
     role: { enum: messageRoles },
   },
-  instruction: {},
+  prompt: {},
   attention: {},
   generation: {
     through: { eid: 'entry', death: 'keep' },
@@ -300,7 +300,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   message: {
     role: { enum: messageRoles },
   },
-  instruction: {},
+  prompt: {},
   attention: {},
   generation: {
     through: { eid: 'entry', death: 'keep' },

@@ -2969,6 +2969,52 @@ Deno.test('open() is idempotent and additive on live files', () => {
   assertMatch(String(fresh().prepare('select 1 as ok').get()?.ok), /1/)
 })
 
+slow('open migrates the legacy instruction marker to prompt once', () => {
+  let root = Deno.makeTempDirSync({ prefix: 'tasks-prompt-' })
+  let path = `${root}/tasks.db`
+  let marker = uid()
+  try {
+    let legacy = open(path)
+    apply(legacy, [{ eid: marker, name: 'doc', comp: { title: 'marker' } }])
+    legacy.prepare(
+      `insert into prompt (entity) select id from entity where eid = ?`,
+    ).run(marker)
+    legacy.exec('alter table prompt rename to instruction')
+    // A rolling successor may have planted the new table before retiring the
+    // old one. Reopen must merge this interrupted two-table shape, then drop
+    // only the one-column legacy marker.
+    legacy.exec(`create table prompt (
+      entity integer primary key references entity(id)
+    )`)
+    legacy.close()
+
+    let migrated = open(path)
+    assertEquals(
+      migrated.prepare(
+        `select e.eid from prompt p join entity e on e.id = p.entity
+         where e.eid = ?`,
+      ).get(marker),
+      { eid: marker },
+    )
+    assertEquals(hasCol(migrated, 'instruction', 'entity'), false)
+
+    // The retired empty marker spelling is now an unknown-component no-op.
+    // It cannot silently create either a prompt or a future instruction.
+    let old = uid()
+    assertEquals(
+      apply(migrated, [{ eid: old, name: 'instruction', comp: {} }]),
+      [],
+    )
+    assertEquals(
+      migrated.prepare('select 1 from entity where eid = ?').get(old),
+      undefined,
+    )
+    migrated.close()
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
+})
+
 slow('open renames every reference key, its filters, and its history', () => {
   let root = Deno.makeTempDirSync({ prefix: 'tasks-refs-' })
   let path = `${root}/tasks.db`

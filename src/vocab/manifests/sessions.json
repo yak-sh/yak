@@ -213,10 +213,6 @@
         "line": "number"
       }
     },
-    "instruction": {
-      "rank": 310,
-      "log": true
-    },
     "lease": {
       "rank": 550,
       "stamped_rank": 320,
@@ -276,6 +272,10 @@
         "path": "text",
         "diff": "body"
       }
+    },
+    "prompt": {
+      "rank": 310,
+      "log": true
     },
     "reasoning": {
       "rank": 510,

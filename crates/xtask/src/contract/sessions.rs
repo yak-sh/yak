@@ -152,7 +152,7 @@ struct Message {
 // The always-first user entry is session context, not conversation.
 #[derive(Comp)]
 #[comp(plugin = "sessions", rank = 310, log)]
-struct Instruction {}
+struct Prompt {}
 
 #[derive(Comp)]
 #[comp(plugin = "sessions", rank = 320, log)]

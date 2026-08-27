@@ -46,7 +46,7 @@ let OWNED = `entity = (select id from entity where eid = ?)`
 export type ManagedJob = {
   // Persona and prompt are seeded as two ordered entries (T-18991); a job that
   // carries neither (a resume/reconfigure) falls back to the single
-  // `instruction` entry.
+  // `prompt` entry.
   persona?: string
   prompt?: string
   instruction: string
@@ -667,18 +667,18 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     ).at(-1)?.eid
     let generation = rows.find((row) => row.comps.generation)?.eid
     if (!input) {
-      // The always-first user entries: the persona wears the `instruction`
+      // The always-first user entries: the persona wears the `prompt`
       // facet so every transcript face folds it collapsed (T-18991); the
       // prompt is a plain user entry, shown. A job that carries neither part
       // (a resume/reconfigure, an unsplit test job) falls back to a single
-      // `instruction` entry holding the whole prompt.
+      // `prompt` entry holding the whole prompt.
       let seeds = [
         job.persona && { body: job.persona, mark: true },
         job.prompt && { body: job.prompt },
       ].filter((s): s is { body: string; mark?: boolean } => !!s)
       if (seeds.length == 0) seeds = [{ body: job.instruction, mark: true }]
       let entries = seeds.map((seed) => ({
-        ...(seed.mark ? { instruction: {} } : {}),
+        ...(seed.mark ? { prompt: {} } : {}),
         message: { role: 'user' },
         content: { body: seed.body },
       }))

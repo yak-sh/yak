@@ -57,9 +57,9 @@ import {
   CommandFull,
   CommandSummary,
   EntrySummary,
-  InstructionSummary,
   MessageFull,
   MessageSummary,
+  PromptSummary,
   ResultFull,
   ResultSummary,
 } from './views/Entry.tsx'
@@ -179,8 +179,8 @@ define([
   },
   {
     view: 'Summary',
-    match: has('entry', 'instruction', 'message'),
-    Render: InstructionSummary,
+    match: has('entry', 'prompt', 'message'),
+    Render: PromptSummary,
   },
   { view: 'Summary', match: has('entry', 'result'), Render: ResultSummary },
   { view: 'Summary', match: has('entry', 'message'), Render: MessageSummary },

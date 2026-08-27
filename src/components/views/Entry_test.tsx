@@ -12,9 +12,9 @@ import {
   EntryBody,
   EntryLens,
   EntrySummary,
-  InstructionSummary,
   mergeTools,
   MessageSummary,
+  PromptSummary,
   ResultFull,
   ResultSummary,
 } from './Entry.tsx'
@@ -222,25 +222,25 @@ Deno.test('normalized user messages render as entry markdown', () =>
     assertEquals(root.querySelector('.Entry-user strong')?.textContent, 'hello')
   }))
 
-Deno.test('session instructions are collapsed persona entries', () =>
+Deno.test('session prompts are collapsed persona entries', () =>
   withDom((root) => {
     let e: Ent = {
-      eid: 'instruction',
+      eid: 'prompt',
       num: 1,
       kind: 'entry',
       refs: [],
       kids: [],
-      entry: { eid: 'instruction', session: 'session', seq: 1 },
-      instruction: { eid: 'instruction' },
-      message: { eid: 'instruction', role: 'user' },
-      content: { eid: 'instruction', body: 'one\ntwo' },
+      entry: { eid: 'prompt', session: 'session', seq: 1 },
+      prompt: { eid: 'prompt' },
+      message: { eid: 'prompt', role: 'user' },
+      content: { eid: 'prompt', body: 'one\ntwo' },
     }
-    assertEquals(resolve(e, 'Entry.Summary').Render, InstructionSummary)
-    render(<InstructionSummary e={e} />, root)
-    let details = root.querySelector('details.Instruction')!
+    assertEquals(resolve(e, 'Entry.Summary').Render, PromptSummary)
+    render(<PromptSummary e={e} />, root)
+    let details = root.querySelector('details.Prompt')!
     assertEquals(details.hasAttribute('open'), false)
     assertEquals(
-      details.querySelector('.Instruction_Gist')?.textContent,
+      details.querySelector('.Prompt_Gist')?.textContent,
       'persona · 2 lines',
     )
   }))

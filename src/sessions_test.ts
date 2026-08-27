@@ -901,11 +901,11 @@ slow('a fake session runs end to end', async () => {
 
   // The transcript reads back from the session's graph entry partition — the
   // reader path (T-16798), no file-log door. Entry 1 is what we SENT: the
-  // instruction, a user say (its projection/paging is ingest_drain_test's job).
+  // prompt, a user say (its projection/paging is ingest_drain_test's job).
   let entries = logOf(eid).entries
   let first = entries[0]
   assertEquals(first.seq, 1)
-  assert(readEntries(db, eid)[0].comps.instruction)
+  assert(readEntries(db, eid)[0].comps.prompt)
   assertEquals(first.row?.kind, 'say')
   assertMatch(sayText(first), /T-\d+/)
   assert(entries.length > 1) // the child's turns followed
@@ -1126,7 +1126,7 @@ slow('a worn persona rides the prompt whole — tiers and all', async () => {
   ])
   let { eid, done } = begin(t, { persona: per })
   await done
-  assert(readEntries(db, eid)[0].comps.instruction)
+  assert(readEntries(db, eid)[0].comps.prompt)
   let text = sayText(logOf(eid, { limit: 1 }).entries[0])
   // The persona's OWN body describes it to graph readers, not the prompt —
   // prompt content rides via contained memories (de1bd7f). So 'Be terse.'
