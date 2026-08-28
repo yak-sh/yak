@@ -387,3 +387,51 @@ Deno.test('redact: a failed audit append rolls every copy back', () => {
     n: 0,
   })
 })
+
+// A historically-torn journal row (row #2106568; T-24020) whose batch is not
+// parseable JSON must not break redaction: the scrubber skips + warns on it,
+// exactly as the backfill does, and still removes the secret from every good
+// row and from live state.
+Deno.test('redact: a corrupt (unparseable) journal row is skipped, not fatal', () => {
+  let db = bareDb()
+  let target = uid()
+  let secret = 'torn-secret-24020'
+  apply(db, [{
+    eid: target,
+    name: 'doc',
+    comp: { title: 'Target', body: `keep ${secret} keep` },
+  }])
+  // Raw bytes straight into the column: the secret is present (so redactionRows'
+  // instr() pre-screen selects the row) but a control char makes it invalid JSON.
+  db.prepare(
+    'insert into journal (ts, actor, via, batch, trace) values (?, ?, ?, ?, ?)',
+  ).run(
+    '2026-01-01T00:00:00.000Z',
+    null,
+    null,
+    '[{"eid":"' + target + '","name":"doc","comp":{"body":"' + secret +
+      String.fromCharCode(1) + '"}}]',
+    null,
+  )
+
+  let warned: string[] = []
+  let realWarn = console.warn
+  console.warn = (...a: unknown[]) => warned.push(String(a[0]))
+  let out
+  try {
+    out = redact(db, target, secret)
+  } finally {
+    console.warn = realWarn
+  }
+
+  // Live state and every PARSEABLE batch are scrubbed …
+  assertEquals(out.column, 'body')
+  assertEquals(readComp(db, target, 'doc')?.body, 'keep [redacted] keep')
+  // … while the one torn row is left untouched (an honest gap the JSON readers
+  // skip), and the skip was WARNED, not thrown.
+  assert(warned.some((w) => w.includes('skipping unparseable batch')))
+  let corrupt = db.prepare(
+    `select batch from journal where instr(batch, char(1)) > 0`,
+  ).get() as { batch: string }
+  assert(corrupt.batch.includes(secret))
+})

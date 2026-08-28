@@ -5868,6 +5868,23 @@ export let journalNormalized = (
   })
 }
 
+// One journal `batch` column decoded, or null if the row is a known-corrupt
+// torn write — a batch that is not parseable JSON (row #2106568, invalid bytes
+// from the Aug'25 SIGBUS/ENOSPC incident; T-24020). The normalized readers skip
+// such a row as an honest gap (the backfill wrote no journal_tx for it), and the
+// JSON readers still authoritative until T-18883 (the backfill itself, and the
+// redaction scrubber) share that policy: warn once and skip, so one torn row
+// cannot break a whole-log scan for the entire timeline. The catch is narrow,
+// around the parse alone, so a real bug still surfaces.
+let parseBatch = (batch: string, rowid: number): Change[] | null => {
+  try {
+    return JSON.parse(batch) as Change[]
+  } catch (e) {
+    console.warn(`journal: skipping unparseable batch #${rowid} —`, e)
+    return null
+  }
+}
+
 // Backfill the EXISTING JSON journal history into the normalized tables
 // (T-18879), so the parallel record covers ALL of history and not merely the
 // writes since dual-write (T-18878) began. Every legacy `journal` row is parsed
@@ -5907,13 +5924,13 @@ export let journalNormalized = (
 // in-flight chunk and never a giant single transaction.
 //
 // RESILIENCE: a legacy batch that does not parse as JSON is a pre-existing
-// corruption — the live delta/history/undo readers `JSON.parse` the same column
-// unguarded, so they choke on it too — and it cannot be faithfully derived. The
-// backfill WARNS and skips exactly that row (advancing past it, leaving an
-// honest gap with no journal_tx) rather than aborting the whole migration; the
-// catch is narrow, around the parse alone, so a real derivation bug still
-// surfaces. Returns the count of legacy rows written and of unparseable rows
-// skipped this call.
+// corruption (T-24020) that cannot be faithfully derived. The backfill decodes
+// through parseBatch, which WARNS and skips exactly that row (advancing past it,
+// leaving an honest gap with no journal_tx) rather than aborting the whole
+// migration; the catch is narrow, around the parse alone, so a real derivation
+// bug still surfaces. The remaining JSON readers (the redaction scrubber) share
+// that helper and policy. Returns the count of legacy rows written and of
+// unparseable rows skipped this call.
 export let backfillJournal = (
   db: DatabaseSync,
   { chunk = 1000, onChunk }: {
@@ -5964,20 +5981,15 @@ export let backfillJournal = (
     try {
       for (let r of rows) {
         if (!has.get(r.id)) {
-          let logged: Change[]
-          try {
-            logged = (JSON.parse(r.batch) as Change[]).map((c) => renamed(c))
-          } catch (e) {
-            // A corrupt, unparseable legacy batch: warn and leave a gap (no
-            // journal_tx for this rowid) rather than abort the migration.
-            console.warn(
-              `journal backfill: skipping unparseable batch #${r.id} —`,
-              e,
-            )
+          let parsed = parseBatch(r.batch, r.id)
+          if (!parsed) {
+            // A corrupt, unparseable legacy batch: leave a gap (no journal_tx
+            // for this rowid) rather than abort the migration.
             skipped++
             hwm = r.id
             continue
           }
+          let logged = parsed.map((c) => renamed(c))
           journalNormalized(db, r.id, r.ts, r.actor, r.via, r.trace, logged)
           wrote++
         }
@@ -6162,7 +6174,9 @@ export let redact = (
         if (doc?.[col]?.includes(value)) columns.add(col)
       }
       for (let row of rows) {
-        for (let col of docColumns(JSON.parse(row.batch), target, value)) {
+        let batch = parseBatch(row.batch, row.rowid)
+        if (!batch) continue
+        for (let col of docColumns(batch, target, value)) {
           columns.add(col)
         }
       }
@@ -6183,7 +6197,9 @@ export let redact = (
     let firstSeen: string | undefined
     let rewrite = prep(db, 'update journal set batch = ? where rowid = ?')
     for (let row of rows) {
-      let clean = scrubBatch(JSON.parse(row.batch), value)
+      let batch = parseBatch(row.batch, row.rowid)
+      if (!batch) continue
+      let clean = scrubBatch(batch, value)
       if (!clean.count) continue
       rewrite.run(JSON.stringify(clean.batch), row.rowid)
       journalRows++
