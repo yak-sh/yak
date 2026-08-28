@@ -10,6 +10,11 @@ use yak_vocab_derive::Comp;
 // (D-13858). A closed set like statuses.
 venum!("kernel", "noticeKinds", 140, ["lapse", "sweep", "scene", "wake"]);
 
+// A durable effect claim's lease state (D-23772). `pending` awaits a worker;
+// `leased` is held under a token until its expiry; `delivered`/`failed` are
+// terminal settlements. The set a worker walks to reclaim expired work.
+venum!("kernel", "effectStates", 150, ["pending", "leased", "delivered", "failed"]);
+
 // The edge vocabulary — every edge reads as a sentence, parent first. The LIST
 // is the source of truth: db.ts bakes it into the dependency check constraint.
 inventory::submit! {
@@ -308,4 +313,34 @@ struct Proposed {
     #[stamped]
     #[col(eid = "entity", death = "keep")]
     via: Ref,
+}
+
+// A durable per-effect claim (D-23772, docs/EFFECT_CLAIMS.md). The temporary
+// `-effects.lock` elects one dispatcher; SQLite coordination per effect is what
+// replaces it, so one or one thousand effects workers are equivalent. Identity
+// is the journal ROW that carried the change plus the HANDLER key — unique, so
+// the same committed effect is claimed at most once. Every field is server-
+// owned: a worker leases a pending or expired row, settles it conditionally on
+// the same lease token, and reclaims it after a crash — the wire never writes
+// it. Additive while the current dispatcher stays the sole claimant; nothing
+// consumes it yet. Not in kindOrder.
+#[derive(Comp)]
+#[comp(plugin = "kernel", rank = 1010, stamped_rank = 340)]
+#[index(cols(jrow, handler), unique)]
+struct Effect {
+    #[stamped]
+    jrow: Number,
+    #[stamped]
+    handler: Text,
+    #[stamped]
+    #[col(sel = "effectStates")]
+    state: Sel,
+    #[stamped]
+    attempts: Number,
+    #[stamped]
+    lease_owner: Text,
+    #[stamped]
+    lease_token: Text,
+    #[stamped]
+    lease_expiry: Time,
 }

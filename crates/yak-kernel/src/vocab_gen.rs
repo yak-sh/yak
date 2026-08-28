@@ -367,6 +367,7 @@ pub(crate) fn baked() -> Vocab {
             ("at".into(), PropType::Time),
             ("by".into(), PropType::Eid("entity".into())),
         ]),
+        ("effect".into(), vec![]),
     ];
     let stamped = HashMap::from([
         ("entity".into(), vec![
@@ -555,6 +556,15 @@ pub(crate) fn baked() -> Vocab {
             ("cached".into(), PropType::Number),
             ("output".into(), PropType::Number),
             ("reasoning".into(), PropType::Number),
+        ]),
+        ("effect".into(), vec![
+            ("jrow".into(), PropType::Number),
+            ("handler".into(), PropType::Text),
+            ("state".into(), PropType::Enum(vec!["pending".into(), "leased".into(), "delivered".into(), "failed".into()])),
+            ("attempts".into(), PropType::Number),
+            ("lease_owner".into(), PropType::Text),
+            ("lease_token".into(), PropType::Text),
+            ("lease_expiry".into(), PropType::Time),
         ]),
     ]);
     let prefix = HashMap::from([

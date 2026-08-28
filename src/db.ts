@@ -741,6 +741,26 @@ let schema = `
     via integer,
     verdict text
   );
+  -- A durable per-effect claim (D-23772, docs/EFFECT_CLAIMS.md): the SQLite
+  -- coordination that replaces the effects-lock dispatcher election, so one or
+  -- one thousand effects workers are equivalent. Identity is (jrow, handler) --
+  -- the journal ROW that carried the change plus the HANDLER key -- unique, so
+  -- the same committed effect is claimed at most once. Every column is server-
+  -- owned (all stamped, so comps.effect is empty and the wire can't write it); a
+  -- worker leases, settles conditionally on lease_token, and reclaims on expiry
+  -- via direct SQL. A wholly new table, so create-if-not-exists is the additive
+  -- add. Nothing consumes it yet -- the dispatcher is unchanged.
+  create table if not exists effect (
+    entity        integer primary key references entity(id),
+    jrow          integer,
+    handler       text,
+    state         text,
+    attempts      integer,
+    lease_owner   text,
+    lease_token   text,
+    lease_expiry  text,
+    unique (jrow, handler)
+  );
   create table if not exists tombstone (
     eid        text primary key,
     num        integer,

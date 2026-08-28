@@ -51,6 +51,7 @@ export let subModes = ['watch', 'mute'] as const
 export let verdicts = ['approved', 'rejected', 'changes_requested'] as const
 export let grades = ['frontier', 'mid', 'small'] as const
 export let noticeKinds = ['lapse', 'sweep', 'scene', 'wake'] as const
+export let effectStates = ['pending', 'leased', 'delivered', 'failed'] as const
 
 // The graph-native Session-log vocabulary (comps marked log = true).
 export let sessionComps: Record<string, Record<string, PropType>> = {
@@ -510,6 +511,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     at: 'time',
     by: { eid: 'entity', death: 'keep' },
   },
+  effect: {},
 }
 
 // Old spellings that still resolve — the compatibility promise in
@@ -534,6 +536,7 @@ export let indexes: Record<string, Idx[]> = {
   result: [{ cols: ['call'], unique: true }],
   subscription: [{ cols: ['actor', 'target'], unique: true }],
   chat: [{ cols: ['actor', 'target'], unique: true }],
+  effect: [{ cols: ['jrow', 'handler'], unique: true }],
 }
 
 // Snapshot partition: lazy comps never ride the boot snapshot.
@@ -727,6 +730,15 @@ export let stamped: Record<string, Record<string, PropType>> = {
     cached: 'number',
     output: 'number',
     reasoning: 'number',
+  },
+  effect: {
+    jrow: 'number',
+    handler: 'text',
+    state: { enum: effectStates },
+    attempts: 'number',
+    lease_owner: 'text',
+    lease_token: 'text',
+    lease_expiry: 'time',
   },
 }
 
