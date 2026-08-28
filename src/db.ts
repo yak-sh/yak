@@ -805,6 +805,61 @@ let schema = `
     jrow integer not null,
     eid  text not null
   );
+  -- The NORMALIZED journal (D-18860/D-18861), written beside the JSON journal
+  -- above in the SAME apply() transaction -- DUAL-WRITE (T-18878). Three
+  -- append-only log tables: still log data, not graph -- no eid of their own,
+  -- never in snapshot() or a client cache, not vocabulary components (so no
+  -- xtask/codegen). The JSON journal stays AUTHORITATIVE and every reader still
+  -- reads it; these only ADD the parallel record the next stages backfill
+  -- (T-18879), switch readers onto (T-18880), and finally retire the JSON
+  -- journal for (T-18883).
+  --
+  -- journal_tx: one row per applied batch, carrying the same provenance the JSON
+  -- row keeps (ts, actor, via, trace). Its rowid is the transaction's durable
+  -- total-order identity -- monotonic, so ordering never rests on ts alone.
+  create table if not exists journal_tx (
+    id    integer primary key,
+    ts    text not null,
+    actor text,
+    via   text,
+    trace text
+  );
+  -- journal_change: one ordered operation per Change in the batch. (tx, ordinal)
+  -- reproduces the exact applied order within a transaction. operation is
+  -- upsert (comp != null -- a present component, an empty one being an upsert
+  -- with no field rows) or remove (comp == null -- a component removal, or
+  -- entity death when component = 'entity'). component is the wire component
+  -- name, eid its entity.
+  create table if not exists journal_change (
+    id        integer primary key,
+    tx        integer not null references journal_tx(id),
+    ordinal   integer not null,
+    eid       text not null,
+    component text not null,
+    operation text not null
+  );
+  -- journal_field: ordered after-image rows, one per field an operation wrote.
+  -- present = 1 records a written value (JSON-encoded in value, so a present
+  -- null -- present=1, value='null' -- stays distinct from a tombstone);
+  -- present = 0 is a TOMBSTONE (value null), emitted for each then-present
+  -- field when its component is removed, so field history, predecessor lookup,
+  -- diffs and undo stay self-contained and no value leaks across a component
+  -- removal and later recreation (D-18861). An upsert with no fields (empty
+  -- component presence) writes none -- its journal_change alone marks it.
+  -- ordinal is the field's order within its change.
+  create table if not exists journal_field (
+    id       integer primary key,
+    change   integer not null references journal_change(id),
+    ordinal  integer not null,
+    field    text not null,
+    present  integer not null,
+    value    text
+  );
+  -- Reconstruct a batch in order (by tx), per-entity history and predecessor
+  -- lookup (by eid+component), and the field rows of a change (by change).
+  create index if not exists journal_change_tx on journal_change(tx, ordinal);
+  create index if not exists journal_change_ent on journal_change(eid, component);
+  create index if not exists journal_field_change on journal_field(change, ordinal);
   -- Server-local key/value, not graph: no eid, no components, so snapshot()
   -- (which walks the comps vocabulary) never carries it, and apply() never
   -- writes it. Holds the durable sync epoch (epochOf): the cursor-lineage
@@ -5637,6 +5692,17 @@ export let apply = (
       let echoed = new Set(['created', 'updated', ...stamps, ...clocked])
       let logged = [...changes, ...extra.filter((c) => !echoed.has(c.name))]
       if (logged.length) {
+        // The Trace, journaled — but only when the caller DEFERRED its
+        // dispatch to the journal feed (a fed() trace). A plain trace()
+        // means the call site dispatches itself, and an absent trace
+        // means no effects at all (the runner's deliberate effect-free
+        // applies) — either way the feed must not fire them again.
+        let trace = t?.fed
+          ? JSON.stringify({
+            created: [...createdComps],
+            removed: [...removedLog],
+          })
+          : null
         let jrow = Number(
           prep(
             db,
@@ -5647,20 +5713,13 @@ export let apply = (
               actor, // the resolved writing actor (T-6669), same as the by-default
               via,
               JSON.stringify(logged),
-              // The Trace, journaled — but only when the caller DEFERRED its
-              // dispatch to the journal feed (a fed() trace). A plain trace()
-              // means the call site dispatches itself, and an absent trace
-              // means no effects at all (the runner's deliberate effect-free
-              // applies) — either way the feed must not fire them again.
-              t?.fed
-                ? JSON.stringify({
-                  created: [...createdComps],
-                  removed: [...removedLog],
-                })
-                : null,
+              trace,
             ).lastInsertRowid,
         )
         touchJournal(db, jrow, logged)
+        // The normalized parallel record (T-18878), same transaction, same
+        // `logged` — the JSON row above stays authoritative.
+        journalNormalized(db, now, actor, via, trace, logged)
       }
     } catch (e) {
       console.warn('journal skipped —', e)
@@ -5730,6 +5789,76 @@ let touchJournal = (db: DatabaseSync, jrow: number, changes: Change[]) => {
   for (let eid of new Set(changes.map((c) => c.eid))) ins.run(jrow, eid)
 }
 
+// The NORMALIZED journal write (D-18860/D-18861) — the parallel record beside
+// the JSON `journal` row, DUAL-WRITE (T-18878): same transaction, same `logged`
+// array, so the two can never disagree. journal_tx keeps the batch's provenance;
+// journal_change one ordered operation per Change; journal_field the ordered
+// after-image, present rows for an upsert and tombstones for a removal. Derived
+// wholly from `logged` plus the append-only field log itself, so it touches
+// nothing in the change loop. Called inside the caller's transaction, beside the
+// JSON insert it mirrors; the caller's try guards it — a broken parallel record
+// must not break the write it records, exactly like the JSON journal.
+let journalNormalized = (
+  db: DatabaseSync,
+  ts: string,
+  actor: string | null,
+  via: string | null,
+  trace: string | null,
+  logged: Change[],
+) => {
+  let tx = Number(
+    prep(
+      db,
+      'insert into journal_tx (ts, actor, via, trace) values (?, ?, ?, ?)',
+    )
+      .run(ts, actor, via, trace).lastInsertRowid,
+  )
+  let insChange = prep(
+    db,
+    `insert into journal_change (tx, ordinal, eid, component, operation)
+     values (?, ?, ?, ?, ?)`,
+  )
+  let insField = prep(
+    db,
+    `insert into journal_field (change, ordinal, field, present, value)
+     values (?, ?, ?, ?, ?)`,
+  )
+  // The fields (eid, component) still shows as present: newest after-image wins
+  // — journal_field.id is monotonic, so the max-id row per field is the latest
+  // in total order (and reads THIS batch's earlier upserts, uncommitted but
+  // visible on the same connection). A component with no baseline yet (older
+  // than dual-write, until T-18879 backfills) names none, so it tombstones none.
+  let present = prep(
+    db,
+    `select field from (
+       select jf.field as field, jf.present as present,
+              row_number() over (partition by jf.field order by jf.id desc) as rn
+       from journal_field jf join journal_change jc on jc.id = jf.change
+       where jc.eid = ? and jc.component = ?
+     ) where rn = 1 and present = 1`,
+  )
+  logged.forEach(({ eid, name, comp }, ordinal) => {
+    let change = Number(
+      insChange.run(tx, ordinal, eid, name, comp == null ? 'remove' : 'upsert')
+        .lastInsertRowid,
+    )
+    if (comp == null) {
+      // A component removal tombstones every field it still had, so field
+      // history stays self-contained across a removal and a later recreation.
+      ;(present.all(eid, name) as { field: string }[]).forEach(({ field }, i) =>
+        insField.run(change, i, field, 0, null)
+      )
+    } else {
+      // An upsert records one present after-image per field, JSON-encoded so a
+      // present null (present=1, value='null') stays distinct from a tombstone.
+      // An empty component writes none — its journal_change alone marks presence.
+      Object.keys(comp).forEach((field, i) =>
+        insField.run(change, i, field, 1, JSON.stringify(comp[field]))
+      )
+    }
+  })
+}
+
 // The journal door for a server STAMP — a write the wire may not carry
 // (frozen_at and kin), made by direct SQL beside this call. delta()
 // promises catch-up clients the same content the live cast carried, so
@@ -5742,14 +5871,21 @@ export let record = (
   writer?: string | null,
 ) => {
   try {
+    let now = new Date().toISOString()
+    let actor = writerActor(db, writer)
+    let via = writerVia(db, writer)
     let jrow = Number(
-      prep(db, 'insert into journal (actor, via, batch) values (?, ?, ?)').run(
-        writerActor(db, writer),
-        writerVia(db, writer),
-        JSON.stringify(changes),
-      ).lastInsertRowid,
+      prep(
+        db,
+        'insert into journal (ts, actor, via, batch) values (?, ?, ?, ?)',
+      )
+        .run(now, actor, via, JSON.stringify(changes)).lastInsertRowid,
     )
     touchJournal(db, jrow, changes)
+    // The normalized parallel record (T-18878): a server stamp is journaled
+    // too, so the two logs stay a faithful pair. No trace — a stamp fires no
+    // effects.
+    journalNormalized(db, now, actor, via, null, changes)
   } catch (e) {
     console.warn('journal skipped —', e)
   }
@@ -5963,6 +6099,18 @@ export let redact = (
         .lastInsertRowid,
     )
     touchJournal(db, jrow, logged)
+    // The normalized parallel record (T-18878) — this redaction AUDIT event is a
+    // fresh journaled transaction, so it mirrors like any apply. The historical
+    // batch rewrites above stay JSON-only; scrubbing existing history into these
+    // tables belongs to backfill (T-18879) and retirement (T-18883).
+    journalNormalized(
+      db,
+      now,
+      actor,
+      via,
+      '{"created":[],"removed":[]}',
+      logged,
+    )
 
     let changes: Change[] = [
       ...logged,

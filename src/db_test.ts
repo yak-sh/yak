@@ -725,6 +725,9 @@ let outsideVocabulary: Record<string, string> = {
   tombstone: 'death record: the eid is dead, nothing reads a component back',
   journal: 'the write log: append-only audit, never walked by snapshot()',
   journal_touch: "the journal's seek index (jrow, eid): log data, never synced",
+  journal_tx: 'normalized journal (T-18878): one row per applied batch, log data',
+  journal_change: 'normalized journal (T-18878): one ordered operation per Change',
+  journal_field: 'normalized journal (T-18878): ordered field after-images',
   blob_text:
     'the in-db text backend of blob identity, resolved through doc_value',
   tool_call: 'telemetry: no eid, no components — read at /telemetry',

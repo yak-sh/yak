@@ -583,6 +583,61 @@ pub static SCHEMA: &[SchemaOp] = &[
     jrow integer not null,
     eid  text not null
   );
+  -- The NORMALIZED journal (D-18860/D-18861), written beside the JSON journal
+  -- above in the SAME apply() transaction -- DUAL-WRITE (T-18878). Three
+  -- append-only log tables: still log data, not graph -- no eid of their own,
+  -- never in snapshot() or a client cache, not vocabulary components (so no
+  -- xtask/codegen). The JSON journal stays AUTHORITATIVE and every reader still
+  -- reads it; these only ADD the parallel record the next stages backfill
+  -- (T-18879), switch readers onto (T-18880), and finally retire the JSON
+  -- journal for (T-18883).
+  --
+  -- journal_tx: one row per applied batch, carrying the same provenance the JSON
+  -- row keeps (ts, actor, via, trace). Its rowid is the transaction's durable
+  -- total-order identity -- monotonic, so ordering never rests on ts alone.
+  create table if not exists journal_tx (
+    id    integer primary key,
+    ts    text not null,
+    actor text,
+    via   text,
+    trace text
+  );
+  -- journal_change: one ordered operation per Change in the batch. (tx, ordinal)
+  -- reproduces the exact applied order within a transaction. operation is
+  -- upsert (comp != null -- a present component, an empty one being an upsert
+  -- with no field rows) or remove (comp == null -- a component removal, or
+  -- entity death when component = 'entity'). component is the wire component
+  -- name, eid its entity.
+  create table if not exists journal_change (
+    id        integer primary key,
+    tx        integer not null references journal_tx(id),
+    ordinal   integer not null,
+    eid       text not null,
+    component text not null,
+    operation text not null
+  );
+  -- journal_field: ordered after-image rows, one per field an operation wrote.
+  -- present = 1 records a written value (JSON-encoded in value, so a present
+  -- null -- present=1, value='null' -- stays distinct from a tombstone);
+  -- present = 0 is a TOMBSTONE (value null), emitted for each then-present
+  -- field when its component is removed, so field history, predecessor lookup,
+  -- diffs and undo stay self-contained and no value leaks across a component
+  -- removal and later recreation (D-18861). An upsert with no fields (empty
+  -- component presence) writes none -- its journal_change alone marks it.
+  -- ordinal is the field's order within its change.
+  create table if not exists journal_field (
+    id       integer primary key,
+    change   integer not null references journal_change(id),
+    ordinal  integer not null,
+    field    text not null,
+    present  integer not null,
+    value    text
+  );
+  -- Reconstruct a batch in order (by tx), per-entity history and predecessor
+  -- lookup (by eid+component), and the field rows of a change (by change).
+  create index if not exists journal_change_tx on journal_change(tx, ordinal);
+  create index if not exists journal_change_ent on journal_change(eid, component);
+  create index if not exists journal_field_change on journal_field(change, ordinal);
   -- Server-local key/value, not graph: no eid, no components, so snapshot()
   -- (which walks the comps vocabulary) never carries it, and apply() never
   -- writes it. Holds the durable sync epoch (epochOf): the cursor-lineage
