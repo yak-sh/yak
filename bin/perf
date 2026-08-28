@@ -744,10 +744,13 @@ let seed = async () => {
   )
   await apply(batch)
 
-  // the seeded root canvas: pin cards onto it in a grid
-  let snap = await (await fetch(`${base}/snapshot`)).json()
-  let canvasEid = (snap.changes as { eid: string; name: string }[])
-    .find((c) => c.name == 'canvas')?.eid
+  // the seeded root canvas: pin cards onto it in a grid. /query for the canvas
+  // entities (the snapshot door is retired) and take the one that isn't the
+  // panCanvas we just minted — that's the seeded root.
+  let canvases = await (await fetch(`${base}/query?${encodeURIComponent('.canvas!')}`))
+    .json() as { entity: { eid: string } }[]
+  let canvasEid = canvases.map((c) => c.entity.eid)
+    .find((eid) => eid != panCanvas)
   if (!canvasEid) throw new Error('no root canvas in the seed')
   let cards: unknown[] = []
   let mountedCards: string[] = []
@@ -796,11 +799,10 @@ let seed = async () => {
   }
   await apply(cards)
 
-  // the board's human id for its URL
-  let snap2 = await (await fetch(`${base}/snapshot`)).json()
-  let num =
-    (snap2.changes as { eid: string; name: string; comp: { num: number } }[])
-      .find((c) => c.eid == board && c.name == 'entity')?.comp.num
+  // the board's human id for its URL — one keyed /query, entity JSON
+  let [boardEnt] = await (await fetch(`${base}/query?id=${board}`))
+    .json() as { entity: { num: number } }[]
+  let num = boardEnt?.entity.num
   return {
     board: `B-${num}`,
     panCanvas,
@@ -825,7 +827,7 @@ let server = async (port: number, dbPath: string) => {
   }).spawn()
   await until(async () => {
     try {
-      return (await fetch(`http://127.0.0.1:${port}/snapshot`)).ok
+      return (await fetch(`http://127.0.0.1:${port}/capabilities`)).ok
     } catch {
       return false
     }
@@ -910,19 +912,11 @@ let main = async () => {
     card = seeded.card
   } else {
     base = urlArg.replace(/\/$/, '')
-    // reuse the largest board on that server
-    let snap = await (await fetch(`${base}/snapshot`)).json()
-    let boards = (snap.changes as {
-      eid: string
-      name: string
-      comp: Record<string, unknown>
-    }[])
-      .filter((c) => c.name == 'board')
-    let nums = new Map(
-      (snap.changes as { eid: string; name: string; comp: { num: number } }[])
-        .filter((c) => c.name == 'entity').map((c) => [c.eid, c.comp.num]),
-    )
-    if (boards[0]) board = `B-${nums.get(boards[0].eid)}`
+    // reuse a board on that server: /query for board entities (the snapshot
+    // door is retired), each entity JSON carrying its own num.
+    let boards = await (await fetch(`${base}/query?${encodeURIComponent('.board!')}`))
+      .json() as { entity: { num: number } }[]
+    if (boards[0]) board = `B-${boards[0].entity.num}`
   }
 
   // chrome INSIDE the guard: launching is itself a step that fails (no chrome

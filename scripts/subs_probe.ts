@@ -41,17 +41,20 @@ let server = new Deno.Command('deno', {
 }).spawn()
 
 let base = `http://127.0.0.1:${PORT}`
-// Wait for the server to answer /snapshot.
+// Wait for the server to answer readiness. /snapshot is retired; /capabilities
+// is the liveness door (200 once booted).
 for (let i = 0; i < 100; i++) {
   try {
-    if ((await fetch(`${base}/snapshot`)).ok) break
+    if ((await fetch(`${base}/capabilities`)).ok) break
   } catch { /* still booting */ }
   await new Promise((r) => setTimeout(r, 100))
 }
 
-// A joined socket with a frame queue + an awaitable matching frame.
+// A joined socket with a frame queue + an awaitable matching frame. A cold
+// client holds nothing, so it joins with `since: 0` exactly as the browser
+// does on first visit — the server answers a `reset` seed (there is no HTTP
+// graph pre-fetch anymore), then opens the live stream.
 let open = async (envelope = false) => {
-  let held = await (await fetch(`${base}/snapshot`)).json()
   let s = new WebSocket(`ws://127.0.0.1:${PORT}/ws`)
   let frames: unknown[] = []
   let wake: (() => void) | null = null
@@ -76,13 +79,10 @@ let open = async (envelope = false) => {
       })
     }
   }
-  send(s, {
-    since: held.cursor,
-    epoch: held.epoch,
-    vocab: held.vocabHash,
-    ...(envelope ? { live: 1 } : {}),
-  })
-  await want((f) => !!f && typeof f == 'object' && 'catchup' in f)
+  send(s, { since: 0, ...(envelope ? { live: 1 } : {}) })
+  await want((f) =>
+    !!f && typeof f == 'object' && ('catchup' in f || 'reset' in f)
+  )
   return { s, frames, want }
 }
 

@@ -181,7 +181,7 @@ let pages: Page[] = []
 try {
   await until(async () => {
     try {
-      return (await fetch(`${base}/snapshot`)).ok
+      return (await fetch(`${base}/capabilities`)).ok
     } catch {
       return false
     }
@@ -191,18 +191,16 @@ try {
     { eid: board, name: 'board', comp: { query: '.status=open' } },
     ...task(first),
   ])
-  let snap = await (await fetch(`${base}/snapshot`)).json()
-  let num = snap.changes.find((c: { eid: string; name: string }) =>
-    c.eid == board && c.name == 'entity'
-  ).comp.num
-  let url = `${base}/B-${num}?v=List`
+  // Read the board's num back over /query (the snapshot door is retired) —
+  // one keyed fetch, entity JSON shaped {entity: {eid, num}, …}.
+  let [ent] = await (await fetch(`${base}/query?id=${board}`))
+    .json() as { entity: { num: number } }[]
+  let url = `${base}/B-${ent.entity.num}?v=List`
 
   pages = [await page(url), await page(url)]
   await until(async () => {
     let states = await Promise.all(pages.map(state))
-    return states.some((s) =>
-      s.members.includes(first)
-    ) &&
+    return states.some((s) => s.members.includes(first)) &&
       states.filter((s) => s.sync.leader && s.sync.socket == WebSocket.OPEN)
           .length == 1 &&
       states.filter((s) => s.sync.socket == null).length == 1
