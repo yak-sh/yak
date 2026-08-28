@@ -31,6 +31,7 @@ fn usage() -> String {
   show <id>                one entity as markdown
   search <words…>          full-text hits (trailing * = prefix)
   inbox | history | telemetry | context        (file only)
+  tui [--db path]          the interactive cockpit — live wants/requires tree
   apply [--db path] …      one batch through the write path (file only)
 
 list, show and search read a FILE or a SERVER, whichever the environment
@@ -88,6 +89,18 @@ fn run(args: &[String]) -> i32 {
     // rides TASKS_HOST here.
     if verb == "apply" {
         return apply_cmd(rest);
+    }
+    // The interactive cockpit lives in its own lib crate (yak-tui); the bin
+    // stays thin and just hands off. It opens its own read + write connections,
+    // so it dispatches before any read graph is opened here.
+    if verb == "tui" {
+        return match yak_tui::run(rest) {
+            Ok(()) => 0,
+            Err(e) => {
+                eprintln!("{e}");
+                1
+            }
+        };
     }
     if verb == "--help" || verb == "-h" || verb == "help" {
         println!("{}", usage());

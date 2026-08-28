@@ -20,6 +20,9 @@ path = "src/main.rs"
 yak-kernel = { version = "0.1.1", path = "../yak-kernel" }
 serde_json = { version = "1", features = ["preserve_order"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# `yak tui` lives in its own lib crate; the bin stays thin and just calls
+# yak_tui::run() from the `tui` subcommand arm. No ratatui code in yak-cli.
+yak-tui = { version = "0.1.1", path = "../yak-tui" }
 
 # the profile test builds its own one-table graph rather than reading the
 # owner's — the same bundled sqlite the kernel already links

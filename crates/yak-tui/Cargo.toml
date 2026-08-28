@@ -1,0 +1,30 @@
+[package]
+name = "yak-tui"
+version = "0.1.1"
+edition = "2021"
+license = "Apache-2.0"
+description = "yak-tui: an interactive ratatui terminal cockpit over the yak-kernel read path — the live wants/requires task tree, journal-tail liveness, read-only."
+keywords = ["tui", "ratatui", "graph", "entity-component", "sqlite"]
+categories = ["command-line-utilities", "database"]
+repository = "https://github.com/yak-sh/yak"
+homepage = "https://yak.sh"
+exclude = ["*.ts"]
+
+# A LIBRARY crate (no [[bin]]): the whole TUI lives here — the ratatui app
+# loop, the views, the kernel read + journal-tail liveness. The `yak` binary
+# (yak-cli) takes a thin dep and calls yak_tui::run() from its `tui` arm, so
+# there is one binary and no ratatui code leaks into the CLI.
+
+[dependencies]
+# The kernel read path: Store::open (read-only sqlite), the Graph projection,
+# and the catchup feed (Feed/data_version). `bundled` keeps the sqlite the
+# whole workspace already links; `remote` is not needed — the TUI reads a file.
+yak-kernel = { version = "0.1.1", path = "../yak-kernel", default-features = false, features = [
+    "native",
+    "bundled",
+] }
+serde_json = { version = "1", features = ["preserve_order"] }
+# ratatui 0.29 pins crossterm 0.28.1; the direct crossterm dep matches its
+# backend's event types (a second crossterm major would split the Event type).
+ratatui = "0.29"
+crossterm = "0.28"
