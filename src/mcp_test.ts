@@ -726,7 +726,6 @@ let bases: Record<string, Record<string, unknown>> = {
       comp: { future: true },
     }],
   },
-  doc_edit: { eid: 'T-1', old: 'x', new: 'y' },
   graph_patch: {
     patch: '*** Begin Patch\n*** Update Prop: T-1.doc.body\n@@\n-x\n+y\n' +
       '*** End Patch',
@@ -1666,7 +1665,9 @@ Deno.test('memory_save guards the body it replaces', async () => {
   }
 })
 
-Deno.test('doc_edit: surgical replace, non-unique refusal, stale guard', async () => {
+// $edit is the one Claude-facing edit surface (T-23843): a surgical replace
+// through graph_apply, comp-agnostic, refusing a non-match or an ambiguous one.
+Deno.test('$edit through graph_apply: surgical replace, refusals, replace_all', async () => {
   let g = graph()
   let E = '60000000-0000-4000-8000-000000000001'
   let body = () => rows(snapshot(g.db)).find((r) => r.eid == E)?.comps.doc?.body
@@ -1677,13 +1678,17 @@ Deno.test('doc_edit: surgical replace, non-unique refusal, stale guard', async (
         { eid: E, name: 'doc', comp: { title: 'Doc', body: 'fix teh plan' } },
         { eid: E, name: 'task', comp: { status: 'open' } },
       ])
-      let edit = (args: Record<string, unknown>) =>
-        client.callTool({ name: 'doc_edit', arguments: { eid: E, ...args } })
+      let edit = (edt: Record<string, unknown>) =>
+        client.callTool({
+          name: 'graph_apply',
+          arguments: {
+            changes: [{ eid: E, name: 'doc', comp: { body: { $edit: edt } } }],
+          },
+        })
 
-      // A surgical replace lands in place; the receipt names the entity.
+      // A surgical replace lands in place.
       let ok = await edit({ old: 'teh plan', new: 'the plan' })
       assertEquals(ok.isError, undefined)
-      assertMatch(said(ok), /edited T-/)
       assertEquals(body(), 'fix the plan')
 
       // A match that isn't there, and one that isn't unique, are refused —
@@ -1696,7 +1701,7 @@ Deno.test('doc_edit: surgical replace, non-unique refusal, stale guard', async (
       assertEquals(many.isError, true)
       assertMatch(said(many), /2 matches/)
       assertEquals(body(), 'a a') // untouched by either refusal
-      let all = await edit({ old: 'a', new: 'b', replace_all: true })
+      let all = await edit({ old: 'a', new: 'b', all: true })
       assertEquals(all.isError, undefined)
       assertEquals(body(), 'b b')
     })

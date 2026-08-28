@@ -1,6 +1,8 @@
 // The Edit primitive's pure half: a surgical replacement builds the guarded
-// patch, and every ambiguous or empty case refuses rather than clobber.
-import { editChanges } from './edit.ts'
+// patch, and every ambiguous or empty case refuses rather than clobber. The
+// comp-agnostic core `editChange` is what the $edit operator and graph_patch
+// both build on; here it is exercised on doc.body directly.
+import { editChange, type EditHunk } from './edit.ts'
 import { type Row, rows } from './client.ts'
 import { sha } from './sha.ts'
 import { assertEquals, assertThrows } from '@std/assert'
@@ -13,38 +15,62 @@ let doc = (body: string): Row =>
       { eid: E, name: 'doc', comp: { title: 'Doc', body } },
     ],
   })[0]
+let edit = (row: Row, ...hunks: EditHunk[]) =>
+  editChange(row, 'doc', 'body', hunks)
 
-Deno.test('editChanges: surgical replace, guarded by the body read', () => {
-  // A single replacement, guarded with the SHA of the body it read.
+Deno.test('editChange: surgical replace, guarded by the value read', () => {
+  // A single replacement, guarded with the SHA of the value it read.
   let body = 'fix teh plan, teh whole plan'
-  let [c] = editChanges(doc(body), 'teh plan', 'the plan')
+  let c = edit(doc(body), { old: 'teh plan', new: 'the plan' })
   assertEquals(c.comp, { body: 'fix the plan, teh whole plan' })
   assertEquals(c.was, { body: sha(body) }) // the compare-and-swap token
 
   // Deleting the match: an empty replacement.
   assertEquals(
-    editChanges(doc('a typo here'), 'typo ', '')[0].comp,
+    edit(doc('a typo here'), { old: 'typo ', new: '' }).comp,
     { body: 'a here' },
   )
 
-  // A non-unique match is refused — unless replace_all takes them all.
+  // A non-unique match is refused — unless `all` takes them all.
   assertThrows(
-    () => editChanges(doc('teh teh'), 'teh', 'the'),
+    () => edit(doc('teh teh'), { old: 'teh', new: 'the' }),
     Error,
     '2 matches',
   )
   assertEquals(
-    editChanges(doc('teh teh'), 'teh', 'the', true)[0].comp,
+    edit(doc('teh teh'), { old: 'teh', new: 'the', all: true }).comp,
     { body: 'the the' },
   )
 
-  // A missing match, an empty old, an unchanged result, and a body-less
+  // A list of hunks applies in order.
+  assertEquals(
+    edit(doc('one two three'), { old: 'one', new: '1' }, {
+      old: 'three',
+      new: '3',
+    })
+      .comp,
+    { body: '1 two 3' },
+  )
+
+  // A missing match, an empty old, an unchanged result, and a comp-less
   // entity each refuse rather than write nothing or clobber.
-  assertThrows(() => editChanges(doc('abc'), 'xyz', 'q'), Error, 'not found')
-  assertThrows(() => editChanges(doc('abc'), '', 'q'), Error, 'empty')
-  assertThrows(() => editChanges(doc('abc'), 'abc', 'abc'), Error, 'unchanged')
+  assertThrows(
+    () => edit(doc('abc'), { old: 'xyz', new: 'q' }),
+    Error,
+    'not found',
+  )
+  assertThrows(() => edit(doc('abc'), { old: '', new: 'q' }), Error, 'empty')
+  assertThrows(
+    () => edit(doc('abc'), { old: 'abc', new: 'abc' }),
+    Error,
+    'unchanged',
+  )
   let bare = rows({
     changes: [{ eid: E, name: 'entity', comp: { eid: E, num: 2 } }],
   })[0]
-  assertThrows(() => editChanges(bare, 'a', 'b'), Error, 'no doc body')
+  assertThrows(
+    () => editChange(bare, 'doc', 'body', [{ old: 'a', new: 'b' }]),
+    Error,
+    'no doc component',
+  )
 })

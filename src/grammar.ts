@@ -32,6 +32,29 @@ value may be an alias, a human id (T-3, P-19), or an eid. Numeric-looking
 text stays text; typed scalars parse by their grammar ('.pin.x=01',
 '.verified=yes', '.priority=p02'). Statuses: ${statuses.join(', ')}.`
 
+// The $edit operator: taught beside graph_apply (the wire door) and appended
+// to `task help grammar`, but deliberately NOT folded into GRAMMAR/FILTERS —
+// those inject into task_new/task_update, which take dot-params, not wire
+// operators. This is the one Claude-facing surgical edit surface; the codex V4A
+// equivalent is the graph_patch tool.
+export let EDIT_OP =
+  `The $edit operator (surgical in-place edit): in a graph_apply CHANGE, a
+text/body comp value may carry {$edit: …} instead of a whole new literal.
+apply() reads that column's CURRENT value under the write lock and replaces
+old→new in place — the comp-agnostic Edit primitive, working on ANY text or
+body column of ANY comp (doc.body, doc.title, a design/persona/memory body,
+project.color, …). Shape: one hunk {old, new, all?}, or a LIST of hunks
+applied in order; an empty new deletes the matched text. old must occur
+exactly ONCE unless all:true. Guarantees: a non-match, or an ambiguous
+match (several hits without all), is REFUSED so you never change the wrong
+text, and a net-unchanged result is refused too. Because it merges into the
+current value under the lock (old must still match), a concurrent full-value
+rewrite is never clobbered — the batch refuses instead. Refused on
+enum/number/reference/bool columns with an addressed error. Prefer it over
+rewriting a whole large value with '.body=' — cheaper, and safe against a
+concurrent edit. Example change:
+{"eid":"T-3","name":"doc","comp":{"body":{"$edit":[{"old":"foo","new":"bar"}]}}}`
+
 export let FILTERS = `Filters add operators to that routing: '.priority<=P1',
 '.domain=Ops,Eng' (any of), '.priority=P1..P3' (range; P1...P3 excludes
 the end), '.status!=done', '.title~=flux' (literal contains), '.domain='

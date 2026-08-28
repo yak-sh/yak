@@ -39,7 +39,7 @@ import {
 import { trouble } from './adapters.ts'
 import { type Dim, report, type Use, use } from './usage.ts'
 import { sha } from './sha.ts'
-import { FILTERS, GRAMMAR } from './grammar.ts'
+import { EDIT_OP, FILTERS, GRAMMAR } from './grammar.ts'
 import {
   authoringLine,
   bus as busNotices,
@@ -102,7 +102,7 @@ import {
   type Reader,
   spawnSpec,
 } from './commands.ts'
-import { editChange, editChanges, parsePropPatch, patchHint } from './edit.ts'
+import { editChange, parsePropPatch, patchHint } from './edit.ts'
 import { slotsOf } from './verb.ts'
 import { renderEntry, seqRange, type Sift, transcribe } from './log_text.ts'
 import {
@@ -1753,17 +1753,16 @@ was is a PRECONDITION — the graph's --ff-only: a map of column → the
 SHA-256 of the value you read (or null for "I read no value"), and
 apply() refuses the WHOLE batch if any named column has moved since. It
 rides beside comp (never inside it), per column, so a stale guarded write
-is rejected while the newer value is preserved. To change PART of a large
-text column, a comp value may carry a $edit operator instead of a literal:
-{..., comp: {body: {$edit: {old, new, all?}}}} (or a list of hunks) patches
-the CURRENT value surgically in place, str_replace-style — cheaper than
-rewriting the whole value, and it won't clobber a concurrent edit (Codex's
-V4A equivalent is the graph_patch tool). Same allowlist and
+is rejected while the newer value is preserved. Same allowlist and
 claim-lease rules as every other client; writes broadcast live to all
 screens. The result reports submitted intent and the authoritative
 effective batch returned by apply(), plus request-local alias mappings for
 nested literals. A nested entity has optional key/id, generated comps, and
-generated deps whose values name, number, or nest another entity. ${GRAMMAR}`,
+generated deps whose values name, number, or nest another entity.
+
+${EDIT_OP}
+
+${GRAMMAR}`,
     {
       changes: z.array(
         z.object({
@@ -1816,63 +1815,6 @@ generated deps whose values name, number, or nest another entity. ${GRAMMAR}`,
           2,
         ) + hint,
       )
-    },
-  )
-
-  tool(
-    'doc_edit',
-    `Surgical edit of a doc body — the graph's Edit primitive: replace the
-one occurrence of old with new, in place, instead of task_update
-".body=" which rewrites the WHOLE body (a transcription risk, and it
-clobbers a concurrent edit). Works on ANY doc body — a task, design,
-persona, memory, or plain doc (eid accepts a human id: T-3, D-9). old
-must occur exactly once unless replace_all; if it doesn't match, or
-matches several times, the edit is refused so you never change the
-wrong text. An empty new deletes the matched text. The write is guarded
-by the body read here, so a body that moved since another writer
-touched it is refused with its current text and a fresh token — read it
-back and retry. (The same surgical core is reachable comp-agnostically as
-the $edit operator in graph_apply, and in Codex's V4A format as
-graph_patch.) ${BUS}`,
-    {
-      eid: z.string(),
-      old: z.string().describe(
-        'The exact text to replace (unique, or use ' +
-          'replace_all). Include surrounding lines to disambiguate.',
-      ),
-      new: z.string().describe('The replacement (empty deletes the match).'),
-      replace_all: z.boolean().optional()
-        .describe(
-          'Replace every occurrence of old instead of refusing a ' +
-            'non-unique match.',
-        ),
-      session: z.string().optional(),
-    },
-    async (
-      { eid, old, new: fresh, replace_all, session }: {
-        eid: string
-        old: string
-        new: string
-        replace_all?: boolean
-        session?: string
-      },
-    ) => {
-      let row = await got(eid)
-      if (!row) return err(`no entity: ${eid}`)
-      let batch
-      try {
-        batch = editChanges(row, old, fresh, replace_all)
-      } catch (e) {
-        return err((e as Error).message)
-      }
-      try {
-        await io.write(batch, session)
-      } catch (e) {
-        // A stale refusal carries the current body and a fresh token (db.ts
-        // Stale) — exactly what the caller needs to merge and retry.
-        return err((e as Error).message)
-      }
-      return bus(`edited ${idOf(row)}`, session)
     },
   )
 

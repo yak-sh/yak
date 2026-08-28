@@ -14,7 +14,7 @@ import {
   TASK_TREE_ADOPTION,
   WORKING_SET,
 } from './client.ts'
-import { FILTERS, GRAMMAR } from './grammar.ts'
+import { EDIT_OP, FILTERS, GRAMMAR } from './grammar.ts'
 import { comps, edges, kindOrder, plurals, statuses } from './types.ts'
 import {
   type Arg,
@@ -307,25 +307,6 @@ export let manuals = declare({
     args: [arg('id', id)],
     opts: [body, value('--comment', bodyText)],
   },
-  edit: {
-    about: 'surgical body edit: replace old with new, refusing a stale write',
-    examples: [
-      'task edit T-3 "teh plan" "the plan"',
-      'task edit D-9 "old paragraph" @new.md',
-      'task edit P-19 "typo" "" --all',
-    ],
-    detail: "The graph's Edit primitive: a targeted old→new replacement on " +
-      'a doc body, instead of a full `.body=` rewrite that clobbers a ' +
-      'concurrent edit. old must match exactly once (add surrounding text, ' +
-      'or --all for every occurrence); an omitted new deletes the match. ' +
-      'old/new take @file or -/@- (a long block over the pipe). The write ' +
-      'is guarded by the body read here, so a body that moved since is ' +
-      'refused with its current text and a fresh token — re-run to pick it ' +
-      'up. Works on any doc body: task, design, persona, memory, doc.',
-    root: true,
-    args: [arg('id', id), arg('old', text), arg('new', text, false, false)],
-    opts: [flag('--all')],
-  },
   patch: {
     about:
       'surgical multi-prop edit in Codex V4A format, refusing a stale write',
@@ -337,10 +318,10 @@ export let manuals = declare({
       'of files: each `*** Update Prop: <entity>.<comp>.<column>` section is ' +
       'a surgical old→new replacement on the current value (the ` `/`-`/`+` ' +
       'hunk lines reconstruct the replacement). Multiple sections land ' +
-      "atomically, the way file apply_patch spans files. `task edit`'s " +
-      'comp-agnostic, multi-target sibling — same guarded core, Codex ' +
-      'grammar. The patch is a multi-line block, so pass it via `@file` or ' +
-      '`@-` (stdin). Envelope: `*** Begin Patch` … `*** End Patch`.',
+      'atomically, the way file apply_patch spans files. The codex V4A door ' +
+      'onto the same guarded core the $edit operator (graph_apply) is the ' +
+      'Claude door onto. The patch is a multi-line block, so pass it via ' +
+      '`@file` or `@-` (stdin). Envelope: `*** Begin Patch` … `*** End Patch`.',
     root: true,
     args: [arg('patch', text)],
     opts: [],
@@ -1351,7 +1332,7 @@ export let help = (args: string[]) => {
   // Root help says `edge`; `link` is the plain-language route to that topic.
   if (['edge', 'link'].includes(args[0]) && args.length == 1) return linkHelp()
   if (args[0] == 'grammar' && args.length == 1) {
-    return `${GRAMMAR}\n\n${FILTERS}`
+    return `${GRAMMAR}\n\n${FILTERS}\n\n${EDIT_OP}`
   }
   if (args[0].startsWith(':') && args.length == 1) {
     return commandHelp(args[0].slice(1))

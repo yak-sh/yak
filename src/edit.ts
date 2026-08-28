@@ -2,10 +2,9 @@
 // surgical old→new replacement on the CURRENT value of ANY text column of ANY
 // comp — not just doc.body — guarded by the value the caller read (Change.was,
 // the wire's compare-and-swap) so a concurrent edit is refused rather than
-// clobbered. One patch mechanism, reached through three doors that all funnel
-// here: `task edit` / MCP `doc_edit` (str_replace), the `$edit` field operator
-// in apply() (Claude's bundle idiom), and `graph_patch` (Codex's V4A format,
-// prop-addressed). The doc-only `editChanges` is now thin sugar over the core.
+// clobbered. One patch core, reached through two doors that funnel here: the
+// `$edit` field operator in apply() (the one Claude-facing edit surface,
+// T-23843) and `graph_patch` (Codex's V4A format, prop-addressed).
 //
 // It lives here, not in client.ts, because it needs sha() and sha.ts pulls
 // node:crypto — server-only. client.ts is in the browser module graph
@@ -76,18 +75,6 @@ export let editChange = (
     comp: { [column]: next },
     was: { [column]: sha(cur) },
   }
-}
-
-// `task edit` / MCP `doc_edit`'s builder, now sugar over the core aimed at
-// doc.body. The distinct "no doc body" message is preserved for that door.
-export let editChanges = (
-  row: Row,
-  old: string,
-  replacement: string,
-  all = false,
-): Change[] => {
-  if (!row.comps.doc) throw new Error(`${idOf(row)} has no doc body to edit`)
-  return [editChange(row, 'doc', 'body', [{ old, new: replacement, all }])]
 }
 
 // A `$edit` field-operator payload → hunks. `{ old, new, all? }`, or a list of
@@ -255,9 +242,10 @@ export let patchHint = (
         let who = name?.(c.eid) ?? c.eid
         return `\nhint: that was a ${v.length}-char full-value ${c.name}.${col} ` +
           `rewrite on ${who}. To change PART of a large value, patch it in ` +
-          `place — doc_edit (Claude: old/new, or {$edit} in graph_apply) or ` +
-          `graph_patch (Codex: V4A) — instead of rewriting the whole value ` +
-          `(cheaper, and it won't clobber a concurrent edit).`
+          `place — the $edit operator in graph_apply (Claude: ` +
+          `comp:{${col}:{$edit:{old,new}}}) or graph_patch (Codex: V4A) — ` +
+          `instead of rewriting the whole value (cheaper, and it won't ` +
+          `clobber a concurrent edit).`
       }
     }
   }

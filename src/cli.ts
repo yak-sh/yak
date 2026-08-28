@@ -95,7 +95,7 @@ import {
   WORKING_SET,
   wrapChanges,
 } from './client.ts'
-import { editChange, editChanges, parsePropPatch } from './edit.ts'
+import { editChange, parsePropPatch } from './edit.ts'
 import { entityUrl } from './url.ts'
 import { prune, reap, sweep } from './probes.ts'
 import {
@@ -799,33 +799,13 @@ let set = async (got: Got) => {
 let assign = (got: Got) =>
   set({ ...got, params: [param(`.assignee=${got.args.who}`)!] })
 
-// `task edit <id> <old> [new]` — the graph's Edit primitive (T-16357): a
-// surgical old→new replacement on a doc body, in place of a full rewrite that
-// silently clobbers a concurrent edit. editChanges() guards the write with the
-// body it read (Change.was), so a body that moved since is refused with its
-// current text and a fresh token below — re-run and the fetch is fresh again.
-// old/new ride the @file / stdin door (M-4415) for a long block; an omitted
-// new deletes the matched text. --all replaces every occurrence (else old must
-// be unique). Works on ANY doc body — task, design, persona, memory, doc.
-let edit = async (got: Got) => {
-  let { id, old } = got.args
-  if (!id || old == null) throw new Error('task edit <id> <old> [new]')
-  let row = await needed(id)
-  let read = (v: string) =>
-    String(inflate({ comp: 'doc', prop: 'body', value: v }).value)
-  let oldV = read(old)
-  let newV = got.args.new == null ? '' : read(got.args.new)
-  await send(editChanges(row, oldV, newV, got.flags.has('--all')))
-  print(`${idOf(row)} edited`)
-}
-
 // `task patch <patch>` — apply a V4A prop-addressed patch (Codex's own
 // apply_patch format) to any graph text column. Each `*** Update Prop:
 // <entity>.<comp>.<column>` section is a surgical old→new replacement on the
 // current value, guarded (Change.was) so a stale write is refused. Multiple
 // sections land atomically. The patch text rides the @file / @- / stdin door
-// (M-4415) since it is a multi-line block. This is `task edit`'s comp-agnostic,
-// multi-target sibling — the same shared patch core, in Codex's grammar.
+// (M-4415) since it is a multi-line block. The codex V4A door onto the same
+// shared patch core the $edit operator (graph_apply) is the Claude door onto.
 let patch = async (got: Got) => {
   let raw = got.args.patch
   if (raw == null) throw new Error('task patch <patch|@file|@->')
@@ -3379,7 +3359,6 @@ export let verbs = bind({
   new: create,
   tree,
   set,
-  edit,
   patch,
   redact,
   show,
