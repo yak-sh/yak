@@ -524,8 +524,12 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
       // An aggregate sub answers a VALUE, so it never enumerates members — not
       // even once, at subscribe. Parse the line, and if it carries an AGG
       // projection let evalAgg answer it with one indexed statement; only a
-      // membership sub pays evalSub's row set.
-      let asked = route != null
+      // membership sub pays evalSub's row set. A bare `id=` sub strips to an
+      // EMPTY residual query, and parseQuery('') is the never-pred — so guard
+      // it to [] the way /query does: the addressed row must flow through
+      // matchQuery (vacuously true on []), never be filtered out as if the
+      // never-pred screened it (T-23811).
+      let asked = route != null || !queryLine.trim()
         ? []
         : resolveRefs(parseQuery(queryLine), (id) => locate(db, id))
       if (aggOf(asked)) {

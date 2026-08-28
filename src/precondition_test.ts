@@ -304,6 +304,62 @@ slow(
   },
 )
 
+// A live subscription over the SAME joined socket: join, take the reset frame,
+// then send one `{sub, q}` control frame and return that sub's first (replace)
+// frame — the seed set the web card reads to decide the entity exists.
+let subscribe = async (name: string, q: string) => {
+  let socket = new WebSocket(`ws://${U}/ws`)
+  let frames: Record<string, unknown>[] = []
+  let waiting: (() => void) | undefined
+  socket.onmessage = (m) => {
+    let frame = JSON.parse(String(m.data))
+    frames.push(Array.isArray(frame) ? { live: frame } : frame)
+    waiting?.()
+  }
+  let next = () =>
+    new Promise<Record<string, unknown>>((ok) => {
+      let take = () => {
+        if (!frames.length) return
+        waiting = undefined
+        ok(frames.shift()!)
+      }
+      waiting = take
+      take()
+    })
+  try {
+    await new Promise((ok, no) => {
+      socket.onopen = ok
+      socket.onerror = () => no(new Error('socket refused'))
+    })
+    socket.send(JSON.stringify({ since: null }))
+    await next() // the reset frame — proof we are in the broadcast set
+    socket.send(JSON.stringify({ sub: name, q }))
+    // Skip any interleaved live frame; take the one bearing OUR sub name.
+    for (;;) {
+      let frame = await next()
+      if (frame.sub == name) return frame
+    }
+  } finally {
+    socket.close()
+  }
+}
+
+// A bare `id=<num>` sub ADDRESSES one entity by id — the same address the web
+// UI opens a card with. Its residual query (everything after `id=` is stripped)
+// is EMPTY, and parseQuery('') mints the never-pred; without the /query-style
+// empty guard the addressed row is screened out by matchQuery and the card
+// reads 0 members as a 404 on a task that plainly exists (T-23811). The first
+// sub frame must carry the addressed entity among its changes.
+slow('a bare id= /ws sub carries the addressed entity', alone, async () => {
+  let eid = uid()
+  await post([{ eid, name: 'doc', comp: { title: 'addressed', body: 'BODY' } }])
+  let n = await num(eid)
+  let frame = await subscribe(`s-${uid()}`, `id=${n}`)
+  let changes = (frame.changes ?? []) as { eid: string }[]
+  let subEids = new Set(changes.map((c) => c.eid))
+  assertEquals(subEids.has(eid), true)
+})
+
 // The in-process hops, named one by one so a failure says WHICH rebuilt the
 // change rather than only that the doors stopped refusing.
 slow('normalizeChanges keeps a precondition', () => {
