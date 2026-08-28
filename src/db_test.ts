@@ -4045,6 +4045,70 @@ Deno.test('journalOf: newest first, cut to the eid', () => {
   assertEquals(past.every((e) => e.changes.every((c) => c.eid == t)), true)
 })
 
+// T-18880: the readers reconstruct their changes from the NORMALIZED journal
+// (journal_change + journal_field), no longer from the JSON journal.batch.
+// Scribble every JSON batch to garbage and the content still reads back whole —
+// direct proof the JSON row is no longer the source that journalOf/delta read.
+Deno.test('journalOf/delta read the normalized rows, not the JSON batch', () => {
+  let d = fresh()
+  let t = uid()
+  apply(d, [{ eid: t, name: 'doc', comp: { title: 'v1' } }]) // births t
+  apply(d, [{ eid: t, name: 'doc', comp: { title: 'v2' } }]) // just the doc
+  let cut = cursorOf(d)
+  apply(d, [{ eid: t, name: 'doc', comp: { title: 'v3' } }])
+  // Corrupt the JSON journal — a JSON.parse of this would throw.
+  d.exec(`update journal set batch = 'not json at all'`)
+  let past = journalOf(d, t)
+  assertEquals(past.length, 3)
+  assertEquals(past[0].changes, [{
+    eid: t,
+    name: 'doc',
+    comp: { title: 'v3' },
+  }])
+  // the oldest batch births t: its doc write and the entity spine, cut to t.
+  let born = past[2].changes.find((c) => c.name == 'doc')?.comp as {
+    title?: string
+  }
+  assertEquals(born?.title, 'v1')
+  assertEquals(past[2].changes.some((c) => c.name == 'entity'), true)
+  // delta replays the same content from the normalized rows.
+  let { changes } = delta(d, cut)
+  assertEquals(
+    changes.some((c) =>
+      c.eid == t && c.name == 'doc' &&
+      (c.comp as { title?: string })?.title == 'v3'
+    ),
+    true,
+  )
+  d.close()
+})
+
+// The three reconstruction shapes D-18860/D-18861 name: a component REMOVAL
+// reads back comp:null (its tombstoned field rows never surface as fields), an
+// empty component reads back {}, and a present-null column stays a present null
+// (distinct from an absent one). All from the normalized field rows.
+Deno.test('normalized readers: removal, empty component, present-null', () => {
+  let d = fresh()
+  let a = uid()
+  // present-null: assignee written as an explicit null rides as a present null.
+  apply(d, [
+    { eid: a, name: 'doc', comp: { title: 'x' } },
+    { eid: a, name: 'task', comp: { status: 'open', assignee: null } },
+    { eid: a, name: 'design', comp: {} }, // an intentionally empty component
+  ])
+  let first = journalOf(d, a)[0].changes
+  let task = first.find((c) => c.name == 'task')!
+  assertEquals((task.comp as { assignee: unknown }).assignee, null)
+  assertEquals('assignee' in (task.comp as object), true) // present, not absent
+  let design = first.find((c) => c.name == 'design')!
+  assertEquals(design.comp, {}) // empty component rebuilds as {}
+  // Remove the design component: it reads back as a removal (comp:null).
+  apply(d, [{ eid: a, name: 'design', comp: null }])
+  let removal = journalOf(d, a)[0].changes.find((c) => c.name == 'design')!
+  assertEquals(removal.comp, null)
+  d.close()
+})
+
 // journal_touch (T-13915) indexes every eid a batch touched, so a batch about
 // two entities is seekable from either — the same eids json_extract('$.eid')
 // found, so journalOf stays behavior-identical while becoming a seek.
@@ -4067,9 +4131,11 @@ Deno.test('journal_touch: a multi-entity batch is seekable from each eid', () =>
 })
 
 // The one-time migration path: a live db has 26k journal rows and an empty
-// journal_touch. backfillJournalTouch fills it once from the existing rows, so a
-// per-entity read on an entity written before the index still seeks correctly —
-// and it is difference-guarded, a no-op once populated.
+// journal_touch. backfillJournalTouch fills it once from the existing rows. The
+// per-entity readers now seek the normalized journal_change (T-18880), so the
+// index is maintained but unread pending its retirement (T-18883); this proves
+// the backfill still rebuilds journal_touch identically from the log and is
+// difference-guarded, a no-op once populated.
 Deno.test('backfillJournalTouch: rebuilds the index from the existing journal', () => {
   let d = fresh()
   let x = uid(), y = uid()
@@ -4078,13 +4144,19 @@ Deno.test('backfillJournalTouch: rebuilds the index from the existing journal', 
     { eid: x, name: 'doc', comp: { title: 'x2' } },
     { eid: y, name: 'doc', comp: { title: 'y1' } },
   ])
-  let before = journalOf(d, x)
+  let touches = () =>
+    d.prepare('select jrow, eid from journal_touch order by jrow, eid')
+      .all() as {
+        jrow: number
+        eid: string
+      }[]
+  let before = touches()
+  assertEquals(before.length >= 3, true) // x (x1), x+y (x2/y1), + blob ids
   // Simulate a pre-index live db: the journal rows exist, the index does not.
   d.exec('delete from journal_touch')
-  assertEquals(journalOf(d, x).length, 0) // proves the read depends on the index
+  assertEquals(touches().length, 0)
   backfillJournalTouch(d)
-  assertEquals(journalOf(d, x), before) // rebuilt identically from the log
-  assertEquals(journalOf(d, y).length, 1)
+  assertEquals(touches(), before) // rebuilt identically from the log
   // Difference-guarded: a second run over the populated table changes nothing.
   let n = (db2: typeof d) =>
     (db2.prepare('select count(*) as n from journal_touch').get() as {

@@ -46,7 +46,7 @@ pub mod write;
 
 pub use change::Change;
 #[cfg(feature = "native")]
-pub use feed::{cursor_of, data_version, journal_since, row_changes, Feed, JournalRow};
+pub use feed::{batch_of, cursor_of, data_version, journal_since, row_changes, Feed, JournalRow};
 pub use literal::{normalize_literals_with, LiteralPlan};
 pub use model::{Dep, Graph, Hit, Row, Source};
 #[cfg(feature = "remote")]

@@ -5,7 +5,7 @@
 // what lets a Rust process CONSUME beside the TS server, the mirror of
 // write.rs letting it produce.
 
-use crate::change::{parse_batch, Change};
+use crate::change::Change;
 use rusqlite::Connection;
 use serde_json::{Map, Value};
 
@@ -26,7 +26,10 @@ pub struct JournalRow {
 }
 
 pub fn cursor_of(conn: &Connection) -> i64 {
-    conn.query_row("select coalesce(max(rowid), 0) from journal", [], |r| r.get(0)).unwrap_or(0)
+    // journal_tx (T-18880), the SAME id-space journal_since seeks, so the cursor
+    // and the reader never drift — journal_tx.id == the JSON journal rowid, so
+    // the value is unchanged, but it no longer leans on the JSON journal.
+    conn.query_row("select coalesce(max(id), 0) from journal_tx", [], |r| r.get(0)).unwrap_or(0)
 }
 
 // PRAGMA data_version: bumped when ANOTHER connection commits, never by our
@@ -35,10 +38,75 @@ pub fn data_version(conn: &Connection) -> i64 {
     conn.query_row("pragma data_version", [], |r| r.get(0)).unwrap_or(0)
 }
 
+// Reconstruct one journaled batch's changes from the normalized rows
+// (journal_change + journal_field, D-18860/D-18861) — the parallel record's
+// read side that REPLACES parsing journal.batch (T-18880). An `upsert` change's
+// comp is rebuilt from its present after-image field rows (each JSON-decoded,
+// in field order; an empty component has no field rows and rebuilds as an empty
+// map); a `remove` change is comp None (a component removal, or entity death
+// when component='entity'). `was` (apply()'s CAS guard) was never stored here
+// and no reader reads it back. With `eid`, only that entity's changes; the
+// caller applies whatever canonicalization the TS reader it mirrors applies.
+pub fn batch_of(conn: &Connection, tx: i64, eid: Option<&str>) -> Vec<Change> {
+    let rows: Vec<(i64, String, String, String)> = match eid {
+        None => {
+            let Ok(mut st) = conn.prepare_cached(
+                "select id, eid, component, operation from journal_change \
+                 where tx = ?1 order by ordinal",
+            ) else {
+                return vec![];
+            };
+            st.query_map([tx], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+                .map(|it| it.filter_map(|x| x.ok()).collect())
+                .unwrap_or_default()
+        }
+        Some(e) => {
+            let Ok(mut st) = conn.prepare_cached(
+                "select id, eid, component, operation from journal_change \
+                 where tx = ?1 and eid = ?2 order by ordinal",
+            ) else {
+                return vec![];
+            };
+            st.query_map(rusqlite::params![tx, e], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })
+            .map(|it| it.filter_map(|x| x.ok()).collect())
+            .unwrap_or_default()
+        }
+    };
+    rows.into_iter()
+        .map(|(cid, ceid, comp, op)| {
+            if op == "remove" {
+                return Change::new(&ceid, &comp, None);
+            }
+            let mut m = Map::new();
+            if let Ok(mut fst) = conn.prepare_cached(
+                "select field, value from journal_field \
+                 where change = ?1 and present = 1 order by ordinal",
+            ) {
+                if let Ok(fields) = fst.query_map([cid], |r| {
+                    Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?))
+                }) {
+                    for (field, value) in fields.flatten() {
+                        let v = value
+                            .and_then(|s| serde_json::from_str(&s).ok())
+                            .unwrap_or(Value::Null);
+                        m.insert(field, v);
+                    }
+                }
+            }
+            Change::new(&ceid, &comp, Some(m))
+        })
+        .collect()
+}
+
+// One journal_tx row's provenance: (id, ts, actor, via, trace).
+type TxMeta = (i64, String, Option<String>, Option<String>, Option<String>);
+
 pub fn journal_since(conn: &Connection, since: i64) -> Vec<JournalRow> {
     let Ok(mut st) = conn.prepare_cached(
-        "select rowid, ts, actor, via, batch, trace from journal \
-         where rowid > ?1 order by rowid",
+        "select id, ts, actor, via, trace from journal_tx \
+         where id > ?1 order by id",
     ) else {
         return vec![];
     };
@@ -48,15 +116,17 @@ pub fn journal_since(conn: &Connection, since: i64) -> Vec<JournalRow> {
             r.get::<_, String>(1)?,
             r.get::<_, Option<String>>(2)?,
             r.get::<_, Option<String>>(3)?,
-            r.get::<_, String>(4)?,
-            r.get::<_, Option<String>>(5)?,
+            r.get::<_, Option<String>>(4)?,
         ))
     });
     let Ok(rows) = rows else { return vec![] };
-    rows.flatten()
-        .filter_map(|(rowid, ts, actor, via, batch, trace)| {
-            let parsed: Value = serde_json::from_str(&batch).ok()?;
-            let batch = parse_batch(&parsed)?;
+    // Collect the tx metadata before reconstructing, so each batch_of borrows
+    // the connection cleanly in turn.
+    let metas: Vec<TxMeta> = rows.flatten().collect();
+    metas
+        .into_iter()
+        .map(|(rowid, ts, actor, via, trace)| {
+            let batch = batch_of(conn, rowid, None);
             let trace = trace.and_then(|t| {
                 let v: Value = serde_json::from_str(&t).ok()?;
                 let created = v
@@ -83,7 +153,7 @@ pub fn journal_since(conn: &Connection, since: i64) -> Vec<JournalRow> {
                     .collect();
                 Some(Trace { created, removed })
             });
-            Some(JournalRow { rowid, ts, actor, via, batch, trace })
+            JournalRow { rowid, ts, actor, via, batch, trace }
         })
         .collect()
 }

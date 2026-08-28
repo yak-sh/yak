@@ -6,6 +6,7 @@
 use rusqlite::OptionalExtension;
 use serde_json::Value;
 
+use crate::feed::batch_of;
 use crate::store::Store;
 use crate::vocab::vocab;
 
@@ -40,26 +41,29 @@ fn canon(change: &mut Value) {
 }
 
 pub fn journal_of(store: &Store, eid: &str, limit: usize) -> Vec<Entry> {
-    if !store.has_table("journal_touch") {
+    if !store.has_table("journal_change") {
         return vec![];
     }
-    let sql = "select j.rowid, j.ts, j.actor, j.batch \
-               from journal_touch t join journal j on j.rowid = t.jrow \
-               where t.eid = ?1 order by t.jrow desc limit ?2";
+    // The batches touching this entity, newest first — the normalized
+    // (eid, component) index (T-18880), each batch's changes reconstructed
+    // from the normalized rows and screened to the entity's own eid. The
+    // corrupt-gap batch (no journal_change) is skipped like every reader.
+    let sql = "select jc.tx as tx, jt.ts as ts, jt.actor as actor \
+               from journal_change jc join journal_tx jt on jt.id = jc.tx \
+               where jc.eid = ?1 group by jc.tx order by jc.tx desc limit ?2";
     let Ok(mut st) = store.conn.prepare(sql) else { return vec![] };
-    let rows: Vec<(i64, String, Option<String>, String)> = st
-        .query_map(rusqlite::params![eid, limit as i64], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
-        })
+    let metas: Vec<(i64, String, Option<String>)> = st
+        .query_map(rusqlite::params![eid, limit as i64], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
         .map(|it| it.filter_map(|x| x.ok()).collect())
         .unwrap_or_default();
-    rows.into_iter()
-        .map(|(id, ts, actor, batch)| {
-            let mut changes: Vec<Value> = serde_json::from_str(&batch).unwrap_or_default();
+    metas
+        .into_iter()
+        .map(|(id, ts, actor)| {
+            let mut changes: Vec<Value> =
+                batch_of(&store.conn, id, Some(eid)).iter().map(|c| c.to_value()).collect();
             for c in &mut changes {
                 canon(c);
             }
-            changes.retain(|c| c.get("eid").and_then(|e| e.as_str()) == Some(eid));
             Entry { id, ts, actor, changes }
         })
         .collect()
@@ -99,12 +103,12 @@ pub fn what_of(e: &Entry) -> String {
 
 // The journal row check the resolver needs: does this eid appear at all.
 pub fn seen(store: &Store, eid: &str) -> bool {
-    if !store.has_table("journal_touch") {
+    if !store.has_table("journal_change") {
         return false;
     }
     store
         .conn
-        .query_row("select 1 from journal_touch where eid = ?1 limit 1", [eid], |r| {
+        .query_row("select 1 from journal_change where eid = ?1 limit 1", [eid], |r| {
             r.get::<_, i64>(0)
         })
         .optional()

@@ -2169,6 +2169,107 @@ fn exec_change(conn: &Connection, sql: &str, params: &[Value]) -> rusqlite::Resu
     st.execute(refs.as_slice())
 }
 
+// The normalized parallel record (D-18860/D-18861), dual-written beside the
+// JSON journal row in the SAME transaction (T-18878) — the Rust mirror of
+// db.ts journalNormalized. journal_tx keeps the batch's provenance;
+// journal_change one ordered operation per Change ((tx, ordinal) reproduces the
+// applied order); journal_field the ordered after-image — one present row per
+// field an upsert wrote (JSON-encoded in value, so a present null stays distinct
+// from a tombstone), or a tombstone per then-present field when a component is
+// removed, keeping field history self-contained across a removal and later
+// recreation. An upsert with no fields (empty component presence) writes none.
+// `tx` is the JSON journal row's rowid, written as journal_tx.id so the two
+// logs share one transaction identity (journal.rowid == journal_tx.id). Both
+// serde_json Maps preserve insertion order, so the field ordinals match the
+// order db.ts records.
+fn journal_normalized(
+    conn: &Connection,
+    tx: i64,
+    now: &str,
+    actor: Option<&str>,
+    via: Option<&str>,
+    trace: &Value,
+    logged: &[Change],
+) -> rusqlite::Result<()> {
+    exec_change(
+        conn,
+        "insert into journal_tx (id, ts, actor, via, trace) values (?1, ?2, ?3, ?4, ?5)",
+        &[
+            Value::from(tx),
+            Value::from(now),
+            actor.map(Value::from).unwrap_or(Value::Null),
+            via.map(Value::from).unwrap_or(Value::Null),
+            trace.clone(),
+        ],
+    )?;
+    for (ordinal, ch) in logged.iter().enumerate() {
+        let op = if ch.comp.is_none() { "remove" } else { "upsert" };
+        exec_change(
+            conn,
+            "insert into journal_change (tx, ordinal, eid, component, operation) \
+             values (?1, ?2, ?3, ?4, ?5)",
+            &[
+                Value::from(tx),
+                Value::from(ordinal as i64),
+                Value::from(ch.eid.as_str()),
+                Value::from(ch.name.as_str()),
+                Value::from(op),
+            ],
+        )?;
+        let change_id = conn.last_insert_rowid();
+        match &ch.comp {
+            // A component removal tombstones every field it still had — the
+            // newest present after-image per field (uncommitted rows on this
+            // same connection included), exactly as db.ts does.
+            None => {
+                let mut st = conn.prepare_cached(
+                    "select field from ( \
+                       select jf.field as field, jf.present as present, \
+                              row_number() over ( \
+                                partition by jf.field order by jf.id desc \
+                              ) as rn \
+                       from journal_field jf join journal_change jc on jc.id = jf.change \
+                       where jc.eid = ?1 and jc.component = ?2 \
+                     ) where rn = 1 and present = 1",
+                )?;
+                let fields: Vec<String> = st
+                    .query_map(rusqlite::params![ch.eid, ch.name], |r| r.get(0))?
+                    .filter_map(|x| x.ok())
+                    .collect();
+                for (i, field) in fields.iter().enumerate() {
+                    exec_change(
+                        conn,
+                        "insert into journal_field (change, ordinal, field, present, value) \
+                         values (?1, ?2, ?3, 0, null)",
+                        &[
+                            Value::from(change_id),
+                            Value::from(i as i64),
+                            Value::from(field.as_str()),
+                        ],
+                    )?;
+                }
+            }
+            // An upsert records one present after-image per field, JSON-encoded.
+            Some(m) => {
+                for (i, (field, val)) in m.iter().enumerate() {
+                    exec_change(
+                        conn,
+                        "insert into journal_field (change, ordinal, field, present, value) \
+                         values (?1, ?2, ?3, 1, ?4)",
+                        &[
+                            Value::from(change_id),
+                            Value::from(i as i64),
+                            Value::from(field.as_str()),
+                            Value::from(val.to_string()),
+                        ],
+                    )?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 // ---- the resume stack + actor backfill (db.ts apply() tail) ----
 
 // A settled task is off every stack (types.ts settled): done or cancelled.
@@ -3191,7 +3292,7 @@ pub fn apply(
                         actor.as_deref().map(Value::from).unwrap_or(Value::Null),
                         via.as_deref().map(Value::from).unwrap_or(Value::Null),
                         Value::from(batch_json(&logged)),
-                        trace,
+                        trace.clone(),
                     ],
                 )?;
                 conn.last_insert_rowid()
@@ -3205,6 +3306,18 @@ pub fn apply(
                     )?;
                 }
             }
+            // The normalized parallel record (T-18878), same transaction, same
+            // `logged` — so a Rust-written batch reads back through the switched
+            // readers (T-18880) identically to a TS-written one.
+            journal_normalized(
+                conn,
+                jrow,
+                &now,
+                actor.as_deref(),
+                via.as_deref(),
+                &trace,
+                &logged,
+            )?;
         }
         conn.execute_batch("commit")?;
         let mut out = changes;

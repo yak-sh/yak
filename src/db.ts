@@ -72,6 +72,7 @@ import {
   type DocColumn,
   docColumns,
   REDACTED,
+  scrubbable,
   scrubBatch,
 } from './redaction.ts'
 import {
@@ -794,13 +795,15 @@ let schema = `
     batch text not null
   );
   -- The journal's seek index (T-13915): one row per (batch rowid, eid) the
-  -- batch touched, written beside the batch inside apply()'s transaction so a
-  -- per-entity read (journalOf, stateBefore, lastBatch, undo's touched-since)
-  -- is an index seek instead of a full json_each scan of the whole log. Still
-  -- log data — jrow is the journal rowid, there is no eid of its own, never in
-  -- snapshot() or a client cache. Backfilled once (backfillJournalTouch); the
-  -- index arrives with the other seek indexes in open(). Nothing deletes
-  -- journal rows, so no delete-sync is needed.
+  -- batch touched, written beside the batch inside apply()'s transaction. It
+  -- once made a per-entity read an index seek instead of a full json_each scan;
+  -- since the readers moved onto the normalized journal (T-18880) they seek
+  -- journal_change (eid, component) instead, so this index is still MAINTAINED
+  -- but unread, kept for reversibility pending the JSON journal's retirement
+  -- (T-18883). Still log data — jrow is the journal rowid, there is no eid of
+  -- its own, never in snapshot() or a client cache. Backfilled once
+  -- (backfillJournalTouch); the index arrives with the other seek indexes in
+  -- open(). Nothing deletes journal rows, so no delete-sync is needed.
   create table if not exists journal_touch (
     jrow integer not null,
     eid  text not null
@@ -1391,7 +1394,7 @@ export let migrateRefs = (db: DatabaseSync) => {
 // Journal bytes are audit history, so the migration never rewrites them. A
 // reader translates former active keys at the boundary, keeping history and
 // replay on the vocabulary spoken by this process.
-let canonicalChanges = (changes: Change[]): Change[] => {
+export let canonicalChanges = (changes: Change[]): Change[] => {
   let names = new Map(
     refRenames.map((r) => [`${r.table}.${r.old}`, r.col]),
   )
@@ -6141,6 +6144,34 @@ export let redact = (
       firstSeen ??= row.ts
     }
 
+    // The normalized parallel record holds the SAME content, and every history/
+    // replay reader now reads it (T-18880) — and backups dump it like the JSON
+    // journal — so the removed value must leave journal_field too or it leaks
+    // through the new door. Scrub every present after-image whose component/
+    // field is a content column (scrubBatch's test, lifted to the field rows),
+    // in THIS transaction. The pre-screen mirrors redactionRows: the JSON-
+    // escaped spelling narrows the scan, the decoded compare is the authority.
+    let encoded = JSON.stringify(value).slice(1, -1)
+    let scrubField = prep(db, 'update journal_field set value = ? where id = ?')
+    let fieldRows = prep(
+      db,
+      `select jf.id as id, jf.value as value,
+              jc.component as component, jf.field as field
+       from journal_field jf join journal_change jc on jc.id = jf.change
+       where jf.present = 1 and instr(jf.value, ?) > 0`,
+    ).all(encoded) as {
+      id: number
+      value: string
+      component: string
+      field: string
+    }[]
+    for (let f of fieldRows) {
+      if (!scrubbable(f.component, f.field)) continue
+      let decoded = JSON.parse(f.value)
+      if (typeof decoded != 'string' || !decoded.includes(value)) continue
+      scrubField.run(JSON.stringify(decoded.replaceAll(value, REDACTED)), f.id)
+    }
+
     let docChange: Change | undefined
     if (doc) {
       let old = doc[column]
@@ -6281,6 +6312,67 @@ export type JournalEntry = {
   via: string | null
   changes: Change[]
 }
+// The read side of the normalized journal (D-18860/D-18861): the Change[] a
+// batch applied, reconstructed from journal_change + journal_field — the
+// parallel record's authoritative content, which REPLACES parsing the JSON
+// `journal.batch` in every history/replay/undo reader (T-18880). The JSON row
+// stays dual-written, but nothing reads it back. An operation is `remove`
+// (comp: null — a component removal, or entity death when component='entity')
+// or `upsert` (comp rebuilt from its present after-image field rows, each
+// JSON-decoded, in field order; an empty component has no field rows and
+// rebuilds as {}). canonicalChanges keeps a forward-renamed ref column reading
+// under its current name, exactly as the JSON reader did. The one thing the
+// JSON batch carried that this does NOT is `was` — apply()'s per-column CAS
+// guard, a write-time precondition and never history (D-18861: canonical rows
+// do not duplicate before-values). No reader reads `was` back (historyLine
+// shows comp keys, delta column-merges, inverseBatch recomputes its own via
+// wasOf), so its absence is behavior-neutral.
+type ChangeRow = {
+  id: number
+  eid: string
+  component: string
+  operation: string
+}
+let rebuildChanges = (db: DatabaseSync, rows: ChangeRow[]): Change[] => {
+  let fieldsOf = prep(
+    db,
+    `select field, value from journal_field
+     where change = ? and present = 1 order by ordinal`,
+  )
+  return canonicalChanges(rows.map((ch) => {
+    if (ch.operation == 'remove') {
+      return { eid: ch.eid, name: ch.component, comp: null }
+    }
+    let comp: Record<string, unknown> = {}
+    for (
+      let f of fieldsOf.all(ch.id) as { field: string; value: string }[]
+    ) comp[f.field] = JSON.parse(f.value)
+    return { eid: ch.eid, name: ch.component, comp }
+  }))
+}
+
+// One journaled batch reconstructed whole (all eids) or, with `eid`, screened
+// to that entity's own changes — both in applied order (journal_change.ordinal).
+let normalizedBatch = (
+  db: DatabaseSync,
+  tx: number,
+  eid?: string,
+): Change[] =>
+  rebuildChanges(
+    db,
+    (eid == null
+      ? prep(
+        db,
+        `select id, eid, component, operation from journal_change
+         where tx = ? order by ordinal`,
+      ).all(tx)
+      : prep(
+        db,
+        `select id, eid, component, operation from journal_change
+         where tx = ? and eid = ? order by ordinal`,
+      ).all(tx, eid)) as ChangeRow[],
+  )
+
 export let journalOf = (
   db: DatabaseSync,
   eid: string,
@@ -6288,26 +6380,23 @@ export let journalOf = (
 ): JournalEntry[] =>
   (prep(
     db,
-    `
-    select j.rowid, j.ts, j.actor, j.via, j.batch
-    from journal_touch t join journal j on j.rowid = t.jrow
-    where t.eid = ?
-    order by t.jrow desc limit ?
-  `,
+    `select jc.tx as tx, jt.ts as ts, jt.actor as actor, jt.via as via
+     from journal_change jc join journal_tx jt on jt.id = jc.tx
+     where jc.eid = ?
+     group by jc.tx
+     order by jc.tx desc limit ?`,
   ).all(eid, limit) as {
-    rowid: number
+    tx: number
     ts: string
     actor: string | null
     via: string | null
-    batch: string
   }[])
     .map((r) => ({
-      id: r.rowid,
+      id: r.tx,
       ts: r.ts,
       actor: r.actor,
       via: r.via,
-      changes: canonicalChanges(JSON.parse(r.batch) as Change[])
-        .filter((c) => c.eid == eid),
+      changes: normalizedBatch(db, r.tx, eid),
     }))
 
 // The same record cut by instrument instead of what: every batch a session
@@ -6320,23 +6409,20 @@ export let journalBy = (
 ): JournalEntry[] =>
   (prep(
     db,
-    `
-    select rowid, ts, actor, via, batch from journal
-    where via = ? order by rowid desc limit ?
-  `,
+    `select id, ts, actor, via from journal_tx
+     where via = ? order by id desc limit ?`,
   ).all(via, limit) as {
-    rowid: number
+    id: number
     ts: string
     actor: string | null
     via: string | null
-    batch: string
   }[])
     .map((r) => ({
-      id: r.rowid,
+      id: r.id,
       ts: r.ts,
       actor: r.actor,
       via: r.via,
-      changes: canonicalChanges(JSON.parse(r.batch) as Change[]),
+      changes: normalizedBatch(db, r.id),
     }))
 
 // One entity's component state as of just BEFORE journal rowid `before`, rebuilt
@@ -6349,26 +6435,30 @@ let stateBefore = (
   eid: string,
   before: number,
 ): Record<string, Record<string, unknown>> => {
-  let rows = prep(
+  // This entity's own changes across every batch below `before`, oldest first
+  // (journal_change (eid, component) index, then applied order) — per-entity
+  // and bounded, never a whole-log scan. Reconstructed from the normalized
+  // rows, so the corrupt-gap batch (no journal_change) is skipped like every
+  // other reader.
+  let changes = rebuildChanges(
     db,
-    `select j.rowid, j.batch
-     from journal_touch t join journal j on j.rowid = t.jrow
-     where t.eid = ? and t.jrow < ?
-     order by t.jrow`,
-  ).all(eid, before) as { rowid: number; batch: string }[]
+    prep(
+      db,
+      `select id, eid, component, operation from journal_change
+       where eid = ? and tx < ? order by tx, ordinal`,
+    ).all(eid, before) as ChangeRow[],
+  )
   let state: Record<string, Record<string, unknown>> = {}
-  for (let r of rows) {
-    for (let c of canonicalChanges(JSON.parse(r.batch) as Change[])) {
-      if (c.eid != eid || c.name == 'dependency') continue
-      // A death mid-window can't precede a valid target (a tombstone voids
-      // later writes), but resetting keeps the reconstruction honest if seen.
-      if (c.name == 'entity') {
-        if (!c.comp) state = {}
-        continue
-      }
-      if (c.comp == null) delete state[c.name]
-      else state[c.name] = { ...(state[c.name] ?? {}), ...c.comp }
+  for (let c of changes) {
+    if (c.name == 'dependency') continue
+    // A death mid-window can't precede a valid target (a tombstone voids
+    // later writes), but resetting keeps the reconstruction honest if seen.
+    if (c.name == 'entity') {
+      if (!c.comp) state = {}
+      continue
     }
+    if (c.comp == null) delete state[c.name]
+    else state[c.name] = { ...(state[c.name] ?? {}), ...c.comp }
   }
   return state
 }
@@ -6402,10 +6492,12 @@ let wasOf = (name: string, comp: Record<string, unknown>, keys: string[]) => {
 // Server-owned components (resume, imported — empty wire vocabulary) and the
 // provenance echoes are re-derived by apply(), never user intent: skipped.
 export let inverseBatch = (db: DatabaseSync, id: number): Change[] => {
-  let row = prep(db, 'select rowid, batch from journal where rowid = ?')
-    .get(id) as { rowid: number; batch: string } | undefined
-  if (!row) throw new Error(`no journal batch #${id}`)
-  let batch = canonicalChanges(JSON.parse(row.batch) as Change[])
+  // The batch reconstructed from the normalized rows (every journal_change
+  // shares this one tx). A tx always journals at least one change, so an empty
+  // reconstruction means the batch does not exist — including the corrupt-gap
+  // row that has no journal_tx (T-24020).
+  let batch = normalizedBatch(db, id)
+  if (!batch.length) throw new Error(`no journal batch #${id}`)
 
   let dead = batch.find((c) => c.name == 'entity' && c.comp == null)
   if (dead) {
@@ -6418,7 +6510,7 @@ export let inverseBatch = (db: DatabaseSync, id: number): Change[] => {
   )
   let touchedSince = prep(
     db,
-    `select 1 from journal_touch where eid = ? and jrow > ? limit 1`,
+    `select 1 from journal_change where eid = ? and tx > ? limit 1`,
   )
   let priors = new Map<string, Record<string, Record<string, unknown>>>()
   let priorOf = (eid: string) => {
@@ -6523,7 +6615,7 @@ export let lastBatch = (db: DatabaseSync, eid: string): number =>
   Number(
     (prep(
       db,
-      `select max(jrow) as id from journal_touch where eid = ?`,
+      `select max(tx) as id from journal_change where eid = ?`,
     ).get(eid) as { id: number | null } | undefined)?.id ?? 0,
   )
 
@@ -6535,19 +6627,21 @@ export let historicalWorked = (db: DatabaseSync): Change[] =>
     db,
     `
     select distinct
-      json_extract(je.value, '$.comp.session') as parent,
-      json_extract(je.value, '$.eid') as child
-    from journal j, json_each(j.batch) je
-    join entity se on se.eid = json_extract(je.value, '$.comp.session')
+      json_extract(sess.value, '$') as parent,
+      jc.eid as child
+    from journal_change jc
+    join journal_field sess
+      on sess.change = jc.id and sess.field = 'session' and sess.present = 1
+    join entity se on se.eid = json_extract(sess.value, '$')
     join session s on s.entity = se.id
-    join entity te on te.eid = json_extract(je.value, '$.eid')
+    join entity te on te.eid = jc.eid
     join task t on t.entity = te.id
     left join dependency d
       on d.parent = se.id
      and d.type = 'worked'
      and d.child = te.id
-    where json_extract(je.value, '$.name') = 'claim'
-      and json_extract(je.value, '$.comp.session') is not null
+    where jc.component = 'claim'
+      and jc.operation = 'upsert'
       and d.parent is null
     order by parent, child
   `,
@@ -6601,14 +6695,13 @@ export type JournalRow = {
 export let journalSince = (db: DatabaseSync, since: number): JournalRow[] =>
   (prep(
     db,
-    `select rowid, ts, actor, via, batch, trace from journal
-     where rowid > ? order by rowid`,
+    `select id, ts, actor, via, trace from journal_tx
+     where id > ? order by id`,
   ).all(since) as {
-    rowid: number
+    id: number
     ts: string
     actor: string | null
     via: string | null
-    batch: string
     trace: string | null
   }[]).map((r) => {
     let t = r.trace
@@ -6618,11 +6711,11 @@ export let journalSince = (db: DatabaseSync, since: number): JournalRow[] =>
       }
       : null
     return {
-      rowid: Number(r.rowid),
+      rowid: Number(r.id),
       ts: r.ts,
       actor: r.actor,
       via: r.via,
-      batch: canonicalChanges(JSON.parse(r.batch) as Change[]),
+      batch: normalizedBatch(db, r.id),
       trace: t
         ? { created: new Set(t.created), removed: new Map(t.removed) }
         : null,
@@ -7048,12 +7141,16 @@ export let vocabHashOf = (
 
 export let vocabHash = vocabHashOf(comps, stamped)
 
-// The journal's current rowid — the cursor a snapshot, a delta, or a live
-// subscription frame is current as of (T-6823/T-3683). A client stamps its
+// The journal's current transaction id — the cursor a snapshot, a delta, or a
+// live subscription frame is current as of (T-6823/T-3683). A client stamps its
 // next `since` from it; a subscription rides it on every pushed frame so a
-// client can bridge to the catch-up delta. 0 on an empty journal.
+// client can bridge to the catch-up delta. Read from journal_tx (T-18880), the
+// SAME id-space journalSince/delta seek, so the cursor and the reader can never
+// drift apart — journal_tx.id == the JSON journal rowid, so the value is
+// unchanged, but it no longer depends on the JSON journal that T-18883 retires.
+// 0 on an empty journal.
 export let cursorOf = (db: DatabaseSync): number =>
-  (prep(db, 'select max(rowid) as m from journal')
+  (prep(db, 'select max(id) as m from journal_tx')
     .get() as { m: number | null }).m ?? 0
 
 // Whether a returning client's held cursor can NO LONGER be trusted for a

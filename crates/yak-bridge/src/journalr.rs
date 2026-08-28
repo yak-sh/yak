@@ -12,11 +12,9 @@
 // `record()` does — never moved to the end).
 
 use serde_json::{Map, Value};
+use yak_kernel::batch_of;
 use yak_kernel::vocab::vocab;
 use yak_kernel::Store;
-
-// One journal row as read from SQLite: (rowid, ts, actor, via, batch json).
-type JournalRow = (i64, String, Option<String>, Option<String>, String);
 
 // canonicalChanges' `record`, order-preserving: rewrite each `<col>_eid` key
 // whose stem is a readable column of `name` to the stem, keeping the original
@@ -75,26 +73,30 @@ fn entry(
 // journalOf: the batches touching one entity, newest first, each batch's
 // changes canonicalized and screened to that entity's own eid.
 pub fn of_eid(store: &Store, eid: &str, limit: i64) -> Vec<Value> {
-    if !store.has_table("journal_touch") {
+    if !store.has_table("journal_change") {
         return vec![];
     }
-    let sql = "select j.rowid, j.ts, j.actor, j.via, j.batch \
-               from journal_touch t join journal j on j.rowid = t.jrow \
-               where t.eid = ?1 order by t.jrow desc limit ?2";
+    // The batches touching this entity, newest first — reconstructed from the
+    // normalized rows (T-18880) and screened to the entity's own eid. Provenance
+    // (ts/actor/via) rides journal_tx; the corrupt-gap batch is skipped.
+    let sql = "select jc.tx as tx, jt.ts as ts, jt.actor as actor, jt.via as via \
+               from journal_change jc join journal_tx jt on jt.id = jc.tx \
+               where jc.eid = ?1 group by jc.tx order by jc.tx desc limit ?2";
     let Ok(mut st) = store.conn.prepare(sql) else { return vec![] };
-    let rows: Vec<JournalRow> = st
+    let metas: Vec<(i64, String, Option<String>, Option<String>)> = st
         .query_map(rusqlite::params![eid, limit], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
         })
         .map(|it| it.filter_map(|x| x.ok()).collect())
         .unwrap_or_default();
-    rows.into_iter()
-        .map(|(id, ts, actor, via, batch)| {
-            let mut changes: Vec<Value> = serde_json::from_str(&batch).unwrap_or_default();
+    metas
+        .into_iter()
+        .map(|(id, ts, actor, via)| {
+            let mut changes: Vec<Value> =
+                batch_of(&store.conn, id, Some(eid)).iter().map(|c| c.to_value()).collect();
             for c in &mut changes {
                 canon_change(c);
             }
-            changes.retain(|c| c.get("eid").and_then(|e| e.as_str()) == Some(eid));
             entry(id, ts, actor, via, changes)
         })
         .collect()
@@ -103,21 +105,23 @@ pub fn of_eid(store: &Store, eid: &str, limit: i64) -> Vec<Value> {
 // journalBy: every batch an instrument wrote, whole (no per-eid screen),
 // newest first.
 pub fn by_via(store: &Store, via: &str, limit: i64) -> Vec<Value> {
-    if !store.has_table("journal") {
+    if !store.has_table("journal_tx") {
         return vec![];
     }
-    let sql = "select rowid, ts, actor, via, batch from journal \
-               where via = ?1 order by rowid desc limit ?2";
+    let sql = "select id, ts, actor, via from journal_tx \
+               where via = ?1 order by id desc limit ?2";
     let Ok(mut st) = store.conn.prepare(sql) else { return vec![] };
-    let rows: Vec<JournalRow> = st
+    let metas: Vec<(i64, String, Option<String>, Option<String>)> = st
         .query_map(rusqlite::params![via, limit], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
         })
         .map(|it| it.filter_map(|x| x.ok()).collect())
         .unwrap_or_default();
-    rows.into_iter()
-        .map(|(id, ts, actor, via, batch)| {
-            let mut changes: Vec<Value> = serde_json::from_str(&batch).unwrap_or_default();
+    metas
+        .into_iter()
+        .map(|(id, ts, actor, via)| {
+            let mut changes: Vec<Value> =
+                batch_of(&store.conn, id, None).iter().map(|c| c.to_value()).collect();
             for c in &mut changes {
                 canon_change(c);
             }

@@ -32,6 +32,22 @@ const SCHEMA: &str = "
     actor text, via text, batch text not null, trace text
   );
   create table journal_touch (jrow integer not null, eid text not null);
+  create table journal_tx (
+    id integer primary key, ts text not null, actor text, via text, trace text
+  );
+  create table journal_change (
+    id integer primary key, tx integer not null references journal_tx(id),
+    ordinal integer not null, eid text not null, component text not null,
+    operation text not null
+  );
+  create table journal_field (
+    id integer primary key, change integer not null references journal_change(id),
+    ordinal integer not null, field text not null, present integer not null,
+    value text
+  );
+  create index journal_change_tx on journal_change(tx, ordinal);
+  create index journal_change_ent on journal_change(eid, component);
+  create index journal_field_change on journal_field(change, ordinal);
   create table blob (
     entity integer primary key references entity(id),
     bytes integer not null

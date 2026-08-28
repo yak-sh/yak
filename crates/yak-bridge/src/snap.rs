@@ -7,7 +7,7 @@
 // entities in WS-set-then-num order (the union's insertion order).
 //
 // Three envelope fields the kernel does not source:
-//   - `cursor` / `epoch`: read straight from the db (max journal rowid, and
+//   - `cursor` / `epoch`: read straight from the db (max journal_tx id, and
 //     server_meta.epoch) — byte-exact with the Deno server on the same file.
 //   - `capabilities`: the types.ts constant, restated here (a build constant of
 //     this code version).

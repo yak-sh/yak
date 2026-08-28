@@ -19,6 +19,14 @@ let replace = (text: string, value: string) => {
   return count ? { text: text.replaceAll(value, REDACTED), count } : null
 }
 
+// scrubBatch's per-change test, lifted to one normalized journal_field row: a
+// content (text) column, never the redaction audit's own — so redact() can
+// scrub the parallel record (journal_field.value) in the same breath as the
+// JSON batch, keeping the two representations consistent for every reader that
+// now reads the normalized rows (T-18880).
+export let scrubbable = (name: string, prop: string) =>
+  name != 'redaction' && textType(name, prop)
+
 // Scrub content columns in one applied batch. Structural strings (eids, enum
 // states, timestamps) stay whole: corrupting replay to hide a short value is
 // not forgetting it. Unknown historical columns are treated as content so a

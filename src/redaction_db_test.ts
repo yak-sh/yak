@@ -4,8 +4,16 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 
 Deno.env.set('DB_PATH', ':memory:')
 
-let { apply, inverseBatch, lastBatch, readComp, redact, search, sha } =
-  await import('./db.ts')
+let {
+  apply,
+  inverseBatch,
+  journalOf,
+  lastBatch,
+  readComp,
+  redact,
+  search,
+  sha,
+} = await import('./db.ts')
 let { bareDb } = await import('./testdb.ts')
 
 bareDb()
@@ -69,6 +77,39 @@ Deno.test('redact: live doc, journal, indexes, embedding, and audit move atomica
     'permanent redaction audit',
   )
   assert(batches(db).every((batch) => !batch.includes(secret)))
+})
+
+// The normalized journal holds the same content and every history/replay reader
+// now reads it (T-18880), so redaction must scrub journal_field too or the value
+// leaks through the new door. Prove it disappears from the normalized rows and
+// from what journalOf reconstructs, not just the JSON batch.
+Deno.test('redact: scrubs the normalized journal_field, so the new readers cannot leak it', () => {
+  let db = bareDb()
+  let target = uid()
+  let secret = 'normalized-needle-51873'
+  apply(db, [{
+    eid: target,
+    name: 'doc',
+    comp: { title: 'Target', body: `keep ${secret} keep` },
+  }])
+  // The value is in journal_field before redaction.
+  let fieldHits = () =>
+    (db.prepare(
+      `select count(*) as n from journal_field where instr(value, ?) > 0`,
+    ).get(secret) as { n: number }).n
+  assert(fieldHits() > 0)
+
+  redact(db, target, secret)
+
+  // Gone from the normalized after-images, and from what the reader rebuilds.
+  assertEquals(fieldHits(), 0)
+  let bodies = journalOf(db, target).flatMap((e) =>
+    e.changes.filter((c) => c.name == 'doc').map((c) =>
+      (c.comp as { body?: string } | null)?.body ?? ''
+    )
+  )
+  assert(bodies.every((b) => !b.includes(secret)))
+  assert(bodies.some((b) => b.includes('[redacted]')))
 })
 
 Deno.test('redact: historical-only literals work; ambiguity and failures change nothing', () => {

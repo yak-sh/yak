@@ -572,13 +572,15 @@ pub static SCHEMA: &[SchemaOp] = &[
     batch text not null
   );
   -- The journal's seek index (T-13915): one row per (batch rowid, eid) the
-  -- batch touched, written beside the batch inside apply()'s transaction so a
-  -- per-entity read (journalOf, stateBefore, lastBatch, undo's touched-since)
-  -- is an index seek instead of a full json_each scan of the whole log. Still
-  -- log data — jrow is the journal rowid, there is no eid of its own, never in
-  -- snapshot() or a client cache. Backfilled once (backfillJournalTouch); the
-  -- index arrives with the other seek indexes in open(). Nothing deletes
-  -- journal rows, so no delete-sync is needed.
+  -- batch touched, written beside the batch inside apply()'s transaction. It
+  -- once made a per-entity read an index seek instead of a full json_each scan;
+  -- since the readers moved onto the normalized journal (T-18880) they seek
+  -- journal_change (eid, component) instead, so this index is still MAINTAINED
+  -- but unread, kept for reversibility pending the JSON journal's retirement
+  -- (T-18883). Still log data — jrow is the journal rowid, there is no eid of
+  -- its own, never in snapshot() or a client cache. Backfilled once
+  -- (backfillJournalTouch); the index arrives with the other seek indexes in
+  -- open(). Nothing deletes journal rows, so no delete-sync is needed.
   create table if not exists journal_touch (
     jrow integer not null,
     eid  text not null
