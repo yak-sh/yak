@@ -1,81 +1,117 @@
-// The cockpit's state and the graph reads behind it. A read is a bulk pull —
-// projects and tasks each in one `rows_of_kind` (never row-at-a-time), bucketed
-// by project in memory — and the render walks that in-memory shape, so no draw
-// ever scans the store (M-17862). Per-entity `requires`/`wants` edges are
-// pulled lazily on expand and cached until the next reload, so a redraw touches
-// no SQL. Liveness is the catchup feed: a cheap `data_version` pragma is the
-// wake (the same foreign-write detector catchup.ts polls), and only a real bump
-// drains the journal and reloads — never a fixed-interval scan of the graph.
+// The cockpit's state: a project -> recent-sessions -> session/entries drill,
+// the current model of an agent run. Reads are bulk and lean — projects and a
+// lean projection of every session (no transcript bodies) each in one query,
+// bucketed to a project by the same repo-root rule scope_for() uses to resolve
+// the cwd. A session's entries load only when it is opened, one indexed query
+// over entry(session, seq). Liveness is the journal tail: a cheap data_version
+// pragma is the wake (never a fixed-interval scan); a real bump reloads the
+// sessions, and the open session's entries.
+//
+// The WRITE path stays wired for the fork primitive that lands next (T-23975's
+// successor): `apply_write` is the seam — the read views never call it yet.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use ratatui::style::Color;
-use serde_json::{Map, Value};
+use yak_kernel::store::{collect, Sel};
 use yak_kernel::{
-    apply, data_version, default_gates, vocab, ApplyOpts, Change, Dep, Feed, Gate, Row, Store,
+    apply, data_version, default_gates, vocab, ApplyOpts, Change, Feed, Gate, Row, Store,
     WriteStore,
 };
 
 use crate::theme;
 
-// One visible line: an entity (or a project header) at a tree depth. The draw
-// layer turns this into styled spans; it holds no store handle.
-pub struct Node {
-    pub key: String,
+// Which level of the drill the cockpit is showing.
+#[derive(Clone, PartialEq)]
+pub enum View {
+    Projects,
+    Project(String), // project eid
+    Session(String), // session eid
+}
+
+// A lean session row for the list — the transcript bodies are never loaded here.
+pub struct SessionInfo {
     pub eid: String,
-    pub depth: u16,
-    pub glyph: char,
-    pub glyph_color: Color,
-    pub id: String,
-    pub title: String,
-    pub meta: String, // an edge's type, or a project's task count
-    pub meta_color: Color,
-    pub expandable: bool,
-    pub expanded: bool,
+    pub id: String, // the human S-num
+    pub cwd: String,
+    pub agent: String, // provider/model/effort
+    pub origin: String,
+    pub status: String,
+    pub entries: i64, // latest_seq
+    pub when: String, // started_at, else finished_at
+    pub project: String,
+    pub actor: String, // actor eid
+}
+
+// One rendered log entry: its seq, role, and (control-scrubbed) body.
+pub struct EntryLine {
+    pub seq: i64,
+    pub role: String,
+    pub body: String,
 }
 
 pub struct App {
     pub db: String,
     store: Store,
-    // The read/write split yak-bridge uses (main.rs): a read-only `Store` for
-    // the Graph projection and the journal feed, a separate READ_WRITE
-    // `WriteStore` for the one apply() the cockpit issues. apply()'s own `begin
-    // immediate` + short transaction is the concurrent-writer discipline, so
-    // this queues politely behind the server's batches and holds no long lock.
+    // The read/write split yak-bridge uses: a read-only Store for the Graph
+    // projection and the journal feed, a READ_WRITE WriteStore kept ready for
+    // the fork write. apply()'s own `begin immediate` is the concurrency
+    // discipline, so this holds no long lock. Wired but not yet called — the
+    // fork primitive lands on `apply_write` next (T-23975's successor).
+    #[allow(dead_code)]
     write: WriteStore,
+    #[allow(dead_code)]
     gates: Vec<Box<dyn Gate>>,
-    pub status_msg: String,
-    // bulk-loaded graph shape
+
+    // bulk graph shape
     projects: Vec<Row>,
-    tasks_by_project: HashMap<String, Vec<Row>>, // "" bucket = unfiled
-    task_ix: HashMap<String, Row>,
-    // lazy per-entity caches, cleared on reload
-    edges: HashMap<String, Vec<Dep>>, // eid -> its requires/wants out-edges
-    rows: HashMap<String, Option<Row>>, // non-task edge children, fetched once
-    // ui
-    pub expanded: HashSet<String>,
+    repos: Vec<(String, String)>, // (project eid, repo path)
+    sessions: Vec<SessionInfo>,   // recency desc
+    by_project: HashMap<String, Vec<usize>>,
+    actor_name: HashMap<String, String>,
+
+    // the open session's entries
+    entries: Vec<EntryLine>,
+
+    // navigation
+    pub view: View,
     pub sel: usize,
-    pub visible: Vec<Node>,
+    stack: Vec<(View, usize)>, // descend history: view + the sel to restore
     pub quit: bool,
+
     // liveness
     feed: Feed,
     last_version: i64,
     pub live_events: u64,
 }
 
-// A comp column as a string, or None if absent.
-fn cstr(r: &Row, comp: &str, prop: &str) -> Option<String> {
-    r.comps.get(comp)?.as_object()?.get(prop)?.as_str().map(str::to_string)
+fn cstr(r: &Row, comp: &str, prop: &str) -> String {
+    r.comps
+        .get(comp)
+        .and_then(|c| c.as_object())
+        .and_then(|o| o.get(prop))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string()
 }
 
 fn id_of(r: &Row) -> String {
     vocab().id_of(&r.kind, &r.eid, r.num)
 }
 
-const EDGE_TYPES: [&str; 2] = ["requires", "wants"];
+// A trailing slash off, nothing more — the DB paths are already absolute and
+// clean, and this is only ever compared against another path read the same way.
+fn clean(p: &str) -> String {
+    p.trim_end_matches('/').to_string()
+}
+
+// ISO -> "YYYY-MM-DD HH:MM", the human-scannable half.
+pub fn short_when(iso: &str) -> String {
+    let s: String = iso.chars().take(16).collect();
+    s.replace('T', " ")
+}
 
 impl App {
-    pub fn new(store: Store, write: WriteStore, db: String) -> App {
+    pub fn new(store: Store, write: WriteStore, db: String, cwd: &str) -> App {
         let feed = Feed::from_tip(&store.conn);
         let last_version = data_version(&store.conn);
         let mut app = App {
@@ -83,51 +119,176 @@ impl App {
             store,
             write,
             gates: default_gates(),
-            status_msg: String::new(),
             projects: vec![],
-            tasks_by_project: HashMap::new(),
-            task_ix: HashMap::new(),
-            edges: HashMap::new(),
-            rows: HashMap::new(),
-            expanded: HashSet::new(),
+            repos: vec![],
+            sessions: vec![],
+            by_project: HashMap::new(),
+            actor_name: HashMap::new(),
+            entries: vec![],
+            view: View::Projects,
             sel: 0,
-            visible: vec![],
+            stack: vec![],
             quit: false,
             feed,
             last_version,
             live_events: 0,
         };
         app.reload();
-        // Open on the first project's tasks so the tree is visible at a glance.
-        if let Some(p) = app
-            .projects
-            .iter()
-            .find(|p| app.tasks_by_project.get(&p.eid).map(|t| !t.is_empty()).unwrap_or(false))
-        {
-            app.expanded.insert(format!("p:{}", p.eid));
+        // Open on the cwd's project (its repo is an ancestor of cwd), seeding
+        // the back-stack so `h` returns to the project list positioned on it.
+        // The project list otherwise.
+        if let Some(p) = app.project_of(cwd) {
+            if let Some(i) = app.projects.iter().position(|r| r.eid == p) {
+                app.stack.push((View::Projects, i));
+                app.view = View::Project(p);
+            }
         }
-        app.rebuild_visible();
         app
     }
 
-    // Bulk read: one query per kind, bucketed. Caches drop — a live child's
-    // status may have moved, so nothing stale survives a reload.
     fn reload(&mut self) {
         self.projects = self.store.rows_of_kind("project");
-        self.tasks_by_project.clear();
-        self.task_ix.clear();
-        self.edges.clear();
-        self.rows.clear();
-        for t in self.store.rows_of_kind("task") {
-            let proj = cstr(&t, "task", "project").unwrap_or_default();
-            self.task_ix.insert(t.eid.clone(), t.clone());
-            self.tasks_by_project.entry(proj).or_default().push(t);
+        self.repos = collect(
+            &self.store.conn,
+            "select e.eid, r.path from repo r join entity e on e.id = r.entity \
+             where r.path is not null",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        );
+        self.load_sessions();
+    }
+
+    // A lean session projection — id/config/lifecycle only, no transcript body —
+    // bucketed to a project by repo-root ancestry, newest first.
+    fn load_sessions(&mut self) {
+        let sels = [
+            Sel {
+                comp: "session",
+                props: &[
+                    "id",
+                    "cwd",
+                    "provider",
+                    "model",
+                    "effort",
+                    "actor",
+                    "origin",
+                    "status",
+                    "latest_seq",
+                    "started_at",
+                    "finished_at",
+                ],
+            },
+            Sel { comp: "doc", props: &["title"] },
+        ];
+        let rows = self.store.rows_of_kind_cols("session", &sels);
+        let mut out: Vec<SessionInfo> = rows
+            .iter()
+            .map(|r| {
+                let cwd = cstr(r, "session", "cwd");
+                let agent = [
+                    cstr(r, "session", "provider"),
+                    cstr(r, "session", "model"),
+                    cstr(r, "session", "effort"),
+                ]
+                .into_iter()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join("/");
+                let started = cstr(r, "session", "started_at");
+                let finished = cstr(r, "session", "finished_at");
+                let when = if started.is_empty() { finished } else { started };
+                SessionInfo {
+                    eid: r.eid.clone(),
+                    id: vocab().id_of(&r.kind, &r.eid, r.num),
+                    project: self.project_of(&cwd).unwrap_or_default(),
+                    cwd,
+                    agent,
+                    origin: cstr(r, "session", "origin"),
+                    status: cstr(r, "session", "status"),
+                    entries: r
+                        .comps
+                        .get("session")
+                        .and_then(|c| c.get("latest_seq"))
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0),
+                    when,
+                    actor: cstr(r, "session", "actor"),
+                }
+            })
+            .collect();
+        out.sort_by(|a, b| b.when.cmp(&a.when));
+        self.by_project.clear();
+        for (i, s) in out.iter().enumerate() {
+            self.by_project.entry(s.project.clone()).or_default().push(i);
+        }
+        self.sessions = out;
+        self.resolve_actor_names();
+    }
+
+    // One lean bulk read of the distinct actors, mapped to a display label.
+    fn resolve_actor_names(&mut self) {
+        let mut actors: Vec<String> =
+            self.sessions.iter().map(|s| s.actor.clone()).filter(|a| !a.is_empty()).collect();
+        actors.sort();
+        actors.dedup();
+        self.actor_name.clear();
+        for r in self.store.rows_of_faces(&actors) {
+            let label = {
+                let slug = cstr(&r, "alias", "slug");
+                let title = cstr(&r, "doc", "title");
+                if !slug.is_empty() {
+                    slug
+                } else if !title.is_empty() {
+                    title
+                } else {
+                    r.eid.chars().take(8).collect()
+                }
+            };
+            self.actor_name.insert(r.eid.clone(), theme::sane(&label, false));
         }
     }
 
-    // The wake: is there a foreign commit since we last looked? A single pragma,
-    // not a scan. On a bump we drain the journal (advancing the feed cursor,
-    // counting events for the status bar) and reload the bulk shape.
+    // The project whose repo path is an ancestor of `path` (longest wins) — the
+    // cheap half of reader::scope_for, replicated so a session buckets by the
+    // same rule the cwd open uses. Sessions in external git worktrees that no
+    // repo root is an ancestor of fall to the "(unfiled)" bucket.
+    fn project_of(&self, path: &str) -> Option<String> {
+        let c = clean(path);
+        if c.is_empty() {
+            return None;
+        }
+        let mut best: Option<(&str, usize)> = None;
+        for (eid, root) in &self.repos {
+            let root = clean(root);
+            let under = c == root || c.starts_with(&format!("{root}/"));
+            if under && best.is_none_or(|(_, n)| root.len() > n) {
+                best = Some((eid, root.len()));
+            }
+        }
+        best.map(|(e, _)| e.to_string())
+    }
+
+    // Load a session's entries in seq order — one indexed query over
+    // entry(session, seq), joining content/message. Bodies are scrubbed at the
+    // boundary before they ever reach a Span.
+    fn load_entries(&mut self, session_eid: &str) {
+        let sql = "select t.seq, coalesce(m.role, ''), coalesce(c.body, '') \
+                   from entry t \
+                   left join message m on m.entity = t.entity \
+                   left join content c on c.entity = t.entity \
+                   where t.session = (select id from entity where eid = ?1) \
+                   order by t.seq";
+        let rows: Vec<(i64, String, String)> = collect(&self.store.conn, sql, [session_eid], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+        });
+        self.entries = rows
+            .into_iter()
+            .map(|(seq, role, body)| EntryLine { seq, role, body: theme::sane(&body, true) })
+            .collect();
+    }
+
+    // --- liveness ---
+
     pub fn tick_live(&mut self) {
         let v = data_version(&self.store.conn);
         if v == self.last_version {
@@ -137,168 +298,111 @@ impl App {
         let mut n = 0u64;
         self.feed.settle(&self.store.conn, &mut |_r| n += 1);
         if n == 0 {
-            return; // a bump with nothing new past our cursor (e.g. a checkpoint)
+            return;
         }
         self.live_events += n;
-        let key = self.selected_key();
         self.reload();
-        self.rebuild_visible();
-        self.restore_selection(key);
-    }
-
-    // An entity's `requires`/`wants` out-edges, num-stable order, fetched once.
-    fn child_edges(&mut self, eid: &str) -> Vec<Dep> {
-        if let Some(e) = self.edges.get(eid) {
-            return e.clone();
+        if let View::Session(eid) = self.view.clone() {
+            self.load_entries(&eid);
         }
-        let all = self.store.deps_of(eid);
-        let out: Vec<Dep> = all
-            .into_iter()
-            .filter(|d| d.parent == eid && EDGE_TYPES.contains(&d.type_.as_str()))
-            .collect();
-        self.edges.insert(eid.to_string(), out.clone());
-        out
+        self.clamp();
     }
 
-    // The row for an edge child: a task is already in the bulk index; anything
-    // else is fetched once (screened for tombstone/quarantine by the Store).
-    fn row_of(&mut self, eid: &str) -> Option<Row> {
-        if let Some(t) = self.task_ix.get(eid) {
-            return Some(t.clone());
+    // --- the current list ---
+
+    // How many rows the current view offers to select over.
+    pub fn visible_len(&self) -> usize {
+        match &self.view {
+            View::Projects => self.project_list().len(),
+            View::Project(p) => self.by_project.get(p).map(|v| v.len()).unwrap_or(0),
+            View::Session(_) => self.entries.len(),
         }
-        if let Some(r) = self.rows.get(eid) {
-            return r.clone();
-        }
-        let r = self.store.row(eid);
-        self.rows.insert(eid.to_string(), r.clone());
-        r
     }
 
-    // A task is gated when it is unfinished and holds a `requires` edge to a
-    // task that is itself unfinished — the blocked facet (gated() in live.ts).
-    fn gated(&mut self, eid: &str) -> bool {
-        let deps = self.child_edges(eid);
-        deps.iter().filter(|d| d.type_ == "requires").any(|d| {
-            self.task_ix
-                .get(&d.child)
-                .and_then(|c| cstr(c, "task", "status"))
-                .map(|s| s != "done" && s != "cancelled")
-                .unwrap_or(false)
-        })
-    }
-
-    // Rebuild the flat visible list from the roots, honoring the expanded set.
-    pub fn rebuild_visible(&mut self) {
-        let key = self.selected_key();
-        let mut out = Vec::new();
-        let projects: Vec<(String, String)> = self
+    // Projects that have at least one session, most-active first, then the
+    // "(unfiled)" bucket for sessions no repo root claims.
+    pub fn project_list(&self) -> Vec<ProjectRow> {
+        let mut rows: Vec<ProjectRow> = self
             .projects
             .iter()
-            .filter(|p| self.tasks_by_project.get(&p.eid).map(|t| !t.is_empty()).unwrap_or(false))
-            .map(|p| (id_of(p), p.eid.clone()))
+            .filter_map(|r| {
+                let n = self.by_project.get(&r.eid).map(|v| v.len()).unwrap_or(0);
+                (n > 0).then(|| ProjectRow {
+                    eid: r.eid.clone(),
+                    id: id_of(r),
+                    title: theme::sane(&cstr(r, "doc", "title"), false),
+                    sessions: n,
+                })
+            })
             .collect();
-        for (pid, eid) in projects {
-            self.walk_project(&pid, &eid, &mut out);
-        }
-        // tasks with no (or an unknown) project land in an Unfiled bucket last
-        if self.tasks_by_project.get("").map(|t| !t.is_empty()).unwrap_or(false) {
-            self.walk_project("Unfiled", "", &mut out);
-        }
-        self.visible = out;
-        self.restore_selection(key);
-    }
-
-    fn walk_project(&mut self, label: &str, eid: &str, out: &mut Vec<Node>) {
-        let key = format!("p:{eid}");
-        let tasks: Vec<Row> = self.tasks_by_project.get(eid).cloned().unwrap_or_default();
-        let expanded = self.expanded.contains(&key);
-        out.push(Node {
-            key: key.clone(),
-            eid: eid.to_string(),
-            depth: 0,
-            glyph: '▪',
-            glyph_color: theme::GREEN,
-            id: label.to_string(),
-            title: String::new(),
-            meta: format!("{} tasks", tasks.len()),
-            meta_color: theme::GREY,
-            expandable: !tasks.is_empty(),
-            expanded,
-        });
-        if expanded {
-            for t in tasks {
-                self.walk_entity(&key, &t.eid, 1, None, out);
+        rows.sort_by_key(|a| std::cmp::Reverse(a.sessions));
+        if let Some(v) = self.by_project.get("") {
+            if !v.is_empty() {
+                rows.push(ProjectRow {
+                    eid: String::new(),
+                    id: "—".into(),
+                    title: "(unfiled)".into(),
+                    sessions: v.len(),
+                });
             }
         }
+        rows
     }
 
-    // One entity line (a task under a project, or an edge child under a task),
-    // then — if expanded — its own `requires`/`wants` children, which is what
-    // makes the wants/requires tree recurse.
-    fn walk_entity(
-        &mut self,
-        parent: &str,
-        eid: &str,
-        depth: u16,
-        via: Option<&str>,
-        out: &mut Vec<Node>,
-    ) {
-        let key = match via {
-            Some(t) => format!("{parent}/e:{t}:{eid}"),
-            None => format!("{parent}/t:{eid}"),
-        };
-        let row = self.row_of(eid);
-        let status = row.as_ref().and_then(|r| cstr(r, "task", "status")).unwrap_or_default();
-        let is_task = row.as_ref().map(|r| r.comps.contains_key("task")).unwrap_or(false);
-        let gated = is_task && self.gated(eid);
-        let (glyph, gcolor) =
-            if is_task { theme::status_dot(&status, gated) } else { ('◦', theme::GREY) };
-        let id = row.as_ref().map(id_of).unwrap_or_else(|| eid.chars().take(8).collect());
-        let title =
-            row.as_ref().and_then(|r| cstr(r, "doc", "title")).unwrap_or_else(|| "(gone)".into());
-        let edges = self.child_edges(eid);
-        let expanded = self.expanded.contains(&key);
-        out.push(Node {
-            key: key.clone(),
-            eid: eid.to_string(),
-            depth,
-            glyph,
-            glyph_color: gcolor,
-            id,
-            title,
-            meta: via.unwrap_or("").to_string(),
-            meta_color: via.map(theme::edge_color).unwrap_or(theme::BODY),
-            expandable: !edges.is_empty(),
-            expanded,
-        });
-        if expanded {
-            for e in edges {
-                self.walk_entity(&key, &e.child, depth + 1, Some(&e.type_), out);
-            }
+    // The sessions of the project in view, recency order.
+    pub fn sessions_in_view(&self) -> Vec<&SessionInfo> {
+        let View::Project(p) = &self.view else { return vec![] };
+        self.by_project
+            .get(p)
+            .map(|v| v.iter().map(|&i| &self.sessions[i]).collect())
+            .unwrap_or_default()
+    }
+
+    pub fn entries_in_view(&self) -> &[EntryLine] {
+        &self.entries
+    }
+
+    pub fn actor_label(&self, eid: &str) -> String {
+        self.actor_name.get(eid).cloned().unwrap_or_else(|| eid.chars().take(8).collect())
+    }
+
+    // The session whose header the Session view shows.
+    pub fn open_session(&self) -> Option<&SessionInfo> {
+        let View::Session(eid) = &self.view else { return None };
+        self.sessions.iter().find(|s| &s.eid == eid)
+    }
+
+    // The project label for the breadcrumb in a Project view.
+    pub fn crumb_project(&self) -> String {
+        let View::Project(p) = &self.view else { return String::new() };
+        if p.is_empty() {
+            return "(unfiled)".into();
         }
+        self.projects
+            .iter()
+            .find(|r| &r.eid == p)
+            .map(|r| {
+                let t = theme::sane(&cstr(r, "doc", "title"), false);
+                if t.is_empty() {
+                    id_of(r)
+                } else {
+                    format!("{} {}", id_of(r), t)
+                }
+            })
+            .unwrap_or_else(|| p.chars().take(8).collect())
     }
 
     // --- navigation ---
 
-    fn selected_key(&self) -> Option<String> {
-        self.visible.get(self.sel).map(|n| n.key.clone())
-    }
-
-    // Keep the cursor on the same node across a rebuild; clamp if it vanished.
-    fn restore_selection(&mut self, key: Option<String>) {
-        if let Some(k) = key {
-            if let Some(i) = self.visible.iter().position(|n| n.key == k) {
-                self.sel = i;
-                return;
-            }
-        }
-        if self.sel >= self.visible.len() {
-            self.sel = self.visible.len().saturating_sub(1);
+    fn clamp(&mut self) {
+        let n = self.visible_len();
+        if self.sel >= n {
+            self.sel = n.saturating_sub(1);
         }
     }
 
     pub fn down(&mut self) {
-        if self.sel + 1 < self.visible.len() {
+        if self.sel + 1 < self.visible_len() {
             self.sel += 1;
         }
     }
@@ -312,101 +416,72 @@ impl App {
     }
 
     pub fn bottom(&mut self) {
-        self.sel = self.visible.len().saturating_sub(1);
+        self.sel = self.visible_len().saturating_sub(1);
     }
 
-    pub fn expand(&mut self) {
-        if let Some(n) = self.visible.get(self.sel) {
-            if n.expandable && !n.expanded {
-                self.expanded.insert(n.key.clone());
-                self.rebuild_visible();
+    // `l`/enter: descend into the selected row.
+    pub fn enter(&mut self) {
+        match &self.view {
+            View::Projects => {
+                let list = self.project_list();
+                let Some(p) = list.get(self.sel) else { return };
+                let eid = p.eid.clone();
+                self.stack.push((View::Projects, self.sel));
+                self.view = View::Project(eid);
+                self.sel = 0;
             }
-        }
-    }
-
-    pub fn collapse(&mut self) {
-        if let Some(n) = self.visible.get(self.sel) {
-            if n.expanded {
-                let key = n.key.clone();
-                self.expanded.remove(&key);
-                self.rebuild_visible();
-            } else {
-                self.select_parent();
+            View::Project(_) => {
+                let sessions = self.sessions_in_view();
+                let Some(s) = sessions.get(self.sel) else { return };
+                let eid = s.eid.clone();
+                let here = self.view.clone();
+                self.stack.push((here, self.sel));
+                self.load_entries(&eid);
+                self.view = View::Session(eid);
+                self.sel = 0;
             }
+            View::Session(_) => {}
         }
     }
 
-    // Collapse an already-collapsed node by jumping to (and folding) its parent —
-    // the outdent that makes `h` feel like a tree, not a list.
-    fn select_parent(&mut self) {
-        let Some(cur) = self.visible.get(self.sel) else { return };
-        let Some(pkey) = cur.key.rsplit_once('/').map(|(p, _)| p.to_string()) else { return };
-        if let Some(i) = self.visible.iter().position(|n| n.key == pkey) {
-            self.sel = i;
-        }
-    }
-
-    // Enter descends: expand a folded node, fold an open one.
-    pub fn toggle(&mut self) {
-        let Some(n) = self.visible.get(self.sel) else { return };
-        if !n.expandable {
-            return;
-        }
-        let key = n.key.clone();
-        if n.expanded {
-            self.expanded.remove(&key);
-        } else {
-            self.expanded.insert(key);
-        }
-        self.rebuild_visible();
-    }
-
-    // The one WRITE the skeleton proves end to end: advance the selected task's
-    // status (open→wip→done→open) through the kernel apply() — a real
-    // {eid, name:"task", comp:{status}} patch down the gated write path, not a
-    // direct UPDATE. The commit bumps data_version on our read connection, so
-    // tick_live() below re-reads it exactly as a foreign write would — the write
-    // and the render close the same loop.
-    pub fn cycle_status(&mut self) {
-        let Some(eid) = self.visible.get(self.sel).map(|n| n.eid.clone()) else { return };
-        let Some(row) = self.task_ix.get(&eid) else {
-            self.status_msg = "not a task — nothing to move".into();
-            return;
-        };
-        let cur = cstr(row, "task", "status").unwrap_or_default();
-        let next = match cur.as_str() {
-            "open" => "wip",
-            "wip" => "done",
-            _ => "open",
-        };
-        let id = id_of(row);
-        let mut comp = Map::new();
-        comp.insert("status".into(), Value::from(next));
-        let change = Change::new(&eid, "task", Some(comp));
-        let opts = ApplyOpts { writer: Some("yak-tui"), fed: false };
-        match apply(&self.write, vec![change], &opts, &self.gates) {
-            Ok(_) => {
-                self.status_msg = format!("{id}: {cur} → {next}");
-                // reflect it now; the data_version bump makes this a foreign
-                // write to the read conn, so the normal live path picks it up
-                self.tick_live();
-            }
-            Err(e) => {
-                let m = e.to_string();
-                self.status_msg = format!("write refused: {}", m.lines().next().unwrap_or(&m));
-            }
+    // `h`/Ctrl-D: back out to the parent view, restoring where the cursor was.
+    pub fn back(&mut self) {
+        if let Some((view, sel)) = self.stack.pop() {
+            self.view = view;
+            self.sel = sel;
+        } else if !matches!(self.view, View::Projects) {
+            // opened straight onto a project with no history: fall to the list
+            self.view = View::Projects;
+            self.sel = 0;
         }
     }
 
     pub fn refresh(&mut self) {
-        let key = self.selected_key();
         self.reload();
-        self.rebuild_visible();
-        self.restore_selection(key);
+        if let View::Session(eid) = self.view.clone() {
+            self.load_entries(&eid);
+        }
+        self.clamp();
     }
 
-    // status-bar facts
-    pub fn counts(&self) -> (usize, usize) {
-        (self.projects.len(), self.task_ix.len())
+    // The write seam the fork primitive lands on next: one batch through the
+    // gated kernel apply(), on the READ_WRITE connection. Wired but unexercised
+    // in v0.1 — kept so fork is an additive call here, not a re-plumb.
+    #[allow(dead_code)]
+    pub fn apply_write(&self, changes: Vec<Change>) -> Result<Vec<Change>, String> {
+        let opts = ApplyOpts { writer: Some("yak-tui"), fed: false };
+        apply(&self.write, changes, &opts, &self.gates).map_err(|e| e.to_string())
     }
+
+    pub fn counts(&self) -> (usize, usize) {
+        (self.projects.len(), self.sessions.len())
+    }
+}
+
+// A project as the Projects view lists it.
+pub struct ProjectRow {
+    pub eid: String,
+    pub id: String,
+    pub title: String,
+    pub sessions: usize,
 }

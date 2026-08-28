@@ -2,14 +2,14 @@
 // (D-23845). A LIBRARY crate: the `yak` binary calls `run()` from its `tui`
 // subcommand, so there is one binary and the ratatui code stays out of the CLI.
 //
-// It reads the live graph directly through the kernel `Store` (D-23308: a local
-// caller reads SQLite directly, no server) and writes through the kernel's gated
-// apply() on a separate READ_WRITE connection — the same read/write split
-// yak-bridge uses. A library client opens an existing file; it never migrates.
-// It renders the wants/requires task tree, cycles a task's status through
-// apply(), and stays live by tailing the journal's catchup feed rather than
-// polling the whole graph. The terminal is ALWAYS restored — on quit, on error,
-// and through a panic hook — so a crash never leaves a broken terminal.
+// v0.1 (T-23975) is a SESSION navigator: it opens on the cwd's project and
+// drills project -> recent sessions -> a session's entries — the current model
+// of an agent run. It reads the live graph directly through the kernel `Store`
+// (D-23308: a local caller reads SQLite directly, no server) and keeps a
+// separate READ_WRITE connection wired for the fork write that lands next. It
+// stays live by tailing the journal's catchup feed rather than polling the whole
+// graph. The terminal is ALWAYS restored — on quit, on error, and through a
+// panic hook — so a crash never leaves a broken terminal.
 
 mod app;
 mod theme;
@@ -34,7 +34,7 @@ type Term = Terminal<CrosstermBackend<Stdout>>;
 // The db this cockpit reads: an explicit `--db <path>` wins, else the CLI's own
 // resolution (DB_PATH, then the home graph) — the same door every reader names
 // itself by, and the seam that points the TUI at a scratch copy for testing
-// live-update without touching the owner's board.
+// without touching the owner's board.
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut path: Option<String> = None;
     let mut i = 0;
@@ -45,7 +45,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 path = args.get(i).cloned();
             }
             "-h" | "--help" => {
-                println!("yak tui [--db <path>] — the wants/requires task tree, live");
+                println!("yak tui [--db <path>] — project -> sessions -> entries, live");
                 return Ok(());
             }
             other => return Err(format!("yak tui: unknown flag {other}")),
@@ -56,12 +56,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // The read/write split yak-bridge uses: a read-only `Store` (URI form so a
     // bare path still opens the WAL sidecar for reads — the door yak-cli's
     // open_store() uses) for rendering and the journal feed, and a READ_WRITE
-    // `WriteStore` for the cockpit's apply(). A library client opens an existing
-    // file; it never creates or migrates.
+    // `WriteStore` kept ready for the fork write. A library client opens an
+    // existing file; it never creates or migrates.
     let store =
         Store::open(&format!("file:{db}?mode=ro")).map_err(|e| format!("cannot open {db}: {e}"))?;
     let write = WriteStore::open(&db).map_err(|e| format!("cannot open {db} read-write: {e}"))?;
-    let app = App::new(store, write, db);
+    let cwd = std::env::current_dir().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+    let app = App::new(store, write, db, &cwd);
 
     install_panic_hook();
     let mut term = setup().map_err(|e| e.to_string())?;
@@ -112,18 +113,26 @@ fn event_loop(term: &mut Term, mut app: App) -> io::Result<()> {
     Ok(())
 }
 
+// The vim vocabulary the TS TUI teaches (keybindings.ts tuiKeys): j/k browse,
+// l/Enter enter, h/Ctrl-D back, q/Ctrl-C quit — so muscle memory carries over.
 fn on_key(app: &mut App, code: KeyCode, mods: KeyModifiers) {
+    let ctrl = |c: char| mods.contains(KeyModifiers::CONTROL) && code == KeyCode::Char(c);
+    if ctrl('c') {
+        app.quit = true;
+        return;
+    }
+    if ctrl('d') {
+        app.back();
+        return;
+    }
     match code {
         KeyCode::Char('q') | KeyCode::Esc => app.quit = true,
-        KeyCode::Char('c') if mods.contains(KeyModifiers::CONTROL) => app.quit = true,
         KeyCode::Char('j') | KeyCode::Down => app.down(),
         KeyCode::Char('k') | KeyCode::Up => app.up(),
-        KeyCode::Char('l') | KeyCode::Right => app.expand(),
-        KeyCode::Char('h') | KeyCode::Left => app.collapse(),
-        KeyCode::Enter => app.toggle(),
+        KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => app.enter(),
+        KeyCode::Char('h') | KeyCode::Left => app.back(),
         KeyCode::Char('g') | KeyCode::Home => app.top(),
         KeyCode::Char('G') | KeyCode::End => app.bottom(),
-        KeyCode::Char(' ') => app.cycle_status(),
         KeyCode::Char('r') => app.refresh(),
         _ => {}
     }
