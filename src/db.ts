@@ -5718,8 +5718,9 @@ export let apply = (
         )
         touchJournal(db, jrow, logged)
         // The normalized parallel record (T-18878), same transaction, same
-        // `logged` — the JSON row above stays authoritative.
-        journalNormalized(db, now, actor, via, trace, logged)
+        // `logged` — the JSON row above stays authoritative. journal_tx.id is
+        // that JSON row's rowid, so the two logs share one transaction identity.
+        journalNormalized(db, jrow, now, actor, via, trace, logged)
       }
     } catch (e) {
       console.warn('journal skipped —', e)
@@ -5798,21 +5799,26 @@ let touchJournal = (db: DatabaseSync, jrow: number, changes: Change[]) => {
 // nothing in the change loop. Called inside the caller's transaction, beside the
 // JSON insert it mirrors; the caller's try guards it — a broken parallel record
 // must not break the write it records, exactly like the JSON journal.
-let journalNormalized = (
+//
+// `tx` is the JSON journal row's rowid, written as journal_tx.id EXPLICITLY so
+// the two logs share ONE transaction identity (journal.rowid = journal_tx.id):
+// a monotonic total order that never rests on ts, a free join for every reader
+// (T-18880), and the key the history backfill (T-18879) skips on to stay
+// idempotent. This is the SINGLE derivation both the live dual-write and the
+// backfill drive, so the parallel record cannot fork a second, drifting shape.
+export let journalNormalized = (
   db: DatabaseSync,
+  tx: number,
   ts: string,
   actor: string | null,
   via: string | null,
   trace: string | null,
   logged: Change[],
 ) => {
-  let tx = Number(
-    prep(
-      db,
-      'insert into journal_tx (ts, actor, via, trace) values (?, ?, ?, ?)',
-    )
-      .run(ts, actor, via, trace).lastInsertRowid,
-  )
+  prep(
+    db,
+    'insert into journal_tx (id, ts, actor, via, trace) values (?, ?, ?, ?, ?)',
+  ).run(tx, ts, actor, via, trace)
   let insChange = prep(
     db,
     `insert into journal_change (tx, ordinal, eid, component, operation)
@@ -5859,6 +5865,132 @@ let journalNormalized = (
   })
 }
 
+// Backfill the EXISTING JSON journal history into the normalized tables
+// (T-18879), so the parallel record covers ALL of history and not merely the
+// writes since dual-write (T-18878) began. Every legacy `journal` row is parsed
+// back into its Change[] and driven through the SAME journalNormalized()
+// derivation the live writer uses — one code path, so the two can never fork —
+// with journal_tx.id = the JSON row's rowid, which preserves the original total
+// order (rowid is monotonic in apply order) and every within-batch ordinal.
+//
+// Canonical form: each parsed change is passed through renamed() — exactly what
+// admitted() does before a live write logs — so a batch predating a forward
+// rename records the column spelling today's writer would produce, and one
+// entity's field history (predecessor lookup, tombstones) stays consistent
+// across the rename boundary. renamed() is add-only and idempotent, so on an
+// already-canonical batch (every batch today: the live rename map is empty) it
+// is the identity. Values are recorded verbatim — a doc body stays inline text
+// (casBodies journals the body inline and prepends a separate content-addressed
+// `blob` change; it never rewrites doc.body), and an entity/edge reference is
+// already its eid — so the derivation is a faithful round-trip of what the batch
+// holds.
+//
+// BASELINE (D-18861): because rows are processed in ascending rowid order and
+// each upsert's present after-images accumulate in journal_field, a historical
+// component removal tombstones exactly the fields present per the BACKFILLED
+// record up to that point — the predecessor frontier is established by the
+// backfill itself, not by live-only state.
+//
+// RESTARTABLE & IDEMPOTENT: a `journal_backfill` high-water mark in server_meta
+// records the highest rowid contiguously backfilled. Absent means no backfill
+// has run: the interim dual-write rows written before this identity mapping
+// existed carry auto-increment ids that do NOT equal their rowid, so the first
+// run clears the three normalized tables and rebuilds every row keyed by rowid —
+// a one-time reset guarded by the absent mark, never repeated. A resumed run
+// reads the mark and continues, and a per-row `journal_tx` existence check makes
+// a re-run (or a row a concurrent live apply already dual-wrote into the gap) a
+// skip rather than a double-insert. Work is chunked: each chunk is one atomic
+// transaction that advances the mark, so an interruption loses at most the
+// in-flight chunk and never a giant single transaction.
+//
+// RESILIENCE: a legacy batch that does not parse as JSON is a pre-existing
+// corruption — the live delta/history/undo readers `JSON.parse` the same column
+// unguarded, so they choke on it too — and it cannot be faithfully derived. The
+// backfill WARNS and skips exactly that row (advancing past it, leaving an
+// honest gap with no journal_tx) rather than aborting the whole migration; the
+// catch is narrow, around the parse alone, so a real derivation bug still
+// surfaces. Returns the count of legacy rows written and of unparseable rows
+// skipped this call.
+export let backfillJournal = (
+  db: DatabaseSync,
+  { chunk = 1000, onChunk }: {
+    chunk?: number
+    onChunk?: (upto: number, wrote: number, skipped: number) => void
+  } = {},
+): { wrote: number; skipped: number } => {
+  let markGet = () =>
+    (prep(db, `select v from server_meta where k = 'journal_backfill'`)
+      .get() as { v: string } | undefined)?.v
+  let markSet = (v: number) =>
+    prep(
+      db,
+      `insert into server_meta (k, v) values ('journal_backfill', ?)
+       on conflict(k) do update set v = excluded.v`,
+    ).run(String(v))
+  let existing = markGet()
+  let hwm = existing == null ? 0 : Number(existing)
+  if (existing == null) {
+    // First run: drop the interim non-identity dual-write rows and establish the
+    // baseline mark, atomically, so a rebuilt log is keyed by rowid throughout.
+    db.exec('begin immediate')
+    db.exec('delete from journal_field')
+    db.exec('delete from journal_change')
+    db.exec('delete from journal_tx')
+    markSet(0)
+    db.exec('commit')
+  }
+  let has = prep(db, 'select 1 from journal_tx where id = ?')
+  let page = prep(
+    db,
+    `select rowid as id, ts, actor, via, batch, trace from journal
+     where rowid > ? order by rowid limit ?`,
+  )
+  let wrote = 0
+  let skipped = 0
+  for (;;) {
+    let rows = page.all(hwm, chunk) as {
+      id: number
+      ts: string
+      actor: string | null
+      via: string | null
+      batch: string
+      trace: string | null
+    }[]
+    if (!rows.length) break
+    db.exec('begin immediate')
+    try {
+      for (let r of rows) {
+        if (!has.get(r.id)) {
+          let logged: Change[]
+          try {
+            logged = (JSON.parse(r.batch) as Change[]).map((c) => renamed(c))
+          } catch (e) {
+            // A corrupt, unparseable legacy batch: warn and leave a gap (no
+            // journal_tx for this rowid) rather than abort the migration.
+            console.warn(
+              `journal backfill: skipping unparseable batch #${r.id} —`,
+              e,
+            )
+            skipped++
+            hwm = r.id
+            continue
+          }
+          journalNormalized(db, r.id, r.ts, r.actor, r.via, r.trace, logged)
+          wrote++
+        }
+        hwm = r.id
+      }
+      markSet(hwm)
+      db.exec('commit')
+    } catch (e) {
+      rollback(db)
+      throw e
+    }
+    onChunk?.(hwm, wrote, skipped)
+  }
+  return { wrote, skipped }
+}
+
 // The journal door for a server STAMP — a write the wire may not carry
 // (frozen_at and kin), made by direct SQL beside this call. delta()
 // promises catch-up clients the same content the live cast carried, so
@@ -5883,9 +6015,9 @@ export let record = (
     )
     touchJournal(db, jrow, changes)
     // The normalized parallel record (T-18878): a server stamp is journaled
-    // too, so the two logs stay a faithful pair. No trace — a stamp fires no
-    // effects.
-    journalNormalized(db, now, actor, via, null, changes)
+    // too, so the two logs stay a faithful pair. journal_tx.id mirrors the JSON
+    // row's rowid; no trace — a stamp fires no effects.
+    journalNormalized(db, jrow, now, actor, via, null, changes)
   } catch (e) {
     console.warn('journal skipped —', e)
   }
@@ -6105,6 +6237,7 @@ export let redact = (
     // tables belongs to backfill (T-18879) and retirement (T-18883).
     journalNormalized(
       db,
+      jrow,
       now,
       actor,
       via,
