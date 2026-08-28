@@ -95,7 +95,7 @@ import {
   WORKING_SET,
   wrapChanges,
 } from './client.ts'
-import { editChanges } from './edit.ts'
+import { editChange, editChanges, parsePropPatch } from './edit.ts'
 import { entityUrl } from './url.ts'
 import { prune, reap, sweep } from './probes.ts'
 import {
@@ -817,6 +817,37 @@ let edit = async (got: Got) => {
   let newV = got.args.new == null ? '' : read(got.args.new)
   await send(editChanges(row, oldV, newV, got.flags.has('--all')))
   print(`${idOf(row)} edited`)
+}
+
+// `task patch <patch>` — apply a V4A prop-addressed patch (Codex's own
+// apply_patch format) to any graph text column. Each `*** Update Prop:
+// <entity>.<comp>.<column>` section is a surgical old→new replacement on the
+// current value, guarded (Change.was) so a stale write is refused. Multiple
+// sections land atomically. The patch text rides the @file / @- / stdin door
+// (M-4415) since it is a multi-line block. This is `task edit`'s comp-agnostic,
+// multi-target sibling — the same shared patch core, in Codex's grammar.
+let patch = async (got: Got) => {
+  let raw = got.args.patch
+  if (raw == null) throw new Error('task patch <patch|@file|@->')
+  let text = String(
+    inflate({ comp: 'doc', prop: 'body', value: raw }, undefined, raw).value,
+  )
+  let sections = parsePropPatch(text)
+  let byAddress = new Map<string, typeof sections[number]>()
+  for (let s of sections) {
+    let prior = byAddress.get(s.address)
+    if (prior) prior.hunks = [...prior.hunks, ...s.hunks]
+    else byAddress.set(s.address, { ...s, hunks: [...s.hunks] })
+  }
+  let batch: Change[] = []
+  let named: string[] = []
+  for (let s of byAddress.values()) {
+    let row = await needed(s.entity)
+    batch.push(editChange(row, s.comp, s.column, s.hunks))
+    named.push(`${idOf(row)}.${s.comp}.${s.column}`)
+  }
+  await send(batch)
+  print(`patched ${named.join(', ')}`)
 }
 
 let redact = async (got: Got) => {
@@ -3349,6 +3380,7 @@ export let verbs = bind({
   tree,
   set,
   edit,
+  patch,
   redact,
   show,
   history: past,

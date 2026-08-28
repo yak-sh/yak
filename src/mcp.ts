@@ -102,7 +102,7 @@ import {
   type Reader,
   spawnSpec,
 } from './commands.ts'
-import { editChanges } from './edit.ts'
+import { editChange, editChanges, parsePropPatch, patchHint } from './edit.ts'
 import { slotsOf } from './verb.ts'
 import { renderEntry, seqRange, type Sift, transcribe } from './log_text.ts'
 import {
@@ -796,7 +796,18 @@ ${GRAMMAR} ${BUS}`,
           )
           : []),
       ], session)
-      return bus(`updated ${idOf(row)}${wall(grouped.doc?.body)}`, session)
+      let hint = patchHint(
+        Object.entries(grouped).map(([name, comp]) => ({
+          eid: row.eid,
+          name,
+          comp,
+        })),
+        () => idOf(row),
+      )
+      return bus(
+        `updated ${idOf(row)}${wall(grouped.doc?.body)}${hint}`,
+        session,
+      )
     },
   )
 
@@ -1742,7 +1753,12 @@ was is a PRECONDITION — the graph's --ff-only: a map of column → the
 SHA-256 of the value you read (or null for "I read no value"), and
 apply() refuses the WHOLE batch if any named column has moved since. It
 rides beside comp (never inside it), per column, so a stale guarded write
-is rejected while the newer value is preserved. Same allowlist and
+is rejected while the newer value is preserved. To change PART of a large
+text column, a comp value may carry a $edit operator instead of a literal:
+{..., comp: {body: {$edit: {old, new, all?}}}} (or a list of hunks) patches
+the CURRENT value surgically in place, str_replace-style — cheaper than
+rewriting the whole value, and it won't clobber a concurrent edit (Codex's
+V4A equivalent is the graph_patch tool). Same allowlist and
 claim-lease rules as every other client; writes broadcast live to all
 screens. The result reports submitted intent and the authoritative
 effective batch returned by apply(), plus request-local alias mappings for
@@ -1783,16 +1799,23 @@ generated deps whose values name, number, or nest another entity. ${GRAMMAR}`,
       } catch (e) {
         return err(`apply failed: ${(e as Error).message}`)
       }
-      return text(JSON.stringify(
-        {
-          submitted: (changes ?? entities!).length,
-          effective: result.changes.length,
-          changes: result.changes,
-          ...(entities ? { aliases: result.aliases } : {}),
-        },
-        null,
-        2,
-      ))
+      // The hint reads the SUBMITTED flat changes, not the effective batch: a
+      // `$edit` op there is an object (no hint), while a large full-value body
+      // literal earns the nudge. The effective batch has already expanded any
+      // op into a literal, which would fire falsely.
+      let hint = changes ? patchHint(changes) : ''
+      return text(
+        JSON.stringify(
+          {
+            submitted: (changes ?? entities!).length,
+            effective: result.changes.length,
+            changes: result.changes,
+            ...(entities ? { aliases: result.aliases } : {}),
+          },
+          null,
+          2,
+        ) + hint,
+      )
     },
   )
 
@@ -1808,7 +1831,9 @@ matches several times, the edit is refused so you never change the
 wrong text. An empty new deletes the matched text. The write is guarded
 by the body read here, so a body that moved since another writer
 touched it is refused with its current text and a fresh token — read it
-back and retry. ${BUS}`,
+back and retry. (The same surgical core is reachable comp-agnostically as
+the $edit operator in graph_apply, and in Codex's V4A format as
+graph_patch.) ${BUS}`,
     {
       eid: z.string(),
       old: z.string().describe(
@@ -1848,6 +1873,74 @@ back and retry. ${BUS}`,
         return err((e as Error).message)
       }
       return bus(`edited ${idOf(row)}`, session)
+    },
+  )
+
+  tool(
+    'graph_patch',
+    `Surgical multi-prop edit in Codex's V4A patch format — the same
+'*** Begin Patch' / '@@' / '±' shape apply_patch uses for files, but each
+section addresses a PROP (<entity>.<comp>.<column>) instead of a file
+path. Multiple '*** Update Prop:' sections in one call, the way file
+apply_patch spans files. Each hunk's ' '/'-'/'+' lines reconstruct a
+contiguous replacement (context anchors the match). Use this to change
+PART of a large value instead of rewriting the whole thing via
+task_update '.body=' (a transcription risk that also clobbers a
+concurrent edit). The write is guarded by the values read here, so a
+value that moved since is refused with a fresh read — retry. Entities
+resolve by human id / alias / uuid. Example:
+\`\`\`
+*** Begin Patch
+*** Update Prop: T-123.doc.body
+@@
+-the old paragraph
++the new paragraph
+*** End Patch
+\`\`\`
+${BUS}`,
+    {
+      patch: z.string().describe(
+        "A V4A patch whose sections address props. '*** Begin Patch' … " +
+          "'*** Update Prop: <entity>.<comp>.<column>' … '@@' … '*** End Patch'.",
+      ),
+      session: z.string().optional(),
+    },
+    async ({ patch, session }: { patch: string; session?: string }) => {
+      let sections
+      try {
+        sections = parsePropPatch(patch)
+      } catch (e) {
+        return err((e as Error).message)
+      }
+      // Combine every section aimed at one address into a single guarded
+      // patch — two @@ blocks on the same column apply in sequence, not as
+      // two colliding Changes on one eid.
+      let byAddress = new Map<string, typeof sections[number]>()
+      for (let s of sections) {
+        let prior = byAddress.get(s.address)
+        if (prior) prior.hunks = [...prior.hunks, ...s.hunks]
+        else byAddress.set(s.address, { ...s, hunks: [...s.hunks] })
+      }
+      let batch: Change[] = []
+      let named: string[] = []
+      try {
+        for (let s of byAddress.values()) {
+          let row = await got(s.entity)
+          if (!row) throw new Error(`graph_patch: no entity: ${s.entity}`)
+          batch.push(editChange(row, s.comp, s.column, s.hunks))
+          named.push(`${idOf(row)}.${s.comp}.${s.column}`)
+        }
+      } catch (e) {
+        return err((e as Error).message)
+      }
+      try {
+        await io.write(batch, session)
+      } catch (e) {
+        // A stale refusal carries the current value and a fresh token (db.ts
+        // Stale) — read it back and re-issue the hunk.
+        return err((e as Error).message)
+      }
+      return bus(`patched ${named.join(', ')}`, session)
     },
   )
 

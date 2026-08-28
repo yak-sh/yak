@@ -266,6 +266,14 @@ let requiredRef = (
   return String(parsed)
 }
 
+// A field OPERATOR is a plain object whose key names an apply()-resolved op
+// (`$edit`, …) rather than a literal column value. Detected by the `$` sigil so
+// the value language leaves it alone; a real scalar is never an object. Kept
+// here (not imported from edit.ts) to avoid a props↔edit cycle.
+let isFieldOp = (v: unknown): boolean =>
+  v != null && typeof v == 'object' && !Array.isArray(v) &&
+  Object.keys(v as object).some((k) => k.startsWith('$'))
+
 // A batch gets one value language before any writer observes it. Unknown
 // components and server-owned columns stay untouched for the db allowlist;
 // every declared scalar and dependency word leaves in canonical form.
@@ -279,6 +287,10 @@ export let normalizeChanges = (
     let props = change.name == 'dependency' ? dep : undefined
     let comp = Object.fromEntries(
       Object.entries(change.comp).map(([name, value]) => {
+        // A field OPERATOR (e.g. { $edit }) is not a literal — pass it through
+        // untouched for apply() to resolve against the current stored value.
+        // A scalar parser would (rightly) reject the object as non-text.
+        if (isFieldOp(value)) return [name, value]
         let p = props?.[name] ??
           (name in (comps[change.name] ?? {})
             ? propAt(change.name, name)

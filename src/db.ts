@@ -38,6 +38,7 @@ import {
 import type { Mutation, MutationOutput } from './mutation.ts'
 import { type Trace } from './effects.ts'
 import { ancestorAt, normalizeLiterals } from './client.ts'
+import { editHunks, isEditOp, isFieldOp, patchText } from './edit.ts'
 import { homeReads } from './persona.ts'
 import {
   type EdgeSelector,
@@ -3646,14 +3647,33 @@ export let sweepSelect = (name: string, pending: string): string => {
 // Today lazy = {entry}.
 let lazyTables = Object.keys(readable).filter(lazy)
 
-let bound = (
+// The one generic scalar writer for every non-ref column (refs go through
+// refToId). It is the storage boundary, so it is where the scalar invariant
+// lives: a text/number/bool column must never receive an object, array, or
+// other non-scalar. node:sqlite only refuses one by accident — it reads an
+// object as a named-param dict and throws an opaque "Unknown named parameter" —
+// so guard here with an addressed message instead. Valid: null, string, number,
+// bigint, and (bool columns) boolean.
+export let bound = (
   name: string,
   col: string,
   value: unknown,
-): string | number | null =>
-  comps[name]?.[col] == 'bool' && typeof value == 'boolean'
-    ? Number(value)
-    : value as string | number | null
+): string | number | bigint | null => {
+  if (comps[name]?.[col] == 'bool' && typeof value == 'boolean') {
+    return Number(value)
+  }
+  let kind = typeof value
+  if (
+    value !== null && kind != 'string' && kind != 'number' && kind != 'bigint'
+  ) {
+    throw new Error(
+      `${name}.${col} expects a scalar value, got ${
+        Array.isArray(value) ? 'array' : kind
+      }`,
+    )
+  }
+  return value as string | number | bigint | null
+}
 
 // The stamp family (notified/opened/archived/decided/proposed): a
 // client-requested act
@@ -4135,6 +4155,55 @@ export class Stale extends Error {
   }
 }
 
+// The `$edit` field operator (T-23829): a comp value carrying `{ $edit }`
+// instead of a literal is a surgical patch on that column's CURRENT stored
+// value. Resolve it here, under the write lock, into the literal result plus a
+// per-column `was` guard — comp-agnostic (any text column of any comp), the
+// Claude-family door onto the same shared core as `graph_patch`. A guard on a
+// value read under this same lock cannot race, so `was` is belt-and-suspenders
+// here; the real no-clobber property is that a surgical patch merges rather
+// than replacing, and `old` must still match (or the whole batch refuses).
+// Any OTHER `$`-keyed operator is a typo/unknown op — refused legibly here at
+// the operator layer, before it reaches storage as a non-scalar (bound()).
+let editOps = (db: DatabaseSync, changes: Change[]): Change[] =>
+  changes.map((change) => {
+    if (!change.comp) return change
+    let ops = Object.entries(change.comp).filter(([, v]) => isFieldOp(v))
+    if (!ops.length) return change
+    if (!readable[change.name]) return change
+    let row = prep(db, `${select(change.name)} where eid = ?`).get(
+      change.eid,
+    ) as Record<string, unknown> | undefined
+    let comp = { ...change.comp }
+    let was = { ...(change.was ?? {}) }
+    for (let [col, op] of ops) {
+      let where = `${human(db, change.eid)}.${change.name}.${col}`
+      // A `$`-keyed value that isn't `$edit` is an unknown operator — a typo
+      // like `{$edt:…}`. Name it here, rather than letting bound() reject the
+      // stray object with its generic "expects a scalar".
+      if (!isEditOp(op)) {
+        let key = Object.keys(op as Record<string, unknown>).find((k) =>
+          k.startsWith('$')
+        )
+        throw new Error(`${where}: unknown operator ${JSON.stringify(key)}`)
+      }
+      // $edit is a string surgery — refuse it on an enum/number/ref/bool
+      // column, whose value editOps would otherwise write UNVALIDATED
+      // (normalizeChanges already ran, before the operator was a literal).
+      let type = comps[change.name]?.[col]
+      if (type != 'text' && type != 'body') {
+        throw new Error(`$edit: ${where} is not a wire-writable text column`)
+      }
+      let cur = row?.[col]
+      if (typeof cur != 'string') {
+        throw new Error(`$edit: ${where} has no text value to edit`)
+      }
+      comp[col] = patchText(cur, editHunks(op.$edit), where)
+      was[col] = sha(cur)
+    }
+    return { ...change, comp, was }
+  })
+
 // An actor has one cadence clock: minting its next untargeted wake removes
 // every pending predecessor in the same transaction. A target makes a wake a
 // reminder about that entity, so those stay independent of the cadence and of
@@ -4324,6 +4393,7 @@ export let apply = (
       actor: string | null
       cwd: string | null
     }[]
+    changes = editOps(db, changes)
     changes = replaceWakes(db, changes)
     changes = guardSettings(db, changes)
     changes = dualSpawn(db, changes)

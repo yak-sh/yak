@@ -326,6 +326,25 @@ export let manuals = declare({
     args: [arg('id', id), arg('old', text), arg('new', text, false, false)],
     opts: [flag('--all')],
   },
+  patch: {
+    about:
+      'surgical multi-prop edit in Codex V4A format, refusing a stale write',
+    examples: [
+      'task patch @change.patch',
+      'task patch @- < change.patch',
+    ],
+    detail: "Codex's own apply_patch format, addressing GRAPH props instead " +
+      'of files: each `*** Update Prop: <entity>.<comp>.<column>` section is ' +
+      'a surgical old→new replacement on the current value (the ` `/`-`/`+` ' +
+      'hunk lines reconstruct the replacement). Multiple sections land ' +
+      "atomically, the way file apply_patch spans files. `task edit`'s " +
+      'comp-agnostic, multi-target sibling — same guarded core, Codex ' +
+      'grammar. The patch is a multi-line block, so pass it via `@file` or ' +
+      '`@-` (stdin). Envelope: `*** Begin Patch` … `*** End Patch`.',
+    root: true,
+    args: [arg('patch', text)],
+    opts: [],
+  },
   redact: {
     about: 'forget a doc value from live state and journal history',
     examples: [

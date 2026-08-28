@@ -58,6 +58,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       tree: 'tree <text…> [--dry-run]',
       set: 'set <id> [--body=BODY] [--comment=TEXT]',
       edit: 'edit <id> <old> [new] [--all]',
+      patch: 'patch <patch>',
       redact: 'redact <id> <selector>',
       show:
         'show <id> [--json] [--format=markdown|json] [--quarantined] [--full] [--comments]',

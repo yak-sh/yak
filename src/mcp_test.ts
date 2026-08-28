@@ -727,6 +727,10 @@ let bases: Record<string, Record<string, unknown>> = {
     }],
   },
   doc_edit: { eid: 'T-1', old: 'x', new: 'y' },
+  graph_patch: {
+    patch: '*** Begin Patch\n*** Update Prop: T-1.doc.body\n@@\n-x\n+y\n' +
+      '*** End Patch',
+  },
   ui_state: {},
   card_open: { target: 'T-1' },
   card_move: { id: 'C-1' },
@@ -1695,6 +1699,71 @@ Deno.test('doc_edit: surgical replace, non-unique refusal, stale guard', async (
       let all = await edit({ old: 'a', new: 'b', replace_all: true })
       assertEquals(all.isError, undefined)
       assertEquals(body(), 'b b')
+    })
+  } finally {
+    g.db.close()
+  }
+})
+
+// graph_patch is Codex's V4A door onto the same shared patch core: multiple
+// prop-addressed sections in one call, resolved by human id, landed atomically
+// and refused (not clobbered) when a hunk doesn't match.
+Deno.test('graph_patch: multi-prop V4A across two entities, resolved by id', async () => {
+  let g = graph()
+  let A = '61000000-0000-4000-8000-000000000001'
+  let B = '61000000-0000-4000-8000-000000000002'
+  let val = (eid: string, name: string, col: string) =>
+    rows(snapshot(g.db)).find((r) => r.eid == eid)
+      ?.comps[name as 'doc']?.[col as 'body']
+  try {
+    await protocol(g.io, async (client) => {
+      apply(g.db, [
+        { eid: A, name: 'entity', comp: { eid: A, num: 71 } },
+        {
+          eid: A,
+          name: 'doc',
+          comp: { title: 'A', body: 'the old line\nkeep' },
+        },
+        { eid: A, name: 'task', comp: { status: 'open' } },
+        { eid: B, name: 'entity', comp: { eid: B, num: 72 } },
+        { eid: B, name: 'doc', comp: { title: 'B', body: 'B' } },
+        { eid: B, name: 'project', comp: { color: 'red' } },
+      ])
+      let patch = (body: string) =>
+        client.callTool({ name: 'graph_patch', arguments: { patch: body } })
+
+      // Two sections addressing different comps land together; each resolves
+      // its entity by id (uuid here), and the receipt speaks the human id.
+      let ok = await patch(
+        `*** Begin Patch
+*** Update Prop: ${A}.doc.body
+@@
+-the old line
++the new line
+ keep
+*** Update Prop: ${B}.project.color
+@@
+-red
++blue
+*** End Patch`,
+      )
+      assertEquals(ok.isError, undefined)
+      assertMatch(said(ok), /patched T-\d+\.doc\.body, P-\d+\.project\.color/)
+      assertEquals(val(A, 'doc', 'body'), 'the new line\nkeep')
+      assertEquals(val(B, 'project', 'color'), 'blue')
+
+      // A hunk that doesn't match is refused cleanly, touching nothing.
+      let bad = await patch(
+        `*** Begin Patch
+*** Update Prop: ${A}.doc.body
+@@
+-absent line
++x
+*** End Patch`,
+      )
+      assertEquals(bad.isError, true)
+      assertMatch(said(bad), /not found/)
+      assertEquals(val(A, 'doc', 'body'), 'the new line\nkeep') // untouched
     })
   } finally {
     g.db.close()
