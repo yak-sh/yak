@@ -6058,6 +6058,53 @@ let redactionRows = (
   ).all(encoded) as RedactionJournal[]
 }
 
+// Garbage-collect unreferenced content-addressed text (D-18862/D-18864). A
+// blob's in-db text backend (blob_text) holds the canonical bytes doc.body and
+// text attachments share by content hash; forgetting a doc body repoints it at a
+// clean blob, which can strand the old content with no live referrer. This
+// collects the VALUE — the blob_text row — only when NOTHING needs it: no
+// doc.body points at the blob, no attachment.blob does, and it is not itself an
+// image facet sharing the sha. A referenced (shared) value is never touched, so
+// a body two docs hold survives forgetting one. The blob entity's byte-count
+// shell stays (it carries no content and, being content-addressed, no num), so
+// a later identical write re-lands the text through textBlob's insert-or-ignore
+// and structural dedup is preserved — forgetting removes what was written, it
+// does not blacklist the string.
+//
+// CONCURRENCY: the caller runs this inside a `begin immediate` transaction, and
+// SQLite serializes writers, so the referrer test and the delete are ONE atomic
+// step against every other write. A value that becomes referenced mid-collection
+// cannot be dropped: a writer that referenced it already committed BEFORE this
+// transaction (its doc.body row is visible, so the referrer test keeps the
+// value), or it blocks on the write lock until AFTER this commits (it then
+// reconstructs blob_text through textBlob's insert-or-ignore, restoring the row
+// this collection removed). Either order is safe; there is no window in which a
+// referrer exists that this transaction cannot see.
+//
+// `only` scopes the sweep to specific blob eids — redaction passes the old body's
+// hash so the cost is O(candidates), not a full blob_text scan. Absent, it sweeps
+// every orphaned text value. Returns the eids whose content it collected.
+export let collectBlobText = (
+  db: DatabaseSync,
+  only?: string[],
+): string[] => {
+  let scope = only?.length
+    ? `and o.eid in (${only.map(() => '?').join(', ')})`
+    : ''
+  let orphans = prep(
+    db,
+    `select o.eid as eid, bt.entity as id
+       from blob_text bt join entity o on o.id = bt.entity
+      where not exists (select 1 from doc where body = bt.entity)
+        and not exists (select 1 from attachment where blob = bt.entity)
+        and not exists (select 1 from image where entity = bt.entity)
+        ${scope}`,
+  ).all(...(only ?? [])) as { eid: string; id: number }[]
+  let del = prep(db, 'delete from blob_text where entity = ?')
+  for (let o of orphans) del.run(o.id)
+  return orphans.map((o) => o.eid)
+}
+
 // Forget one doc value everywhere the graph's write record carried it. This is
 // deliberately NOT apply(): changing live state, old journal rows, the derived
 // vector and the audit must be one transaction, and the ordinary write path is
@@ -6180,6 +6227,12 @@ export let redact = (
         if (column == 'body') {
           prep(db, 'update doc set body = ? where entity = ?')
             .run(textBlob(db, clean), targetId)
+          // Repointing doc.body at the clean blob can strand the old content in
+          // its content-addressed backend (D-18862): the doc's UPDATE trigger has
+          // just repaired FTS/gram off the still-present old blob_text, so collect
+          // it now — but only if no other doc or attachment shares that value.
+          // Same transaction, so the referrer test sees this doc already moved.
+          collectBlobText(db, [sha(old)])
         } else {
           prep(db, 'update doc set title = ? where entity = ?')
             .run(clean, targetId)
@@ -6240,6 +6293,16 @@ export let redact = (
       name: 'created',
       comp: readComp(db, audit, 'created')!,
     }
+    // This forward transaction IS the cursor invalidation (D-18864): the sanitized
+    // docChange advances cursorOf, so every returning client's since-delta and
+    // every live socket's cast carries the [redacted] value over the one it held —
+    // the same append-forward path any write travels. (The durable epoch is NOT
+    // rotated: it is the graph's lineage identity, read per-connection and cached
+    // at boot, so a mid-run bump would reach the writer connection but never the
+    // per-worker read connections that serve /ws handshakes — it would silently
+    // no-op in the file-backed config while forcing a full resnapshot only under
+    // :memory:. The forward change reaches every connection through the journal
+    // feed, which is why it is the right lever for a content correction.)
     let logged: Change[] = [
       ...(docChange ? [docChange] : []),
       redaction,
