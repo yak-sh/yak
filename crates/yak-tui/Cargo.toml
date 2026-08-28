@@ -24,6 +24,9 @@ yak-kernel = { version = "0.1.1", path = "../yak-kernel", default-features = fal
     "bundled",
 ] }
 serde_json = { version = "1", features = ["preserve_order"] }
+# A fork mints a new session entity; clients mint eids (uuid v4) — the same
+# door the kernel uses for its own spines.
+uuid = { version = "1", features = ["v4"] }
 # ratatui 0.29 pins crossterm 0.28.1; the direct crossterm dep matches its
 # backend's event types (a second crossterm major would split the Event type).
 ratatui = "0.29"

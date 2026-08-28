@@ -266,6 +266,9 @@ pub(crate) fn baked() -> Vocab {
         ("stop_request".into(), vec![
             ("target".into(), PropType::Eid("session".into())),
         ]),
+        ("fork".into(), vec![
+            ("from".into(), PropType::Eid("entry".into())),
+        ]),
         ("knock".into(), vec![
             ("target".into(), PropType::Eid("entity".into())),
         ]),
@@ -634,6 +637,7 @@ pub(crate) fn baked() -> Vocab {
         ("chat".into(), "actor".into(), "detach".into()),
         ("chat".into(), "target".into(), "detach".into()),
         ("stop_request".into(), "target".into(), "cascade".into()),
+        ("fork".into(), "from".into(), "detach".into()),
         ("knock".into(), "target".into(), "cascade".into()),
         ("wake".into(), "target".into(), "cascade".into()),
         ("dream".into(), "scope".into(), "cascade".into()),

@@ -499,6 +499,7 @@ let contracts = [
   contract('session', 'role', 'role', { id: 'role-session' }),
   contract('session', 'parent', 'session', { id: 'child-session' }),
   contract('entry', 'session', 'session'),
+  contract('fork', 'from', 'entry'),
   contract(
     'generation',
     'through',

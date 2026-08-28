@@ -301,6 +301,12 @@ let sessionTwin = (owners: string[]) =>
   owners.some((name) => sessionFacets.has(name)) &&
   owners.every((name) => name == 'session' || sessionFacets.has(name))
 
+// Component columns that never claim their BARE prop spelling — an established
+// bare filter of a different concept already owns it, so the newcomer is
+// reached only through its component (`.fork.from`). `fork.from` (the fork-
+// point entry) yields bare `.from` to the shipped `mail.from` sender filter.
+let bareShy = new Set(['fork.from'])
+
 // These associations already had one bare filter across several suffixed
 // columns. Keep that reading after the columns take their canonical names;
 // other collisions (`by`, `at`) remain explicit as before.
@@ -339,6 +345,16 @@ export let route = (prop: string): { comp: string; prop: string } => {
       // Bare graph props keep their shipped meanings; log predicates say
       // `.response.status`, `.content.body`, `.generation.provider`, etc.
       .filter((name) => !(name in sessionComps))
+      // A newcomer that shares a name with an ESTABLISHED bare filter of a
+      // different concept never steals the bare spelling — it is reached
+      // qualified by its component. `fork.from` (the fork-point entry ref, a
+      // session facet) shares `from` with the shipped `.from` = `mail.from`
+      // sender filter (query.ts:659, `task inbox .from=…`); the writable-vs-
+      // stamped rule below would silently repoint bare `.from` onto the fork
+      // ref, so bare `.from` keeps meaning mail's sender and `.fork.from`
+      // reaches the fork — the same "bare keeps its shipped meaning, qualified
+      // reaches the newcomer" split parent/child already use.
+      .filter((name) => !bareShy.has(`${name}.${p}`))
   let own = hits(prop)
   // A stamped lifecycle field may share a name with an established writable
   // filter (`session.status` and `task.status`). Qualified reads reach both;

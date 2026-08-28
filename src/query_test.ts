@@ -1486,6 +1486,23 @@ Deno.test('resolution: an empty answer names the routing it actually used', () =
   assertEquals(resolution(ps('.order=hot'), 'task'), '')
 })
 
+// fork.from (the fork-point entry, a session facet) shares `from` with the
+// shipped `.from` = mail.from sender filter. The newcomer never steals the
+// bare spelling: bare `.from` stays mail's sender, and the fork is reached
+// qualified as `.fork.from`.
+Deno.test('fork.from yields the bare .from spelling to mail.from', () => {
+  let ps = (q: string) => parseQuery(q)
+  assertEquals(ps('.from=jeff@yak.sh')[0], {
+    comp: 'mail',
+    prop: 'from',
+    op: '',
+    value: 'jeff@yak.sh',
+  })
+  let qualified = ps('.fork.from=E-9')[0]
+  assertEquals(qualified.comp, 'fork')
+  assertEquals(qualified.prop, 'from')
+})
+
 // The `updated` row is stamped by a LATER write, so an entity made and never
 // touched since carries `created` and no `updated` at all — 1,656 of the live
 // graph's 10,767 entities. Every one was invisible to `.updated.at>=…`,

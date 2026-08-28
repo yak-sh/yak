@@ -823,6 +823,10 @@ pub static SCHEMA: &[SchemaOp] = &[
     "start" real,
     "end" real
   );"#),
+    SchemaOp::Exec(r#"create table if not exists "fork" (
+    entity integer primary key references entity(id),
+    "from" integer references entity(id)
+  );"#),
     SchemaOp::AddColumn { table: "project", col: "color", sql: r#"alter table project add column "color" text"# },
     SchemaOp::AddColumn { table: "venture", col: "phase", sql: r#"alter table venture add column "phase" text"# },
     SchemaOp::AddColumn { table: "venture", col: "paused_from", sql: r#"alter table venture add column "paused_from" text"# },
@@ -882,6 +886,7 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "anchor", col: "hunk", sql: r#"alter table anchor add column "hunk" text"# },
     SchemaOp::AddColumn { table: "anchor", col: "start", sql: r#"alter table anchor add column "start" real"# },
     SchemaOp::AddColumn { table: "anchor", col: "end", sql: r#"alter table anchor add column "end" real"# },
+    SchemaOp::AddColumn { table: "fork", col: "from", sql: r#"alter table fork add column "from" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "task", col: "project", sql: r#"alter table task add column project integer references entity(id)"# },
     SchemaOp::AddColumn { table: "task", col: "assignee", sql: r#"alter table task add column assignee integer references entity(id)"# },
     SchemaOp::AddColumn { table: "task", col: "domain", sql: r#"alter table task add column domain text"# },
@@ -971,6 +976,7 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::Exec(r#"create index if not exists chat_actor on "chat" ("actor");"#),
     SchemaOp::Exec(r#"create index if not exists chat_target on "chat" ("target");"#),
     SchemaOp::Exec(r#"create index if not exists stop_request_target on "stop_request" ("target");"#),
+    SchemaOp::Exec(r#"create index if not exists fork_from on "fork" ("from");"#),
     SchemaOp::Exec(r#"create index if not exists knock_target on "knock" ("target");"#),
     SchemaOp::Exec(r#"create index if not exists wake_target on "wake" ("target");"#),
     SchemaOp::Exec(r#"create index if not exists dream_scope on "dream" ("scope");"#),

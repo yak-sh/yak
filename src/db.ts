@@ -928,6 +928,12 @@ export let derived = [
   // number columns, an entity-keyed spine, no FK — wholly PropType-
   // expressible, so it derives.
   'anchor',
+  // The session-level fork facet (D-23845 §v0.1, D-23985): one nullable {eid}
+  // reference to the fork-point entry (death 'detach'), an entity-keyed spine,
+  // no NOT NULL/default/CHECK — wholly PropType-expressible, so it derives. The
+  // derived DDL quotes the reserved "from" column name and plants the auto index
+  // on the reference for the shared-prefix walk.
+  'fork',
 ]
 
 // Insert a bare entity spine — the eid, and nothing else. num is NOT minted

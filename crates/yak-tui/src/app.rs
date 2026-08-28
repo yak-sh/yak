@@ -12,7 +12,8 @@
 
 use std::collections::HashMap;
 
-use yak_kernel::store::{collect, Sel};
+use serde_json::{Map, Value};
+use yak_kernel::store::{collect, one, Sel};
 use yak_kernel::{
     apply, data_version, default_gates, vocab, ApplyOpts, Change, Feed, Gate, Row, Store,
     WriteStore,
@@ -42,24 +43,27 @@ pub struct SessionInfo {
     pub actor: String, // actor eid
 }
 
-// One rendered log entry: its seq, role, and (control-scrubbed) body.
+// One rendered log entry: its own eid (the fork point a fork forks at), seq,
+// role, and (control-scrubbed) body, plus which session it belongs to and
+// whether it is INHERITED — a shared-prefix line walked from a fork ancestor,
+// rendered by reference (never copied into the fork's own entry rows).
 pub struct EntryLine {
+    pub eid: String,
     pub seq: i64,
     pub role: String,
     pub body: String,
+    pub source: String, // the owning session's S-id (for the shared-prefix label)
+    pub inherited: bool,
 }
 
 pub struct App {
     pub db: String,
     store: Store,
     // The read/write split yak-bridge uses: a read-only Store for the Graph
-    // projection and the journal feed, a READ_WRITE WriteStore kept ready for
-    // the fork write. apply()'s own `begin immediate` is the concurrency
-    // discipline, so this holds no long lock. Wired but not yet called — the
-    // fork primitive lands on `apply_write` next (T-23975's successor).
-    #[allow(dead_code)]
+    // projection and the journal feed, a READ_WRITE WriteStore for the fork
+    // write. apply()'s own `begin immediate` is the concurrency discipline, so
+    // this holds no long lock. `f` in the session view drives it via apply_write.
     write: WriteStore,
-    #[allow(dead_code)]
     gates: Vec<Box<dyn Gate>>,
 
     // bulk graph shape
@@ -69,14 +73,20 @@ pub struct App {
     by_project: HashMap<String, Vec<usize>>,
     actor_name: HashMap<String, String>,
 
-    // the open session's entries
+    // the open session's entries (a forked session's is the walked shared prefix
+    // followed by its own entries), and — when the open session is a fork — a
+    // one-line origin: "S-parent @ #seq".
     entries: Vec<EntryLine>,
+    fork_origin: Option<String>,
 
     // navigation
     pub view: View,
     pub sel: usize,
     stack: Vec<(View, usize)>, // descend history: view + the sel to restore
     pub quit: bool,
+    // The last action's outcome, shown in the footer until the next keystroke
+    // moves on — a fork's confirmation, or a durable-enough reason it refused.
+    pub flash: Option<String>,
 
     // liveness
     feed: Feed,
@@ -125,10 +135,12 @@ impl App {
             by_project: HashMap::new(),
             actor_name: HashMap::new(),
             entries: vec![],
+            fork_origin: None,
             view: View::Projects,
             sel: 0,
             stack: vec![],
             quit: false,
+            flash: None,
             feed,
             last_version,
             live_events: 0,
@@ -268,23 +280,110 @@ impl App {
         best.map(|(e, _)| e.to_string())
     }
 
-    // Load a session's entries in seq order — one indexed query over
-    // entry(session, seq), joining content/message. Bodies are scrubbed at the
-    // boundary before they ever reach a Span.
+    // Build the open session's FULL transcript. An unforked session is just its
+    // own entries in seq order. A forked session's transcript is its shared
+    // prefix — the parent's entries up to the fork point — followed by its own,
+    // the prefix walked BY REFERENCE (fork.from up the chain, fork-of-fork and
+    // all) and never copied. Each ancestor contributes only its entries up to
+    // the seq its child forked at; the fork itself contributes all of its own.
     fn load_entries(&mut self, session_eid: &str) {
-        let sql = "select t.seq, coalesce(m.role, ''), coalesce(c.body, '') \
-                   from entry t \
-                   left join message m on m.entity = t.entity \
-                   left join content c on c.entity = t.entity \
-                   where t.session = (select id from entity where eid = ?1) \
-                   order by t.seq";
-        let rows: Vec<(i64, String, String)> = collect(&self.store.conn, sql, [session_eid], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?))
-        });
-        self.entries = rows
-            .into_iter()
-            .map(|(seq, role, body)| EntryLine { seq, role, body: theme::sane(&body, true) })
-            .collect();
+        self.fork_origin = None;
+        // The ancestry newest-first: (session eid, seq cap inclusive). None cap =
+        // the whole session (the open fork). A cycle or a detached fork point
+        // (from went null) simply stops the walk.
+        let mut chain: Vec<(String, Option<i64>)> = vec![(session_eid.to_string(), None)];
+        let mut cur = session_eid.to_string();
+        for _ in 0..64 {
+            let Some(from) = self.fork_from(&cur) else { break };
+            let Some((parent, seq)) = self.entry_location(&from) else { break };
+            if chain.iter().any(|(e, _)| e == &parent) {
+                break; // never loop on a fork that points into its own line
+            }
+            if self.fork_origin.is_none() {
+                self.fork_origin = Some(format!("{} @ #{}", self.session_label(&parent), seq));
+            }
+            chain.push((parent.clone(), Some(seq)));
+            cur = parent;
+        }
+        // Oldest ancestor first, the open fork last.
+        chain.reverse();
+        let mut out: Vec<EntryLine> = vec![];
+        for (sid, cap) in &chain {
+            let label = self.session_label(sid);
+            let inherited = sid != session_eid;
+            for (eid, seq, role, body) in self.entries_of(sid, *cap) {
+                out.push(EntryLine {
+                    eid,
+                    seq,
+                    role,
+                    body: theme::sane(&body, true),
+                    source: label.clone(),
+                    inherited,
+                });
+            }
+        }
+        self.entries = out;
+    }
+
+    // The fork-point ENTRY this session forked at, if it is a fork (and the
+    // point is still alive — a detached fork.from reads as None).
+    fn fork_from(&self, session_eid: &str) -> Option<String> {
+        self.store
+            .comp_row("fork", session_eid)
+            .and_then(|m| m.get("from").and_then(|v| v.as_str()).map(String::from))
+    }
+
+    // The (session eid, seq) an entry belongs to — one indexed lookup over the
+    // entry spine — or None if the entry is gone.
+    fn entry_location(&self, entry_eid: &str) -> Option<(String, i64)> {
+        one(
+            &self.store.conn,
+            "select o.eid, t.seq from entry t join entity o on o.id = t.session \
+             where t.entity = (select id from entity where eid = ?1)",
+            [entry_eid],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+    }
+
+    // One session's own entries in seq order, optionally capped at a fork
+    // point (seq <= cap) — one indexed query over entry(session, seq).
+    fn entries_of(
+        &self,
+        session_eid: &str,
+        cap: Option<i64>,
+    ) -> Vec<(String, i64, String, String)> {
+        let tail = if cap.is_some() { " and t.seq <= ?2" } else { "" };
+        let sql = format!(
+            "select o.eid, t.seq, coalesce(m.role, ''), coalesce(c.body, '') \
+             from entry t join entity o on o.id = t.entity \
+             left join message m on m.entity = t.entity \
+             left join content c on c.entity = t.entity \
+             where t.session = (select id from entity where eid = ?1){tail} \
+             order by t.seq"
+        );
+        match cap {
+            Some(s) => collect(&self.store.conn, &sql, (session_eid, s), |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            }),
+            None => collect(&self.store.conn, &sql, [session_eid], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            }),
+        }
+    }
+
+    // A session's spoken S-id, from the already-loaded list (an ancestor is
+    // always a session), else a short eid.
+    fn session_label(&self, eid: &str) -> String {
+        self.sessions
+            .iter()
+            .find(|s| s.eid == eid)
+            .map(|s| s.id.clone())
+            .unwrap_or_else(|| eid.chars().take(8).collect())
+    }
+
+    // The open fork's origin line ("S-parent @ #seq"), or None when unforked.
+    pub fn fork_origin(&self) -> Option<&str> {
+        self.fork_origin.as_deref()
     }
 
     // --- liveness ---
@@ -464,13 +563,65 @@ impl App {
         self.clamp();
     }
 
-    // The write seam the fork primitive lands on next: one batch through the
-    // gated kernel apply(), on the READ_WRITE connection. Wired but unexercised
-    // in v0.1 — kept so fork is an additive call here, not a re-plumb.
-    #[allow(dead_code)]
+    // The write seam: one batch through the gated kernel apply() on the
+    // READ_WRITE connection. apply()'s own `begin immediate` queues politely
+    // behind the server's short batches, so this holds no long lock.
     pub fn apply_write(&self, changes: Vec<Change>) -> Result<Vec<Change>, String> {
         let opts = ApplyOpts { writer: Some("yak-tui"), fed: false };
         apply(&self.write, changes, &opts, &self.gates).map_err(|e| e.to_string())
+    }
+
+    // Fork the open session at the SELECTED entry (`f`). Mints a new session
+    // wearing fork{from: <that entry>}, inheriting the parent's cwd/actor so the
+    // fork files under the same project and speaks as the same actor, then
+    // reloads and descends into it. The parent's entries up to the fork point are
+    // the shared prefix BY REFERENCE — no entry row is copied. A coarse,
+    // additive branch: entry{session, seq} is untouched, so nothing else changes.
+    pub fn fork_here(&mut self) -> Result<(), String> {
+        if !matches!(self.view, View::Session(_)) {
+            return Ok(());
+        }
+        let Some(entry) = self.entries.get(self.sel) else { return Ok(()) };
+        let from = entry.eid.clone();
+        let seq = entry.seq;
+        let parent = self.open_session().ok_or("no open session")?;
+        let cwd = parent.cwd.clone();
+        let actor = parent.actor.clone();
+        let plabel = parent.id.clone();
+
+        let new_eid = uuid::Uuid::new_v4().to_string();
+        let mut session = Map::new();
+        // A synthesized, unique handle — the human id stays the minted S-num.
+        session.insert("id".into(), Value::from(format!("fork:{new_eid}")));
+        if !cwd.is_empty() {
+            session.insert("cwd".into(), Value::from(cwd));
+        }
+        if !actor.is_empty() {
+            session.insert("actor".into(), Value::from(actor));
+        }
+        session.insert("source".into(), Value::from("fork"));
+        let mut doc = Map::new();
+        doc.insert("title".into(), Value::from(format!("fork of {plabel} @ #{seq}")));
+        let mut fork = Map::new();
+        fork.insert("from".into(), Value::from(from));
+
+        self.apply_write(vec![
+            Change::new(&new_eid, "session", Some(session)),
+            Change::new(&new_eid, "doc", Some(doc)),
+            Change::new(&new_eid, "fork", Some(fork)),
+        ])?;
+
+        // Surface the fresh session, then descend into it — its transcript is the
+        // walked shared prefix followed by (as yet) no entries of its own.
+        self.reload();
+        let here = self.view.clone();
+        self.stack.push((here, self.sel));
+        self.load_entries(&new_eid);
+        let label = self.session_label(&new_eid);
+        self.view = View::Session(new_eid);
+        self.sel = 0;
+        self.flash = Some(format!("forked {plabel} @ #{seq} → {label}"));
+        Ok(())
     }
 
     pub fn counts(&self) -> (usize, usize) {

@@ -165,6 +165,15 @@
         }
       }
     },
+    "fork": {
+      "rank": 631,
+      "cols": {
+        "from": {
+          "eid": "entry",
+          "death": "detach"
+        }
+      }
+    },
     "generation": {
       "rank": 330,
       "stamped_rank": 300,

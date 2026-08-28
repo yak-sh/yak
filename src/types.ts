@@ -403,6 +403,9 @@ export let comps: Record<string, Record<string, PropType>> = {
   stop_request: {
     target: { eid: 'session', death: 'cascade' },
   },
+  fork: {
+    from: { eid: 'entry', death: 'detach' },
+  },
   knock: {
     target: { eid: 'entity', death: 'cascade' },
   },

@@ -450,3 +450,18 @@ struct StopRequest {
     #[col(eid = "session", death = "cascade")]
     target: Ref,
 }
+
+// A branching session (D-23845 §v0.1, D-23985): a fork carries `from`, the
+// fork-point ENTRY it forked at. The parent session's entries up to that point
+// are the shared prefix, read back BY REFERENCE (never copied) — a reader walks
+// `from` up for the shared history, then the fork's own entry rows. This is the
+// coarse, additive session-level primitive: `entry{session, seq}` is untouched
+// and stays the linear fallback, so unforked sessions render unchanged.
+// Death: detach — deleting the source entry frees the fork (from goes null),
+// never nukes it. Rank 631 keeps it beside stop_request in the sessions block.
+#[derive(Comp)]
+#[comp(plugin = "sessions", rank = 631)]
+struct Fork {
+    #[col(eid = "entry", death = "detach")]
+    from: Ref,
+}

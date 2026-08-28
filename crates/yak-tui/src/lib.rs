@@ -116,6 +116,8 @@ fn event_loop(term: &mut Term, mut app: App) -> io::Result<()> {
 // The vim vocabulary the TS TUI teaches (keybindings.ts tuiKeys): j/k browse,
 // l/Enter enter, h/Ctrl-D back, q/Ctrl-C quit — so muscle memory carries over.
 fn on_key(app: &mut App, code: KeyCode, mods: KeyModifiers) {
+    // A flash lives until the next keystroke moves on.
+    app.flash = None;
     let ctrl = |c: char| mods.contains(KeyModifiers::CONTROL) && code == KeyCode::Char(c);
     if ctrl('c') {
         app.quit = true;
@@ -134,6 +136,14 @@ fn on_key(app: &mut App, code: KeyCode, mods: KeyModifiers) {
         KeyCode::Char('g') | KeyCode::Home => app.top(),
         KeyCode::Char('G') | KeyCode::End => app.bottom(),
         KeyCode::Char('r') => app.refresh(),
+        // Fork the open session at the selected entry — a new session sharing
+        // the prefix up to here, navigated straight into. A refusal is durable
+        // in the footer rather than lost.
+        KeyCode::Char('f') => {
+            if let Err(e) = app.fork_here() {
+                app.flash = Some(format!("fork refused: {e}"));
+            }
+        }
         _ => {}
     }
 }

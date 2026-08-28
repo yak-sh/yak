@@ -1922,6 +1922,7 @@ dependencies = [
  "crossterm",
  "ratatui",
  "serde_json",
+ "uuid",
  "yak-kernel",
 ]
 

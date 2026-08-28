@@ -116,6 +116,8 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'session.parent',
       'session.requested_task',
       'session.persona',
+      // a fork lets go of its fork-point entry rather than dying with it
+      'fork.from',
       'spawn.persona',
       'role.scope',
       'role.checkout',

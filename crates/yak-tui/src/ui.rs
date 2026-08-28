@@ -165,7 +165,17 @@ fn session_head(f: &mut Frame, area: Rect, app: &App) {
             label("entries "),
             val(s.entries.to_string()),
         ]),
-        Line::from(vec![Span::raw(" "), label("cwd "), val(theme::sane(&s.cwd, false))]),
+        match app.fork_origin() {
+            // A forked session shows its origin: where it branched from.
+            Some(origin) => Line::from(vec![
+                Span::raw(" "),
+                Span::styled("⑂ forked from ", Style::default().fg(theme::YELLOW)),
+                Span::styled(origin.to_string(), Style::default().fg(theme::AQUA)),
+            ]),
+            None => {
+                Line::from(vec![Span::raw(" "), label("cwd "), val(theme::sane(&s.cwd, false))])
+            }
+        },
     ];
     f.render_widget(Paragraph::new(lines).style(Style::default().bg(theme::BG)), area);
 }
@@ -181,11 +191,22 @@ fn entries(f: &mut Frame, area: Rect, app: &App) {
         .iter()
         .map(|e| {
             let role = if e.role.is_empty() { "·" } else { &e.role };
-            let mut lines = vec![Line::from(vec![
+            let mut head = vec![
                 Span::raw(" "),
                 Span::styled(format!("#{} ", e.seq), Style::default().fg(theme::GREY)),
                 Span::styled(role.to_string(), Style::default().fg(theme::role_color(&e.role))),
-            ])];
+            ];
+            // A shared-prefix line names the session it is inherited from — the
+            // prefix is rendered by reference, so its provenance stays visible.
+            if e.inherited {
+                head.push(Span::styled(
+                    format!("  ↖ {}", e.source),
+                    Style::default().fg(theme::GREY),
+                ));
+            }
+            let mut lines = vec![Line::from(head)];
+            // Dim the shared prefix so the fork's OWN turns read as the foreground.
+            let body_fg = if e.inherited { theme::GREY } else { theme::BODY };
             let wrapped = wrap(&e.body, width, cap);
             for (i, w) in wrapped.iter().enumerate() {
                 let last = i + 1 == wrapped.len();
@@ -194,7 +215,7 @@ fn entries(f: &mut Frame, area: Rect, app: &App) {
                 } else {
                     format!("   {w}")
                 };
-                lines.push(Line::from(Span::styled(text, Style::default().fg(theme::BODY))));
+                lines.push(Line::from(Span::styled(text, Style::default().fg(body_fg))));
             }
             ListItem::new(lines)
         })
@@ -247,14 +268,22 @@ fn footer(f: &mut Frame, area: Rect, app: &App) {
         sep(),
         key("g/G"),
         hint("ends"),
-        sep(),
-        key("q"),
-        hint("quit"),
     ];
-    let (note, color) = if app.live_events > 0 {
-        (format!("live · {} events", app.live_events), theme::AQUA)
-    } else {
-        ("live · watching".to_string(), theme::AQUA)
+    // Fork is only offered where it can act — inside a session, on an entry.
+    if matches!(app.view, View::Session(_)) {
+        spans.push(sep());
+        spans.push(key("f"));
+        spans.push(hint("fork"));
+    }
+    spans.push(sep());
+    spans.push(key("q"));
+    spans.push(hint("quit"));
+    // A flash (a fork's confirmation or refusal) takes the right slot; else the
+    // live-tail note sits there.
+    let (note, color) = match &app.flash {
+        Some(msg) => (msg.clone(), theme::YELLOW),
+        None if app.live_events > 0 => (format!("live · {} events", app.live_events), theme::AQUA),
+        None => ("live · watching".to_string(), theme::AQUA),
     };
     let left: usize = spans.iter().map(|s| s.content.chars().count()).sum();
     let pad = (area.width as usize).saturating_sub(left + note.chars().count() + 1);
