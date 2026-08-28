@@ -4701,6 +4701,31 @@ export let apply = (
           )
         }
       }
+      // A comment's identity is CREATED, never reused. The wire is
+      // patch-by-design (M-17872), so a client that reuses an eid for a SECOND
+      // comment silently DISPLACES the first: the doc.body change (processed
+      // just before this one) patches over the live comment, and the earlier
+      // note is lost with no trace (T-23428 — two sequential comments collided
+      // on one eid). No legit path re-asserts comment-hood on an entity that
+      // already wears it: editing a body sends `doc` alone, never the `comment`
+      // component again. So a `comment` component landing on an entity that is
+      // ALREADY a comment is identity reuse — bounce the whole batch loudly, the
+      // way a taken claim or alias does, rolling back the displacing doc write
+      // with it, for every entry path (CLI, MCP, raw graph_apply, deno eval).
+      if (name == 'comment' && comp) {
+        if (
+          prep(
+            db,
+            `select 1 from comment
+             where entity = (select id from entity where eid = ?)`,
+          ).get(eid)
+        ) {
+          throw new Error(
+            `${human(db, eid)} is already a comment — mint a fresh id ` +
+              `(comment identity reuse would displace the existing one)`,
+          )
+        }
+      }
       if (comp == null) {
         if (name != 'entity') {
           if (

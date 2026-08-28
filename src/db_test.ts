@@ -608,6 +608,69 @@ Deno.test('review: a comment carries one canonical verdict', () => {
   )
 })
 
+// The write boundary must never let two comments collide on one identity
+// (T-23428). The wire is patch-by-design, so a client that reuses an eid for a
+// second comment would silently DISPLACE the first — the doc.body patch lands
+// on the live comment and the earlier note is gone with no trace. apply()
+// refuses a `comment` component on an entity that already wears one, so distinct
+// writes are always distinct durable entities and reuse bounces the whole batch.
+Deno.test('comment: distinct writes are distinct, reuse is refused, edits allowed', () => {
+  let d = fresh()
+  let target = tag(d, 'doc', { title: 'work' })
+  let bodies = () =>
+    d.prepare(
+      `select doc.body as body from comment
+       join doc on doc.entity = comment.entity
+       where comment.target = (select id from entity where eid = ?)`,
+    ).all(target).map((r) => (r as { body: string }).body).sort()
+
+  // Two sequential comment writes on distinct eids: two durable comments.
+  let a = uid(), b = uid()
+  apply(d, [
+    { eid: a, name: 'doc', comp: { title: '', body: 'first' } },
+    { eid: a, name: 'comment', comp: { target } },
+  ])
+  apply(d, [
+    { eid: b, name: 'doc', comp: { title: '', body: 'second' } },
+    { eid: b, name: 'comment', comp: { target } },
+  ])
+  assertNotEquals(a, b)
+  assertEquals(bodies(), ['first', 'second'])
+
+  // Reusing an eid for a NEW comment is refused — and the batch rolls back
+  // whole, so the earlier comment's body is never displaced.
+  assertThrows(
+    () =>
+      apply(d, [
+        { eid: a, name: 'doc', comp: { title: '', body: 'DISPLACES' } },
+        { eid: a, name: 'comment', comp: { target } },
+      ]),
+    Error,
+    'already a comment',
+  )
+  assertEquals(bodies(), ['first', 'second'])
+
+  // Two comments sharing one eid WITHIN a single batch is the same reuse.
+  let c = uid()
+  assertThrows(
+    () =>
+      apply(d, [
+        { eid: c, name: 'doc', comp: { title: '', body: 'one' } },
+        { eid: c, name: 'comment', comp: { target } },
+        { eid: c, name: 'doc', comp: { title: '', body: 'two' } },
+        { eid: c, name: 'comment', comp: { target } },
+      ]),
+    Error,
+    'already a comment',
+  )
+
+  // A legitimate body edit is a doc-only patch — it never re-asserts
+  // comment-hood, so the guard leaves it untouched.
+  apply(d, [{ eid: a, name: 'doc', comp: { body: 'edited' } }])
+  assertEquals(bodies(), ['edited', 'second'])
+  d.close()
+})
+
 // refsOf reads each column's PropType, not its name: a reference wearing no
 // A reference with any name (deliver.to, created.by, project) is walked, so
 // graph-out backlinks can't skip a whole class of edge.
