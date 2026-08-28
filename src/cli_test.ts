@@ -650,39 +650,92 @@ slow('task comment help teaches verdict-bearing comments', async () => {
 })
 
 Deno.test('task claude scopes operator capability and strips its local flag', () => {
-  let launch = claudeLaunch(
-    ['--model', 'claude-opus-4-8', '--operator', '--continue'],
-    true,
-    42,
-  )
-  assertEquals(launch, {
-    args: [
-      '--dangerously-skip-permissions',
-      '--settings',
-      claudeHookSettings(),
-      '--channels',
-      'plugin:tasks@tasks-fleet',
-      '--model',
-      'claude-opus-4-8',
-      '--continue',
-    ],
-    env: {
-      TASKS_OPERATOR: '42',
+  // A cwd with no operator persona file: the launch wears none, so the args
+  // are exactly the scoped passthrough — deterministic regardless of the box.
+  let cwd = Deno.makeTempDirSync()
+  try {
+    let launch = claudeLaunch(
+      ['--model', 'claude-opus-4-8', '--operator', '--continue'],
+      true,
+      42,
+      cwd,
+    )
+    assertEquals(launch, {
+      args: [
+        '--dangerously-skip-permissions',
+        '--settings',
+        claudeHookSettings(cwd),
+        '--channels',
+        'plugin:tasks@tasks-fleet',
+        '--model',
+        'claude-opus-4-8',
+        '--continue',
+      ],
+      env: {
+        TASKS_OPERATOR: '42',
+        TASKS_TASK: '',
+        CLAUDE_CODE_CHILD_SESSION: '',
+      },
+    })
+
+    let ordinary = claudeLaunch(['--continue'], true, 42, cwd)
+    assertEquals(ordinary.env, {
+      TASKS_OPERATOR: '',
       TASKS_TASK: '',
       CLAUDE_CODE_CHILD_SESSION: '',
-    },
-  })
+    })
+    assertEquals(
+      claudeLaunch(['--', '--operator'], true, 42, cwd).args.slice(-2),
+      ['--', '--operator'],
+    )
+  } finally {
+    Deno.removeSync(cwd, { recursive: true })
+  }
+})
 
-  let ordinary = claudeLaunch(['--continue'], true, 42)
-  assertEquals(ordinary.env, {
-    TASKS_OPERATOR: '',
-    TASKS_TASK: '',
-    CLAUDE_CODE_CHILD_SESSION: '',
-  })
-  assertEquals(
-    claudeLaunch(['--', '--operator'], true, 42).args.slice(-2),
-    ['--', '--operator'],
-  )
+// --operator wears the repo's operator persona through claude's native
+// `--agent`, resolved off the `.claude/agents/operator.md` symlink. The agent
+// name is the symlink TARGET's basename (its frontmatter name = slug), never
+// the link name — an operator.md → taskmaster.md file launches `--agent
+// taskmaster`. An ordinary (non-operator) launch wears none; a caller's own
+// --agent is never doubled; a pre-frontmatter file is skipped, not broken.
+Deno.test('task claude --operator wears the operator persona via --agent', () => {
+  let cwd = Deno.makeTempDirSync()
+  try {
+    Deno.mkdirSync(`${cwd}/.claude/agents`, { recursive: true })
+    Deno.mkdirSync(`${cwd}/.tasks/personas`, { recursive: true })
+    let target = `${cwd}/.tasks/personas/taskmaster.md`
+    Deno.writeTextFileSync(
+      target,
+      '---\nname: taskmaster\ndescription: "TaskMaster"\n---\n<!-- GENERATED -->\n\nYou run the graph.',
+    )
+    Deno.symlinkSync(
+      '../../.tasks/personas/taskmaster.md',
+      `${cwd}/.claude/agents/operator.md`,
+    )
+
+    // operator → --agent taskmaster (the resolved basename), ahead of passthrough
+    assertEquals(
+      claudeLaunch(['--operator', '--continue'], true, 42, cwd).args.slice(-3),
+      ['--agent', 'taskmaster', '--continue'],
+    )
+    // no --operator → no persona, even with the file present
+    let ordinary = claudeLaunch(['--continue'], true, 42, cwd).args
+    assert(!ordinary.includes('--agent'))
+    // caller's own --agent stands; we never wear a second over it
+    assertEquals(
+      claudeLaunch(['--operator', '--agent', 'mine'], true, 42, cwd).args
+        .filter((a) => a == '--agent' || a == 'mine' || a == 'taskmaster'),
+      ['--agent', 'mine'],
+    )
+    // a pre-frontmatter projection is skipped, never handed to --agent
+    Deno.writeTextFileSync(target, '<!-- GENERATED -->\n\nno frontmatter here')
+    assert(
+      !claudeLaunch(['--operator'], true, 42, cwd).args.includes('--agent'),
+    )
+  } finally {
+    Deno.removeSync(cwd, { recursive: true })
+  }
 })
 
 Deno.test('task codex scopes operator capability and strips its local flag', () => {

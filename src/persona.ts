@@ -25,7 +25,7 @@ import { entityUrl } from './url.ts'
 // adapters.ts provider rows declare their dialect + target filenames,
 // and sync renders one persona into N provider files.
 export type Dialect = {
-  header: (id: string, title: string) => string
+  header: (id: string, title: string, name: string) => string
   rule: string
   index: string
 }
@@ -39,6 +39,37 @@ next sync overwrites hand edits. -->`,
   index:
     '## Memory Index\n\n*Recall a body by id (MCP `memory_recall` / CLI `task show`).*',
 }
+
+// The claude AGENT-FILE dialect. `claude --agent <name>` (and every native
+// harness that reads `.claude/agents/<name>.md`) loads a persona as the
+// session's system prompt — but ONLY if the file OPENS with YAML frontmatter
+// carrying `name` and `description`; a file that starts with the HTML banner
+// is silently "not found" (verified against claude 2.1.250). So a specialist
+// persona projection — the file `.claude/agents/<slug>.md` symlinks to — leads
+// with frontmatter, then the same banner as its first body line. `name` is the
+// slug, because claude keys the agent by this frontmatter name, not the
+// filename: an `operator.md` symlink to `taskmaster.md` registers as agent
+// `taskmaster`. codex reads the very same file RAW (model_instructions_file),
+// where the frontmatter is harmless preamble. The description is the persona's
+// one-line doc title, JSON-encoded so any character stays a valid YAML scalar.
+export let AGENT: Dialect = {
+  header: (id, title, name) =>
+    `---\nname: ${name}\ndescription: ${JSON.stringify(title)}\n---\n${
+      DIALECT.header(id, title, name)
+    }`,
+  rule: DIALECT.rule,
+  index: DIALECT.index,
+}
+
+// The claude agent name a persona registers under — its slug, sanitized to
+// claude's charset (lowercase, digits, hyphens), falling back to its lowered
+// id. cli.ts resolves the same name from the operator symlink's realpath, so
+// the two agree without a shared table.
+export let agentName = (p: Row) =>
+  String(p.comps.alias?.slug ?? idOf(p)).toLowerCase().replace(
+    /[^a-z0-9-]+/g,
+    '-',
+  )
 
 // One index line — the memory_recall rendering, tolerant of non-memory
 // targets (any doc can ride the index tier). Warmth ORDERS the index but
@@ -151,7 +182,11 @@ export let materialize = (
     pre = pre.filter((r) => !omit.pre.has(r.eid))
     idx = idx.filter((r) => !omit.idx.has(r.eid))
   }
-  let header = d.header(idOf(p), String(p.comps.doc?.title ?? 'persona'))
+  let header = d.header(
+    idOf(p),
+    String(p.comps.doc?.title ?? 'persona'),
+    agentName(p),
+  )
   let parts = [
     header,
     ...pre.flatMap((r) => [
@@ -304,10 +339,12 @@ export let filesFor = (all: Row[], deps: Dep[], now: number) => {
         r.comps.persona?.home == proj.eid && r.eid != base?.eid
       )
     ) {
-      let slug = String(p.comps.alias?.slug ?? idOf(p))
+      // The filename IS the frontmatter name (agentName): claude keys the
+      // agent by the frontmatter, cli.ts resolves the `--agent` value from the
+      // symlink's realpath BASENAME, and the two must never disagree.
       out.push({
-        path: `${root}/personas/${slug}.md`,
-        body: materialize(all, deps, p, now, DIALECT, said),
+        path: `${root}/personas/${agentName(p)}.md`,
+        body: materialize(all, deps, p, now, AGENT, said),
         push,
       })
     }

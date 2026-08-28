@@ -14,6 +14,8 @@ import { projectionSnapshot, type Row, rows } from './client.ts'
 import { fakeGraph } from './graph_fake.ts'
 import {
   adopted,
+  AGENT,
+  agentName,
   commonOf,
   composeWorn,
   deliveredBy,
@@ -353,6 +355,69 @@ Deno.test('materialize: a dialect reframes without touching content', () => {
   assertStringIncludes(md, 'Use the front door.')
   assert(!md.includes('GENERATED'))
   assert(!md.includes('---'))
+})
+
+Deno.test('AGENT dialect: frontmatter first so claude --agent can load it', () => {
+  let spec = row({
+    doc: {
+      title: 'TaskMaster',
+      body: 'describes the persona to graph readers',
+    },
+    persona: { home: null },
+    alias: { slug: 'taskmaster', slugs: null },
+  })
+  let md = materialize(
+    [spec, warm],
+    [edge(spec, 'contains', warm)],
+    spec,
+    NOW,
+    AGENT,
+  )
+  // Opens with a YAML frontmatter block — the very first bytes, name + desc.
+  assert(
+    md.startsWith('---\nname: taskmaster\ndescription: "TaskMaster"\n---\n'),
+  )
+  // The banner still rides, now as the first body line under the frontmatter.
+  assertStringIncludes(md, '<!-- GENERATED from')
+  // A preloaded memory BODY is present — the persona wears its memories.
+  assertStringIncludes(md, 'Use the front door.')
+  // name is the SLUG (claude keys by it), sanitized to its charset.
+  assertEquals(agentName(spec), 'taskmaster')
+  assertEquals(
+    agentName(
+      row({
+        doc: { title: 'x' },
+        alias: { slug: 'Green Eyeshade!', slugs: null },
+      }),
+    ),
+    'green-eyeshade-',
+  )
+})
+
+Deno.test('filesFor: specialist files are agent files, AGENTS.md is not', () => {
+  let proj = row({
+    project: {},
+    doc: { title: 'Tasks' },
+    repo: { path: '/repo' },
+  })
+  let base = row({
+    doc: { title: 'common', body: 'b' },
+    persona: { home: proj.eid },
+  })
+  let spec = row({
+    doc: { title: 'TaskMaster', body: 's' },
+    persona: { home: proj.eid },
+    alias: { slug: 'taskmaster', slugs: null },
+  })
+  let files = filesFor([proj, base, spec], [edge(proj, 'contains', base)], NOW)
+  let agents = files.find((f) =>
+    f.path == '/repo/.tasks/personas/taskmaster.md'
+  )!
+  let common = files.find((f) => f.path == '/repo/.tasks/AGENTS.md')!
+  // The specialist a `.claude/agents/<slug>.md` symlinks to leads with frontmatter.
+  assert(agents.body.startsWith('---\nname: taskmaster\n'))
+  // The common persona (→ CLAUDE.md, native context) keeps the plain banner.
+  assert(common.body.startsWith('<!-- GENERATED'))
 })
 
 Deno.test('indexLine: id, feedback tag, count, confirmed date — never warmth', () => {

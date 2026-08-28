@@ -3185,6 +3185,31 @@ let terminalScope = (got: Got, pid: number) => {
   }
 }
 
+// Whether the caller already spoke claude's `--agent` (either spelling). When
+// they did, their choice stands — we never wear a second persona over it.
+let hasAgentFlag = (args: string[]) =>
+  args.some((a) => a == '--agent' || a.startsWith('--agent='))
+
+// Claude's native persona door: `--agent <name>` loads `.claude/agents/<name>.md`
+// as the session's system prompt. `.claude/agents/operator.md` symlinks to this
+// repo's materialized operator persona; claude keys the agent by that file's
+// frontmatter `name` (its slug), NOT the filename, so we hand it the resolved
+// basename — `operator.md` → `taskmaster.md` becomes `--agent taskmaster`. This
+// is the claude twin of the codex `model_instructions_file` wired below off the
+// same file. Absent, or still the pre-frontmatter projection (which claude would
+// reject as an unknown agent and refuse to start), we wear nothing rather than
+// break the launch — the next persona sync rewrites the file with frontmatter.
+let operatorAgentArgs = (cwd: string): string[] => {
+  try {
+    let real = Deno.realPathSync(`${cwd}/.claude/agents/operator.md`)
+    if (!Deno.readTextFileSync(real).startsWith('---')) return []
+    let name = real.replace(/.*\//, '').replace(/\.md$/, '')
+    return name ? ['--agent', name] : []
+  } catch {
+    return [] // no operator persona here — an ordinary chat wears none
+  }
+}
+
 let claudeLaunchGot = (
   got: Got,
   listed: boolean,
@@ -3200,6 +3225,9 @@ let claudeLaunchGot = (
       '--channels',
       CHANNEL,
       ...(listed ? [] : ['--dangerously-load-development-channels', CHANNEL]),
+      ...(scope.env.TASKS_OPERATOR && !hasAgentFlag(scope.args)
+        ? operatorAgentArgs(cwd)
+        : []),
       ...scope.args,
     ],
     // A nested interactive launch is a new session, never the caller's managed
