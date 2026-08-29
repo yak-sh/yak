@@ -138,9 +138,11 @@ export let launch = async (
   let recorded = record(child.stderr, child.pid)
   // An exit before readiness is a failure.
   let died = child.status.then((status) => {
-    throw new Error(
+    let error = new Error(
       `server pid ${child.pid} exited before ready (code ${status.code})`,
-    )
+    ) as Error & { exitCode: number }
+    error.exitCode = status.code
+    throw error
   })
   // Await one ready beat under a deadline, or the child's death. Sized to
   // measured time with headroom for a loaded box; past it the child is wedged
@@ -334,6 +336,12 @@ let firstBoot = async (): Promise<Deno.ChildProcess> => {
       return watch(await launch())
     } catch (e) {
       console.error('server first boot failed —', (e as Error).message)
+      if ((e as Error & { exitCode?: number }).exitCode == 73) {
+        console.error(
+          'another server owns this graph — supervisor is stepping aside',
+        )
+        Deno.exit(73)
+      }
       if (await peer(port)) {
         console.error(
           `port ${port} already served by another supervisor — stepping aside`,

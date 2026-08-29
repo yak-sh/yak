@@ -91,9 +91,10 @@ slow(
       let js = `Deno.exit(7)`
       let err = await assertRejects(() =>
         launch(Deno.execPath(), ['eval', js, '--'])
-      ) as Error
+      ) as Error & { exitCode?: number }
       assertStringIncludes(err.message, 'exited before ready')
       assertStringIncludes(err.message, 'code 7')
+      assertEquals(err.exitCode, 7)
     })
   },
 )
