@@ -68,6 +68,12 @@ export type ResponseOptions = {
   pause?: (ms: number) => Promise<void>
   id?: () => string
   shape?: (request: ResponseRequest) => Record<string, unknown>
+  // Abort one exchange that makes no progress for this long — the connect that
+  // never returns headers, the headers with no first frame, the mid-stream gap
+  // that never closes. 0 disables. Without it a stalled bus hangs forever: the
+  // managed scheduler renews the lease every half-TTL, so the generation reads
+  // `running` with no error and its claim never frees (T-24135).
+  stallMs?: number
 }
 
 type RunOptions = {
@@ -111,6 +117,38 @@ let sleep = (ms: number) =>
 
 let record = (value: unknown): value is Record<string, unknown> =>
   value != null && typeof value == 'object' && !Array.isArray(value)
+
+// A resettable idle deadline for one provider exchange. It aborts its OWN signal
+// — never the caller's stop — when `ms` passes with no progress, and each frame
+// calls kick() to push the deadline forward. The caller reads stalled() to turn
+// that self-abort into a diagnosable fault instead of a silent hang. A relayed
+// stop aborts too, but leaves stalled() false so the caller keeps its own path.
+let watchdog = (ms: number, stop?: AbortSignal) => {
+  let control = new AbortController()
+  let stalled = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let relay = () => control.abort()
+  let kick = () => {
+    if (!ms || control.signal.aborted) return
+    clearTimeout(timer)
+    timer = setTimeout(() => {
+      stalled = true
+      control.abort()
+    }, ms)
+  }
+  if (stop?.aborted) control.abort()
+  else stop?.addEventListener('abort', relay, { once: true })
+  kick()
+  return {
+    signal: control.signal,
+    kick,
+    stalled: () => stalled,
+    close: () => {
+      clearTimeout(timer)
+      stop?.removeEventListener('abort', relay)
+    },
+  }
+}
 
 // Only named scalar fields cross from the OpenAI dialect into the Tasks
 // observation vocabulary. Completed items take the durable runner path;
@@ -298,13 +336,18 @@ let terminal = async (
   response: Response,
   secrets: string[],
   notify?: (event: ResponseEvent) => void,
+  kick?: () => void,
 ): Promise<ResponseResult> => {
   if (!response.body) throw fault('responses: provider returned no stream')
+  // Headers arrived; reset the deadline for the wait on the first frame, then on
+  // every frame the gap to the next one.
+  kick?.()
   let items: ResponseItem[] = []
   let unknown: ResponseEvent[] = []
   let completed: Record<string, unknown> | undefined
   let ended: ResponseEvent | undefined
   for await (let frame of events(response.body, secrets)) {
+    kick?.()
     notify?.(frame)
     if (!knownEvents.has(frame.type)) unknown.push(frame)
     if (frame.type == 'response.output_item.done') {
@@ -383,6 +426,7 @@ export let responses = (options: ResponseOptions) => {
   let fetcher = options.fetch ?? fetch
   let base = options.base?.replace(/\/$/, '')
   let retries = Math.max(0, options.retries ?? 2)
+  let stallMs = Math.max(0, options.stallMs ?? 0)
   let pause = options.pause ?? sleep
   let id = options.id ?? (() => crypto.randomUUID())
   // Refresh replaces the credential at the HTTP edge, but completed provider
@@ -419,6 +463,11 @@ export let responses = (options: ResponseOptions) => {
       headers.set('x-client-request-id', requestId)
       if (auth.account) headers.set('chatgpt-account-id', auth.account)
 
+      // One deadline spans this whole exchange — the connect, the wait on the
+      // first frame, and every mid-stream gap — each frame pushing it forward.
+      // A trip aborts its own signal (not run.signal), so the throw below is a
+      // named stall the caller can fail on, never a silent hang.
+      let dog = watchdog(stallMs, run.signal)
       let response: Response
       try {
         let endpoint = (base ?? auth.base ?? 'https://api.openai.com/v1')
@@ -427,9 +476,11 @@ export let responses = (options: ResponseOptions) => {
           method: 'POST',
           headers,
           body: JSON.stringify(options.shape?.(value) ?? request(value)),
-          signal: run.signal,
+          signal: dog.signal,
         })
       } catch (error) {
+        dog.close()
+        if (dog.stalled()) throw fault('responses: transport stalled')
         if (run.signal?.aborted || (error as Error)?.name == 'AbortError') {
           throw error
         }
@@ -441,6 +492,7 @@ export let responses = (options: ResponseOptions) => {
         !refreshed &&
         options.credentials.refresh
       ) {
+        dog.close()
         await response.body?.cancel()
         auth = await credentials(
           options.credentials.refresh,
@@ -454,11 +506,13 @@ export let responses = (options: ResponseOptions) => {
         continue
       }
       if (response.status >= 500 && failures < retries) {
+        dog.close()
         await response.body?.cancel()
         await pause(200 * 2 ** failures++)
         continue
       }
       if (!response.ok) {
+        dog.close()
         let body = await response.text()
         let status = response.status
         let { code, reason } = explain(body, secrets)
@@ -467,9 +521,53 @@ export let responses = (options: ResponseOptions) => {
           { status, code, limits: limits(response.headers) },
         )
       }
-      return await terminal(response, secrets, run.event)
+      try {
+        return await terminal(response, secrets, run.event, dog.kick)
+      } catch (error) {
+        if (dog.stalled()) throw fault('responses: stream stalled')
+        throw error
+      } finally {
+        dog.close()
+      }
     }
   }
 
-  return { run }
+  // A connectivity probe distinct from "credentials exist": reach the serving
+  // endpoint and report whether the transport got there at all. Any HTTP answer
+  // — even 401 or 5xx — proves the bus is up; only a network failure or a bounded
+  // timeout (the silent hang `run` guards mid-stream) reads as unreachable. A
+  // readiness gate pairs this with the account's signed-in state so a box whose
+  // bus is down or wedged drops out of the dispatch rotation (T-24135).
+  let reach = async (): Promise<boolean> => {
+    let auth: Credential
+    try {
+      auth = await credentials(
+        options.credentials.get,
+        'responses: credential unavailable',
+        options.authentication == 'optional',
+      )
+    } catch {
+      return false
+    }
+    remember(auth)
+    let headers = new Headers(options.headers)
+    headers.set('accept', 'application/json')
+    if (auth.token) headers.set('authorization', `Bearer ${auth.token}`)
+    if (auth.account) headers.set('chatgpt-account-id', auth.account)
+    let endpoint = (base ?? auth.base ?? 'https://api.openai.com/v1')
+      .replace(/\/$/, '')
+    try {
+      let response = await fetcher(`${endpoint}/models`, {
+        method: 'GET',
+        headers,
+        signal: AbortSignal.timeout(5000),
+      })
+      await response.body?.cancel()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  return { run, reach }
 }

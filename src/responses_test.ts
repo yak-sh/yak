@@ -599,3 +599,104 @@ Deno.test('responses aborts an active stream without retrying', async () => {
   await assertRejects(() => run, DOMException, 'cancelled')
   assertEquals(calls, 1)
 })
+
+let hang = (init?: RequestInit) =>
+  new ReadableStream({
+    start(stream) {
+      stream.enqueue(
+        new TextEncoder().encode('data: {"type":"response.created"}\n\n'),
+      )
+      init?.signal?.addEventListener('abort', () =>
+        stream.error(new DOMException('aborted', 'AbortError')))
+      // and then never another frame — a bus that connected and went silent
+    },
+  })
+
+Deno.test('responses fails a connect that never returns a response', async () => {
+  let client = responses({
+    credentials: auth(),
+    stallMs: 20,
+    fetch: (_input, init) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('aborted', 'AbortError')))
+      }),
+  })
+  let error = await assertRejects(
+    () => client.run({ model: 'm', input: [] }),
+  ) as ResponseFault
+  assertEquals(error.message, 'responses: transport stalled')
+})
+
+Deno.test('responses fails a stream that stalls after connecting', async () => {
+  let client = responses({
+    credentials: auth(),
+    stallMs: 20,
+    fetch: (_input, init) => Promise.resolve(new Response(hang(init))),
+  })
+  let error = await assertRejects(
+    () => client.run({ model: 'm', input: [] }),
+  ) as ResponseFault
+  assertEquals(error.message, 'responses: stream stalled')
+})
+
+Deno.test('reach counts any HTTP answer as connected and names the endpoint', async () => {
+  let seen: { url: string; init?: RequestInit } | undefined
+  let client = responses({
+    credentials: auth(),
+    base: 'https://bus.example/v1',
+    // Even an unauthorized answer proves the bus is up; only a network throw is
+    // unreachable. A wedged bus that never answers is the timeout case below.
+    fetch: (input, init) => {
+      seen = { url: String(input), init }
+      return Promise.resolve(new Response('', { status: 401 }))
+    },
+  })
+  assertEquals(await client.reach(), true)
+  assertEquals(seen?.url, 'https://bus.example/v1/models')
+  assertEquals(seen?.init?.method, 'GET')
+  assertEquals(
+    new Headers(seen?.init?.headers).get('authorization'),
+    'Bearer secret-old',
+  )
+})
+
+Deno.test('reach reads a network failure as unreachable', async () => {
+  let client = responses({
+    credentials: auth(),
+    fetch: () => Promise.reject(new Error('secret-old getaddrinfo ENOTFOUND')),
+  })
+  assertEquals(await client.reach(), false)
+})
+
+Deno.test('reach is unreachable without a credential', async () => {
+  let calls = 0
+  let client = responses({
+    credentials: { get: () => Promise.reject(new Error('signed out')) },
+    fetch: () => {
+      calls++
+      return Promise.resolve(new Response(''))
+    },
+  })
+  assertEquals(await client.reach(), false)
+  assertEquals(calls, 0)
+})
+
+Deno.test('responses keeps a caller stop distinct from a stall', async () => {
+  let controller = new AbortController()
+  let client = responses({
+    credentials: auth(),
+    // A deadline far longer than the run so only the caller's stop fires; the
+    // relay aborts the transport but leaves the verdict a stop, not a stall.
+    stallMs: 60_000,
+    fetch: (_input, init) => Promise.resolve(new Response(hang(init))),
+  })
+  let run = client.run(
+    { model: 'm', input: [] },
+    {
+      signal: controller.signal,
+      event: (_event: ResponseEvent) => controller.abort(),
+    },
+  )
+  await assertRejects(() => run, DOMException, 'aborted')
+})

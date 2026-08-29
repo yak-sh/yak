@@ -24,6 +24,8 @@ import { bootDoing, type Doing, wireDoing } from './doing.ts'
 import { providers } from './adapters.ts'
 import { accountService } from './accounts.ts'
 import { codexIssuer, codexStore } from './codex_auth.ts'
+import { responses } from './responses.ts'
+import { codexReadiness } from './codex_ready.ts'
 import { record } from './telemetry.ts'
 import { stop as stopTimers } from './timers.ts'
 
@@ -44,8 +46,15 @@ void lease // held for the process lifetime, released by exit
 // both buildable from the same file-backed stores the server reads; holding a
 // second accountService is reading the same auth files, not a second sign-in.
 let codexAccount = accountService(codexStore(), codexIssuer())
-let codexReady = () =>
-  codexAccount.status().then((s) => s.ready).catch(() => false)
+// The dispatch gate DISPATCH_EXCLUDE complements (c0b12f6): route the sweep away
+// from codex when its account is signed out OR its Responses bus is unreachable
+// — creds alone left a wedged bus in the rotation, where every drawn generation
+// stalled behind a live claim (T-24135). The probe transport is reach-only.
+let codexBus = responses({ credentials: codexAccount.credentials })
+let codexReady = codexReadiness(
+  () => codexAccount.status(),
+  () => codexBus.reach(),
+)
 // Same readiness routing the server offers dispatch: graph-native codex only
 // when the account is signed in. A codex session this daemon's dispatch sweep
 // mints still LAUNCHES in the server — its session-created row routes to the

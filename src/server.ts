@@ -77,6 +77,7 @@ import { combineTools, localTools, tasksTools } from './harness_tools.ts'
 import { managedCodex } from './managed_codex.ts'
 import { sessionRow as storedSession } from './session_store.ts'
 import { responses } from './responses.ts'
+import { codexReadiness } from './codex_ready.ts'
 import { type OllamaConfig, ollamaProbe, ollamaTransport } from './ollama.ts'
 import { resolve, settingRows } from './config.ts'
 import { codexGeneration } from './runner.ts'
@@ -612,24 +613,39 @@ let ollamaConfig: OllamaConfig = {
 setEmbedConfig(ollamaConfig)
 setModel(resolve('OLLAMA_EMBED_MODEL', (key) => settingValue(db, key)).value!)
 
+// How long a provider exchange may make no progress — no headers, no first
+// frame, no next frame — before the transport aborts it as stalled. A hung
+// Responses bus otherwise renews its lease forever and strands the generation
+// `running` with no error (T-24135); five silent minutes is a strong stall
+// signal even for a high-effort turn whose reasoning streams nothing.
+let stallMs = Number(Deno.env.get('CODEX_STALL_MS') ?? 300_000)
+let codexTransport = responses({
+  credentials: codexAccount.credentials,
+  headers: { originator: 'tasks', version: '0' },
+  retries: 1,
+  stallMs,
+})
 // The adapter table stamped with live readiness: the graph-native Codex
-// transport is ready only when its account is signed in, so every server-side
-// spawn default (obey, MCP, CLI) routes graph-native → CLI fallback off this
-// one probe instead of reading the account again at each door.
+// transport is ready only when its account is signed in AND its Responses bus
+// answers, so every server-side spawn default (obey, MCP, CLI) routes
+// graph-native → CLI fallback off this one probe instead of reading the account
+// again at each door. Creds alone left a wedged bus in the rotation (T-24135).
+let codexReady = codexReadiness(
+  () => codexAccount.status(),
+  () => codexTransport.reach(),
+)
 let readyProviders = async () => {
-  let ok = await codexAccount.status().then((s) => s.ready).catch(() => false)
+  let ok = await codexReady()
   return providers((name) => name != 'codex' || ok)
 }
 let managed = managedCodex({
   db,
   cast,
-  transport: responses({
-    credentials: codexAccount.credentials,
-    headers: { originator: 'tasks', version: '0' },
-    retries: 1,
-  }),
+  transport: codexTransport,
   generators: {
-    ollama: codexGeneration(ollamaTransport({ retries: 1 }, ollamaConfig)),
+    ollama: codexGeneration(
+      ollamaTransport({ retries: 1, stallMs }, ollamaConfig),
+    ),
   },
   tools: async (tree, session) => {
     let tasks = await tasksTools(graphIO, session)
@@ -1467,7 +1483,7 @@ let doingDeps: Doing = {
     stop: (eid, target) => managed.stop(eid, target),
     comment: (target, eid) => managed.comment(target, eid),
   },
-  codexReady: () => codexAccount.status().then((s) => s.ready),
+  codexReady,
   readyProviders,
 }
 let { syncSoon } = wireDoing(doingDeps)
