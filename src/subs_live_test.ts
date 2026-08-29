@@ -990,7 +990,7 @@ let byId = async (ids: string, extra = '') => {
 }
 
 slow('query: id= fetches by every form a name takes', alone, async () => {
-  let a = task({})
+  let a = task({ status: 'open' })
   let b = task({ status: 'done' })
   await post([
     ...a.born,

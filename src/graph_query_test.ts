@@ -11,11 +11,14 @@ import {
   evalAgg,
   evalCapped as evalCappedDoor,
   evalGraph,
+  evalQuery,
   evalSub as evalSubDoor,
 } from './graph_query.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, eager, open } = await import('./db.ts')
+let { apply, eager, entriesOf, entriesScan, matching, open } = await import(
+  './db.ts'
+)
 let { append } = await import('./entries.ts')
 let { freshDb } = await import('./testdb.ts')
 
@@ -91,6 +94,100 @@ Deno.test('paging walks the partition by seq (after) and bounds it (limit)', () 
     ),
     [2, 3],
   )
+  db.close()
+})
+
+Deno.test('lazy subscription selects its keyed bounded universe before hydration', () => {
+  let db = freshDb()
+  let a = session(db)
+  let { eids: [through] } = append(db, a, [{
+    message: { role: 'user' },
+    content: { body: 'ordinary anchor' },
+  }])
+  append(
+    db,
+    a,
+    Array.from({ length: 619 }, (_, i) => ({
+      message: { role: i % 2 ? 'agent' : 'user' },
+      content: { body: i % 7 || i == 0 ? `ordinary ${i}` : `needle ${i}` },
+      ...(i == 0
+        ? {
+          content: { body: 'needle generation response' },
+          generation: { through, provider: 'codex', model: 'bounded' },
+        }
+        : {}),
+      ...(i == 0 ? { response: { status: 503 } } : {}),
+    })),
+  )
+
+  let eagerEnumerations = 0
+  let keyedReads: { session: string; after: number; limit: number }[] = []
+  let doors = {
+    matching: (...args: Parameters<typeof matching>) => {
+      eagerEnumerations++
+      return matching(...args)
+    },
+    entriesOf: (...args: Parameters<typeof entriesOf>) => {
+      keyedReads.push({ session: args[1], after: args[2]!, limit: args[3]! })
+      return entriesOf(...args)
+    },
+    entriesScan,
+  }
+
+  // This is the evaluator's universe-selection seam, not a query-string spy:
+  // every positive lazy facet takes it. The eager/source-list statement door
+  // must remain unopened, while entriesOf receives the exact page bound.
+  let direct = evalQuery(db, `.entry.session=${a}`, 0, 500, doors)
+  assertEquals(eagerEnumerations, 0)
+  assertEquals(keyedReads, [{ session: a, after: 0, limit: 500 }])
+  assertEquals(seqs(direct.hits), Array.from({ length: 500 }, (_, i) => i + 1))
+
+  // Subscription initialization uses that same evaluator and returns the page
+  // in partition order, independent of the 120 older rows behind the bound.
+  let initial = evalSubDoor(db, `.entry.session=${a}`).hits
+  assertEquals(initial.length, 500)
+  assertEquals(seqs(initial), Array.from({ length: 500 }, (_, i) => i + 1))
+
+  // Remaining predicates refine the bounded candidates. These cover the
+  // JS-only content.body substring fallback and compiled generation/response
+  // facets together; no predicate gets a parallel unbounded universe.
+  let refined = evalGraph(
+    db,
+    `.entry.session=${a}&.content.body~=needle&.generation.provider=codex&.response.status>=500`,
+  ).hits
+  assertEquals(
+    refined.every((h) =>
+      Number(h.comps.entry?.seq) <= 500 &&
+      String(h.comps.content?.body).includes('needle') &&
+      h.comps.generation?.provider == 'codex' &&
+      Number(h.comps.response?.status) >= 500
+    ),
+    true,
+  )
+  assertEquals(refined.length > 0, true)
+  db.close()
+})
+
+Deno.test('an unscoped lazy universe remains explicitly capped', () => {
+  let db = freshDb()
+  let a = session(db), b = session(db)
+  append(
+    db,
+    a,
+    Array.from({ length: 350 }, (_, i) => ({
+      content: { body: `a ${i}` },
+    })),
+  )
+  append(
+    db,
+    b,
+    Array.from({ length: 350 }, (_, i) => ({
+      content: { body: `b ${i}` },
+    })),
+  )
+  let hits = evalGraph(db, '.content!').hits
+  assertEquals(hits.length, 500)
+  assertEquals(seqs(hits).every((seq) => seq > 0), true)
   db.close()
 })
 

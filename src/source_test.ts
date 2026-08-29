@@ -6,6 +6,7 @@ let { apply, eager, entriesOf, matching, resolveId, rowsOf } = await import(
   './db.ts'
 )
 let { addSource, clearSources, sourceEntries } = await import('./source.ts')
+let { evalGraph } = await import('./graph_query.ts')
 let { freshDb } = await import('./testdb.ts')
 let { assertEquals } = await import('@std/assert')
 
@@ -125,6 +126,15 @@ Deno.test('source: graph partition handle wins before provider fallback', () => 
     provider()
     clearSources()
   }
+})
+
+Deno.test('source: a scoped lazy query uses the keyed source-backed tail', () => {
+  withSource((db) => {
+    let tail = evalGraph(db, '.entry.session=ghost-sid').hits
+    assertEquals(tail.length, 1)
+    assertEquals(tail[0].comps.entry?.session, eid)
+    assertEquals(tail[0].comps.entry?.seq, 1)
+  })
 })
 
 Deno.test('source: no source, no cost — a normal miss still returns undefined/empty', () => {

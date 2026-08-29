@@ -145,21 +145,45 @@ export let rowsFor = (
 // it by `after` (an entry.seq cursor).
 export let ENTRY_PAGE = 500
 
-// The candidate entries a lazy query's JS fallback must see — the partition the
-// root snapshot omits, so the matcher can screen them like any eager row. A
-// `.entry.session=` scope reads each session's page (entriesOf, keyed +
-// bounded); an unscoped lazy query (a lazy pred the index declined) scans the
-// partition globally under the same cap.
-let entryUniverse = (
+// The storage doors used to select a query's candidate partition. Kept as an
+// explicit seam so a test can prove partition selection happens BEFORE either
+// universe is enumerated; it also makes the invariant visible in the evaluator
+// rather than relying on a particular SQL string continuing to compile.
+export type QueryUniverseDoors = {
+  matching: typeof matching
+  entriesOf: typeof entriesOf
+  entriesScan: typeof entriesScan
+}
+let universeDoors: QueryUniverseDoors = { matching, entriesOf, entriesScan }
+
+// The candidate entries a lazy query must see — the partition the root
+// snapshot omits, so the matcher can screen them like any eager row. A
+// `.entry.session=` scope reads directly through entriesOf (keyed + bounded);
+// an unscoped lazy query scans the partition globally under the same cap.
+//
+// Multiple equality values still share ONE result-page budget. Entry order is
+// session then seq, so reading sessions in that order and passing only the
+// remaining room prevents an `A,B` scope from hydrating two full pages merely
+// to discard the second one in orderedEntries.
+export let entryUniverse = (
   db: DatabaseSync,
   preds: Pred[],
   after: number,
   limit: number,
+  doors: QueryUniverseDoors = universeDoors,
 ): Row[] => {
-  let sessions = scopedSessions(preds)
-  let got = sessions.length
-    ? sessions.flatMap((s) => entriesOf(db, s, after, limit))
-    : entriesScan(db, after, limit)
+  if (limit <= 0) return []
+  let sessions = [...new Set(scopedSessions(preds))].sort()
+  let got: ReturnType<typeof entriesOf> = []
+  if (sessions.length) {
+    for (let session of sessions) {
+      let room = limit - got.length
+      if (room <= 0) break
+      got.push(...doors.entriesOf(db, session, after, room))
+    }
+  } else {
+    got = doors.entriesScan(db, after, limit)
+  }
   return got.map((e) => rowed({ eid: e.eid, comps: e.comps }))
 }
 
@@ -217,10 +241,12 @@ export let evalFast = (
   let inputs = inputsOf(preds)
   if (!narrows(inputs)) return null
   let entries = forceEntries || namesLazy(preds)
-  // SQL can answer only durable entry rows. With registered read-through
-  // sources, a named entry partition must take the ordinary scoped fallback so
-  // entryUniverse can ask entriesOf() and project a provider transcript too.
-  if (entries && hasSources() && scopedSessions(preds).length) return null
+  // Lazy membership is selected from its storage partition before hydration.
+  // Even a fully compilable lazy predicate must not take matching(): its SQL
+  // answer is unwindowed here because entries page by seq downstream, which
+  // used to hydrate the session's entire history and discard all but 500.
+  // evalQuery applies the same predicates/projections to the bounded lazy door.
+  if (entries) return null
   // The statement carries the screens the JS filters below otherwise apply
   // AFTER it (query.ts screened) — which is the whole reason a LIMIT may ride
   // it: a filter that runs after the limit under-fills the page. The JS filters
@@ -265,6 +291,7 @@ export let evalQuery = (
   q: string,
   after = 0,
   limit = ENTRY_PAGE,
+  doors: QueryUniverseDoors = universeDoors,
 ) => {
   let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
   let inputs = inputsOf(preds)
@@ -277,16 +304,18 @@ export let evalQuery = (
     referrersOf(db, [eid], { comp, prop }).map(ent)
   let walk = walker(db)
   let fts = (eid: string, p: Pred) => textMatches(db, eid, p)
-  let all = matching(db, whereSome(inputs)).map(rowed)
-    // matching() reads every entity the subset selects, entry-partition rows
-    // included (they keep a spine); snapshot() omitted ALL of them, so drop them
-    // here too. entryUniverse is the one bounded entry source — keyed per
-    // session or a capped scan — so keeping matching()'s entries would double
-    // every one it also returns (and unbound the scan whereSome couldn't).
-    .filter((r) => !r.comps.entry)
-  if (entries) {
-    all = [...all, ...entryUniverse(db, preds, after, limit)]
-  }
+  // Select the relevant storage partition BEFORE hydration. Naming a positive
+  // session-log facet can only match lazy entries, so enumerating the eager /
+  // source-list universe first is both wasted and dangerous: matching() also
+  // sees entry spines and can hydrate an unbounded history. Conversely an eager
+  // query never opens the lazy door. There is one branch, at the universe
+  // boundary, for every lazy predicate — not a query-string special case.
+  let all = entries
+    ? entryUniverse(db, preds, after, limit, doors)
+    : doors.matching(db, whereSome(inputs)).map(rowed)
+      // matching() may union source rows wearing entry; eager queries do not
+      // opt into that partition.
+      .filter((r) => !r.comps.entry)
   all = withResults(db, preds, all)
   let hits = all.filter((r) =>
     listed(r.comps, preds) &&
