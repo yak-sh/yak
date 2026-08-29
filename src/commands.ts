@@ -227,15 +227,29 @@ let page = (body: string, ctx: Ctx) =>
     )
     : body
 
-let move = (status: string): Verb => (_rest, ctx) => {
+// Status is DERIVED (D-24102): a close mints its mark, apply() stamps at/by/via.
+// `done` wears `completed`, `cancel` wears `cancelled`, `reopen` retracts both
+// (and, with no claim, the task reads open again). wip is derived from a claim,
+// so `wip` leases rather than moves — see the verb below.
+let complete: Verb = (_rest, ctx) => {
   let r = here(ctx)
   if (!r.comps.task) throw new Error(`${idOf(r)} is not a task`)
   return {
-    changes: [{ eid: r.eid, name: 'task', comp: { status } }],
-    msg: `${idOf(r)} → ${status}`,
+    changes: [{ eid: r.eid, name: 'completed', comp: {} }],
+    msg: `${idOf(r)} → done`,
   }
 }
-let reopen = move('open')
+let reopen: Verb = (_rest, ctx) => {
+  let r = here(ctx)
+  if (!r.comps.task) throw new Error(`${idOf(r)} is not a task`)
+  return {
+    changes: [
+      { eid: r.eid, name: 'completed', comp: null },
+      { eid: r.eid, name: 'cancelled', comp: null },
+    ],
+    msg: `${idOf(r)} → open`,
+  }
+}
 
 let go = (id: string, ctx: Ctx): Result => {
   let r = graphOf(ctx).find(id)
@@ -410,8 +424,10 @@ let card = (kind: typeof cardCommands[number]): Command => ({
         ...(kind == 'doc' ? [] : [{
           eid,
           name: kind,
+          // A new task is born open — no mark (D-24102). `status` is derived, not
+          // writable, so drop any adopted/typed status; the honest path is `done`.
           comp: kind == 'task'
-            ? { status: 'open', ...grouped.task }
+            ? (({ status: _drop, ...task }) => task)(grouped.task ?? {})
             : { scope: null, ...grouped.memory },
         }]),
       ]
@@ -565,14 +581,26 @@ export let commands: Record<string, Command> = {
     about:
       'move the focused task to done (shell: `task done T-3 [comment]` names one explicitly)',
     words: [0, 0],
-    run: move('done'),
+    run: complete,
   },
   wip: {
     args: [],
     about:
-      'move the focused task to wip (shell: `task wip T-3` names one explicitly)',
+      'take up the focused task — wip is a live claim now (shell: `task wip T-3`)',
     words: [0, 0],
-    run: move('wip'),
+    run: (_rest, ctx) => {
+      let g = graphOf(ctx)
+      let r = here(ctx)
+      if (!r.comps.task) throw new Error(`${idOf(r)} is not a task`)
+      let session = ctx.session
+      if (!session) {
+        throw new Error('wip: run under a session to hold the claim')
+      }
+      return {
+        changes: claimChanges(corpus(r, g.session(session)), r.eid, session),
+        msg: `${idOf(r)} → wip`,
+      }
+    },
   },
   cancel: {
     args: [a('reason', 'reason', { rest: true, need: false })],
@@ -585,8 +613,10 @@ export let commands: Record<string, Command> = {
       let reason = rest.trim()
       return {
         changes: [
-          { eid: r.eid, name: 'task', comp: { status: 'cancelled' } },
-          // the why rides the same atomic batch — as plain commentary,
+          // The `cancelled` mark IS the status now (D-24102); its optional
+          // reason rides the comp, apply() stamps at/by/via.
+          { eid: r.eid, name: 'cancelled', comp: reason ? { reason } : {} },
+          // the why also rides the same atomic batch — as plain commentary,
           // never a machine trail (the journal records the change)
           ...(reason
             ? commentChanges(

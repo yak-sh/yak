@@ -314,10 +314,19 @@ export let subject = (id: string | undefined, args: string[]) => {
     return { cmd: 'dep', args: [id, verb, ...objects] }
   }
   if (verb == 'is') {
-    if (objects.length != 1 || !statuses.some((s) => s == objects[0])) {
+    // Status is DERIVED (D-24102): `is <status>` drives the palette verb that
+    // mints or retracts the mark, never a `set .status=` (status isn't writable).
+    let verbFor: Record<string, string> = {
+      open: ':open',
+      wip: ':wip',
+      done: ':done',
+      cancelled: ':cancel',
+    }
+    let palette = objects.length == 1 ? verbFor[objects[0]] : undefined
+    if (!palette) {
       throw new UsageError(`status is one of: ${statuses.join(', ')}`)
     }
-    return { cmd: 'set', args: [id, `.status=${objects[0]}`] }
+    return { cmd: id, args: [palette] }
   }
   if (verb == 'as') {
     return showAs(id, objects)
@@ -893,11 +902,26 @@ let finish =
     let sid = me()
     let [row, sess] = await Promise.all([
       needed(id),
-      comment && sid ? sessionRow(sid) : undefined,
+      (comment || status == 'wip') && sid ? sessionRow(sid) : undefined,
     ])
     let all = [row, ...(sess ? [sess] : [])]
+    // Status is DERIVED (D-24102): wip LEASES (a claim), done/cancel MINT their
+    // mark; apply() stamps at/by/via, and cancel's reason rides the mark. There
+    // is no `set .status=` any more — the presence of the comp is the status.
+    let move: Change[] = status == 'wip'
+      ? (() => {
+        if (!sid) throw new UsageError('wip: run under a session')
+        return claimChanges(all, row.eid, sid, Deno.cwd())
+      })()
+      : status == 'done'
+      ? [{ eid: row.eid, name: 'completed', comp: {} }]
+      : [{
+        eid: row.eid,
+        name: 'cancelled',
+        comp: comment ? { reason: comment } : {},
+      }]
     await send([
-      { eid: row.eid, name: 'task', comp: { status } },
+      ...move,
       ...(comment ? commentChanges(all, row.eid, comment, me()) : []),
     ])
     print(`${idOf(row)} → ${status}${comment ? ` — ${comment}` : ''}`)

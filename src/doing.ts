@@ -332,18 +332,23 @@ export let wireDoing = (d: Doing) => {
     doc: 'a comment whose first line opens with `:` is a command line — ' +
       'run against its target, as its author, answered by an event comment',
   })
-  on('task', {
-    changed: { status: closingTask(cast) },
-    doc: 'closing a task archives the correspondence about it — the ' +
-      'letters and comments that were waiting at the moment it closed, ' +
-      'never anything that arrives after',
-  })
-  on('task', {
-    changed: { status: unblocking(cast) },
-    doc: 'an ended task knocks the claimant session of every task that ' +
-      'requires it and is now fully unblocked — the dep-completion wake ' +
-      'that resumes a parked run to finish its own task (D-21448)',
-  })
+  // Status is DERIVED (D-24102): a task closes by wearing `completed` or
+  // `cancelled`, so the close effects key on those marks landing, not on a
+  // status column moving.
+  for (let mark of ['completed', 'cancelled'] as const) {
+    on(mark, {
+      created: closingTask(cast),
+      doc: 'closing a task archives the correspondence about it — the ' +
+        'letters and comments that were waiting at the moment it closed, ' +
+        'never anything that arrives after',
+    })
+    on(mark, {
+      created: unblocking(cast),
+      doc: 'an ended task knocks the claimant session of every task that ' +
+        'requires it and is now fully unblocked — the dep-completion wake ' +
+        'that resumes a parked run to finish its own task (D-21448)',
+    })
+  }
   on('knock', {
     created: knocked(cast),
     sweep: { pending: PENDING('knock') },
@@ -770,10 +775,16 @@ export let bootDoing = (d: Doing, syncSoon: () => void) => {
       created: dispatchSoon,
       doc: 'an approval may make its task ready — dispatch sweeps soon',
     })
-    on('task', {
-      changed: { status: dispatchSoon },
-      doc: 'a status move can open a requires gate — dispatch sweeps soon',
-    })
+    // A close (or a reopen) can open — or re-gate — a requires edge (D-24102):
+    // the completed/cancelled marks are the status move now.
+    for (let mark of ['completed', 'cancelled'] as const) {
+      on(mark, {
+        created: dispatchSoon,
+        removed: dispatchSoon,
+        doc: 'a task closing or reopening can open a requires gate — ' +
+          'dispatch sweeps soon',
+      })
+    }
     on('claim', {
       removed: dispatchSoon,
       doc: 'a released claim can return a ready task — dispatch sweeps soon',

@@ -526,6 +526,24 @@ pub static SCHEMA: &[SchemaOp] = &[
     via integer,
     verdict text
   );
+  -- A task FINISHED / CALLED OFF (D-24102): the marks the dissolved task.status
+  -- becomes. Same stamp shape as decided — "at"/"by" ride the wire (a completion
+  -- recorded after the fact), the server alone stamps "via" — so they carry a
+  -- default clock and stay HAND-written rather than derived. cancelled adds its
+  -- optional "reason". Presence IS the status: statusOf reads these two + claim.
+  create table if not exists completed (
+    entity integer primary key references entity(id),
+    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    "by" integer,
+    via integer
+  );
+  create table if not exists cancelled (
+    entity integer primary key references entity(id),
+    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    "by" integer,
+    reason text,
+    via integer
+  );
   -- A durable per-effect claim (D-23772, docs/EFFECT_CLAIMS.md): the SQLite
   -- coordination that replaces the effects-lock dispatcher election, so one or
   -- one thousand effects workers are equivalent. Identity is (jrow, handler) --
@@ -904,19 +922,6 @@ pub static SCHEMA: &[SchemaOp] = &[
     entity integer primary key references entity(id),
     "from" integer references entity(id)
   );"#),
-    SchemaOp::Exec(r#"create table if not exists "completed" (
-    entity integer primary key references entity(id),
-    "at" text,
-    "by" integer,
-    "via" integer
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "cancelled" (
-    entity integer primary key references entity(id),
-    "at" text,
-    "by" integer,
-    "reason" text,
-    "via" integer
-  );"#),
     SchemaOp::AddColumn { table: "project", col: "color", sql: r#"alter table project add column "color" text"# },
     SchemaOp::AddColumn { table: "venture", col: "phase", sql: r#"alter table venture add column "phase" text"# },
     SchemaOp::AddColumn { table: "venture", col: "paused_from", sql: r#"alter table venture add column "paused_from" text"# },
@@ -977,13 +982,6 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "anchor", col: "start", sql: r#"alter table anchor add column "start" real"# },
     SchemaOp::AddColumn { table: "anchor", col: "end", sql: r#"alter table anchor add column "end" real"# },
     SchemaOp::AddColumn { table: "fork", col: "from", sql: r#"alter table fork add column "from" integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "completed", col: "at", sql: r#"alter table completed add column "at" text"# },
-    SchemaOp::AddColumn { table: "completed", col: "by", sql: r#"alter table completed add column "by" integer"# },
-    SchemaOp::AddColumn { table: "completed", col: "via", sql: r#"alter table completed add column "via" integer"# },
-    SchemaOp::AddColumn { table: "cancelled", col: "at", sql: r#"alter table cancelled add column "at" text"# },
-    SchemaOp::AddColumn { table: "cancelled", col: "by", sql: r#"alter table cancelled add column "by" integer"# },
-    SchemaOp::AddColumn { table: "cancelled", col: "reason", sql: r#"alter table cancelled add column "reason" text"# },
-    SchemaOp::AddColumn { table: "cancelled", col: "via", sql: r#"alter table cancelled add column "via" integer"# },
     SchemaOp::AddColumn { table: "task", col: "project", sql: r#"alter table task add column project integer references entity(id)"# },
     SchemaOp::AddColumn { table: "task", col: "assignee", sql: r#"alter table task add column assignee integer references entity(id)"# },
     SchemaOp::AddColumn { table: "task", col: "domain", sql: r#"alter table task add column domain text"# },

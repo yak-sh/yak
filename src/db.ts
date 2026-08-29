@@ -754,6 +754,24 @@ let schema = `
     via integer,
     verdict text
   );
+  -- A task FINISHED / CALLED OFF (D-24102): the marks the dissolved task.status
+  -- becomes. Same stamp shape as decided — "at"/"by" ride the wire (a completion
+  -- recorded after the fact), the server alone stamps "via" — so they carry a
+  -- default clock and stay HAND-written rather than derived. cancelled adds its
+  -- optional "reason". Presence IS the status: statusOf reads these two + claim.
+  create table if not exists completed (
+    entity integer primary key references entity(id),
+    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    "by" integer,
+    via integer
+  );
+  create table if not exists cancelled (
+    entity integer primary key references entity(id),
+    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    "by" integer,
+    reason text,
+    via integer
+  );
   -- A durable per-effect claim (D-23772, docs/EFFECT_CLAIMS.md): the SQLite
   -- coordination that replaces the effects-lock dispatcher election, so one or
   -- one thousand effects workers are equivalent. Identity is (jrow, handler) --
@@ -1011,12 +1029,6 @@ export let derived = [
   // derived DDL quotes the reserved "from" column name and plants the auto index
   // on the reference for the shared-prefix walk.
   'fork',
-  // The task completion/cancellation marks (D-24102): {at, by{eid}, via{eid}}
-  // and cancelled's extra {reason}, every column nullable, entity-keyed spine,
-  // {eid} FKs by death word — wholly PropType-expressible, so they derive. Their
-  // presence is the dissolved `task.status`: `status(task)` reads them.
-  'completed',
-  'cancelled',
 ]
 
 // Insert a bare entity spine — the eid, and nothing else. num is NOT minted

@@ -94,6 +94,7 @@ import {
   type Session,
   sessionActive,
   settled as taskSettled,
+  statusOf,
   uuid,
 } from './types.ts'
 
@@ -364,10 +365,13 @@ let pendingWake = (eid: string) =>
 // dep-completion knock (unblock.ts, D-21448 Piece 2) reads "ungated" the same
 // way — one reading of the requires edge, not two that can drift.
 export let gatedTask = (taskEid: string) =>
-  depsOf(db, [taskEid]).some((d) =>
-    d.type == 'requires' && d.parent == taskEid &&
-    !taskSettled(eager(db, d.child)?.task?.status as string | undefined)
-  )
+  depsOf(db, [taskEid]).some((d) => {
+    let child = eager(db, d.child)
+    // Status is derived (D-24102): a child the read can't resolve counts as
+    // open (the safe reading — never lapse a claim on a maybe-blocked task).
+    return d.type == 'requires' && d.parent == taskEid &&
+      !taskSettled(child?.task ? statusOf(child) : 'open')
+  })
 
 // A claim is PARKED-WAITING (D-21448 Piece 1) when the session has a return
 // wake armed (pendingWake — the M-7323 parked standing) AND the claimed task is

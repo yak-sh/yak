@@ -29,13 +29,6 @@ type Cast = (changes: Change[]) => void
 let OWNED = `entity = (select id from entity where eid = ?)`
 let refEid = (col: string) => `(select eid from entity where id = ${col})`
 
-// The statuses that END a task. Closing is an ACT, not a state, so
-// closing an already-closed task closes its correspondence again —
-// sweeping up whatever arrived since. That is the honest reading of
-// "I am closing this", and nothing is lost: `task inbox --all` is
-// where the archived went.
-let terminal = new Set(['done', 'cancelled'])
-
 // Everything addressed ABOUT this task and not yet hidden. Read state
 // is irrelevant — the conversation is settled, not merely seen — so
 // this is `archived`, the one stamp that hides, and nothing else.
@@ -52,9 +45,13 @@ let waiting = (task: string): string[] =>
          and m.entity not in (select entity from archived)`,
   ).all(task) as { eid: string }[]).map((r) => r.eid)
 
+// Fires when a task wears `completed` or `cancelled` (D-24102): the mark's
+// creation IS the close, so there is no status to test — closing an
+// already-closed task (re-minting the mark) closes its correspondence again,
+// sweeping up whatever arrived since. Nothing is lost: `task inbox --all` is
+// where the archived went.
 export let closingTask =
-  (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
-    if (!terminal.has(String(comp.status ?? ''))) return
+  (cast: Cast) => (eid: string, _comp: Record<string, unknown> | null) => {
     let items = waiting(eid)
     if (!items.length) return
     // Attributed to whoever closed it: they archived this mail by

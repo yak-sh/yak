@@ -31,11 +31,6 @@ type Cast = (changes: Change[]) => void
 // stores its session as an int id; this module speaks EIDs.
 let refEid = (col: string) => `(select eid from entity where id = ${col})`
 
-// The statuses that END a task — the same set closing.ts closes on. Closing is
-// an act, so re-closing an already-done task re-knocks; harmless (a second
-// resume comment the parent simply reads), and not worth a guard.
-let terminal = new Set(['done', 'cancelled'])
-
 // The session currently claiming this task, or null. A claim row keys by the
 // task entity and carries its claimer in `session`.
 let claimant = (taskEid: string): string | null =>
@@ -60,9 +55,11 @@ let parkWakes = (sessionEid: string): string[] =>
        and v.entity is null and x.entity is null`,
   ).all(sessionEid) as { eid: string }[]).map((r) => r.eid)
 
+// Fires when a task wears `completed` or `cancelled` (D-24102): the mark IS the
+// end, so there is no status to test. Re-closing an already-done task re-knocks;
+// harmless (a second resume comment the parent simply reads), not worth a guard.
 export let unblocking =
-  (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
-    if (!terminal.has(String(comp.status ?? ''))) return
+  (cast: Cast) => (eid: string, _comp: Record<string, unknown> | null) => {
     // Tasks that `requires` the one that just ended — the reverse edge.
     let dependents = depsOf(db, [eid])
       .filter((d) => d.type == 'requires' && d.child == eid)

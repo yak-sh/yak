@@ -11,7 +11,7 @@
 import { apply, depsOf, settingValue } from './db.ts'
 import { db } from './live_db.ts'
 import { dispatch, trace } from './effects.ts'
-import { type Change, type Dep } from './types.ts'
+import { type Change, type Dep, statusOf } from './types.ts'
 import { type Row, spawnChanges, spawnPlan } from './client.ts'
 import { hotRun, isPersona, liveRun } from './spawnrule.ts'
 import { type Provider } from './providers.ts'
@@ -26,7 +26,14 @@ type Cast = (changes: Change[]) => void
 export let approved = (r: Row) =>
   !!r.comps.decided && r.comps.decided.verdict != 'declined'
 
-let settled = (status: unknown) => status == 'done' || status == 'cancelled'
+// Status is DERIVED from the comps (D-24102): open = no completed/cancelled/claim,
+// settled = wears completed or cancelled. Reading it off statusOf keeps dispatch
+// selecting the same tasks whether or not a row carries the materialized value.
+let statusIs = (r: Row) => statusOf(r.comps)
+let settled = (r?: Row) => {
+  let s = r && statusIs(r)
+  return s == 'done' || s == 'cancelled'
+}
 
 // Birth for the age ordering; an unstamped birth sorts last.
 let born = (r: Row) => {
@@ -50,7 +57,7 @@ export let authorized = (all: Row[], deps: Dep[]) => {
     )
   let seen = new Set<string>()
   let stack = all
-    .filter((r) => r.comps.task?.status == 'open' && approved(r))
+    .filter((r) => statusIs(r) == 'open' && approved(r))
     .flatMap((r) => kids(r.eid))
   while (stack.length) {
     let eid = stack.pop()!
@@ -72,11 +79,11 @@ export let backlog = (all: Row[], deps: Dep[], recursive = false) => {
   let gated = (eid: string) =>
     deps.some((d) =>
       d.type == 'requires' && d.parent == eid &&
-      !settled(by.get(d.child)?.comps.task?.status)
+      !settled(by.get(d.child))
     )
   return all
     .filter((r) =>
-      r.comps.task?.status == 'open' && !r.comps.claim && !r.comps.blocked &&
+      statusIs(r) == 'open' && !r.comps.claim && !r.comps.blocked &&
       (approved(r) || auth.has(r.eid)) && !gated(r.eid)
     )
     .sort((a, b) => rank(a) - rank(b) || born(a) - born(b) || a.num - b.num)
@@ -104,11 +111,11 @@ export let parkable = (all: Row[], deps: Dep[]) => {
   let gated = (eid: string) =>
     deps.some((d) =>
       d.type == 'requires' && d.parent == eid &&
-      !settled(by.get(d.child)?.comps.task?.status)
+      !settled(by.get(d.child))
     )
   return all
     .filter((r) =>
-      r.comps.task?.status == 'open' && !r.comps.claim && !r.comps.blocked &&
+      statusIs(r) == 'open' && !r.comps.claim && !r.comps.blocked &&
       approved(r) && gated(r.eid)
     )
     .sort((a, b) => rank(a) - rank(b) || born(a) - born(b) || a.num - b.num)
@@ -211,7 +218,7 @@ export let dispatchSpawn = (
     })
   for (let d of wanted(all, deps)) {
     let t = by.get(d.child)!
-    if (settled(t.comps.task?.status) || hotRun(all, d.parent, t)) {
+    if (settled(t) || hotRun(all, d.parent, t)) {
       drop(d)
       continue
     }
