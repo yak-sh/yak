@@ -1,7 +1,13 @@
 import { type ComponentChildren, Fragment } from 'preact'
 import { useState } from 'preact/hooks'
 import { formatProp, isRef, propAt } from '../../props.ts'
-import { comps as vocab, type Ent, idOf, plural } from '../../types.ts'
+import {
+  comps as vocab,
+  type Ent,
+  idOf,
+  plural,
+  statusOf,
+} from '../../types.ts'
 import { ent, mutate, parents } from '../../live.ts'
 import { useBacklinks } from '../useQuery.ts'
 import { up } from './Show.tsx'
@@ -392,7 +398,7 @@ export let DebugTaskItem = ({ e }: { e: Ent }) => (
     <Title {...title(e.doc?.title ?? '')} />
     {e.claim && <Claim>⚑ {viaName(e.claim.session)}</Claim>}
     <Prio>{formatProp(priority, e.task!.priority)}</Prio>
-    <Status mod={e.task!.status}>{e.task!.status}</Status>
+    <Status mod={statusOf(e)}>{statusOf(e)}</Status>
   </Item>
 )
 

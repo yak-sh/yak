@@ -119,6 +119,7 @@ import {
   sessionOf,
   type Snapshot,
   statuses,
+  statusOf,
 } from './types.ts'
 import { cost, type Dim, group, report, roll, type Use, use } from './usage.ts'
 import { armLocal, localReadPath } from './localread.ts'
@@ -445,7 +446,7 @@ let list = async (got: Got) => {
     [
       r,
       String(
-        r.comps.task ? r.comps.task.status ?? '' : r.comps.alias?.slug ?? '',
+        r.comps.task ? statusOf(r.comps) : r.comps.alias?.slug ?? '',
       ),
     ] as const
   )

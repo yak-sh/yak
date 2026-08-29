@@ -1,4 +1,5 @@
 import { crewed, gated } from '../../live.ts'
+import { statusOf } from '../../types.ts'
 import { Dot } from '../Dot.tsx'
 import { Entity } from '../Entity.tsx'
 import { menuAt } from '../nav.tsx'
@@ -25,7 +26,7 @@ export let TaskTile = ({ e, slots, onOpen }: TileProps) => (
     onContextMenu={menuAt(e)}
   >
     {slot(slots, 'before')}
-    <Dot status={e.task!.status} gated={gated(e)} live={crewed(e)} />
+    <Dot status={statusOf(e)} gated={gated(e)} live={crewed(e)} />
     <Title {...tileTitle(slots, e.doc?.title ?? '')} />
     <Entity eid={e.eid} view='Meta' id>
       {slot(slots, 'after')}

@@ -1,5 +1,6 @@
 import { subChanges } from '../client.ts'
 import { ent, mutate, myActor, myMode, reveal, rows, shown } from '../live.ts'
+import { statusOf } from '../types.ts'
 import { type Action, define, defineActions, has, resolve } from './registry.ts'
 import { shelve } from './shelf.ts'
 import { memo } from './memo.ts'
@@ -298,7 +299,7 @@ defineActions([
     }],
   },
   {
-    match: (e) => !!e.proposed && !e.decided && e.task?.status != 'cancelled',
+    match: (e) => !!e.proposed && !e.decided && statusOf(e) != 'cancelled',
     acts: (e) => [{
       label: 'accept',
       run: () => mutate({ eid: e.eid, name: 'decided', comp: {} }),
@@ -307,7 +308,7 @@ defineActions([
   {
     match: has('task'),
     acts: (e) => {
-      let s = e.task!.status
+      let s = statusOf(e)
       let move = (label: string, status: string): Action => ({
         label,
         run: () => mutate({ eid: e.eid, name: 'task', comp: { status } }),

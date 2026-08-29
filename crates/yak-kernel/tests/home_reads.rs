@@ -120,8 +120,8 @@ fn seed() -> Fixture {
     // otherwise byte-identical (its edges present, no reads minted).
     let t1 = mint("t1");
     let t2 = mint("t2");
-    conn.execute("insert into task (entity, status, priority) values (?1,'open',0)", [t1]).unwrap();
-    conn.execute("insert into task (entity, status, priority) values (?1,'open',0)", [t2]).unwrap();
+    conn.execute("insert into task (entity, priority) values (?1,0)", [t1]).unwrap();
+    conn.execute("insert into task (entity, priority) values (?1,0)", [t2]).unwrap();
     conn.execute(
         "insert into dependency (parent, type, child) values (?1, 'requires', ?2)",
         rusqlite::params![t1, t2],

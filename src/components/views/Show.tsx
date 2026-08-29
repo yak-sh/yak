@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type ComponentChildren } from 'preact'
-import { comps, type Ent } from '../../types.ts'
+import { comps, type Ent, statusOf } from '../../types.ts'
 import { FLOOR, textOf } from '../../twin.ts'
 import {
   base,
@@ -111,7 +111,7 @@ export let Pip = ({ e }: { e: Ent }) => {
     <>
       <Dot
         elRef={anchor}
-        status={e.task!.status}
+        status={statusOf(e)}
         gated={gated(e)}
         live={crewed(e)}
         class='Show_Pip'
@@ -123,7 +123,7 @@ export let Pip = ({ e }: { e: Ent }) => {
           comp='task'
           prop='status'
           t={t}
-          value={e.task!.status}
+          value={statusOf(e)}
           done={() => setOpen(false)}
           anchor={anchor}
           side='below'
@@ -394,10 +394,10 @@ export let Tasks = ({ e }: { e: Ent }) => {
   let ids = useBacklinks(e.eid)
     .filter((b) => b.via == 'task.project')
     .map((b) => ent(b.from))
-    .filter((t) => t.task && !settled(t.task.status))
+    .filter((t) => t.task && !settled(statusOf(t)))
     .sort((a, b) =>
-      statuses.findIndex((s) => s == a.task!.status) -
-        statuses.findIndex((s) => s == b.task!.status) ||
+      statuses.findIndex((s) => s == statusOf(a)) -
+        statuses.findIndex((s) => s == statusOf(b)) ||
       a.task!.priority - b.task!.priority
     )
   if (!ids.length) return null
@@ -462,7 +462,7 @@ export let Similar = ({ e }: { e: Ent }) => {
 // the CALM deps affordance (D-17094): open deps live here, never on the Dot
 // — only the `blocked` facet reddens it (gated()).
 let split = (kids: Ent[]): [number, number] => {
-  let done = kids.filter((k) => settled(k.task?.status)).length
+  let done = kids.filter((k) => k.task && settled(statusOf(k))).length
   return [kids.length - done, done]
 }
 
@@ -500,7 +500,7 @@ let ProposalState = ({ e }: { e: Ent }) => {
   if (!e.proposed) return null
   let declined = e.decided?.verdict == 'declined'
   let approved = !!e.decided && !declined
-  let cancelled = !e.decided && e.task?.status == 'cancelled'
+  let cancelled = !e.decided && statusOf(e) == 'cancelled'
   let state = approved
     ? 'approved'
     : declined

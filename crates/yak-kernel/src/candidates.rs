@@ -287,21 +287,32 @@ mod tests {
 
     #[test]
     fn enum_equality_compiles_exactly() {
-        let n = compile(&preds(&[".status=open"]));
+        // A stored enum column narrows exactly (task.status is DERIVED now and
+        // declines — see derived_status_declines below — so this uses venture.phase).
+        let n = compile(&preds(&[".venture.phase=live"]));
         assert!(n.exact && n.narrowed);
         assert!(n.cond.contains("in (?)"), "{}", n.cond);
-        assert!(n.joins.contains("left join \"task\""), "{}", n.joins);
+        assert!(n.joins.contains("left join \"venture\""), "{}", n.joins);
         assert_eq!(n.params.len(), 1);
     }
 
     #[test]
     fn list_and_range_compile() {
-        let list = compile(&preds(&[".status=open,wip"]));
+        let list = compile(&preds(&[".venture.phase=live,hold"]));
         assert!(list.exact);
         assert!(list.cond.contains("in (?,?)"), "{}", list.cond);
         let rng = compile(&preds(&[".priority=0..2"]));
         assert!(rng.exact, "priority range should compile");
         assert!(rng.cond.contains(">=") && rng.cond.contains("<="), "{}", rng.cond);
+    }
+
+    #[test]
+    fn derived_status_declines() {
+        // task.status has no stored column (D-24102): candidates declines it, the
+        // matcher computes it from completed/cancelled/claim (query::matches).
+        let n = compile(&preds(&[".status=open"]));
+        assert!(!n.exact && !n.narrowed, "derived status does not narrow");
+        assert!(n.joins.is_empty() && n.params.is_empty(), "{} / {:?}", n.joins, n.params);
     }
 
     #[test]
@@ -342,9 +353,9 @@ mod tests {
     #[test]
     fn declines_widen_not_break() {
         // a time phrase declines (exact=false) but the other pred still narrows
-        let n = compile(&preds(&[".status=open", ".updated.at>=today"]));
+        let n = compile(&preds(&[".venture.phase=live", ".updated.at>=today"]));
         assert!(!n.exact, "time phrase should decline");
-        assert!(n.narrowed, "status still narrows");
+        assert!(n.narrowed, "phase still narrows");
         assert!(n.cond.contains("in (?)"));
         assert_eq!(n.params.len(), 1, "only the compiled pred binds");
     }
@@ -357,7 +368,7 @@ mod tests {
 
     #[test]
     fn shared_columns_share_one_join() {
-        let n = compile(&preds(&[".status=open", ".priority=0"]));
+        let n = compile(&preds(&[".project=P-19", ".priority=0"]));
         assert_eq!(n.joins.matches("left join").count(), 1, "one task join");
     }
 }

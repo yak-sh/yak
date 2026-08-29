@@ -7,7 +7,8 @@
 use crate::schema::SchemaOp;
 
 pub static SCHEMA: &[SchemaOp] = &[
-    SchemaOp::Exec(r#"
+    SchemaOp::Exec(
+        r#"
   create table if not exists entity (
     id          integer primary key,
     eid         text not null unique,
@@ -759,12 +760,16 @@ pub static SCHEMA: &[SchemaOp] = &[
     values (new.rowid, new.title,
       (select value from blob_text where entity = new.body));
   end;
-"#),
-    SchemaOp::Exec(r#"create table if not exists "project" (
+"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "project" (
     entity integer primary key references entity(id),
     "color" text
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "venture" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "venture" (
     entity integer primary key references entity(id),
     "phase" text,
     "paused_from" text,
@@ -774,58 +779,86 @@ pub static SCHEMA: &[SchemaOp] = &[
     "operated_by" text,
     "tagline" text,
     "site" text
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "board" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "board" (
     entity integer primary key references entity(id),
     "query" text
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "layout" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "layout" (
     entity integer primary key references entity(id),
     "root" integer references entity(id)
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "design" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "design" (
     entity integer primary key references entity(id)
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "architecture" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "architecture" (
     entity integer primary key references entity(id)
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "canvas" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "canvas" (
     entity integer primary key references entity(id)
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "favorite" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "favorite" (
     entity integer primary key references entity(id),
     "at" text
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "worktree" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "worktree" (
     entity integer primary key references entity(id),
     "cwd" text,
     "branch" text,
     "base_revision" text
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "attention" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "attention" (
     entity integer primary key references entity(id)
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "prompt" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "prompt" (
     entity integer primary key references entity(id)
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "task_context" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "task_context" (
     entity integer primary key references entity(id)
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "reasoning" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "reasoning" (
     entity integer primary key references entity(id)
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "recalled" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "recalled" (
     entity integer primary key references entity(id),
     "source" integer
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "spawn" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "spawn" (
     entity integer primary key references entity(id),
     "provider" text,
     "model" text,
     "effort" text,
     "persona" integer references entity(id)
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "hook" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "hook" (
     entity integer primary key references entity(id),
     "source" text,
     "event" text,
@@ -836,80 +869,114 @@ pub static SCHEMA: &[SchemaOp] = &[
     "path" text,
     "headers" text,
     "sig_ok" integer
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "person" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "person" (
     entity integer primary key references entity(id)
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "persona" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "persona" (
     entity integer primary key references entity(id),
     "home" integer references entity(id)
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "model" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "model" (
     entity integer primary key references entity(id),
     "name" text,
     "vendor" text,
     "grade" text
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "memory" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "memory" (
     entity integer primary key references entity(id),
     "scope" integer,
     "last_confirmed_at" text
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "feedback" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "feedback" (
     entity integer primary key references entity(id),
     "by" integer
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "meta" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "meta" (
     entity integer primary key references entity(id)
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "resume" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "resume" (
     entity integer primary key references entity(id),
     "actor" integer,
     "at" text,
     "rank" real
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "chat" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "chat" (
     entity integer primary key references entity(id),
     "actor" integer references entity(id),
     "target" integer references entity(id)
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "dream" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "dream" (
     entity integer primary key references entity(id),
     "scope" integer references entity(id),
     "floor" text
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "notice" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "notice" (
     entity integer primary key references entity(id),
     "target" integer references entity(id),
     "event" text
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "deliver" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "deliver" (
     entity integer primary key references entity(id),
     "to" integer
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "delivered" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "delivered" (
     entity integer primary key references entity(id),
     "at" text,
     "via" text
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "error" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "error" (
     entity integer primary key references entity(id),
     "at" text,
     "message" text
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "exception" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "exception" (
     entity integer primary key references entity(id),
     "at" text,
     "message" text,
     "stack" text
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "fixer" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "fixer" (
     entity integer primary key references entity(id)
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "nofix" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "nofix" (
     entity integer primary key references entity(id)
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "anchor" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "anchor" (
     entity integer primary key references entity(id),
     "paths" text,
     "sha" text,
@@ -917,113 +984,519 @@ pub static SCHEMA: &[SchemaOp] = &[
     "hunk" text,
     "start" real,
     "end" real
-  );"#),
-    SchemaOp::Exec(r#"create table if not exists "fork" (
+  );"#,
+    ),
+    SchemaOp::Exec(
+        r#"create table if not exists "fork" (
     entity integer primary key references entity(id),
     "from" integer references entity(id)
-  );"#),
-    SchemaOp::AddColumn { table: "project", col: "color", sql: r#"alter table project add column "color" text"# },
-    SchemaOp::AddColumn { table: "venture", col: "phase", sql: r#"alter table venture add column "phase" text"# },
-    SchemaOp::AddColumn { table: "venture", col: "paused_from", sql: r#"alter table venture add column "paused_from" text"# },
-    SchemaOp::AddColumn { table: "venture", col: "hold_from", sql: r#"alter table venture add column "hold_from" text"# },
-    SchemaOp::AddColumn { table: "venture", col: "run_mode", sql: r#"alter table venture add column "run_mode" text"# },
-    SchemaOp::AddColumn { table: "venture", col: "agent_model", sql: r#"alter table venture add column "agent_model" text"# },
-    SchemaOp::AddColumn { table: "venture", col: "operated_by", sql: r#"alter table venture add column "operated_by" text"# },
-    SchemaOp::AddColumn { table: "venture", col: "tagline", sql: r#"alter table venture add column "tagline" text"# },
-    SchemaOp::AddColumn { table: "venture", col: "site", sql: r#"alter table venture add column "site" text"# },
-    SchemaOp::AddColumn { table: "board", col: "query", sql: r#"alter table board add column "query" text"# },
-    SchemaOp::AddColumn { table: "layout", col: "root", sql: r#"alter table layout add column "root" integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "favorite", col: "at", sql: r#"alter table favorite add column "at" text"# },
-    SchemaOp::AddColumn { table: "worktree", col: "cwd", sql: r#"alter table worktree add column "cwd" text"# },
-    SchemaOp::AddColumn { table: "worktree", col: "branch", sql: r#"alter table worktree add column "branch" text"# },
-    SchemaOp::AddColumn { table: "worktree", col: "base_revision", sql: r#"alter table worktree add column "base_revision" text"# },
-    SchemaOp::AddColumn { table: "recalled", col: "source", sql: r#"alter table recalled add column "source" integer"# },
-    SchemaOp::AddColumn { table: "spawn", col: "provider", sql: r#"alter table spawn add column "provider" text"# },
-    SchemaOp::AddColumn { table: "spawn", col: "model", sql: r#"alter table spawn add column "model" text"# },
-    SchemaOp::AddColumn { table: "spawn", col: "effort", sql: r#"alter table spawn add column "effort" text"# },
-    SchemaOp::AddColumn { table: "spawn", col: "persona", sql: r#"alter table spawn add column "persona" integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "hook", col: "source", sql: r#"alter table hook add column "source" text"# },
-    SchemaOp::AddColumn { table: "hook", col: "event", sql: r#"alter table hook add column "event" text"# },
-    SchemaOp::AddColumn { table: "hook", col: "payload", sql: r#"alter table hook add column "payload" text"# },
-    SchemaOp::AddColumn { table: "hook", col: "spool_id", sql: r#"alter table hook add column "spool_id" text"# },
-    SchemaOp::AddColumn { table: "hook", col: "received_at", sql: r#"alter table hook add column "received_at" text"# },
-    SchemaOp::AddColumn { table: "hook", col: "method", sql: r#"alter table hook add column "method" text"# },
-    SchemaOp::AddColumn { table: "hook", col: "path", sql: r#"alter table hook add column "path" text"# },
-    SchemaOp::AddColumn { table: "hook", col: "headers", sql: r#"alter table hook add column "headers" text"# },
-    SchemaOp::AddColumn { table: "hook", col: "sig_ok", sql: r#"alter table hook add column "sig_ok" integer"# },
-    SchemaOp::AddColumn { table: "persona", col: "home", sql: r#"alter table persona add column "home" integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "model", col: "name", sql: r#"alter table model add column "name" text"# },
-    SchemaOp::AddColumn { table: "model", col: "vendor", sql: r#"alter table model add column "vendor" text"# },
-    SchemaOp::AddColumn { table: "model", col: "grade", sql: r#"alter table model add column "grade" text"# },
-    SchemaOp::AddColumn { table: "memory", col: "scope", sql: r#"alter table memory add column "scope" integer"# },
-    SchemaOp::AddColumn { table: "memory", col: "last_confirmed_at", sql: r#"alter table memory add column "last_confirmed_at" text"# },
-    SchemaOp::AddColumn { table: "feedback", col: "by", sql: r#"alter table feedback add column "by" integer"# },
-    SchemaOp::AddColumn { table: "resume", col: "actor", sql: r#"alter table resume add column "actor" integer"# },
-    SchemaOp::AddColumn { table: "resume", col: "at", sql: r#"alter table resume add column "at" text"# },
-    SchemaOp::AddColumn { table: "resume", col: "rank", sql: r#"alter table resume add column "rank" real"# },
-    SchemaOp::AddColumn { table: "chat", col: "actor", sql: r#"alter table chat add column "actor" integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "chat", col: "target", sql: r#"alter table chat add column "target" integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "dream", col: "scope", sql: r#"alter table dream add column "scope" integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "dream", col: "floor", sql: r#"alter table dream add column "floor" text"# },
-    SchemaOp::AddColumn { table: "notice", col: "target", sql: r#"alter table notice add column "target" integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "notice", col: "event", sql: r#"alter table notice add column "event" text"# },
-    SchemaOp::AddColumn { table: "deliver", col: "to", sql: r#"alter table deliver add column "to" integer"# },
-    SchemaOp::AddColumn { table: "delivered", col: "at", sql: r#"alter table delivered add column "at" text"# },
-    SchemaOp::AddColumn { table: "delivered", col: "via", sql: r#"alter table delivered add column "via" text"# },
-    SchemaOp::AddColumn { table: "error", col: "at", sql: r#"alter table error add column "at" text"# },
-    SchemaOp::AddColumn { table: "error", col: "message", sql: r#"alter table error add column "message" text"# },
-    SchemaOp::AddColumn { table: "exception", col: "at", sql: r#"alter table exception add column "at" text"# },
-    SchemaOp::AddColumn { table: "exception", col: "message", sql: r#"alter table exception add column "message" text"# },
-    SchemaOp::AddColumn { table: "exception", col: "stack", sql: r#"alter table exception add column "stack" text"# },
-    SchemaOp::AddColumn { table: "anchor", col: "paths", sql: r#"alter table anchor add column "paths" text"# },
-    SchemaOp::AddColumn { table: "anchor", col: "sha", sql: r#"alter table anchor add column "sha" text"# },
-    SchemaOp::AddColumn { table: "anchor", col: "symbol", sql: r#"alter table anchor add column "symbol" text"# },
-    SchemaOp::AddColumn { table: "anchor", col: "hunk", sql: r#"alter table anchor add column "hunk" text"# },
-    SchemaOp::AddColumn { table: "anchor", col: "start", sql: r#"alter table anchor add column "start" real"# },
-    SchemaOp::AddColumn { table: "anchor", col: "end", sql: r#"alter table anchor add column "end" real"# },
-    SchemaOp::AddColumn { table: "fork", col: "from", sql: r#"alter table fork add column "from" integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "task", col: "project", sql: r#"alter table task add column project integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "task", col: "assignee", sql: r#"alter table task add column assignee integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "task", col: "domain", sql: r#"alter table task add column domain text"# },
-    SchemaOp::AddColumn { table: "session", col: "pid", sql: r#"alter table session add column pid integer"# },
-    SchemaOp::AddColumn { table: "session", col: "pane", sql: r#"alter table session add column pane text"# },
-    SchemaOp::AddColumn { table: "session", col: "turn", sql: r#"alter table session add column turn text"# },
-    SchemaOp::AddColumn { table: "session", col: "notice_at", sql: r#"alter table session add column notice_at text"# },
-    SchemaOp::AddColumn { table: "session", col: "notice_accepted_at", sql: r#"alter table session add column notice_accepted_at text"# },
-    SchemaOp::AddColumn { table: "session", col: "notice_token", sql: r#"alter table session add column notice_token text"# },
-    SchemaOp::AddColumn { table: "session", col: "transcript", sql: r#"alter table session add column transcript text"# },
-    SchemaOp::AddColumn { table: "session", col: "agent_type", sql: r#"alter table session add column agent_type text"# },
-    SchemaOp::AddColumn { table: "session", col: "source", sql: r#"alter table session add column source text"# },
-    SchemaOp::AddColumn { table: "session", col: "operator", sql: r#"alter table session add column operator integer"# },
-    SchemaOp::AddColumn { table: "session", col: "parent", sql: r#"alter table session add column parent integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "journal", col: "trace", sql: r#"alter table journal add column trace text"# },
-    SchemaOp::AddColumn { table: "session", col: "origin", sql: r#"alter table session add column origin text not null default 'external'"# },
-    SchemaOp::AddColumn { table: "session", col: "provider", sql: r#"alter table session add column provider text"# },
-    SchemaOp::AddColumn { table: "session", col: "model", sql: r#"alter table session add column model text"# },
-    SchemaOp::AddColumn { table: "session", col: "effort", sql: r#"alter table session add column effort text"# },
-    SchemaOp::AddColumn { table: "session", col: "persona", sql: r#"alter table session add column persona integer"# },
-    SchemaOp::AddColumn { table: "session", col: "requested_task", sql: r#"alter table session add column requested_task integer"# },
-    SchemaOp::AddColumn { table: "session", col: "role", sql: r#"alter table session add column role integer"# },
-    SchemaOp::AddColumn { table: "session", col: "branch", sql: r#"alter table session add column branch text"# },
-    SchemaOp::AddColumn { table: "session", col: "base_revision", sql: r#"alter table session add column base_revision text"# },
-    SchemaOp::AddColumn { table: "session", col: "status", sql: r#"alter table session add column status text"# },
-    SchemaOp::AddColumn { table: "session", col: "provider_session_id", sql: r#"alter table session add column provider_session_id text"# },
-    SchemaOp::AddColumn { table: "session", col: "serving_model", sql: r#"alter table session add column serving_model text"# },
-    SchemaOp::AddColumn { table: "session", col: "latest_seq", sql: r#"alter table session add column latest_seq integer not null default 0"# },
-    SchemaOp::AddColumn { table: "session", col: "standing", sql: r#"alter table session add column standing text"# },
-    SchemaOp::AddColumn { table: "session", col: "started_at", sql: r#"alter table session add column started_at text"# },
-    SchemaOp::AddColumn { table: "session", col: "stop_requested_at", sql: r#"alter table session add column stop_requested_at text"# },
-    SchemaOp::AddColumn { table: "session", col: "input_at", sql: r#"alter table session add column input_at text"# },
-    SchemaOp::AddColumn { table: "session", col: "finished_at", sql: r#"alter table session add column finished_at text"# },
-    SchemaOp::AddColumn { table: "session", col: "exit_code", sql: r#"alter table session add column exit_code integer"# },
-    SchemaOp::AddColumn { table: "session", col: "stop_reason", sql: r#"alter table session add column stop_reason text"# },
-    SchemaOp::AddColumn { table: "session", col: "final_text", sql: r#"alter table session add column final_text text"# },
-    SchemaOp::AddColumn { table: "session", col: "usage_json", sql: r#"alter table session add column usage_json text"# },
-    SchemaOp::AddColumn { table: "session", col: "stderr", sql: r#"alter table session add column stderr text"# },
-    SchemaOp::AddColumn { table: "client", col: "actor", sql: r#"alter table client add column actor integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "session", col: "actor", sql: r#"alter table session add column actor integer references entity(id)"# },
+  );"#,
+    ),
+    SchemaOp::AddColumn {
+        table: "project",
+        col: "color",
+        sql: r#"alter table project add column "color" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "venture",
+        col: "phase",
+        sql: r#"alter table venture add column "phase" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "venture",
+        col: "paused_from",
+        sql: r#"alter table venture add column "paused_from" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "venture",
+        col: "hold_from",
+        sql: r#"alter table venture add column "hold_from" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "venture",
+        col: "run_mode",
+        sql: r#"alter table venture add column "run_mode" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "venture",
+        col: "agent_model",
+        sql: r#"alter table venture add column "agent_model" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "venture",
+        col: "operated_by",
+        sql: r#"alter table venture add column "operated_by" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "venture",
+        col: "tagline",
+        sql: r#"alter table venture add column "tagline" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "venture",
+        col: "site",
+        sql: r#"alter table venture add column "site" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "board",
+        col: "query",
+        sql: r#"alter table board add column "query" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "layout",
+        col: "root",
+        sql: r#"alter table layout add column "root" integer references entity(id)"#,
+    },
+    SchemaOp::AddColumn {
+        table: "favorite",
+        col: "at",
+        sql: r#"alter table favorite add column "at" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "worktree",
+        col: "cwd",
+        sql: r#"alter table worktree add column "cwd" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "worktree",
+        col: "branch",
+        sql: r#"alter table worktree add column "branch" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "worktree",
+        col: "base_revision",
+        sql: r#"alter table worktree add column "base_revision" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "recalled",
+        col: "source",
+        sql: r#"alter table recalled add column "source" integer"#,
+    },
+    SchemaOp::AddColumn {
+        table: "spawn",
+        col: "provider",
+        sql: r#"alter table spawn add column "provider" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "spawn",
+        col: "model",
+        sql: r#"alter table spawn add column "model" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "spawn",
+        col: "effort",
+        sql: r#"alter table spawn add column "effort" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "spawn",
+        col: "persona",
+        sql: r#"alter table spawn add column "persona" integer references entity(id)"#,
+    },
+    SchemaOp::AddColumn {
+        table: "hook",
+        col: "source",
+        sql: r#"alter table hook add column "source" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "hook",
+        col: "event",
+        sql: r#"alter table hook add column "event" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "hook",
+        col: "payload",
+        sql: r#"alter table hook add column "payload" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "hook",
+        col: "spool_id",
+        sql: r#"alter table hook add column "spool_id" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "hook",
+        col: "received_at",
+        sql: r#"alter table hook add column "received_at" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "hook",
+        col: "method",
+        sql: r#"alter table hook add column "method" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "hook",
+        col: "path",
+        sql: r#"alter table hook add column "path" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "hook",
+        col: "headers",
+        sql: r#"alter table hook add column "headers" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "hook",
+        col: "sig_ok",
+        sql: r#"alter table hook add column "sig_ok" integer"#,
+    },
+    SchemaOp::AddColumn {
+        table: "persona",
+        col: "home",
+        sql: r#"alter table persona add column "home" integer references entity(id)"#,
+    },
+    SchemaOp::AddColumn {
+        table: "model",
+        col: "name",
+        sql: r#"alter table model add column "name" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "model",
+        col: "vendor",
+        sql: r#"alter table model add column "vendor" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "model",
+        col: "grade",
+        sql: r#"alter table model add column "grade" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "memory",
+        col: "scope",
+        sql: r#"alter table memory add column "scope" integer"#,
+    },
+    SchemaOp::AddColumn {
+        table: "memory",
+        col: "last_confirmed_at",
+        sql: r#"alter table memory add column "last_confirmed_at" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "feedback",
+        col: "by",
+        sql: r#"alter table feedback add column "by" integer"#,
+    },
+    SchemaOp::AddColumn {
+        table: "resume",
+        col: "actor",
+        sql: r#"alter table resume add column "actor" integer"#,
+    },
+    SchemaOp::AddColumn {
+        table: "resume",
+        col: "at",
+        sql: r#"alter table resume add column "at" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "resume",
+        col: "rank",
+        sql: r#"alter table resume add column "rank" real"#,
+    },
+    SchemaOp::AddColumn {
+        table: "chat",
+        col: "actor",
+        sql: r#"alter table chat add column "actor" integer references entity(id)"#,
+    },
+    SchemaOp::AddColumn {
+        table: "chat",
+        col: "target",
+        sql: r#"alter table chat add column "target" integer references entity(id)"#,
+    },
+    SchemaOp::AddColumn {
+        table: "dream",
+        col: "scope",
+        sql: r#"alter table dream add column "scope" integer references entity(id)"#,
+    },
+    SchemaOp::AddColumn {
+        table: "dream",
+        col: "floor",
+        sql: r#"alter table dream add column "floor" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "notice",
+        col: "target",
+        sql: r#"alter table notice add column "target" integer references entity(id)"#,
+    },
+    SchemaOp::AddColumn {
+        table: "notice",
+        col: "event",
+        sql: r#"alter table notice add column "event" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "deliver",
+        col: "to",
+        sql: r#"alter table deliver add column "to" integer"#,
+    },
+    SchemaOp::AddColumn {
+        table: "delivered",
+        col: "at",
+        sql: r#"alter table delivered add column "at" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "delivered",
+        col: "via",
+        sql: r#"alter table delivered add column "via" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "error",
+        col: "at",
+        sql: r#"alter table error add column "at" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "error",
+        col: "message",
+        sql: r#"alter table error add column "message" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "exception",
+        col: "at",
+        sql: r#"alter table exception add column "at" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "exception",
+        col: "message",
+        sql: r#"alter table exception add column "message" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "exception",
+        col: "stack",
+        sql: r#"alter table exception add column "stack" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "anchor",
+        col: "paths",
+        sql: r#"alter table anchor add column "paths" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "anchor",
+        col: "sha",
+        sql: r#"alter table anchor add column "sha" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "anchor",
+        col: "symbol",
+        sql: r#"alter table anchor add column "symbol" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "anchor",
+        col: "hunk",
+        sql: r#"alter table anchor add column "hunk" text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "anchor",
+        col: "start",
+        sql: r#"alter table anchor add column "start" real"#,
+    },
+    SchemaOp::AddColumn {
+        table: "anchor",
+        col: "end",
+        sql: r#"alter table anchor add column "end" real"#,
+    },
+    SchemaOp::AddColumn {
+        table: "fork",
+        col: "from",
+        sql: r#"alter table fork add column "from" integer references entity(id)"#,
+    },
+    SchemaOp::AddColumn {
+        table: "task",
+        col: "project",
+        sql: r#"alter table task add column project integer references entity(id)"#,
+    },
+    SchemaOp::AddColumn {
+        table: "task",
+        col: "assignee",
+        sql: r#"alter table task add column assignee integer references entity(id)"#,
+    },
+    SchemaOp::AddColumn {
+        table: "task",
+        col: "domain",
+        sql: r#"alter table task add column domain text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "pid",
+        sql: r#"alter table session add column pid integer"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "pane",
+        sql: r#"alter table session add column pane text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "turn",
+        sql: r#"alter table session add column turn text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "notice_at",
+        sql: r#"alter table session add column notice_at text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "notice_accepted_at",
+        sql: r#"alter table session add column notice_accepted_at text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "notice_token",
+        sql: r#"alter table session add column notice_token text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "transcript",
+        sql: r#"alter table session add column transcript text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "agent_type",
+        sql: r#"alter table session add column agent_type text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "source",
+        sql: r#"alter table session add column source text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "operator",
+        sql: r#"alter table session add column operator integer"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "parent",
+        sql: r#"alter table session add column parent integer references entity(id)"#,
+    },
+    SchemaOp::AddColumn {
+        table: "journal",
+        col: "trace",
+        sql: r#"alter table journal add column trace text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "origin",
+        sql: r#"alter table session add column origin text not null default 'external'"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "provider",
+        sql: r#"alter table session add column provider text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "model",
+        sql: r#"alter table session add column model text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "effort",
+        sql: r#"alter table session add column effort text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "persona",
+        sql: r#"alter table session add column persona integer"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "requested_task",
+        sql: r#"alter table session add column requested_task integer"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "role",
+        sql: r#"alter table session add column role integer"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "branch",
+        sql: r#"alter table session add column branch text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "base_revision",
+        sql: r#"alter table session add column base_revision text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "status",
+        sql: r#"alter table session add column status text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "provider_session_id",
+        sql: r#"alter table session add column provider_session_id text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "serving_model",
+        sql: r#"alter table session add column serving_model text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "latest_seq",
+        sql: r#"alter table session add column latest_seq integer not null default 0"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "standing",
+        sql: r#"alter table session add column standing text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "started_at",
+        sql: r#"alter table session add column started_at text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "stop_requested_at",
+        sql: r#"alter table session add column stop_requested_at text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "input_at",
+        sql: r#"alter table session add column input_at text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "finished_at",
+        sql: r#"alter table session add column finished_at text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "exit_code",
+        sql: r#"alter table session add column exit_code integer"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "stop_reason",
+        sql: r#"alter table session add column stop_reason text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "final_text",
+        sql: r#"alter table session add column final_text text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "usage_json",
+        sql: r#"alter table session add column usage_json text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "stderr",
+        sql: r#"alter table session add column stderr text"#,
+    },
+    SchemaOp::AddColumn {
+        table: "client",
+        col: "actor",
+        sql: r#"alter table client add column actor integer references entity(id)"#,
+    },
+    SchemaOp::AddColumn {
+        table: "session",
+        col: "actor",
+        sql: r#"alter table session add column actor integer references entity(id)"#,
+    },
     SchemaOp::Exec(r#"create index if not exists dependency_child on "dependency" ("child");"#),
-    SchemaOp::Index { name: "journal_touch_eid", sql: r#"create index journal_touch_eid on journal_touch (eid, jrow desc);"# },
+    SchemaOp::Index {
+        name: "journal_touch_eid",
+        sql: r#"create index journal_touch_eid on journal_touch (eid, jrow desc);"#,
+    },
     SchemaOp::Exec(r#"create index if not exists task_project on "task" ("project");"#),
     SchemaOp::Exec(r#"create index if not exists task_assignee on "task" ("assignee");"#),
     SchemaOp::Exec(r#"create index if not exists role_scope on "role" ("scope");"#),
@@ -1037,24 +1510,36 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::Exec(r#"create index if not exists card_target on "card" ("target");"#),
     SchemaOp::Exec(r#"create index if not exists pin_canvas on "pin" ("canvas");"#),
     SchemaOp::Exec(r#"create index if not exists client_actor on "client" ("actor");"#),
-    SchemaOp::Exec(r#"create unique index if not exists camera_client_canvas on "camera" ("client", "canvas");"#),
+    SchemaOp::Exec(
+        r#"create unique index if not exists camera_client_canvas on "camera" ("client", "canvas");"#,
+    ),
     SchemaOp::Exec(r#"create index if not exists camera_client on "camera" ("client");"#),
     SchemaOp::Exec(r#"create index if not exists camera_canvas on "camera" ("canvas");"#),
-    SchemaOp::Exec(r#"create unique index if not exists fold_client_board on "fold" ("client", "board");"#),
+    SchemaOp::Exec(
+        r#"create unique index if not exists fold_client_board on "fold" ("client", "board");"#,
+    ),
     SchemaOp::Exec(r#"create index if not exists fold_client on "fold" ("client");"#),
     SchemaOp::Exec(r#"create index if not exists fold_board on "fold" ("board");"#),
     SchemaOp::Exec(r#"create unique index if not exists shelf_client on "shelf" ("client");"#),
     SchemaOp::Exec(r#"create unique index if not exists cursor_client on "cursor" ("client");"#),
     SchemaOp::Exec(r#"create index if not exists cursor_target on "cursor" ("target");"#),
-    SchemaOp::Exec(r#"create index if not exists session_requested_task on "session" ("requested_task");"#),
+    SchemaOp::Exec(
+        r#"create index if not exists session_requested_task on "session" ("requested_task");"#,
+    ),
     SchemaOp::Exec(r#"create index if not exists session_role on "session" ("role");"#),
     SchemaOp::Exec(r#"create index if not exists session_persona on "session" ("persona");"#),
     SchemaOp::Exec(r#"create index if not exists session_actor on "session" ("actor");"#),
     SchemaOp::Exec(r#"create index if not exists session_parent on "session" ("parent");"#),
-    SchemaOp::Exec(r#"create unique index if not exists entry_session_seq on "entry" ("session", "seq");"#),
+    SchemaOp::Exec(
+        r#"create unique index if not exists entry_session_seq on "entry" ("session", "seq");"#,
+    ),
     SchemaOp::Exec(r#"create index if not exists entry_session on "entry" ("session");"#),
-    SchemaOp::Exec(r#"create unique index if not exists generation_through on "generation" ("through");"#),
-    SchemaOp::Exec(r#"create unique index if not exists output_source_key on "output" ("source", "key") where key is not null;"#),
+    SchemaOp::Exec(
+        r#"create unique index if not exists generation_through on "generation" ("through");"#,
+    ),
+    SchemaOp::Exec(
+        r#"create unique index if not exists output_source_key on "output" ("source", "key") where key is not null;"#,
+    ),
     SchemaOp::Exec(r#"create index if not exists output_source on "output" ("source");"#),
     SchemaOp::Exec(r#"create unique index if not exists result_call on "result" ("call");"#),
     SchemaOp::Exec(r#"create index if not exists checkpoint_through on "checkpoint" ("through");"#),
@@ -1064,13 +1549,21 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::Exec(r#"create index if not exists spawn_persona on "spawn" ("persona");"#),
     SchemaOp::Exec(r#"create index if not exists claim_session on "claim" ("session");"#),
     SchemaOp::Exec(r#"create index if not exists resume_actor on "resume" ("actor");"#),
-    SchemaOp::Exec(r#"create unique index if not exists subscription_actor_target on "subscription" ("actor", "target");"#),
+    SchemaOp::Exec(
+        r#"create unique index if not exists subscription_actor_target on "subscription" ("actor", "target");"#,
+    ),
     SchemaOp::Exec(r#"create index if not exists subscription_actor on "subscription" ("actor");"#),
-    SchemaOp::Exec(r#"create index if not exists subscription_target on "subscription" ("target");"#),
-    SchemaOp::Exec(r#"create unique index if not exists chat_actor_target on "chat" ("actor", "target");"#),
+    SchemaOp::Exec(
+        r#"create index if not exists subscription_target on "subscription" ("target");"#,
+    ),
+    SchemaOp::Exec(
+        r#"create unique index if not exists chat_actor_target on "chat" ("actor", "target");"#,
+    ),
     SchemaOp::Exec(r#"create index if not exists chat_actor on "chat" ("actor");"#),
     SchemaOp::Exec(r#"create index if not exists chat_target on "chat" ("target");"#),
-    SchemaOp::Exec(r#"create index if not exists stop_request_target on "stop_request" ("target");"#),
+    SchemaOp::Exec(
+        r#"create index if not exists stop_request_target on "stop_request" ("target");"#,
+    ),
     SchemaOp::Exec(r#"create index if not exists fork_from on "fork" ("from");"#),
     SchemaOp::Exec(r#"create index if not exists knock_target on "knock" ("target");"#),
     SchemaOp::Exec(r#"create index if not exists wake_target on "wake" ("target");"#),
@@ -1105,6 +1598,8 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::Exec(r#"create index if not exists decided_via on "decided" ("via");"#),
     SchemaOp::Exec(r#"create index if not exists proposed_by on "proposed" ("by");"#),
     SchemaOp::Exec(r#"create index if not exists proposed_via on "proposed" ("via");"#),
-    SchemaOp::Exec(r#"create unique index if not exists effect_jrow_handler on "effect" ("jrow", "handler");"#),
+    SchemaOp::Exec(
+        r#"create unique index if not exists effect_jrow_handler on "effect" ("jrow", "handler");"#,
+    ),
     SchemaOp::Exec(r#"drop index if exists subscription_one"#),
 ];

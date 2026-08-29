@@ -66,11 +66,23 @@ const SCHEMA: &str = "
     from doc d join blob_text b on b.entity = d.body;
   create table task (
     entity integer primary key references entity(id),
-    status text not null default 'open',
     priority real not null default 0,
     project integer,
     assignee integer,
     domain text
+  );
+  create table completed (
+    entity integer primary key references entity(id),
+    at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    \"by\" integer,
+    via integer
+  );
+  create table cancelled (
+    entity integer primary key references entity(id),
+    at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    \"by\" integer,
+    reason text,
+    via integer
   );
   create table project (
     entity integer primary key references entity(id),
@@ -272,10 +284,7 @@ const D: &str = "aaaaaaaa-0000-4000-8000-000000000004";
 #[test]
 fn create_stamps_numbers_and_journals() {
     let s = store();
-    let out = run(
-        &s,
-        vec![ch(A, "doc", json!({"title": "Hello"})), ch(A, "task", json!({"status": "open"}))],
-    );
+    let out = run(&s, vec![ch(A, "doc", json!({"title": "Hello"})), ch(A, "task", json!({}))]);
     // num minted, created stamped, births + provenance ride the return
     let num: i64 = one(&s, "select num from entity where eid like 'aaaa%'");
     assert_eq!(num, 1);
@@ -325,10 +334,7 @@ fn native_safe_routes_plain_graph_and_proxies_the_rest() {
     // natively only if EVERY change names a transform-free NATIVE_COMPS comp.
     let ok = |cs: Vec<Change>| native_safe(&cs);
     // plain-graph creates/updates/edges → native.
-    assert!(ok(vec![
-        ch(A, "doc", json!({"title": "x"})),
-        ch(A, "task", json!({"status": "open"}))
-    ]));
+    assert!(ok(vec![ch(A, "doc", json!({"title": "x"})), ch(A, "task", json!({}))]));
     assert!(ok(vec![ch(A, "board", json!({"query": ".task!"}))]));
     assert!(ok(vec![ch(A, "project", json!({}))]));
     assert!(ok(vec![ch(A, "comment", json!({"target": B}))]));
@@ -648,10 +654,12 @@ fn unknown_column_refuses_server_owned_drops() {
 
 #[test]
 fn enum_refuses_out_of_domain() {
+    // task.status is DERIVED now (D-24102), so venture.phase is the enum column
+    // that exercises domain validation.
     let s = store();
     let err = apply(
         &s,
-        vec![ch(A, "task", json!({"status": "donee"}))],
+        vec![ch(A, "venture", json!({"phase": "livee"}))],
         &ApplyOpts::default(),
         &default_gates(),
     );
@@ -724,9 +732,10 @@ fn claim_lease_bounces_and_audits() {
     seed_session(&s, B, "sess-b");
     seed_session(&s, C, "sess-c");
     run(&s, vec![ch(A, "claim", json!({"session": B}))]);
-    // claim implies wip; the worked edge lands
-    let status: String = one(&s, "select status from task");
-    assert_eq!(status, "wip");
+    // a claim IS wip now (D-24102): the claim row is the derived wip, and the
+    // worked edge lands
+    let claims: i64 = one(&s, "select count(*) from claim");
+    assert_eq!(claims, 1);
     let n: i64 = one(&s, "select count(*) from dependency where type = 'worked'");
     assert_eq!(n, 1);
     // a second session's claim bounces the batch and mints a conflict audit
@@ -833,8 +842,8 @@ fn release_pushes_resume_retake_and_settle_pop() {
     // so it resets to 1 rather than climbing (db.ts reads max off the live table)
     run(&s, vec![ch(A, "claim", Value::Null)]);
     assert_eq!(one::<f64>(&s, "select rank from resume"), 1.0);
-    // SETTLING the task pops it (a task change to a settled status)
-    let out = run(&s, vec![ch(A, "task", json!({"status": "done"}))]);
+    // SETTLING the task pops it — a `completed` mark now, not a status write (D-24102)
+    let out = run(&s, vec![ch(A, "completed", json!({}))]);
     assert_eq!(one::<i64>(&s, "select count(*) from resume"), 0);
     assert!(out.iter().any(|c| c.name == "resume" && c.eid == A && c.comp.is_none()));
 }

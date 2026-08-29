@@ -1,4 +1,4 @@
-import { type Ent, idOf, settled } from '../../types.ts'
+import { type Ent, idOf, settled, statusOf } from '../../types.ts'
 import { crewed, gated } from '../../live.ts'
 import { block, Chip } from '../ui.tsx'
 import { linkProps } from '../nav.tsx'
@@ -28,12 +28,12 @@ export let Inline = ({ e, dot }: { e: Ent; dot?: boolean }) => (
   <Line {...linkProps(e)}>
     {dot && (
       <>
-        <Dot status={e.task!.status} gated={gated(e)} live={crewed(e)} />
+        <Dot status={statusOf(e)} gated={gated(e)} live={crewed(e)} />
         {' '}
       </>
     )}
     <Title
-      mod={settled(e.task?.status) && 'settled'}
+      mod={settled(statusOf(e)) && 'settled'}
       {...title(e.doc?.title ?? e.kind)}
     />
   </Line>

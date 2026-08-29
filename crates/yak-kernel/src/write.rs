@@ -1676,27 +1676,8 @@ impl Gate for ClaimGate {
                 cx.extra.push(Change::new(session, "dependency", Some(m)));
             }
         }
-        // A claim implies wip: open → wip in the same transaction.
-        let status: Option<String> = cx
-            .conn
-            .query_row(
-                "select status from task where entity = \
-                 (select id from entity where eid = ?1)",
-                [&c.eid],
-                |r| r.get(0),
-            )
-            .optional()?;
-        if status.as_deref() == Some("open") {
-            cx.conn.execute(
-                "update task set status = 'wip' where entity = \
-                 (select id from entity where eid = ?1)",
-                [&c.eid],
-            )?;
-            cx.touch.push(c.eid.clone());
-            let mut m = Map::new();
-            m.insert("status".into(), Value::from("wip"));
-            cx.extra.push(Change::new(&c.eid, "task", Some(m)));
-        }
+        // A claim IS wip now (D-24102): status is derived, so the claim's mere
+        // presence makes an open task read wip — no stored move to synthesize.
         Ok(())
     }
 }
@@ -2318,15 +2299,46 @@ fn prior_claims(conn: &Connection) -> Vec<PriorClaim> {
     }
 }
 
+// The DERIVED status (D-24102): cancelled → done → wip (a live claim) → open.
+// None when there is no task row, the way `select status` returned no row — so
+// the resume stack keeps a non-task claim on the stack (unsettled) as before.
 fn task_status(conn: &Connection, eid: &str) -> Option<String> {
-    conn.query_row(
-        "select status from task where entity = (select id from entity where eid = ?1)",
-        [eid],
-        |r| r.get(0),
+    let is_task = conn
+        .query_row(
+            "select 1 from task where entity = (select id from entity where eid = ?1)",
+            [eid],
+            |_| Ok(()),
+        )
+        .optional()
+        .ok()
+        .flatten()
+        .is_some();
+    if !is_task {
+        return None;
+    }
+    let has = |t: &str| {
+        conn.query_row(
+            &format!("select 1 from \"{t}\" where entity = (select id from entity where eid = ?1)"),
+            [eid],
+            |_| Ok(()),
+        )
+        .optional()
+        .ok()
+        .flatten()
+        .is_some()
+    };
+    Some(
+        if has("cancelled") {
+            "cancelled"
+        } else if has("completed") {
+            "done"
+        } else if has("claim") {
+            "wip"
+        } else {
+            "open"
+        }
+        .to_string(),
     )
-    .optional()
-    .ok()
-    .flatten()
 }
 
 // Path helpers mirroring node's, enough for ventureAt (client.ts ancestorAt +
@@ -2971,9 +2983,13 @@ pub fn apply(
             };
             // Every claim/task the batch named: taken-again pops, settled pops;
             // a released-and-unsettled one is left for the push below.
+            // A settle is a `completed`/`cancelled` mark now (D-24102), not a
+            // task status write — so those name the stack the same as claim/task.
             let mut clear: Vec<String> = vec![];
             for c in &changes {
-                if (c.name == "claim" || c.name == "task") && !clear.contains(&c.eid) {
+                if matches!(c.name.as_str(), "claim" | "task" | "completed" | "cancelled")
+                    && !clear.contains(&c.eid)
+                {
                     clear.push(c.eid.clone());
                 }
             }

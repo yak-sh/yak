@@ -256,6 +256,13 @@ fn route(path: &str) -> Result<(String, String), String> {
     if path == "kind" {
         return Ok(("".into(), "kind".into()));
     }
+    // task.status is a DERIVED column (D-24102): no stored owner, so it never
+    // reaches the vocab owner scan. Route it (bare or explicit) to task, where
+    // scalar() computes it from the completed/cancelled/claim comps — the same
+    // priority `.status` keeps over the stamped session.status.
+    if path == "status" || path == "task.status" {
+        return Ok(("task".into(), "status".into()));
+    }
     let v = vocab();
     if let Some((comp, prop)) = path.split_once('.') {
         if prop.contains('.') {
@@ -377,6 +384,25 @@ pub fn resolve_values<S: Source + ?Sized>(src: &S, preds: &mut [Pred]) {
 // and never touched since carries no `updated` row, and being made IS the
 // last time it changed (query.ts read()).
 fn scalar(comps: &serde_json::Map<String, Value>, comp: &str, prop: &str) -> Option<Value> {
+    // task.status is DERIVED (D-24102): cancelled → done → wip (a live claim) →
+    // open, the same reading statusOf gives the TS matcher. Only a task carries
+    // it; a bag without a task comp has no status (None), the way the stored
+    // column was absent on non-tasks.
+    if comp == "task" && prop == "status" {
+        if !comps.contains_key("task") {
+            return None;
+        }
+        let s = if comps.contains_key("cancelled") {
+            "cancelled"
+        } else if comps.contains_key("completed") {
+            "done"
+        } else if comps.contains_key("claim") {
+            "wip"
+        } else {
+            "open"
+        };
+        return Some(Value::String(s.into()));
+    }
     let v = comps.get(comp).and_then(|c| c.as_object()).and_then(|c| c.get(prop)).cloned();
     if v.is_none() && comp == "updated" && prop == "at" {
         return comps.get("created").and_then(|c| c.get("at")).cloned();

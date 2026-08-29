@@ -9,7 +9,7 @@ import { useBoardSub, useEntity } from '../components/subscriptions.ts'
 import { useCommentsOn } from '../components/useQuery.ts'
 import { tuiKeys } from '../keybindings.ts'
 import { formatProp, propAt } from '../props.ts'
-import { type Ent, idOf, verdictName } from '../types.ts'
+import { type Ent, idOf, statusOf, verdictName } from '../types.ts'
 import {
   applyLocal,
   boardTasks,
@@ -103,7 +103,7 @@ let boardEid = () =>
     )[0]
 
 let rows = (e: Ent, status: string) =>
-  boardTasks(e).filter((k) => k.task?.status == status).sort(byPriority)
+  boardTasks(e).filter((k) => k.task && statusOf(k) == status).sort(byPriority)
 
 export let selected = () => {
   let p = boardEid()
@@ -326,7 +326,7 @@ let TuiBoard = ({ e }: { e: Ent }) => (
 let TuiTask = ({ e }: { e: Ent }) => (
   <div class='Task'>
     <div class='Task_Head'>
-      <Dot status={e.task!.status} gated={gated(e)} live={crewed(e)} />
+      <Dot status={statusOf(e)} gated={gated(e)} live={crewed(e)} />
       <span class='Task_Title'>{e.doc?.title}</span>
       <span class='Task_Prio'>{formatProp(priority, e.task!.priority)}</span>
       {e.claim && (

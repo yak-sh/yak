@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { type Ent } from '../../types.ts'
+import { type Ent, statusOf } from '../../types.ts'
 import {
   boardTally,
   boardTasks,
@@ -209,7 +209,7 @@ export let Board = ({ e }: { e: Ent }) => {
     // The new neighbours: this column's tasks (minus the dragged one), in
     // render order; the drop's insertion index comes from the row midpoints.
     let list = tasks
-      .filter((k) => k.task?.status == status && k.eid != target)
+      .filter((k) => k.task && statusOf(k) == status && k.eid != target)
       .sort(byPriority)
     let rows = [...ev.currentTarget.querySelectorAll('.Board_Item')]
       .filter((r) => (r as HTMLElement).dataset.eid != target)
@@ -263,7 +263,7 @@ export let Board = ({ e }: { e: Ent }) => {
   return (
     <Frame>
       {statuses.map((s) => {
-        let list = tasks.filter((k) => k.task?.status == s).sort(order)
+        let list = tasks.filter((k) => k.task && statusOf(k) == s).sort(order)
         let pageKey = `${e.eid}:${s}`
         let page = visible(list, !!expanded[pageKey])
         return (

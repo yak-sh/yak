@@ -121,7 +121,21 @@ fn seed(n: usize) -> Fixture {
     );
     // Generate every comp table (quarantined included — it carries stamped
     // at/by columns fill() selects) from the vocabulary, so nothing drifts.
-    for comp in ["doc", "task", "project", "created", "updated", "quarantined"] {
+    // completed/cancelled/claim carry the DERIVED status (D-24102): the fixture
+    // mints them to cycle a task through open/wip/done/cancelled without a stored
+    // column, and the matcher reads them the way statusOf does.
+    for comp in [
+        "doc",
+        "task",
+        "project",
+        "created",
+        "updated",
+        "quarantined",
+        "completed",
+        "cancelled",
+        "claim",
+        "session",
+    ] {
         schema.push_str(&ddl_for(comp));
     }
     schema.push_str(
@@ -157,7 +171,11 @@ fn seed(n: usize) -> Fixture {
         proj_ids.push(id);
     }
 
-    let statuses = &vocab().statuses;
+    // One session entity to hold the wip tasks' claims — wip is a live claim now.
+    let sess = mint(&conn, 800_000);
+    conn.execute("insert into session (entity, id) values (?1, 'S-wip')", [sess]).unwrap();
+
+    let statuses = &vocab().statuses; // [open, wip, done, cancelled] — the cycle order
     for i in 0..n {
         let id = mint(&conn, i);
         let title = format!("Task {i} widget");
@@ -167,14 +185,39 @@ fn seed(n: usize) -> Fixture {
             rusqlite::params![id, title, body],
         )
         .unwrap();
-        let status = &statuses[i % statuses.len()];
         let priority = (i % 4) as f64;
         let project = proj_ids[i % proj_ids.len()];
         conn.execute(
-            "insert into task (entity, status, priority, project) values (?1,?2,?3,?4)",
-            rusqlite::params![id, status, priority, project],
+            "insert into task (entity, priority, project) values (?1,?2,?3)",
+            rusqlite::params![id, priority, project],
         )
         .unwrap();
+        // Mint the mark/claim that DERIVES this task's status (D-24102), cycling
+        // through the same order vocab().statuses lists: open → wip → done → cancelled.
+        match statuses[i % statuses.len()].as_str() {
+            "wip" => {
+                conn.execute(
+                    "insert into claim (entity, session, claimed_at) values (?1,?2,'2026-01-01T00:00:00Z')",
+                    rusqlite::params![id, sess],
+                )
+                .unwrap();
+            }
+            "done" => {
+                conn.execute(
+                    "insert into completed (entity, at) values (?1,'2026-01-01T00:00:00Z')",
+                    [id],
+                )
+                .unwrap();
+            }
+            "cancelled" => {
+                conn.execute(
+                    "insert into cancelled (entity, at) values (?1,'2026-01-01T00:00:00Z')",
+                    [id],
+                )
+                .unwrap();
+            }
+            _ => {} // open: no mark
+        }
         conn.execute(
             "insert into created (entity, at) values (?1, ?2)",
             rusqlite::params![id, format!("2026-08-{:02}T00:00:00Z", 1 + (i % 27))],
@@ -189,8 +232,7 @@ fn seed(n: usize) -> Fixture {
         [qid, body],
     )
     .unwrap();
-    conn.execute("insert into task (entity, status, priority) values (?1, 'open', 0)", [qid])
-        .unwrap();
+    conn.execute("insert into task (entity, priority) values (?1, 0)", [qid]).unwrap();
     conn.execute("insert into quarantined (entity) values (?1)", [qid]).unwrap();
 
     conn.execute_batch("commit").unwrap();

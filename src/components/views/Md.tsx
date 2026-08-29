@@ -1,4 +1,4 @@
-import { type Ent, idOf } from '../../types.ts'
+import { type Ent, idOf, statusOf } from '../../types.ts'
 import { ent, pending } from '../../live.ts'
 import { el } from '../ui.tsx'
 import { highlight } from '../../highlight.ts'
@@ -20,7 +20,7 @@ export let mdText = (e: Ent) => {
     '---',
     `id: ${idOf(e)}`,
     `title: ${e.doc?.title ?? ''}`,
-    ...(e.task ? [`status: ${e.task.status}`] : []),
+    ...(e.task ? [`status: ${statusOf(e)}`] : []),
     ...(refs ? [refs] : []),
     '---',
     '',
