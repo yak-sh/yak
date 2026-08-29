@@ -10,6 +10,26 @@ import { slow, until } from './testing.ts'
 
 let dir = await Deno.makeTempDir({ prefix: 'wsworker-test-' })
 Deno.env.set('DB_PATH', `${dir}/graph.db`)
+// A provider transcript which belongs to a persisted graph Session. Worker
+// isolates must register sources for themselves; server.ts's registry is not
+// shared across the isolate boundary.
+let sourceSid = '01a006a8-07b2-7453-a54d-6a851201169f'
+let sourceStore = `${dir}/codex/2026/08/29`
+Deno.mkdirSync(sourceStore, { recursive: true })
+Deno.writeTextFileSync(
+  `${sourceStore}/rollout-2026-08-29T12-00-00-${sourceSid}.jsonl`,
+  [
+    JSON.stringify({
+      type: 'session_meta',
+      payload: { session_id: sourceSid },
+    }),
+    JSON.stringify({
+      type: 'event_msg',
+      payload: { type: 'user_message', message: 'from worker source' },
+    }),
+  ].join('\n'),
+)
+Deno.env.set('CODEX_SESSIONS', `${dir}/codex`)
 // The delegator's worker mode is opt-in (default inline since the 2026-08-26
 // corruption); these tests exist to exercise the worker path, so opt in.
 Deno.env.set('TASKS_WS_WORKERS', '1')
@@ -90,6 +110,36 @@ slow(
     let subbed = JSON.parse(((await next()) as { frame: string }).frame)
     assertEquals(subbed.sub, 'q:probe')
     assert(subbed.replace === true && Array.isArray(subbed.changes))
+    // Persist only the public Session identity; its entries remain in the
+    // provider file and must project back through that graph eid in this
+    // worker's ordinary entries: subscription.
+    let sourceSession = uid()
+    let sourced = await fetch(`http://${U}/apply`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify([{
+        eid: sourceSession,
+        name: 'session',
+        comp: { id: sourceSid },
+      }]),
+    })
+    assert(sourced.ok)
+    await sourced.body?.cancel()
+    w.postMessage({
+      raw: JSON.stringify({
+        sub: `entries:${sourceSession}`,
+        q: `.entry.session=${sourceSession}`,
+      }),
+    })
+    let sourceFrame = JSON.parse(((await next()) as { frame: string }).frame)
+    assertEquals(sourceFrame.sub, `entries:${sourceSession}`)
+    assertEquals(sourceFrame.error, undefined)
+    assert(
+      sourceFrame.changes.some((
+        c: { name: string; comp?: { session?: string } },
+      ) => c.name == 'entry' && c.comp?.session == sourceSession),
+      'the worker projects provider entries onto the graph Session partition',
+    )
     // A write batch never applies here — it posts back to the writer process.
     let eid = uid()
     let batch = [{ eid, name: 'doc', comp: { title: 'from worker test' } }]

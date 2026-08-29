@@ -12,6 +12,9 @@
 // (-A), and the read-only open means a bug here cannot write the graph.
 /// <reference lib="webworker" />
 import { DatabaseSync } from './sqlite.ts'
+import { registerCodexSource } from './source_codex.ts'
+import { registerManagedSource } from './source_managed.ts'
+import { registerSessionSource } from './source_session.ts'
 import { type Subserve, subserve } from './subserve.ts'
 
 type In =
@@ -32,11 +35,26 @@ let post = (m: unknown) =>
 // (T-22658). Held at module scope so the {close} teardown can reach it.
 let db: DatabaseSync | undefined
 let sub: Subserve | undefined
+let sources = false
+
+// Each Worker is its own JS isolate: the source registry installed by
+// server.ts belongs only to the delegator's isolate. Install the same adapters
+// here before opening a subscription evaluator, otherwise a file-backed graph
+// (the only mode which uses workers) silently loses every transcript-backed
+// Session at precisely the lazy-partition door meant to serve it.
+let registerSources = () => {
+  if (sources) return
+  registerSessionSource()
+  registerCodexSource()
+  registerManagedSource()
+  sources = true
+}
 
 self.onmessage = (m: MessageEvent<In>) => {
   let d = m.data
   try {
     if ('init' in d) {
+      registerSources()
       // connect()-style pragmas without connect(): the worker never migrates
       // and never loads the vector
       // extension (write-capable extensions live only in the owning process).
