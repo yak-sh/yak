@@ -66,6 +66,7 @@ import {
   jsonOf,
   memoryChanges,
   memoryHead,
+  mintedIn,
   mutate,
   noticeBlock,
   param,
@@ -81,6 +82,7 @@ import {
   scopeFor,
   search,
   serverCaps,
+  sessionFor,
   sessionRow,
   similarHint,
   spawnChanges,
@@ -357,6 +359,21 @@ let HINTS: Record<string, ToolAnnotations> = {
   task_spawn: { openWorldHint: true },
 }
 
+export let WORKER_PROTOCOL = `# Work the graph
+1. Evaluate recent open work before selecting it. Inspect its context,
+dependencies, approval, claim, and acceptance criteria; add missing context or
+prerequisites before build work begins.
+2. Build only approved, open, unblocked work. Claim exactly what you undertake,
+report progress and failures on the task, verify the result, then complete and
+release it.
+3. Treat verification as a separate pass recorded through review; completion
+alone is not verification.
+
+When the operator explicitly tells you to claim or work queued tasks, inspect
+eligible work, claim it, and execute it in this harness. Do not merely wait for
+managed auto-dispatch. Subagents are optional: delegate when they are available
+and useful; otherwise work the task yourself.`
+
 export let MCP_INSTRUCTIONS =
   `Tool arguments are source data, never HTML. Pass <, >,
 and & literally; the renderer escapes them for its own output type.
@@ -371,9 +388,9 @@ Exact dry run: ${taskTreeExample('mcp')}. Choose every relation explicitly;
 never infer edge meanings from prose. Keep leaf bodies to the irreducible ask
 and pointers.
 
-Call task_context first each session, and pass the same stable session
-id to every tool that takes one — it names the run for attribution, claims,
-and the comms bus.`
+If you do not know a stable session id, call work_start first. On later turns,
+call task_context first. Pass the same stable sid to every tool that takes a
+session — it names the run for attribution, claims, and the comms bus.`
 
 export let mcpServer = (io: IO) => {
   // The io-backed Querier: client.ts's scoped readers (checkedRefs, sessionRow,
@@ -429,6 +446,86 @@ export let mcpServer = (io: IO) => {
   // working set explicitly through task_context; quietly appending inbox rows
   // here made every tool response a second, drifting model of attention.
   let bus = (out: string, _session?: string, _snap?: Snapshot) => text(out)
+
+  let workerContext = async (session: string) => {
+    let [snap, pending] = await Promise.all([
+      contextSnapshot(session, undefined, undefined, [], ioQ, io.deps),
+      busNotices(session, undefined, ioQ),
+    ])
+    let digest = contextDigest(
+      snap,
+      session,
+      Date.now(),
+      undefined,
+      new Set(pending.eids),
+    )
+    return pending.lines.length ? digest + noticeBlock(pending.lines) : digest
+  }
+
+  tool(
+    'work_start',
+    `Create or resume an external graph worker before it knows a session id.
+With no argument, creates a durable identity and returns its human S-id plus a
+stable sid. Pass that sid on reconnect to resume it; a caller-supplied stable
+sid also converges to one identity under concurrent calls. Returns the portable
+worker protocol and the same bounded, rooted working context as task_context.
+This is the mutating bootstrap door; task_context remains read-only.`,
+    {
+      session: z.string().trim().min(1)
+        .describe('Returned sid or a stable harness key; omit on first use.')
+        .optional(),
+    },
+    async ({ session }: { session?: string }) => {
+      let key = session ?? uuid()
+      let row = await sessionRow(key, ioQ)
+      let created = false
+      if (!row) {
+        let planned = sessionFor([], key, undefined, undefined, {
+          source: 'mcp',
+        })
+        try {
+          let result = await io.write(planned.changes)
+          let id = mintedIn(result.changes, planned.eid)
+          row = rows({ changes: result.changes })
+            .find((candidate) => idOf(candidate) == id)
+          created = true
+        } catch (cause) {
+          // Two desktops may bootstrap the same stable key together. The
+          // unique session.id constraint chooses one winner; observing it is
+          // success, while every other write failure remains loud and specific.
+          row = await sessionRow(key, ioQ)
+          if (!row) {
+            return err(
+              `worker bootstrap failed before a session was created: ${
+                (cause as Error).message
+              }. Retry work_start with session ${key}; no session entity was ` +
+                `confirmed.`,
+            )
+          }
+        }
+      }
+      if (!row) {
+        return err('worker bootstrap failed: session readback was empty')
+      }
+      let id = idOf(row)
+      let sid = String(row.comps.session?.id)
+      try {
+        let context = await workerContext(sid)
+        return text(
+          `session: ${id}\nsid: ${sid}\nstate: ${
+            created ? 'created' : 'resumed'
+          }\n\n` +
+            `${WORKER_PROTOCOL}\n\n# Context\n${context}`,
+        )
+      } catch (cause) {
+        return err(
+          `worker ${id} is durable, but its context failed to load: ${
+            (cause as Error).message
+          }. Its sid is ${sid}; call work_start with session ${sid} to retry.`,
+        )
+      }
+    },
+  )
 
   tool(
     'search',
@@ -837,19 +934,7 @@ with the same stable session identifier you claim with.`,
       // bus) — through io, so the in-process mount reads the live db and
       // stdio the /query door. notices() sorts identically on both paths
       // (T-15463), so the served lines match the whole-snapshot read.
-      let [snap, pending] = await Promise.all([
-        contextSnapshot(session, undefined, undefined, [], ioQ, io.deps),
-        busNotices(session, undefined, ioQ),
-      ])
-      let digest = contextDigest(
-        snap,
-        session,
-        Date.now(),
-        undefined,
-        new Set(pending.eids),
-      )
-      if (!pending.lines.length) return text(digest)
-      return text(digest + noticeBlock(pending.lines))
+      return text(await workerContext(session))
     },
   )
 

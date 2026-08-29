@@ -18,6 +18,7 @@ import {
   MCP_INSTRUCTIONS,
   mcpServer,
   stdioIO,
+  WORKER_PROTOCOL,
 } from './mcp.ts'
 import { commandOut } from './commands.ts'
 import { sha } from './sha.ts'
@@ -60,6 +61,17 @@ Deno.test('MCP prompt makes task trees the default for multi-step work', () => {
     MCP_INSTRUCTIONS,
     /After\ncompaction or resume, use durable task context to restore assignments/,
   )
+  assertMatch(
+    MCP_INSTRUCTIONS,
+    /do not know a stable session id, call work_start/,
+  )
+  assertMatch(MCP_INSTRUCTIONS, /On later turns,\ncall task_context first/)
+})
+
+Deno.test('worker protocol executes queued work in the current harness', () => {
+  assertMatch(WORKER_PROTOCOL, /claim it, and execute it in this harness/)
+  assertMatch(WORKER_PROTOCOL, /Do not merely wait for\nmanaged auto-dispatch/)
+  assertMatch(WORKER_PROTOCOL, /Subagents are optional/)
 })
 
 let N = 'aaaaaaaa-0000-4000-8000-000000000001'
@@ -207,6 +219,148 @@ Deno.test('task_context surfaces agent input without human read-state', async ()
     }) as ToolResult
     assertEquals(said(second).includes('UNTRUSTED comment'), true)
     assertEquals(writes, [])
+  })
+})
+
+Deno.test('work_start bootstraps without a session id and resumes it', async () => {
+  let { db, io } = graph()
+  let session = ''
+  let sid = ''
+  await protocol(io, async (client) => {
+    let started = await client.callTool({
+      name: 'work_start',
+      arguments: {},
+    }) as ToolResult
+    assertEquals(started.isError, undefined)
+    assertMatch(
+      said(started),
+      /^session: S-\d+\nsid: [0-9a-f-]+\nstate: created/m,
+    )
+    assertMatch(said(started), /# Work the graph/)
+    assertMatch(said(started), /# Context\n# tasks · session/)
+    session = said(started).match(/^session: (S-\d+)$/m)![1]
+    sid = said(started).match(/^sid: ([^\n]+)$/m)![1]
+    assertEquals(
+      db.prepare('select id from session').all(),
+      [{ id: sid }],
+    )
+  })
+  // A fresh MCP connection has no closure-local identity. The returned sid
+  // alone resumes the same durable Session.
+  await protocol(io, async (client) => {
+    let resumed = await client.callTool({
+      name: 'work_start',
+      arguments: { session: sid },
+    }) as ToolResult
+    assertMatch(said(resumed), new RegExp(`^session: ${session}$`, 'm'))
+    assertMatch(said(resumed), new RegExp(`^sid: ${sid}$`, 'm'))
+    assertMatch(said(resumed), /^state: resumed$/m)
+    assertEquals(
+      db.prepare('select count(*) as n from session').get(),
+      { n: 1 },
+    )
+  })
+})
+
+Deno.test('concurrent work_start calls converge on one stable identity', async () => {
+  let { db, io } = graph()
+  let write = io.write
+  let waiting = 0
+  let release!: () => void
+  let together = new Promise<void>((resolve) => release = resolve)
+  io.write = async (mutation, via) => {
+    waiting++
+    if (waiting == 2) release()
+    await together
+    return await write(mutation, via)
+  }
+  await protocol(io, async (client) => {
+    let call = () =>
+      client.callTool({
+        name: 'work_start',
+        arguments: { session: 'desktop-worker-1' },
+      }) as Promise<ToolResult>
+    let [a, b] = await Promise.all([call(), call()])
+    let session = said(a).match(/^session: (S-\d+)$/m)![1]
+    assertMatch(said(b), new RegExp(`^session: ${session}$`, 'm'))
+    assertEquals(
+      [said(a), said(b)].filter((s) => /state: created/.test(s)).length,
+      1,
+    )
+    assertEquals(
+      [said(a), said(b)].filter((s) => /state: resumed/.test(s)).length,
+      1,
+    )
+    assertEquals(
+      db.prepare('select id from session').all(),
+      [{ id: 'desktop-worker-1' }],
+    )
+  })
+})
+
+Deno.test('concurrent anonymous work_start calls mint separate identities', async () => {
+  let { db, io } = graph()
+  await protocol(io, async (client) => {
+    let call = () =>
+      client.callTool({ name: 'work_start', arguments: {} }) as Promise<
+        ToolResult
+      >
+    let [a, b] = await Promise.all([call(), call()])
+    let sessions = [a, b].map((out) =>
+      said(out).match(/^session: (S-\d+)$/m)![1]
+    )
+    let sids = [a, b].map((out) => said(out).match(/^sid: ([^\n]+)$/m)![1])
+    assertEquals(new Set(sessions).size, 2)
+    assertEquals(new Set(sids).size, 2)
+    assertEquals(
+      db.prepare('select count(*) as n from session').get(),
+      { n: 2 },
+    )
+  })
+})
+
+Deno.test('work_start preserves its durable identity when context fails', async () => {
+  let { db, io } = graph()
+  let query = io.query
+  let loading = false
+  let write = io.write
+  io.write = async (mutation, via) => {
+    let out = await write(mutation, via)
+    loading = true
+    return out
+  }
+  io.query = (q, opts) =>
+    loading
+      ? Promise.reject(new Error('context index unavailable'))
+      : query(q, opts)
+  await protocol(io, async (client) => {
+    let out = await client.callTool({
+      name: 'work_start',
+      arguments: {},
+    }) as ToolResult
+    assertEquals(out.isError, true)
+    assertMatch(said(out), /worker S-\d+ is durable/)
+    assertMatch(said(out), /context index unavailable/)
+    assertMatch(said(out), /Its sid is [0-9a-f-]+/)
+    assertEquals(
+      db.prepare('select count(*) as n from session').get(),
+      { n: 1 },
+    )
+  })
+})
+
+Deno.test('work_start returns a stable retry sid when creation fails', async () => {
+  let io = blank()
+  io.write = () => Promise.reject(new Error('graph is read-only'))
+  await protocol(io, async (client) => {
+    let out = await client.callTool({
+      name: 'work_start',
+      arguments: {},
+    }) as ToolResult
+    assertEquals(out.isError, true)
+    assertMatch(said(out), /graph is read-only/)
+    assertMatch(said(out), /Retry work_start with session [0-9a-f-]+/)
+    assertMatch(said(out), /no session entity was confirmed/)
   })
 })
 
@@ -704,6 +858,7 @@ Deno.test('MCP query and show expose provenance context in via', async () => {
 })
 
 let bases: Record<string, Record<string, unknown>> = {
+  work_start: {},
   search: { q: 'x' },
   usage: {},
   task_list: {},
@@ -819,6 +974,10 @@ Deno.test('MCP schemas document parameters and derive closed vocabularies', asyn
       assert(prop(byName(tools, name), field)?.description, `${name}.${field}`)
     }
 
+    let start = byName(tools, 'work_start')
+    assert(prop(start, 'session')?.description)
+    assertEquals(schema(start).required?.includes('session') ?? false, false)
+
     let task = byName(tools, 'task_new')
     assertMatch(task.description ?? '', /3\+ steps use task_tree/)
     assertMatch(task.description ?? '', /"dry_run":true/)
@@ -902,6 +1061,8 @@ Deno.test('MCP annotations: queries read-only, deleters destructive, setters ide
     for (let q of ['search', 'task_list', 'task_show', 'graph_query']) {
       assertEquals(a(q).readOnlyHint, true, q)
     }
+    assertEquals(a('task_context').readOnlyHint, true)
+    assert(!a('work_start').readOnlyHint)
     // A mutating tool is never marked read-only.
     for (let w of ['task_new', 'graph_apply', 'task_comment']) {
       assert(!a(w).readOnlyHint, w)
