@@ -23,6 +23,24 @@ export type EntryRow = {
   comps: Record<string, Record<string, unknown>>
 }
 
+// A source lookup is not a plain list: [] can mean either "the transcript was
+// read and contains no recognized entries" or "there was no transcript to
+// read". Keep those states distinct here even though entriesOf() retains its
+// historical array return for graph readers.
+export type EntrySourceOutcome =
+  | { state: 'found'; entries: EntryRow[] }
+  | { state: 'empty'; entries: EntryRow[] }
+  | { state: 'failed'; reason: 'missing' | 'unreadable' | 'malformed' }
+  | { state: 'undiscoverable' }
+
+// A registered source returns undefined only when it does not own the handle.
+// Once it locates a transcript it must give an authoritative outcome, including
+// an empty or failed read.
+export type OwnedEntrySourceOutcome = Exclude<
+  EntrySourceOutcome,
+  { state: 'undiscoverable' }
+>
+
 export type SqlFilter = { sql: string; params: (string | number)[] }
 
 export type Source = {
@@ -34,7 +52,11 @@ export type Source = {
   // decides for itself which of its entities satisfy it.
   list?: (filter: SqlFilter) => Iterable<Change[]>
   // A pass-through entity's log tail, read from its file on demand.
-  entries?: (eid: string, after: number, limit: number) => EntryRow[]
+  entries?: (
+    handle: string,
+    after: number,
+    limit: number,
+  ) => OwnedEntrySourceOutcome | undefined
 }
 
 // The registry is a plain module-level list — the same shape as the effect and
@@ -73,17 +95,21 @@ export let sourceList = function* (filter: SqlFilter): Iterable<Change[]> {
   for (let s of sources) if (s.list) yield* s.list(filter)
 }
 
-// First source with a tail for this eid wins. Empty when none owns it.
+// First source which owns either handle wins. The graph eid is tried first (the
+// unchanged ephemeral/managed path), followed by provider ids discovered from
+// persisted Session metadata.
 export let sourceEntries = (
-  eid: string,
+  handles: string[],
   after: number,
   limit: number,
-): EntryRow[] => {
-  for (let s of sources) {
-    let e = s.entries?.(eid, after, limit)
-    if (e && e.length) return e
+): OwnedEntrySourceOutcome | undefined => {
+  for (let handle of handles) {
+    for (let s of sources) {
+      let outcome = s.entries?.(handle, after, limit)
+      if (outcome) return outcome
+    }
   }
-  return []
+  return undefined
 }
 
 // A source batch → the comps shape the keyed reads speak (component name → row,

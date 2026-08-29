@@ -217,6 +217,10 @@ export let evalFast = (
   let inputs = inputsOf(preds)
   if (!narrows(inputs)) return null
   let entries = forceEntries || namesLazy(preds)
+  // SQL can answer only durable entry rows. With registered read-through
+  // sources, a named entry partition must take the ordinary scoped fallback so
+  // entryUniverse can ask entriesOf() and project a provider transcript too.
+  if (entries && hasSources() && scopedSessions(preds).length) return null
   // The statement carries the screens the JS filters below otherwise apply
   // AFTER it (query.ts screened) — which is the whole reason a LIMIT may ride
   // it: a filter that runs after the limit under-fills the page. The JS filters

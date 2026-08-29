@@ -17,7 +17,7 @@ import { createHash } from 'node:crypto'
 import type { Change } from './types.ts'
 import { adapters } from './adapters.ts'
 import { ingestEntries, ingestTranscript } from './ingest.ts'
-import type { EntryRow, Source } from './source.ts'
+import type { EntryRow, OwnedEntrySourceOutcome, Source } from './source.ts'
 
 // A fixed namespace so the derivation is stable forever. uuid v5 = sha1 of
 // (namespace bytes ++ name bytes), version/variant bits stamped.
@@ -92,6 +92,18 @@ export let readLines = (path: string): string[] => {
   }
 }
 
+let readTranscript = (
+  path: string,
+): { lines: string[] } | { reason: 'missing' | 'unreadable' } => {
+  try {
+    return { lines: Deno.readTextFileSync(path).trim().split('\n') }
+  } catch (error) {
+    return {
+      reason: error instanceof Deno.errors.NotFound ? 'missing' : 'unreadable',
+    }
+  }
+}
+
 // The session's own facts, read from the transcript on demand: the adapter's
 // observe() states the model/provider a conversation reveals.
 let observe = (
@@ -117,6 +129,19 @@ export type Door = 'stream' | 'transcript'
 let ingest = (
   door: Door,
 ) => (door == 'stream' ? ingestEntries : ingestTranscript)
+
+// Ingest mappers mint UUIDs because the durable append path calls them once.
+// A file Source calls them on every read, so replace those transient ids with a
+// stable identity derived from the source session and recognized-entry
+// coordinate. Rewrite same-batch references (notably result.call) with it too.
+let remapIds = (value: unknown, ids: Map<string, string>): unknown => {
+  if (typeof value == 'string') return ids.get(value) ?? value
+  if (Array.isArray(value)) return value.map((item) => remapIds(item, ids))
+  if (!value || typeof value != 'object') return value
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, remapIds(item, ids)]),
+  )
+}
 
 // resolve + entries for a store, given how to locate a session, which door its
 // files speak, and (only for a store whose files don't name their provider) how
@@ -157,26 +182,46 @@ export let fileSource = (opts: {
   // over the entries the
   // adapter recognizes, stable across reads, so a tailing reader's `after`
   // cursor advances the same way it would on a persisted partition.
-  let entries = (eid: string, after: number, limit: number): EntryRow[] => {
-    let loc = opts.locate(eid)
-    if (!loc) return []
-    let lines = readLines(loc.path)
+  let entries = (
+    handle: string,
+    after: number,
+    limit: number,
+  ): OwnedEntrySourceOutcome | undefined => {
+    let loc = opts.locate(handle)
+    if (!loc) return undefined
+    let read = readTranscript(loc.path)
+    if ('reason' in read) return { state: 'failed', reason: read.reason }
+    let { lines } = read
     let provider = providerOf(loc, lines)
     let ad = adapters[provider]
-    if (!ad) return []
+    if (!ad) return { state: 'empty', entries: [] }
     let map = ingest(opts.door)
     let state = { calls: new Map<string, string>() }
     let out: EntryRow[] = []
     let seq = 0
+    let parsed = 0
     for (let line of lines) {
       if (!line.trim()) continue
       let e
       try {
         e = JSON.parse(line)
+        parsed++
       } catch {
         continue // a malformed line carries no entry
       }
       let batch = map(ad.dialect, e, state)
+      let ids = new Map(
+        batch.ids.map((
+          id,
+          i,
+        ) => [id, sidEid(`${loc.eid}:entry:${seq + i + 1}`)]),
+      )
+      batch.ids = batch.ids.map((id) => ids.get(id)!)
+      batch.specs = batch.specs.map((spec) =>
+        remapIds(spec, ids) as typeof spec
+      )
+      batch.calls = batch.calls.map(([key, id]) => [key, ids.get(id) ?? id])
+      for (let [key, id] of batch.calls) state.calls.set(key, id)
       for (let [i, spec] of batch.specs.entries()) {
         seq++
         if (seq <= after) continue
@@ -188,10 +233,18 @@ export let fileSource = (opts: {
           comps[name] = { eid: entryEid, ...(comp as Record<string, unknown>) }
         }
         out.push({ eid: entryEid, seq, comps })
-        if (out.length >= limit) return out
+        if (out.length >= limit) return { state: 'found', entries: out }
       }
     }
-    return out
+    if (!parsed && lines.some((line) => line.trim())) {
+      return { state: 'failed', reason: 'malformed' }
+    }
+    // A cursor beyond a non-empty transcript is still a found source, merely
+    // with an empty PAGE. `empty` is reserved for an authoritatively entryless
+    // transcript.
+    return seq
+      ? { state: 'found', entries: out }
+      : { state: 'empty', entries: [] }
   }
 
   return { resolve, entries }

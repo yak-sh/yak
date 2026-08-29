@@ -5,7 +5,7 @@ Deno.env.set('DB_PATH', ':memory:')
 let { apply, eager, entriesOf, matching, resolveId, rowsOf } = await import(
   './db.ts'
 )
-let { addSource, clearSources } = await import('./source.ts')
+let { addSource, clearSources, sourceEntries } = await import('./source.ts')
 let { freshDb } = await import('./testdb.ts')
 let { assertEquals } = await import('@std/assert')
 
@@ -25,12 +25,15 @@ let source = {
   },
   entries: (e: string, after: number, _limit: number) =>
     e == eid && after < 1
-      ? [{
-        eid: `${eid}-1`,
-        seq: 1,
-        comps: { entry: { eid: `${eid}-1`, session: e, seq: 1 } },
-      }]
-      : [],
+      ? {
+        state: 'found' as const,
+        entries: [{
+          eid: `${eid}-1`,
+          seq: 1,
+          comps: { entry: { eid: `${eid}-1`, session: e, seq: 1 } },
+        }],
+      }
+      : { state: 'found' as const, entries: [] },
 }
 
 let count = (db: import('./sqlite.ts').DatabaseSync) =>
@@ -96,6 +99,32 @@ Deno.test('source: entriesOf streams a pass-through session tail', () => {
     assertEquals(tail.length, 1)
     assertEquals(tail[0].seq, 1)
   })
+})
+
+Deno.test('source: graph partition handle wins before provider fallback', () => {
+  let provider = addSource({
+    entries: (handle: string) =>
+      handle == 'provider-id'
+        ? { state: 'found' as const, entries: [] }
+        : undefined,
+  })
+  let graph = addSource({
+    entries: (handle: string) =>
+      handle == eid ? { state: 'empty' as const, entries: [] } : undefined,
+  })
+  try {
+    // Source registration order must not let a provider-id match shadow the
+    // graph-owned managed log. Handles are identity precedence; sources are
+    // alternative implementations within each handle.
+    assertEquals(sourceEntries([eid, 'provider-id'], 0, 500), {
+      state: 'empty',
+      entries: [],
+    })
+  } finally {
+    graph()
+    provider()
+    clearSources()
+  }
 })
 
 Deno.test('source: no source, no cost — a normal miss still returns undefined/empty', () => {

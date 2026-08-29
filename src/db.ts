@@ -76,6 +76,7 @@ import {
 } from './redaction.ts'
 import {
   compsOf,
+  type EntrySourceOutcome,
   hasSources,
   sourceEntries,
   sourceList,
@@ -7924,14 +7925,61 @@ export let entriesOf = (
       eid: string
       seq: number
     }[]
-  // A pass-through session has no persisted entry rows — its tail streams from
-  // the source's transcript file. (through-bounded replay stays a persisted
-  // concern; an ephemeral session serves its live tail.)
+  // Only a wholly file-backed partition falls through. A page beyond the end
+  // of a real SQL partition must stay empty rather than replaying a provider
+  // transcript over its durable rows.
   if (!index.length && hasSources() && through == null) {
-    let tail = sourceEntries(session, after, cap)
-    if (tail.length) return tail
+    let stored = prep(
+      db,
+      `select 1 from entry t join entity s on s.id = t.session
+       where s.eid = ? limit 1`,
+    ).get(session)
+    if (!stored) {
+      let outcome = sourceEntriesOf(db, session, after, cap)
+      if (outcome.state == 'found') return outcome.entries
+    }
   }
   return entryRows(db, index)
+}
+
+// The explicit source-side answer for a Session partition. Persisted Sessions
+// are located by both identities: their graph eid remains the partition owner,
+// while session.id is merely the provider-store handle used to find bytes.
+// Ephemeral sessions have no SQL metadata and retain the direct derived-eid
+// lookup. Returned entry identities and source seqs are untouched; only the
+// entry.session reference is projected to the requested persisted identity.
+export let sourceEntriesOf = (
+  db: DatabaseSync,
+  session: string,
+  after = 0,
+  limit = 500,
+): EntrySourceOutcome => {
+  let meta = readComp(db, session, 'session')
+  let providerId = typeof meta?.id == 'string' && meta.id ? meta.id : undefined
+  let handles = [
+    ...new Set([session, providerId].filter((x): x is string => !!x)),
+  ]
+  let outcome = sourceEntries(
+    handles,
+    after,
+    Math.max(1, Math.min(limit, 5000)),
+  )
+  if (!outcome) {
+    return providerId
+      ? { state: 'failed', reason: 'missing' }
+      : { state: 'undiscoverable' }
+  }
+  if (outcome.state != 'found') return outcome
+  return {
+    state: 'found',
+    entries: outcome.entries.map((row) => ({
+      ...row,
+      comps: {
+        ...row.comps,
+        entry: { ...row.comps.entry, session },
+      },
+    })),
+  }
 }
 
 // The lazy partition scanned ACROSS sessions, ordered (session, seq) and

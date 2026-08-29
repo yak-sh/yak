@@ -25,11 +25,30 @@ Deno.writeTextFileSync(
         phase: 'final_answer',
       },
     }),
+    JSON.stringify({
+      type: 'response_item',
+      payload: {
+        type: 'function_call',
+        call_id: 'call-1',
+        name: 'exec_command',
+        arguments: JSON.stringify({ cmd: 'pwd' }),
+      },
+    }),
+    JSON.stringify({
+      type: 'response_item',
+      payload: {
+        type: 'function_call_output',
+        call_id: 'call-1',
+        output:
+          'Chunk ID: one\nProcess exited with code 0\nFinal output:\n/tmp',
+      },
+    }),
   ].join('\n'),
 )
 Deno.env.set('CODEX_SESSIONS', store)
 
-let { eager, entriesOf, resolveId } = await import('./db.ts')
+let { apply, eager, entriesOf, resolveId } = await import('./db.ts')
+let { evalGraph } = await import('./graph_query.ts')
 let { clearSources } = await import('./source.ts')
 let { freshDb } = await import('./testdb.ts')
 let { registerCodexSource, forgetCodexIndex } = await import(
@@ -43,14 +62,17 @@ let eid = sidEid(sid)
 let count = (db: import('./sqlite.ts').DatabaseSync) =>
   (db.prepare('select count(*) as n from entity').get() as { n: number }).n
 
-let withSource = (fn: (db: import('./sqlite.ts').DatabaseSync) => void) => {
+let withSource = (
+  fn: (db: import('./sqlite.ts').DatabaseSync) => void,
+  written = 0,
+) => {
   let db = freshDb()
   let before = count(db)
   forgetCodexIndex()
   let off = registerCodexSource()
   try {
     fn(db)
-    assertEquals(count(db), before) // no read ever persisted a row
+    assertEquals(count(db), before + written) // reads never persist rows
   } finally {
     off()
     clearSources()
@@ -87,4 +109,38 @@ Deno.test('codex source: entriesOf streams the rollout tail, cursor-advanced', (
     let rest = entriesOf(db, eid, tail[0].seq, 500)
     assertEquals(rest.every((r) => r.seq > tail[0].seq), true)
   })
+})
+
+Deno.test('codex source: persisted identity projects rollout rows and preserves paging identities', () => {
+  withSource((db) => {
+    let persisted = crypto.randomUUID()
+    apply(db, [{ eid: persisted, name: 'session', comp: { id: sid } }])
+    let all = entriesOf(db, persisted, 0, 500)
+    assertEquals(
+      entriesOf(db, persisted, 0, 500).map((row) => row.eid),
+      all.map((row) => row.eid),
+    )
+    let first = entriesOf(db, persisted, 0, 1)
+    assertEquals(first.length, 1)
+    assertEquals(first[0].comps.entry?.session, persisted)
+    let rest = entriesOf(db, persisted, first[0].seq, 500)
+    assertEquals(
+      [...first, ...rest].map((row) => row.eid),
+      all.map((row) => row.eid),
+    )
+    let call = all.find((row) => row.comps.call)
+    let result = all.find((row) => row.comps.result)
+    assertEquals(result?.comps.result?.call, call?.eid)
+    assertEquals(rest.every((row) => row.seq > first[0].seq), true)
+    assertEquals(
+      rest.every((row) => row.comps.entry?.session == persisted),
+      true,
+    )
+    let hits = evalGraph(db, `.entry.session=${persisted}`).hits
+    assertEquals(hits.length >= 2, true)
+    assertEquals(
+      hits.every((row) => row.comps.entry?.session == persisted),
+      true,
+    )
+  }, 1)
 })
