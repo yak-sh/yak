@@ -249,14 +249,18 @@ Deno.test('status moves land on the focused task', () => {
   // Status is DERIVED (D-24102): the moves mint/retract marks, never a task
   // write. `done` wears `completed`; `open` retracts both marks.
   assertEquals(run('done', ctx(T)).changes, [
+    { eid: T, name: 'cancelled', comp: null },
     { eid: T, name: 'completed', comp: {} },
   ])
   assertEquals(run('open', ctx(T)).changes, [
     { eid: T, name: 'completed', comp: null },
     { eid: T, name: 'cancelled', comp: null },
+    { eid: T, name: 'claim', comp: null },
   ])
   // wip is a live claim now — it leases under a session, and refuses without one
   assertEquals(run('wip', ctx(T, 'sess-x')).changes, [
+    { eid: T, name: 'completed', comp: null },
+    { eid: T, name: 'cancelled', comp: null },
     { eid: S, name: 'session', comp: { actor: P } },
     { eid: T, name: 'claim', comp: { session: S } },
   ])
@@ -337,6 +341,7 @@ Deno.test('comment writes on the focus and reads the shell body convention', () 
 
 Deno.test('cancel: trailing words become a plain comment, same batch', () => {
   assertEquals(run('cancel', ctx(T)).changes, [
+    { eid: T, name: 'completed', comp: null },
     { eid: T, name: 'cancelled', comp: {} },
   ])
   let why = run('cancel superseded by T-9', ctx(T, 'sess-x'))

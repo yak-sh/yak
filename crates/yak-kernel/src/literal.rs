@@ -363,14 +363,14 @@ mod tests {
                     "key":"goal",
                     "comps": {
                         "doc":{"title":"Goal"},
-                        "task":{"status":"open", "project":"project"}
+                        "task":{"project":"project"}
                     },
                     "was":{"doc":{"title":"old-title-hash"}},
                     "deps":{"requires":[{
                         "key":"gate",
                         "comps": {
                             "doc":{"title":"Gate"},
-                            "task":{"status":"open", "project":"project"}
+                            "task":{"project":"project"}
                         },
                         "deps":{"reads":["memory"]}
                     }]}
@@ -413,9 +413,9 @@ mod tests {
             json!([
                 {"eid":minted[0],"name":"doc","comp":{"title":"Goal"},
                  "was":{"title":"old-title-hash"}},
-                {"eid":minted[0],"name":"task","comp":{"status":"open","project":project}},
+                {"eid":minted[0],"name":"task","comp":{"project":project}},
                 {"eid":minted[1],"name":"doc","comp":{"title":"Gate"}},
-                {"eid":minted[1],"name":"task","comp":{"status":"open","project":project}},
+                {"eid":minted[1],"name":"task","comp":{"project":project}},
                 {"eid":minted[2],"name":"recalled","comp":{"source":memory}},
                 {"eid":minted[0],"name":"dependency","comp":{"type":"requires","child":minted[1]}},
                 {"eid":minted[1],"name":"dependency","comp":{"type":"reads","child":memory}},

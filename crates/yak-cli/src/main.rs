@@ -367,12 +367,7 @@ fn list(store: &dyn Graph, args: &[String]) -> i32 {
         .iter()
         .map(|r| {
             let handle = if r.comps.contains_key("task") {
-                r.comps
-                    .get("task")
-                    .and_then(|t| t.get("status"))
-                    .and_then(|s| s.as_str())
-                    .unwrap_or("")
-                    .to_string()
+                query::task_status(r).unwrap_or("").to_string()
             } else {
                 r.comps
                     .get("alias")

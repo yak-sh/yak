@@ -1456,7 +1456,7 @@ let sub: Snapshot = {
     { eid: S, name: 'session', comp: { id: 'sub-1', agent_type: 'general' } },
     { eid: T, name: 'entity', comp: { eid: T, num: 2, created_at: '' } },
     { eid: T, name: 'doc', comp: { title: 'Child work', body: '' } },
-    { eid: T, name: 'task', comp: { status: 'wip', priority: 0 } },
+    { eid: T, name: 'task', comp: { priority: 0 } },
     { eid: T, name: 'claim', comp: { session: S } },
   ],
   deps: [],
@@ -2057,7 +2057,14 @@ slow(
       return [
         { eid, name: 'entity', comp: { eid, num } },
         { eid, name: 'doc', comp: { eid, title: `task ${status}`, body: '' } },
-        { eid, name: 'task', comp: { eid, status, priority: 1 } },
+        { eid, name: 'task', comp: { eid, priority: 1 } },
+        ...(status == 'wip'
+          ? [{ eid, name: 'claim', comp: { session: S } }]
+          : status == 'done'
+          ? [{ eid, name: 'completed', comp: {} }]
+          : status == 'cancelled'
+          ? [{ eid, name: 'cancelled', comp: {} }]
+          : []),
       ]
     }
     let snap: Snapshot = {
@@ -2520,12 +2527,14 @@ slow(
         text(out.stdout),
         /^T-4 → cancelled — duplicate of the umbrella/,
       )
-      let task = acked.filter((c) => c.name == 'task')
-      assertEquals(task, [{
-        eid: O,
-        name: 'task',
-        comp: { status: 'cancelled' },
-      }])
+      assertEquals(acked.slice(0, 2), [
+        { eid: O, name: 'completed', comp: null },
+        {
+          eid: O,
+          name: 'cancelled',
+          comp: { reason: 'duplicate of the umbrella' },
+        },
+      ])
       let comment = acked.find((c) => c.name == 'comment')
       assertEquals(comment?.comp, { target: O })
       assertEquals(seen.some((path) => path.startsWith('/snapshot')), false)
@@ -2554,10 +2563,10 @@ slow(
       assertEquals(text(out.stderr), '')
       assertEquals(out.code, 0)
       assertEquals(text(out.stdout).trim(), 'T-4 → done')
-      assertEquals(
-        acked.filter((c) => c.name == 'task'),
-        [{ eid: O, name: 'task', comp: { status: 'done' } }],
-      )
+      assertEquals(acked, [
+        { eid: O, name: 'cancelled', comp: null },
+        { eid: O, name: 'completed', comp: {} },
+      ])
     } finally {
       await server.shutdown()
     }
@@ -2583,10 +2592,11 @@ slow(
       assertEquals(text(out.stderr), '')
       assertEquals(out.code, 0)
       assertEquals(text(out.stdout).trim(), 'T-4 → wip')
-      assertEquals(
-        acked.filter((c) => c.name == 'task'),
-        [{ eid: O, name: 'task', comp: { status: 'wip' } }],
-      )
+      assertEquals(acked.slice(0, 2), [
+        { eid: O, name: 'completed', comp: null },
+        { eid: O, name: 'cancelled', comp: null },
+      ])
+      assertEquals(acked.some((c) => c.eid == O && c.name == 'claim'), true)
     } finally {
       await server.shutdown()
     }
@@ -2621,10 +2631,14 @@ slow(
         text(out.stdout),
         /^T-2 → cancelled — duplicate of the umbrella/,
       )
-      assertEquals(
-        acked.filter((c) => c.name == 'task'),
-        [{ eid: T, name: 'task', comp: { status: 'cancelled' } }],
-      )
+      assertEquals(acked.slice(0, 2), [
+        { eid: T, name: 'completed', comp: null },
+        {
+          eid: T,
+          name: 'cancelled',
+          comp: { reason: 'duplicate of the umbrella' },
+        },
+      ])
     } finally {
       await server.shutdown()
     }

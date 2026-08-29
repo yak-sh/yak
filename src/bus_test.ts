@@ -69,7 +69,7 @@ let world = (sess: Record<string, unknown> = {}): Change[] => [
   }),
   ...ent(T, 4, {
     doc: { title: 'Claimed work', body: '' },
-    task: { status: 'wip' },
+    task: {},
     claim: { session: S },
     created: { at: '2026-01-01', by: P },
   }),

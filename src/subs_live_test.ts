@@ -390,12 +390,22 @@ let walk = async (q: string, writes: Change[][]) => {
 // A task carrying whatever the case needs, born OUTSIDE the query under test so
 // the first write is a genuine add rather than a member present from the start.
 let task = (comp: Record<string, unknown>) => {
-  let eid = uid()
+  let eid = uid(), session = uid()
+  let { status = 'done', ...stored } = comp
   return {
     eid,
+    session,
     born: [
       { eid, name: 'doc', comp: { title: `probe ${eid.slice(0, 8)}` } },
-      { eid, name: 'task', comp: { status: 'done', priority: 3, ...comp } },
+      { eid, name: 'task', comp: { priority: 3, ...stored } },
+      { eid: session, name: 'session', comp: { id: `sub-${session}` } },
+      ...(status == 'done'
+        ? [{ eid, name: 'completed', comp: {} }]
+        : status == 'cancelled'
+        ? [{ eid, name: 'cancelled', comp: {} }]
+        : status == 'wip'
+        ? [{ eid, name: 'claim', comp: { session } }]
+        : []),
     ] as Change[],
   }
 }
@@ -408,10 +418,10 @@ slow(
     let q = `.task.status=open&.doc.title~=${a.eid.slice(0, 8)}`
     await walk(q, [
       a.born, // exists, does not match
-      [{ eid: a.eid, name: 'task', comp: {} }], // add
+      [{ eid: a.eid, name: 'completed', comp: null }], // add
       [{ eid: a.eid, name: 'task', comp: { priority: 0 } }], // update, still in
-      [{ eid: a.eid, name: 'task', comp: { status: 'done' } }], // remove
-      [{ eid: a.eid, name: 'task', comp: {} }], // add again
+      [{ eid: a.eid, name: 'completed', comp: {} }], // remove
+      [{ eid: a.eid, name: 'completed', comp: null }], // add again
       [{ eid: a.eid, name: 'entity', comp: null }], // dead
     ])
   },
@@ -425,9 +435,9 @@ slow(
     let q = `.task.status=open,wip&.doc.title~=${a.eid.slice(0, 8)}`
     await walk(q, [
       a.born,
-      [{ eid: a.eid, name: 'task', comp: {} }], // add
-      [{ eid: a.eid, name: 'task', comp: { status: 'wip' } }], // still in
-      [{ eid: a.eid, name: 'task', comp: { status: 'done' } }], // out
+      [{ eid: a.eid, name: 'completed', comp: null }], // add
+      [{ eid: a.eid, name: 'claim', comp: { session: a.session } }], // still in
+      [{ eid: a.eid, name: 'completed', comp: {} }], // out
     ])
   },
 )
@@ -521,8 +531,8 @@ slow('subscription: negation and contains preds', alone, async () => {
   let tag = a.eid.slice(0, 8)
   await walk(`.task.status!=done&.doc.title~=${tag}`, [
     a.born, // done — out
-    [{ eid: a.eid, name: 'task', comp: {} }], // in
-    [{ eid: a.eid, name: 'task', comp: { status: 'done' } }], // out
+    [{ eid: a.eid, name: 'completed', comp: null }], // in
+    [{ eid: a.eid, name: 'completed', comp: {} }], // out
   ])
   await walk(`.doc.title~=${tag}`, [
     [{ eid: a.eid, name: 'doc', comp: { title: 'renamed away' } }], // out
@@ -577,7 +587,7 @@ slow(
     let tag = a.eid.slice(0, 8)
     await walk(`.task.status!=done&.doc.title~=${tag}`, [
       a.born,
-      [{ eid: a.eid, name: 'task', comp: {} }], // in
+      [{ eid: a.eid, name: 'completed', comp: null }], // in
       [{ eid: a.eid, name: 'task', comp: null }], // component gone
     ])
   },
@@ -599,7 +609,7 @@ slow(
       let mine = `.doc.title~=${tag}`
       await client.open('open', open)
       await client.open('mine', mine)
-      await post([{ eid: a.eid, name: 'task', comp: {} }])
+      await post([{ eid: a.eid, name: 'completed', comp: null }])
       await client.settle()
       assertEquals(client.members('open'), await queried(open))
       assertEquals(client.members('mine'), await queried(mine))
@@ -656,6 +666,29 @@ slow('bodies ride only where a body is read', alone, async () => {
     client.close()
   }
 })
+
+slow(
+  'a projected derived status wakes on lifecycle changes',
+  alone,
+  async () => {
+    let a = task({ status: 'open' })
+    let sub = `status:${a.eid}`
+    let client = await subscriber()
+    let statuses = () =>
+      client.carried(sub).filter((c) => c.eid == a.eid && c.name == 'task')
+        .map((c) => c.comp?.status).filter(Boolean)
+    try {
+      await post(a.born)
+      await client.open(sub, `id=${a.eid}&.fields=task.status`)
+      assertEquals(statuses(), ['open'])
+      await post([{ eid: a.eid, name: 'completed', comp: {} }])
+      await client.settle()
+      assertEquals(statuses(), ['open', 'done'])
+    } finally {
+      client.close()
+    }
+  },
+)
 
 // The Session /logs door is RETIRED (T-16798): every reader now reads the graph
 // entry partition, and the file-backed `/sessions/:eid/logs` route is gone —
@@ -1139,12 +1172,12 @@ slow(
 
       // A live update streams a standing-match frame (details), even though the
       // sub is not a query.
-      await post([{ eid, name: 'task', comp: { status: 'done' } }])
+      await post([{ eid, name: 'completed', comp: {} }])
       await s.settle()
-      let last = s.carried(`route:${eid}`).filter((c) => c.name == 'task').at(
-        -1,
+      let completed = s.carried(`route:${eid}`).find((c) =>
+        c.name == 'completed'
       )
-      assertEquals((last!.comp as { status?: string }).status, 'done')
+      assertEquals(completed?.eid, eid)
 
       // Death drops it from the set.
       await post([{ eid, name: 'entity', comp: null }])

@@ -138,9 +138,9 @@ slow(
 
     // Piece 2 — the wake. D completes; the dep-completion effect finds T now
     // ungated with P still its claimant, and knocks P — closing the loop.
-    apply(db, [{ eid: D, name: 'task', comp: { status: 'done' } }])
+    apply(db, [{ eid: D, name: 'completed', comp: {} }])
     let knocks: Change[] = []
-    unblocking((cs) => knocks.push(...cs))(D, { status: 'done' })
+    unblocking((cs) => knocks.push(...cs))(D, {})
 
     let delivered = knocks.find((c) =>
       c.name === 'deliver' && (c.comp as { to?: string })?.to === P

@@ -30,6 +30,8 @@ const TASK_SELS: &[Sel] = &[
     Sel { comp: "proposed", props: &[] },
     Sel { comp: "decided", props: &[] },
     Sel { comp: "claim", props: &[] },
+    Sel { comp: "completed", props: &[] },
+    Sel { comp: "cancelled", props: &[] },
     Sel { comp: "resume", props: &[] },
     Sel { comp: "design", props: &[] },
     Sel { comp: "quarantined", props: &[] },
@@ -71,6 +73,9 @@ const DECIDED_SELS: &[Sel] = &[
     Sel { comp: "decided", props: &[] },
     Sel { comp: "doc", props: &["title"] },
     Sel { comp: "task", props: &[] },
+    Sel { comp: "completed", props: &[] },
+    Sel { comp: "cancelled", props: &[] },
+    Sel { comp: "claim", props: &[] },
     Sel { comp: "memory", props: &[] },
     Sel { comp: "persona", props: &[] },
     Sel { comp: "project", props: &[] },
@@ -150,7 +155,7 @@ fn title_of(r: &Row) -> String {
 }
 
 fn status_of(r: &Row) -> String {
-    cs(r, "task", "status")
+    query::task_status(r).unwrap_or("").to_string()
 }
 
 // every eid wearing a comp, projected to the comps `sels` names

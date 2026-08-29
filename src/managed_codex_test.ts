@@ -936,7 +936,7 @@ slow('comments on claimed work wake its graph-native holder', async () => {
   apply(db, [{
     eid: task,
     name: 'task',
-    comp: { status: 'wip' },
+    comp: {},
   }, {
     eid: task,
     name: 'claim',

@@ -1614,7 +1614,7 @@ Deno.test('applyLocal: reports touched eids and edges', () => {
   deps.value = []
   // a component merge and a component delete each touch their eid
   let t1 = applyLocal([
-    { eid: 'a', name: 'task', comp: { status: 'done' } },
+    { eid: 'a', name: 'task', comp: { priority: 2 } },
     { eid: 'b', name: 'task', comp: null },
   ])
   assertEquals(t1.eids.toSorted(), ['a', 'b'])
@@ -1888,12 +1888,12 @@ Deno.test('catch-up then live batch apply in arrival order', () => {
   }
   deps.value = []
   // the catch-up frame (older) arrives first over the one channel
-  applyLocal([{ eid: 'x', name: 'task', comp: { status: 'wip' } }])
-  assertEquals(cache.value.x.task!.status, 'wip')
+  applyLocal([{ eid: 'x', name: 'task', comp: { priority: 2 } }])
+  assertEquals(cache.value.x.task!.priority, 2)
   // then the live frame (newer) — same column, and it wins because it lands
   // after the catch-up the server already sent
-  applyLocal([{ eid: 'x', name: 'task', comp: { status: 'done' } }])
-  assertEquals(cache.value.x.task!.status, 'done')
+  applyLocal([{ eid: 'x', name: 'task', comp: { priority: 3 } }])
+  assertEquals(cache.value.x.task!.priority, 3)
 })
 
 // boardAll: the board's List face — the query over the WHOLE graph.

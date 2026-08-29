@@ -294,7 +294,7 @@ export let manuals = declare({
     body: 'body',
     about: 'patch any entity; --comment says why, in the same batch',
     examples: [
-      'task set T-3 .status=done --comment="verified end-to-end"',
+      'task set T-3 .priority=1 --comment="reprioritized after review"',
       'task set T-3 .assignee=jeff .priority=1',
       'task set S-12 --body=@brief.md',
       'task set S-12 .body=@- < brief.md',

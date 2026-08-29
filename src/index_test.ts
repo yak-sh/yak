@@ -85,7 +85,7 @@ Deno.test('anchor falls back to component presence, and to nothing', () => {
   let ix = emptyIndex()
   indexAll(ix, {
     t1: { task: {} },
-    t2: { task: { status: 'wip' } },
+    t2: { task: {}, claim: { session: 's1' } },
     d1: { doc: { title: 'x' } },
   }, [])
   // a scalar pred requires its component present -> byComp[task]

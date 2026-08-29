@@ -53,6 +53,7 @@ import {
   spawnDefaults,
   spawnPlan,
   spec,
+  statusChanges,
   STUB,
   subChanges,
   TASK_TREE_ADOPTION,
@@ -640,6 +641,23 @@ Deno.test('taskChanges: defaults + grouped comps ride along', () => {
   assertEquals(cs[0].comp, { body: '', title: 'x' })
   // Born open: no status mark (D-24102) — status is derived, not stored.
   assertEquals(cs[1].comp, {})
+})
+
+Deno.test('statusChanges replaces conflicting lifecycle facets', () => {
+  assertEquals(statusChanges(T1, 'done'), [
+    { eid: T1, name: 'cancelled', comp: null },
+    { eid: T1, name: 'completed', comp: {} },
+  ])
+  assertEquals(statusChanges(T1, 'wip', S), [
+    { eid: T1, name: 'completed', comp: null },
+    { eid: T1, name: 'cancelled', comp: null },
+    { eid: T1, name: 'claim', comp: { session: S } },
+  ])
+  assertEquals(statusChanges(T1, 'open'), [
+    { eid: T1, name: 'completed', comp: null },
+    { eid: T1, name: 'cancelled', comp: null },
+    { eid: T1, name: 'claim', comp: null },
+  ])
 })
 
 Deno.test('taskTreePlan: one rooted batch covers new and existing nodes', async () => {

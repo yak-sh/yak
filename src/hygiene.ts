@@ -260,9 +260,18 @@ let errorArtifact = (
   }
 }
 
+// The same derived status used by boards, expressed against the task alias in
+// this keyed read. A claim row is the active lease; reaping deletes it.
+let TASK_STATUS = `case
+  when exists(select 1 from cancelled x where x.entity = t.entity) then 'cancelled'
+  when exists(select 1 from completed x where x.entity = t.entity) then 'done'
+  when exists(select 1 from claim x where x.entity = t.entity) then 'wip'
+  else 'open'
+end`
+
 let filed = (key: string) =>
   db.prepare(
-    `select e.eid, f.hits, t.status, d.body,
+    `select e.eid, f.hits, (${TASK_STATUS}) as status, d.body,
             exists(select 1 from proposed p where p.entity = f.entity) as proposed,
             exists(select 1 from decided d where d.entity = f.entity) as decided
        from finding f

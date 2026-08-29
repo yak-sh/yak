@@ -90,7 +90,7 @@ slow(
     // Close the task. closingTask fires as an effect and runs, in essence,
     //   select eid from comment where target = <task>
     // to find what to archive. Post-flip a wrong binding matches nothing here.
-    await post([{ eid: task, name: 'task', comp: { status: 'done' } }])
+    await post([{ eid: task, name: 'completed', comp: {} }])
 
     // The comment about the now-closed task must be archived. If the reference
     // filter silently matched nothing (the C-19763 landmine), this never turns

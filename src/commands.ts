@@ -235,7 +235,10 @@ let complete: Verb = (_rest, ctx) => {
   let r = here(ctx)
   if (!r.comps.task) throw new Error(`${idOf(r)} is not a task`)
   return {
-    changes: [{ eid: r.eid, name: 'completed', comp: {} }],
+    changes: [
+      { eid: r.eid, name: 'cancelled', comp: null },
+      { eid: r.eid, name: 'completed', comp: {} },
+    ],
     msg: `${idOf(r)} → done`,
   }
 }
@@ -246,6 +249,7 @@ let reopen: Verb = (_rest, ctx) => {
     changes: [
       { eid: r.eid, name: 'completed', comp: null },
       { eid: r.eid, name: 'cancelled', comp: null },
+      { eid: r.eid, name: 'claim', comp: null },
     ],
     msg: `${idOf(r)} → open`,
   }
@@ -597,7 +601,11 @@ export let commands: Record<string, Command> = {
         throw new Error('wip: run under a session to hold the claim')
       }
       return {
-        changes: claimChanges(corpus(r, g.session(session)), r.eid, session),
+        changes: [
+          { eid: r.eid, name: 'completed', comp: null },
+          { eid: r.eid, name: 'cancelled', comp: null },
+          ...claimChanges(corpus(r, g.session(session)), r.eid, session),
+        ],
         msg: `${idOf(r)} → wip`,
       }
     },
@@ -613,6 +621,7 @@ export let commands: Record<string, Command> = {
       let reason = rest.trim()
       return {
         changes: [
+          { eid: r.eid, name: 'completed', comp: null },
           // The `cancelled` mark IS the status now (D-24102); its optional
           // reason rides the comp, apply() stamps at/by/via.
           { eid: r.eid, name: 'cancelled', comp: reason ? { reason } : {} },

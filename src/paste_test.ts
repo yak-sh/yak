@@ -38,3 +38,26 @@ Deno.test('pasted: plain text becomes a task, first line the title', () => {
     minted: 1,
   })
 })
+
+Deno.test('pasted: terminal task status becomes a lifecycle mark', () => {
+  cache.value = {}
+  for (
+    let [input, mark] of [
+      [{ title: 'finished', status: 'done' }, 'completed'],
+      [
+        { doc: { title: 'called off' }, task: { status: 'cancelled' } },
+        'cancelled',
+      ],
+    ] as const
+  ) {
+    let spec = pasted(JSON.stringify(input))!
+    assertEquals(spec.changes.map((c) => c.name), ['doc', 'task', mark])
+    assertEquals(
+      Object.hasOwn(
+        spec.changes.find((c) => c.name == 'task')!.comp!,
+        'status',
+      ),
+      false,
+    )
+  }
+})

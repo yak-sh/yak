@@ -913,15 +913,25 @@ let finish =
     let move: Change[] = status == 'wip'
       ? (() => {
         if (!sid) throw new UsageError('wip: run under a session')
-        return claimChanges(all, row.eid, sid, Deno.cwd())
+        return [
+          { eid: row.eid, name: 'completed', comp: null },
+          { eid: row.eid, name: 'cancelled', comp: null },
+          ...claimChanges(all, row.eid, sid, Deno.cwd()),
+        ]
       })()
       : status == 'done'
-      ? [{ eid: row.eid, name: 'completed', comp: {} }]
-      : [{
-        eid: row.eid,
-        name: 'cancelled',
-        comp: comment ? { reason: comment } : {},
-      }]
+      ? [
+        { eid: row.eid, name: 'cancelled', comp: null },
+        { eid: row.eid, name: 'completed', comp: {} },
+      ]
+      : [
+        { eid: row.eid, name: 'completed', comp: null },
+        {
+          eid: row.eid,
+          name: 'cancelled',
+          comp: comment ? { reason: comment } : {},
+        },
+      ]
     await send([
       ...move,
       ...(comment ? commentChanges(all, row.eid, comment, me()) : []),

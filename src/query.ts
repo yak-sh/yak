@@ -487,7 +487,15 @@ export let predComps = (preds: Pred[]): Set<string> | null => {
     // `.count!` aggregates the selection, naming no column of its own.
     if (p.op == AGG && !p.comp) continue
     if (!p.comp) return null
-    out.add(p.comp)
+    // task.status is virtual: a filter/window/aggregate over it reads all four
+    // lifecycle facets, not only the task row that owns the public spelling.
+    // Without this expansion a claim or terminal mark changes the answer but
+    // never dirties a standing tally or exact window.
+    if (p.comp == 'task' && p.prop == 'status') {
+      for (let comp of ['task', 'completed', 'cancelled', 'claim']) {
+        out.add(comp)
+      }
+    } else out.add(p.comp)
   }
   return out
 }

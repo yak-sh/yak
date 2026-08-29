@@ -20,10 +20,16 @@ let byNum = (num: number) =>
 
 let task = (title: string, body = '', status = 'open'): Pasted => {
   let eid = uuid()
+  let mark = status == 'done'
+    ? [{ eid, name: 'completed', comp: {} }]
+    : status == 'cancelled'
+    ? [{ eid, name: 'cancelled', comp: {} }]
+    : []
   return {
     changes: [
       { eid, name: 'doc', comp: { eid, title, body } },
-      { eid, name: 'task', comp: { eid, status } },
+      { eid, name: 'task', comp: { eid } },
+      ...mark,
     ],
     target: eid,
   }
@@ -45,12 +51,24 @@ let json = (text: string): Pasted | null => {
   )
   if (names.length) {
     let eid = uuid()
+    let task = o.task as Record<string, unknown> | undefined
+    let status = String(task?.status ?? 'open')
+    let cleanTask = (({ status: _status, ...rest }) => rest)(task ?? {})
     return {
-      changes: names.map((n) => ({
-        eid,
-        name: n,
-        comp: { ...(o[n] as object), eid },
-      })),
+      changes: [
+        ...names.map((n) => ({
+          eid,
+          name: n,
+          comp: n == 'task'
+            ? { ...cleanTask, eid }
+            : { ...(o[n] as object), eid },
+        })),
+        ...status == 'done'
+          ? [{ eid, name: 'completed', comp: {} }]
+          : status == 'cancelled'
+          ? [{ eid, name: 'cancelled', comp: {} }]
+          : [],
+      ],
       target: eid,
     }
   }

@@ -506,9 +506,19 @@ Deno.test('predComps names the dirty set, null where a pred reads elsewhere', ()
     let got = predComps(parseQuery(q))
     return got && [...got].sort()
   }
-  assertEquals(comps('.task.status=open&.tally=task.status'), ['task'])
+  assertEquals(comps('.task.status=open&.tally=task.status'), [
+    'cancelled',
+    'claim',
+    'completed',
+    'task',
+  ])
   // The count pred contributes nothing of its own; the filters name the set.
-  assertEquals(comps('.task.status=open&.count!'), ['task'])
+  assertEquals(comps('.task.status=open&.count!'), [
+    'cancelled',
+    'claim',
+    'completed',
+    'task',
+  ])
   assertEquals(comps('.comment!&.tally=comment.target'), ['comment'])
   // The empty query reads nothing (it selects nothing at every door).
   assertEquals(comps(''), [])

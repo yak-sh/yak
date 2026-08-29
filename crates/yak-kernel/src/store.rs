@@ -633,7 +633,18 @@ impl Store {
         // the facets project_session folds into a session's agent line — not
         // kind_order comps, so name them here (alias, an author's handle, is
         // already covered as a kind_order comp).
-        for f in ["spawn", "worktree", "runtime", "run", "settled", "yield"] {
+        for f in [
+            "spawn",
+            "worktree",
+            "runtime",
+            "run",
+            "settled",
+            "yield",
+            // Inputs to the virtual task.status shown by said().
+            "completed",
+            "cancelled",
+            "claim",
+        ] {
             sels.push(Sel { comp: f, props: &[] });
         }
         self.rows_of_cols(eids, &sels)

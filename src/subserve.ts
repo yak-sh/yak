@@ -170,14 +170,54 @@ let carry = (sub: Sub, changes: Change[]) =>
     sub.cut ? sub.cut(changes) : sub.bodies ? changes : bodyless(changes),
   )
 
+// A projected virtual task.status has no task-column patch to carry when one
+// of its inputs moves. Re-project the current value onto the public read shape
+// before applying the ordinary projection cut. A `~` field is explicitly
+// non-waking, so only a waking task.status declaration gets this synthetic
+// read patch; nothing on the write path ever sees it.
+let carriedPatch = (
+  sub: Sub,
+  eid: string,
+  comps: Record<string, Record<string, unknown>>,
+  changes: Change[],
+) => {
+  let status =
+    sub.fields?.some((f) => f.wake && f.comp == 'task' && f.prop == 'status') &&
+    changes.some((c) =>
+      c.name == 'completed' || c.name == 'cancelled' || c.name == 'claim'
+    )
+  return carry(
+    sub,
+    status && comps.task
+      ? [...changes, {
+        eid,
+        name: 'task',
+        comp: { status: statusOf(comps) },
+      }]
+      : changes,
+  )
+}
+
 let payload = (
   sub: Sub,
   eid: string,
   comps: Record<string, Record<string, unknown>>,
-): Change[] =>
-  sub.shadow && !sub.details
-    ? [{ eid, name: 'entity', comp: comps.entity as Change['comp'] }]
-    : carry(sub, spread(eid, comps))
+): Change[] => {
+  if (sub.shadow && !sub.details) {
+    return [{ eid, name: 'entity', comp: comps.entity as Change['comp'] }]
+  }
+  let changes = spread(eid, comps)
+  // Keyed/addressed reads hand payload() raw eager comps rather than rowed(),
+  // so a projected virtual status needs the same read-shape materialization as
+  // a query result. This is initial delivery only; carriedPatch handles moves.
+  if (
+    comps.task && !('status' in comps.task) &&
+    sub.fields?.some((f) => f.comp == 'task' && f.prop == 'status')
+  ) {
+    changes.push({ eid, name: 'task', comp: { status: statusOf(comps) } })
+  }
+  return carry(sub, changes)
+}
 
 // An edge's identity is its whole sentence — a triple has no row key — so the
 // rider keys by it and a re-linked edge is the same edge.
@@ -762,7 +802,9 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
             changes.push(...payload(sub, r.eid, r.comps))
             entered.push(r.eid)
           } else if (patch.has(r.eid) && (!sub.shadow || sub.details)) {
-            changes.push(...carry(sub, patch.get(r.eid)!))
+            changes.push(
+              ...carriedPatch(sub, r.eid, r.comps, patch.get(r.eid)!),
+            )
           }
         }
         for (let eid of sub.members) {
@@ -848,7 +890,9 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         } // A standing match tells a shadow sub nothing: membership did not
         // move, and the client heard the patch on the complete stream.
         else if (s == 'update' && (!sub.shadow || sub.details)) {
-          changes.push(...carry(sub, patch.get(eid) ?? []))
+          changes.push(
+            ...carriedPatch(sub, eid, projected, patch.get(eid) ?? []),
+          )
         } else if (s == 'remove') drop.push(eid)
         else if (s == 'dead') changes.push({ eid, name: 'entity', comp: null })
       }

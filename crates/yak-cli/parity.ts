@@ -38,7 +38,7 @@ let KNOWN = new Set([P, S1, S2, T, E1, C1, A1, A2, R1])
     { eid: S1, name: 'session', comp: { id: 'parity-sess-1' } },
     { eid: S2, name: 'session', comp: { id: 'parity-sess-2' } },
     { eid: T, name: 'doc', comp: { title: 'Base task' } },
-    { eid: T, name: 'task', comp: { status: 'open' } },
+    { eid: T, name: 'task', comp: {} },
   ])
   db.exec('pragma wal_checkpoint(truncate)')
   db.close()
@@ -58,7 +58,7 @@ let cases: Case[] = [
       {
         eid: E1,
         name: 'task',
-        comp: { status: 'open', priority: 2, project: P },
+        comp: { priority: 2, project: P },
       },
     ],
   },

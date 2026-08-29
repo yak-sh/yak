@@ -75,23 +75,34 @@ export let taskStatus = (r: { comps: Record<string, unknown> }) =>
   r.comps.task ? statusOf(r.comps) : undefined
 
 // The changes a UI picker sends to set a task to a chosen DERIVED status
-// (D-24102): done/cancelled MINT their mark, open RETRACTS both. wip is a live
-// claim — with a session it leases, without one (the web board has none) it
-// falls back to retracting the marks, so the task reads open until it is claimed.
+// (D-24102): each move retracts conflicting facets before minting its own, so
+// cancelled→done and done→wip are real transitions rather than precedence
+// accidents. wip is a live claim; open retracts that lease too.
 export let statusChanges = (
   eid: string,
   status: string,
   session?: string,
 ): Change[] =>
   status == 'done'
-    ? [{ eid, name: 'completed', comp: {} }]
+    ? [
+      { eid, name: 'cancelled', comp: null },
+      { eid, name: 'completed', comp: {} },
+    ]
     : status == 'cancelled'
-    ? [{ eid, name: 'cancelled', comp: {} }]
+    ? [
+      { eid, name: 'completed', comp: null },
+      { eid, name: 'cancelled', comp: {} },
+    ]
     : status == 'wip' && session
-    ? [{ eid, name: 'claim', comp: { session } }]
+    ? [
+      { eid, name: 'completed', comp: null },
+      { eid, name: 'cancelled', comp: null },
+      { eid, name: 'claim', comp: { session } },
+    ]
     : [
       { eid, name: 'completed', comp: null },
       { eid, name: 'cancelled', comp: null },
+      { eid, name: 'claim', comp: null },
     ]
 
 // The slice of a Row the scope predicates read — eid and comps, never num or

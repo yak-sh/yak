@@ -175,7 +175,7 @@ fn comp_get<'a>(r: &'a Row, comp: &str, prop: &str) -> Option<&'a Value> {
 // "T-3695 (open) — title" — the way an edge endpoint reads anywhere.
 pub fn said(rows: &Rows, eid: &str) -> String {
     let Some(r) = rows.get(eid) else { return eid.to_string() };
-    let st = s_of(comp_get(&r, "task", "status"));
+    let st = yak_kernel::query::task_status(&r).unwrap_or("").to_string();
     let mut t = s_of(comp_get(&r, "doc", "title"));
     if t.is_empty() {
         t = s_of(comp_get(&r, "session", "id"));

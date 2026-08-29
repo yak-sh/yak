@@ -231,7 +231,8 @@ Deno.test('window: a birth inside the bound pushes the oldest member out', () =>
 
 Deno.test('window: a departure pulls the next-newest member in', () => {
   // An EXACT window (a compilable filter) is the one whose edge subserve
-  // maintains by re-answering — the derived .task.status is not compilable, so
+  // maintains by re-answering — the derived .task.status is compiled through
+  // its lifecycle CASE, while the window still has to be recomputed as a set,
   // the departure is driven through the same domain filter the window screens on.
   let { s, seen, last } = dial(`${MINE}&.limit=3`, 'w2')
   let held = new Set(last().changes!.map((c) => c.eid))

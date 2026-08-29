@@ -145,7 +145,7 @@ slow('an edges rider answers scoped, then speaks deltas', alone, async () => {
   // A PEER's own edit reaches the tree: nothing about membership moved, and no
   // sub holds b, so only the rider could have noticed.
   assertEquals(
-    await post([{ eid: b, name: 'task', comp: { status: 'done' } }]),
+    await post([{ eid: b, name: 'completed', comp: {} }]),
     200,
   )
   assertEquals(peerOf(await next(), b).task?.status, 'done')

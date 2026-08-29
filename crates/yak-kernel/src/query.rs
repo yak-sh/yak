@@ -380,6 +380,23 @@ pub fn resolve_values<S: Source + ?Sized>(src: &S, preds: &mut [Pred]) {
     }
 }
 
+// The virtual task status shared by matching, sorting, and native renderers.
+// It reads component presence only; a claim row is the active lease and is
+// removed when its session dies.
+pub fn task_status(r: &Row) -> Option<&'static str> {
+    if !r.comps.contains_key("task") {
+        None
+    } else if r.comps.contains_key("cancelled") {
+        Some("cancelled")
+    } else if r.comps.contains_key("completed") {
+        Some("done")
+    } else if r.comps.contains_key("claim") {
+        Some("wip")
+    } else {
+        Some("open")
+    }
+}
+
 // One column read. `updated.at` falls back to `created.at`: an entity made
 // and never touched since carries no `updated` row, and being made IS the
 // last time it changed (query.ts read()).
@@ -652,12 +669,7 @@ fn test(got: Option<Value>, p: &Pred, now: i64) -> bool {
 pub fn by_board(a: &Row, b: &Row) -> std::cmp::Ordering {
     let v = vocab();
     let slot = |r: &Row| {
-        let s = r
-            .comps
-            .get("task")
-            .and_then(|t| t.get("status"))
-            .and_then(|s| s.as_str())
-            .unwrap_or("");
+        let s = task_status(r).unwrap_or("");
         v.statuses.iter().position(|x| x == s).map(|i| i as i64).unwrap_or(-1)
     };
     let pri = |r: &Row| {

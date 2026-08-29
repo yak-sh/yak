@@ -859,7 +859,7 @@ fn ws_sub_parity() {
         &ts,
         &format!(
             "[{{\"eid\":\"{eid3}\",\"name\":\"doc\",\"comp\":{{\"title\":\"{marker} win\"}}}},\
-              {{\"eid\":\"{eid3}\",\"name\":\"task\",\"comp\":{{\"status\":\"open\"}}}}]"
+              {{\"eid\":\"{eid3}\",\"name\":\"task\",\"comp\":{{}}}}]"
         ),
     );
     same_sub_delta(&mut ts_wm, &mut br_wm, "wm", "create (window re-answer)");
@@ -871,9 +871,9 @@ fn ws_sub_parity() {
     // --- FIELDS projection MAINTAIN parity (T-22756) -------------------------
     // On its own socket pair, a marker task sub projected to `task.status`: an
     // ADD carries the projected column + spine (the doc, not projected, never
-    // rides); a patch to the PROJECTED column ships a projected update; a patch
-    // to a NON-projected column (priority) projects to nothing and both stay
-    // silent; a delete forwards entity-null.
+    // rides); changing a lifecycle facet ships a projected virtual-status
+    // update; a patch to a NON-projected column (priority) projects to nothing
+    // and both stay silent; a delete forwards entity-null.
     let mut ts_fm = joined_ws(&ts);
     let mut br_fm = joined_ws(&br);
     let fmark = format!("zqfmark{}", &uuid_v4()[..8]);
@@ -888,15 +888,12 @@ fn ws_sub_parity() {
         &ts,
         &format!(
             "[{{\"eid\":\"{feid}\",\"name\":\"doc\",\"comp\":{{\"title\":\"{fmark} f\"}}}},\
-              {{\"eid\":\"{feid}\",\"name\":\"task\",\"comp\":{{\"status\":\"open\",\"priority\":0}}}}]"
+              {{\"eid\":\"{feid}\",\"name\":\"task\",\"comp\":{{\"priority\":0}}}}]"
         ),
     );
     same_sub_delta(&mut ts_fm, &mut br_fm, "fm", "create (projected add)");
-    apply(
-        &ts,
-        &format!("[{{\"eid\":\"{feid}\",\"name\":\"task\",\"comp\":{{\"status\":\"wip\"}}}}]"),
-    );
-    same_sub_delta(&mut ts_fm, &mut br_fm, "fm", "patch task.status (projected update)");
+    apply(&ts, &format!("[{{\"eid\":\"{feid}\",\"name\":\"completed\",\"comp\":{{}}}}]"));
+    same_sub_delta(&mut ts_fm, &mut br_fm, "fm", "add completed (projected status update)");
     apply(&ts, &format!("[{{\"eid\":\"{feid}\",\"name\":\"task\",\"comp\":{{\"priority\":2}}}}]"));
     same_sub_delta(&mut ts_fm, &mut br_fm, "fm", "patch task.priority (unprojected: both silent)");
     apply(&ts, &format!("[{{\"eid\":\"{feid}\",\"name\":\"entity\",\"comp\":null}}]"));

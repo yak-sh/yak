@@ -75,8 +75,9 @@ for (let i = 0; i < 4; i++) {
     {
       eid: e,
       name: 'task',
-      comp: { status: i % 2 ? 'open' : 'done', priority: i, project: P },
+      comp: { priority: i, project: P },
     },
+    ...(i % 2 ? [] : [{ eid: e, name: 'completed', comp: {} }]),
   ])
 }
 
@@ -104,8 +105,8 @@ eq(
   ['T-103', 'T-102'],
 )
 
-// a delta flips one status — the same query answers differently
-ingest([{ eid: uuid(0), name: 'task', comp: { status: 'open' } }])
+// a delta retracts the completion mark — the same query answers differently
+ingest([{ eid: uuid(0), name: 'completed', comp: null }])
 eq(
   'delta updates change results',
   query('.status=open').rows!.map((r) => (r as { id: string }).id),
@@ -114,7 +115,7 @@ eq(
 
 // tombstone: the entity leaves every answer, late patches are void
 ingest([{ eid: uuid(1), name: 'entity', comp: null }])
-ingest([{ eid: uuid(1), name: 'task', comp: { status: 'open' } }])
+ingest([{ eid: uuid(1), name: 'task', comp: { priority: 1 } }])
 eq(
   'tombstone removes and stays dead',
   query('.status=open').rows!.map((r) => (r as { id: string }).id),
@@ -133,6 +134,7 @@ let seed: unknown[] = []
 let N = 3000
 for (let i = 0; i < N; i++) {
   let e = uuid(1000 + i)
+  let status = ['open', 'wip', 'done', 'cancelled'][i % 4]
   seed.push(
     { eid: e, name: 'entity', comp: { num: 1000 + i } },
     { eid: e, name: 'doc', comp: { title: `task number ${i}` } },
@@ -140,11 +142,17 @@ for (let i = 0; i < N; i++) {
       eid: e,
       name: 'task',
       comp: {
-        status: ['open', 'wip', 'done', 'cancelled'][i % 4],
         priority: i % 5,
         project: P,
       },
     },
+    ...(status == 'wip'
+      ? [{ eid: e, name: 'claim', comp: { session: uuid(99999) } }]
+      : status == 'done'
+      ? [{ eid: e, name: 'completed', comp: {} }]
+      : status == 'cancelled'
+      ? [{ eid: e, name: 'cancelled', comp: {} }]
+      : []),
     { eid: e, name: 'created', comp: { at: `2026-08-${(i % 28) + 1}` } },
   )
 }

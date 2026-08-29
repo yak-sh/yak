@@ -20,9 +20,10 @@ for (let i = 0; i < 2000; i++) {
     {
       eid,
       name: 'task',
-      comp: { status: i % 4 ? 'open' : 'done', priority: i % 3 },
+      comp: { priority: i % 3 },
     },
   )
+  if (i % 4 == 0) changes.push({ eid, name: 'completed', comp: {} })
   if (i < 5) changes.push({ eid, name: 'claim', comp: { session: S } })
 }
 let snap: Snapshot = { changes, deps: [] }
@@ -71,9 +72,10 @@ for (let i = 0; i < 2000; i++) {
     {
       eid,
       name: 'task',
-      comp: { status: i % 4 ? 'open' : 'done', priority: i % 3 },
+      comp: { priority: i % 3 },
     },
   )
+  if (i % 4 == 0) aCh.push({ eid, name: 'completed', comp: {} })
   if (i < 5) aCh.push({ eid, name: 'claim', comp: { session: AS } })
 }
 let aSibs: string[] = []
@@ -145,9 +147,10 @@ for (let i = 0; i < 2000; i++) {
     {
       eid,
       name: 'task',
-      comp: { status: i % 4 ? 'open' : 'done', priority: i % 3, project: NH },
+      comp: { priority: i % 3, project: NH },
     },
   )
+  if (i % 4 == 0) nCh.push({ eid, name: 'completed', comp: {} })
   if (i < 5) {
     nClaims.push(eid)
     nCh.push({ eid, name: 'claim', comp: { session: NS } })

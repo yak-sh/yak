@@ -671,7 +671,17 @@ Reference param values accept human ids
           title: t.title,
           ...(t.body != null ? { body: t.body } : {}),
         }
-        if (t.status) grouped.task = { ...grouped.task, status: t.status }
+        // Status is derived (D-24102): taskChanges strips the virtual column,
+        // so preserve authored terminal states as marks. A new `wip` task can
+        // only be wip when this request names the session holding its claim.
+        if (t.status == 'done') grouped.completed = {}
+        else if (t.status == 'cancelled') grouped.cancelled = {}
+        else if (t.status == 'wip') {
+          if (!sess) {
+            return err('status wip requires a session to hold the claim')
+          }
+          grouped.claim = { session: sess.eid }
+        }
         if (!grouped.task?.project && scope) {
           grouped.task = { ...grouped.task, project: scope }
         }

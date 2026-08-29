@@ -103,7 +103,7 @@ slow(
       }, {
         eid: task,
         name: 'task',
-        comp: { status: 'wip' },
+        comp: {},
       }, {
         eid: task,
         name: 'claim',

@@ -3471,6 +3471,63 @@ slow('open retires proposal into a stamp and rewrites stale boards', () => {
   Deno.removeSync(root, { recursive: true })
 })
 
+slow('open dissolves task.status into lifecycle marks idempotently', () => {
+  let root = Deno.makeTempDirSync({ prefix: 'tasks-status-' })
+  let path = `${root}/tasks.db`
+  let legacy = open(path)
+  let session = uid(), openTask = uid(), liveWip = uid(), stuckWip = uid()
+  let done = uid(), cancelled = uid(), board = uid()
+  apply(legacy, [
+    { eid: session, name: 'session', comp: { id: 'status-migration' } },
+    ...[openTask, liveWip, stuckWip, done, cancelled].map((eid) => ({
+      eid,
+      name: 'task',
+      comp: {},
+    })),
+    { eid: liveWip, name: 'claim', comp: { session } },
+    { eid: board, name: 'board', comp: { query: '.status=open,wip' } },
+  ])
+  // Recreate the legacy shape after the current schema has seeded the file.
+  legacy.exec("alter table task add column status text not null default 'open'")
+  for (
+    let [eid, status] of [
+      [liveWip, 'wip'],
+      [stuckWip, 'wip'],
+      [done, 'done'],
+      [cancelled, 'cancelled'],
+    ]
+  ) {
+    legacy.prepare(`update task set status = ? where ${OWNED}`).run(status, eid)
+  }
+  legacy.close()
+
+  let healed = open(path)
+  assertEquals(hasCol(healed, 'task', 'status'), false)
+  let derived = (eid: string) =>
+    statusOf({
+      task: compOf(healed, eid, 'task'),
+      claim: compOf(healed, eid, 'claim'),
+      completed: compOf(healed, eid, 'completed'),
+      cancelled: compOf(healed, eid, 'cancelled'),
+    })
+  assertEquals(derived(openTask), 'open')
+  assertEquals(derived(liveWip), 'wip')
+  assertEquals(derived(stuckWip), 'open')
+  assertEquals(derived(done), 'done')
+  assertEquals(derived(cancelled), 'cancelled')
+  assertEquals(compOf(healed, board, 'board')?.query, '.status=open,wip')
+  let doneAt = compOf(healed, done, 'completed')?.at
+  let cancelledAt = compOf(healed, cancelled, 'cancelled')?.at
+  healed.close()
+
+  let again = open(path)
+  assertEquals(hasCol(again, 'task', 'status'), false)
+  assertEquals(compOf(again, done, 'completed')?.at, doneAt)
+  assertEquals(compOf(again, cancelled, 'cancelled')?.at, cancelledAt)
+  again.close()
+  Deno.removeSync(root, { recursive: true })
+})
+
 slow('open retires project timestamps into the archived stamp', () => {
   let root = Deno.makeTempDirSync({
     prefix: 'tasks-retired-project-',

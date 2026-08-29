@@ -130,6 +130,16 @@ put('e5', {
   doc: { title: '10', body: 'digits in a text column' },
   task: { priority: 10, domain: '9' },
 })
+// Cancellation has highest precedence even if stale lower-priority lifecycle
+// facets coexist. This one row makes every status agreement case exercise the
+// full cancelled → completed → claim → open ordering, not just each mark alone.
+put('e9', {
+  doc: { title: 'cancelled task' },
+  task: { priority: 3 },
+  claim: { session: 'sc' },
+  completed: { at: '2026-08-02T00:00:00.000Z', by: null },
+  cancelled: { at: '2026-08-03T00:00:00.000Z', by: null, reason: 'superseded' },
+})
 // The trigram index narrows with the needle's wildcards left in, so these two
 // are the rows a missing re-test would hand back: each holds what `100%` and
 // `under_score` become once `%` and `_` are wildcards, and neither is a match.
@@ -252,9 +262,8 @@ let graph = () => {
     'response',
     'created',
     'updated',
-    // the derived-status marks (D-24102): statusOf reads these off the comp
-    // bag, so the JS world must carry them or every task reads back as 'open'
-    // while the SQL side (which derives from the tables) says otherwise.
+    // Inputs to the virtual task.status column. These are lifecycle facets,
+    // not kinds, so kindOrder does not otherwise pull them into the JS world.
     'completed',
     'cancelled',
     'claim',
@@ -336,6 +345,7 @@ let COMPILES = [
   '.task.status=open,wip',
   '.task.priority=0,10',
   '.task.status=open,wip,done',
+  '.task.status=cancelled',
   // absent-or-empty, over a null column, an empty string, and a missing comp
   '.task.project=',
   '.task.domain=',

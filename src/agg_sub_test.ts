@@ -109,14 +109,22 @@ slow(
   'a board tile tally follows a status move, members absent',
   alone,
   async () => {
-    let p = uid(), t1 = uid(), t2 = uid()
-    let task = (eid: string, status: string) => [
+    let p = uid(), t1 = uid(), t2 = uid(), session = uid()
+    let task = (eid: string) => [
       { eid, name: 'doc', comp: { title: 'work', body: '' } },
-      { eid, name: 'task', comp: { status, project: p } },
+      { eid, name: 'task', comp: { project: p } },
     ]
     assertEquals(await post([{ eid: p, name: 'project', comp: {} }]), 200)
-    assertEquals(await post(task(t1, 'open')), 200)
-    assertEquals(await post(task(t2, 'open')), 200)
+    assertEquals(
+      await post([{
+        eid: session,
+        name: 'session',
+        comp: { id: 'agg-status' },
+      }]),
+      200,
+    )
+    assertEquals(await post(task(t1)), 200)
+    assertEquals(await post(task(t2)), 200)
 
     let q = `.task.project=${p}&.tally=task.status`
     let { sock, next } = await dial(q, 'agg:tile')
@@ -124,7 +132,7 @@ slow(
 
     // A status move: one recompute, one frame, both moved keys.
     assertEquals(
-      await post([{ eid: t1, name: 'task', comp: { status: 'wip' } }]),
+      await post([{ eid: t1, name: 'claim', comp: { session } }]),
       200,
     )
     assertEquals((await next()).agg, { open: 1, wip: 1 })
