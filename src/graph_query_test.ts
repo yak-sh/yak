@@ -5,7 +5,7 @@
 // seq partition, paging walks it, and an empty result means the scope is empty,
 // never that the optimization dropped it. The index/matcher equivalence over
 // entries lives in sql_test.ts; this proves the door on top of it.
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertThrows } from '@std/assert'
 import { uuid } from './types.ts'
 import {
   evalAgg,
@@ -142,6 +142,11 @@ Deno.test('lazy subscription selects its keyed bounded universe before hydration
   assertEquals(keyedReads, [{ session: a, after: 0, limit: 500 }])
   assertEquals(seqs(direct.hits), Array.from({ length: 500 }, (_, i) => i + 1))
 
+  keyedReads.length = 0
+  let next = evalQuery(db, `.entry.session=${a}`, 500, 500, doors)
+  assertEquals(keyedReads, [{ session: a, after: 500, limit: 500 }])
+  assertEquals(seqs(next.hits), Array.from({ length: 120 }, (_, i) => i + 501))
+
   // Subscription initialization uses that same evaluator and returns the page
   // in partition order, independent of the 120 older rows behind the bound.
   let initial = evalSubDoor(db, `.entry.session=${a}`).hits
@@ -165,6 +170,90 @@ Deno.test('lazy subscription selects its keyed bounded universe before hydration
     true,
   )
   assertEquals(refined.length > 0, true)
+  db.close()
+})
+
+Deno.test('entry paging refuses the duplicate-producing multi-session order', () => {
+  let db = freshDb()
+  let a = session(db), b = session(db)
+  append(
+    db,
+    a,
+    Array.from({ length: 3 }, (_, i) => ({ content: { body: `a ${i}` } })),
+  )
+  append(
+    db,
+    b,
+    Array.from({ length: 3 }, (_, i) => ({ content: { body: `b ${i}` } })),
+  )
+
+  // The old first page was A1,A2,A3,B1; `after=1` then repeated A2,A3.
+  assertThrows(
+    () => evalGraph(db, `.entry.session=${a},${b}`, { limit: 4 }),
+    Error,
+    'query each Session separately',
+  )
+  db.close()
+})
+
+Deno.test('entry paging refuses before one Session spends the page budget', () => {
+  let db = freshDb()
+  let a = session(db), b = session(db)
+  append(
+    db,
+    a,
+    Array.from({ length: 501 }, (_, i) => ({ content: { body: `a ${i}` } })),
+  )
+  append(db, b, [{ content: { body: 'b 0' } }])
+  let reads = 0
+  let doors = {
+    matching,
+    entriesOf: (...args: Parameters<typeof entriesOf>) => {
+      reads++
+      return entriesOf(...args)
+    },
+    entriesScan: (...args: Parameters<typeof entriesScan>) => {
+      reads++
+      return entriesScan(...args)
+    },
+  }
+
+  assertThrows(
+    () => evalQuery(db, `.entry.session=${a},${b}`, 0, 500, doors),
+    Error,
+    'query each Session separately',
+  )
+  assertEquals(reads, 0)
+  db.close()
+})
+
+Deno.test('entry session ranges use one bounded scan and cannot take a seq cursor', () => {
+  let db = freshDb()
+  let a = session(db), b = session(db)
+  append(db, a, [{ content: { body: 'a' } }])
+  append(db, b, [{ content: { body: 'b' } }])
+  let keyed = 0, scans: { after: number; limit: number }[] = []
+  let doors = {
+    matching,
+    entriesOf: (...args: Parameters<typeof entriesOf>) => {
+      keyed++
+      return entriesOf(...args)
+    },
+    entriesScan: (...args: Parameters<typeof entriesScan>) => {
+      scans.push({ after: args[1]!, limit: args[2]! })
+      return entriesScan(...args)
+    },
+  }
+  let [lo, hi] = [a, b].sort()
+
+  evalQuery(db, `.entry.session=${lo}..${hi}`, 0, 500, doors)
+  assertEquals(keyed, 0)
+  assertEquals(scans, [{ after: 0, limit: 500 }])
+  assertThrows(
+    () => evalQuery(db, `.entry.session=${lo}..${hi}`, 1, 500, doors),
+    Error,
+    'requires one scalar .entry.session=',
+  )
   db.close()
 })
 

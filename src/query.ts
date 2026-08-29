@@ -602,14 +602,14 @@ export type Walk = (
 export let namesLazy = (preds: Pred[]) =>
   preds.some((p) => p.comp in sessionComps && !(p.prop == '' && p.op == ''))
 
-// The sessions an entry query is scoped to — the eids of every `.entry.session=`
-// equality (a comma list is any-of). A keyed, bounded read (entriesOf) serves
-// these; a lazy query without one is a global scan. resolveRefs has already
-// turned S-16765 into its eid by the time a door asks.
+// The sessions an entry query is scoped to — the eids of every scalar
+// `.entry.session=` equality (a comma list is any-of). A range cannot name
+// keyed partitions, so it stays unscoped and the bounded scan refines it.
+// resolveRefs has already turned S-16765 into its eid by the time a door asks.
 export let scopedSessions = (preds: Pred[]): string[] =>
   preds
     .filter((p) => p.comp == 'entry' && p.prop == 'session' && p.op == '')
-    .flatMap((p) => p.value.split(','))
+    .flatMap((p) => p.value.includes('..') ? [] : p.value.split(','))
     .filter(Boolean)
 
 // Quarantine is invisible by default, but mentioning the facet is the

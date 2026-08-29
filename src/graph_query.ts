@@ -52,7 +52,6 @@ import {
   parseQuery,
   type Pred,
   resolveRefs,
-  scopedSessions,
   screened,
   tally,
   type Walk,
@@ -161,10 +160,31 @@ let universeDoors: QueryUniverseDoors = { matching, entriesOf, entriesScan }
 // `.entry.session=` scope reads directly through entriesOf (keyed + bounded);
 // an unscoped lazy query scans the partition globally under the same cap.
 //
-// Multiple equality values still share ONE result-page budget. Entry order is
-// session then seq, so reading sessions in that order and passing only the
-// remaining room prevents an `A,B` scope from hydrating two full pages merely
-// to discard the second one in orderedEntries.
+// An entry cursor is `seq`, which is only unique inside one Session. A scalar
+// equality can therefore take the keyed door; an unscoped/range query can read
+// one bounded prefix, but cannot continue it with `after`. A multi-session
+// equality is refused rather than returning a first page whose cursor would
+// duplicate or skip rows on the next page.
+let entryScope = (preds: Pred[]): string | null | undefined => {
+  let narrowed: Set<string> | undefined
+  for (let p of preds) {
+    if (p.comp != 'entry' || p.prop != 'session' || p.op != '') continue
+    if (p.value.includes('..')) continue
+    let values = new Set(p.value.split(',').filter(Boolean))
+    narrowed = narrowed == null
+      ? values
+      : new Set([...narrowed].filter((value) => values.has(value)))
+  }
+  if (narrowed == null) return undefined
+  if (!narrowed.size) return null
+  if (narrowed.size > 1) {
+    throw new Error(
+      'entry pages require one scalar .entry.session= value; query each Session separately',
+    )
+  }
+  return [...narrowed][0]
+}
+
 export let entryUniverse = (
   db: DatabaseSync,
   preds: Pred[],
@@ -173,17 +193,17 @@ export let entryUniverse = (
   doors: QueryUniverseDoors = universeDoors,
 ): Row[] => {
   if (limit <= 0) return []
-  let sessions = [...new Set(scopedSessions(preds))].sort()
-  let got: ReturnType<typeof entriesOf> = []
-  if (sessions.length) {
-    for (let session of sessions) {
-      let room = limit - got.length
-      if (room <= 0) break
-      got.push(...doors.entriesOf(db, session, after, room))
-    }
-  } else {
-    got = doors.entriesScan(db, after, limit)
+  let session = entryScope(preds)
+  if (session === undefined && after > 0) {
+    throw new Error(
+      'entry .after cursor requires one scalar .entry.session= value',
+    )
   }
+  let got = session === null
+    ? []
+    : session === undefined
+    ? doors.entriesScan(db, after, limit)
+    : doors.entriesOf(db, session, after, limit)
   return got.map((e) => rowed({ eid: e.eid, comps: e.comps }))
 }
 
