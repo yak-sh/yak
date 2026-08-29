@@ -210,19 +210,14 @@ export let fileSource = (opts: {
       }
       // JSON syntax alone does not make a provider record. `null`, scalars and
       // arrays would otherwise reach dialect mappers as Event and either throw
-      // or masquerade as an authoritatively empty transcript. Likewise, a
-      // structurally invalid object must become the same stable source outcome,
-      // not escape the read door as an adapter exception.
+      // or masquerade as an authoritatively empty transcript. Mapper exceptions
+      // are programming/provider-adapter failures and deliberately stay loud;
+      // only invalid source DATA is classified as malformed here.
       if (!e || typeof e != 'object' || Array.isArray(e)) {
         return { state: 'failed', reason: 'malformed' }
       }
       parsed++
-      let batch: ReturnType<typeof map>
-      try {
-        batch = map(ad.dialect, e as Record<string, unknown>, state)
-      } catch {
-        return { state: 'failed', reason: 'malformed' }
-      }
+      let batch = map(ad.dialect, e as Record<string, unknown>, state)
       let ids = new Map(
         batch.ids.map((
           id,

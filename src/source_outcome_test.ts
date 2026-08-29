@@ -3,7 +3,8 @@
 // flow through the ordinary `.entry.session=` partition when present.
 Deno.env.set('DB_PATH', ':memory:')
 
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertStrictEquals, assertThrows } from '@std/assert'
+import { adapters } from './adapters.ts'
 import { apply, sourceEntriesOf } from './db.ts'
 import { addSource, clearSources } from './source.ts'
 import { fileSource, type Located, sidEid } from './source_file.ts'
@@ -58,9 +59,11 @@ let outcome = (sid?: string) => {
   let db = freshDb()
   let eid = crypto.randomUUID()
   if (sid) apply(db, [{ eid, name: 'session', comp: { id: sid } }])
-  let result = sourceEntriesOf(db, eid)
-  db.close()
-  return result
+  try {
+    return sourceEntriesOf(db, eid)
+  } finally {
+    db.close()
+  }
 }
 
 Deno.test('file source: missing metadata path is an explicit failure', () => {
@@ -99,6 +102,35 @@ Deno.test('file source: valid non-object JSON is malformed across provider diale
   } finally {
     off()
     clearSources()
+  }
+})
+
+Deno.test('file source: an adapter exception stays visible, never malformed', () => {
+  let sid = 'throwing-adapter'
+  let path = `${root}/${sid}.jsonl`
+  Deno.writeTextFileSync(path, JSON.stringify({ type: 'event_msg' }))
+  located.set(sid, {
+    sid,
+    eid: sidEid(sid),
+    path,
+    provider: sid,
+    origin: 'native',
+  })
+  let failure = new Error('adapter exploded')
+  adapters[sid] = {
+    ...adapters.codex,
+    get dialect(): 'codex' {
+      throw failure
+    },
+  }
+  let off = addSource(source)
+  try {
+    assertStrictEquals(assertThrows(() => outcome(sid)), failure)
+  } finally {
+    off()
+    clearSources()
+    delete adapters[sid]
+    located.delete(sid)
   }
 })
 
