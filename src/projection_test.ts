@@ -9,12 +9,13 @@
 // socket — the same door server.ts and wsworker.ts both wire), and the client's
 // column-level honesty (live.ts `loaded`, in live_test.ts beside the rest of
 // landSub).
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertStringIncludes } from '@std/assert'
 import { fieldsOf, parseQuery, PROJECT } from './query.ts'
 import { projected } from './subs.ts'
 import { select, where } from './sql.ts'
 import type { Change } from './types.ts'
 import { uuid } from './types.ts'
+import { addSource, clearSources } from './source.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, open } = await import('./db.ts')
@@ -125,6 +126,8 @@ type Frame = {
   drop?: string[]
   replace?: boolean
   fields?: unknown[]
+  error?: string
+  reference?: string
 }
 
 // One subserve over one graph, collecting the frames it sends. No socket and no
@@ -157,6 +160,50 @@ Deno.test('a projected sub answers only its columns', () => {
   // And the reply STATES the projection it answered under.
   assertEquals(frames[0].fields, fields(q))
   db.close()
+})
+
+Deno.test('a subscription exception is addressed and recorded as read telemetry', () => {
+  let db = bareDb()
+  let session = mint(db, { id: 'read-failure' })
+  let { sv, frames } = dial(db)
+  sv.frame({
+    sub: `entries:${session}`,
+    q: '.priority=not-a-priority',
+  })
+  let frame = frames[0]
+  assertEquals(frame.sub, `entries:${session}`)
+  assertEquals(frame.replace, true)
+  assertEquals(frame.changes, [])
+  assertStringIncludes(frame.error ?? '', 'priority')
+  assertStringIncludes(frame.reference ?? '', 'entries:S-')
+  let stored = db.prepare(`
+    select source, name, session_id, ok, error, detail
+    from tool_call order by rowid desc limit 1
+  `).get() as Record<string, unknown>
+  assertEquals(stored.source, 'srv')
+  assertEquals(stored.name, 'subscription read')
+  assertEquals(stored.session_id, session)
+  assertEquals(stored.ok, 0)
+  assertStringIncludes(String(stored.error), 'priority')
+  assertEquals(stored.detail, frame.reference)
+})
+
+Deno.test('an expected missing entry source is a refusal, not ready-empty', () => {
+  let db = bareDb()
+  let session = mint(db, { id: 'expected-provider-session' })
+  addSource({ entries: () => undefined })
+  try {
+    let { sv, frames } = dial(db)
+    sv.frame({
+      sub: `entries:${session}`,
+      q: `.entry.session=${session}`,
+    })
+    assertEquals(frames[0].replace, true)
+    assertStringIncludes(frames[0].error ?? '', 'entry source missing')
+    assertStringIncludes(frames[0].reference ?? '', 'entries:S-')
+  } finally {
+    clearSources()
+  }
 })
 
 Deno.test('a full sub is unchanged by the projection machinery', () => {

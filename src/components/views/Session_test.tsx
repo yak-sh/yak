@@ -2,7 +2,15 @@
 import { h, render } from 'preact'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { cache, deps, ent, repoUrl } from '../../live.ts'
+import {
+  cache,
+  deps,
+  ent,
+  landSub,
+  repoUrl,
+  resetSignals,
+  useRoute,
+} from '../../live.ts'
 import { type Ent } from '../../types.ts'
 import { resolve } from '../Entity.tsx'
 import { mount } from '../mount.ts'
@@ -11,6 +19,7 @@ import {
   mentionSig,
   observing,
   resolveMentions,
+  Session,
   SessionContext,
   SessionDiagnostics,
   SessionEntry,
@@ -21,6 +30,106 @@ import {
   SessionTime,
   threadMentions,
 } from './Session.tsx'
+
+Deno.test('Session explains loading, ready-empty, rows, and read failure', async () => {
+  let priorRoute = useRoute(() => {})
+  let session = (eid: string, num: number, status: string) => {
+    cache.value = {
+      [eid]: {
+        entity: { eid, num },
+        session: { eid, id: eid, status },
+      },
+    }
+    resetSignals()
+    return ent(eid)
+  }
+  let mounted: ReturnType<typeof mount> | undefined
+  try {
+    let e = session('session-loading-copy', 7101, 'running')
+    mounted = mount(<Session e={e} />)
+    assertEquals(
+      mounted.root.querySelector('.Session_EntryState')?.textContent,
+      'Loading entries for S-7101…',
+    )
+
+    landSub({
+      sub: `entries:${e.eid}`,
+      changes: [],
+      replace: true,
+    })
+    await Promise.resolve()
+    assertEquals(
+      mounted.root.querySelector('.Session_EntryState')?.textContent,
+      'No entries yet',
+    )
+
+    landSub({
+      sub: `entries:${e.eid}`,
+      replace: true,
+      changes: [
+        {
+          eid: 'session-entry-copy',
+          name: 'entity',
+          comp: { num: 7102 },
+        },
+        {
+          eid: 'session-entry-copy',
+          name: 'entry',
+          comp: { session: e.eid, seq: 1 },
+        },
+        {
+          eid: 'session-entry-copy',
+          name: 'message',
+          comp: { role: 'agent' },
+        },
+        {
+          eid: 'session-entry-copy',
+          name: 'content',
+          comp: { body: 'ordinary row' },
+        },
+      ],
+    })
+    await Promise.resolve()
+    assertEquals(mounted.root.querySelector('.Session_EntryState'), null)
+    assertEquals(
+      mounted.root.querySelector('.Session_Log')?.textContent.includes(
+        'ordinary row',
+      ),
+      true,
+    )
+    mounted.free()
+    mounted = undefined
+
+    e = session('session-ended-copy', 7103, 'completed')
+    landSub({ sub: `entries:${e.eid}`, changes: [], replace: true })
+    mounted = mount(<Session e={e} />)
+    assertEquals(
+      mounted.root.querySelector('.Session_EntryState')?.textContent,
+      'No entries recorded',
+    )
+    mounted.free()
+    mounted = undefined
+
+    e = session('session-failed-copy', 7104, 'completed')
+    landSub({
+      sub: `entries:${e.eid}`,
+      changes: [],
+      replace: true,
+      error: 'source unreadable',
+      reference: 'entries:S-7104',
+    })
+    mounted = mount(<Session e={e} />)
+    assertEquals(
+      mounted.root.querySelector('.Session_EntryState')?.textContent,
+      'Entries could not be loaded: source unreadable [entries:S-7104] retry',
+    )
+  } finally {
+    mounted?.free()
+    useRoute(priorRoute)
+    cache.value = {}
+    resetSignals()
+  }
+})
 
 Deno.test('session activity explains transcript and transient waits', () => {
   assertEquals(doing(undefined, undefined, true), 'starting…')

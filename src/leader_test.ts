@@ -392,11 +392,21 @@ slow(
     leader.use('entries:S-1', '.entry.session=S-1')
     assertEquals(calls, ['sub:entries:S-1:.entry.session=S-1'])
 
+    // An explicit retry keeps the same stable identity and query, but asks the
+    // active owner for a fresh replacement immediately.
+    assertEquals(leader.retry('entries:S-1'), true)
+    assertEquals(leader.retry('entries:missing'), false)
+    assertEquals(calls, [
+      'sub:entries:S-1:.entry.session=S-1',
+      'sub:entries:S-1:.entry.session=S-1',
+    ])
+
     // A follower opens the same partition: a higher-rev use for the same query.
     // The leader must refresh once so the newcomer receives the current set.
     let use = { name: 'entries:S-1', value: '.entry.session=S-1', rev: 5 }
     peer.postMessage({ kind: 'owned', tab: 'b', uses: [use] })
     assertEquals(calls, [
+      'sub:entries:S-1:.entry.session=S-1',
       'sub:entries:S-1:.entry.session=S-1',
       'sub:entries:S-1:.entry.session=S-1',
     ])
@@ -405,6 +415,7 @@ slow(
     // so no second refresh goes out.
     peer.postMessage({ kind: 'owned', tab: 'b', uses: [use] })
     assertEquals(calls, [
+      'sub:entries:S-1:.entry.session=S-1',
       'sub:entries:S-1:.entry.session=S-1',
       'sub:entries:S-1:.entry.session=S-1',
     ])

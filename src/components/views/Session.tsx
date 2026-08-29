@@ -20,6 +20,7 @@ import {
   mutate,
   observation,
   repoUrl,
+  retryEntrySub,
   uuid,
 } from '../../live.ts'
 import { contextOf, graphLog } from '../../entry_log.ts'
@@ -79,6 +80,8 @@ let Frame = block('div', 'Session', {
   Transient: 'div',
   Final: 'div',
   Fault: 'p',
+  EntryState: 'p',
+  Retry: 'button',
   Log: 'div',
   Earlier: 'button',
   Line: 'div',
@@ -110,6 +113,8 @@ let {
   Transient,
   Final,
   Fault,
+  EntryState,
+  Retry,
   Log,
   Earlier,
   Line,
@@ -598,18 +603,24 @@ export let Session = ({ e }: { e: Ent }) => {
   // its door is open. `standing` is that answer as a word, so an external
   // run's pip and label read `running` instead of a blank lifecycle.
   let state = useSessionStanding(e)
-  let entries = state.log
+  let entries = state.entries
+  let ready = entries.status == 'ready' ? entries.log : undefined
+  let [retried, setRetried] = useState(false)
+  useEffect(() => {
+    if (entries.status == 'ready') setRetried(false)
+  }, [entries.status])
   let native = s.origin == 'managed' && s.status == null &&
     e.spawn?.provider == 'codex'
   let stream = native ? observation(e.eid) : undefined
-  let live = native ? !s.base_revision || !!entries?.busy : awake(s)
+  let live = native ? !s.base_revision || !!ready?.busy : awake(s)
   let status = state.status
   let fault = e.exception?.message ?? e.error?.message
   // One read path (T-16824): the transcript is the session's entry partition
   // for every substrate — the subscription useSessionStanding opened, live
-  // through the graph, never a /logs file-poll. graphLog([]) is the empty frame
-  // before the first entry arrives.
-  let log = entries ?? graphLog([])
+  // through the graph, never a /logs file-poll. The fallback log is only for
+  // internal derivations while the explicit read state paints below; it is
+  // never presented as an authoritative empty transcript.
+  let log = ready ?? graphLog([])
   // Context: a graph-native run derives it from its usage ENTRIES (log.context);
   // a process-backed run has none, so it derives from the session's usage_json
   // facet, which the graph already holds (T-16798, contextOf) — no file-read.
@@ -690,7 +701,7 @@ export let Session = ({ e }: { e: Ent }) => {
     [sig],
   )
   let mentions = resolveMentions(raw)
-  let graphActivity = native ? entries?.activity : undefined
+  let graphActivity = native ? ready?.activity : undefined
   let activity = graphActivity?.kind == 'tool'
     ? graphActivity.label
     : observing(stream) ?? graphActivity?.label ??
@@ -735,6 +746,30 @@ export let Session = ({ e }: { e: Ent }) => {
         {fault && <Fault mod='error'>{fault}</Fault>}
         {s.stop_reason && <Fault>{s.stop_reason}</Fault>}
         <Log>
+          {entries.status == 'loading' && (
+            <EntryState>Loading entries for {idOf(e)}…</EntryState>
+          )}
+          {entries.status == 'failed' && (
+            <EntryState>
+              Entries could not be loaded: {entries.reason}{' '}
+              [{entries.reference}]{' '}
+              <Retry
+                type='button'
+                onClick={() => {
+                  setRetried(true)
+                  retryEntrySub(e.eid)
+                }}
+              >
+                {retried ? 'retry again' : 'retry'}
+              </Retry>
+              {retried && ' Retry requested.'}
+            </EntryState>
+          )}
+          {entries.status == 'ready' && !log.entries.length && (
+            <EntryState>
+              {live ? 'No entries yet' : 'No entries recorded'}
+            </EntryState>
+          )}
           {start > 0 && (
             <Earlier type='button' onClick={older}>
               ↑ {start} earlier {start == 1 ? 'line' : 'lines'}

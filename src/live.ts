@@ -1373,6 +1373,10 @@ export type Sub = {
   unedges?: Dep[]
   peers?: Change[]
   unpeers?: string[]
+  // An addressed read refusal. `reference` is stable enough to correlate the
+  // visible failure with server read telemetry without marking the entity.
+  error?: string
+  reference?: string
 }
 type Observed = { observe: unknown }
 type Hot = 'reload' | { hmr: number } | { css: number }
@@ -1772,6 +1776,19 @@ let settleEdges = (gained: Dep[], lost: Dep[]) => {
 // evicted from the cache. A control reply replaces the prior set wholesale;
 // maintenance frames patch it.
 export let landSub = (f: Sub) => {
+  if (f.error) {
+    subFailures.set(f.sub, {
+      reason: f.error,
+      reference: f.reference ?? f.sub,
+    })
+    // The failed replacement is NOT an authoritative empty answer. Preserve
+    // any prior membership for cache ownership, but publish the failure so a
+    // first read cannot remain silently undefined and an old read cannot pose
+    // as current. Only a later successful replacement clears this state.
+    subVersion.value++
+    return { eids: [], edges: [] }
+  }
+  if (f.replace) subFailures.delete(f.sub)
   // An aggregate frame lands in its tally signal and nowhere else — it carries
   // no rows, so the cache, member sets and eviction all stay out of it.
   if (f.agg) {
@@ -2067,6 +2084,10 @@ export let assertAgree = (
 
 let boardUses = new Map<string, { n: number; q: string }>()
 let entryUses = new Map<string, number>()
+let subFailures = new Map<
+  string,
+  { reason: string; reference: string }
+>()
 let edgeUses = new Map<string, number>()
 let resultUses = new Map<string, number>()
 let resultSignals = new Map<
@@ -2190,6 +2211,35 @@ export let entrySub = (session: string) => {
     dropBoard(sub)
   }
 }
+
+export type SubscriptionState =
+  | { status: 'loading' }
+  | { status: 'ready'; eids: Set<string> }
+  | { status: 'failed'; reason: string; reference: string }
+
+// Stable subscription state, independent of the row cache. Failures survive
+// unrelated renders, unmounts, cache reseeds, and reconnect attempts; the
+// successful replacement in landSub is the sole clearing event.
+export let subscriptionState = (sub: string): SubscriptionState => {
+  subVersion.value
+  let failed = subFailures.get(sub)
+  if (failed) return { status: 'failed', ...failed }
+  let eids = subMembers.get(sub)
+  return eids ? { status: 'ready', eids: new Set(eids) } : { status: 'loading' }
+}
+
+export let retrySubscription = (sub: string) => {
+  if (owner?.retry(sub)) return true
+  let q = sub.startsWith('entries:')
+    ? `.entry.session=${sub.slice('entries:'.length)}`
+    : undefined
+  if (!q) return false
+  subscribe(sub, q)
+  return true
+}
+
+export let retryEntrySub = (session: string) =>
+  retrySubscription(`entries:${session}`)
 
 // The fullscreen root a client reaches by direct URL (or a peek) is one entity
 // that no defining set holds and the query grammar can't name (`.eid=` is
@@ -2352,10 +2402,10 @@ let land = async (data: unknown, mode: Land) => {
   }
   if (!data || typeof data != 'object') return
   let frame = data as Partial<Live & Catchup & Reset & Sub>
-  // A refused SUBSCRIPTION (empty query, server.ts control()) still carries
-  // its sub and an empty replace: land it through the sub arm so the set
-  // settles live-and-empty, and keep the refusal loud without raising the
-  // global problem banner a rejected WRITE earns.
+  // A refused SUBSCRIPTION is addressed by its stable sub identity. landSub
+  // retains that read failure (and does not mistake its empty transport batch
+  // for an authoritative empty result) without raising the global problem
+  // banner a rejected WRITE earns.
   if (frame.error && typeof frame.sub == 'string') {
     console.warn(`sub ${frame.sub} refused —`, frame.error)
     landSub(frame as Sub)

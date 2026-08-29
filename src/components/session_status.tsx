@@ -2,7 +2,7 @@
 // lazy partition; wakes stay in the root graph because their timer and outcome
 // are ordinary shared facets.
 import { useEffect } from 'preact/hooks'
-import { ent, entrySub, subEids } from '../live.ts'
+import { ent, entrySub, subscriptionState } from '../live.ts'
 import { type Ent, standing } from '../types.ts'
 import { type EntryRow, type GraphLog, graphLog } from '../entry_log.ts'
 import { useQueryEids } from './useQuery.ts'
@@ -34,19 +34,24 @@ let entryRow = (e: Ent): EntryRow | undefined => {
   }
 }
 
+export type EntryReadState =
+  | { status: 'loading' }
+  | { status: 'ready'; log: GraphLog }
+  | { status: 'failed'; reason: string; reference: string }
+
 export let useEntryLog = (
   eid: string,
   enabled = true,
-): GraphLog | undefined => {
+): EntryReadState => {
   useEffect(() => enabled ? entrySub(eid) : undefined, [eid, enabled])
-  if (!enabled) return undefined
-  let eids = subEids(`entries:${eid}`)
-  if (!eids) return undefined
-  let rows = [...eids].flatMap((id) => {
+  if (!enabled) return { status: 'loading' }
+  let state = subscriptionState(`entries:${eid}`)
+  if (state.status != 'ready') return state
+  let rows = [...state.eids].flatMap((id) => {
     let row = entryRow(ent(id))
     return row ? [row] : []
   })
-  return graphLog(rows)
+  return { status: 'ready', log: graphLog(rows) }
 }
 
 // The native session's standing for the dot, read O(1) — never scans the log.
@@ -90,6 +95,6 @@ export let useSessionStanding = (e: Ent) => {
   // Every substrate reads its transcript from the same entry-partition
   // subscription (T-16824): a process-backed run's JSONL is ingested into these
   // entries, so there is one live read path, not a per-substrate branch.
-  let log = useEntryLog(e.eid)
-  return { log, status: graphStanding(e, usePendingWake(e.eid)) }
+  let entries = useEntryLog(e.eid)
+  return { entries, status: graphStanding(e, usePendingWake(e.eid)) }
 }

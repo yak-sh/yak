@@ -29,14 +29,17 @@ import {
   delta,
   eager,
   eagerDeps,
+  human,
   locate,
   referrersOf,
   refValuesOf,
   rootChanges,
   rowsOf,
   selectedDeps,
+  sourceEntriesOf,
   textMatches,
 } from './db.ts'
+import { record } from './telemetry.ts'
 import { evalAgg, evalSub, walker, workingSet } from './graph_query.ts'
 import {
   inputsOf,
@@ -48,6 +51,7 @@ import {
 } from './result_component.ts'
 import type { ResultComp } from './query.ts'
 import { liveFrame } from './wire.ts'
+import { hasSources } from './source.ts'
 import {
   bodied,
   bodyless,
@@ -609,6 +613,23 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         }
         : evalSub(db, queryLine, details)
       let { preds, hits } = answer
+      // entriesOf keeps its legacy array return for graph readers, so a source
+      // refusal would otherwise collapse to the same [] as an authoritative
+      // empty transcript. The stable partition subscription is where that
+      // distinction becomes protocol state: only an empty answer needs the
+      // source-side outcome checked, and an undiscoverable source remains a
+      // legitimate empty lookup.
+      if (
+        !hits.length && hasSources() && f.sub.startsWith('entries:')
+      ) {
+        let session = f.sub.slice('entries:'.length)
+        let source = sourceEntriesOf(db, session)
+        if (source.state == 'failed') {
+          throw new Error(
+            `entry source ${source.reason} for ${human(db, session)}`,
+          )
+        }
+      }
       let window = 'window' in answer ? answer.window : undefined
       // The declared projection, compiled once. A route sub never has one: it
       // exists to load ONE entity whole, which is the opposite ask.
@@ -682,7 +703,35 @@ export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
         }),
       )
     } catch (e) {
-      console.warn('sub: bad query —', e)
+      // A subscription is a read request with an addressed caller waiting for
+      // its initial replacement. Silence here leaves that caller in loading
+      // forever. Keep the read failure outside the graph (it is telemetry, not
+      // a failure of the Session being read), and answer the exact stable sub
+      // identity so a retry can replace it normally.
+      let message = e instanceof Error ? e.message : String(e)
+      let session = f.sub.startsWith('entries:')
+        ? f.sub.slice('entries:'.length)
+        : undefined
+      let reference = session
+        ? `entries:${human(db, session)}`
+        : `subscription:${f.sub}`
+      record(db, {
+        source: 'srv',
+        name: 'subscription read',
+        session_id: session ?? null,
+        ok: false,
+        error: message,
+        detail: reference,
+      })
+      send(JSON.stringify({
+        sub: f.sub,
+        changes: [],
+        replace: true,
+        error: message,
+        reference,
+        cursor: cursorOf(db),
+        shadow: !!f.shadow,
+      }))
     }
   }
 

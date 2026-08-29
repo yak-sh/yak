@@ -246,6 +246,18 @@ export let topology = <T>(
     settle()
   }
 
+  // Re-issue one held subscription without changing its stable name or query.
+  // Moving the ownership revision makes settle install it again on the active
+  // connection and announce that retry to a shared-tab leader.
+  let retry = (name: string) => {
+    let held = mine.get(name)
+    if (!held) return false
+    mine.set(name, { ...held, rev: ++clock })
+    announce()
+    settle()
+    return true
+  }
+
   let leave = () => {
     mine.clear()
     announce()
@@ -269,5 +281,6 @@ export let topology = <T>(
     seek,
     start,
     use,
+    retry,
   }
 }

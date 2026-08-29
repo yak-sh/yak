@@ -60,6 +60,7 @@ import {
   statusOf,
   subEids,
   subscriptionChecks,
+  subscriptionState,
   topZ,
   unreadFor,
   unsubscribe,
@@ -691,6 +692,36 @@ Deno.test('a replacement frame forgets the prior query set', () => {
     shadow: true,
   })
   assertEquals([...(subEids('board:replace') ?? [])], ['new'])
+})
+
+Deno.test('subscription failures persist until a successful replacement', () => {
+  let sub = 'entries:failure-state-test'
+  landSub({
+    sub,
+    changes: [],
+    replace: true,
+    error: 'source unreadable',
+    reference: 'entries:S-77',
+  })
+  assertEquals(subscriptionState(sub), {
+    status: 'failed',
+    reason: 'source unreadable',
+    reference: 'entries:S-77',
+  })
+
+  // An unrelated cache publication is not a subscription recovery.
+  applyLocal([{
+    eid: 'unrelated-failure-state-test',
+    name: 'entity',
+    comp: { num: 1 },
+  }])
+  assertEquals(subscriptionState(sub).status, 'failed')
+
+  landSub({ sub, changes: [], replace: true })
+  assertEquals(subscriptionState(sub), {
+    status: 'ready',
+    eids: new Set<string>(),
+  })
 })
 
 Deno.test('transient observations yield to the durable Session partition', () => {
