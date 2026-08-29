@@ -12,7 +12,7 @@ let { freshDb } = await import('./testdb.ts')
 let uid = () => crypto.randomUUID()
 let task = (eid: string, i: number) => [
   { eid, name: 'doc', comp: { title: `Task ${i}`, body: 'b'.repeat(200) } },
-  { eid, name: 'task', comp: { status: 'open', priority: i % 3 } },
+  { eid, name: 'task', comp: { priority: i % 3 } },
 ]
 
 // A resident graph of 2k tasks for the read benches.

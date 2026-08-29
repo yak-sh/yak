@@ -39,7 +39,7 @@ for (let i = 0; i < 36; i++) {
   let e = uid()
   apply(d, [
     { eid: e, name: 'doc', comp: { title: `Task ${i}`, body: '' } },
-    { eid: e, name: 'task', comp: { status: 'open', project: p } },
+    { eid: e, name: 'task', comp: { project: p } },
   ])
   put(e, `Task ${i}`, vecAt(i))
 }

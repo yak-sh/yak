@@ -324,7 +324,7 @@ let file = (a: Artifact, cast: Cast): Filing => {
     {
       eid,
       name: 'task',
-      comp: { status: 'open', priority: a.priority, project: a.project },
+      comp: { priority: a.priority, project: a.project },
     },
     { eid, name: 'proposed', comp: {} },
     {

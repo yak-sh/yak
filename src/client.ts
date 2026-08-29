@@ -1507,7 +1507,13 @@ export let taskChanges = (
   grouped: Record<string, Record<string, unknown>>,
 ): Change[] => [
   { eid, name: 'doc', comp: { body: '', ...grouped.doc } },
-  { eid, name: 'task', comp: { status: 'open', ...grouped.task } },
+  // A new task is born open — no mark (D-24102). status is derived, not
+  // writable, so drop any that rode in on the spec (`.status=` on new).
+  {
+    eid,
+    name: 'task',
+    comp: (({ status: _drop, ...task }) => task)(grouped.task ?? {}),
+  },
   ...Object.entries(grouped)
     .filter(([n]) => n != 'doc' && n != 'task')
     .map(([name, comp]) => ({ eid, name, comp })),

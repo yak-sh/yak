@@ -1,4 +1,4 @@
-import { subChanges } from '../client.ts'
+import { statusChanges, subChanges } from '../client.ts'
 import { ent, mutate, myActor, myMode, reveal, rows, shown } from '../live.ts'
 import { statusOf } from '../types.ts'
 import { type Action, define, defineActions, has, resolve } from './registry.ts'
@@ -309,9 +309,13 @@ defineActions([
     match: has('task'),
     acts: (e) => {
       let s = statusOf(e)
+      // Status is DERIVED (D-24102): a move mints/retracts the mark
+      // (statusChanges), never a status column. wip is a live claim, so on the
+      // web (no session) 'start' falls back to reopening — the task reads open
+      // until it is claimed.
       let move = (label: string, status: string): Action => ({
         label,
-        run: () => mutate({ eid: e.eid, name: 'task', comp: { status } }),
+        run: () => mutate(...statusChanges(e.eid, status)),
       })
       // Cancelling wants a why: after the write, the cursor lands in the
       // entity's comment box — a nudge toward the convention, never a
@@ -319,7 +323,7 @@ defineActions([
       let cancel: Action = {
         label: 'cancel',
         run: () => {
-          mutate({ eid: e.eid, name: 'task', comp: { status: 'cancelled' } })
+          mutate(...statusChanges(e.eid, 'cancelled'))
           if (typeof document != 'undefined') {
             setTimeout(() =>
               document.querySelector<HTMLElement>(
