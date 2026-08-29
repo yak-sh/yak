@@ -202,14 +202,27 @@ export let fileSource = (opts: {
     let parsed = 0
     for (let line of lines) {
       if (!line.trim()) continue
-      let e
+      let e: unknown
       try {
         e = JSON.parse(line)
-        parsed++
       } catch {
         continue // a malformed line carries no entry
       }
-      let batch = map(ad.dialect, e, state)
+      // JSON syntax alone does not make a provider record. `null`, scalars and
+      // arrays would otherwise reach dialect mappers as Event and either throw
+      // or masquerade as an authoritatively empty transcript. Likewise, a
+      // structurally invalid object must become the same stable source outcome,
+      // not escape the read door as an adapter exception.
+      if (!e || typeof e != 'object' || Array.isArray(e)) {
+        return { state: 'failed', reason: 'malformed' }
+      }
+      parsed++
+      let batch: ReturnType<typeof map>
+      try {
+        batch = map(ad.dialect, e as Record<string, unknown>, state)
+      } catch {
+        return { state: 'failed', reason: 'malformed' }
+      }
       let ids = new Map(
         batch.ids.map((
           id,

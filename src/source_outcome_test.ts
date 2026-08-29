@@ -33,6 +33,22 @@ for (let [sid, path] of Object.entries(paths)) {
     origin: 'native',
   })
 }
+let invalid = [
+  { sid: 'codex-null', provider: 'codex', value: null },
+  { sid: 'codex-scalar', provider: 'codex', value: 7 },
+  { sid: 'claude-array', provider: 'claude', value: ['not', 'an', 'event'] },
+]
+for (let { sid, provider, value } of invalid) {
+  let path = `${root}/${sid}.jsonl`
+  Deno.writeTextFileSync(path, JSON.stringify(value))
+  located.set(sid, {
+    sid,
+    eid: sidEid(sid),
+    path,
+    provider,
+    origin: 'native',
+  })
+}
 let source = fileSource({
   locate: (handle) => located.get(handle),
   door: 'transcript',
@@ -68,6 +84,18 @@ Deno.test('file source: unreadable and malformed transcripts are explicit failur
       state: 'failed',
       reason: 'malformed',
     })
+  } finally {
+    off()
+    clearSources()
+  }
+})
+
+Deno.test('file source: valid non-object JSON is malformed across provider dialects', () => {
+  let off = addSource(source)
+  try {
+    for (let { sid } of invalid) {
+      assertEquals(outcome(sid), { state: 'failed', reason: 'malformed' })
+    }
   } finally {
     off()
     clearSources()
