@@ -102,13 +102,7 @@ import {
   resolveRefs,
   TEXT,
 } from './query.ts'
-import {
-  evalAgg,
-  evalBuildWork,
-  evalGraph,
-  rowed,
-  workBlockers,
-} from './graph_query.ts'
+import { evalAgg, evalGraph, evalWork, rowed } from './graph_query.ts'
 import { withResults } from './result_component.ts'
 import { nativeSoon } from './tmux.ts'
 import { loadPlugins, pluginSpecifiers } from './plugins.ts'
@@ -996,18 +990,6 @@ let handle = async (req: Request) => {
   // and dangling {eid} references — both wire-invisible, so the doctor cannot
   // see them through /query and reads this raw db scan instead. Read-only.
   if (path == '/integrity') return Response.json(scanAnomalies(db))
-  if (path == '/work-blockers') {
-    if (req.method != 'GET') return methodNotAllowed('GET')
-    let parents = (url.searchParams.get('ids') ?? '').split(',').filter(Boolean)
-    let limit = Number(url.searchParams.get('limit')) || 20
-    return Response.json(
-      workBlockers(db, parents, limit).map((set) => ({
-        parent: set.parent,
-        items: set.items.map((row) => jsonOf(row)),
-        truncated: set.truncated,
-      })),
-    )
-  }
   if (path == '/query') {
     if (req.method != 'GET') return methodNotAllowed('GET')
     // The graph over plain GET: the query string IS the filter line —
@@ -1063,6 +1045,29 @@ let handle = async (req: Request) => {
         !s.startsWith('id=')
       )
       let q = segs.join('&')
+      // Work is its own exact row selection. Validate and execute it before
+      // aggregate/ranking riders can consume the same query string through a
+      // different response shape; unsupported work grammar must fail as work,
+      // not quietly become a normal query result.
+      if (work) {
+        if (work != 'evaluate' && work != 'build') {
+          throw new Error(`unknown work lane: ${work}`)
+        }
+        if (named.length) throw new Error('work queries do not accept id=')
+        if (reveal) {
+          throw new Error('work queries do not reveal quarantined entities')
+        }
+        if (backs || edged) {
+          throw new Error('work queries do not accept backlinks or edge riders')
+        }
+        return Response.json(
+          evalWork(db, q, {
+            work,
+            limit,
+            recursive,
+          }).map((row) => jsonOf(row)),
+        )
+      }
       let asked = q.trim()
         ? resolveRefs(parseQuery(q), (id) => locate(db, id))
         : []
@@ -1218,13 +1223,6 @@ let handle = async (req: Request) => {
         return Response.json(
           layers(screen(hits).sort((a, b) => a.num - b.num)),
         )
-      }
-      if (work) {
-        if (work != 'build') throw new Error(`unknown work lane: ${work}`)
-        return Response.json(layers(evalBuildWork(db, q, {
-          limit,
-          recursive,
-        })))
       }
       // The authoritative pipeline (evalGraph): the index answers when it can
       // (a one-row question cost a 27 MB snapshot and 0.29s before sql.ts,

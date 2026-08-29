@@ -243,15 +243,28 @@ export let arm: {
 export type QueryOpts = {
   after?: number
   limit?: number
-  work?: 'build'
+  work?: 'evaluate' | 'build'
   recursive?: boolean
 }
 
-export type WorkBlockerSet = {
-  parent: string
-  items: Row[]
-  truncated: boolean
+export type WorkProjection = {
+  authorization?: {
+    kind: 'direct' | 'inherited'
+    from: string[]
+    truncated: boolean
+  }
+  blockers: {
+    items: {
+      id: string
+      title: string
+      status: string
+      claim: string | null
+    }[]
+    truncated: boolean
+  }
 }
+
+export let WORK_REFS_LIMIT = 20
 
 export let httpQuery = async (
   filters: string[],
@@ -280,26 +293,6 @@ export let httpQuery = async (
 export type Querier = typeof httpQuery
 export let query: Querier = (filters, opts) =>
   arm.query ? arm.query(filters, opts) : httpQuery(filters, opts)
-
-export let httpWorkBlockers = async (
-  parents: string[],
-  limit: number,
-): Promise<WorkBlockerSet[]> => {
-  if (!parents.length) return []
-  let q = new URLSearchParams({ ids: parents.join(','), limit: String(limit) })
-  let res = await request(`http://${host()}/work-blockers?${q}`)
-  if (!res.ok) throw new Error(`server said ${res.status}`)
-  let sets = await res.json() as {
-    parent: string
-    items: Record<string, unknown>[]
-    truncated: boolean
-  }[]
-  return sets.map((set) => ({
-    parent: set.parent,
-    items: set.items.map(rowOf),
-    truncated: set.truncated,
-  }))
-}
 
 // Entities BY ADDRESS — the narrow half of find(), which needs `all: Row[]`
 // and so opens every CLI verb with a whole-graph snapshot. Speaks the same

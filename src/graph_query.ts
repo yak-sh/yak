@@ -23,10 +23,12 @@ import {
 } from './types.ts'
 import {
   find,
+  idOf,
   need,
   type Querier,
   type Row,
-  type WorkBlockerSet,
+  WORK_REFS_LIMIT,
+  type WorkProjection,
 } from './client.ts'
 import type { Reader } from './commands.ts'
 import {
@@ -48,6 +50,7 @@ import {
 import { aggregateSql, countSql, where, whereSome, windowed } from './sql.ts'
 import { hasSources } from './source.ts'
 import {
+  AGG,
   aggOf,
   EDGES,
   listed,
@@ -57,12 +60,16 @@ import {
   orderOf,
   parseQuery,
   type Pred,
+  PROJECT,
+  REACHES,
   resolveRefs,
   screened,
   tally,
+  TEXT,
   type Walk,
   warm,
   type Win,
+  WINDOW,
   windowOf,
 } from './query.ts'
 import { inputsOf, resultsOf, withResults } from './result_component.ts'
@@ -522,67 +529,99 @@ export let evalAgg = (
 // and pending/declined rows are admitted as boundaries but never expanded.
 // Readiness is screened before ORDER/LIMIT, making the returned prefix exactly
 // priority ASC, newest spine first rather than a re-ranked recent sample.
+let workLineageSql = (seed: string) =>
+  `lineage(origin, entity) as (
+     select origin, entity from ${seed}
+     union
+     select lineage.origin, dependency.parent
+       from lineage
+       join entity current on current.id = lineage.entity
+       left join tombstone current_dead on current_dead.eid = current.eid
+       left join proposed on proposed.entity = current.id
+       left join decided choice on choice.entity = current.id
+       left join quarantined hidden on hidden.entity = current.id
+       join dependency indexed by dependency_child
+         on dependency.child = current.id
+        and dependency.type = 'requires'
+       join entity parent on parent.id = dependency.parent
+       left join tombstone parent_dead on parent_dead.eid = parent.eid
+      where not (proposed.entity is not null and choice.entity is null)
+        and coalesce(choice.verdict, '') != 'declined'
+        and hidden.entity is null
+        and current_dead.eid is null
+        and parent_dead.eid is null
+   )`
+
+let workRootsSql = `approved_root(entity, num) as (
+  select root.id, root.num
+    from entity root
+    join task root_task on root_task.entity = root.id
+    join decided approval on approval.entity = root.id
+    left join completed on completed.entity = root.id
+    left join cancelled on cancelled.entity = root.id
+    left join claim on claim.entity = root.id
+    left join quarantined on quarantined.entity = root.id
+    left join tombstone root_dead on root_dead.eid = root.eid
+   where coalesce(approval.verdict, 'approved') != 'declined'
+     and completed.entity is null
+     and cancelled.entity is null
+     and claim.entity is null
+     and quarantined.entity is null
+     and root_dead.eid is null
+)`
+
+let workBase = (db: DatabaseSync, q: string) => {
+  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  if (
+    preds.some((p) =>
+      p.rev || p.refs || p.reach ||
+      [AGG, EDGES, ORDER, PROJECT, REACHES, TEXT, WINDOW].includes(p.op)
+    )
+  ) {
+    throw new Error(
+      'work filters support indexed scalar dot-params and forward reference ' +
+        'paths only; text, reverse hops, traversals, windows, rankings, and ' +
+        'projections are unsupported',
+    )
+  }
+  let base = where(screened(inputsOf(preds), false))
+  if (!base) {
+    throw new Error(
+      'work filter cannot be answered exactly by indexed SQL; use a scalar ' +
+        'equality, list, range, comparison, presence, or absence predicate',
+    )
+  }
+  return base
+}
+
 export let buildWorkSql = (
   db: DatabaseSync,
   q: string,
   opts: { limit?: number; recursive?: boolean } = {},
 ) => {
-  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
-  let base = where(screened(inputsOf(preds), false))
-  if (!base) {
-    throw new Error('work filters must resolve to an indexed query')
-  }
+  let base = workBase(db, q)
   let limit = Math.max(1, Math.min(opts.limit ?? 20, 100))
   let lineage = opts.recursive
-    ? `, lineage(origin, entity) as (
-         select entity, entity from candidate
-         union
-         select l.origin, d.parent
-           from lineage l
-           join entity current on current.id = l.entity
-           join task current_task on current_task.entity = current.id
-           left join proposed current_proposed
-             on current_proposed.entity = current.id
-           left join decided current_decided
-             on current_decided.entity = current.id
-           join dependency d indexed by dependency_child
-             on d.child = current.id and d.type = 'requires'
-           join entity parent on parent.id = d.parent
-           join task parent_task on parent_task.entity = parent.id
-          where not (
-            current_proposed.entity is not null and
-            current_decided.entity is null
-          )
-            and coalesce(current_decided.verdict, '') != 'declined'
-       )`
+    ? `, ${workLineageSql('candidate')}, ${workRootsSql}`
     : ''
   let authorization = opts.recursive
     ? `exists (
          select 1
            from lineage l
-           join decided root_decided on root_decided.entity = l.entity
-           left join completed root_completed
-             on root_completed.entity = l.entity
-           left join cancelled root_cancelled
-             on root_cancelled.entity = l.entity
-           left join claim root_claim on root_claim.entity = l.entity
+           join approved_root root on root.entity = l.entity
           where l.origin = entity.id
-            and coalesce(root_decided.verdict, 'approved') != 'declined'
-            and root_completed.entity is null
-            and root_cancelled.entity is null
-            and root_claim.entity is null
        )`
     : `choice.entity is not null and
        coalesce(choice.verdict, 'approved') != 'declined'`
   return {
     sql: `with recursive filtered(eid) as materialized (${base.sql}),
-       candidate(entity) as materialized (
-         select entity.id from filtered
+       candidate(origin, entity) as materialized (
+         select entity.id, entity.id from filtered
          join entity on entity.eid = filtered.eid
        )${lineage}
        select entity.eid as eid
          from candidate
-         join entity on entity.id = candidate.entity
+       join entity on entity.id = candidate.entity
          join task on task.entity = entity.id
          left join proposed on proposed.entity = entity.id
          left join decided choice on choice.entity = entity.id
@@ -612,7 +651,7 @@ export let buildWorkSql = (
                and endpoint_cancelled.entity is null
           )
           and (${authorization})
-        order by task.priority asc, entity.num desc
+        order by task.priority is null, task.priority asc, entity.num desc
         limit ?`,
     params: [...base.params, limit],
   }
@@ -637,7 +676,7 @@ export let workBlockers = (
   db: DatabaseSync,
   parents: string[],
   limit = 20,
-): WorkBlockerSet[] => {
+): { parent: string; items: Row[]; truncated: boolean }[] => {
   let unique = [...new Set(parents)].filter(Boolean).slice(0, 100)
   if (!unique.length) return []
   let cap = Math.max(1, Math.min(limit, 100))
@@ -654,10 +693,14 @@ export let workBlockers = (
          join entity child on child.id = dependency.child
          left join completed on completed.entity = child.id
          left join cancelled on cancelled.entity = child.id
+         left join quarantined on quarantined.entity = child.id
+         left join tombstone child_dead on child_dead.eid = child.eid
         where parent.eid in (${marks})
           and dependency.type = 'requires'
           and completed.entity is null
           and cancelled.entity is null
+          and quarantined.entity is null
+          and child_dead.eid is null
      )
      select parent, child, position from ranked
       where position <= ? order by parent, position`,
@@ -681,6 +724,142 @@ export let workBlockers = (
       truncated: mine.length > cap,
     }
   })
+}
+
+let workAuthorizations = (
+  db: DatabaseSync,
+  candidates: Row[],
+  limit = WORK_REFS_LIMIT,
+) => {
+  let ids = [...new Set(candidates.map((r) => r.eid))].slice(0, 100)
+  let out = new Map<string, { from: string[]; truncated: boolean }>()
+  if (!ids.length) return out
+  let cap = Math.max(1, Math.min(limit, 100))
+  let marks = ids.map(() => '?').join(',')
+  let found = db.prepare(
+    `with recursive seed(origin, entity) as (
+       select id, id from entity where eid in (${marks})
+     ), ${
+      workLineageSql('seed')
+    }, ${workRootsSql}, eligible(origin, root, num) as (
+       select lineage.origin, root.entity, root.num
+         from lineage
+         join approved_root root on root.entity = lineage.entity
+     ), ranked as (
+       select origin, root,
+              row_number() over (partition by origin order by num desc) position
+         from eligible
+     )
+     select source.eid as source, target.eid as target, ranked.position
+       from ranked
+       join entity source on source.id = ranked.origin
+       join entity target on target.id = ranked.root
+      where ranked.position <= ? order by source, ranked.position`,
+  ).all(...ids, cap + 1) as {
+    source: string
+    target: string
+    position: number
+  }[]
+  let emitted = found.filter((r) => r.position <= cap)
+  let roots = new Map(
+    rowsFor(db, emitted.map((r) => r.target)).map((r) => [r.eid, r]),
+  )
+  for (let candidate of candidates) {
+    let mine = found.filter((r) => r.source == candidate.eid)
+    out.set(candidate.eid, {
+      from: mine.slice(0, cap).flatMap((r) => {
+        let root = roots.get(r.target)
+        return root ? [idOf(root)] : []
+      }),
+      truncated: mine.length > cap,
+    })
+  }
+  return out
+}
+
+// Both public work lanes return ordinary rows plus one transient `work`
+// projection. The projection is assembled beside SQLite in one local read, so
+// HTTP, MCP stdio, and an armed CLI share quarantine screening and never walk
+// authorization depth over the transport.
+export let evalWork = (
+  db: DatabaseSync,
+  q: string,
+  opts: {
+    work: 'evaluate' | 'build'
+    limit?: number
+    recursive?: boolean
+  },
+): Row[] => {
+  let limit = Math.max(1, Math.min(opts.limit ?? 20, 100))
+  let hits = opts.work == 'build'
+    ? evalBuildWork(db, q, { limit, recursive: opts.recursive })
+    : (() => {
+      workBase(db, q)
+      return evalGraph(db, q, { limit }).hits
+        .sort((a, b) => b.num - a.num).slice(0, limit)
+    })()
+  let inherited = hits.filter((r) =>
+    opts.work == 'build' &&
+    !(r.comps.decided && r.comps.decided.verdict != 'declined')
+  )
+  let auth = opts.recursive
+    ? workAuthorizations(db, inherited, WORK_REFS_LIMIT)
+    : new Map<string, { from: string[]; truncated: boolean }>()
+  let sets = opts.work == 'evaluate'
+    ? workBlockers(db, hits.map((r) => r.eid), WORK_REFS_LIMIT)
+    : hits.map((r) => ({ parent: r.eid, items: [], truncated: false }))
+  let blockers = new Map(sets.map((set) => [set.parent, set]))
+  let holders = new Map(
+    rowsFor(
+      db,
+      sets.flatMap((set) =>
+        set.items.map((r) => String(r.comps.claim?.session ?? ''))
+      ),
+    ).filter((r) => !r.comps.quarantined).map((r) => [r.eid, r]),
+  )
+  for (let row of hits) {
+    let direct = !!row.comps.decided &&
+      row.comps.decided.verdict != 'declined'
+    let inheritedAuth = auth.get(row.eid)
+    let set = blockers.get(row.eid) ?? {
+      parent: row.eid,
+      items: [],
+      truncated: false,
+    }
+    let projection: WorkProjection = {
+      ...(direct
+        ? {
+          authorization: {
+            kind: 'direct' as const,
+            from: [idOf(row)],
+            truncated: false,
+          },
+        }
+        : inheritedAuth
+        ? {
+          authorization: {
+            kind: 'inherited' as const,
+            from: inheritedAuth.from,
+            truncated: inheritedAuth.truncated,
+          },
+        }
+        : {}),
+      blockers: {
+        items: set.items.map((blocker) => {
+          let holder = holders.get(String(blocker.comps.claim?.session ?? ''))
+          return {
+            id: idOf(blocker),
+            title: String(blocker.comps.doc?.title ?? ''),
+            status: statusOf(blocker.comps),
+            claim: holder ? idOf(holder) : null,
+          }
+        }),
+        truncated: set.truncated,
+      },
+    }
+    row.comps.work = projection as unknown as Record<string, unknown>
+  }
+  return hits
 }
 
 // The authoritative filter-query answer. The index answers when it can (evalFast
@@ -836,9 +1015,9 @@ async (filters, opts) => {
   let named = filters.filter((s) => s.startsWith('id='))
     .flatMap((s) => s.slice(3).split(',')).filter(Boolean)
   let q = filters.filter((s) => !s.startsWith('id=')).join('&')
-  if (opts?.work == 'build') {
+  if (opts?.work) {
     if (named.length) throw new Error('work queries do not accept id=')
-    return evalBuildWork(db, q, opts)
+    return evalWork(db, q, { ...opts, work: opts.work })
   }
   if (!named.length) return evalGraph(db, q, opts).hits
   // A tombstoned entity still resolves by name but has left the graph, and its

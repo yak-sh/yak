@@ -111,10 +111,22 @@ slow(
     let { record } = await import('./telemetry.ts')
     let db = open(path)
     let session = crypto.randomUUID(), item = crypto.randomUUID()
+    let project = crypto.randomUUID(), candidate = crypto.randomUUID()
     apply(db, [{ eid: session, name: 'session', comp: { id: session } }])
     apply(
       db,
-      [{ eid: item, name: 'doc', comp: { title: 'localread proof' } }],
+      [
+        { eid: item, name: 'doc', comp: { title: 'localread proof' } },
+        { eid: project, name: 'doc', comp: { title: 'local work', body: '' } },
+        { eid: project, name: 'project', comp: {} },
+        {
+          eid: candidate,
+          name: 'doc',
+          comp: { title: 'local candidate', body: '' },
+        },
+        { eid: candidate, name: 'task', comp: { priority: 1, project } },
+        { eid: candidate, name: 'proposed', comp: {} },
+      ],
       undefined,
       session,
     )
@@ -133,6 +145,15 @@ slow(
       let hits = await query(['.title~=localread'])
       assertEquals(hits.length, 1)
       assertEquals(hits[0].comps.doc?.title, 'localread proof')
+      let work = await query(['.task!', '.proposed!', '.decided='], {
+        work: 'evaluate',
+        limit: 1,
+      })
+      assertEquals(work[0].comps.doc?.title, 'local candidate')
+      assertEquals(work[0].comps.work?.blockers, {
+        items: [],
+        truncated: false,
+      })
       let found = await search('localread')
       assert(found.some((h) => h.eid == item))
       assertEquals((await history(item))[0].via, session)

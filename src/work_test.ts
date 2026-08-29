@@ -1,9 +1,9 @@
 // Work-lane readiness and candidate envelopes: managed dispatch and external
 // workers share membership, while each keeps its own ordering. The db-backed
 // cases also hold the lane reads to indexed, bounded graph queries.
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Change, idOf, uuid } from './types.ts'
-import { buildWorkSql, rowsFor, workBlockers } from './graph_query.ts'
+import { buildWorkSql, rowsFor } from './graph_query.ts'
 import { parseQuery } from './query.ts'
 import { where } from './sql.ts'
 import {
@@ -18,6 +18,11 @@ let { apply, depsOf } = await import('./db.ts')
 let { bareDb } = await import('./testdb.ts')
 let { localQuery } = await import('./graph_query.ts')
 let { backlog } = await import('./dispatch.ts')
+
+let readFor = (db: ReturnType<typeof bareDb>): WorkRead => ({
+  query: localQuery(db),
+  get: (ids) => localQuery(db)(ids.length ? [`id=${ids.join(',')}`] : []),
+})
 
 let task = (
   eid: string,
@@ -120,13 +125,7 @@ let world = () => {
       comp: { type: 'requires', child: grandchild },
     },
   ])
-  let query = localQuery(db)
-  let read: WorkRead = {
-    query,
-    get: (ids) => Promise.resolve(rowsFor(db, ids)),
-    deps: (eids) => Promise.resolve(depsOf(db, eids)),
-    blockers: (eids, limit) => Promise.resolve(workBlockers(db, eids, limit)),
-  }
+  let read = readFor(db)
   return {
     db,
     read,
@@ -233,13 +232,7 @@ Deno.test('build selection is exact beyond a recent declined window', async () =
     ]))
   }
   apply(db, changes)
-  let read: WorkRead = {
-    query: localQuery(db),
-    get: (ids) => Promise.resolve(rowsFor(db, ids)),
-    deps: (eids) => Promise.resolve(depsOf(db, eids)),
-    blockers: (eids, limit) => Promise.resolve(workBlockers(db, eids, limit)),
-  }
-  let candidates = await workCandidates(read, 'build', { limit: 1 })
+  let candidates = await workCandidates(readFor(db), 'build', { limit: 1 })
   assertEquals(candidates.map((c) => c.id), [idOf(rowsFor(db, [old])[0])])
 })
 
@@ -291,13 +284,7 @@ Deno.test('recursive DB selection stops beyond a high-fanout pending boundary', 
     },
   )
   apply(db, changes)
-  let read: WorkRead = {
-    query: localQuery(db),
-    get: (ids) => Promise.resolve(rowsFor(db, ids)),
-    deps: (eids) => Promise.resolve(depsOf(db, eids)),
-    blockers: (eids, limit) => Promise.resolve(workBlockers(db, eids, limit)),
-  }
-  let ids = (await workCandidates(read, 'build', {
+  let ids = (await workCandidates(readFor(db), 'build', {
     recursive: true,
     limit: 100,
   })).map((c) => c.id)
@@ -330,13 +317,7 @@ Deno.test('evaluate bounds high-fanout blockers and emits only human ids', async
     })
   }
   apply(db, changes)
-  let read: WorkRead = {
-    query: localQuery(db),
-    get: (ids) => Promise.resolve(rowsFor(db, ids)),
-    deps: (eids) => Promise.resolve(depsOf(db, eids)),
-    blockers: (eids, limit) => Promise.resolve(workBlockers(db, eids, limit)),
-  }
-  let [found] = await workCandidates(read, 'evaluate', { limit: 1 })
+  let [found] = await workCandidates(readFor(db), 'evaluate', { limit: 1 })
   assertEquals(found.blockers.items.length, 20)
   assertEquals(found.blockers.truncated, true)
   assert(found.blockers.items.every((b) => /^T-\d+$/.test(b.id)))
@@ -353,6 +334,231 @@ Deno.test('evaluate is newest-first, filtered, bounded, and human-addressed', as
     filters: ['.title~=Needs'],
   })
   assertEquals(filtered.map((c) => c.id), [idOf(rowsFor(w.db, [w.pending])[0])])
+  let byProject = await workCandidates(w.read, 'evaluate', {
+    filters: ['.task.project.doc.title=Task Graph'],
+  })
+  assertEquals(byProject.length, 2)
+})
+
+Deno.test('work filters reject unsupported query riders explicitly', async () => {
+  let w = world()
+  for (let filter of ['.comments!', '.count!', 'free text']) {
+    await assertRejects(
+      () => workCandidates(w.read, 'build', { filters: [filter] }),
+      Error,
+      'work filters support indexed scalar dot-params',
+    )
+  }
+})
+
+Deno.test('recursive authorization traverses non-task intermediates', async () => {
+  let db = bareDb()
+  let P = uuid(), root = uuid(), design = uuid(), leaf = uuid()
+  apply(db, [
+    { eid: P, name: 'doc', comp: { title: 'Mixed tree', body: '' } },
+    { eid: P, name: 'project', comp: {} },
+    ...task(root, 'Approved root', 1, P, [{
+      eid: root,
+      name: 'decided',
+      comp: {},
+    }]),
+    { eid: design, name: 'doc', comp: { title: 'Design', body: '' } },
+    { eid: design, name: 'design', comp: {} },
+    ...task(leaf, 'Build leaf', 1, P),
+    {
+      eid: root,
+      name: 'dependency',
+      comp: { type: 'requires', child: design },
+    },
+    {
+      eid: design,
+      name: 'dependency',
+      comp: { type: 'requires', child: leaf },
+    },
+  ])
+  let candidates = await workCandidates(readFor(db), 'build', {
+    recursive: true,
+    limit: 20,
+  })
+  let found = candidates.find((c) => c.id == idOf(rowsFor(db, [leaf])[0]))
+  assertEquals(found?.authorization, {
+    kind: 'inherited',
+    from: [idOf(rowsFor(db, [root])[0])],
+    truncated: false,
+  })
+})
+
+Deno.test('quarantine is private in blocker and authorization projections', async () => {
+  let db = bareDb()
+  let P = uuid(), hidden = uuid(), visible = uuid()
+  let proposed = uuid(), approved = uuid(), hiddenRoot = uuid(), leaf = uuid()
+  let hiddenSession = uuid(), hiddenPersona = uuid()
+  apply(db, [
+    { eid: P, name: 'doc', comp: { title: 'Private', body: '' } },
+    { eid: P, name: 'project', comp: {} },
+    ...task(hidden, 'SECRET BLOCKER', 1, P),
+    { eid: hidden, name: 'quarantined', comp: {} },
+    { eid: hiddenSession, name: 'session', comp: { id: 'secret-holder' } },
+    { eid: hiddenSession, name: 'quarantined', comp: {} },
+    {
+      eid: hiddenPersona,
+      name: 'doc',
+      comp: { title: 'SECRET PERSONA', body: '' },
+    },
+    { eid: hiddenPersona, name: 'persona', comp: {} },
+    { eid: hiddenPersona, name: 'quarantined', comp: {} },
+    ...task(visible, 'Visible blocker', 1, P),
+    { eid: visible, name: 'claim', comp: { session: hiddenSession } },
+    ...task(proposed, 'Needs review', 1, P, [{
+      eid: proposed,
+      name: 'proposed',
+      comp: {},
+    }, {
+      eid: proposed,
+      name: 'spawn',
+      comp: { provider: 'codex', persona: hiddenPersona },
+    }]),
+    {
+      eid: proposed,
+      name: 'dependency',
+      comp: { type: 'requires', child: hidden },
+    },
+    {
+      eid: proposed,
+      name: 'dependency',
+      comp: { type: 'requires', child: visible },
+    },
+    ...task(approved, 'Gated by hidden work', 1, P, [{
+      eid: approved,
+      name: 'decided',
+      comp: {},
+    }]),
+    {
+      eid: approved,
+      name: 'dependency',
+      comp: { type: 'requires', child: hidden },
+    },
+    ...task(hiddenRoot, 'SECRET ROOT', 1, P, [{
+      eid: hiddenRoot,
+      name: 'decided',
+      comp: {},
+    }]),
+    { eid: hiddenRoot, name: 'quarantined', comp: {} },
+    ...task(leaf, 'Unapproved leaf', 1, P),
+    {
+      eid: hiddenRoot,
+      name: 'dependency',
+      comp: { type: 'requires', child: leaf },
+    },
+  ])
+  let [candidate] = await workCandidates(readFor(db), 'evaluate', { limit: 20 })
+  assertEquals(candidate.blockers, {
+    items: [{
+      id: idOf(rowsFor(db, [visible])[0]),
+      title: 'Visible blocker',
+      status: 'wip',
+      claim: null,
+    }],
+    truncated: false,
+  })
+  assertEquals(JSON.stringify(candidate).includes('SECRET'), false)
+  assertEquals(candidate.execution, { spawn: { provider: 'codex' } })
+  let build = await workCandidates(readFor(db), 'build', {
+    recursive: true,
+    limit: 100,
+  })
+  let ids = build.map((c) => c.id)
+  assertEquals(ids.includes(idOf(rowsFor(db, [approved])[0])), false)
+  assertEquals(ids.includes(idOf(rowsFor(db, [leaf])[0])), false)
+  assertEquals(JSON.stringify(build).includes('SECRET'), false)
+})
+
+Deno.test('deep authorization is one bounded query projection', async () => {
+  let db = bareDb()
+  let P = uuid(), root = uuid(), leaf = uuid()
+  let changes: Change[] = [
+    { eid: P, name: 'doc', comp: { title: 'Deep', body: '' } },
+    { eid: P, name: 'project', comp: {} },
+    ...task(root, 'Approved root', 1, P, [{
+      eid: root,
+      name: 'decided',
+      comp: {},
+    }]),
+    ...task(leaf, 'Deep leaf', 1, P),
+  ]
+  let parent = root
+  for (let i = 0; i < 201; i++) {
+    let eid = uuid()
+    changes.push(
+      { eid, name: 'doc', comp: { title: `Design ${i}`, body: '' } },
+      { eid, name: 'design', comp: {} },
+      {
+        eid: parent,
+        name: 'dependency',
+        comp: { type: 'requires', child: eid },
+      },
+    )
+    parent = eid
+  }
+  changes.push({
+    eid: parent,
+    name: 'dependency',
+    comp: { type: 'requires', child: leaf },
+  })
+  apply(db, changes)
+  let local = readFor(db)
+  let queries = 0, gets = 0
+  let read: WorkRead = {
+    query: (filters, opts) => {
+      queries++
+      return local.query(filters, opts)
+    },
+    get: (ids) => {
+      gets++
+      return local.get(ids)
+    },
+  }
+  let candidates = await workCandidates(read, 'build', {
+    recursive: true,
+    limit: 100,
+  })
+  let found = candidates.find((c) => c.id == idOf(rowsFor(db, [leaf])[0]))
+  assertEquals(found?.authorization?.from, [idOf(rowsFor(db, [root])[0])])
+  assertEquals({ queries, gets }, { queries: 1, gets: 1 })
+})
+
+Deno.test('authorization sources are capped and say when truncated', async () => {
+  let db = bareDb()
+  let P = uuid(), leaf = uuid()
+  let changes: Change[] = [
+    { eid: P, name: 'doc', comp: { title: 'Many roots', body: '' } },
+    { eid: P, name: 'project', comp: {} },
+    ...task(leaf, 'Shared leaf', 1, P),
+  ]
+  for (let i = 0; i < 25; i++) {
+    let root = uuid()
+    changes.push(
+      ...task(root, `Root ${i}`, 1, P, [{
+        eid: root,
+        name: 'decided',
+        comp: {},
+      }]),
+      {
+        eid: root,
+        name: 'dependency',
+        comp: { type: 'requires', child: leaf },
+      },
+    )
+  }
+  apply(db, changes)
+  let candidates = await workCandidates(readFor(db), 'build', {
+    recursive: true,
+    limit: 100,
+  })
+  let found = candidates.find((c) => c.id == idOf(rowsFor(db, [leaf])[0]))!
+  assertEquals(found.authorization?.from.length, 20)
+  assertEquals(found.authorization?.truncated, true)
+  assert(found.authorization!.from.every((id) => /^T-\d+$/.test(id)))
 })
 
 Deno.test('lane membership queries compile to indexed component scans', () => {
@@ -377,6 +583,16 @@ Deno.test('lane membership queries compile to indexed component scans', () => {
   ) as { detail: string }[]
   assertEquals(plan.some((row) => row.detail == 'SCAN entity'), false)
   assert(plan.some((row) => row.detail.includes('dependency_child')))
+  let path = buildWorkSql(
+    w.db,
+    `${workFilters('build').join('&')}&.task.project.doc.title=Task Graph`,
+  )
+  let pathPlan = w.db.prepare(`explain query plan ${path.sql}`).all(
+    ...path.params,
+  ) as { detail: string }[]
+  assertEquals(pathPlan.some((row) => row.detail == 'SCAN entity'), false)
+  assert(pathPlan.some((row) => row.detail == 'CORRELATED SCALAR SUBQUERY 1'))
+  assert(pathPlan.some((row) => row.detail.includes('INTEGER PRIMARY KEY')))
 })
 
 Deno.test('buildReady counts a missing requires child as unresolved', () => {

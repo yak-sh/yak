@@ -383,6 +383,17 @@ let COMPILES = [
   '.task.status=open&.task.priority=1',
   '.task.status=open,wip&.doc.title~=widget',
   '.task.status=open&.task.domain=Eng',
+  // Forward paths: one-to-one reference dereferences compile as correlated
+  // indexed lookups. Cover scalar/ref/derived/component leaves, a second hop,
+  // and the broken-link NULL semantics where `!=` and absence still hold.
+  '.task.project.doc.title=a project',
+  '.task.project.doc.title~=PROJECT',
+  '.task.project.doc.title!=other',
+  '.task.project.project!',
+  '.task.project.archived=',
+  '.comment.target.task.project=p1',
+  '.comment.target.task.status=open',
+  '.comment.target.task.project.doc.title=a project',
   // the SPINE, which is the from table rather than a joined one — how `task
   // show T-3` asks its question, and the one component whose join would be
   // to itself
@@ -538,6 +549,10 @@ let DECLINES = [
   // a body substring on a NON-doc body: sql.ts only ever narrows doc.body, so a
   // content-body scan declines and the matcher answers it over the partition
   '.content.body~=boom',
+  // A path body has a different owner from the outer row, so doc_gram's
+  // outer-doc narrowing cannot be reused. It declines instead of emitting a
+  // dangling `doc.rowid` reference.
+  '.task.project.doc.body~=project',
   // the reverse-union's presence/absence admit rows in no reverse map, so SQL
   // declines them (as the anchor does) and the matcher answers
   '.refs!',
@@ -658,10 +673,9 @@ Deno.test('projection: no .fields makes select the plain membership where', () =
   assertEquals(select(ps), where(ps))
 })
 
-// Exactness across the projection: an unknown projected column, and a filter
-// beside the projection that itself declines (a path deref, a second join),
-// both decline the whole thing rather than answer an almost-right question.
-Deno.test('projection: an unknown column or a declining filter declines', () => {
+// Exactness across the projection: an unknown projected column still declines.
+// A forward path is now exact SQL, so it composes with a projection too.
+Deno.test('projection: unknown columns decline and paths compose', () => {
   assertEquals(
     select([{
       comp: '',
@@ -672,7 +686,8 @@ Deno.test('projection: an unknown column or a declining filter declines', () => 
     }]),
     null,
   )
-  assertEquals(select(parseQuery('.assignee.title~=j&.fields=pin.x')), null)
+  let path = select(parseQuery('.assignee.title~=j&.fields=pin.x'))
+  assertEquals(!!path?.sql.includes('select "__path_leaf"."title"'), true)
 })
 
 // kind=K is not a filter STRING but a synthetic Pred[] (query.ts kindPreds):

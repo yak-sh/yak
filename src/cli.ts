@@ -39,8 +39,6 @@ import {
   historyLine,
   hookClaim,
   host,
-  httpDeps,
-  httpWorkBlockers,
   idOf,
   inboxItem,
   inboxRows,
@@ -512,8 +510,6 @@ let work = async (got: Got) => {
     {
       query,
       get: (ids) => fetched(ids),
-      deps: httpDeps,
-      blockers: httpWorkBlockers,
     },
     lane,
     {

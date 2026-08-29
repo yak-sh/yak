@@ -10,7 +10,7 @@ import {
   assertThrows,
 } from '@std/assert'
 import { find, idOf, type Row, rows, TASK_TREE_ADOPTION } from './client.ts'
-import { localQuery, workBlockers } from './graph_query.ts'
+import { localQuery } from './graph_query.ts'
 import {
   CUT,
   elide,
@@ -604,7 +604,6 @@ let blank = (): IO => ({
   query: () => Promise.resolve([]),
   get: () => Promise.resolve([]),
   deps: () => Promise.resolve([]),
-  workBlockers: () => Promise.resolve([]),
   write: (mutation) =>
     Promise.resolve({ changes: batch(mutation), aliases: {} }),
   find: () => Promise.resolve([]),
@@ -631,8 +630,6 @@ let graph = () => {
         ? localQuery(db)([`id=${ids.join(',')}`, ...filters])
         : Promise.resolve([]),
     deps: (eids) => Promise.resolve(depsOf(db, eids)),
-    workBlockers: (eids, limit) =>
-      Promise.resolve(workBlockers(db, eids, limit)),
     write: (mutation, via) =>
       Promise.resolve(
         mutationResult(applyMutation(db, mutation, undefined, via)),
@@ -684,6 +681,7 @@ slow(
         comp: { title: 'stdio local proof', body: 'direct sqlite history' },
       },
       { eid, name: 'task', comp: {} },
+      { eid, name: 'decided', comp: {} },
     ])
     let expected = await localQuery(writer)(['.title~=stdio local'])
     let id = idOf(expected[0])
@@ -732,6 +730,12 @@ slow(
           arguments: { query: '.title~=stdio local' },
         }) as ToolResult
         assertEquals(JSON.parse(said(listed))[0].doc.title, 'stdio local proof')
+
+        let work = await client.callTool({
+          name: 'work_list',
+          arguments: { lane: 'build', limit: 1 },
+        }) as ToolResult
+        assertEquals(JSON.parse(said(work))[0].title, 'stdio local proof')
 
         let found = await client.callTool({
           name: 'search',

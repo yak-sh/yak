@@ -14,10 +14,9 @@
 // the definition, and `sql_test.ts` holds the two answers against each other
 // over every predicate class rather than trusting this file's reading of them.
 //
-// What it declines today, all still served by the fallback: path predicates
-// (`.assignee.title~=j`, a second join), the shared-ref spelling (`comp: ''`,
-// which reads whichever component happens to carry the column), and a substring
-// too short for a trigram (see `grams`).
+// What it declines today, all still served by the fallback: the shared-ref
+// spelling (`comp: ''`, which reads whichever component happens to carry the
+// column), and a substring too short for a useful index narrowing (see `grams`).
 import { isRef, propAt } from './props.ts'
 import {
   AGG,
@@ -50,6 +49,7 @@ export type Sql = { sql: string; params: Bind[] }
 let LIVE = ` and "entity"."eid" not in (select eid from tombstone)`
 let table = (name: string) =>
   name == 'doc' ? '"doc_value" as "doc"' : `"${name}"`
+let source = (name: string) => name == 'doc' ? '"doc_value"' : `"${name}"`
 
 // A column reference, quoted. The table is the component's own table, joined on
 // the int owner key (D-18866), so `.task.status` is `"task"."status"`. Two
@@ -156,15 +156,15 @@ let stampish = (c: string, s: Sql): Sql => ({
 // through JS's own number formatting. `.priority=1.0` does not: no JS number
 // stringifies to '1.0', so the JS answer is empty for every row, and the
 // honest compilation is a constant false rather than a numeric 1.
-let eq = (c: string, value: string): Sql | null => {
+let eq = (c: string, value: string, knownTag = tagFor(c)): Sql | null => {
   if (value == '') {
     return { sql: `(${c} is null or ${asText(c)} = '')`, params: [] }
   }
   let r = value.match(/^(.*?)\.\.(\.?)(.*)$/s)
   if (r) {
     let [, lo, excl, hi] = r
-    let bound = cmp(c, '>=', lo)
-    let upper = cmp(c, excl ? '<' : '<=', hi)
+    let bound = cmp(c, '>=', lo, knownTag)
+    let upper = cmp(c, excl ? '<' : '<=', hi, knownTag)
     if (!bound || !upper) return null
     return {
       sql: `(${c} is not null and ${bound.sql} and ${upper.sql})`,
@@ -172,14 +172,14 @@ let eq = (c: string, value: string): Sql | null => {
     }
   }
   if (value.includes(',')) {
-    let parts = value.split(',').map((p) => eq(c, p))
+    let parts = value.split(',').map((p) => eq(c, p, knownTag))
     if (parts.some((p) => !p)) return null
     return {
       sql: `(${parts.map((p) => p!.sql).join(' or ')})`,
       params: parts.flatMap((p) => p!.params),
     }
   }
-  if (isNum(c)) {
+  if (NUMERIC_TAGS.includes(String(knownTag))) {
     return numeric(value) && String(Number(value)) === value
       ? { sql: `${c} = ?`, params: [Number(value)] }
       : { sql: '0', params: [] }
@@ -202,9 +202,13 @@ let tagFor = (c: string) => {
   let m = c.match(/^"(.+)"\."(.+)"$/)
   return m ? tagOf(m[1], m[2]) : DERIVED[c]
 }
-let isNum = (c: string) => NUMERIC_TAGS.includes(String(tagFor(c)))
-let cmp = (c: string, op: string, value: string): Sql | null => {
-  let tag = tagFor(c)
+let cmp = (
+  c: string,
+  op: string,
+  value: string,
+  knownTag = tagFor(c),
+): Sql | null => {
+  let tag = knownTag
   if (!tag) return null
   if (NUMERIC_TAGS.includes(tag)) {
     return numeric(value)
@@ -375,6 +379,119 @@ let body = (p: Pred, c: string): Sql | null =>
 // The ops query.ts routes to cmp(), spelled the same in SQL.
 let CMP: Record<string, string> = { '<': '<', '<=': '<=', '>': '>', '>=': '>=' }
 
+// One scalar predicate, separated from where its value came from. A path leaf
+// is a correlated scalar subquery rather than a joined column, but the value
+// still has the leaf column's declared type and must take the exact same
+// equality/range/time/absence roads as a direct column.
+let scalar = (
+  p: Pred,
+  c: string,
+  tag: string | undefined,
+  now: number,
+  path = false,
+): Sql | null => {
+  if (p.op == EXISTS) return { sql: `${c} is not null`, params: [] }
+  // doc.body's trigram narrowing is tied to the outer doc row. A path body has
+  // a different owner, so only the empty contains (which needs no index) can
+  // compile here; every other body operation declines exactly as it does at
+  // depth zero.
+  if (tag == 'body') {
+    if (path) return p.op == '~' && p.value == '' ? has(c, '') : null
+    return body(p, c)
+  }
+  // A phrase takes the span road; `~=` never does (the matcher excludes it, so
+  // a stamp's substring stays a literal contains), and a value that is no
+  // phrase falls through to the ordinary scalar road below.
+  if (tag == 'time' && p.op != '~') {
+    let t = timeSql(p, c, now)
+    if (t) return t
+  }
+  if (p.op == '') return eq(c, p.value, tag)
+  if (p.op == '!') {
+    // `!eq(v, value)`, and eq(null, …) is FALSE — but SQL's `not (null = ?)`
+    // is NULL, which drops exactly the rows whose component is absent.
+    let inner = eq(c, p.value, tag)
+    return inner &&
+      { sql: `(coalesce(${inner.sql}, 0) = 0)`, params: inner.params }
+  }
+  if (p.op == '~') return has(c, p.value)
+  if (CMP[p.op]) {
+    let inner = cmp(c, CMP[p.op], p.value, tag)
+    return inner &&
+      { sql: `(${c} is not null and ${inner.sql})`, params: inner.params }
+  }
+  return null
+}
+
+// A forward path is a chain of one-to-one reference lookups. Component rows
+// and reference columns are both indexed by their integer owner/target ids, so
+// nested correlated scalar subqueries walk the chain without widening the
+// candidate set or scanning the graph. Missing intermediate rows yield NULL:
+// equality/comparisons miss, `!=` holds, and an absent component leaf holds —
+// exactly the matcher reading a broken link as an undefined bag.
+let pathSql = (p: Pred, now: number): Sql | null => {
+  if (!p.at?.length || !known(p.comp, p.prop) || !isRef(p.comp, p.prop)) {
+    return null
+  }
+  let target = `"${p.comp}"."${p.prop}"`
+  for (let [i, h] of p.at.slice(0, -1).entries()) {
+    if (!known(h.comp, h.prop) || !isRef(h.comp, h.prop)) return null
+    let a = `__path_${i}`
+    target = `(select "${a}"."${h.prop}" from ${source(h.comp)} as "${a}"` +
+      ` where "${a}"."entity" = ${target})`
+  }
+  let leaf = p.at[p.at.length - 1]
+  if (!known(leaf.comp, leaf.prop)) return null
+  let a = '__path_leaf'
+  if (!leaf.prop) {
+    let owner = leaf.comp == 'entity' ? `"${a}"."id"` : `"${a}"."entity"`
+    let hit = `(select ${owner} from ${source(leaf.comp)} as "${a}"` +
+      ` where ${owner} = ${target})`
+    return {
+      sql: `${hit} is ${p.op == '~' || p.op == EXISTS ? 'not ' : ''}null`,
+      params: [],
+    }
+  }
+  let c: string
+  if (leaf.comp == 'updated' && leaf.prop == 'at') {
+    c = `coalesce(` +
+      `(select "${a}"."at" from "updated" as "${a}"` +
+      ` where "${a}"."entity" = ${target}),` +
+      `(select "__path_created"."at" from "created" as "__path_created"` +
+      ` where "__path_created"."entity" = ${target}))`
+  } else if (leaf.comp == 'task' && leaf.prop == 'status') {
+    c = `(case when not exists(select 1 from task __path_task` +
+      ` where __path_task.entity = ${target}) then null` +
+      ` when exists(select 1 from cancelled __path_mark` +
+      ` where __path_mark.entity = ${target}) then 'cancelled'` +
+      ` when exists(select 1 from completed __path_mark` +
+      ` where __path_mark.entity = ${target}) then 'done'` +
+      ` when exists(select 1 from claim __path_mark` +
+      ` where __path_mark.entity = ${target}) then 'wip'` +
+      ` else 'open' end)`
+  } else if (leaf.comp == 'entity') {
+    c = `(select "${a}"."${leaf.prop}" from "entity" as "${a}"` +
+      ` where "${a}"."id" = ${target})`
+  } else if (isRef(leaf.comp, leaf.prop)) {
+    c = `(select "__path_ref"."eid" from ${source(leaf.comp)} as "${a}"` +
+      ` join entity __path_ref on __path_ref.id = "${a}"."${leaf.prop}"` +
+      ` where "${a}"."entity" = ${target})`
+  } else {
+    c = `(select "${a}"."${leaf.prop}" from ${source(leaf.comp)} as "${a}"` +
+      ` where "${a}"."entity" = ${target})`
+  }
+  return scalar(
+    { ...p, comp: leaf.comp, prop: leaf.prop },
+    c,
+    tagOf(
+      leaf.comp,
+      leaf.prop,
+    ),
+    now,
+    true,
+  )
+}
+
 let one = (p: Pred, now: number): Sql | null => {
   // The empty query's never-pred: a false condition, so the index answers
   // the empty set immediately — never a full scan, never a dropped pred.
@@ -388,7 +505,7 @@ let one = (p: Pred, now: number): Sql | null => {
   if (p.op == TEXT) return text(p.value)
   if (p.refs) return refsSql(p) // multi-column reverse-union: an eid IN union
   if (p.rev) return revSql(p, now) // a reverse hop: a correlated EXISTS/count
-  if (p.at) return null // path preds need a second join
+  if (p.at) return pathSql(p, now)
   if (!known(p.comp, p.prop)) return null
   if (!p.prop) {
     return {
@@ -398,37 +515,9 @@ let one = (p: Pred, now: number): Sql | null => {
       params: [],
     }
   }
-  if (p.op == EXISTS) {
-    return { sql: `${readCol(p.comp, p.prop)} is not null`, params: [] }
-  }
   let tag = tagOf(p.comp, p.prop)
   let c = readCol(p.comp, p.prop)
-  // A phrase takes the span road; `~=` never does (the matcher excludes it, so
-  // a stamp's substring stays a literal contains), and a value that is no
-  // phrase falls through to the ordinary scalar road below.
-  if (tag == 'time' && p.op != '~') {
-    let t = timeSql(p, c, now)
-    if (t) return t
-  }
-  if (tag == 'body') return body(p, c)
-  if (p.op == '') return eq(c, p.value)
-  if (p.op == '!') {
-    // `!eq(v, value)`, and eq(null, …) is FALSE — but SQL's `not (null = ?)`
-    // is NULL, which drops exactly the rows whose component is absent. Those
-    // are the rows a `!=` most often means to keep, and nothing about the
-    // result would have looked wrong.
-    let inner = eq(c, p.value)
-    return inner &&
-      { sql: `(coalesce(${inner.sql}, 0) = 0)`, params: inner.params }
-  }
-  if (p.op == '~') return has(c, p.value)
-  if (CMP[p.op]) {
-    // JS: `if (v == null) return false` before comparing.
-    let inner = cmp(c, CMP[p.op], p.value)
-    return inner &&
-      { sql: `(${c} is not null and ${inner.sql})`, params: inner.params }
-  }
-  return null
+  return scalar(p, c, tag, now)
 }
 
 // The LEFT JOINs and AND-condition for a set of preds over a base entity whose
@@ -469,7 +558,7 @@ let build = (
   for (let p of kept) {
     if (p.rev) continue // its EXISTS is self-contained; nothing joins here
     if (p.op == TEXT) tables.add('doc')
-    else if (p.comp && !p.at) tables.add(p.comp)
+    else if (p.comp) tables.add(p.comp)
     // the far half of the updated.at fallback (readCol)
     if (!p.at && falls(p.comp, p.prop)) tables.add('created')
   }
