@@ -56,7 +56,7 @@
 import { bareType, isRef, parseProp, type Prop, propAt } from './props.ts'
 import {
   comps,
-  derivedCols,
+  derivedProps,
   edges,
   kindOrder,
   kindWord,
@@ -189,7 +189,7 @@ let routes: Record<string, readonly string[]> = Object.fromEntries(
       ...Object.keys(comps),
       ...Object.keys(stamped),
       ...Object.keys(resultComps),
-      ...Object.keys(derivedCols),
+      ...Object.keys(derivedProps),
     ]),
   ].map((name) => [
     name,
@@ -197,7 +197,7 @@ let routes: Record<string, readonly string[]> = Object.fromEntries(
       ...comps[name],
       ...stamped[name],
       ...resultComps[name as ResultComp],
-      ...derivedCols[name],
+      ...derivedProps[name],
     }),
   ]),
 )
@@ -368,7 +368,7 @@ export let route = (prop: string): { comp: string; prop: string } => {
   // `session.status`. When every owner is stamped, the normal ambiguity/twin
   // rules below still apply.
   let preferred = own.filter((name) =>
-    prop in (comps[name] ?? {}) || prop in (derivedCols[name] ?? {})
+    prop in (comps[name] ?? {}) || prop in (derivedProps[name] ?? {})
   )
   if (preferred.length) own = preferred
   // Parent/child words are the dependency vocabulary. Their component refs

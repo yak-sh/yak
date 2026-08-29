@@ -3,7 +3,7 @@
 import {
   type Change,
   comps,
-  derivedCols,
+  derivedProps,
   edges,
   type PropType,
   stamped,
@@ -38,7 +38,7 @@ let typeCache = new Map<string, Record<string, PropType>>()
 let types = (comp: string): Record<string, PropType> => {
   let hit = typeCache.get(comp)
   if (hit) return hit
-  let t = { ...comps[comp], ...stamped[comp], ...derivedCols[comp] }
+  let t = { ...comps[comp], ...stamped[comp], ...derivedProps[comp] }
   typeCache.set(comp, t)
   return t
 }

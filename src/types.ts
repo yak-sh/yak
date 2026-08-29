@@ -937,7 +937,7 @@ export let verdictName = (verdict?: string | null) =>
 // (props.ts types(), query.ts routes) so `.status` and `.task.status` resolve
 // and type-check; excluded from the write vocabulary, so `set .status=` refuses.
 // `status` is the first and only member: it reads completed/cancelled/claim.
-export let derivedCols: Record<string, Record<string, PropType>> = {
+export let derivedProps: Record<string, Record<string, PropType>> = {
   task: { status: { enum: statuses } },
 }
 

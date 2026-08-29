@@ -30,7 +30,6 @@ pub static SCHEMA: &[SchemaOp] = &[
     from doc d join blob_text b on b.entity = d.body;
   create table if not exists task (
     entity    integer primary key references entity(id),
-    status text not null default 'open',
     priority real not null default 0
   );
   create table if not exists repo (

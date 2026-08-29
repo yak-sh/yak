@@ -27,7 +27,6 @@ import {
   propRenames,
   sessionActive,
   sessionComps,
-  settled,
   SHORT,
   shortId,
   slugsOf,
@@ -271,7 +270,6 @@ let schema = `
     from doc d join blob_text b on b.entity = d.body;
   create table if not exists task (
     entity    integer primary key references entity(id),
-    status text not null default 'open',
     priority real not null default 0
   );
   create table if not exists repo (
@@ -1112,8 +1110,19 @@ let doc = (db: DatabaseSync, eid: string, title: string, body = '') =>
 let addTask = (db: DatabaseSync, title: string, status: string, body = '') => {
   let eid = ent(db)
   doc(db, eid, title, body)
-  prep(db, `insert into task (entity, status) values (${ID}, ?)`)
-    .run(eid, status)
+  prep(db, `insert into task (entity) values (${ID})`).run(eid)
+  // Status is derived (D-24102): a demo task wears the mark its status names.
+  // 'wip'/'open' get no mark — a seed has no live claim, so wip reads open.
+  let now = `strftime('%Y-%m-%dT%H:%M:%fZ','now')`
+  if (status == 'done') {
+    prep(db, `insert into completed (entity, at) values (${ID}, ${now})`).run(
+      eid,
+    )
+  } else if (status == 'cancelled') {
+    prep(db, `insert into cancelled (entity, at) values (${ID}, ${now})`).run(
+      eid,
+    )
+  }
   return eid
 }
 
@@ -1578,6 +1587,35 @@ export let retireProposal = (db: DatabaseSync) => {
       set query = replace(query, '.proposal=true', '.proposed~=')
       where instr(query, '.proposal=true') > 0`)
     if (legacy) db.exec('alter table task drop column proposal')
+  })
+}
+
+// task.status dissolves into components (D-24102): status=done mints
+// `completed`, status=cancelled mints `cancelled`, status=wip is DROPPED (wip
+// is derived from a live claim — a stuck wip with no claim becomes open, the
+// intended fix), status=open needs nothing. The status column then goes. Idempotent:
+// the column-presence guard skips a db already past the drop, and `insert or
+// ignore` heals a partial run. No board rewrite — `.status=` still parses and
+// answers as the derived predicate, so saved queries keep working untouched. The
+// close moment and its actor come from `updated` (the done/cancel write was the
+// last edit for a settled task), falling back to `created`, then to now.
+export let retireTaskStatus = (db: DatabaseSync) => {
+  if (!hasCol(db, 'task', 'status')) return
+  let mint = (status: string, table: string) =>
+    db.exec(`
+      insert or ignore into ${table} (entity, at, "by", via)
+      select t.entity,
+        coalesce(u.at, c.at, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        coalesce(u."by", c."by"), null
+      from task t
+      left join updated u on u.entity = t.entity
+      left join created c on c.entity = t.entity
+      where t.status = '${status}'
+    `)
+  atomic(db, () => {
+    mint('done', 'completed')
+    mint('cancelled', 'cancelled')
+    db.exec('alter table task drop column status')
   })
 }
 
@@ -3277,6 +3315,7 @@ export let migrate = (db: DatabaseSync) => {
       retireMemoryType(db)
       retireProposal(db)
       retireProjectRetiredAt(db)
+      retireTaskStatus(db)
       healStored(db)
       // Indexes LAST — over EVERY component, not just `derived` (T-17678). SQLite
       // auto-indexes no foreign key, and the hand-written `schema` tables (comment,
@@ -4955,27 +4994,9 @@ export let apply = (
             comp: { type: 'worked', child: eid },
           })
         }
-        // A claim implies wip (T-17330, reversing T-3449): a task read `open`
-        // while someone holds a claim misrepresents active work as available.
-        // So a landing claim drags an OPEN task to wip in the same
-        // transaction — every claim path flows through apply(), so no caller
-        // can claim-without-wip. Only open→wip; a stray claim never reopens a
-        // done/cancelled task. The synthesized `task` change rides `extra` so
-        // every client cache hears the status move.
-        let tk = prep(
-          db,
-          'select status from task where entity = (select id from entity where eid = ?)',
-        )
-          .get(eid) as { status: string } | undefined
-        if (tk?.status == 'open') {
-          prep(
-            db,
-            `update task set status = 'wip'
-             where entity = (select id from entity where eid = ?)`,
-          ).run(eid)
-          touched.add(eid)
-          extra.push({ eid, name: 'task', comp: { status: 'wip' } })
-        }
+        // A claim IS wip now (D-24102): status is derived, so the claim's mere
+        // presence makes an open task read wip — no stored move to synthesize,
+        // and none to get stuck when the session dies and the claim is reaped.
       }
       // A stop_request is a lever, not a note: it may only be pulled on a
       // managed session that is still going — anything else is refused
@@ -5417,17 +5438,26 @@ export let apply = (
       ).all() as { eid: string }[])
         .map((r) => r.eid),
     )
-    let status = prep(
+    // Status is derived (D-24102): settled = wears completed or cancelled. A
+    // non-task eid returns no row, exactly as the old `select status` did.
+    let settledRow = prep(
       db,
-      'select status from task where entity = (select id from entity where eid = ?)',
+      `select (
+         exists(select 1 from cancelled x where x.entity = t.entity)
+         or exists(select 1 from completed x where x.entity = t.entity)
+       ) as settled
+       from task t where t.entity = (select id from entity where eid = ?)`,
     )
     let clear = new Set(
-      changes.filter((c) => c.name == 'claim' || c.name == 'task')
+      changes.filter((c) =>
+        c.name == 'claim' || c.name == 'task' || c.name == 'completed' ||
+        c.name == 'cancelled'
+      )
         .map((c) => c.eid),
     )
     for (let eid of clear) {
-      let task = status.get(eid) as { status: string } | undefined
-      if (!finalClaims.has(eid) && task && !settled(task.status)) continue
+      let task = settledRow.get(eid) as { settled: number } | undefined
+      if (!finalClaims.has(eid) && task && !task.settled) continue
       if (
         prep(
           db,
@@ -5441,8 +5471,8 @@ export let apply = (
     let released = priorClaims
       .filter((c) => !finalClaims.has(c.eid))
       .filter((c) => {
-        let task = status.get(c.eid) as { status: string } | undefined
-        return task && !settled(task.status)
+        let task = settledRow.get(c.eid) as { settled: number } | undefined
+        return task && !task.settled
       })
       .map((c) => ({ ...c, actor: c.actor ?? ventureAt(db, c.cwd) }))
       .filter((c) => c.actor)
