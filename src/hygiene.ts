@@ -5,7 +5,7 @@
 import { createHash } from 'node:crypto'
 import { apply, human } from './db.ts'
 import { db } from './live_db.ts'
-import { dispatch, trace } from './effects.ts'
+import { commitEffects } from './effects.ts'
 import { FLOOR, similar, stored, textOf } from './embed.ts'
 import { personaGraph } from './graph_query.ts'
 import { materialize } from './persona.ts'
@@ -294,10 +294,7 @@ let oops = (comp: string, e: unknown) =>
   console.warn(`hygiene effect ${comp} —`, e)
 
 let land = (changes: Change[], cast: Cast) => {
-  let t = trace()
-  let out = apply(db, changes, t)
-  cast(out)
-  dispatch(out, t, oops)
+  commitEffects((t) => apply(db, changes, t), cast, oops)
 }
 
 type Filing = { fate: 'filed' | 'recurred' | 'skipped'; eid?: string }

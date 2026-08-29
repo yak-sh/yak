@@ -15,7 +15,7 @@
 import { apply } from './db.ts'
 import { db } from './live_db.ts'
 import { dbReader } from './graph_query.ts'
-import { dispatch, trace } from './effects.ts'
+import { commitEffects } from './effects.ts'
 import { providers } from './adapters.ts'
 import {
   commandOut,
@@ -149,10 +149,7 @@ export let obeyed =
     if (!said && !changes.length) return // `:open` moves a viewport we don't have
     if (said) changes.push(...receipt(target, said))
     try {
-      let t = trace()
-      let out = apply(db, changes, t, via || undefined)
-      cast(out)
-      dispatch(out, t, (c, e) => console.warn(`obey effect ${c} —`, e))
+      commitEffects((t) => apply(db, changes, t, via || undefined), cast)
     } catch (e) {
       console.warn('order dropped —', e)
     }

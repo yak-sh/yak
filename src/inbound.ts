@@ -11,7 +11,7 @@
 // (imports db).
 import { apply, readComp } from './db.ts'
 import { db } from './live_db.ts'
-import { dispatch, trace } from './effects.ts'
+import { commitEffects } from './effects.ts'
 import { named, rfcId } from './mail.ts'
 import { canon, fleetAddress } from './mailaddr.ts'
 import { record } from './telemetry.ts'
@@ -418,11 +418,8 @@ let mint = (
   cast: Cast,
   by?: string | null,
 ) => {
-  let t = trace()
-  let out = apply(db, wire, t, by)
-  cast(out)
+  commitEffects((t) => apply(db, wire, t, by), cast)
   stamp(table, eid, s, cast)
-  dispatch(out, t, (c, e) => console.warn(`inbound effect ${c} —`, e))
 }
 
 // An echo coming home: our own letter re-entering through the store —

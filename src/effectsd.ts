@@ -16,9 +16,9 @@
 // sockets — which is what retires the handler-internal-cast residue T-22496
 // documented. Nothing here talks to a browser.
 import { db } from './live_db.ts'
-import { file as graph, recast } from './db.ts'
+import { file as graph } from './db.ts'
 import { catchup } from './catchup.ts'
-import { dispatch, type Where } from './effects.ts'
+import { configureEffects, dispatch, type Where } from './effects.ts'
 import { takeEffectsLease } from './effects_lease.ts'
 import { bootDoing, type Doing, wireDoing } from './doing.ts'
 import { providers } from './adapters.ts'
@@ -90,10 +90,11 @@ let oops = (comp: string, e: unknown) =>
 // safety tick bounds the window either way.
 let feed = catchup(db, (r) => {
   if (!r.trace) return
-  dispatch(recast(db, r), r.trace, oops, mine)
+  dispatch(r.batch, r.trace, oops, mine)
     .finally(() => feed.settle())
 })
 feed.watch(graph)
+configureEffects({ split: true, want: mine, settle: feed.settle, oops })
 setInterval(() => feed.settle(), 2_000)
 
 // Boot reconcile — recover/reapLeases/relay(do)/ticks — then serve the feed

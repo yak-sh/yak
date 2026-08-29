@@ -12,7 +12,7 @@
 // decision there; absent that row, the code defaults below apply.
 import { apply, depsOf, locate } from './db.ts'
 import { db } from './live_db.ts'
-import { dispatch, trace } from './effects.ts'
+import { commitEffects } from './effects.ts'
 import { type Change, type Dep } from './types.ts'
 import { DESK, find, type Row, spawnChanges, STUB } from './client.ts'
 import { evalGraph, rowsFor } from './graph_query.ts'
@@ -111,10 +111,7 @@ export let scribeRun = (
     ]
     let out = scribeSpawn(all, deps, Date.now(), t)
     if (out.changes) {
-      let tr = trace()
-      let applied = apply(db, out.changes, tr)
-      cast(applied)
-      dispatch(applied, tr, (c, e) => console.warn(`scribe effect ${c} —`, e))
+      commitEffects((tr) => apply(db, out.changes!, tr), cast)
     }
     return { reason: out.reason, observed: out.observed }
   } finally {

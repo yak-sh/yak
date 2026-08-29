@@ -23,9 +23,15 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { apply, journalSince, recast } from './db.ts'
+import { apply, journalSince, open } from './db.ts'
 import { catchup } from './catchup.ts'
-import { dispatch, fed, on } from './effects.ts'
+import {
+  commitEffects,
+  configureEffects,
+  dispatch,
+  fed,
+  on,
+} from './effects.ts'
 import { takeEffectsLease } from './effects_lease.ts'
 import { bareDb } from './testdb.ts'
 import { slow } from './testing.ts'
@@ -42,7 +48,7 @@ let doc = (eid: string, title: string): Change => ({
 let split = (db: ReturnType<typeof bareDb>) => {
   let feed = (want: (w: 'serve' | 'do') => boolean) =>
     catchup(db, (r) => {
-      if (r.trace) dispatch(recast(db, r), r.trace, () => {}, want)
+      if (r.trace) dispatch(r.batch, r.trace, () => {}, want)
     })
   return { server: feed((w) => w == 'serve'), daemon: feed((w) => w == 'do') }
 }
@@ -109,6 +115,115 @@ Deno.test('a daemon restart re-dispatches nothing past its cursor', () => {
   restarted.settle()
   assertEquals(handed.length, 1, 'the post-restart row, once and only once')
   assert(handed[0] == journalSince(db, 0).at(-1)!.rowid)
+})
+
+Deno.test('configured driver journals nested cross-owner effects exactly once', () => {
+  let path = `${Deno.makeTempDirSync()}/split-effects.db`
+  let writer = open(path)
+  let serving = open(path)
+  let daemon = open(path)
+  let serveCalls = 0
+  let sameOwnerCalls = 0
+  let serveToDoCalls = 0
+
+  // The do-owned first hop writes one serve-owned and one do-owned
+  // consequence through the configured driver.
+  on('meta', {
+    created: () => {
+      commitEffects((t) =>
+        apply(daemon, [
+          { eid: crypto.randomUUID(), name: 'brief', comp: { text: 'serve' } },
+          { eid: crypto.randomUUID(), name: 'doc', comp: { title: 'same' } },
+        ], t), () => {})
+    },
+  })
+  on('brief', { where: 'serve', created: () => serveCalls++ })
+  on('doc', { created: () => sameOwnerCalls++ })
+
+  // The reverse direction: a serve-owned handler writes a do-owned row.
+  on('canvas', {
+    where: 'serve',
+    created: () => {
+      commitEffects(
+        (t) =>
+          apply(serving, [{
+            eid: crypto.randomUUID(),
+            name: 'alias',
+            comp: { slug: crypto.randomUUID() },
+          }], t),
+        () => {},
+      )
+    },
+  })
+  on('alias', { created: () => serveToDoCalls++ })
+
+  let serveFeed = catchup(serving, (r) => {
+    if (r.trace) {
+      dispatch(r.batch, r.trace, () => {}, (w) => w == 'serve')
+    }
+  })
+  let daemonFeed = catchup(daemon, (r) => {
+    if (r.trace) {
+      dispatch(r.batch, r.trace, () => {}, (w) => w == 'do')
+    }
+  })
+
+  let restore = configureEffects({
+    split: true,
+    want: (w) => w == 'do',
+    settle: daemonFeed.settle,
+  })
+  commitEffects(
+    (t) =>
+      apply(writer, [{
+        eid: crypto.randomUUID(),
+        name: 'meta',
+        comp: {},
+      }], t),
+    () => {},
+  )
+  assertEquals(serveCalls, 0, 'the daemon never invokes the serve consequence')
+  assertEquals(sameOwnerCalls, 1, 'same-owner nested consequence fires once')
+  assert(
+    journalSince(writer, 0).every((r) => r.trace),
+    'root and nested births carry fed traces',
+  )
+
+  restore()
+  restore = configureEffects({
+    split: true,
+    want: (w) => w == 'serve',
+    settle: serveFeed.settle,
+  })
+  serveFeed.settle()
+  serveFeed.settle()
+  assertEquals(serveCalls, 1, 'the serving feed invokes the consequence once')
+  assertEquals(sameOwnerCalls, 1, 'the serving feed cannot double-fire do work')
+
+  commitEffects(
+    (t) =>
+      apply(serving, [{
+        eid: crypto.randomUUID(),
+        name: 'canvas',
+        comp: {},
+      }], t),
+    () => {},
+  )
+  assertEquals(serveToDoCalls, 0, 'serve does not invoke its do consequence')
+
+  restore()
+  restore = configureEffects({
+    split: true,
+    want: (w) => w == 'do',
+    settle: daemonFeed.settle,
+  })
+  daemonFeed.settle()
+  daemonFeed.settle()
+  assertEquals(serveToDoCalls, 1, 'the daemon invokes the reverse hop once')
+  restore()
+  writer.close()
+  serving.close()
+  daemon.close()
 })
 
 slow(

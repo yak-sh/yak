@@ -19,7 +19,7 @@ import { db } from './live_db.ts'
 import { type Change, kindOf, sessionActive } from './types.ts'
 import { spawnChanges } from './client.ts'
 import { rowsFor } from './graph_query.ts'
-import { dispatch, trace } from './effects.ts'
+import { commitEffects } from './effects.ts'
 import { record as telemetry } from './telemetry.ts'
 import type { SystemSpec, SystemTuning } from './roles.ts'
 
@@ -338,18 +338,19 @@ export let ensureFixer = (cast: Cast) =>
       provider: FIXER.provider,
       model: FIXER.model,
     })
-    let tr = trace()
     // The `fixer` mark rides the same batch: what the cap counts, the
     // cooldown reaches, and how the sweep tells spawned from un-spawned.
-    let out = apply(db, [...changes, { eid, name: 'fixer', comp: {} }], tr)
-    cast(out)
-    dispatch(out, tr, (comp, e) =>
-      telemetry(db, {
-        source: 'srv',
-        name: `effect:${comp}`,
-        ok: false,
-        error: String(e),
-      }))
+    commitEffects(
+      (tr) => apply(db, [...changes, { eid, name: 'fixer', comp: {} }], tr),
+      cast,
+      (comp, e) =>
+        telemetry(db, {
+          source: 'srv',
+          name: `effect:${comp}`,
+          ok: false,
+          error: String(e),
+        }),
+    )
     return eid
   } catch (e) {
     telemetry(db, {

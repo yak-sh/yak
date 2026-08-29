@@ -9,7 +9,7 @@ import { apply, human } from './db.ts'
 import { db } from './live_db.ts'
 import { reachable } from './door.ts'
 import { delivered, errored, excepted, toOf } from './deliver.ts'
-import { dispatch, trace } from './effects.ts'
+import { commitEffects } from './effects.ts'
 import { capabilities, type Change, uuid } from './types.ts'
 import { isOperator, spawnChanges, spawnPlan } from './client.ts'
 import { rowsFor } from './graph_query.ts'
@@ -114,31 +114,32 @@ export let knocked =
       ).get(to)
       if (managed) {
         let c = uuid()
-        let t = trace()
         let words = wordsFor(target)
-        let out = apply(
-          db,
-          [
-            {
-              eid: c,
-              name: 'doc',
-              comp: {
-                title: '',
-                body: `knock: ${human(db, target)}${
-                  words ? ` — ${words}` : ''
-                }`,
-              },
-            },
-            // Not an event: these are the knocker's own words relayed, the
-            // same reason rung 3's letter is a letter (M-4062). An event
-            // would also be ignored by commented(), so nothing would wake.
-            { eid: c, name: 'comment', comp: { target: to } },
-          ],
-          t,
-          knocker(),
+        commitEffects(
+          (t) =>
+            apply(
+              db,
+              [
+                {
+                  eid: c,
+                  name: 'doc',
+                  comp: {
+                    title: '',
+                    body: `knock: ${human(db, target)}${
+                      words ? ` — ${words}` : ''
+                    }`,
+                  },
+                },
+                // Not an event: these are the knocker's own words relayed, the
+                // same reason rung 3's letter is a letter (M-4062). An event
+                // would also be ignored by commented(), so nothing would wake.
+                { eid: c, name: 'comment', comp: { target: to } },
+              ],
+              t,
+              knocker(),
+            ),
+          cast,
         )
-        cast(out)
-        dispatch(out, t, (n, e) => console.warn(`knock resume ${n} —`, e))
         // What WE did. Waking the run belongs to the comment effect, which
         // keeps its own trail — the same division as `mailed`.
         return done(`commented ${human(db, to)}`)
@@ -174,10 +175,7 @@ export let knocked =
           effort: plan.effort,
           persona: plan.persona,
         }, capabilities)
-        let t = trace()
-        let out = apply(db, made.changes, t)
-        cast(out)
-        dispatch(out, t, (c, e) => console.warn(`knock spawn ${c} —`, e))
+        commitEffects((t) => apply(db, made.changes, t), cast)
         return done(`spawned ${human(db, made.eid)}`)
       }
       // 3: a person (or anything addressed) — the knock rides mail; the
@@ -186,28 +184,30 @@ export let knocked =
       if (addressed) {
         let words = wordsFor(target)
         let m = uuid()
-        let t = trace()
-        let out = apply(
-          db,
-          [
-            {
-              eid: m,
-              name: 'doc',
-              comp: {
-                title: `knock: ${human(db, target)}`,
-                body: words || `You are asked to look at ${human(db, target)}.`,
-              },
-            },
-            { eid: m, name: 'mail', comp: { target: target } },
-            { eid: m, name: 'deliver', comp: { to } },
-            // Signed by whoever knocked — the letter carries their words.
-            // An unnamed writer would sign it by fallback, as the owner.
-          ],
-          t,
-          knocker(),
+        commitEffects(
+          (t) =>
+            apply(
+              db,
+              [
+                {
+                  eid: m,
+                  name: 'doc',
+                  comp: {
+                    title: `knock: ${human(db, target)}`,
+                    body: words ||
+                      `You are asked to look at ${human(db, target)}.`,
+                  },
+                },
+                { eid: m, name: 'mail', comp: { target: target } },
+                { eid: m, name: 'deliver', comp: { to } },
+                // Signed by whoever knocked — the letter carries their words.
+                // An unnamed writer would sign it by fallback, as the owner.
+              ],
+              t,
+              knocker(),
+            ),
+          cast,
         )
-        cast(out)
-        dispatch(out, t, (c, e) => console.warn(`knock mail ${c} —`, e))
         return done(`mailed ${human(db, to)}`)
       }
       // 4: a settled session keeps that compatibility door; the knock records

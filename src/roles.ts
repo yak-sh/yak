@@ -19,7 +19,7 @@ import { db } from './live_db.ts'
 import { localQuery, personaGraph } from './graph_query.ts'
 import { isRef } from './props.ts'
 import { errorChange, healthChange } from './deliver.ts'
-import { dispatch, trace } from './effects.ts'
+import { commitEffects } from './effects.ts'
 import { actorRows, bus, busRows, notices, readerAt, uniq } from './client.ts'
 import { materialize } from './persona.ts'
 import { continueSession } from './sessions.ts'
@@ -820,11 +820,7 @@ let breakerReason = () =>
   `${breakerWindowMs / 60_000}m — fix the spawn config, then task role start`
 
 let applyGraph = (changes: Change[], cast: Cast) => {
-  let t = trace()
-  let out = apply(db, changes, t)
-  cast(out)
-  dispatch(out, t, (comp, e) => console.warn(`role ${comp} —`, e))
-  return out
+  return commitEffects((t) => apply(db, changes, t), cast)
 }
 
 let stopManaged = (s: DbRow, cast: Cast) => {

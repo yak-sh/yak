@@ -15,7 +15,7 @@
 import { apply, human, readComp } from './db.ts'
 import { db } from './live_db.ts'
 import { delivered, errored, settled, toOf } from './deliver.ts'
-import { dispatch, trace } from './effects.ts'
+import { commitEffects } from './effects.ts'
 import { type Letter, logOut, native, send } from './mailer.ts'
 import { atFleet, canon, fleetAddress, fleetLocal } from './mailaddr.ts'
 import { type Change } from './types.ts'
@@ -402,38 +402,39 @@ export let fanout =
         | { body: string }
         | undefined)?.body ?? ''
     let sid = crypto.randomUUID()
-    let t2 = trace()
     try {
-      let out = apply(
-        db,
-        [
-          {
-            eid: sid,
-            name: 'doc',
-            comp: {
-              title: `[T-${num}] ${title}`,
-              body: `${said}\n\n${entityUrl(`T-${num}`)}`,
-            },
-          },
-          { eid: sid, name: 'mail', comp: { target: target } },
-          // WHERE it goes rides the shared deliver.to — the project reference,
-          // resolved to its address at delivery like any other.
-          { eid: sid, name: 'deliver', comp: { to: t.project } },
-          {
-            eid: sid,
-            name: 'dependency',
-            comp: { type: 'about', child: eid },
-          },
-          // The relay carries someone's WORDS, so it is signed by whoever
-          // wrote them. Without a writer named here the sender would resolve
-          // by fallback, and a comment relayed from any venture would leave
-          // signed by the box owner (T-9571).
-        ],
-        t2,
-        actor?.by ?? null,
+      commitEffects(
+        (t2) =>
+          apply(
+            db,
+            [
+              {
+                eid: sid,
+                name: 'doc',
+                comp: {
+                  title: `[T-${num}] ${title}`,
+                  body: `${said}\n\n${entityUrl(`T-${num}`)}`,
+                },
+              },
+              { eid: sid, name: 'mail', comp: { target: target } },
+              // WHERE it goes rides the shared deliver.to — the project reference,
+              // resolved to its address at delivery like any other.
+              { eid: sid, name: 'deliver', comp: { to: t.project } },
+              {
+                eid: sid,
+                name: 'dependency',
+                comp: { type: 'about', child: eid },
+              },
+              // The relay carries someone's WORDS, so it is signed by whoever
+              // wrote them. Without a writer named here the sender would resolve
+              // by fallback, and a comment relayed from any venture would leave
+              // signed by the box owner (T-9571).
+            ],
+            t2,
+            actor?.by ?? null,
+          ),
+        cast,
       )
-      cast(out)
-      dispatch(out, t2, (c, e) => console.warn(`relay effect ${c} —`, e))
     } catch (e) {
       console.warn('comment relay dropped —', e)
     }

@@ -47,7 +47,14 @@ import { db } from './live_db.ts'
 import { catchup } from './catchup.ts'
 import { published, withBackupLock } from './redaction.ts'
 import { dbKids, type Subserve, subserve } from './subserve.ts'
-import { dispatch, fed, relay, trace, type Where } from './effects.ts'
+import {
+  configureEffects,
+  dispatch,
+  fed,
+  relay,
+  trace,
+  type Where,
+} from './effects.ts'
 import {
   bootDoing,
   type Doing,
@@ -330,9 +337,10 @@ let effect = (out: Change[], t: ReturnType<typeof trace>) => {
 // doors call feed.settle() right after apply(), keeping today's synchronous
 // ordering) and a foreign process's (data_version polling wakes the same drain),
 // uniformly. Effects fire only for rows journaled with a fed() trace — the
-// doors that DEFERRED dispatch here — so the self-dispatching modules (heal,
-// wake, deliver, …) and the runner's deliberate effect-free applies are never
-// double-fired, and record()'d stamps broadcast without dispatching.
+// configured driver DEFERRED here — so effect-free runner applies and ordinary
+// record() stamps broadcast without dispatching. Dispatch reads the journal's
+// canonical batch, not recast()'s extra cache-convergence echoes, so one commit
+// remains one effect ask even when a stamped component is re-read for sockets.
 // Handler-internal casts (sessions.ts, managed_codex.ts, …) still cast
 // directly; their journaled rows re-broadcast once when the feed passes them —
 // idempotent by the wire's contract ("applying the same patch twice is
@@ -341,9 +349,21 @@ let effect = (out: Change[], t: ReturnType<typeof trace>) => {
 let feed = catchup(db, (r) => {
   let changes = recast(db, r)
   cast(changes, undefined, r.rowid)
-  if (r.trace) effect(changes, r.trace)
+  if (r.trace) effect(r.batch, r.trace)
 })
 feed.watch(graph)
+configureEffects({
+  split: splitEffects(),
+  want: wantHere,
+  settle: feed.settle,
+  oops: (comp, e) =>
+    record(db, {
+      source: 'http',
+      name: `effect:${comp}`,
+      ok: false,
+      error: String(e),
+    }),
+})
 
 // A write batch from one socket, applied HERE — the writer process — whichever
 // side served the socket. {apply, id} is a batch wearing a delivery id

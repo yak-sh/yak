@@ -11,7 +11,7 @@
 import { apply, human } from './db.ts'
 import { db } from './live_db.ts'
 import { delivered, errored, PENDING } from './deliver.ts'
-import { dispatch, trace } from './effects.ts'
+import { commitEffects } from './effects.ts'
 import { type Change, uuid } from './types.ts'
 import { instant } from './time.ts'
 
@@ -62,7 +62,6 @@ let pending = () =>
 // resumed session reads what it was mid-doing without a second mechanism. The
 // note is authored by whoever set the wake, so the relayed words are signed.
 let fire = (r: Row, cast: Cast) => {
-  let t = trace()
   let ke = uuid()
   let target = r.target ?? r.to
   let batch: Change[] = [
@@ -87,9 +86,7 @@ let fire = (r: Row, cast: Cast) => {
       { eid: ce, name: 'comment', comp: { target } },
     )
   }
-  let out = apply(db, batch, t, r.by ?? undefined)
-  cast(out)
-  dispatch(out, t, (c, e) => console.warn(`wake ${c} —`, e))
+  commitEffects((t) => apply(db, batch, t, r.by ?? undefined), cast)
   // Settled DELIVERED after the mint: the wake did its one job, minting the
   // knock that owns the ladder. `via` names it. A crash in the gap re-knocks
   // at boot — a duplicate nudge is cheaper than the missed one this whole

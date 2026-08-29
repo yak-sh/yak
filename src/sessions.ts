@@ -65,7 +65,13 @@ import {
   scrub,
 } from './ingest.ts'
 import { graphSession, runnerSessions } from './managed_codex.ts'
-import { dispatch, trace } from './effects.ts'
+import {
+  commitEffects,
+  dispatch,
+  effectTrace,
+  routeEffects,
+  trace,
+} from './effects.ts'
 import { legacyWorktreesDir, worktreesDir } from './ground.ts'
 import {
   hookClaim,
@@ -257,6 +263,7 @@ let stamp = (
   let ending = SETTLED.includes(String(body.status))
   let changes: Change[] = []
   let exc: Change | undefined
+  let effects = effectTrace()
   db.exec('begin immediate')
   try {
     was = storedSession(db, eid)
@@ -273,7 +280,10 @@ let stamp = (
     }
     if (broke) {
       let change = exceptionChange(eid, broke.message, broke.stack ?? null)
-      if (change) changes.push(exc = change)
+      if (change) {
+        changes.push(exc = change)
+        effects.created.add(`exception ${change.eid}`)
+      }
     }
     let visible = changes.flatMap((change) => {
       if (
@@ -283,7 +293,7 @@ let stamp = (
       let { latest_seq: _, ...comp } = change.comp
       return Object.keys(comp).length ? [{ ...change, comp }] : []
     })
-    if (visible.length) record(db, visible)
+    if (visible.length) record(db, visible, undefined, effects)
     db.exec('commit')
     changes = visible
   } catch (e) {
@@ -295,11 +305,8 @@ let stamp = (
   // shows, and a long run freezes every open canvas (T-7063). Only a
   // column whose value actually moved is worth telling everyone.
   if (changes.length) cast(changes)
-  // A break stamped: fire the heal effect LIVE (deliver.ts excepted()'s door).
-  // A launch/finish failure is terminal — it won't self-recover — so the ticket
-  // should file now, not wait for a boot reconcile. A throwing filer is telemetry
-  // (dispatch isolates it), never a break in this settle.
-  if (exc) {
+  if (changes.length && effects.fed) routeEffects(changes, effects)
+  else if (exc) {
     let t = trace()
     t.created.add(`exception ${exc.eid}`)
     dispatch([exc], t, (comp, e) => console.warn(`heal ${comp} —`, e))
@@ -625,26 +632,15 @@ let settled = (eid: string, status: string, cast: Cast) => {
   )
   if (changes.length) {
     try {
-      let t = trace()
-      let out = apply(db, changes, t, eid)
-      cast(out)
-      dispatch(out, t, (comp, e) => console.warn(`settle effect ${comp} —`, e))
+      commitEffects((t) => apply(db, changes, t, eid), cast)
     } catch (e) {
       console.warn('settle batch dropped —', e)
     }
   }
-  // Re-drive the owning role. A managed role has no liveness poller — only
-  // native roles get the 2s deadline/roleSoon reconcile (roles.ts) — so its
-  // operator session ENDING is the one event that can re-pin a fresh operator
-  // after a crash/kill. The on('session',{changed:{status}}) effect (server.ts)
-  // is registered for exactly this, but a lifecycle stamp bypasses
-  // apply()/dispatch (see stamp() above), so the handler never hears the death:
-  // deliver the ending to it here. Without this a crashed managed operator sits
-  // with applied_hash set, refusing to respawn until an unrelated role event
-  // pokes it (T-19477). Isolated like any effect — a throw is telemetry, never
-  // a break in this settle; reconcileManaged decides whether to re-pin, so a
-  // clean completion still idles rather than churning.
-  if (row.role) {
+  // Inline preserves the historical synthetic lifecycle edge. In split mode
+  // stamp() journaled the status with a fed trace, so the owning process's
+  // feed already delivers this hook and a direct dispatch would double-fire.
+  if (row.role && !effectTrace().fed) {
     let t = trace()
     dispatch(
       [{ eid, name: 'session', comp: { status } }],
@@ -970,13 +966,23 @@ let ingestLine = (
 ) => {
   if (!batch.specs.length || state.lines.has(line)) return
   try {
-    let { changes, trace } = append(db, eid, batch.specs, null, batch.ids, {
-      source: state.source,
-      line,
-    })
+    let liveEffects = live && fresh(at)
+    let effect = liveEffects ? effectTrace() : trace()
+    let { changes, trace: appliedTrace } = append(
+      db,
+      eid,
+      batch.specs,
+      null,
+      batch.ids,
+      {
+        source: state.source,
+        line,
+      },
+      effect,
+    )
     state.lines.add(line)
     for (let [key, id] of batch.calls) state.state.calls.set(key, id)
-    if (live && fresh(at)) {
+    if (liveEffects) {
       // A real-time ingest reaches entry subscribers the same way the runner's
       // own appends do — through the server's cast()/maintain() (T-16824) — so a
       // live process-backed or native session tails through the graph
@@ -984,11 +990,7 @@ let ingestLine = (
       // recover/backfill (live false, or a stale `at`) stay silent history; a
       // fresh subscriber picks those up in its subscription's initial frame.
       cast(changes)
-      dispatch(
-        changes,
-        trace,
-        (comp, e) => console.warn(`entry effect ${comp} —`, e),
-      )
+      routeEffects(changes, appliedTrace)
     }
   } catch (e) {
     errs.push(`line ${line}: entry ingest failed — ${String(e)}`)
@@ -2360,22 +2362,23 @@ let departed = async (eid: string, pid: number, ms: number) => {
 let refuse = (eid: string, target: string, why: string, cast: Cast) => {
   try {
     let cid = crypto.randomUUID()
-    let t = trace()
-    let out = apply(
-      db,
-      [
-        {
-          eid: cid,
-          name: 'doc',
-          comp: { title: '', body: `can't resume — ${why}` },
-        },
-        { eid: cid, name: 'comment', comp: { target } },
-      ],
-      t,
-      eid,
+    commitEffects(
+      (t) =>
+        apply(
+          db,
+          [
+            {
+              eid: cid,
+              name: 'doc',
+              comp: { title: '', body: `can't resume — ${why}` },
+            },
+            { eid: cid, name: 'comment', comp: { target } },
+          ],
+          t,
+          eid,
+        ),
+      cast,
     )
-    cast(out)
-    dispatch(out, t, (comp, e) => console.warn(`resume refusal ${comp} —`, e))
   } catch (e) {
     console.warn('resume refusal dropped —', e)
   }
@@ -2855,9 +2858,5 @@ export let reapLeases = (cast: Cast) => {
     )
   }
   if (!changes.length) return []
-  let t = trace()
-  let out = apply(db, changes, t)
-  cast(out)
-  dispatch(out, t, (comp, e) => console.warn(`reap effect ${comp} —`, e))
-  return out
+  return commitEffects((t) => apply(db, changes, t), cast)
 }

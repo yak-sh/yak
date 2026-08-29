@@ -20,7 +20,7 @@
 import { apply, human } from './db.ts'
 import { db } from './live_db.ts'
 import { errored } from './deliver.ts'
-import { dispatch, trace } from './effects.ts'
+import { commitEffects } from './effects.ts'
 import { type Change, sessionActive } from './types.ts'
 import { next } from './time.ts'
 
@@ -87,19 +87,20 @@ export let scheduleArm = (eid: string, cast: Cast) => {
   // untargeted predecessor addressed to this role in the same transaction;
   // `by` = the role itself, so the fired knock is born archived — an alarm
   // clock, not correspondence. dispatch() lets wake.ts re-arm its timer.
-  let t = trace()
   let we = crypto.randomUUID()
-  let out = apply(
-    db,
-    [
-      { eid: we, name: 'wake', comp: { at: iso(at) } },
-      { eid: we, name: 'deliver', comp: { to: eid } },
-    ],
-    t,
-    eid,
+  commitEffects(
+    (t) =>
+      apply(
+        db,
+        [
+          { eid: we, name: 'wake', comp: { at: iso(at) } },
+          { eid: we, name: 'deliver', comp: { to: eid } },
+        ],
+        t,
+        eid,
+      ),
+    cast,
   )
-  cast(out)
-  dispatch(out, t, (c, e) => console.warn(`schedule ${c} —`, e))
 }
 
 // Settle trigger: a role session reaching a terminal status re-arms its role.

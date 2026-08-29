@@ -20,7 +20,7 @@
 import { apply, human, locate, webAt } from './db.ts'
 import { db } from './live_db.ts'
 import { dbReader } from './graph_query.ts'
-import { dispatch, trace } from './effects.ts'
+import { commitEffects } from './effects.ts'
 import { filing } from './commands.ts'
 import { order } from './obey.ts'
 import { store } from './freeze.ts'
@@ -97,10 +97,7 @@ export let filed = async (body: Filing, cast: Cast) => {
   }
 
   try {
-    let t = trace()
-    let out = apply(db, changes, t, body.session)
-    cast(out)
-    dispatch(out, t, (c, e) => console.warn(`page effect ${c} —`, e))
+    commitEffects((t) => apply(db, changes, t, body.session), cast)
   } catch (e) {
     return new Response((e as Error).message, { status: 400 })
   }

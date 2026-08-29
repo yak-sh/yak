@@ -21,7 +21,7 @@
 import { apply, depsOf, human } from './db.ts'
 import { db } from './live_db.ts'
 import { delivered } from './deliver.ts'
-import { dispatch, trace } from './effects.ts'
+import { commitEffects } from './effects.ts'
 import { type Change, uuid } from './types.ts'
 import { gatedTask } from './sessions.ts'
 
@@ -79,10 +79,7 @@ export let unblocking =
       resumed.push({ session, knock: k })
     }
     if (!out.length) return
-    let t = trace()
-    let done = apply(db, out, t, null)
-    cast(done)
-    dispatch(done, t, (n, e) => console.warn(`unblock knock ${n} —`, e))
+    commitEffects((t) => apply(db, out, t, null), cast)
     // The knock is the resume, so the park's fallback wake has done its job:
     // settle it delivered (via names the knock), the same idiom wake.ts uses
     // when a timer fires. An ungated knock never re-parks, so nothing re-arms.

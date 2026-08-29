@@ -8,8 +8,9 @@
 // heavy. The effect tests use the module db with an injected recall fn, so no
 // embedder and no KNN, and stay in the fast tier.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply } = await import('./db.ts')
+let { apply, journalSince } = await import('./db.ts')
 let { db } = await import('./live_db.ts')
+let { configureEffects } = await import('./effects.ts')
 let { hash, MODEL } = await import('./embed.ts')
 let { recallEntry, recallFrom } = await import('./recall.ts')
 let { vectorDb } = await import('./testdb.ts')
@@ -212,6 +213,27 @@ Deno.test('recallEntry: a message writes a recall entry into its session, linked
     `select 1 from dependency where parent = ${idOf} and type = 'recalled' and child = ${idOf}`,
   ).get(rec!.eid, m)
   assertEquals(!!edge, true)
+})
+
+Deno.test('recallEntry: its nested entry keeps split effect ownership', async () => {
+  let s = sess()
+  let m = mem(db, 'wake the serving runner', vec(0.9, 0.1))
+  let msg = msgEntry(s, 'surface the thought')
+  let before = journalSince(db, 0).at(-1)?.rowid ?? 0
+  let restore = configureEffects({ split: true, settle: () => {} })
+  try {
+    await recallEntry(noop, saysM(m, 'M-43', 'wake the serving runner'))(msg)
+  } finally {
+    restore()
+  }
+  let row = journalSince(db, before).find((row) =>
+    row.batch.some((change) => change.name == 'recalled')
+  )
+  assertEquals(!!row?.trace, true)
+  assertEquals(
+    row?.batch.some((change) => change.name == 'entry'),
+    true,
+  )
 })
 
 Deno.test('recallEntry: recall cannot recall itself — a recall entry carries no message facet', async () => {

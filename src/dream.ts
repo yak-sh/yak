@@ -18,7 +18,7 @@
 import { apply, human, locate, touch } from './db.ts'
 import { db } from './live_db.ts'
 import { type Change, uuid } from './types.ts'
-import { dispatch, trace } from './effects.ts'
+import { commitEffects } from './effects.ts'
 import { record as telemetry } from './telemetry.ts'
 import { delivered, PENDING, toOf } from './deliver.ts'
 import { readEntries } from './entries.ts'
@@ -252,10 +252,7 @@ let oops = (comp: string, e: unknown) =>
 // Land a batch the heal.ts way: apply, cast so caches update, dispatch so
 // downstream effects fire and a throwing one is telemetry, never a break.
 let land = (changes: Change[], cast: Cast, writer?: string | null) => {
-  let t = trace()
-  let out = apply(db, changes, t, writer)
-  cast(out)
-  dispatch(out, t, oops)
+  commitEffects((t) => apply(db, changes, t, writer), cast, oops)
 }
 
 // The dedup key of a finding (T-17407 gate 1): its kind + normalized title,
@@ -571,17 +568,19 @@ let passRecord = (to: string, r: Pass, cast: Cast): string => {
 // so the server's one timer picks it up now, not only at next boot.
 let rearm = (to: string, cast: Cast) => {
   let w = uuid()
-  let t = trace()
-  let out = apply(db, [
-    {
-      eid: w,
-      name: 'wake',
-      comp: { at: iso(Date.now() + dreamTuning().cadenceMs) },
-    },
-    { eid: w, name: 'deliver', comp: { to } },
-  ], t)
-  cast(out)
-  dispatch(out, t, oops)
+  commitEffects(
+    (t) =>
+      apply(db, [
+        {
+          eid: w,
+          name: 'wake',
+          comp: { at: iso(Date.now() + dreamTuning().cadenceMs) },
+        },
+        { eid: w, name: 'deliver', comp: { to } },
+      ], t),
+    cast,
+    oops,
+  )
 }
 
 // The created(knock) handler. EVERY knock reaches it, so it abstains unless the

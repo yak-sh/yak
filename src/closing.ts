@@ -18,7 +18,7 @@
 // SERVER-ONLY (imports db).
 import { apply } from './db.ts'
 import { db } from './live_db.ts'
-import { dispatch, trace } from './effects.ts'
+import { commitEffects } from './effects.ts'
 import { type Change } from './types.ts'
 
 type Cast = (changes: Change[]) => void
@@ -60,13 +60,14 @@ export let closingTask =
       `select ${refEid('"by"')} as "by" from updated where ${OWNED}`,
     )
       .get(eid) as { by: string | null } | undefined)?.by ?? null
-    let t = trace()
-    let out = apply(
-      db,
-      items.map((e) => ({ eid: e, name: 'archived', comp: {} })),
-      t,
-      by,
+    commitEffects(
+      (t) =>
+        apply(
+          db,
+          items.map((e) => ({ eid: e, name: 'archived', comp: {} })),
+          t,
+          by,
+        ),
+      cast,
     )
-    cast(out)
-    dispatch(out, t, (n, e) => console.warn(`closing archive ${n} —`, e))
   }

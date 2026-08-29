@@ -17,7 +17,7 @@
 // above it is pure over Rows and fast-tier tested.
 import { apply, depsOf } from './db.ts'
 import { db } from './live_db.ts'
-import { dispatch, trace } from './effects.ts'
+import { commitEffects } from './effects.ts'
 import { type Change, type Dep, sessionActive } from './types.ts'
 import { type Row } from './client.ts'
 import { evalGraph, rowsFor } from './graph_query.ts'
@@ -112,8 +112,5 @@ export let ruled =
       depsOf(db, [about]),
     )
     if (!marks.length) return
-    let t = trace()
-    let out = apply(db, marks, t)
-    cast(out)
-    dispatch(out, t, (c, e) => console.warn(`spawn rule ${c} —`, e))
+    commitEffects((t) => apply(db, marks, t), cast)
   }

@@ -4,7 +4,7 @@
 // sessions stay in sessions.ts.
 import { DatabaseSync } from './sqlite.ts'
 import { apply, entriesOf, entryOf, record } from './db.ts'
-import { trace } from './effects.ts'
+import { type Trace, trace } from './effects.ts'
 import { checkpointValid, type EntryRow } from './replay.ts'
 import { type Change, uuid } from './types.ts'
 
@@ -60,6 +60,7 @@ export let append = (
   writer?: string | null,
   ids?: string[],
   coord?: Coord,
+  effects: Trace = trace(),
 ) => {
   if (ids && ids.length != specs.length) {
     throw new Error('entry ids must match specs')
@@ -75,8 +76,11 @@ export let append = (
     }
   }
   let imports = coord ? new Map(eids.map((eid) => [eid, coord])) : undefined
-  let t = trace()
-  return { eids, changes: apply(db, changes, t, writer, imports), trace: t }
+  return {
+    eids,
+    changes: apply(db, changes, effects, writer, imports),
+    trace: effects,
+  }
 }
 
 // The durable cursor, derived (D-16704): the (source, line) coordinates already

@@ -5748,7 +5748,8 @@ export let apply = (
         // dispatch to the journal feed (a fed() trace). A plain trace()
         // means the call site dispatches itself, and an absent trace
         // means no effects at all (the runner's deliberate effect-free
-        // applies) — either way the feed must not fire them again.
+        // applies and ordinary direct stamps) — either way the feed must not
+        // fire them again. Effect-bearing direct stamps pass a fed trace.
         let trace = t?.fed
           ? JSON.stringify({
             created: [...createdComps],
@@ -6065,6 +6066,7 @@ export let record = (
   db: DatabaseSync,
   changes: Change[],
   writer?: string | null,
+  effects?: Trace,
 ) => {
   try {
     let now = new Date().toISOString()
@@ -6073,15 +6075,40 @@ export let record = (
     let jrow = Number(
       prep(
         db,
-        'insert into journal (ts, actor, via, batch) values (?, ?, ?, ?)',
+        'insert into journal (ts, actor, via, batch, trace) values (?, ?, ?, ?, ?)',
       )
-        .run(now, actor, via, JSON.stringify(changes)).lastInsertRowid,
+        .run(
+          now,
+          actor,
+          via,
+          JSON.stringify(changes),
+          effects?.fed
+            ? JSON.stringify({
+              created: [...effects.created],
+              removed: [...effects.removed],
+            })
+            : null,
+        ).lastInsertRowid,
     )
     touchJournal(db, jrow, changes)
     // The normalized parallel record (T-18878): a server stamp is journaled
     // too, so the two logs stay a faithful pair. journal_tx.id mirrors the JSON
-    // row's rowid; no trace — a stamp fires no effects.
-    journalNormalized(db, jrow, now, actor, via, null, changes)
+    // row's rowid. Most stamps carry no trace; the few effect-bearing lifecycle
+    // stamps pass the process driver's trace so split ownership is preserved.
+    journalNormalized(
+      db,
+      jrow,
+      now,
+      actor,
+      via,
+      effects?.fed
+        ? JSON.stringify({
+          created: [...effects.created],
+          removed: [...effects.removed],
+        })
+        : null,
+      changes,
+    )
   } catch (e) {
     console.warn('journal skipped —', e)
   }

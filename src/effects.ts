@@ -87,13 +87,70 @@ export type Trace = {
   // Dispatch belongs to the journal FEED (catchup.ts), not the call site:
   // apply() journals a fed trace beside the batch, and the feed fires the
   // effects when its cursor passes the row — own writes and a foreign
-  // process's uniformly. A plain trace() keeps dispatch at the call site
-  // (the self-dispatching modules: heal, wake, deliver, …) and journals no
-  // trace, so the feed can never fire those effects a second time.
+  // process's uniformly. A plain trace() keeps dispatch at the call site in
+  // inline mode (and for deliberate low-level callers) and journals no trace,
+  // so the feed can never fire those effects a second time.
   fed?: boolean
 }
 export let trace = (): Trace => ({ created: new Set(), removed: new Map() })
 export let fed = (): Trace => ({ ...trace(), fed: true })
+
+// The one post-commit routing policy for this process. Library users, tests,
+// probes, and the unsplit server keep the inline default. A split process
+// installs its owner and local journal-feed nudge once at boot. Callers never
+// choose fed-vs-plain or a process filter themselves: that choice has to remain
+// stable through handler-written consequences as well as top-level writes.
+type Driver = {
+  split: boolean
+  want: (w: Where) => boolean
+  settle: () => void
+  oops: (comp: string, e: unknown) => void
+}
+
+let driver: Driver = {
+  split: false,
+  want: () => true,
+  settle: () => {},
+  oops: (comp, e) => console.warn(`effect ${comp} failed —`, e),
+}
+
+// Returns a restore hook so a focused test/probe can configure a split pair
+// without leaking process policy into its neighbours.
+export let configureEffects = (next: Partial<Driver>) => {
+  let prior = driver
+  driver = { ...driver, ...next }
+  return () => driver = prior
+}
+
+export let effectTrace = (): Trace => driver.split ? fed() : trace()
+
+// Atomic commit + cast + route. In inline mode handlers run now, as before.
+// In split mode the fed trace is already durable in the same transaction as
+// the mutation; nudging this process's feed can only fire this owner's rows,
+// and the peer feed observes the cross-owner half from the journal.
+export let commitEffects = (
+  commit: (t: Trace) => Change[],
+  cast: (changes: Change[]) => void,
+  oops?: (comp: string, e: unknown) => void,
+): Change[] => {
+  let t = effectTrace()
+  let out = commit(t)
+  cast(out)
+  routeEffects(out, t, oops)
+  return out
+}
+
+// The companion for a commit helper that must construct its batch/trace
+// itself (entries.append is the one production case). New mutation doors
+// should prefer commitEffects so trace selection cannot drift from apply().
+export let routeEffects = (
+  out: Change[],
+  t: Trace,
+  oops?: (comp: string, e: unknown) => void,
+) => {
+  if (t.fed) driver.settle()
+  else dispatch(out, t, oops ?? driver.oops, driver.want)
+}
 
 // Run every matching handler, isolated: a throw (or rejection) goes to
 // `oops` and the rest still fire. Returns a promise of all handler
@@ -101,11 +158,13 @@ export let fed = (): Trace => ({ ...trace(), fed: true })
 export let dispatch = (
   changes: Change[],
   t: Trace,
-  oops: (comp: string, e: unknown) => void = (comp, e) =>
-    console.warn(`effect ${comp} failed —`, e),
+  // A configured process owns failure reporting as well as selection. The
+  // inline default still warns; split processes install durable telemetry.
+  oops: (comp: string, e: unknown) => void = driver.oops,
   // Which rows this PROCESS may fire (split dispatch, D-22388 step 3).
-  // Default: all of them — inline mode, and every existing caller.
-  want: (w: Where) => boolean = () => true,
+  // Default: this process's configured owner. Inline's owner accepts both;
+  // split callers cannot accidentally fall back to all handlers.
+  want: (w: Where) => boolean = driver.want,
 ): Promise<unknown[]> => {
   let jobs: Promise<unknown>[] = []
   let mine = (e: Effect) => want(e.where ?? 'do')

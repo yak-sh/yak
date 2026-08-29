@@ -10,7 +10,7 @@
 // `system` entity under T-3906.
 import { apply, depsOf, settingValue } from './db.ts'
 import { db } from './live_db.ts'
-import { dispatch, trace } from './effects.ts'
+import { commitEffects } from './effects.ts'
 import { type Change, type Dep, statusOf } from './types.ts'
 import { type Row, spawnChanges, spawnPlan } from './client.ts'
 import { hotRun, isPersona, liveRun } from './spawnrule.ts'
@@ -352,10 +352,7 @@ export let dispatchSweep = async (
     let ps = (await providers()).filter((p) => !bar.has(p.name))
     let changes = dispatchSpawn(all, deps, ps, cap, recursive)
     if (changes.length) {
-      let t = trace()
-      let out = apply(db, changes, t)
-      cast(out)
-      dispatch(out, t, (c, e) => console.warn(`dispatch effect ${c} —`, e))
+      commitEffects((t) => apply(db, changes, t), cast)
       let n = new Set(
         changes.filter((c) => c.name == 'session').map((c) => c.eid),
       ).size

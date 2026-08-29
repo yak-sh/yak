@@ -22,7 +22,7 @@
 import { record } from './db.ts'
 import { db } from './live_db.ts'
 import { record as telemetry } from './telemetry.ts'
-import { dispatch, trace } from './effects.ts'
+import { effectTrace, routeEffects } from './effects.ts'
 import { type Change } from './types.ts'
 
 type Cast = (changes: Change[]) => void
@@ -159,10 +159,11 @@ export let excepted = (
 ) => {
   let change = exceptionChange(eid, message, stack, at)
   if (!change) return
-  publish([change], cast)
-  let t = trace()
+  let t = effectTrace()
   t.created.add(`exception ${change.eid}`)
-  dispatch([change], t, (comp, e) =>
+  record(db, [change], undefined, t)
+  cast([change])
+  routeEffects([change], t, (comp, e) =>
     telemetry(db, {
       source: 'srv',
       name: `effect:${comp}`,

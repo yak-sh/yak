@@ -16,6 +16,7 @@ import { type DatabaseSync } from './sqlite.ts'
 import { embed, similar } from './embed.ts'
 import { apply, human, rowsOf } from './db.ts'
 import { db } from './live_db.ts'
+import { commitEffects } from './effects.ts'
 import { belongs, type Scoped, scopeFor } from './client.ts'
 import { type Change } from './types.ts'
 
@@ -213,5 +214,10 @@ export let recallEntry =
       ).all(session) as { child: string }[]).map((r) => r.child),
     )
     let floaters = await recallFn(db, text, scopeOf(session), seen)
-    if (floaters.length) cast(apply(db, writeRecall(session, eid, floaters)))
+    if (floaters.length) {
+      commitEffects(
+        (trace) => apply(db, writeRecall(session, eid, floaters), trace),
+        cast,
+      )
+    }
   }
