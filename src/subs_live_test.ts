@@ -408,10 +408,10 @@ slow(
     let q = `.task.status=open&.doc.title~=${a.eid.slice(0, 8)}`
     await walk(q, [
       a.born, // exists, does not match
-      [{ eid: a.eid, name: 'task', comp: { status: 'open' } }], // add
+      [{ eid: a.eid, name: 'task', comp: {} }], // add
       [{ eid: a.eid, name: 'task', comp: { priority: 0 } }], // update, still in
       [{ eid: a.eid, name: 'task', comp: { status: 'done' } }], // remove
-      [{ eid: a.eid, name: 'task', comp: { status: 'open' } }], // add again
+      [{ eid: a.eid, name: 'task', comp: {} }], // add again
       [{ eid: a.eid, name: 'entity', comp: null }], // dead
     ])
   },
@@ -425,7 +425,7 @@ slow(
     let q = `.task.status=open,wip&.doc.title~=${a.eid.slice(0, 8)}`
     await walk(q, [
       a.born,
-      [{ eid: a.eid, name: 'task', comp: { status: 'open' } }], // add
+      [{ eid: a.eid, name: 'task', comp: {} }], // add
       [{ eid: a.eid, name: 'task', comp: { status: 'wip' } }], // still in
       [{ eid: a.eid, name: 'task', comp: { status: 'done' } }], // out
     ])
@@ -452,7 +452,7 @@ slow(
         {
           eid: source,
           name: 'task',
-          comp: { status: 'open', priority: 1, assignee },
+          comp: { priority: 1, assignee },
         },
       ],
       [{ eid: assignee, name: 'doc', comp: { title: mark } }], // add
@@ -482,7 +482,7 @@ slow(
         {
           eid: target,
           name: 'task',
-          comp: { status: 'open', priority: 1, project: left },
+          comp: { priority: 1, project: left },
         },
         {
           eid: source,
@@ -521,7 +521,7 @@ slow('subscription: negation and contains preds', alone, async () => {
   let tag = a.eid.slice(0, 8)
   await walk(`.task.status!=done&.doc.title~=${tag}`, [
     a.born, // done — out
-    [{ eid: a.eid, name: 'task', comp: { status: 'open' } }], // in
+    [{ eid: a.eid, name: 'task', comp: {} }], // in
     [{ eid: a.eid, name: 'task', comp: { status: 'done' } }], // out
   ])
   await walk(`.doc.title~=${tag}`, [
@@ -577,7 +577,7 @@ slow(
     let tag = a.eid.slice(0, 8)
     await walk(`.task.status!=done&.doc.title~=${tag}`, [
       a.born,
-      [{ eid: a.eid, name: 'task', comp: { status: 'open' } }], // in
+      [{ eid: a.eid, name: 'task', comp: {} }], // in
       [{ eid: a.eid, name: 'task', comp: null }], // component gone
     ])
   },
@@ -599,7 +599,7 @@ slow(
       let mine = `.doc.title~=${tag}`
       await client.open('open', open)
       await client.open('mine', mine)
-      await post([{ eid: a.eid, name: 'task', comp: { status: 'open' } }])
+      await post([{ eid: a.eid, name: 'task', comp: {} }])
       await client.settle()
       assertEquals(client.members('open'), await queried(open))
       assertEquals(client.members('mine'), await queried(mine))
@@ -900,8 +900,8 @@ slow(
   'query: index and snapshot answer alike, order included',
   alone,
   async () => {
-    let a = task({ status: 'open', priority: 1 })
-    let b = task({ status: 'open', priority: 2 })
+    let a = task({ priority: 1 })
+    let b = task({ priority: 2 })
     await post([...a.born, ...b.born])
     let num = async (eid: string) =>
       ((await (await fetch(
@@ -957,7 +957,7 @@ let byId = async (ids: string, extra = '') => {
 }
 
 slow('query: id= fetches by every form a name takes', alone, async () => {
-  let a = task({ status: 'open' })
+  let a = task({})
   let b = task({ status: 'done' })
   await post([
     ...a.born,
@@ -1017,7 +1017,7 @@ slow(
   'query and subscriptions require an explicit quarantine read',
   alone,
   async () => {
-    let a = task({ status: 'open' })
+    let a = task({})
     let q = `.doc.title~=${a.eid.slice(0, 8)}`
     await post(a.born)
     let client = await subscriber()
@@ -1065,8 +1065,8 @@ slow(
   'query: deps= reports stored and derived edges',
   alone,
   async () => {
-    let a = task({ status: 'open' })
-    let b = task({ status: 'open' })
+    let a = task({})
+    let b = task({})
     let proj = uid(), common = uid(), spec = uid()
     await post([
       ...a.born,
@@ -1124,7 +1124,7 @@ slow(
         name: 'doc',
         comp: { title: 'route target', body: 'the whole body' },
       },
-      { eid, name: 'task', comp: { status: 'open', priority: 1 } },
+      { eid, name: 'task', comp: { priority: 1 } },
     ])
     let s = await subscriber()
     try {

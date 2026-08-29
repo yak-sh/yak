@@ -148,7 +148,7 @@ Deno.test('correct: an optimistic comp change is reverted to the stored value', 
   let t = uid()
   apply(d, [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
-    { eid: t, name: 'task', comp: { status: 'open', priority: 'P2' } },
+    { eid: t, name: 'task', comp: { priority: 'P2' } },
   ])
   // The sender optimistically moved it to wip; the server rejected the batch.
   let out = correct(d, [{ eid: t, name: 'task', comp: { status: 'wip' } }])
@@ -477,7 +477,7 @@ let contract = (
 })
 
 let contracts = [
-  contract('task', 'project', 'project', { status: 'open' }),
+  contract('task', 'project', 'project', {}),
   contract('attachment', 'blob', 'blob'),
   contract('camera', 'client', 'client', (d) => ({
     canvas: tag(d, 'canvas'),
@@ -527,14 +527,13 @@ Deno.test('create + patch + column clear', () => {
   let t = uid()
   let out = apply(db, [
     { eid: t, name: 'doc', comp: { title: 'A', body: 'b' } },
-    { eid: t, name: 'task', comp: { status: 'open' } },
+    { eid: t, name: 'task', comp: {} },
   ])
   assertEquals(comp(t, 'doc')?.title, 'A')
   assertEquals(comp(t, 'task')?.priority, 0) // schema default
   assertEquals(
     out.find((c) => c.eid == t && c.name == 'task')?.comp,
     {
-      status: 'open',
       priority: 0,
       project: null,
       assignee: null,
@@ -571,7 +570,7 @@ Deno.test('entity delete tombstones; nothing resurrects the eid', () => {
 
 Deno.test('server-owned facets: the wire cannot mint or erase them (T-15457)', () => {
   let t = uid()
-  apply(db, [{ eid: t, name: 'task', comp: { status: 'open' } }])
+  apply(db, [{ eid: t, name: 'task', comp: {} }])
   // A bare presence create is dropped, not admitted — no false fleet-health
   // error, no forged delivery receipt. The effective batch omits it too.
   for (let name of ['error', 'delivered', 'exception']) {
@@ -812,7 +811,7 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
     { eid: target, name: 'person', comp: {} },
     { eid: target, name: 'alias', comp: { slug: 'typed-target' } },
     { eid: subject, name: 'doc', comp: { title: 'Subject' } },
-    { eid: subject, name: 'task', comp: { status: 'open', priority: 0 } },
+    { eid: subject, name: 'task', comp: { priority: 0 } },
     { eid: subject, name: 'session', comp: { id: `typed-${subject}` } },
     { eid: subject, name: 'project', comp: {} },
     { eid: subject, name: 'board', comp: { query: '' } },
@@ -1257,7 +1256,7 @@ Deno.test('legacy session launch fields dual-materialize', () => {
 Deno.test('canonical session launch fields dual-materialize', () => {
   let d = fresh()
   let s = uid(), task = uid()
-  apply(d, [{ eid: task, name: 'task', comp: { status: 'open' } }])
+  apply(d, [{ eid: task, name: 'task', comp: {} }])
   let out = apply(d, [
     {
       eid: s,
@@ -1435,7 +1434,7 @@ Deno.test('spawn refuses an undecided proposal and allows an atomic decision', (
   let task = uid(), refused = uid(), accepted = uid()
   apply(d, [
     { eid: task, name: 'doc', comp: { title: 'fleet idea' } },
-    { eid: task, name: 'task', comp: { status: 'open' } },
+    { eid: task, name: 'task', comp: {} },
     { eid: task, name: 'proposed', comp: {} },
   ])
   let id = human(d, task)
@@ -1469,7 +1468,7 @@ Deno.test('a task spawn hint never becomes a session', () => {
   let task = uid()
   apply(d, [
     { eid: task, name: 'doc', comp: { title: 'hinted' } },
-    { eid: task, name: 'task', comp: { status: 'open' } },
+    { eid: task, name: 'task', comp: {} },
     {
       eid: task,
       name: 'spawn',
@@ -1537,7 +1536,7 @@ Deno.test('canonical mirrors roll back with a refused batch', () => {
         {
           eid: bad,
           name: 'task',
-          comp: { status: 'open', project: ghost },
+          comp: { project: ghost },
         },
       ]),
     Error,
@@ -1605,7 +1604,7 @@ Deno.test('a claim implies wip: open→wip, done stays, wip unchanged', () => {
   let todo = uid(), done = uid(), busy = uid()
   apply(db, [
     { eid: s, name: 'session', comp: { id: 'sess-c' } },
-    { eid: todo, name: 'task', comp: { status: 'open' } },
+    { eid: todo, name: 'task', comp: {} },
     { eid: done, name: 'task', comp: { status: 'done' } },
     { eid: busy, name: 'task', comp: { status: 'wip' } },
   ])
@@ -1722,7 +1721,7 @@ Deno.test('task project requires a project and fails atomically', () => {
         {
           eid: task,
           name: 'task',
-          comp: { status: 'open', project: bare },
+          comp: { project: bare },
         },
       ]),
     Error,
@@ -1745,7 +1744,7 @@ Deno.test('task project requires a project and fails atomically', () => {
     {
       eid: existing,
       name: 'task',
-      comp: { status: 'open', project: project },
+      comp: { project: project },
     },
   ])
   assertThrows(() =>
@@ -1763,7 +1762,7 @@ Deno.test('task project requires a project and fails atomically', () => {
       apply(db, [{
         eid: uid(),
         name: 'task',
-        comp: { status: 'open', project: ghost },
+        comp: { project: ghost },
       }]),
     Error,
     'project',
@@ -1789,14 +1788,14 @@ Deno.test('task project accepts projects created anywhere in its batch', () => {
     {
       eid: a,
       name: 'task',
-      comp: { status: 'open', project: before },
+      comp: { project: before },
     },
   ])
   apply(db, [
     {
       eid: b,
       name: 'task',
-      comp: { status: 'open', project: after },
+      comp: { project: after },
     },
     { eid: after, name: 'project', comp: {} },
   ])
@@ -1877,7 +1876,7 @@ Deno.test('a target component cannot leave typed references dangling', () => {
   apply(local, [{
     eid: task,
     name: 'task',
-    comp: { status: 'open', project: project },
+    comp: { project: project },
   }])
   assertThrows(
     () =>
@@ -2587,7 +2586,7 @@ Deno.test('fts: search finds, follows edits, forgets the dead', () => {
   let t = uid(), c = uid()
   apply(db, [
     { eid: t, name: 'doc', comp: { title: 'Xylophone repair', body: 'tune' } },
-    { eid: t, name: 'task', comp: { status: 'open' } },
+    { eid: t, name: 'task', comp: {} },
   ])
   assertEquals(search(db, 'xylophone')[0]?.eid, t)
   assertEquals(
@@ -2651,9 +2650,9 @@ Deno.test('entity delete cascades to aimed entities, detaches soft refs', () => 
     { eid: p, name: 'doc', comp: { title: 'proj' } },
     { eid: p, name: 'project', comp: {} },
     { eid: t, name: 'doc', comp: { title: 'doomed' } },
-    { eid: t, name: 'task', comp: { status: 'open', project: p } },
+    { eid: t, name: 'task', comp: { project: p } },
     { eid: t2, name: 'doc', comp: { title: 'survivor' } },
-    { eid: t2, name: 'task', comp: { status: 'open', project: p } },
+    { eid: t2, name: 'task', comp: { project: p } },
     { eid: card, name: 'card', comp: { target: t, view: 'Task' } },
     { eid: note, name: 'doc', comp: { title: '', body: 'aimed at doomed' } },
     { eid: note, name: 'comment', comp: { target: t } },
@@ -2732,11 +2731,11 @@ Deno.test('death broadcasts its soft-detaches: no ghost claims', async () => {
     { eid: p, name: 'doc', comp: { title: 'home' } },
     { eid: p, name: 'project', comp: {} },
     { eid: t2, name: 'doc', comp: { title: 'homed' } },
-    { eid: t2, name: 'task', comp: { status: 'open', project: p } },
+    { eid: t2, name: 'task', comp: { project: p } },
     { eid: who, name: 'doc', comp: { title: 'holder' } },
     { eid: who, name: 'person', comp: {} },
     { eid: t3, name: 'doc', comp: { title: 'plated' } },
-    { eid: t3, name: 'task', comp: { status: 'open', assignee: who } },
+    { eid: t3, name: 'task', comp: { assignee: who } },
   ])
   // dead session: the freed lease rides the return AND the Trace
   let tr = trace()
@@ -2770,7 +2769,7 @@ Deno.test('assignee: whose plate round-trips, a dead assignee detaches', () => {
     { eid: who, name: 'doc', comp: { title: 'Jeff' } },
     { eid: who, name: 'person', comp: {} },
     { eid: t, name: 'doc', comp: { title: 'chore' } },
-    { eid: t, name: 'task', comp: { status: 'open', assignee: who } },
+    { eid: t, name: 'task', comp: { assignee: who } },
   ])
   assertEquals(comp(t, 'task')?.assignee, who)
   // the person dies; the task stays, unassigned — soft ref, never cascade
@@ -2812,7 +2811,7 @@ Deno.test('detach: a dead task or persona lets its sessions go', () => {
   let task = uid(), muse = uid(), s = uid()
   apply(db, [
     { eid: task, name: 'doc', comp: { title: 'requested' } },
-    { eid: task, name: 'task', comp: { status: 'open' } },
+    { eid: task, name: 'task', comp: {} },
     { eid: muse, name: 'doc', comp: { title: 'muse' } },
     {
       eid: s,
@@ -3201,7 +3200,7 @@ slow('open renames every reference key, its filters, and its history', () => {
   apply(legacy, [
     { eid: project, name: 'doc', comp: { title: 'project' } },
     { eid: project, name: 'project', comp: {} },
-    { eid: task, name: 'task', comp: { status: 'open', project } },
+    { eid: task, name: 'task', comp: { project } },
     { eid: first, name: 'mail', comp: { target: task } },
     { eid: reply, name: 'mail', comp: { target: task, reply_to: first } },
     {
@@ -3423,9 +3422,9 @@ slow('open retires proposal into a stamp and rewrites stale boards', () => {
   let legacy = open(path)
   let idea = uid(), declined = uid(), plain = uid(), board = uid()
   apply(legacy, [
-    { eid: idea, name: 'task', comp: { status: 'open' } },
-    { eid: declined, name: 'task', comp: { status: 'open' } },
-    { eid: plain, name: 'task', comp: { status: 'open' } },
+    { eid: idea, name: 'task', comp: {} },
+    { eid: declined, name: 'task', comp: {} },
+    { eid: plain, name: 'task', comp: {} },
     { eid: board, name: 'board', comp: { query: '.status=open' } },
   ])
   let filed = compOf(legacy, idea, 'created')!
@@ -3527,9 +3526,9 @@ slow('open heals canonical stored values once and preserves failures', () => {
     {
       eid: task,
       name: 'task',
-      comp: { status: 'open', priority: 2, project: project },
+      comp: { priority: 2, project: project },
     },
-    { eid: bad, name: 'task', comp: { status: 'open' } },
+    { eid: bad, name: 'task', comp: {} },
     {
       eid: session,
       name: 'session',
@@ -3597,7 +3596,7 @@ slow('open heals canonical stored values once and preserves failures', () => {
         `select status, priority, ${refEid('project')} as project
          from task where ${OWNED}`,
       ).get(task),
-      { status: 'open', priority: 2, project: project },
+      { priority: 2, project: project },
     )
     second.close()
     assertEquals(Deno.readFileSync(path), before)
@@ -3624,7 +3623,7 @@ Deno.test('search: terms and filters mix in one line', () => {
     { eid: a, name: 'doc', comp: { title: 'Quokka feeding run' } },
     { eid: a, name: 'task', comp: { status: 'done' } },
     { eid: b, name: 'doc', comp: { title: 'Quokka photo shoot' } },
-    { eid: b, name: 'task', comp: { status: 'open' } },
+    { eid: b, name: 'task', comp: {} },
   ])
   let eids = (q: string) => search(db, q).map((h) => h.eid)
   assertEquals(eids('quokka').length, 2)
@@ -3663,9 +3662,9 @@ Deno.test('search: references and paths screen the hits', () => {
     { eid: other, name: 'person', comp: {} },
     { eid: other, name: 'alias', comp: { slug: 'alicej' } },
     { eid: t, name: 'doc', comp: { title: 'Wurlitzer tuning' } },
-    { eid: t, name: 'task', comp: { status: 'open', assignee: u } },
+    { eid: t, name: 'task', comp: { assignee: u } },
     { eid: t2, name: 'doc', comp: { title: 'Wurlitzer restringing' } },
-    { eid: t2, name: 'task', comp: { status: 'open' } },
+    { eid: t2, name: 'task', comp: {} },
     { eid: instrument, name: 'doc', comp: { title: 'Wurlitzer console' } },
     {
       eid: instrument,
@@ -3844,9 +3843,9 @@ Deno.test('claim leaves one durable worked edge after its lease is released', ()
   apply(db, [
     { eid: session, name: 'session', comp: { id: session } },
     { eid: one, name: 'doc', comp: { title: 'one' } },
-    { eid: one, name: 'task', comp: { status: 'open', priority: 1 } },
+    { eid: one, name: 'task', comp: { priority: 1 } },
     { eid: two, name: 'doc', comp: { title: 'two' } },
-    { eid: two, name: 'task', comp: { status: 'open', priority: 1 } },
+    { eid: two, name: 'task', comp: { priority: 1 } },
   ])
   let first = apply(db, [{ eid: one, name: 'claim', comp: { session } }])
   assertEquals(
@@ -3874,7 +3873,7 @@ Deno.test('historical worked edges materialize explicitly and idempotently', () 
   apply(db, [
     { eid: session, name: 'session', comp: { id: session } },
     { eid: task, name: 'doc', comp: { title: 'historical task' } },
-    { eid: task, name: 'task', comp: { status: 'open', priority: 1 } },
+    { eid: task, name: 'task', comp: { priority: 1 } },
   ])
   apply(db, [{ eid: task, name: 'claim', comp: { session } }])
   apply(db, [{ eid: task, name: 'claim', comp: null }])
@@ -3990,7 +3989,7 @@ Deno.test('a change and its commentary land in one atomic batch', () => {
   apply(db, [
     { eid: s, name: 'session', comp: { id: `talker-${s}` } },
     { eid: t, name: 'doc', comp: { title: 'commented' } },
-    { eid: t, name: 'task', comp: { status: 'open' } },
+    { eid: t, name: 'task', comp: {} },
   ])
   // the v1 gap, closed: status move + plain comment, same transaction
   apply(
@@ -4093,7 +4092,7 @@ Deno.test('normalized readers: removal, empty component, present-null', () => {
   // present-null: assignee written as an explicit null rides as a present null.
   apply(d, [
     { eid: a, name: 'doc', comp: { title: 'x' } },
-    { eid: a, name: 'task', comp: { status: 'open', assignee: null } },
+    { eid: a, name: 'task', comp: { assignee: null } },
     { eid: a, name: 'design', comp: {} }, // an intentionally empty component
   ])
   let first = journalOf(d, a)[0].changes
@@ -4195,9 +4194,9 @@ Deno.test('search: retired-project hits sink to the tail, flagged', () => {
     { eid: p, name: 'project', comp: {} },
     { eid: p, name: 'archived', comp: {} },
     { eid: sunk, name: 'doc', comp: { title: 'Quagga sunk chore' } },
-    { eid: sunk, name: 'task', comp: { status: 'open', project: p } },
+    { eid: sunk, name: 'task', comp: { project: p } },
     { eid: live, name: 'doc', comp: { title: 'Quagga live chore' } },
-    { eid: live, name: 'task', comp: { status: 'open' } },
+    { eid: live, name: 'task', comp: {} },
   ])
   let hits = search(db, 'quagga')
   assertEquals(hits[0].eid, live) // the only live hit leads
@@ -4300,7 +4299,7 @@ Deno.test('delta: snapshot@C0 + delta(C0) matches the live broadcast stream, cas
   let script = [
     [
       { eid: t, name: 'doc', comp: { title: 'doomed', body: 'v1' } },
-      { eid: t, name: 'task', comp: { status: 'open' } },
+      { eid: t, name: 'task', comp: {} },
     ],
     [{ eid: s, name: 'session', comp: { id: `d-${s}` } }],
     [
@@ -4310,7 +4309,7 @@ Deno.test('delta: snapshot@C0 + delta(C0) matches the live broadcast stream, cas
     [{ eid: t, name: 'claim', comp: { session: s } }],
     [
       { eid: other, name: 'doc', comp: { title: 'blocker' } },
-      { eid: other, name: 'task', comp: { status: 'open' } },
+      { eid: other, name: 'task', comp: {} },
       {
         eid: other,
         name: 'dependency',

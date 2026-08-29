@@ -117,7 +117,6 @@ let world = () => {
       eid: t1,
       name: 'task',
       comp: {
-        status: 'open',
         priority: 0,
         project: P,
         assignee: jeff,
@@ -157,7 +156,7 @@ let world = () => {
     {
       eid: t4,
       name: 'task',
-      comp: { status: 'open', priority: 3, assignee: jeff, domain: '' },
+      comp: { priority: 3, assignee: jeff, domain: '' },
     },
     // t5: cancelled/P1, project P
     { eid: t5, name: 'doc', comp: { title: 'dead end', body: '' } },

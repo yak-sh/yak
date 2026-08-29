@@ -1137,7 +1137,10 @@ export type Doc = { eid: string; title: string; body?: string }
 // Workflow state only — a task is a doc with task-management added.
 export type Task = {
   eid: string
-  status: string
+  // DERIVED (D-24102), never stored: statusOf reads it off the completed/
+  // cancelled/claim comps, and rowed() materializes it onto a read shape. Present
+  // on a row that has been through statusOf; absent on a bare write literal.
+  status?: string
   priority: number // board order within a status column; lower sorts first
   project?: string | null // the project (venture) this task belongs to
   assignee?: string | null // whose plate — durable; claim is who's on it now

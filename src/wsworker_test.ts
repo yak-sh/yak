@@ -103,7 +103,7 @@ slow(
     let task = uid()
     let committed = [
       { eid: task, name: 'doc', comp: { title: 'cast fold' } },
-      { eid: task, name: 'task', comp: { status: 'open' } },
+      { eid: task, name: 'task', comp: {} },
     ]
     let posted = await fetch(`http://${U}/apply`, {
       method: 'POST',
@@ -194,7 +194,7 @@ slow(
     sock.send(JSON.stringify({
       apply: [
         { eid, name: 'doc', comp: { title: 'delegator e2e' } },
-        { eid, name: 'task', comp: { status: 'open' } },
+        { eid, name: 'task', comp: {} },
       ],
       id: 'w1',
     }))
@@ -236,7 +236,7 @@ slow(
     a.sock.send(JSON.stringify({
       apply: [
         { eid, name: 'doc', comp: { title: 'cross-worker' } },
-        { eid, name: 'task', comp: { status: 'open' } },
+        { eid, name: 'task', comp: {} },
       ],
       id: 'x1',
     }))

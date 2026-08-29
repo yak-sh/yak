@@ -31,7 +31,7 @@ let graph = (extra: Snapshot['changes'] = []): Snapshot => ({
     }),
     ...mk(DESK, 2, ago(9999), {
       doc: { title: 'the desk' },
-      task: { status: 'open', priority: 3, project: P },
+      task: { priority: 3, project: P },
       alias: { slug: 'scribe-desk' },
     }),
     ...mk(PERSONA, 3, ago(9999), {

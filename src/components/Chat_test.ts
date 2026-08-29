@@ -72,7 +72,7 @@ Deno.test('chat references mount the entity List.Tile renderer', () => {
     target: {
       entity: { eid: 'target', num: 7 },
       doc: { eid: 'target', title: 'A target', body: '' },
-      task: { eid: 'target', status: 'open', priority: 0 },
+      task: { eid: 'target', priority: 0 },
     },
   }
   let mounted = mount(

@@ -86,7 +86,6 @@ Deno.test('a linked prop keeps a separate edit press', () => {
       entity: { eid: task, num: 1 },
       task: {
         eid: task,
-        status: 'open',
         priority: 0,
         project: null,
         assignee: person,

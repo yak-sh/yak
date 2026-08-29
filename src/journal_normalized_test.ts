@@ -75,7 +75,7 @@ Deno.test('normalized: rows reconstruct the JSON batch exactly, in order', () =>
   let t = uid()
   apply(d, [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
-    { eid: t, name: 'task', comp: { status: 'open', priority: 'P2' } },
+    { eid: t, name: 'task', comp: { priority: 'P2' } },
   ])
   // The parallel record is byte-for-byte the authoritative batch — same
   // changes, same order (doc before task before the synthesized entity birth).
@@ -98,7 +98,7 @@ Deno.test('normalized: within-batch ordinals reproduce applied order', () => {
   let t = uid()
   apply(d, [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
-    { eid: t, name: 'task', comp: { status: 'open', priority: 'P2' } },
+    { eid: t, name: 'task', comp: { priority: 'P2' } },
   ])
   let batch = jsonBatch(d)
   let tx = (d.prepare('select max(id) as id from journal_tx').get() as {
@@ -116,7 +116,7 @@ Deno.test('normalized: a present null field is distinct from a tombstone', () =>
   let d = fresh()
   let t = uid()
   apply(d, [{ eid: t, name: 'doc', comp: { title: 'a', body: '' } }])
-  apply(d, [{ eid: t, name: 'task', comp: { status: 'open', priority: 'P2' } }])
+  apply(d, [{ eid: t, name: 'task', comp: { priority: 'P2' } }])
   // Clear a nullable column: the after-image is a PRESENT null, not a tombstone.
   apply(d, [{ eid: t, name: 'task', comp: { assignee: null } }])
   let field = fieldsAt(d, 0).find((f) => f.field == 'assignee')!
@@ -152,7 +152,7 @@ Deno.test('normalized: removing a component tombstones its then-present fields',
   let t = uid()
   apply(d, [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
-    { eid: t, name: 'task', comp: { status: 'open', priority: 'P2' } },
+    { eid: t, name: 'task', comp: { priority: 'P2' } },
   ])
   // Remove the whole task component.
   apply(d, [{ eid: t, name: 'task', comp: null }])
@@ -180,7 +180,7 @@ Deno.test('normalized: create-then-remove in one batch tombstones the fields', (
   // same batch (uncommitted, same connection) — else it tombstones nothing.
   apply(d, [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
-    { eid: t, name: 'task', comp: { status: 'open', priority: 'P2' } },
+    { eid: t, name: 'task', comp: { priority: 'P2' } },
     { eid: t, name: 'task', comp: null },
   ])
   let tx = (d.prepare('select max(id) as id from journal_tx').get() as {

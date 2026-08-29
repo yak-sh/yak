@@ -52,7 +52,7 @@ let task = (title: string) => {
   let e = uid()
   apply(db, [
     { eid: e, name: 'doc', comp: { title, body: '' } },
-    { eid: e, name: 'task', comp: { status: 'open' } },
+    { eid: e, name: 'task', comp: {} },
   ])
   let { num } = db.prepare('select num from entity where eid = ?').get(e) as {
     num: number

@@ -59,7 +59,7 @@ let taskIn = (
   let e = uid()
   apply(d, [
     { eid: e, name: 'doc', comp: { title, body: '' } },
-    { eid: e, name: 'task', comp: { status: 'open', project } },
+    { eid: e, name: 'task', comp: { project } },
   ])
   put(d, e, title, v)
   return e

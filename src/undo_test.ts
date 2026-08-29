@@ -43,7 +43,7 @@ Deno.test('the mutation capability applies batches and guarded undo', () => {
   let db = freshDb(), t = uid()
   let created = mutate(db, [
     { eid: t, name: 'doc', comp: { title: 'x', body: '' } },
-    { eid: t, name: 'task', comp: { status: 'open' } },
+    { eid: t, name: 'task', comp: {} },
   ])
   assertEquals(Array.isArray(created), true)
   mutate(db, [{ eid: t, name: 'task', comp: { status: 'done' } }])
@@ -58,14 +58,14 @@ Deno.test('the mutation capability normalizes nested literals atomically', () =>
       key: 'goal',
       comps: {
         doc: { title: 'goal' },
-        task: { status: 'open' },
+        task: {},
       },
       deps: {
         requires: {
           key: 'step',
           comps: {
             doc: { title: 'step' },
-            task: { status: 'open' },
+            task: {},
           },
         },
       },
@@ -136,7 +136,7 @@ Deno.test('named mutations reject ambiguous targets', () => {
 Deno.test('undo of a component create deletes just that component', () => {
   let db = freshDb(), t = uid()
   apply(db, [{ eid: t, name: 'doc', comp: { title: 'x', body: '' } }])
-  apply(db, [{ eid: t, name: 'task', comp: { status: 'open' } }])
+  apply(db, [{ eid: t, name: 'task', comp: {} }])
   assertEquals(!!compOf(db, t, 'task'), true)
   undoLast(db, t) // last batch created the task component
   assertEquals(compOf(db, t, 'task'), undefined)

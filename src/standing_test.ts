@@ -229,7 +229,7 @@ Deno.test('a live native session keeps its claim across the boot reap', () => {
   let task = uid()
   apply(db, [
     { eid: task, name: 'doc', comp: { title: 'held', body: '' } },
-    { eid: task, name: 'task', comp: { status: 'open' } },
+    { eid: task, name: 'task', comp: {} },
     { eid: task, name: 'claim', comp: { session: eid } },
   ])
 
@@ -254,7 +254,7 @@ Deno.test('a failed native turn settles, releases, and can reopen', () => {
   let task = uid()
   apply(db, [
     { eid: task, name: 'doc', comp: { title: 'held', body: '' } },
-    { eid: task, name: 'task', comp: { status: 'open' } },
+    { eid: task, name: 'task', comp: {} },
     { eid: task, name: 'claim', comp: { session: eid } },
   ])
 

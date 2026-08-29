@@ -35,11 +35,11 @@ Deno.test('memoryResolver resolves and subscribes an {eid}-ref query, narrowly',
     person: { entity: { num: 1 }, person: {} },
     t1: {
       entity: { num: 2 },
-      task: { status: 'open', priority: 1, assignee: 'person' },
+      task: { priority: 1, assignee: 'person' },
     },
     t2: {
       entity: { num: 3 },
-      task: { status: 'open', priority: 1, assignee: 'other' },
+      task: { priority: 1, assignee: 'other' },
     },
   }
   let r = memoryResolver(storeOver(graph))
@@ -56,7 +56,7 @@ Deno.test('memoryResolver resolves and subscribes an {eid}-ref query, narrowly',
   })
   try {
     // Reassign t2 to person and tell the resolver which row moved — it joins.
-    graph.t2!.task = { status: 'open', priority: 1, assignee: 'person' }
+    graph.t2!.task = { priority: 1, assignee: 'person' }
     r.refresh(new Set(['t2']))
     assertEquals(ids.value.toSorted(), ['t1', 't2'])
     assertEquals(runs, 2)
@@ -65,7 +65,7 @@ Deno.test('memoryResolver resolves and subscribes an {eid}-ref query, narrowly',
     r.refresh(new Set(['person']))
     assertEquals(runs, 2)
     // Reassign t1 away — it leaves.
-    graph.t1!.task = { status: 'open', priority: 1, assignee: 'other' }
+    graph.t1!.task = { priority: 1, assignee: 'other' }
     r.refresh(new Set(['t1']))
     assertEquals(ids.value, ['t2'])
     assertEquals(runs, 3)
@@ -80,12 +80,12 @@ Deno.test('memoryResolver folds a multi-hop traversal (T-17123)', () => {
     c2: { entity: { num: 2 }, comment: { target: 't2' } },
     t1: {
       entity: { num: 3 },
-      task: { status: 'open', priority: 1 },
+      task: { priority: 1 },
       doc: { title: 'foo' },
     },
     t2: {
       entity: { num: 4 },
-      task: { status: 'open', priority: 1 },
+      task: { priority: 1 },
       doc: { title: 'bar' },
     },
   }
@@ -150,7 +150,7 @@ Deno.test('a second Resolver implementation satisfies the same interface', () =>
     subscribe: () => signal(['a', 'b']),
   }
   let mem = memoryResolver(storeOver({
-    a: { entity: { num: 1 }, task: { status: 'open', priority: 1 } },
+    a: { entity: { num: 1 }, task: { priority: 1 } },
   }))
   // One consumer, typed to the seam, drives either backing.
   let count = (res: Resolver, preds: Pred[]) => res.resolve(preds).length

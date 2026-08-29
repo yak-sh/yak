@@ -92,7 +92,7 @@ let populate = (db: DatabaseSync) => {
   let task = uid(), note = uid(), card = uid()
   apply(db, [
     { eid: task, name: 'doc', comp: { title: 'parity subject', body: 'body' } },
-    { eid: task, name: 'task', comp: { status: 'open', priority: 1 } },
+    { eid: task, name: 'task', comp: { priority: 1 } },
     { eid: note, name: 'doc', comp: { title: '', body: 'a comment' } },
     { eid: note, name: 'comment', comp: { target: task } }, // {eid} reference
     { eid: card, name: 'card', comp: { target: task, view: 'Show' } },
@@ -147,7 +147,7 @@ slow(
     let t = uid()
     apply(db, [
       { eid: t, name: 'doc', comp: { title: 'doomed' } },
-      { eid: t, name: 'task', comp: { status: 'open' } },
+      { eid: t, name: 'task', comp: {} },
     ])
     let deadNum = numOf(snapshot(db), t)
     apply(db, [{ eid: t, name: 'entity', comp: null }])

@@ -69,7 +69,7 @@ let all = rows({
     { eid: P, name: 'alias', comp: { slug: 'home' } },
     { eid: T, name: 'entity', comp: { eid: T, num: 7595 } },
     { eid: T, name: 'doc', comp: { title: 'Task', body: '' } },
-    { eid: T, name: 'task', comp: { status: 'open' } },
+    { eid: T, name: 'task', comp: {} },
   ],
 })
 
@@ -115,7 +115,7 @@ Deno.test('command: open returns the public entity URL', async () => {
       changes: [
         { eid: T, name: 'entity', comp: { eid: T, num: 7595 } },
         { eid: T, name: 'doc', comp: { title: 'Task', body: '' } },
-        { eid: T, name: 'task', comp: { status: 'open' } },
+        { eid: T, name: 'task', comp: {} },
       ],
       deps: [],
     })
@@ -136,7 +136,7 @@ Deno.test('command: setting a wake returns every pending wake for its session', 
   apply(db, [
     { eid: session, name: 'session', comp: { id: 'wake-reader' } },
     { eid: target, name: 'doc', comp: { title: 'Return here' } },
-    { eid: target, name: 'task', comp: { status: 'open' } },
+    { eid: target, name: 'task', comp: {} },
     {
       eid: existing,
       name: 'wake',
@@ -274,7 +274,7 @@ Deno.test('task_spawn refuses an undecided proposal without minting a session', 
   let task = crypto.randomUUID()
   apply(db, [
     { eid: task, name: 'doc', comp: { title: 'fleet idea' } },
-    { eid: task, name: 'task', comp: { status: 'open' } },
+    { eid: task, name: 'task', comp: {} },
     { eid: task, name: 'proposed', comp: {} },
   ])
   await protocol(io, async (client) => {
@@ -419,7 +419,7 @@ slow(
         name: 'doc',
         comp: { title: 'stdio local proof', body: 'direct sqlite history' },
       },
-      { eid, name: 'task', comp: { status: 'open' } },
+      { eid, name: 'task', comp: {} },
     ])
     let expected = await localQuery(writer)(['.title~=stdio local'])
     let id = idOf(expected[0])
@@ -651,7 +651,7 @@ Deno.test('MCP query and show expose provenance context in via', async () => {
     },
     { eid: task, name: 'entity', comp: { eid: task, num: 54 } },
     { eid: task, name: 'doc', comp: { title: 'Candidate idea' } },
-    { eid: task, name: 'task', comp: { status: 'open' } },
+    { eid: task, name: 'task', comp: {} },
     {
       eid: task,
       name: 'created',
@@ -957,7 +957,7 @@ Deno.test('MCP refusals are error results', async () => {
       changes: [
         { eid: target, name: 'entity', comp: { eid: target, num: 1 } },
         { eid: target, name: 'doc', comp: { title: 'Target', body: '' } },
-        { eid: target, name: 'task', comp: { status: 'open' } },
+        { eid: target, name: 'task', comp: {} },
       ],
       deps: [],
     })
@@ -1343,7 +1343,7 @@ Deno.test("undo tool reverses an entity's latest batch by human id", async () =>
   try {
     apply(g.db, [
       { eid, name: 'doc', comp: { title: 'undo me', body: '' } },
-      { eid, name: 'task', comp: { status: 'open' } },
+      { eid, name: 'task', comp: {} },
     ])
     apply(g.db, [{ eid, name: 'task', comp: { status: 'done' } }])
     let num =
@@ -1381,7 +1381,7 @@ Deno.test('MCP lists hide quarantine and task_show requires an opt-in', async ()
         name: 'doc',
         comp: { title: 'unsafe title', body: 'unsafe body' },
       },
-      { eid, name: 'task', comp: { status: 'open' } },
+      { eid, name: 'task', comp: {} },
       { eid, name: 'quarantined', comp: {} },
     ])
     await protocol(g.io, async (client) => {
@@ -1452,14 +1452,14 @@ Deno.test('graph_apply accepts nested literals and reports aliases', async () =>
             key: 'goal',
             comps: {
               doc: { title: 'nested goal' },
-              task: { status: 'open' },
+              task: {},
             },
             deps: {
               requires: {
                 key: 'step',
                 comps: {
                   doc: { title: 'nested step' },
-                  task: { status: 'open' },
+                  task: {},
                 },
               },
             },
@@ -1676,7 +1676,7 @@ Deno.test('$edit through graph_apply: surgical replace, refusals, replace_all', 
       apply(g.db, [
         { eid: E, name: 'entity', comp: { eid: E, num: 42 } },
         { eid: E, name: 'doc', comp: { title: 'Doc', body: 'fix teh plan' } },
-        { eid: E, name: 'task', comp: { status: 'open' } },
+        { eid: E, name: 'task', comp: {} },
       ])
       let edit = (edt: Record<string, unknown>) =>
         client.callTool({
@@ -1729,7 +1729,7 @@ Deno.test('graph_patch: multi-prop V4A across two entities, resolved by id', asy
           name: 'doc',
           comp: { title: 'A', body: 'the old line\nkeep' },
         },
-        { eid: A, name: 'task', comp: { status: 'open' } },
+        { eid: A, name: 'task', comp: {} },
         { eid: B, name: 'entity', comp: { eid: B, num: 72 } },
         { eid: B, name: 'doc', comp: { title: 'B', body: 'B' } },
         { eid: B, name: 'project', comp: { color: 'red' } },

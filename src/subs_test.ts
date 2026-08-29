@@ -69,7 +69,7 @@ Deno.test('the bodyless projection drops declared bodies, keeps the rest', () =>
     bodyless([
       { eid: 'e1', name: 'entity', comp: { eid: 'e1', num: 7 } },
       { eid: 'e1', name: 'doc', comp: { title: 'hi', body: 'long' } },
-      { eid: 'e1', name: 'task', comp: { status: 'open' } },
+      { eid: 'e1', name: 'task', comp: {} },
       { eid: 'e1', name: 'session', comp: { status: 'done', final_text: 'x' } },
       { eid: 'e1', name: 'doc', comp: { body: 'the whole patch' } },
       { eid: 'e1', name: 'entity', comp: null },
@@ -77,7 +77,7 @@ Deno.test('the bodyless projection drops declared bodies, keeps the rest', () =>
     [
       { eid: 'e1', name: 'entity', comp: { eid: 'e1', num: 7 } },
       { eid: 'e1', name: 'doc', comp: { title: 'hi' } },
-      { eid: 'e1', name: 'task', comp: { status: 'open' } },
+      { eid: 'e1', name: 'task', comp: {} },
       { eid: 'e1', name: 'session', comp: { status: 'done' } },
       // a patch that was only a body says nothing at all
       { eid: 'e1', name: 'entity', comp: null },
@@ -126,10 +126,10 @@ Deno.test('agreement diff names both sides once and in order', () => {
 // supported operator moves one member out, then back in.
 Deno.test('own-component operators maintain subscription membership', () => {
   let cases: [string, Record<string, unknown>, Record<string, unknown>][] = [
-    ['.status=open', { status: 'open' }, { status: 'done' }],
+    ['.status=open', {}, { status: 'done' }],
     ['.domain=Ops,Eng', { domain: 'Ops' }, { domain: 'Web' }],
     ['.priority=1..3', { priority: 3 }, { priority: 4 }],
-    ['.status!=done', { status: 'open' }, { status: 'done' }],
+    ['.status!=done', {}, { status: 'done' }],
     ['.priority>=2', { priority: 2 }, { priority: 1 }],
     ['.title~=flux', { title: 'Flux gate' }, { title: 'Warp gate' }],
   ]

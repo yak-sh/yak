@@ -148,7 +148,7 @@ slow('a count sub answers one number and maintains it', alone, async () => {
   let p = uid(), t1 = uid(), t2 = uid()
   let task = (eid: string) => [
     { eid, name: 'doc', comp: { title: 'c', body: '' } },
-    { eid, name: 'task', comp: { status: 'open', project: p } },
+    { eid, name: 'task', comp: { project: p } },
   ]
   assertEquals(await post([{ eid: p, name: 'project', comp: {} }]), 200)
   assertEquals(await post(task(t1)), 200)

@@ -52,7 +52,6 @@ Deno.test('the index is a typed grid and grid mode is bare tiles', async () => {
       doc: { eid: task, title: 'Ship it', body: '' },
       task: {
         eid: task,
-        status: 'open',
         priority: 1,
         project: project,
         assignee: null,
@@ -111,7 +110,7 @@ Deno.test('facet pages list their carriers without widening task', async () => {
     [task]: {
       entity: { eid: task, num: 20 },
       doc: { eid: task, title: 'Ship it', body: '' },
-      task: { eid: task, status: 'open', priority: 1, project },
+      task: { eid: task, priority: 1, project },
     },
   }
   let root = document.querySelector('main')!
@@ -171,12 +170,12 @@ Deno.test('an admin query deep link filters the index', async () => {
     [mine]: {
       entity: { eid: mine, num: 21 },
       doc: { eid: mine, title: 'Mine', body: '' },
-      task: { eid: mine, status: 'open', priority: 1, project: home },
+      task: { eid: mine, priority: 1, project: home },
     },
     [other]: {
       entity: { eid: other, num: 22 },
       doc: { eid: other, title: 'Other', body: '' },
-      task: { eid: other, status: 'open', priority: 1, project: away },
+      task: { eid: other, priority: 1, project: away },
     },
   }
   route.value = '/admin/task?q=.task.project%3DP-19'

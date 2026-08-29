@@ -95,7 +95,7 @@ Deno.test('the keyword-named apply facet round trips as one graph batch', () => 
   let eid = uuid()
   let changes = JSON.stringify([
     { eid, name: 'doc', comp: { title: 'x' } },
-    { eid, name: 'task', comp: { status: 'open' } },
+    { eid, name: 'task', comp: {} },
   ])
   append(db, sid, [{ apply: { changes } }])
   assertEquals(readEntries(db, sid)[0].comps.apply.changes, changes)

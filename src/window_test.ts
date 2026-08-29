@@ -36,7 +36,7 @@ for (let i = 0; i < 30; i++) {
   ids.push(eid)
   apply(db, [
     { eid, name: 'doc', comp: { title: `task ${i}`, body: '' } },
-    { eid, name: 'task', comp: { status: 'open', priority: 1, domain: 'win' } },
+    { eid, name: 'task', comp: { priority: 1, domain: 'win' } },
   ])
 }
 // The stamps are server-owned, so they are aged by hand here — stored bytes are
@@ -116,7 +116,7 @@ Deno.test('window: a bound selects nothing and writes nothing', () => {
   // through), and a board DROP must never try to write `.limit` onto the task
   // it adopted (adopt reads scalar equalities, and a bound is not one).
   let preds = parseQuery(`${MINE}&.limit=5`)
-  let row = { task: { domain: 'win', status: 'open' } }
+  let row = { task: { domain: 'win' } }
   assertEquals(matchQuery(row, preds), true)
   assertEquals(adopt(preds, 'task'), { domain: 'win' })
 })
@@ -214,7 +214,7 @@ Deno.test('window: a birth inside the bound pushes the oldest member out', () =>
     {
       eid: born,
       name: 'task',
-      comp: { status: 'open', priority: 1, domain: 'win' },
+      comp: { priority: 1, domain: 'win' },
     },
   ]
   apply(db, batch)

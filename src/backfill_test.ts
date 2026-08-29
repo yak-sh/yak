@@ -22,7 +22,7 @@ Deno.test('readBackfill scans SQLite while landBackfill owns no write path', asy
   apply(db, [
     { eid: session, name: 'session', comp: { id: `backfill-${uid()}` } },
     { eid: task, name: 'doc', comp: { title: 'historical task' } },
-    { eid: task, name: 'task', comp: { status: 'open', priority: 1 } },
+    { eid: task, name: 'task', comp: { priority: 1 } },
   ])
   apply(db, [{ eid: task, name: 'claim', comp: { session } }])
   apply(db, [{ eid: task, name: 'claim', comp: null }])

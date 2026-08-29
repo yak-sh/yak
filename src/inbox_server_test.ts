@@ -92,7 +92,7 @@ let world = () => {
     }),
     ...ent(W, 5, {
       doc: { title: 'Watched', body: '' },
-      task: { status: 'open' },
+      task: {},
       created: { at: '2026-01-01', by: V },
     }),
     ...ent(Cv, 10, {

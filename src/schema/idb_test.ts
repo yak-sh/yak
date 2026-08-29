@@ -52,7 +52,7 @@ let graph = (): Graph => ({
   p2: { entity: { num: 3 }, person: {}, doc: { title: 'bob' } },
   t1: {
     entity: { num: 4 },
-    task: { status: 'open', priority: 1, project: 'proj', assignee: 'p1' },
+    task: { priority: 1, project: 'proj', assignee: 'p1' },
     doc: { title: 'foo task' },
     created: { at: '2026-08-05T00:00:00.000Z' },
   },
@@ -147,7 +147,7 @@ Deno.test('putBags writes a batch, deleting where a component is absent (slice e
       ['t3', { entity: { num: 6 }, doc: { title: 'baz' } }],
       ['t1', {
         entity: { num: 4 },
-        task: { status: 'open', priority: 1, project: 'proj', assignee: 'p2' },
+        task: { priority: 1, project: 'proj', assignee: 'p2' },
         doc: { title: 'foo task' },
       }],
     ])
@@ -271,7 +271,7 @@ slow('traversal resolves within the frame budget', async () => {
     let assignee = i % 2 ? 'p1' : 'p2'
     g[`k${i}`] = {
       entity: { num: 100 + i },
-      task: { status: 'open', priority: 1, assignee },
+      task: { priority: 1, assignee },
       doc: { title: `task ${i}` },
     }
     g[`m${i}`] = { entity: { num: 400 + i }, comment: { target: `k${i}` } }

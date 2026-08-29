@@ -63,7 +63,7 @@ let seed = () => {
 
   let noise = e() // unrelated row — present in snapshot, absent from the walk
   doc(noise, 'A task')
-  apply(db, [{ eid: noise, name: 'task', comp: { status: 'open' } }])
+  apply(db, [{ eid: noise, name: 'task', comp: {} }])
 
   return { db, proj, common, spec, m1, m3 }
 }

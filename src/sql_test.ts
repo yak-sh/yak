@@ -107,7 +107,7 @@ put('w5', { doc: { title: 'no stamps at all' } })
 
 put('e1', {
   doc: { title: 'alpha widget', body: 'the first one' },
-  task: { status: 'open', priority: 1, domain: 'Eng', project: 'p1' },
+  task: { priority: 1, domain: 'Eng', project: 'p1' },
   proposed: { at: '2026-08-01T00:00:00.000Z', by: null, via: null },
 })
 put('e2', {
@@ -121,7 +121,7 @@ put('e3', {
 put('e4', { doc: { title: 'delta', body: '' } }) // no task component at all
 put('e5', {
   doc: { title: '10', body: 'digits in a text column' },
-  task: { status: 'open', priority: 10, domain: '9' },
+  task: { priority: 10, domain: '9' },
 })
 // The trigram index narrows with the needle's wildcards left in, so these two
 // are the rows a missing re-test would hand back: each holds what `100%` and
@@ -136,7 +136,7 @@ put('e8', { proposed: { at: '', by: null, via: null } })
 // is a task, not a project. It is the case presence (`.project!`) cannot tell
 // from a bare project and kind= must — the row kind=task keeps and kind=project
 // drops.
-put('pt', { task: { status: 'open', priority: 1, domain: '' }, project: {} })
+put('pt', { task: { priority: 1, domain: '' }, project: {} })
 
 // The lazy entry partition lives in the entity table like everything else, so
 // the index and the matcher must agree over its facets too — the exactness the

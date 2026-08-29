@@ -35,7 +35,7 @@ Deno.test('release names the session by its chip id', () => {
   cache.value = {
     task: {
       entity: { eid: 'task', num: 1 },
-      task: { eid: 'task', status: 'open', priority: 0 },
+      task: { eid: 'task', priority: 0 },
       claim: { eid: 'task', session: 'session' },
     },
     session: {
@@ -55,7 +55,7 @@ Deno.test('quarantine is hidden until revealed and can be cleared', () => {
     task: {
       entity: { eid: 'task', num: 1 },
       doc: { eid: 'task', title: 'unsafe', body: 'hidden' },
-      task: { eid: 'task', status: 'open', priority: 0 },
+      task: { eid: 'task', priority: 0 },
       quarantined: { eid: 'task', at: 'now' },
     },
   }
@@ -111,7 +111,7 @@ Deno.test('a renamed view still resolves through the renames table', () => {
     task: {
       entity: { eid: 'task', num: 1 },
       doc: { eid: 'task', title: 'T', body: '' },
-      task: { eid: 'task', status: 'open', priority: 0 },
+      task: { eid: 'task', priority: 0 },
     },
   }
   let e = ent('task')

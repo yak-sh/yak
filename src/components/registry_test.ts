@@ -108,7 +108,7 @@ Deno.test('actions union across matching contributors, in order', () => {
     { match: () => true, acts: () => [{ label: 'delete', run: () => {} }] },
   ])
   assertEquals(
-    actionsFor(ent({ task: { status: 'open' } })).map((a) => a.label),
+    actionsFor(ent({ task: {} })).map((a) => a.label),
     ['set-open', 'delete'], // both contributors, registration order
   )
   assertEquals(actionsFor(ent({})).map((a) => a.label), ['delete'])

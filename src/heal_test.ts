@@ -219,7 +219,7 @@ let makeBug = (key: string, project?: string) => {
     {
       eid,
       name: 'task',
-      comp: { status: 'open', priority: 2, project: project ?? null },
+      comp: { priority: 2, project: project ?? null },
     },
     { eid, name: 'bug', comp: { fault: key, hits: 1, last: now() } },
   ])

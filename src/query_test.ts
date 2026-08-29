@@ -50,7 +50,6 @@ let row = (
   updated: { at: '2026-07-16' },
   doc: { title: 'Fix the flux capacitor', body: '' },
   task: {
-    status: 'open',
     priority: 1,
     project: 'p1',
     domain: 'Ops',
@@ -188,7 +187,7 @@ for (let [name, q, task, want] of cases) {
 
 Deno.test('query: comparisons never match an absent prop', () => {
   assertEquals(
-    matchQuery({ task: { status: 'open' } }, parseQuery('.priority<=1')),
+    matchQuery({ task: {} }, parseQuery('.priority<=1')),
     false,
   )
 })
@@ -292,16 +291,16 @@ Deno.test('query: adopt pins down scalar equalities only', () => {
   // assignee rides the same generality: a board of Jeff's plate adopts
   assertEquals(
     adopt(parseQuery('.assignee=u1&.status=open'), 'task'),
-    { assignee: 'u1', status: 'open' },
+    { assignee: 'u1' },
   )
 })
 
 Deno.test('query: assignee routes bare and filters', () => {
   let p = pred('.assignee=u1')!
   assertEquals([p.comp, p.prop, p.op], ['task', 'assignee', ''])
-  assert(matchQuery(row({ status: 'open', assignee: 'u1' }), [p]))
-  assert(!matchQuery(row({ status: 'open', assignee: 'u2' }), [p]))
-  assert(!matchQuery(row({ status: 'open' }), [p]))
+  assert(matchQuery(row({ assignee: 'u1' }), [p]))
+  assert(!matchQuery(row({ assignee: 'u2' }), [p]))
+  assert(!matchQuery(row({}), [p]))
 })
 
 // ---- reverse hops ----
@@ -312,7 +311,7 @@ let revGraph = () =>
   ({
     T1: {
       entity: { eid: 'T1', num: 1 },
-      task: { eid: 'T1', status: 'open' },
+      task: { eid: 'T1' },
       doc: { eid: 'T1', title: 'parent' },
     },
     P1: {
@@ -624,7 +623,7 @@ Deno.test('the EDGES rider is a delivery, never a filter', () => {
   // The other preds still decide membership; the rider passes every row it is
   // handed, so adding `.edges!` to a live board cannot move what the board holds.
   let ps = parseQuery('.task.status=open&.edges.peers=task.status')
-  assert(matchQuery({ task: { status: 'open' } }, ps))
+  assert(matchQuery({ task: {} }, ps))
   assert(!matchQuery({ task: { status: 'done' } }, ps))
   // and a rider ALONE has said nothing about membership
   assert(matchQuery({ doc: { title: 'anything' } }, parseQuery('.edges!')))
@@ -824,7 +823,7 @@ let when = (updatedAt: string) => ({
   entity: { num: 7 },
   created: { at: '2026-07-01T00:00:00Z' },
   updated: { at: updatedAt },
-  task: { status: 'open' },
+  task: {},
 })
 // matchQuery evaluates phrases on the REAL clock, so the fixtures do too.
 let d = new Date()
@@ -845,7 +844,7 @@ Deno.test('time: >= takes the start, <= the end', () => {
   assertEquals(matchQuery(when(old), parseQuery('.updated.at<today')), true)
 })
 Deno.test('time: a string row named today stays a string', () => {
-  let c = { task: { status: 'open', domain: 'today' } }
+  let c = { task: { domain: 'today' } }
   assertEquals(matchQuery(c, parseQuery('.domain=today')), true)
 })
 
@@ -976,7 +975,7 @@ Deno.test('.order=hot is a ranking, not a filter', () => {
   let ps = parseQuery('.order=hot&.status=open')
   assertEquals(orderOf(ps), 'hot')
   assertEquals(matchQuery(row({}), ps), true) // never screens
-  assertEquals(adopt(ps, 'task'), { status: 'open' }) // never adopts
+  assertEquals(adopt(ps, 'task'), {}) // never adopts
   assertEquals(orderOf(parseQuery('.status=open')), undefined)
 })
 
@@ -985,7 +984,7 @@ Deno.test('.near supplies similarity rank without becoming membership', () => {
   assertEquals(nearOf(ps), 'T-3')
   assertEquals(orderOf(ps), 'similar')
   assertEquals(matchQuery(row({}), ps), true)
-  assertEquals(adopt(ps, 'task'), { status: 'open' })
+  assertEquals(adopt(ps, 'task'), {})
 })
 
 Deno.test('bare text uses FTS token and explicit prefix membership', () => {
@@ -1193,7 +1192,7 @@ Deno.test('paths: a chain derefs each reference in turn (two hops)', () => {
   // spelling is how a chain derefs it — the escape hatch for any ref whose
   // name collides with a component's.
   let world: Record<string, Record<string, Record<string, unknown>>> = {
-    task1: { doc: { title: 't' }, task: { status: 'open', project: 'proj1' } },
+    task1: { doc: { title: 't' }, task: { project: 'proj1' } },
     proj1: { doc: { title: 'Task Graph' }, project: {} },
     proj2: { doc: { title: 'Other' }, project: {} },
   }

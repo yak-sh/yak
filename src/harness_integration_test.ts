@@ -115,7 +115,7 @@ slow(
       }, {
         eid: other,
         name: 'task',
-        comp: { status: 'open' },
+        comp: {},
       }, {
         eid: untouched,
         name: 'doc',
@@ -402,7 +402,7 @@ slow(
       let ok = await tasks.call('graph_apply', {
         changes: [
           { eid, name: 'doc', comp: { title: 'batched' } },
-          { eid, name: 'task', comp: { status: 'open' } },
+          { eid, name: 'task', comp: {} },
         ],
       })
       assertEquals(ok.failed, false)
@@ -415,14 +415,14 @@ slow(
           key: 'goal',
           comps: {
             doc: { title: 'nested' },
-            task: { status: 'open' },
+            task: {},
           },
           deps: {
             requires: {
               key: 'step',
               comps: {
                 doc: { title: 'nested step' },
-                task: { status: 'open' },
+                task: {},
               },
             },
           },

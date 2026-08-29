@@ -104,7 +104,7 @@ Deno.test('$edit refuses: non-unique, unchanged, and non-text', () => {
   )
   // And $edit on a non-text column (an enum) is refused outright.
   let T = uid()
-  apply(db, [{ eid: T, name: 'task', comp: { status: 'open' } }])
+  apply(db, [{ eid: T, name: 'task', comp: {} }])
   assertThrows(
     () =>
       apply(db, [{

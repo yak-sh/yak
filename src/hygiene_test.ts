@@ -147,7 +147,7 @@ slow(
 
     let eid = first.verified[0]
     let row = db.prepare(
-      `select t.status, f.hits,
+      `select f.hits,
             exists(select 1 from proposed p where p.entity = t.entity) as proposed,
             exists(select 1 from dependency d
               where d.parent = t.entity and d.type = 'about'
@@ -155,12 +155,11 @@ slow(
        from task t join finding f on f.entity = t.entity
       where t.entity = (select id from entity where eid = ?)`,
     ).get(m, eid) as {
-      status: string
       hits: number
       proposed: number
       aimed: number
     }
-    assertEquals(row, { status: 'open', hits: 1, proposed: 1, aimed: 1 })
+    assertEquals(row, { hits: 1, proposed: 1, aimed: 1 })
     let source = db.prepare(
       `select doc.body,
             exists(select 1 from archived a where a.entity = doc.entity) as archived,

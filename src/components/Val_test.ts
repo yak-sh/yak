@@ -13,7 +13,7 @@ Deno.test('Val dispatches by shape', () => {
     abc: {
       entity: { eid: 'abc', num: 5 },
       doc: { eid: 'abc', title: 'Hello', body: '' },
-      task: { eid: 'abc', status: 'open', priority: 0 },
+      task: { eid: 'abc', priority: 0 },
     },
   }
   // a Date wears the time face

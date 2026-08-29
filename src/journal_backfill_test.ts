@@ -77,7 +77,7 @@ Deno.test('backfill: normalized rows reconstruct each JSON batch, in order', () 
   let t = uid()
   let b1: Change[] = [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
-    { eid: t, name: 'task', comp: { status: 'open', priority: 'P2' } },
+    { eid: t, name: 'task', comp: { priority: 'P2' } },
   ]
   let b2: Change[] = [{ eid: t, name: 'task', comp: { status: 'wip' } }]
   let r1 = legacy(d, b1)
@@ -115,7 +115,7 @@ Deno.test('backfill: within-batch ordinals are dense and match the JSON batch', 
   let t = uid()
   let b: Change[] = [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
-    { eid: t, name: 'task', comp: { status: 'open', priority: 'P2' } },
+    { eid: t, name: 'task', comp: { priority: 'P2' } },
     { eid: t, name: 'design', comp: {} },
   ]
   let r = legacy(d, b)
@@ -132,7 +132,7 @@ Deno.test('backfill: a historical removal tombstones the then-present fields', (
   let t = uid()
   legacy(d, [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
-    { eid: t, name: 'task', comp: { status: 'open', priority: 'P2' } },
+    { eid: t, name: 'task', comp: { priority: 'P2' } },
   ])
   let rem = legacy(d, [{ eid: t, name: 'task', comp: null }])
   backfillJournal(d)
@@ -158,7 +158,7 @@ Deno.test('backfill: a present null stays distinct from a tombstone', () => {
   legacy(d, [{
     eid: t,
     name: 'task',
-    comp: { status: 'open', priority: 'P2' },
+    comp: { priority: 'P2' },
   }])
   let r = legacy(d, [{ eid: t, name: 'task', comp: { assignee: null } }])
   backfillJournal(d)
@@ -215,7 +215,7 @@ Deno.test('backfill: reset+rebuild reproduces the live dual-write exactly', () =
   // apply() dual-writes the normalized rows; capture the JSON batch it logged.
   apply(d, [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
-    { eid: t, name: 'task', comp: { status: 'open', priority: 'P2' } },
+    { eid: t, name: 'task', comp: { priority: 'P2' } },
   ])
   let row = d.prepare(
     'select rowid as id, batch from journal order by rowid desc limit 1',

@@ -84,7 +84,7 @@ Deno.test('anchor picks the reverse-index set for an eid-ref equality', () => {
 Deno.test('anchor falls back to component presence, and to nothing', () => {
   let ix = emptyIndex()
   indexAll(ix, {
-    t1: { task: { status: 'open' } },
+    t1: { task: {} },
     t2: { task: { status: 'wip' } },
     d1: { doc: { title: 'x' } },
   }, [])
@@ -119,8 +119,8 @@ Deno.test('anchor narrows a multi-hop path to its NEAR component', () => {
   indexAll(ix, {
     c1: { comment: { target: 't1' } },
     c2: { comment: { target: 't2' } },
-    t1: { task: { status: 'open' }, doc: { title: 'foo' } },
-    t2: { task: { status: 'open' }, doc: { title: 'bar' } },
+    t1: { task: {}, doc: { title: 'foo' } },
+    t2: { task: {}, doc: { title: 'bar' } },
   }, [])
   // The chain's result rows are the COMMENTS, so the candidate set is
   // byComp[comment] — the far doc.title is tested by the matcher, not anchored.

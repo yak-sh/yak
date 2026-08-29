@@ -374,11 +374,11 @@ Deno.test('queryEids indexes any {eid} reference with no bespoke index', () => {
     person: { entity: { eid: 'person', num: 1 }, person: { eid: 'person' } },
     t1: {
       entity: { eid: 't1', num: 2 },
-      task: { eid: 't1', status: 'open', priority: 1, assignee: 'person' },
+      task: { eid: 't1', priority: 1, assignee: 'person' },
     },
     t2: {
       entity: { eid: 't2', num: 3 },
-      task: { eid: 't2', status: 'open', priority: 1, assignee: 'other' },
+      task: { eid: 't2', priority: 1, assignee: 'other' },
     },
   }
   deps.value = []
@@ -413,7 +413,6 @@ Deno.test('repoUrl follows task, comment, and session ownership', () => {
       entity: { eid: 'task', num: 2 },
       task: {
         eid: 'task',
-        status: 'open',
         priority: 1,
         project: 'project',
       },
@@ -478,7 +477,7 @@ Deno.test('repoUrl follows an entry through its session', () => {
     },
     task: {
       entity: { eid: 'task', num: 3 },
-      task: { eid: 'task', status: 'open', priority: 1, project: 'project' },
+      task: { eid: 'task', priority: 1, project: 'project' },
     },
     entry: {
       entity: { eid: 'entry', num: 4 },
@@ -509,7 +508,7 @@ let fill = (rows: [string, string | null][]) => {
     kind == 'T'
       ? {
         entity: { eid: `e${i}`, num: i, created_at: '' },
-        task: { eid: `e${i}`, status: 'open', priority: 1, domain: v },
+        task: { eid: `e${i}`, priority: 1, domain: v },
       }
       : {
         entity: { eid: `e${i}`, num: i, created_at: '' },
@@ -534,19 +533,19 @@ Deno.test('facets: byComp derivation matches the whole-cache scan', () => {
     // tasks: duplicate + distinct domains, and one with no domain
     t1: {
       entity: { eid: 't1', num: 3 },
-      task: { eid: 't1', status: 'open', priority: 1, domain: 'Ops' },
+      task: { eid: 't1', priority: 1, domain: 'Ops' },
     },
     t2: {
       entity: { eid: 't2', num: 4 },
-      task: { eid: 't2', status: 'open', priority: 1, domain: 'Eng' },
+      task: { eid: 't2', priority: 1, domain: 'Eng' },
     },
     t3: {
       entity: { eid: 't3', num: 5 },
-      task: { eid: 't3', status: 'open', priority: 1, domain: 'Ops' },
+      task: { eid: 't3', priority: 1, domain: 'Ops' },
     },
     t4: {
       entity: { eid: 't4', num: 6 },
-      task: { eid: 't4', status: 'open', priority: 1, domain: null },
+      task: { eid: 't4', priority: 1, domain: null },
     },
     // sessions + shelves + an unrelated doc that must touch no facet
     s1: {
@@ -597,7 +596,7 @@ Deno.test('agreement diagnostics are inert until explicitly enabled', () => {
     },
     task: {
       entity: { eid: 'task', num: 2 },
-      task: { eid: 'task', status: 'open', priority: 1 },
+      task: { eid: 'task', priority: 1 },
     },
   }
   let scheduled = 0
@@ -827,7 +826,7 @@ Deno.test('rider peers are held apart from members, and evicted with them', () =
     edges: [{ parent: 'a', type: 'requires', child: 'blocker' }],
     peers: [
       { eid: 'blocker', name: 'entity', comp: { eid: 'blocker', num: 2 } },
-      { eid: 'blocker', name: 'task', comp: { status: 'open' } },
+      { eid: 'blocker', name: 'task', comp: {} },
     ],
   })
   // The peer paints — but it is NOT a member, or a useQuery over this sub's
@@ -1173,7 +1172,7 @@ Deno.test('backlinks: reverse-union set + via, awake only for its own target', (
   cache.value = {
     t1: {
       entity: { eid: 't1', num: 1 },
-      task: { eid: 't1', status: 'open', priority: 1, domain: null },
+      task: { eid: 't1', priority: 1, domain: null },
     },
     s1: {
       entity: { eid: 's1', num: 2 },
@@ -1234,12 +1233,12 @@ Deno.test('jobOf: newest claimed task, off the reverse index', () => {
     // two claims by s1; the newer claimed_at wins regardless of cache order
     t_old: {
       entity: { eid: 't_old', num: 2 },
-      task: { eid: 't_old', status: 'open', priority: 1 },
+      task: { eid: 't_old', priority: 1 },
       claim: { eid: 't_old', session: 's1', claimed_at: '2026-01-01' },
     },
     t_new: {
       entity: { eid: 't_new', num: 3 },
-      task: { eid: 't_new', status: 'open', priority: 1 },
+      task: { eid: 't_new', priority: 1 },
       claim: { eid: 't_new', session: 's1', claimed_at: '2026-08-01' },
     },
     // a claim by s1 on a non-task entity is skipped (the `r.task` screen)
@@ -1252,7 +1251,7 @@ Deno.test('jobOf: newest claimed task, off the reverse index', () => {
     s2: { entity: { eid: 's2', num: 5 }, session: { eid: 's2', id: 'y' } },
     t_other: {
       entity: { eid: 't_other', num: 6 },
-      task: { eid: 't_other', status: 'open', priority: 1 },
+      task: { eid: 't_other', priority: 1 },
       claim: { eid: 't_other', session: 's2', claimed_at: '2026-12-31' },
     },
   }
@@ -1271,7 +1270,7 @@ Deno.test("myMode: this actor's subscription, off the reverse index", () => {
     },
     tgt: {
       entity: { eid: 'tgt', num: 2 },
-      task: { eid: 'tgt', status: 'open', priority: 1 },
+      task: { eid: 'tgt', priority: 1 },
     },
     // my subscription on tgt
     sub_mine: {
@@ -1327,7 +1326,7 @@ Deno.test('relationship indices wake only their affected targets', () => {
   cache.value = {
     index_target: {
       entity: { eid: 'index_target', num: 1 },
-      task: { eid: 'index_target', status: 'open', priority: 1 },
+      task: { eid: 'index_target', priority: 1 },
     },
     index_other: {
       entity: { eid: 'index_other', num: 2 },
@@ -1508,7 +1507,7 @@ Deno.test('camera motion and card stacking stay off the graph signal', () => {
     },
     task: {
       entity: { eid: 'task', num: 2 },
-      task: { eid: 'task', status: 'open', priority: 1 },
+      task: { eid: 'task', priority: 1 },
     },
     cam: {
       entity: { eid: 'cam', num: 3 },
@@ -1595,7 +1594,7 @@ Deno.test('camera motion and card stacking stay off the graph signal', () => {
 Deno.test('applyLocal: reports touched eids and edges', () => {
   let sp = (eid: string) => ({
     entity: { eid, num: 0 },
-    task: { eid, status: 'open', priority: 1, domain: null },
+    task: { eid, priority: 1, domain: null },
   })
   cache.value = { a: sp('a'), b: sp('b') }
   deps.value = []
@@ -1623,12 +1622,12 @@ Deno.test('applyLocal: an idempotent replay preserves cache identity', () => {
   cache.value = {
     a: {
       entity: { eid: 'a', num: 1 },
-      task: { eid: 'a', status: 'open', priority: 1 },
+      task: { eid: 'a', priority: 1 },
     },
   }
   let before = cache.value
   let touched = applyLocal([
-    { eid: 'a', name: 'task', comp: { status: 'open' } },
+    { eid: 'a', name: 'task', comp: {} },
   ])
   assertStrictEquals(cache.value, before)
   assertEquals(touched.eids, ['a'])
@@ -1758,7 +1757,7 @@ Deno.test('board membership sleeps through an unrelated row patch', () => {
     },
     task_narrow: {
       entity: { eid: 'task_narrow', num: 2 },
-      task: { eid: 'task_narrow', status: 'open', priority: 1 },
+      task: { eid: 'task_narrow', priority: 1 },
     },
     doc_narrow: {
       entity: { eid: 'doc_narrow', num: 3 },
@@ -1798,7 +1797,7 @@ Deno.test('a hot board sleeps through card births and deaths', () => {
     },
     task_hot: {
       entity: { eid: 'task_hot', num: 2 },
-      task: { eid: 'task_hot', status: 'open', priority: 1 },
+      task: { eid: 'task_hot', priority: 1 },
     },
   }
   deps.value = []
@@ -1870,7 +1869,7 @@ Deno.test('catch-up then live batch apply in arrival order', () => {
   cache.value = {
     x: {
       entity: { eid: 'x', num: 1 },
-      task: { eid: 'x', status: 'open', priority: 1, domain: null },
+      task: { eid: 'x', priority: 1, domain: null },
     },
   }
   deps.value = []
@@ -1897,7 +1896,7 @@ Deno.test('boardAll: whole-graph match, chrome/comments/self excluded', async ()
     task: {
       entity: spine('task', 2),
       doc: { eid: 'task', title: 'a task', body: '' },
-      task: { eid: 'task', status: 'open', priority: 1 },
+      task: { eid: 'task', priority: 1 },
     },
     sesh: {
       entity: spine('sesh', 3),
@@ -1987,7 +1986,7 @@ Deno.test('topZ: pinless rows never ride, whatever the canvas', () => {
   cache.value = {
     t1: {
       entity: { eid: 't1', num: 1 },
-      task: { eid: 't1', status: 'open', priority: 1, domain: null },
+      task: { eid: 't1', priority: 1, domain: null },
     },
     c1: {
       entity: { eid: 'c1', num: 2 },
@@ -2055,7 +2054,7 @@ Deno.test('the agreement counter counts when both doors answer', async () => {
     },
     t1: {
       entity: { eid: 't1', num: 2 },
-      task: { eid: 't1', status: 'open', priority: 1 },
+      task: { eid: 't1', priority: 1 },
     },
   }
   // What a Board view does on mount: register the subscription, then render.
@@ -2106,11 +2105,11 @@ Deno.test('a board renders from the subscription and tracks joins and leaves', (
     },
     t1: {
       entity: { eid: 't1', num: 2 },
-      task: { eid: 't1', status: 'open', priority: 1 },
+      task: { eid: 't1', priority: 1 },
     },
     t2: {
       entity: { eid: 't2', num: 3 },
-      task: { eid: 't2', status: 'open', priority: 2 },
+      task: { eid: 't2', priority: 2 },
     },
   }
   deps.value = []
@@ -2159,7 +2158,7 @@ Deno.test('a subscribed board sleeps through an unrelated ordinary patch', () =>
     },
     t1: {
       entity: { eid: 't1', num: 2 },
-      task: { eid: 't1', status: 'open', priority: 1 },
+      task: { eid: 't1', priority: 1 },
     },
     other: {
       entity: { eid: 'other', num: 3 },
@@ -2207,7 +2206,7 @@ Deno.test('boardPost excludes chrome and self from the subscription members', ()
     },
     task: {
       entity: { eid: 'task', num: 2 },
-      task: { eid: 'task', status: 'open', priority: 1 },
+      task: { eid: 'task', priority: 1 },
     },
     note: {
       entity: { eid: 'note', num: 3 },

@@ -40,11 +40,11 @@ let snap: Snapshot = {
     {
       eid: T,
       name: 'task',
-      comp: { status: 'open', priority: 0, project: P },
+      comp: { priority: 0, project: P },
     },
     { eid: D, name: 'entity', comp: { eid: D, num: 5 } },
     { eid: D, name: 'doc', comp: { title: 'Scribe desk', body: '' } },
-    { eid: D, name: 'task', comp: { status: 'open', priority: 3 } },
+    { eid: D, name: 'task', comp: { priority: 3 } },
     { eid: D, name: 'alias', comp: { slug: 'scribe-desk' } },
     { eid: N, name: 'entity', comp: { eid: N, num: 6 } },
     { eid: N, name: 'doc', comp: { title: 'scribe', body: '' } },
@@ -75,7 +75,7 @@ let comps = (line: string, eid?: string, session?: string) =>
 
 Deno.test('basic card commands mint the smallest editable entities', () => {
   let expected: Record<string, Record<string, unknown>[]> = {
-    task: [{ title: '', body: '' }, { status: 'open' }],
+    task: [{ title: '', body: '' }, {}],
     session: [{ id: '' }],
     doc: [{ title: '', body: '' }],
     memory: [{ title: '', body: '' }, { scope: null }],
@@ -154,7 +154,7 @@ Deno.test('task cards take their title first and body below', () => {
   let made = run('task Ship it\nwhy and how', ctx(B))
   assertEquals(comps('task Ship it\nwhy and how', B), {
     doc: { title: 'Ship it', body: 'why and how' },
-    task: { status: 'open' },
+    task: {},
   })
   assertEquals(made.card, made.changes![0].eid)
   assertEquals(made.spawn, undefined)
@@ -164,11 +164,11 @@ Deno.test('new: a task, inheriting where you stand', () => {
   // On a board: the query's scalar equalities ride along, so it JOINS it.
   assertEquals(comps('new Ship it', B), {
     doc: { body: '', title: 'Ship it' },
-    task: { status: 'open', project: P, domain: 'Eng' },
+    task: { project: P, domain: 'Eng' },
   })
-  assertEquals(comps('new Ship it', P).task, { status: 'open', project: P })
-  assertEquals(comps('new Ship it', T).task, { status: 'open', project: P })
-  assertEquals(comps('new Ship it').task, { status: 'open' }) // no context
+  assertEquals(comps('new Ship it', P).task, { project: P })
+  assertEquals(comps('new Ship it', T).task, { project: P })
+  assertEquals(comps('new Ship it').task, {}) // no context
   // the spec grammar tokenizes, so runs of spaces normalize to one
   assertEquals(
     run('new  Two  words ', ctx(B)).changes![0].comp!.title,
@@ -181,7 +181,6 @@ Deno.test('new: a task, inheriting where you stand', () => {
   })
   // …and setters in the line win over what the context hands down
   assertEquals(comps('new P2 .domain=Ops Ship it', B).task, {
-    status: 'open',
     project: P,
     domain: 'Ops',
     priority: 2,
@@ -205,7 +204,7 @@ Deno.test('fix: a bare id spawns, words file a task first', () => {
   assertEquals(f.spawn, f.changes![0].eid)
   assertEquals(
     Object.fromEntries(f.changes!.map((c) => [c.name, c.comp])).task,
-    { status: 'open', project: P },
+    { project: P },
   )
   // shift+enter's ask: line 2 on rides as the filed task's body
   assertEquals(comps('fix the bar clips\nrepro: shrink the window').doc, {
@@ -216,7 +215,6 @@ Deno.test('fix: a bare id spawns, words file a task first', () => {
   // context does NOT ride along (its domain stays out), and with many
   // repo projects the `tasks` venture alias names the deployment's own
   assertEquals(comps('fix Ship it', B).task, {
-    status: 'open',
     project: P,
   })
   let H = 'aaaaaaaa-0000-4000-8000-000000000008'
@@ -384,7 +382,7 @@ Deno.test('open: an argument navigates, none is the status move', () => {
   assertEquals(run('open 4', ctx()).go, T) // bare num
   assertEquals(run(`open ${T}`, ctx()).go, T) // eid
   assertEquals(run('open B-3', ctx(T)).go, B) // argument wins over the move
-  assertEquals(run('open', ctx(T)).changes![0].comp, { status: 'open' })
+  assertEquals(run('open', ctx(T)).changes![0].comp, {})
   assertEquals(run('open', ctx(T)).go, undefined)
   assertThrows(() => run('open T-99', ctx()), Error, 'no such entity: T-99')
   assertThrows(() => run('open T-4 extra', ctx()), Error, 'usage :open [id]')
@@ -739,7 +737,7 @@ let aimed = rows({
   changes: [
     { eid: X, name: 'entity', comp: { eid: X, num: 40 } },
     { eid: X, name: 'doc', comp: { title: 'target', body: '' } },
-    { eid: X, name: 'task', comp: { status: 'open' } },
+    { eid: X, name: 'task', comp: {} },
     { eid: C, name: 'entity', comp: { eid: C, num: 41 } },
     { eid: C, name: 'doc', comp: { title: '', body: 'aimed at T-40' } },
     { eid: C, name: 'comment', comp: { target: X } },

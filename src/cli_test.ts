@@ -139,7 +139,7 @@ Deno.test('release guards the holder it read', () => {
   let row = rows({
     changes: [
       { eid: 'task', name: 'entity', comp: { eid: 'task', num: 1 } },
-      { eid: 'task', name: 'task', comp: { status: 'open' } },
+      { eid: 'task', name: 'task', comp: {} },
       { eid: 'task', name: 'claim', comp: { session: 'session-eid' } },
     ],
   })[0]
@@ -871,7 +871,7 @@ Deno.test('role binding accepts only a live role entity', () => {
     eid: 'task-eid',
     num: 8,
     kind: 'task',
-    comps: { task: { status: 'open' } },
+    comps: { task: {} },
   }
   assertEquals(roleEid([role, task], 'R-7'), role.eid)
   assertEquals(roleEid([role, task], task.eid), undefined)
@@ -1469,7 +1469,7 @@ let graph: Snapshot = {
     { eid: N, name: 'session', comp: { id: 'idle-1' } },
     { eid: O, name: 'entity', comp: { eid: O, num: 4, created_at: '' } },
     { eid: O, name: 'doc', comp: { title: 'Open board task', body: '' } },
-    { eid: O, name: 'task', comp: { status: 'open', priority: 1 } },
+    { eid: O, name: 'task', comp: { priority: 1 } },
   ],
   deps: [],
 }
@@ -1513,7 +1513,7 @@ slow('task undo sends a named mutation through generic /apply', async () => {
     changes: [
       { eid, name: 'entity', comp: { eid, num: 91 } },
       { eid, name: 'doc', comp: { eid, title: 'undo me', body: '' } },
-      { eid, name: 'task', comp: { eid, status: 'open', priority: 1 } },
+      { eid, name: 'task', comp: { eid, priority: 1 } },
     ],
     deps: [],
   }
@@ -1584,7 +1584,7 @@ slow(
     apply(db, [
       { eid: session, name: 'session', comp: { id: crypto.randomUUID() } },
       { eid: task, name: 'doc', comp: { title: 'historical task' } },
-      { eid: task, name: 'task', comp: { status: 'open', priority: 1 } },
+      { eid: task, name: 'task', comp: { priority: 1 } },
     ])
     apply(db, [{ eid: task, name: 'claim', comp: { session } }])
     apply(db, [{ eid: task, name: 'claim', comp: null }])
@@ -1668,7 +1668,7 @@ slow(
       {
         eid: item,
         name: 'task',
-        comp: { status: 'open', priority: 1, project },
+        comp: { priority: 1, project },
       },
       {
         eid: project,
@@ -1738,7 +1738,7 @@ slow(
         {
           eid,
           name: 'task',
-          comp: { eid, status: 'open', priority: 1 },
+          comp: { eid, priority: 1 },
         },
       ],
       deps: [],
@@ -2106,7 +2106,7 @@ slow('setting a wake shows every pending wake for that session', async () => {
     { eid: session, name: 'entity', comp: { eid: session, num: 71 } },
     { eid: session, name: 'session', comp: { id: 'wake-reader' } },
     { eid: target, name: 'entity', comp: { eid: target, num: 72 } },
-    { eid: target, name: 'task', comp: { status: 'open' } },
+    { eid: target, name: 'task', comp: {} },
     { eid: existing, name: 'entity', comp: { eid: existing, num: null } },
     {
       eid: existing,

@@ -222,7 +222,7 @@ Deno.test('graduation: a write touching only persisted entities hydrates nothing
     let tid = crypto.randomUUID()
     apply(db, [
       { eid: tid, name: 'doc', comp: { title: 'a real task' } },
-      { eid: tid, name: 'task', comp: { status: 'open' } },
+      { eid: tid, name: 'task', comp: {} },
     ])
     assertEquals(has(db, 'task', tid), true)
     assertEquals(has(db, 'entity', gid), false) // the source eid stayed ephemeral

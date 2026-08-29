@@ -77,7 +77,7 @@ slow(
     // {eid} reference the closing consumer filters on.
     await post([
       { eid: task, name: 'doc', comp: { title: 'closes soon' } },
-      { eid: task, name: 'task', comp: { status: 'open' } },
+      { eid: task, name: 'task', comp: {} },
       { eid: note, name: 'doc', comp: { title: '', body: 'about the task' } },
       { eid: note, name: 'comment', comp: { target: task } },
     ])

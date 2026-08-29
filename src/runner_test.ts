@@ -558,7 +558,7 @@ Deno.test('executeCall recovers typed dispatch and records tool failures as resu
   assertEquals(seen, {
     changes: [
       { eid: 'e1', name: 'doc', comp: { title: 'x' } },
-      { eid: 'e1', name: 'task', comp: { status: 'open' } },
+      { eid: 'e1', name: 'task', comp: {} },
     ],
   })
   assertEquals(spec.result.call, 'call')

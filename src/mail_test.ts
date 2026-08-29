@@ -241,7 +241,7 @@ let fixture = () => {
     { eid: proj, name: 'project', comp: {} },
     { eid: proj, name: 'email', comp: { address: 'venture@x.test' } },
     { eid: task, name: 'doc', comp: { title: 'the work' } },
-    { eid: task, name: 'task', comp: { status: 'open', project: proj } },
+    { eid: task, name: 'task', comp: { project: proj } },
   ])
   // A standing task, not one being filed this instant: commenting on it is
   // correspondence. Birth commentary is its own case and builds its own
@@ -313,7 +313,7 @@ Deno.test('fanout: self-echo and the unaddressed stay home', () => {
     { eid: bare, name: 'doc', comp: { title: 'NoMail' } },
     { eid: bare, name: 'project', comp: {} },
     { eid: t2, name: 'doc', comp: { title: 'quiet work' } },
-    { eid: t2, name: 'task', comp: { status: 'open', project: bare } },
+    { eid: t2, name: 'task', comp: { project: bare } },
   ])
   let c2 = comment(t2)
   fanout(cast)(c2, { target: t2 })
@@ -328,7 +328,7 @@ Deno.test('fanout: commentary born with a task stays in its filing event', () =>
     {
       eid: filed,
       name: 'task',
-      comp: { status: 'open', project: proj },
+      comp: { project: proj },
     },
     { eid: c, name: 'doc', comp: { title: '', body: 'filed T-1' } },
     { eid: c, name: 'comment', comp: { target: filed } },
@@ -367,7 +367,7 @@ Deno.test('fanout: the birth window is one second, either side of it', () => {
   let target = uid(), inside = uid(), outside = uid()
   apply(db, [
     { eid: target, name: 'doc', comp: { title: 'the work' } },
-    { eid: target, name: 'task', comp: { status: 'open', project: proj } },
+    { eid: target, name: 'task', comp: { project: proj } },
     { eid: inside, name: 'doc', comp: { title: '', body: 'born beside it' } },
     { eid: inside, name: 'comment', comp: { target: target } },
     { eid: outside, name: 'doc', comp: { title: '', body: 'said after' } },
@@ -953,7 +953,7 @@ Deno.test('mailed: local delivery keeps a relay mail aimed at its task', async (
   somebody('relayed', 'relayed@bot.test')
   apply(db, [
     { eid: t, name: 'doc', comp: { title: 'the work' } },
-    { eid: t, name: 'task', comp: { status: 'open' } },
+    { eid: t, name: 'task', comp: {} },
   ])
   let m = uid()
   apply(

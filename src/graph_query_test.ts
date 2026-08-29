@@ -248,11 +248,11 @@ Deno.test('search ordering is explicit query rank, recent first and retired last
     { eid: retired, name: 'project', comp: {} },
     { eid: retired, name: 'doc', comp: { title: 'retired', body: '' } },
     { eid: retired, name: 'archived', comp: {} },
-    { eid: older, name: 'task', comp: { status: 'open', project: live } },
+    { eid: older, name: 'task', comp: { project: live } },
     { eid: older, name: 'doc', comp: { title: 'older', body: '' } },
-    { eid: newer, name: 'task', comp: { status: 'open', project: live } },
+    { eid: newer, name: 'task', comp: { project: live } },
     { eid: newer, name: 'doc', comp: { title: 'newer', body: '' } },
-    { eid: sunk, name: 'task', comp: { status: 'open', project: retired } },
+    { eid: sunk, name: 'task', comp: { project: retired } },
     { eid: sunk, name: 'doc', comp: { title: 'sunk', body: '' } },
   ])
   let at = (eid: string, value: string) =>
@@ -295,7 +295,7 @@ Deno.test('evalSub: exact for narrowing and aggregate queries, capped otherwise'
     apply(db, [{ eid, name: 'doc', comp: { title: `t${i}` } }, {
       eid,
       name: 'task',
-      comp: { status: 'open' },
+      comp: {},
     }])
   }
   // Narrowing: the index answers whole — every task, mine and freshDb's seed.

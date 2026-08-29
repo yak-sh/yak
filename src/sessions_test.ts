@@ -161,7 +161,7 @@ let seed = (body = '', repo: string | null = scratch) => {
     { eid: p, name: 'project', comp: {} },
     ...(repo ? [{ eid: p, name: 'repo', comp: { path: repo } }] : []),
     { eid: t, name: 'doc', comp: { title: 'Do the thing', body } },
-    { eid: t, name: 'task', comp: { status: 'open', project: p } },
+    { eid: t, name: 'task', comp: { project: p } },
   ])
   return { p, t }
 }
@@ -512,7 +512,7 @@ slow('a projectless Codex task starts as a no-code graph session', async () => {
   let task = uid(), eid = uid(), routed = 0
   apply(db, [
     { eid: task, name: 'doc', comp: { title: 'Triage the graph' } },
-    { eid: task, name: 'task', comp: { status: 'open' } },
+    { eid: task, name: 'task', comp: {} },
     {
       eid,
       name: 'session',
@@ -552,7 +552,7 @@ slow('a process provider names its projectless-task requirement', async () => {
   let task = uid()
   apply(db, [
     { eid: task, name: 'doc', comp: { title: 'Triage the graph' } },
-    { eid: task, name: 'task', comp: { status: 'open' } },
+    { eid: task, name: 'task', comp: {} },
   ])
   let { eid, done } = begin(task)
   await done
@@ -2417,7 +2417,7 @@ Deno.test('reapLeases frees an ended session lease, spares a live one', () => {
     apply(db, [
       { eid: task, name: 'entity', comp: { eid: task } },
       { eid: task, name: 'doc', comp: { title: 'leased', body: '' } },
-      { eid: task, name: 'task', comp: { status: 'open' } },
+      { eid: task, name: 'task', comp: {} },
       { eid: task, name: 'claim', comp: { session: s } },
     ])
     return s
@@ -2458,7 +2458,7 @@ Deno.test('reapLeases retains a parked-waiting claim, reaps the rest', () => {
     apply(db, [
       { eid: task, name: 'entity', comp: { eid: task } },
       { eid: task, name: 'doc', comp: { title: 'held', body: '' } },
-      { eid: task, name: 'task', comp: { status: 'open' } },
+      { eid: task, name: 'task', comp: {} },
       { eid: task, name: 'claim', comp: { session: s } },
     ])
     if (opts.blocker) {

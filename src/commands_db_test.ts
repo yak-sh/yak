@@ -30,14 +30,14 @@ let world = () => {
     { eid: R, name: 'project', comp: {} },
     { eid: R, name: 'repo', comp: { path: '/tmp/repo' } },
     { eid: T, name: 'doc', comp: { title: 'A task', body: '' } },
-    { eid: T, name: 'task', comp: { status: 'open', project: P } },
+    { eid: T, name: 'task', comp: { project: P } },
     { eid: S, name: 'session', comp: { id: 'sess-1' } },
     // a comment aimed at T — the collateral a cascade delete of T takes
     { eid: C, name: 'doc', comp: { title: '', body: 'a note' } },
     { eid: C, name: 'comment', comp: { target: T } },
     // the scribe desk + its persona, both addressed by alias (DESK)
     { eid: desk, name: 'doc', comp: { title: 'Scribe desk', body: '' } },
-    { eid: desk, name: 'task', comp: { status: 'open' } },
+    { eid: desk, name: 'task', comp: {} },
     { eid: desk, name: 'alias', comp: { slug: 'scribe-desk' } },
     { eid: scribe, name: 'doc', comp: { title: 'Scribe', body: '' } },
     { eid: scribe, name: 'persona', comp: {} },

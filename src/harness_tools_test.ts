@@ -229,7 +229,7 @@ slow(
         {
           eid: 'aaaaaaaa-0000-4000-8000-000000000001',
           name: 'task',
-          comp: { status: 'open' },
+          comp: {},
         },
       ]
       await tasks.call('graph_apply', { changes: batch })

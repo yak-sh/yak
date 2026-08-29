@@ -78,7 +78,7 @@ let dial = async (name: string, q: string) => {
 
 let task = (eid: string, title: string, body = 'the whole body') => [
   { eid, name: 'doc', comp: { title, body } },
-  { eid, name: 'task', comp: { status: 'open', priority: 1 } },
+  { eid, name: 'task', comp: { priority: 1 } },
 ]
 
 // One peer's projected columns, keyed by component — what the client lands.

@@ -71,7 +71,7 @@ slow(
       }),
       ...ent(T, 3, {
         doc: { title: 'A task', body: '' },
-        task: { status: 'open', project: P },
+        task: { project: P },
         created: { at: '2026-01-01', by: P },
       }),
     ])
