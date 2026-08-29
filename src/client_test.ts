@@ -638,7 +638,8 @@ Deno.test('taskChanges: defaults + grouped comps ride along', () => {
   let cs = taskChanges('E', { doc: { title: 'x' }, pin: { x: 1 } })
   assertEquals(cs.map((c) => c.name), ['doc', 'task', 'pin'])
   assertEquals(cs[0].comp, { body: '', title: 'x' })
-  assertEquals(cs[1].comp?.status, 'open')
+  // Born open: no status mark (D-24102) — status is derived, not stored.
+  assertEquals(cs[1].comp, {})
 })
 
 Deno.test('taskTreePlan: one rooted batch covers new and existing nodes', async () => {
@@ -1277,8 +1278,8 @@ Deno.test('wrapChanges: unfinished gets the trail, done goes quiet', () => {
     event: 'lapse',
   })
   let done = structuredClone(snap)
-  done.changes.find((c) => c.eid == T1 && c.name == 'task')!.comp!.status =
-    'done'
+  // Done is DERIVED (D-24102): mint the completed mark, not a status column.
+  done.changes.push({ eid: T1, name: 'completed', comp: {} })
   let quiet = wrapChanges(rows(done), 'sess-x')
   // finished work releases without a notice — only the brief rides along
   // (fixture S is docless and held a claim, so it earns the stub)
@@ -3220,9 +3221,11 @@ Deno.test('showMd: frontmatter, edge sentences, claim holder, body', () => {
   assertMatch(md, /^---\nid: T-2\nkind: task\n/)
   // the spine renders as a comp: raw eid + num under entity:
   assertMatch(md, new RegExp(`entity:\n {2}eid: ${T1}\n {2}num: `))
-  // comps serialize nested — no flattened task.status/priority lines
-  assertMatch(md, /task:\n {2}status: wip\n {2}priority: P0/)
+  // comps serialize nested — status is DERIVED, not a stored task column, so
+  // the frontmatter carries only real columns; wip shows through the claim below
+  assertMatch(md, /task:\n {2}priority: P0/)
   assertEquals(md.includes('task.status:'), false)
+  assertEquals(md.includes('status: wip'), false)
   assertMatch(md, /mail:\n {2}verified: true/)
   assertMatch(md, /claim: sess-x/) // the holder's session id, not an eid
   assertMatch(md, /requires:\n {2}- T-3 \(open\) — Second/)
@@ -3392,7 +3395,8 @@ Deno.test('showMd: comments ride as a section, oldest first', () => {
 
 Deno.test('grammar: the teaching text derives from the vocabulary', async () => {
   let { GRAMMAR, FILTERS } = await import('./grammar.ts')
-  assertMatch(GRAMMAR, /status\(open\|wip\|done\|cancelled\)/)
+  // status is DERIVED now (D-24102), no longer a writable task enum column, so
+  // the vocabulary teaches it as a sentence rather than an inline enum.
   assertMatch(GRAMMAR, /Statuses: open, wip, done, cancelled/)
   assertMatch(
     GRAMMAR,
@@ -3410,7 +3414,7 @@ let DAY: import('./client.ts').JournalEntry[] = [
     ts: '2026-07-20T18:00:00Z',
     actor: 'sess-x',
     changes: [
-      { eid: T1, name: 'task', comp: { status: 'done' } },
+      { eid: T1, name: 'completed', comp: {} },
       {
         eid: 'c-1',
         name: 'doc',
@@ -3464,7 +3468,7 @@ Deno.test('ledger: the day as lived, oldest first, ids humanized', () => {
   assertMatch(text, /\+ minted task T-2 First/)
   assertMatch(text, /⚑ claimed T-2 First/)
   assertMatch(text, /∴ linked T-2 First requires T-3 Second/)
-  assertMatch(text, /→ T-2 First status → done/)
+  assertMatch(text, /→ T-2 First done/)
   assertMatch(text, /💬 on T-2 First: status: wip → done — verified/) // first line only
   // order: mint before claim before link before finish
   let at = (re: RegExp) => lines.findIndex((l) => re.test(l))
@@ -4207,7 +4211,7 @@ Deno.test('contextDigest: golden — every section, frozen assembly', () => {
     {
       eid: G + 'T1',
       name: 'task',
-      comp: { status: 'wip', priority: 0, project: P },
+      comp: { priority: 0, project: P },
     },
     { eid: G + 'T1', name: 'claim', comp: { session: S, claimed_at: ago(5) } },
     ...mkE('T2', 5, 39),
@@ -4261,8 +4265,9 @@ Deno.test('contextDigest: golden — every section, frozen assembly', () => {
     {
       eid: G + 'D1',
       name: 'task',
-      comp: { status: 'done', priority: 0, project: P },
+      comp: { priority: 0, project: P },
     },
+    { eid: G + 'D1', name: 'completed', comp: { at: ago(70) } },
     ...mkE('M1', 12, 80),
     {
       eid: G + 'M1',
@@ -4275,7 +4280,7 @@ Deno.test('contextDigest: golden — every section, frozen assembly', () => {
     '# tasks · session sess-x',
     'claimed by you:',
     '- T-4 wip — First claimed',
-    '- T-5 open — Second claimed',
+    '- T-5 wip — Second claimed',
     '## resume — pop your stack',
     '- T-7 open — Actor created open',
     '## previously — S-2 Prev session',
@@ -4287,7 +4292,7 @@ Deno.test('contextDigest: golden — every section, frozen assembly', () => {
     '## fleet — nowhere placed',
     '- T-6 open — Open in project',
     '- T-7 open — Actor created open',
-    '- T-5 open — Second claimed',
+    '- T-5 wip — Second claimed',
     '## decided',
     '- 2026-08-12 T-11 — A decision',
     '## from the fleet — read any that fit (MCP memory_recall / CLI task show <id>), adopt what helps',

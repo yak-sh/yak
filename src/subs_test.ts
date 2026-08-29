@@ -125,21 +125,28 @@ Deno.test('agreement diff names both sides once and in order', () => {
 // The server's touched-row protocol uses this exact match → step seam. Each
 // supported operator moves one member out, then back in.
 Deno.test('own-component operators maintain subscription membership', () => {
-  let cases: [string, Record<string, unknown>, Record<string, unknown>][] = [
-    ['.status=open', {}, { status: 'done' }],
-    ['.domain=Ops,Eng', { domain: 'Ops' }, { domain: 'Web' }],
-    ['.priority=1..3', { priority: 3 }, { priority: 4 }],
-    ['.status!=done', {}, { status: 'done' }],
-    ['.priority>=2', { priority: 2 }, { priority: 1 }],
-    ['.title~=flux', { title: 'Flux gate' }, { title: 'Warp gate' }],
+  // Whole comp bags now: status is DERIVED (D-24102), so `done` is the completed
+  // mark riding beside the task comp, never a task column.
+  let cases: [
+    string,
+    Record<string, Record<string, unknown>>,
+    Record<string, Record<string, unknown>>,
+  ][] = [
+    ['.status=open', { task: {} }, { task: {}, completed: {} }],
+    ['.domain=Ops,Eng', { task: { domain: 'Ops' } }, {
+      task: { domain: 'Web' },
+    }],
+    ['.priority=1..3', { task: { priority: 3 } }, { task: { priority: 4 } }],
+    ['.status!=done', { task: {} }, { task: {}, completed: {} }],
+    ['.priority>=2', { task: { priority: 2 } }, { task: { priority: 1 } }],
+    ['.title~=flux', { doc: { title: 'Flux gate' } }, {
+      doc: { title: 'Warp gate' },
+    }],
   ]
   for (let [q, inside, outside] of cases) {
     let members = new Set<string>()
-    let matches = (v: Record<string, unknown>) =>
-      matchQuery(
-        q.includes('title') ? { doc: v } : { task: v },
-        parseQuery(q),
-      )
+    let matches = (v: Record<string, Record<string, unknown>>) =>
+      matchQuery(v, parseQuery(q))
     assertEquals(step(members, 'e1', true, matches(inside)), 'add', q)
     assertEquals(step(members, 'e1', true, matches(outside)), 'remove', q)
     assertEquals(step(members, 'e1', true, matches(inside)), 'add', q)

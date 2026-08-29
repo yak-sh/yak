@@ -99,7 +99,7 @@ let world = () => {
   let db = freshDb()
   let jeff = uuid(), pri = uuid(), P = uuid()
   let t1 = uuid(), t2 = uuid(), t3 = uuid(), t4 = uuid(), t5 = uuid()
-  let c1 = uuid(), c2 = uuid(), bd = uuid(), mem = uuid()
+  let c1 = uuid(), c2 = uuid(), bd = uuid(), mem = uuid(), sw = uuid()
   apply(db, [
     { eid: jeff, name: 'doc', comp: { title: 'Jeff Peterson', body: '' } },
     { eid: jeff, name: 'client', comp: { user_agent: 'cli' } },
@@ -123,7 +123,9 @@ let world = () => {
         domain: 'Eng',
       },
     },
-    // t2: wip/P1, assigned priya, project P
+    // t2: wip/P1, assigned priya, project P — status is DERIVED (D-24102):
+    // wip = a live claim, so seed a session and claim it.
+    { eid: sw, name: 'session', comp: { id: uuid() } },
     {
       eid: t2,
       name: 'doc',
@@ -133,20 +135,21 @@ let world = () => {
       eid: t2,
       name: 'task',
       comp: {
-        status: 'wip',
         priority: 1,
         project: P,
         assignee: pri,
         domain: 'Eng',
       },
     },
-    // t3: done/P2, no project, no assignee
+    { eid: t2, name: 'claim', comp: { session: sw } },
+    // t3: done/P2, no project, no assignee — done = a completed mark
     { eid: t3, name: 'doc', comp: { title: 'archive old', body: '' } },
     {
       eid: t3,
       name: 'task',
-      comp: { status: 'done', priority: 2, domain: 'Ops' },
+      comp: { priority: 2, domain: 'Ops' },
     },
+    { eid: t3, name: 'completed', comp: {} },
     // t4: open/P3, assigned jeff, no project
     {
       eid: t4,
@@ -158,13 +161,14 @@ let world = () => {
       name: 'task',
       comp: { priority: 3, assignee: jeff, domain: '' },
     },
-    // t5: cancelled/P1, project P
+    // t5: cancelled/P1, project P — cancelled = a cancelled mark
     { eid: t5, name: 'doc', comp: { title: 'dead end', body: '' } },
     {
       eid: t5,
       name: 'task',
-      comp: { status: 'cancelled', priority: 1, project: P, domain: 'Ops' },
+      comp: { priority: 1, project: P, domain: 'Ops' },
     },
+    { eid: t5, name: 'cancelled', comp: {} },
     // comments on t1, authored by the two clients
     { eid: c1, name: 'doc', comp: { title: '', body: 'seen it too' } },
     { eid: c1, name: 'comment', comp: { target: t1 } },

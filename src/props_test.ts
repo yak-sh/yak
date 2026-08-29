@@ -206,7 +206,7 @@ Deno.test('normalizeChanges: component values, ids, and edges canonicalize', () 
       {
         eid: 'parent',
         name: 'task',
-        comp: { status: 'WIP', priority: 'P02', assignee: '2' },
+        comp: { priority: 'P02', assignee: '2' },
       },
       {
         eid: 'parent',
@@ -218,7 +218,7 @@ Deno.test('normalizeChanges: component values, ids, and edges canonicalize', () 
       {
         eid: parent,
         name: 'task',
-        comp: { status: 'wip', priority: 2, assignee: child },
+        comp: { priority: 2, assignee: child },
       },
       {
         eid: parent,

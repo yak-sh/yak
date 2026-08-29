@@ -113,7 +113,7 @@ Deno.test('ready: an open requires edge gates; a settled one does not', () => {
   ]
   assertEquals(ready(all, dep(T3)).map((r) => r.eid), [T2]) // T3 open → gated
   let done = rows(graph([
-    ...mk(T4, 5, ago(50), { task: { status: 'done', project: P } }),
+    ...mk(T4, 5, ago(50), { task: { project: P }, completed: {} }),
   ]))
   assertEquals(ready(done, dep(T4)).map((r) => r.eid), [T1, T2])
   // a blocker the caller never fetched counts as open — spend on yes only
@@ -403,7 +403,7 @@ Deno.test('dispatchSpawn: a hot or settled mark clears unspent; a capped one wai
   )
   let done = rows(graph([
     ...persona(),
-    { eid: T3, name: 'task', comp: { status: 'done', project: P } },
+    { eid: T3, name: 'completed', comp: {} }, // T3 wears its end mark → settled
   ]))
   assertEquals(dispatchSpawn(done, [mark], ps, 0), [gone])
   // no free slot: the mark stays pending for the next sweep

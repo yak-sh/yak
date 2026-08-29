@@ -14,11 +14,11 @@ let sent: Change[] = []
 let cast = (cs: Change[]) => sent.push(...cs)
 let unblock = unblocking(cast)
 
-let task = (status = 'open') => {
+let task = () => {
   let eid = uid()
   apply(db, [
     { eid, name: 'doc', comp: { title: 'a task' } },
-    { eid, name: 'task', comp: { status, priority: 0 } },
+    { eid, name: 'task', comp: { priority: 0 } }, // born open (D-24102)
   ])
   return eid
 }
@@ -35,11 +35,14 @@ let requires = (parent: string, child: string) =>
   }])
 let claim = (taskEid: string, session: string) =>
   apply(db, [{ eid: taskEid, name: 'claim', comp: { session } }])
-// End a dep for real: commit the status change, THEN run the post-commit
-// effect on it — the effect reads the dep's committed status through gatedTask.
-let ended = (dep: string, status: string) => {
-  apply(db, [{ eid: dep, name: 'task', comp: { status } }])
-  unblock(dep, { status })
+// End a dep for real: land its terminal MARK (D-24102) — `completed` for done,
+// `cancelled` for cancelled — THEN run the post-commit effect on it. The effect
+// reads the dep's committed status through gatedTask; its comp is ignored (the
+// mark's PRESENCE is the end), so pass {}.
+let ended = (dep: string, word: string) => {
+  let mark = word == 'cancelled' ? 'cancelled' : 'completed'
+  apply(db, [{ eid: dep, name: mark, comp: {} }])
+  unblock(dep, {})
 }
 
 // The knocks minted at a given session in the last cast — each is a knock+deliver
@@ -96,12 +99,14 @@ Deno.test('cancelled ends a dep the same as done', () => {
   assertEquals(knocksTo(s), [t])
 })
 
-Deno.test('a non-terminal status change knocks nobody', () => {
+Deno.test('a claim on a dep is not an ending — nobody is knocked', () => {
   let dep = task()
   let t = task(), s = session()
   requires(t, dep)
   claim(t, s)
-  ended(dep, 'wip')
+  // The dep goes wip via a live claim (D-24102) — no terminal mark lands, so
+  // the unblock effect (registered on completed/cancelled) never fires at all.
+  claim(dep, session())
   assertEquals(knocksTo(s), [])
 })
 

@@ -21,7 +21,15 @@ import {
 } from './mcp.ts'
 import { commandOut } from './commands.ts'
 import { sha } from './sha.ts'
-import { type Change, comps, edges, statuses, uuid, verdicts } from './types.ts'
+import {
+  type Change,
+  comps,
+  edges,
+  statuses,
+  statusOf,
+  uuid,
+  verdicts,
+} from './types.ts'
 import { type Mutation, mutationResult } from './mutation.ts'
 import { slow } from './testing.ts'
 import { backfillChanges } from './backfill.ts'
@@ -1337,15 +1345,20 @@ Deno.test('graph_apply carries a Change.was precondition to apply()', async () =
 Deno.test("undo tool reverses an entity's latest batch by human id", async () => {
   let g = graph()
   let eid = crypto.randomUUID()
+  // Status is DERIVED (D-24102): read it off the entity's marks, not a column.
   let status = () =>
-    snapshot(g.db).changes.find((c) => c.eid == eid && c.name == 'task')
-      ?.comp?.status
+    statusOf(Object.fromEntries(
+      snapshot(g.db).changes.filter((c) => c.eid == eid).map((
+        c,
+      ) => [c.name, c.comp]),
+    ))
   try {
     apply(g.db, [
       { eid, name: 'doc', comp: { title: 'undo me', body: '' } },
       { eid, name: 'task', comp: {} },
     ])
-    apply(g.db, [{ eid, name: 'task', comp: { status: 'done' } }])
+    // `done` is the `completed` mark now — the latest batch undo will reverse.
+    apply(g.db, [{ eid, name: 'completed', comp: {} }])
     let num =
       (g.db.prepare('select num from entity where eid = ?').get(eid) as {
         num: number
@@ -1357,7 +1370,7 @@ Deno.test("undo tool reverses an entity's latest batch by human id", async () =>
         arguments: { id: `T-${num}` },
       }) as ToolResult
       assertEquals(out.isError, undefined)
-      assertMatch(said(out), /undid .*task/)
+      assertMatch(said(out), /undid .*completed/) // the reversed mark
       assertEquals(status(), 'open') // the latest batch was reversed
       // A target that names nothing refuses, never silently no-ops.
       let miss = await client.callTool({

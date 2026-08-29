@@ -98,9 +98,11 @@ Deno.test('basic card commands mint the smallest editable entities', () => {
 })
 
 Deno.test('basic card properties use the standard dot-param grammar', () => {
+  // status is derived (D-24102): a `.status=` on a card mint is dropped, not
+  // written — the honest path to wip is a claim.
   assertEquals(comps('task .title=Next step .priority=2 .status=wip'), {
     doc: { title: 'Next step', body: '' },
-    task: { status: 'wip', priority: 2 },
+    task: { priority: 2 },
   })
   assertEquals(comps('session .id=review'), { session: { id: 'review' } })
   assertEquals(comps('doc .title=Notes .body=some words'), {
@@ -244,11 +246,21 @@ Deno.test('fix: a bare id spawns, words file a task first', () => {
 })
 
 Deno.test('status moves land on the focused task', () => {
-  for (let s of ['done', 'wip', 'open']) {
-    assertEquals(run(s, ctx(T)).changes, [
-      { eid: T, name: 'task', comp: { status: s } },
-    ])
-  }
+  // Status is DERIVED (D-24102): the moves mint/retract marks, never a task
+  // write. `done` wears `completed`; `open` retracts both marks.
+  assertEquals(run('done', ctx(T)).changes, [
+    { eid: T, name: 'completed', comp: {} },
+  ])
+  assertEquals(run('open', ctx(T)).changes, [
+    { eid: T, name: 'completed', comp: null },
+    { eid: T, name: 'cancelled', comp: null },
+  ])
+  // wip is a live claim now — it leases under a session, and refuses without one
+  assertEquals(run('wip', ctx(T, 'sess-x')).changes, [
+    { eid: S, name: 'session', comp: { actor: P } },
+    { eid: T, name: 'claim', comp: { session: S } },
+  ])
+  assertThrows(() => run('wip', ctx(T)), Error, 'run under a session')
   assertEquals(run('done', ctx(T)).msg, 'T-4 → done')
   assertThrows(() => run('done', ctx(B)), Error, 'B-3 is not a task')
   assertThrows(() => run('done', ctx()), Error, 'nothing focused')
@@ -284,7 +296,7 @@ Deno.test('chat starts a taskless model with an optional multiline prompt', () =
     },
   )
   assertThrows(
-    () => run('chat .task.status=done Why?', ctx()),
+    () => run('chat .status=done Why?', ctx()),
     Error,
     'chat: cannot set task',
   )
@@ -325,13 +337,18 @@ Deno.test('comment writes on the focus and reads the shell body convention', () 
 
 Deno.test('cancel: trailing words become a plain comment, same batch', () => {
   assertEquals(run('cancel', ctx(T)).changes, [
-    { eid: T, name: 'task', comp: { status: 'cancelled' } },
+    { eid: T, name: 'cancelled', comp: {} },
   ])
   let why = run('cancel superseded by T-9', ctx(T, 'sess-x'))
-  let move = why.changes!.find((c) => c.name == 'task')!
+  let move = why.changes!.find((c) => c.name == 'cancelled')!
   let doc = why.changes!.find((c) => c.name == 'doc')!
   let comment = why.changes!.find((c) => c.name == 'comment')!
-  assertEquals(move, { eid: T, name: 'task', comp: { status: 'cancelled' } })
+  // the `cancelled` mark IS the status now, its optional reason on the comp
+  assertEquals(move, {
+    eid: T,
+    name: 'cancelled',
+    comp: { reason: 'superseded by T-9' },
+  })
   assertEquals(doc.comp?.body, 'superseded by T-9')
   assertEquals(comment.name, 'comment')
   assertEquals(comment.comp?.target, T)
@@ -382,7 +399,7 @@ Deno.test('open: an argument navigates, none is the status move', () => {
   assertEquals(run('open 4', ctx()).go, T) // bare num
   assertEquals(run(`open ${T}`, ctx()).go, T) // eid
   assertEquals(run('open B-3', ctx(T)).go, B) // argument wins over the move
-  assertEquals(run('open', ctx(T)).changes![0].comp, {})
+  assertEquals(run('open', ctx(T)).changes![0].comp, null) // retracts the mark
   assertEquals(run('open', ctx(T)).go, undefined)
   assertThrows(() => run('open T-99', ctx()), Error, 'no such entity: T-99')
   assertThrows(() => run('open T-4 extra', ctx()), Error, 'usage :open [id]')

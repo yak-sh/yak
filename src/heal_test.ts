@@ -73,7 +73,13 @@ Deno.test('a single break files one keyed, pointed, open ticket', () => {
   assertEquals(mine.length, 1)
   assertEquals(mine[0].hits, 1)
 
-  let task = db.prepare(`select status, priority from task where ${OWNED}`)
+  let task = db.prepare(
+    `select case
+        when exists(select 1 from cancelled x where x.entity = task.entity) then 'cancelled'
+        when exists(select 1 from completed x where x.entity = task.entity) then 'done'
+        when exists(select 1 from claim x where x.entity = task.entity) then 'wip'
+        else 'open' end as status, priority from task where ${OWNED}`,
+  )
     .get(mine[0].eid) as { status: string; priority: number }
   assertEquals(task.status, 'open')
   assertEquals(task.priority, 1) // "cannot" reads fatal → jumps the queue
@@ -362,7 +368,7 @@ Deno.test('a per-fault cooldown suppresses a re-spawn for the same key', () => {
   assertEquals(fixerBlocked(undefined, 'a-cold-key'), null)
 
   // the fault recurs after its ticket closed: a new ticket, but no new fixer
-  db.prepare(`update task set status = 'done' where ${OWNED}`).run(bug1)
+  db.prepare(`insert into completed (entity) values (${idOf})`).run(bug1)
   let bug2 = makeBug(key)
   ensureFixer(cast)(bug2)
   assertEquals(fixersFor(bug2).length, 0)
@@ -422,7 +428,7 @@ Deno.test('fixerRun re-drives pending bugs and reports the tally', () => {
   // Close every earlier test's bug: reset() dropped their fixer marks, which
   // would put them all back in the pending predicate.
   db.exec(
-    `update task set status = 'done' where entity in (select entity from bug)`,
+    `insert or ignore into completed (entity) select entity from bug`,
   )
   let bug = makeBug('sweep-me')
   let out = fixerRun({ quiet: 0, cooldown: 1800, cap: 2 }, cast)
@@ -441,7 +447,7 @@ Deno.test('the boot sweep re-drives only open, un-spawned tickets', () => {
   let spawned = makeBug('sweep-spawned')
   makeFixer(spawned) // already has a fixer
   let closed = makeBug('sweep-closed')
-  db.prepare(`update task set status = 'cancelled' where ${OWNED}`).run(closed)
+  db.prepare(`insert into cancelled (entity) values (${idOf})`).run(closed)
 
   let pending = (db.prepare(
     `select o.eid as eid from bug join entity o on o.id = bug.entity

@@ -288,10 +288,11 @@ Deno.test('query: adopt pins down scalar equalities only', () => {
   assertEquals(adopt(preds, 'task'), { project: 'p1', priority: 2 })
   assertEquals(adopt(preds, 'doc'), {})
   assertEquals(adopt(parseQuery(''), 'task'), {})
-  // assignee rides the same generality: a board of Jeff's plate adopts
+  // assignee rides the same generality: a board of Jeff's plate adopts — and a
+  // status equality is a scalar too, so the derived .status=open pins down.
   assertEquals(
     adopt(parseQuery('.assignee=u1&.status=open'), 'task'),
-    { assignee: 'u1' },
+    { assignee: 'u1', status: 'open' },
   )
 })
 
@@ -624,7 +625,7 @@ Deno.test('the EDGES rider is a delivery, never a filter', () => {
   // handed, so adding `.edges!` to a live board cannot move what the board holds.
   let ps = parseQuery('.task.status=open&.edges.peers=task.status')
   assert(matchQuery({ task: {} }, ps))
-  assert(!matchQuery({ task: { status: 'done' } }, ps))
+  assert(!matchQuery({ task: {}, completed: {} }, ps))
   // and a rider ALONE has said nothing about membership
   assert(matchQuery({ doc: { title: 'anything' } }, parseQuery('.edges!')))
 })
@@ -975,7 +976,7 @@ Deno.test('.order=hot is a ranking, not a filter', () => {
   let ps = parseQuery('.order=hot&.status=open')
   assertEquals(orderOf(ps), 'hot')
   assertEquals(matchQuery(row({}), ps), true) // never screens
-  assertEquals(adopt(ps, 'task'), {}) // never adopts
+  assertEquals(adopt(ps, 'task'), { status: 'open' }) // order adds nothing; the status pred adopts
   assertEquals(orderOf(parseQuery('.status=open')), undefined)
 })
 
@@ -984,7 +985,7 @@ Deno.test('.near supplies similarity rank without becoming membership', () => {
   assertEquals(nearOf(ps), 'T-3')
   assertEquals(orderOf(ps), 'similar')
   assertEquals(matchQuery(row({}), ps), true)
-  assertEquals(adopt(ps, 'task'), {})
+  assertEquals(adopt(ps, 'task'), { status: 'open' })
 })
 
 Deno.test('bare text uses FTS token and explicit prefix membership', () => {
@@ -1427,7 +1428,7 @@ Deno.test('filter bar: extra preds AND into a saved query', () => {
   let both = [...parseQuery('.status=open'), ...parseQuery('.domain=Ops')]
   assert(matchQuery(row({}), both))
   assert(!matchQuery(row({ domain: 'Eng' }), both))
-  assert(!matchQuery(row({ status: 'done' }), both))
+  assert(!matchQuery(row({}, { completed: {} }), both))
   // a half-typed bar line throws like any query — the bar catches, inert
   assertThrows(() => parseQuery('.hovercraf=x'), Error, 'unknown prop')
 })

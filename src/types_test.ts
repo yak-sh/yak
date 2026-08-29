@@ -161,6 +161,9 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'decided.by',
       'proposed.by',
       'feedback.by',
+      // The done/cancelled marks keep their byline past the actor's tombstone.
+      'completed.by',
+      'cancelled.by',
     ]),
   )
 })

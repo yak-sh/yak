@@ -2463,10 +2463,18 @@ Deno.test('reapLeases retains a parked-waiting claim, reaps the rest', () => {
     ])
     if (opts.blocker) {
       let b = uid()
+      // Status is DERIVED: a 'done'/'cancelled' blocker gets the matching mark;
+      // 'open' stays bare.
+      let mark: Change[] = opts.blocker == 'done'
+        ? [{ eid: b, name: 'completed', comp: {} }]
+        : opts.blocker == 'cancelled'
+        ? [{ eid: b, name: 'cancelled', comp: {} }]
+        : []
       apply(db, [
         { eid: b, name: 'entity', comp: { eid: b } },
         { eid: b, name: 'doc', comp: { title: 'blocker', body: '' } },
-        { eid: b, name: 'task', comp: { status: opts.blocker } },
+        { eid: b, name: 'task', comp: {} },
+        ...mark,
         { eid: task, name: 'dependency', comp: { type: 'requires', child: b } },
       ])
     }

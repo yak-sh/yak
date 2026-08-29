@@ -88,7 +88,8 @@ Deno.test('a pending proposal keeps deletion named as deletion', () => {
   cache.value = {
     design: {
       ...cache.value.design,
-      task: { eid: 'design', status: 'cancelled', priority: 1 },
+      task: { eid: 'design', priority: 1 },
+      cancelled: { eid: 'design' },
     },
   }
   assertEquals(labels().includes('accept'), false)

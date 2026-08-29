@@ -26,6 +26,7 @@ ownVector()
 let { axes } = await import('./testvec.ts')
 let { slow } = await import('./testing.ts')
 let { assertEquals } = await import('@std/assert')
+let { statusOf } = await import('./types.ts')
 
 let uid = () => crypto.randomUUID()
 let DAY = 86_400_000
@@ -83,8 +84,12 @@ let task = (title: string, status: string) => {
   let eid = uid()
   apply(db, [
     { eid, name: 'doc', comp: { title, body: '' } },
-    { eid, name: 'task', comp: { status } },
+    { eid, name: 'task', comp: {} },
   ])
+  if (status == 'done') apply(db, [{ eid, name: 'completed', comp: {} }])
+  else if (status == 'cancelled') {
+    apply(db, [{ eid, name: 'cancelled', comp: {} }])
+  }
   let num = (db.prepare('select num from entity where eid = ?').get(eid) as {
     num: number
   }).num
@@ -173,7 +178,7 @@ Deno.test('considerChanges: a drift finding becomes a consider task about its so
     'consider: add a delete verb',
   )
   let task = cs.find((c) => c.name == 'task')!.comp!
-  assertEquals(task.status, 'open')
+  assertEquals(statusOf(task), 'open')
   assertEquals(task.priority, 2)
   assertEquals(task.project, 'p-eid')
   let edge = cs.find((c) => c.name == 'dependency')!.comp!
@@ -221,7 +226,12 @@ slow(
     )
     // A consider task, about the combed session, in the venture.
     let task = db.prepare(
-      `select t.status, (select eid from entity where id = t.project) as project,
+      `select case
+          when exists(select 1 from cancelled x where x.entity = t.entity) then 'cancelled'
+          when exists(select 1 from completed x where x.entity = t.entity) then 'done'
+          when exists(select 1 from claim x where x.entity = t.entity) then 'wip'
+          else 'open' end as status,
+              (select eid from entity where id = t.project) as project,
               doc.title from task t
        join doc_value doc on doc.entity = t.entity
        join dependency dep on dep.parent = t.entity

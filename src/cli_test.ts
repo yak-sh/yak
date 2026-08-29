@@ -249,9 +249,11 @@ Deno.test('subject: sentences route through the existing CLI verbs', () => {
     cmd: 'show',
     args: ['T-3', '--json'],
   })
+  // status is derived (D-24102): `is <status>` drives the palette verb that
+  // mints/retracts the mark, never a `set .status=` write
   assertEquals(route('T-3 is wip'), {
-    cmd: 'set',
-    args: ['T-3', '.status=wip'],
+    cmd: 'T-3',
+    args: [':wip'],
   })
   assertEquals(route('T-3 edge'), {
     cmd: 'help',

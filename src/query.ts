@@ -1529,7 +1529,9 @@ let read = (c: Comps, comp: string, prop: string): unknown => {
   // The one DERIVED column (D-24102): task.status is computed from the
   // completed/cancelled/claim comps, never stored — the same value statusOf
   // gives every renderer, so a filter, projection or tally reads it identically.
-  if (comp == 'task' && prop == 'status') return statusOf(c)
+  if (comp == 'task' && prop == 'status') {
+    return c.task ? statusOf(c) : undefined
+  }
   let v = c[comp]?.[prop]
   return v == null && comp == 'updated' && prop == 'at' ? c.created?.at : v
 }
@@ -1648,7 +1650,8 @@ let starts = (s: string, pre: string) =>
 
 // a column's label: its comp, marked when it's filterable but never
 // wire-writable (in routes via `stamped`, absent from comps)
-let mark = (c: string, p: string) => comps[c]?.[p] ? c : `${c} · stamped`
+let mark = (c: string, p: string) =>
+  comps[c]?.[p] || derivedProps[c]?.[p] ? c : `${c} · stamped`
 
 let typeOf = (comp: string, prop: string) => typed(comp, prop)?.type
 
@@ -1671,7 +1674,11 @@ let bares = (): Cand[] => {
   for (let [p, cs] of owners) {
     if (edgeish.test(p)) continue
     let writable = cs.filter((c) => p in (comps[c] ?? {}))
-    let routed = writable.length ? writable : cs
+    // A DERIVED prop (task.status) reads like a stored column but owns no wire
+    // column, so it has no `writable` owner — route it to its declaring comp so
+    // `.status` is still offered from a bare `.`, the way pred() resolves it.
+    let derived = cs.filter((c) => p in (derivedProps[c] ?? {}))
+    let routed = writable.length ? writable : derived.length ? derived : cs
     if (
       routed.length == 1 || sessionTwin(routed) || sharedRef(p, routed)
     ) {

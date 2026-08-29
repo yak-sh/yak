@@ -169,7 +169,6 @@ Deno.test('normalized: removing a component tombstones its then-present fields',
   // Every field the task still held gets a present=0 tombstone with a null value.
   assertEquals(fields.every((f) => f.present == 0 && f.value == null), true)
   let names = new Set(fields.map((f) => f.field))
-  assertEquals(names.has('status'), true)
   assertEquals(names.has('priority'), true)
 })
 
@@ -193,7 +192,7 @@ Deno.test('normalized: create-then-remove in one batch tombstones the fields', (
   let n = (d.prepare(
     'select count(*) as n from journal_field where change = ? and present = 0',
   ).get(change.id) as { n: number }).n
-  assertEquals(n >= 2, true)
+  assertEquals(n >= 1, true)
 })
 
 Deno.test('normalized: entity deletion cascades to a remove per casualty', () => {

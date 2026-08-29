@@ -12,7 +12,7 @@ import {
   resolve,
 } from './registry.ts'
 import { mount } from './mount.ts'
-import { type Ent } from '../types.ts'
+import { type Ent, statusOf } from '../types.ts'
 import { assertEquals } from '@std/assert'
 
 // A fixture renderer is a component like any other — it just paints its tag
@@ -101,7 +101,7 @@ Deno.test('actions union across matching contributors, in order', () => {
     {
       match: has('task'),
       acts: (e) => [{
-        label: `set-${(e.task as { status: string }).status}`,
+        label: `set-${statusOf(e)}`,
         run: () => {},
       }],
     },

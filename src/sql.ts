@@ -585,6 +585,10 @@ export let aggregateSql = (preds: Pred[], now = Date.now()): Sql | null => {
   // distinct — comes back as one value→count shape.
   if (agg.agg == 'count') return countSql(preds, now)
   if (!agg.comp || !agg.prop) return null
+  // A DERIVED column (D-24102: task.status) has no table to select — decline so
+  // the caller tallies/distincts it in JS through query.ts read(), exactly as a
+  // declining filter falls to the matcher.
+  if (derived(agg.comp, agg.prop)) return null
   let tag = tagOf(agg.comp, agg.prop)
   if (!['text', 'enum', 'eid'].includes(String(tag))) return null
   let built = build(preds, 'entity', [], false, now)

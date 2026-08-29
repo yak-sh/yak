@@ -6,6 +6,7 @@ let { apply, open } = await import('./db.ts')
 let { db } = await import('./live_db.ts')
 let { inert, obeyed } = await import('./obey.ts')
 let { orderIn } = await import('./commands.ts')
+let { statusOf } = await import('./types.ts')
 let { assertEquals, assertMatch } = await import('@std/assert')
 
 open()
@@ -41,12 +42,19 @@ let task = (title = 'A thing to do') => {
   return eid
 }
 
-let status = (eid: string) =>
-  (db.prepare(
-    'select status from task where entity = (select id from entity where eid = ?)',
-  ).get(eid) as
-    | { status: string }
-    | undefined)?.status
+// Status is DERIVED now (D-24102): it reads off the terminal marks and a live
+// claim, never a stored column. Read their presence and let statusOf name it.
+let status = (eid: string) => {
+  let has = (tbl: string) =>
+    db.prepare(
+        `select 1 from ${tbl} where entity = (select id from entity where eid = ?)`,
+      ).get(eid) != null || undefined
+  return statusOf({
+    cancelled: has('cancelled'),
+    completed: has('completed'),
+    claim: has('claim'),
+  })
+}
 
 // Every comment aimed at the target, oldest first — the receipts are in
 // here, and nothing else should be.
@@ -69,7 +77,10 @@ Deno.test('a comment that says :done closes the task it was said on', () => {
 
 Deno.test('the order rides with its prose, and the prose stays put', () => {
   let t = task()
-  say(t, ':wip\n\nStarting on this now — the parser is the hard half.')
+  // wip is a live claim now (D-24102) — it needs a session to hold the lease.
+  let s = uid()
+  apply(db, [{ eid: s, name: 'session', comp: { id: uid() } }])
+  say(t, ':wip\n\nStarting on this now — the parser is the hard half.', s)
   assertEquals(status(t), 'wip')
   assertMatch(replies(t)[0].body, /parser is the hard half/)
 })
@@ -139,7 +150,7 @@ Deno.test('the answer rides the wire, so every screen sees it', () => {
   let t = task()
   heard = []
   say(t, ':done')
-  assertEquals(heard.some((c) => c.name == 'task'), true)
+  assertEquals(heard.some((c) => c.name == 'completed'), true)
   assertEquals(heard.some((c) => c.name == 'comment'), true)
 })
 

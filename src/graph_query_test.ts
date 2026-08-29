@@ -167,8 +167,14 @@ Deno.test('evalAgg answers .distinct/.tally, filtered and null-for-membership', 
   let mk = (domain: string, status: string) => {
     let eid = uuid()
     apply(db, [
-      { eid, name: 'task', comp: { status, domain } },
+      { eid, name: 'task', comp: { domain } },
       { eid, name: 'doc', comp: { title: 't', body: '' } },
+      // status is DERIVED (D-24102): the mark makes the derived value
+      ...(status == 'done'
+        ? [{ eid, name: 'completed', comp: {} }]
+        : status == 'cancelled'
+        ? [{ eid, name: 'cancelled', comp: {} }]
+        : []),
     ])
   }
   mk('Ops', 'open')

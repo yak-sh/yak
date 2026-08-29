@@ -7138,8 +7138,15 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
     // reads its TARGET through the same fetcher (compsOf doubles as the
     // ent argument), so `.comment.target.doc.title~=j` walks every hop's
     // component one row further.
-    let owners = (comp: string, prop: string) =>
-      comp ? [comp] : propOwners(prop)
+    let owners = (comp: string, prop: string) => {
+      let cs = comp ? [comp] : propOwners(prop)
+      // task.status is DERIVED (D-24102), computed by statusOf from the
+      // completed/cancelled/claim marks — hydrate those so the JS refinement
+      // reads the right value, exactly as a full materialized bag would.
+      return prop == 'status' && cs.includes('task')
+        ? [...cs, 'completed', 'cancelled', 'claim']
+        : cs
+    }
     // Every component a pred reads, forward path AND reverse hop (its child ref
     // comp plus, recursively, its sub-filter's) — so compsOf can hydrate a hop's
     // far side, whichever direction it walks.

@@ -2,8 +2,9 @@
 //   deno task install       (deno install -g — puts `task` on PATH)
 //   task tui                 the terminal UI
 //   task list [.status=open .priority<=1 .domain=Ops,Eng]  filter grammar
-//   task new .title="Hi" [.body=... .status=wip]   (bare words = title)
-//   task set T-3 .status=done                       patch any entity
+//   task new .title="Hi" [.body=... .priority=P1]   (bare words = title)
+//   task done T-3   ·   task wip T-3   ·   task cancel T-3 [reason]
+//   task set T-3 .priority=P1                        patch any entity
 //   task show T-3                                   one entity, whole
 // Dot-params route by prop through the shared vocabulary (.title → doc);
 // collisions use the explicit .comp.prop spelling. TASKS_HOST points at a

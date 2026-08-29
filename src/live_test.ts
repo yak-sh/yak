@@ -57,6 +57,7 @@ import {
   shelfFor,
   sieve,
   socketStale,
+  statusOf,
   subEids,
   subscriptionChecks,
   topZ,
@@ -74,6 +75,17 @@ import {
   assertStrictEquals,
 } from '@std/assert'
 import { until } from './testing.ts'
+
+// Status is DERIVED (D-24102): to make a cache Ent read as done/wip/cancelled,
+// give it the mark/claim comp statusOf keys off, not a stored status column.
+let mark = (status: string, eid: string): Record<string, unknown> =>
+  status == 'done'
+    ? { completed: { eid } }
+    : status == 'cancelled'
+    ? { cancelled: { eid } }
+    : status == 'wip'
+    ? { claim: { eid, session: 's' } }
+    : {}
 
 Deno.test('findEid indexes human ids, aliases, and short handles', () => {
   cache.value = {
@@ -831,7 +843,7 @@ Deno.test('rider peers are held apart from members, and evicted with them', () =
   })
   // The peer paints — but it is NOT a member, or a useQuery over this sub's
   // query would wrongly gain it.
-  assertEquals(ent('blocker').task?.status, 'open')
+  assertEquals(statusOf(ent('blocker')), 'open')
   assertEquals(subEids('card')?.has('blocker'), false)
   assertEquals(subEids('card')?.has('a'), true)
 
@@ -839,9 +851,9 @@ Deno.test('rider peers are held apart from members, and evicted with them', () =
   landSub({
     sub: 'card',
     changes: [],
-    peers: [{ eid: 'blocker', name: 'task', comp: { status: 'done' } }],
+    peers: [{ eid: 'blocker', name: 'completed', comp: {} }],
   })
-  assertEquals(ent('blocker').task?.status, 'done')
+  assertEquals(statusOf(ent('blocker')), 'done')
 
   // Nothing points at it any more: the peer leaves the cache with its edge.
   landSub({
@@ -1439,7 +1451,8 @@ Deno.test('byWarmth: recalled-often beats merely-new beats faded', () => {
 Deno.test('gated: red keys on the blocked facet, never an open requires', () => {
   let mk = (status: string, extra = {}) => ({
     entity: { eid: `x`, num: 0, created_at: '' },
-    task: { eid: 'x', status, priority: 1 },
+    task: { eid: 'x', priority: 1 },
+    ...mark(status, 'x'),
     ...extra,
   })
   // An open requires child: calm, not red — one open dep, no alarm.
@@ -1467,7 +1480,8 @@ Deno.test('gated: red keys on the blocked facet, never an open requires', () => 
 Deno.test('ent: refs put open work before settled work', () => {
   let sp = (eid: string, status = 'open') => ({
     entity: { eid, num: 0, created_at: '' },
-    task: { eid, status, priority: 1, domain: null },
+    task: { eid, priority: 1, domain: null },
+    ...mark(status, eid),
   })
   cache.value = {
     p: sp('p'),

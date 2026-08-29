@@ -230,13 +230,18 @@ Deno.test('window: a birth inside the bound pushes the oldest member out', () =>
 })
 
 Deno.test('window: a departure pulls the next-newest member in', () => {
-  let { s, seen, last } = dial(`${MINE}&.task.status=open&.limit=3`, 'w2')
+  // An EXACT window (a compilable filter) is the one whose edge subserve
+  // maintains by re-answering — the derived .task.status is not compilable, so
+  // the departure is driven through the same domain filter the window screens on.
+  let { s, seen, last } = dial(`${MINE}&.limit=3`, 'w2')
   let held = new Set(last().changes!.map((c) => c.eid))
   let inside = [...held].sort((a, b) => numOf.get(b)! - numOf.get(a)!)[0]
   // The rows below the window — one of them should be pulled up.
   let beneath = newest.filter((e) => !held.has(e))
 
-  let batch = [{ eid: inside, name: 'task', comp: { status: 'done' } }]
+  // Move it out of the domain the window screens on — it leaves the query
+  // exactly as a status flip once did, and nothing in the batch names its refill.
+  let batch = [{ eid: inside, name: 'task', comp: { domain: 'out' } }]
   apply(db, batch)
   seen.length = 0
   s.maintain(batch as never)

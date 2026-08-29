@@ -105,6 +105,9 @@ put('w4', {
 })
 put('w5', { doc: { title: 'no stamps at all' } })
 
+// A session to hold e2's claim — wip derives from an active claim (D-24102),
+// and a claim's session ref must resolve, so the session is seeded first.
+put('sc', { session: { id: 'sc' } })
 put('e1', {
   doc: { title: 'alpha widget', body: 'the first one' },
   task: { priority: 1, domain: 'Eng', project: 'p1' },
@@ -112,11 +115,15 @@ put('e1', {
 })
 put('e2', {
   doc: { title: 'beta WIDGET', body: '100% sure' },
-  task: { status: 'wip', priority: 2, domain: 'Ops', project: 'p1' },
+  task: { priority: 2, domain: 'Ops', project: 'p1' },
+  // wip is derived from an active claim (D-24102), not a stored column.
+  claim: { session: 'sc' },
 })
 put('e3', {
   doc: { title: 'gamma', body: 'under_score' },
-  task: { status: 'done', priority: 0, domain: '', project: null },
+  task: { priority: 0, domain: '', project: null },
+  // done is derived from a completed mark (D-24102), not a stored column.
+  completed: { at: '2026-08-02T00:00:00.000Z', by: null },
 })
 put('e4', { doc: { title: 'delta', body: '' } }) // no task component at all
 put('e5', {

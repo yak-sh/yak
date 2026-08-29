@@ -57,10 +57,18 @@ let { db } = await import('./live_db.ts')
 let { assertEquals, assertMatch, assertNotEquals, assertThrows } = await import(
   '@std/assert'
 )
-let { comps, kindOrder, lazy, partition, sessionOf, shortId, stamped } =
-  await import(
-    './types.ts'
-  )
+let {
+  comps,
+  kindOrder,
+  lazy,
+  partition,
+  sessionOf,
+  shortId,
+  stamped,
+  statusOf,
+} = await import(
+  './types.ts'
+)
 let { bareDb } = await import('./testdb.ts')
 let { DatabaseSync } = await import('./sqlite.ts')
 let { slow } = await import('./testing.ts')
@@ -150,9 +158,9 @@ Deno.test('correct: an optimistic comp change is reverted to the stored value', 
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
     { eid: t, name: 'task', comp: { priority: 'P2' } },
   ])
-  // The sender optimistically moved it to wip; the server rejected the batch.
-  let out = correct(d, [{ eid: t, name: 'task', comp: { status: 'wip' } }])
-  assertEquals(reverted(out, t, 'task')!.comp!.status, 'open')
+  // The sender optimistically bumped its priority; the server rejected the batch.
+  let out = correct(d, [{ eid: t, name: 'task', comp: { priority: 'P1' } }])
+  assertEquals(reverted(out, t, 'task')!.comp!.priority, 2)
   // Every stored component rides back whole (a delete-revert needs them all).
   assertEquals(!!reverted(out, t, 'doc'), true)
   assertEquals(!!reverted(out, t, 'entity'), true)
@@ -446,6 +454,14 @@ Deno.test('partition: only entry is lazy, and snapshot honors the declaration', 
 let compOf = (d: ReturnType<typeof open>, eid: string, name: string) =>
   readComp(d, eid, name)
 let comp = (eid: string, name: string) => compOf(db, eid, name)
+// A task's DERIVED status (D-24102): statusOf reads the completed/cancelled
+// marks and the live claim off the entity's comps.
+let status = (eid: string) =>
+  statusOf({
+    claim: comp(eid, 'claim'),
+    completed: comp(eid, 'completed'),
+    cancelled: comp(eid, 'cancelled'),
+  })
 
 let tag = (
   db: ReturnType<typeof fresh>,
@@ -823,7 +839,6 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
       eid: 'typed-subject',
       name: 'task',
       comp: {
-        status: 'WIP',
         priority: 'P02',
         assignee: 'typed-target',
         domain: 'Eng',
@@ -850,7 +865,6 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
       eid: subject,
       name: 'task',
       comp: {
-        status: 'wip',
         priority: 2,
         assignee: target,
         domain: 'Eng',
@@ -1000,7 +1014,7 @@ Deno.test('a column naming nothing is refused, not silently defaulted', () => {
     () =>
       apply(db, [
         { eid: t, name: 'doc', comp: { title: 'fine' } },
-        { eid: t, name: 'task', comp: { status: 'done', statuss: 'done' } },
+        { eid: t, name: 'task', comp: { priority: 1, statuss: 'done' } },
       ]),
     Error,
     'unknown column: task.statuss',
@@ -1600,34 +1614,27 @@ Deno.test('claim is a lease: conflict throws + audits, same session refreshes', 
 })
 
 Deno.test('a claim implies wip: open→wip, done stays, wip unchanged', () => {
-  let s = uid()
+  let s = uid(), s2 = uid()
   let todo = uid(), done = uid(), busy = uid()
   apply(db, [
     { eid: s, name: 'session', comp: { id: 'sess-c' } },
+    { eid: s2, name: 'session', comp: { id: 'sess-c2' } },
     { eid: todo, name: 'task', comp: {} },
-    { eid: done, name: 'task', comp: { status: 'done' } },
-    { eid: busy, name: 'task', comp: { status: 'wip' } },
+    { eid: done, name: 'task', comp: {} },
+    { eid: done, name: 'completed', comp: {} },
+    // already-wip: a live claim from another session
+    { eid: busy, name: 'task', comp: {} },
+    { eid: busy, name: 'claim', comp: { session: s2 } },
   ])
-  // claiming an open task drags it to wip in the same batch, and the wire
-  // hears the status move as a synthesized task change
-  let out = apply(db, [{ eid: todo, name: 'claim', comp: { session: s } }])
-  assertEquals(comp(todo, 'task')?.status, 'wip')
-  assertEquals(
-    out.some((c) =>
-      c.eid == todo && c.name == 'task' && c.comp?.status == 'wip'
-    ),
-    true,
-  )
-  // a stray claim never reopens a closed task
+  // claiming an open task derives wip the moment the claim lands
+  assertEquals(status(todo), 'open')
+  apply(db, [{ eid: todo, name: 'claim', comp: { session: s } }])
+  assertEquals(status(todo), 'wip')
+  // a stray claim never reopens a closed task (the completed mark wins)
   apply(db, [{ eid: done, name: 'claim', comp: { session: s } }])
-  assertEquals(comp(done, 'task')?.status, 'done')
-  // an already-wip task is untouched (no spurious status write)
-  let busyOut = apply(db, [{ eid: busy, name: 'claim', comp: { session: s } }])
-  assertEquals(comp(busy, 'task')?.status, 'wip')
-  assertEquals(
-    busyOut.some((c) => c.eid == busy && c.name == 'task'),
-    false,
-  )
+  assertEquals(status(done), 'done')
+  // an already-wip task stays wip
+  assertEquals(status(busy), 'wip')
 })
 
 Deno.test('claim release pushes the actor stack; reclaim and settle pop it', () => {
@@ -1642,7 +1649,7 @@ Deno.test('claim release pushes the actor stack; reclaim and settle pop it', () 
     ...[a, b, c].map((eid) => ({
       eid,
       name: 'task',
-      comp: { status: 'wip' },
+      comp: {},
     })),
   ])
   for (let eid of [a, b, c]) {
@@ -1669,7 +1676,7 @@ Deno.test('claim release pushes the actor stack; reclaim and settle pop it', () 
     take.some((x) => x.eid == c && x.name == 'resume' && x.comp == null),
     true,
   )
-  apply(db, [{ eid: b, name: 'task', comp: { status: 'done' } }])
+  apply(db, [{ eid: b, name: 'completed', comp: {} }])
   assertEquals(comp(b, 'resume'), undefined)
   assertEquals(comp(a, 'resume')?.actor, actor)
 
@@ -2195,7 +2202,7 @@ Deno.test('decided: the wire dates and signs it, the server names the instrument
   let t = uid()
   apply(d, [
     { eid: t, name: 'doc', comp: { title: 'ship the thing' } },
-    { eid: t, name: 'task', comp: { status: 'done' } },
+    { eid: t, name: 'task', comp: {} },
   ])
   let out = apply(
     d,
@@ -3621,7 +3628,8 @@ Deno.test('search: terms and filters mix in one line', () => {
   let a = uid(), b = uid()
   apply(db, [
     { eid: a, name: 'doc', comp: { title: 'Quokka feeding run' } },
-    { eid: a, name: 'task', comp: { status: 'done' } },
+    { eid: a, name: 'task', comp: {} },
+    { eid: a, name: 'completed', comp: {} },
     { eid: b, name: 'doc', comp: { title: 'Quokka photo shoot' } },
     { eid: b, name: 'task', comp: {} },
   ])
@@ -3995,14 +4003,14 @@ Deno.test('a change and its commentary land in one atomic batch', () => {
   apply(
     db,
     [
-      { eid: t, name: 'task', comp: { status: 'done' } },
+      { eid: t, name: 'completed', comp: {} },
       { eid: c, name: 'doc', comp: { title: '', body: 'proof landed' } },
       { eid: c, name: 'comment', comp: { target: t } },
     ],
     undefined,
     s,
   )
-  assertEquals(comp(t, 'task')?.status, 'done')
+  assertEquals(status(t), 'done')
   assertEquals(comp(c, 'doc')?.body, 'proof landed')
   assertEquals(comp(c, 'created')?.via, s)
   // the old journal pseudo-change is dead vocabulary: it mints nothing
@@ -4317,7 +4325,7 @@ Deno.test('delta: snapshot@C0 + delta(C0) matches the live broadcast stream, cas
       },
     ],
     [{ eid: t, name: 'doc', comp: { title: 'doomed', body: 'v2 edit' } }],
-    [{ eid: other, name: 'task', comp: { status: 'wip' } }], // survivor re-touched
+    [{ eid: other, name: 'task', comp: { priority: 1 } }], // survivor re-touched
     [{ eid: t, name: 'entity', comp: null }], // cascade
   ] as Wire[][]
 

@@ -349,9 +349,10 @@ Deno.test('fanout: commentary born with a task stays in its filing event', () =>
     update created set at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 hour')
     where ${OWNED}
   `).run(filed)
-  let later = uid()
+  let later = uid(), sess = uid()
   apply(db, [
-    { eid: filed, name: 'task', comp: { status: 'wip' } },
+    { eid: sess, name: 'session', comp: { id: 'S-fanout' } },
+    { eid: filed, name: 'claim', comp: { session: sess } },
     { eid: later, name: 'doc', comp: { title: '', body: 'new words' } },
     { eid: later, name: 'comment', comp: { target: filed } },
   ])

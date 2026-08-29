@@ -104,13 +104,13 @@ Deno.test('$edit refuses: non-unique, unchanged, and non-text', () => {
   )
   // And $edit on a non-text column (an enum) is refused outright.
   let T = uid()
-  apply(db, [{ eid: T, name: 'task', comp: {} }])
+  apply(db, [{ eid: T, name: 'venture', comp: {} }])
   assertThrows(
     () =>
       apply(db, [{
         eid: T,
-        name: 'task',
-        comp: { status: { $edit: { old: 'open', new: 'wip' } } },
+        name: 'venture',
+        comp: { phase: { $edit: { old: 'idea', new: 'building' } } },
       }]),
     Error,
     'not a wire-writable text column',

@@ -80,13 +80,13 @@ let world = () => {
     }),
     ...ent(T1, 3, {
       doc: { title: 'Claimed A', body: '' },
-      task: { status: 'wip' },
+      task: {},
       claim: { session: S1 },
       created: { at: '2026-01-01', by: V },
     }),
     ...ent(T2, 4, {
       doc: { title: 'Claimed B (muted)', body: '' },
-      task: { status: 'wip' },
+      task: {},
       claim: { session: S1 },
       created: { at: '2026-01-01', by: V },
     }),
@@ -267,7 +267,7 @@ slow(
       }),
       ...ent(RT, 102, {
         doc: { title: 'Route task', body: '' },
-        task: { status: 'wip' },
+        task: {},
         claim: { session: RS },
         created: { at: '2026-02-01', by: RV },
       }),

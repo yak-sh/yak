@@ -69,7 +69,7 @@ Deno.test('the index is a typed grid and grid mode is bare tiles', async () => {
     assertEquals(table.tagName, 'DIV')
     assertEquals(
       [...root.querySelectorAll('.Admin_Cell')].map((x) => x.textContent),
-      ['T-2', 'Ship it', 'open', 'P1', 'Task Graph', '—', '—', ''],
+      ['T-2', 'Ship it', 'P1', 'Task Graph', '—', '—', ''],
     )
 
     let grid = [...root.querySelectorAll<HTMLButtonElement>('.Admin_Tool')]
@@ -134,7 +134,7 @@ Deno.test('facet pages list their carriers without widening task', async () => {
       'P-19Task Graphtask@bot.yak.sh',
     ])
     assertEquals(await texts('alias', 'P-19'), ['P-19Task Graphtasks—'])
-    assertEquals(await texts('task', 'T-20'), ['T-20Ship itopenP1Task Graph——'])
+    assertEquals(await texts('task', 'T-20'), ['T-20Ship itP1Task Graph——'])
   } finally {
     render(null, root)
     restore()

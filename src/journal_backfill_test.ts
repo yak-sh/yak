@@ -148,7 +148,7 @@ Deno.test('backfill: a historical removal tombstones the then-present fields', (
   assertEquals(fields.every((f) => f.present == 0 && f.value == null), true)
   assertEquals(
     new Set(fields.map((f) => f.field)),
-    new Set(['status', 'priority']),
+    new Set(['priority']),
   )
 })
 
