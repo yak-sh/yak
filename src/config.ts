@@ -153,6 +153,22 @@ export let catalog: Spec[] = [
       'the whole park→wake loop is verified end to end (T-21453). Any of ' +
       "'1'/'true'/'on'/'yes' enables it.",
   },
+  {
+    key: 'DISPATCH_EXCLUDE',
+    label: 'Dispatch provider denylist',
+    group: 'dispatch',
+    type: 'text',
+    sensitive: false,
+    default: '',
+    help: 'Provider names the dispatch sweep must NOT draw — a comma- or ' +
+      'space-separated list. The autonomous rotation drops these before it ' +
+      'picks, so a task whose plan resolves to an excluded provider is left ' +
+      'for the next sweep instead of spawned; every other spawn door (an ' +
+      'operator explicitly picking the provider) is untouched. The escape ' +
+      'hatch for a provider that launches everywhere but this box (T-24115): ' +
+      'list its CLI fallback too, e.g. "codex, codex-cli", or the default ' +
+      'model still routes to the fallback. Empty by default.',
+  },
 ]
 
 export let byKey: Map<string, Spec> = new Map(catalog.map((s) => [s.key, s]))

@@ -10,6 +10,7 @@ import {
   authorized,
   backlog,
   dispatchSpawn,
+  excluded,
   inFlight,
   on,
   ready,
@@ -170,6 +171,29 @@ Deno.test('dispatchSpawn: fills free slots, most urgent first', () => {
   // one slot already spent leaves one spawn; cap 0 leaves none
   assertEquals(sessions(dispatchSpawn(all, [], ps, 1)).length, 1)
   assertEquals(dispatchSpawn(all, [], ps, 0), [])
+})
+
+Deno.test('excluded: names split on commas/space; empty bars nothing', () => {
+  assertEquals([...excluded('codex, codex-cli')], ['codex', 'codex-cli'])
+  assertEquals([...excluded('codex codex-cli')], ['codex', 'codex-cli'])
+  assertEquals([...excluded('')], [])
+  assertEquals([...excluded(undefined)], [])
+})
+
+Deno.test('dispatchSpawn: a task pinned to an excluded provider is skipped, not stopped', () => {
+  // T1 pins codex via its spawn hint; the sweep's ps omits codex (excluded
+  // upstream), so T1's plan resolves to codex — barred. T2 keeps the default
+  // claude and still spawns: an excluded pin skips the task, never the sweep.
+  let all = rows(graph([
+    {
+      eid: T1,
+      name: 'spawn',
+      comp: { provider: 'codex', model: 'gpt-5.6-sol' },
+    },
+  ]))
+  let out = dispatchSpawn(all, [], ps, 2)
+    .filter((c) => c.name == 'session').map((c) => c.comp!.requested_task)
+  assertEquals(out, [T2])
 })
 
 Deno.test('dispatchSpawn: a held or asked-for task is skipped', () => {

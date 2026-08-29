@@ -151,6 +151,13 @@ export let slots = (value: string | undefined) => {
 export let on = (value: string | undefined) =>
   ['1', 'true', 'on', 'yes'].includes((value ?? '').trim().toLowerCase())
 
+// The provider denylist (config DISPATCH_EXCLUDE) as a name set: comma- or
+// space-separated. Dropped from the sweep's provider view so the rotation
+// never draws a provider that can't launch here (T-24115); the empty default
+// bars nothing.
+export let excluded = (value: string | undefined) =>
+  new Set((value ?? '').split(/[\s,]+/).map((s) => s.trim()).filter(Boolean))
+
 // The pending spawn marks, most urgent target first: `wants` edges a
 // persona's watch match minted (spawnrule.ts). Only a persona parent and a
 // task child count — anything else is a stale mark the sweep leaves alone
@@ -192,6 +199,10 @@ export let dispatchSpawn = (
   let free = cap - inFlight(all).length
   let changes: Change[] = []
   let spawned = new Set<string>()
+  // A resolved plan whose provider isn't in `ps` — a task pinned to a provider
+  // the sweep excludes (ps is already filtered). Skip it, don't stop: other
+  // tasks may still land on a provider that launches (T-24115).
+  let barred = (provider?: string) => !ps.some((p) => p.name == provider)
   let drop = (d: Dep) =>
     changes.push({
       eid: d.parent,
@@ -207,6 +218,7 @@ export let dispatchSpawn = (
     if (free <= 0) break // the mark waits for the next sweep's free slot
     let plan = spawnPlan(all, ps, { task: t.eid, ask: { persona: d.parent } })
     if (!plan.provider || !plan.model) break // nothing can launch — say so once
+    if (barred(plan.provider)) continue // pinned to an excluded provider
     changes.push(
       ...spawnChanges(all, {
         task: t.eid,
@@ -226,6 +238,7 @@ export let dispatchSpawn = (
     if (spawned.has(t.eid) || asked(all, t.eid)) continue
     let plan = spawnPlan(all, ps, { task: t.eid })
     if (!plan.provider || !plan.model) break // nothing can launch — say so once
+    if (barred(plan.provider)) continue // pinned to an excluded provider
     changes.push(
       ...spawnChanges(all, {
         task: t.eid,
@@ -251,6 +264,7 @@ export let dispatchSpawn = (
       if (spawned.has(t.eid) || asked(all, t.eid)) continue
       let plan = spawnPlan(all, ps, { task: t.eid })
       if (!plan.provider || !plan.model) break
+      if (barred(plan.provider)) continue // pinned to an excluded provider
       changes.push(
         ...spawnChanges(all, {
           task: t.eid,
@@ -321,7 +335,15 @@ export let dispatchSweep = async (
     let recursive = on(
       resolve('DISPATCH_RECURSIVE', (k) => settingValue(db, k)).value,
     )
-    let changes = dispatchSpawn(all, deps, await providers(), cap, recursive)
+    // Drop the denied providers before the sweep picks, so the default model
+    // never routes to a provider that can't launch here (T-24115). Excluding a
+    // graph-native provider without its CLI fallback would leave the fallback
+    // to carry the same model, so the operator lists both.
+    let bar = excluded(
+      resolve('DISPATCH_EXCLUDE', (k) => settingValue(db, k)).value,
+    )
+    let ps = (await providers()).filter((p) => !bar.has(p.name))
+    let changes = dispatchSpawn(all, deps, ps, cap, recursive)
     if (changes.length) {
       let t = trace()
       let out = apply(db, changes, t)
