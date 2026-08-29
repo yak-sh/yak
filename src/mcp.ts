@@ -379,18 +379,22 @@ export let MCP_INSTRUCTIONS =
 and & literally; the renderer escapes them for its own output type.
 The graph renders bodies as markdown. ${DOC}
 
-Coordinators delegate all individual-contributor implementation. After
-compaction or resume, use durable task context to restore assignments and stay
-in orchestration and review.
+Use subagents when they are available and useful. A worker without subagents
+works directly. When the operator explicitly tells this harness to claim or
+work queued tasks, inspect eligible work, claim it, and execute it here instead
+of waiting for managed auto-dispatch. After compaction or resume, use durable
+task context to restore assignments.
 
 Work with ${TASK_TREE_ADOPTION.steps}+ steps defaults to task_tree, not a checklist in one task body.
 Exact dry run: ${taskTreeExample('mcp')}. Choose every relation explicitly;
 never infer edge meanings from prose. Keep leaf bodies to the irreducible ask
 and pointers.
 
-If you do not know a stable session id, call work_start first. On later turns,
-call task_context first. Pass the same stable sid to every tool that takes a
-session — it names the run for attribution, claims, and the comms bus.`
+On the first connection, call work_start first: pass the stable sid if you know
+it, or omit session to mint one. It returns the worker protocol and initial
+context. On later context refreshes, call task_context first. Pass that same
+stable sid to every tool that takes a session — it names the run for
+attribution, claims, and the comms bus.`
 
 export let mcpServer = (io: IO) => {
   // The io-backed Querier: client.ts's scoped readers (checkedRefs, sessionRow,
@@ -477,7 +481,16 @@ This is the mutating bootstrap door; task_context remains read-only.`,
     },
     async ({ session }: { session?: string }) => {
       let key = session ?? uuid()
-      let row = await sessionRow(key, ioQ)
+      let row: Row | undefined
+      try {
+        row = await sessionRow(key, ioQ)
+      } catch (cause) {
+        return err(
+          `worker bootstrap for sid ${key} could not check for an existing ` +
+            `session: ${(cause as Error).message}. No session entity was ` +
+            `created; retry work_start with session ${key}.`,
+        )
+      }
       let created = false
       if (!row) {
         let planned = sessionFor([], key, undefined, undefined, {
@@ -493,7 +506,16 @@ This is the mutating bootstrap door; task_context remains read-only.`,
           // Two desktops may bootstrap the same stable key together. The
           // unique session.id constraint chooses one winner; observing it is
           // success, while every other write failure remains loud and specific.
-          row = await sessionRow(key, ioQ)
+          try {
+            row = await sessionRow(key, ioQ)
+          } catch (recovery) {
+            return err(
+              `worker bootstrap for sid ${key} could not recover after its ` +
+                `write failed (${(cause as Error).message}): session lookup ` +
+                `also failed (${(recovery as Error).message}). The write ` +
+                `outcome is unknown; retry work_start with session ${key}.`,
+            )
+          }
           if (!row) {
             return err(
               `worker bootstrap failed before a session was created: ${
@@ -505,7 +527,10 @@ This is the mutating bootstrap door; task_context remains read-only.`,
         }
       }
       if (!row) {
-        return err('worker bootstrap failed: session readback was empty')
+        return err(
+          `worker bootstrap for sid ${key} failed: the session write returned ` +
+            `no readable identity. Retry work_start with session ${key}.`,
+        )
       }
       let id = idOf(row)
       let sid = String(row.comps.session?.id)
@@ -518,6 +543,11 @@ This is the mutating bootstrap door; task_context remains read-only.`,
             `${WORKER_PROTOCOL}\n\n# Context\n${context}`,
         )
       } catch (cause) {
+        // The HTTP MCP boundary durably records an isError tool_call and its
+        // first text block. Lead with the human Session and stable sid so this
+        // transient read failure remains attributable and retryable. `error`
+        // is server-owned current health; an MCP read must neither forge nor
+        // clear that facet.
         return err(
           `worker ${id} is durable, but its context failed to load: ${
             (cause as Error).message

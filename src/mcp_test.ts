@@ -53,19 +53,19 @@ Deno.test('MCP prompt makes task trees the default for multi-step work', () => {
   assertMatch(MCP_INSTRUCTIONS, /3\+ steps defaults to task_tree/)
   assertMatch(MCP_INSTRUCTIONS, /"dry_run":true/)
   assertMatch(MCP_INSTRUCTIONS, /never infer .* from prose/i)
+  assertMatch(MCP_INSTRUCTIONS, /worker without subagents\nworks directly/)
   assertMatch(
     MCP_INSTRUCTIONS,
-    /Coordinators delegate all individual-contributor implementation/,
+    /tells this harness to claim or\nwork queued tasks,[\s\S]*execute it here/,
   )
   assertMatch(
     MCP_INSTRUCTIONS,
-    /After\ncompaction or resume, use durable task context to restore assignments/,
+    /On the first connection, call work_start first: pass the stable sid if you know\nit, or omit session to mint one\.[\s\S]*On later context refreshes, call task_context first\./,
   )
-  assertMatch(
-    MCP_INSTRUCTIONS,
-    /do not know a stable session id, call work_start/,
+  assertEquals(
+    /delegate all individual-contributor implementation/.test(MCP_INSTRUCTIONS),
+    false,
   )
-  assertMatch(MCP_INSTRUCTIONS, /On later turns,\ncall task_context first/)
 })
 
 Deno.test('worker protocol executes queued work in the current harness', () => {
@@ -339,12 +339,71 @@ Deno.test('work_start preserves its durable identity when context fails', async 
       arguments: {},
     }) as ToolResult
     assertEquals(out.isError, true)
-    assertMatch(said(out), /worker S-\d+ is durable/)
+    assertMatch(said(out), /^worker S-\d+ is durable/)
     assertMatch(said(out), /context index unavailable/)
     assertMatch(said(out), /Its sid is [0-9a-f-]+/)
+    let sid = said(out).match(/Its sid is ([0-9a-f-]+)/)![1]
     assertEquals(
       db.prepare('select count(*) as n from session').get(),
       { n: 1 },
+    )
+    loading = false
+    await protocol(io, async (retry) => {
+      let resumed = await retry.callTool({
+        name: 'work_start',
+        arguments: { session: sid },
+      }) as ToolResult
+      assertEquals(resumed.isError, undefined)
+      assertMatch(
+        said(resumed),
+        /^session: S-\d+\nsid: [^\n]+\nstate: resumed/m,
+      )
+    })
+    assertEquals(
+      db.prepare('select count(*) as n from session').get(),
+      { n: 1 },
+    )
+  })
+})
+
+Deno.test('work_start returns its sid when the initial lookup fails', async () => {
+  let io = blank()
+  io.query = () => Promise.reject(new Error('session index unavailable'))
+  await protocol(io, async (client) => {
+    let out = await client.callTool({
+      name: 'work_start',
+      arguments: { session: 'desktop-worker-lookup' },
+    }) as ToolResult
+    assertEquals(out.isError, true)
+    assertMatch(said(out), /^worker bootstrap for sid desktop-worker-lookup/)
+    assertMatch(said(out), /session index unavailable/)
+    assertMatch(
+      said(out),
+      /retry work_start with session desktop-worker-lookup/,
+    )
+  })
+})
+
+Deno.test('work_start returns its sid when write recovery lookup fails', async () => {
+  let io = blank()
+  let reads = 0
+  io.query = () =>
+    reads++ == 0
+      ? Promise.resolve([])
+      : Promise.reject(new Error('recovery index unavailable'))
+  io.write = () => Promise.reject(new Error('write transport failed'))
+  await protocol(io, async (client) => {
+    let out = await client.callTool({
+      name: 'work_start',
+      arguments: { session: 'desktop-worker-recovery' },
+    }) as ToolResult
+    assertEquals(out.isError, true)
+    assertMatch(said(out), /^worker bootstrap for sid desktop-worker-recovery/)
+    assertMatch(said(out), /write transport failed/)
+    assertMatch(said(out), /recovery index unavailable/)
+    assertMatch(
+      said(out),
+      /retry work_start with session desktop-worker-recovery/,
     )
   })
 })
