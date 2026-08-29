@@ -8,7 +8,7 @@
 // the writer's.
 import type { DatabaseSync } from './sqlite.ts'
 import type { Change, Dep } from './types.ts'
-import { kindOrder } from './types.ts'
+import { kindOrder, statusOf } from './types.ts'
 import {
   aggOf,
   edgeRider,
@@ -220,7 +220,11 @@ let peerPayload = (
     let kind = kindOrder.find((c) => comps[c])
     if (kind) picked.set(kind, {})
     for (let h of peers) {
-      let v = comps[h.comp]?.[h.prop]
+      // task.status is DERIVED (D-24102): compute it for a projected peer so the
+      // requires-tree renders a blocker's status without a stored column.
+      let v = h.comp == 'task' && h.prop == 'status'
+        ? (comps.task ? statusOf(comps) : undefined)
+        : comps[h.comp]?.[h.prop]
       if (v == null) continue
       picked.set(h.comp, { ...picked.get(h.comp), [h.prop]: v })
     }

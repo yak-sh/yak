@@ -235,7 +235,7 @@ export let considerChanges = (
     {
       eid,
       name: 'task',
-      comp: { status: 'open', priority: f.priority, project },
+      comp: { priority: f.priority, project },
     },
     { eid, name: 'dependency', comp: { type: 'about', child: source } },
   ]
@@ -269,9 +269,20 @@ export let findingKey = (f: Finding) => `${f.kind}:${normalize(f.title)}`
 // An artifact this dream already filed for a key, and the status of the task it
 // became (null for a memory). The stored key makes dedup a lookup, never a scan
 // (heal.ts openBug). One row per key.
+// The derived status (D-24102) as a SQL CASE over a task alias: cancelled →
+// done → wip (a live claim) → open — the same reading statusOf gives a bag.
+let STATUS = (t: string) =>
+  `case
+     when exists (select 1 from cancelled _dx where _dx.entity = ${t}.entity) then 'cancelled'
+     when exists (select 1 from completed _dc where _dc.entity = ${t}.entity) then 'done'
+     when exists (select 1 from claim _dm where _dm.entity = ${t}.entity) then 'wip'
+     else 'open' end`
+
 let filed = (key: string) =>
   db.prepare(
-    `select o.eid as eid, fd.hits as hits, t.status as status
+    `select o.eid as eid, fd.hits as hits,
+            case when t.entity is null then null else (${STATUS('t')}) end
+              as status
        from finding fd
        join entity o on o.id = fd.entity
        left join task t on t.entity = fd.entity
@@ -291,8 +302,8 @@ export let namesResolved = (f: Finding): boolean => {
   if (!ids) return false
   for (let id of new Set(ids)) {
     let row = db.prepare(
-      `select t.status as status from task t join entity e on e.id = t.entity
-        where e.num = ?`,
+      `select ${STATUS('t')} as status from task t
+         join entity e on e.id = t.entity where e.num = ?`,
     ).get(Number(id.slice(2))) as { status: string } | undefined
     if (row && CLOSED.has(row.status)) return true
   }

@@ -34,6 +34,13 @@ let OWNED = `entity = (select id from entity where eid = ?)`
 let idOf = `(select id from entity where eid = ?)`
 let refEid = (col: string) => `(select eid from entity where id = ${col})`
 
+// A task is open or wip — i.e. NOT settled — when it wears neither mark
+// (D-24102: status is derived). Spelled against a `task` alias so a join can
+// screen closed tickets in SQL, the way `t.status in ('open','wip')` once did.
+let UNSETTLED = (t: string) =>
+  `not exists (select 1 from completed _hc where _hc.entity = ${t}.entity)
+   and not exists (select 1 from cancelled _hx where _hx.entity = ${t}.entity)`
+
 // The volatile tokens a storm varies while the fault stays the same: uuids,
 // human ids (T-3, S-45), iso timestamps, absolute paths, :line:col, hex blobs,
 // and bare numbers all collapse to one placeholder. What is left is the shape
@@ -168,7 +175,7 @@ let openBug = (key: string) =>
      join entity o on o.id = b.entity
      join task t on t.entity = b.entity
      join doc_value d on d.entity = b.entity
-     where b.fault = ? and t.status in ('open', 'wip') limit 1`,
+     where b.fault = ? and ${UNSETTLED('t')} limit 1`,
   ).get(key) as { eid: string; hits: number; body: string } | undefined
 
 // --- Phase 2: the fixer spawn, behind guardrails (D-17077) -----------------
@@ -305,14 +312,17 @@ export let ensureFixer = (cast: Cast) =>
   t: FixerGates = fixerTuning(),
 ): string | undefined => {
   let task = db.prepare(
-    `select ${refEid('t.project')} as project, t.status as status,
+    `select ${refEid('t.project')} as project,
+              (exists (select 1 from completed x where x.entity = t.entity)
+               or exists (select 1 from cancelled x where x.entity = t.entity))
+                as settled,
               b.fault as fault
        from task t join bug b on b.entity = t.entity where t.${OWNED}`,
   ).get(bug) as
-    | { project: string | null; status: string; fault: string | null }
+    | { project: string | null; settled: number; fault: string | null }
     | undefined
   if (!task) return // no bug row (deleted in its own batch)
-  if (task.status != 'open' && task.status != 'wip') return // closed ticket
+  if (task.settled) return // closed ticket (D-24102: derived from the marks)
   if (hasFixer(bug)) return // already summoned one
   let why = fixerBlocked(
     task.project ?? undefined,
@@ -357,7 +367,7 @@ export let ensureFixer = (cast: Cast) =>
 // doubles one that launched. This is the reconcile that eventually spawns a
 // bug the cap or a mute suppressed live, once the pressure clears.
 export let FIXER_PENDING = `exists (select 1 from task t
-     where t.entity = bug.entity and t.status in ('open', 'wip'))
+     where t.entity = bug.entity and ${UNSETTLED('t')})
    and not exists (select 1 from session s join fixer f on f.entity = s.entity
      where s.requested_task = bug.entity)`
 
@@ -460,7 +470,6 @@ export let fileBug =
         eid: bug,
         name: 'task',
         comp: {
-          status: 'open',
           priority: severity(message),
           project: project ?? null,
         },

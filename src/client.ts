@@ -22,6 +22,7 @@ import {
   type Snapshot,
   stamped,
   statuses,
+  statusOf,
   uuid,
   verdictName,
 } from './types.ts'
@@ -66,6 +67,12 @@ export type Row = {
   kind: string
   comps: Record<string, Record<string, unknown>>
 }
+
+// Task status is DERIVED (D-24102): read it off the comps a row carries. A
+// non-task row has no task comp, so this stays undefined the way `.task?.status`
+// did — every caller that guarded on truthiness keeps its meaning.
+export let taskStatus = (r: { comps: Record<string, unknown> }) =>
+  r.comps.task ? statusOf(r.comps) : undefined
 
 // The slice of a Row the scope predicates read — eid and comps, never num or
 // kind. Widening belongs()/scopeFor()/repoAt() to this lets a server-side
@@ -850,10 +857,15 @@ export let ledger = (entries: JournalEntry[], all: Row[]): string[] => {
             : `- ⚑ claimed ${name(c.eid)}`,
         )
         seen.add(c.eid)
-      } else if (c.name == 'task' && c.comp && 'status' in c.comp) {
-        // a same-batch reason comment (the journal pseudo-change's twin)
-        // already tells the story as its own 💬 line
-        lines.push(`- → ${name(c.eid)} status → ${c.comp.status}`)
+      } else if (c.name == 'completed' || c.name == 'cancelled') {
+        // Status is derived (D-24102): a close is the mark landing, a reopen its
+        // removal. A same-batch reason comment tells the why on its own 💬 line.
+        let word = c.comp == null
+          ? 'reopened'
+          : c.name == 'completed'
+          ? 'done'
+          : 'cancelled'
+        lines.push(`- → ${name(c.eid)} ${word}`)
         seen.add(c.eid)
       } else if (c.name == 'dependency' && c.comp) {
         let verb = c.comp.gone ? 'unlinked' : 'linked'
@@ -1879,11 +1891,14 @@ export let taskTreePlan = async (
       ...(node.body != null ? { body: node.body } : {}),
     }
     grouped.task = {
-      status: 'open',
       ...grouped.task,
       project: project.eid,
-      ...(node.status ? { status: node.status } : {}),
     }
+    delete grouped.task.status // status is DERIVED (D-24102), never stored
+    // A node born done/cancelled wears the mark; open/wip need none (a tree
+    // can't hold a live claim, so a wip node is just open until claimed).
+    if (node.status == 'done') grouped.completed = {}
+    else if (node.status == 'cancelled') grouped.cancelled = {}
     let literal = { key, comps: grouped }
     literals.push(literal)
     literalByKey.set(key, literal)
@@ -1976,8 +1991,8 @@ export let WORKING_SET = 50
 
 // The board sort: status column order, then priority, then num.
 export let byBoard = (a: Row, b: Row) =>
-  (statuses.findIndex((s) => s == a.comps.task?.status) -
-    statuses.findIndex((s) => s == b.comps.task?.status)) ||
+  (statuses.findIndex((s) => s == taskStatus(a)) -
+    statuses.findIndex((s) => s == taskStatus(b))) ||
   (Number(a.comps.task?.priority ?? 0) - Number(b.comps.task?.priority ?? 0)) ||
   (a.num - b.num)
 
@@ -2858,7 +2873,7 @@ let pulse = (tasks: Row[], now: number, budget: number, scope?: string) => {
   let fresh = (r: Row) => editedAt(r) > cutoff
   let mine = scope
     ? tasks.filter((r) => String(r.comps.task?.project) == scope && fresh(r))
-    : tasks.filter((r) => !settled(String(r.comps.task?.status))).filter(fresh)
+    : tasks.filter((r) => !settled(taskStatus(r))).filter(fresh)
   let hits = mine
     .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))
     .slice(0, Math.min(budget - 1, scope ? 6 : 3))
@@ -2866,7 +2881,7 @@ let pulse = (tasks: Row[], now: number, budget: number, scope?: string) => {
   return [
     scope ? '## lately' : '## fleet — nowhere placed',
     ...hits.map((r) =>
-      `- ${idOf(r)} ${r.comps.task?.status} — ${
+      `- ${idOf(r)} ${taskStatus(r)} — ${
         snip(String(r.comps.doc?.title ?? ''))
       }`
     ),
@@ -2949,7 +2964,7 @@ let resumptions = (
   let mineClaim = parseQuery('.claim.session.actor=' + actor)
   let deref = (eid: string) => sessions.get(eid)?.comps
   let hits = tasks
-    .filter((r) => !settled(String(r.comps.task?.status)))
+    .filter((r) => !settled(taskStatus(r)))
     .filter((r) => !mine.has(r.eid))
     .filter((r) => {
       if (r.comps.claim) return matchQuery(r.comps, mineClaim, deref)
@@ -2968,7 +2983,7 @@ let resumptions = (
     ...hits.map((r) => {
       let holder = sessions.get(String(r.comps.claim?.session ?? ''))
       let held = holder ? ` · ⚑ ${idOf(holder)}` : ''
-      return `- ${idOf(r)} ${r.comps.task?.status}${held} — ${
+      return `- ${idOf(r)} ${taskStatus(r)}${held} — ${
         snip(String(r.comps.doc?.title ?? ''))
       }`
     }),
@@ -3158,13 +3173,13 @@ export let taskContextBlock = (
     )
     .map((d) => byEid.get(d.child))
     .filter((r): r is Row =>
-      !!r?.comps.task && !settled(String(r.comps.task.status))
+      !!r?.comps.task && !settled(taskStatus(r))
     )
     .filter((r, i, a) => a.findIndex((x) => x.eid == r.eid) == i)
     .sort((a, b) => order(a.eid, b.eid))
     .slice(0, 1)
     .map((r) =>
-      `  - prerequisite ${idOf(r)} (${r.comps.task.status}) — ${
+      `  - prerequisite ${idOf(r)} (${taskStatus(r)}) — ${
         snip(String(r.comps.doc?.title ?? ''), 64)
       }`
     )
@@ -3204,17 +3219,17 @@ export let taskBlock = (
   let byEid = byIx ?? new Map(all.map((x) => [x.eid, x]))
   let authoring = authoringLine(all, r)
   let out = [
-    `- ${idOf(r)} ${r.comps.task?.status ?? r.kind} — ${
+    `- ${idOf(r)} ${taskStatus(r) ?? r.kind} — ${
       r.comps.doc?.title ?? ''
     }${authoring ? ` · ${authoring}` : ''}`,
   ]
   for (let d of deps.filter((d) => d.parent == r.eid)) {
     let c = byEid.get(d.child)
     if (!c || d.type == 'reads') continue
-    if (settled(String(c.comps.task?.status))) continue
+    if (settled(taskStatus(c))) continue
     let who = claimant(all, c)
     out.push(
-      `  - ${d.type} → ${idOf(c)} (${c.comps.task?.status ?? c.kind}${
+      `  - ${d.type} → ${idOf(c)} (${taskStatus(c) ?? c.kind}${
         who ? `, ⚑ ${who}` : ''
       })`,
     )
@@ -3323,7 +3338,7 @@ export let contextDigest = (
     // open work is task list's job) — an idle project falls back to
     // the fleet rather than suggesting nothing.
     let open = tasks
-      .filter((r) => !settled(String(r.comps.task?.status)))
+      .filter((r) => !settled(taskStatus(r)))
       .filter((r) => !r.comps.claim)
     let local = scope ? open.filter((r) => belongs(r, scope)) : open
     if (!local.length) local = open
@@ -3712,7 +3727,7 @@ export let contextSnapshot = async (
     ? preliminary.filter((r) => r.comps.claim?.session == sess.eid)
     : []
   let available = preliminary
-    .filter((r) => r.comps.task && !settled(String(r.comps.task.status)))
+    .filter((r) => r.comps.task && !settled(taskStatus(r)))
     .filter((r) => !r.comps.claim)
   let local = scope ? available.filter((r) => belongs(r, scope)) : available
   if (!local.length) local = available
@@ -3885,7 +3900,7 @@ export let lapseChanges = (all: Row[], sess: Row): Change[] => {
   return all.filter((r) => r.comps.claim?.session == sess.eid)
     .flatMap((r): Change[] => {
       let body = `⚑ lease lapsed: session ${name} ended before this was done`
-      let mint = !settled(String(r.comps.task?.status)) && !lapsed(r.eid, body)
+      let mint = !settled(taskStatus(r)) && !lapsed(r.eid, body)
       return [
         // the session exists — skip the mint, keep doc + notice
         ...(mint ? noticeChanges(all, r.eid, 'lapse', body, id).slice(-2) : []),
@@ -3948,7 +3963,7 @@ let brief = (
   let day = new Date(now).toISOString().slice(0, 10)
   let title = String(sess.comps.doc?.title || `Work session ${day}`)
   let holding = held.map((r) =>
-    `- ${idOf(r)} (${r.comps.task?.status ?? '?'}) ${r.comps.doc?.title ?? ''}`
+    `- ${idOf(r)} (${taskStatus(r) ?? '?'}) ${r.comps.doc?.title ?? ''}`
   )
   let told = ledger(entries, all)
   return [{
@@ -4217,7 +4232,7 @@ export let showMd = (snap: { deps: Dep[] }, all: Row[], row: Row) => {
   let said = (eid: unknown) => {
     let r = byEid.get(String(eid))
     if (!r) return String(eid)
-    let st = r.comps.task?.status
+    let st = taskStatus(r)
     let t = r.comps.doc?.title ?? r.comps.session?.id ?? ''
     // a mail's stored subject may be an encoded-word — decode to read
     let title = clip(r.comps.mail ? unmime(String(t)) : t)

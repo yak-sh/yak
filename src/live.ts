@@ -24,6 +24,7 @@ import {
   SHORT,
   slugsOf,
   type Snapshot,
+  statusOf,
 } from './types.ts'
 import { isUnread, type Row } from './client.ts'
 import {
@@ -743,7 +744,7 @@ export let storeProbe = (search: string) =>
 export let base = () => `http${config.secure ? 's' : ''}://${config.host}`
 
 // The column sort: priority first (lower sorts higher), num as tiebreak.
-export { settled, statuses, uuid } from './types.ts'
+export { settled, statuses, statusOf, uuid } from './types.ts'
 import { kindOf, uuid } from './types.ts'
 export let byPriority = (a: Ent, b: Ent) =>
   (a.task!.priority - b.task!.priority) || (a.num - b.num)
@@ -782,7 +783,9 @@ export let openDeps = (e: Ent) => {
   let requires = e.refs.filter((r) => r.type == 'requires').map((r) =>
     ent(r.child)
   )
-  return [...requires, ...e.kids].filter((c) => !settled(c.task?.status)).length
+  return [...requires, ...e.kids].filter((c) =>
+    !settled(statusOf(c as Record<string, unknown>))
+  ).length
 }
 
 // Who this viewer IS, for the verbs that are per-actor. A browser has no
@@ -2612,8 +2615,8 @@ export let ent = (eid: string): Ent => {
       .filter((d) => d.type != 'contains')
       .map((d) => ({ type: d.type, child: d.child }))
       .sort((a, b) =>
-        Number(settled(row(a.child).value?.task?.status)) -
-        Number(settled(row(b.child).value?.task?.status))
+        Number(settled(statusOf(row(a.child).value ?? {}))) -
+        Number(settled(statusOf(row(b.child).value ?? {})))
       ),
     kids: mine
       .filter((d) => d.type == 'contains')
