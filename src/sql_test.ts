@@ -252,6 +252,12 @@ let graph = () => {
     'response',
     'created',
     'updated',
+    // the derived-status marks (D-24102): statusOf reads these off the comp
+    // bag, so the JS world must carry them or every task reads back as 'open'
+    // while the SQL side (which derives from the tables) says otherwise.
+    'completed',
+    'cancelled',
+    'claim',
   ]
   // Component tables are id-keyed now: read each row the way the SQL matcher's
   // select() projects it — the owner's eid as `eid`, every reference column back

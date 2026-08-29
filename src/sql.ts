@@ -76,8 +76,25 @@ let col = (comp: string, prop: string): string =>
 // `created` joined; build() adds it for any pred that reads this column.
 let UPDATED_AT = `coalesce("updated"."at", "created"."at")`
 let falls = (comp: string, prop: string) => comp == 'updated' && prop == 'at'
+// task.status is DERIVED (D-24102), computed the same way statusOf does: a
+// `cancelled` mark outranks a `completed` mark, then an active claim is wip,
+// else open. The `entity` join build() adds for a task pred anchors it; the
+// three marks are correlated EXISTS, so no extra joins. Mirrors UPDATED_AT: a
+// column with no stored cell still reads as the value the matcher computes.
+// The leading null guard mirrors a stored column: the task table is LEFT
+// joined, so a non-task row has a null `task.entity` and must read NULL (not
+// 'open'), or `.task.status=open` would match every entity that is not a task.
+let STATUS = `(case when "task"."entity" is null then null` +
+  ` when exists(select 1 from "cancelled" __s where __s."entity" = "task"."entity") then 'cancelled'` +
+  ` when exists(select 1 from "completed" __s where __s."entity" = "task"."entity") then 'done'` +
+  ` when exists(select 1 from "claim" __s where __s."entity" = "task"."entity") then 'wip'` +
+  ` else 'open' end)`
 let readCol = (comp: string, prop: string): string =>
-  falls(comp, prop) ? UPDATED_AT : col(comp, prop)
+  falls(comp, prop)
+    ? UPDATED_AT
+    : comp == 'task' && prop == 'status'
+    ? STATUS
+    : col(comp, prop)
 
 // Is this a column the graph actually has, STORED? A pred naming an unknown
 // column would compile to broken SQL rather than to `false`, so it is refused —
@@ -85,9 +102,13 @@ let readCol = (comp: string, prop: string): string =>
 // decline here: a filter is refined in JS (partial narrowing), a projection or
 // tally falls to the JS matcher that computes the value through query.ts read().
 let derived = (comp: string, prop: string) => comp == 'task' && prop == 'status'
+// task.status is derived, not stored, but it DOES compile: readCol() supplies
+// the CASE expression (STATUS), so a filter over it stays in SQL rather than
+// falling to a JS scan of every task (M-17862). Only a tally/projection of the
+// derived value still declines (see aggregate()/derived below).
 let known = (comp: string, prop: string) =>
   !!comp && (!prop ? comp in comps : !!propAt(comp, prop)) &&
-  (comp in comps || comp in stamped) && !derived(comp, prop)
+  (comp in comps || comp in stamped)
 
 let tagOf = (comp: string, prop: string) => {
   let t = propAt(comp, prop)?.type
