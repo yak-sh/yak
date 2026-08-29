@@ -262,6 +262,46 @@ Deno.test('work_start bootstraps without a session id and resumes it', async () 
   })
 })
 
+Deno.test('work_list exposes bounded human-addressed evaluate and build lanes', async () => {
+  let { db, io } = graph()
+  let project = uuid(), old = uuid(), fresh = uuid(), pending = uuid()
+  apply(db, [
+    { eid: project, name: 'doc', comp: { title: 'Work project', body: '' } },
+    { eid: project, name: 'project', comp: {} },
+    { eid: old, name: 'doc', comp: { title: 'Old ready', body: '' } },
+    { eid: old, name: 'task', comp: { priority: 1, project } },
+    { eid: old, name: 'decided', comp: {} },
+    { eid: fresh, name: 'doc', comp: { title: 'Fresh ready', body: '' } },
+    { eid: fresh, name: 'task', comp: { priority: 1, project } },
+    { eid: fresh, name: 'decided', comp: {} },
+    { eid: pending, name: 'doc', comp: { title: 'Newest proposal', body: '' } },
+    { eid: pending, name: 'design', comp: {} },
+    { eid: pending, name: 'proposed', comp: {} },
+  ])
+  await protocol(io, async (client) => {
+    let built = await client.callTool({
+      name: 'work_list',
+      arguments: { lane: 'build', limit: 1 },
+    }) as ToolResult
+    let [candidate] = JSON.parse(said(built))
+    assertMatch(candidate.id, /^T-\d+$/)
+    assertEquals(candidate.title, 'Fresh ready')
+    assertMatch(candidate.project.id, /^P-\d+$/)
+    assertEquals(candidate.authorization.kind, 'direct')
+    assertEquals(candidate.claim, null)
+    assertEquals(candidate.blocked, null)
+
+    let evaluated = await client.callTool({
+      name: 'work_list',
+      arguments: { lane: 'evaluate' },
+    }) as ToolResult
+    let [proposal] = JSON.parse(said(evaluated))
+    assertMatch(proposal.id, /^D-\d+$/)
+    assertEquals(proposal.title, 'Newest proposal')
+    assertEquals(proposal.decision, 'pending')
+  })
+})
+
 Deno.test('concurrent work_start calls converge on one stable identity', async () => {
   let { db, io } = graph()
   let write = io.write
@@ -920,6 +960,7 @@ let bases: Record<string, Record<string, unknown>> = {
   work_start: {},
   search: { q: 'x' },
   usage: {},
+  work_list: { lane: 'build' },
   task_list: {},
   task_new: {},
   task_tree: {
@@ -1037,6 +1078,11 @@ Deno.test('MCP schemas document parameters and derive closed vocabularies', asyn
     assert(prop(start, 'session')?.description)
     assertEquals(schema(start).required?.includes('session') ?? false, false)
 
+    let work = byName(tools, 'work_list')
+    assertEquals(prop(work, 'lane')?.enum, ['evaluate', 'build'])
+    assert(prop(work, 'lane')?.description)
+    assert(prop(work, 'limit')?.description)
+
     let task = byName(tools, 'task_new')
     assertMatch(task.description ?? '', /3\+ steps use task_tree/)
     assertMatch(task.description ?? '', /"dry_run":true/)
@@ -1117,7 +1163,9 @@ Deno.test('MCP annotations: queries read-only, deleters destructive, setters ide
     let tools: Tool[] = (await client.listTools()).tools
     let a = (name: string) => byName(tools, name).annotations ?? {}
 
-    for (let q of ['search', 'task_list', 'task_show', 'graph_query']) {
+    for (
+      let q of ['search', 'task_list', 'work_list', 'task_show', 'graph_query']
+    ) {
       assertEquals(a(q).readOnlyHint, true, q)
     }
     assertEquals(a('task_context').readOnlyHint, true)

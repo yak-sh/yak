@@ -49,6 +49,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       codex: 'codex [codex args…] [--operator]',
       list:
         'list [kind] [filters…] [--all] [--kind=KIND] [--limit=N] [--sort=SORT] [--json]',
+      work: 'work <lane> [filters…] [--limit=N] [--recursive] [--json]',
       query: 'query [filters…] [--json]',
       graph_query: 'graph_query [filters…] [--json]',
       decided: 'decided [filters…] [--all] [--json]',
@@ -398,6 +399,19 @@ Deno.test('list sort accepts joined and separate values', () => {
     parse('list', manuals.list, ['.status=open', '--sort', 'priority']).opts,
     { '--sort': 'priority' },
   )
+})
+
+Deno.test('work names its lane and preserves trailing filters', () => {
+  let got = parse('work', manuals.work, [
+    'build',
+    '.project=P-19',
+    '--limit=3',
+    '--recursive',
+  ])
+  assertEquals(got.args.lane, 'build')
+  assertEquals(got.words, ['build', '.project=P-19'])
+  assertEquals(got.opts['--limit'], '3')
+  assertEquals(got.flags.has('--recursive'), true)
 })
 
 Deno.test('parse names positionals, resolves options, and applies defaults', () => {

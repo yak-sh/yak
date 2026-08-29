@@ -126,6 +126,7 @@ import {
 import { depsOf, eager, journalOf, search as dbSearch, snapshot } from './db.ts'
 import { dbReader, localQuery } from './graph_query.ts'
 import { guarded, localReadPath } from './localread.ts'
+import { workCandidates, type WorkLane } from './work.ts'
 
 // How the tools reach the graph — database-backed in the server and local
 // stdio processes, HTTP only for an explicitly remote graph.
@@ -339,6 +340,7 @@ let HINTS: Record<string, ToolAnnotations> = {
   search: RO,
   usage: RO,
   task_list: RO,
+  work_list: RO,
   task_context: RO,
   task_show: RO,
   session_peek: RO,
@@ -450,6 +452,13 @@ export let mcpServer = (io: IO) => {
   // working set explicitly through task_context; quietly appending inbox rows
   // here made every tool response a second, drifting model of attention.
   let bus = (out: string, _session?: string, _snap?: Snapshot) => text(out)
+
+  let workRead = {
+    query: (filters: string[], opts?: { limit?: number }) =>
+      io.query(filters.join('&'), opts),
+    get: (ids: string[]) => io.get(ids),
+    deps: (eids: string[]) => io.deps(eids),
+  }
 
   let workerContext = async (session: string) => {
     let [snap, pending] = await Promise.all([
@@ -630,6 +639,45 @@ covered). ${FILTERS}`,
         if (u.task) u.project = taskProj.get(u.task) || undefined
       }
       return text(report(uses, by, (k) => name.get(k) ?? k))
+    },
+  )
+
+  tool(
+    'work_list',
+    `List bounded candidate envelopes from a derived work lane. evaluate is
+proposed and undecided, newest first. build is approved, open, unclaimed,
+unblocked, and dependency-ready, ordered by priority then newest; recursive
+also includes descendants authorized by an approved open ancestor, but never
+crosses a pending proposal or declined decision. Each JSON envelope carries
+human ids, project/domain, decision and authorization state, blockers, and
+existing repo/spawn hints. Read task_show before claiming. ${FILTERS}`,
+    {
+      lane: z.enum(['evaluate', 'build']).describe(
+        'Derived lane to inspect: proposals awaiting evaluation or ready build work.',
+      ),
+      filters: z.array(z.string()).optional(),
+      limit: count.max(100).describe('Maximum candidates (default 20).')
+        .optional(),
+      recursive: z.boolean().describe(
+        'Include inherited authorization in the build lane (default false).',
+      ).optional(),
+    },
+    async (
+      { lane, filters = [], limit, recursive }: {
+        lane: WorkLane
+        filters?: string[]
+        limit?: number
+        recursive?: boolean
+      },
+    ) => {
+      let ps = parseFilters(filters)
+      if (refHandles(ps).length) await checkedRefs(ps, ioQ)
+      let candidates = await workCandidates(workRead, lane, {
+        filters,
+        limit,
+        recursive,
+      })
+      return text(JSON.stringify(candidates, null, 2))
     },
   )
 

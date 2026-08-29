@@ -39,6 +39,7 @@ import {
   historyLine,
   hookClaim,
   host,
+  httpDeps,
   idOf,
   inboxItem,
   inboxRows,
@@ -160,6 +161,7 @@ import { loadPlugins, pluginSpecifiers } from './plugins.ts'
 import { safe } from './terminal.ts'
 import { VERSION } from './version.ts'
 import { sha } from './sha.ts'
+import { type WorkCandidate, workCandidates, type WorkLane } from './work.ts'
 export { subjectUsage } from './manual.ts'
 
 let formats = ['markdown', 'json']
@@ -475,6 +477,48 @@ let list = async (got: Got) => {
         : '(no matches)',
     )
   }
+}
+
+let workLine = (candidate: WorkCandidate) => {
+  let scope = [
+    candidate.priority == null ? '' : `P${candidate.priority}`,
+    candidate.domain ?? '',
+    candidate.project?.id ?? '',
+  ].filter(Boolean).join(' ')
+  let auth = candidate.authorization
+    ? `${candidate.authorization.kind} from ${
+      candidate.authorization.from.join(',')
+    }`
+    : candidate.decision
+  let blockers = candidate.blockers.length
+    ? ` · requires ${candidate.blockers.map((b) => b.id).join(',')}`
+    : ''
+  return `${candidate.id} ${candidate.kind}${
+    scope ? ` ${scope}` : ''
+  } — ${candidate.title} · ${auth}${blockers}`
+}
+
+let work = async (got: Got) => {
+  let lane = got.args.lane as WorkLane
+  let filters = got.words.slice(1)
+  let ps = predicates(filters)
+  await checkedRefs(ps)
+  let candidates = await workCandidates(
+    {
+      query,
+      get: (ids) => fetched(ids),
+      deps: httpDeps,
+    },
+    lane,
+    {
+      filters,
+      limit: got.opts['--limit'] ? Number(got.opts['--limit']) : undefined,
+      recursive: got.flags.has('--recursive'),
+    },
+  )
+  if (got.flags.has('--json')) return print(jsonText(candidates))
+  if (!candidates.length) return print('(no candidates)')
+  for (let candidate of candidates) print(workLine(candidate))
 }
 
 // ---- task decided: what has been SETTLED where you stand, newest decision
@@ -3415,6 +3459,7 @@ export let verbs = bind({
   claude,
   codex,
   list,
+  work,
   query: list,
   graph_query: list,
   decided,

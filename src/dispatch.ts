@@ -19,15 +19,11 @@ import { evalGraph, rowsFor } from './graph_query.ts'
 import { resolve } from './config.ts'
 import { record as telemetry } from './telemetry.ts'
 import { type DatabaseSync } from './sqlite.ts'
+import { approved, backlog, dispatchOrder } from './work.ts'
+
+export { approved, authorized, backlog, ready } from './work.ts'
 
 type Cast = (changes: Change[]) => void
-
-// Greenlit for autonomous dispatch: the task wears `decided` and was not
-// decided AGAINST. Absent verdict reads as approved — what every row
-// stamped before the column meant (D-21212).
-export let approved = (r: Row) =>
-  !!r.comps.decided && r.comps.decided.verdict != 'declined'
-let declined = (r: Row) => r.comps.decided?.verdict == 'declined'
 
 // Status is DERIVED from the comps (D-24102): open = no completed/cancelled/claim,
 // settled = wears completed or cancelled. Reading it off statusOf keeps dispatch
@@ -37,76 +33,10 @@ let settled = (r?: Row) => {
   let s = r && statusIs(r)
   return s == 'done' || s == 'cancelled'
 }
-
-// Birth for the age ordering; an unstamped birth sorts last.
 let born = (r: Row) => {
-  let t = Date.parse(String(r.comps.created?.at ?? ''))
-  return Number.isNaN(t) ? Infinity : t
+  let at = Date.parse(String(r.comps.created?.at ?? ''))
+  return Number.isNaN(at) ? Infinity : at
 }
-let rank = (r: Row) =>
-  typeof r.comps.task?.priority == 'number' ? r.comps.task.priority : Infinity
-let resumeRank = (r: Row) => Number(r.comps.resume?.rank ?? 0)
-let order = (a: Row, b: Row) =>
-  Number(!!b.comps.resume) - Number(!!a.comps.resume) ||
-  resumeRank(b) - resumeRank(a) || rank(a) - rank(b) ||
-  born(a) - born(b) || a.num - b.num
-
-// Approval inherits down `requires` (T-21452, D-21448 Piece 3): an approved
-// OPEN task authorizes its whole requires-subtree, so the sweep may spawn its
-// unblocked blockers even ones never individually decided — an approved umbrella
-// greenlights the work that unblocks it. Returns the authorized CHILD eids (not
-// the approved roots — ready() already covers those). A `seen` guard makes a
-// requires cycle terminate. Only open approved tasks seed the descent: a settled
-// one needs nothing spawned.
-export let authorized = (all: Row[], deps: Dep[]) => {
-  let by = new Map(all.map((r) => [r.eid, r]))
-  let kids = (eid: string) =>
-    deps.filter((d) => d.type == 'requires' && d.parent == eid).map((d) =>
-      d.child
-    )
-  let seen = new Set<string>()
-  let stack = all
-    .filter((r) => !!r.comps.task && statusIs(r) == 'open' && approved(r))
-    .flatMap((r) => kids(r.eid))
-  while (stack.length) {
-    let eid = stack.pop()!
-    if (seen.has(eid)) continue
-    let row = by.get(eid)
-    // An explicit no is a veto, not merely an absent yes. It prunes inherited
-    // authorization at this node so neither it nor work below it can spend on
-    // an ancestor's approval.
-    if (!row?.comps.task || declined(row)) continue
-    seen.add(eid)
-    stack.push(...kids(eid))
-  }
-  return seen
-}
-
-// The runnable backlog: open + unclaimed + not externally blocked (D-17094) +
-// no open `requires` edge, and greenlit — either individually approved OR, when
-// `recursive`, authorized by an approved ancestor (approval inherits, above). A
-// blocker the caller didn't fetch counts as open — the safe reading for a sweep
-// that spends money on yes. Most urgent first: priority, then age, then num.
-export let backlog = (all: Row[], deps: Dep[], recursive = false) => {
-  let by = new Map(all.map((r) => [r.eid, r]))
-  let auth = recursive ? authorized(all, deps) : new Set<string>()
-  let gated = (eid: string) =>
-    deps.some((d) =>
-      d.type == 'requires' && d.parent == eid &&
-      !settled(by.get(d.child))
-    )
-  return all
-    .filter((r) =>
-      !!r.comps.task && statusIs(r) == 'open' && !r.comps.claim &&
-      !r.comps.blocked && !declined(r) &&
-      (approved(r) || auth.has(r.eid)) && !gated(r.eid)
-    )
-    .sort(order)
-}
-
-// Ready = the non-recursive backlog: individually approved, runnable now. The
-// name every caller and test knows; recursive descent is opt-in via backlog().
-export let ready = (all: Row[], deps: Dep[]) => backlog(all, deps, false)
 
 // The parked-parent frontier (D-21448): individually-APPROVED, open, unclaimed,
 // unblocked, never-attempted GATED tasks — the umbrellas an operator spawns an agent
@@ -131,11 +61,11 @@ export let parkable = (all: Row[], deps: Dep[]) => {
   return all
     .filter((r) =>
       !!r.comps.task && statusIs(r) == 'open' && !r.comps.claim &&
-      !r.comps.blocked &&
+      !r.comps.blocked && !r.comps.quarantined &&
       approved(r) && gated(r.eid) &&
       !all.some((s) => s.comps.session?.requested_task == r.eid)
     )
-    .sort(order)
+    .sort(dispatchOrder)
 }
 
 // The sessions the dispatcher is paying for: live (a session holds its slot
@@ -226,7 +156,7 @@ export let wanted = (all: Row[], deps: Dep[]) => {
     )
     .sort((a, b) => {
       let x = by.get(a.child)!, y = by.get(b.child)!
-      return order(x, y)
+      return dispatchOrder(x, y)
     })
 }
 
