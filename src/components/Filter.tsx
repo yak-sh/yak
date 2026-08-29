@@ -11,9 +11,10 @@
 // glance.
 import { useEffect, useRef } from 'preact/hooks'
 import { type Signal, signal } from '@preact/signals'
+import type { SubscriptionRead } from '../live.ts'
 import { parseQuery } from '../query.ts'
 import { useDraft } from './drafts.ts'
-import { useQueryEids } from './useQuery.ts'
+import { useQueryResult } from './useQuery.ts'
 import { block } from './ui.tsx'
 import { useComplete } from './Complete.tsx'
 
@@ -36,10 +37,14 @@ export let filterable = new Set(['Board', 'List'])
 export let filterLine = (eid: string): string => lineOf(eid).value
 
 // the face's half: the current pass predicate for this entity's rows
+export type Pass = ((eid: string) => boolean) & {
+  subscription?: SubscriptionRead
+}
+
 export let usePassOf = (
   eid: string,
   initial = '',
-): (eid: string) => boolean => {
+): Pass => {
   let line = lineOf(eid, initial).value
   let valid = true
   try {
@@ -49,8 +54,11 @@ export let usePassOf = (
   }
   // Text membership is FTS5-owned, so even this transient screen reads the
   // same server subscription as a saved board instead of tokenizing locally.
-  let hits = new Set(useQueryEids(valid ? line : ''))
-  return !line.trim() || !valid ? () => true : (row) => hits.has(row)
+  let result = useQueryResult(valid ? line : '')
+  let hits = new Set(result.eids)
+  let pass: Pass = !line.trim() || !valid ? () => true : (row) => hits.has(row)
+  pass.subscription = result.subscription
+  return pass
 }
 
 // the titlebar's half: the input + its completion dropdown. Uncontrolled

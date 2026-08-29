@@ -2228,11 +2228,27 @@ export let subscriptionState = (sub: string): SubscriptionState => {
   return eids ? { status: 'ready', eids: new Set(eids) } : { status: 'loading' }
 }
 
+export type SubscriptionRead = { sub: string; state: SubscriptionState }
+
+// The addressed state beside a direct query's result signal. A query shape
+// that cannot ride the server has no remote failure to report; server-backed
+// shapes share the exact ServerSet that queryEids reads.
+export let querySubscription = (
+  preds: Pred[],
+): SubscriptionRead | undefined => {
+  let line = serverLine(preds)
+  if (!line) return undefined
+  let set = serverSet(preds, line)
+  return { sub: set.sub, state: subscriptionState(set.sub) }
+}
+
 export let retrySubscription = (sub: string) => {
   if (owner?.retry(sub)) return true
-  let q = sub.startsWith('entries:')
-    ? `.entry.session=${sub.slice('entries:'.length)}`
-    : undefined
+  let direct = [...queryUses.values()].find((set) => set.sub == sub)
+  let q = boardUses.get(sub)?.q ?? (direct && serverLine(direct.preds)) ??
+    (sub.startsWith('entries:')
+      ? `.entry.session=${sub.slice('entries:'.length)}`
+      : undefined)
   if (!q) return false
   subscribe(sub, q)
   return true

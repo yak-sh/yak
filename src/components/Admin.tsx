@@ -16,6 +16,7 @@ import {
   inSection,
 } from './admin.ts'
 import { FilterInput, usePassOf } from './Filter.tsx'
+import { SubscriptionFailure } from './SubscriptionFailure.tsx'
 import { pickLine, useHits } from './hits.ts'
 import { Prop } from './editors.tsx'
 import { Id } from './views/Inline.tsx'
@@ -179,7 +180,9 @@ let Index = (
           </Tool>
         </Tools>
       </Head>
-      {grid
+      {pass.subscription?.state.status == 'failed'
+        ? <SubscriptionFailure read={pass.subscription} />
+        : grid
         ? (
           <Grid>
             {shown.map((e) => (

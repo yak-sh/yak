@@ -16,6 +16,7 @@ import { spec, taskChanges } from '../../client.ts'
 import { adopt, orderOf, parseQuery } from '../../query.ts'
 import { peek, useDraft } from '../drafts.ts'
 import { useBoardSub, useBoardTally } from '../subscriptions.ts'
+import { SubscriptionFailure } from '../SubscriptionFailure.tsx'
 import { block } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
@@ -123,7 +124,7 @@ let QuickAdd = (
 let addKey = (eid: string, status: string) => `new:${eid}:${status}`
 
 export let Board = ({ e }: { e: Ent }) => {
-  useBoardSub(e)
+  let boardRead = useBoardSub(e)
   // The member sub is a WINDOW now (live.ts boardLine), so the rows a column
   // holds are a page of it — while the COUNT a column names is the whole
   // truth, and it comes from the same aggregate the tile reads (T-22509): one
@@ -158,6 +159,18 @@ export let Board = ({ e }: { e: Ent }) => {
   // board.query alone, so a glance never leaks into what a filed task
   // carries.
   let pass = usePassOf(e.eid)
+  let failed = boardRead?.state.status == 'failed'
+    ? boardRead
+    : pass.subscription?.state.status == 'failed'
+    ? pass.subscription
+    : undefined
+  if (failed) {
+    return (
+      <Frame>
+        <SubscriptionFailure read={failed} />
+      </Frame>
+    )
+  }
   let tasks: Ent[]
   try {
     tasks = boardTasks(e).filter((k) => pass(k.eid))

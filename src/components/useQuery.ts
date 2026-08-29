@@ -19,26 +19,39 @@ import {
   holdQuery,
   linksVia,
   queryEids,
+  querySubscription,
   type References,
   references,
   resultComponent,
   resultSub,
+  type SubscriptionRead,
 } from '../live.ts'
 import { parseQuery, resolveRefs, type ResultComp } from '../query.ts'
 import type { Ent } from '../types.ts'
 
 let resolve = (query: string) => resolveRefs(parseQuery(query), findEid)
 
-// The matching eids, as a live array. Prefer this when the caller only needs
-// ids (membership, a count); `useQuery` assembles the Ents.
-export let useQueryEids = (query: string): string[] => {
+export type QueryResult = { eids: string[]; subscription?: SubscriptionRead }
+
+// The result and addressed read state of one direct query. Most callers need
+// only eids; query-driven UI also consumes a refusal so it never paints a
+// local partial set as the server's answer.
+export let useQueryResult = (query: string): QueryResult => {
   let preds = useMemo(() => resolve(query), [query])
   useEffect(() => {
     holdQuery(preds)
     return () => dropQuery(preds)
   }, [preds])
-  return queryEids(preds).value
+  return {
+    eids: queryEids(preds).value,
+    subscription: querySubscription(preds),
+  }
 }
+
+// The matching eids, as a live array. Prefer this when the caller only needs
+// ids (membership, a count); `useQuery` assembles the Ents.
+export let useQueryEids = (query: string): string[] =>
+  useQueryResult(query).eids
 
 // The matching entities, assembled. Each rides its own `row` signal, so the
 // list re-renders on membership change and each row on its own edits.

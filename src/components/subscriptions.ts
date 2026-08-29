@@ -10,15 +10,20 @@ import {
   dropAgg,
   holdAgg,
   routeSub,
+  type SubscriptionRead,
+  subscriptionState,
 } from '../live.ts'
 import { type Ent } from '../types.ts'
 
-export let useBoardSub = (e?: Ent) => {
+export let useBoardSub = (e?: Ent): SubscriptionRead | undefined => {
   let q = String(e?.board?.query ?? '')
   useEffect(() => e ? boardSub(e) : undefined, [e?.eid])
   useEffect(() => {
     if (e) boardQuery(e)
   }, [e?.eid, q])
+  if (!e) return undefined
+  let sub = `board:${e.eid}`
+  return { sub, state: subscriptionState(sub) }
 }
 
 // The tile's half of a board: its status COUNTS, held for the tile's life and

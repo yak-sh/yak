@@ -11,6 +11,7 @@ import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
 import { ListFrame } from '../ListFrame.tsx'
+import { SubscriptionFailure } from '../SubscriptionFailure.tsx'
 
 let { Row } = ListFrame
 
@@ -24,6 +25,13 @@ export let List = ({ e }: { e: Ent }) => {
   // those rows itself — nothing else subscribes them (T-22371).
   let ps = pinned(e.eid)
   usePinTargets(ps)
+  if (pass.subscription?.state.status == 'failed') {
+    return (
+      <ListFrame>
+        <SubscriptionFailure read={pass.subscription} />
+      </ListFrame>
+    )
+  }
   return (
     <ListFrame>
       {ps
@@ -53,8 +61,20 @@ let byModified = (a: Ent, b: Ent) =>
   String(touchedAt(b)).localeCompare(String(touchedAt(a))) ||
   (b.num - a.num)
 export let BoardList = ({ e }: { e: Ent }) => {
-  useBoardSub(e)
+  let boardRead = useBoardSub(e)
   let pass = usePassOf(e.eid)
+  let failed = boardRead?.state.status == 'failed'
+    ? boardRead
+    : pass.subscription?.state.status == 'failed'
+    ? pass.subscription
+    : undefined
+  if (failed) {
+    return (
+      <ListFrame>
+        <SubscriptionFailure read={failed} />
+      </ListFrame>
+    )
+  }
   let rows: Ent[]
   let hot = false
   try {

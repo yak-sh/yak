@@ -6,7 +6,7 @@ import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { Admin } from './Admin.tsx'
 import { route } from './nav.tsx'
-import { cache } from '../live.ts'
+import { cache, landSub, useRoute } from '../live.ts'
 import { assertEquals } from '@std/assert'
 import { until } from '../testing.ts'
 
@@ -193,5 +193,75 @@ Deno.test('an admin query deep link filters the index', async () => {
     route.value = '/'
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+Deno.test('a refused direct query replaces partial rows with retry', async () => {
+  let priorDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let task = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  cache.value = {
+    [task]: {
+      entity: { eid: task, num: 2 },
+      doc: { eid: task, title: 'Partial row', body: '' },
+      task: { eid: task, priority: 1, project: null },
+    },
+  }
+  let query = '.entry.session=a,b'
+  route.value = `/admin/task?q=${encodeURIComponent(query)}`
+  let sent: Record<string, unknown>[] = []
+  let priorRoute = useRoute((frame) => {
+    let f = frame as Record<string, unknown>
+    sent.push(f)
+    if (typeof f.sub != 'string' || !f.sub.startsWith('q:')) return
+    landSub({
+      sub: f.sub,
+      changes: [],
+      replace: true,
+      error: 'one Session is required',
+      reference: `subscription:${f.sub}`,
+    })
+  })
+  let root = document.querySelector('main')!
+  let restore = stubFetch()
+  try {
+    render(h(Admin, {}), root)
+    let failure = await until(
+      () => root.querySelector('.SubscriptionFailure'),
+      { label: 'direct query refusal' },
+    )
+    assertEquals(
+      failure!.textContent.includes(
+        'Query could not be loaded: one Session is required [subscription:q:',
+      ),
+      true,
+    )
+    assertEquals(root.querySelector('.Admin_Table'), null)
+
+    let before = sent.filter((f) => String(f.sub).startsWith('q:')).length
+    root.querySelector<HTMLButtonElement>('.SubscriptionFailure_Retry')!.click()
+    await Promise.resolve()
+    assertEquals(
+      sent.filter((f) => String(f.sub).startsWith('q:')).length,
+      before + 1,
+    )
+  } finally {
+    render(null, root)
+    for (
+      let sub of new Set(
+        sent.flatMap((f) => typeof f.sub == 'string' ? [f.sub] : []),
+      )
+    ) landSub({ sub, changes: [], replace: true })
+    useRoute(priorRoute)
+    restore()
+    cache.value = {}
+    route.value = '/'
+    if (priorDocument) {
+      Object.defineProperty(globalThis, 'document', priorDocument)
+    } else delete (globalThis as { document?: unknown }).document
   }
 })
