@@ -154,6 +154,18 @@ export let catalog: Spec[] = [
       "'1'/'true'/'on'/'yes' enables it.",
   },
   {
+    key: 'DISPATCH_RETRY_BACKOFF',
+    label: 'Dispatch retry backoff',
+    group: 'dispatch',
+    type: 'text',
+    sensitive: false,
+    default: '60000',
+    help: 'Milliseconds a released task waits from its server-minted resume ' +
+      'timestamp before autonomous dispatch may create one new Session for ' +
+      'that generation. Must be nonzero; zero or invalid disables retries. ' +
+      'The prior terminal Session and its failure evidence remain intact.',
+  },
+  {
     key: 'DISPATCH_EXCLUDE',
     label: 'Dispatch provider denylist',
     group: 'dispatch',

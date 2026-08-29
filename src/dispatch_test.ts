@@ -1,5 +1,5 @@
 // The dispatcher's pure half: what counts as ready, who holds a slot,
-// the no-retry rule, and the batch a sweep would mint. The sweep itself
+// generation retry eligibility, and the batches a sweep would mint. The sweep
 // is the same apply/dispatch machinery every other sweep rides.
 import { type Snapshot } from './types.ts'
 import { rows } from './client.ts'
@@ -7,13 +7,18 @@ import { type Provider } from './providers.ts'
 import {
   approved,
   asked,
+  attemptEligible,
   authorized,
   backlog,
+  commitCandidates,
+  type DispatchCandidate,
+  dispatchCandidates,
   dispatchSpawn,
   excluded,
   inFlight,
   on,
   ready,
+  retryBackoff,
   slots,
   wanted,
 } from './dispatch.ts'
@@ -106,6 +111,25 @@ Deno.test('ready: open + unclaimed + approved + unblocked, urgent first', () => 
   assertEquals(ready(held, []).map((r) => r.eid), [])
 })
 
+Deno.test('backlog and parkable require the task facet', async () => {
+  let { parkable } = await import('./dispatch.ts')
+  let memory = id(90)
+  let all = rows(graph([
+    ...mk(memory, 90, ago(700), {
+      doc: { title: 'M-4585-shaped open memory' },
+      memory: {},
+      decided: { at: ago(10) },
+    }),
+  ]))
+  assertEquals(backlog(all, [], false).some((r) => r.eid == memory), false)
+  assertEquals(
+    parkable(all, [{ parent: memory, type: 'requires', child: T3 }]).some((r) =>
+      r.eid == memory
+    ),
+    false,
+  )
+})
+
 Deno.test('ready: an open requires edge gates; a settled one does not', () => {
   let all = rows(graph())
   let dep = (child: string) => [
@@ -118,6 +142,25 @@ Deno.test('ready: an open requires edge gates; a settled one does not', () => {
   assertEquals(ready(done, dep(T4)).map((r) => r.eid), [T1, T2])
   // a blocker the caller never fetched counts as open — spend on yes only
   assertEquals(ready(all, dep(id(99))).map((r) => r.eid), [T2])
+})
+
+Deno.test('claimed, gated, blocked, declined, completed, and cancelled stay excluded', () => {
+  let cases: Snapshot['changes'][] = [
+    [{ eid: T1, name: 'claim', comp: { session: S1 } }],
+    [{ eid: T1, name: 'blocked', comp: { on: 'external' } }],
+    [{ eid: T1, name: 'decided', comp: { at: ago(1), verdict: 'declined' } }],
+    [{ eid: T1, name: 'completed', comp: {} }],
+    [{ eid: T1, name: 'cancelled', comp: { reason: 'called off' } }],
+  ]
+  for (let extra of cases) {
+    assertEquals(ready(rows(graph(extra)), []).some((r) => r.eid == T1), false)
+  }
+  assertEquals(
+    ready(rows(graph()), [{ parent: T1, type: 'requires', child: T3 }]).some((
+      r,
+    ) => r.eid == T1),
+    false,
+  )
 })
 
 Deno.test('inFlight: live sessions on approved tasks hold slots', () => {
@@ -142,7 +185,7 @@ Deno.test('inFlight: live sessions on approved tasks hold slots', () => {
   assertEquals(inFlight(running).map((r) => r.eid), [S1])
 })
 
-Deno.test('asked: one ask per task, ever — a failed Session is the record', () => {
+Deno.test('asked: terminal history without a fresh generation still suppresses', () => {
   let all = rows(graph([
     ...mk(S1, 6, ago(60), {
       session: { id: 's1', requested_task: T1, status: 'failed' },
@@ -150,6 +193,85 @@ Deno.test('asked: one ask per task, ever — a failed Session is the record', ()
   ]))
   assertEquals(asked(all, T1), true)
   assertEquals(asked(all, T2), false)
+})
+
+Deno.test('attempt eligibility consumes exactly one fresh resume generation', () => {
+  let failed = mk(S1, 6, ago(60), {
+    session: { id: 'old', requested_task: T1, status: 'failed' },
+    error: { at: ago(59), message: 'transport failed' },
+  })
+  let stale = rows(graph([
+    ...failed,
+    { eid: T1, name: 'resume', comp: { at: ago(120), rank: 240 } },
+  ]))
+  assertEquals(attemptEligible(stale, T1, NOW, 60_000), false)
+
+  let freshAt = ago(10)
+  let fresh = rows(graph([
+    ...failed,
+    { eid: T1, name: 'resume', comp: { at: freshAt, rank: 240 } },
+  ]))
+  assertEquals(
+    attemptEligible(fresh, T1, Date.parse(freshAt) + 59_999, 60_000),
+    false,
+  )
+  assertEquals(
+    attemptEligible(fresh, T1, Date.parse(freshAt) + 60_000, 60_000),
+    true,
+  )
+
+  let retried = rows(graph([
+    ...failed,
+    { eid: T1, name: 'resume', comp: { at: freshAt, rank: 240 } },
+    ...mk(S2, 7, new Date(Date.parse(freshAt) + 1).toISOString(), {
+      session: { id: 'new', requested_task: T1, status: 'failed' },
+    }),
+  ]))
+  assertEquals(attemptEligible(retried, T1, NOW, 60_000), false)
+  let later = rows(graph([
+    ...failed,
+    ...mk(S2, 7, new Date(Date.parse(freshAt) + 1).toISOString(), {
+      session: { id: 'new', requested_task: T1, status: 'failed' },
+    }),
+    { eid: T1, name: 'resume', comp: { at: ago(1), rank: 241 } },
+  ]))
+  assertEquals(attemptEligible(later, T1, NOW + 60_000, 60_000), true)
+  // Failure evidence is input, never a mutation target.
+  assertEquals(
+    fresh.find((r) => r.eid == S1)?.comps.error?.message,
+    'transport failed',
+  )
+})
+
+Deno.test('attempt eligibility: pending, starting, and running Sessions suppress', () => {
+  for (let status of [undefined, 'starting', 'running']) {
+    let all = rows(graph([
+      ...mk(S1, 6, ago(60), {
+        session: {
+          id: 'live',
+          requested_task: T1,
+          ...(status ? { status } : {}),
+        },
+      }),
+      { eid: T1, name: 'resume', comp: { at: ago(10), rank: 1 } },
+    ]))
+    assertEquals(attemptEligible(all, T1, NOW, 1), false, String(status))
+  }
+})
+
+Deno.test('retryBackoff requires a finite nonzero millisecond delay', () => {
+  assertEquals(retryBackoff('60000'), 60_000)
+  assertEquals(retryBackoff('0'), undefined)
+  assertEquals(retryBackoff('-1'), undefined)
+  assertEquals(retryBackoff('later'), undefined)
+})
+
+Deno.test('resume rank precedes priority and age; first-attempt order stays stable', () => {
+  let all = rows(graph([
+    { eid: T2, name: 'resume', comp: { at: ago(1), rank: 240 } },
+  ]))
+  assertEquals(ready(all, []).map((r) => r.eid), [T2, T1])
+  assertEquals(ready(rows(graph()), []).map((r) => r.eid), [T1, T2])
 })
 
 Deno.test('slots: a count parses, anything else is the default', () => {
@@ -171,6 +293,41 @@ Deno.test('dispatchSpawn: fills free slots, most urgent first', () => {
   // one slot already spent leaves one spawn; cap 0 leaves none
   assertEquals(sessions(dispatchSpawn(all, [], ps, 1)).length, 1)
   assertEquals(dispatchSpawn(all, [], ps, 0), [])
+})
+
+Deno.test('candidate refusals do not spend a slot or starve the next commit', () => {
+  let all = rows(graph())
+  let t1 = all.find((r) => r.eid == T1)!
+  let t2 = all.find((r) => r.eid == T2)!
+  let valid: Snapshot['changes'] = [{
+    eid: S2,
+    name: 'session',
+    comp: { id: 'ok' },
+  }]
+  let candidates: DispatchCandidate[] = [
+    { target: t1, error: new Error('planning refused'), spends: true },
+    {
+      target: t1,
+      changes: [{ eid: S1, name: 'session', comp: { id: 'conflict' } }],
+      spends: true,
+    },
+    { target: t2, changes: valid, spends: true },
+  ]
+  let landed: Snapshot['changes'] = []
+  let refused: string[] = []
+  let n = commitCandidates(
+    candidates,
+    1,
+    (changes) => {
+      if (changes[0].eid == S1) throw new Error('precondition moved')
+      landed.push(...changes)
+    },
+    (target, e) => refused.push(`${target.num}:${String(e)}`),
+  )
+  assertEquals(n, 1)
+  assertEquals(landed, valid)
+  assertEquals(refused.length, 2)
+  assertEquals(refused.every((s) => s.startsWith('2:')), true)
 })
 
 Deno.test('excluded: names split on commas/space; empty bars nothing', () => {
@@ -250,6 +407,37 @@ Deno.test('authorized: an approved open task authorizes its whole requires subtr
   assertEquals([...authorized(tree(false), subtree)], [])
 })
 
+Deno.test('an explicit decline vetoes inherited recursive authorization', () => {
+  let deps = [{ parent: T1, type: 'requires' as const, child: T3 }]
+  let declinedTask = {
+    eid: T3,
+    name: 'decided',
+    comp: {
+      at: ago(4),
+      verdict: 'declined',
+    },
+  }
+  let firstRows = rows(graph([declinedTask]))
+  assertEquals([...authorized(firstRows, deps)], [])
+  let first = dispatchSpawn(firstRows, deps, ps, 5, true)
+  assertEquals(
+    first.some((c) => c.name == 'session' && c.comp?.requested_task == T3),
+    false,
+  )
+  let retryRows = rows(graph([
+    declinedTask,
+    ...mk(S1, 20, ago(60), {
+      session: { id: 'failed', requested_task: T3, status: 'failed' },
+    }),
+    { eid: T3, name: 'resume', comp: { at: ago(1), rank: 9 } },
+  ]))
+  let retried = dispatchSpawn(retryRows, deps, ps, 5, true, NOW + 60_000, 1)
+  assertEquals(
+    retried.some((c) => c.name == 'session' && c.comp?.requested_task == T3),
+    false,
+  )
+})
+
 Deno.test('authorized: a requires cycle terminates', () => {
   let cyclic = [...subtree, {
     parent: B3,
@@ -292,6 +480,48 @@ Deno.test('dispatchSpawn: recursive descent spawns the frontier then parks the u
   // an un-decided gated root contributes nothing even recursively — not the
   // frontier (unauthorized) and not a parked parent (unapproved)
   assertEquals(dispatchSpawn(tree(false), subtree, ps, 5, true), [])
+})
+
+Deno.test('warm parking is first-attempt only; a retry waits until ungated', () => {
+  let gate = [{ parent: T1, type: 'requires' as const, child: T3 }]
+  let first = dispatchSpawn(rows(graph()), gate, ps, 5, true)
+  assertEquals(
+    first.some((c) => c.name == 'session' && c.comp?.requested_task == T1),
+    true,
+  )
+
+  let resumed = rows(graph([
+    ...mk(S1, 6, ago(60), {
+      session: { id: 'failed', requested_task: T1, status: 'failed' },
+    }),
+    { eid: T1, name: 'resume', comp: { at: ago(1), rank: 9 } },
+  ]))
+  let gatedRetry = dispatchSpawn(
+    resumed,
+    gate,
+    ps,
+    5,
+    true,
+    NOW + 60_000,
+    1,
+  )
+  assertEquals(
+    gatedRetry.some((c) => c.name == 'session' && c.comp?.requested_task == T1),
+    false,
+  )
+
+  let ungated = rows(graph([
+    ...mk(S1, 6, ago(60), {
+      session: { id: 'failed', requested_task: T1, status: 'failed' },
+    }),
+    { eid: T1, name: 'resume', comp: { at: ago(1), rank: 9 } },
+    { eid: T3, name: 'completed', comp: {} },
+  ]))
+  let retry = dispatchSpawn(ungated, gate, ps, 5, true, NOW + 60_000, 1)
+  assertEquals(
+    retry.some((c) => c.name == 'session' && c.comp?.requested_task == T1),
+    true,
+  )
 })
 
 Deno.test('dispatchSpawn: recursive descent leaves a claimed or asked blocker alone', () => {
@@ -367,6 +597,27 @@ Deno.test('wanted: persona parent + task child, most urgent target first', () =>
   assertEquals(wanted(all, deps).map((d) => d.child), [T3, T2])
 })
 
+Deno.test('a non-persona wants parent cannot turn its reads memory into work', () => {
+  let memory = id(90)
+  let all = rows(graph([
+    ...mk(memory, 90, ago(500), {
+      doc: { title: 'memory behind project reads' },
+      memory: {},
+      decided: { at: ago(1) },
+    }),
+  ]))
+  let deps = [
+    { parent: P, type: 'wants' as const, child: T1 },
+    { parent: P, type: 'reads' as const, child: memory },
+  ]
+  assertEquals(wanted(all, deps), [])
+  assertEquals(backlog(all, deps).some((r) => r.eid == memory), false)
+  assertEquals(
+    dispatchCandidates(all, deps, ps).some((c) => c.target.eid == memory),
+    false,
+  )
+})
+
 Deno.test('dispatchSpawn: a mark spawns its persona onto the target and clears the edge', () => {
   let all = rows(graph([...persona()]))
   let out = dispatchSpawn(all, [mark], ps, 1)
@@ -384,6 +635,14 @@ Deno.test('dispatchSpawn: a mark spawns its persona onto the target and clears t
   ]))
   let re = dispatchSpawn(again, [mark], ps, 1)
   assertEquals(re.some((c) => c.name == 'session'), true)
+})
+
+Deno.test('a watched spawn birth and wants removal are one candidate batch', () => {
+  let all = rows(graph([...persona()]))
+  let candidates = dispatchCandidates(all, [mark], ps)
+  let watched = candidates.find((c) => c.spends)!
+  assertEquals(watched.changes?.some((c) => c.name == 'session'), true)
+  assertEquals(watched.changes?.filter((c) => c.name == 'dependency'), [gone])
 })
 
 Deno.test('dispatchSpawn: a hot or settled mark clears unspent; a capped one waits', () => {

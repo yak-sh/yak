@@ -6,7 +6,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { tick } from './testing.ts'
 import { type Change } from './types.ts'
-import { dispatch, docs, on, relay, trace } from './effects.ts'
+import { commitEffects, dispatch, docs, on, relay, trace } from './effects.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply } = await import('./db.ts')
@@ -35,6 +35,23 @@ on('alias', {
   },
 })
 on('alias', { created: () => seen.push('alias survived') })
+
+Deno.test('commitEffects keeps a durable commit successful when cast fails', () => {
+  seen = []
+  let eid = uid()
+  let errors: string[] = []
+  let out = commitEffects(
+    (t) => apply(db, [{ eid, name: 'web', comp: { url: 'http://cast' } }], t),
+    () => {
+      throw new Error('broadcast down')
+    },
+    (comp, e) => errors.push(`${comp}: ${e}`),
+  )
+  assertEquals(out[0].eid, eid)
+  assertEquals(errors.length, 1)
+  assertEquals(errors[0].startsWith('cast: Error: broadcast down'), true)
+  assertEquals(seen.includes(`created ${eid}`), true)
+})
 
 Deno.test('created fires on birth, changed on patches, by column', async () => {
   seen = []

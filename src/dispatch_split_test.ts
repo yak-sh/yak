@@ -47,7 +47,7 @@ Deno.test('split dispatcher launches graph-native Session without restart', asyn
     assert(child.success, stderr)
     assertStringIncludes(
       new TextDecoder().decode(child.stdout),
-      'split dispatcher launched graph-native session',
+      'split dispatcher launched one retained-failure retry',
     )
   } finally {
     Deno.removeSync(root, { recursive: true })

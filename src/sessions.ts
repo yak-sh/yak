@@ -384,8 +384,8 @@ export let gatedTask = (taskEid: string) =>
 // wake armed (pendingWake — the M-7323 parked standing) AND the claimed task is
 // gated by an open `requires` blocker. Such a claim must SURVIVE both release
 // truths — the graceful settle and the boot heal — because releasing it strands
-// the task with no owner and asked() then blocks its re-dispatch: the parked
-// session ended only its turn and returns on its wake to finish it. The wait
+// the task with no warm owner: dispatch may eventually create a cold retry, but
+// this session ended only its turn and returns on its wake to finish it. The wait
 // registration is the edge itself; no new subscription facet.
 let parkedWaiting = (sessionEid: string, taskEid: string) =>
   pendingWake(sessionEid) && gatedTask(taskEid)

@@ -124,10 +124,11 @@ export let configureEffects = (next: Partial<Driver>) => {
 
 export let effectTrace = (): Trace => driver.split ? fed() : trace()
 
-// Atomic commit + cast + route. In inline mode handlers run now, as before.
-// In split mode the fed trace is already durable in the same transaction as
-// the mutation; nudging this process's feed can only fire this owner's rows,
-// and the peer feed observes the cross-owner half from the journal.
+// Atomic commit, then best-effort notification + routing. Once commit returns,
+// the mutation is durable: neither a broken socket cast nor a feed nudge may
+// turn that success back into an apparent apply refusal. Both failures still
+// reach the configured durable effect reporter under their own type, and a
+// cast failure cannot prevent effect routing.
 export let commitEffects = (
   commit: (t: Trace) => Change[],
   cast: (changes: Change[]) => void,
@@ -135,8 +136,23 @@ export let commitEffects = (
 ): Change[] => {
   let t = effectTrace()
   let out = commit(t)
-  cast(out)
-  routeEffects(out, t, oops)
+  let report = (comp: string, e: unknown) => {
+    try {
+      ;(oops ?? driver.oops)(comp, e)
+    } catch (reportError) {
+      console.warn(`effect ${comp} reporting failed —`, reportError)
+    }
+  }
+  try {
+    cast(out)
+  } catch (e) {
+    report('cast', e)
+  }
+  try {
+    routeEffects(out, t, report)
+  } catch (e) {
+    report('route', e)
+  }
   return out
 }
 

@@ -4,19 +4,21 @@
 // where a human already said yes. Creating the session IS the spawn request
 // (the created(session) effect validates and launches; the launcher's
 // auto-claim takes the lease), so this module holds no queue and no
-// supervision — and no retry: a failed launch is a failed Session on the
-// board, and its task is never re-asked until someone clears that session.
+// supervision. A terminal attempt remains durable; a later server-minted
+// resume generation may authorize exactly one fresh Session after backoff.
 // A sweep like the others (scribe.ts is the sibling) — graduates to a
 // `system` entity under T-3906.
 import { apply, depsOf, settingValue } from './db.ts'
 import { db } from './live_db.ts'
 import { commitEffects } from './effects.ts'
 import { type Change, type Dep, statusOf } from './types.ts'
-import { type Row, spawnChanges, spawnPlan } from './client.ts'
+import { idOf, type Row, spawnChanges, spawnPlan } from './client.ts'
 import { hotRun, isPersona, liveRun } from './spawnrule.ts'
 import { type Provider } from './providers.ts'
 import { evalGraph, rowsFor } from './graph_query.ts'
 import { resolve } from './config.ts'
+import { record as telemetry } from './telemetry.ts'
+import { type DatabaseSync } from './sqlite.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -25,6 +27,7 @@ type Cast = (changes: Change[]) => void
 // stamped before the column meant (D-21212).
 export let approved = (r: Row) =>
   !!r.comps.decided && r.comps.decided.verdict != 'declined'
+let declined = (r: Row) => r.comps.decided?.verdict == 'declined'
 
 // Status is DERIVED from the comps (D-24102): open = no completed/cancelled/claim,
 // settled = wears completed or cancelled. Reading it off statusOf keeps dispatch
@@ -42,6 +45,11 @@ let born = (r: Row) => {
 }
 let rank = (r: Row) =>
   typeof r.comps.task?.priority == 'number' ? r.comps.task.priority : Infinity
+let resumeRank = (r: Row) => Number(r.comps.resume?.rank ?? 0)
+let order = (a: Row, b: Row) =>
+  Number(!!b.comps.resume) - Number(!!a.comps.resume) ||
+  resumeRank(b) - resumeRank(a) || rank(a) - rank(b) ||
+  born(a) - born(b) || a.num - b.num
 
 // Approval inherits down `requires` (T-21452, D-21448 Piece 3): an approved
 // OPEN task authorizes its whole requires-subtree, so the sweep may spawn its
@@ -51,17 +59,23 @@ let rank = (r: Row) =>
 // requires cycle terminate. Only open approved tasks seed the descent: a settled
 // one needs nothing spawned.
 export let authorized = (all: Row[], deps: Dep[]) => {
+  let by = new Map(all.map((r) => [r.eid, r]))
   let kids = (eid: string) =>
     deps.filter((d) => d.type == 'requires' && d.parent == eid).map((d) =>
       d.child
     )
   let seen = new Set<string>()
   let stack = all
-    .filter((r) => statusIs(r) == 'open' && approved(r))
+    .filter((r) => !!r.comps.task && statusIs(r) == 'open' && approved(r))
     .flatMap((r) => kids(r.eid))
   while (stack.length) {
     let eid = stack.pop()!
     if (seen.has(eid)) continue
+    let row = by.get(eid)
+    // An explicit no is a veto, not merely an absent yes. It prunes inherited
+    // authorization at this node so neither it nor work below it can spend on
+    // an ancestor's approval.
+    if (!row?.comps.task || declined(row)) continue
     seen.add(eid)
     stack.push(...kids(eid))
   }
@@ -83,10 +97,11 @@ export let backlog = (all: Row[], deps: Dep[], recursive = false) => {
     )
   return all
     .filter((r) =>
-      statusIs(r) == 'open' && !r.comps.claim && !r.comps.blocked &&
+      !!r.comps.task && statusIs(r) == 'open' && !r.comps.claim &&
+      !r.comps.blocked && !declined(r) &&
       (approved(r) || auth.has(r.eid)) && !gated(r.eid)
     )
-    .sort((a, b) => rank(a) - rank(b) || born(a) - born(b) || a.num - b.num)
+    .sort(order)
 }
 
 // Ready = the non-recursive backlog: individually approved, runnable now. The
@@ -94,7 +109,7 @@ export let backlog = (all: Row[], deps: Dep[], recursive = false) => {
 export let ready = (all: Row[], deps: Dep[]) => backlog(all, deps, false)
 
 // The parked-parent frontier (D-21448): individually-APPROVED, open, unclaimed,
-// unblocked, un-asked GATED tasks — the umbrellas an operator spawns an agent
+// unblocked, never-attempted GATED tasks — the umbrellas an operator spawns an agent
 // onto. The sweep spawns a WARM agent that holds the claim and PARKS, to be
 // resumed by the dep-completion knock (unblock.ts) when a blocker lands, rather
 // than cold-redispatched. The gated COMPLEMENT of backlog: backlog spawns the
@@ -115,10 +130,12 @@ export let parkable = (all: Row[], deps: Dep[]) => {
     )
   return all
     .filter((r) =>
-      statusIs(r) == 'open' && !r.comps.claim && !r.comps.blocked &&
-      approved(r) && gated(r.eid)
+      !!r.comps.task && statusIs(r) == 'open' && !r.comps.claim &&
+      !r.comps.blocked &&
+      approved(r) && gated(r.eid) &&
+      !all.some((s) => s.comps.session?.requested_task == r.eid)
     )
-    .sort((a, b) => rank(a) - rank(b) || born(a) - born(b) || a.num - b.num)
+    .sort(order)
 }
 
 // The sessions the dispatcher is paying for: live (a session holds its slot
@@ -140,11 +157,42 @@ export let inFlight = (all: Row[]) => {
   })
 }
 
-// A task ever asked-for is never asked for again — v1's whole retry
-// policy. A failed Session stays on the board saying so; deleting it is
-// the human act that reopens dispatch for its task.
-export let asked = (all: Row[], task: string) =>
-  all.some((r) => r.comps.session?.requested_task == task)
+// Retry delay in milliseconds. Zero/invalid disables retry: a terminal attempt
+// is never retried without an explicitly nonzero safety window.
+export let retryBackoff = (value: string | undefined) => {
+  let n = Number(value)
+  return Number.isFinite(n) && n > 0 ? n : undefined
+}
+
+// Attempt identity is the Session birth, not its mutable outcome. The first
+// attempt has no history. A retry requires a terminal history, a fresh resume
+// generation, and its elapsed backoff. A birth at/after resume.at consumes that
+// generation forever; a later release mints a later timestamp and can authorize
+// one more attempt. Any pending/starting/running Session always suppresses.
+export let attemptEligible = (
+  all: Row[],
+  task: string,
+  now = Date.now(),
+  backoff?: number,
+) => {
+  let attempts = all.filter((r) => r.comps.session?.requested_task == task)
+  if (attempts.some((r) => liveRun(r.comps.session!))) return false
+  if (!attempts.length) return true
+  let t = all.find((r) => r.eid == task)
+  let at = Date.parse(String(t?.comps.resume?.at ?? ''))
+  if (!backoff || Number.isNaN(at) || now < at + backoff) return false
+  return !attempts.some((r) => born(r) >= at)
+}
+
+// Compatibility name for callers that ask the inverse question. Unlike v1 it
+// is generation-aware; callers that need elapsed time should use
+// attemptEligible directly.
+export let asked = (
+  all: Row[],
+  task: string,
+  now = Date.now(),
+  backoff?: number,
+) => !attemptEligible(all, task, now, backoff)
 
 // The cap as a number: the catalog guarantees a value ('2' default), but a
 // stored override is free text, so a non-count falls back to the default.
@@ -178,9 +226,65 @@ export let wanted = (all: Row[], deps: Dep[]) => {
     )
     .sort((a, b) => {
       let x = by.get(a.child)!, y = by.get(b.child)!
-      return rank(x) - rank(y) || born(x) - born(y) || x.num - y.num
+      return order(x, y)
     })
 }
+
+export type DispatchCandidate = {
+  target: Row
+  // A planning refusal occupies its ordered position, but has no mutation.
+  changes?: Change[]
+  error?: unknown
+  spends: boolean
+}
+
+// Commit candidates independently. Planning and apply refusals are addressed
+// to their target and never charge a slot; cleanup-only candidates never charge
+// one either. The caller supplies commitEffects as the commit door, keeping the
+// process-configured split-effects policy central.
+export let commitCandidates = (
+  candidates: DispatchCandidate[],
+  free: number,
+  commit: (changes: Change[]) => void,
+  refuse: (target: Row, error: unknown) => void,
+) => {
+  let spawned = 0
+  for (let candidate of candidates) {
+    if (candidate.spends && free <= 0) break
+    if (candidate.error || !candidate.changes) {
+      refuse(
+        candidate.target,
+        candidate.error ?? new Error('no candidate batch'),
+      )
+      continue
+    }
+    try {
+      commit(candidate.changes)
+      if (candidate.spends) {
+        free--
+        spawned++
+      }
+    } catch (e) {
+      refuse(candidate.target, e)
+    }
+  }
+  return spawned
+}
+
+// Stable, durable address for every refused candidate. telemetry.record owns
+// sanitization; detail stays the human graph id rather than an opaque UUID.
+export let candidateRefusal = (
+  database: DatabaseSync,
+  target: Row,
+  e: unknown,
+) =>
+  telemetry(database, {
+    source: 'srv',
+    name: 'dispatch candidate',
+    ok: false,
+    error: String(e),
+    detail: idOf(target),
+  })
 
 // The batch the sweep would mint: one spawn per free slot, marks first (an
 // event is an attention ask; the ready backlog waits behind it), then the
@@ -195,68 +299,93 @@ export let wanted = (all: Row[], deps: Dep[]) => {
 // the (persona, target) debounce is what bounds them. Each backlog launch
 // resolves through spawnPlan, so a task's own `spawn` hint wins and the
 // provider table fills the rest.
-export let dispatchSpawn = (
+export let dispatchCandidates = (
   all: Row[],
   deps: Dep[],
   ps: Provider[],
-  cap: number,
   recursive = false,
+  now = Date.now(),
+  backoff?: number,
 ) => {
   let by = new Map(all.map((r) => [r.eid, r]))
-  let free = cap - inFlight(all).length
-  let changes: Change[] = []
+  let candidates: DispatchCandidate[] = []
   let spawned = new Set<string>()
   // A resolved plan whose provider isn't in `ps` — a task pinned to a provider
   // the sweep excludes (ps is already filtered). Skip it, don't stop: other
   // tasks may still land on a provider that launches (T-24115).
   let barred = (provider?: string) => !ps.some((p) => p.name == provider)
-  let drop = (d: Dep) =>
-    changes.push({
-      eid: d.parent,
-      name: 'dependency',
-      comp: { type: 'wants', child: d.child, gone: true },
+  let missingPlan = (t: Row) => {
+    candidates.push({
+      target: t,
+      error: new Error('no dispatch provider/model plan'),
+      spends: true,
     })
+  }
+  let drop = (d: Dep) => ({
+    eid: d.parent,
+    name: 'dependency',
+    comp: { type: 'wants', child: d.child, gone: true },
+  })
   for (let d of wanted(all, deps)) {
     let t = by.get(d.child)!
     if (settled(t) || hotRun(all, d.parent, t)) {
-      drop(d)
+      candidates.push({ target: t, changes: [drop(d)], spends: false })
       continue
     }
-    if (free <= 0) break // the mark waits for the next sweep's free slot
-    let plan = spawnPlan(all, ps, { task: t.eid, ask: { persona: d.parent } })
-    if (!plan.provider || !plan.model) break // nothing can launch — say so once
-    if (barred(plan.provider)) continue // pinned to an excluded provider
-    changes.push(
-      ...spawnChanges(all, {
+    // A different active persona may be attending the task. Keep this mark
+    // pending rather than violating one-active-attempt-per-task.
+    if (
+      all.some((r) =>
+        r.comps.session?.requested_task == t.eid && liveRun(r.comps.session)
+      )
+    ) continue
+    try {
+      let plan = spawnPlan(all, ps, { task: t.eid, ask: { persona: d.parent } })
+      if (!plan.provider || !plan.model) {
+        if (!ps.length) break
+        missingPlan(t)
+        continue
+      }
+      if (barred(plan.provider)) continue
+      let made = spawnChanges(all, {
         task: t.eid,
         provider: plan.provider,
         model: plan.model,
         ...(plan.effort ? { effort: plan.effort } : {}),
         persona: d.parent,
         deps,
-      }).changes,
-    )
-    drop(d)
-    spawned.add(t.eid)
-    free--
+      }).changes
+      candidates.push({ target: t, changes: [...made, drop(d)], spends: true })
+      spawned.add(t.eid)
+    } catch (error) {
+      candidates.push({ target: t, error, spends: true })
+    }
   }
   for (let t of backlog(all, deps, recursive)) {
-    if (free <= 0) break
-    if (spawned.has(t.eid) || asked(all, t.eid)) continue
-    let plan = spawnPlan(all, ps, { task: t.eid })
-    if (!plan.provider || !plan.model) break // nothing can launch — say so once
-    if (barred(plan.provider)) continue // pinned to an excluded provider
-    changes.push(
-      ...spawnChanges(all, {
+    if (spawned.has(t.eid) || !attemptEligible(all, t.eid, now, backoff)) {
+      continue
+    }
+    try {
+      let plan = spawnPlan(all, ps, { task: t.eid })
+      if (!plan.provider || !plan.model) {
+        if (!ps.length) break
+        missingPlan(t)
+        continue
+      }
+      if (barred(plan.provider)) continue
+      let changes = spawnChanges(all, {
         task: t.eid,
         provider: plan.provider,
         model: plan.model,
         ...(plan.effort ? { effort: plan.effort } : {}),
         ...(plan.persona ? { persona: plan.persona } : {}),
         deps,
-      }).changes,
-    )
-    free--
+      }).changes
+      candidates.push({ target: t, changes, spends: true })
+      spawned.add(t.eid)
+    } catch (error) {
+      candidates.push({ target: t, error, spends: true })
+    }
   }
   // The parked parents (D-21448), after the workers: a gated umbrella spawns a
   // warm agent that holds T's claim and parks (spawned() folds the park
@@ -267,26 +396,54 @@ export let dispatchSpawn = (
   // re-dispatch once ungated — correct either way.
   if (recursive) {
     for (let t of parkable(all, deps)) {
-      if (free <= 0) break
-      if (spawned.has(t.eid) || asked(all, t.eid)) continue
-      let plan = spawnPlan(all, ps, { task: t.eid })
-      if (!plan.provider || !plan.model) break
-      if (barred(plan.provider)) continue // pinned to an excluded provider
-      changes.push(
-        ...spawnChanges(all, {
+      if (spawned.has(t.eid)) continue
+      try {
+        let plan = spawnPlan(all, ps, { task: t.eid })
+        if (!plan.provider || !plan.model) {
+          if (!ps.length) break
+          missingPlan(t)
+          continue
+        }
+        if (barred(plan.provider)) continue
+        let changes = spawnChanges(all, {
           task: t.eid,
           provider: plan.provider,
           model: plan.model,
           ...(plan.effort ? { effort: plan.effort } : {}),
           ...(plan.persona ? { persona: plan.persona } : {}),
           deps,
-        }).changes,
-      )
-      spawned.add(t.eid)
-      free--
+        }).changes
+        candidates.push({ target: t, changes, spends: true })
+        spawned.add(t.eid)
+      } catch (error) {
+        candidates.push({ target: t, error, spends: true })
+      }
     }
   }
-  return changes
+  return candidates
+}
+
+// Legacy pure facade: flatten the independently planned batches as if every
+// commit succeeded. Production uses dispatchCandidates + commitCandidates so a
+// refused batch can be replaced by the next candidate without spending a slot.
+export let dispatchSpawn = (
+  all: Row[],
+  deps: Dep[],
+  ps: Provider[],
+  cap: number,
+  recursive = false,
+  now = Date.now(),
+  backoff?: number,
+) => {
+  let free = cap - inFlight(all).length
+  let out: Change[] = []
+  commitCandidates(
+    dispatchCandidates(all, deps, ps, recursive, now, backoff),
+    free,
+    (changes) => out.push(...changes),
+    () => {},
+  )
+  return out
 }
 
 // The interval-safe door, mirroring scribe: never two sweeps in flight,
@@ -314,10 +471,23 @@ export let dispatchSweep = async (
        join entity c on c.id = d.child
        where d.type = 'wants'`,
     ).all() as Dep[]
+    // Validate endpoints before expanding a neighborhood. In particular, a
+    // project wearing a stale wants edge must not make its unrelated reads
+    // memories visible to backlog construction (P-22 → M-4585).
+    let hinted = tasks.map((t) => t.comps.spawn?.persona)
+      .filter((p): p is string => typeof p == 'string')
+    let endpoints = rowsFor(db, [
+      ...hinted,
+      ...wants.flatMap((w) => [w.parent, w.child]),
+    ])
+    let endpointBy = new Map(endpoints.map((r) => [r.eid, r]))
+    let validWants = wants.filter((w) =>
+      isPersona(endpointBy.get(w.parent)) &&
+      !!endpointBy.get(w.child)?.comps.task
+    )
     let personas = [
-      ...tasks.map((t) => t.comps.spawn?.persona)
-        .filter((p): p is string => typeof p == 'string'),
-      ...wants.map((w) => w.parent),
+      ...hinted.filter((p) => isPersona(endpointBy.get(p))),
+      ...validWants.map((w) => w.parent),
     ]
     // depsOf over the personas re-reads every mark, so `wants` never dupes
     // into deps here.
@@ -325,7 +495,7 @@ export let dispatchSweep = async (
     let extra = [
       ...sessions.map((s) => s.comps.session?.requested_task),
       ...deps.filter((d) => d.type == 'requires').map((d) => d.child),
-      ...wants.map((w) => w.child),
+      ...validWants.map((w) => w.child),
       ...personas,
       ...deps.filter((d) =>
         personas.includes(d.parent) ||
@@ -342,6 +512,9 @@ export let dispatchSweep = async (
     let recursive = on(
       resolve('DISPATCH_RECURSIVE', (k) => settingValue(db, k)).value,
     )
+    let backoff = retryBackoff(
+      resolve('DISPATCH_RETRY_BACKOFF', (k) => settingValue(db, k)).value,
+    )
     // Drop the denied providers before the sweep picks, so the default model
     // never routes to a provider that can't launch here (T-24115). Excluding a
     // graph-native provider without its CLI fallback would leave the fallback
@@ -350,14 +523,23 @@ export let dispatchSweep = async (
       resolve('DISPATCH_EXCLUDE', (k) => settingValue(db, k)).value,
     )
     let ps = (await providers()).filter((p) => !bar.has(p.name))
-    let changes = dispatchSpawn(all, deps, ps, cap, recursive)
-    if (changes.length) {
-      commitEffects((t) => apply(db, changes, t), cast)
-      let n = new Set(
-        changes.filter((c) => c.name == 'session').map((c) => c.eid),
-      ).size
-      console.log(`dispatch sweep: ${n} spawned`)
-    }
+    let candidates = dispatchCandidates(
+      all,
+      deps,
+      ps,
+      recursive,
+      Date.now(),
+      backoff,
+    )
+    let n = commitCandidates(
+      candidates,
+      cap - inFlight(all).length,
+      (changes) => {
+        commitEffects((t) => apply(db, changes, t), cast)
+      },
+      (target, e) => candidateRefusal(db, target, e),
+    )
+    if (n) console.log(`dispatch sweep: ${n} spawned`)
   } catch (e) {
     console.warn('dispatch sweep —', e)
   } finally {
