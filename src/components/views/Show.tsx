@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type ComponentChildren } from 'preact'
-import { comps, type Ent, statusOf } from '../../types.ts'
+import { derivedProps, type Ent, statusOf } from '../../types.ts'
 import { FLOOR, textOf } from '../../twin.ts'
 import {
   base,
@@ -105,7 +105,10 @@ let {
 export let Pip = ({ e }: { e: Ent }) => {
   let [open, setOpen] = useState(false)
   let anchor = useRef<HTMLElement>(null)
-  let t = comps.task.status
+  // task.status is a DERIVED column (D-24102): its enum type lives in
+  // derivedProps, not the writable `comps` vocabulary. The enum editor renders
+  // the choices; set() translates a pick into the completed/cancelled mark.
+  let t = derivedProps.task.status
   let ed = editorFor(t)!
   return (
     <>

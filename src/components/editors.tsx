@@ -2,6 +2,7 @@ import { type ComponentChildren, type JSX } from 'preact'
 import { useContext, useRef, useState } from 'preact/hooks'
 import { formatProp, propAt } from '../props.ts'
 import { idOf, type PropType, statuses } from '../types.ts'
+import { statusChanges } from '../client.ts'
 import { cache, domains, ent, mutate, problem } from '../live.ts'
 import { ago, block, focus, pretty, Surround } from './ui.tsx'
 import { Dot } from './Dot.tsx'
@@ -71,10 +72,16 @@ export let popout = (E: (p: EditorProps) => JSX.Element) => (p: EditProps) => (
 let wells: Record<string, () => string[]> = {}
 export let defineWells = (w: typeof wells) => Object.assign(wells, w)
 
-// One write path for every editor: a single column, patched in place.
+// One write path for every editor: a single column, patched in place —
+// except task.status, which is DERIVED (D-24102) and has no column to patch, so
+// a pick mints/retracts the completed/cancelled mark instead.
 let set = (p: EditorProps, v: unknown) => {
   try {
-    mutate({ eid: p.eid, name: p.comp, comp: { [p.prop]: v } })
+    if (p.comp == 'task' && p.prop == 'status') {
+      mutate(...statusChanges(p.eid, String(v)))
+    } else {
+      mutate({ eid: p.eid, name: p.comp, comp: { [p.prop]: v } })
+    }
   } catch (e) {
     problem.value = e instanceof Error ? e.message : String(e)
   }

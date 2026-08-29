@@ -74,6 +74,26 @@ export type Row = {
 export let taskStatus = (r: { comps: Record<string, unknown> }) =>
   r.comps.task ? statusOf(r.comps) : undefined
 
+// The changes a UI picker sends to set a task to a chosen DERIVED status
+// (D-24102): done/cancelled MINT their mark, open RETRACTS both. wip is a live
+// claim — with a session it leases, without one (the web board has none) it
+// falls back to retracting the marks, so the task reads open until it is claimed.
+export let statusChanges = (
+  eid: string,
+  status: string,
+  session?: string,
+): Change[] =>
+  status == 'done'
+    ? [{ eid, name: 'completed', comp: {} }]
+    : status == 'cancelled'
+    ? [{ eid, name: 'cancelled', comp: {} }]
+    : status == 'wip' && session
+    ? [{ eid, name: 'claim', comp: { session } }]
+    : [
+      { eid, name: 'completed', comp: null },
+      { eid, name: 'cancelled', comp: null },
+    ]
+
 // The slice of a Row the scope predicates read — eid and comps, never num or
 // kind. Widening belongs()/scopeFor()/repoAt() to this lets a server-side
 // caller reuse the ONE scope truth over db.ts rowsOf() output (which carries no
@@ -3172,9 +3192,7 @@ export let taskContextBlock = (
       d.parent != task.eid && !forward.has(d.child)
     )
     .map((d) => byEid.get(d.child))
-    .filter((r): r is Row =>
-      !!r?.comps.task && !settled(taskStatus(r))
-    )
+    .filter((r): r is Row => !!r?.comps.task && !settled(taskStatus(r)))
     .filter((r, i, a) => a.findIndex((x) => x.eid == r.eid) == i)
     .sort((a, b) => order(a.eid, b.eid))
     .slice(0, 1)
@@ -3219,9 +3237,9 @@ export let taskBlock = (
   let byEid = byIx ?? new Map(all.map((x) => [x.eid, x]))
   let authoring = authoringLine(all, r)
   let out = [
-    `- ${idOf(r)} ${taskStatus(r) ?? r.kind} — ${
-      r.comps.doc?.title ?? ''
-    }${authoring ? ` · ${authoring}` : ''}`,
+    `- ${idOf(r)} ${taskStatus(r) ?? r.kind} — ${r.comps.doc?.title ?? ''}${
+      authoring ? ` · ${authoring}` : ''
+    }`,
   ]
   for (let d of deps.filter((d) => d.parent == r.eid)) {
     let c = byEid.get(d.child)
