@@ -46,6 +46,16 @@ Deno.test('claude: the result event is the last word', () => {
     result: null,
   })
   assertEquals(bad?.error, 'result: error_during_execution')
+
+  // API refusals can paradoxically carry subtype `success`; result is the
+  // provider's useful diagnosis and therefore wins over that subtype.
+  let refused = claude.terminal({
+    type: 'result',
+    subtype: 'success',
+    is_error: true,
+    result: "You've hit your weekly limit",
+  })
+  assertEquals(refused?.error, "You've hit your weekly limit")
 })
 
 Deno.test('claude: interactive assistant events state model and effort', () => {

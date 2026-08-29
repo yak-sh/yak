@@ -1168,6 +1168,19 @@ slow('a child that exits nonzero failed, whatever it said', async () => {
   assertEquals(row(eid)?.exit_code, 3)
 })
 
+// A provider can deliberately refuse a turn (quota, validation) and exit
+// non-zero. Its terminal event makes that a known operational failure, not a
+// process break for self-healing to chase.
+slow('a terminal provider refusal is an error, not an exception', async () => {
+  let { t } = seed('refuse fail:3')
+  let { eid, done } = begin(t)
+  await done
+  assertEquals(row(eid)?.status, 'failed')
+  assertEquals(row(eid)?.exit_code, 3)
+  assertEquals(failure(eid), 'provider refused')
+  assertEquals(broke(eid), undefined)
+})
+
 // The launcher's refusals are all SILENT — it backgrounds systemd-run and
 // exits 0 — so the only witness is the stderr file and the pidfile that
 // never appeared. Shadowing systemd-run with a refusal replays the whole

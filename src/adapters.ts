@@ -348,6 +348,7 @@ export let adapters: Record<string, Adapter> = {
         ? {
           final_text: e.final_text == null ? null : String(e.final_text),
           usage_json: e.usage ? JSON.stringify(e.usage) : null,
+          ...(e.error ? { error: String(e.error) } : {}),
         }
         : null,
     row: (e) => {
@@ -463,7 +464,16 @@ export let adapters: Record<string, Adapter> = {
         ? {
           final_text: e.result == null ? null : String(e.result),
           usage_json: e.usage ? JSON.stringify(e.usage) : null,
-          ...(e.is_error ? { error: `result: ${e.subtype}` } : {}),
+          ...(e.is_error
+            ? {
+              // Claude currently reports API refusals as subtype `success`
+              // with is_error=true. The result carries the useful diagnosis;
+              // retain the subtype fallback for execution errors without one.
+              error: e.result
+                ? String(e.result)
+                : `result: ${String(e.subtype ?? 'error')}`,
+            }
+            : {}),
         }
         : null,
     observe: (e) => {

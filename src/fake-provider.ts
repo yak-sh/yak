@@ -13,6 +13,7 @@
 //   oversize    emit a line past the tailer's 1MB ceiling
 //   quiet       skip the terminal event (an agent that just stops talking)
 //   fail:3      exit 3 instead of 0
+//   refuse      terminally declare a known provider refusal
 //
 // --resume marks a continuation of an existing thread: the session is
 // already known, so it skips the init and just narrates on — the same
@@ -66,6 +67,7 @@ if (!says('quiet')) {
   say({
     type: 'result',
     final_text: `done: ${instruction}`,
+    ...(says('refuse') ? { error: 'provider refused' } : {}),
     usage: { input_tokens: 12, output_tokens: 34 },
   })
 }

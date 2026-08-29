@@ -900,6 +900,11 @@ type Tail = {
   seq: number
   ended: boolean
   errs: string[]
+  // A terminal event can say the provider REFUSED the turn (rate limit,
+  // validation, etc.). That is an expected operational failure even when the
+  // provider process exits non-zero; keep it distinct from malformed output
+  // and process death, which are breaks.
+  failure?: string
   imp?: Imp
   // The live-edge gate (T-17306): false while a tailer consumes the pre-existing
   // tail (initial catch-up) or a bulk backfill re-reads a finished file —
@@ -1085,7 +1090,10 @@ export let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
       // a previous run's ending, not this one's. The live tail never re-reads
       // a settled run — but recover() drains whole files, and must not flag
       // the shape resume writes by design.
-      if (type == 'session.input') t.ended = false
+      if (type == 'session.input') {
+        t.ended = false
+        t.failure = undefined
+      }
       continue
     }
     // The terminal event is the last word: an agent that keeps talking after
@@ -1101,6 +1109,7 @@ export let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
     let end = ad.terminal(e)
     if (end) {
       Object.assign(patch, end)
+      t.failure = end.error ? String(end.error) : undefined
       t.ended = true
     }
     // Transcript rows: usage/lifecycle events map to nothing here (they stay
@@ -1201,6 +1210,8 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
   // failure — the stderr tail. The status is the domain fact; this names it.
   let why = t.errs.length
     ? diagnosis(t)
+    : t.failure
+    ? t.failure
     : !ok
     ? errTail(eid).trim().slice(-2000)
     : ''
@@ -1219,10 +1230,12 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
   // machinery — the `interrupted` status is the whole truth, so no fault facet.
   // A break wears `exception`, the self-healing trigger: a READ non-zero exit
   // (127, a crash, a clean exit with no terminal event — the provider died
-  // mid-call) or a stillborn launch. An unobservable exit that is NOT stillborn
-  // is a known operational end — surfaced as `error` if it left words, never
-  // healed. A completed run that merely muttered on its way out is `error` too.
-  let broke = status == 'failed' && (code != null || stillborn)
+  // mid-call) or a stillborn launch. A terminal event that explicitly declared
+  // a failure is instead a known provider refusal (quota, validation, etc.) and
+  // stays `error`, even when its CLI also exits non-zero. An unobservable exit
+  // that is NOT stillborn is likewise operational, never healed.
+  let declared = !!t.failure && !t.errs.length
+  let broke = status == 'failed' && !declared && (code != null || stillborn)
   let health = status == 'interrupted' ? {} : broke
     ? {
       exception: {
@@ -1706,7 +1719,11 @@ let spawn = (
       // exit 127. `sh <file>` gives systemd a metacharacter-free command line
       // (WRAPPER above); inside it, the file's `$@` is the agent argv and sh
       // does the log/err redirection Deno.Command can't.
-      `systemd-run --user --scope --collect --unit="${scopeUnit(eid)}" ` +
+      // --quiet suppresses systemd-run's successful "Running as unit" banner.
+      // Real launcher failures still write stderr and remain the stillborn WHY.
+      `systemd-run --user --scope --collect --quiet --unit="${
+        scopeUnit(eid)
+      }" ` +
       `setsid sh "$WRAPPER_SH" "$@" 2>> "$TASKS_ERR" &`,
       'sh',
       ...argv,
