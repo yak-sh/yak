@@ -15,9 +15,7 @@ let { wireDoing } = await import('./doing.ts')
 let { codexPending } = await import('./sessions.ts')
 let { writeSession } = await import('./session_store.ts')
 
-let run = async () => {
-  let serving = open(graph)
-  let repo = Deno.makeTempDirSync({ prefix: 'dispatch-split-repo-' })
+let run = async (serving: ReturnType<typeof open>, repo: string) => {
   let git = (...args: string[]) =>
     new Deno.Command('git', { cwd: repo, args, stdout: 'null', stderr: 'null' })
       .outputSync()
@@ -116,8 +114,20 @@ let run = async () => {
   )
 
   restore()
-  serving.close()
 }
 
-await run()
+let repo = Deno.makeTempDirSync({
+  dir: Deno.env.get('TMPDIR'),
+  prefix: 'dispatch-split-repo-',
+})
+try {
+  let serving = open(graph)
+  try {
+    await run(serving, repo)
+  } finally {
+    serving.close()
+  }
+} finally {
+  Deno.removeSync(repo, { recursive: true })
+}
 console.log('split dispatcher launched graph-native session')
