@@ -102,7 +102,13 @@ import {
   resolveRefs,
   TEXT,
 } from './query.ts'
-import { evalAgg, evalGraph, rowed } from './graph_query.ts'
+import {
+  evalAgg,
+  evalBuildWork,
+  evalGraph,
+  rowed,
+  workBlockers,
+} from './graph_query.ts'
 import { withResults } from './result_component.ts'
 import { nativeSoon } from './tmux.ts'
 import { loadPlugins, pluginSpecifiers } from './plugins.ts'
@@ -990,6 +996,18 @@ let handle = async (req: Request) => {
   // and dangling {eid} references — both wire-invisible, so the doctor cannot
   // see them through /query and reads this raw db scan instead. Read-only.
   if (path == '/integrity') return Response.json(scanAnomalies(db))
+  if (path == '/work-blockers') {
+    if (req.method != 'GET') return methodNotAllowed('GET')
+    let parents = (url.searchParams.get('ids') ?? '').split(',').filter(Boolean)
+    let limit = Number(url.searchParams.get('limit')) || 20
+    return Response.json(
+      workBlockers(db, parents, limit).map((set) => ({
+        parent: set.parent,
+        items: set.items.map((row) => jsonOf(row)),
+        truncated: set.truncated,
+      })),
+    )
+  }
   if (path == '/query') {
     if (req.method != 'GET') return methodNotAllowed('GET')
     // The graph over plain GET: the query string IS the filter line —
@@ -1015,6 +1033,8 @@ let handle = async (req: Request) => {
       let limit = Number(
         segs.find((s) => s.startsWith('limit='))?.slice(6),
       ) || undefined
+      let work = segs.find((s) => s.startsWith('work='))?.slice(5)
+      let recursive = segs.includes('recursive=1')
       // `id=` FETCHES rather than filters: each value is an ADDRESS — T-3, a
       // bare num, an alias slug, a uuid — and locate() is the index's own
       // reading of "what names an entity", the same four rules find() spells
@@ -1038,6 +1058,8 @@ let handle = async (req: Request) => {
         s != 'backlinks=1' && s != 'deps=1' && s != 'quarantined=1' &&
         !s.startsWith('after=') &&
         !s.startsWith('limit=') &&
+        !s.startsWith('work=') &&
+        s != 'recursive=1' &&
         !s.startsWith('id=')
       )
       let q = segs.join('&')
@@ -1196,6 +1218,13 @@ let handle = async (req: Request) => {
         return Response.json(
           layers(screen(hits).sort((a, b) => a.num - b.num)),
         )
+      }
+      if (work) {
+        if (work != 'build') throw new Error(`unknown work lane: ${work}`)
+        return Response.json(layers(evalBuildWork(db, q, {
+          limit,
+          recursive,
+        })))
       }
       // The authoritative pipeline (evalGraph): the index answers when it can
       // (a one-row question cost a 27 MB snapshot and 0.29s before sql.ts,

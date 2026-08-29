@@ -60,6 +60,7 @@ import {
   historyLine,
   host,
   httpDeps,
+  httpWorkBlockers,
   idOf,
   type JournalEntry,
   jsonAuthored,
@@ -73,6 +74,7 @@ import {
   patches,
   type Querier,
   query as queryHttp,
+  type QueryOpts,
   recallIndex,
   refHandles,
   refsIn,
@@ -94,6 +96,7 @@ import {
   taskTreeText,
   taskTreeWarning,
   uniq,
+  type WorkBlockerSet,
 } from './client.ts'
 import { noFilter, orderOf, parseQuery, pred, resolution } from './query.ts'
 import {
@@ -124,7 +127,11 @@ import {
   readBackfill,
 } from './backfill.ts'
 import { depsOf, eager, journalOf, search as dbSearch, snapshot } from './db.ts'
-import { dbReader, localQuery } from './graph_query.ts'
+import {
+  dbReader,
+  localQuery,
+  workBlockers as dbWorkBlockers,
+} from './graph_query.ts'
 import { guarded, localReadPath } from './localread.ts'
 import { workCandidates, type WorkLane } from './work.ts'
 
@@ -141,7 +148,7 @@ export type IO = {
   // process it runs localQuery; explicitly remote stdio uses the /query GET.
   query: (
     q: string,
-    opts?: { after?: number; limit?: number },
+    opts?: QueryOpts,
   ) => Promise<Row[]>
   // Entities BY ADDRESS (any form id= reads), extra filters screening the
   // hits — find() over the wire, for target resolution and bounded reference
@@ -150,6 +157,7 @@ export type IO = {
   // The dependency edges touching these entities, both directions, quarantine-
   // screened; `reveal` lifts the screen the way quarantined=1 does.
   deps: (eids: string[], reveal?: boolean) => Promise<Dep[]>
+  workBlockers: (eids: string[], limit: number) => Promise<WorkBlockerSet[]>
   // `via` is journal attribution — the calling session's id, when the
   // tool knows it. Never auth.
   write: (mutation: Mutation, via?: string) => Promise<MutationResult>
@@ -185,6 +193,7 @@ type DBReads = Required<
     | 'query'
     | 'get'
     | 'deps'
+    | 'workBlockers'
     | 'find'
     | 'history'
     | 'backfill'
@@ -214,6 +223,8 @@ export let dbReads = (db: DatabaseSync): DBReads => {
             !eager(db, d.child).quarantined)
         ),
       ),
+    workBlockers: (eids, limit) =>
+      Promise.resolve(dbWorkBlockers(db, eids, limit)),
     find: (q, limit) => Promise.resolve(dbSearch(db, q, limit)),
     history: (eid, limit) => Promise.resolve(journalOf(db, eid, limit)),
     backfill: (kind) => Promise.resolve(backfillChanges(db, kind)),
@@ -454,10 +465,11 @@ export let mcpServer = (io: IO) => {
   let bus = (out: string, _session?: string, _snap?: Snapshot) => text(out)
 
   let workRead = {
-    query: (filters: string[], opts?: { limit?: number }) =>
+    query: (filters: string[], opts?: QueryOpts) =>
       io.query(filters.join('&'), opts),
     get: (ids: string[]) => io.get(ids),
     deps: (eids: string[]) => io.deps(eids),
+    blockers: (eids: string[], limit: number) => io.workBlockers(eids, limit),
   }
 
   let workerContext = async (session: string) => {
@@ -650,7 +662,8 @@ unblocked, and dependency-ready, ordered by priority then newest; recursive
 also includes descendants authorized by an approved open ancestor, but never
 crosses a pending proposal or declined decision. Each JSON envelope carries
 human ids, project/domain, decision and authorization state, blockers, and
-existing repo/spawn hints. Read task_show before claiming. ${FILTERS}`,
+existing repo/spawn hints. blocker and authorization references are bounded;
+their truncated flag says more exist. Read task_show before claiming. ${FILTERS}`,
     {
       lane: z.enum(['evaluate', 'build']).describe(
         'Derived lane to inspect: proposals awaiting evaluation or ready build work.',
@@ -2627,6 +2640,7 @@ export let httpIO = (): IO => ({
   query: (q, opts) => queryHttp(q.split('&').filter(Boolean), opts),
   get: (ids, filters = []) => fetched(ids, filters),
   deps: (eids, reveal) => httpDeps(eids, reveal),
+  workBlockers: (eids, limit) => httpWorkBlockers(eids, limit),
   write: async (mutation, via) => mutationResult(await mutate(mutation, via)),
   find: search,
   upload: async (eid, html) => {

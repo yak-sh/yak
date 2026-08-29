@@ -6,7 +6,7 @@ import { assertEquals, assertMatch } from '@std/assert'
 import { rows } from './client.ts'
 import { apply, depsOf, journalOf, mutate, open, snapshot } from './db.ts'
 import { readEntries } from './entries.ts'
-import { localQuery } from './graph_query.ts'
+import { localQuery, workBlockers } from './graph_query.ts'
 import { combineTools, localTools, tasksTools } from './harness_tools.ts'
 import { managedCodex } from './managed_codex.ts'
 import { type IO } from './mcp.ts'
@@ -53,6 +53,7 @@ let ioFor = (db: ReturnType<typeof open>): IO => ({
       ? localQuery(db)([`id=${ids.join(',')}`, ...filters])
       : Promise.resolve([]),
   deps: (eids) => Promise.resolve(depsOf(db, eids)),
+  workBlockers: (eids, limit) => Promise.resolve(workBlockers(db, eids, limit)),
   write: (mutation, via) =>
     Promise.resolve(mutationResult(mutate(db, mutation, undefined, via))),
   find: () => Promise.resolve([]),

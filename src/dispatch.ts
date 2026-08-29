@@ -19,9 +19,9 @@ import { evalGraph, rowsFor } from './graph_query.ts'
 import { resolve } from './config.ts'
 import { record as telemetry } from './telemetry.ts'
 import { type DatabaseSync } from './sqlite.ts'
-import { approved, backlog, dispatchOrder } from './work.ts'
+import { approved, authorized, buildReady } from './work.ts'
 
-export { approved, authorized, backlog, ready } from './work.ts'
+export { approved, authorized } from './work.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -37,6 +37,25 @@ let born = (r: Row) => {
   let at = Date.parse(String(r.comps.created?.at ?? ''))
   return Number.isNaN(at) ? Infinity : at
 }
+let rank = (r: Row) =>
+  typeof r.comps.task?.priority == 'number' ? r.comps.task.priority : Infinity
+let resumeRank = (r: Row) => Number(r.comps.resume?.rank ?? 0)
+let order = (a: Row, b: Row) =>
+  Number(!!b.comps.resume) - Number(!!a.comps.resume) ||
+  resumeRank(b) - resumeRank(a) || rank(a) - rank(b) ||
+  born(a) - born(b) || a.num - b.num
+
+// Scheduling stays local; work.ts owns the membership predicate shared with
+// external workers, while resume generation and age decide spend order here.
+export let backlog = (all: Row[], deps: Dep[], recursive = false) => {
+  let by = new Map(all.map((r) => [r.eid, r]))
+  let auth = recursive ? authorized(all, deps) : new Set<string>()
+  return all
+    .filter((r) => buildReady(r, by, deps, auth.has(r.eid)))
+    .sort(order)
+}
+
+export let ready = (all: Row[], deps: Dep[]) => backlog(all, deps, false)
 
 // The parked-parent frontier (D-21448): individually-APPROVED, open, unclaimed,
 // unblocked, never-attempted GATED tasks — the umbrellas an operator spawns an agent
@@ -65,7 +84,7 @@ export let parkable = (all: Row[], deps: Dep[]) => {
       approved(r) && gated(r.eid) &&
       !all.some((s) => s.comps.session?.requested_task == r.eid)
     )
-    .sort(dispatchOrder)
+    .sort(order)
 }
 
 // The sessions the dispatcher is paying for: live (a session holds its slot
@@ -156,7 +175,7 @@ export let wanted = (all: Row[], deps: Dep[]) => {
     )
     .sort((a, b) => {
       let x = by.get(a.child)!, y = by.get(b.child)!
-      return dispatchOrder(x, y)
+      return order(x, y)
     })
 }
 

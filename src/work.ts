@@ -3,7 +3,7 @@
 // agents choosing work. Dispatch still owns spending, slots, providers, and
 // retry policy; this module owns only whether work is eligible and how a bounded
 // candidate envelope is assembled from indexed graph reads.
-import type { Row } from './client.ts'
+import type { QueryOpts, Row, WorkBlockerSet } from './client.ts'
 import { type Dep, idOf, settled, statusOf } from './types.ts'
 
 export type WorkLane = 'evaluate' | 'build'
@@ -11,10 +11,11 @@ export type WorkLane = 'evaluate' | 'build'
 export type WorkRead = {
   query: (
     filters: string[],
-    opts?: { limit?: number },
+    opts?: QueryOpts,
   ) => Promise<Row[]>
   get: (ids: string[]) => Promise<Row[]>
   deps: (eids: string[]) => Promise<Dep[]>
+  blockers: (eids: string[], limit: number) => Promise<WorkBlockerSet[]>
 }
 
 export type WorkCandidate = {
@@ -26,15 +27,22 @@ export type WorkCandidate = {
   priority?: number
   proposed: boolean
   decision: 'pending' | 'approved' | 'declined' | 'none'
-  authorization?: { kind: 'direct' | 'inherited'; from: string[] }
+  authorization?: {
+    kind: 'direct' | 'inherited'
+    from: string[]
+    truncated: boolean
+  }
   claim: string | null
   blocked: string | null
   blockers: {
-    id: string
-    title: string
-    status: string
-    claim: string | null
-  }[]
+    items: {
+      id: string
+      title: string
+      status: string
+      claim: string | null
+    }[]
+    truncated: boolean
+  }
   execution?: {
     repo?: {
       path?: string
@@ -86,7 +94,7 @@ export let authorizations = (all: Row[], deps: Dep[]) => {
       // An explicit decision boundary stops inheritance at that node. Its
       // descendants wait behind the same boundary rather than being reached
       // through work the owner has held or declined.
-      if (row && (pending(row) || declined(row))) continue
+      if (!row || pending(row) || declined(row)) continue
       let sources = out.get(eid) ?? new Set<string>()
       sources.add(root.eid)
       out.set(eid, sources)
@@ -117,43 +125,6 @@ export let buildReady = (
   open(r) && !r.comps.claim && !r.comps.blocked &&
   !unresolved(r.eid, by, deps).length &&
   (approved(r) || (inherited && !pending(r) && !declined(r)))
-
-let born = (r: Row) => {
-  let t = Date.parse(String(r.comps.created?.at ?? ''))
-  return Number.isNaN(t) ? Infinity : t
-}
-let rank = (r: Row) =>
-  typeof r.comps.task?.priority == 'number' ? r.comps.task.priority : Infinity
-let resumeRank = (r: Row) => Number(r.comps.resume?.rank ?? 0)
-
-// Managed retry generations outrank first attempts, then preserve the
-// established priority → oldest → number spend order.
-export let dispatchOrder = (a: Row, b: Row) =>
-  Number(!!b.comps.resume) - Number(!!a.comps.resume) ||
-  resumeRank(b) - resumeRank(a) || rank(a) - rank(b) ||
-  born(a) - born(b) || a.num - b.num
-
-// Managed dispatch membership and order. External candidates deliberately
-// re-order the same members below; spending keeps priority → oldest → number.
-export let backlog = (all: Row[], deps: Dep[], recursive = false) => {
-  let by = new Map(all.map((r) => [r.eid, r]))
-  let auth = recursive ? authorized(all, deps) : new Set<string>()
-  return all
-    .filter((r) => buildReady(r, by, deps, auth.has(r.eid)))
-    .sort(dispatchOrder)
-}
-
-export let ready = (all: Row[], deps: Dep[]) => backlog(all, deps, false)
-
-export let parkable = (all: Row[], deps: Dep[]) => {
-  let by = new Map(all.map((r) => [r.eid, r]))
-  return all
-    .filter((r) =>
-      open(r) && !r.comps.claim && !r.comps.blocked && approved(r) &&
-      unresolved(r.eid, by, deps).length > 0
-    )
-    .sort((a, b) => rank(a) - rank(b) || born(a) - born(b) || a.num - b.num)
-}
 
 let decision = (r: Row): WorkCandidate['decision'] =>
   pending(r)
@@ -214,7 +185,7 @@ let execution = (
 }
 
 let LIMIT = 20
-let POOL = 200
+export let WORK_REFS_LIMIT = 20
 
 export let workFilters = (lane: WorkLane, recursive = false) =>
   lane == 'evaluate' ? ['.proposed!', '.decided='] : [
@@ -225,49 +196,72 @@ export let workFilters = (lane: WorkLane, recursive = false) =>
     '.blocked=',
   ]
 
-let expand = async (
+// Only the ancestry of selected candidates is needed to explain inherited
+// authorization. Walk requires child→parent through indexed incident reads;
+// pending, declined, and unknown rows are boundaries. Direct outgoing requires
+// are retained too, and every one is hydrated for the pure readiness recheck.
+let buildContext = async (
   read: WorkRead,
   seeds: Row[],
-  recursive = false,
-  cap = POOL * 2,
+  recursive: boolean,
 ) => {
   let by = new Map(seeds.map((r) => [r.eid, r]))
   let edges = new Map<string, Dep>()
+  let seed = new Set(seeds.map((r) => r.eid))
   let frontier = seeds.map((r) => r.eid)
-  while (frontier.length && by.size < cap) {
+  let walked = new Set<string>()
+  while (frontier.length) {
+    frontier = frontier.filter((eid) => {
+      let row = by.get(eid)
+      return !walked.has(eid) && !!row && !pending(row) && !declined(row)
+    })
+    if (!frontier.length) break
+    frontier.forEach((eid) => walked.add(eid))
     let found = (await read.deps(frontier)).filter((d) => d.type == 'requires')
-    for (let d of found) edges.set(`${d.type}\0${d.parent}\0${d.child}`, d)
-    let ids = [...new Set(found.flatMap((d) => [d.parent, d.child]))]
-      .filter((eid) => !by.has(eid)).slice(0, cap - by.size)
+    let active = new Set(frontier)
+    let kept = found.filter((d) =>
+      seed.has(d.parent) || (recursive && active.has(d.child))
+    )
+    for (let d of kept) edges.set(`${d.type}\0${d.parent}\0${d.child}`, d)
+    let ids = [...new Set(kept.flatMap((d) => [d.parent, d.child]))]
+      .filter((eid) => !by.has(eid))
     let rows = await read.get(ids)
-    frontier = rows.filter((r) => !by.has(r.eid)).map((r) => r.eid)
     for (let r of rows) by.set(r.eid, r)
-    if (!recursive) break
+    frontier = recursive
+      ? kept.filter((d) => active.has(d.child)).map((d) => d.parent)
+      : []
   }
   return { by, deps: [...edges.values()] }
 }
 
-// Bounded candidate discovery: an indexed membership query, incident-edge
-// walks capped to the candidate pool, and keyed expansion of only the projects,
-// blockers, sessions, personas, and authorization roots those candidates name.
-// No whole-graph snapshot rides this path.
+// Candidate discovery is a bounded indexed query. Build readiness, recursive
+// authorization, filters, and priority/newest order settle in the database
+// before LIMIT; this pure layer rechecks the same predicate and assembles the
+// human-addressed envelope from keyed rows. No recent-window approximation or
+// whole-graph snapshot rides this path.
 export let workCandidates = async (
   read: WorkRead,
   lane: WorkLane,
   opts: { filters?: string[]; limit?: number; recursive?: boolean } = {},
 ): Promise<WorkCandidate[]> => {
   let limit = Math.max(1, Math.min(opts.limit ?? LIMIT, 100))
-  let pool = Math.min(POOL, Math.max(50, limit * 4))
   let base = workFilters(lane, opts.recursive)
   let hits = await read.query([...base, ...opts.filters ?? []], {
-    limit: lane == 'evaluate' ? limit : pool,
+    limit,
+    ...(lane == 'build'
+      ? { work: 'build' as const, recursive: !!opts.recursive }
+      : {}),
   })
-  let expanded = await expand(
-    read,
-    hits,
-    lane == 'build' && opts.recursive,
-    pool * 2,
-  )
+  let expanded = lane == 'build'
+    ? await buildContext(read, hits, !!opts.recursive)
+    : { by: new Map(hits.map((r) => [r.eid, r])), deps: [] }
+  let blockerSets = lane == 'evaluate'
+    ? await read.blockers(hits.map((r) => r.eid), WORK_REFS_LIMIT)
+    : hits.map((r) => ({ parent: r.eid, items: [], truncated: false }))
+  let blockerBy = new Map(blockerSets.map((set) => [set.parent, set]))
+  for (let set of blockerSets) {
+    for (let row of set.items) expanded.by.set(row.eid, row)
+  }
   let deps = expanded.deps
   let first = await read.get([
     ...hits.map((r) => String(r.comps.task?.project ?? '')).filter(Boolean),
@@ -287,22 +281,27 @@ export let workCandidates = async (
   let selected = lane == 'evaluate'
     ? hits
     : hits.filter((r) => buildReady(r, by, deps, auth.has(r.eid)))
-  selected.sort((a, b) =>
-    lane == 'build' ? rank(a) - rank(b) || b.num - a.num : b.num - a.num
-  )
+  if (lane == 'evaluate') selected.sort((a, b) => b.num - a.num)
   return selected.slice(0, limit).map((r) => {
     let project = by.get(String(r.comps.task?.project ?? ''))
-    let roots = approved(r) ? [r.eid] : [...auth.get(r.eid) ?? []]
-    let blockers = unresolved(r.eid, by, deps).map((d) => {
-      let blocker = by.get(d.child)
+    let summary = blockerBy.get(r.eid) ?? {
+      parent: r.eid,
+      items: [],
+      truncated: false,
+    }
+    let blockers = summary.items.map((blocker) => {
       let holder = by.get(String(blocker?.comps.claim?.session ?? ''))
       return {
-        id: blocker ? idOf(blocker) : d.child,
+        id: idOf(blocker),
         title: String(blocker?.comps.doc?.title ?? ''),
-        status: blocker ? statusOf(blocker.comps) : 'missing',
+        status: statusOf(blocker.comps),
         claim: holder ? idOf(holder) : null,
       }
     })
+    let roots = (approved(r) ? [r] : [...auth.get(r.eid) ?? []]
+      .map((eid) => by.get(eid)).filter((x): x is Row => !!x))
+      .sort((a, b) => b.num - a.num)
+    let source = roots.slice(0, WORK_REFS_LIMIT)
     let holder = by.get(String(r.comps.claim?.session ?? ''))
     return {
       id: idOf(r),
@@ -324,19 +323,21 @@ export let workCandidates = async (
         : {}),
       proposed: !!r.comps.proposed,
       decision: decision(r),
-      ...(roots.length
+      ...(source.length
         ? {
           authorization: {
             kind: approved(r) ? 'direct' as const : 'inherited' as const,
-            from: roots.map((eid) => by.get(eid)).filter(Boolean).map((x) =>
-              idOf(x!)
-            ),
+            from: source.map(idOf),
+            truncated: roots.length > source.length,
           },
         }
         : {}),
       claim: holder ? idOf(holder) : null,
       blocked: text(r.comps.blocked?.on) ?? null,
-      blockers,
+      blockers: {
+        items: blockers,
+        truncated: summary.truncated,
+      },
       ...(() => {
         let hint = execution(r, project, by)
         return hint ? { execution: hint } : {}

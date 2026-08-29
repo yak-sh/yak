@@ -21,7 +21,13 @@ import {
   type Snapshot,
   statusOf,
 } from './types.ts'
-import { find, need, type Querier, type Row } from './client.ts'
+import {
+  find,
+  need,
+  type Querier,
+  type Row,
+  type WorkBlockerSet,
+} from './client.ts'
 import type { Reader } from './commands.ts'
 import {
   buried,
@@ -509,6 +515,174 @@ export let evalAgg = (
   }
 }
 
+// The build lane is a derived selection, not a status. Its recursive CTE walks
+// from the scoped candidate set toward approved ancestors, so a query never
+// enumerates the graph (or every approved task) to discover authorization.
+// UNION terminates cycles; inner joins make an unknown endpoint a hard stop;
+// and pending/declined rows are admitted as boundaries but never expanded.
+// Readiness is screened before ORDER/LIMIT, making the returned prefix exactly
+// priority ASC, newest spine first rather than a re-ranked recent sample.
+export let buildWorkSql = (
+  db: DatabaseSync,
+  q: string,
+  opts: { limit?: number; recursive?: boolean } = {},
+) => {
+  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let base = where(screened(inputsOf(preds), false))
+  if (!base) {
+    throw new Error('work filters must resolve to an indexed query')
+  }
+  let limit = Math.max(1, Math.min(opts.limit ?? 20, 100))
+  let lineage = opts.recursive
+    ? `, lineage(origin, entity) as (
+         select entity, entity from candidate
+         union
+         select l.origin, d.parent
+           from lineage l
+           join entity current on current.id = l.entity
+           join task current_task on current_task.entity = current.id
+           left join proposed current_proposed
+             on current_proposed.entity = current.id
+           left join decided current_decided
+             on current_decided.entity = current.id
+           join dependency d indexed by dependency_child
+             on d.child = current.id and d.type = 'requires'
+           join entity parent on parent.id = d.parent
+           join task parent_task on parent_task.entity = parent.id
+          where not (
+            current_proposed.entity is not null and
+            current_decided.entity is null
+          )
+            and coalesce(current_decided.verdict, '') != 'declined'
+       )`
+    : ''
+  let authorization = opts.recursive
+    ? `exists (
+         select 1
+           from lineage l
+           join decided root_decided on root_decided.entity = l.entity
+           left join completed root_completed
+             on root_completed.entity = l.entity
+           left join cancelled root_cancelled
+             on root_cancelled.entity = l.entity
+           left join claim root_claim on root_claim.entity = l.entity
+          where l.origin = entity.id
+            and coalesce(root_decided.verdict, 'approved') != 'declined'
+            and root_completed.entity is null
+            and root_cancelled.entity is null
+            and root_claim.entity is null
+       )`
+    : `choice.entity is not null and
+       coalesce(choice.verdict, 'approved') != 'declined'`
+  return {
+    sql: `with recursive filtered(eid) as materialized (${base.sql}),
+       candidate(entity) as materialized (
+         select entity.id from filtered
+         join entity on entity.eid = filtered.eid
+       )${lineage}
+       select entity.eid as eid
+         from candidate
+         join entity on entity.id = candidate.entity
+         join task on task.entity = entity.id
+         left join proposed on proposed.entity = entity.id
+         left join decided choice on choice.entity = entity.id
+         left join completed on completed.entity = entity.id
+         left join cancelled on cancelled.entity = entity.id
+         left join claim on claim.entity = entity.id
+         left join blocked on blocked.entity = entity.id
+        where completed.entity is null
+          and cancelled.entity is null
+          and claim.entity is null
+          and blocked.entity is null
+          and not (
+            proposed.entity is not null and choice.entity is null
+          )
+          and coalesce(choice.verdict, '') != 'declined'
+          and not exists (
+            select 1
+              from dependency needed
+              join entity endpoint on endpoint.id = needed.child
+              left join completed endpoint_completed
+                on endpoint_completed.entity = endpoint.id
+              left join cancelled endpoint_cancelled
+                on endpoint_cancelled.entity = endpoint.id
+             where needed.parent = entity.id
+               and needed.type = 'requires'
+               and endpoint_completed.entity is null
+               and endpoint_cancelled.entity is null
+          )
+          and (${authorization})
+        order by task.priority asc, entity.num desc
+        limit ?`,
+    params: [...base.params, limit],
+  }
+}
+
+export let evalBuildWork = (
+  db: DatabaseSync,
+  q: string,
+  opts: { limit?: number; recursive?: boolean } = {},
+): Row[] => {
+  let built = buildWorkSql(db, q, opts)
+  let ids = db.prepare(built.sql).all(...built.params) as { eid: string }[]
+  let by = new Map(rowsFor(db, ids.map((r) => r.eid)).map((r) => [r.eid, r]))
+  return ids.map((r) => by.get(r.eid)).filter((r): r is Row => !!r)
+}
+
+// A candidate summary needs names for a bounded number of unresolved direct
+// dependencies, not every endpoint on a high-fanout task. The parent and child
+// indexes answer this one scoped window per parent; CAP+1 proves truncation,
+// and only the CAP rows that will be emitted are hydrated.
+export let workBlockers = (
+  db: DatabaseSync,
+  parents: string[],
+  limit = 20,
+): WorkBlockerSet[] => {
+  let unique = [...new Set(parents)].filter(Boolean).slice(0, 100)
+  if (!unique.length) return []
+  let cap = Math.max(1, Math.min(limit, 100))
+  let marks = unique.map(() => '?').join(',')
+  let found = db.prepare(
+    `with ranked as (
+       select parent.eid as parent, child.eid as child,
+              row_number() over (
+                partition by dependency.parent
+                order by dependency.ord, child.num
+              ) as position
+         from dependency
+         join entity parent on parent.id = dependency.parent
+         join entity child on child.id = dependency.child
+         left join completed on completed.entity = child.id
+         left join cancelled on cancelled.entity = child.id
+        where parent.eid in (${marks})
+          and dependency.type = 'requires'
+          and completed.entity is null
+          and cancelled.entity is null
+     )
+     select parent, child, position from ranked
+      where position <= ? order by parent, position`,
+  ).all(...unique, cap + 1) as {
+    parent: string
+    child: string
+    position: number
+  }[]
+  let emitted = found.filter((r) => r.position <= cap)
+  let rows = new Map(
+    rowsFor(db, emitted.map((r) => r.child)).map((r) => [r.eid, r]),
+  )
+  return unique.map((parent) => {
+    let mine = found.filter((r) => r.parent == parent)
+    return {
+      parent,
+      items: mine.slice(0, cap).flatMap((r) => {
+        let row = rows.get(r.child)
+        return row ? [row] : []
+      }),
+      truncated: mine.length > cap,
+    }
+  })
+}
+
 // The authoritative filter-query answer. The index answers when it can (evalFast
 // over matching(), entries included); otherwise the JS matcher over the full
 // universe. Hot ranking and entry ordering/paging settle here, so every caller
@@ -662,6 +836,10 @@ async (filters, opts) => {
   let named = filters.filter((s) => s.startsWith('id='))
     .flatMap((s) => s.slice(3).split(',')).filter(Boolean)
   let q = filters.filter((s) => !s.startsWith('id=')).join('&')
+  if (opts?.work == 'build') {
+    if (named.length) throw new Error('work queries do not accept id=')
+    return evalBuildWork(db, q, opts)
+  }
   if (!named.length) return evalGraph(db, q, opts).hits
   // A tombstoned entity still resolves by name but has left the graph, and its
   // spine row now survives the delete (D-18866) — exclude it so `id=` addresses

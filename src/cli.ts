@@ -40,6 +40,7 @@ import {
   hookClaim,
   host,
   httpDeps,
+  httpWorkBlockers,
   idOf,
   inboxItem,
   inboxRows,
@@ -488,10 +489,14 @@ let workLine = (candidate: WorkCandidate) => {
   let auth = candidate.authorization
     ? `${candidate.authorization.kind} from ${
       candidate.authorization.from.join(',')
-    }`
+    }${candidate.authorization.truncated ? ',…' : ''}`
     : candidate.decision
-  let blockers = candidate.blockers.length
-    ? ` · requires ${candidate.blockers.map((b) => b.id).join(',')}`
+  let blockers = candidate.blockers.items.length
+    ? ` · requires ${candidate.blockers.items.map((b) => b.id).join(',')}${
+      candidate.blockers.truncated ? ',…' : ''
+    }`
+    : candidate.blockers.truncated
+    ? ' · requires …'
     : ''
   return `${candidate.id} ${candidate.kind}${
     scope ? ` ${scope}` : ''
@@ -508,6 +513,7 @@ let work = async (got: Got) => {
       query,
       get: (ids) => fetched(ids),
       deps: httpDeps,
+      blockers: httpWorkBlockers,
     },
     lane,
     {

@@ -10,7 +10,7 @@ import {
   assertThrows,
 } from '@std/assert'
 import { find, idOf, type Row, rows, TASK_TREE_ADOPTION } from './client.ts'
-import { localQuery } from './graph_query.ts'
+import { localQuery, workBlockers } from './graph_query.ts'
 import {
   CUT,
   elide,
@@ -604,6 +604,7 @@ let blank = (): IO => ({
   query: () => Promise.resolve([]),
   get: () => Promise.resolve([]),
   deps: () => Promise.resolve([]),
+  workBlockers: () => Promise.resolve([]),
   write: (mutation) =>
     Promise.resolve({ changes: batch(mutation), aliases: {} }),
   find: () => Promise.resolve([]),
@@ -630,6 +631,8 @@ let graph = () => {
         ? localQuery(db)([`id=${ids.join(',')}`, ...filters])
         : Promise.resolve([]),
     deps: (eids) => Promise.resolve(depsOf(db, eids)),
+    workBlockers: (eids, limit) =>
+      Promise.resolve(workBlockers(db, eids, limit)),
     write: (mutation, via) =>
       Promise.resolve(
         mutationResult(applyMutation(db, mutation, undefined, via)),

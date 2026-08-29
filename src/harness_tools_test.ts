@@ -172,6 +172,7 @@ slow(
         return Promise.resolve([])
       },
       deps: () => Promise.resolve([]),
+      workBlockers: () => Promise.resolve([]),
       write: (mutation: Mutation, via) => {
         writes.push({ mutation, via })
         let aliases: Record<string, string> = 'entities' in mutation

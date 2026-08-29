@@ -3,11 +3,10 @@
 // cases also hold the lane reads to indexed, bounded graph queries.
 import { assert, assertEquals } from '@std/assert'
 import { type Change, idOf, uuid } from './types.ts'
-import { rowsFor } from './graph_query.ts'
+import { buildWorkSql, rowsFor, workBlockers } from './graph_query.ts'
 import { parseQuery } from './query.ts'
 import { where } from './sql.ts'
 import {
-  backlog,
   buildReady,
   workCandidates,
   workFilters,
@@ -18,6 +17,7 @@ Deno.env.set('DB_PATH', ':memory:')
 let { apply, depsOf } = await import('./db.ts')
 let { bareDb } = await import('./testdb.ts')
 let { localQuery } = await import('./graph_query.ts')
+let { backlog } = await import('./dispatch.ts')
 
 let task = (
   eid: string,
@@ -125,6 +125,7 @@ let world = () => {
     query,
     get: (ids) => Promise.resolve(rowsFor(db, ids)),
     deps: (eids) => Promise.resolve(depsOf(db, eids)),
+    blockers: (eids, limit) => Promise.resolve(workBlockers(db, eids, limit)),
   }
   return {
     db,
@@ -184,6 +185,7 @@ Deno.test('recursive authorization stops at pending and declined boundaries', as
   assertEquals(inherited.authorization, {
     kind: 'inherited',
     from: [idOf(rowsFor(w.db, [w.root])[0])],
+    truncated: false,
   })
 })
 
@@ -194,9 +196,9 @@ Deno.test('build candidates and managed backlog have identical membership', asyn
       recursive,
       limit: 100,
     })
-    let tasks = await w.read.query(workFilters('build', recursive), {
-      limit: 200,
-    })
+    // The reference side is the complete task partition plus every incident
+    // endpoint, not the selector (or one of its windows) under test.
+    let tasks = await w.read.query(['.task!'])
     let deps = depsOf(w.db, tasks.map((r) => r.eid))
     let ends = rowsFor(w.db, deps.flatMap((d) => [d.parent, d.child]))
     let unique = new Map([...tasks, ...ends].map((r) => [r.eid, r]))
@@ -204,6 +206,141 @@ Deno.test('build candidates and managed backlog have identical membership', asyn
       .map((r) => idOf(r)).sort()
     assertEquals(candidates.map((c) => c.id).sort(), members)
   }
+})
+
+Deno.test('build selection is exact beyond a recent declined window', async () => {
+  let db = bareDb()
+  let P = uuid(), old = uuid(), newer = uuid()
+  let changes: Change[] = [
+    { eid: P, name: 'doc', comp: { title: 'Ordering', body: '' } },
+    { eid: P, name: 'project', comp: {} },
+    ...task(old, 'Old P0 ready', 0, P, [{
+      eid: old,
+      name: 'decided',
+      comp: {},
+    }]),
+    ...task(newer, 'Newer P1 ready', 1, P, [{
+      eid: newer,
+      name: 'decided',
+      comp: {},
+    }]),
+  ]
+  for (let i = 0; i < 250; i++) {
+    let eid = uuid()
+    changes.push(...task(eid, `Declined ${i}`, 0, P, [
+      { eid, name: 'proposed', comp: {} },
+      { eid, name: 'decided', comp: { verdict: 'declined' } },
+    ]))
+  }
+  apply(db, changes)
+  let read: WorkRead = {
+    query: localQuery(db),
+    get: (ids) => Promise.resolve(rowsFor(db, ids)),
+    deps: (eids) => Promise.resolve(depsOf(db, eids)),
+    blockers: (eids, limit) => Promise.resolve(workBlockers(db, eids, limit)),
+  }
+  let candidates = await workCandidates(read, 'build', { limit: 1 })
+  assertEquals(candidates.map((c) => c.id), [idOf(rowsFor(db, [old])[0])])
+})
+
+Deno.test('recursive DB selection stops beyond a high-fanout pending boundary', async () => {
+  let db = bareDb()
+  let P = uuid(), root = uuid(), target = uuid()
+  let boundary = 'ffffffff-ffff-4fff-bfff-fffffffffff0'
+  let changes: Change[] = [
+    { eid: P, name: 'doc', comp: { title: 'Fanout', body: '' } },
+    { eid: P, name: 'project', comp: {} },
+  ]
+  for (let i = 0; i < 450; i++) {
+    let eid = `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`
+    changes.push(...task(eid, `Sibling ${i}`, 5, P))
+  }
+  changes.push(
+    ...task(boundary, 'Pending boundary', 4, P, [{
+      eid: boundary,
+      name: 'proposed',
+      comp: {},
+    }]),
+    ...task(root, 'Approved root', -2, P, [{
+      eid: root,
+      name: 'decided',
+      comp: {},
+    }]),
+    ...task(target, 'Must stay held', -3, P),
+  )
+  for (let i = 0; i < 450; i++) {
+    changes.push({
+      eid: root,
+      name: 'dependency',
+      comp: {
+        type: 'requires',
+        child: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+      },
+    })
+  }
+  changes.push(
+    {
+      eid: root,
+      name: 'dependency',
+      comp: { type: 'requires', child: boundary },
+    },
+    {
+      eid: boundary,
+      name: 'dependency',
+      comp: { type: 'requires', child: target },
+    },
+  )
+  apply(db, changes)
+  let read: WorkRead = {
+    query: localQuery(db),
+    get: (ids) => Promise.resolve(rowsFor(db, ids)),
+    deps: (eids) => Promise.resolve(depsOf(db, eids)),
+    blockers: (eids, limit) => Promise.resolve(workBlockers(db, eids, limit)),
+  }
+  let ids = (await workCandidates(read, 'build', {
+    recursive: true,
+    limit: 100,
+  })).map((c) => c.id)
+  assertEquals(ids.includes(idOf(rowsFor(db, [target])[0])), false)
+})
+
+Deno.test('evaluate bounds high-fanout blockers and emits only human ids', async () => {
+  let db = bareDb()
+  let P = uuid(), candidate = uuid()
+  let changes: Change[] = [
+    { eid: P, name: 'doc', comp: { title: 'Blockers', body: '' } },
+    { eid: P, name: 'project', comp: {} },
+  ]
+  let blockers: string[] = []
+  for (let i = 0; i < 450; i++) {
+    let eid = uuid()
+    blockers.push(eid)
+    changes.push(...task(eid, `Blocker ${i}`, 2, P))
+  }
+  changes.push(...task(candidate, 'Evaluate fanout', 0, P, [{
+    eid: candidate,
+    name: 'proposed',
+    comp: {},
+  }]))
+  for (let child of blockers) {
+    changes.push({
+      eid: candidate,
+      name: 'dependency',
+      comp: { type: 'requires', child },
+    })
+  }
+  apply(db, changes)
+  let read: WorkRead = {
+    query: localQuery(db),
+    get: (ids) => Promise.resolve(rowsFor(db, ids)),
+    deps: (eids) => Promise.resolve(depsOf(db, eids)),
+    blockers: (eids, limit) => Promise.resolve(workBlockers(db, eids, limit)),
+  }
+  let [found] = await workCandidates(read, 'evaluate', { limit: 1 })
+  assertEquals(found.blockers.items.length, 20)
+  assertEquals(found.blockers.truncated, true)
+  assert(found.blockers.items.every((b) => /^T-\d+$/.test(b.id)))
+  assert(found.blockers.items.every((b) => b.status == 'open'))
 })
 
 Deno.test('evaluate is newest-first, filtered, bounded, and human-addressed', async () => {
@@ -230,6 +367,16 @@ Deno.test('lane membership queries compile to indexed component scans', () => {
     }[]
     assertEquals(plan.some((row) => row.detail == 'SCAN entity'), false, lane)
   }
+  let built = buildWorkSql(
+    w.db,
+    workFilters('build', true).join('&'),
+    { recursive: true },
+  )
+  let plan = w.db.prepare(`explain query plan ${built.sql}`).all(
+    ...built.params,
+  ) as { detail: string }[]
+  assertEquals(plan.some((row) => row.detail == 'SCAN entity'), false)
+  assert(plan.some((row) => row.detail.includes('dependency_child')))
 })
 
 Deno.test('buildReady counts a missing requires child as unresolved', () => {
