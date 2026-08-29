@@ -53,6 +53,24 @@ export let verdictName = (verdict?: string | null) =>
   String(verdict ?? '').replaceAll('_', ' ')
 
 
+// Query-only DERIVED columns (D-24102): readable exactly like a stored column
+// — filter, project, tally, sort — but no write ever carries one, so they stay
+// out of `comps`/`stamped`. The query evaluators compute the value (statusOf in
+// query.ts read() and its SQL CASE mirror). Merged into the readable routing
+// (props.ts types(), query.ts routes) so `.status` and `.task.status` resolve
+// and type-check; excluded from the write vocabulary, so `set .status=` refuses.
+// `status` is the first and only member: it reads completed/cancelled/claim.
+export let derivedCols: Record<string, Record<string, PropType>> = {
+  task: { status: { enum: statuses } },
+}
+
+// Task status is DERIVED, not stored (D-24102): `cancelled` comp → cancelled;
+// else `completed` comp → done; else an active `claim` → wip; else open. `has`
+// is a component bag (a live row's `.comps`, a Row's comps). wip can't get
+// stuck: the claim vanishes when its session dies, and the task reads open again.
+export let statusOf = (has: Record<string, unknown>) =>
+  has.cancelled ? 'cancelled' : has.completed ? 'done' : has.claim ? 'wip' : 'open'
+
 // Settled = no longer open work, whether it finished or was called off.
 // Gating, board defaults, and lease-lapse audits all key off this
 // instead of 'done' alone, so a cancelled blocker releases its gate too.

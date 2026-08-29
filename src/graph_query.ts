@@ -19,6 +19,7 @@ import {
   kindOf,
   sessionOf,
   type Snapshot,
+  statusOf,
 } from './types.ts'
 import { find, need, type Querier, type Row } from './client.ts'
 import type { Reader } from './commands.ts'
@@ -103,6 +104,12 @@ export let rowed = (
 ): Row => {
   let session = sessionOf(comps)
   if (session) comps.session = session
+  // The DERIVED task.status (D-24102): materialize it onto the read shape so
+  // every server reader — a projection's JS fallback, an edge-peer, a sort — sees
+  // the computed value a stored column once carried, without re-deriving. The
+  // write path never passes through here, so nothing storable is invented; the
+  // task comp is copied so a shared/cached bag is never mutated.
+  if (comps.task) comps.task = { ...comps.task, status: statusOf(comps) }
   return {
     eid,
     num: Number(comps.entity?.num ?? 0),

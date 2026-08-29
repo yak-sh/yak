@@ -79,11 +79,15 @@ let falls = (comp: string, prop: string) => comp == 'updated' && prop == 'at'
 let readCol = (comp: string, prop: string): string =>
   falls(comp, prop) ? UPDATED_AT : col(comp, prop)
 
-// Is this a column the graph actually has? A pred naming an unknown column
-// would compile to broken SQL rather than to `false`, so it is refused.
+// Is this a column the graph actually has, STORED? A pred naming an unknown
+// column would compile to broken SQL rather than to `false`, so it is refused —
+// and so is a DERIVED column (D-24102: task.status has no table to read). Both
+// decline here: a filter is refined in JS (partial narrowing), a projection or
+// tally falls to the JS matcher that computes the value through query.ts read().
+let derived = (comp: string, prop: string) => comp == 'task' && prop == 'status'
 let known = (comp: string, prop: string) =>
   !!comp && (!prop ? comp in comps : !!propAt(comp, prop)) &&
-  (comp in comps || comp in stamped)
+  (comp in comps || comp in stamped) && !derived(comp, prop)
 
 let tagOf = (comp: string, prop: string) => {
   let t = propAt(comp, prop)?.type

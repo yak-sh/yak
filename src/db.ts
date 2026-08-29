@@ -1013,6 +1013,12 @@ export let derived = [
   // derived DDL quotes the reserved "from" column name and plants the auto index
   // on the reference for the shared-prefix walk.
   'fork',
+  // The task completion/cancellation marks (D-24102): {at, by{eid}, via{eid}}
+  // and cancelled's extra {reason}, every column nullable, entity-keyed spine,
+  // {eid} FKs by death word — wholly PropType-expressible, so they derive. Their
+  // presence is the dissolved `task.status`: `status(task)` reads them.
+  'completed',
+  'cancelled',
 ]
 
 // Insert a bare entity spine — the eid, and nothing else. num is NOT minted

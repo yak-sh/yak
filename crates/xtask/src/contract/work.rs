@@ -4,8 +4,10 @@
 use yak_vocab::{Bool, Priority, Query, Ref, Sel, Text, Time, Url, Well};
 use yak_vocab_derive::Comp;
 
-// The status vocabulary, in board-column order. 'cancelled' is authored, not
-// derived, and not deletion: it preserves a decision about real work.
+// The status vocabulary, in board-column order — now a DERIVED value, not a
+// stored column (D-24102). `status(task)`: `cancelled` comp → cancelled; else
+// `completed` comp → done; else an active `claim` → wip; else open. The list
+// stays for board columns, sort order, and the derived `.status=` predicate.
 venum!("work", "statuses", 10, ["open", "wip", "done", "cancelled"]);
 
 // A venture's lifecycle, from a glimmer to its end. `hold`/`paused` are
@@ -37,8 +39,6 @@ venum!("work", "verdicts", 120, ["approved", "rejected", "changes_requested"]);
 #[derive(Comp)]
 #[comp(plugin = "work", rank = 20, kind_rank = 20, prefix = "T")]
 struct Task {
-    #[col(sel = "statuses")]
-    status: Sel,
     priority: Priority,
     #[col(eid = "project", death = "detach")]
     project: Ref,
@@ -119,6 +119,36 @@ struct Blocked {
     on: Text,
     #[stamped]
     since: Time,
+}
+
+// A task FINISHED (D-24102): the `done` mark that replaces the stored status.
+// Presence IS done — `status(task)` derives it, and it takes priority over an
+// active claim. at/by are wire-writable like `decided` (a completion recorded
+// after the fact); `via` is server-owned. Not in kindOrder: a task stays a task.
+#[derive(Comp)]
+#[comp(plugin = "work", rank = 971, stamped_rank = 350)]
+struct Completed {
+    at: Time,
+    #[col(eid = "entity", death = "keep")]
+    by: Ref,
+    #[stamped]
+    #[col(eid = "entity", death = "keep")]
+    via: Ref,
+}
+
+// A task CALLED OFF (D-24102): the `cancelled` mark. Authored, not deletion —
+// it preserves a decision about real work — and outranks `completed` in the
+// derivation. `reason` is the optional why; at/by wire-writable, `via` server-owned.
+#[derive(Comp)]
+#[comp(plugin = "work", rank = 972, stamped_rank = 360)]
+struct Cancelled {
+    at: Time,
+    #[col(eid = "entity", death = "keep")]
+    by: Ref,
+    reason: Text,
+    #[stamped]
+    #[col(eid = "entity", death = "keep")]
+    via: Ref,
 }
 
 // A verdict-bearing comment. The aim/rationale/authorship stay on

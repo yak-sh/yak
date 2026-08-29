@@ -56,6 +56,7 @@
 import { bareType, isRef, parseProp, type Prop, propAt } from './props.ts'
 import {
   comps,
+  derivedCols,
   edges,
   kindOrder,
   kindWord,
@@ -63,6 +64,7 @@ import {
   sessionComps,
   sessionFacetNames,
   stamped,
+  statusOf,
 } from './types.ts'
 import { type Span, span } from './time.ts'
 
@@ -187,6 +189,7 @@ let routes: Record<string, readonly string[]> = Object.fromEntries(
       ...Object.keys(comps),
       ...Object.keys(stamped),
       ...Object.keys(resultComps),
+      ...Object.keys(derivedCols),
     ]),
   ].map((name) => [
     name,
@@ -194,6 +197,7 @@ let routes: Record<string, readonly string[]> = Object.fromEntries(
       ...comps[name],
       ...stamped[name],
       ...resultComps[name as ResultComp],
+      ...derivedCols[name],
     }),
   ]),
 )
@@ -358,11 +362,15 @@ export let route = (prop: string): { comp: string; prop: string } => {
   let own = hits(prop)
   // A stamped lifecycle field may share a name with an established writable
   // filter (`session.status` and `task.status`). Qualified reads reach both;
-  // bare routing keeps the writable spelling instead of manufacturing a new
-  // ambiguity. When every owner is stamped, the normal ambiguity/twin rules
-  // below still apply.
-  let writable = own.filter((name) => prop in (comps[name] ?? {}))
-  if (writable.length) own = writable
+  // bare routing keeps the writable — or derived (D-24102) — spelling instead of
+  // manufacturing a new ambiguity. `task.status` is a DERIVED column now, no
+  // longer writable, so it must still win bare `.status` over stamped
+  // `session.status`. When every owner is stamped, the normal ambiguity/twin
+  // rules below still apply.
+  let preferred = own.filter((name) =>
+    prop in (comps[name] ?? {}) || prop in (derivedCols[name] ?? {})
+  )
+  if (preferred.length) own = preferred
   // Parent/child words are the dependency vocabulary. Their component refs
   // remain available through `.pane.parent` / `.session.parent`; bare keeps
   // teaching the edge door instead of silently changing an old mistake.
@@ -493,7 +501,9 @@ export let tally = (
 ): Map<string, number> => {
   let m = new Map<string, number>()
   for (let c of rows) {
-    let v = c[at.comp]?.[at.prop]
+    // read() so a DERIVED column (task.status) tallies its computed value, not
+    // the absent stored one — board column counts stay honest (D-24102).
+    let v = read(c, at.comp, at.prop)
     if (v == null || v === '') continue
     let k = String(v)
     m.set(k, (m.get(k) ?? 0) + 1)
@@ -1516,6 +1526,10 @@ export let matchQuery = (
 // entity is a different question about authorship, and nothing is broken by
 // leaving it alone.
 let read = (c: Comps, comp: string, prop: string): unknown => {
+  // The one DERIVED column (D-24102): task.status is computed from the
+  // completed/cancelled/claim comps, never stored — the same value statusOf
+  // gives every renderer, so a filter, projection or tally reads it identically.
+  if (comp == 'task' && prop == 'status') return statusOf(c)
   let v = c[comp]?.[prop]
   return v == null && comp == 'updated' && prop == 'at' ? c.created?.at : v
 }

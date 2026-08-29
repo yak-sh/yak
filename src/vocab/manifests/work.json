@@ -64,6 +64,41 @@
         "query": "query"
       }
     },
+    "cancelled": {
+      "rank": 972,
+      "stamped_rank": 360,
+      "cols": {
+        "at": "time",
+        "by": {
+          "eid": "entity",
+          "death": "keep"
+        },
+        "reason": "text"
+      },
+      "stamped": {
+        "via": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      }
+    },
+    "completed": {
+      "rank": 971,
+      "stamped_rank": 350,
+      "cols": {
+        "at": "time",
+        "by": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      },
+      "stamped": {
+        "via": {
+          "eid": "entity",
+          "death": "keep"
+        }
+      }
+    },
     "design": {
       "rank": 100,
       "kind_rank": 10
@@ -106,9 +141,6 @@
       "kind_rank": 20,
       "prefix": "T",
       "cols": {
-        "status": {
-          "enum": "statuses"
-        },
         "priority": "priority",
         "project": {
           "eid": "project",

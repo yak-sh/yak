@@ -14,7 +14,6 @@ pub(crate) fn baked() -> Vocab {
             ("body".into(), PropType::Body),
         ]),
         ("task".into(), vec![
-            ("status".into(), PropType::Enum(vec!["open".into(), "wip".into(), "done".into(), "cancelled".into()])),
             ("priority".into(), PropType::Priority),
             ("project".into(), PropType::Eid("project".into())),
             ("assignee".into(), PropType::Eid("entity".into())),
@@ -357,6 +356,15 @@ pub(crate) fn baked() -> Vocab {
         ("blocked".into(), vec![
             ("on".into(), PropType::Text),
         ]),
+        ("completed".into(), vec![
+            ("at".into(), PropType::Time),
+            ("by".into(), PropType::Eid("entity".into())),
+        ]),
+        ("cancelled".into(), vec![
+            ("at".into(), PropType::Time),
+            ("by".into(), PropType::Eid("entity".into())),
+            ("reason".into(), PropType::Text),
+        ]),
         ("anchor".into(), vec![
             ("paths".into(), PropType::Text),
             ("sha".into(), PropType::Text),
@@ -573,6 +581,12 @@ pub(crate) fn baked() -> Vocab {
             ("lease_token".into(), PropType::Text),
             ("lease_expiry".into(), PropType::Time),
         ]),
+        ("completed".into(), vec![
+            ("via".into(), PropType::Eid("entity".into())),
+        ]),
+        ("cancelled".into(), vec![
+            ("via".into(), PropType::Eid("entity".into())),
+        ]),
     ]);
     let prefix = HashMap::from([
         ("task".into(), "T".into()),
@@ -656,6 +670,8 @@ pub(crate) fn baked() -> Vocab {
         ("created".into(), "by".into(), "keep".into()),
         ("updated".into(), "by".into(), "keep".into()),
         ("deliver".into(), "to".into(), "keep".into()),
+        ("completed".into(), "by".into(), "keep".into()),
+        ("cancelled".into(), "by".into(), "keep".into()),
         ("decided".into(), "by".into(), "keep".into()),
         ("proposed".into(), "by".into(), "keep".into()),
     ];

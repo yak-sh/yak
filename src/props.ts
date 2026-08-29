@@ -1,6 +1,13 @@
 // Typed scalar parsing and formatting. PropType declares the language;
 // this module gives every declaration one canonical stored and shown value.
-import { type Change, comps, edges, type PropType, stamped } from './types.ts'
+import {
+  type Change,
+  comps,
+  derivedCols,
+  edges,
+  type PropType,
+  stamped,
+} from './types.ts'
 import { instant, local } from './time.ts'
 import { normalize } from './url.ts'
 
@@ -31,7 +38,7 @@ let typeCache = new Map<string, Record<string, PropType>>()
 let types = (comp: string): Record<string, PropType> => {
   let hit = typeCache.get(comp)
   if (hit) return hit
-  let t = { ...comps[comp], ...stamped[comp] }
+  let t = { ...comps[comp], ...stamped[comp], ...derivedCols[comp] }
   typeCache.set(comp, t)
   return t
 }
