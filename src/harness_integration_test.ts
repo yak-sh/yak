@@ -315,11 +315,14 @@ slow(
         ).get(task),
         { session },
       )
+      // Managed agents consume graph attention. `notified` is human inbox
+      // read-state and must not be minted merely because task_context read the
+      // comment (door.ts).
       assertEquals(
-        !!db.prepare(
+        db.prepare(
           'select 1 from notified where entity = (select id from entity where eid = ?)',
         ).get(comment),
-        true,
+        undefined,
       )
       assertEquals(
         db.prepare(
