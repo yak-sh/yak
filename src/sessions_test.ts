@@ -967,6 +967,39 @@ slow('both Codex rollback names run through process JSONL', async () => {
 })
 
 slow(
+  'a replayed spawn effect crosses the launch boundary only once',
+  async () => {
+    let { t } = seed()
+    let eid = uid()
+    apply(db, [{
+      eid,
+      name: 'session',
+      comp: {
+        id: uid(),
+        provider: 'fake',
+        model: 'fake-fast',
+        requested_task: t,
+      },
+    }])
+
+    // The first invocation yields in worktree preparation. A replay arriving in
+    // that window must observe started_at and do nothing: one prompt, one child,
+    // one terminal stream. This is also the rolling-server overlap shape.
+    let effect = spawned(cast)
+    await Promise.all([effect(eid, {}), effect(eid, {})])
+
+    let lines = Deno.readTextFileSync(log(eid)).trimEnd().split('\n')
+    assertEquals(
+      lines.filter((line) => JSON.parse(line).type == 'session.prompt').length,
+      1,
+    )
+    assertEquals(row(eid)?.status, 'completed')
+    assertEquals(row(eid)?.latest_seq, 5)
+    assertEquals(failure(eid), undefined)
+  },
+)
+
+slow(
   'a unified operator (role comp on the project) launches in its own repo, actor = itself',
   async () => {
     // The role comp sits ON the project with NO scope — the project IS its own

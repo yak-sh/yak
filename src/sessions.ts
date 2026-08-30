@@ -2016,14 +2016,27 @@ export let spawned =
       model,
       effort: row.spawn_effort ? String(row.spawn_effort) : undefined,
     }
-    stamp(eid, {
-      origin: 'managed',
-      ...(workspace ? { branch: workspace.branch, cwd: workspace.tree } : {}),
-      ...(row.started_at ? {} : { started_at: now() }),
-      // A request that named no actor acts for the task's project. The cwd is
-      // stamped before its worktree exists, so no .git link can place it yet.
-      ...(row.actor || !project ? {} : { actor: project }),
-    }, cast)
+    // Claim the launch boundary in the SAME transaction that publishes its
+    // durable start. Effects can be replayed after a server restart, and two
+    // server generations can briefly overlap during handoff; without this
+    // guard they can both append a prompt and start a provider for one Session.
+    // `started_at` is already the retry boundary (reconfigured() only retries
+    // rows that never acquired it), so it is also the natural one-shot CAS.
+    let claimed = stamp(
+      eid,
+      {
+        origin: 'managed',
+        ...(workspace ? { branch: workspace.branch, cwd: workspace.tree } : {}),
+        started_at: now(),
+        ...(!nativeRun ? { status: 'starting' } : {}),
+        // A request that named no actor acts for the task's project. The cwd is
+        // stamped before its worktree exists, so no .git link can place it yet.
+        ...(row.actor || !project ? {} : { actor: project }),
+      },
+      cast,
+      (was) => !was.started_at,
+    )
+    if (!claimed) return
     if (native && nativeRun) {
       // hookClaim reads only the target task and the session it claims for —
       // a two-row universe by keyed read, never the whole-graph snapshot
@@ -2053,7 +2066,6 @@ export let spawned =
     if (!job.repo || !job.tree || !job.branch) {
       return fail('process-backed session has no worktree')
     }
-    stamp(eid, { status: 'starting' }, cast)
     // The fs and the child are the SLOW half — the returned promise is
     // the whole run, riding the dispatch for callers that await it
     // (tests); the wire never does.
