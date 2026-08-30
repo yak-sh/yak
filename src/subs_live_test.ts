@@ -975,6 +975,21 @@ slow(
   },
 )
 
+slow('query: work lanes refuse quarantine reveal filters', alone, async () => {
+  for (let lane of ['evaluate', 'build']) {
+    for (let filter of ['.quarantined!', '.task.project.quarantined!']) {
+      let res = await fetch(
+        `http://${U}/query?work=${lane}&${encodeURIComponent(filter)}`,
+      )
+      assertEquals(res.status, 400)
+      assertStringIncludes(
+        await res.text(),
+        'work filters never reveal quarantined entities',
+      )
+    }
+  }
+})
+
 // `id=` is the door a lookup goes through — `task show T-3` and every
 // find()/need() in the CLI, which today open with a whole-graph snapshot to
 // resolve one name. It must speak all four forms locate() knows, and it must

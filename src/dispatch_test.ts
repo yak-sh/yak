@@ -17,6 +17,7 @@ import {
   excluded,
   inFlight,
   on,
+  parkable,
   ready,
   retryBackoff,
   slots,
@@ -109,6 +110,15 @@ Deno.test('ready: open + unclaimed + approved + unblocked, urgent first', () => 
     { eid: T2, name: 'blocked', comp: { on: 'vendor' } },
   ]))
   assertEquals(ready(held, []).map((r) => r.eid), [])
+  let hidden = rows(graph([
+    { eid: T1, name: 'quarantined', comp: {} },
+    { eid: T2, name: 'quarantined', comp: {} },
+  ]))
+  assertEquals(ready(hidden, []).map((r) => r.eid), [])
+  assertEquals(
+    parkable(hidden, [{ parent: T1, type: 'requires', child: T3 }]),
+    [],
+  )
 })
 
 Deno.test('backlog and parkable require the task facet', async () => {
@@ -351,6 +361,30 @@ Deno.test('dispatchSpawn: a task pinned to an excluded provider is skipped, not 
   let out = dispatchSpawn(all, [], ps, 2)
     .filter((c) => c.name == 'session').map((c) => c.comp!.requested_task)
   assertEquals(out, [T2])
+})
+
+Deno.test('dispatchSpawn: a selected feed still obeys asks, providers, and slots', () => {
+  let T5 = id(8)
+  let all = rows(graph([
+    ...mk(T4, 5, ago(50), {
+      task: { priority: 1, project: P },
+      decided: { at: ago(5) },
+      spawn: { provider: 'codex', model: 'gpt-5.6-sol' },
+    }),
+    ...mk(T5, 8, ago(40), {
+      task: { priority: 1, project: P },
+      decided: { at: ago(5) },
+    }),
+    ...mk(S1, 6, ago(60), {
+      session: { id: 'past', requested_task: T1, status: 'failed' },
+    }),
+  ]))
+  let by = new Map(all.map((r) => [r.eid, r]))
+  let selected = [T1, T4, T2, T5].map((eid) => by.get(eid)!)
+  let spawned = dispatchSpawn(all, [], ps, 1, false, NOW, undefined, selected)
+    .filter((c) => c.name == 'session')
+    .map((c) => c.comp!.requested_task)
+  assertEquals(spawned, [T2])
 })
 
 Deno.test('dispatchSpawn: a held or asked-for task is skipped', () => {

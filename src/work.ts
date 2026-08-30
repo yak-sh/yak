@@ -4,9 +4,25 @@
 // retry policy; this module owns only whether work is eligible and how a bounded
 // candidate envelope is assembled from indexed graph reads.
 import type { QueryOpts, Row, WorkProjection } from './client.ts'
+import { leafOf, parseQuery, type Pred } from './query.ts'
 import { type Dep, idOf, settled, statusOf } from './types.ts'
 
 export type WorkLane = 'evaluate' | 'build'
+
+// Work lanes are a public execution surface, never a moderation surface. A
+// quarantine predicate normally opts a graph query into hidden rows; reject it
+// here (including a far path leaf) so no worker transport can turn that reveal
+// switch on accidentally or deliberately.
+export let workPredicates = (preds: Pred[]) => {
+  if (
+    preds.some((p) =>
+      p.comp == 'quarantined' || leafOf(p).comp == 'quarantined'
+    )
+  ) {
+    throw new Error('work filters never reveal quarantined entities')
+  }
+  return preds
+}
 
 export type WorkRead = {
   query: (
@@ -66,7 +82,8 @@ export let approved = (r: Row) =>
 export let pending = (r: Row) => !!r.comps.proposed && !r.comps.decided
 export let declined = (r: Row) => r.comps.decided?.verdict == 'declined'
 
-let open = (r?: Row) => !!r?.comps.task && statusOf(r.comps) == 'open'
+let open = (r?: Row) =>
+  !!r?.comps.task && !r.comps.quarantined && statusOf(r.comps) == 'open'
 
 // Approval inheritance is traced to each approved open root so a worker can
 // explain why a descendant is authorized. A per-root seen set terminates
@@ -202,6 +219,7 @@ export let workCandidates = async (
 ): Promise<WorkCandidate[]> => {
   let limit = Math.max(1, Math.min(opts.limit ?? LIMIT, 100))
   let base = workFilters(lane, opts.recursive)
+  workPredicates(parseQuery([...base, ...opts.filters ?? []].join('&')))
   let hits = await read.query([...base, ...opts.filters ?? []], {
     limit,
     work: lane,

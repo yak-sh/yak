@@ -15,11 +15,11 @@ import { type Change, type Dep, statusOf } from './types.ts'
 import { idOf, type Row, spawnChanges, spawnPlan } from './client.ts'
 import { hotRun, isPersona, liveRun } from './spawnrule.ts'
 import { type Provider } from './providers.ts'
-import { evalGraph, rowsFor } from './graph_query.ts'
+import { evalDispatchWork, evalGraph, rowsFor } from './graph_query.ts'
 import { resolve } from './config.ts'
 import { record as telemetry } from './telemetry.ts'
 import { type DatabaseSync } from './sqlite.ts'
-import { approved, authorized, buildReady } from './work.ts'
+import { approved, authorized, buildReady, workFilters } from './work.ts'
 
 export { approved, authorized } from './work.ts'
 
@@ -255,6 +255,7 @@ export let dispatchCandidates = (
   recursive = false,
   now = Date.now(),
   backoff?: number,
+  readyRows?: Row[],
 ) => {
   let by = new Map(all.map((r) => [r.eid, r]))
   let candidates: DispatchCandidate[] = []
@@ -310,7 +311,7 @@ export let dispatchCandidates = (
       candidates.push({ target: t, error, spends: true })
     }
   }
-  for (let t of backlog(all, deps, recursive)) {
+  for (let t of readyRows ?? backlog(all, deps, recursive)) {
     if (spawned.has(t.eid) || !attemptEligible(all, t.eid, now, backoff)) {
       continue
     }
@@ -383,11 +384,12 @@ export let dispatchSpawn = (
   recursive = false,
   now = Date.now(),
   backoff?: number,
+  readyRows?: Row[],
 ) => {
   let free = cap - inFlight(all).length
   let out: Change[] = []
   commitCandidates(
-    dispatchCandidates(all, deps, ps, recursive, now, backoff),
+    dispatchCandidates(all, deps, ps, recursive, now, backoff, readyRows),
     free,
     (changes) => out.push(...changes),
     () => {},
@@ -464,6 +466,15 @@ export let dispatchSweep = async (
     let backoff = retryBackoff(
       resolve('DISPATCH_RETRY_BACKOFF', (k) => settingValue(db, k)).value,
     )
+    // Recursive readiness must see every intermediary, including entities
+    // that are not tasks and therefore are absent from the dispatch context
+    // below. The shared DB selector owns that complete closure; `all` remains
+    // the bounded policy/spawn context for slots, prior asks, and plans.
+    let readyRows = evalDispatchWork(
+      db,
+      workFilters('build', recursive).join('&'),
+      recursive,
+    )
     // Drop the denied providers before the sweep picks, so the default model
     // never routes to a provider that can't launch here (T-24115). Excluding a
     // graph-native provider without its CLI fallback would leave the fallback
@@ -479,6 +490,7 @@ export let dispatchSweep = async (
       recursive,
       Date.now(),
       backoff,
+      readyRows,
     )
     let n = commitCandidates(
       candidates,

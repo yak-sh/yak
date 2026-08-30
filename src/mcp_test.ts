@@ -302,6 +302,25 @@ Deno.test('work_list exposes bounded human-addressed evaluate and build lanes', 
   })
 })
 
+Deno.test('work_list refuses quarantine reveal filters', async () => {
+  let { io } = graph()
+  await protocol(io, async (client) => {
+    for (let lane of ['evaluate', 'build']) {
+      for (let filter of ['.quarantined!', '.task.project.quarantined!']) {
+        let result = await client.callTool({
+          name: 'work_list',
+          arguments: { lane, filters: [filter] },
+        }) as ToolResult
+        assertEquals(result.isError, true)
+        assertMatch(
+          said(result),
+          /work filters never reveal quarantined entities/,
+        )
+      }
+    }
+  })
+})
+
 Deno.test('concurrent work_start calls converge on one stable identity', async () => {
   let { db, io } = graph()
   let write = io.write

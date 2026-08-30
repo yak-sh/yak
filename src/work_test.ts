@@ -1,9 +1,17 @@
 // Work-lane readiness and candidate envelopes: managed dispatch and external
 // workers share membership, while each keeps its own ordering. The db-backed
 // cases also hold the lane reads to indexed, bounded graph queries.
-import { assert, assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { type Change, idOf, uuid } from './types.ts'
-import { buildWorkSql, rowsFor } from './graph_query.ts'
+import {
+  buildWorkSql,
+  evalBuildWork,
+  evalDispatchWork,
+  evalGraph,
+  evalWork,
+  rowsFor,
+} from './graph_query.ts'
+import { dispatchSpawn } from './dispatch.ts'
 import { parseQuery } from './query.ts'
 import { where } from './sql.ts'
 import {
@@ -386,6 +394,145 @@ Deno.test('recursive authorization traverses non-task intermediates', async () =
     from: [idOf(rowsFor(db, [root])[0])],
     truncated: false,
   })
+})
+
+Deno.test('managed dispatch shares the complete recursive DB membership', async () => {
+  let db = bareDb()
+  let P = uuid(), root = uuid(), a = uuid(), b = uuid(), leaf = uuid()
+  let direct = uuid()
+  apply(db, [
+    { eid: P, name: 'doc', comp: { title: 'Dispatch closure', body: '' } },
+    { eid: P, name: 'project', comp: {} },
+    ...task(root, 'Approved root', 0, P, [
+      { eid: root, name: 'decided', comp: {} },
+    ]),
+    { eid: a, name: 'doc', comp: { title: 'Design A', body: '' } },
+    { eid: a, name: 'design', comp: {} },
+    { eid: b, name: 'doc', comp: { title: 'Design B', body: '' } },
+    { eid: b, name: 'design', comp: {} },
+    ...task(leaf, 'Inherited leaf', 1, P),
+    ...task(direct, 'Direct newer', 1, P, [{
+      eid: direct,
+      name: 'decided',
+      comp: {},
+    }]),
+    { eid: root, name: 'dependency', comp: { type: 'requires', child: a } },
+    { eid: a, name: 'dependency', comp: { type: 'requires', child: b } },
+    { eid: b, name: 'dependency', comp: { type: 'requires', child: a } },
+    { eid: b, name: 'dependency', comp: { type: 'requires', child: leaf } },
+  ])
+  // created.at is server-stamped and therefore cannot be supplied on the
+  // wire. Put the higher-numbered direct task first in time so a num-only
+  // dispatch order would fail this assertion.
+  let stamp = db.prepare(
+    `update created set at = ?
+      where entity = (select id from entity where eid = ?)`,
+  )
+  stamp.run('2026-01-03T00:00:00.000Z', leaf)
+  stamp.run('2026-01-02T00:00:00.000Z', direct)
+  let q = workFilters('build', true).join('&')
+  let worker = evalBuildWork(db, q, { recursive: true, limit: 100 })
+  let managed = evalDispatchWork(db, q, true)
+  assertEquals(
+    managed.map((r) => r.eid).sort(),
+    worker.map((r) => r.eid).sort(),
+  )
+  // Same membership, separate established orders: worker number-desc and
+  // dispatch oldest-created. The A↔B cycle terminates under UNION.
+  assertEquals(worker.map((r) => r.eid), [direct, leaf])
+  assertEquals(managed.map((r) => r.eid), [direct, leaf])
+  db.prepare(
+    `insert into resume(entity, at, rank)
+     select id, ?, ? from entity where eid = ?`,
+  ).run('2026-01-04T00:00:00.000Z', 7, leaf)
+  assertEquals(evalDispatchWork(db, q, true).map((r) => r.eid), [leaf, direct])
+  assertEquals(
+    evalBuildWork(db, q, { recursive: true, limit: 100 }).map((r) => r.eid),
+    [direct, leaf],
+  )
+
+  // This is the old dispatch input: deps incident only to open tasks. It sees
+  // root→A and B→leaf, but omits A→B and therefore cannot authorize the leaf.
+  let taskRows = await localQuery(db)(['.task!'])
+  let partial = depsOf(db, taskRows.map((r) => r.eid))
+  let ends = rowsFor(db, partial.flatMap((d) => [d.parent, d.child]))
+  let all = new Map([...taskRows, ...ends].map((r) => [r.eid, r]))
+  assertEquals(
+    backlog([...all.values()], partial, true).some((r) => r.eid == leaf),
+    false,
+  )
+  let spawned = dispatchSpawn(
+    [...all.values()],
+    partial,
+    [{ name: 'claude', models: ['sonnet'] }],
+    2,
+    true,
+    Date.now(),
+    undefined,
+    managed,
+  ).filter((c) => c.name == 'session').map((c) => c.comp!.requested_task)
+  assertEquals(spawned.slice(0, 2), [direct, leaf])
+  let off = workFilters('build', false).join('&')
+  assertEquals(evalBuildWork(db, off, { limit: 100 }).map((r) => r.eid), [
+    direct,
+  ])
+  assertEquals(evalDispatchWork(db, off, false).map((r) => r.eid), [
+    direct,
+  ])
+})
+
+Deno.test('work lanes reject direct and dotted quarantine reveal filters', async () => {
+  let db = bareDb()
+  let hidden = uuid()
+  apply(db, [
+    { eid: hidden, name: 'doc', comp: { title: 'Moderated', body: '' } },
+    { eid: hidden, name: 'quarantined', comp: {} },
+  ])
+  assertEquals(evalGraph(db, '.quarantined!').hits.map((r) => r.eid), [hidden])
+  for (let lane of ['evaluate', 'build'] as const) {
+    for (let filter of ['.quarantined!', '.task.project.quarantined!']) {
+      let filters = [...workFilters(lane), filter]
+      assertThrows(
+        () => evalWork(db, filters.join('&'), { work: lane }),
+        Error,
+        'work filters never reveal quarantined entities',
+      )
+      await assertRejects(
+        () => localQuery(db)(filters, { work: lane }),
+        Error,
+        'work filters never reveal quarantined entities',
+      )
+      await assertRejects(
+        () => workCandidates(readFor(db), lane, { filters: [filter] }),
+        Error,
+        'work filters never reveal quarantined entities',
+      )
+    }
+  }
+})
+
+Deno.test('managed dispatch does not window its eligible feed', () => {
+  let db = bareDb()
+  let P = uuid()
+  let changes: Change[] = [
+    { eid: P, name: 'doc', comp: { title: 'Long queue', body: '' } },
+    { eid: P, name: 'project', comp: {} },
+  ]
+  for (let i = 0; i < 125; i++) {
+    let eid = uuid()
+    changes.push(
+      ...task(eid, `Ready ${i}`, 1, P, [{
+        eid,
+        name: 'decided',
+        comp: {},
+      }]),
+    )
+  }
+  apply(db, changes)
+  assertEquals(
+    evalDispatchWork(db, workFilters('build').join('&')).length,
+    125,
+  )
 })
 
 Deno.test('quarantine is private in blocker and authorization projections', async () => {

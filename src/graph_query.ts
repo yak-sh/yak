@@ -73,6 +73,7 @@ import {
   windowOf,
 } from './query.ts'
 import { inputsOf, resultsOf, withResults } from './result_component.ts'
+import { workPredicates } from './work.ts'
 export { personaGraph, projectionGraph } from './persona_graph.ts'
 
 // A filter of only rankings — or of nothing at all — selects EVERY entity, and
@@ -571,7 +572,9 @@ let workRootsSql = `approved_root(entity, num) as (
 )`
 
 let workBase = (db: DatabaseSync, q: string) => {
-  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let preds = workPredicates(
+    resolveRefs(parseQuery(q), (id) => locate(db, id)),
+  )
   if (
     preds.some((p) =>
       p.rev || p.refs || p.reach ||
@@ -584,7 +587,14 @@ let workBase = (db: DatabaseSync, q: string) => {
         'projections are unsupported',
     )
   }
-  let base = where(screened(inputsOf(preds), false))
+  // Unlike an ordinary graph query, work has no reveal mode. These outer
+  // screens are unconditional even if a future predicate classifier changes:
+  // candidates are visible eager entities before readiness or LIMIT runs.
+  let base = where([
+    ...inputsOf(preds),
+    { comp: 'quarantined', prop: '', op: '', value: '' },
+    { comp: 'entry', prop: '', op: '', value: '' },
+  ])
   if (!base) {
     throw new Error(
       'work filter cannot be answered exactly by indexed SQL; use a scalar ' +
@@ -594,13 +604,16 @@ let workBase = (db: DatabaseSync, q: string) => {
   return base
 }
 
-export let buildWorkSql = (
+let workSelectionSql = (
   db: DatabaseSync,
   q: string,
-  opts: { limit?: number; recursive?: boolean } = {},
+  opts: {
+    limit: number | null
+    recursive?: boolean
+    order: 'worker' | 'dispatch'
+  },
 ) => {
   let base = workBase(db, q)
-  let limit = Math.max(1, Math.min(opts.limit ?? 20, 100))
   let lineage = opts.recursive
     ? `, ${workLineageSql('candidate')}, ${workRootsSql}`
     : ''
@@ -613,6 +626,12 @@ export let buildWorkSql = (
        )`
     : `choice.entity is not null and
        coalesce(choice.verdict, 'approved') != 'declined'`
+  let dispatch = opts.order == 'dispatch'
+  let ordering = dispatch
+    ? `resume.entity is null, resume.rank desc,
+       task.priority is null, task.priority asc,
+       created.at is null, created.at asc, entity.num asc`
+    : `task.priority is null, task.priority asc, entity.num desc`
   return {
     sql: `with recursive filtered(eid) as materialized (${base.sql}),
        candidate(origin, entity) as materialized (
@@ -629,6 +648,12 @@ export let buildWorkSql = (
          left join cancelled on cancelled.entity = entity.id
          left join claim on claim.entity = entity.id
          left join blocked on blocked.entity = entity.id
+         ${
+      dispatch
+        ? `left join created on created.entity = entity.id
+         left join resume on resume.entity = entity.id`
+        : ''
+    }
         where completed.entity is null
           and cancelled.entity is null
           and claim.entity is null
@@ -651,11 +676,21 @@ export let buildWorkSql = (
                and endpoint_cancelled.entity is null
           )
           and (${authorization})
-        order by task.priority is null, task.priority asc, entity.num desc
-        limit ?`,
-    params: [...base.params, limit],
+        order by ${ordering}${opts.limit == null ? '' : '\n        limit ?'}`,
+    params: [...base.params, ...(opts.limit == null ? [] : [opts.limit])],
   }
 }
+
+export let buildWorkSql = (
+  db: DatabaseSync,
+  q: string,
+  opts: { limit?: number; recursive?: boolean } = {},
+) =>
+  workSelectionSql(db, q, {
+    limit: Math.max(1, Math.min(opts.limit ?? 20, 100)),
+    recursive: opts.recursive,
+    order: 'worker',
+  })
 
 export let evalBuildWork = (
   db: DatabaseSync,
@@ -663,6 +698,26 @@ export let evalBuildWork = (
   opts: { limit?: number; recursive?: boolean } = {},
 ): Row[] => {
   let built = buildWorkSql(db, q, opts)
+  let ids = db.prepare(built.sql).all(...built.params) as { eid: string }[]
+  let by = new Map(rowsFor(db, ids.map((r) => r.eid)).map((r) => [r.eid, r]))
+  return ids.map((r) => by.get(r.eid)).filter((r): r is Row => !!r)
+}
+
+// Managed dispatch consumes the SAME complete membership CTE as external
+// workers, but keeps its established spend order: resumed generation/rank,
+// then priority, oldest creation, and number. It is intentionally unwindowed — asked/provider policy is
+// applied afterward and may skip any prefix, so a limit here would make an
+// eligible tail disappear.
+export let evalDispatchWork = (
+  db: DatabaseSync,
+  q: string,
+  recursive = false,
+): Row[] => {
+  let built = workSelectionSql(db, q, {
+    limit: null,
+    recursive,
+    order: 'dispatch',
+  })
   let ids = db.prepare(built.sql).all(...built.params) as { eid: string }[]
   let by = new Map(rowsFor(db, ids.map((r) => r.eid)).map((r) => [r.eid, r]))
   return ids.map((r) => by.get(r.eid)).filter((r): r is Row => !!r)
