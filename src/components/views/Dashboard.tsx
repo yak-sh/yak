@@ -1,5 +1,5 @@
 import { awake, type Ent } from '../../types.ts'
-import { boardsOver, byWarmth, ent, sessionDetail } from '../../live.ts'
+import { boardsOver, ent, sessionDetail } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { Entity } from '../Entity.tsx'
 import { useQuery } from '../useQuery.ts'
@@ -81,10 +81,6 @@ let rolesOf = (roles: Ent[]) =>
         Number(a.role?.state == 'running') || a.num - b.num
     )
 
-// The digest's "lately", as a widget: the tasks homed here, warm first —
-// settled ones included, because recent work IS the news.
-let latelyOf = (tasks: Ent[]) => tasks.toSorted(byWarmth(Date.now()))
-
 export let Dashboard = ({ e }: { e: Ent }) => {
   // The sessions facet screens EVERY session down to the few serving this
   // project, then renders them as rows — so it asks for the row columns and
@@ -93,7 +89,11 @@ export let Dashboard = ({ e }: { e: Ent }) => {
   let sessions = useQuery(sessionDetail)
   let claims = useQuery('.claim!')
   let roles = useQuery(`.role.scope=${e.eid}`)
-  let tasks = useQuery(`.task.project=${e.eid}`)
+  // This facet paints eight rows, so stream only its eight warmest. Fetching
+  // every task in every project card made the root canvas discard megabytes.
+  let tasks = useQuery(
+    `.task.project=${e.eid}&.order=hot&.limit=${CAP}`,
+  )
   let unread = useInbox(e.eid).filter(isUnread).length
   return (
     <Frame>
@@ -110,7 +110,7 @@ export let Dashboard = ({ e }: { e: Ent }) => {
         name='sessions'
         ids={sessionsOf(e, sessions, claims).map((s) => s.eid)}
       />
-      <Facet name='lately' ids={latelyOf(tasks).map((t) => t.eid)} />
+      <Facet name='lately' ids={tasks.map((t) => t.eid)} />
     </Frame>
   )
 }
