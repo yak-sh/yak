@@ -50,6 +50,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       list:
         'list [kind] [filters…] [--all] [--kind=KIND] [--limit=N] [--sort=SORT] [--json]',
       work: 'work <lane> [filters…] [--limit=N] [--recursive] [--json]',
+      verify: 'verify <id>',
       query: 'query [filters…] [--json]',
       graph_query: 'graph_query [filters…] [--json]',
       decided: 'decided [filters…] [--all] [--json]',

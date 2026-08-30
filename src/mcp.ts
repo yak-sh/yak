@@ -95,6 +95,9 @@ import {
   taskTreeText,
   taskTreeWarning,
   uniq,
+  verificationLine,
+  type VerificationResult,
+  verifyTask,
   workClaimMutation,
 } from './client.ts'
 import { noFilter, orderOf, parseQuery, pred, resolution } from './query.ts'
@@ -164,6 +167,10 @@ export type IO = {
   // `via` is journal attribution — the calling session's id, when the
   // tool knows it. Never auth.
   write: (mutation: Mutation, via?: string) => Promise<MutationResult>
+  // Server-authoritative explicit verification: the service resolves the
+  // target, re-reads its completion cycle, and atomically takes the verifier
+  // claim. This cannot be expressed as an unguarded component patch.
+  verify: (id: string, via?: string) => Promise<VerificationResult>
   find: (q: string, limit?: number) => Promise<Hit[]>
   // Land an HTML page in the frozen store for an existing web entity.
   upload: (eid: string, html: string) => Promise<void>
@@ -369,6 +376,7 @@ let HINTS: Record<string, ToolAnnotations> = {
   task_update: { idempotentHint: true },
   task_claim: { idempotentHint: true },
   task_release: { idempotentHint: true },
+  task_verify: { idempotentHint: true, openWorldHint: true },
   card_move: { idempotentHint: true },
   show: { idempotentHint: true },
   graph_apply: { destructiveHint: true },
@@ -1102,6 +1110,28 @@ other sessions. ${BUS}`,
       if (!row) return err(`no entity: ${id}`)
       await io.write([{ eid: row.eid, name: 'claim', comp: null }], session)
       return bus(`released ${idOf(row)}`, session)
+    },
+  )
+
+  tool(
+    'task_verify',
+    `Start independent verification of completed acceptance-bearing work.
+The server resolves the human task id and applies the same current-cycle
+policy as automatic verification. Manual requests bypass only project
+noverify; the verifier role state, capacity, quiet period, cooldown, identity,
+and atomic claim still govern. Repeated or concurrent calls return the active
+verifier Session instead of spawning another. This action never posts a
+verdict; the independent verifier records its own review. ${BUS}`,
+    { id: z.string(), session: z.string().optional() },
+    async ({ id, session }: { id: string; session?: string }) => {
+      try {
+        return bus(
+          verificationLine(await verifyTask(id, session, io.verify)),
+          session,
+        )
+      } catch (e) {
+        return err(`verification refused: ${(e as Error).message}`)
+      }
     },
   )
 
@@ -2673,6 +2703,7 @@ export let httpIO = (): IO => ({
   get: (ids, filters = []) => fetched(ids, filters),
   deps: (eids, reveal) => httpDeps(eids, reveal),
   write: async (mutation, via) => mutationResult(await mutate(mutation, via)),
+  verify: (id, via) => verifyTask(id, via),
   find: search,
   upload: async (eid, html) => {
     let res = await request(`http://${host()}/upload?eid=${eid}`, {

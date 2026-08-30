@@ -1626,6 +1626,58 @@ slow(
   },
 )
 
+slow(
+  'task verify uses the explicit verifier service and prints human ids',
+  async () => {
+    let bodies: unknown[] = []
+    let refuse = false
+    let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
+      let url = new URL(req.url)
+      if (req.method != 'POST' || url.pathname != '/verify') {
+        return new Response('not found', { status: 404 })
+      }
+      bodies.push(await req.json())
+      if (refuse) return new Response('T-90 is cancelled', { status: 400 })
+      return Response.json({
+        state: 'spawned',
+        target: 'T-90',
+        verifier: 'S-91',
+        reason: 'independent verification started',
+      })
+    })
+    let host = `127.0.0.1:${(server.addr as Deno.NetAddr).port}`
+    let run = () =>
+      new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          'verify',
+          'verify-me',
+        ],
+        clearEnv: true,
+        env: { TASKS_HOST: host },
+      }).output()
+    try {
+      let out = await run()
+      assertEquals(out.code, 0, text(out.stderr))
+      assertEquals(
+        text(out.stdout),
+        'spawned S-91 to verify T-90 · independent verification started\n',
+      )
+      assertEquals(bodies, [{ id: 'verify-me' }])
+
+      refuse = true
+      out = await run()
+      assertEquals(out.code, 1)
+      assertStringIncludes(text(out.stderr), 'T-90 is cancelled')
+      assertEquals(bodies, [{ id: 'verify-me' }, { id: 'verify-me' }])
+    } finally {
+      await server.shutdown()
+    }
+  },
+)
+
 slow('task undo sends a named mutation through generic /apply', async () => {
   let eid = 'bbbbbbbb-0000-4000-8000-000000000091'
   let snap: Snapshot = {

@@ -3,15 +3,16 @@
 // gates and mints one independently-personaed Session for an eligible task.
 // It registers nothing itself: doing.ts owns the curated effects and system
 // role wiring, while command surfaces may call the same exported doors.
-import { apply, locate, readComp } from './db.ts'
+import { apply, buried, human, locate, readComp } from './db.ts'
 import { db } from './live_db.ts'
-import { spawnChanges } from './client.ts'
+import { spawnChanges, type VerificationResult } from './client.ts'
 import { rowsFor } from './graph_query.ts'
 import { commitEffects } from './effects.ts'
 import { sha } from './sha.ts'
 import { type Change } from './types.ts'
 import type { SystemSpec, SystemTuning } from './roles.ts'
 import {
+  activeVerifier,
   latestVerificationReview,
   verificationArgs,
   verificationPending,
@@ -144,10 +145,14 @@ export let verifierBlocked = (
     : null
 }
 
-// `automatic=false` is the future explicit verification door. It bypasses only
+// `automatic=false` is the explicit verification door. It bypasses only
 // the project's noverify preference; the global role state and resource gates
 // still govern every spawned worker.
-export let ensureVerifier = (cast: Cast, automatic = true) =>
+export let ensureVerifier = (
+  cast: Cast,
+  automatic = true,
+  via?: string,
+) =>
 (
   task: string,
   _comp?: Record<string, unknown>,
@@ -178,14 +183,114 @@ export let ensureVerifier = (cast: Cast, automatic = true) =>
   // loser rolls its whole spawn back and leaves the ordinary conflict audit.
   commitEffects(
     (trace) =>
-      apply(db, [
-        ...changes,
-        { eid, name: 'verifier', comp: {} },
-        { eid: task, name: 'claim', comp: { session: eid } },
-      ], trace),
+      apply(
+        db,
+        [
+          ...changes,
+          { eid, name: 'verifier', comp: {} },
+          { eid: task, name: 'claim', comp: { session: eid } },
+        ],
+        trace,
+        via,
+      ),
     cast,
   )
   return eid
+}
+
+let hidden = (eid: string): boolean =>
+  buried(db, eid) ||
+  !!db.prepare(`select 1 from quarantined where ${OWNED}`).get(eid)
+
+let requestResult = (
+  state: VerificationResult['state'],
+  task: string,
+  verifier: string,
+  reason: string,
+): VerificationResult => ({
+  state,
+  target: human(db, task),
+  verifier: human(db, verifier),
+  reason,
+})
+
+let activeResult = (task: string): VerificationResult | undefined => {
+  let verifier = activeVerifier(db, task)
+  return verifier
+    ? requestResult(
+      'existing',
+      task,
+      verifier,
+      'independent verification is already in progress',
+    )
+    : undefined
+}
+
+let refuse = (task: string, reason: string): never => {
+  throw new Error(`${human(db, task)} ${reason}`)
+}
+
+// The explicit action resolves and diagnoses one visible task, then delegates
+// the decision and atomic spawn to ensureVerifier. It bypasses only noverify:
+// role state, quiet/cooldown, cap, identity validation, and the claim race all
+// remain the automatic path's policy. A race winner is an idempotent existing
+// result; an unrelated claimant still yields apply()'s audited refusal.
+export let requestVerifier = (
+  cast: Cast,
+  id: string,
+  via?: string,
+): VerificationResult => {
+  let task = locate(db, id)
+  if (!task || hidden(task)) throw new Error(`no visible task: ${id}`)
+  if (!readComp(db, task, 'task')) return refuse(task, 'is not a task')
+  if (readComp(db, task, 'cancelled')) return refuse(task, 'is cancelled')
+  if (!readComp(db, task, 'accept')) {
+    return refuse(task, 'has no acceptance criteria')
+  }
+  if (!readComp(db, task, 'completed')) {
+    return refuse(task, 'is not completed')
+  }
+  let review = latestVerificationReview(db, task)
+  if (review?.verdict == 'approved') {
+    return refuse(task, 'already has an approving independent review')
+  }
+  let existing = activeResult(task)
+  if (existing) return existing
+  if (!verificationPending(db, task)) {
+    return refuse(task, 'is not eligible for independent verification')
+  }
+  let cycle = cycleOf(task)!
+  let blocked = verifierBlocked(task, cycle, verifierTuning(), false)
+  if (blocked) return refuse(task, `cannot start verification: ${blocked}`)
+
+  let made: string | undefined
+  try {
+    made = ensureVerifier(cast, false, via)(task)
+  } catch (error) {
+    // A manual/manual or manual/automatic race loses at the task claim after
+    // apply() has recorded its ordinary conflict. The winner is the answer;
+    // every other claim refusal remains loud and retains its audit.
+    let won = activeResult(task)
+    if (won) return won
+    throw error
+  }
+  if (made) {
+    return requestResult(
+      'spawned',
+      task,
+      made,
+      'independent verification started',
+    )
+  }
+  existing = activeResult(task)
+  if (existing) return existing
+  blocked = verifierBlocked(task, cycle, verifierTuning(), false)
+  return refuse(
+    task,
+    blocked
+      ? `cannot start verification: ${blocked}`
+      : 'is no longer awaiting verification',
+  )
 }
 
 // A review is an event, not the authority by itself: delayed/replayed handlers

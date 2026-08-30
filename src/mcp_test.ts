@@ -443,6 +443,42 @@ Deno.test('task_claim uses the guarded writer mutation and can approve atomicall
   )
 })
 
+Deno.test('task_verify uses the authoritative service and reports refusals as errors', async () => {
+  let io = blank()
+  let seen: { id: string; via?: string } | undefined
+  io.verify = (id, via) => {
+    seen = { id, via }
+    return Promise.resolve({
+      state: 'spawned',
+      target: 'T-7',
+      verifier: 'S-9',
+      reason: 'independent verification started',
+    })
+  }
+  await protocol(io, async (client) => {
+    let out = await client.callTool({
+      name: 'task_verify',
+      arguments: { id: 'verify-me', session: 'desktop' },
+    }) as ToolResult
+    assertEquals(out.isError, undefined)
+    assertEquals(
+      said(out),
+      'spawned S-9 to verify T-7 · independent verification started',
+    )
+  })
+  assertEquals(seen, { id: 'verify-me', via: 'desktop' })
+
+  io.verify = () => Promise.reject(new Error('T-7 is cancelled'))
+  await protocol(io, async (client) => {
+    let out = await client.callTool({
+      name: 'task_verify',
+      arguments: { id: 'T-7' },
+    }) as ToolResult
+    assertEquals(out.isError, true)
+    assertEquals(said(out), 'verification refused: T-7 is cancelled')
+  })
+})
+
 Deno.test('work_list refuses quarantine reveal filters', async () => {
   let { io } = graph()
   await protocol(io, async (client) => {
@@ -766,6 +802,13 @@ let blank = (): IO => ({
   deps: () => Promise.resolve([]),
   write: (mutation) =>
     Promise.resolve({ changes: batch(mutation), aliases: {} }),
+  verify: (id) =>
+    Promise.resolve({
+      state: 'spawned',
+      target: id,
+      verifier: 'S-1',
+      reason: 'independent verification started',
+    }),
   find: () => Promise.resolve([]),
   upload: () => Promise.resolve(),
   touch: () => Promise.resolve(),
@@ -794,6 +837,13 @@ let graph = () => {
       Promise.resolve(
         mutationResult(applyMutation(db, mutation, undefined, via)),
       ),
+    verify: (id) =>
+      Promise.resolve({
+        state: 'spawned',
+        target: id,
+        verifier: 'S-1',
+        reason: 'independent verification started',
+      }),
     find: () => Promise.resolve([]),
     upload: (eid, html) => {
       pages.set(eid, html)
@@ -884,6 +934,15 @@ slow(
       services++
       return Promise.resolve({ changes: batch(mutation), aliases: {} })
     }
+    wire.verify = (id, via) => {
+      services++
+      return Promise.resolve({
+        state: 'existing',
+        target: id,
+        verifier: 'S-77',
+        reason: `served remotely${via ? ` for ${via}` : ''}`,
+      })
+    }
     wire.upload = () => {
       services++
       return Promise.resolve()
@@ -944,10 +1003,16 @@ slow(
       })
       assertEquals(calls, 0)
       assertEquals(await mounted.io.write([]), { changes: [], aliases: {} })
+      assertEquals(await mounted.io.verify('T-1', 'desktop'), {
+        state: 'existing',
+        target: 'T-1',
+        verifier: 'S-77',
+        reason: 'served remotely for desktop',
+      })
       await mounted.io.upload(eid, '<p>service</p>')
       await mounted.io.touch([eid])
       assertEquals(await mounted.io.providers(), [{ name: 'wire', models: [] }])
-      assertEquals(services, 4)
+      assertEquals(services, 5)
     } finally {
       mounted.close()
       await Deno.remove(dir, { recursive: true })
@@ -1165,6 +1230,7 @@ let bases: Record<string, Record<string, unknown>> = {
   task_context: { session: 'test' },
   task_claim: { id: 'T-1', session: 'test' },
   task_release: { id: 'T-1' },
+  task_verify: { id: 'T-1' },
   task_spawn: { id: 'T-1' },
   command: { line: ':help' },
   session_peek: { id: 'S-1' },
@@ -1336,16 +1402,15 @@ Deno.test('backfill reads locally and submits bounded ordinary writes', async ()
   ])
 })
 
-Deno.test('MCP tools declare closed-world, save task_spawn (the agent launch)', async () => {
+Deno.test('MCP tools declare closed-world, save autonomous agent launches', async () => {
   await protocol(blank(), async (client) => {
     let tools: Tool[] = (await client.listTools()).tools
-    // The graph is a closed domain, so every tool but task_spawn — which
-    // launches an autonomous agent — declares openWorldHint false, overriding
-    // the protocol's open-world default.
+    // The graph is a closed domain. Only the two tools that launch autonomous
+    // agents declare openWorldHint true, overriding the closed-world default.
     for (let tool of tools) {
       assertEquals(
         tool.annotations?.openWorldHint,
-        tool.name == 'task_spawn' ? true : false,
+        ['task_spawn', 'task_verify'].includes(tool.name),
         tool.name,
       )
     }
@@ -1368,13 +1433,14 @@ Deno.test('MCP annotations: queries read-only, deleters destructive, setters ide
     for (let w of ['task_new', 'graph_apply', 'task_comment']) {
       assert(!a(w).readOnlyHint, w)
     }
-    for (let s of ['task_update', 'task_claim', 'card_move']) {
+    for (let s of ['task_update', 'task_claim', 'task_verify', 'card_move']) {
       assertEquals(a(s).idempotentHint, true, s)
     }
     for (let d of ['graph_apply', 'card_close', 'command']) {
       assertEquals(a(d).destructiveHint, true, d)
     }
     assertEquals(a('task_spawn').openWorldHint, true)
+    assertEquals(a('task_verify').openWorldHint, true)
   })
 })
 

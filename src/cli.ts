@@ -94,6 +94,8 @@ import {
   taskTreeWarning,
   undo,
   unreadPipe,
+  verificationLine,
+  verifyTask,
   workClaimMutation,
   WORKING_SET,
   wrapChanges,
@@ -536,6 +538,10 @@ let work = async (got: Got) => {
   if (got.flags.has('--json')) return print(jsonText(candidates))
   if (!candidates.length) return print('(no candidates)')
   for (let candidate of candidates) print(workLine(candidate))
+}
+
+let verify = async (got: Got) => {
+  print(verificationLine(await verifyTask(got.args.id!)))
 }
 
 // ---- task decided: what has been SETTLED where you stand, newest decision
@@ -3522,6 +3528,7 @@ export let verbs = bind({
   delete: del,
   forget: del,
   spawn,
+  verify,
   land: () => land(),
   comment,
   meta: (got) => colon(undefined, ['meta', got.body ?? '']),

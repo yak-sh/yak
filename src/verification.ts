@@ -98,22 +98,28 @@ export let latestVerificationReview = (
 // Keyed current-cycle lookup used by every imperative spawn door. The caller
 // supplies an eid; the task/completed owner primary keys and
 // session_requested_task index bound the read to that one task.
-export let hasVerifier = (db: DatabaseSync, task: string): boolean =>
-  !!db.prepare(
-    `select 1
+export let activeVerifier = (
+  db: DatabaseSync,
+  task: string,
+): string | undefined =>
+  (db.prepare(
+    `select owner.eid
        from task
        join completed _vc on _vc.entity = task.entity
+       join session s indexed by session_requested_task
+         on s.requested_task = task.entity
+       join verifier v on v.entity = s.entity
+       join created _vz on _vz.entity = s.entity
+       join entity owner on owner.id = s.entity
       where task.entity = (select id from entity where eid = ?)
-        and exists (
-          select 1 from session s
-          join verifier v on v.entity = s.entity
-          join created _vz on _vz.entity = s.entity
-          where s.requested_task = task.entity
-            and _vz.at > _vc.at
-            and (${activeSql})
-        )
+        and _vz.at > _vc.at
+        and (${activeSql})
+      order by _vz.at desc, owner.eid desc
       limit 1`,
-  ).get(task, ...activeArgs)
+  ).get(task, ...activeArgs) as { eid: string } | undefined)?.eid
+
+export let hasVerifier = (db: DatabaseSync, task: string): boolean =>
+  !!activeVerifier(db, task)
 
 // The exact keyed form of VERIFY_PENDING. Imperative callers re-read it before
 // every spawn; derived lanes use VERIFY_PENDING directly in their own bounded

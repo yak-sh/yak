@@ -182,6 +182,13 @@ slow(
           aliases,
         })
       },
+      verify: (id) =>
+        Promise.resolve({
+          state: 'existing',
+          target: id,
+          verifier: 'S-1',
+          reason: 'test service',
+        }),
       find: () => Promise.resolve([]),
       upload: () => Promise.resolve(),
       touch: () => Promise.resolve(),

@@ -93,6 +93,7 @@ import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { serverFile } from './reload.ts'
 import { jsonOf, type Row } from './client.ts'
+import { requestVerifier } from './verify.ts'
 import {
   listed,
   matchQuery,
@@ -577,6 +578,11 @@ let graphIO: IO = {
     feed.settle()
     return out
   },
+  // deno-lint-ignore require-await
+  verify: async (id, via) => {
+    if (appOnly) refuseWrite()
+    return requestVerifier(cast, id, via)
+  },
   upload: async (eid, html) => {
     if (appOnly) refuseWrite()
     // store() journals its stamp (record); the feed carries it to the sockets.
@@ -813,7 +819,7 @@ let refuseWrite = (): never => {
 let writeDoor = (method: string, path: string): boolean =>
   (method == 'GET' && path == '/freeze') ||
   (method == 'POST' &&
-    (path == '/apply' || path == '/redact' ||
+    (path == '/apply' || path == '/verify' || path == '/redact' ||
       path == '/page' || path == '/upload' || path == '/blob'))
 
 let methodNotAllowed = (allow: string) =>
@@ -1297,6 +1303,22 @@ let handle = async (req: Request) => {
       note(false, why)
       return new Response(why, { status: 400 })
     })
+  }
+  if (path == '/verify') {
+    if (req.method != 'POST') return methodNotAllowed('POST')
+    try {
+      let body = await req.json() as { id?: unknown }
+      if (typeof body.id != 'string' || !body.id.trim()) {
+        throw new Error('verify needs a task id')
+      }
+      return Response.json(
+        requestVerifier(cast, body.id, req.headers.get('x-via') ?? undefined),
+      )
+    } catch (e) {
+      return new Response(e instanceof Error ? e.message : String(e), {
+        status: 400,
+      })
+    }
   }
   // Value redaction is the one write that reaches backward into the journal.
   // Hold backup's process lock from the atomic database scrub through the

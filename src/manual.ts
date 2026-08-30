@@ -185,6 +185,17 @@ export let manuals = declare({
     args: [arg('lane', lane), arg('filters', text, true, false)],
     opts: [value('--limit', num, true), flag('--recursive'), json],
   },
+  verify: {
+    about: 'start independent verification of a completed task',
+    examples: ['task verify T-3'],
+    detail: 'Starts the graph verifier through the same current-cycle policy ' +
+      'as automatic verification. An existing active verifier is returned ' +
+      'idempotently. The explicit action bypasses only project noverify; role ' +
+      'state, capacity, quiet period, cooldown, and the atomic target claim ' +
+      'still govern. The verifier posts its own review verdict.',
+    root: true,
+    args: [arg('id', id)],
+  },
   query: {
     dots: 'filters',
     about: 'query the graph (filter grammar)',

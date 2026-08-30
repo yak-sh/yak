@@ -55,6 +55,13 @@ let ioFor = (db: ReturnType<typeof open>): IO => ({
   deps: (eids) => Promise.resolve(depsOf(db, eids)),
   write: (mutation, via) =>
     Promise.resolve(mutationResult(mutate(db, mutation, undefined, via))),
+  verify: (id) =>
+    Promise.resolve({
+      state: 'existing',
+      target: id,
+      verifier: 'S-1',
+      reason: 'test service',
+    }),
   find: () => Promise.resolve([]),
   upload: () => Promise.resolve(),
   touch: () => Promise.resolve(),

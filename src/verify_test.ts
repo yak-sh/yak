@@ -15,7 +15,7 @@ Deno.env.set('DB_PATH', ':memory:')
 Deno.env.set('TASKS_VERIFIER_PROVIDER', 'fake')
 Deno.env.set('TASKS_VERIFIER_MODEL', 'fake-fast')
 
-let { apply, readComp, snapshot } = await import('./db.ts')
+let { apply, human, readComp, snapshot } = await import('./db.ts')
 let { db } = await import('./live_db.ts')
 let { rows, spawnChanges } = await import('./client.ts')
 let { rowsFor } = await import('./graph_query.ts')
@@ -29,6 +29,7 @@ let {
 } = await import('./verification.ts')
 let {
   ensureVerifier,
+  requestVerifier,
   settleVerification,
   verifierBlocked,
   verifierIdentity,
@@ -101,6 +102,7 @@ let reset = () => {
   db.exec('delete from accept')
   db.exec('delete from completed')
   db.exec('delete from cancelled')
+  db.exec('delete from conflict')
   db.prepare(
     `update role set state = 'running', quiet = 0, cooldown = ?, cap = ?
       where ${OWNED}`,
@@ -523,6 +525,155 @@ Deno.test('project noverify mutes automatic spawn only and remains pending for m
     ensureVerifier(cast, false)(work.eid),
     'manual summon bypasses noverify',
   )
+})
+
+Deno.test('explicit verification resolves aliases, bypasses noverify, and returns one human verifier', () => {
+  reset()
+  let work = task()
+  apply(db, [
+    { eid: work.eid, name: 'alias', comp: { slug: 'verify-me' } },
+    { eid: project, name: 'noverify', comp: {} },
+  ])
+
+  let made = requestVerifier(cast, 'verify-me', 'desktop')
+  assertEquals(made, {
+    state: 'spawned',
+    target: human(db, work.eid),
+    verifier: human(db, verifiersFor(work.eid)[0].eid),
+    reason: 'independent verification started',
+  })
+  assertEquals(
+    db.prepare('select count(*) as n from review').get(),
+    { n: 0 },
+  )
+
+  let again = requestVerifier(cast, human(db, work.eid), 'desktop')
+  assertEquals(again, {
+    ...made,
+    state: 'existing',
+    reason: 'independent verification is already in progress',
+  })
+  assertEquals(verifiersFor(work.eid).length, 1)
+})
+
+Deno.test('explicit verification gives specific state and verdict refusals', () => {
+  reset()
+  let open = task()
+  apply(db, [{ eid: open.eid, name: 'completed', comp: null }])
+  assertThrows(
+    () => requestVerifier(cast, human(db, open.eid)),
+    Error,
+    'is not completed',
+  )
+
+  let criteria = task({ accept: false })
+  assertThrows(
+    () => requestVerifier(cast, human(db, criteria.eid)),
+    Error,
+    'has no acceptance criteria',
+  )
+
+  let cancelled = task({ cancelled: true })
+  assertThrows(
+    () => requestVerifier(cast, human(db, cancelled.eid)),
+    Error,
+    'is cancelled',
+  )
+
+  let approved = task(), reviewer = session()
+  review(approved.eid, reviewer, 'approved')
+  assertThrows(
+    () => requestVerifier(cast, human(db, approved.eid)),
+    Error,
+    'already has an approving independent review',
+  )
+
+  for (let verdict of ['rejected', 'changes_requested']) {
+    let pending = task(), independent = session()
+    review(pending.eid, independent, verdict)
+    assertEquals(requestVerifier(cast, human(db, pending.eid)).state, 'spawned')
+    let made = verifiersFor(pending.eid)[0].eid
+    apply(db, [{ eid: pending.eid, name: 'claim', comp: null }])
+    db.prepare(`update session set status = 'completed' where ${OWNED}`).run(
+      made,
+    )
+  }
+})
+
+Deno.test('explicit verification keeps live role gates and automatic/manual idempotency', () => {
+  reset()
+  let stopped = task()
+  db.prepare(`update role set state = 'stopped' where ${OWNED}`).run(persona)
+  assertThrows(
+    () => requestVerifier(cast, human(db, stopped.eid)),
+    Error,
+    'cannot start verification: stopped',
+  )
+
+  reset()
+  let capped = task(), filler = task()
+  verifier(filler.eid, iso(-30), 'running')
+  db.prepare(`update role set cap = 1 where ${OWNED}`).run(persona)
+  assertThrows(
+    () => requestVerifier(cast, human(db, capped.eid)),
+    Error,
+    'cannot start verification: at cap (1)',
+  )
+
+  reset()
+  let cooling = task()
+  let failed = ensureVerifier(cast)(cooling.eid)!
+  db.prepare(`update session set status = 'failed' where ${OWNED}`).run(failed)
+  apply(db, [{ eid: cooling.eid, name: 'claim', comp: null }])
+  assertThrows(
+    () => requestVerifier(cast, human(db, cooling.eid)),
+    Error,
+    'cannot start verification: cooling down',
+  )
+
+  reset()
+  let automatic = task()
+  let auto = ensureVerifier(cast)(automatic.eid)!
+  assertEquals(
+    requestVerifier(cast, human(db, automatic.eid)).verifier,
+    human(db, auto),
+  )
+  assertEquals(verifiersFor(automatic.eid).length, 1)
+
+  reset()
+  let manual = task()
+  requestVerifier(cast, human(db, manual.eid))
+  assertEquals(ensureVerifier(cast)(manual.eid), undefined)
+  assertEquals(verifiersFor(manual.eid).length, 1)
+})
+
+Deno.test('explicit verification rolls a conflicting spawn back and keeps the conflict audit', () => {
+  reset()
+  let work = task(), holder = session('running')
+  apply(db, [{ eid: work.eid, name: 'claim', comp: { session: holder } }])
+
+  assertThrows(
+    () => requestVerifier(cast, human(db, work.eid), 'desktop'),
+    Error,
+    'already claimed',
+  )
+  assertEquals(verifiersFor(work.eid), [])
+  assertEquals(
+    db.prepare('select count(*) as n from conflict').get(),
+    { n: 1 },
+  )
+})
+
+Deno.test('explicit verification hides quarantined targets without spawning', () => {
+  reset()
+  let work = task(), id = human(db, work.eid)
+  apply(db, [{ eid: work.eid, name: 'quarantined', comp: {} }])
+  assertThrows(
+    () => requestVerifier(cast, id),
+    Error,
+    `no visible task: ${id}`,
+  )
+  assertEquals(verifiersFor(work.eid), [])
 })
 
 Deno.test('verifier identity fails closed when alias, persona, or role configuration is missing', () => {

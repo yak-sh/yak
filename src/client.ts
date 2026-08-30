@@ -640,6 +640,44 @@ export let mutate = async <T extends Mutation>(
 export let send = async (changes: Change[], via = me()) =>
   await mutate(changes, via)
 
+export type VerificationResult = {
+  state: 'spawned' | 'existing'
+  target: string
+  verifier: string
+  reason: string
+}
+
+export type VerifyTask = (
+  id: string,
+  via?: string,
+) => Promise<VerificationResult>
+
+// Explicit verification is a service action, not a component patch: the
+// server must re-read the current completion cycle and take the verifier claim
+// under its own authority. The injectable request keeps CLI and MCP on this
+// one client contract while an in-process MCP mount avoids a loopback request.
+export let httpVerifyTask: VerifyTask = async (id, via) => {
+  let res = await request(`http://${host()}/verify`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(via ? { 'x-via': via } : {}),
+    },
+    body: JSON.stringify({ id }),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<VerificationResult>
+}
+
+export let verifyTask = (
+  id: string,
+  via = me(),
+  request: VerifyTask = httpVerifyTask,
+): Promise<VerificationResult> => request(id, via)
+
+export let verificationLine = (r: VerificationResult): string =>
+  `${r.state} ${r.verifier} to verify ${r.target} · ${r.reason}`
+
 export type RedactionReport = {
   changes: Change[]
   audit: string
