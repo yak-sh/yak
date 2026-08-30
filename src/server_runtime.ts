@@ -1050,7 +1050,7 @@ let handle = async (req: Request) => {
       // different response shape; unsupported work grammar must fail as work,
       // not quietly become a normal query result.
       if (work) {
-        if (work != 'evaluate' && work != 'build') {
+        if (work != 'evaluate' && work != 'build' && work != 'verify') {
           throw new Error(`unknown work lane: ${work}`)
         }
         if (named.length) throw new Error('work queries do not accept id=')

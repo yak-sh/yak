@@ -648,17 +648,20 @@ covered). ${FILTERS}`,
 proposed and undecided, newest first. build is approved, open, unclaimed,
 unblocked, and dependency-ready, ordered by priority then newest; recursive
 also includes descendants authorized by an approved open ancestor, but never
-crosses a pending proposal or declined decision. Each JSON envelope carries
+crosses a pending proposal or declined decision. verify is completed,
+acceptance-bearing work still awaiting an independent approving review, newest
+completion first. Each JSON envelope carries
 human ids, project/domain, decision and authorization state, blockers, and
-existing repo/spawn hints. blocker and authorization references are bounded;
+existing repo/spawn hints; verify also carries bounded acceptance, completion,
+review, and verifier-attempt evidence. blocker and authorization references are bounded;
 their truncated flag says more exist. Read task_show before claiming. Optional
 filters support indexed scalar equality, lists, ranges, comparisons, presence,
 absence, literal contains, time phrases, and forward reference paths such as
 '.task.project.doc.title~=graph'. Text terms, reverse associations, traversals,
 rankings, aggregates, projections, and query windows are not work filters.`,
     {
-      lane: z.enum(['evaluate', 'build']).describe(
-        'Derived lane to inspect: proposals awaiting evaluation or ready build work.',
+      lane: z.enum(['evaluate', 'build', 'verify']).describe(
+        'Derived lane to inspect: proposals awaiting evaluation, ready build work, or completed work awaiting verification.',
       ),
       filters: z.array(z.string()).optional(),
       limit: count.max(100).describe('Maximum candidates (default 20).')

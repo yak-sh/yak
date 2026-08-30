@@ -1,15 +1,23 @@
 // Work-lane readiness and candidate envelopes: managed dispatch and external
 // workers share membership, while each keeps its own ordering. The db-backed
 // cases also hold the lane reads to indexed, bounded graph queries.
-import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertRejects,
+  assertThrows,
+} from '@std/assert'
 import { type Change, idOf, uuid } from './types.ts'
 import {
   buildWorkSql,
   evalBuildWork,
   evalDispatchWork,
   evalGraph,
+  evalVerifyWork,
   evalWork,
   rowsFor,
+  verifyWorkSql,
 } from './graph_query.ts'
 import { dispatchSpawn } from './dispatch.ts'
 import { parseQuery } from './query.ts'
@@ -20,6 +28,7 @@ import {
   workFilters,
   type WorkRead,
 } from './work.ts'
+import { verificationPending } from './verification.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, depsOf } = await import('./db.ts')
@@ -43,6 +52,84 @@ let task = (
   { eid, name: 'task', comp: { priority, project, domain: 'Eng' } },
   ...extra,
 ]
+
+let completedTask = (
+  db: ReturnType<typeof bareDb>,
+  project: string,
+  title: string,
+  at: string,
+  accept = 'exercise the shipped door',
+) => {
+  let builder = uuid(), eid = uuid()
+  apply(db, [
+    { eid: builder, name: 'session', comp: { id: uuid() } },
+    ...task(
+      eid,
+      title,
+      1,
+      project,
+      accept ? [{ eid, name: 'accept', comp: { body: accept } }] : [],
+    ),
+  ])
+  apply(db, [{ eid, name: 'completed', comp: { at } }], undefined, builder)
+  db.prepare(
+    `update completed set at = ?
+      where entity = (select id from entity where eid = ?)`,
+  ).run(at, eid)
+  return { eid, builder }
+}
+
+let workReview = (
+  db: ReturnType<typeof bareDb>,
+  target: string,
+  reviewer: string,
+  verdict: 'approved' | 'rejected' | 'changes_requested',
+  at: string,
+  body = 'Ran the acceptance recipe.',
+  eid = uuid(),
+) => {
+  apply(
+    db,
+    [
+      { eid, name: 'doc', comp: { title: '', body } },
+      { eid, name: 'comment', comp: { target } },
+      { eid, name: 'review', comp: { verdict } },
+    ],
+    undefined,
+    reviewer,
+  )
+  db.prepare(
+    `update created set at = ?
+      where entity = (select id from entity where eid = ?)`,
+  ).run(at, eid)
+  return eid
+}
+
+let workVerifier = (
+  db: ReturnType<typeof bareDb>,
+  target: string,
+  at: string,
+  status: string | null,
+) => {
+  let eid = uuid()
+  apply(db, [
+    {
+      eid,
+      name: 'session',
+      comp: { id: uuid(), requested_task: target },
+    },
+    { eid, name: 'verifier', comp: {} },
+  ])
+  db.prepare(
+    `update created set at = ?
+      where entity = (select id from entity where eid = ?)`,
+  ).run(at, eid)
+  db.prepare(
+    `update session set status = ?
+      where entity = (select id from entity where eid = ?)`,
+  ).run(status, eid)
+  return eid
+}
 
 let world = () => {
   let db = bareDb()
@@ -489,7 +576,7 @@ Deno.test('work lanes reject direct and dotted quarantine reveal filters', async
     { eid: hidden, name: 'quarantined', comp: {} },
   ])
   assertEquals(evalGraph(db, '.quarantined!').hits.map((r) => r.eid), [hidden])
-  for (let lane of ['evaluate', 'build'] as const) {
+  for (let lane of ['evaluate', 'build', 'verify'] as const) {
     for (let filter of ['.quarantined!', '.task.project.quarantined!']) {
       let filters = [...workFilters(lane), filter]
       assertThrows(
@@ -708,9 +795,255 @@ Deno.test('authorization sources are capped and say when truncated', async () =>
   assert(found.authorization!.from.every((id) => /^T-\d+$/.test(id)))
 })
 
+Deno.test('verify lane has exact VERIFY_PENDING membership across review and verifier states', () => {
+  let db = bareDb()
+  let P = uuid(), reviewer = uuid(), muted = uuid()
+  apply(db, [
+    { eid: P, name: 'doc', comp: { title: 'Verification', body: '' } },
+    { eid: P, name: 'project', comp: {} },
+    { eid: reviewer, name: 'session', comp: { id: uuid() } },
+    { eid: muted, name: 'doc', comp: { title: 'Muted', body: '' } },
+    { eid: muted, name: 'project', comp: {} },
+    { eid: muted, name: 'noverify', comp: {} },
+  ])
+  let made: string[] = []
+  let add = (title: string, at: string, project = P, accept?: string) => {
+    let found = completedTask(db, project, title, at, accept)
+    made.push(found.eid)
+    return found
+  }
+  let pending = add('No review', '2026-01-01T00:00:00.000Z')
+  let approved = add('Approved', '2026-01-02T00:00:00.000Z')
+  workReview(
+    db,
+    approved.eid,
+    reviewer,
+    'approved',
+    '2026-01-02T01:00:00.000Z',
+  )
+  let rejected = add('Rejected', '2026-01-03T00:00:00.000Z')
+  workReview(
+    db,
+    rejected.eid,
+    reviewer,
+    'rejected',
+    '2026-01-03T01:00:00.000Z',
+  )
+  let changes = add('Changes', '2026-01-04T00:00:00.000Z')
+  workReview(
+    db,
+    changes.eid,
+    reviewer,
+    'changes_requested',
+    '2026-01-04T01:00:00.000Z',
+  )
+  let empty = add('Empty evidence', '2026-01-05T00:00:00.000Z')
+  workReview(
+    db,
+    empty.eid,
+    reviewer,
+    'approved',
+    '2026-01-05T01:00:00.000Z',
+    '\u2003\ufeff',
+  )
+  let self = add('Self review', '2026-01-06T00:00:00.000Z')
+  workReview(
+    db,
+    self.eid,
+    self.builder,
+    'approved',
+    '2026-01-06T01:00:00.000Z',
+  )
+  let stale = add('Stale review', '2026-01-07T00:00:00.000Z')
+  workReview(
+    db,
+    stale.eid,
+    reviewer,
+    'approved',
+    '2026-01-06T23:00:00.000Z',
+  )
+  let active = add('Active verifier', '2026-01-08T00:00:00.000Z')
+  workVerifier(db, active.eid, '2026-01-08T01:00:00.000Z', 'running')
+  let terminal = add('Terminal verifier', '2026-01-09T00:00:00.000Z')
+  workVerifier(db, terminal.eid, '2026-01-09T01:00:00.000Z', 'failed')
+  let noverify = add(
+    'Manual despite noverify',
+    '2026-01-10T00:00:00.000Z',
+    muted,
+  )
+  let missing = add('Missing criteria', '2026-01-11T00:00:00.000Z', P, '')
+  let cancelled = add('Cancelled', '2026-01-12T00:00:00.000Z')
+  apply(db, [{
+    eid: cancelled.eid,
+    name: 'cancelled',
+    comp: { at: '2026-01-12T01:00:00.000Z' },
+  }])
+
+  let expected = made.filter((eid) => verificationPending(db, eid)).sort()
+  let actual = evalVerifyWork(db, workFilters('verify').join('&'), {
+    limit: 100,
+  }).map((r) => r.eid).sort()
+  assertEquals(actual, expected)
+  assertEquals(actual.includes(active.eid), false)
+  assertEquals(actual.includes(approved.eid), false)
+  assertEquals(actual.includes(noverify.eid), true)
+  assertEquals(actual.includes(missing.eid), false)
+  assertEquals(actual.includes(cancelled.eid), false)
+  for (let task of [pending, rejected, changes, empty, self, stale, terminal]) {
+    assertEquals(actual.includes(task.eid), true)
+  }
+})
+
+Deno.test('verify lane orders before LIMIT and projects bounded human evidence', async () => {
+  let db = bareDb()
+  let P = uuid(), reviewer = uuid()
+  apply(db, [
+    { eid: P, name: 'doc', comp: { title: 'Verify order', body: '' } },
+    { eid: P, name: 'project', comp: {} },
+    { eid: reviewer, name: 'session', comp: { id: uuid() } },
+  ])
+  let old = completedTask(
+    db,
+    P,
+    'Old pending',
+    '2026-01-01T00:00:00.000Z',
+    'x'.repeat(5000),
+  )
+  let review = workReview(
+    db,
+    old.eid,
+    reviewer,
+    'rejected',
+    '2026-01-01T01:00:00.000Z',
+    'y'.repeat(5001),
+  )
+  let verifier = workVerifier(
+    db,
+    old.eid,
+    '2026-01-01T02:00:00.000Z',
+    'failed',
+  )
+  // A filtered prefix full of newer approved work cannot starve an older
+  // pending candidate: VERIFY_PENDING screens before LIMIT.
+  for (let i = 0; i < 125; i++) {
+    let done = completedTask(
+      db,
+      P,
+      `Approved ${i}`,
+      `2026-02-${String((i % 27) + 1).padStart(2, '0')}T00:00:00.000Z`,
+    )
+    workReview(
+      db,
+      done.eid,
+      reviewer,
+      'approved',
+      `2026-03-${String((i % 27) + 1).padStart(2, '0')}T00:00:00.000Z`,
+    )
+  }
+  let [candidate] = await workCandidates(readFor(db), 'verify', { limit: 1 })
+  assertEquals(candidate.id, idOf(rowsFor(db, [old.eid])[0]))
+  assertEquals(candidate.accept, {
+    body: 'x'.repeat(4000),
+    truncated: true,
+  })
+  assertEquals(candidate.completed, {
+    at: '2026-01-01T00:00:00.000Z',
+    via: idOf(rowsFor(db, [old.builder])[0]),
+  })
+  assertEquals(candidate.review, {
+    id: idOf(rowsFor(db, [review])[0]),
+    verdict: 'rejected',
+    body: 'y'.repeat(4000),
+    truncated: true,
+    reviewer: idOf(rowsFor(db, [reviewer])[0]),
+    at: '2026-01-01T01:00:00.000Z',
+  })
+  assertEquals(candidate.verifier, {
+    id: idOf(rowsFor(db, [verifier])[0]),
+    status: 'failed',
+    at: '2026-01-01T02:00:00.000Z',
+    active: false,
+  })
+
+  let tie = '2026-04-01T00:00:00.000Z'
+  let a = completedTask(db, P, 'Tie A', tie)
+  let b = completedTask(db, P, 'Tie B', tie)
+  let tied = await workCandidates(readFor(db), 'verify', { limit: 2 })
+  let expected = rowsFor(db, [a.eid, b.eid])
+    .sort((x, y) => y.num - x.num).map(idOf)
+  assertEquals(tied.map((c) => c.id), expected)
+})
+
+Deno.test('verify evidence never reveals quarantined candidates or references', async () => {
+  let db = bareDb()
+  let P = uuid(), reviewer = uuid()
+  apply(db, [
+    { eid: P, name: 'doc', comp: { title: 'SECRET PROJECT', body: '' } },
+    { eid: P, name: 'project', comp: {} },
+    { eid: P, name: 'quarantined', comp: {} },
+    { eid: reviewer, name: 'session', comp: { id: 'SECRET REVIEWER' } },
+    { eid: reviewer, name: 'quarantined', comp: {} },
+  ])
+  let visible = completedTask(
+    db,
+    P,
+    'Visible candidate',
+    '2026-01-01T00:00:00.000Z',
+  )
+  apply(db, [{ eid: visible.builder, name: 'quarantined', comp: {} }])
+  let hiddenReview = workReview(
+    db,
+    visible.eid,
+    reviewer,
+    'rejected',
+    '2026-01-01T01:00:00.000Z',
+    'SECRET REVIEW',
+  )
+  apply(db, [{ eid: hiddenReview, name: 'quarantined', comp: {} }])
+  let hidden = completedTask(
+    db,
+    P,
+    'SECRET CANDIDATE',
+    '2026-01-02T00:00:00.000Z',
+  )
+  apply(db, [{ eid: hidden.eid, name: 'quarantined', comp: {} }])
+
+  let candidates = await workCandidates(readFor(db), 'verify', { limit: 20 })
+  assertEquals(candidates.length, 1)
+  assertEquals(candidates[0].title, 'Visible candidate')
+  assertEquals(candidates[0].project, undefined)
+  assertEquals(candidates[0].completed?.via, null)
+  assertEquals(candidates[0].review, undefined)
+  assertEquals(JSON.stringify(candidates).includes('SECRET'), false)
+})
+
+Deno.test('verify lane plan starts at completed_at with keyed evidence joins', async () => {
+  let db = bareDb()
+  let P = uuid()
+  apply(db, [
+    { eid: P, name: 'doc', comp: { title: 'Plan', body: '' } },
+    { eid: P, name: 'project', comp: {} },
+  ])
+  completedTask(db, P, 'Pending', '2026-01-01T00:00:00.000Z')
+  let built = verifyWorkSql(db, workFilters('verify').join('&'))
+  let plan = db.prepare(`explain query plan ${built.sql}`).all(
+    ...built.params,
+  ) as { detail: string }[]
+  let details = plan.map((row) => row.detail).join('\n')
+  assertMatch(details, /completed_at/)
+  assertMatch(details, /comment_target/)
+  assertMatch(details, /session_requested_task/)
+  assertEquals(plan.some((row) => row.detail == 'SCAN entity'), false)
+
+  // Drive the evidence projection too: its review and verifier walks must be
+  // keyed by the selected task set rather than component scans.
+  let [candidate] = await workCandidates(readFor(db), 'verify', { limit: 1 })
+  assertEquals(candidate.title, 'Pending')
+})
+
 Deno.test('lane membership queries compile to indexed component scans', () => {
   let w = world()
-  for (let lane of ['evaluate', 'build'] as const) {
+  for (let lane of ['evaluate', 'build', 'verify'] as const) {
     let built = where(parseQuery(workFilters(lane).join('&')))
     assert(built, lane)
     let plan = w.db.prepare(`explain query plan ${built.sql}`).all(

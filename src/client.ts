@@ -244,8 +244,27 @@ export let arm: {
 export type QueryOpts = {
   after?: number
   limit?: number
-  work?: 'evaluate' | 'build'
+  work?: 'evaluate' | 'build' | 'verify'
   recursive?: boolean
+}
+
+export type VerificationProjection = {
+  accept: { body: string; truncated: boolean }
+  completed: { at: string | null; via: string | null }
+  review?: {
+    id: string
+    verdict: 'approved' | 'rejected' | 'changes_requested'
+    body: string
+    truncated: boolean
+    reviewer: string | null
+    at: string
+  }
+  verifier?: {
+    id: string
+    status: string | null
+    at: string
+    active: boolean
+  }
 }
 
 export type WorkProjection = {
@@ -263,6 +282,7 @@ export type WorkProjection = {
     }[]
     truncated: boolean
   }
+  verification?: VerificationProjection
 }
 
 export let WORK_REFS_LIMIT = 20

@@ -497,9 +497,20 @@ let workLine = (candidate: WorkCandidate) => {
     : candidate.blockers.truncated
     ? ' · requires …'
     : ''
+  let verify = candidate.completed
+    ? ` · completed ${candidate.completed.at ?? 'unknown'}${
+      candidate.completed.via ? ` via ${candidate.completed.via}` : ''
+    }${
+      candidate.review
+        ? ` · review ${candidate.review.verdict}${
+          candidate.review.reviewer ? ` by ${candidate.review.reviewer}` : ''
+        }`
+        : ''
+    }`
+    : ''
   return `${candidate.id} ${candidate.kind}${
     scope ? ` ${scope}` : ''
-  } — ${candidate.title} · ${auth}${blockers}`
+  } — ${candidate.title} · ${auth}${blockers}${verify}`
 }
 
 let work = async (got: Got) => {

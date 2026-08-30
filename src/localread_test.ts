@@ -6,7 +6,7 @@
 // tier below, beside the proof that the armed CLI needs no listener at all.
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { armLocal, armPath, disarm, guarded } from './localread.ts'
-import { arm } from './client.ts'
+import { arm, type WorkProjection } from './client.ts'
 import { slow } from './testing.ts'
 
 Deno.test('armPath: explicit DB_PATH names the file — local, host or not', () => {
@@ -112,6 +112,7 @@ slow(
     let db = open(path)
     let session = crypto.randomUUID(), item = crypto.randomUUID()
     let project = crypto.randomUUID(), candidate = crypto.randomUUID()
+    let verify = crypto.randomUUID()
     apply(db, [{ eid: session, name: 'session', comp: { id: session } }])
     apply(
       db,
@@ -126,10 +127,27 @@ slow(
         },
         { eid: candidate, name: 'task', comp: { priority: 1, project } },
         { eid: candidate, name: 'proposed', comp: {} },
+        { eid: verify, name: 'doc', comp: { title: 'local verify', body: '' } },
+        { eid: verify, name: 'task', comp: { priority: 1, project } },
+        { eid: verify, name: 'accept', comp: { body: 'Use the local door.' } },
       ],
       undefined,
       session,
     )
+    apply(
+      db,
+      [{
+        eid: verify,
+        name: 'completed',
+        comp: { at: '2026-01-01T00:00:00.000Z' },
+      }],
+      undefined,
+      session,
+    )
+    db.prepare(
+      `update completed set at = ?
+        where entity = (select id from entity where eid = ?)`,
+    ).run('2026-01-01T00:00:00.000Z', verify)
     record(db, {
       source: 'cli',
       name: 'localread-proof',
@@ -154,10 +172,24 @@ slow(
         items: [],
         truncated: false,
       })
+      let verifying = await query(['.kind=task'], {
+        work: 'verify',
+        limit: 1,
+      })
+      assertEquals(verifying[0].comps.doc?.title, 'local verify')
+      let projection = verifying[0].comps.work as unknown as WorkProjection
+      assertEquals(projection.verification?.accept, {
+        body: 'Use the local door.',
+        truncated: false,
+      })
       let found = await search('localread')
       assert(found.some((h) => h.eid == item))
       assertEquals((await history(item))[0].via, session)
-      assertEquals((await historyBy(session))[0].changes[0].eid, item)
+      assert(
+        (await historyBy(session)).some((tx) =>
+          tx.changes.some((change) => change.eid == item)
+        ),
+      )
       assertEquals(
         (await readTelemetry({ only: 'errors' }))[0].name,
         'localread-proof',

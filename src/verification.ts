@@ -11,9 +11,9 @@ let activeSql = `s.status is null or s.status in (${
 })`
 
 // One qualification and ordering sentence serves both the pending predicate
-// and review settlement. The latter must never reinterpret which review wins:
-// a delayed effect re-reads this exact query and acts only when its own review
-// is still the latest qualifying verdict for the current completion cycle.
+// review settlement, and worker evidence. A delayed effect re-reads this exact
+// query and acts only when its own review is still the latest qualifying
+// verdict for the current completion cycle.
 let reviewTables = `comment _vm
   join review _vr on _vr.entity = _vm.entity
   join entity _ve on _ve.id = _vr.entity
@@ -26,7 +26,13 @@ let reviewWhere = (target: string, at: string, via: string) => `
   and text_present(_vd.body)
   and _va.at > ${at}
   and _va.via != ${via}`
-let reviewOrder = `order by _va.at desc, _ve.eid desc limit 1`
+
+export let verificationReviewWhere = reviewWhere(
+  'task.entity',
+  '_vc.at',
+  '_vc.via',
+)
+export let verificationReviewOrder = `_va.at desc, _ve.eid desc`
 
 // Assumes the outer task table is named `task`. Review evidence is reached
 // through comment.target (indexed), and verifier attempts through
@@ -45,8 +51,9 @@ export let VERIFY_PENDING = `
       and coalesce((
         select _vr.verdict
           from ${reviewTables}
-         where ${reviewWhere('task.entity', '_vc.at', '_vc.via')}
-         ${reviewOrder}
+         where ${verificationReviewWhere}
+         order by ${verificationReviewOrder}
+         limit 1
       ), '') <> 'approved'
       and not exists (
         select 1 from session s
@@ -84,7 +91,8 @@ export let latestVerificationReview = (
        join task on task.entity = _vm.target
       where task.entity = (select id from entity where eid = ?)
         and ${reviewWhere('task.entity', '_vc.at', '_vc.via')}
-      ${reviewOrder}`,
+      order by ${verificationReviewOrder}
+      limit 1`,
   ).get(eid) as VerificationReview | undefined
 
 // Keyed current-cycle lookup used by every imperative spawn door. The caller

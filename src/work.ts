@@ -3,11 +3,16 @@
 // agents choosing work. Dispatch still owns spending, slots, providers, and
 // retry policy; this module owns only whether work is eligible and how a bounded
 // candidate envelope is assembled from indexed graph reads.
-import type { QueryOpts, Row, WorkProjection } from './client.ts'
+import type {
+  QueryOpts,
+  Row,
+  VerificationProjection,
+  WorkProjection,
+} from './client.ts'
 import { leafOf, parseQuery, type Pred } from './query.ts'
 import { type Dep, idOf, settled, statusOf } from './types.ts'
 
-export type WorkLane = 'evaluate' | 'build'
+export type WorkLane = 'evaluate' | 'build' | 'verify'
 
 // Work lanes are a public execution surface, never a moderation surface. A
 // quarantine predicate normally opts a graph query into hidden rows; reject it
@@ -71,6 +76,10 @@ export type WorkCandidate = {
       persona?: string
     }
   }
+  accept?: VerificationProjection['accept']
+  completed?: VerificationProjection['completed']
+  review?: VerificationProjection['review']
+  verifier?: VerificationProjection['verifier']
 }
 
 // A direct approval is the decided facet unless its explicit verdict says no.
@@ -298,13 +307,17 @@ let execution = (
 let LIMIT = 20
 
 export let workFilters = (lane: WorkLane, recursive = false) =>
-  lane == 'evaluate' ? ['.proposed!', '.decided='] : [
-    '.kind=task',
-    '.status=open',
-    ...recursive ? [] : ['.decided!'],
-    '.claim=',
-    '.blocked=',
-  ]
+  lane == 'evaluate'
+    ? ['.proposed!', '.decided=']
+    : lane == 'verify'
+    ? ['.kind=task']
+    : [
+      '.kind=task',
+      '.status=open',
+      ...recursive ? [] : ['.decided!'],
+      '.claim=',
+      '.blocked=',
+    ]
 
 // Candidate discovery is a bounded indexed query. Build readiness, recursive
 // authorization, filters, and priority/newest order settle in the database
@@ -334,7 +347,13 @@ export let workCandidates = async (
     ...hits,
     ...first,
   ]
-  let by = new Map(all.map((r) => [r.eid, r]))
+  // Work envelopes may name a reference, but they never reveal a quarantined
+  // reference's identity or content. Membership already excludes quarantined
+  // candidates in the database; this closes the same boundary around the
+  // bounded project/claim/persona hydration.
+  let by = new Map(
+    all.filter((r) => !r.comps.quarantined).map((r) => [r.eid, r]),
+  )
   return hits.slice(0, limit).map((r) => {
     let project = by.get(String(r.comps.task?.project ?? ''))
     let projection = r.comps.work as unknown as WorkProjection | undefined
@@ -365,6 +384,18 @@ export let workCandidates = async (
       claim: holder ? idOf(holder) : null,
       blocked: text(r.comps.blocked?.on) ?? null,
       blockers: projection?.blockers ?? { items: [], truncated: false },
+      ...(projection?.verification
+        ? {
+          accept: projection.verification.accept,
+          completed: projection.verification.completed,
+          ...(projection.verification.review
+            ? { review: projection.verification.review }
+            : {}),
+          ...(projection.verification.verifier
+            ? { verifier: projection.verification.verifier }
+            : {}),
+        }
+        : {}),
       ...(() => {
         let hint = execution(r, project, by)
         return hint ? { execution: hint } : {}

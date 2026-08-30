@@ -79,7 +79,7 @@ let listSort = of(
       name,
     ) => [name, `-${name}`]),
 )
-let lane = of('lane', () => ['evaluate', 'build'])
+let lane = of('lane', () => ['evaluate', 'build', 'verify'])
 let transcriptOpts = [
   flag('--prose'),
   value('--seq', { name: 'range', test: /^\d*\.\.\d*$/ }, true),
@@ -167,17 +167,20 @@ export let manuals = declare({
   },
   work: {
     dots: 'filters',
-    about: 'list bounded evaluate or build candidates',
+    about: 'list bounded evaluate, build, or verify candidates',
     examples: [
       'task work evaluate',
       'task work build .project=P-19',
       'task work build --recursive --json',
+      'task work verify --json',
     ],
     detail: 'Evaluate is proposed and undecided, newest first. Build reuses ' +
       'managed dispatch readiness — approved, open, unclaimed, unblocked, ' +
       'and dependency-ready — but presents priority then newest. ' +
       '`--recursive` includes authorization inherited from an approved open ' +
-      'ancestor without crossing a pending proposal or declined decision.',
+      'ancestor without crossing a pending proposal or declined decision. ' +
+      'Verify is completed acceptance-bearing work awaiting an independent ' +
+      'approving review, newest completion first.',
     root: true,
     args: [arg('lane', lane), arg('filters', text, true, false)],
     opts: [value('--limit', num, true), flag('--recursive'), json],

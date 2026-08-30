@@ -23,6 +23,7 @@ import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { db } = await import('./live_db.ts')
+let { apply } = await import('./db.ts')
 let { append, settleGeneration, takeEntry } = await import('./entries.ts')
 
 // The server serves on import — the one heavy boot in this file. Every test
@@ -989,7 +990,7 @@ slow(
 )
 
 slow('query: work lanes refuse quarantine reveal filters', alone, async () => {
-  for (let lane of ['evaluate', 'build']) {
+  for (let lane of ['evaluate', 'build', 'verify']) {
     for (let filter of ['.quarantined!', '.task.project.quarantined!']) {
       let res = await fetch(
         `http://${U}/query?work=${lane}&${encodeURIComponent(filter)}`,
@@ -1002,6 +1003,58 @@ slow('query: work lanes refuse quarantine reveal filters', alone, async () => {
     }
   }
 })
+
+slow(
+  'query: verify work lane preserves HTTP projection parity',
+  alone,
+  async () => {
+    let project = uid(), builder = uid(), target = uid()
+    apply(db, [
+      { eid: project, name: 'doc', comp: { title: 'HTTP verify', body: '' } },
+      { eid: project, name: 'project', comp: {} },
+      { eid: builder, name: 'session', comp: { id: uid() } },
+      { eid: target, name: 'doc', comp: { title: 'HTTP candidate', body: '' } },
+      { eid: target, name: 'task', comp: { project } },
+      { eid: target, name: 'accept', comp: { body: 'Use HTTP.' } },
+    ])
+    apply(
+      db,
+      [{
+        eid: target,
+        name: 'completed',
+        comp: { at: '2099-01-01T00:00:00.000Z' },
+      }],
+      undefined,
+      builder,
+    )
+    db.prepare(
+      `update completed set at = ?
+      where entity = (select id from entity where eid = ?)`,
+    ).run('2099-01-01T00:00:00.000Z', target)
+
+    let res = await fetch(
+      `http://${U}/query?work=verify&limit=1&${
+        encodeURIComponent('.kind=task')
+      }`,
+    )
+    if (!res.ok) throw new Error(`verify work refused: ${await res.text()}`)
+    let [candidate] = await res.json() as {
+      entity: { eid: string }
+      work: {
+        verification: {
+          accept: { body: string; truncated: boolean }
+          completed: { via: string }
+        }
+      }
+    }[]
+    assertEquals(candidate.entity.eid, target)
+    assertEquals(candidate.work.verification.accept, {
+      body: 'Use HTTP.',
+      truncated: false,
+    })
+    assertStringIncludes(candidate.work.verification.completed.via, 'S-')
+  },
+)
 
 // `id=` is the door a lookup goes through — `task show T-3` and every
 // find()/need() in the CLI, which today open with a whole-graph snapshot to

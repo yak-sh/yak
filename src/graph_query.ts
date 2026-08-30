@@ -17,6 +17,7 @@ import {
   type Change,
   deaths,
   kindOf,
+  sessionActive,
   sessionOf,
   type Snapshot,
   statusOf,
@@ -39,6 +40,7 @@ import {
   entriesOf,
   entriesScan,
   epochOf,
+  human,
   locate,
   matching,
   reaching,
@@ -81,6 +83,12 @@ import {
   workReadyWhereSql,
   workRootsSql,
 } from './work.ts'
+import {
+  verificationArgs,
+  verificationReviewOrder,
+  verificationReviewWhere,
+  VERIFY_PENDING,
+} from './verification.ts'
 export { personaGraph, projectionGraph } from './persona_graph.ts'
 
 // A filter of only rankings — or of nothing at all — selects EVERY entity, and
@@ -654,6 +662,204 @@ export let evalDispatchWork = (
   return ids.map((r) => by.get(r.eid)).filter((r): r is Row => !!r)
 }
 
+// Verification is ordered by the fact workers are reviewing, not task
+// creation or priority. The completed_at index owns the walk, every optional
+// caller filter is screened in the materialized candidate set, and the
+// authoritative policy is applied before LIMIT.
+export let verifyWorkSql = (
+  db: DatabaseSync,
+  q: string,
+  opts: { limit?: number } = {},
+) => {
+  let base = workBase(db, q)
+  let limit = Math.max(1, Math.min(opts.limit ?? 20, 100))
+  return {
+    sql: `with filtered(eid) as materialized (${base.sql})
+      select entity.eid as eid
+        from completed indexed by completed_at
+        join task on task.entity = completed.entity
+        join entity on entity.id = task.entity
+        join filtered on filtered.eid = entity.eid
+       where ${VERIFY_PENDING}
+       order by completed.at desc, entity.num desc
+       limit ?`,
+    params: [...base.params, ...verificationArgs(), limit],
+  }
+}
+
+export let evalVerifyWork = (
+  db: DatabaseSync,
+  q: string,
+  opts: { limit?: number } = {},
+): Row[] => {
+  let built = verifyWorkSql(db, q, opts)
+  let ids = db.prepare(built.sql).all(...built.params) as { eid: string }[]
+  let by = new Map(rowsFor(db, ids.map((r) => r.eid)).map((r) => [r.eid, r]))
+  return ids.map((r) => by.get(r.eid)).filter((r): r is Row => !!r)
+}
+
+let WORK_TEXT_LIMIT = 4000
+
+type CompletionEvidence = {
+  task: string
+  at: string | null
+  builder: string | null
+  body: string
+  truncated: number
+}
+
+type ReviewEvidence = {
+  task: string
+  review: string | null
+  verdict: 'approved' | 'rejected' | 'changes_requested'
+  body: string
+  truncated: number
+  reviewer: string | null
+  at: string
+  position: number
+}
+
+type VerifierEvidence = {
+  task: string
+  verifier: string | null
+  status: string | null
+  at: string
+  position: number
+}
+
+// Evidence is read only for the already bounded candidate set. Text is cut in
+// SQLite, before it enters a row or transport, and every referenced entity is
+// screened for quarantine before its human id is formed. The review WHERE and
+// ordering are the same fragments VERIFY_PENDING uses.
+let workVerifications = (
+  db: DatabaseSync,
+  candidates: Row[],
+) => {
+  let ids = [...new Set(candidates.map((r) => r.eid))].slice(0, 100)
+  let out = new Map<string, WorkProjection['verification']>()
+  if (!ids.length) return out
+  let marks = ids.map(() => '?').join(',')
+  let completions = db.prepare(
+    `select owner.eid as task, completed.at as at,
+            case when builder_hidden.entity is null then builder.eid end
+              as builder,
+            substr(accept.body, 1, ?) as body,
+            length(accept.body) > ? as truncated
+       from entity owner
+       join task on task.entity = owner.id
+       join accept on accept.entity = task.entity
+       join completed on completed.entity = task.entity
+       join session builder_session on builder_session.entity = completed.via
+       join entity builder on builder.id = builder_session.entity
+       left join quarantined builder_hidden
+         on builder_hidden.entity = builder.id
+      where owner.eid in (${marks})`,
+  ).all(WORK_TEXT_LIMIT, WORK_TEXT_LIMIT, ...ids) as CompletionEvidence[]
+
+  let reviews = db.prepare(
+    `with ranked as (
+       select owner.eid as task,
+              case when review_hidden.entity is null then _ve.eid end
+                as review,
+              _vr.verdict as verdict,
+              substr(_vd.body, 1, ?) as body,
+              length(_vd.body) > ? as truncated,
+              case when reviewer_hidden.entity is null then reviewer.eid end
+                as reviewer,
+              _va.at as at,
+              row_number() over (
+                partition by task.entity
+                order by ${verificationReviewOrder}
+              ) as position
+         from entity owner
+         join task on task.entity = owner.id
+         join completed _vc on _vc.entity = task.entity
+         join comment _vm indexed by comment_target
+           on _vm.target = task.entity
+         join review _vr on _vr.entity = _vm.entity
+         join entity _ve on _ve.id = _vr.entity
+         join doc_value _vd on _vd.entity = _vm.entity
+         join created _va on _va.entity = _vm.entity
+         join session _vs on _vs.entity = _va.via
+         join entity reviewer on reviewer.id = _vs.entity
+         left join quarantined review_hidden
+           on review_hidden.entity = _ve.id
+         left join quarantined reviewer_hidden
+           on reviewer_hidden.entity = reviewer.id
+        where owner.eid in (${marks})
+          and ${verificationReviewWhere}
+     )
+     select * from ranked where position = 1`,
+  ).all(WORK_TEXT_LIMIT, WORK_TEXT_LIMIT, ...ids) as ReviewEvidence[]
+
+  let verifiers = db.prepare(
+    `with ranked as (
+       select owner.eid as task,
+              case when verifier_hidden.entity is null then runner.eid end
+                as verifier,
+              s.status as status, _vz.at as at,
+              row_number() over (
+                partition by task.entity
+                order by _vz.at desc, runner.eid desc
+              ) as position
+         from entity owner
+         join task on task.entity = owner.id
+         join completed _vc on _vc.entity = task.entity
+         join session s indexed by session_requested_task
+           on s.requested_task = task.entity
+         join verifier v on v.entity = s.entity
+         join created _vz on _vz.entity = s.entity
+         join entity runner on runner.id = s.entity
+         left join quarantined verifier_hidden
+           on verifier_hidden.entity = runner.id
+        where owner.eid in (${marks})
+          and _vz.at > _vc.at
+     )
+     select * from ranked where position = 1`,
+  ).all(...ids) as VerifierEvidence[]
+
+  let reviewBy = new Map(reviews.map((r) => [r.task, r]))
+  let verifierBy = new Map(verifiers.map((r) => [r.task, r]))
+  for (let completion of completions) {
+    let review = reviewBy.get(completion.task)
+    let verifier = verifierBy.get(completion.task)
+    out.set(completion.task, {
+      accept: {
+        body: completion.body,
+        truncated: !!completion.truncated,
+      },
+      completed: {
+        at: completion.at,
+        via: completion.builder ? human(db, completion.builder) : null,
+      },
+      ...(review?.review
+        ? {
+          review: {
+            id: human(db, review.review),
+            verdict: review.verdict,
+            body: review.body,
+            truncated: !!review.truncated,
+            reviewer: review.reviewer ? human(db, review.reviewer) : null,
+            at: review.at,
+          },
+        }
+        : {}),
+      ...(verifier?.verifier
+        ? {
+          verifier: {
+            id: human(db, verifier.verifier),
+            status: verifier.status,
+            at: verifier.at,
+            active: verifier.status == null ||
+              sessionActive.includes(verifier.status),
+          },
+        }
+        : {}),
+    })
+  }
+  return out
+}
+
 // A candidate summary needs names for a bounded number of unresolved direct
 // dependencies, not every endpoint on a high-fanout task. The parent and child
 // indexes answer this one scoped window per parent; CAP+1 proves truncation,
@@ -763,7 +969,7 @@ let workAuthorizations = (
   return out
 }
 
-// Both public work lanes return ordinary rows plus one transient `work`
+// Every public work lane returns ordinary rows plus one transient `work`
 // projection. The projection is assembled beside SQLite in one local read, so
 // HTTP, MCP stdio, and an armed CLI share quarantine screening and never walk
 // authorization depth over the transport.
@@ -771,7 +977,7 @@ export let evalWork = (
   db: DatabaseSync,
   q: string,
   opts: {
-    work: 'evaluate' | 'build'
+    work: 'evaluate' | 'build' | 'verify'
     limit?: number
     recursive?: boolean
   },
@@ -779,6 +985,8 @@ export let evalWork = (
   let limit = Math.max(1, Math.min(opts.limit ?? 20, 100))
   let hits = opts.work == 'build'
     ? evalBuildWork(db, q, { limit, recursive: opts.recursive })
+    : opts.work == 'verify'
+    ? evalVerifyWork(db, q, { limit })
     : (() => {
       workBase(db, q)
       return evalGraph(db, q, { limit }).hits
@@ -803,6 +1011,9 @@ export let evalWork = (
       ),
     ).filter((r) => !r.comps.quarantined).map((r) => [r.eid, r]),
   )
+  let verification = opts.work == 'verify'
+    ? workVerifications(db, hits)
+    : new Map<string, WorkProjection['verification']>()
   for (let row of hits) {
     let direct = !!row.comps.decided &&
       row.comps.decided.verdict != 'declined'
@@ -842,6 +1053,9 @@ export let evalWork = (
         }),
         truncated: set.truncated,
       },
+      ...(verification.get(row.eid)
+        ? { verification: verification.get(row.eid) }
+        : {}),
     }
     row.comps.work = projection as unknown as Record<string, unknown>
   }

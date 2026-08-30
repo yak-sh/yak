@@ -34,6 +34,7 @@ export let answers = (snap: Snapshot) => {
     let line = segs.filter((s) =>
       !s.startsWith('id=') && !s.startsWith('after=') &&
       !s.startsWith('limit=') &&
+      !s.startsWith('work=') && s != 'recursive=1' &&
       s != 'deps=1' && s != 'backlinks=1' && s != 'quarantined=1'
     ).join('&')
     // Same reading as the real doors: `id=` already selected, a remaining

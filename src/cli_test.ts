@@ -1556,6 +1556,68 @@ let busServer = () => fakeGraph(busGraph)
 
 let graphServer = (snap = graph) => fakeGraph(snap)
 
+slow(
+  'work verify prints the bounded candidate projection from HTTP',
+  async () => {
+    let target = 'bbbbbbbb-0000-4000-8000-000000000090'
+    let snap: Snapshot = {
+      changes: [
+        { eid: target, name: 'entity', comp: { eid: target, num: 90 } },
+        {
+          eid: target,
+          name: 'doc',
+          comp: { title: 'Verify from CLI', body: '' },
+        },
+        { eid: target, name: 'task', comp: { priority: 1 } },
+        { eid: target, name: 'accept', comp: { body: 'Use the CLI.' } },
+        {
+          eid: target,
+          name: 'completed',
+          comp: { at: '2026-01-01T00:00:00.000Z' },
+        },
+        {
+          eid: target,
+          name: 'work',
+          comp: {
+            blockers: { items: [], truncated: false },
+            verification: {
+              accept: { body: 'Use the CLI.', truncated: false },
+              completed: {
+                at: '2026-01-01T00:00:00.000Z',
+                via: 'S-89',
+              },
+            },
+          },
+        },
+      ],
+      deps: [],
+    }
+    let { server, seen, host } = graphServer(snap)
+    try {
+      let out = await new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          'work',
+          'verify',
+          '--json',
+        ],
+        clearEnv: true,
+        env: { TASKS_HOST: host },
+      }).output()
+      assertEquals(out.code, 0, text(out.stderr))
+      let [candidate] = JSON.parse(text(out.stdout))
+      assertEquals(candidate.id, 'T-90')
+      assertEquals(candidate.accept, { body: 'Use the CLI.', truncated: false })
+      assertEquals(candidate.completed.via, 'S-89')
+      assert(seen.some((path) => path.includes('work=verify')))
+    } finally {
+      await server.shutdown()
+    }
+  },
+)
+
 slow('task undo sends a named mutation through generic /apply', async () => {
   let eid = 'bbbbbbbb-0000-4000-8000-000000000091'
   let snap: Snapshot = {

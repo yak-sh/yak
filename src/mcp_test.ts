@@ -297,9 +297,10 @@ Deno.test('work_start bootstraps without a session id and resumes it', async () 
   })
 })
 
-Deno.test('work_list exposes bounded human-addressed evaluate and build lanes', async () => {
+Deno.test('work_list exposes bounded human-addressed evaluate, build, and verify lanes', async () => {
   let { db, io } = graph()
   let project = uuid(), old = uuid(), fresh = uuid(), pending = uuid()
+  let builder = uuid(), verify = uuid()
   apply(db, [
     { eid: project, name: 'doc', comp: { title: 'Work project', body: '' } },
     { eid: project, name: 'project', comp: {} },
@@ -312,7 +313,25 @@ Deno.test('work_list exposes bounded human-addressed evaluate and build lanes', 
     { eid: pending, name: 'doc', comp: { title: 'Newest proposal', body: '' } },
     { eid: pending, name: 'design', comp: {} },
     { eid: pending, name: 'proposed', comp: {} },
+    { eid: builder, name: 'session', comp: { id: uuid() } },
+    { eid: verify, name: 'doc', comp: { title: 'Verify this', body: '' } },
+    { eid: verify, name: 'task', comp: { priority: 1, project } },
+    { eid: verify, name: 'accept', comp: { body: 'Run the public door.' } },
   ])
+  apply(
+    db,
+    [{
+      eid: verify,
+      name: 'completed',
+      comp: { at: '2026-01-01T00:00:00.000Z' },
+    }],
+    undefined,
+    builder,
+  )
+  db.prepare(
+    `update completed set at = ?
+      where entity = (select id from entity where eid = ?)`,
+  ).run('2026-01-01T00:00:00.000Z', verify)
   await protocol(io, async (client) => {
     let built = await client.callTool({
       name: 'work_list',
@@ -334,6 +353,18 @@ Deno.test('work_list exposes bounded human-addressed evaluate and build lanes', 
     assertMatch(proposal.id, /^D-\d+$/)
     assertEquals(proposal.title, 'Newest proposal')
     assertEquals(proposal.decision, 'pending')
+
+    let verified = await client.callTool({
+      name: 'work_list',
+      arguments: { lane: 'verify' },
+    }) as ToolResult
+    let [awaiting] = JSON.parse(said(verified))
+    assertEquals(awaiting.title, 'Verify this')
+    assertEquals(awaiting.accept, {
+      body: 'Run the public door.',
+      truncated: false,
+    })
+    assertMatch(awaiting.completed.via, /^S-\d+$/)
   })
 })
 
@@ -388,7 +419,7 @@ Deno.test('task_claim uses the guarded writer mutation and can approve atomicall
 Deno.test('work_list refuses quarantine reveal filters', async () => {
   let { io } = graph()
   await protocol(io, async (client) => {
-    for (let lane of ['evaluate', 'build']) {
+    for (let lane of ['evaluate', 'build', 'verify']) {
       for (let filter of ['.quarantined!', '.task.project.quarantined!']) {
         let result = await client.callTool({
           name: 'work_list',
@@ -774,7 +805,8 @@ slow(
   async () => {
     let dir = await Deno.makeTempDir()
     let path = `${dir}/graph.db`
-    let eid = crypto.randomUUID()
+    let eid = crypto.randomUUID(), verify = crypto.randomUUID()
+    let builder = crypto.randomUUID()
     let writer = open(path)
     apply(writer, [
       {
@@ -784,7 +816,25 @@ slow(
       },
       { eid, name: 'task', comp: {} },
       { eid, name: 'decided', comp: {} },
+      { eid: builder, name: 'session', comp: { id: crypto.randomUUID() } },
+      { eid: verify, name: 'doc', comp: { title: 'stdio verify', body: '' } },
+      { eid: verify, name: 'task', comp: {} },
+      { eid: verify, name: 'accept', comp: { body: 'Use stdio.' } },
     ])
+    apply(
+      writer,
+      [{
+        eid: verify,
+        name: 'completed',
+        comp: { at: '2026-01-01T00:00:00.000Z' },
+      }],
+      undefined,
+      builder,
+    )
+    writer.prepare(
+      `update completed set at = ?
+        where entity = (select id from entity where eid = ?)`,
+    ).run('2026-01-01T00:00:00.000Z', verify)
     let expected = await localQuery(writer)(['.title~=stdio local'])
     let id = idOf(expected[0])
     writer.close()
@@ -838,6 +888,12 @@ slow(
           arguments: { lane: 'build', limit: 1 },
         }) as ToolResult
         assertEquals(JSON.parse(said(work))[0].title, 'stdio local proof')
+
+        let verifying = await client.callTool({
+          name: 'work_list',
+          arguments: { lane: 'verify', limit: 1 },
+        }) as ToolResult
+        assertEquals(JSON.parse(said(verifying))[0].title, 'stdio verify')
 
         let found = await client.callTool({
           name: 'search',
@@ -1188,7 +1244,7 @@ Deno.test('MCP schemas document parameters and derive closed vocabularies', asyn
     assertEquals(schema(start).required?.includes('session') ?? false, false)
 
     let work = byName(tools, 'work_list')
-    assertEquals(prop(work, 'lane')?.enum, ['evaluate', 'build'])
+    assertEquals(prop(work, 'lane')?.enum, ['evaluate', 'build', 'verify'])
     assert(prop(work, 'lane')?.description)
     assert(prop(work, 'limit')?.description)
 
