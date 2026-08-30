@@ -372,6 +372,26 @@ Deno.test('work_list exposes bounded human-addressed evaluate, build, and verify
       truncated: false,
     })
     assertMatch(awaiting.completed.via, /^S-\d+$/)
+
+    for (
+      let filters of [
+        ['.completed!'],
+        ['.completed.at!'],
+        ['.completed.at>=2025-01-01'],
+        ['.completed.at=2026-01-01..2026-01-02'],
+      ]
+    ) {
+      let filtered = await client.callTool({
+        name: 'work_list',
+        arguments: { lane: 'verify', filters },
+      }) as ToolResult
+      assertEquals(JSON.parse(said(filtered))[0], awaiting, filters[0])
+    }
+    let absent = await client.callTool({
+      name: 'work_list',
+      arguments: { lane: 'verify', filters: ['.completed='] },
+    }) as ToolResult
+    assertEquals(JSON.parse(said(absent)), [])
   })
 })
 

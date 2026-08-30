@@ -977,6 +977,29 @@ Deno.test('verify lane orders before LIMIT and projects bounded human evidence',
   assertEquals(tied.map((c) => c.id), expected)
 })
 
+Deno.test('verify filters reuse the driving completed row exactly', async () => {
+  let db = bareDb()
+  let P = uuid()
+  apply(db, [
+    { eid: P, name: 'doc', comp: { title: 'Completed filters', body: '' } },
+    { eid: P, name: 'project', comp: {} },
+  ])
+  let old = completedTask(db, P, 'Old', '2026-01-01T12:00:00.000Z')
+  let fresh = completedTask(db, P, 'Fresh', '2026-01-03T12:00:00.000Z')
+  let ids = (filters: string[]) =>
+    workCandidates(readFor(db), 'verify', { filters, limit: 20 }).then((rows) =>
+      rows.map((row) => row.id)
+    )
+  let oldId = idOf(rowsFor(db, [old.eid])[0])
+  let freshId = idOf(rowsFor(db, [fresh.eid])[0])
+
+  assertEquals(await ids(['.completed!']), [freshId, oldId])
+  assertEquals(await ids(['.completed=']), [])
+  assertEquals(await ids(['.completed.at!']), [freshId, oldId])
+  assertEquals(await ids(['.completed.at>=2026-01-02']), [freshId])
+  assertEquals(await ids(['.completed.at=2026-01-01..2026-01-02']), [oldId])
+})
+
 Deno.test('verify evidence never reveals quarantined candidates or references', async () => {
   let db = bareDb()
   let P = uuid(), reviewer = uuid()

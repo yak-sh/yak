@@ -1117,6 +1117,30 @@ slow(
         .test(json),
       false,
     )
+
+    for (
+      let filter of [
+        '.completed!',
+        '.completed.at!',
+        '.completed.at>=2098-01-01',
+        '.completed.at=2099-01-01..2099-01-02',
+      ]
+    ) {
+      let filtered = await fetch(
+        `http://${U}/query?work=verify&limit=1&${encodeURIComponent(filter)}`,
+      )
+      if (!filtered.ok) {
+        throw new Error(`${filter} refused: ${await filtered.text()}`)
+      }
+      assertEquals(await filtered.json(), candidates, filter)
+    }
+    let absent = await fetch(
+      `http://${U}/query?work=verify&limit=1&${
+        encodeURIComponent('.completed=')
+      }`,
+    )
+    if (!absent.ok) throw new Error(await absent.text())
+    assertEquals(await absent.json(), [])
   },
 )
 

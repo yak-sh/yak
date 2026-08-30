@@ -682,7 +682,7 @@ export let verifyWorkSql = (
   q: string,
   opts: { limit?: number } = {},
 ) => {
-  let screen = screenSql(workInputs(db, q), ['task'])
+  let screen = screenSql(workInputs(db, q), ['task', 'completed'])
   if (!screen) {
     throw new Error(
       'work filter cannot be answered exactly by indexed SQL; use a scalar ' +
