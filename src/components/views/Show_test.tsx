@@ -9,6 +9,32 @@ import { resolve } from '../registry.ts'
 import { mount } from '../mount.ts'
 import '../Entity.tsx'
 
+Deno.test('task acceptance is a distinct Markdown section', () => {
+  cache.value = {
+    task: {
+      entity: { eid: 'task', num: 1 },
+      doc: { eid: 'task', title: 'Ship it', body: 'Implementation notes' },
+      task: { eid: 'task', priority: 1 },
+      accept: { eid: 'task', body: '- exits zero' },
+    },
+  }
+  let e = ent('task')
+  let { root, free } = mount(h(resolve(e, 'Acceptance').Render, { e }))
+  try {
+    assertEquals(
+      root.querySelector('.Show_AcceptanceTitle')?.textContent,
+      'Acceptance',
+    )
+    assertEquals(
+      root.querySelector('.Show_AcceptanceBody li')?.textContent,
+      'exits zero',
+    )
+  } finally {
+    free()
+    cache.value = {}
+  }
+})
+
 Deno.test('document meta paints no tally when it has no comments', () => {
   cache.value = {
     doc: {

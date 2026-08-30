@@ -46,6 +46,11 @@ Deno.test('indexesFor merges declarations with auto-derived ref indexes', () => 
   assertEquals(indexesFor('comment'), [{ cols: ['target'] }])
   // A comp with neither declaration nor ref has no index.
   assertEquals(indexesFor('doc'), [])
+  assertEquals(indexesFor('completed'), [
+    { cols: ['at'] },
+    { cols: ['by'] },
+    { cols: ['via'] },
+  ])
 })
 
 // The invariant that makes the acceptance hold: every {eid} reference in the
@@ -61,7 +66,9 @@ Deno.test('every {eid} ref yields exactly one single-column index', () => {
     ])
   ) {
     for (let i of indexesFor(c)) {
-      if (i.cols.length == 1) single.add(`${c}.${i.cols[0]}`)
+      if (i.cols.length == 1 && isRef(c, i.cols[0])) {
+        single.add(`${c}.${i.cols[0]}`)
+      }
     }
   }
   assertEquals(single, new Set(refCols.map(([c, p]) => `${c}.${p}`)))
@@ -101,7 +108,10 @@ Deno.test('indexes map matches the db and dependency plans use both ends', () =>
       let cols = (d.prepare(`pragma index_info("${ix.name}")`).all() as {
         name: string
       }[]).map((c) => c.name)
-      if (cols.length == 1 && !isRef(t, cols[0])) continue // hand-DDL exception
+      let declared = (indexes[t] ?? []).some((i) =>
+        i.cols.length == 1 && i.cols[0] == cols[0]
+      )
+      if (cols.length == 1 && !isRef(t, cols[0]) && !declared) continue
       let key = `${t}|${cols.join(',')}`
       live.set(key, (live.get(key) ?? false) || !!ix.unique)
     }
@@ -118,6 +128,7 @@ Deno.test('indexes map matches the db and dependency plans use both ends', () =>
     'x',
     'x',
   )
+  let newest = plan('select * from completed order by at desc limit 1')
   d.close()
 
   let declared = new Map<string, boolean>()
@@ -141,4 +152,5 @@ Deno.test('indexes map matches the db and dependency plans use both ends', () =>
   assertEquals(parent.some((x) => x.includes('SCAN dependency')), false)
   assertEquals(child.some((x) => x.includes('dependency_child')), true)
   assertEquals(death.some((x) => x.includes('SCAN dependency')), false)
+  assertEquals(newest.some((x) => x.includes('completed_at')), true)
 })

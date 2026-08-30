@@ -998,6 +998,7 @@ let schema = `
 // every column it declares.
 export let derived = [
   'project',
+  'accept',
   'venture',
   'board',
   'layout',

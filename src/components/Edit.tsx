@@ -61,7 +61,7 @@ export let Edit = (
 
   useEffect(() => {
     let t = ref.current
-    if (unloaded) return void want(eid)
+    if (unloaded) return void want(eid, comp, prop)
     if (!t || t.isContentEditable) return
     let d = peek(dkey) // a draft only exists mid-edit: resume it
     if (!open && !d) return

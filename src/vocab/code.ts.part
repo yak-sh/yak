@@ -270,6 +270,10 @@ export type Task = {
   domain?: string | null
 }
 
+// Acceptance criteria are their own deferred Markdown body, distinct from the
+// task's narrative and from the review that records a verdict.
+export type Accept = { eid: string; body?: string }
+
 // A tag: "this doc fronts a project" (a venture, a workstream). Its name
 // is its doc.title — one naming mechanism, no drift. An archived project is
 // over — kept, referenceable, sunk in every ranking.
@@ -1000,6 +1004,7 @@ export type EntCore = {
   design?: { eid: string }
   architecture?: { eid: string }
   task?: Task
+  accept?: Accept
   project?: ProjectTag
   venture?: Venture
   role?: Role

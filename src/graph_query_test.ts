@@ -304,6 +304,27 @@ Deno.test('a body substring on a NON-doc body still answers over the partition',
   db.close()
 })
 
+Deno.test('accept.body filters tasks through the ordinary query door', () => {
+  let db = freshDb()
+  let matching = uuid(), other = uuid()
+  for (
+    let [eid, body] of [[matching, 'the command exits zero'], [
+      other,
+      'manual check',
+    ]]
+  ) {
+    apply(db, [
+      { eid, name: 'doc', comp: { title: eid } },
+      { eid, name: 'task', comp: {} },
+      { eid, name: 'accept', comp: { body } },
+    ])
+  }
+  let hits = evalGraph(db, '.task!&.accept.body~=exits zero').hits
+  assertEquals(hits.map((r) => r.eid), [matching])
+  assertEquals(hits[0].comps.accept?.body, 'the command exits zero')
+  db.close()
+})
+
 Deno.test('an empty result means the scope is empty, never a dropped partition', () => {
   let { db, a, b } = world()
   assertEquals(evalGraph(db, `.entry.session=${b}`).hits, []) // real, empty

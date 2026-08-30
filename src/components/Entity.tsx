@@ -5,6 +5,7 @@ import { type Action, define, defineActions, has, resolve } from './registry.ts'
 import { shelve } from './shelf.ts'
 import { memo } from './memo.ts'
 import {
+  Acceptance,
   Boards,
   Body,
   CardFull,
@@ -198,6 +199,7 @@ define([
   // absent, and a specialized look for an entity shape is a higher-
   // scoring entry above these, never an edit to Full.
   { view: 'Body', match: () => true, Render: Body },
+  { view: 'Acceptance', match: has('accept'), Render: Acceptance },
   { view: 'Meta', match: has('board'), Render: BoardMeta },
   { view: 'Meta', match: () => true, Render: Meta },
   { view: 'Mail', match: () => true, Render: Mail },

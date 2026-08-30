@@ -764,6 +764,10 @@ pub static SCHEMA: &[SchemaOp] = &[
     entity integer primary key references entity(id),
     "color" text
   );"#),
+    SchemaOp::Exec(r#"create table if not exists "accept" (
+    entity integer primary key references entity(id),
+    "body" text
+  );"#),
     SchemaOp::Exec(r#"create table if not exists "venture" (
     entity integer primary key references entity(id),
     "phase" text,
@@ -923,6 +927,7 @@ pub static SCHEMA: &[SchemaOp] = &[
     "from" integer references entity(id)
   );"#),
     SchemaOp::AddColumn { table: "project", col: "color", sql: r#"alter table project add column "color" text"# },
+    SchemaOp::AddColumn { table: "accept", col: "body", sql: r#"alter table accept add column "body" text"# },
     SchemaOp::AddColumn { table: "venture", col: "phase", sql: r#"alter table venture add column "phase" text"# },
     SchemaOp::AddColumn { table: "venture", col: "paused_from", sql: r#"alter table venture add column "paused_from" text"# },
     SchemaOp::AddColumn { table: "venture", col: "hold_from", sql: r#"alter table venture add column "hold_from" text"# },
@@ -1097,6 +1102,7 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::Exec(r#"create index if not exists quarantined_by on "quarantined" ("by");"#),
     SchemaOp::Exec(r#"create index if not exists quarantined_via on "quarantined" ("via");"#),
     SchemaOp::Exec(r#"create index if not exists deliver_to on "deliver" ("to");"#),
+    SchemaOp::Exec(r#"create index if not exists completed_at on "completed" ("at");"#),
     SchemaOp::Exec(r#"create index if not exists completed_by on "completed" ("by");"#),
     SchemaOp::Exec(r#"create index if not exists completed_via on "completed" ("via");"#),
     SchemaOp::Exec(r#"create index if not exists cancelled_by on "cancelled" ("by");"#),

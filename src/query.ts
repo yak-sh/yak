@@ -307,9 +307,10 @@ let sessionTwin = (owners: string[]) =>
 
 // Component columns that never claim their BARE prop spelling — an established
 // bare filter of a different concept already owns it, so the newcomer is
-// reached only through its component (`.fork.from`). `fork.from` (the fork-
-// point entry) yields bare `.from` to the shipped `mail.from` sender filter.
-let bareShy = new Set(['fork.from'])
+// reached only through its component (`.fork.from`, `.accept.body`). The fork
+// point yields bare `.from` to mail's sender; acceptance criteria yield bare
+// `.body` to the shipped doc-body filter.
+let bareShy = new Set(['fork.from', 'accept.body'])
 
 // These associations already had one bare filter across several suffixed
 // columns. Keep that reading after the columns take their canonical names;

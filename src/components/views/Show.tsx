@@ -45,6 +45,9 @@ let Frame = block('div', 'Show', {
   Heading: 'h1',
   Title: 'span',
   Body: 'p',
+  Acceptance: 'section',
+  AcceptanceTitle: 'h2',
+  AcceptanceBody: 'div',
   Claim: 'a',
   Domain: 'span',
   Project: 'a',
@@ -72,6 +75,9 @@ let {
   Heading,
   Title,
   Body: BodyEl,
+  Acceptance: AcceptanceEl,
+  AcceptanceTitle,
+  AcceptanceBody,
   Claim,
   Domain,
   Project,
@@ -309,6 +315,40 @@ export let Body = ({ e, mod }: { e: Ent; mod?: string }) => {
         repo={repoUrl(e)}
       />
     )
+}
+
+// Acceptance criteria are a second document-shaped facet, not part of the
+// task narrative. Whole-entity views carry bodies, so the same Markdown/source
+// editing seam as doc.body keeps the criteria legible and editable.
+export let Acceptance = ({ e }: { e: Ent }) => {
+  let [src, setSrc] = useState(false)
+  if (!e.accept) return null
+  return (
+    <AcceptanceEl>
+      <AcceptanceTitle>Acceptance</AcceptanceTitle>
+      {src
+        ? (
+          <AcceptanceBody>
+            <Edit
+              eid={e.eid}
+              comp='accept'
+              prop='body'
+              multi
+              open
+              onClose={() => setSrc(false)}
+            />
+          </AcceptanceBody>
+        )
+        : (
+          <Markdown
+            as={AcceptanceBody}
+            onDblClick={() => setSrc(true)}
+            text={e.accept.body ?? ''}
+            repo={repoUrl(e)}
+          />
+        )}
+    </AcceptanceEl>
+  )
 }
 
 // The reversed sentences: how each edge below reads from the child's side.
@@ -629,6 +669,7 @@ export let Talkback = ({ e }: { e: Ent }) => <Comments eid={e.eid} />
 // The section stack, walked by both faces — change the order here,
 // every doc-carrying entity follows.
 let stack = [
+  'Acceptance',
   'Dependencies',
   'Relate',
   'Boards',

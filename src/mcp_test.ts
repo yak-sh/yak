@@ -1357,6 +1357,7 @@ slow('MCP modes apply every accepted field and reject conflicts', async () => {
             '.title=Param title',
             '.body=Param body',
             '.status=open',
+            '.accept.body=exits zero',
             '.proposed.at=2026-08-01T00:00:00.000Z',
           ],
         },
@@ -1367,6 +1368,7 @@ slow('MCP modes apply every accepted field and reject conflicts', async () => {
       )
       assertEquals(made?.comps.doc?.body, 'Dedicated <body> & words')
       assertEquals(made?.comps.task?.status, 'done')
+      assertEquals(made?.comps.accept?.body, 'exits zero')
       assertEquals(made?.comps.proposed?.at, '2026-08-01T00:00:00.000Z')
 
       let sprawling = await client.callTool({

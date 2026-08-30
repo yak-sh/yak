@@ -70,6 +70,7 @@ Deno.test('the bodyless projection drops declared bodies, keeps the rest', () =>
       { eid: 'e1', name: 'entity', comp: { eid: 'e1', num: 7 } },
       { eid: 'e1', name: 'doc', comp: { title: 'hi', body: 'long' } },
       { eid: 'e1', name: 'task', comp: {} },
+      { eid: 'e1', name: 'accept', comp: { eid: 'e1', body: 'must pass' } },
       { eid: 'e1', name: 'session', comp: { status: 'done', final_text: 'x' } },
       { eid: 'e1', name: 'doc', comp: { body: 'the whole patch' } },
       { eid: 'e1', name: 'entity', comp: null },
@@ -78,6 +79,7 @@ Deno.test('the bodyless projection drops declared bodies, keeps the rest', () =>
       { eid: 'e1', name: 'entity', comp: { eid: 'e1', num: 7 } },
       { eid: 'e1', name: 'doc', comp: { title: 'hi' } },
       { eid: 'e1', name: 'task', comp: {} },
+      { eid: 'e1', name: 'accept', comp: { eid: 'e1' } },
       { eid: 'e1', name: 'session', comp: { status: 'done' } },
       // a patch that was only a body says nothing at all
       { eid: 'e1', name: 'entity', comp: null },

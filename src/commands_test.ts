@@ -104,6 +104,11 @@ Deno.test('basic card properties use the standard dot-param grammar', () => {
     doc: { title: 'Next step', body: '' },
     task: { priority: 2 },
   })
+  assertEquals(comps('task .title=Ship .accept.body=passes'), {
+    doc: { title: 'Ship', body: '' },
+    task: {},
+    accept: { body: 'passes' },
+  })
   assertEquals(comps('session .id=review'), { session: { id: 'review' } })
   assertEquals(comps('doc .title=Notes .body=some words'), {
     doc: { title: 'Notes', body: 'some words' },
@@ -434,6 +439,9 @@ Deno.test('set: the write grammar, routed and grouped', () => {
   assertEquals(comps('set .title=two words .status=wip', T), {
     doc: { title: 'two words' }, // params start at a dot: spaces survive
     task: { status: 'wip' },
+  })
+  assertEquals(comps('set .accept.body=passes', T), {
+    accept: { body: 'passes' },
   })
   assertEquals(run('set .status=done', ctx(T)).msg, 'T-4 .status=done')
   assertThrows(() => run('set .nope=1', ctx(T)), Error, 'unknown prop')

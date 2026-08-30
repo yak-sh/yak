@@ -632,27 +632,35 @@ slow('bodies ride only where a body is read', alone, async () => {
   let board = `board:${uid()}`
   let card = `card:${a.eid}`
   let client = await subscriber()
-  let doc = (sub: string) =>
-    client.carried(sub).filter((c) => c.eid == a.eid && c.name == 'doc')
+  let part = (sub: string, name: string) =>
+    client.carried(sub).filter((c) => c.eid == a.eid && c.name == name)
       .map((c) => c.comp!)
   try {
-    await post([...a.born, {
-      eid: a.eid,
-      name: 'doc',
-      comp: { body: 'the stored body' },
-    }])
+    await post([
+      ...a.born,
+      { eid: a.eid, name: 'doc', comp: { body: 'the stored body' } },
+      { eid: a.eid, name: 'accept', comp: { body: 'the acceptance body' } },
+    ])
     await client.open(board, q)
     await client.open(card, q)
-    assertEquals(doc(board).map((c) => 'body' in c), [false])
-    assertEquals(doc(card).map((c) => c.body), ['the stored body'])
+    assertEquals(part(board, 'doc').map((c) => 'body' in c), [false])
+    assertEquals(part(board, 'accept'), [{ eid: a.eid }])
+    assertEquals(part(card, 'doc').map((c) => c.body), ['the stored body'])
+    assertEquals(part(card, 'accept').map((c) => c.body), [
+      'the acceptance body',
+    ])
     // The title still rides on both: it is the shape, not the body.
-    assertEquals(doc(board).map((c) => 'title' in c), [true])
+    assertEquals(part(board, 'doc').map((c) => 'title' in c), [true])
 
     // A body EDIT is likewise the card's news and nothing to the board.
     await post([{ eid: a.eid, name: 'doc', comp: { body: 'a later body' } }])
     await client.settle()
-    assertEquals(doc(board).length, 1, 'no second doc change for the board')
-    assertEquals(doc(card).map((c) => c.body), [
+    assertEquals(
+      part(board, 'doc').length,
+      1,
+      'no second doc change for the board',
+    )
+    assertEquals(part(card, 'doc').map((c) => c.body), [
       'the stored body',
       'a later body',
     ])
@@ -661,7 +669,12 @@ slow('bodies ride only where a body is read', alone, async () => {
     // through the same subscription protocol and patch shape.
     let want = `want:${a.eid}`
     await client.open(want, `id=${a.eid}&.fields=doc.body`)
-    assertEquals(doc(want).map((c) => c.body), ['a later body'])
+    assertEquals(part(want, 'doc').map((c) => c.body), ['a later body'])
+    let accept = `accept:${a.eid}`
+    await client.open(accept, `id=${a.eid}&.fields=accept.body`)
+    assertEquals(part(accept, 'accept').map((c) => c.body), [
+      'the acceptance body',
+    ])
   } finally {
     client.close()
   }

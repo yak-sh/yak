@@ -3274,6 +3274,23 @@ Deno.test('showMd: frontmatter, edge sentences, claim holder, body', () => {
   assertMatch(back, /referenced by:\n {2}- T-2 \(wip\) — First · requires this/)
 })
 
+Deno.test('showMd exposes acceptance criteria as their own facet', () => {
+  let eid = 'bbbbbbbb-0000-4000-8000-000000000001'
+  let graph: Snapshot = {
+    changes: [
+      { eid, name: 'entity', comp: { eid, num: 41 } },
+      { eid, name: 'doc', comp: { title: 'Ship it', body: 'Build notes' } },
+      { eid, name: 'task', comp: {} },
+      { eid, name: 'accept', comp: { body: '- exits zero' } },
+    ],
+    deps: [],
+  }
+  let all = rows(graph)
+  let md = showMd(graph, all, all[0])
+  assertMatch(md, /accept:\n {2}body: - exits zero/)
+  assertMatch(md, /# Ship it\n\nBuild notes/)
+})
+
 Deno.test('provenance exposes actors, model settings, persona, and decisions', () => {
   let actor = crypto.randomUUID(), session = crypto.randomUUID()
   let persona = crypto.randomUUID(), task = crypto.randomUUID()

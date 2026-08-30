@@ -396,7 +396,7 @@ let card = (kind: typeof cardCommands[number]): Command => ({
     let ps = readParams(args, ctx)
     let grouped = typed?.grouped ?? patches(ps)
     let allowed = kind == 'task'
-      ? ['doc', 'task']
+      ? ['doc', 'task', 'accept']
       : kind == 'memory'
       ? ['doc', 'memory']
       : [kind]
@@ -417,6 +417,15 @@ let card = (kind: typeof cardCommands[number]): Command => ({
         name: 'session',
         comp: { id: uuid(), ...sessionDefaults(ctx), ...grouped.session },
       }]
+      : kind == 'task'
+      ? taskChanges(eid, {
+        ...grouped,
+        doc: {
+          title: typed?.title ?? '',
+          body: typed?.body ?? (explicit ? lines.join('\n').trim() : ''),
+          ...grouped.doc,
+        },
+      })
       : [
         {
           eid,
@@ -430,11 +439,8 @@ let card = (kind: typeof cardCommands[number]): Command => ({
         ...(kind == 'doc' ? [] : [{
           eid,
           name: kind,
-          // A new task is born open — no mark (D-24102). `status` is derived, not
-          // writable, so drop any adopted/typed status; the honest path is `done`.
-          comp: kind == 'task'
-            ? (({ status: _drop, ...task }) => task)(grouped.task ?? {})
-            : { scope: null, ...grouped.memory },
+          // An absent memory scope means fleet-wide, represented as null.
+          comp: { scope: null, ...grouped.memory },
         }]),
       ]
     return { changes, card: eid, msg: `new ${kind}` }

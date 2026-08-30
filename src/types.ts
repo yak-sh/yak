@@ -156,6 +156,9 @@ export let comps: Record<string, Record<string, PropType>> = {
     assignee: { eid: 'entity', death: 'detach' },
     domain: { text: 'domains' },
   },
+  accept: {
+    body: 'body',
+  },
   project: {
     color: 'text',
   },
@@ -551,6 +554,7 @@ export let indexes: Record<string, Idx[]> = {
   result: [{ cols: ['call'], unique: true }],
   subscription: [{ cols: ['actor', 'target'], unique: true }],
   chat: [{ cols: ['actor', 'target'], unique: true }],
+  completed: [{ cols: ['at'] }],
   effect: [{ cols: ['jrow', 'handler'], unique: true }],
 }
 
@@ -1148,6 +1152,10 @@ export type Task = {
   // picker derives its options from distinct values.
   domain?: string | null
 }
+
+// Acceptance criteria are their own deferred Markdown body, distinct from the
+// task's narrative and from the review that records a verdict.
+export type Accept = { eid: string; body?: string }
 
 // A tag: "this doc fronts a project" (a venture, a workstream). Its name
 // is its doc.title — one naming mechanism, no drift. An archived project is
@@ -1879,6 +1887,7 @@ export type EntCore = {
   design?: { eid: string }
   architecture?: { eid: string }
   task?: Task
+  accept?: Accept
   project?: ProjectTag
   venture?: Venture
   role?: Role

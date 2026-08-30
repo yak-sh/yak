@@ -1046,35 +1046,42 @@ let tell = (changes: Change[]) => {
 
 // Bodies ride only on the payloads that paint one entity whole (subs.ts
 // `bodied`), and a patch that names no body leaves none either — so a cached
-// doc can lack its body while the stored column holds one. The column
-// defaults to '', so an ABSENT body means UNLOADED, never empty: nothing may
-// render it as content or arm an editor over it, because a commit would write
-// a fragment over the stored body. want() is the other end: the answer lands
-// as an ordinary doc patch through applyLocal, which merges onto the cached
-// doc and keeps its title — exactly what a live body edit does.
+// component can lack its body while the stored column holds one. An ABSENT
+// body means UNLOADED, never empty: nothing may render it as content or arm an
+// editor over it, because a commit would write a fragment over the stored
+// body. want() is the other end: the requested body column lands as an ordinary
+// patch through applyLocal and merges onto the cached component — exactly what
+// a live body edit does.
 //
 // One trip per PAINT, not per element: a card and all its comments ask
 // within the same render, so the queue drains on the next turn and they
 // travel together.
 let asked = new Set<string>()
-let queue = new Set<string>()
+let queue = new Map<string, Set<string>>()
 let sweep = () => {
-  let eids = [...queue]
+  let wants = [...queue]
   queue.clear()
-  for (let eid of eids) {
-    asked.add(eid)
+  for (let [eid, fields] of wants) {
+    let keys = [...fields].map((field) => `${eid}\0${field}`)
+    for (let key of keys) asked.add(key)
+    let projection = [...fields].join(',')
     oneShot(
-      `want:${eid}`,
-      `id=${eid}&.fields=doc.body`,
+      projection == 'doc.body' ? `want:${eid}` : `want:${eid}:${projection}`,
+      `id=${eid}&.fields=${projection}`,
       () => {},
-      () => asked.delete(eid),
+      () => {
+        for (let key of keys) asked.delete(key)
+      },
     )
   }
 }
-export let want = (eid: string) => {
-  if (asked.has(eid) || queue.has(eid)) return
+export let want = (eid: string, comp = 'doc', prop = 'body') => {
+  let field = `${comp}.${prop}`
+  let key = `${eid}\0${field}`
+  if (asked.has(key) || queue.get(eid)?.has(field)) return
   if (!queue.size) setTimeout(sweep)
-  queue.add(eid)
+  let fields = queue.get(eid) ?? new Set<string>()
+  queue.set(eid, fields.add(field))
 }
 
 // Whether a view is still waiting on this entity's body — and ASKING is what

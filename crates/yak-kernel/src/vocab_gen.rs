@@ -19,6 +19,9 @@ pub(crate) fn baked() -> Vocab {
             ("assignee".into(), PropType::Eid("entity".into())),
             ("domain".into(), PropType::Well("domains".into())),
         ]),
+        ("accept".into(), vec![
+            ("body".into(), PropType::Body),
+        ]),
         ("project".into(), vec![
             ("color".into(), PropType::Text),
         ]),

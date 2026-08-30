@@ -106,6 +106,7 @@ fn create_produces_the_full_schema() {
         "claim",
         // derived component tables
         "project",
+        "accept",
         "board",
         "notice",
         "error",
@@ -123,7 +124,7 @@ fn create_produces_the_full_schema() {
     }
     // the bare index (guarded by name), a derived {eid} index, and the hand
     // edge-reverse index — all realized in the last pass.
-    for i in ["journal_touch_eid", "notice_target", "dependency_child"] {
+    for i in ["journal_touch_eid", "notice_target", "dependency_child", "completed_at"] {
         assert!(has(c, "index", i), "missing index {i}");
     }
     // an ALTER-added column and a derived column both land.
@@ -148,11 +149,18 @@ fn additive_migration_restores_the_old_shape() {
     let c = &ws.conn;
     let fresh = snapshot(c);
 
-    // regress to a db that predates the last hand column and a derived table.
-    c.execute_batch("alter table task drop column domain; drop table meta;").unwrap();
+    // regress to a db that predates the last hand column, the acceptance facet,
+    // and the completion-order index.
+    c.execute_batch(
+        "alter table task drop column domain; \
+         drop table accept; \
+         drop index completed_at;",
+    )
+    .unwrap();
     assert_ne!(snapshot(c), fresh, "the regression must change the schema");
     assert!(!has_col(c, "task", "domain"));
-    assert!(!has(c, "table", "meta"));
+    assert!(!has(c, "table", "accept"));
+    assert!(!has(c, "index", "completed_at"));
 
     apply_schema(c).unwrap();
     assert_eq!(snapshot(c), fresh, "migrate must restore the exact schema");

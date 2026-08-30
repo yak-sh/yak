@@ -42,6 +42,12 @@
     }
   },
   "comps": {
+    "accept": {
+      "rank": 21,
+      "cols": {
+        "body": "body"
+      }
+    },
     "architecture": {
       "rank": 110
     },
@@ -97,7 +103,14 @@
           "eid": "entity",
           "death": "keep"
         }
-      }
+      },
+      "indexes": [
+        {
+          "cols": [
+            "at"
+          ]
+        }
+      ]
     },
     "design": {
       "rank": 100,

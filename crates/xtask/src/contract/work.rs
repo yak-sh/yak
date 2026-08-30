@@ -1,7 +1,7 @@
 // The work plugin (D-22530 §8): tasks, projects/ventures, boards, designs —
 // the portfolio vocabulary.
 
-use yak_vocab::{Bool, Priority, Query, Ref, Sel, Text, Time, Url, Well};
+use yak_vocab::{Body, Bool, Priority, Query, Ref, Sel, Text, Time, Url, Well};
 use yak_vocab_derive::Comp;
 
 // The status vocabulary, in board-column order — now a DERIVED value, not a
@@ -48,6 +48,15 @@ struct Task {
     assignee: Ref,
     #[col(well = "domains")]
     domain: Well,
+}
+
+// The criteria a task must satisfy before an independent review can approve
+// its current completion. The review records the outcome; this facet owns only
+// the specification it judges.
+#[derive(Comp)]
+#[comp(plugin = "work", rank = 21)]
+struct Accept {
+    body: Body,
 }
 
 // color: the venture's tmux window colour; empty means DERIVE it.
@@ -127,6 +136,7 @@ struct Blocked {
 // after the fact); `via` is server-owned. Not in kindOrder: a task stays a task.
 #[derive(Comp)]
 #[comp(plugin = "work", rank = 971, stamped_rank = 350)]
+#[index(cols(at))]
 struct Completed {
     at: Time,
     #[col(eid = "entity", death = "keep")]

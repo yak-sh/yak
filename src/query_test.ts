@@ -258,6 +258,17 @@ Deno.test('query: bad tokens are loud, bare words are terms', () => {
   assertEquals(parseQuery('sandwich')[0].op, 'text') // a term, not an error
 })
 
+Deno.test('accept.body is qualified while bare body keeps meaning doc.body', () => {
+  assertEquals(route('body'), { comp: 'doc', prop: 'body' })
+  let accept = pred('.accept.body~=exits')!
+  assertEquals([accept.comp, accept.prop, accept.op, accept.value], [
+    'accept',
+    'body',
+    '~',
+    'exits',
+  ])
+})
+
 // A page address is the ordinary value that carries the separator, and
 // an unquoted one used to become a url pred plus a stray term matching
 // nothing — an empty badge that looked like a truthful "nothing here".

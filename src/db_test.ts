@@ -7,6 +7,7 @@ let {
   backfillLineage,
   backfillOpened,
   backfillVia,
+  bodies,
   componentCounts,
   connect,
   correct,
@@ -624,6 +625,27 @@ Deno.test('review: a comment carries one canonical verdict', () => {
     Error,
     "verdict is one of approved, rejected, changes_requested — got 'maybe'",
   )
+})
+
+Deno.test('accept: criteria round-trip on the wire and through body fetch', () => {
+  let d = fresh()
+  let t = uid()
+  apply(d, [
+    { eid: t, name: 'doc', comp: { title: 'ship it' } },
+    { eid: t, name: 'task', comp: {} },
+    { eid: t, name: 'accept', comp: { body: '- exits zero' } },
+  ])
+  assertEquals(eager(d, t).accept?.body, '- exits zero')
+  assertEquals(
+    snapshot(d).changes.find((c) => c.eid == t && c.name == 'accept')?.comp
+      ?.body,
+    '- exits zero',
+  )
+  assertEquals(
+    bodies(d, [t]).find((c) => c.name == 'accept'),
+    { eid: t, name: 'accept', comp: { eid: t, body: '- exits zero' } },
+  )
+  d.close()
 })
 
 // The write boundary must never let two comments collide on one identity
