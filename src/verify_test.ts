@@ -29,6 +29,7 @@ let {
 } = await import('./verification.ts')
 let {
   ensureVerifier,
+  settleVerification,
   verifierBlocked,
   verifierIdentity,
   verifierRun,
@@ -330,6 +331,85 @@ Deno.test('recompletion starts a fresh review and verifier cycle', () => {
   assertEquals(verificationPending(db, work.eid), true)
   review(work.eid, reviewer, 'approved', 'independent pass', iso(-4))
   assertEquals(verificationPending(db, work.eid), false)
+})
+
+Deno.test('review settlement preserves approval and reopens rejection or requested changes', () => {
+  for (let verdict of ['approved', 'rejected', 'changes_requested']) {
+    reset()
+    let work = task(), reviewer = session()
+    let judgment = review(work.eid, reviewer, verdict)
+    settleVerification(cast)(judgment)
+    assertEquals(
+      !!readComp(db, work.eid, 'completed'),
+      verdict == 'approved',
+      verdict,
+    )
+    assertEquals(readComp(db, work.eid, 'task')?.status, undefined)
+
+    let writes = casts.length
+    settleVerification(cast)(judgment)
+    assertEquals(casts.length, writes, `${verdict} replay is idempotent`)
+  }
+})
+
+Deno.test('review settlement ignores stale-cycle, empty, self-authored, unstamped, and nonlatest reviews', () => {
+  let ignored = (
+    make: (work: ReturnType<typeof task>, reviewer: string) => string,
+  ) => {
+    reset()
+    let work = task(), reviewer = session()
+    let judgment = make(work, reviewer)
+    settleVerification(cast)(judgment)
+    assert(readComp(db, work.eid, 'completed'))
+    assertEquals(casts.length, 0)
+  }
+
+  ignored((work, reviewer) =>
+    review(work.eid, reviewer, 'rejected', 'old cycle', iso(-90))
+  )
+  ignored((work, reviewer) =>
+    review(work.eid, reviewer, 'rejected', '\u00a0\u2003')
+  )
+  ignored((work) => review(work.eid, work.builder, 'rejected'))
+  ignored((work, reviewer) => {
+    let judgment = review(work.eid, reviewer, 'rejected')
+    db.prepare(`update created set via = null where ${OWNED}`).run(judgment)
+    return judgment
+  })
+  ignored((work, reviewer) => {
+    let old = review(
+      work.eid,
+      reviewer,
+      'rejected',
+      'superseded failure',
+      iso(-30),
+    )
+    review(work.eid, reviewer, 'approved', 'latest pass', iso(-20))
+    return old
+  })
+})
+
+Deno.test('review settlement applies only the latest qualifying verdict', () => {
+  reset()
+  let work = task(), reviewer = session()
+  review(work.eid, reviewer, 'approved', 'first pass', iso(-30))
+  let latest = review(
+    work.eid,
+    reviewer,
+    'changes_requested',
+    'new regression',
+    iso(-20),
+  )
+  settleVerification(cast)(latest)
+  assertEquals(readComp(db, work.eid, 'completed'), undefined)
+})
+
+Deno.test('completion cancelled before its handler cannot spawn a verifier', () => {
+  reset()
+  let work = task()
+  apply(db, [{ eid: work.eid, name: 'cancelled', comp: {} }])
+  assertEquals(ensureVerifier(cast)(work.eid), undefined)
+  assertEquals(verifiersFor(work.eid), [])
 })
 
 Deno.test('ensureVerifier composes the verifier identity and target project into one spawn', () => {

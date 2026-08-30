@@ -40,6 +40,7 @@ import { knocked } from './knock.ts'
 import { waking } from './wake.ts'
 import { scheduleArm, scheduleKnocked, scheduleSettled } from './schedule.ts'
 import { DREAM_PENDING, DREAM_ROLE, dreamComb } from './dream.ts'
+import { ensureVerifier, settleVerification, VERIFIER_ROLE } from './verify.ts'
 import { fleetApi, inboundSweep, isLive, mayStamp } from './inbound.ts'
 import { SCRIBE } from './scribe.ts'
 import { dispatchSweep } from './dispatch.ts'
@@ -254,6 +255,7 @@ export let wireDoing = (d: Doing) => {
       retry_at: roleConfig(cast),
       quiet: roleConfig(cast),
       cooldown: roleConfig(cast),
+      cap: roleConfig(cast),
     },
     removed: roleRemoved(cast),
     sweep: { pending: '1' },
@@ -350,6 +352,18 @@ export let wireDoing = (d: Doing) => {
         'that resumes a parked run to finish its own task (D-21448)',
     })
   }
+  on('completed', {
+    created: ensureVerifier(cast),
+    doc: 'completed work with acceptance criteria summons one independent ' +
+      'verifier through the shared pending policy; the verifier role retries ' +
+      'eligible work after gates or launch failures clear',
+  })
+  on('review', {
+    created: settleVerification(cast),
+    doc: 'the latest qualifying independent review settles the current ' +
+      'completion cycle: approval keeps completed; rejection or requested ' +
+      'changes retracts it so the task derives open',
+  })
   on('knock', {
     created: knocked(cast),
     sweep: { pending: PENDING('knock') },
@@ -729,12 +743,13 @@ export let bootDoing = (d: Doing, syncSoon: () => void) => {
         'HOLDCO_CF_ACCOUNT_ID',
   )
 
-  // The system roles (roles.ts): scribe, fixer, dream — on/off and throttle
+  // The system roles (roles.ts): scribe, fixer, dream, verifier — on/off and throttle
   // live as role data on their alias entities, and each pass stamps its
   // decision there. The ten-minute tick carries their time-based triggers.
   registerSystem(SCRIBE)
   registerSystem(FIXER_ROLE)
   registerSystem(DREAM_ROLE)
+  registerSystem(VERIFIER_ROLE)
   tick('system', () => systemSweep(cast), 10 * 60_000)
 
   // Embeddings (embed.ts): every non-comment doc keeps a semantic vector,

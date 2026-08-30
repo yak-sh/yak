@@ -1,16 +1,18 @@
 // The verifier role's spawn engine (D-25036). Verification state itself lives
 // in verification.ts; this module applies the graph-configured system-role
 // gates and mints one independently-personaed Session for an eligible task.
-// It deliberately registers no effects or commands — doing.ts owns that
-// curated wiring in the next task.
+// It registers nothing itself: doing.ts owns the curated effects and system
+// role wiring, while command surfaces may call the same exported doors.
 import { apply, locate, readComp } from './db.ts'
 import { db } from './live_db.ts'
 import { spawnChanges } from './client.ts'
 import { rowsFor } from './graph_query.ts'
 import { commitEffects } from './effects.ts'
+import { sha } from './sha.ts'
 import { type Change } from './types.ts'
 import type { SystemSpec, SystemTuning } from './roles.ts'
 import {
+  latestVerificationReview,
   verificationArgs,
   verificationPending,
   VERIFY_PENDING,
@@ -184,6 +186,43 @@ export let ensureVerifier = (cast: Cast, automatic = true) =>
     cast,
   )
   return eid
+}
+
+// A review is an event, not the authority by itself: delayed/replayed handlers
+// first resolve the latest qualifying independent review of the task's current
+// completion cycle. Approval preserves the builder's completed fact. Rejection
+// and requested changes retract only that fact, which derives the task open;
+// the task component has no mutable workflow status to write.
+export let settleVerification = (cast: Cast) =>
+(
+  review: string,
+  _comp?: Record<string, unknown>,
+): void => {
+  let task = (db.prepare(
+    `select ${refEid('comment.target')} as task from comment where ${OWNED}`,
+  ).get(review) as { task: string } | undefined)?.task
+  if (!task) return
+  let latest = latestVerificationReview(db, task)
+  if (
+    !latest || latest.eid != review || latest.verdict == 'approved'
+  ) return
+  commitEffects(
+    (trace) =>
+      apply(
+        db,
+        [{
+          eid: task,
+          name: 'completed',
+          comp: null,
+          // A recompletion racing a delayed review starts a new cycle. Guard its
+          // server-stamped clock so this older verdict cannot reopen the new one.
+          was: { at: sha(latest.completedAt) },
+        }],
+        trace,
+        latest.via,
+      ),
+    cast,
+  )
 }
 
 // One bounded newest-first system-role pass. Muted projects remain in

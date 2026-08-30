@@ -10,6 +10,24 @@ let activeSql = `s.status is null or s.status in (${
   sessionActive.map(() => '?').join(', ')
 })`
 
+// One qualification and ordering sentence serves both the pending predicate
+// and review settlement. The latter must never reinterpret which review wins:
+// a delayed effect re-reads this exact query and acts only when its own review
+// is still the latest qualifying verdict for the current completion cycle.
+let reviewTables = `comment _vm
+  join review _vr on _vr.entity = _vm.entity
+  join entity _ve on _ve.id = _vr.entity
+  join doc_value _vd on _vd.entity = _vm.entity
+  join created _va on _va.entity = _vm.entity
+  join session _vs on _vs.entity = _va.via`
+let reviewWhere = (target: string, at: string, via: string) => `
+  _vm.target = ${target}
+  and _vr.verdict in ('approved', 'rejected', 'changes_requested')
+  and text_present(_vd.body)
+  and _va.at > ${at}
+  and _va.via != ${via}`
+let reviewOrder = `order by _va.at desc, _ve.eid desc limit 1`
+
 // Assumes the outer task table is named `task`. Review evidence is reached
 // through comment.target (indexed), and verifier attempts through
 // session.requested_task (indexed). The current completed row is a keyed
@@ -26,19 +44,9 @@ export let VERIFY_PENDING = `
     where _vc.entity = task.entity
       and coalesce((
         select _vr.verdict
-          from comment _vm
-          join review _vr on _vr.entity = _vm.entity
-          join entity _ve on _ve.id = _vr.entity
-          join doc_value _vd on _vd.entity = _vm.entity
-          join created _va on _va.entity = _vm.entity
-          join session _vs on _vs.entity = _va.via
-         where _vm.target = task.entity
-           and _vr.verdict in ('approved', 'rejected', 'changes_requested')
-           and text_present(_vd.body)
-           and _va.at > _vc.at
-           and _va.via != _vc.via
-         order by _va.at desc, _ve.eid desc
-         limit 1
+          from ${reviewTables}
+         where ${reviewWhere('task.entity', '_vc.at', '_vc.via')}
+         ${reviewOrder}
       ), '') <> 'approved'
       and not exists (
         select 1 from session s
@@ -51,6 +59,33 @@ export let VERIFY_PENDING = `
   )`
 
 let activeArgs = sessionActive
+
+export type VerificationReview = {
+  eid: string
+  verdict: 'approved' | 'rejected' | 'changes_requested'
+  via: string
+  completedAt: string
+}
+
+// The current cycle's authoritative outcome. This is keyed by task eid and
+// shares every qualifier and tie-break with VERIFY_PENDING above; callers may
+// compare the returned eid with the event they are handling to reject stale or
+// out-of-order effect delivery.
+export let latestVerificationReview = (
+  db: DatabaseSync,
+  eid: string,
+): VerificationReview | undefined =>
+  db.prepare(
+    `select _ve.eid, _vr.verdict,
+            (select eid from entity where id = _va.via) as via,
+            _vc.at as completedAt
+       from ${reviewTables}
+       join completed _vc on _vc.entity = _vm.target
+       join task on task.entity = _vm.target
+      where task.entity = (select id from entity where eid = ?)
+        and ${reviewWhere('task.entity', '_vc.at', '_vc.via')}
+      ${reviewOrder}`,
+  ).get(eid) as VerificationReview | undefined
 
 // Keyed current-cycle lookup used by every imperative spawn door. The caller
 // supplies an eid; the task/completed owner primary keys and
