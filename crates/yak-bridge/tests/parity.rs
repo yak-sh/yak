@@ -1700,7 +1700,7 @@ fn write_parity() {
         &format!(
             "{{\"mutation\":\"claim_work\",\"target\":\"{twork}\",\"session\":\"{worker}-pending\",\"mode\":\"ready\"}}"
         ),
-        "native",
+        "proxy",
     );
     assert_write(
         "claim-work/rejects-task-as-session",
@@ -1777,7 +1777,7 @@ fn write_parity() {
         r#"{"mutation":"undo","id":1,"entities":[{"comps":{"project":{}}}]}"#,
         "native",
     );
-    assert_write("claim-work/approve-take", &ts, &br, &ts_db, &br_db, &take, "native");
+    assert_write("claim-work/approve-take", &ts, &br, &ts_db, &br_db, &take, "proxy");
     assert_write("claim-work/replay", &ts, &br, &ts_db, &br_db, &take, "native");
     assert_write(
         "claim-work/collision",
@@ -1788,7 +1788,7 @@ fn write_parity() {
         &format!(
             "{{\"mutation\":\"claim_work\",\"target\":\"{twork}\",\"session\":\"{worker}-loser\",\"mode\":\"ready\"}}"
         ),
-        "native",
+        "proxy",
     );
     let wrong_target = uuid_v4();
     g(&ts, &br, &format!("[{{\"eid\":\"{wrong_target}\",\"name\":\"project\",\"comp\":{{}}}}]"));
@@ -1799,7 +1799,7 @@ fn write_parity() {
         &ts_db,
         &br_db,
         &format!(
-            "{{\"mutation\":\"claim_work\",\"target\":\"{wrong_target}\",\"session\":\"{worker}-wrong-target\",\"mode\":\"ready\"}}"
+            "{{\"mutation\":\"claim_work\",\"target\":\"{wrong_target}\",\"session\":\"{worker}\",\"mode\":\"ready\"}}"
         ),
         "native",
     );
@@ -1823,7 +1823,7 @@ fn write_parity() {
         &ts_db,
         &br_db,
         &uuid_take,
-        "native",
+        "proxy",
     );
     assert_write("claim-work/replays-stable-uuid", &ts, &br, &ts_db, &br_db, &uuid_take, "native");
     g(&ts, &br, &format!("[{{\"eid\":\"{uuid_task}\",\"name\":\"entity\",\"comp\":null}}]"));

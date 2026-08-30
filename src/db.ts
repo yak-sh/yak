@@ -4158,7 +4158,11 @@ let trustedRefs: [string, string][] = [['session', 'requested_task']]
 // interactive session) and mints the spine + num. Called only when sources
 // exist, and only ever prepends — a batch that engages nothing ephemeral is
 // returned untouched, so the non-graduating write path is unchanged.
-let graduate = (db: DatabaseSync, changes: Change[]): Change[] => {
+let graduate = (
+  db: DatabaseSync,
+  changes: Change[],
+  resolved: Change[] = [],
+): Change[] => {
   let engaged = new Set<string>()
   for (let { eid, name, comp } of changes) {
     if (name == 'entity' && comp == null) continue // a delete never graduates
@@ -4174,9 +4178,10 @@ let graduate = (db: DatabaseSync, changes: Change[]): Change[] => {
   }
   let live = prep(db, 'select 1 from entity where eid = ?')
   let dead = prep(db, 'select 1 from tombstone where eid = ?')
-  let hydration: Change[] = []
+  let hydration = [...resolved]
+  let resolvedEids = new Set(resolved.map((change) => change.eid))
   for (let eid of engaged) {
-    if (live.get(eid) || dead.get(eid)) continue
+    if (resolvedEids.has(eid) || live.get(eid) || dead.get(eid)) continue
     let batch = sourceResolve(eid)
     if (batch) hydration.push(...batch)
   }
@@ -4799,7 +4804,7 @@ export let apply = (
   // A named worker-claim mutation supplies the one claim whose readiness must
   // be validated under this transaction's writer lock. Raw Change[] leaves it
   // absent and retains the administrative graph capability.
-  workClaim?: { target: string; recursive: boolean },
+  workClaim?: { target: string; recursive: boolean; source?: Change[] },
 ): Change[] => {
   // A raw @-address in `deliver.to` names no eid the parser could resolve —
   // fold it into its address-book entity (find-or-mint) before normalize.
@@ -4877,7 +4882,7 @@ export let apply = (
     // its source comps into this batch (D-17790). After the dual* transforms so
     // a hydrated session.provider is never promoted to a spawn request; a
     // historical session must not launch an agent.
-    if (hasSources()) changes = graduate(db, changes)
+    if (hasSources()) changes = graduate(db, changes, workClaim?.source)
     changes = casBodies(db, changes)
     // A log entry is an append-only fact. Every request/content facet is
     // born in the same batch as entry membership and can never be revised,
@@ -6910,13 +6915,18 @@ let claimWork = (
          join entity holder on holder.id = claim.session
         where claim.entity = (select id from entity where eid = ?)`,
     ).get(target) as { session: string } | undefined
-    // A session address may be its graph id (S-3/eid/alias) or its stable
-    // session.id. A resolved graph address is authoritative: a task or actor
-    // cannot silently turn into a newly-minted Session with the same spelling.
+    // A session address may be its graph id (S-3/eid/alias), its stable
+    // session.id, or a pass-through Session owned by a registered source. A
+    // persisted graph address is authoritative; a source address graduates at
+    // its existing eid through apply() below instead of minting a lookalike.
     let sessionAddress = resolveId(db, ask.session)
     if (!sessionAddress && /^[A-Za-z]+-\d+$/.test(ask.session)) {
       throw new Error(`no entity: ${ask.session}`)
     }
+    let storedAddress = sessionAddress && prep(
+      db,
+      'select 1 from entity where eid = ?',
+    ).get(sessionAddress)
     let session = sessionAddress
       ? prep(
         db,
@@ -6929,10 +6939,10 @@ let claimWork = (
         | { eid: string; cwd: string | null; actor: string | null }
         | undefined
       : undefined
-    if (sessionAddress && !session) {
+    if (sessionAddress && storedAddress && !session) {
       throw new Error(`${human(db, sessionAddress)} is not a session`)
     }
-    if (!sessionAddress) {
+    if (!session) {
       session = prep(
         db,
         `select owner.eid as eid, s.cwd, actor.eid as actor
@@ -6943,6 +6953,31 @@ let claimWork = (
       ).get(ask.session) as
         | { eid: string; cwd: string | null; actor: string | null }
         | undefined
+    }
+    let source: Change[] | undefined
+    if (!session && sessionAddress) {
+      source = sourceResolve(ask.session) ?? sourceResolve(sessionAddress)
+      let facet = source?.find((change) =>
+        change.eid == sessionAddress && change.name == 'session' && change.comp
+      )?.comp
+      if (
+        !source?.length || source.some((change) =>
+          change.eid != sessionAddress
+        ) ||
+        !facet
+      ) {
+        throw new Error(`${human(db, sessionAddress)} is not a session`)
+      }
+      if (typeof facet.id != 'string' || !facet.id.trim()) {
+        throw new Error(
+          `source Session ${human(db, sessionAddress)} has no stable id`,
+        )
+      }
+      session = {
+        eid: sessionAddress,
+        cwd: typeof facet.cwd == 'string' ? facet.cwd : null,
+        actor: typeof facet.actor == 'string' ? facet.actor : null,
+      }
     }
     // A replay by the same stable session is a true no-op: no stamp, journal
     // row, worked edge refresh, or cwd edit.
@@ -6972,6 +7007,7 @@ let claimWork = (
     return apply(db, changes, trace, via, undefined, {
       target,
       recursive: ask.recursive !== false,
+      source,
     })
   } catch (e) {
     rollback(db)

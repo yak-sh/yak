@@ -7,18 +7,38 @@
 // skips it, and it takes an ephemeral port handed back before the server binds.
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
 import { query } from './client.ts'
+import type { DatabaseSync } from './sqlite.ts'
 import { slow } from './testing.ts'
 import type { Change } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let U = ''
+let sourceSid = '11111111-2222-4333-8444-555555555555'
+let sourceEid = ''
+let liveDb: DatabaseSync | undefined
 let alone = { sanitizeOps: false, sanitizeResources: false }
 if (Deno.env.get('TASKS_SLOW')) {
+  let sourceStore = Deno.makeTempDirSync()
+  let sourceProject = `${sourceStore}/project`
+  Deno.mkdirSync(sourceProject)
+  Deno.writeTextFileSync(
+    `${sourceProject}/${sourceSid}.jsonl`,
+    JSON.stringify({
+      type: 'user',
+      message: { content: [{ type: 'text', text: 'legacy work' }] },
+    }),
+  )
+  let emptySources = Deno.makeTempDirSync()
+  Deno.env.set('CLAUDE_PROJECTS', sourceStore)
+  Deno.env.set('CODEX_SESSIONS', emptySources)
+  Deno.env.set('LOGS_DIR', emptySources)
+  sourceEid = (await import('./source_file.ts')).sidEid(sourceSid)
   let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
   let port = (seat.addr as Deno.NetAddr).port
   seat.close()
   Deno.env.set('PORT', String(port))
   await import('./server.ts')
+  liveDb = (await import('./live_db.ts')).db
   U = `127.0.0.1:${port}`
   Deno.env.set('TASKS_HOST', U)
 }
@@ -184,6 +204,99 @@ slow(
         .claim,
       undefined,
     )
+
+    // The source Session is planned as its existing identity, but graduation
+    // itself rides the guarded apply transaction. A readiness failure leaves no
+    // partial SQL identity; concurrent successful takes graduate once and both
+    // claims point at that same eid.
+    let sourceFailed = uid(10), sourceA = uid(11), sourceB = uid(12)
+    await post([
+      ...ent(sourceFailed, 10, {
+        doc: { title: 'Source refusal', body: '' },
+        task: { project: P },
+        proposed: {},
+      }),
+      ...ent(sourceA, 11, {
+        doc: { title: 'Source claim A', body: '' },
+        task: { project: P },
+        decided: {},
+      }),
+      ...ent(sourceB, 12, {
+        doc: { title: 'Source claim B', body: '' },
+        task: { project: P },
+        decided: {},
+      }),
+    ])
+    let sourceAttempt = (target: string, session: string) =>
+      fetch(`http://${U}/apply`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          mutation: 'claim_work',
+          target,
+          session,
+          mode: 'ready',
+        }),
+      })
+    let sql = liveDb!
+    let journal = Number(
+      (sql.prepare('select count(*) as n from journal').get() as { n: number })
+        .n,
+    )
+    let sourceRefusal = await sourceAttempt(sourceFailed, sourceSid)
+    assertEquals(sourceRefusal.status, 400)
+    assertStringIncludes(
+      await sourceRefusal.text(),
+      'proposed but not decided',
+    )
+    assertEquals(
+      sql.prepare('select 1 from entity where eid = ?').get(sourceEid),
+      undefined,
+    )
+    assertEquals(
+      Number(
+        (sql.prepare('select count(*) as n from journal').get() as {
+          n: number
+        }).n,
+      ),
+      journal,
+    )
+
+    let sourceClaims = await Promise.all([
+      sourceAttempt(sourceA, sourceSid),
+      sourceAttempt(sourceB, sourceSid),
+    ])
+    assertEquals(sourceClaims.map((res) => res.status), [200, 200])
+    let sourceTasks = await query(['.kind=task'])
+    assertEquals(
+      sourceTasks.find((row) => row.eid == sourceA)?.comps.claim?.session,
+      sourceEid,
+    )
+    assertEquals(
+      sourceTasks.find((row) => row.eid == sourceB)?.comps.claim?.session,
+      sourceEid,
+    )
+    let sourceSession = (await query(['.kind=session'])).find((row) =>
+      row.eid == sourceEid
+    )!
+    assertEquals(sourceSession.comps.session?.id, sourceSid)
+    assertEquals(typeof sourceSession.num, 'number')
+    assertEquals(
+      sql.prepare(
+        `select count(*) as n from session
+         where id = ? and entity = (select id from entity where eid = ?)`,
+      ).get(sourceSid, sourceEid),
+      { n: 1 },
+    )
+    let replay = await sourceAttempt(sourceA, sourceSid)
+    assertEquals(replay.status, 200)
+    assertEquals((await replay.json()).changes, [])
+    let humanReplay = await sourceAttempt(
+      sourceA,
+      `S-${sourceSession.num}`,
+    )
+    assertEquals(humanReplay.status, 200)
+    assertEquals((await humanReplay.json()).changes, [])
 
     // Two worker takes arriving together serialize at the writer transaction:
     // exactly one claims, the loser leaves no Session, and the existing

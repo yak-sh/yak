@@ -33,6 +33,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use yak_bridge::subserve::Subserve;
 use yak_bridge::{appread, front, journalr, read, snap};
+use yak_kernel::store::resolve_checked;
 use yak_kernel::{
     apply, claim_work, default_gates, native_safe, normalize_literals, parse_batch, ApplyOpts,
     Change, ClaimWork, Store, WriteStore,
@@ -313,7 +314,9 @@ fn route_apply(
 ) -> (u16, String, String, &'static str) {
     let parsed = serde_json::from_slice::<serde_json::Value>(body).ok();
     if let Some(object) = parsed.as_ref().and_then(Value::as_object) {
-        if object.get("mutation").and_then(Value::as_str) == Some("claim_work") {
+        if object.get("mutation").and_then(Value::as_str) == Some("claim_work")
+            && claim_work_has_native_identity(write, object)
+        {
             let (s, c, t) = native_claim_work(write, via, object);
             return (s, c, t, "native");
         }
@@ -353,6 +356,49 @@ fn route_apply(
                 .into(),
             "proxy",
         ),
+    }
+}
+
+// An identity absent from SQLite may be a brand-new stable session id OR a
+// pass-through Session owned by Deno's file-backed source registry. The native
+// bridge cannot distinguish those cases, so it never guesses: stored graph and
+// stable Session identities stay native; a valid unknown identity falls
+// through to the Deno source authority (or the ordinary no-upstream 503).
+// Malformed requests stay native so the closed-world parser rejects them before
+// routing can obscure the exact field error.
+fn claim_work_has_native_identity(
+    write: &Mutex<WriteStore>,
+    object: &serde_json::Map<String, Value>,
+) -> bool {
+    let allowed = ["mutation", "target", "session", "mode", "recursive", "cwd"];
+    if object.keys().any(|key| !allowed.contains(&key.as_str())) {
+        return true;
+    }
+    let valid = object.get("target").and_then(Value::as_str).is_some_and(|v| !v.trim().is_empty())
+        && object.get("session").and_then(Value::as_str).is_some_and(|v| !v.trim().is_empty())
+        && matches!(object.get("mode").and_then(Value::as_str), Some("ready" | "approve"))
+        && object.get("recursive").is_none_or(Value::is_boolean)
+        && object.get("cwd").is_none_or(|v| v.as_str().is_some_and(|cwd| !cwd.trim().is_empty()));
+    if !valid {
+        return true;
+    }
+    let session = object.get("session").and_then(Value::as_str).unwrap_or_default();
+    let human_address = session.split_once('-').is_some_and(|(prefix, num)| {
+        !prefix.is_empty()
+            && prefix.chars().all(|c| c.is_ascii_alphabetic())
+            && !num.is_empty()
+            && num.chars().all(|c| c.is_ascii_digit())
+    });
+    if human_address {
+        return true;
+    }
+    let store = write.lock().unwrap_or_else(|p| p.into_inner());
+    match resolve_checked(&store.conn, session) {
+        Err(_) | Ok(Some(_)) => true,
+        Ok(None) => store
+            .conn
+            .query_row("select 1 from session where id = ?1", [session], |_| Ok(()))
+            .is_ok(),
     }
 }
 
@@ -854,4 +900,58 @@ async fn main() {
         })
         .await
         .unwrap();
+}
+
+#[cfg(test)]
+mod claim_identity_tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    fn request(session: &str) -> serde_json::Map<String, Value> {
+        serde_json::json!({
+            "mutation": "claim_work",
+            "target": "aaaaaaaa-0000-4000-8000-000000000001",
+            "session": session,
+            "mode": "ready"
+        })
+        .as_object()
+        .unwrap()
+        .clone()
+    }
+
+    #[test]
+    fn unknown_session_identity_requires_the_source_authority() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "create table entity (id integer primary key, eid text unique, num integer); \
+             create table session (entity integer primary key, id text unique); \
+             create table alias (entity integer primary key, slug text, slugs text);",
+        )
+        .unwrap();
+        let write = Mutex::new(WriteStore::from_conn(conn));
+        let source_id = "11111111-2222-4333-8444-555555555555";
+        let ask = request(source_id);
+        assert!(!claim_work_has_native_identity(&write, &ask));
+
+        // With no Deno upstream the bridge refuses safely instead of minting a
+        // duplicate of a source Session it cannot see.
+        let body = serde_json::to_vec(&ask).unwrap();
+        let (status, _, _, route) = route_apply(&write, None, None, &body);
+        assert_eq!(status, 503);
+        assert_eq!(route, "proxy");
+
+        let store = write.lock().unwrap();
+        store.conn.execute("insert into entity (eid, num) values (?1, 1)", [source_id]).unwrap();
+        store
+            .conn
+            .execute(
+                "insert into session (entity, id) values ((select id from entity where eid = ?1), 'stored')",
+                [source_id],
+            )
+            .unwrap();
+        drop(store);
+        assert!(claim_work_has_native_identity(&write, &request(source_id)));
+        assert!(claim_work_has_native_identity(&write, &request("stored")));
+        assert!(claim_work_has_native_identity(&write, &request("S-999999")));
+    }
 }

@@ -9,6 +9,7 @@ import { type Change, uuid } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, human, mutate } = await import('./db.ts')
+let { addSource, clearSources } = await import('./source.ts')
 let { bareDb } = await import('./testdb.ts')
 
 let task = (
@@ -298,6 +299,117 @@ Deno.test('claim_work mints an unknown stable uuid and resumes an exact session'
     Number(cell(db, 'select count(*) as n from journal')?.n),
     journal,
   )
+})
+
+Deno.test('claim_work atomically graduates a source Session at its existing identity', () => {
+  let { db, project } = world()
+  let target = uuid(), failed = uuid(), wrongTarget = uuid()
+  let sourceEid = uuid(), wrongEid = uuid()
+  let sid = 'source-session', wrongSid = 'source-task'
+  apply(db, [
+    ...task(target, project, [{ eid: target, name: 'decided', comp: {} }]),
+    ...task(failed, project, [{ eid: failed, name: 'proposed', comp: {} }]),
+    ...task(wrongTarget, project, [
+      { eid: wrongTarget, name: 'decided', comp: {} },
+    ]),
+  ])
+  let off = addSource({
+    resolve: (id) => {
+      if (id == sid || id == sourceEid) {
+        return [
+          {
+            eid: sourceEid,
+            name: 'session',
+            comp: { id: sid, provider: 'claude', origin: 'native' },
+          },
+          {
+            eid: sourceEid,
+            name: 'doc',
+            comp: { title: 'Source session' },
+          },
+        ]
+      }
+      if (id == wrongSid || id == wrongEid) {
+        return [{ eid: wrongEid, name: 'task', comp: {} }]
+      }
+    },
+  })
+  try {
+    let journal = Number(cell(db, 'select count(*) as n from journal')?.n)
+    assertThrows(
+      () => take(db, failed, sid),
+      Error,
+      'proposed but not decided',
+    )
+    assertEquals(sessionEid(db, sid), undefined)
+    assertEquals(
+      cell(db, 'select 1 from entity where eid = ?', sourceEid),
+      undefined,
+    )
+    assertEquals(
+      Number(cell(db, 'select count(*) as n from journal')?.n),
+      journal,
+    )
+    assertThrows(
+      () => take(db, wrongTarget, wrongSid),
+      Error,
+      `${wrongEid.slice(0, 8)} is not a session`,
+    )
+    assertEquals(
+      cell(db, 'select 1 from entity where eid = ?', wrongEid),
+      undefined,
+    )
+
+    let landed = take(db, target, sid)
+    assertEquals(
+      landed.some((change) =>
+        change.name == 'spawn' && change.comp?.provider != null
+      ),
+      false,
+    )
+    assertEquals(sessionEid(db, sid), sourceEid)
+    assertEquals(holder(db, target), sourceEid)
+    let identity = cell(
+      db,
+      `select entity.num, session.id from session
+       join entity on entity.id = session.entity where entity.eid = ?`,
+      sourceEid,
+    ) as { num: number; id: string }
+    assertEquals(identity.id, sid)
+    assertEquals(typeof identity.num, 'number')
+    assertEquals(
+      cell(
+        db,
+        `select title from doc_value
+         where entity = (select id from entity where eid = ?)`,
+        sourceEid,
+      )?.title,
+      'Source session',
+    )
+    assertEquals(
+      cell(
+        db,
+        `select provider from spawn
+         where entity = (select id from entity where eid = ?)`,
+        sourceEid,
+      ),
+      { provider: null },
+    )
+    journal = Number(cell(db, 'select count(*) as n from journal')?.n)
+    assertEquals(take(db, target, sid), [])
+    assertEquals(take(db, target, human(db, sourceEid)), [])
+    assertEquals(
+      cell(db, 'select num from entity where eid = ?', sourceEid)?.num,
+      identity.num,
+    )
+    assertEquals(
+      Number(cell(db, 'select count(*) as n from journal')?.n),
+      journal,
+    )
+  } finally {
+    off()
+    clearSources()
+  }
 })
 
 Deno.test('claim_work refuses a resolved non-task target before reifying a session', () => {
