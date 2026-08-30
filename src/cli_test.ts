@@ -1294,6 +1294,50 @@ slow('task set adds and removes empty writable facets', async () => {
   }
 })
 
+slow(
+  'task set expands every derived status like the public MCP door',
+  async () => {
+    let fake = graphServer()
+    let run = (status: string) =>
+      new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          'set',
+          'T-2',
+          `.status=${status}`,
+        ],
+        clearEnv: true,
+        env: { TASKS_HOST: fake.host, TASKS_SESSION: 'sub-1' },
+      }).output()
+    try {
+      for (let status of ['done', 'cancelled', 'wip', 'open']) {
+        let out = await run(status)
+        assertEquals(out.code, 0, `${status}: ${text(out.stderr)}`)
+      }
+      assertEquals(fake.acked, [
+        { eid: T, name: 'cancelled', comp: null },
+        { eid: T, name: 'completed', comp: {} },
+        { eid: T, name: 'completed', comp: null },
+        { eid: T, name: 'cancelled', comp: {} },
+        { eid: T, name: 'completed', comp: null },
+        { eid: T, name: 'cancelled', comp: null },
+        { eid: T, name: 'claim', comp: { session: S } },
+        { eid: T, name: 'completed', comp: null },
+        { eid: T, name: 'cancelled', comp: null },
+        { eid: T, name: 'claim', comp: null },
+      ])
+      assertEquals(
+        fake.acked.some((c) => c.name == 'task' && 'status' in (c.comp ?? {})),
+        false,
+      )
+    } finally {
+      await fake.server.shutdown()
+    }
+  },
+)
+
 slow('task dep rejects surplus positional arguments', async () => {
   let out = await cli('dep', 'T-1', 'requires', 'T-2', 'surplus')
   assertEquals(out.code, 1)

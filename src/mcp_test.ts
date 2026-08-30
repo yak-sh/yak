@@ -167,6 +167,150 @@ Deno.test('task_update adds and removes empty writable facets', async () => {
   db.close()
 })
 
+Deno.test('task_update expands derived lifecycle status with attribution', async () => {
+  let { db, io } = graph()
+  let task = crypto.randomUUID(), session = crypto.randomUUID()
+  let actor = crypto.randomUUID()
+  apply(db, [
+    { eid: task, name: 'doc', comp: { title: 'lifecycle', body: '' } },
+    { eid: task, name: 'task', comp: { priority: 1 } },
+    { eid: actor, name: 'project', comp: {} },
+    {
+      eid: session,
+      name: 'session',
+      comp: { id: 'lifecycle-worker', actor },
+    },
+  ])
+  let current = () => rows(snapshot(db)).find((r) => r.eid == task)!
+  let id = idOf(current())
+
+  await protocol(io, async (client) => {
+    for (let status of ['done', 'cancelled', 'wip', 'open']) {
+      let out = await client.callTool({
+        name: 'task_update',
+        arguments: {
+          id,
+          params: [`.status=${status}`],
+          session: 'lifecycle-worker',
+        },
+      }) as ToolResult
+      assertEquals(out.isError, undefined, `${status}: ${said(out)}`)
+      assertEquals(statusOf(current().comps), status)
+      assertEquals(current().comps.task.status, undefined)
+      if (status == 'done') {
+        assertEquals(current().comps.completed.by, actor)
+        assertEquals(current().comps.completed.via, session)
+        assertMatch(String(current().comps.completed.at), /^20/)
+      }
+      if (status == 'cancelled') {
+        assertEquals(current().comps.cancelled.by, actor)
+        assertEquals(current().comps.cancelled.via, session)
+        assertMatch(String(current().comps.cancelled.at), /^20/)
+      }
+      if (status == 'wip') {
+        assertEquals(current().comps.claim.session, session)
+      }
+    }
+    // The terminal and default mappings are safe to repeat and never grow a
+    // stored status column.
+    for (let status of ['cancelled', 'open']) {
+      for (let n = 0; n < 2; n++) {
+        let out = await client.callTool({
+          name: 'task_update',
+          arguments: { id, params: [`.status=${status}`] },
+        }) as ToolResult
+        assertEquals(out.isError, undefined, said(out))
+      }
+      assertEquals(statusOf(current().comps), status)
+      assertEquals(current().comps.task.status, undefined)
+    }
+  })
+  db.close()
+})
+
+Deno.test('task_update lifecycle refusals leave the target untouched', async () => {
+  let { db, io } = graph()
+  let task = crypto.randomUUID(), hidden = crypto.randomUUID()
+  let writer = crypto.randomUUID(), holder = crypto.randomUUID()
+  apply(db, [
+    { eid: task, name: 'doc', comp: { title: 'contested', body: 'before' } },
+    { eid: task, name: 'task', comp: {} },
+    { eid: writer, name: 'session', comp: { id: 'writer' } },
+    { eid: holder, name: 'session', comp: { id: 'holder' } },
+    { eid: task, name: 'claim', comp: { session: holder } },
+    { eid: hidden, name: 'doc', comp: { title: 'hidden', body: 'secret' } },
+    { eid: hidden, name: 'task', comp: {} },
+  ])
+  let current = () => rows(snapshot(db)).find((r) => r.eid == task)!
+  let taskId = idOf(current())
+  let hiddenId = idOf(rows(snapshot(db)).find((r) => r.eid == hidden)!)
+  apply(db, [{ eid: hidden, name: 'quarantined', comp: {} }])
+
+  await protocol(io, async (client) => {
+    for (
+      let [arguments_, expected] of [
+        [
+          { id: taskId, params: ['.body=after', '.status=wip'] },
+          /wip status needs session/,
+        ],
+        [
+          {
+            id: taskId,
+            params: ['.body=after', '.status=wip'],
+            session: 'missing',
+          },
+          /no session: missing/,
+        ],
+        [
+          { id: taskId, params: ['.body=after', '.status=bogus'] },
+          /status is one of/,
+        ],
+        [
+          { id: hiddenId, params: ['.status=done'], session: 'writer' },
+          new RegExp(`no entity: ${hiddenId}`),
+        ],
+        [
+          { id: 'T-999999', params: ['.status=done'], session: 'writer' },
+          /no entity: T-999999/,
+        ],
+      ] as const
+    ) {
+      let out = await client.callTool({
+        name: 'task_update',
+        arguments: arguments_,
+      }) as ToolResult
+      assertEquals(out.isError, true, said(out))
+      assertMatch(said(out), expected)
+      assertEquals(said(out).includes(task), false)
+      assertEquals(current().comps.doc.body, 'before')
+      assertEquals(current().comps.claim.session, holder)
+    }
+
+    let conflict = await client.callTool({
+      name: 'task_update',
+      arguments: {
+        id: taskId,
+        params: ['.body=after', '.status=wip'],
+        comment: 'must not land',
+        session: 'writer',
+      },
+    }) as ToolResult
+    assertEquals(conflict.isError, true, said(conflict))
+    assertMatch(
+      said(conflict),
+      new RegExp(`${taskId} already claimed by holder`),
+    )
+    assertEquals(said(conflict).includes(task), false)
+    assertEquals(current().comps.doc.body, 'before')
+    assertEquals(current().comps.claim.session, holder)
+    assertEquals(
+      rows(snapshot(db)).some((r) => r.comps.comment?.target == task),
+      false,
+    )
+  })
+  db.close()
+})
+
 Deno.test('command: generated references resolve aliases and reject misses', () => {
   let out = commandOut(all, ':new .project=home Ship it', T)
   let task = out.changes!.find((c) => c.name == 'task')
@@ -1571,7 +1715,8 @@ slow('MCP modes apply every accepted field and reject conflicts', async () => {
         row.comps.doc?.title == 'Dedicated <title> & words'
       )
       assertEquals(made?.comps.doc?.body, 'Dedicated <body> & words')
-      assertEquals(made?.comps.task?.status, 'done')
+      assertEquals(statusOf(made!.comps), 'done')
+      assertEquals(made?.comps.task?.status, undefined)
       assertEquals(made?.comps.accept?.body, 'exits zero')
       assertEquals(made?.comps.proposed?.at, '2026-08-01T00:00:00.000Z')
 

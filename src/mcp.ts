@@ -70,6 +70,7 @@ import {
   mutate,
   noticeBlock,
   param,
+  patchChanges,
   patches,
   type Querier,
   query as queryHttp,
@@ -985,7 +986,8 @@ No structure is inferred from prose. ${GRAMMAR} ${BUS}`,
 [".status=done"] or [".body=notes..."]. Only the named props change.
 comment optionally lands a plain comment in the same atomic batch.
 Reference values accept human ids. Cancelling (".status=cancelled") calls off
-work without pretending it finished; use comment to say why. ${DOC}
+work without pretending it finished; use comment to say why. Setting
+".status=wip" requires the stable session id returned by work_start. ${DOC}
 ${GRAMMAR} ${BUS}`,
     {
       id: z.string(),
@@ -1006,36 +1008,44 @@ ${GRAMMAR} ${BUS}`,
         session?: string
       },
     ) => {
-      let row = await got(id)
-      if (!row) return err(`no entity: ${id}`)
-      let grouped = patches(await derefedParams(parseAll(params), ioQ))
-      // The comment builder resolves its author (the session row) and the
-      // task's project (the row itself) — hand it exactly those.
-      let sess = comment && session ? await sessionRow(session, ioQ) : undefined
-      await io.write([
-        ...Object.entries(grouped)
-          .map(([name, comp]) => ({ eid: row.eid, name, comp })),
-        ...(comment
-          ? commentChanges(
-            uniq([row, ...(sess ? [sess] : [])]),
-            row.eid,
-            comment,
-            session,
+      try {
+        let row = await got(id)
+        if (!row) return err(`no entity: ${id}`)
+        let grouped = patches(await derefedParams(parseAll(params), ioQ))
+        let status = grouped.task && Object.hasOwn(grouped.task, 'status')
+          ? String(grouped.task.status)
+          : undefined
+        // The comment builder resolves its author (the session row) and the
+        // task's project (the row itself). wip needs that same row's eid for
+        // the claim while write keeps the stable id for attribution.
+        let sess = (comment || status == 'wip') && session
+          ? await sessionRow(session, ioQ)
+          : undefined
+        if (status == 'wip' && !sess) {
+          return err(
+            session ? `no session: ${session}` : 'wip status needs session',
           )
-          : []),
-      ], session)
-      let hint = patchHint(
-        Object.entries(grouped).map(([name, comp]) => ({
-          eid: row.eid,
-          name,
-          comp,
-        })),
-        () => idOf(row),
-      )
-      return bus(
-        `updated ${idOf(row)}${wall(grouped.doc?.body)}${hint}`,
-        session,
-      )
+        }
+        let changes = patchChanges(row, grouped, sess?.eid)
+        await io.write([
+          ...changes,
+          ...(comment
+            ? commentChanges(
+              uniq([row, ...(sess ? [sess] : [])]),
+              row.eid,
+              comment,
+              session,
+            )
+            : []),
+        ], session)
+        let hint = patchHint(changes, () => idOf(row))
+        return bus(
+          `updated ${idOf(row)}${wall(grouped.doc?.body)}${hint}`,
+          session,
+        )
+      } catch (e) {
+        return err((e as Error).message)
+      }
     },
   )
 

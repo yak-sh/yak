@@ -59,6 +59,7 @@ import {
   neighborhoods,
   noticeBlock,
   param,
+  patchChanges,
   patches,
   projectionSnapshot,
   query,
@@ -860,15 +861,21 @@ let set = async (got: Got) => {
     throw new Error('task set <id> .prop=value ...')
   }
   let sid = me()
-  let [row, resolved, sess] = await Promise.all([
+  let [row, resolved] = await Promise.all([
     needed(id),
     derefedParams(params),
-    say && sid ? sessionRow(sid) : undefined,
   ])
+  let grouped = patches(resolved)
+  let status = grouped.task && Object.hasOwn(grouped.task, 'status')
+    ? String(grouped.task.status)
+    : undefined
+  let sess = (say || status == 'wip') && sid ? await sessionRow(sid) : undefined
+  if (status == 'wip' && !sess) {
+    throw new Error(sid ? `no session: ${sid}` : 'wip: run under a session')
+  }
   let all = [row, ...(sess ? [sess] : [])]
   await send([
-    ...Object.entries(patches(resolved))
-      .map(([name, comp]) => ({ eid: row.eid, name, comp })),
+    ...patchChanges(row, grouped, sess?.eid),
     ...(say ? commentChanges(all, row.eid, say, me()) : []),
   ])
   print(`${idOf(row)} updated`)
@@ -992,8 +999,9 @@ let finish =
     ])
     let all = [row, ...(sess ? [sess] : [])]
     // Status is DERIVED (D-24102): wip LEASES (a claim), done/cancel MINT their
-    // mark; apply() stamps at/by/via, and cancel's reason rides the mark. There
-    // is no `set .status=` any more — the presence of the comp is the status.
+    // mark; apply() stamps at/by/via, and cancel's reason rides the mark. The
+    // compatibility `.status=` spelling expands at the CLI/MCP boundary; raw
+    // graph writes never store it.
     let move: Change[] = status == 'done'
       ? [
         { eid: row.eid, name: 'cancelled', comp: null },

@@ -34,6 +34,7 @@ import {
   normalizeLiterals,
   noticesFor,
   param,
+  patchChanges,
   patches,
   readerAt,
   readerFor,
@@ -684,6 +685,31 @@ Deno.test('statusChanges replaces conflicting lifecycle facets', () => {
     { eid: T1, name: 'cancelled', comp: null },
     { eid: T1, name: 'claim', comp: null },
   ])
+})
+
+Deno.test('patchChanges expands virtual status and preserves siblings', () => {
+  assertEquals(
+    patchChanges(by(T2), {
+      task: { status: 'done', priority: 2 },
+      doc: { body: 'shipped' },
+    }),
+    [
+      { eid: T2, name: 'task', comp: { priority: 2 } },
+      { eid: T2, name: 'doc', comp: { body: 'shipped' } },
+      { eid: T2, name: 'cancelled', comp: null },
+      { eid: T2, name: 'completed', comp: {} },
+    ],
+  )
+  assertThrows(
+    () => patchChanges(by(T2), { task: { status: 'wip' } }),
+    Error,
+    'wip status needs a resolved session',
+  )
+  assertThrows(
+    () => patchChanges(by(S), { task: { status: 'done' } }),
+    Error,
+    'cannot set task status on S-1',
+  )
 })
 
 Deno.test('taskTreePlan: one rooted batch covers new and existing nodes', async () => {

@@ -1597,6 +1597,41 @@ export let patches = (params: Param[]): ComponentPatches => {
   return out
 }
 
+// A dot-param patch may carry the virtual task.status read face. Expand that
+// one property into its lifecycle facets while every sibling stays an ordinary
+// component patch. The caller resolves a wip session first; accepting an
+// unresolved one here would turn wip into statusChanges()' open fallback.
+export let patchChanges = (
+  row: Row,
+  grouped: ComponentPatches,
+  session?: string,
+): Change[] => {
+  let task = grouped.task
+  if (!task || !Object.hasOwn(task, 'status')) {
+    return Object.entries(grouped)
+      .map(([name, comp]) => ({ eid: row.eid, name, comp }))
+  }
+  let status = String(task.status)
+  if (!row.comps.task) {
+    throw new Error(`cannot set task status on ${idOf(row)}`)
+  }
+  if (!(statuses as readonly string[]).includes(status)) {
+    throw new Error(`status is one of: ${statuses.join(', ')}`)
+  }
+  if (status == 'wip' && !session) {
+    throw new Error('wip status needs a resolved session')
+  }
+  let { status: _status, ...rest } = task
+  return [
+    ...Object.entries(grouped).flatMap(([name, comp]) =>
+      name == 'task'
+        ? Object.keys(rest).length ? [{ eid: row.eid, name, comp: rest }] : []
+        : [{ eid: row.eid, name, comp }]
+    ),
+    ...statusChanges(row.eid, status, session),
+  ]
+}
+
 // A task, TYPED: 'P1 .domain=Eng Build a thing\nnotes…' — the first line
 // is setters + title, every later line is body. Dot-params parse
 // anywhere in the line (their syntax can't be prose); the P1 shorthand

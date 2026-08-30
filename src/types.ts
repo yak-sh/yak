@@ -936,13 +936,13 @@ export type PropType =
 export let verdictName = (verdict?: string | null) =>
   String(verdict ?? '').replaceAll('_', ' ')
 
-// Query-only DERIVED columns (D-24102): readable exactly like a stored column
-// — filter, project, tally, sort — but no write ever carries one, so they stay
-// out of `comps`/`stamped`. The query evaluators compute the value (statusOf in
-// query.ts read() and its SQL CASE mirror). Merged into the readable routing
-// (props.ts types(), query.ts routes) so `.status` and `.task.status` resolve
-// and type-check; excluded from the write vocabulary, so `set .status=` refuses.
-// `status` is the first and only member: it reads completed/cancelled/claim.
+// DERIVED columns (D-24102): readable exactly like a stored column — filter,
+// project, tally, sort — but absent from `comps`/`stamped`, so raw graph writes
+// cannot store one. The query evaluators compute the value (statusOf in query.ts
+// read() and its SQL CASE mirror). Merged into readable routing so `.status` and
+// `.task.status` resolve and type-check; CLI/MCP compatibility writers expand
+// that spelling into facets. `status` is the first and only member: it reads
+// completed/cancelled/claim.
 export let derivedProps: Record<string, Record<string, PropType>> = {
   task: { status: { enum: statuses } },
 }
