@@ -118,13 +118,13 @@ Deno.test('projectionGraph yields snapshot-identical files and roots', () => {
   let snap = snapshot(db)
   let g = projectionGraph(db)
   assertEquals(
-    filesFor(g.all, g.deps, NOW),
-    filesFor(rows(snap), snap.deps, NOW),
+    filesFor(g.all, g.deps),
+    filesFor(rows(snap), snap.deps),
   )
   assertEquals(taskRoots(g.all), taskRoots(rows(snap)))
   // The parity is not vacuous: the venture renders its common persona AND the
   // homeReads-only specialist, and the walk stayed bounded (no task row).
-  let files = filesFor(g.all, g.deps, NOW)
+  let files = filesFor(g.all, g.deps)
   assertEquals(files.length, 2)
   assert(!g.all.some((r) => r.comps.task))
 })
@@ -133,11 +133,11 @@ Deno.test('projectionGraph keeps a persona through role add and removal', () => 
   let { db, common, spec } = seed()
   let render = () => {
     let g = projectionGraph(db)
-    let local = filesFor(g.all, g.deps, NOW)
+    let local = filesFor(g.all, g.deps)
     let snap = snapshot(db)
     assertEquals(
       local,
-      filesFor(rows(snap), snap.deps, NOW),
+      filesFor(rows(snap), snap.deps),
       'bounded daemon and whole local projection stay byte-identical',
     )
     assertEquals(local.length, 2, 'one common and one specialist file')

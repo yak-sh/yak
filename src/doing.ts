@@ -527,7 +527,7 @@ export let wireDoing = (d: Doing) => {
         // fires on every persona-ish change, and snapshot() here cost the
         // graph each time (M-21143).
         let { all, deps } = projectionGraph(db)
-        let files = projection(all, deps, Date.now())
+        let files = projection(all, deps)
         for (let f of syncFiles(files).failed) stuck(f)
         // Every projection path, not just this tick's writes: a file some
         // earlier tick left dirty (untracked then, adopted since) is dirt

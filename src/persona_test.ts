@@ -135,6 +135,67 @@ Deno.test('materialize: edge ord breaks a warmth tie, undeclared trails (T-12939
   assert(md2.indexOf('HOT.') < md2.indexOf('ABODY.'))
 })
 
+Deno.test('persisted projection stays fresh across a warmth crossover', () => {
+  let dir = Deno.makeTempDirSync()
+  try {
+    let project = row({
+      doc: { title: 'Tasks', body: '' },
+      project: {},
+      repo: { path: dir },
+    })
+    let base = row({
+      doc: { title: 'common', body: '' },
+      persona: { home: project.eid },
+    })
+    // These are the two curves that crossed between T-24426's passing
+    // pre-land check and failing post-land review. Ephemeral composition
+    // should follow that changing warmth; a persisted file cannot.
+    let durable = row({
+      doc: { title: 'durable', body: 'DURABLE.' },
+      recall: {
+        count: 6,
+        first_at: '2026-08-07T12:16:11.606Z',
+        last_at: '2026-08-19T19:51:46.851Z',
+      },
+    })
+    let recent = row({
+      doc: { title: 'recent', body: 'RECENT.' },
+      updated: { at: '2026-08-29T00:01:42.716Z' },
+    })
+    let all = [project, base, durable, recent]
+    let deps = [
+      edge(project, 'contains', base),
+      edge(base, 'contains', durable),
+      edge(base, 'contains', recent),
+    ]
+    let early = materialize(
+      all,
+      deps,
+      base,
+      Date.parse('2026-08-30T06:52:35Z'),
+    )
+    let late = materialize(
+      all,
+      deps,
+      base,
+      Date.parse('2026-08-30T07:03:17Z'),
+    )
+    assert(early.indexOf('RECENT.') < early.indexOf('DURABLE.'))
+    assert(late.indexOf('DURABLE.') < late.indexOf('RECENT.'))
+
+    let first = projection(all, deps)
+    // A later CLI check may receive the same graph rows and edges in another
+    // order. Persisted bytes use explicit ord + identity, never either input
+    // order or the clock that moved above.
+    let later = projection([...all].reverse(), [...deps].reverse())
+    assertEquals(later, first)
+    assertEquals(syncFiles(first).written, [`${dir}/.tasks/AGENTS.md`])
+    assertEquals(syncFiles(later), { written: [], removed: [], failed: [] })
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
 Deno.test('projection selects persona facets, including a role persona', async () => {
   let project = row({
     doc: { title: 'Venture', body: '' },
@@ -173,10 +234,10 @@ Deno.test('projection selects persona facets, including a role persona', async (
   Deno.env.set('TASKS_HOST', host)
   try {
     let narrow = await projectionSnapshot()
-    let files = filesFor(rows(narrow), narrow.deps, NOW)
+    let files = filesFor(rows(narrow), narrow.deps)
     assertEquals(
       files,
-      filesFor(all, deps, NOW),
+      filesFor(all, deps),
     )
     assertEquals(files.length, 2, 'one common and one specialist projection')
     assertStringIncludes(files[0].body, `GENERATED from N-${voice.num}`)
@@ -226,7 +287,7 @@ slow('task sync --check accepts a projected persona role', async () => {
     ),
     deps,
   }
-  let expected = projection(all, deps, NOW)
+  let expected = projection(all, deps)
   let synced = syncFiles(expected)
   assertEquals(synced.failed, [])
   let fake = fakeGraph(snap)
@@ -484,7 +545,7 @@ Deno.test('filesFor: specialist files are agent files, AGENTS.md is not', () => 
     persona: { home: proj.eid },
     alias: { slug: 'taskmaster', slugs: null },
   })
-  let files = filesFor([proj, base, spec], [edge(proj, 'contains', base)], NOW)
+  let files = filesFor([proj, base, spec], [edge(proj, 'contains', base)])
   let agents = files.find((f) =>
     f.path == '/repo/.tasks/personas/taskmaster.md'
   )!
@@ -580,7 +641,6 @@ Deno.test('filesFor: common → AGENTS.md, others → personas/<slug>.md, fleet 
   let files = filesFor(
     [proj, homeless, base, other, fleet, stray],
     [edge(proj, 'contains', base)],
-    NOW,
   )
   assertEquals(files.map((f) => f.path), [
     '/repo/.tasks/AGENTS.md',
@@ -592,7 +652,7 @@ Deno.test('filesFor: common → AGENTS.md, others → personas/<slug>.md, fleet 
   // never granted one grants none — git.ts reads this and nothing else.
   assertEquals(files.map((f) => f.push), [false, false])
   proj.comps.repo.push = 1
-  let granted = filesFor([proj, base], [edge(proj, 'contains', base)], NOW)
+  let granted = filesFor([proj, base], [edge(proj, 'contains', base)])
   assertEquals(granted.map((f) => f.push), [true])
 })
 
@@ -627,7 +687,7 @@ Deno.test('filesFor / taskRoots: a retired venture is neither written nor swept'
     persona: { home: proj.eid },
   })
   let deps = [edge(proj, 'contains', base)]
-  assertEquals(filesFor([proj, base], deps, NOW), [])
+  assertEquals(filesFor([proj, base], deps), [])
   assertEquals(taskRoots([proj, base]), [])
 })
 
@@ -702,11 +762,11 @@ Deno.test('projection: a renamed slug orphans the old file; sync removes it', ()
     })
     let all = [proj, base, spec]
     let deps = [edge(proj, 'contains', base)]
-    syncFiles(projection(all, deps, NOW))
+    syncFiles(projection(all, deps))
     assert(Deno.readTextFileSync(`${dir}/.tasks/personas/old.md`).length > 0)
     // rename the slug: old.md is now an orphan, new.md is what the render wants
     spec.comps.alias.slug = 'new'
-    let plan = projection(all, deps, NOW)
+    let plan = projection(all, deps)
     assert(
       plan.some((f) => f.path.endsWith('/personas/old.md') && f.body == null),
     )
@@ -734,10 +794,10 @@ Deno.test('projection: a deleted persona orphans its file; AGENTS.md untouched',
       alias: { slug: 'spec' },
     })
     let deps = [edge(proj, 'contains', base)]
-    syncFiles(projection([proj, base, spec], deps, NOW))
+    syncFiles(projection([proj, base, spec], deps))
     assert(Deno.readTextFileSync(`${dir}/.tasks/personas/spec.md`).length > 0)
     // spec deleted from the graph — its file is an orphan under a dir we own
-    let { removed } = syncFiles(projection([proj, base], deps, NOW))
+    let { removed } = syncFiles(projection([proj, base], deps))
     assert(removed.includes(`${dir}/.tasks/personas/spec.md`))
     assertThrows(() => Deno.statSync(`${dir}/.tasks/personas/spec.md`))
     // the surviving common persona's file is left alone
@@ -946,7 +1006,7 @@ Deno.test('filesFor: a specialist file presumes the AGENTS.md beside it', () => 
     edge(spec, 'contains', shared),
     edge(spec, 'contains', own),
   ]
-  let files = filesFor([proj, shared, common, spec, own], deps, NOW)
+  let files = filesFor([proj, shared, common, spec, own], deps)
   let agents = files.find((f) => f.path.endsWith('AGENTS.md'))!
   let reviewer = files.find((f) => f.path.endsWith('reviewer.md'))!
   assertStringIncludes(agents.body, 'SHAREDBODY.')
@@ -956,7 +1016,6 @@ Deno.test('filesFor: a specialist file presumes the AGENTS.md beside it', () => 
   let alone = filesFor(
     [proj, shared, spec, own],
     deps.filter((d) => d.parent != proj.eid),
-    NOW,
   )
   assertStringIncludes(
     alone.find((f) => f.path.endsWith('reviewer.md'))!.body,

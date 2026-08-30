@@ -3091,7 +3091,7 @@ let sync = async (got: Got) => {
     if (check) return print(`sync --check skipped: ${(e as Error).message}`)
     throw e
   }
-  let files = projection(rows(snap), snap.deps, Date.now())
+  let files = projection(rows(snap), snap.deps)
   if (check) {
     let drift: string[] = []
     for (let f of files) {

@@ -72,10 +72,10 @@ export let agentName = (p: Row) =>
   )
 
 // One index line — the memory_recall rendering, tolerant of non-memory
-// targets (any doc can ride the index tier). Warmth ORDERS the index but
-// never prints: a score in the line re-materializes every persona file
-// on every decay tick, and that churn buries the real diffs.
-export let indexLine = (r: Row, _now: number) => {
+// targets (any doc can ride the index tier). Dynamic composition may order
+// these lines by warmth, but the score never prints: that would churn the text
+// on every decay tick and bury real diffs.
+export let indexLine = (r: Row, _now?: number) => {
   let m = r.comps.memory
   let n = Number(r.comps.recall?.count ?? 0)
   let head = memoryHead(r)
@@ -101,7 +101,7 @@ let tiers = (
   all: Row[],
   deps: Dep[],
   eid: string,
-  now: number,
+  order: number | null,
   seen = new Set<string>(),
 ): { pre: Row[]; idx: Row[] } => {
   let pre = new Map<string, Row>()
@@ -117,7 +117,7 @@ let tiers = (
     for (let { d, r } of kids(type)) {
       if (r.comps.persona) {
         if (seen.has(r.eid)) continue
-        let sub = tiers(all, deps, r.eid, now, seen)
+        let sub = tiers(all, deps, r.eid, order, seen)
         for (let m of sub.pre) pre.set(m.eid, m)
         for (let m of sub.idx) idx.set(m.eid, m)
       } else {
@@ -127,14 +127,19 @@ let tiers = (
     }
   }
   for (let e of pre.keys()) idx.delete(e) // preload wins the fuller form
-  // Warmth ranks the tier; a declared edge `ord` breaks a tie (lower first,
-  // undeclared last), so equal cache classes keep an intentional order that
-  // snapshot's deterministic read makes identical across databases and
-  // rewrites. sub-persona members carry no ord here (their own edges ordered
-  // them within the sub) and trail on warmth alone, stably.
+  // Ephemeral persona composition ranks by live warmth. Persisted projection
+  // cannot: hot() decays against the wall clock, so two unchanged memories can
+  // cross and make a generated file stale without a graph write. Stored files
+  // use only graph facts — declared edge order, then stable identity. Both
+  // paths are total orders, so neither depends on input/SQLite iteration.
   let rank = (e: string) => ord.get(e) ?? Number.MAX_SAFE_INTEGER
+  let byGraph = (a: Row, b: Row) =>
+    rank(a.eid) - rank(b.eid) || a.num - b.num ||
+    a.eid.localeCompare(b.eid)
   let byWarm = (a: Row, b: Row) =>
-    hot(b.comps, now) - hot(a.comps, now) || rank(a.eid) - rank(b.eid)
+    order == null
+      ? byGraph(a, b)
+      : hot(b.comps, order) - hot(a.comps, order) || byGraph(a, b)
   let warm = (m: Map<string, Row>) => [...m.values()].sort(byWarm)
   return { pre: warm(pre), idx: warm(idx) }
 }
@@ -145,18 +150,24 @@ let tiers = (
 // the reverse). A second document rendered for the same reader passes these
 // as `omit` so a tier lands once, through whichever file said it first.
 export type Delivered = { pre: Set<string>; idx: Set<string> }
-export let deliveredBy = (
+let delivered = (
   all: Row[],
   deps: Dep[],
   eid: string,
-  now: number,
+  order: number | null,
 ): Delivered => {
-  let { pre, idx } = tiers(all, deps, eid, now)
+  let { pre, idx } = tiers(all, deps, eid, order)
   return {
     pre: new Set(pre.map((r) => r.eid)),
     idx: new Set([...pre, ...idx].map((r) => r.eid)),
   }
 }
+export let deliveredBy = (
+  all: Row[],
+  deps: Dep[],
+  eid: string,
+  now: number,
+): Delivered => delivered(all, deps, eid, now)
 
 // The whole persona as one markdown document: header naming the edit path,
 // preloaded bodies (warmest first — the budgeted auto-tier hangs off this
@@ -169,15 +180,15 @@ export let deliveredBy = (
 // delivers to the same reader (deliveredBy) — a preload elsewhere silences
 // both forms here; an index line elsewhere silences only the index line,
 // since this document's preload is the fuller form and still earns its place.
-export let materialize = (
+let render = (
   all: Row[],
   deps: Dep[],
   p: Row,
-  now: number,
+  order: number | null,
   d: Dialect = DIALECT,
   omit?: Delivered,
 ) => {
-  let { pre, idx } = tiers(all, deps, p.eid, now)
+  let { pre, idx } = tiers(all, deps, p.eid, order)
   if (omit) {
     pre = pre.filter((r) => !omit.pre.has(r.eid))
     idx = idx.filter((r) => !omit.idx.has(r.eid))
@@ -198,12 +209,20 @@ export let materialize = (
     ...(idx.length
       ? [
         d.rule,
-        `${d.index}\n\n${idx.map((r) => indexLine(r, now)).join('\n')}`,
+        `${d.index}\n\n${idx.map((r) => indexLine(r)).join('\n')}`,
       ]
       : []),
   ]
   return parts.filter(Boolean).join('\n\n') + '\n'
 }
+export let materialize = (
+  all: Row[],
+  deps: Dep[],
+  p: Row,
+  now: number,
+  d: Dialect = DIALECT,
+  omit?: Delivered,
+) => render(all, deps, p, now, d, omit)
 
 // A project's COMMON persona — the one the project `contains` (an
 // edge, so the marker is graph-data the editor can move). Among its
@@ -315,8 +334,10 @@ let managed = (r: Row) =>
 //
 // Each file carries its venture's `push` permission, because that is the
 // only place the two facts meet: git.ts sees paths, and only the project
-// row knows whether this venture's origin may hear from us.
-export let filesFor = (all: Row[], deps: Dep[], now: number) => {
+// row knows whether this venture's origin may hear from us. Generated files
+// use the stored tier order: unlike a one-run prompt, their bytes must stay a
+// pure function of graph state while the wall clock advances.
+export let filesFor = (all: Row[], deps: Dep[]) => {
   let out: { path: string; body: string; push: boolean }[] = []
   for (let proj of all.filter(managed)) {
     let root = `${proj.comps.repo.path}/.tasks`
@@ -325,7 +346,7 @@ export let filesFor = (all: Row[], deps: Dep[], now: number) => {
     if (base) {
       out.push({
         path: `${root}/AGENTS.md`,
-        body: materialize(all, deps, base, now),
+        body: render(all, deps, base, null),
         push,
       })
     }
@@ -333,7 +354,7 @@ export let filesFor = (all: Row[], deps: Dep[], now: number) => {
     // session reading one reads both — so tiers the common persona already
     // delivers are omitted here rather than said twice (T-21957). Outside a
     // repo the specialist rides the spawn path, which renders complete.
-    let said = base ? deliveredBy(all, deps, base.eid, now) : undefined
+    let said = base ? delivered(all, deps, base.eid, null) : undefined
     for (
       let p of all.filter((r) =>
         r.comps.persona?.home == proj.eid && r.eid != base?.eid
@@ -344,7 +365,7 @@ export let filesFor = (all: Row[], deps: Dep[], now: number) => {
       // symlink's realpath BASENAME, and the two must never disagree.
       out.push({
         path: `${root}/personas/${agentName(p)}.md`,
-        body: materialize(all, deps, p, now, AGENT, said),
+        body: render(all, deps, p, null, AGENT, said),
         push,
       })
     }
@@ -419,8 +440,8 @@ export let orphans = (
 // Impure — it reads the .tasks dirs to see what's there but shouldn't be — so
 // it lives beside syncFiles, not the pure renderers. One plan feeds both the
 // CLI verb and the server effect, so they reconcile identically.
-export let projection = (all: Row[], deps: Dep[], now: number) => {
-  let files = filesFor(all, deps, now)
+export let projection = (all: Row[], deps: Dep[]) => {
+  let files = filesFor(all, deps)
   return [...files, ...orphans(taskRoots(all), files)]
 }
 
