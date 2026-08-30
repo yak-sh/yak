@@ -85,6 +85,7 @@ import { sweepSelect, vocabularyDoc } from './db.ts'
 import { projectionGraph } from './graph_query.ts'
 import { vocabularyMd } from './schema.ts'
 import { repeat } from './timers.ts'
+import type { DatabaseSync } from './sqlite.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -520,11 +521,24 @@ export let wireDoing = (d: Doing) => {
       }
     }, 250)
   }
+  wirePersonaSync(db, syncSoon)
+  return { syncSoon }
+}
+
+type Row = Record<string, unknown>
+
+// Register the graph changes that reshape persona files. Kept as a seam over
+// the database and reconcile callback so the daemon's invalidation contract is
+// testable without writing into a venture checkout.
+export let wirePersonaSync = (
+  store: DatabaseSync,
+  syncSoon: () => void,
+) => {
   // Is this eid a persona, or on some persona's tier? The gate that keeps
   // ordinary doc edits and edges from re-rendering the fleet.
   let personaish = (...eids: (string | undefined)[]) =>
     eids.some((e) =>
-      e && db.prepare(
+      e && store.prepare(
         `select 1 from persona
            where entity = (select id from entity where eid = :e)
          union select 1 from dependency d
@@ -543,6 +557,11 @@ export let wireDoing = (d: Doing) => {
     doc: "materialize personas into their projects' .tasks/ files " +
       '(write-if-changed; task sync --commit is the deliberate commit)',
   })
+  on('role', {
+    created: (eid) => personaish(eid) && syncSoon(),
+    removed: (eid) => personaish(eid) && syncSoon(),
+    doc: 'adding or removing role on a persona re-renders its human header',
+  })
   on('dependency', {
     created: (eid, comp) => personaish(eid, comp.child as string) && syncSoon(),
     doc: 'a tier edge (or common flip) at a persona re-renders its files',
@@ -554,10 +573,7 @@ export let wireDoing = (d: Doing) => {
     },
     doc: 'a doc edit on a persona or a tiered memory re-renders its files',
   })
-  return { syncSoon }
 }
-
-type Row = Record<string, unknown>
 
 // Every reconciler runs on a timer, which means nothing is holding its
 // promise — and in Deno a rejection nobody handled ENDS THE PROCESS. A sweep

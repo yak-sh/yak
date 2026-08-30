@@ -6,8 +6,8 @@
 // a graph with every shape that walk must reach — a contained base, an
 // index tier, a specialist homed but not contained, and noise rows that
 // must change nothing.
-import { assert, assertEquals } from '@std/assert'
-import { uuid } from './types.ts'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { idOf, uuid } from './types.ts'
 import { evalGraph, personaGraph, projectionGraph } from './graph_query.ts'
 import { resultStates } from './result_component.ts'
 import { filesFor, materialize, taskRoots } from './persona.ts'
@@ -47,7 +47,10 @@ let seed = () => {
   edge(common, 'contains', base)
   let spec = e() // specialist: homed, NOT contained — rides derived homeReads
   doc(spec, 'Specialist persona')
-  apply(db, [{ eid: spec, name: 'persona', comp: { home: proj } }])
+  apply(db, [
+    { eid: spec, name: 'persona', comp: { home: proj } },
+    { eid: spec, name: 'alias', comp: { slug: 'specialist' } },
+  ])
 
   let m1 = e() // preloaded via the base — must surface through recursion
   doc(m1, 'Base memory')
@@ -124,4 +127,56 @@ Deno.test('projectionGraph yields snapshot-identical files and roots', () => {
   let files = filesFor(g.all, g.deps, NOW)
   assertEquals(files.length, 2)
   assert(!g.all.some((r) => r.comps.task))
+})
+
+Deno.test('projectionGraph keeps a persona through role add and removal', () => {
+  let { db, common, spec } = seed()
+  let render = () => {
+    let g = projectionGraph(db)
+    let local = filesFor(g.all, g.deps, NOW)
+    let snap = snapshot(db)
+    assertEquals(
+      local,
+      filesFor(rows(snap), snap.deps, NOW),
+      'bounded daemon and whole local projection stay byte-identical',
+    )
+    assertEquals(local.length, 2, 'one common and one specialist file')
+    return {
+      common: local.find((f) => f.path.endsWith('/AGENTS.md'))!,
+      specialist: local.find((f) => f.path.endsWith('/specialist.md'))!,
+    }
+  }
+
+  let plain = render()
+  let initial = rows(snapshot(db))
+  let commonRow = initial.find((r) => r.eid == common)!
+  let specialistRow = initial.find((r) => r.eid == spec)!
+  assertStringIncludes(plain.common.body, `GENERATED from ${idOf(commonRow)}`)
+  assertStringIncludes(
+    plain.specialist.body,
+    `GENERATED from ${idOf(specialistRow)}`,
+  )
+  assertEquals(commonRow.kind, 'persona')
+  assertEquals(specialistRow.kind, 'persona')
+
+  apply(db, [{ eid: spec, name: 'role', comp: { state: 'stopped' } }])
+  let mixed = render()
+  let roleRow = rows(snapshot(db)).find((r) => r.eid == spec)!
+  assertEquals(roleRow.kind, 'role', 'derived kind precedence is unchanged')
+  assertStringIncludes(mixed.specialist.body, `GENERATED from ${idOf(roleRow)}`)
+  assertStringIncludes(
+    mixed.common.body,
+    `GENERATED from ${idOf(commonRow)}`,
+    'ordinary personas keep their N address',
+  )
+
+  apply(db, [{ eid: spec, name: 'role', comp: null }])
+  let restored = render()
+  let restoredRow = rows(snapshot(db)).find((r) => r.eid == spec)!
+  assertEquals(restoredRow.kind, 'persona')
+  assertStringIncludes(
+    restored.specialist.body,
+    `GENERATED from ${idOf(restoredRow)}`,
+  )
+  assertEquals(restored.specialist.body, plain.specialist.body)
 })

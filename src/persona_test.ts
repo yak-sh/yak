@@ -12,6 +12,7 @@ import {
 import { type Dep, type Edge, kindOf } from './types.ts'
 import { projectionSnapshot, type Row, rows } from './client.ts'
 import { fakeGraph } from './graph_fake.ts'
+import { slow } from './testing.ts'
 import {
   adopted,
   AGENT,
@@ -134,7 +135,7 @@ Deno.test('materialize: edge ord breaks a warmth tie, undeclared trails (T-12939
   assert(md2.indexOf('HOT.') < md2.indexOf('ABODY.'))
 })
 
-Deno.test('projection queries only persona neighborhoods', async () => {
+Deno.test('projection selects persona facets, including a role persona', async () => {
   let project = row({
     doc: { title: 'Venture', body: '' },
     project: {},
@@ -145,12 +146,18 @@ Deno.test('projection queries only persona neighborhoods', async () => {
     persona: { home: project.eid },
     alias: { slug: 'voice' },
   })
+  let specialist = row({
+    doc: { title: 'Verifier', body: 'Check the work.' },
+    persona: { home: project.eid },
+    role: { state: 'stopped' },
+    alias: { slug: 'verifier' },
+  })
   let lesson = doc('Lesson', 'Keep it small.')
   let deps = [
     edge(project, 'contains', voice),
     edge(voice, 'contains', lesson),
   ]
-  let all = [project, voice, lesson]
+  let all = [project, voice, specialist, lesson]
   let snap = {
     changes: all.flatMap((r) =>
       Object.entries(r.comps).map(([name, comp]) => ({
@@ -166,15 +173,83 @@ Deno.test('projection queries only persona neighborhoods', async () => {
   Deno.env.set('TASKS_HOST', host)
   try {
     let narrow = await projectionSnapshot()
+    let files = filesFor(rows(narrow), narrow.deps, NOW)
     assertEquals(
-      filesFor(rows(narrow), narrow.deps, NOW),
+      files,
       filesFor(all, deps, NOW),
     )
+    assertEquals(files.length, 2, 'one common and one specialist projection')
+    assertStringIncludes(files[0].body, `GENERATED from N-${voice.num}`)
+    assertStringIncludes(files[1].path, '/personas/verifier.md')
+    assertStringIncludes(files[1].body, `GENERATED from R-${specialist.num}`)
+    assertEquals(
+      rows(narrow).filter((r) => r.comps.persona).length,
+      2,
+      'persona roots are not duplicated by their neighborhoods',
+    )
+    assert(seen.some((path) => path.includes('.persona!')))
     assertEquals(seen.some((path) => path.startsWith('/snapshot')), false)
   } finally {
     if (was) Deno.env.set('TASKS_HOST', was)
     else Deno.env.delete('TASKS_HOST')
     await server.shutdown()
+  }
+})
+
+slow('task sync --check accepts a projected persona role', async () => {
+  let root = Deno.makeTempDirSync()
+  let project = row({
+    doc: { title: 'Venture', body: '' },
+    project: {},
+    repo: { path: root, push: 0 },
+  })
+  let common = row({
+    doc: { title: 'Common', body: '' },
+    persona: { home: project.eid },
+    alias: { slug: 'common' },
+  })
+  let specialist = row({
+    doc: { title: 'Verifier', body: '' },
+    persona: { home: project.eid },
+    role: { state: 'stopped' },
+    alias: { slug: 'verifier' },
+  })
+  let all = [project, common, specialist]
+  let deps = [edge(project, 'contains', common)]
+  let snap = {
+    changes: all.flatMap((r) =>
+      Object.entries(r.comps).map(([name, comp]) => ({
+        eid: r.eid,
+        name,
+        comp: name == 'entity' ? { ...comp, eid: r.eid } : comp,
+      }))
+    ),
+    deps,
+  }
+  let expected = projection(all, deps, NOW)
+  let synced = syncFiles(expected)
+  assertEquals(synced.failed, [])
+  let fake = fakeGraph(snap)
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'sync',
+        '--check',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: fake.host, TASKS_BACKOFF: '' },
+    }).output()
+    let text = new TextDecoder()
+    assertEquals(out.code, 0, text.decode(out.stderr))
+    assertEquals(text.decode(out.stdout), 'projections in sync\n')
+    assert(fake.seen.some((path) => path.includes('.persona!')))
+    assertEquals(fake.seen.some((path) => path.startsWith('/snapshot')), false)
+  } finally {
+    await fake.server.shutdown()
+    Deno.removeSync(root, { recursive: true })
   }
 })
 

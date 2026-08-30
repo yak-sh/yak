@@ -3865,7 +3865,7 @@ export let contextSnapshot = async (
 export let projectionSnapshot = async (): Promise<Snapshot> => {
   let [projects, personas] = await Promise.all([
     query(['.kind=project', '.repo!']),
-    query(['.kind=persona']),
+    query(['.persona!']),
   ])
   let near = await neighborhoods(personas.map((r) => r.eid))
   let all = uniq([...projects, ...personas, ...near.rows])
