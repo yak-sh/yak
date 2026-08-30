@@ -1306,18 +1306,35 @@ let handle = async (req: Request) => {
   }
   if (path == '/verify') {
     if (req.method != 'POST') return methodNotAllowed('POST')
+    // The mounted MCP calls graphIO.verify directly and records its own MCP
+    // outcome once. This HTTP row therefore belongs only to callers that
+    // crossed this boundary: the CLI and a standalone remote MCP process.
+    let t0 = performance.now()
+    let note = (ok: boolean, error?: string) =>
+      record(db, {
+        source: 'http',
+        name: 'verify',
+        ok,
+        ms: performance.now() - t0,
+        error,
+      })
     try {
       let body = await req.json() as { id?: unknown }
       if (typeof body.id != 'string' || !body.id.trim()) {
         throw new Error('verify needs a task id')
       }
-      return Response.json(
-        requestVerifier(cast, body.id, req.headers.get('x-via') ?? undefined),
+      let result = requestVerifier(
+        cast,
+        body.id,
+        req.headers.get('x-via') ?? undefined,
       )
+      let response = Response.json(result)
+      note(true)
+      return response
     } catch (e) {
-      return new Response(e instanceof Error ? e.message : String(e), {
-        status: 400,
-      })
+      let why = e instanceof Error ? e.message : String(e)
+      note(false, why)
+      return new Response(why, { status: 400 })
     }
   }
   // Value redaction is the one write that reaches backward into the journal.

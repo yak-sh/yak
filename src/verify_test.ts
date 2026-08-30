@@ -676,6 +676,42 @@ Deno.test('explicit verification hides quarantined targets without spawning', ()
   assertEquals(verifiersFor(work.eid), [])
 })
 
+Deno.test('explicit verification reports settlement between pending and cycle reads', () => {
+  reset()
+  let work = task(), id = human(db, work.eid)
+  let original = db.prepare
+  let crossed = false
+  db.prepare = ((sql: string) => {
+    let statement = original.call(db, sql)
+    if (
+      !crossed && sql.includes('select 1 from task') &&
+      sql.includes('exists (select 1 from accept')
+    ) {
+      let get = statement.get.bind(statement)
+      statement.get = ((...args: unknown[]) => {
+        let result = get(...args as never[])
+        if (result) {
+          crossed = true
+          apply(db, [{ eid: work.eid, name: 'completed', comp: null }])
+        }
+        return result
+      }) as typeof statement.get
+    }
+    return statement
+  }) as typeof db.prepare
+  try {
+    assertThrows(
+      () => requestVerifier(cast, id),
+      Error,
+      'is no longer awaiting verification',
+    )
+    assertEquals(crossed, true)
+    assertEquals(verifiersFor(work.eid), [])
+  } finally {
+    db.prepare = original
+  }
+})
+
 Deno.test('verifier identity fails closed when alias, persona, or role configuration is missing', () => {
   reset()
   assertEquals(verifierIdentity(), persona)

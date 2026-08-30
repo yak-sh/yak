@@ -259,7 +259,11 @@ export let requestVerifier = (
   if (!verificationPending(db, task)) {
     return refuse(task, 'is not eligible for independent verification')
   }
-  let cycle = cycleOf(task)!
+  // Settlement may retract completed between the pending predicate and this
+  // keyed lookup. That is an ordinary eligibility change, not an invariant
+  // violation: speak the same actionable result as the post-spawn recheck.
+  let cycle = cycleOf(task)
+  if (!cycle) return refuse(task, 'is no longer awaiting verification')
   let blocked = verifierBlocked(task, cycle, verifierTuning(), false)
   if (blocked) return refuse(task, `cannot start verification: ${blocked}`)
 
