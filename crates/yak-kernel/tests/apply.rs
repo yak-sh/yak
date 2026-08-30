@@ -8,7 +8,8 @@ use serde_json::{json, Map, Value};
 use yak_kernel::change::Change;
 use yak_kernel::feed::{cursor_of, journal_since, row_changes, Feed};
 use yak_kernel::write::{
-    apply, claim_work, default_gates, native_safe, ApplyError, ApplyOpts, ClaimWork, WriteStore,
+    apply, claim_work, default_gates, human, native_safe, ApplyError, ApplyOpts, ClaimWork,
+    WriteStore,
 };
 
 const SCHEMA: &str = "
@@ -73,6 +74,9 @@ const SCHEMA: &str = "
     project integer,
     assignee integer,
     domain text
+  );
+  create table design (
+    entity integer primary key references entity(id)
   );
   create table completed (
     entity integer primary key references entity(id),
@@ -839,6 +843,68 @@ fn guarded_worker_claim_approves_inherits_replays_and_rolls_back() {
     assert_eq!(one::<i64>(&blocked, "select count(*) from decided"), 0);
     assert_eq!(one::<i64>(&blocked, "select count(*) from session"), 0);
     assert_eq!(one::<i64>(&blocked, "select count(*) from claim"), 0);
+}
+
+#[test]
+fn guarded_worker_claim_rejects_wrong_kinds_and_ambiguous_aliases_without_a_trace() {
+    let s = store();
+    run(
+        &s,
+        vec![
+            ch(A, "task", json!({})),
+            ch(A, "decided", json!({})),
+            ch(B, "task", json!({})),
+            ch(B, "alias", json!({"slug": "alias-a"})),
+            ch(C, "design", json!({})),
+            ch(C, "alias", json!({"slug": "alias-b"})),
+            ch(D, "comment", json!({"target": A})),
+        ],
+    );
+    s.conn.execute("update alias set slugs = 'ambiguous-worker'", []).unwrap();
+    let journals = one::<i64>(&s, "select count(*) from journal");
+    for wrong in [B, C, D] {
+        let id = human(&s.conn, wrong);
+        let err = take(&s, A, &id, false).unwrap_err().to_string();
+        assert!(err.contains(&format!("{id} is not a session")), "{err}");
+    }
+    let err = take(&s, A, "ambiguous-worker", false).unwrap_err().to_string();
+    assert!(err.contains("ambiguous-worker is an ambiguous alias"), "{err}");
+    assert_eq!(one::<i64>(&s, "select count(*) from session"), 0);
+    assert_eq!(one::<i64>(&s, "select count(*) from claim"), 0);
+    assert_eq!(one::<i64>(&s, "select count(*) from journal"), journals);
+
+    let target = human(&s.conn, D);
+    let err = take(&s, &target, "wrong-target", false).unwrap_err().to_string();
+    assert!(err.contains(&format!("{target} is not a task")), "{err}");
+    assert_eq!(one::<i64>(&s, "select count(*) from session"), 0);
+    assert_eq!(one::<i64>(&s, "select count(*) from journal"), journals);
+}
+
+#[test]
+fn guarded_worker_claim_mints_unknown_uuid_resumes_exact_session_and_rejects_empty_cwd() {
+    let s = store();
+    run(&s, vec![ch(A, "task", json!({})), ch(A, "decided", json!({}))]);
+    let sid = "ffffffff-0000-4000-8000-000000000099";
+    take(&s, A, sid, false).unwrap();
+    let session: String = one(
+        &s,
+        "select e.eid from session join entity e on e.id = session.entity \
+         where session.id = 'ffffffff-0000-4000-8000-000000000099'",
+    );
+    let journals = one::<i64>(&s, "select count(*) from journal");
+    assert!(take(&s, A, sid, false).unwrap().is_empty());
+    assert!(take(&s, A, &human(&s.conn, &session), false).unwrap().is_empty());
+    assert_eq!(one::<i64>(&s, "select count(*) from journal"), journals);
+
+    let err = claim_work(
+        &s,
+        &ClaimWork { target: A, session: sid, approve: false, recursive: true, cwd: Some(" ") },
+        &ApplyOpts::default(),
+        &default_gates(),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("claim_work cwd must not be empty"), "{err}");
 }
 
 #[test]

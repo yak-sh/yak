@@ -102,6 +102,89 @@ slow(
     assertMatch(dec(bad.stderr), /no entity: S-999999/)
     assertEquals((await phantoms('S-999999')).length, 0)
 
+    // Every human graph address is authoritative. A task, design, or comment
+    // cannot fall through to stable session.id minting, and malformed payloads
+    // cannot carry a second write shape through the named mutation.
+    let guarded = uid(5), wrongTask = uid(6), design = uid(7), comment = uid(8)
+    await post([
+      ...ent(guarded, 5, {
+        doc: { title: 'Guarded task', body: '' },
+        task: { project: P },
+        decided: {},
+      }),
+      ...ent(wrongTask, 6, {
+        doc: { title: 'Wrong task identity', body: '' },
+        task: { project: P },
+      }),
+      ...ent(design, 7, {
+        doc: { title: 'Wrong design identity', body: '' },
+        design: {},
+      }),
+      ...ent(comment, 8, {
+        doc: { title: 'Wrong comment identity', body: '' },
+        comment: { target: guarded },
+      }),
+    ])
+    let rows = [
+      ...await query(['.kind=task']),
+      ...await query(['.kind=design']),
+      ...await query(['.kind=comment']),
+    ]
+    let address = (eid: string, prefix: string) =>
+      `${prefix}-${rows.find((row) => row.eid == eid)!.num}`
+    let guardedHuman = address(guarded, 'T')
+    let wrongs = [
+      address(wrongTask, 'T'),
+      address(design, 'D'),
+      address(comment, 'C'),
+    ]
+    let guardedAttempt = (session: unknown, extra = {}) =>
+      fetch(`http://${U}/apply`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          mutation: 'claim_work',
+          target: guardedHuman,
+          session,
+          mode: 'ready',
+          ...extra,
+        }),
+      })
+    for (let wrong of wrongs) {
+      let refusal = await guardedAttempt(wrong)
+      assertEquals(refusal.status, 400)
+      assertStringIncludes(await refusal.text(), `${wrong} is not a session`)
+      assertEquals((await phantoms(wrong)).length, 0)
+    }
+    let smuggled = await guardedAttempt('smuggler', {
+      changes: [{ eid: uid(9), name: 'project', comp: {} }],
+    })
+    assertEquals(smuggled.status, 400)
+    assertEquals(await smuggled.text(), 'claim_work unknown field: changes')
+    let blankCwd = await guardedAttempt('blank-cwd', { cwd: ' ' })
+    assertEquals(blankCwd.status, 400)
+    assertEquals(await blankCwd.text(), 'claim_work cwd must not be empty')
+    let wrongTarget = await fetch(`http://${U}/apply`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        mutation: 'claim_work',
+        target: address(comment, 'C'),
+        session: 'wrong-target',
+        mode: 'ready',
+      }),
+    })
+    assertEquals(wrongTarget.status, 400)
+    assertStringIncludes(await wrongTarget.text(), 'is not a task')
+    assertEquals((await phantoms('smuggler')).length, 0)
+    assertEquals((await phantoms('blank-cwd')).length, 0)
+    assertEquals((await phantoms('wrong-target')).length, 0)
+    assertEquals(
+      (await query(['.kind=task'])).find((row) => row.eid == guarded)?.comps
+        .claim,
+      undefined,
+    )
+
     // Two worker takes arriving together serialize at the writer transaction:
     // exactly one claims, the loser leaves no Session, and the existing
     // conflict audit records the collision.

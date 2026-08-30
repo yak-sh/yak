@@ -1703,16 +1703,71 @@ fn write_parity() {
         "native",
     );
     assert_write(
-        "claim-work/rejects-literal-smuggling",
+        "claim-work/rejects-task-as-session",
         &ts,
         &br,
         &ts_db,
         &br_db,
         &format!(
-            "{{\"mutation\":\"claim_work\",\"target\":\"{twork}\",\"session\":\"{worker}\",\"mode\":\"ready\",\"entities\":[{{\"comps\":{{\"project\":{{}}}}}}]}}"
+            "{{\"mutation\":\"claim_work\",\"target\":\"{twork}\",\"session\":\"{twork}\",\"mode\":\"ready\"}}"
         ),
         "native",
     );
+    for (key, value) in [
+        ("entities", r#"[{"comps":{"project":{}}}]"#),
+        ("changes", r#"[{"eid":"smuggled"}]"#),
+        ("constructor", r#"{"eid":"smuggled"}"#),
+        ("__proto__", r#"{"eid":"smuggled"}"#),
+    ] {
+        assert_write(
+            &format!("claim-work/rejects-unknown-{key}"),
+            &ts,
+            &br,
+            &ts_db,
+            &br_db,
+            &format!(
+                "{{\"mutation\":\"claim_work\",\"target\":\"{twork}\",\"session\":\"{worker}\",\"mode\":\"ready\",\"{key}\":{value}}}"
+            ),
+            "native",
+        );
+    }
+    for (field, body) in [
+        (
+            "target",
+            format!(
+                "{{\"mutation\":\"claim_work\",\"target\":{{\"eid\":\"smuggled\"}},\"session\":\"{worker}\",\"mode\":\"ready\"}}"
+            ),
+        ),
+        (
+            "session",
+            format!(
+                "{{\"mutation\":\"claim_work\",\"target\":\"{twork}\",\"session\":{{\"eid\":\"smuggled\"}},\"mode\":\"ready\"}}"
+            ),
+        ),
+    ] {
+        assert_write(
+            &format!("claim-work/rejects-object-{field}"),
+            &ts,
+            &br,
+            &ts_db,
+            &br_db,
+            &body,
+            "native",
+        );
+    }
+    for (name, cwd) in [("empty", ""), ("blank", "  ")] {
+        assert_write(
+            &format!("claim-work/rejects-{name}-cwd"),
+            &ts,
+            &br,
+            &ts_db,
+            &br_db,
+            &format!(
+                "{{\"mutation\":\"claim_work\",\"target\":\"{twork}\",\"session\":\"{worker}\",\"mode\":\"ready\",\"cwd\":\"{cwd}\"}}"
+            ),
+            "native",
+        );
+    }
     assert_write(
         "named-mutation/rejects-literal-smuggling",
         &ts,
@@ -1735,6 +1790,44 @@ fn write_parity() {
         ),
         "native",
     );
+    let wrong_target = uuid_v4();
+    g(&ts, &br, &format!("[{{\"eid\":\"{wrong_target}\",\"name\":\"project\",\"comp\":{{}}}}]"));
+    assert_write(
+        "claim-work/rejects-project-target",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!(
+            "{{\"mutation\":\"claim_work\",\"target\":\"{wrong_target}\",\"session\":\"{worker}-wrong-target\",\"mode\":\"ready\"}}"
+        ),
+        "native",
+    );
+    let uuid_task = uuid_v4();
+    let uuid_session = uuid_v4();
+    g(
+        &ts,
+        &br,
+        &format!(
+            "[{{\"eid\":\"{uuid_task}\",\"name\":\"task\",\"comp\":{{}}}},\
+              {{\"eid\":\"{uuid_task}\",\"name\":\"decided\",\"comp\":{{}}}}]"
+        ),
+    );
+    let uuid_take = format!(
+        "{{\"mutation\":\"claim_work\",\"target\":\"{uuid_task}\",\"session\":\"{uuid_session}\",\"mode\":\"ready\"}}"
+    );
+    assert_write(
+        "claim-work/mints-unknown-stable-uuid",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &uuid_take,
+        "native",
+    );
+    assert_write("claim-work/replays-stable-uuid", &ts, &br, &ts_db, &br_db, &uuid_take, "native");
+    g(&ts, &br, &format!("[{{\"eid\":\"{uuid_task}\",\"name\":\"entity\",\"comp\":null}}]"));
+    g(&ts, &br, &format!("[{{\"eid\":\"{wrong_target}\",\"name\":\"entity\",\"comp\":null}}]"));
     g(&ts, &br, &format!("[{{\"eid\":\"{twork}\",\"name\":\"entity\",\"comp\":null}}]"));
 
     // --- DELETE CASCADE: synthesized entity-nulls + detach echoes ------------

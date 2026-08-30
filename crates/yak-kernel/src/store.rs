@@ -1296,15 +1296,25 @@ pub fn resolve_checked(conn: &Connection, id: &str) -> Result<Option<String>, St
         })
         .is_some();
     if has_alias {
-        if let Some(hit) = one(
+        let hits: Vec<String> = collect(
             conn,
             "select e.eid from alias a join entity e \
              on e.id = a.entity where a.slug = ?1 \
-             or instr(' ' || coalesce(a.slugs, '') || ' ', ' ' || ?1 || ' ') > 0",
+             or instr(' ' || coalesce(a.slugs, '') || ' ', ' ' || ?1 || ' ') > 0 limit 2",
             [id],
             |r| r.get::<_, String>(0),
-        ) {
-            return Ok(Some(hit));
+        );
+        if hits.len() > 1 {
+            return Err(format!(
+                "{id} is an ambiguous alias — matches {}; use an eid",
+                hits.iter()
+                    .map(|eid| eid.chars().take(8).collect::<String>())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        if hits.len() == 1 {
+            return Ok(Some(hits[0].clone()));
         }
     }
     Ok(None)

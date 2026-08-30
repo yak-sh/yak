@@ -2056,12 +2056,25 @@ pub fn claim_work(
     if ask.session.trim().is_empty() {
         return Err(refuse("claim_work needs a session"));
     }
+    if ask.cwd.is_some_and(|cwd| cwd.trim().is_empty()) {
+        return Err(refuse("claim_work cwd must not be empty"));
+    }
     let conn = &store.conn;
     conn.execute_batch("begin immediate")?;
     let planned: Result<Option<(String, Vec<Change>)>> = (|| {
         let target = resolve_checked(conn, ask.target)
             .map_err(refuse)?
             .ok_or_else(|| refuse(format!("no entity: {}", ask.target)))?;
+        let task = conn
+            .query_row(
+                "select 1 from task where entity = (select id from entity where eid = ?1)",
+                [&target],
+                |_| Ok(()),
+            )
+            .optional()?;
+        if task.is_none() {
+            return Err(refuse(format!("{} is not a task", human(conn, &target))));
+        }
         let held: Option<String> = conn
             .query_row(
                 "select holder.eid from claim \
@@ -2084,7 +2097,7 @@ pub fn claim_work(
         if addressed.is_none() && human_address {
             return Err(refuse(format!("no entity: {}", ask.session)));
         }
-        let mut session: Option<Session> = match addressed {
+        let mut session: Option<Session> = match addressed.as_ref() {
             Some(eid) => conn
                 .query_row(
                     "select owner.eid, s.cwd, actor.eid from session s \
@@ -2096,7 +2109,11 @@ pub fn claim_work(
                 .optional()?,
             None => None,
         };
-        if session.is_none() {
+        if let Some(eid) = addressed.as_ref() {
+            if session.is_none() {
+                return Err(refuse(format!("{} is not a session", human(conn, eid))));
+            }
+        } else {
             session = conn
                 .query_row(
                     "select owner.eid, s.cwd, actor.eid from session s \

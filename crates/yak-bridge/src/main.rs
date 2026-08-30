@@ -313,6 +313,10 @@ fn route_apply(
 ) -> (u16, String, String, &'static str) {
     let parsed = serde_json::from_slice::<serde_json::Value>(body).ok();
     if let Some(object) = parsed.as_ref().and_then(Value::as_object) {
+        if object.get("mutation").and_then(Value::as_str) == Some("claim_work") {
+            let (s, c, t) = native_claim_work(write, via, object);
+            return (s, c, t, "native");
+        }
         if object.contains_key("mutation") && object.contains_key("entities") {
             return (
                 400,
@@ -320,10 +324,6 @@ fn route_apply(
                 "a named mutation cannot include entities".into(),
                 "native",
             );
-        }
-        if object.get("mutation").and_then(Value::as_str) == Some("claim_work") {
-            let (s, c, t) = native_claim_work(write, via, object);
-            return (s, c, t, "native");
         }
     }
     if let Some(changes) = parsed.as_ref().and_then(parse_batch) {
@@ -361,6 +361,10 @@ fn native_claim_work(
     via: Option<&str>,
     object: &serde_json::Map<String, Value>,
 ) -> (u16, String, String) {
+    let allowed = ["mutation", "target", "session", "mode", "recursive", "cwd"];
+    if let Some(unknown) = object.keys().filter(|key| !allowed.contains(&key.as_str())).min() {
+        return (400, "text/plain".into(), format!("claim_work unknown field: {unknown}"));
+    }
     let Some(target) = object.get("target").and_then(Value::as_str) else {
         return (400, "text/plain".into(), "claim_work needs a target".into());
     };
@@ -382,6 +386,9 @@ fn native_claim_work(
     };
     let cwd = match object.get("cwd") {
         Some(value) => match value.as_str() {
+            Some(value) if value.trim().is_empty() => {
+                return (400, "text/plain".into(), "claim_work cwd must not be empty".into())
+            }
             Some(value) => Some(value),
             None => return (400, "text/plain".into(), "claim_work cwd must be a string".into()),
         },

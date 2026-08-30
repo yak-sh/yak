@@ -250,6 +250,73 @@ Deno.test('claim_work replay is a no-op; collision audits one winner', () => {
   assertEquals(Number(cell(db, 'select count(*) as n from conflict')?.n), 1)
 })
 
+Deno.test('claim_work refuses non-session and ambiguous graph addresses without a trace', () => {
+  let { db, project } = world()
+  let target = uuid(), wrongTask = uuid(), design = uuid(), comment = uuid()
+  let aliasA = uuid(), aliasB = uuid()
+  apply(db, [
+    ...task(target, project, [{ eid: target, name: 'decided', comp: {} }]),
+    ...task(wrongTask, project),
+    { eid: design, name: 'doc', comp: { title: 'A design', body: '' } },
+    { eid: design, name: 'design', comp: {} },
+    { eid: comment, name: 'doc', comp: { title: 'A comment', body: '' } },
+    { eid: comment, name: 'comment', comp: { target } },
+    { eid: aliasA, name: 'alias', comp: { slug: 'alias-a' } },
+    { eid: aliasB, name: 'alias', comp: { slug: 'alias-b' } },
+  ])
+  db.prepare('update alias set slugs = ? where slug in (?, ?)')
+    .run('ambiguous-worker', 'alias-a', 'alias-b')
+  let journal = Number(cell(db, 'select count(*) as n from journal')?.n)
+  for (let wrong of [wrongTask, design, comment]) {
+    let id = human(db, wrong)
+    assertThrows(() => take(db, target, id), Error, `${id} is not a session`)
+  }
+  assertThrows(
+    () => take(db, target, 'ambiguous-worker'),
+    Error,
+    'ambiguous-worker is an ambiguous alias',
+  )
+  assertEquals(Number(cell(db, 'select count(*) as n from session')?.n), 0)
+  assertEquals(Number(cell(db, 'select count(*) as n from claim')?.n), 0)
+  assertEquals(
+    Number(cell(db, 'select count(*) as n from journal')?.n),
+    journal,
+  )
+})
+
+Deno.test('claim_work mints an unknown stable uuid and resumes an exact session', () => {
+  let { db, project } = world()
+  let target = uuid(), sid = uuid()
+  apply(db, task(target, project, [{ eid: target, name: 'decided', comp: {} }]))
+  take(db, target, sid)
+  let session = sessionEid(db, sid)!
+  assertEquals(holder(db, target), session)
+  let journal = Number(cell(db, 'select count(*) as n from journal')?.n)
+  assertEquals(take(db, target, sid), [])
+  assertEquals(take(db, target, human(db, session)), [])
+  assertEquals(
+    Number(cell(db, 'select count(*) as n from journal')?.n),
+    journal,
+  )
+})
+
+Deno.test('claim_work refuses a resolved non-task target before reifying a session', () => {
+  let { db, project } = world()
+  let comment = uuid()
+  apply(db, [
+    { eid: comment, name: 'doc', comp: { title: 'A comment', body: '' } },
+    { eid: comment, name: 'comment', comp: { target: project } },
+  ])
+  let journal = Number(cell(db, 'select count(*) as n from journal')?.n)
+  let id = human(db, comment)
+  assertThrows(() => take(db, id, 'wrong-target'), Error, `${id} is not a task`)
+  assertEquals(sessionEid(db, 'wrong-target'), undefined)
+  assertEquals(
+    Number(cell(db, 'select count(*) as n from journal')?.n),
+    journal,
+  )
+})
+
 Deno.test('raw claim mutation remains an administrative force door', () => {
   let { db, project } = world()
   let target = uuid(), session = uuid()
@@ -296,7 +363,40 @@ Deno.test('claim_work rejects malformed requests before writing', () => {
         entities: [{ comps: { project: {} } }],
       } as unknown as WorkClaimMutation),
     Error,
-    'named mutation cannot include entities',
+    'claim_work unknown field: entities',
+  )
+  for (let key of ['changes', 'constructor', '__proto__']) {
+    let request = JSON.parse(
+      `{"mutation":"claim_work","target":"T-1","session":"worker",` +
+        `"mode":"ready","${key}":{"eid":"smuggled"}}`,
+    ) as WorkClaimMutation
+    assertThrows(
+      () => mutate(db, request),
+      Error,
+      `claim_work unknown field: ${key}`,
+    )
+  }
+  for (let field of ['target', 'session']) {
+    let request = {
+      mutation: 'claim_work',
+      target: 'T-1',
+      session: 'worker',
+      mode: 'ready',
+      [field]: { eid: 'smuggled' },
+    } as unknown as WorkClaimMutation
+    assertThrows(() => mutate(db, request), Error, `needs a ${field}`)
+  }
+  assertThrows(
+    () =>
+      mutate(db, {
+        mutation: 'claim_work',
+        target: 'T-1',
+        session: 'worker',
+        mode: 'ready',
+        cwd: '  ',
+      }),
+    Error,
+    'cwd must not be empty',
   )
   assertEquals(Number(cell(db, 'select count(*) as n from project')?.n), 1)
 })

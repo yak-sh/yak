@@ -1996,15 +1996,21 @@ export let resolveId = (
   // space-delimited `slugs` set. instr on a space-padded column matches whole
   // tokens only ('task' never hits inside 'tasks'); the alias table is tiny,
   // so the scan is free.
-  let alias = (prep(
+  let aliases = prep(
     db,
     `select o.eid as eid from alias a join entity o on o.id = a.entity
      where a.slug = ?
-       or instr(' ' || coalesce(a.slugs, '') || ' ', ' ' || ? || ' ') > 0`,
-  ).get(id, id) as
-    | { eid: string }
-    | undefined)?.eid
-  if (alias) return alias
+       or instr(' ' || coalesce(a.slugs, '') || ' ', ' ' || ? || ' ') > 0
+     limit 2`,
+  ).all(id, id) as { eid: string }[]
+  if (aliases.length > 1) {
+    throw new Error(
+      `${id} is an ambiguous alias — matches ${
+        aliases.map((hit) => shortId(hit.eid)).join(', ')
+      }; use an eid`,
+    )
+  }
+  if (aliases.length == 1) return aliases[0].eid
   // Pass-through sources: an ephemeral entity resolvable by handle (or its own
   // deterministic eid). Consulted ONLY after every SQL lookup missed, so a
   // persisted/graduated entity never reaches here.
@@ -6856,6 +6862,16 @@ let claimWork = (
   trace?: Trace,
   via?: string | null,
 ) => {
+  let allowed = new Set([
+    'mutation',
+    'target',
+    'session',
+    'mode',
+    'recursive',
+    'cwd',
+  ])
+  let unknown = Object.keys(ask).filter((key) => !allowed.has(key)).sort()[0]
+  if (unknown) throw new Error(`claim_work unknown field: ${unknown}`)
   if (typeof ask.target != 'string' || !ask.target.trim()) {
     throw new Error('claim_work needs a target')
   }
@@ -6871,10 +6887,22 @@ let claimWork = (
   if (ask.cwd !== undefined && typeof ask.cwd != 'string') {
     throw new Error('claim_work cwd must be a string')
   }
+  if (ask.cwd !== undefined && !ask.cwd.trim()) {
+    throw new Error('claim_work cwd must not be empty')
+  }
   db.exec('begin immediate')
   try {
     let target = resolveId(db, ask.target)
     if (!target) throw new Error(`no entity: ${ask.target}`)
+    if (
+      !prep(
+        db,
+        `select 1 from task
+       where entity = (select id from entity where eid = ?)`,
+      ).get(target)
+    ) {
+      throw new Error(`${human(db, target)} is not a task`)
+    }
     let held = prep(
       db,
       `select holder.eid as session
@@ -6883,8 +6911,8 @@ let claimWork = (
         where claim.entity = (select id from entity where eid = ?)`,
     ).get(target) as { session: string } | undefined
     // A session address may be its graph id (S-3/eid/alias) or its stable
-    // session.id. Prefer a graph address only when it resolves to a Session;
-    // otherwise a coincident actor/task alias cannot shadow the stable id.
+    // session.id. A resolved graph address is authoritative: a task or actor
+    // cannot silently turn into a newly-minted Session with the same spelling.
     let sessionAddress = resolveId(db, ask.session)
     if (!sessionAddress && /^[A-Za-z]+-\d+$/.test(ask.session)) {
       throw new Error(`no entity: ${ask.session}`)
@@ -6901,16 +6929,21 @@ let claimWork = (
         | { eid: string; cwd: string | null; actor: string | null }
         | undefined
       : undefined
-    session ??= prep(
-      db,
-      `select owner.eid as eid, s.cwd, actor.eid as actor
-         from session s
-         join entity owner on owner.id = s.entity
-         left join entity actor on actor.id = s.actor
-        where s.id = ?`,
-    ).get(ask.session) as
-      | { eid: string; cwd: string | null; actor: string | null }
-      | undefined
+    if (sessionAddress && !session) {
+      throw new Error(`${human(db, sessionAddress)} is not a session`)
+    }
+    if (!sessionAddress) {
+      session = prep(
+        db,
+        `select owner.eid as eid, s.cwd, actor.eid as actor
+           from session s
+           join entity owner on owner.id = s.entity
+           left join entity actor on actor.id = s.actor
+          where s.id = ?`,
+      ).get(ask.session) as
+        | { eid: string; cwd: string | null; actor: string | null }
+        | undefined
+    }
     // A replay by the same stable session is a true no-op: no stamp, journal
     // row, worked edge refresh, or cwd edit.
     if (session && held?.session == session.eid) {
@@ -6925,7 +6958,7 @@ let claimWork = (
     ).get(target) as { eid: string | null } | undefined
     let seid = session?.eid ?? uuid()
     let comp: Record<string, unknown> = session ? {} : { id: ask.session }
-    if (ask.cwd && session?.cwd != ask.cwd) comp.cwd = ask.cwd
+    if (ask.cwd !== undefined && session?.cwd != ask.cwd) comp.cwd = ask.cwd
     if (actor?.eid && !session?.actor) comp.actor = actor.eid
     let changes: Change[] = [
       ...(Object.keys(comp).length
@@ -6955,11 +6988,11 @@ export let mutate = <T extends Mutation>(
   if (Array.isArray(mutation)) {
     return apply(db, mutation, trace, via) as MutationOutput<T>
   }
-  if ('mutation' in mutation && 'entities' in mutation) {
-    throw new Error('a named mutation cannot include entities')
-  }
   if ('mutation' in mutation && mutation.mutation == 'claim_work') {
     return claimWork(db, mutation, trace, via) as MutationOutput<T>
+  }
+  if ('mutation' in mutation && 'entities' in mutation) {
+    throw new Error('a named mutation cannot include entities')
   }
   if ('entities' in mutation) {
     let plan = normalizeLiterals(mutation.entities, {
