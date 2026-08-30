@@ -1,7 +1,8 @@
 // The server's synchronous SQLite door. It keeps the small node:sqlite API
 // the graph uses while the driver beneath it supplies working loadable
-// extensions. Linux uses the system library because @db/sqlite's 0.13.0
-// bundled x86_64 library crashes during sqlite3_initialize on Deno 2.9.
+// extensions and the few deterministic text semantics SQL must share with
+// JavaScript. Linux uses the system library because @db/sqlite's 0.13.0 bundled
+// x86_64 library crashes during sqlite3_initialize on Deno 2.9.
 
 // Declaration order is load-bearing: the prelude sets DENO_SQLITE_PATH, and
 // module evaluation (post-order, declaration order) runs it before the driver
@@ -46,6 +47,12 @@ let reset = (statement: DriverStatement) => {
 let MAIN = new TextEncoder().encode('main\0')
 let bytesAt = (pointer: Deno.PointerObject, size: number) =>
   new Uint8Array(new Deno.UnsafePointerView(pointer).getArrayBuffer(size))
+
+// SQLite trim() only knows the characters named by its second argument. Agent
+// evidence needs JavaScript's complete WhiteSpace + LineTerminator semantics,
+// including NBSP, Unicode spaces, and BOM, without maintaining a codepoint list.
+export let textPresent = (value: unknown) =>
+  typeof value == 'string' && value.trim().length > 0
 
 type Options = {
   readOnly?: boolean
@@ -108,6 +115,11 @@ export class DatabaseSync {
       parseJson: false,
       readonly: options.readOnly,
     })
+    this.#db.function(
+      'text_present',
+      (value: unknown) => textPresent(value) ? 1 : 0,
+      { deterministic: true },
+    )
     this.#db.exec('pragma foreign_keys = on')
   }
 

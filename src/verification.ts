@@ -34,10 +34,7 @@ export let VERIFY_PENDING = `
           join session _vs on _vs.entity = _va.via
          where _vm.target = task.entity
            and _vr.verdict in ('approved', 'rejected', 'changes_requested')
-           and trim(
-             coalesce(_vd.body, ''),
-             char(9) || char(10) || char(11) || char(12) || char(13) || ' '
-           ) <> ''
+           and text_present(_vd.body)
            and _va.at > _vc.at
            and _va.via != _vc.via
          order by _va.at desc, _ve.eid desc

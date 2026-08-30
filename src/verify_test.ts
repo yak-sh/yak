@@ -20,6 +20,7 @@ let { db } = await import('./live_db.ts')
 let { rows, spawnChanges } = await import('./client.ts')
 let { rowsFor } = await import('./graph_query.ts')
 let { materialize } = await import('./persona.ts')
+let { textPresent } = await import('./sqlite.ts')
 let {
   hasVerifier,
   verificationArgs,
@@ -263,6 +264,24 @@ Deno.test('empty, self-authored, unstamped, and stale reviews do not qualify', (
   let stale = task()
   review(stale.eid, reviewer, 'approved', 'old evidence', iso(-90))
   assertEquals(verificationPending(db, stale.eid), true)
+})
+
+Deno.test('review evidence shares Unicode-aware JavaScript whitespace semantics', () => {
+  let whitespace = ['\u00a0', '\u2003', '\u3000', '\ufeff']
+  for (let body of whitespace) {
+    reset()
+    let work = task(), reviewer = session()
+    assertEquals(textPresent(body), false)
+    review(work.eid, reviewer, 'approved', body)
+    assertEquals(verificationPending(db, work.eid), true, JSON.stringify(body))
+  }
+
+  reset()
+  let work = task(), reviewer = session()
+  let body = '\u00a0\u2003Ran the check.\u3000\ufeff'
+  assertEquals(textPresent(body), true)
+  review(work.eid, reviewer, 'approved', body)
+  assertEquals(verificationPending(db, work.eid), false)
 })
 
 Deno.test('null and active current-cycle verifiers suppress; terminal and stale-cycle verifiers permit retry', () => {
@@ -513,7 +532,7 @@ Deno.test('VERIFY_PENDING plans from authored indexes with bounded target subque
   assertMatch(details, /completed_at/)
   assertMatch(details, /comment_target/)
   assertMatch(details, /session_requested_task/)
-  assert(!/SCAN (?:_vm|s)\b/.test(details), details)
+  assert(!/SCAN (?:_vm|_vr|_ve|_vd|_va|_vs|s)\b/.test(details), details)
 
   let cap = db.prepare(
     `explain query plan
