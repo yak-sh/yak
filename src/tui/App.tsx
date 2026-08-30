@@ -22,6 +22,7 @@ import {
   gated,
   mode,
   mutate,
+  mutateWork,
   pending,
   problem,
   queryEids,
@@ -441,10 +442,11 @@ let spawn = async (intent: string | SpawnIntent) => {
   )
 }
 
-let exec = (line: string) => {
+let exec = async (line: string) => {
   try {
     let r = run(line, ctx(), local)
     if (r.changes?.length) mutate(...r.changes)
+    if (r.mutation) await mutateWork(r.mutation)
     if (r.go) trail.value = [...trail.value, r.go]
     if (r.card) trail.value = [...trail.value, r.card]
     msg.value = r.msg ?? ''

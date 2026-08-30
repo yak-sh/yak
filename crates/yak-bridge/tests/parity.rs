@@ -1673,6 +1673,70 @@ fn write_parity() {
         eprintln!("write-parity [reject/claim-bounce]: skipped (need 2 sessions in the snapshot)");
     }
 
+    // --- NAMED MUTATION: guarded worker approval + claim -------------------
+    // Unlike raw Change[] claim writes, claim_work owns identity resolution,
+    // session reification, optional approval and readiness under one writer
+    // transaction. It is native on the bridge and byte-identical to Deno.
+    let twork = uuid_v4();
+    let worker = format!("zqw{uid}-worker");
+    g(
+        &ts,
+        &br,
+        &format!(
+            "[{{\"eid\":\"{twork}\",\"name\":\"doc\",\"comp\":{{\"title\":\"zqw{uid} guarded\"}}}},\
+              {{\"eid\":\"{twork}\",\"name\":\"task\",\"comp\":{{}}}},\
+              {{\"eid\":\"{twork}\",\"name\":\"proposed\",\"comp\":{{}}}}]"
+        ),
+    );
+    let take = format!(
+        "{{\"mutation\":\"claim_work\",\"target\":\"{twork}\",\"session\":\"{worker}\",\"mode\":\"approve\"}}"
+    );
+    assert_write(
+        "claim-work/pending-refusal",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!(
+            "{{\"mutation\":\"claim_work\",\"target\":\"{twork}\",\"session\":\"{worker}-pending\",\"mode\":\"ready\"}}"
+        ),
+        "native",
+    );
+    assert_write(
+        "claim-work/rejects-literal-smuggling",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!(
+            "{{\"mutation\":\"claim_work\",\"target\":\"{twork}\",\"session\":\"{worker}\",\"mode\":\"ready\",\"entities\":[{{\"comps\":{{\"project\":{{}}}}}}]}}"
+        ),
+        "native",
+    );
+    assert_write(
+        "named-mutation/rejects-literal-smuggling",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        r#"{"mutation":"undo","id":1,"entities":[{"comps":{"project":{}}}]}"#,
+        "native",
+    );
+    assert_write("claim-work/approve-take", &ts, &br, &ts_db, &br_db, &take, "native");
+    assert_write("claim-work/replay", &ts, &br, &ts_db, &br_db, &take, "native");
+    assert_write(
+        "claim-work/collision",
+        &ts,
+        &br,
+        &ts_db,
+        &br_db,
+        &format!(
+            "{{\"mutation\":\"claim_work\",\"target\":\"{twork}\",\"session\":\"{worker}-loser\",\"mode\":\"ready\"}}"
+        ),
+        "native",
+    );
+    g(&ts, &br, &format!("[{{\"eid\":\"{twork}\",\"name\":\"entity\",\"comp\":null}}]"));
+
     // --- DELETE CASCADE: synthesized entity-nulls + detach echoes ------------
     let p = uuid_v4();
     let t = uuid_v4();

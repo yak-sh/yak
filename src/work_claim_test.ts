@@ -1,0 +1,302 @@
+// The guarded worker take: unlike raw graph mutation, claim_work resolves,
+// optionally approves, validates readiness, and claims under one writer lock.
+// These cases hold the named mutation to the same boundaries as the build lane
+// and prove a refusal rolls back session reification and approval with it.
+import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
+import type { DatabaseSync } from './sqlite.ts'
+import type { WorkClaimMutation } from './mutation.ts'
+import { type Change, uuid } from './types.ts'
+
+Deno.env.set('DB_PATH', ':memory:')
+let { apply, human, mutate } = await import('./db.ts')
+let { bareDb } = await import('./testdb.ts')
+
+let task = (
+  eid: string,
+  project: string,
+  extra: Change[] = [],
+): Change[] => [
+  { eid, name: 'doc', comp: { title: eid.slice(0, 8), body: '' } },
+  { eid, name: 'task', comp: { project } },
+  ...extra,
+]
+
+let world = () => {
+  let db = bareDb()
+  let project = uuid()
+  apply(db, [
+    { eid: project, name: 'doc', comp: { title: 'Graph', body: '' } },
+    { eid: project, name: 'project', comp: {} },
+  ])
+  return { db, project }
+}
+
+let take = (
+  db: DatabaseSync,
+  target: string,
+  session: string,
+  mode: 'ready' | 'approve' = 'ready',
+  recursive = true,
+) =>
+  mutate(
+    db,
+    {
+      mutation: 'claim_work',
+      target,
+      session,
+      mode,
+      recursive,
+      cwd: '/work',
+    } satisfies WorkClaimMutation,
+  )
+
+let cell = (
+  db: DatabaseSync,
+  sql: string,
+  ...args: (string | number | null)[]
+) => db.prepare(sql).get(...args) as Record<string, unknown> | undefined
+
+let sessionEid = (db: DatabaseSync, sid: string) =>
+  cell(
+    db,
+    `select owner.eid as eid from session
+     join entity owner on owner.id = session.entity where session.id = ?`,
+    sid,
+  )?.eid as string | undefined
+
+let holder = (db: DatabaseSync, target: string) =>
+  cell(
+    db,
+    `select owner.eid as eid from claim
+     join entity owner on owner.id = claim.session
+     where claim.entity = (select id from entity where eid = ?)`,
+    target,
+  )?.eid as string | undefined
+
+Deno.test('claim_work takes direct and inherited approved work', () => {
+  let { db, project } = world()
+  let direct = uuid(), root = uuid(), child = uuid()
+  apply(db, [
+    ...task(direct, project, [{ eid: direct, name: 'decided', comp: {} }]),
+    ...task(root, project, [{ eid: root, name: 'decided', comp: {} }]),
+    ...task(child, project),
+    {
+      eid: root,
+      name: 'dependency',
+      comp: { type: 'requires', child },
+    },
+  ])
+  take(db, direct, 'direct-worker')
+  take(db, child, 'inherited-worker')
+  assertEquals(holder(db, direct), sessionEid(db, 'direct-worker'))
+  assertEquals(holder(db, child), sessionEid(db, 'inherited-worker'))
+})
+
+Deno.test('claim_work direct policy refuses inherited authorization', () => {
+  let { db, project } = world()
+  let root = uuid(), child = uuid()
+  apply(db, [
+    ...task(root, project, [{ eid: root, name: 'decided', comp: {} }]),
+    ...task(child, project),
+    {
+      eid: root,
+      name: 'dependency',
+      comp: { type: 'requires', child },
+    },
+  ])
+  assertThrows(
+    () => take(db, child, 'worker', 'ready', false),
+    Error,
+    `${human(db, child)} is not approved directly`,
+  )
+  assertEquals(sessionEid(db, 'worker'), undefined)
+})
+
+Deno.test('claim_work approve and claim is atomic and never reverses decline', () => {
+  let { db, project } = world()
+  let pending = uuid(), declined = uuid(), blocked = uuid()
+  apply(db, [
+    ...task(pending, project, [{ eid: pending, name: 'proposed', comp: {} }]),
+    ...task(declined, project, [
+      { eid: declined, name: 'proposed', comp: {} },
+      {
+        eid: declined,
+        name: 'decided',
+        comp: { verdict: 'declined' },
+      },
+    ]),
+    ...task(blocked, project, [
+      { eid: blocked, name: 'proposed', comp: {} },
+      { eid: blocked, name: 'blocked', comp: { on: 'owner choice' } },
+    ]),
+  ])
+  take(db, pending, 'builder', 'approve')
+  assert(holder(db, pending))
+  assert(cell(
+    db,
+    'select 1 from decided where entity = (select id from entity where eid = ?)',
+    pending,
+  ))
+
+  assertThrows(
+    () => take(db, declined, 'declined-builder', 'approve'),
+    Error,
+    `${human(db, declined)} was declined`,
+  )
+  assertEquals(
+    cell(
+      db,
+      'select verdict from decided where entity = (select id from entity where eid = ?)',
+      declined,
+    )?.verdict,
+    'declined',
+  )
+  assertEquals(sessionEid(db, 'declined-builder'), undefined)
+
+  assertThrows(
+    () => take(db, blocked, 'blocked-builder', 'approve'),
+    Error,
+    `${human(db, blocked)} is externally blocked: owner choice`,
+  )
+  assertEquals(sessionEid(db, 'blocked-builder'), undefined)
+  assertEquals(
+    cell(
+      db,
+      'select 1 from decided where entity = (select id from entity where eid = ?)',
+      blocked,
+    ),
+    undefined,
+  )
+})
+
+Deno.test('claim_work refuses every non-build state and rolls back identity', () => {
+  let { db, project } = world()
+  let cases: [string, Change[], string][] = [
+    [
+      'pending',
+      [{ eid: '', name: 'proposed', comp: {} }],
+      'proposed but not decided',
+    ],
+    ['unapproved', [], 'not approved directly'],
+    ['completed', [{ eid: '', name: 'completed', comp: {} }], 'is completed'],
+    ['cancelled', [{ eid: '', name: 'cancelled', comp: {} }], 'is cancelled'],
+    [
+      'quarantined',
+      [{ eid: '', name: 'quarantined', comp: {} }],
+      'is quarantined',
+    ],
+  ]
+  for (let [sid, extras, message] of cases) {
+    let eid = uuid()
+    apply(db, task(eid, project, extras.map((c) => ({ ...c, eid }))))
+    assertThrows(() => take(db, eid, sid), Error, message)
+    assertEquals(sessionEid(db, sid), undefined)
+    assertEquals(holder(db, eid), undefined)
+  }
+})
+
+Deno.test('claim_work gates unresolved and hidden dependencies', () => {
+  let { db, project } = world()
+  let open = uuid(), hidden = uuid(), a = uuid(), b = uuid()
+  apply(db, [
+    ...task(open, project),
+    ...task(hidden, project, [{ eid: hidden, name: 'quarantined', comp: {} }]),
+    ...task(a, project, [{ eid: a, name: 'decided', comp: {} }]),
+    ...task(b, project, [{ eid: b, name: 'decided', comp: {} }]),
+    { eid: a, name: 'dependency', comp: { type: 'requires', child: open } },
+    { eid: b, name: 'dependency', comp: { type: 'requires', child: hidden } },
+  ])
+  assertThrows(
+    () => take(db, a, 'open-blocked'),
+    Error,
+    `${human(db, a)} requires unresolved ${human(db, open)}`,
+  )
+  let hiddenId = human(db, hidden)
+  let e = assertThrows(() => take(db, b, 'hidden-blocked')) as Error
+  assertMatch(e.message, /requires a hidden unresolved dependency/)
+  assertEquals(e.message.includes(hiddenId), false)
+})
+
+Deno.test('claim_work replay is a no-op; collision audits one winner', () => {
+  let { db, project } = world()
+  let target = uuid()
+  apply(db, task(target, project, [{ eid: target, name: 'decided', comp: {} }]))
+  let first = take(db, target, 'winner')
+  let journal = Number(cell(db, 'select count(*) as n from journal')?.n)
+  assert(first.length > 0)
+  assertEquals(take(db, target, 'winner'), [])
+  assertEquals(take(db, target, human(db, sessionEid(db, 'winner')!)), [])
+  assertEquals(
+    Number(cell(db, 'select count(*) as n from journal')?.n),
+    journal,
+  )
+  assertEquals(
+    Number(
+      cell(
+        db,
+        `select count(*) as n from dependency
+         where type = 'worked' and child = (select id from entity where eid = ?)`,
+        target,
+      )?.n,
+    ),
+    1,
+  )
+  assertThrows(
+    () => take(db, target, 'loser'),
+    Error,
+    `${human(db, target)} already claimed by winner`,
+  )
+  assertEquals(sessionEid(db, 'loser'), undefined)
+  assertEquals(Number(cell(db, 'select count(*) as n from conflict')?.n), 1)
+})
+
+Deno.test('raw claim mutation remains an administrative force door', () => {
+  let { db, project } = world()
+  let target = uuid(), session = uuid()
+  apply(db, [
+    ...task(target, project),
+    { eid: session, name: 'session', comp: { id: 'admin' } },
+    { eid: target, name: 'claim', comp: { session } },
+  ])
+  assertEquals(holder(db, target), session)
+})
+
+Deno.test('claim_work rejects malformed requests before writing', () => {
+  let { db } = world()
+  assertThrows(
+    () =>
+      mutate(db, {
+        mutation: 'claim_work',
+        target: '',
+        session: 'worker',
+        mode: 'ready',
+      }),
+    Error,
+    'needs a target',
+  )
+  assertThrows(
+    () =>
+      mutate(db, {
+        mutation: 'claim_work',
+        target: 'T-1',
+        session: 'worker',
+        mode: 'ready',
+        recursive: 'yes',
+      } as unknown as WorkClaimMutation),
+    Error,
+    'recursive must be a boolean',
+  )
+  assertThrows(
+    () =>
+      mutate(db, {
+        mutation: 'claim_work',
+        target: 'T-1',
+        session: 'worker',
+        mode: 'ready',
+        entities: [{ comps: { project: {} } }],
+      } as unknown as WorkClaimMutation),
+    Error,
+    'named mutation cannot include entities',
+  )
+  assertEquals(Number(cell(db, 'select count(*) as n from project')?.n), 1)
+})

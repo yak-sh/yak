@@ -7,7 +7,9 @@ use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Map, Value};
 use yak_kernel::change::Change;
 use yak_kernel::feed::{cursor_of, journal_since, row_changes, Feed};
-use yak_kernel::write::{apply, default_gates, native_safe, ApplyError, ApplyOpts, WriteStore};
+use yak_kernel::write::{
+    apply, claim_work, default_gates, native_safe, ApplyError, ApplyOpts, ClaimWork, WriteStore,
+};
 
 const SCHEMA: &str = "
   create table entity (
@@ -27,6 +29,7 @@ const SCHEMA: &str = "
     ord    integer,
     primary key (parent, type, child)
   );
+  create index dependency_child on dependency(child);
   create table journal (
     ts text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     actor text, via text, batch text not null, trace text
@@ -83,6 +86,26 @@ const SCHEMA: &str = "
     \"by\" integer,
     reason text,
     via integer
+  );
+  create table proposed (
+    entity integer primary key references entity(id),
+    at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    \"by\" integer, via integer
+  );
+  create table decided (
+    entity integer primary key references entity(id),
+    at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    \"by\" integer, via integer, verdict text
+  );
+  create table blocked (
+    entity integer primary key references entity(id),
+    \"on\" text,
+    since text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
+  create table quarantined (
+    entity integer primary key references entity(id),
+    at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    \"by\" integer, via integer
   );
   create table project (
     entity integer primary key references entity(id),
@@ -522,7 +545,13 @@ fn set_session_ref(s: &WriteStore, sess: &str, col: &str, target: &str) {
 }
 
 fn run_via(s: &WriteStore, writer: &str, changes: Vec<Change>) -> Vec<Change> {
-    apply(s, changes, &ApplyOpts { writer: Some(writer), fed: false }, &default_gates()).unwrap()
+    apply(
+        s,
+        changes,
+        &ApplyOpts { writer: Some(writer), fed: false, ..Default::default() },
+        &default_gates(),
+    )
+    .unwrap()
 }
 
 fn mail_from(s: &WriteStore, eid: &str) -> Option<String> {
@@ -588,7 +617,7 @@ fn mail_from_stays_empty_when_the_signer_has_no_address() {
 #[test]
 fn fed_trace_serializes_created_and_removed() {
     let s = store();
-    let opts = ApplyOpts { writer: None, fed: true };
+    let opts = ApplyOpts { writer: None, fed: true, ..Default::default() };
     apply(&s, vec![ch(A, "doc", json!({"title": "x"}))], &opts, &default_gates()).unwrap();
     apply(&s, vec![ch(A, "doc", Value::Null)], &opts, &default_gates()).unwrap();
     let traces: Vec<String> = {
@@ -752,6 +781,88 @@ fn claim_lease_bounces_and_audits() {
     assert_eq!(loser, "sess-c");
     // the same session re-claiming is a no-op refresh
     run(&s, vec![ch(A, "claim", json!({"session": B}))]);
+}
+
+#[allow(clippy::result_large_err)]
+fn take<'a>(
+    s: &WriteStore,
+    target: &'a str,
+    session: &'a str,
+    approve: bool,
+) -> Result<Vec<Change>, ApplyError> {
+    claim_work(
+        s,
+        &ClaimWork { target, session, approve, recursive: true, cwd: Some("/work") },
+        &ApplyOpts::default(),
+        &default_gates(),
+    )
+}
+
+#[test]
+fn guarded_worker_claim_approves_inherits_replays_and_rolls_back() {
+    let s = store();
+    run(
+        &s,
+        vec![
+            ch(A, "task", json!({})),
+            ch(A, "proposed", json!({})),
+            ch(B, "task", json!({})),
+            ch(B, "decided", json!({})),
+            ch(C, "task", json!({})),
+            ch(B, "dependency", json!({"type": "requires", "child": C})),
+        ],
+    );
+    take(&s, A, "approver", true).unwrap();
+    assert_eq!(one::<i64>(&s, "select count(*) from decided where entity = (select id from entity where eid = 'aaaaaaaa-0000-4000-8000-000000000001')"), 1);
+    take(&s, C, "inherited", false).unwrap();
+    let journals = one::<i64>(&s, "select count(*) from journal");
+    assert!(take(&s, C, "inherited", false).unwrap().is_empty());
+    let human_session: String = one(
+        &s,
+        "select 'S-' || e.num from session join entity e on e.id = session.entity \
+         where session.id = 'inherited'",
+    );
+    assert!(take(&s, C, &human_session, false).unwrap().is_empty());
+    assert_eq!(one::<i64>(&s, "select count(*) from journal"), journals);
+
+    let blocked = store();
+    run(
+        &blocked,
+        vec![
+            ch(A, "task", json!({})),
+            ch(A, "proposed", json!({})),
+            ch(A, "blocked", json!({"on": "owner"})),
+        ],
+    );
+    let err = take(&blocked, A, "rolled-back", true).unwrap_err().to_string();
+    assert!(err.contains("is externally blocked: owner"));
+    assert_eq!(one::<i64>(&blocked, "select count(*) from decided"), 0);
+    assert_eq!(one::<i64>(&blocked, "select count(*) from session"), 0);
+    assert_eq!(one::<i64>(&blocked, "select count(*) from claim"), 0);
+}
+
+#[test]
+fn guarded_worker_claim_preserves_decline_and_conflict_audit() {
+    let s = store();
+    run(
+        &s,
+        vec![
+            ch(A, "task", json!({})),
+            ch(A, "decided", json!({"verdict": "declined"})),
+            ch(B, "task", json!({})),
+            ch(B, "decided", json!({})),
+        ],
+    );
+    let err = take(&s, A, "declined", true).unwrap_err().to_string();
+    assert!(err.contains("was declined"));
+    assert_eq!(one::<String>(&s, "select verdict from decided where entity = (select id from entity where eid = 'aaaaaaaa-0000-4000-8000-000000000001')"), "declined");
+    assert_eq!(one::<i64>(&s, "select count(*) from session"), 0);
+
+    take(&s, B, "winner", false).unwrap();
+    let err = take(&s, B, "loser", false).unwrap_err().to_string();
+    assert!(err.contains("already claimed by winner"));
+    assert_eq!(one::<i64>(&s, "select count(*) from conflict"), 1);
+    assert_eq!(one::<i64>(&s, "select count(*) from session where id = 'loser'"), 0);
 }
 
 #[test]

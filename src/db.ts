@@ -34,7 +34,11 @@ import {
   stamped,
   uuid,
 } from './types.ts'
-import type { Mutation, MutationOutput } from './mutation.ts'
+import {
+  type Mutation,
+  type MutationOutput,
+  type WorkClaimMutation,
+} from './mutation.ts'
 import { type Trace } from './effects.ts'
 import { ancestorAt, normalizeLiterals } from './client.ts'
 import { editHunks, isEditOp, isFieldOp, patchText } from './edit.ts'
@@ -82,6 +86,13 @@ import {
   sourceList,
   sourceResolve,
 } from './source.ts'
+import {
+  workAuthorizationSql,
+  workLineageSql,
+  workReadyJoinsSql,
+  workReadyWhereSql,
+  workRootsSql,
+} from './work.ts'
 
 // Prepared-statement cache, per db handle. SQLite recompiles the SQL on
 // every prepare(); apply() alone recompiles ~35 statements per call (~318µs
@@ -4675,6 +4686,98 @@ let casBodies = (db: DatabaseSync, changes: Change[]): Change[] => {
   return [...blobs, ...changes]
 }
 
+let guardedWorkSql = (recursive: boolean) =>
+  `with recursive candidate(origin, entity) as (
+  select id, id from entity where eid = ?
+)${recursive ? `, ${workLineageSql('candidate')}, ${workRootsSql}` : ''}
+select 1
+  from candidate
+  join entity on entity.id = candidate.entity
+  ${workReadyJoinsSql}
+ where ${workReadyWhereSql(workAuthorizationSql(recursive))}`
+
+let workClaimRefusal = (db: DatabaseSync, eid: string) => {
+  let id = human(db, eid)
+  let state = prep(
+    db,
+    `select task.entity is not null as task,
+            completed.entity is not null as completed,
+            cancelled.entity is not null as cancelled,
+            quarantined.entity is not null as quarantined,
+            blocked.entity is not null as has_block,
+            blocked."on" as blocked,
+            proposed.entity is not null as proposed,
+            decided.entity is not null as decided,
+            decided.verdict as verdict
+       from entity
+       left join task on task.entity = entity.id
+       left join completed on completed.entity = entity.id
+       left join cancelled on cancelled.entity = entity.id
+       left join quarantined on quarantined.entity = entity.id
+       left join blocked on blocked.entity = entity.id
+       left join proposed on proposed.entity = entity.id
+       left join decided on decided.entity = entity.id
+      where entity.eid = ?`,
+  ).get(eid) as
+    | {
+      task: number
+      completed: number
+      cancelled: number
+      quarantined: number
+      has_block: number
+      blocked: string | null
+      proposed: number
+      decided: number
+      verdict: string | null
+    }
+    | undefined
+  if (!state?.task) return `${id} is not a task`
+  if (state.quarantined) return `${id} is quarantined`
+  if (state.completed) return `${id} is completed`
+  if (state.cancelled) return `${id} is cancelled`
+  if (state.has_block) {
+    return `${id} is externally blocked${
+      state.blocked ? `: ${state.blocked}` : ''
+    }`
+  }
+  if (state.proposed && !state.decided) {
+    return `${id} is proposed but not decided — approve it and claim atomically`
+  }
+  if (state.verdict == 'declined') {
+    return `${id} was declined — revise or explicitly replace that decision before claiming`
+  }
+  let blocker = prep(
+    db,
+    `select child.eid as eid, dead.eid is not null as missing,
+            hidden.entity is not null as hidden
+       from dependency needed
+       left join entity child on child.id = needed.child
+       left join tombstone dead on dead.eid = child.eid
+       left join quarantined hidden on hidden.entity = child.id
+       left join completed on completed.entity = child.id
+       left join cancelled on cancelled.entity = child.id
+      where needed.parent = (select id from entity where eid = ?)
+        and needed.type = 'requires'
+        and (
+          child.id is null or dead.eid is not null or
+          (completed.entity is null and cancelled.entity is null)
+        )
+      order by needed.ord, child.num limit 1`,
+  ).get(eid) as
+    | { eid: string | null; missing: number; hidden: number }
+    | undefined
+  if (blocker) {
+    if (blocker.hidden) {
+      return `${id} requires a hidden unresolved dependency — ask an administrator to resolve it`
+    }
+    let child = blocker.eid ? human(db, blocker.eid) : 'a missing dependency'
+    return blocker.missing
+      ? `${id} requires missing ${child} — restore or remove that dependency`
+      : `${id} requires unresolved ${child} — complete or cancel it first`
+  }
+  return `${id} is not approved directly or through an approved open ancestor`
+}
+
 export let apply = (
   db: DatabaseSync,
   changes: Change[],
@@ -4687,6 +4790,10 @@ export let apply = (
   // nothing and the column stays unwritable from the wire (admitted refuses
   // it too, belt and suspenders).
   imports?: Map<string, { source: string; line: number }>,
+  // A named worker-claim mutation supplies the one claim whose readiness must
+  // be validated under this transaction's writer lock. Raw Change[] leaves it
+  // absent and retains the administrative graph capability.
+  workClaim?: { target: string; recursive: boolean },
 ): Change[] => {
   // A raw @-address in `deliver.to` names no eid the parser could resolve —
   // fold it into its address-book entity (find-or-mint) before normalize.
@@ -4728,7 +4835,10 @@ export let apply = (
   // This is a write transaction from birth. Taking its reserved lock before
   // the validation reads lets busy_timeout wait for a handoff peer; upgrading
   // a deferred read transaction can fail immediately to avoid a deadlock.
-  db.exec('begin immediate')
+  // claimWork() takes this lock before resolving and synthesizing its batch;
+  // apply owns the remainder and commits/rolls it back exactly as if it had
+  // opened the transaction itself.
+  if (!workClaim) db.exec('begin immediate')
   try {
     // Claim release is the interruption event. Capture the holder before the
     // row can vanish — including through a session cascade — then derive the
@@ -4984,6 +5094,18 @@ export let apply = (
               cur.id ?? human(db, cur.session)
             }`,
           )
+        }
+        // A worker take is stricter than raw graph mutation. The collision
+        // check stays first so a concurrent loser retains the established
+        // conflict audit; replay by the same holder is idempotent even though
+        // its live claim now derives wip. Every other readiness fact is read
+        // under this BEGIN IMMEDIATE transaction, after an optional bare
+        // decision in the same batch has landed.
+        if (
+          workClaim?.target == eid && !cur &&
+          !prep(db, guardedWorkSql(workClaim.recursive)).get(eid)
+        ) {
+          throw new Error(workClaimRefusal(db, eid))
         }
         // A lease is temporary; having done the work is not. The edge is the
         // durable, indexed truth used by Session Tiles. Insert it in the same
@@ -6728,6 +6850,102 @@ export let inverseBatch = (db: DatabaseSync, id: number): Change[] => {
 // The one database mutation capability. Named mutations live here only when
 // their read and guarded write must be indivisible; HTTP and in-process MCP
 // both call this function, so transport cannot weaken that boundary.
+let claimWork = (
+  db: DatabaseSync,
+  ask: WorkClaimMutation,
+  trace?: Trace,
+  via?: string | null,
+) => {
+  if (typeof ask.target != 'string' || !ask.target.trim()) {
+    throw new Error('claim_work needs a target')
+  }
+  if (typeof ask.session != 'string' || !ask.session.trim()) {
+    throw new Error('claim_work needs a session')
+  }
+  if (ask.mode != 'ready' && ask.mode != 'approve') {
+    throw new Error('claim_work mode must be ready or approve')
+  }
+  if (ask.recursive !== undefined && typeof ask.recursive != 'boolean') {
+    throw new Error('claim_work recursive must be a boolean')
+  }
+  if (ask.cwd !== undefined && typeof ask.cwd != 'string') {
+    throw new Error('claim_work cwd must be a string')
+  }
+  db.exec('begin immediate')
+  try {
+    let target = resolveId(db, ask.target)
+    if (!target) throw new Error(`no entity: ${ask.target}`)
+    let held = prep(
+      db,
+      `select holder.eid as session
+         from claim
+         join entity holder on holder.id = claim.session
+        where claim.entity = (select id from entity where eid = ?)`,
+    ).get(target) as { session: string } | undefined
+    // A session address may be its graph id (S-3/eid/alias) or its stable
+    // session.id. Prefer a graph address only when it resolves to a Session;
+    // otherwise a coincident actor/task alias cannot shadow the stable id.
+    let sessionAddress = resolveId(db, ask.session)
+    if (!sessionAddress && /^[A-Za-z]+-\d+$/.test(ask.session)) {
+      throw new Error(`no entity: ${ask.session}`)
+    }
+    let session = sessionAddress
+      ? prep(
+        db,
+        `select owner.eid as eid, s.cwd, actor.eid as actor
+           from session s
+           join entity owner on owner.id = s.entity
+           left join entity actor on actor.id = s.actor
+          where owner.eid = ?`,
+      ).get(sessionAddress) as
+        | { eid: string; cwd: string | null; actor: string | null }
+        | undefined
+      : undefined
+    session ??= prep(
+      db,
+      `select owner.eid as eid, s.cwd, actor.eid as actor
+         from session s
+         join entity owner on owner.id = s.entity
+         left join entity actor on actor.id = s.actor
+        where s.id = ?`,
+    ).get(ask.session) as
+      | { eid: string; cwd: string | null; actor: string | null }
+      | undefined
+    // A replay by the same stable session is a true no-op: no stamp, journal
+    // row, worked edge refresh, or cwd edit.
+    if (session && held?.session == session.eid) {
+      db.exec('commit')
+      return []
+    }
+    let actor = prep(
+      db,
+      `select project.eid as eid from task
+       left join entity project on project.id = task.project
+       where task.entity = (select id from entity where eid = ?)`,
+    ).get(target) as { eid: string | null } | undefined
+    let seid = session?.eid ?? uuid()
+    let comp: Record<string, unknown> = session ? {} : { id: ask.session }
+    if (ask.cwd && session?.cwd != ask.cwd) comp.cwd = ask.cwd
+    if (actor?.eid && !session?.actor) comp.actor = actor.eid
+    let changes: Change[] = [
+      ...(Object.keys(comp).length
+        ? [{ eid: seid, name: 'session', comp }]
+        : []),
+      ...(ask.mode == 'approve'
+        ? [{ eid: target, name: 'decided', comp: {} } as Change]
+        : []),
+      { eid: target, name: 'claim', comp: { session: seid } },
+    ]
+    return apply(db, changes, trace, via, undefined, {
+      target,
+      recursive: ask.recursive !== false,
+    })
+  } catch (e) {
+    rollback(db)
+    throw e
+  }
+}
+
 export let mutate = <T extends Mutation>(
   db: DatabaseSync,
   mutation: T,
@@ -6736,6 +6954,12 @@ export let mutate = <T extends Mutation>(
 ): MutationOutput<T> => {
   if (Array.isArray(mutation)) {
     return apply(db, mutation, trace, via) as MutationOutput<T>
+  }
+  if ('mutation' in mutation && 'entities' in mutation) {
+    throw new Error('a named mutation cannot include entities')
+  }
+  if ('mutation' in mutation && mutation.mutation == 'claim_work') {
+    return claimWork(db, mutation, trace, via) as MutationOutput<T>
   }
   if ('entities' in mutation) {
     let plan = normalizeLiterals(mutation.entities, {

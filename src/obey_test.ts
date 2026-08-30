@@ -79,7 +79,10 @@ Deno.test('the order rides with its prose, and the prose stays put', () => {
   let t = task()
   // wip is a live claim now (D-24102) — it needs a session to hold the lease.
   let s = uid()
-  apply(db, [{ eid: s, name: 'session', comp: { id: uid() } }])
+  apply(db, [
+    { eid: s, name: 'session', comp: { id: uid() } },
+    { eid: t, name: 'decided', comp: {} },
+  ])
   say(t, ':wip\n\nStarting on this now — the parser is the hard half.', s)
   assertEquals(status(t), 'wip')
   assertMatch(replies(t)[0].body, /parser is the hard half/)

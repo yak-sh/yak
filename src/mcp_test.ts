@@ -302,6 +302,54 @@ Deno.test('work_list exposes bounded human-addressed evaluate and build lanes', 
   })
 })
 
+Deno.test('task_claim uses the guarded writer mutation and can approve atomically', async () => {
+  let { db, io } = graph()
+  let project = uuid(), target = uuid()
+  apply(db, [
+    { eid: project, name: 'doc', comp: { title: 'Work', body: '' } },
+    { eid: project, name: 'project', comp: {} },
+    { eid: target, name: 'doc', comp: { title: 'Candidate', body: '' } },
+    { eid: target, name: 'task', comp: { project } },
+    { eid: target, name: 'proposed', comp: {} },
+  ])
+  let seen: Mutation | undefined
+  let write = io.write
+  io.write = async (mutation, via) => {
+    seen = mutation
+    return await write(mutation, via)
+  }
+  await protocol(io, async (client) => {
+    let out = await client.callTool({
+      name: 'task_claim',
+      arguments: {
+        id: idOf((await io.get([target]))[0]),
+        session: 'desktop',
+        approve: true,
+      },
+    }) as ToolResult
+    assertEquals(out.isError, undefined)
+    assertMatch(said(out), /^claimed T-\d+ for desktop/)
+  })
+  assertEquals(seen, {
+    mutation: 'claim_work',
+    target: idOf((await io.get([target]))[0]),
+    session: 'desktop',
+    mode: 'approve',
+  })
+  assertEquals(
+    db.prepare(
+      `select s.id from claim join session s on s.entity = claim.session
+       where claim.entity = (select id from entity where eid = ?)`,
+    ).get(target),
+    { id: 'desktop' },
+  )
+  assert(
+    db.prepare(
+      'select 1 from decided where entity = (select id from entity where eid = ?)',
+    ).get(target),
+  )
+})
+
 Deno.test('work_list refuses quarantine reveal filters', async () => {
   let { io } = graph()
   await protocol(io, async (client) => {

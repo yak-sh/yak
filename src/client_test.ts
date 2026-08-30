@@ -68,6 +68,7 @@ import {
   threadOf,
   unreadMail,
   unreadPipe,
+  workClaimMutation,
   worktreeRoot,
   wrapChanges,
 } from './client.ts'
@@ -1102,6 +1103,24 @@ Deno.test('sessionFor: a child records its operator parent, once', () => {
 Deno.test('claimChanges points at the session entity', () => {
   let cs = claimChanges(all, T2, 'sess-x')
   assertEquals(cs, [{ eid: T2, name: 'claim', comp: { session: S } }])
+})
+
+Deno.test('workClaimMutation exposes only the guarded writer intent', () => {
+  assertEquals(
+    workClaimMutation('T-3', 'worker', {
+      approve: true,
+      recursive: false,
+      cwd: '/work',
+    }),
+    {
+      mutation: 'claim_work',
+      target: 'T-3',
+      session: 'worker',
+      mode: 'approve',
+      recursive: false,
+      cwd: '/work',
+    },
+  )
 })
 
 Deno.test('spawnChanges: request speaks canonical and rollback frames', () => {

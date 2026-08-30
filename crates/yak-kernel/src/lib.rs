@@ -63,7 +63,8 @@ pub use schema::{apply_schema, mint_epoch, SchemaOp};
 pub use store::{Rows, Store};
 pub use vocab::{vocab, PropType, Vocab};
 pub use write::{
-    apply, default_gates, native_safe, ApplyError, ApplyOpts, Gate, WriteStore, NATIVE_COMPS,
+    apply, claim_work, default_gates, native_safe, ApplyError, ApplyOpts, ClaimWork, Gate,
+    WorkClaimGuard, WriteStore, NATIVE_COMPS,
 };
 
 // The live graph the way every client resolves it: DB_PATH wins, else the

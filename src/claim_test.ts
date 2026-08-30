@@ -72,6 +72,7 @@ slow(
       ...ent(T, 3, {
         doc: { title: 'A task', body: '' },
         task: { project: P },
+        decided: {},
         created: { at: '2026-01-01', by: P },
       }),
     ])
@@ -100,5 +101,38 @@ slow(
     assertEquals(bad.code, 1)
     assertMatch(dec(bad.stderr), /no entity: S-999999/)
     assertEquals((await phantoms('S-999999')).length, 0)
+
+    // Two worker takes arriving together serialize at the writer transaction:
+    // exactly one claims, the loser leaves no Session, and the existing
+    // conflict audit records the collision.
+    let racing = uid(4)
+    await post(ent(racing, 4, {
+      doc: { title: 'Racing task', body: '' },
+      task: { project: P },
+      decided: {},
+    }))
+    let attempt = (session: string) =>
+      fetch(`http://${U}/apply`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          mutation: 'claim_work',
+          target: racing,
+          session,
+          mode: 'ready',
+        }),
+      })
+    let raced = await Promise.all([attempt('racer-a'), attempt('racer-b')])
+    assertEquals(raced.map((r) => r.status).sort(), [200, 400])
+    let live = (await query(['.kind=task'])).find((r) => r.eid == racing)!
+    let sessions = await query(['.kind=session'])
+    let winner = sessions.find((r) => r.eid == live.comps.claim?.session)
+    assertMatch(String(winner?.comps.session?.id), /^racer-[ab]$/)
+    assertEquals(
+      sessions.filter((r) => /^racer-[ab]$/.test(String(r.comps.session?.id)))
+        .length,
+      1,
+    )
+    assertEquals((await query(['.kind=conflict'])).length >= 1, true)
   },
 )

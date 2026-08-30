@@ -567,7 +567,7 @@ impl App {
     // READ_WRITE connection. apply()'s own `begin immediate` queues politely
     // behind the server's short batches, so this holds no long lock.
     pub fn apply_write(&self, changes: Vec<Change>) -> Result<Vec<Change>, String> {
-        let opts = ApplyOpts { writer: Some("yak-tui"), fed: false };
+        let opts = ApplyOpts { writer: Some("yak-tui"), fed: false, ..Default::default() };
         apply(&self.write, changes, &opts, &self.gates).map_err(|e| e.to_string())
     }
 

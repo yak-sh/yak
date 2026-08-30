@@ -46,7 +46,6 @@ import {
   byBoard,
   checkedRefs,
   claimant,
-  claimChanges,
   commentChanges,
   contextDigest,
   contextSnapshot,
@@ -95,6 +94,7 @@ import {
   taskTreeText,
   taskTreeWarning,
   uniq,
+  workClaimMutation,
 } from './client.ts'
 import { noFilter, orderOf, parseQuery, pred, resolution } from './query.ts'
 import {
@@ -1023,24 +1023,36 @@ with the same stable session identifier you claim with.`,
 
   tool(
     'task_claim',
-    `Claim a task for your session — a lease telling other agents who is
-working it (⚑ in listings). Pass a STABLE identifier for yourself
-(session id or agent name) and reuse it for the whole session. Fails if
-another session holds the lease; task_release drops it when you finish
-or hand off.`,
-    { id: z.string(), session: z.string() },
-    async ({ id, session }: { id: string; session: string }) => {
-      let row = await got(id)
-      if (!row) return err(`no entity: ${id}`)
-      // claimChanges resolves its author (the session row) and the task's
-      // project (the row itself) — hand it exactly those.
-      let sess = await sessionRow(session, ioQ)
+    `Atomically claim ready, approved work for your session. Readiness is the
+same predicate as work_list lane=build: open, unblocked, dependency-ready,
+not quarantined, and directly or recursively approved. Pass a STABLE
+identifier for yourself and reuse it for the whole session. Set approve only
+when you evaluated the task and are also its best builder; approval and claim
+then land together, but an explicit decline is never reversed. Raw graph_apply
+remains the administrative claim door. task_release drops the lease when you
+finish or hand off.`,
+    {
+      id: z.string(),
+      session: z.string(),
+      approve: z.boolean().describe(
+        'Approve an undecided task and claim it atomically (default false).',
+      ).optional(),
+    },
+    async (
+      { id, session, approve }: {
+        id: string
+        session: string
+        approve?: boolean
+      },
+    ) => {
+      // Target/session resolution and readiness are deliberately not checked
+      // here; the writer owns all three under its lock.
       try {
         await io.write(
-          claimChanges(
-            uniq([row, ...(sess ? [sess] : [])]),
-            row.eid,
+          workClaimMutation(
+            id,
             session,
+            { approve },
           ),
           session,
         )
@@ -1050,6 +1062,8 @@ or hand off.`,
           isError: true as const,
         }
       }
+      let row = await got(id)
+      if (!row) return err(`claim landed but no entity can be read: ${id}`)
       return bus(`claimed ${idOf(row)} for ${session}`, session)
     },
   )
@@ -1196,6 +1210,7 @@ ${
         return err((e as Error).message)
       }
       if (out.changes?.length) await io.write(out.changes, session)
+      if (out.mutation) await io.write(out.mutation, session)
       let said = out.msg ? [out.msg] : []
       if (line.replace(/^:/, '').trim().split(/\s/)[0] == 'wake') {
         let to = String(

@@ -20,7 +20,6 @@ import {
   byList,
   checkedRefs,
   claimant,
-  claimChanges,
   commentChanges,
   contextDigest,
   contextSnapshot,
@@ -55,6 +54,7 @@ import {
   me,
   memoryChanges,
   mintedIn,
+  mutate,
   needed,
   neighborhoods,
   noticeBlock,
@@ -93,6 +93,7 @@ import {
   taskTreeWarning,
   undo,
   unreadPipe,
+  workClaimMutation,
   WORKING_SET,
   wrapChanges,
 } from './client.ts'
@@ -948,24 +949,32 @@ let finish =
     let [id, ...words] = args
     let comment = words.join(' ')
     let sid = me()
+    if (status == 'wip') {
+      if (!sid) throw new UsageError('wip: run under a session')
+      await mutate(workClaimMutation(id, sid, { cwd: Deno.cwd() }))
+      let row = await needed(id)
+      if (comment) {
+        let sess = await sessionRow(sid)
+        await send(
+          commentChanges(
+            [row, ...(sess ? [sess] : [])],
+            row.eid,
+            comment,
+            sid,
+          ),
+        )
+      }
+      return print(`${idOf(row)} → wip${comment ? ` — ${comment}` : ''}`)
+    }
     let [row, sess] = await Promise.all([
       needed(id),
-      (comment || status == 'wip') && sid ? sessionRow(sid) : undefined,
+      comment && sid ? sessionRow(sid) : undefined,
     ])
     let all = [row, ...(sess ? [sess] : [])]
     // Status is DERIVED (D-24102): wip LEASES (a claim), done/cancel MINT their
     // mark; apply() stamps at/by/via, and cancel's reason rides the mark. There
     // is no `set .status=` any more — the presence of the comp is the status.
-    let move: Change[] = status == 'wip'
-      ? (() => {
-        if (!sid) throw new UsageError('wip: run under a session')
-        return [
-          { eid: row.eid, name: 'completed', comp: null },
-          { eid: row.eid, name: 'cancelled', comp: null },
-          ...claimChanges(all, row.eid, sid, Deno.cwd()),
-        ]
-      })()
-      : status == 'done'
+    let move: Change[] = status == 'done'
       ? [
         { eid: row.eid, name: 'cancelled', comp: null },
         { eid: row.eid, name: 'completed', comp: {} },
@@ -1357,8 +1366,8 @@ let subscribe = (mode: 'watch' | 'mute') => async (input: Got) => {
 // named after the literal string — two builders passed `S-16450` and claimed
 // under a garbage session whose id was the string "S-16450", so `task land`
 // then found "no task" (T-16487). A raw external id (a uuid, never idLike)
-// passes straight through to claimChanges' find-or-mint, which reifies a
-// hook/spawn's session on first sight.
+// passes straight through; the guarded writer reifies a hook/spawn's session
+// on first sight.
 let sessionArg = async (arg: string): Promise<string> => {
   if (!idLike(arg)) return arg
   let row = await needed(arg)
@@ -1372,21 +1381,21 @@ let sessionArg = async (arg: string): Promise<string> => {
 let claim = async (got: Got) => {
   let id = got.args.id, sess = got.opts['--session'] ?? got.args.session
   if (!id) throw new Error('task claim <id> [session]')
-  let session = sess ? await sessionArg(sess) : me()
+  let session = sess || me()
   if (!session) {
     throw new Error('task claim <id> <session> (or run under a session)')
   }
-  // The task by address, and the claiming session by its unique id — the
-  // two rows claimChanges reads. sessionFor mints the session only on a
-  // genuinely-absent sessionRow (query throws on a fetch miss, never []),
-  // so a claim reifies exactly one session on first sight, as the whole
-  // snapshot did.
-  let row = await needed(id)
-  let srow = await sessionRow(session)
-  await send(
-    claimChanges([row, ...(srow ? [srow] : [])], row.eid, session, Deno.cwd()),
+  await mutate(
+    workClaimMutation(
+      id,
+      session,
+      { cwd: Deno.cwd(), approve: got.flags.has('--approve') },
+    ),
   )
-  print(`${idOf(row)} claimed by ${session}`)
+  // Resolution is writer-owned; read only after the take for its human receipt.
+  let row = await needed(id)
+  let namedSession = await sessionArg(session)
+  print(`${idOf(row)} claimed by ${namedSession}`)
 }
 
 // Dispatch a managed agent onto a task — one wire write; the server's
@@ -1567,10 +1576,6 @@ let colon = async (focus: string | undefined, argv: string[]) => {
       one(head.at(-1)),
     ])
   }
-  if (name == 'claim' && rest[0]) {
-    let sess = await sessionRow(rest[0])
-    if (sess) all.push(sess)
-  }
   if (name == 'park' && session) {
     // :park reads the caller's own session and the single task it claims
     // (focusFor). Pre-fetch both so the local reader resolves them without a
@@ -1597,6 +1602,7 @@ let colon = async (focus: string | undefined, argv: string[]) => {
     ? await derefedChanges(out.changes)
     : undefined
   if (changes) await send(changes)
+  if (out.mutation) await mutate(out.mutation)
   if (out.msg) print(out.msg)
   if (name == 'wake' && changes) {
     let to = String(changes.find((c) => c.name == 'deliver')?.comp?.to ?? '')

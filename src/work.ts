@@ -128,6 +128,106 @@ export let authorizations = (all: Row[], deps: Dep[]) => {
 export let authorized = (all: Row[], deps: Dep[]) =>
   new Set(authorizations(all, deps).keys())
 
+// The SQL half of buildReady(). Query selection and the writer's guarded
+// claim both compose these fragments, so discovering work and taking it cannot
+// drift. The candidate CTE always has (origin, entity); recursive callers add
+// lineage + approved_root, while a direct-only caller needs neither.
+export let workLineageSql = (seed: string) =>
+  `lineage(origin, entity) as (
+     select origin, entity from ${seed}
+     union
+     select lineage.origin, dependency.parent
+       from lineage
+       join entity current on current.id = lineage.entity
+       left join tombstone current_dead on current_dead.eid = current.eid
+       left join proposed on proposed.entity = current.id
+       left join decided choice on choice.entity = current.id
+       left join quarantined hidden on hidden.entity = current.id
+       join dependency indexed by dependency_child
+         on dependency.child = current.id
+        and dependency.type = 'requires'
+       join entity parent on parent.id = dependency.parent
+       left join tombstone parent_dead on parent_dead.eid = parent.eid
+      where not (proposed.entity is not null and choice.entity is null)
+        and coalesce(choice.verdict, '') != 'declined'
+        and hidden.entity is null
+        and current_dead.eid is null
+        and parent_dead.eid is null
+   )`
+
+export let workRootsSql = `approved_root(entity, num) as (
+  select root.id, root.num
+    from entity root
+    join task root_task on root_task.entity = root.id
+    join decided approval on approval.entity = root.id
+    left join completed on completed.entity = root.id
+    left join cancelled on cancelled.entity = root.id
+    left join claim on claim.entity = root.id
+    left join quarantined on quarantined.entity = root.id
+    left join tombstone root_dead on root_dead.eid = root.eid
+   where coalesce(approval.verdict, 'approved') != 'declined'
+     and completed.entity is null
+     and cancelled.entity is null
+     and claim.entity is null
+     and quarantined.entity is null
+     and root_dead.eid is null
+)`
+
+export let workAuthorizationSql = (recursive: boolean) =>
+  recursive
+    ? `exists (
+         select 1
+           from lineage l
+           join approved_root root on root.entity = l.entity
+          where l.origin = entity.id
+       )`
+    : `choice.entity is not null and
+       coalesce(choice.verdict, 'approved') != 'declined'`
+
+export let workReadyJoinsSql = `
+         join task on task.entity = entity.id
+         left join proposed on proposed.entity = entity.id
+         left join decided choice on choice.entity = entity.id
+         left join completed on completed.entity = entity.id
+         left join cancelled on cancelled.entity = entity.id
+         left join claim on claim.entity = entity.id
+         left join blocked on blocked.entity = entity.id
+         left join quarantined on quarantined.entity = entity.id
+         left join tombstone dead on dead.eid = entity.eid`
+
+export let workReadyWhereSql = (authorization: string) => `
+          completed.entity is null
+          and cancelled.entity is null
+          and claim.entity is null
+          and blocked.entity is null
+          and quarantined.entity is null
+          and dead.eid is null
+          and not (
+            proposed.entity is not null and choice.entity is null
+          )
+          and coalesce(choice.verdict, '') != 'declined'
+          and not exists (
+            select 1
+              from dependency needed
+              left join entity endpoint on endpoint.id = needed.child
+              left join tombstone endpoint_dead on endpoint_dead.eid = endpoint.eid
+              left join completed endpoint_completed
+                on endpoint_completed.entity = endpoint.id
+              left join cancelled endpoint_cancelled
+                on endpoint_cancelled.entity = endpoint.id
+             where needed.parent = entity.id
+               and needed.type = 'requires'
+               and (
+                 endpoint.id is null
+                 or endpoint_dead.eid is not null
+                 or (
+                   endpoint_completed.entity is null
+                   and endpoint_cancelled.entity is null
+                 )
+               )
+          )
+          and (${authorization})`
+
 let unresolved = (eid: string, by: Map<string, Row>, deps: Dep[]) =>
   deps.filter((d) =>
     d.type == 'requires' && d.parent == eid &&

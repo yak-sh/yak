@@ -594,14 +594,21 @@ export let manuals = declare({
     args: [arg('id', id)],
   },
   claim: {
-    about: 'lease a task (default: your own session id)',
-    examples: ['task claim T-3 --session S-9'],
+    about: 'claim ready, approved work (default: your own session id)',
+    detail: 'Readiness and the lease are checked atomically. `--approve` ' +
+      'approves an undecided task and claims it in the same transaction; it ' +
+      'never reverses a declined decision. Raw graph mutation remains the ' +
+      'administrative claim door.',
+    examples: [
+      'task claim T-3 --session S-9',
+      'task claim T-3 --approve',
+    ],
     root: true,
     // An empty shell expansion means "use the ambient session", exactly like
     // omitting this optional slot. Agent briefs commonly carry a session
     // placeholder before the child has a provider id (T-19193).
     args: [arg('id', id), arg('session', empty, false, false)],
-    opts: [value('--session', empty, true)],
+    opts: [value('--session', empty, true), flag('--approve')],
   },
   release: {
     about: 'drop one or more leases',

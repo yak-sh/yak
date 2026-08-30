@@ -32,7 +32,7 @@
 #![allow(clippy::result_large_err)]
 
 use crate::change::{batch_json, Change};
-use crate::store::resolve;
+use crate::store::{resolve, resolve_checked};
 use crate::vocab::{vocab, PropType, Vocab};
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use serde_json::{Map, Value};
@@ -1603,6 +1603,7 @@ pub struct GateCx<'a> {
     pub extra: Vec<Change>,
     pub touch: Vec<String>,
     pub bounce: Option<Bounce>,
+    pub work_claim: Option<&'a WorkClaimGuard>,
 }
 
 pub trait Gate {
@@ -1614,6 +1615,187 @@ pub trait Gate {
 // a landing claim writes the durable `worked` edge and drags an open task to
 // wip, exactly as db.ts does.
 pub struct ClaimGate;
+
+#[derive(Debug, Clone)]
+pub struct WorkClaimGuard {
+    pub target: String,
+    pub recursive: bool,
+}
+
+fn work_ready_sql(recursive: bool) -> String {
+    let lineage = if recursive {
+        ", lineage(origin, entity) as (\
+           select origin, entity from candidate union \
+           select lineage.origin, dependency.parent from lineage \
+           join entity current on current.id = lineage.entity \
+           left join tombstone current_dead on current_dead.eid = current.eid \
+           left join proposed on proposed.entity = current.id \
+           left join decided choice on choice.entity = current.id \
+           left join quarantined hidden on hidden.entity = current.id \
+           join dependency indexed by dependency_child \
+             on dependency.child = current.id and dependency.type = 'requires' \
+           join entity parent on parent.id = dependency.parent \
+           left join tombstone parent_dead on parent_dead.eid = parent.eid \
+          where not (proposed.entity is not null and choice.entity is null) \
+            and coalesce(choice.verdict, '') != 'declined' \
+            and hidden.entity is null and current_dead.eid is null \
+            and parent_dead.eid is null), \
+         approved_root(entity, num) as (\
+           select root.id, root.num from entity root \
+           join task root_task on root_task.entity = root.id \
+           join decided approval on approval.entity = root.id \
+           left join completed on completed.entity = root.id \
+           left join cancelled on cancelled.entity = root.id \
+           left join claim on claim.entity = root.id \
+           left join quarantined on quarantined.entity = root.id \
+           left join tombstone root_dead on root_dead.eid = root.eid \
+          where coalesce(approval.verdict, 'approved') != 'declined' \
+            and completed.entity is null and cancelled.entity is null \
+            and claim.entity is null and quarantined.entity is null \
+            and root_dead.eid is null)"
+    } else {
+        ""
+    };
+    let authorization = if recursive {
+        "exists (select 1 from lineage l join approved_root root \
+          on root.entity = l.entity where l.origin = entity.id)"
+    } else {
+        "choice.entity is not null and coalesce(choice.verdict, 'approved') != 'declined'"
+    };
+    format!(
+        "with recursive candidate(origin, entity) as (\
+           select id, id from entity where eid = ?1){lineage} \
+         select 1 from candidate join entity on entity.id = candidate.entity \
+         join task on task.entity = entity.id \
+         left join proposed on proposed.entity = entity.id \
+         left join decided choice on choice.entity = entity.id \
+         left join completed on completed.entity = entity.id \
+         left join cancelled on cancelled.entity = entity.id \
+         left join claim on claim.entity = entity.id \
+         left join blocked on blocked.entity = entity.id \
+         left join quarantined on quarantined.entity = entity.id \
+         left join tombstone dead on dead.eid = entity.eid \
+         where completed.entity is null and cancelled.entity is null \
+           and claim.entity is null and blocked.entity is null \
+           and quarantined.entity is null and dead.eid is null \
+           and not (proposed.entity is not null and choice.entity is null) \
+           and coalesce(choice.verdict, '') != 'declined' \
+           and not exists (\
+             select 1 from dependency needed \
+             left join entity endpoint on endpoint.id = needed.child \
+             left join tombstone endpoint_dead on endpoint_dead.eid = endpoint.eid \
+             left join completed endpoint_completed on endpoint_completed.entity = endpoint.id \
+             left join cancelled endpoint_cancelled on endpoint_cancelled.entity = endpoint.id \
+             where needed.parent = entity.id and needed.type = 'requires' \
+               and (endpoint.id is null or endpoint_dead.eid is not null or \
+                 (endpoint_completed.entity is null and endpoint_cancelled.entity is null))) \
+           and ({authorization})"
+    )
+}
+
+fn work_claim_refusal(conn: &Connection, eid: &str) -> Result<String> {
+    let id = human(conn, eid);
+    type State = (i64, i64, i64, i64, i64, Option<String>, i64, i64, Option<String>);
+    let state: Option<State> = conn
+        .query_row(
+            "select task.entity is not null, completed.entity is not null, \
+                    cancelled.entity is not null, quarantined.entity is not null, \
+                    blocked.entity is not null, blocked.\"on\", proposed.entity is not null, \
+                    decided.entity is not null, decided.verdict \
+               from entity left join task on task.entity = entity.id \
+               left join completed on completed.entity = entity.id \
+               left join cancelled on cancelled.entity = entity.id \
+               left join quarantined on quarantined.entity = entity.id \
+               left join blocked on blocked.entity = entity.id \
+               left join proposed on proposed.entity = entity.id \
+               left join decided on decided.entity = entity.id where entity.eid = ?1",
+            [eid],
+            |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                    r.get(6)?,
+                    r.get(7)?,
+                    r.get(8)?,
+                ))
+            },
+        )
+        .optional()?;
+    let Some((
+        task,
+        completed,
+        cancelled,
+        quarantined,
+        has_block,
+        blocked,
+        proposed,
+        decided,
+        verdict,
+    )) = state
+    else {
+        return Ok(format!("{id} is not a task"));
+    };
+    if task == 0 {
+        return Ok(format!("{id} is not a task"));
+    }
+    if quarantined != 0 {
+        return Ok(format!("{id} is quarantined"));
+    }
+    if completed != 0 {
+        return Ok(format!("{id} is completed"));
+    }
+    if cancelled != 0 {
+        return Ok(format!("{id} is cancelled"));
+    }
+    if has_block != 0 {
+        return Ok(match blocked.filter(|s| !s.is_empty()) {
+            Some(reason) => format!("{id} is externally blocked: {reason}"),
+            None => format!("{id} is externally blocked"),
+        });
+    }
+    if proposed != 0 && decided == 0 {
+        return Ok(format!("{id} is proposed but not decided — approve it and claim atomically"));
+    }
+    if verdict.as_deref() == Some("declined") {
+        return Ok(format!(
+            "{id} was declined — revise or explicitly replace that decision before claiming"
+        ));
+    }
+    let blocker: Option<(Option<String>, i64, i64)> = conn
+        .query_row(
+            "select child.eid, dead.eid is not null, hidden.entity is not null \
+               from dependency needed left join entity child on child.id = needed.child \
+               left join tombstone dead on dead.eid = child.eid \
+               left join quarantined hidden on hidden.entity = child.id \
+               left join completed on completed.entity = child.id \
+               left join cancelled on cancelled.entity = child.id \
+              where needed.parent = (select id from entity where eid = ?1) \
+                and needed.type = 'requires' and (child.id is null or dead.eid is not null or \
+                  (completed.entity is null and cancelled.entity is null)) \
+              order by needed.ord, child.num limit 1",
+            [eid],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .optional()?;
+    if let Some((child, missing, hidden)) = blocker {
+        if hidden != 0 {
+            return Ok(format!(
+                "{id} requires a hidden unresolved dependency — ask an administrator to resolve it"
+            ));
+        }
+        let child = child.map(|e| human(conn, &e)).unwrap_or_else(|| "a missing dependency".into());
+        return Ok(if missing != 0 {
+            format!("{id} requires missing {child} — restore or remove that dependency")
+        } else {
+            format!("{id} requires unresolved {child} — complete or cancel it first")
+        });
+    }
+    Ok(format!("{id} is not approved directly or through an approved open ancestor"))
+}
 
 impl Gate for ClaimGate {
     fn on_change(&self, cx: &mut GateCx) -> Result<()> {
@@ -1634,6 +1816,7 @@ impl Gate for ClaimGate {
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .optional()?;
+        let occupied = cur.is_some();
         if let Some((holder_eid, holder_id)) = cur {
             let holder_eid = holder_eid.unwrap_or_default();
             if holder_eid != session {
@@ -1656,6 +1839,18 @@ impl Gate for ClaimGate {
                     "{} already claimed by {holder_label}",
                     human(cx.conn, &c.eid)
                 )));
+            }
+        }
+        if let Some(guard) = cx.work_claim {
+            if guard.target == c.eid && !occupied {
+                let ready = cx
+                    .conn
+                    .query_row(&work_ready_sql(guard.recursive), [&c.eid], |_| Ok(()))
+                    .optional()?
+                    .is_some();
+                if !ready {
+                    return Err(refuse(work_claim_refusal(cx.conn, &c.eid)?));
+                }
             }
         }
         // The durable edge, echoed on first landing only.
@@ -1833,6 +2028,152 @@ pub struct ApplyOpts<'a> {
     // Trace is serialized into journal.trace (ecc2c5f). false = no effects
     // journaled — a foreign writer with no effect owner of its own.
     pub fed: bool,
+    // Present only for the high-level worker claim mutation. Raw Change[]
+    // claims retain their administrative force semantics.
+    pub work_claim: Option<WorkClaimGuard>,
+}
+
+pub struct ClaimWork<'a> {
+    pub target: &'a str,
+    pub session: &'a str,
+    pub approve: bool,
+    pub recursive: bool,
+    pub cwd: Option<&'a str>,
+}
+
+// The named worker mutation owns every state-dependent step under one reserved
+// writer lock. The caller supplies addresses and intent only; it cannot smuggle
+// unrelated graph changes through this safe door.
+pub fn claim_work(
+    store: &WriteStore,
+    ask: &ClaimWork,
+    opts: &ApplyOpts,
+    gates: &[Box<dyn Gate>],
+) -> Result<Vec<Change>> {
+    if ask.target.trim().is_empty() {
+        return Err(refuse("claim_work needs a target"));
+    }
+    if ask.session.trim().is_empty() {
+        return Err(refuse("claim_work needs a session"));
+    }
+    let conn = &store.conn;
+    conn.execute_batch("begin immediate")?;
+    let planned: Result<Option<(String, Vec<Change>)>> = (|| {
+        let target = resolve_checked(conn, ask.target)
+            .map_err(refuse)?
+            .ok_or_else(|| refuse(format!("no entity: {}", ask.target)))?;
+        let held: Option<String> = conn
+            .query_row(
+                "select holder.eid from claim \
+                 join entity holder on holder.id = claim.session \
+                 where claim.entity = (select id from entity where eid = ?1)",
+                [&target],
+                |r| r.get(0),
+            )
+            .optional()?;
+        type Session = (String, Option<String>, Option<String>);
+        // The graph address form (S-3/eid/alias) and stable session.id form
+        // are both resolved here, under the same writer lock as readiness.
+        let addressed = resolve_checked(conn, ask.session).map_err(refuse)?;
+        let human_address = ask.session.split_once('-').is_some_and(|(prefix, num)| {
+            !prefix.is_empty()
+                && prefix.chars().all(|c| c.is_ascii_alphabetic())
+                && !num.is_empty()
+                && num.chars().all(|c| c.is_ascii_digit())
+        });
+        if addressed.is_none() && human_address {
+            return Err(refuse(format!("no entity: {}", ask.session)));
+        }
+        let mut session: Option<Session> = match addressed {
+            Some(eid) => conn
+                .query_row(
+                    "select owner.eid, s.cwd, actor.eid from session s \
+                     join entity owner on owner.id = s.entity \
+                     left join entity actor on actor.id = s.actor where owner.eid = ?1",
+                    [eid],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                )
+                .optional()?,
+            None => None,
+        };
+        if session.is_none() {
+            session = conn
+                .query_row(
+                    "select owner.eid, s.cwd, actor.eid from session s \
+                     join entity owner on owner.id = s.entity \
+                     left join entity actor on actor.id = s.actor where s.id = ?1",
+                    [ask.session],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                )
+                .optional()?;
+        }
+        if let Some((seid, _, _)) = &session {
+            if held.as_ref() == Some(seid) {
+                return Ok(None);
+            }
+        }
+        let actor: Option<String> = conn
+            .query_row(
+                "select project.eid from task \
+                 left join entity project on project.id = task.project \
+                 where task.entity = (select id from entity where eid = ?1)",
+                [&target],
+                |r| r.get(0),
+            )
+            .optional()?
+            .flatten();
+        let seid = session
+            .as_ref()
+            .map(|s| s.0.clone())
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let mut changes = vec![];
+        let mut session_comp = Map::new();
+        if session.is_none() {
+            session_comp.insert("id".into(), Value::from(ask.session));
+        }
+        if let Some(cwd) = ask.cwd {
+            if session.as_ref().and_then(|s| s.1.as_deref()) != Some(cwd) {
+                session_comp.insert("cwd".into(), Value::from(cwd));
+            }
+        }
+        if let Some(actor) = actor {
+            if session.as_ref().and_then(|s| s.2.as_ref()).is_none() {
+                session_comp.insert("actor".into(), Value::from(actor));
+            }
+        }
+        if !session_comp.is_empty() {
+            changes.push(Change::new(&seid, "session", Some(session_comp)));
+        }
+        if ask.approve {
+            changes.push(Change::new(&target, "decided", Some(Map::new())));
+        }
+        let mut claim = Map::new();
+        claim.insert("session".into(), Value::from(seid));
+        changes.push(Change::new(&target, "claim", Some(claim)));
+        Ok(Some((target, changes)))
+    })();
+    match planned {
+        Ok(None) => {
+            conn.execute_batch("commit")?;
+            Ok(vec![])
+        }
+        Ok(Some((target, changes))) => apply(
+            store,
+            changes,
+            &ApplyOpts {
+                writer: opts.writer,
+                fed: opts.fed,
+                work_claim: Some(WorkClaimGuard { target, recursive: ask.recursive }),
+            },
+            gates,
+        ),
+        Err(e) => {
+            if !conn.is_autocommit() {
+                let _ = conn.execute_batch("rollback");
+            }
+            Err(e)
+        }
+    }
 }
 
 // The box owner, IF there is exactly one person (db.ts ownerActor): the sole
@@ -2462,7 +2803,11 @@ pub fn apply(
         None => log.push((eid.to_string(), vec![name.to_string()])),
     };
 
-    conn.execute_batch("begin immediate").map_err(ApplyError::Db)?;
+    // claim_work takes the lock before resolving and synthesizing its batch;
+    // apply owns the rest of that transaction and commits or rolls it back.
+    if opts.work_claim.is_none() {
+        conn.execute_batch("begin immediate").map_err(ApplyError::Db)?;
+    }
     let out: Result<Vec<Change>> = (|| {
         // Snapshot the claims as they stand BEFORE this batch mutates them, so a
         // release (its claim row gone by commit) still knows who held it — the
@@ -2644,8 +2989,14 @@ pub fn apply(
             }
             // ---- gates: the plugins' in-transaction rules ----
             for g in gates {
-                let mut cx =
-                    GateCx { conn, change: &change, extra: vec![], touch: vec![], bounce: None };
+                let mut cx = GateCx {
+                    conn,
+                    change: &change,
+                    extra: vec![],
+                    touch: vec![],
+                    bounce: None,
+                    work_claim: opts.work_claim.as_ref(),
+                };
                 let r = g.on_change(&mut cx);
                 for t in cx.touch {
                     push_touch(&mut touched, &t);

@@ -31,6 +31,7 @@ import type {
   Mutation,
   MutationOutput,
   MutationResult,
+  WorkClaimMutation,
 } from './mutation.ts'
 export type { EntityLiteral, LiteralRef } from './mutation.ts'
 import { idOf, SHORT, shortId, slugsOf } from './types.ts'
@@ -2248,6 +2249,24 @@ export let claimChanges = (
     { eid: target, name: 'claim', comp: { session: s.eid } },
   ]
 }
+
+// A worker claim is not raw graph mutation: the writer validates the same
+// readiness predicate discovery used, after taking its transaction lock. A
+// bare decided touch approves an undecided task without overwriting a prior
+// explicit verdict; if the task was declined, the writer still sees declined
+// and rolls the whole operation back.
+export let workClaimMutation = (
+  target: string,
+  session: string,
+  opts: { cwd?: string; approve?: boolean; recursive?: boolean } = {},
+): WorkClaimMutation => ({
+  mutation: 'claim_work',
+  target,
+  session,
+  mode: opts.approve ? 'approve' : 'ready',
+  ...(opts.cwd ? { cwd: opts.cwd } : {}),
+  ...(opts.recursive === false ? { recursive: false } : {}),
+})
 
 // One launch spec, however it is spelled: the four fields a spawn carries,
 // worn by an explicit ask, a task's hint, and a caller session alike.

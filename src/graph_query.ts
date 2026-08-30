@@ -73,7 +73,14 @@ import {
   windowOf,
 } from './query.ts'
 import { inputsOf, resultsOf, withResults } from './result_component.ts'
-import { workPredicates } from './work.ts'
+import {
+  workAuthorizationSql,
+  workLineageSql,
+  workPredicates,
+  workReadyJoinsSql,
+  workReadyWhereSql,
+  workRootsSql,
+} from './work.ts'
 export { personaGraph, projectionGraph } from './persona_graph.ts'
 
 // A filter of only rankings — or of nothing at all — selects EVERY entity, and
@@ -530,47 +537,6 @@ export let evalAgg = (
 // and pending/declined rows are admitted as boundaries but never expanded.
 // Readiness is screened before ORDER/LIMIT, making the returned prefix exactly
 // priority ASC, newest spine first rather than a re-ranked recent sample.
-let workLineageSql = (seed: string) =>
-  `lineage(origin, entity) as (
-     select origin, entity from ${seed}
-     union
-     select lineage.origin, dependency.parent
-       from lineage
-       join entity current on current.id = lineage.entity
-       left join tombstone current_dead on current_dead.eid = current.eid
-       left join proposed on proposed.entity = current.id
-       left join decided choice on choice.entity = current.id
-       left join quarantined hidden on hidden.entity = current.id
-       join dependency indexed by dependency_child
-         on dependency.child = current.id
-        and dependency.type = 'requires'
-       join entity parent on parent.id = dependency.parent
-       left join tombstone parent_dead on parent_dead.eid = parent.eid
-      where not (proposed.entity is not null and choice.entity is null)
-        and coalesce(choice.verdict, '') != 'declined'
-        and hidden.entity is null
-        and current_dead.eid is null
-        and parent_dead.eid is null
-   )`
-
-let workRootsSql = `approved_root(entity, num) as (
-  select root.id, root.num
-    from entity root
-    join task root_task on root_task.entity = root.id
-    join decided approval on approval.entity = root.id
-    left join completed on completed.entity = root.id
-    left join cancelled on cancelled.entity = root.id
-    left join claim on claim.entity = root.id
-    left join quarantined on quarantined.entity = root.id
-    left join tombstone root_dead on root_dead.eid = root.eid
-   where coalesce(approval.verdict, 'approved') != 'declined'
-     and completed.entity is null
-     and cancelled.entity is null
-     and claim.entity is null
-     and quarantined.entity is null
-     and root_dead.eid is null
-)`
-
 let workBase = (db: DatabaseSync, q: string) => {
   let preds = workPredicates(
     resolveRefs(parseQuery(q), (id) => locate(db, id)),
@@ -617,15 +583,7 @@ let workSelectionSql = (
   let lineage = opts.recursive
     ? `, ${workLineageSql('candidate')}, ${workRootsSql}`
     : ''
-  let authorization = opts.recursive
-    ? `exists (
-         select 1
-           from lineage l
-           join approved_root root on root.entity = l.entity
-          where l.origin = entity.id
-       )`
-    : `choice.entity is not null and
-       coalesce(choice.verdict, 'approved') != 'declined'`
+  let authorization = workAuthorizationSql(!!opts.recursive)
   let dispatch = opts.order == 'dispatch'
   let ordering = dispatch
     ? `resume.entity is null, resume.rank desc,
@@ -641,41 +599,14 @@ let workSelectionSql = (
        select entity.eid as eid
          from candidate
        join entity on entity.id = candidate.entity
-         join task on task.entity = entity.id
-         left join proposed on proposed.entity = entity.id
-         left join decided choice on choice.entity = entity.id
-         left join completed on completed.entity = entity.id
-         left join cancelled on cancelled.entity = entity.id
-         left join claim on claim.entity = entity.id
-         left join blocked on blocked.entity = entity.id
+       ${workReadyJoinsSql}
          ${
       dispatch
         ? `left join created on created.entity = entity.id
          left join resume on resume.entity = entity.id`
         : ''
     }
-        where completed.entity is null
-          and cancelled.entity is null
-          and claim.entity is null
-          and blocked.entity is null
-          and not (
-            proposed.entity is not null and choice.entity is null
-          )
-          and coalesce(choice.verdict, '') != 'declined'
-          and not exists (
-            select 1
-              from dependency needed
-              join entity endpoint on endpoint.id = needed.child
-              left join completed endpoint_completed
-                on endpoint_completed.entity = endpoint.id
-              left join cancelled endpoint_cancelled
-                on endpoint_cancelled.entity = endpoint.id
-             where needed.parent = entity.id
-               and needed.type = 'requires'
-               and endpoint_completed.entity is null
-               and endpoint_cancelled.entity is null
-          )
-          and (${authorization})
+        where ${workReadyWhereSql(authorization)}
         order by ${ordering}${opts.limit == null ? '' : '\n        limit ?'}`,
     params: [...base.params, ...(opts.limit == null ? [] : [opts.limit])],
   }

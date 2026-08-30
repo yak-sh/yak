@@ -74,6 +74,11 @@ export let filed = async (body: Filing, cast: Cast) => {
       }],
     )
     let out = order(g, filing(line), eid, body.session)
+    if (out.mutation) {
+      return new Response('claim commands cannot target a page filing', {
+        status: 400,
+      })
+    }
     said = out.said
     // Everything the line BROUGHT INTO BEING that is a task is about this
     // page. Standing somewhere is why you filed it — the same reason a

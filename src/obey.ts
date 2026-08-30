@@ -12,7 +12,7 @@
 // and must land whatever the order does. Execution is the response to it,
 // post-commit, unable to reject the batch that carried it.
 
-import { apply } from './db.ts'
+import { apply, mutate } from './db.ts'
 import { db } from './live_db.ts'
 import { dbReader } from './graph_query.ts'
 import { commitEffects } from './effects.ts'
@@ -26,6 +26,7 @@ import {
 } from './commands.ts'
 import { spawnDefault } from './providers.ts'
 import { type Change, idOf } from './types.ts'
+import type { WorkClaimMutation } from './mutation.ts'
 import { rows, spawnChanges, spawnDefaults } from './client.ts'
 
 type Cast = (changes: Change[]) => void
@@ -53,8 +54,10 @@ export let order = (
   let changes: Change[] = []
   let said = ''
   let spawned = ''
+  let mutation: WorkClaimMutation | undefined
   try {
     let out = commandOut([], line, focus, session, g)
+    mutation = out.mutation
     changes.push(...(out.changes ?? []))
     said = out.msg ?? ''
     // `:fix` from a comment is the point of the whole feature — an agent
@@ -96,8 +99,9 @@ export let order = (
   } catch (e) {
     said = (e as Error).message
     changes.length = 0
+    mutation = undefined
   }
-  return { changes, said, spawned }
+  return { changes, said, spawned, mutation }
 }
 
 // The author, as the vocabulary knows them: `run` wants the session's own
@@ -145,7 +149,19 @@ export let obeyed =
     // words, and the receipt below says them where the order was given,
     // so the next line typed is a better one. The reader resolves ids and
     // enumerations on demand — no whole-graph snapshot (M-21143).
-    let { changes, said } = order(dbReader(db), line, target, session, blocked)
+    let out = order(dbReader(db), line, target, session, blocked)
+    let changes = out.changes
+    let said = out.said
+    if (out.mutation) {
+      try {
+        commitEffects(
+          (t) => mutate(db, out.mutation!, t, via || undefined),
+          cast,
+        )
+      } catch (e) {
+        said = (e as Error).message
+      }
+    }
     if (!said && !changes.length) return // `:open` moves a viewport we don't have
     if (said) changes.push(...receipt(target, said))
     try {

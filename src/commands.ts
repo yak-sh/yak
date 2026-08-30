@@ -21,7 +21,6 @@
 import { type Change, type Dep, idOf, uuid } from './types.ts'
 import {
   cascade,
-  claimChanges,
   commentChanges,
   derefChanges,
   derefWith,
@@ -41,7 +40,9 @@ import {
   taskChanges,
   uniq,
   UUID,
+  workClaimMutation,
 } from './client.ts'
+import type { WorkClaimMutation } from './mutation.ts'
 import { adopt, listed, matchQuery, parseQuery } from './query.ts'
 import { instant } from './time.ts'
 import { type Arg, id, slotsOf, text } from './verb.ts'
@@ -172,6 +173,7 @@ export let focusFor = (g: Reader, session?: string): string | undefined => {
 
 export type Result = {
   changes?: Change[]
+  mutation?: WorkClaimMutation
   go?: string // an eid to open — the platform picks the form (url, trail)
   card?: string // a minted entity to place on a canvas, or open elsewhere
   spawn?: string | SpawnIntent // a launch platforms spend with their catalog
@@ -593,7 +595,6 @@ export let commands: Record<string, Command> = {
       'take up the focused task — wip is a live claim now (shell: `task wip T-3`)',
     words: [0, 0],
     run: (_rest, ctx) => {
-      let g = graphOf(ctx)
       let r = here(ctx)
       if (!r.comps.task) throw new Error(`${idOf(r)} is not a task`)
       let session = ctx.session
@@ -601,11 +602,7 @@ export let commands: Record<string, Command> = {
         throw new Error('wip: run under a session to hold the claim')
       }
       return {
-        changes: [
-          { eid: r.eid, name: 'completed', comp: null },
-          { eid: r.eid, name: 'cancelled', comp: null },
-          ...claimChanges(corpus(r, g.session(session)), r.eid, session),
-        ],
+        mutation: workClaimMutation(r.eid, session),
         msg: `${idOf(r)} → wip`,
       }
     },
@@ -979,12 +976,11 @@ export let commands: Record<string, Command> = {
     about: 'lease the focused entity',
     words: [0, 1],
     run: (rest, ctx) => {
-      let g = graphOf(ctx)
       let r = here(ctx)
       let session = rest.trim() || ctx.session
       if (!session) throw new Error('claim: name a session (:claim sess-1)')
       return {
-        changes: claimChanges(corpus(r, g.session(session)), r.eid, session),
+        mutation: workClaimMutation(r.eid, session),
         msg: `${idOf(r)} ⚑ ${session}`,
       }
     },

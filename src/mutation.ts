@@ -19,7 +19,18 @@ export type UndoMutation = {
   id?: number
   eid?: string
 }
-export type FlatMutation = Change[] | UndoMutation
+// The high-level worker take. The writer resolves both addresses and owns the
+// session reification, optional approval, readiness read, and claim write in
+// one transaction. Raw Change[] remains the administrative graph door.
+export type WorkClaimMutation = {
+  mutation: 'claim_work'
+  target: string
+  session: string
+  mode: 'ready' | 'approve'
+  recursive?: boolean
+  cwd?: string
+}
+export type FlatMutation = Change[] | UndoMutation | WorkClaimMutation
 export type Mutation = FlatMutation | LiteralMutation
 
 export type MutationResult = {

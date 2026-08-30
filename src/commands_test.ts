@@ -257,13 +257,13 @@ Deno.test('status moves land on the focused task', () => {
     { eid: T, name: 'cancelled', comp: null },
     { eid: T, name: 'claim', comp: null },
   ])
-  // wip is a live claim now — it leases under a session, and refuses without one
-  assertEquals(run('wip', ctx(T, 'sess-x')).changes, [
-    { eid: T, name: 'completed', comp: null },
-    { eid: T, name: 'cancelled', comp: null },
-    { eid: S, name: 'session', comp: { actor: P } },
-    { eid: T, name: 'claim', comp: { session: S } },
-  ])
+  // wip is a guarded live claim, never a raw claim batch.
+  assertEquals(run('wip', ctx(T, 'sess-x')).mutation, {
+    mutation: 'claim_work',
+    target: T,
+    session: 'sess-x',
+    mode: 'ready',
+  })
   assertThrows(() => run('wip', ctx(T)), Error, 'run under a session')
   assertEquals(run('done', ctx(T)).msg, 'T-4 → done')
   assertThrows(() => run('done', ctx(B)), Error, 'B-3 is not a task')
@@ -411,17 +411,14 @@ Deno.test('open: an argument navigates, none is the status move', () => {
 })
 
 Deno.test('claim: names a session, or takes the ambient one', () => {
-  assertEquals(run('claim sess-x', ctx(T)).changes, [
-    { eid: S, name: 'session', comp: { actor: P } },
-    { eid: T, name: 'claim', comp: { session: S } }, // known: no mint
-  ])
-  // An unknown session is minted, and the claim points at the new entity.
-  let minted = run('claim sess-new', ctx(T)).changes!
-  assertEquals(minted[0].name, 'session')
-  assertEquals(minted[0].comp, { id: 'sess-new', actor: P })
-  assertEquals(UUID.test(minted[0].eid), true)
-  assertEquals(minted[1].comp, { session: minted[0].eid })
-  assertEquals(run('claim', ctx(T, 'sess-x')).changes!.length, 2) // ambient
+  assertEquals(run('claim sess-x', ctx(T)).mutation, {
+    mutation: 'claim_work',
+    target: T,
+    session: 'sess-x',
+    mode: 'ready',
+  })
+  assertEquals(run('claim sess-new', ctx(T)).mutation?.session, 'sess-new')
+  assertEquals(run('claim', ctx(T, 'sess-x')).mutation?.session, 'sess-x')
   assertThrows(() => run('claim', ctx(T)), Error, 'name a session')
   assertThrows(
     () => run('claim sess-x extra', ctx(T)),

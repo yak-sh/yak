@@ -2576,7 +2576,7 @@ slow(
 slow(
   'task wip <id> targets the named task past its 0-word palette form',
   async () => {
-    let { server, acked, host } = graphServer(graph)
+    let { server, mutations, host } = graphServer(graph)
     try {
       let out = await new Deno.Command(Deno.execPath(), {
         args: [
@@ -2592,11 +2592,13 @@ slow(
       assertEquals(text(out.stderr), '')
       assertEquals(out.code, 0)
       assertEquals(text(out.stdout).trim(), 'T-4 → wip')
-      assertEquals(acked.slice(0, 2), [
-        { eid: O, name: 'completed', comp: null },
-        { eid: O, name: 'cancelled', comp: null },
-      ])
-      assertEquals(acked.some((c) => c.eid == O && c.name == 'claim'), true)
+      assertEquals(mutations, [{
+        mutation: 'claim_work',
+        target: 'T-4',
+        session: 'sub-1',
+        mode: 'ready',
+        cwd: Deno.cwd(),
+      }])
     } finally {
       await server.shutdown()
     }

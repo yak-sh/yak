@@ -222,7 +222,7 @@ fn apply_cmd(args: &[String]) -> i32 {
             return 1;
         }
     };
-    let opts = yak_kernel::ApplyOpts { writer: writer.as_deref(), fed };
+    let opts = yak_kernel::ApplyOpts { writer: writer.as_deref(), fed, ..Default::default() };
     match yak_kernel::apply(&store, changes, &opts, &yak_kernel::default_gates()) {
         Ok(out) => {
             println!("{}", yak_kernel::change::batch_json(&out));

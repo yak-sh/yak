@@ -34,8 +34,8 @@ use std::time::Duration;
 use yak_bridge::subserve::Subserve;
 use yak_bridge::{appread, front, journalr, read, snap};
 use yak_kernel::{
-    apply, default_gates, native_safe, normalize_literals, parse_batch, ApplyOpts, Change, Store,
-    WriteStore,
+    apply, claim_work, default_gates, native_safe, normalize_literals, parse_batch, ApplyOpts,
+    Change, ClaimWork, Store, WriteStore,
 };
 
 #[derive(Clone)]
@@ -312,6 +312,20 @@ fn route_apply(
     body: &[u8],
 ) -> (u16, String, String, &'static str) {
     let parsed = serde_json::from_slice::<serde_json::Value>(body).ok();
+    if let Some(object) = parsed.as_ref().and_then(Value::as_object) {
+        if object.contains_key("mutation") && object.contains_key("entities") {
+            return (
+                400,
+                "text/plain".into(),
+                "a named mutation cannot include entities".into(),
+                "native",
+            );
+        }
+        if object.get("mutation").and_then(Value::as_str) == Some("claim_work") {
+            let (s, c, t) = native_claim_work(write, via, object);
+            return (s, c, t, "native");
+        }
+    }
     if let Some(changes) = parsed.as_ref().and_then(parse_batch) {
         if native_safe(&changes) {
             let (s, c, t) = native_apply(write, via, changes);
@@ -342,6 +356,53 @@ fn route_apply(
     }
 }
 
+fn native_claim_work(
+    write: &Mutex<WriteStore>,
+    via: Option<&str>,
+    object: &serde_json::Map<String, Value>,
+) -> (u16, String, String) {
+    let Some(target) = object.get("target").and_then(Value::as_str) else {
+        return (400, "text/plain".into(), "claim_work needs a target".into());
+    };
+    let Some(session) = object.get("session").and_then(Value::as_str) else {
+        return (400, "text/plain".into(), "claim_work needs a session".into());
+    };
+    let mode = object.get("mode").and_then(Value::as_str).unwrap_or("");
+    if mode != "ready" && mode != "approve" {
+        return (400, "text/plain".into(), "claim_work mode must be ready or approve".into());
+    }
+    let recursive = match object.get("recursive") {
+        Some(value) => match value.as_bool() {
+            Some(value) => value,
+            None => {
+                return (400, "text/plain".into(), "claim_work recursive must be a boolean".into())
+            }
+        },
+        None => true,
+    };
+    let cwd = match object.get("cwd") {
+        Some(value) => match value.as_str() {
+            Some(value) => Some(value),
+            None => return (400, "text/plain".into(), "claim_work cwd must be a string".into()),
+        },
+        None => None,
+    };
+    let store = write.lock().unwrap_or_else(|p| p.into_inner());
+    let opts = ApplyOpts { writer: via, fed: true, ..Default::default() };
+    let ask = ClaimWork { target, session, approve: mode == "approve", recursive, cwd };
+    match claim_work(&store, &ask, &opts, &default_gates()) {
+        Ok(out) => {
+            let changes: Vec<Value> = out.iter().map(Change::to_value).collect();
+            (
+                200,
+                "application/json".into(),
+                serde_json::json!({ "ok": true, "changes": changes }).to_string(),
+            )
+        }
+        Err(e) => (400, "text/plain".into(), e.to_string()),
+    }
+}
+
 // Commit a native-safe batch through the bridge's WriteStore and shape the
 // answer like the Deno door: `{ok:true,changes:[…]}` on success, or the refusal
 // MESSAGE as a 400 body (byte-identical to Deno's — apply() is the same port).
@@ -357,7 +418,7 @@ fn native_apply(
     // transaction back, so the WriteStore is sound — recover the guard rather
     // than wedging the write door forever.
     let store = write.lock().unwrap_or_else(|p| p.into_inner());
-    let opts = ApplyOpts { writer: via, fed: true };
+    let opts = ApplyOpts { writer: via, fed: true, ..Default::default() };
     match apply(&store, changes, &opts, &default_gates()) {
         Ok(out) => {
             let changes: Vec<serde_json::Value> = out.iter().map(Change::to_value).collect();
@@ -387,7 +448,7 @@ fn native_literal_apply(
     if !native_safe(&plan.changes) {
         return None;
     }
-    let opts = ApplyOpts { writer: via, fed: true };
+    let opts = ApplyOpts { writer: via, fed: true, ..Default::default() };
     Some(match apply(&store, plan.changes, &opts, &default_gates()) {
         Ok(out) => {
             let changes: Vec<Value> = out.iter().map(Change::to_value).collect();
