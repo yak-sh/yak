@@ -113,6 +113,8 @@ fn create_produces_the_full_schema() {
         "deliver",
         "anchor",
         "meta",
+        "verifier",
+        "noverify",
         // fts virtual tables
         "doc_fts",
         "doc_gram",
@@ -149,17 +151,21 @@ fn additive_migration_restores_the_old_shape() {
     let c = &ws.conn;
     let fresh = snapshot(c);
 
-    // regress to a db that predates the last hand column, the acceptance facet,
-    // and the completion-order index.
+    // regress to a db that predates the last hand column, the acceptance and
+    // verifier facets, and the completion-order index.
     c.execute_batch(
         "alter table task drop column domain; \
          drop table accept; \
+         drop table verifier; \
+         drop table noverify; \
          drop index completed_at;",
     )
     .unwrap();
     assert_ne!(snapshot(c), fresh, "the regression must change the schema");
     assert!(!has_col(c, "task", "domain"));
     assert!(!has(c, "table", "accept"));
+    assert!(!has(c, "table", "verifier"));
+    assert!(!has(c, "table", "noverify"));
     assert!(!has(c, "index", "completed_at"));
 
     apply_schema(c).unwrap();

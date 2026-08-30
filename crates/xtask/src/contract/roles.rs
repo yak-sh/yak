@@ -94,8 +94,22 @@ struct Finding {
 #[comp(plugin = "roles", rank = 950)]
 struct Fixer {}
 
+// The verifier subsystem's worker marker (D-25036): `verifier` marks a
+// session performing independent acceptance verification. Presence alone;
+// NOT in kindOrder — a verifier IS a session.
+#[derive(Comp)]
+#[comp(plugin = "roles", rank = 951)]
+struct Verifier {}
+
 // The auto-spawn mute (D-17077): `nofix` on a PROJECT silences fixer spawns;
 // on the self-healing HOME project it is the GLOBAL switch. NOT in kindOrder.
 #[derive(Comp)]
 #[comp(plugin = "roles", rank = 960)]
 struct Nofix {}
+
+// The verifier auto-spawn mute (D-25036): `noverify` on a PROJECT silences
+// automatic verifier spawns while leaving manual verification available.
+// NOT in kindOrder — a project stays a project.
+#[derive(Comp)]
+#[comp(plugin = "roles", rank = 961)]
+struct Noverify {}

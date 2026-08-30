@@ -355,7 +355,9 @@ pub(crate) fn baked() -> Vocab {
             ("last".into(), PropType::Time),
         ]),
         ("fixer".into(), vec![]),
+        ("verifier".into(), vec![]),
         ("nofix".into(), vec![]),
+        ("noverify".into(), vec![]),
         ("blocked".into(), vec![
             ("on".into(), PropType::Text),
         ]),

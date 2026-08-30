@@ -499,7 +499,9 @@ export let comps: Record<string, Record<string, PropType>> = {
     last: 'time',
   },
   fixer: {},
+  verifier: {},
   nofix: {},
+  noverify: {},
   blocked: {
     on: 'text',
   },

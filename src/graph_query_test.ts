@@ -6,7 +6,7 @@
 // never that the optimization dropped it. The index/matcher equivalence over
 // entries lives in sql_test.ts; this proves the door on top of it.
 import { assertEquals, assertThrows } from '@std/assert'
-import { uuid } from './types.ts'
+import { kindOf, uuid } from './types.ts'
 import {
   evalAgg,
   evalCapped as evalCappedDoor,
@@ -20,7 +20,7 @@ let { apply, eager, entriesOf, entriesScan, matching, open } = await import(
   './db.ts'
 )
 let { append } = await import('./entries.ts')
-let { freshDb } = await import('./testdb.ts')
+let { bareDb, freshDb } = await import('./testdb.ts')
 
 let session = (db: ReturnType<typeof open>) => {
   let eid = uuid()
@@ -47,6 +47,34 @@ let world = () => {
   append(db, a, [{ response: { status: 500 }, content: { body: 'boom' } }])
   return { db, a, b }
 }
+
+Deno.test('verifier facets round-trip, query, and preserve their base kinds', () => {
+  let db = bareDb()
+  let verifier = uuid(), muted = uuid()
+  apply(db, [
+    { eid: verifier, name: 'session', comp: { id: uuid() } },
+    { eid: verifier, name: 'verifier', comp: {} },
+    { eid: muted, name: 'project', comp: {} },
+    { eid: muted, name: 'noverify', comp: {} },
+  ])
+
+  assertEquals(eager(db, verifier).verifier, { eid: verifier })
+  assertEquals(eager(db, muted).noverify, { eid: muted })
+  assertEquals(kindOf(eager(db, verifier)), 'session')
+  assertEquals(kindOf(eager(db, muted)), 'project')
+  assertEquals(evalGraph(db, '.verifier!').hits.map((h) => h.eid), [verifier])
+  assertEquals(evalGraph(db, '.noverify!').hits.map((h) => h.eid), [muted])
+
+  apply(db, [
+    { eid: verifier, name: 'verifier', comp: null },
+    { eid: muted, name: 'noverify', comp: null },
+  ])
+  assertEquals(eager(db, verifier).verifier, undefined)
+  assertEquals(eager(db, muted).noverify, undefined)
+  assertEquals(evalGraph(db, '.verifier!').hits, [])
+  assertEquals(evalGraph(db, '.noverify!').hits, [])
+  db.close()
+})
 
 Deno.test('a named session scope returns its ordered seq partition', () => {
   let { db, a } = world()

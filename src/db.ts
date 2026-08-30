@@ -1031,7 +1031,9 @@ export let derived = [
   'error',
   'exception',
   'fixer',
+  'verifier',
   'nofix',
+  'noverify',
   // The git-anchor facet (D-18378, exact tiers D-21211): nullable text and
   // number columns, an entity-keyed spine, no FK — wholly PropType-
   // expressible, so it derives.

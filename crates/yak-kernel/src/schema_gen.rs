@@ -910,7 +910,13 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::Exec(r#"create table if not exists "fixer" (
     entity integer primary key references entity(id)
   );"#),
+    SchemaOp::Exec(r#"create table if not exists "verifier" (
+    entity integer primary key references entity(id)
+  );"#),
     SchemaOp::Exec(r#"create table if not exists "nofix" (
+    entity integer primary key references entity(id)
+  );"#),
+    SchemaOp::Exec(r#"create table if not exists "noverify" (
     entity integer primary key references entity(id)
   );"#),
     SchemaOp::Exec(r#"create table if not exists "anchor" (

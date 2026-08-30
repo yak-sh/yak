@@ -64,6 +64,9 @@
     "nofix": {
       "rank": 960
     },
+    "noverify": {
+      "rank": 961
+    },
     "role": {
       "rank": 60,
       "stamped_rank": 250,
@@ -110,6 +113,9 @@
         },
         "decided_at": "time"
       }
+    },
+    "verifier": {
+      "rank": 951
     }
   }
 }
