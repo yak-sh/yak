@@ -49,7 +49,14 @@ import {
   textMatches,
   vocabHash,
 } from './db.ts'
-import { aggregateSql, countSql, where, whereSome, windowed } from './sql.ts'
+import {
+  aggregateSql,
+  countSql,
+  screenSql,
+  where,
+  whereSome,
+  windowed,
+} from './sql.ts'
 import { hasSources } from './source.ts'
 import {
   AGG,
@@ -545,7 +552,7 @@ export let evalAgg = (
 // and pending/declined rows are admitted as boundaries but never expanded.
 // Readiness is screened before ORDER/LIMIT, making the returned prefix exactly
 // priority ASC, newest spine first rather than a re-ranked recent sample.
-let workBase = (db: DatabaseSync, q: string) => {
+let workInputs = (db: DatabaseSync, q: string) => {
   let preds = workPredicates(
     resolveRefs(parseQuery(q), (id) => locate(db, id)),
   )
@@ -561,14 +568,18 @@ let workBase = (db: DatabaseSync, q: string) => {
         'projections are unsupported',
     )
   }
-  // Unlike an ordinary graph query, work has no reveal mode. These outer
-  // screens are unconditional even if a future predicate classifier changes:
-  // candidates are visible eager entities before readiness or LIMIT runs.
-  let base = where([
+  return [
     ...inputsOf(preds),
     { comp: 'quarantined', prop: '', op: '', value: '' },
     { comp: 'entry', prop: '', op: '', value: '' },
-  ])
+  ]
+}
+
+let workBase = (db: DatabaseSync, q: string) => {
+  // Unlike an ordinary graph query, work has no reveal mode. These outer
+  // screens are unconditional even if a future predicate classifier changes:
+  // candidates are visible eager entities before readiness or LIMIT runs.
+  let base = where(workInputs(db, q))
   if (!base) {
     throw new Error(
       'work filter cannot be answered exactly by indexed SQL; use a scalar ' +
@@ -664,26 +675,33 @@ export let evalDispatchWork = (
 
 // Verification is ordered by the fact workers are reviewing, not task
 // creation or priority. The completed_at index owns the walk, every optional
-// caller filter is screened in the materialized candidate set, and the
-// authoritative policy is applied before LIMIT.
+// caller filter is screened on that same indexed walk, and the authoritative
+// policy is applied before LIMIT.
 export let verifyWorkSql = (
   db: DatabaseSync,
   q: string,
   opts: { limit?: number } = {},
 ) => {
-  let base = workBase(db, q)
+  let screen = screenSql(workInputs(db, q), ['task'])
+  if (!screen) {
+    throw new Error(
+      'work filter cannot be answered exactly by indexed SQL; use a scalar ' +
+        'equality, list, range, comparison, presence, or absence predicate',
+    )
+  }
   let limit = Math.max(1, Math.min(opts.limit ?? 20, 100))
   return {
-    sql: `with filtered(eid) as materialized (${base.sql})
-      select entity.eid as eid
+    sql: `select entity.eid as eid
         from completed indexed by completed_at
         join task on task.entity = completed.entity
         join entity on entity.id = task.entity
-        join filtered on filtered.eid = entity.eid
-       where ${VERIFY_PENDING}
+        ${screen.joins}
+       where ${screen.cond}
+         and entity.eid not in (select eid from tombstone)
+         and ${VERIFY_PENDING}
        order by completed.at desc, entity.num desc
        limit ?`,
-    params: [...base.params, ...verificationArgs(), limit],
+    params: [...screen.params, ...verificationArgs(), limit],
   }
 }
 
@@ -727,6 +745,90 @@ type VerifierEvidence = {
   position: number
 }
 
+let marksFor = (ids: string[]) => ids.map(() => '?').join(',')
+
+export let workCompletionSql = (ids: string[]) => ({
+  sql: `select owner.eid as task, completed.at as at,
+          case when builder_hidden.entity is null then builder.eid end
+            as builder,
+          substr(accept.body, 1, ?) as body,
+          length(accept.body) > ? as truncated
+     from entity owner
+     join task on task.entity = owner.id
+     join accept on accept.entity = task.entity
+     join completed on completed.entity = task.entity
+     join session builder_session on builder_session.entity = completed.via
+     join entity builder on builder.id = builder_session.entity
+     left join quarantined builder_hidden
+       on builder_hidden.entity = builder.id
+    where owner.eid in (${marksFor(ids)})`,
+  params: [WORK_TEXT_LIMIT, WORK_TEXT_LIMIT, ...ids],
+})
+
+export let workReviewSql = (ids: string[]) => ({
+  sql: `with ranked as (
+     select owner.eid as task,
+            case when review_hidden.entity is null then _ve.eid end
+              as review,
+            _vr.verdict as verdict,
+            substr(_vd.body, 1, ?) as body,
+            length(_vd.body) > ? as truncated,
+            case when reviewer_hidden.entity is null then reviewer.eid end
+              as reviewer,
+            _va.at as at,
+            row_number() over (
+              partition by task.entity
+              order by ${verificationReviewOrder}
+            ) as position
+       from entity owner
+       join task on task.entity = owner.id
+       join completed _vc on _vc.entity = task.entity
+       join comment _vm indexed by comment_target
+         on _vm.target = task.entity
+       join review _vr on _vr.entity = _vm.entity
+       join entity _ve on _ve.id = _vr.entity
+       join doc_value _vd on _vd.entity = _vm.entity
+       join created _va on _va.entity = _vm.entity
+       join session _vs on _vs.entity = _va.via
+       join entity reviewer on reviewer.id = _vs.entity
+       left join quarantined review_hidden
+         on review_hidden.entity = _ve.id
+       left join quarantined reviewer_hidden
+         on reviewer_hidden.entity = reviewer.id
+      where owner.eid in (${marksFor(ids)})
+        and ${verificationReviewWhere}
+   )
+   select * from ranked where position = 1`,
+  params: [WORK_TEXT_LIMIT, WORK_TEXT_LIMIT, ...ids],
+})
+
+export let workVerifierSql = (ids: string[]) => ({
+  sql: `with ranked as (
+     select owner.eid as task,
+            case when verifier_hidden.entity is null then runner.eid end
+              as verifier,
+            s.status as status, _vz.at as at,
+            row_number() over (
+              partition by task.entity
+              order by _vz.at desc, runner.eid desc
+            ) as position
+       from entity owner
+       join task on task.entity = owner.id
+       join completed _vc on _vc.entity = task.entity
+       join session s indexed by session_requested_task
+         on s.requested_task = task.entity
+       join verifier v on v.entity = s.entity
+       join created _vz on _vz.entity = s.entity
+       join entity runner on runner.id = s.entity
+       left join quarantined verifier_hidden
+         on verifier_hidden.entity = runner.id
+      where owner.eid in (${marksFor(ids)})
+        and _vz.at > _vc.at
+   )
+   select * from ranked where position = 1`,
+  params: ids,
+})
+
 // Evidence is read only for the already bounded candidate set. Text is cut in
 // SQLite, before it enters a row or transport, and every referenced entity is
 // screened for quarantine before its human id is formed. The review WHERE and
@@ -738,85 +840,18 @@ let workVerifications = (
   let ids = [...new Set(candidates.map((r) => r.eid))].slice(0, 100)
   let out = new Map<string, WorkProjection['verification']>()
   if (!ids.length) return out
-  let marks = ids.map(() => '?').join(',')
-  let completions = db.prepare(
-    `select owner.eid as task, completed.at as at,
-            case when builder_hidden.entity is null then builder.eid end
-              as builder,
-            substr(accept.body, 1, ?) as body,
-            length(accept.body) > ? as truncated
-       from entity owner
-       join task on task.entity = owner.id
-       join accept on accept.entity = task.entity
-       join completed on completed.entity = task.entity
-       join session builder_session on builder_session.entity = completed.via
-       join entity builder on builder.id = builder_session.entity
-       left join quarantined builder_hidden
-         on builder_hidden.entity = builder.id
-      where owner.eid in (${marks})`,
-  ).all(WORK_TEXT_LIMIT, WORK_TEXT_LIMIT, ...ids) as CompletionEvidence[]
-
-  let reviews = db.prepare(
-    `with ranked as (
-       select owner.eid as task,
-              case when review_hidden.entity is null then _ve.eid end
-                as review,
-              _vr.verdict as verdict,
-              substr(_vd.body, 1, ?) as body,
-              length(_vd.body) > ? as truncated,
-              case when reviewer_hidden.entity is null then reviewer.eid end
-                as reviewer,
-              _va.at as at,
-              row_number() over (
-                partition by task.entity
-                order by ${verificationReviewOrder}
-              ) as position
-         from entity owner
-         join task on task.entity = owner.id
-         join completed _vc on _vc.entity = task.entity
-         join comment _vm indexed by comment_target
-           on _vm.target = task.entity
-         join review _vr on _vr.entity = _vm.entity
-         join entity _ve on _ve.id = _vr.entity
-         join doc_value _vd on _vd.entity = _vm.entity
-         join created _va on _va.entity = _vm.entity
-         join session _vs on _vs.entity = _va.via
-         join entity reviewer on reviewer.id = _vs.entity
-         left join quarantined review_hidden
-           on review_hidden.entity = _ve.id
-         left join quarantined reviewer_hidden
-           on reviewer_hidden.entity = reviewer.id
-        where owner.eid in (${marks})
-          and ${verificationReviewWhere}
-     )
-     select * from ranked where position = 1`,
-  ).all(WORK_TEXT_LIMIT, WORK_TEXT_LIMIT, ...ids) as ReviewEvidence[]
-
-  let verifiers = db.prepare(
-    `with ranked as (
-       select owner.eid as task,
-              case when verifier_hidden.entity is null then runner.eid end
-                as verifier,
-              s.status as status, _vz.at as at,
-              row_number() over (
-                partition by task.entity
-                order by _vz.at desc, runner.eid desc
-              ) as position
-         from entity owner
-         join task on task.entity = owner.id
-         join completed _vc on _vc.entity = task.entity
-         join session s indexed by session_requested_task
-           on s.requested_task = task.entity
-         join verifier v on v.entity = s.entity
-         join created _vz on _vz.entity = s.entity
-         join entity runner on runner.id = s.entity
-         left join quarantined verifier_hidden
-           on verifier_hidden.entity = runner.id
-        where owner.eid in (${marks})
-          and _vz.at > _vc.at
-     )
-     select * from ranked where position = 1`,
-  ).all(...ids) as VerifierEvidence[]
+  let completionSql = workCompletionSql(ids)
+  let completions = db.prepare(completionSql.sql).all(
+    ...completionSql.params,
+  ) as CompletionEvidence[]
+  let reviewSql = workReviewSql(ids)
+  let reviews = db.prepare(reviewSql.sql).all(
+    ...reviewSql.params,
+  ) as ReviewEvidence[]
+  let verifierSql = workVerifierSql(ids)
+  let verifiers = db.prepare(verifierSql.sql).all(
+    ...verifierSql.params,
+  ) as VerifierEvidence[]
 
   let reviewBy = new Map(reviews.map((r) => [r.task, r]))
   let verifierBy = new Map(verifiers.map((r) => [r.task, r]))

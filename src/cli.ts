@@ -66,6 +66,7 @@ import {
   readerRows,
   readTelemetry,
   readTelemetryStats,
+  readWork,
   redact as redactValue,
   refsIn,
   replyChanges,
@@ -522,6 +523,8 @@ let work = async (got: Got) => {
     {
       query,
       get: (ids) => fetched(ids),
+      candidates: (lane, opts) =>
+        readWork(lane, opts) as Promise<WorkCandidate[]>,
     },
     lane,
     {

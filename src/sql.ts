@@ -542,6 +542,7 @@ let build = (
   also: string[] = [],
   drop = false,
   now = Date.now(),
+  present: string[] = [],
 ): { joins: string; cond: string; params: Bind[] } | null => {
   let parts: Sql[] = []
   let kept: Pred[] = []
@@ -566,6 +567,7 @@ let build = (
   // name a table no filter joined, and it must still be LEFT JOINed to be read.
   for (let t of also) if (t) tables.add(t)
   tables.delete(base)
+  for (let t of present) tables.delete(t)
   if (base != 'entity' && tables.has('entity')) return null
   // Sibling component tables share one entity, so they join on the int owner
   // key: the spine's `id` when the base IS the spine, else the base table's own
@@ -578,6 +580,16 @@ let build = (
   let cond = parts.length ? parts.map((p) => p.sql).join(' and ') : '1'
   return { joins, cond, params: parts.flatMap((p) => p.params) }
 }
+
+// Compile an exact filter against a caller-owned entity row. `present` names
+// component tables the caller already joined under their canonical names, so
+// a derived selection can choose its driving index without duplicate joins or
+// re-running a standalone candidate query first.
+export let screenSql = (
+  preds: Pred[],
+  present: string[] = [],
+  now = Date.now(),
+) => build(preds, 'entity', [], false, now, present)
 
 // The correlated-EXISTS half of a reverse hop. `.comments…` compiles to an
 // EXISTS over the child ref table, correlated on the parent's eid and backed by

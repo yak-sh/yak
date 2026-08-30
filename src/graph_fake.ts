@@ -22,6 +22,7 @@ export let answers = (snap: Snapshot) => {
   return (search: string) => {
     let segs = search.split('&').filter(Boolean)
     let edged = segs.includes('deps=1')
+    let work = segs.some((s) => s.startsWith('work='))
     let named = segs.filter((s) => s.startsWith('id='))
       .flatMap((s) => s.slice(3).split(',')).filter(Boolean)
     let eids = new Set(named.map((id) => find(all, id)?.eid).filter(Boolean))
@@ -41,11 +42,21 @@ export let answers = (snap: Snapshot) => {
     // filter only screens — and no remaining filter means no screen (an empty
     // QUERY selects nothing, so parsing '' here would drop every named hit).
     // With no id= either, parseQuery('') mints the never-pred: empty answer.
-    let preds = line.trim() || !named.length ? parseQuery(line) : []
-    return all.filter((r) =>
+    let preds = work && !line.trim()
+      ? []
+      : line.trim() || !named.length
+      ? parseQuery(line)
+      : []
+    let hits = all.filter((r) =>
       matchQuery(r.comps, preds, (e) => byEid.get(e)?.comps, undefined, kids) &&
       (!named.length || eids.has(r.eid))
-    ).map((r) => edged ? { ...jsonOf(r), deps: edgesOf(r.eid) } : jsonOf(r))
+    )
+    if (work) {
+      return hits.flatMap((r) => r.comps.work?.candidate ?? [])
+    }
+    return hits.map((r) =>
+      edged ? { ...jsonOf(r), deps: edgesOf(r.eid) } : jsonOf(r)
+    )
   }
 }
 

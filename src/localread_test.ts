@@ -104,6 +104,7 @@ slow(
       historyBy,
       integrity,
       query,
+      readWork,
       readTelemetry,
       readTelemetryStats,
       search,
@@ -182,6 +183,17 @@ slow(
         body: 'Use the local door.',
         truncated: false,
       })
+      let [envelope] = await readWork('verify', { limit: 1 }) as {
+        title: string
+        accept: { body: string; truncated: boolean }
+        completed: { via: string }
+      }[]
+      assertEquals(envelope.title, 'local verify')
+      assertEquals(envelope.accept, {
+        body: 'Use the local door.',
+        truncated: false,
+      })
+      assertEquals(envelope.completed.via.startsWith('S-'), true)
       let found = await search('localread')
       assert(found.some((h) => h.eid == item))
       assertEquals((await history(item))[0].via, session)

@@ -102,7 +102,8 @@ import {
   resolveRefs,
   TEXT,
 } from './query.ts'
-import { evalAgg, evalGraph, evalWork, rowed } from './graph_query.ts'
+import { evalAgg, evalGraph, rowed } from './graph_query.ts'
+import type { WorkLane } from './work.ts'
 import { withResults } from './result_component.ts'
 import { nativeSoon } from './tmux.ts'
 import { loadPlugins, pluginSpecifiers } from './plugins.ts'
@@ -1061,11 +1062,11 @@ let handle = async (req: Request) => {
           throw new Error('work queries do not accept backlinks or edge riders')
         }
         return Response.json(
-          evalWork(db, q, {
-            work,
+          await graphIO.work!(work as WorkLane, {
+            filters: segs,
             limit,
             recursive,
-          }).map((row) => jsonOf(row)),
+          }),
         )
       }
       let asked = q.trim()

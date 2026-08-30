@@ -40,8 +40,10 @@ import {
   httpQuery,
   httpTelemetry,
   httpTelemetryStats,
+  httpWork,
 } from './client.ts'
 import { recent, stats } from './telemetry.ts'
+import { workCandidates, type WorkLane } from './work.ts'
 
 // Where the arm may read, or undefined for wire-only. Pure over its inputs —
 // no env defaults, so the decision table tests without an environment — and
@@ -94,6 +96,7 @@ async (...a: A): Promise<R> => {
 
 export let disarm = () => {
   arm.query =
+    arm.work =
     arm.deps =
     arm.search =
     arm.history =
@@ -131,6 +134,19 @@ export let armLocal = (path = envPath()): boolean => {
     return false
   }
   arm.query = guarded(localQuery(db), httpQuery)
+  let query = localQuery(db)
+  arm.work = guarded(
+    (lane, opts) =>
+      workCandidates(
+        {
+          query,
+          get: (ids) => query(ids.length ? [`id=${ids.join(',')}`] : []),
+        },
+        lane as WorkLane,
+        opts,
+      ),
+    httpWork,
+  )
   arm.deps = guarded(localDeps(db), httpDeps)
   arm.history = guarded(
     (eid, limit) => journalOf(db, eid, limit),

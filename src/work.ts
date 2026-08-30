@@ -35,6 +35,16 @@ export type WorkRead = {
     opts?: QueryOpts,
   ) => Promise<Row[]>
   get: (ids: string[]) => Promise<Row[]>
+  candidates?: (
+    lane: WorkLane,
+    opts: WorkOptions,
+  ) => Promise<WorkCandidate[]>
+}
+
+export type WorkOptions = {
+  filters?: string[]
+  limit?: number
+  recursive?: boolean
 }
 
 export type WorkCandidate = {
@@ -328,12 +338,16 @@ export let workFilters = (lane: WorkLane, recursive = false) =>
 export let workCandidates = async (
   read: WorkRead,
   lane: WorkLane,
-  opts: { filters?: string[]; limit?: number; recursive?: boolean } = {},
+  opts: WorkOptions = {},
 ): Promise<WorkCandidate[]> => {
   let limit = Math.max(1, Math.min(opts.limit ?? LIMIT, 100))
   let base = workFilters(lane, opts.recursive)
-  workPredicates(parseQuery([...base, ...opts.filters ?? []].join('&')))
-  let hits = await read.query([...base, ...opts.filters ?? []], {
+  let filters = [...base, ...opts.filters ?? []]
+  workPredicates(parseQuery(filters.join('&')))
+  if (read.candidates) {
+    return read.candidates(lane, { ...opts, limit })
+  }
+  let hits = await read.query(filters, {
     limit,
     work: lane,
     recursive: !!opts.recursive,

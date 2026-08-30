@@ -35,6 +35,7 @@ import { type Mutation, mutationResult } from './mutation.ts'
 import { slow } from './testing.ts'
 import { backfillChanges } from './backfill.ts'
 import { DatabaseSync } from './sqlite.ts'
+import { workCandidates } from './work.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let {
@@ -359,6 +360,12 @@ Deno.test('work_list exposes bounded human-addressed evaluate, build, and verify
       arguments: { lane: 'verify' },
     }) as ToolResult
     let [awaiting] = JSON.parse(said(verified))
+    let query = localQuery(db)
+    let [direct] = await workCandidates({
+      query,
+      get: (ids) => query(ids.length ? [`id=${ids.join(',')}`] : []),
+    }, 'verify')
+    assertEquals(awaiting, direct)
     assertEquals(awaiting.title, 'Verify this')
     assertEquals(awaiting.accept, {
       body: 'Run the public door.',
@@ -876,6 +883,7 @@ slow(
       assertEquals((await mounted.io.get([id]))[0].eid, eid)
       assertEquals(await mounted.io.deps([eid]), [])
       assert(rows(await mounted.io.read()).some((r) => r.eid == eid))
+      let [directVerify] = await mounted.io.work!('verify', { limit: 1 })
       await protocol(mounted.io, async (client) => {
         let listed = await client.callTool({
           name: 'graph_query',
@@ -893,7 +901,8 @@ slow(
           name: 'work_list',
           arguments: { lane: 'verify', limit: 1 },
         }) as ToolResult
-        assertEquals(JSON.parse(said(verifying))[0].title, 'stdio verify')
+        assertEquals(JSON.parse(said(verifying))[0], directVerify)
+        assertEquals(directVerify.title, 'stdio verify')
 
         let found = await client.callTool({
           name: 'search',

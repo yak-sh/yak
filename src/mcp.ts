@@ -59,6 +59,7 @@ import {
   historyLine,
   host,
   httpDeps,
+  httpWork,
   idOf,
   type JournalEntry,
   jsonAuthored,
@@ -127,7 +128,12 @@ import {
 import { depsOf, eager, journalOf, search as dbSearch, snapshot } from './db.ts'
 import { dbReader, localQuery } from './graph_query.ts'
 import { guarded, localReadPath } from './localread.ts'
-import { workCandidates, type WorkLane } from './work.ts'
+import {
+  type WorkCandidate,
+  workCandidates,
+  type WorkLane,
+  type WorkOptions,
+} from './work.ts'
 
 // How the tools reach the graph — database-backed in the server and local
 // stdio processes, HTTP only for an explicitly remote graph.
@@ -144,6 +150,10 @@ export type IO = {
     q: string,
     opts?: QueryOpts,
   ) => Promise<Row[]>
+  // Work-mode HTTP returns the bounded candidate envelope, not graph rows.
+  // Keeping that shape distinct prevents a transport from exposing hydrated
+  // bodies or UUID references beneath the transient projection.
+  work?: (lane: WorkLane, opts?: WorkOptions) => Promise<WorkCandidate[]>
   // Entities BY ADDRESS (any form id= reads), extra filters screening the
   // hits — find() over the wire, for target resolution and bounded reference
   // expansion in derived read faces.
@@ -184,6 +194,7 @@ type DBReads = Required<
     IO,
     | 'read'
     | 'query'
+    | 'work'
     | 'get'
     | 'deps'
     | 'find'
@@ -199,9 +210,14 @@ type DBReads = Required<
 // not appear here.
 export let dbReads = (db: DatabaseSync): DBReads => {
   let query = localQuery(db)
+  let workRead = {
+    query,
+    get: (ids: string[]) => query(ids.length ? [`id=${ids.join(',')}`] : []),
+  }
   return {
     read: () => Promise.resolve(snapshot(db)),
     query: (q, opts) => query(q.split('&').filter(Boolean), opts),
+    work: (lane, opts) => workCandidates(workRead, lane, opts),
     reader: (overlay) => dbReader(db, overlay),
     get: (ids, filters = []) =>
       ids.length
@@ -458,6 +474,11 @@ export let mcpServer = (io: IO) => {
     query: (filters: string[], opts?: QueryOpts) =>
       io.query(filters.join('&'), opts),
     get: (ids: string[]) => io.get(ids),
+    ...(io.work
+      ? {
+        candidates: (lane: WorkLane, opts: WorkOptions) => io.work!(lane, opts),
+      }
+      : {}),
   }
 
   let workerContext = async (session: string) => {
@@ -2648,6 +2669,7 @@ export let httpIO = (): IO => ({
   // reachable over stdio too. A filter LINE splits into its `&` tokens, the
   // encoding-safe unit client.query already speaks.
   query: (q, opts) => queryHttp(q.split('&').filter(Boolean), opts),
+  work: (lane, opts) => httpWork(lane, opts) as Promise<WorkCandidate[]>,
   get: (ids, filters = []) => fetched(ids, filters),
   deps: (eids, reveal) => httpDeps(eids, reveal),
   write: async (mutation, via) => mutationResult(await mutate(mutation, via)),
@@ -2701,6 +2723,8 @@ export let stdioIO = (
     return { io: wire, close: () => {} }
   }
   let local = dbReads(db)
+  let remoteWork = wire.work ??
+    (() => Promise.reject(new Error('remote work reader unavailable')))
   let active = true
   let io: IO
   let close = () => {
@@ -2720,6 +2744,7 @@ export let stdioIO = (
     ...wire,
     read: protect(local.read, wire.read),
     query: protect(local.query, wire.query),
+    work: protect(local.work, remoteWork),
     get: protect(local.get, wire.get),
     deps: protect(local.deps, wire.deps),
     find: protect(local.find, wire.find),

@@ -25,6 +25,8 @@ Deno.env.set('DB_PATH', ':memory:')
 let { db } = await import('./live_db.ts')
 let { apply } = await import('./db.ts')
 let { append, settleGeneration, takeEntry } = await import('./entries.ts')
+let { localQuery } = await import('./graph_query.ts')
+let { workCandidates } = await import('./work.ts')
 
 // The server serves on import — the one heavy boot in this file. Every test
 // here is slow(), so the fast run (which ignores them all) must not pay that
@@ -1005,17 +1007,33 @@ slow('query: work lanes refuse quarantine reveal filters', alone, async () => {
 })
 
 slow(
-  'query: verify work lane preserves HTTP projection parity',
+  'query: verify work returns only the bounded human candidate envelope',
   alone,
   async () => {
-    let project = uid(), builder = uid(), target = uid()
+    let project = uid(), builder = uid(), verifier = uid(), target = uid()
+    let secretTaskBody = `TASK-SECRET-${'x'.repeat(9000)}`
+    let secretAcceptTail = `${'y'.repeat(9000)}-ACCEPT-SECRET`
     apply(db, [
-      { eid: project, name: 'doc', comp: { title: 'HTTP verify', body: '' } },
+      {
+        eid: project,
+        name: 'doc',
+        comp: { title: 'PROJECT-SECRET', body: '' },
+      },
       { eid: project, name: 'project', comp: {} },
+      { eid: project, name: 'quarantined', comp: {} },
       { eid: builder, name: 'session', comp: { id: uid() } },
-      { eid: target, name: 'doc', comp: { title: 'HTTP candidate', body: '' } },
+      { eid: builder, name: 'quarantined', comp: {} },
+      {
+        eid: target,
+        name: 'doc',
+        comp: { title: 'HTTP candidate', body: secretTaskBody },
+      },
       { eid: target, name: 'task', comp: { project } },
-      { eid: target, name: 'accept', comp: { body: 'Use HTTP.' } },
+      {
+        eid: target,
+        name: 'accept',
+        comp: { body: `Use HTTP. ${secretAcceptTail}` },
+      },
     ])
     apply(
       db,
@@ -1031,6 +1049,23 @@ slow(
       `update completed set at = ?
       where entity = (select id from entity where eid = ?)`,
     ).run('2099-01-01T00:00:00.000Z', target)
+    apply(db, [
+      {
+        eid: verifier,
+        name: 'session',
+        comp: { id: uid(), requested_task: target },
+      },
+      { eid: verifier, name: 'verifier', comp: {} },
+      { eid: verifier, name: 'quarantined', comp: {} },
+    ])
+    db.prepare(
+      `update created set at = ?
+      where entity = (select id from entity where eid = ?)`,
+    ).run('2099-01-01T01:00:00.000Z', verifier)
+    db.prepare(
+      `update session set status = 'failed'
+      where entity = (select id from entity where eid = ?)`,
+    ).run(verifier)
 
     let res = await fetch(
       `http://${U}/query?work=verify&limit=1&${
@@ -1038,21 +1073,50 @@ slow(
       }`,
     )
     if (!res.ok) throw new Error(`verify work refused: ${await res.text()}`)
-    let [candidate] = await res.json() as {
-      entity: { eid: string }
-      work: {
-        verification: {
-          accept: { body: string; truncated: boolean }
-          completed: { via: string }
-        }
-      }
-    }[]
-    assertEquals(candidate.entity.eid, target)
-    assertEquals(candidate.work.verification.accept, {
-      body: 'Use HTTP.',
-      truncated: false,
+    let candidates = await res.json() as Record<string, unknown>[]
+    let [candidate] = candidates
+    let query = localQuery(db)
+    let local = await workCandidates(
+      {
+        query,
+        get: (ids) => query(ids.length ? [`id=${ids.join(',')}`] : []),
+      },
+      'verify',
+      { limit: 1, filters: ['.kind=task'] },
+    )
+    assertEquals(candidates, local)
+    assertEquals(Object.keys(candidate).sort(), [
+      'accept',
+      'blocked',
+      'blockers',
+      'claim',
+      'completed',
+      'decision',
+      'id',
+      'kind',
+      'priority',
+      'proposed',
+      'title',
+    ])
+    assertStringIncludes(String(candidate.id), 'T-')
+    assertEquals(candidate.title, 'HTTP candidate')
+    assertEquals(candidate.completed, {
+      at: '2099-01-01T00:00:00.000Z',
+      via: null,
     })
-    assertStringIncludes(candidate.work.verification.completed.via, 'S-')
+    let accept = candidate.accept as { body: string; truncated: boolean }
+    assertEquals(accept.body.length, 4000)
+    assertEquals(accept.truncated, true)
+    let json = JSON.stringify(candidates)
+    assertEquals(json.length < 5000, true)
+    for (let secret of ['TASK-SECRET', 'ACCEPT-SECRET', 'PROJECT-SECRET']) {
+      assertEquals(json.includes(secret), false, secret)
+    }
+    assertEquals(
+      /[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i
+        .test(json),
+      false,
+    )
   },
 )
 

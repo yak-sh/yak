@@ -1579,8 +1579,16 @@ slow(
           eid: target,
           name: 'work',
           comp: {
-            blockers: { items: [], truncated: false },
-            verification: {
+            candidate: {
+              id: 'T-90',
+              kind: 'task',
+              title: 'Verify from CLI',
+              priority: 1,
+              proposed: false,
+              decision: 'none',
+              claim: null,
+              blocked: null,
+              blockers: { items: [], truncated: false },
               accept: { body: 'Use the CLI.', truncated: false },
               completed: {
                 at: '2026-01-01T00:00:00.000Z',

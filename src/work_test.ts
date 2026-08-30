@@ -18,6 +18,9 @@ import {
   evalWork,
   rowsFor,
   verifyWorkSql,
+  workCompletionSql,
+  workReviewSql,
+  workVerifierSql,
 } from './graph_query.ts'
 import { dispatchSpawn } from './dispatch.ts'
 import { parseQuery } from './query.ts'
@@ -1017,28 +1020,55 @@ Deno.test('verify evidence never reveals quarantined candidates or references', 
   assertEquals(JSON.stringify(candidates).includes('SECRET'), false)
 })
 
-Deno.test('verify lane plan starts at completed_at with keyed evidence joins', async () => {
+Deno.test('verify lane and evidence plans stay on their keyed walks', () => {
   let db = bareDb()
   let P = uuid()
   apply(db, [
     { eid: P, name: 'doc', comp: { title: 'Plan', body: '' } },
     { eid: P, name: 'project', comp: {} },
   ])
-  completedTask(db, P, 'Pending', '2026-01-01T00:00:00.000Z')
+  let pending = completedTask(db, P, 'Pending', '2026-01-01T00:00:00.000Z')
   let built = verifyWorkSql(db, workFilters('verify').join('&'))
   let plan = db.prepare(`explain query plan ${built.sql}`).all(
     ...built.params,
   ) as { detail: string }[]
   let details = plan.map((row) => row.detail).join('\n')
-  assertMatch(details, /completed_at/)
+  assertMatch(
+    plan[0].detail,
+    /SCAN completed USING COVERING INDEX completed_at/,
+  )
   assertMatch(details, /comment_target/)
   assertMatch(details, /session_requested_task/)
   assertEquals(plan.some((row) => row.detail == 'SCAN entity'), false)
+  assertEquals(
+    plan.some((row) => /MATERIALIZE|SCAN task/.test(row.detail)),
+    false,
+  )
 
-  // Drive the evidence projection too: its review and verifier walks must be
-  // keyed by the selected task set rather than component scans.
-  let [candidate] = await workCandidates(readFor(db), 'verify', { limit: 1 })
-  assertEquals(candidate.title, 'Pending')
+  // Evidence starts from the bounded human-id set. Every component lookup is
+  // a primary-key or reference-index search; scans are confined to the ranked
+  // CTE result, never a persistent component table.
+  for (
+    let [name, evidence, index] of [
+      ['completion', workCompletionSql([pending.eid]), /autoindex_entity/],
+      ['review', workReviewSql([pending.eid]), /comment_target/],
+      ['verifier', workVerifierSql([pending.eid]), /session_requested_task/],
+    ] as const
+  ) {
+    let evidencePlan = db.prepare(`explain query plan ${evidence.sql}`).all(
+      ...evidence.params,
+    ) as { detail: string }[]
+    let evidenceDetails = evidencePlan.map((row) => row.detail).join('\n')
+    assertMatch(evidenceDetails, index, name)
+    assertEquals(
+      evidencePlan.some((row) =>
+        /SCAN (entity|task|accept|completed|comment|review|session|verifier)(?:\s|$)/
+          .test(row.detail)
+      ),
+      false,
+      name,
+    )
+  }
 })
 
 Deno.test('lane membership queries compile to indexed component scans', () => {

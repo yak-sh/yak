@@ -232,6 +232,10 @@ export let readTelemetryStats = (opts: TelemetryOpts = {}): Promise<Stat[]> =>
 // routers stay one line.
 export let arm: {
   query?: Querier
+  work?: (
+    lane: NonNullable<QueryOpts['work']>,
+    opts: { filters?: string[]; limit?: number; recursive?: boolean },
+  ) => Promise<unknown[]>
   deps?: DepsFn
   search?: SearchFn
   history?: typeof httpHistory
@@ -287,23 +291,43 @@ export type WorkProjection = {
 
 export let WORK_REFS_LIMIT = 20
 
+let queryArgs = (filters: string[], opts?: QueryOpts) => [
+  ...(opts?.after ? [`after=${opts.after}`] : []),
+  ...(opts?.limit ? [`limit=${opts.limit}`] : []),
+  ...(opts?.work ? [`work=${opts.work}`] : []),
+  ...(opts?.recursive ? ['recursive=1'] : []),
+  ...filters,
+]
+
+let queryResponse = async (filters: string[], opts?: QueryOpts) => {
+  let url = queryArgs(filters, opts).map(encodeURIComponent).join('&')
+  let res = await request(`http://${host()}/query?${url}`)
+  if (!res.ok) throw new Error(`server said ${res.status}`)
+  return res
+}
+
 export let httpQuery = async (
   filters: string[],
   opts?: QueryOpts,
 ) => {
-  let args = [
-    ...(opts?.after ? [`after=${opts.after}`] : []),
-    ...(opts?.limit ? [`limit=${opts.limit}`] : []),
-    ...(opts?.work ? [`work=${opts.work}`] : []),
-    ...(opts?.recursive ? ['recursive=1'] : []),
-    ...filters,
-  ]
-  let url = args.map(encodeURIComponent).join('&')
-  let res = await request(`http://${host()}/query?${url}`)
-  if (!res.ok) throw new Error(`server said ${res.status}`)
+  if (opts?.work) throw new Error('work queries use the candidate reader')
+  let res = await queryResponse(filters, opts)
   let hits = await res.json() as Record<string, unknown>[]
   return hits.map(rowOf)
 }
+
+export let httpWork = async (
+  lane: NonNullable<QueryOpts['work']>,
+  opts: { filters?: string[]; limit?: number; recursive?: boolean } = {},
+) => {
+  let res = await queryResponse(opts.filters ?? [], { ...opts, work: lane })
+  return await res.json() as Record<string, unknown>[]
+}
+
+export let readWork = (
+  lane: NonNullable<QueryOpts['work']>,
+  opts: { filters?: string[]; limit?: number; recursive?: boolean } = {},
+) => arm.work ? arm.work(lane, opts) : httpWork(lane, opts)
 
 // How a filter line is ANSWERED — the /query door as a plain function. The
 // default runs it over HTTP (httpQuery) unless the local arm is set; the
