@@ -51,13 +51,14 @@ let { freshDb } = await import('./testdb.ts')
 let { append } = await import('./entries.ts')
 
 Deno.test('MCP prompt makes task trees the default for multi-step work', () => {
+  assertEquals(MCP_INSTRUCTIONS.includes(WORKER_PROTOCOL), true)
+  assertEquals(MCP_INSTRUCTIONS.split(WORKER_PROTOCOL).length, 2)
   assertMatch(MCP_INSTRUCTIONS, /3\+ steps defaults to task_tree/)
   assertMatch(MCP_INSTRUCTIONS, /"dry_run":true/)
   assertMatch(MCP_INSTRUCTIONS, /never infer .* from prose/i)
-  assertMatch(MCP_INSTRUCTIONS, /worker without subagents\nworks directly/)
   assertMatch(
     MCP_INSTRUCTIONS,
-    /tells this harness to claim or\nwork queued tasks,[\s\S]*execute it here/,
+    /tells this harness to claim or work queued tasks,[\s\S]*execute it here now/,
   )
   assertMatch(
     MCP_INSTRUCTIONS,
@@ -70,9 +71,22 @@ Deno.test('MCP prompt makes task trees the default for multi-step work', () => {
 })
 
 Deno.test('worker protocol executes queued work in the current harness', () => {
-  assertMatch(WORKER_PROTOCOL, /claim it, and execute it in this harness/)
-  assertMatch(WORKER_PROTOCOL, /Do not merely wait for\nmanaged auto-dispatch/)
-  assertMatch(WORKER_PROTOCOL, /Subagents are optional/)
+  for (
+    let expected of [
+      /bounded evaluate, build, and verify lanes in their authoritative/,
+      /Read the full entity before choosing\s+work and assess fit/,
+      /Treat evaluation as work:[\s\S]*acceptance criteria,[\s\S]*dependencies/,
+      /Design approval and executable-task\napproval are separate boundaries/,
+      /an owner request starts the lifecycle but\ndoes not collapse either approval/,
+      /approve and claim atomically/,
+      /report progress and durable failures/,
+      /release or hand off the claim/,
+      /independent review against acceptance criteria/,
+      /Use subagents when they are available and useful; otherwise work directly/,
+      /claim or work queued tasks,[\s\S]*execute it here now instead of waiting/,
+      /Ordinary approval still triggers managed dispatch/,
+    ]
+  ) assertMatch(WORKER_PROTOCOL, expected)
 })
 
 let N = 'aaaaaaaa-0000-4000-8000-000000000001'
@@ -263,6 +277,8 @@ Deno.test('work_start bootstraps without a session id and resumes it', async () 
   let session = ''
   let sid = ''
   await protocol(io, async (client) => {
+    assertEquals(client.getInstructions(), MCP_INSTRUCTIONS)
+    assertEquals(client.getInstructions()?.includes(WORKER_PROTOCOL), true)
     let started = await client.callTool({
       name: 'work_start',
       arguments: {},
@@ -272,7 +288,8 @@ Deno.test('work_start bootstraps without a session id and resumes it', async () 
       said(started),
       /^session: S-\d+\nsid: [0-9a-f-]+\nstate: created/m,
     )
-    assertMatch(said(started), /# Work the graph/)
+    assertEquals(said(started).includes(WORKER_PROTOCOL), true)
+    assertEquals(said(started).split(WORKER_PROTOCOL).length, 2)
     assertMatch(said(started), /# Context\n# tasks · session/)
     session = said(started).match(/^session: (S-\d+)$/m)![1]
     sid = said(started).match(/^sid: ([^\n]+)$/m)![1]
@@ -291,6 +308,7 @@ Deno.test('work_start bootstraps without a session id and resumes it', async () 
     assertMatch(said(resumed), new RegExp(`^session: ${session}$`, 'm'))
     assertMatch(said(resumed), new RegExp(`^sid: ${sid}$`, 'm'))
     assertMatch(said(resumed), /^state: resumed$/m)
+    assertEquals(said(resumed).includes(WORKER_PROTOCOL), true)
     assertEquals(
       db.prepare('select count(*) as n from session').get(),
       { n: 1 },

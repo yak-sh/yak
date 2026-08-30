@@ -387,30 +387,36 @@ let HINTS: Record<string, ToolAnnotations> = {
 }
 
 export let WORKER_PROTOCOL = `# Work the graph
-1. Evaluate recent open work before selecting it. Inspect its context,
-dependencies, approval, claim, and acceptance criteria; add missing context or
-prerequisites before build work begins.
-2. Build only approved, open, unblocked work. Claim exactly what you undertake,
-report progress and failures on the task, verify the result, then complete and
-release it.
-3. Treat verification as a separate pass recorded through review; completion
-alone is not verification.
+1. Bootstrap or resume a stable worker identity and restore durable task
+context after reconnect or compaction.
+2. Inspect bounded evaluate, build, and verify lanes in their authoritative
+readiness, priority, and recency order. Read the full entity before choosing
+work and assess fit from the repository, CLI, browser, design, and delegation
+tools you have.
+3. Treat evaluation as work: add missing specification, acceptance criteria,
+context, and dependencies before approval. Design approval and executable-task
+approval are separate boundaries; an owner request starts the lifecycle but
+does not collapse either approval.
+4. Build only approved, open, unclaimed, unblocked, dependency-ready work.
+Claim through the readiness-aware worker door; when you are both evaluator and
+chosen builder, approve and claim atomically.
+5. Keep the graph as the record: report progress and durable failures on the
+task, complete the work, and release or hand off the claim. Verification is an
+independent review against acceptance criteria; completion alone is not
+approval.
 
-When the operator explicitly tells you to claim or work queued tasks, inspect
-eligible work, claim it, and execute it in this harness. Do not merely wait for
-managed auto-dispatch. Subagents are optional: delegate when they are available
-and useful; otherwise work the task yourself.`
+Use subagents when they are available and useful; otherwise work directly.
+When the operator explicitly tells this harness to claim or work queued tasks,
+inspect eligible work, claim it, and execute it here now instead of waiting for
+managed auto-dispatch. Ordinary approval still triggers managed dispatch when
+work is not explicitly addressed to this harness.`
 
 export let MCP_INSTRUCTIONS =
   `Tool arguments are source data, never HTML. Pass <, >,
 and & literally; the renderer escapes them for its own output type.
 The graph renders bodies as markdown. ${DOC}
 
-Use subagents when they are available and useful. A worker without subagents
-works directly. When the operator explicitly tells this harness to claim or
-work queued tasks, inspect eligible work, claim it, and execute it here instead
-of waiting for managed auto-dispatch. After compaction or resume, use durable
-task context to restore assignments.
+${WORKER_PROTOCOL}
 
 Work with ${TASK_TREE_ADOPTION.steps}+ steps defaults to task_tree, not a checklist in one task body.
 Exact dry run: ${taskTreeExample('mcp')}. Choose every relation explicitly;

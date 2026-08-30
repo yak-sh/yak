@@ -29,6 +29,35 @@ There is no observation-only agent class. Project-attention scope controls which
 notifications a session receives; it never restricts graph reads, task claims,
 code inspection, or edits.
 
+## Portable worker protocol
+
+Every adapter publishes the same work lifecycle. A worker bootstraps or resumes
+a stable identity, inspects bounded `evaluate`, `build`, and `verify` lanes in
+their authoritative readiness, priority, and recency order, and reads the full
+entity before selecting work. Evaluation may add missing specification,
+acceptance criteria, context, and dependencies; design approval and
+executable-task approval remain separate. An owner request starts the lifecycle
+but does not collapse either approval. Build work enters through the
+readiness-aware claim door, using atomic approval and claim when the evaluator
+is also the chosen builder. Progress and durable failures stay on the task,
+completion releases or hands off the claim, and independent review records
+verification.
+
+Workers use subagents when they are available and useful and work directly when
+they are not. An explicit instruction to “claim queued tasks” or “work queued
+tasks” addresses the current harness: it claims eligible work and executes it
+now rather than waiting for managed auto-dispatch. Ordinary approval still
+triggers managed dispatch when work is not explicitly addressed to that harness.
+
+| Lifecycle                | MCP clients, including Claude Desktop and ChatGPT Desktop           | Native CLI                           |
+| ------------------------ | ------------------------------------------------------------------- | ------------------------------------ |
+| Identity and context     | `work_start`, then `task_context` on refresh                        | `task session context`               |
+| Candidate lanes          | `work_list` with `evaluate`, `build`, or `verify`; then `task_show` | `task work <lane>`, then `task show` |
+| Approve and claim        | `task_claim` with `approve=true` when both must be atomic           | `task claim <id> --approve`          |
+| Progress and failure     | `task_comment`                                                      | `task comment`                       |
+| Complete and release     | `task_update`, then `task_release`                                  | `task set`, then `task release`      |
+| Independent verification | `task_verify`                                                       | `task verify`                        |
+
 The lifecycle hooks and provider settings are invocation-scoped. `task claude`
 and `task codex` opt that one provider process into Tasks. Bare `claude` and
 `codex` processes retain their native configuration and receive no injected repo
@@ -41,6 +70,7 @@ hooks. A project may add Claude settings for task-launched sessions in
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | Native Claude   | `task claude`; lifecycle hooks follow the provider process, and the newest session on its pid takes the seat after `/clear`                | Claude channel events carry addressed content into the transcript                                                      | The channel event or `task_context` |
 | Native Codex    | `task codex`; lifecycle hooks bind the provider id, pid, and tmux pane, and report busy/idle turns                                         | Guarded tmux injection types one constant notice with no graph-authored text                                           | `task_context`                      |
+| Desktop MCP     | `work_start` creates or resumes a stable graph Session without filesystem hooks or a prior session id                                      | None out of band; the user or host invokes the MCP client                                                              | `work_start`, then `task_context`   |
 | Managed process | Graph session request; `claude` and explicit `codex-cli` runs own a detached process, JSONL log, worktree, status, usage, and stop request | A resumed process receives only a fixed request to call `task_context`                                                 | `task_context`                      |
 | Managed Codex   | `codex` request; tasksd leases the Session's ordered graph entries and owns its worktree, usage, and stop request                          | A structured attention entry starts or resumes a turn; connected observers receive transient provider-neutral progress | `task_context`                      |
 
