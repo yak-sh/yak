@@ -6,7 +6,7 @@ Deno.env.set('DB_PATH', ':memory:')
 // Enter through the registry, as the app does; importing Board first would
 // invert its deliberate Entity render cycle.
 await import('../Entity.tsx')
-let { Board, CAP, visible } = await import('./Board.tsx')
+let { Board, CAP, QuickAdd, visible } = await import('./Board.tsx')
 let { apply } = await import('../../db.ts')
 let { subserve } = await import('../../subserve.ts')
 let { freshDb } = await import('../../testdb.ts')
@@ -16,6 +16,7 @@ let { cache, ent, landSub, resetSignals, useRoute } = await import(
 )
 let { mount } = await import('../mount.ts')
 let { tick } = await import('../../testing.ts')
+let { drop } = await import('../drafts.ts')
 
 Deno.test('board columns reveal a bounded first page and report the tail', () => {
   let rows = Array.from({ length: CAP + 7 }, (_, i) => i)
@@ -24,6 +25,31 @@ Deno.test('board columns reveal a bounded first page and report the tail', () =>
     more: 7,
   })
   assertEquals(visible(rows, true), { rows, more: 0 })
+})
+
+Deno.test('quick-add previews empty facets and ordinary properties', async () => {
+  let key = `test:quick-add:${crypto.randomUUID()}`
+  let mounted = mount(
+    <QuickAdd dkey={key} file={() => true} close={() => {}} />,
+  )
+  try {
+    let input = mounted.root.querySelector<HTMLTextAreaElement>('.Board_New')!
+    input.setSelectionRange = () => {}
+    input.value = '.verifier=true .noverify=false .domain=Eng Ship'
+    input.dispatchEvent(
+      new input.ownerDocument.defaultView!.Event('input', { bubbles: true }),
+    )
+    await tick()
+    assertEquals(
+      [...mounted.root.querySelectorAll('.Board_Chip')].map((e) =>
+        e.textContent
+      ),
+      ['verifier=true', 'noverify=false', 'domain=Eng'],
+    )
+  } finally {
+    mounted.free()
+    drop(key)
+  }
 })
 
 Deno.test('a server refusal reaches a mounted Board with its retry identity', async () => {

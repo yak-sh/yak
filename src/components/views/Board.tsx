@@ -66,7 +66,7 @@ export let visible = <T,>(rows: T[], expanded: boolean) => ({
 // by Board reopening the column from the draft, so a half-typed task is
 // never lost. Blur closes the box but KEEPS the draft (Board resurfaces
 // it); only filing or Escape spends it.
-let QuickAdd = (
+export let QuickAdd = (
   { dkey, file, close }: {
     dkey: string
     file: (text: string) => boolean
@@ -80,9 +80,13 @@ let QuickAdd = (
   let { body, grouped } = spec(text)
   let p = grouped.task?.priority
   let chips = Object.entries(grouped).flatMap(([comp, props]) =>
-    props == null ? [`${comp}=false`] : Object.entries(props)
-      .filter(([prop]) => comp != 'task' || prop != 'priority')
-      .map(([prop, v]) => `${prop}=${v}`)
+    props == null
+      ? [`${comp}=false`]
+      : Object.keys(props).length == 0
+      ? [`${comp}=true`]
+      : Object.entries(props)
+        .filter(([prop]) => comp != 'task' || prop != 'priority')
+        .map(([prop, v]) => `${prop}=${v}`)
   )
   return (
     <>
