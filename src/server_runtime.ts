@@ -91,7 +91,7 @@ import { codexGeneration } from './runner.ts'
 import { type Observation, safeObservation } from './observations.ts'
 import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
-import { serverFile } from './reload.ts'
+import { graph as browserGraph, serverFile } from './reload.ts'
 import { jsonOf, type Row } from './client.ts'
 import { requestVerifier } from './verify.ts'
 import {
@@ -186,6 +186,16 @@ let file = async (root: string, path: string) => {
     return new Response('not found', { status: 404 })
   }
 }
+
+// The browser asks for this graph as a waterfall: every response reveals the
+// next imports. Fill the transform cache before readiness so the first page is
+// no slower than every page after it.
+let warmBrowser = () =>
+  Promise.all(
+    [...browserGraph('main.tsx')].map((path) =>
+      file(src.slice(0, -1), `/${path}`)
+    ),
+  )
 
 // The sync channel: clients send flat change batches ([{eid, name, comp}]),
 // the server applies them and rebroadcasts to every other client. Non-array
@@ -1765,6 +1775,7 @@ let drain = async () => {
 // Bind last, after migrations and boot reconciliation. The supervisor has
 // already stopped and reaped the old process, so the public port has one
 // serving process and needs no listener overlap.
+await warmBrowser()
 export let http = Deno.serve({ port }, handle)
 Deno.addSignalListener('SIGINT', drain)
 Deno.addSignalListener('SIGTERM', drain)
