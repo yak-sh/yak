@@ -624,3 +624,45 @@ Deno.test('VERIFY_PENDING plans from authored indexes with bounded target subque
   assertMatch(capDetails, /claim_session/)
   assert(!/SCAN session\b/.test(capDetails), capDetails)
 })
+
+Deno.test('boot registers system roles before replay, so verifier runs on its first sweep', async () => {
+  reset()
+  let work = task()
+  apply(db, [{
+    eid: persona,
+    name: 'spawn',
+    comp: { provider: 'codex', model: 'gpt-5.6-sol', effort: 'high' },
+  }])
+
+  let { bootDoing, wireDoing } = await import('./doing.ts')
+  let { configureEffects } = await import('./effects.ts')
+  let { tick: nextTick } = await import('./testing.ts')
+  let { stop } = await import('./timers.ts')
+  let restore = configureEffects({
+    split: true,
+    want: (where) => where == 'do',
+    settle: () => {},
+  })
+  try {
+    let doing = {
+      cast,
+      codexReady: () => Promise.resolve(true),
+      readyProviders: () => Promise.resolve([]),
+    }
+    let { syncSoon } = wireDoing(doing)
+    bootDoing(doing, syncSoon)
+    await nextTick()
+
+    assertEquals(verifiersFor(work.eid).length, 1)
+    assertEquals(
+      db.prepare(
+        `select count(*) as n from session where role = ${idOf}`,
+      ).get(persona),
+      { n: 0 },
+      'the verifier role never entered the operator reconciler',
+    )
+  } finally {
+    stop()
+    restore()
+  }
+})

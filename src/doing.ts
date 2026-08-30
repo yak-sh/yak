@@ -90,6 +90,11 @@ import type { DatabaseSync } from './sqlite.ts'
 
 type Cast = (changes: Change[]) => void
 
+// System identity must exist before any role row is replayed: roleBoot chooses
+// the system reconciler through this registry. Keep every built-in spec in one
+// list so a fresh process cannot briefly treat one as an operator role.
+let SYSTEMS = [SCRIBE, FIXER_ROLE, DREAM_ROLE, VERIFIER_ROLE]
+
 // The serving process's in-memory runner hooks (managedCodex + the graph-
 // native sweep debounce). Present only where that runner lives; the daemon
 // registers the same rows with inert stubs it will never fire (the `want`
@@ -621,6 +626,12 @@ export let tick = (
 export let bootDoing = (d: Doing, syncSoon: () => void) => {
   let { cast } = d
 
+  // Register before every boot reconciler, especially the role outbox relay
+  // below. A replay that enters roleBoot first can otherwise take the operator
+  // flight; the immediate system sweep then sees that flight and skips its own
+  // first pass.
+  for (let spec of SYSTEMS) registerSystem(spec)
+
   // Boot migrations may reshape graph-owned teachings without an apply
   // trace. Reconcile once here too, or the source migrates while its
   // generated persona files keep teaching the retired vocabulary.
@@ -743,13 +754,9 @@ export let bootDoing = (d: Doing, syncSoon: () => void) => {
         'HOLDCO_CF_ACCOUNT_ID',
   )
 
-  // The system roles (roles.ts): scribe, fixer, dream, verifier — on/off and throttle
-  // live as role data on their alias entities, and each pass stamps its
-  // decision there. The ten-minute tick carries their time-based triggers.
-  registerSystem(SCRIBE)
-  registerSystem(FIXER_ROLE)
-  registerSystem(DREAM_ROLE)
-  registerSystem(VERIFIER_ROLE)
+  // The system roles' ten-minute tick carries their time-based triggers. Their
+  // identities were registered before boot replay above; registration here
+  // would be too late for a role row the relay already handed to roleBoot.
   tick('system', () => systemSweep(cast), 10 * 60_000)
 
   // Embeddings (embed.ts): every non-comment doc keeps a semantic vector,
