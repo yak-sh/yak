@@ -117,6 +117,41 @@ Deno.test('command: set resolves a human reference before the write', () => {
   ])
 })
 
+Deno.test('task_update adds and removes empty writable facets', async () => {
+  let { db, io } = graph()
+  let verifier = crypto.randomUUID(), muted = crypto.randomUUID()
+  apply(db, [
+    { eid: verifier, name: 'session', comp: { id: 'verifier' } },
+    { eid: muted, name: 'project', comp: {} },
+  ])
+  let wears = (eid: string, mark: string) =>
+    snapshot(db).changes.some((c) => c.eid == eid && c.name == mark)
+
+  await protocol(io, async (client) => {
+    for (
+      let [id, mark] of [
+        [verifier, 'verifier'],
+        [muted, 'noverify'],
+      ]
+    ) {
+      let added = await client.callTool({
+        name: 'task_update',
+        arguments: { id, params: [`.${mark}=true`] },
+      }) as ToolResult
+      assertEquals(added.isError, undefined, said(added))
+      assertEquals(wears(id, mark), true)
+
+      let removed = await client.callTool({
+        name: 'task_update',
+        arguments: { id, params: [`.${mark}=false`] },
+      }) as ToolResult
+      assertEquals(removed.isError, undefined, said(removed))
+      assertEquals(wears(id, mark), false)
+    }
+  })
+  db.close()
+})
+
 Deno.test('command: generated references resolve aliases and reject misses', () => {
   let out = commandOut(all, ':new .project=home Ship it', T)
   let task = out.changes!.find((c) => c.name == 'task')

@@ -353,6 +353,31 @@ Deno.test('param: a bare facet teaches instead of crashing (T-12981)', () => {
   assertThrows(() => param('.archived='), Error, 'server-stamped mark')
 })
 
+Deno.test('param: empty writable facets compile Boolean presence', () => {
+  assertEquals(param('.verifier=true'), {
+    comp: 'verifier',
+    prop: '',
+    value: true,
+  })
+  assertEquals(param('.noverify=false'), {
+    comp: 'noverify',
+    prop: '',
+    value: false,
+  })
+  assertEquals(
+    patches([
+      param('.verifier=true')!,
+      param('.noverify=false')!,
+    ]),
+    { verifier: {}, noverify: null },
+  )
+  assertThrows(
+    () => param('.verifier=maybe'),
+    Error,
+    "verifier is a boolean (true, false, 1, 0, yes, no) — got 'maybe'",
+  )
+})
+
 Deno.test('find: T-num, bare num, eid, alias slug', () => {
   assertEquals(find(all, 'T-2')?.eid, T1)
   assertEquals(find(all, '3')?.eid, T2)
@@ -3457,6 +3482,7 @@ Deno.test('grammar: the teaching text derives from the vocabulary', async () => 
     /review: verdict\(approved\|rejected\|changes_requested\|approve\|reject\|changes\)/,
   )
   assertMatch(GRAMMAR, /typed scalars parse by their grammar/)
+  assertMatch(GRAMMAR, /\.verifier=true.*\.verifier=false/)
   assertMatch(FILTERS, /time phrases/i)
 })
 

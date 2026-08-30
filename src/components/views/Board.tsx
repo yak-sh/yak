@@ -80,7 +80,7 @@ let QuickAdd = (
   let { body, grouped } = spec(text)
   let p = grouped.task?.priority
   let chips = Object.entries(grouped).flatMap(([comp, props]) =>
-    Object.entries(props)
+    props == null ? [`${comp}=false`] : Object.entries(props)
       .filter(([prop]) => comp != 'task' || prop != 'priority')
       .map(([prop, v]) => `${prop}=${v}`)
   )

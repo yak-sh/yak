@@ -30,7 +30,10 @@ few collisions (pin/camera x,y,w,h) use '.comp.prop=x'. References go
 by their property names: '.assignee=jeff' routes to task.assignee, and any reference
 value may be an alias, a human id (T-3, P-19), or an eid. Numeric-looking
 text stays text; typed scalars parse by their grammar ('.pin.x=01',
-'.verified=yes', '.priority=p02'). Statuses: ${statuses.join(', ')}.`
+'.verified=yes', '.priority=p02'). Empty writable tags use Boolean presence
+('.verifier=true' adds it; '.verifier=false' removes it). Statuses: ${
+    statuses.join(', ')
+  }.`
 
 // The $edit operator: taught beside graph_apply (the wire door) and appended
 // to `task help grammar`, but deliberately NOT folded into GRAMMAR/FILTERS —

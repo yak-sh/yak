@@ -974,6 +974,10 @@ export let undo = async (
 // grammar with operators/lists/ranges lives in query.ts) ----
 
 export type Param = { comp: string; prop: string; value: unknown }
+export type ComponentPatches = Record<
+  string,
+  Record<string, unknown> | null
+>
 
 let legacySessionProp = (name: string) =>
   name in comps.session &&
@@ -1019,18 +1023,28 @@ export let param = (arg: string): Param | null => {
     p = { ...r, value: raw }
   }
   if (!p.prop) {
-    // A bare facet (.proposed, .archived) is a presence mark, not a column:
-    // route() hands it the filter grammar (= absent, ~= present), but there's
-    // no scalar to write through, so propAt() below found nothing and the raw
-    // TypeError reached the operator (T-12981). Name the working spelling.
+    // A component name is a presence mark, not a column. Column-bearing marks
+    // keep their explicit write spelling; stamped-only marks stay protected.
+    // A genuinely empty writable component speaks Boolean presence so the
+    // same dot-param compiler can add ({}) or remove (null) it at every door.
     let cols = Object.keys(comps[p.comp] ?? {})
-    throw new Error(
-      cols.length
-        ? `.${p.comp} is a mark — write it as .${p.comp}.${
+    if (cols.length) {
+      throw new Error(
+        `.${p.comp} is a mark — write it as .${p.comp}.${
           cols[0]
-        }=<value> (e.g. .${p.comp}.${cols[0]}=now)`
-        : `.${p.comp} is a server-stamped mark; it isn't set through a dot-param`,
+        }=<value> (e.g. .${p.comp}.${cols[0]}=now)`,
+      )
+    }
+    if (Object.keys(stamped[p.comp] ?? {}).length) {
+      throw new Error(
+        `.${p.comp} is a server-stamped mark; it isn't set through a dot-param`,
+      )
+    }
+    let present = parseProp(
+      { comp: p.comp, prop: '', name: p.comp, type: 'bool' },
+      raw,
     )
+    return { ...p, value: !!present }
   }
   let declared = propAt(p.comp, p.prop)!
   if (!(typeof declared.type == 'object' && 'eid' in declared.type)) {
@@ -1393,6 +1407,7 @@ export let checkedRefs = async (preds: Pred[], q: Querier = query) => {
 }
 export let derefParams = (all: Row[], ps: Param[]) =>
   ps.map((p) => {
+    if (!p.prop) return p
     let declared = propAt(p.comp, p.prop)!
     let value = typeof declared.type == 'object' && 'eid' in declared.type
       ? parseProp(declared, p.value, {
@@ -1488,9 +1503,13 @@ export let derefedChanges = async (changes: Change[]) => {
 }
 
 // Group routed params into per-component patches.
-export let patches = (params: Param[]) => {
-  let out: Record<string, Record<string, unknown>> = {}
+export let patches = (params: Param[]): ComponentPatches => {
+  let out: ComponentPatches = {}
   for (let { comp, prop, value } of params) {
+    if (!prop) {
+      out[comp] = value ? {} : null
+      continue
+    }
     ;(out[comp] ??= {})[prop] = value
   }
   return out
@@ -1544,9 +1563,9 @@ export let spec = (text: string, read: (p: Param) => Param = (p) => p) => {
 // grouped.doc first.
 export let taskChanges = (
   eid: string,
-  grouped: Record<string, Record<string, unknown>>,
+  grouped: ComponentPatches,
 ): Change[] => [
-  { eid, name: 'doc', comp: { body: '', ...grouped.doc } },
+  { eid, name: 'doc', comp: { body: '', ...(grouped.doc ?? {}) } },
   // A new task is born open — no mark (D-24102). status is derived, not
   // writable, so drop any that rode in on the spec (`.status=` on new).
   {
@@ -4168,7 +4187,7 @@ export let designChanges = (
     // The standard property grammar, grouped per component (patches()): a
     // design accepts `.project`/`.priority` like `task new`, so any routed
     // param rides onto the entity beside its tag and proposed mark.
-    props?: Record<string, Record<string, unknown>>
+    props?: ComponentPatches
   },
 ) => {
   let s = sessionFor(all, d.session)
@@ -4179,7 +4198,7 @@ export let designChanges = (
     {
       eid,
       name: 'doc',
-      comp: { title: d.title, body: d.body ?? '', ...props.doc },
+      comp: { title: d.title, body: d.body ?? '', ...(props.doc ?? {}) },
     },
     { eid, name: 'design', comp: {} },
     { eid, name: 'proposed', comp: d.at ? { at: d.at } : {} },

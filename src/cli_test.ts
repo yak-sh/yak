@@ -1247,6 +1247,53 @@ slow('task set --body patches the document body', async () => {
   }
 })
 
+slow('task set adds and removes empty writable facets', async () => {
+  let session = 'cccccccc-0000-4000-8000-000000000012'
+  let project = 'cccccccc-0000-4000-8000-000000000019'
+  let fake = graphServer({
+    changes: [
+      { eid: session, name: 'entity', comp: { eid: session, num: 12 } },
+      { eid: session, name: 'session', comp: { id: 'verifier' } },
+      { eid: project, name: 'entity', comp: { eid: project, num: 19 } },
+      { eid: project, name: 'project', comp: {} },
+    ],
+    deps: [],
+  })
+  let run = (...args: string[]) =>
+    new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'set',
+        ...args,
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: fake.host },
+    }).output()
+  try {
+    for (
+      let [id, mark] of [
+        ['S-12', 'verifier'],
+        ['P-19', 'noverify'],
+      ]
+    ) {
+      for (let value of ['true', 'false']) {
+        let out = await run(id, `.${mark}=${value}`)
+        assertEquals(out.code, 0, text(out.stderr))
+      }
+    }
+    assertEquals(fake.acked, [
+      { eid: session, name: 'verifier', comp: {} },
+      { eid: session, name: 'verifier', comp: null },
+      { eid: project, name: 'noverify', comp: {} },
+      { eid: project, name: 'noverify', comp: null },
+    ])
+  } finally {
+    await fake.server.shutdown()
+  }
+})
+
 slow('task dep rejects surplus positional arguments', async () => {
   let out = await cli('dep', 'T-1', 'requires', 'T-2', 'surplus')
   assertEquals(out.code, 1)
