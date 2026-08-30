@@ -2905,16 +2905,17 @@ let boardPreds = (e: Ent) =>
 // join or leave: a maintenance frame adds/drops the eid and wakes this read.
 //
 // Until the subscription's first frame lands (undefined — an empty Set is a
-// ready, empty result), the query door answers from the cache so a board never
-// flashes empty on mount; that pass is correct even for a complex board, since
-// a one-shot resolve derefs forward. boardPost splits the one member set into
+// ready, empty result), the local index answers from the cache so a board never
+// flashes empty on mount. Opening a second server query here doubles every
+// board's initial transfer and defeats boardSub's window. boardPost splits the
+// one member set into
 // the tasks-only and whole-graph faces and drops chrome/self (a board is not
 // news to itself), reading each member through its own row signal — so the list
 // sleeps through an unrelated patch and wakes on a member's edit.
 let boardScan = (e: Ent, tasks: boolean): Ent[] => {
   let preds = boardPreds(e) // throws on a bad query, before either door
   let members = subEids(`board:${e.eid}`)
-  if (!members) return boardPost(e, tasks, queryEids(preds).value).map(ent)
+  if (!members) return boardPost(e, tasks, mem.resolve(preds)).map(ent)
   let post = boardPost(e, tasks, members)
   // Pre-flip agreement (probe only, config.agreement): the local query door
   // must answer the same set the server streamed. The scan that used to be the

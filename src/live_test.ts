@@ -2090,6 +2090,36 @@ Deno.test('pinned sleeps through an unrelated row patch', () => {
 // Before the first sub frame the query door answers alone and there is nothing
 // to compare — the deferred counter stays null, which a probe must not mistake
 // for "no divergence found".
+Deno.test('a board cache prime opens no second unwindowed subscription', () => {
+  cache.value = {
+    board_prime: {
+      entity: { eid: 'board_prime', num: 1 },
+      board: { eid: 'board_prime', query: '.task!' },
+    },
+    task_prime: {
+      entity: { eid: 'task_prime', num: 2 },
+      task: { eid: 'task_prime', priority: 1 },
+    },
+  }
+  let sent: unknown[] = []
+  let restore = useRoute((frame) => sent.push(frame))
+  let drop = boardSub(ent('board_prime'))
+  try {
+    assertEquals(boardTasks(ent('board_prime')).map((e) => e.eid), [
+      'task_prime',
+    ])
+    assertEquals(sent, [{
+      sub: 'board:board_prime',
+      q: '.task!&.limit=400',
+      shadow: true,
+    }])
+  } finally {
+    drop()
+    unsubscribe('board:board_prime')
+    useRoute(restore)
+  }
+})
+
 Deno.test('the agreement counter counts when both doors answer', async () => {
   config.agreement = true
   cache.value = {
