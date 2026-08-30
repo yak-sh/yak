@@ -1529,9 +1529,20 @@ let land = async () => {
     `landed ${outcome.landed} — now close the task and release your claims ` +
       '(task done <id>; task release <id>)',
   )
-  let sessions = await query(['.kind=session'])
-  for (let t of sweep(sessionsOf(sessions), outcome.root).trees) {
-    if (t.prune && prune(outcome.root, t.tree)) warn(`swept ${t.tree.path}`)
+  // Landing is already complete. Sibling collection is housekeeping and a
+  // graph outage cannot turn the successful git transition into a refusal.
+  // Keep the failure legible on stderr; the next land/probe sweep can retry.
+  try {
+    let sessions = await query(['.kind=session'])
+    for (let t of sweep(sessionsOf(sessions), outcome.root).trees) {
+      if (t.prune && prune(outcome.root, t.tree)) warn(`swept ${t.tree.path}`)
+    }
+  } catch (e) {
+    warn(
+      `land: post-land worktree sweep skipped — ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+    )
   }
 }
 

@@ -104,25 +104,40 @@ let tiers = (
   order: number | null,
   seen = new Set<string>(),
 ): { pre: Row[]; idx: Row[] } => {
-  let pre = new Map<string, Row>()
-  let idx = new Map<string, Row>()
-  let ord = new Map<string, number>() // declared listing order, direct edges
+  type Member = { row: Row; rank: number; seq: number }
+  let pre = new Map<string, Member>()
+  let idx = new Map<string, Member>()
+  let put = (tier: Map<string, Member>, row: Row, rank: number) => {
+    let at = tier.get(row.eid)
+    if (!at) tier.set(row.eid, { row, rank, seq: tier.size })
+    // A direct authored order still wins when the same memory also arrived
+    // through a persona. Map insertion stays put, preserving the first
+    // deterministic path for every otherwise-unranked member.
+    else if (rank < at.rank) at.rank = rank
+  }
   seen.add(eid)
   let kids = (type: Edge) =>
     deps.filter((d) => d.parent == eid && d.type == type)
       .map((d) => ({ d, r: all.find((r) => r.eid == d.child) }))
       .filter((x): x is { d: Dep; r: Row } => !!x.r?.comps.doc)
+      .sort((a, b) =>
+        (a.d.ord ?? Number.MAX_SAFE_INTEGER) -
+          (b.d.ord ?? Number.MAX_SAFE_INTEGER) ||
+        a.r.num - b.r.num || a.r.eid.localeCompare(b.r.eid)
+      )
   for (let type of ['contains', 'reads'] as const) {
     let here = type == 'contains' ? pre : idx
     for (let { d, r } of kids(type)) {
       if (r.comps.persona) {
         if (seen.has(r.eid)) continue
         let sub = tiers(all, deps, r.eid, order, seen)
-        for (let m of sub.pre) pre.set(m.eid, m)
-        for (let m of sub.idx) idx.set(m.eid, m)
+        // The child's arrays already embody its authored order. Give their
+        // members stable parent-local sequence numbers instead of discarding
+        // that order and re-sorting them by entity identity at every ancestor.
+        for (let m of sub.pre) put(pre, m, Number.MAX_SAFE_INTEGER)
+        for (let m of sub.idx) put(idx, m, Number.MAX_SAFE_INTEGER)
       } else {
-        here.set(r.eid, r)
-        if (d.ord != null) ord.set(r.eid, d.ord)
+        put(here, r, d.ord ?? Number.MAX_SAFE_INTEGER)
       }
     }
   }
@@ -132,15 +147,15 @@ let tiers = (
   // cross and make a generated file stale without a graph write. Stored files
   // use only graph facts — declared edge order, then stable identity. Both
   // paths are total orders, so neither depends on input/SQLite iteration.
-  let rank = (e: string) => ord.get(e) ?? Number.MAX_SAFE_INTEGER
-  let byGraph = (a: Row, b: Row) =>
-    rank(a.eid) - rank(b.eid) || a.num - b.num ||
-    a.eid.localeCompare(b.eid)
-  let byWarm = (a: Row, b: Row) =>
+  let byGraph = (a: Member, b: Member) =>
+    a.rank - b.rank || a.seq - b.seq || a.row.num - b.row.num ||
+    a.row.eid.localeCompare(b.row.eid)
+  let byWarm = (a: Member, b: Member) =>
     order == null
       ? byGraph(a, b)
-      : hot(b.comps, order) - hot(a.comps, order) || byGraph(a, b)
-  let warm = (m: Map<string, Row>) => [...m.values()].sort(byWarm)
+      : hot(b.row.comps, order) - hot(a.row.comps, order) || byGraph(a, b)
+  let warm = (m: Map<string, Member>) =>
+    [...m.values()].sort(byWarm).map((x) => x.row)
   return { pre: warm(pre), idx: warm(idx) }
 }
 

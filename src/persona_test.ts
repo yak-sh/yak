@@ -196,6 +196,57 @@ Deno.test('persisted projection stays fresh across a warmth crossover', () => {
   }
 })
 
+Deno.test('persisted projection keeps nested persona order', () => {
+  let dir = Deno.makeTempDirSync()
+  try {
+    let project = row({
+      doc: { title: 'Tasks', body: '' },
+      project: {},
+      repo: { path: dir },
+    })
+    let base = row({
+      doc: { title: 'common', body: '' },
+      persona: { home: project.eid },
+    })
+    let nested = row({
+      doc: { title: 'nested', body: '' },
+      persona: { home: null },
+    })
+    let a = doc('alpha', 'ALPHA.')
+    let b = doc('beta', 'BETA.')
+    // Entity identity disagrees with the authored order on purpose. The old
+    // persisted parent merge lost the nested ord and incorrectly chose A.
+    a.num = 10
+    a.comps.entity!.num = 10
+    b.num = 11
+    b.comps.entity!.num = 11
+    let all = [project, base, nested, a, b]
+    let deps = [
+      edge(project, 'contains', base),
+      edge(base, 'contains', nested),
+      edge(nested, 'contains', a, 2),
+      edge(nested, 'contains', b, 1),
+    ]
+    let early = materialize(all, deps, base, NOW)
+    let late = materialize(
+      [...all].reverse(),
+      [...deps].reverse(),
+      base,
+      NOW + 30 * 86_400_000,
+    )
+    assert(early.indexOf('BETA.') < early.indexOf('ALPHA.'))
+    assert(late.indexOf('BETA.') < late.indexOf('ALPHA.'))
+
+    let first = projection(all, deps)
+    let later = projection([...all].reverse(), [...deps].reverse())
+    assertEquals(later, first)
+    let body = first[0].body ?? ''
+    assert(body.indexOf('BETA.') < body.indexOf('ALPHA.'))
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
 Deno.test('projection selects persona facets, including a role persona', async () => {
   let project = row({
     doc: { title: 'Venture', body: '' },

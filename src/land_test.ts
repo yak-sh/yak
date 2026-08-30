@@ -124,6 +124,48 @@ slow(
 )
 
 slow(
+  'public task land stays successful when post-land graph cleanup is offline',
+  async () => {
+    let r = await setup()
+    try {
+      let candidate = await command(r.tree, 'rev-parse', 'HEAD')
+      let cli = new URL('./cli.ts', import.meta.url).pathname
+      let config = new URL('../deno.json', import.meta.url).pathname
+      let out = await new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          '--config',
+          config,
+          '--unstable-worker-options',
+          cli,
+          'land',
+        ],
+        cwd: r.tree,
+        env: {
+          TASKS_HOST: '127.0.0.1:1',
+          TASKS_BACKOFF: '',
+          TASKS_LOCAL: '0',
+        },
+        stdout: 'piped',
+        stderr: 'piped',
+      }).output()
+      let stdout = new TextDecoder().decode(out.stdout)
+      let stderr = new TextDecoder().decode(out.stderr)
+      assertEquals(out.code, 0, `${stdout}\n${stderr}`)
+      assert(stdout.includes(`landed ${candidate}`), stdout)
+      assert(
+        stderr.includes('post-land worktree sweep skipped'),
+        stderr,
+      )
+      assertEquals(await command(r.repo, 'rev-parse', 'main'), candidate)
+    } finally {
+      Deno.removeSync(r.root, { recursive: true })
+    }
+  },
+)
+
+slow(
   'landing leaves the checkout holding the work it landed, dirt untouched',
   async () => {
     let r = await setup()
