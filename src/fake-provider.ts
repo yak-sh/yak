@@ -14,6 +14,7 @@
 //   quiet       skip the terminal event (an agent that just stops talking)
 //   fail:3      exit 3 instead of 0
 //   refuse      terminally declare a known provider refusal
+//   signal-ready install explicit INT/TERM handlers and announce readiness
 //
 // --resume marks a continuation of an existing thread: the session is
 // already known, so it skips the init and just narrates on — the same
@@ -47,6 +48,14 @@ if (!Deno.args.includes('--resume')) {
     model: arg('--model'),
     effort: arg('--effort') ?? null,
   })
+}
+if (says('signal-ready')) {
+  // The readiness line is emitted only after both handlers exist. Lifecycle
+  // tests can therefore cancel on an observed provider boundary rather than
+  // guessing that a freshly exec'd runtime has reached signal dispatch.
+  Deno.addSignalListener('SIGINT', () => Deno.exit(130))
+  Deno.addSignalListener('SIGTERM', () => Deno.exit(143))
+  say({ type: 'message', role: 'assistant', text: 'signal-ready' })
 }
 await beat()
 say({ type: 'message', role: 'assistant', text: `working: ${instruction}` })

@@ -24,9 +24,7 @@ import { slow } from './testing.ts'
 // is what registers the effects; we read the registry, never the socket.
 Deno.env.set('DB_PATH', ':memory:')
 if (Deno.env.get('TASKS_SLOW')) {
-  let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
-  Deno.env.set('PORT', String((seat.addr as Deno.NetAddr).port))
-  seat.close()
+  Deno.env.set('PORT', '0')
   await import('./server.ts')
 }
 

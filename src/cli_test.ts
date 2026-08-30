@@ -68,17 +68,35 @@ let transcript = (...events: unknown[]) => {
   }
 }
 
+let runnerCache = Deno.env.get('TEST_DENO_DIR') ?? Deno.env.get('DENO_DIR')
 let cli = (...args: string[]) =>
   new Deno.Command(Deno.execPath(), {
-    args: ['run', '-A', new URL('./cli.ts', import.meta.url).pathname, ...args],
+    args: [
+      'run',
+      '--cached-only',
+      '-A',
+      new URL('./cli.ts', import.meta.url).pathname,
+      ...args,
+    ],
     // A dead host on purpose; fail on the first refusal instead of retrying
     // through the 6.3s restart ladder these offline-parsing tests never need.
-    env: { TASKS_HOST: '127.0.0.1:1', TASKS_BACKOFF: '' },
+    env: {
+      TASKS_HOST: '127.0.0.1:1',
+      TASKS_BACKOFF: '',
+      // A parallel peer may temporarily redirect its process cache. Nested
+      // CLIs must resolve only from the runner's already-warm cache.
+      ...(runnerCache ? { DENO_DIR: runnerCache } : {}),
+    },
   }).output()
 
 let bareCli = (env: Record<string, string>) =>
   new Deno.Command(Deno.execPath(), {
-    args: ['run', '-A', new URL('./cli.ts', import.meta.url).pathname],
+    args: [
+      'run',
+      '--cached-only',
+      '-A',
+      new URL('./cli.ts', import.meta.url).pathname,
+    ],
     clearEnv: true,
     env,
   }).output()

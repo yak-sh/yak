@@ -32,7 +32,10 @@ Deno.env.set('LOGS_DIR', `${tmp}/logs`)
 Deno.env.set('WORKTREES_DIR', `${tmp}/worktrees`)
 Deno.env.set('CODEX_HOME', `${tmp}/codex`)
 Deno.env.set('POLL_MS', '10') // tests wait on facts, never on the clock
-Deno.env.set('STOP_GRACE_MS', '1000')
+// Production remains five seconds (sessions.ts). Disposable test process
+// groups use a short courtesy window; the repetition below proves SIGTERM gets
+// scheduled reliably before that deadline.
+Deno.env.set('STOP_GRACE_MS', '25')
 
 let { apply, delta, human, journalOf, snapshot, sweepSelect } = await import(
   './db.ts'
@@ -1476,6 +1479,31 @@ slow(
       Error,
       'stop_request refused',
     )
+  },
+)
+
+slow(
+  'stop: 25ms grace observes SIGTERM in 20 fresh provider processes',
+  async () => {
+    for (let i = 0; i < 20; i++) {
+      let { t } = seed('delay:9000 signal-ready')
+      let { eid, done } = begin(t)
+      await until(
+        () =>
+          row(eid)?.status == 'running' &&
+          logOf(eid).entries.some((entry) => sayText(entry) == 'signal-ready'),
+        `run ${i + 1} provider signal handlers ready`,
+      )
+      await write([{
+        eid: uid(),
+        name: 'stop_request',
+        comp: { target: eid },
+      }])
+      let s = row(eid)!
+      assertEquals(s.status, 'interrupted', `run ${i + 1}`)
+      assertEquals(s.exit_code, 143, `run ${i + 1}`)
+      await done
+    }
   },
 )
 

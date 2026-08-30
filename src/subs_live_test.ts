@@ -39,13 +39,10 @@ let broadcastObservation!: typeof import('./server.ts').broadcastObservation
 let maintain!: typeof import('./server.ts').maintain
 let retiredDataDoors!: typeof import('./server.ts').retiredDataDoors
 if (Deno.env.get('TASKS_SLOW')) {
-  let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
-  let port = (seat.addr as Deno.NetAddr).port
-  seat.close()
-  Deno.env.set('PORT', String(port))
-  ;({ aged, broadcastObservation, maintain, retiredDataDoors } = await import(
-    './server.ts'
-  ))
+  Deno.env.set('PORT', '0')
+  let server = await import('./server.ts')
+  ;({ aged, broadcastObservation, maintain, retiredDataDoors } = server)
+  let port = (server.http.addr as Deno.NetAddr).port
   U = `127.0.0.1:${port}`
 }
 let uid = () => crypto.randomUUID()

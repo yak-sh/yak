@@ -7,12 +7,10 @@ import { slow } from './testing.ts'
 Deno.env.set('DB_PATH', ':memory:')
 let port = 0
 if (Deno.env.get('TASKS_SLOW')) {
-  let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
-  port = (seat.addr as Deno.NetAddr).port
-  seat.close()
-  Deno.env.set('PORT', String(port))
+  Deno.env.set('PORT', '0')
+  let { http } = await import('./server.ts')
+  port = (http.addr as Deno.NetAddr).port
   Deno.env.set('TASKS_HOST', `127.0.0.1:${port}`)
-  await import('./server.ts')
 }
 
 slow(

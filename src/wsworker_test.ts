@@ -37,11 +37,9 @@ let alone = { sanitizeOps: false, sanitizeResources: false }
 
 let U = ''
 if (Deno.env.get('TASKS_SLOW')) {
-  let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
-  let port = (seat.addr as Deno.NetAddr).port
-  seat.close()
-  Deno.env.set('PORT', String(port))
-  await import('./server.ts')
+  Deno.env.set('PORT', '0')
+  let { http } = await import('./server.ts')
+  let port = (http.addr as Deno.NetAddr).port
   U = `127.0.0.1:${port}`
 }
 

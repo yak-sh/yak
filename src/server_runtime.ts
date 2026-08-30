@@ -1765,7 +1765,7 @@ let drain = async () => {
 // Bind last, after migrations and boot reconciliation. The supervisor has
 // already stopped and reaped the old process, so the public port has one
 // serving process and needs no listener overlap.
-let http = Deno.serve({ port }, handle)
+export let http = Deno.serve({ port }, handle)
 Deno.addSignalListener('SIGINT', drain)
 Deno.addSignalListener('SIGTERM', drain)
 booted()

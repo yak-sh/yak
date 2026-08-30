@@ -33,11 +33,9 @@ if (Deno.env.get('TASKS_SLOW')) {
   Deno.env.set('CODEX_SESSIONS', emptySources)
   Deno.env.set('LOGS_DIR', emptySources)
   sourceEid = (await import('./source_file.ts')).sidEid(sourceSid)
-  let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
-  let port = (seat.addr as Deno.NetAddr).port
-  seat.close()
-  Deno.env.set('PORT', String(port))
-  await import('./server.ts')
+  Deno.env.set('PORT', '0')
+  let { http } = await import('./server.ts')
+  let port = (http.addr as Deno.NetAddr).port
   liveDb = (await import('./live_db.ts')).db
   U = `127.0.0.1:${port}`
   Deno.env.set('TASKS_HOST', U)

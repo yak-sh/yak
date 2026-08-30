@@ -17,6 +17,7 @@ export let broadcastObservation:
 export let maintain: typeof import('./server_runtime.ts').maintain
 export let retiredDataDoors:
   typeof import('./server_runtime.ts').retiredDataDoors
+export let http: typeof import('./server_runtime.ts').http
 
 let graph = ownerGraphPath()
 try {
@@ -32,6 +33,7 @@ try {
   broadcastObservation = runtime.broadcastObservation
   maintain = runtime.maintain
   retiredDataDoors = runtime.retiredDataDoors
+  http = runtime.http
 } catch (e) {
   // Keep ownership until process exit closes every descriptor together. A
   // failed module evaluation may have opened SQLite before a later boot step

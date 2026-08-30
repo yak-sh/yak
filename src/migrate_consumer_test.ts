@@ -40,13 +40,11 @@ Deno.env.set('DB_PATH', ':memory:')
 let U = ''
 let read: Querier | undefined
 if (Deno.env.get('TASKS_SLOW')) {
-  let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
-  let port = (seat.addr as Deno.NetAddr).port
-  seat.close()
-  Deno.env.set('PORT', String(port))
+  Deno.env.set('PORT', '0')
   let { db } = await import('./live_db.ts')
   read = localQuery(db)
-  await import('./server.ts')
+  let { http } = await import('./server.ts')
+  let port = (http.addr as Deno.NetAddr).port
   U = `127.0.0.1:${port}`
 }
 
