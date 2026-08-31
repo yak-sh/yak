@@ -58,6 +58,13 @@ Deno.test('claude: the result event is the last word', () => {
   assertEquals(refused?.error, "You've hit your weekly limit")
 })
 
+Deno.test('claude: known MCP stdout contamination is adapter-owned noise', () => {
+  let warning =
+    'Client.listTools() called but server does not advertise tools capability - returning empty list'
+  assertEquals(claude.ignoreLine?.(warning), true)
+  assertEquals(claude.ignoreLine?.('not json'), false)
+})
+
 Deno.test('claude: interactive assistant events state model and effort', () => {
   assertEquals(
     claude.observe?.({

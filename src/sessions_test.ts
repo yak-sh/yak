@@ -1738,6 +1738,32 @@ slow('tail diagnoses never override a successful ending', async () => {
   assertMatch(failure(eid) ?? '', /line 5: output after the terminal event/)
 })
 
+slow(
+  'claude MCP capability noise does not turn a declared refusal into a break',
+  async () => {
+    let warning =
+      'Client.listTools() called but server does not advertise tools capability - returning empty list'
+    let eid = plant([
+      JSON.stringify({
+        type: 'result',
+        subtype: 'success',
+        is_error: true,
+        result: "You've hit your weekly limit",
+      }),
+      warning,
+    ], 'claude')
+    Deno.writeTextFileSync(`${logsDir()}/${eid}.code`, '1')
+
+    recover(cast)
+    await running.get(eid)!.done
+
+    assertEquals(row(eid)?.status, 'failed')
+    assertEquals(failure(eid), "You've hit your weekly limit")
+    assertEquals(broke(eid), undefined)
+    assertEquals(row(eid)?.latest_seq, 2) // ignored lines still own coordinates
+  },
+)
+
 slow('an oversized line is truncated and the tail reaches exit 0', async () => {
   let huge = JSON.stringify({ type: 'message', text: 'x'.repeat(1_100_000) })
   let eid = plant([

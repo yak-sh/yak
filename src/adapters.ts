@@ -63,6 +63,11 @@ export type Adapter = {
   resume: (job: Job, provider_session_id: string, text: string) => string[]
   init: (e: Event) => Summary | null
   terminal: (e: Event) => Summary | null
+  // Some CLIs contaminate their promised JSONL stdout with a small set of
+  // known, benign diagnostics. The adapter owns those vendor spellings just
+  // as it owns the event dialect; every other non-JSON line remains a
+  // malformed-stream diagnosis in sessions.ts.
+  ignoreLine?: (line: string) => boolean
   // Facts an interactive transcript states outright. Unlike terminal(),
   // these never invent a lifecycle ending from conversation.
   observe?: (e: Event) => Summary | null
@@ -476,6 +481,13 @@ export let adapters: Record<string, Adapter> = {
             : {}),
         }
         : null,
+    // Claude's MCP client currently prints this capability warning to stdout
+    // after its valid terminal result. It says only that an optional MCP
+    // method is absent; treating it as transcript corruption turns a declared
+    // quota refusal into a self-healing exception (T-26361).
+    ignoreLine: (line) =>
+      line ==
+        'Client.listTools() called but server does not advertise tools capability - returning empty list',
     observe: (e) => {
       if (e.type != 'assistant') return null
       let message = e.message as { model?: unknown } | undefined

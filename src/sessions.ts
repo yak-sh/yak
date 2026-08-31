@@ -1077,6 +1077,7 @@ export let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
     try {
       e = JSON.parse(line)
     } catch {
+      if (ad.ignoreLine?.(line)) continue
       t.errs.push(`line ${t.seq}: malformed`)
       continue
     }
