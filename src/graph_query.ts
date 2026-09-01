@@ -62,6 +62,7 @@ import {
   AGG,
   aggOf,
   EDGES,
+  EXISTS,
   listed,
   matchQuery,
   namesLazy,
@@ -235,10 +236,23 @@ export let entryUniverse = (
       'entry .after cursor requires one scalar .entry.session= value',
     )
   }
-  let got = session === null
-    ? []
-    : session === undefined
-    ? doors.entriesScan(db, after, limit)
+  // Unscoped: the newest `limit` entries the query's own compilable preds
+  // admit (entry presence pinned, quarantine screened), so `.message.role=user`
+  // over the whole fleet answers the last user turns, not the first 500 rows
+  // of one session with its tool calls. A declining pred widens the candidate
+  // set; the JS pass after this refines it exactly, as everywhere else.
+  let got = session === null ? [] : session === undefined
+    ? doors.entriesScan(
+      db,
+      after,
+      limit,
+      whereSome(
+        screened(
+          [...preds, { comp: 'entry', prop: '', op: EXISTS, value: '' }],
+          true,
+        ),
+      ),
+    )
     : doors.entriesOf(db, session, after, limit)
   return got.map((e) => rowed({ eid: e.eid, comps: e.comps }))
 }

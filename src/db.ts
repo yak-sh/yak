@@ -54,7 +54,7 @@ import {
   resolveRefs,
   TEXT,
 } from './query.ts'
-import { where } from './sql.ts'
+import { type Sql, where } from './sql.ts'
 import {
   Invalid,
   spec as configSpec,
@@ -8310,14 +8310,30 @@ export let sourceEntriesOf = (
 // and whose predicate the index declined to compile. entriesOf is the keyed,
 // per-session read; this is its unscoped sibling, bounded so an all-sessions
 // scan can never be unbounded.
-export let entriesScan = (db: DatabaseSync, after = 0, limit = 500) => {
+// The unscoped scan reads the partition's TAIL, newest first: a cross-session
+// reader wants what was said last across the fleet (the owner's latest words,
+// the newest prompts), never an arbitrary prefix of whichever session sorts
+// first. Entity ids are minted in arrival order, so `t.entity desc` is time.
+// `narrow` is the query's own compiled candidate statement (sql.ts whereSome
+// over its preds), so the bound is spent on rows that can match rather than
+// on every tool call between two user turns.
+export let entriesScan = (
+  db: DatabaseSync,
+  after = 0,
+  limit = 500,
+  narrow?: Sql,
+) => {
   let index = prep(
     db,
     `select o.eid as eid, t.seq as seq from entry t
-     left join entity o on o.id = t.entity
-     where t.seq > ?
-     order by t.session, t.seq limit ?`,
-  ).all(after, Math.max(1, Math.min(limit, 5000))) as {
+     join entity o on o.id = t.entity
+     where t.seq > ?${narrow ? ` and o.eid in (${narrow.sql})` : ''}
+     order by t.entity desc limit ?`,
+  ).all(
+    after,
+    ...(narrow?.params ?? []),
+    Math.max(1, Math.min(limit, 5000)),
+  ) as {
     eid: string
     seq: number
   }[]

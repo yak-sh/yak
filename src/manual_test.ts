@@ -64,6 +64,8 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       show:
         'show <id> [--json] [--format=markdown|json] [--quarantined] [--full] [--comments]',
       history: 'history <id> [-n=50] [--json] [--verbose]',
+      said: 'said [-n=20]',
+      hooks: 'hooks [--gone]',
       undo: 'undo <id>',
       transcript:
         'transcript <id> [--prose] [--seq=RANGE] [--after=N] [--limit=N] [--since=ISO] [--until=ISO] [--json]',

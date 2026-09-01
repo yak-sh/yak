@@ -400,6 +400,28 @@ export let manuals = declare({
     args: [arg('id', id)],
     opts: [{ ...count, or: '50' }, json, verbose],
   },
+  said: {
+    about: 'what the owner has said, in order, across every session',
+    examples: ['task said', 'task said -n 50'],
+    detail:
+      "The owner's own words are the signal (M-31946): the user turns of " +
+      'sessions a human drove, oldest first so the newest sits at the bottom. ' +
+      'The boot digest carries the last five under `## owner said`.',
+    root: true,
+    opts: [{ ...count, or: '20' }],
+  },
+  hooks: {
+    about: 'install the lifecycle hooks into ~/.claude/settings.json',
+    examples: ['task hooks', 'task hooks --gone'],
+    detail:
+      'With the hooks in the user settings every claude session on the box — ' +
+      'a bare `claude` included — reifies its graph row at start, has its ' +
+      "transcript tailed live (the owner's words land as typed), and wraps " +
+      "at end. Idempotent: Tasks' entries are replaced, others kept. `--gone` " +
+      'removes them. `task claude` skips its own copy once these are here.',
+    root: true,
+    opts: [flag('--gone')],
+  },
   undo: {
     about: "reverse a journaled batch — the graph's guarded undo",
     examples: ['task undo T-5', 'task undo #1287'],

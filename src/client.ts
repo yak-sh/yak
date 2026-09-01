@@ -3506,6 +3506,57 @@ export let sessionMeta = (all: Row[], sid: string) => {
 // operator sees, minus the session extras — parity by construction.
 // Scope resolves via scopeFor: an explicit arg, else the cwd's repo, else
 // the worn persona's home, else the actor-as-project (client.ts scopeFor).
+// The owner's own words: a user-role message entry of a session a human
+// drove. Not a managed run (its user turns are the brief and injected
+// comments) and not a subagent (its user turns are the parent's prompts).
+// Harness wrappers (`<local-command-caveat>`, `<command-name>`,
+// `<system-reminder>`) ride the user role too and are nothing anyone said.
+export let spoken = (r: Row, s?: Row) =>
+  r.comps.message?.role == 'user' && !!r.comps.content?.body &&
+  !r.comps.result && !!s?.comps.session &&
+  s.comps.session.origin != 'managed' && s.comps.session.agent_type == null &&
+  !/^\s*</.test(String(r.comps.content.body))
+
+let when = (at: string) => at.slice(5, 16).replace('T', ' ')
+
+// What the owner said, in order — the last `n` owner turns among `rows`,
+// oldest first so the newest sits at the bottom, one line each: when, which
+// session, the first line. This is the signal every context reads before the
+// fleet's own prose (M-31946); the digest carries a few, `task said` the rest.
+export let saidLines = (rows: Row[], byEid: Map<string, Row>, n: number) =>
+  rows
+    .filter((r) =>
+      r.comps.entry && spoken(r, byEid.get(String(r.comps.entry.session)))
+    )
+    .sort((a, b) => bornAt(a).localeCompare(bornAt(b)))
+    .slice(-Math.max(0, n))
+    .map((r) => {
+      let s = byEid.get(String(r.comps.entry!.session))!
+      let head = String(r.comps.content!.body).trim().split('\n')[0]
+      return `- ${when(bornAt(r))} ${idOf(s)} · ${snip(head, 96)}`
+    })
+
+// The owner's latest words over the wire: the newest user turns across every
+// session (the entry partition answers newest-first when unscoped), their
+// sessions fetched to tell a human's turn from a managed run's, then the
+// same lines the digest prints. Over-read, since managed prompts share the
+// role and are screened here.
+export let ownerSaid = async (n = 20, q: Querier = query) => {
+  let since = new Date(Date.now() - 30 * DAY).toISOString()
+  let entries = await q([
+    '.message.role=user',
+    '.content!',
+    `.created.at>=${since}`,
+    `.limit=${Math.max(200, n * 5)}`,
+  ])
+  let sessions = await fetched(
+    entries.map((r) => String(r.comps.entry?.session ?? '')).filter(Boolean),
+    [],
+    q,
+  )
+  return saidLines(entries, new Map(sessions.map((r) => [r.eid, r])), n)
+}
+
 export let contextDigest = (
   snap: Snapshot,
   session?: string,
@@ -3635,6 +3686,10 @@ export let contextDigest = (
   // headroom is what makes the project layer render identically with or
   // without a session (parity).
   let room = () => 48 - lines.length
+  // The owner's latest words come before the fleet's own noise (M-31946):
+  // five lines, newest last, `task said` for the rest.
+  let said = saidLines(all, byEid, Math.min(5, room()))
+  if (said.length) lines.push('## owner said (task said)', ...said)
   lines.push(
     ...onMine(claims, comments, byEid, sess, now, Math.min(4, room()), skip),
   )
@@ -3904,6 +3959,7 @@ export let contextSnapshot = async (
     actorTouched,
     inbox,
     comments,
+    said,
   ] = await Promise.all([
     q(['.kind=task', `.task.status=${open}`]),
     scope
@@ -3928,6 +3984,14 @@ export let contextSnapshot = async (
       : [],
     inboxRows(session, cwd, [], 'inbox', q),
     claims.length ? q([`.comment.target=${claims.join(',')}`]) : [],
+    // The owner's newest turns for `## owner said`: a bounded newest-first
+    // read of the entry partition, screened to a human's turns in the digest.
+    q([
+      '.message.role=user',
+      '.content!',
+      `.created.at>=${since}`,
+      '.limit=60',
+    ]),
   ])
   // Only the CURRENT session's claims are ever read (mine, below), so query
   // that one session — never the actor's whole session history, which for a
@@ -3981,7 +4045,21 @@ export let contextSnapshot = async (
     [],
     q,
   )
-  let all = uniq([...preliminary, ...near.rows, ...unheardRows, ...refs])
+  // The sessions the owner's turns belong to, so the digest can tell a
+  // human's turn from a managed run's brief (spoken).
+  let spoke = await fetched(
+    said.map((r) => String(r.comps.entry?.session ?? '')).filter(Boolean),
+    [],
+    q,
+  )
+  let all = uniq([
+    ...preliminary,
+    ...near.rows,
+    ...unheardRows,
+    ...refs,
+    ...said,
+    ...spoke,
+  ])
   return { changes: changesOf(all), deps: near.deps }
 }
 

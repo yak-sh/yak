@@ -58,6 +58,7 @@ import {
   needed,
   neighborhoods,
   noticeBlock,
+  ownerSaid,
   param,
   patchChanges,
   patches,
@@ -2109,6 +2110,16 @@ let past = async (got: Got) => {
   for (let e of entries) print(historyLine(e))
 }
 
+// What the owner has said, linearly across every session — the signal, in
+// its own order (M-31946). Oldest first so the newest is at the bottom, like
+// the inbox; the boot digest carries the last five of these same lines.
+let said = async (got: Got) => {
+  let n = Number(got.opts['-n'] ?? 20)
+  let lines = await ownerSaid(n)
+  if (!lines.length) return warn('(nothing said in the last 30 days)')
+  for (let l of lines) print(l)
+}
+
 // Reverse a journaled batch — the graph's --ff-only undo. `task undo #123`
 // names a batch (the #id from `task history`); `task undo T-5` reverses that
 // entity's latest batch. The server builds the guarded inverse and refuses
@@ -3231,6 +3242,75 @@ export let lifecycleHooks = (provider: Provider): Record<string, Hook[]> => ({
   SessionEnd: [commandHook(hookCommand(provider, 'wrap'), 3)],
 })
 
+// Tasks' own lifecycle entries, told apart from anyone else's by the commands
+// they run — so an install replaces exactly what an earlier install wrote.
+let TASKS_HOOK = /task session \w+ --hook|task-turn|self-clear-stop\.sh/
+let ours = (h: unknown) => {
+  let hooks = (h as Hook | undefined)?.hooks
+  return Array.isArray(hooks) &&
+    hooks.some((x) => TASKS_HOOK.test(String(x?.command ?? '')))
+}
+let installed = (hooks: Record<string, unknown> | undefined) =>
+  Object.values(hooks ?? {}).some((v) => Array.isArray(v) && v.some(ours))
+
+// The lifecycle hooks merged into a settings file's hooks: Tasks' entries lead
+// each event, anything else already there follows; an earlier Tasks install is
+// replaced, never duplicated. `gone` removes Tasks' entries and keeps the rest.
+export let mergedHooks = (
+  had: Record<string, unknown> | undefined,
+  add: Record<string, Hook[]>,
+  gone = false,
+) => {
+  let out: Record<string, unknown[]> = {}
+  for (let event of new Set([...Object.keys(had ?? {}), ...Object.keys(add)])) {
+    let was = had?.[event]
+    let kept = (Array.isArray(was) ? was : []).filter((h) => !ours(h))
+    let mine = gone ? [] : add[event] ?? []
+    if (kept.length || mine.length) out[event] = [...mine, ...kept]
+  }
+  return out
+}
+
+let settingsPath = () => `${Deno.env.get('HOME')}/.claude/settings.json`
+let globalHooks = (path = settingsPath()): Record<string, unknown> => {
+  try {
+    let s = JSON.parse(Deno.readTextFileSync(path))
+    return s?.hooks && typeof s.hooks == 'object' ? s.hooks : {}
+  } catch {
+    return {}
+  }
+}
+
+// Capture is eager for a NEW session because the hooks are already in the
+// user's settings when `claude` starts bare — not only under `task claude`.
+// Every session then reifies its graph row at start, its transcript is
+// tailed live (the owner's words land as they are typed), and it wraps at
+// end. Idempotent, and the launcher skips its own copy once these are here.
+export let installHooks = (path = settingsPath(), gone = false) => {
+  let settings: Record<string, unknown> = {}
+  try {
+    settings = JSON.parse(Deno.readTextFileSync(path))
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e
+  }
+  let hooks = mergedHooks(
+    settings.hooks as Record<string, unknown> | undefined,
+    lifecycleHooks('claude'),
+    gone,
+  )
+  let next: Record<string, unknown> = { ...settings, hooks }
+  if (!Object.keys(hooks).length) delete next.hooks
+  Deno.mkdirSync(path.replace(/\/[^/]+$/, ''), { recursive: true })
+  Deno.writeTextFileSync(path, `${JSON.stringify(next, null, 2)}\n`)
+  return path
+}
+
+let hooks = (got: Got) => {
+  let gone = got.flags.has('--gone')
+  let path = installHooks(undefined, gone)
+  print(`${gone ? 'removed' : 'installed'} tasks lifecycle hooks: ${path}`)
+}
+
 let toml = (value: unknown): string => {
   if (
     typeof value == 'string' || typeof value == 'number' ||
@@ -3267,8 +3347,13 @@ let claudeSettings = (cwd: string): Record<string, unknown> => {
 }
 
 // A project may add provider settings under `.tasks/`, where they affect only
-// `task claude`. Lifecycle arrays append after Tasks' identity hooks.
-export let claudeHookSettings = (cwd = Deno.cwd()) => {
+// `task claude`. Lifecycle arrays append after Tasks' identity hooks — unless
+// the user's own settings already carry them (`task hooks`), where a second
+// copy here would run every hook twice.
+export let claudeHookSettings = (
+  cwd = Deno.cwd(),
+  global: Record<string, unknown> = globalHooks(),
+) => {
   let settings = claudeSettings(cwd)
   let custom = settings.hooks
   if (
@@ -3280,7 +3365,9 @@ export let claudeHookSettings = (cwd = Deno.cwd()) => {
     )
   }
   let hooks: Record<string, unknown[]> = Object.fromEntries(
-    Object.entries(lifecycleHooks('claude')).map(([event, entries]) => [
+    Object.entries(installed(global) ? {} : lifecycleHooks('claude')).map((
+      [event, entries],
+    ) => [
       event,
       [...entries],
     ]),
@@ -3342,13 +3429,14 @@ let claudeLaunchGot = (
   listed: boolean,
   pid = Deno.pid,
   cwd = Deno.cwd(),
+  global?: Record<string, unknown>,
 ) => {
   let scope = terminalScope(got, pid)
   return {
     args: [
       '--dangerously-skip-permissions',
       '--settings',
-      claudeHookSettings(cwd),
+      claudeHookSettings(cwd, global),
       '--channels',
       CHANNEL,
       ...(listed ? [] : ['--dangerously-load-development-channels', CHANNEL]),
@@ -3368,7 +3456,15 @@ export let claudeLaunch = (
   listed: boolean,
   pid = Deno.pid,
   cwd = Deno.cwd(),
-) => claudeLaunchGot(parse('claude', manuals.claude, args), listed, pid, cwd)
+  global?: Record<string, unknown>,
+) =>
+  claudeLaunchGot(
+    parse('claude', manuals.claude, args),
+    listed,
+    pid,
+    cwd,
+    global,
+  )
 
 let claude = async (got: Got) => {
   // Allowlisted in root's managed settings → clean launch; otherwise the
@@ -3537,6 +3633,8 @@ export let verbs = bind({
   watch: subscribe('watch'),
   mute: subscribe('mute'),
   inbox: inboxList,
+  said,
+  hooks,
   'inbox show': inboxShow,
   'inbox archive': inboxArchive,
   archive: inboxArchive,

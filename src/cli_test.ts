@@ -30,6 +30,7 @@ import {
   listArgs,
   listing,
   liveRoleSessions,
+  mergedHooks,
   operatorHook,
   place,
   printer,
@@ -1425,8 +1426,14 @@ Deno.test('launchers scope lifecycle hooks to their provider invocation', () => 
     /TASKS_PROVIDER=claude task session context --hook/,
   )
   assertEquals(
-    JSON.parse(claudeHookSettings()).hooks,
+    JSON.parse(claudeHookSettings(undefined, {})).hooks,
     claude,
+  )
+  // Once `task hooks` has put them in the user's settings, the launcher's
+  // --settings copy is dropped, or every lifecycle hook would run twice.
+  assertEquals(
+    JSON.parse(claudeHookSettings(undefined, mergedHooks({}, claude))).hooks,
+    {},
   )
   let project = JSON.parse(
     Deno.readTextFileSync(
@@ -1451,7 +1458,7 @@ Deno.test('task claude appends project settings only for its invocation', () => 
         },
       }),
     )
-    let settings = JSON.parse(claudeHookSettings(dir))
+    let settings = JSON.parse(claudeHookSettings(dir, {}))
     assertEquals(settings.env, { DESK: 'trading' })
     assertEquals(settings.hooks.SessionStart.length, 2)
     assertMatch(
@@ -1463,12 +1470,40 @@ Deno.test('task claude appends project settings only for its invocation', () => 
       'echo rearm',
     )
     assertEquals(
-      JSON.parse(claudeLaunch([], true, 42, dir).args[2]),
+      JSON.parse(claudeLaunch([], true, 42, dir, {}).args[2]),
       settings,
     )
   } finally {
     Deno.removeSync(dir, { recursive: true })
   }
+})
+
+// `task hooks` writes Tasks' lifecycle entries into the user's settings so a
+// bare `claude` is captured too. Its own earlier entries are replaced (never
+// stacked), anyone else's are kept, and --gone leaves only those.
+Deno.test('mergedHooks replaces its own entries, keeps others, and removes cleanly', () => {
+  let ours = lifecycleHooks('claude')
+  let stale = {
+    hooks: [{
+      type: 'command',
+      command: 'task session context --hook || true',
+    }],
+  }
+  let theirs = { hooks: [{ type: 'command', command: 'echo hi' }] }
+  let had = {
+    SessionStart: [stale, theirs],
+    PreToolUse: [theirs],
+  }
+  let merged = mergedHooks(had, ours)
+  assertEquals(merged.SessionStart, [...ours.SessionStart, theirs])
+  assertEquals(merged.PreToolUse, [theirs])
+  assertEquals(merged.UserPromptSubmit, ours.UserPromptSubmit)
+  // Installing twice is the same as once.
+  assertEquals(mergedHooks(merged, ours), merged)
+  assertEquals(mergedHooks(merged, ours, true), {
+    SessionStart: [theirs],
+    PreToolUse: [theirs],
+  })
 })
 
 // `task new P1 …` honors the documented shorthand (T-6741): a LEADING
