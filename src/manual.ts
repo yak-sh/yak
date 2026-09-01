@@ -885,9 +885,10 @@ export let manuals = declare({
     ],
     detail: 'A design is a doc wearing the `design` tag and the `proposed` ' +
       'mark — written awaiting acceptance. Accepting one is `task set D-9 ' +
-      '.decided.at=now .decided.by=jeff`, the same stamp a task or a memory ' +
-      'takes; both marks then stand, proposed on that day and decided on ' +
-      'this one. `task designs` lists them, `.decided=` screens the ones ' +
+      '.decided.verdict=approved`, the same stamp a task or a memory ' +
+      'takes; `by` defaults to you, the writer — name `.decided.by=<person>` ' +
+      "only when relaying that person's explicit decision. Both marks then " +
+      'stand, proposed on that day and decided on this one. `task designs` lists them, `.decided=` screens the ones ' +
       'still waiting.\n\nThe words are the TITLE; the standard property ' +
       'grammar rides alongside, exactly as `task new` takes it — ' +
       '`.project=P-19 .priority=2` set those props on the design, and it ' +

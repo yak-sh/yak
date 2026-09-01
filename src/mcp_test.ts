@@ -899,7 +899,7 @@ Deno.test('task_spawn refuses an undecided proposal without minting a session', 
     assertMatch(said(out), /is proposed but not decided/)
     assertMatch(
       said(out),
-      /task set T-\d+ \.decided\.at=now \.decided\.by=U-3709/,
+      /task set T-\d+ \.decided\.verdict=approved \(by defaults to you/,
     )
   })
   assertEquals(

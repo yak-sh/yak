@@ -1485,7 +1485,9 @@ Deno.test('spawn refuses an undecided proposal and allows an atomic decision', (
       }]),
     Error,
     `${id} is proposed but not decided — accept it with ` +
-      `task set ${id} .decided.at=now .decided.by=U-3709`,
+      `task set ${id} .decided.verdict=approved (by defaults to you; ` +
+      `name .decided.by=<person> only when relaying that person's ` +
+      `explicit decision)`,
   )
   assertEquals(compOf(d, refused, 'session'), undefined)
   assertEquals(compOf(d, refused, 'spawn'), undefined)
@@ -2278,6 +2280,44 @@ Deno.test('decided: the wire dates and signs it, the server names the instrument
   assertMatch(String(stamp(t)?.at), /^2026-03-01T/)
   assertEquals(stamp(t)?.by, jeff)
   assertEquals(stamp(t)?.via, client)
+})
+
+// A session's implicit byline is the actor it runs AS, never the person who
+// launched it: an agent's decision written without `by` is the agent's. The
+// person is `by` only when the wire names them — an explicit relay of their
+// decision — which is kept as written.
+Deno.test('decided: a session signs as its actor unless the wire names the person', () => {
+  let d = fresh()
+  let jeff = uid(), project = uid(), session = uid(), label = uid()
+  apply(d, [
+    { eid: jeff, name: 'person', comp: {} },
+    { eid: project, name: 'doc', comp: { title: 'a venture' } },
+    { eid: project, name: 'project', comp: {} },
+    { eid: session, name: 'session', comp: { id: label, actor: project } },
+  ])
+  let t = uid(), u = uid()
+  apply(d, [
+    { eid: t, name: 'doc', comp: { title: 'agent-approved' } },
+    { eid: t, name: 'task', comp: {} },
+    { eid: u, name: 'doc', comp: { title: 'owner-relayed' } },
+    { eid: u, name: 'task', comp: {} },
+  ])
+  apply(
+    d,
+    [{ eid: t, name: 'decided', comp: { verdict: 'approved' } }],
+    undefined,
+    label,
+  )
+  assertEquals(readComp(d, t, 'decided')?.by, project)
+  assertEquals(readComp(d, t, 'decided')?.via, session)
+  apply(
+    d,
+    [{ eid: u, name: 'decided', comp: { verdict: 'approved', by: jeff } }],
+    undefined,
+    label,
+  )
+  assertEquals(readComp(d, u, 'decided')?.by, jeff)
+  assertEquals(readComp(d, u, 'decided')?.via, session)
 })
 
 Deno.test('proposed: any entity wears the authored, server-signed stamp', () => {

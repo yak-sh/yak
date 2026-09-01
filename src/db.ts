@@ -5640,7 +5640,9 @@ export let apply = (
       let id = human(db, target)
       throw new Error(
         `${id} is proposed but not decided — accept it with ` +
-          `task set ${id} .decided.at=now .decided.by=U-3709`,
+          `task set ${id} .decided.verdict=approved (by defaults to you; ` +
+          `name .decided.by=<person> only when relaying that person's ` +
+          `explicit decision)`,
       )
     }
     // One clock for the whole batch: every provenance stamp below reads it,
