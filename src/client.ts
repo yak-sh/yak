@@ -1309,7 +1309,10 @@ export let around = async (id: string, quarantined = false) => {
     })()
   if (!seed) return undefined
   let { row, deps } = seed
-  let comments = await query([`.comment.target=${row.eid}`])
+  let comments = [
+    ...await query([`.comment.target=${row.eid}`]),
+    ...await query([`.commit.target=${row.eid}`]),
+  ]
   let want = new Set<string>()
   for (let r of [row, ...comments]) for (let e of refsIn(r)) want.add(e)
   for (let d of deps) want.add(d.parent), want.add(d.child)
@@ -2642,6 +2645,27 @@ export let noticeChanges = (
     ...(s?.changes ?? []),
     { eid, name: 'doc', comp: { title: '', body } },
     { eid, name: 'notice', comp: { target, event } },
+  ]
+}
+
+// A commit: a revision landed FOR the target (M-31946 §7) — the structured
+// twin of a comment for "here is the code". No doc: sha, repo and subject
+// are columns, so nothing about it is prose to read. The session reification
+// matches a comment's, so apply() stamps who landed it.
+export let commitChanges = (
+  all: Row[],
+  target: string,
+  git: { sha: string; repo?: string; message?: string },
+  session?: string,
+): Change[] => {
+  let s = session
+    ? sessionFor(all, session, undefined, undefined, {
+      actor: taskActor(all, target),
+    })
+    : undefined
+  return [
+    ...(s?.changes ?? []),
+    { eid: uuid(), name: 'commit', comp: { target, ...git } },
   ]
 }
 
@@ -4610,6 +4634,22 @@ export let showMd = (snap: { deps: Dep[] }, all: Row[], row: Row) => {
   let body = String(row.comps.doc?.body ?? '')
   if (title) out.push('', `# ${title}`)
   if (body) out.push('', body)
+  // Commits are rows, not prose: one line each, sha first.
+  let commits = all
+    .filter((r) => r.comps.commit?.target == row.eid)
+    .sort((a, b) => bornAt(a).localeCompare(bornAt(b)))
+  if (commits.length) {
+    out.push('', '## Commits')
+    for (let c of commits) {
+      let { sha, message } = c.comps.commit
+      let by = c.comps.created?.by
+      out.push(
+        `- ${String(sha ?? '').slice(0, 7)} ${clip(message, 72)} · ${
+          local(bornAt(c))
+        }${by ? ` · ${said(by)}` : ''}`,
+      )
+    }
+  }
   let comments = all
     .filter((r) => r.comps.comment?.target == row.eid)
     .sort((a, b) => bornAt(a).localeCompare(bornAt(b)))

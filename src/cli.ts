@@ -21,6 +21,7 @@ import {
   checkedRefs,
   claimant,
   commentChanges,
+  commitChanges,
   contextDigest,
   contextSnapshot,
   decidedAt,
@@ -142,7 +143,7 @@ import {
 } from './proc.ts'
 import { projection, syncFiles } from './persona.ts'
 import { anchorPaths, type Freshness, freshness } from './anchor.ts'
-import { commit } from './git.ts'
+import { commit, revision } from './git.ts'
 import { land as landTree } from './land.ts'
 import { request } from './http.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
@@ -2071,6 +2072,25 @@ let comment = async (got: Got) => {
   )
 }
 
+// A commit on a task: `task commit T-3 [sha]` records the revision as
+// structure (M-31946 §7) — sha defaults to HEAD of the cwd repo, repo to
+// that repo's root, message to the subject line. Where a comment would have
+// said "landed abc123", this says it as columns the board can read.
+let landed = async (got: Got) => {
+  let id = got.args.id
+  if (!id) throw new Error('task commit <id> [sha]')
+  let row = await needed(id)
+  let ref = got.args.sha
+  let at = await revision(Deno.cwd(), ref)
+  if (!at) throw new Error(`no such revision here: ${ref ?? 'HEAD'}`)
+  let sid = me()
+  let sess = sid ? await sessionRow(sid) : undefined
+  let made = commitChanges([row, ...(sess ? [sess] : [])], row.eid, at, sid)
+  let applied = await send(made)
+  let mine = made.find((c) => c.name == 'commit')!.eid
+  print(`${mintedIn(applied, mine)} — ${at.sha.slice(0, 7)} on ${idOf(row)}`)
+}
+
 let show = async (got: Got) => {
   let json = got.flags.has('--json') || got.opts['--format'] == 'json'
   let quarantined = got.flags.has('--quarantined')
@@ -3648,6 +3668,7 @@ export let verbs = bind({
   verify,
   land: () => land(),
   comment,
+  commit: landed,
   meta: (got) => colon(undefined, ['meta', got.body ?? '']),
   link: dep,
   dep,

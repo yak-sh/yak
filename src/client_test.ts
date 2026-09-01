@@ -8,6 +8,7 @@ import {
   claimant,
   claimChanges,
   commentChanges,
+  commitChanges,
   contextDigest,
   contextSnapshot,
   derefParams,
@@ -4474,4 +4475,13 @@ Deno.test('contextSnapshot: claim read names only the current session', async ()
   } finally {
     globalThis.fetch = real
   }
+})
+
+Deno.test('commitChanges: one row aimed at the task, session reified', () => {
+  let git = { sha: 'abc1234', repo: '/r', message: 'Land it' }
+  let cs = commitChanges(all, T1, git, 'sess-x')
+  let last = cs.at(-1)!
+  assertEquals(last.name, 'commit')
+  assertEquals(last.comp, { target: T1, ...git })
+  assertEquals(commitChanges(all, T1, git).length, 1)
 })

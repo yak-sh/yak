@@ -97,6 +97,17 @@ let upstream = async (root: string) => {
   return { remote: ref.out.slice(0, cut), branch: ref.out.slice(cut + 1) }
 }
 
+// The revision `task commit` records: the sha a ref resolves to (HEAD by
+// default), the repo root, and the subject line — or nothing when cwd is
+// not a repo or the ref names no commit.
+export let revision = async (cwd: string, ref = 'HEAD') => {
+  let sha = await git(cwd, 'rev-parse', '--verify', `${ref}^{commit}`)
+  if (!sha.ok) return
+  let root = await git(cwd, 'rev-parse', '--show-toplevel')
+  let subject = await git(cwd, 'log', '-1', '--format=%s', sha.out)
+  return { sha: sha.out, repo: root.out, message: subject.out }
+}
+
 // How this branch sits against its upstream, or nothing when it has no
 // upstream to sit against. Counts, not opinions: `ahead` is ours alone,
 // `behind` is theirs alone, and both non-zero is diverged.

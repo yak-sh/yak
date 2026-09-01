@@ -2,7 +2,7 @@ import { useRef, useState } from 'preact/hooks'
 import { commands, orderIn, suggest } from '../commands.ts'
 import { slotsOf } from '../verb.ts'
 import { ent, mutate, pending, repoUrl, uuid } from '../live.ts'
-import { useCommentsOn } from './useQuery.ts'
+import { useCommentsOn, useCommitsOn } from './useQuery.ts'
 import { ago, block, pretty } from './ui.tsx'
 import { useDraft } from './drafts.ts'
 import {
@@ -251,9 +251,40 @@ export let Composer = (
 // The comment rail under any entity: everything said about it, oldest
 // first, plus the composer. (A session doesn't use this — its view
 // weaves the heard comments into the thread and pins its own composer.)
-export let Comments = ({ eid }: { eid: string }) => (
-  <Frame>
-    {useCommentsOn(eid).map((c) => <Note key={c.eid} c={c} />)}
-    <Composer eid={eid} />
-  </Frame>
-)
+export let Comments = ({ eid }: { eid: string }) => {
+  let said = useCommentsOn(eid), landed = useCommitsOn(eid)
+  let rows = [...said, ...landed].sort((a, b) => a.num - b.num)
+  return (
+    <Frame>
+      {rows.map((c) =>
+        c.commit ? <Landed key={c.eid} c={c} /> : <Note key={c.eid} c={c} />
+      )}
+      <Composer eid={eid} />
+    </Frame>
+  )
+}
+
+// One commit, as a row: who landed it, when, then sha and subject. The
+// structured twin of a Note — nothing here is a body to read.
+export let Landed = ({ c }: { c: Ent }) => {
+  let actor = c.created?.by ? ent(String(c.created.by)) : undefined
+  let instrument = c.created?.via ? ent(String(c.created.via)) : undefined
+  let who = actor ?? instrument
+  return (
+    <Item>
+      <Who
+        {...(who ? linkProps(who) : {})}
+        {...title(
+          actor ? actor.doc?.title || idOf(actor) : viaName(instrument?.eid),
+        )}
+      />
+      <When data-tip={pretty(c.created?.at)} {...linkProps(c)}>
+        {ago(c.created?.at)}
+      </When>
+      <Body>
+        <code>{String(c.commit?.sha ?? '').slice(0, 7)}</code>{' '}
+        {c.commit?.message ?? ''}
+      </Body>
+    </Item>
+  )
+}

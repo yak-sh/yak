@@ -94,7 +94,7 @@ export let bareDb = () => {
            and name not like '%_fts%'
            and name not like '%_gram%'`,
       ).all() as { name: string }[]
-    ) d.exec(`delete from ${name}`)
+    ) d.exec(`delete from "${name}"`)
     bareSnap = d.serialize()
     d.close()
   }

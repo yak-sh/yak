@@ -83,6 +83,20 @@
         }
       }
     },
+    "commit": {
+      "rank": 715,
+      "kind_rank": 295,
+      "prefix": "G",
+      "cols": {
+        "target": {
+          "eid": "entity",
+          "death": "cascade"
+        },
+        "sha": "text",
+        "repo": "text",
+        "message": "text"
+      }
+    },
     "conflict": {
       "rank": 680,
       "stamped_rank": 230,

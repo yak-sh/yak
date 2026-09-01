@@ -77,6 +77,8 @@ Deno.test('death words: every reference declares, the sets hold', () => {
     new Set([
       'card.target',
       'comment.target',
+      // a commit row dies with the task it was landed for (M-31946 §7)
+      'commit.target',
       // a notice dies with the entity it is about (D-13858)
       'notice.target',
       // both ends: a standing instruction is meaningless without the

@@ -99,6 +99,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       spawn: 'spawn <id> [--provider=PROVIDER] [--model=MODEL] ' +
         '[--effort=high] [--persona=ID]',
       land: 'land',
+      commit: 'commit <id> [sha]',
       comment:
         'comment <id> [text…] [--body=BODY] [-F=FILE] [--verdict=VERDICT]',
       meta: 'meta [text…] [--body=BODY]',

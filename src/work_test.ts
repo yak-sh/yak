@@ -899,11 +899,14 @@ Deno.test('verify lane has exact VERIFY_PENDING membership across review and ver
 
 Deno.test('verify lane orders before LIMIT and projects bounded human evidence', async () => {
   let db = bareDb()
-  let P = uuid(), reviewer = uuid()
+  let P = uuid(), reviewer = uuid(), human = uuid()
+  // The reviewer acts for a person: only a human's comment may run past the
+  // agent budget, and this evidence is deliberately long.
   apply(db, [
     { eid: P, name: 'doc', comp: { title: 'Verify order', body: '' } },
     { eid: P, name: 'project', comp: {} },
-    { eid: reviewer, name: 'session', comp: { id: uuid() } },
+    { eid: human, name: 'person', comp: {} },
+    { eid: reviewer, name: 'session', comp: { id: uuid(), actor: human } },
   ])
   let old = completedTask(
     db,

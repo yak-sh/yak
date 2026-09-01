@@ -1026,6 +1026,9 @@ export let derived = [
   // A notice (D-13858): {target FK cascade, kind text} — an entity-keyed spine,
   // every column nullable, wholly PropType-expressible, so it derives.
   'notice',
+  // A commit (M-31946 §7): {target FK cascade, sha/repo/message text} — the
+  // notice shape with three nullable text columns, so it derives.
+  'commit',
   'deliver',
   'delivered',
   'error',
@@ -2993,7 +2996,8 @@ export let migrate = (db: DatabaseSync) => {
       db.exec(schema)
       let addCol = (table: string, col: string, ddl: string) => {
         if (!hasCol(db, table, col)) {
-          db.exec(`alter table ${table} add column ${ddl}`)
+          // Quoted: a component may be named after a keyword (`commit`).
+          db.exec(`alter table ${sqlName(table)} add column ${ddl}`)
         }
       }
       // The mirror of addCol, for a column whose mechanism is gone. A retired
@@ -4396,6 +4400,19 @@ export let writerActor = (
   writer?: string | null,
 ): string | null => actorFor(db, writer, true)
 
+// Whether an actor is a human — the one writer whose comments go unbounded
+// (M-31946 §7). Nothing resolved is not a person: an anonymous write is
+// machinery until it says otherwise.
+let isPerson = (db: DatabaseSync, actor: string | null) =>
+  !!actor &&
+  !!prep(db, `select 1 from person where ${byEid}`).get(actor)
+
+// The comment budget an agent gets: the size of a turn's closing summary.
+export let COMMENT_CHARS = 1500
+export let COMMENT_LINES = 25
+export let overlong = (body: string) =>
+  body.length > COMMENT_CHARS || body.split('\n').length > COMMENT_LINES
+
 // Who may SIGN a letter: the same chain, minus the one inference provenance
 // is allowed to make. A tab at the owner's keyboard may be RECORDED as them;
 // it may not SPEAK as them, because that is the fleet's highest-trust byline
@@ -5258,6 +5275,31 @@ export let apply = (
       // ALREADY a comment is identity reuse — bounce the whole batch loudly, the
       // way a taken claim or alias does, rolling back the displacing doc write
       // with it, for every entry path (CLI, MCP, raw graph_apply, deno eval).
+      // An agent's comment is a turn summary, not a document (M-31946 §7):
+      // the graph is structure — status, edges, a commit row — and prose in
+      // it is noise the owner has to read. So a comment body written by
+      // anything that is not a person is bounded here, for every door at
+      // once, and the refusal names the structured doors. A person's is not.
+      if (name == 'doc' && comp && typeof comp.body == 'string') {
+        let aimed = changes.some((c) => c.eid == eid && c.name == 'comment') ||
+          !!prep(
+            db,
+            `select 1 from comment
+             where entity = (select id from entity where eid = ?)`,
+          ).get(eid)
+        if (
+          aimed && overlong(comp.body) && !isPerson(db, writerActor(db, writer))
+        ) {
+          throw new Error(
+            `comment refused: ${comp.body.length} chars / ${
+              comp.body.split('\n').length
+            } lines — an agent's comment is a turn summary (≤${COMMENT_CHARS} ` +
+              `chars, ≤${COMMENT_LINES} lines). Say it as structure instead: ` +
+              `task commit <id> <sha>, task set <id> .status=…, ` +
+              `task <a> requires <b>, or task session brief for the narrative.`,
+          )
+        }
+      }
       if (name == 'comment' && comp) {
         if (
           prep(
@@ -7513,7 +7555,7 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       .slice(0, limit)
   }
   let is = kindOrder.map((k) =>
-    [k, prep(db, `select 1 from ${k} where ${byEid}`)] as const
+    [k, prep(db, `select 1 from ${sqlName(k)} where ${byEid}`)] as const
   )
   let aim = prep(
     db,
@@ -7897,7 +7939,9 @@ export let componentCounts = (db: DatabaseSync): Record<string, number> => {
   }
   if (named.length) {
     let sql = 'select ' +
-      named.map((n) => `(select count(*) from ${n}) as "${n}"`).join(', ')
+      named.map((n) => `(select count(*) from ${sqlName(n)}) as "${n}"`).join(
+        ', ',
+      )
     let row = prep(db, sql).get() as Record<string, number>
     for (let name of named) out[name] = Number(row[name])
   }

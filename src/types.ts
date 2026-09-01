@@ -434,6 +434,12 @@ export let comps: Record<string, Record<string, PropType>> = {
   comment: {
     target: { eid: 'entity', death: 'cascade' },
   },
+  commit: {
+    target: { eid: 'entity', death: 'cascade' },
+    sha: 'text',
+    repo: 'text',
+    message: 'text',
+  },
   notice: {
     target: { eid: 'entity', death: 'cascade' },
     event: { enum: noticeKinds },
@@ -801,6 +807,7 @@ export let kindOrder = [
   'redaction',
   'review',
   'notice',
+  'commit',
   'comment',
   'memory',
   'person',
@@ -838,6 +845,7 @@ export let prefix: Record<string, string> = {
   mail: 'E',
   redaction: 'X',
   hook: 'H',
+  commit: 'G',
   person: 'U',
   persona: 'N',
   model: 'O',
@@ -1724,6 +1732,17 @@ export type Comment = {
   target: string
 }
 
+// A commit: a git revision landed FOR its target (M-31946 §7) — the
+// structured twin of a comment, with no doc: sha, repo and subject are
+// columns, so nothing about it is prose.
+export type Commit = {
+  eid: string
+  target: string
+  sha?: string
+  repo?: string
+  message?: string
+}
+
 // A notice: a doc EMITTED about its target, not said (D-13858). Same aim
 // column as comment, and `event` names what happened; the words ride the
 // doc. Delivered by the bus and inbox beside comments, but never a comment
@@ -1966,6 +1985,7 @@ export type EntCore = {
   conflict?: Conflict
   redaction?: Redaction
   comment?: Comment
+  commit?: Commit
   notice?: Notice
   meta?: { eid: string }
   review?: Review
