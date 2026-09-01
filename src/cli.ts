@@ -33,12 +33,14 @@ import {
   edgesOf,
   fetched,
   find,
+  goalChanges,
   got,
   history,
   historyBy,
   historyLine,
   hookClaim,
   host,
+  httpDeps,
   idOf,
   inboxItem,
   inboxRows,
@@ -2809,6 +2811,61 @@ let design = async (got: Got) => {
 }
 
 // Mint a venture's dream: the consolidation cursor and its first cadence wake
+// State a goal: doc + the `goal` tag (client.ts goalChanges). Guidance, not
+// work — no status, no proposed mark, nothing to close; tasks `satisfies`
+// it. `--scope=P-19` names the project it guides; absent is fleet-wide.
+let goal = async (got: Got) => {
+  let title = got.args.title?.trim()
+  if (!title) throw new Error('task goal <title...> (the purpose, in a line)')
+  let session = me()
+  if (!session) throw new Error('goal: no session identity (attribution)')
+  let scope = got.opts['--scope']
+  let [sess, refs] = await Promise.all([
+    sessionRow(session),
+    fetched([scope].filter(Boolean)),
+  ])
+  let made = goalChanges([...(sess ? [sess] : []), ...refs], {
+    title,
+    body: got.body,
+    session,
+    scope,
+  })
+  let applied = await send(made.changes)
+  print(`${mintedIn(applied, made.eid)} standing`)
+}
+
+// Every goal with what satisfies it — `V-3 title · 2 open · 5 done` — read
+// off the goals' incident `satisfies` edges (task → goal).
+let goals = async () => {
+  let all = await query(['.goal!'])
+  if (!all.length) return print('no goals — `task goal <title...>` states one')
+  let deps = await httpDeps(all.map((r) => r.eid))
+  let byGoal = new Map<string, string[]>()
+  for (let d of deps) {
+    if (d.type != 'satisfies') continue
+    byGoal.set(d.child, [...(byGoal.get(d.child) ?? []), d.parent])
+  }
+  let scopes = all.map((r) => String(r.comps.goal?.scope ?? '')).filter(
+    Boolean,
+  )
+  let rows = await fetched([...new Set([...byGoal.values()].flat()), ...scopes])
+  let byEid = new Map(rows.map((r) => [r.eid, r]))
+  let status = (eid: string) => String(byEid.get(eid)?.comps.task?.status ?? '')
+  for (let r of all.sort((a, b) => a.num - b.num)) {
+    let of = byGoal.get(r.eid) ?? []
+    let done = of.filter((t) => status(t) == 'done').length
+    let open = of.filter((t) => !['done', 'cancelled'].includes(status(t)))
+      .length
+    let where = byEid.get(String(r.comps.goal?.scope ?? ''))
+    print(
+      `${idOf(r)} ${r.comps.doc?.title ?? ''}${
+        where ? ` · ${idOf(where)}` : ''
+      } · ${open} open · ${done} done`,
+    )
+  }
+}
+
+// Mint a venture's dream: the consolidation cursor and its first cadence wake
 // (client.ts dreamChanges). This is how a venture opts into the graph-native
 // dream cycle — the wake fires shortly, its knock hooks dreamComb, and the
 // dream self-arms from there. Idempotent per venture (a second is refused).
@@ -3697,6 +3754,8 @@ export let verbs = bind({
   backup: () => backup(),
   sync,
   design,
+  goal,
+  goals,
   dream,
   remember,
   session,

@@ -141,6 +141,8 @@ Deno.test('death words: every reference declares, the sets hold', () => {
     words('keep'),
     new Set([
       'memory.scope',
+      // a goal outlives the project it guided — guidance is not the venture
+      'goal.scope',
       'session.role',
       'mail.target',
       'mail.reply_to',

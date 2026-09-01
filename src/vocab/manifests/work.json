@@ -116,6 +116,17 @@
       "rank": 100,
       "kind_rank": 10
     },
+    "goal": {
+      "rank": 105,
+      "kind_rank": 15,
+      "prefix": "V",
+      "cols": {
+        "scope": {
+          "eid": "project",
+          "death": "keep"
+        }
+      }
+    },
     "project": {
       "rank": 30,
       "kind_rank": 30,

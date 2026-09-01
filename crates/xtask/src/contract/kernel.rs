@@ -32,6 +32,7 @@ inventory::submit! {
             "worked",
             "referenced",
             "wants",
+            "satisfies",
         ],
     }
 }

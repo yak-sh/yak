@@ -113,6 +113,17 @@ struct Board {
 #[comp(plugin = "work", rank = 100, kind_rank = 10)]
 struct Design {}
 
+// A goal: a standing purpose — guidance, never completed or reviewed
+// (M-31946 §5). Work points at it with a `satisfies` edge; `scope` names
+// the project it guides, absent means fleet-wide. kind_rank between design
+// and task so a goal is never mistaken for either.
+#[derive(Comp)]
+#[comp(plugin = "work", rank = 105, kind_rank = 15, prefix = "V")]
+struct Goal {
+    #[col(eid = "project", death = "keep")]
+    scope: Ref,
+}
+
 // Marks a doc as architecture documentation — the graph's self-description.
 // NOT in kindOrder: an architecture doc is still a plain doc.
 #[derive(Comp)]

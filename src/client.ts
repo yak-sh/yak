@@ -3684,6 +3684,17 @@ export let saidLines = (
       ]
     })
 
+// The standing goals (M-31946 §5) — fleet-wide ones plus the scope's, by
+// num, titles only: what the work is FOR, read right after what the owner
+// said. `task show V-3` for the words.
+export let goalLines = (rows: Row[], scope?: string, n = 8) =>
+  rows
+    .filter((r) => r.comps.goal && r.comps.doc)
+    .filter((r) => !r.comps.goal!.scope || r.comps.goal!.scope == scope)
+    .sort((a, b) => a.num - b.num)
+    .slice(0, Math.max(0, n))
+    .map((r) => `- ${idOf(r)} ${r.comps.doc?.title ?? ''}`)
+
 // The stamps that name a person, as filters over the eager graph: what they
 // created, edited, decided, or gave as feedback since `since`.
 export let authoredQueries = (people: string, since: string) => [
@@ -3891,6 +3902,9 @@ export let contextDigest = (
   // five lines, newest last, `task said` for the rest.
   let said = saidLines(all, byEid, Math.min(5, room()))
   if (said.length) lines.push('## owner said (task said)', ...said)
+  // Then what the work is for: the standing goals, titles only.
+  let goals = goalLines(all, scope, Math.min(8, room()))
+  if (goals.length) lines.push('## goals (task goals)', ...goals)
   lines.push(
     ...onMine(claims, comments, byEid, sess, now, Math.min(4, room()), skip),
   )
@@ -4161,6 +4175,7 @@ export let contextSnapshot = async (
     inbox,
     comments,
     said,
+    goals,
   ] = await Promise.all([
     q(['.kind=task', `.task.status=${open}`]),
     scope
@@ -4193,6 +4208,8 @@ export let contextSnapshot = async (
       `.created.at>=${since}`,
       '.limit=60',
     ]),
+    // The standing goals for `## goals` — few, and every context reads them.
+    q(['.goal!']),
   ])
   // Only the CURRENT session's claims are ever read (mine, below), so query
   // that one session — never the actor's whole session history, which for a
@@ -4272,6 +4289,7 @@ export let contextSnapshot = async (
     ...acts,
     ...said,
     ...spoke,
+    ...goals,
   ])
   return { changes: changesOf(all), deps: near.deps }
 }
@@ -4623,6 +4641,26 @@ export let designChanges = (
     ...Object.entries(props)
       .filter(([n]) => n != 'doc' && n != 'design' && n != 'proposed')
       .map(([name, comp]) => ({ eid, name, comp })),
+  ]
+  return { eid, changes }
+}
+
+// A goal (M-31946 §5): doc + the `goal` tag, `scope` the project it guides
+// (absent = fleet-wide). No proposed mark and no status — a goal is guidance
+// that work `satisfies`, never a decision awaiting a verdict or a thing to
+// close.
+export let goalChanges = (
+  all: Row[],
+  g: { title: string; body?: string; session: string; scope?: string },
+) => {
+  let scope = g.scope ? find(all, g.scope) : undefined
+  if (g.scope && !scope) throw new Error(`no entity: ${g.scope}`)
+  let s = sessionFor(all, g.session)
+  let eid = uuid()
+  let changes: Change[] = [
+    ...s.changes,
+    { eid, name: 'doc', comp: { title: g.title, body: g.body ?? '' } },
+    { eid, name: 'goal', comp: { scope: scope?.eid ?? null } },
   ]
   return { eid, changes }
 }

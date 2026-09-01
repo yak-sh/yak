@@ -109,6 +109,8 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       backup: 'backup',
       sync: 'sync [--no-commit] [--check]',
       design: 'design <title…> [--body=BODY]',
+      goal: 'goal <title…> [--body=BODY] [--scope=ID]',
+      goals: 'goals',
       dream: 'dream <project>',
       remember:
         'remember <title…> [--body=BODY] [--feedback=TEXT] [--scope=ID]',

@@ -1003,6 +1003,9 @@ export let derived = [
   'board',
   'layout',
   'design',
+  // A goal (M-31946 §5): {scope FK keep} — a tag with one nullable ref, the
+  // memory shape without the stamp, so it derives.
+  'goal',
   'architecture',
   'canvas',
   'favorite',

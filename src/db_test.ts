@@ -535,6 +535,7 @@ let contracts = [
   contract('mail', 'reply_to', 'mail'),
   contract('persona', 'home', 'project'),
   contract('memory', 'scope', 'project'),
+  contract('goal', 'scope', 'project'),
   contract('dream', 'scope', 'project'),
   contract('layout', 'root', 'pane'),
   contract('pane', 'layout', 'layout'),

@@ -571,7 +571,7 @@ pub static SCHEMA: &[SchemaOp] = &[
   );
   create table if not exists dependency (
     parent integer not null references entity(id),
-    type       text not null check (type in ('requires','contains','reads','about','supervises','delegates','recalled','supersedes','worked','referenced','wants')),
+    type       text not null check (type in ('requires','contains','reads','about','supervises','delegates','recalled','supersedes','worked','referenced','wants','satisfies')),
     child  integer not null references entity(id),
     ord    integer,
     primary key (parent, type, child)
@@ -790,6 +790,10 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::Exec(r#"create table if not exists "design" (
     entity integer primary key references entity(id)
   );"#),
+    SchemaOp::Exec(r#"create table if not exists "goal" (
+    entity integer primary key references entity(id),
+    "scope" integer
+  );"#),
     SchemaOp::Exec(r#"create table if not exists "architecture" (
     entity integer primary key references entity(id)
   );"#),
@@ -951,6 +955,7 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "venture", col: "site", sql: r#"alter table venture add column "site" text"# },
     SchemaOp::AddColumn { table: "board", col: "query", sql: r#"alter table board add column "query" text"# },
     SchemaOp::AddColumn { table: "layout", col: "root", sql: r#"alter table layout add column "root" integer references entity(id)"# },
+    SchemaOp::AddColumn { table: "goal", col: "scope", sql: r#"alter table goal add column "scope" integer"# },
     SchemaOp::AddColumn { table: "favorite", col: "at", sql: r#"alter table favorite add column "at" text"# },
     SchemaOp::AddColumn { table: "worktree", col: "cwd", sql: r#"alter table worktree add column "cwd" text"# },
     SchemaOp::AddColumn { table: "worktree", col: "branch", sql: r#"alter table worktree add column "branch" text"# },
@@ -1056,6 +1061,7 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::Exec(r#"create index if not exists pane_layout on "pane" ("layout");"#),
     SchemaOp::Exec(r#"create index if not exists pane_parent on "pane" ("parent");"#),
     SchemaOp::Exec(r#"create index if not exists pane_content on "pane" ("content");"#),
+    SchemaOp::Exec(r#"create index if not exists goal_scope on "goal" ("scope");"#),
     SchemaOp::Exec(r#"create index if not exists card_target on "card" ("target");"#),
     SchemaOp::Exec(r#"create index if not exists pin_canvas on "pin" ("canvas");"#),
     SchemaOp::Exec(r#"create index if not exists client_actor on "client" ("actor");"#),

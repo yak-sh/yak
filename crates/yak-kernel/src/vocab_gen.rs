@@ -71,6 +71,9 @@ pub(crate) fn baked() -> Vocab {
             ("view".into(), PropType::Text),
         ]),
         ("design".into(), vec![]),
+        ("goal".into(), vec![
+            ("scope".into(), PropType::Eid("project".into())),
+        ]),
         ("architecture".into(), vec![]),
         ("canvas".into(), vec![]),
         ("web".into(), vec![
@@ -605,6 +608,7 @@ pub(crate) fn baked() -> Vocab {
         ("role".into(), "R".into()),
         ("board".into(), "B".into()),
         ("layout".into(), "L".into()),
+        ("goal".into(), "V".into()),
         ("session".into(), "S".into()),
         ("knock".into(), "K".into()),
         ("wake".into(), "W".into()),
@@ -619,7 +623,7 @@ pub(crate) fn baked() -> Vocab {
         ("email".into(), "A".into()),
         ("memory".into(), "M".into()),
     ]);
-    let kind_order = vec!["design".into(), "task".into(), "project".into(), "layout".into(), "board".into(), "canvas".into(), "web".into(), "card".into(), "pane".into(), "client".into(), "camera".into(), "fold".into(), "cursor".into(), "role".into(), "session".into(), "entry".into(), "runner".into(), "claim".into(), "subscription".into(), "stop_request".into(), "knock".into(), "wake".into(), "dream".into(), "mail".into(), "hook".into(), "conflict".into(), "redaction".into(), "review".into(), "notice".into(), "commit".into(), "comment".into(), "memory".into(), "person".into(), "persona".into(), "model".into(), "attachment".into(), "doc".into(), "email".into(), "alias".into()];
+    let kind_order = vec!["design".into(), "goal".into(), "task".into(), "project".into(), "layout".into(), "board".into(), "canvas".into(), "web".into(), "card".into(), "pane".into(), "client".into(), "camera".into(), "fold".into(), "cursor".into(), "role".into(), "session".into(), "entry".into(), "runner".into(), "claim".into(), "subscription".into(), "stop_request".into(), "knock".into(), "wake".into(), "dream".into(), "mail".into(), "hook".into(), "conflict".into(), "redaction".into(), "review".into(), "notice".into(), "commit".into(), "comment".into(), "memory".into(), "person".into(), "persona".into(), "model".into(), "attachment".into(), "doc".into(), "email".into(), "alias".into()];
     let statuses = vec!["open".into(), "wip".into(), "done".into(), "cancelled".into()];
     let renames = vec![
         ("view:Debug.ListItem".into(), "Debug.Tile".into()),
@@ -638,6 +642,7 @@ pub(crate) fn baked() -> Vocab {
         ("pane".into(), "layout".into(), "cascade".into()),
         ("pane".into(), "parent".into(), "cascade".into()),
         ("pane".into(), "content".into(), "detach".into()),
+        ("goal".into(), "scope".into(), "keep".into()),
         ("attachment".into(), "blob".into(), "cascade".into()),
         ("card".into(), "target".into(), "cascade".into()),
         ("pin".into(), "canvas".into(), "cascade".into()),
@@ -688,7 +693,7 @@ pub(crate) fn baked() -> Vocab {
         ("decided".into(), "by".into(), "keep".into()),
         ("proposed".into(), "by".into(), "keep".into()),
     ];
-    let edges = vec!["requires".into(), "contains".into(), "reads".into(), "about".into(), "supervises".into(), "delegates".into(), "recalled".into(), "supersedes".into(), "worked".into(), "referenced".into(), "wants".into()];
+    let edges = vec!["requires".into(), "contains".into(), "reads".into(), "about".into(), "supervises".into(), "delegates".into(), "recalled".into(), "supersedes".into(), "worked".into(), "referenced".into(), "wants".into(), "satisfies".into()];
     let governed = vec!["task".into(), "architecture".into(), "memory".into(), "persona".into()];
     let session_comps = vec!["entry".into(), "content".into(), "message".into(), "prompt".into(), "attention".into(), "generation".into(), "output".into(), "call".into(), "bash".into(), "fetch".into(), "patch".into(), "tool".into(), "task_context".into(), "graph_query".into(), "apply".into(), "result".into(), "exit".into(), "response".into(), "headers".into(), "stderr".into(), "timeout".into(), "checkpoint".into(), "cancel".into(), "reasoning".into(), "recalled".into(), "opaque".into(), "runner".into(), "lease".into(), "usage".into(), "imported".into()];
     let session_facets = vec!["spawn".into(), "worktree".into(), "runtime".into(), "run".into(), "settled".into(), "yield".into()];

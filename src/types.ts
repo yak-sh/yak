@@ -208,6 +208,9 @@ export let comps: Record<string, Record<string, PropType>> = {
     view: 'text',
   },
   design: {},
+  goal: {
+    scope: { eid: 'project', death: 'keep' },
+  },
   architecture: {},
   canvas: {},
   web: {
@@ -779,6 +782,7 @@ export let stamped: Record<string, Record<string, PropType>> = {
 // names it. Rank order across the manifests.
 export let kindOrder = [
   'design',
+  'goal',
   'task',
   'project',
   'layout',
@@ -838,6 +842,7 @@ export let prefix: Record<string, string> = {
   role: 'R',
   board: 'B',
   layout: 'L',
+  goal: 'V',
   session: 'S',
   knock: 'K',
   wake: 'W',
@@ -872,6 +877,7 @@ export let edges = [
   'worked',
   'referenced',
   'wants',
+  'satisfies',
 ] as const
 
 // Durable work/knowledge facets governed by project-rooted dependency paths.
@@ -1820,6 +1826,14 @@ export type Memory = {
   last_confirmed_at?: string | null
 }
 
+// A standing purpose (M-31946 §5): the doc carries the words, `scope` the
+// project it guides (absent = fleet-wide). Never completed or reviewed —
+// tasks `satisfies` it.
+export type Goal = {
+  eid: string
+  scope?: string | null
+}
+
 // This entity records feedback; `by` is who gave it, absent when nobody
 // wrote the source down. A facet — any entity may wear it.
 export type Feedback = { eid: string; by?: string | null }
@@ -1906,6 +1920,7 @@ export type EntCore = {
   kind: string
   doc?: Doc
   design?: { eid: string }
+  goal?: Goal
   architecture?: { eid: string }
   task?: Task
   accept?: Accept

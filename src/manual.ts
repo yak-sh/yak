@@ -896,6 +896,37 @@ export let manuals = declare({
     args: [arg('title', text, true)],
     opts: [body],
   },
+  goal: {
+    dots: ['body', 'scope'],
+    body: 'body',
+    about: 'state a standing goal: a purpose that work satisfies, never closed',
+    examples: [
+      'task goal "Reduce noise, amplify signal"',
+      'task goal "A useful, performant, well-designed TUI" --scope=P-19',
+      'task T-42 satisfies V-3',
+      'task goals',
+    ],
+    detail: 'A goal is a doc wearing the `goal` tag (M-31946 §5): guidance, ' +
+      'not work — no status, no proposed mark, nothing to close. Work ' +
+      'points at it: `task <T> satisfies <V>` is the edge, and `task goals` ' +
+      'counts what satisfies each. `--scope=P-19` names the project it ' +
+      'guides; absent means fleet-wide. Every boot digest lists the ' +
+      'standing goals under `## goals`, titles only — `task show V-3` for ' +
+      'the words. The words are the TITLE; the body rides `.body=@why.md` ' +
+      'or `--body=@why.md`, `-`/`@-` piped stdin.',
+    root: true,
+    args: [arg('title', text, true)],
+    opts: [body, value('--scope', id)],
+  },
+  goals: {
+    about: 'the standing goals, each with what satisfies it',
+    examples: ['task goals'],
+    detail: 'One line per goal: id, title, its project when scoped, and ' +
+      'how many tasks `satisfies` it, open and done.',
+    root: true,
+    args: [],
+    opts: [],
+  },
   dream: {
     about: 'start a venture dreaming: the graph-native consolidation cycle',
     examples: [

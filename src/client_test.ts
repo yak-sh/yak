@@ -17,6 +17,7 @@ import {
   facetsFor,
   fetched,
   find,
+  goalChanges,
   hookClaim,
   inboxItem,
   inflate,
@@ -3056,6 +3057,41 @@ Deno.test('memoryChanges: an unknown session is minted alongside', () => {
   assertEquals(changes.length, 3)
   assertEquals(changes[0].name, 'session')
   assertEquals(changes[2].comp, { scope: null })
+})
+
+// ---- the goal door's pure half ----
+
+Deno.test('goalChanges: a doc and the tag, fleet-wide when unscoped', () => {
+  let { changes } = goalChanges(all, {
+    title: 'Reduce noise, amplify signal',
+    session: 'sess-x',
+  })
+  assertEquals(changes.length, 2) // the session exists: nothing minted
+  assertEquals(changes[0].comp, {
+    title: 'Reduce noise, amplify signal',
+    body: '',
+  })
+  assertEquals(changes[1].name, 'goal')
+  assertEquals(changes[1].comp, { scope: null })
+  // Guidance, not work: no status, no proposed mark, nothing to decide.
+  assertEquals(changes.some((c) => c.name == 'task'), false)
+  assertEquals(changes.some((c) => c.name == 'proposed'), false)
+})
+
+Deno.test('goalChanges: scope resolves to the project it guides', () => {
+  let { changes } = goalChanges(all, {
+    title: 'A useful TUI',
+    body: 'why',
+    session: 'sess-x',
+    scope: 'T-3',
+  })
+  assertEquals(changes.at(-1)?.comp, { scope: T2 })
+  assertEquals(changes[0].comp?.body, 'why')
+  assertThrows(
+    () => goalChanges(all, { title: 'x', session: 'sess-x', scope: 'P-999' }),
+    Error,
+    'no entity: P-999',
+  )
 })
 
 // ---- the design door's pure half ----
