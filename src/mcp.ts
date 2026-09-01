@@ -387,30 +387,19 @@ let HINTS: Record<string, ToolAnnotations> = {
   task_spawn: { openWorldHint: true },
 }
 
+// Short on purpose: the owner's standing direction (M-31946) is that agents
+// drown his signal in process prose. This says only what every writer must do.
 export let WORKER_PROTOCOL = `# Work the graph
-1. Bootstrap or resume a stable worker identity and restore durable task
-context after reconnect or compaction.
-2. Inspect bounded evaluate, build, and verify lanes in their authoritative
-readiness, priority, and recency order. Read the full entity before choosing
-work and assess fit from the repository, CLI, browser, design, and delegation
-tools you have.
-3. Treat evaluation as work: add missing specification, acceptance criteria,
-context, and dependencies before approval. Design approval and executable-task
-approval are separate boundaries; an owner request starts the lifecycle but
-does not collapse either approval.
-4. Build only approved, open, unclaimed, unblocked, dependency-ready work.
-Claim through the readiness-aware worker door; when you are both evaluator and
-chosen builder, approve and claim atomically.
-5. Keep the graph as the record: report progress and durable failures on the
-task, complete the work, and release or hand off the claim. Verification is an
-independent review against acceptance criteria; completion alone is not
-approval.
-
-Use subagents when they are available and useful; otherwise work directly.
-When the operator explicitly tells this harness to claim or work queued tasks,
-inspect eligible work, claim it, and execute it here now instead of waiting for
-managed auto-dispatch. Ordinary approval still triggers managed dispatch when
-work is not explicitly addressed to this harness.`
+The owner's standing direction is M-31946 — it wins over any other rule.
+1. Name your session: work_start once, task_context on a refresh, and pass
+that sid to every tool.
+2. Claim the task you were given, or open, unclaimed, unblocked work
+(task_claim). When the owner tells this harness to claim or work queued tasks,
+claim and execute it here now.
+3. Do the work. Small commits, run the gate, land.
+4. Record structure, not prose: status, the commit sha, edges. A comment is a
+line or two at most, or a question only the owner can answer.
+5. Release the claim when done or when handing off.`
 
 export let MCP_INSTRUCTIONS =
   `Tool arguments are source data, never HTML. Pass <, >,

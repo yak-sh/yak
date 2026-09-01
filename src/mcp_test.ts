@@ -73,18 +73,12 @@ Deno.test('MCP prompt makes task trees the default for multi-step work', () => {
 Deno.test('worker protocol executes queued work in the current harness', () => {
   for (
     let expected of [
-      /bounded evaluate, build, and verify lanes in their authoritative/,
-      /Read the full entity before choosing\s+work and assess fit/,
-      /Treat evaluation as work:[\s\S]*acceptance criteria,[\s\S]*dependencies/,
-      /Design approval and executable-task\napproval are separate boundaries/,
-      /an owner request starts the lifecycle but\ndoes not collapse either approval/,
-      /approve and claim atomically/,
-      /report progress and durable failures/,
-      /release or hand off the claim/,
-      /independent review against acceptance criteria/,
-      /Use subagents when they are available and useful; otherwise work directly/,
-      /claim or work queued tasks,[\s\S]*execute it here now instead of waiting/,
-      /Ordinary approval still triggers managed dispatch/,
+      /standing direction is M-31946/,
+      /work_start once, task_context on a refresh/,
+      /claim or work queued tasks,\s+claim and execute it here now/,
+      /Record structure, not prose/,
+      /A comment is a\s+line or two at most/,
+      /Release the claim when done/,
     ]
   ) assertMatch(WORKER_PROTOCOL, expected)
 })
