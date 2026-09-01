@@ -4923,6 +4923,11 @@ export let apply = (
     )
     for (let { eid, name, comp } of changes) {
       if (!facts.has(name)) continue
+      // The one late mark: `prompt` may be ADDED to an existing turn, never
+      // revised or removed. `task backfill prompt` re-reads the turn's own
+      // transcript line for the tag ingest stamps at birth today; a tag is
+      // content-free, so nothing about what was said changes.
+      if (name == 'prompt' && comp != null && existed.get(eid)) continue
       if (existed.get(eid)) {
         throw new Error(`entry ${shortId(eid)} is immutable`)
       }

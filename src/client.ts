@@ -3517,19 +3517,17 @@ export let sessionMeta = (all: Row[], sid: string) => {
 // at — one with a terminal pane. Not a managed run (its user turns are the
 // brief and injected comments), not a subagent (its user turns are the
 // parent's prompts), and not a scripted run (a cron sweep's `claude -p` has
-// no pane; its one user turn is the launcher's prompt). Harness wrappers
-// (`<local-command-caveat>`, `<command-name>`, `<system-reminder>`) and the
-// compaction summary ("This session is being continued from a previous
-// conversation…") ride the user role too and are nothing anyone said.
-let COMPACTION = 'This session is being continued from a previous conversation'
-export let spoken = (r: Row, s?: Row) => {
-  let body = String(r.comps.content?.body ?? '').trimStart()
-  return r.comps.message?.role == 'user' && !!body &&
-    !r.comps.result && !!s?.comps.session?.pane &&
-    s.comps.session.origin != 'managed' &&
-    s.comps.session.agent_type == null &&
-    !body.startsWith('<') && !body.startsWith(COMPACTION)
-}
+// no pane; its one user turn is the launcher's prompt). Within a session the
+// `prompt` tag is the mark: ingest puts it on the turns the human typed
+// (transcript origin.kind 'human'), and never on what the harness injects as
+// the user role — hook feedback, notifications, wrappers, the compaction
+// summary. Entries from before the tag existed get it from
+// `task backfill prompt`.
+export let spoken = (r: Row, s?: Row) =>
+  !!r.comps.prompt && r.comps.message?.role == 'user' &&
+  !!String(r.comps.content?.body ?? '').trim() &&
+  !!s?.comps.session?.pane &&
+  s.comps.session.origin != 'managed' && s.comps.session.agent_type == null
 
 let when = (at: string) => at.slice(5, 16).replace('T', ' ')
 

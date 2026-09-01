@@ -7,12 +7,58 @@ import { historicalWorked } from './db.ts'
 import { historicalReferenced } from './reference_changes.ts'
 import { type Change } from './types.ts'
 
-export let backfillKinds = ['worked', 'referenced'] as const
+export let backfillKinds = ['worked', 'referenced', 'prompt'] as const
 export type BackfillKind = typeof backfillKinds[number]
+
+// The `prompt` tag for user entries ingested before ingest stamped it: each
+// native user entry names the transcript line it came from (imported
+// source/line) and its session names the transcript, so re-read that one
+// line and tag the entry when the harness marked the turn as typed
+// (origin.kind 'human' — the same test ingest.ts applies live). One
+// transcript is held at a time; a missing or rewritten file yields nothing.
+export let historicalPrompts = (
+  db: DatabaseSync,
+  read = (path: string) => Deno.readTextFileSync(path),
+): Change[] => {
+  let rows = db.prepare(
+    `select o.eid as eid, i.line as line, s.transcript as path
+       from entry t
+       join entity o on o.id = t.entity
+       join imported i on i.entity = t.entity and i.source = 'native'
+       join message m on m.entity = t.entity and m.role = 'user'
+       join session s on s.entity = t.session
+       left join prompt p on p.entity = t.entity
+      where p.entity is null and s.transcript is not null
+      order by s.transcript, i.line`,
+  ).all() as { eid: string; line: number; path: string }[]
+  let held: { path: string; lines: string[] } | undefined
+  let lineOf = (path: string, n: number) => {
+    if (held?.path != path) {
+      let text = ''
+      try {
+        text = read(path)
+      } catch { /* gone or unreadable — nothing to tag */ }
+      held = { path, lines: text.split('\n') }
+    }
+    return held.lines[n - 1] ?? ''
+  }
+  let typed = (raw: string) => {
+    try {
+      let e = JSON.parse(raw)
+      return e?.type == 'user' && e.origin?.kind == 'human'
+    } catch {
+      return false
+    }
+  }
+  return rows
+    .filter((r) => typed(lineOf(r.path, r.line)))
+    .map((r): Change => ({ eid: r.eid, name: 'prompt', comp: {} }))
+}
 
 let generators: Record<BackfillKind, (db: DatabaseSync) => Change[]> = {
   worked: historicalWorked,
   referenced: historicalReferenced,
+  prompt: historicalPrompts,
 }
 
 export let backfillChanges = (db: DatabaseSync, kind: BackfillKind) =>
@@ -47,7 +93,8 @@ export let landBackfill = async (
     state = {
       ...state,
       submitted: state.submitted + batch.length,
-      landed: state.landed + out.filter((c) => c.name == 'dependency').length,
+      landed: state.landed +
+        out.filter((c) => c.name == 'dependency' || c.name == 'prompt').length,
     }
     progress(state)
     // The old server route yielded between chunks so a large historical sweep

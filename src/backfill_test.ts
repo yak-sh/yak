@@ -5,7 +5,10 @@ import { type Change } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, open } = await import('./db.ts')
-let { landBackfill, readBackfill } = await import('./backfill.ts')
+let { historicalPrompts, landBackfill, readBackfill } = await import(
+  './backfill.ts'
+)
+let { append } = await import('./entries.ts')
 let { graph } = await import('./reload.ts')
 
 let uid = () => crypto.randomUUID()
@@ -72,4 +75,54 @@ Deno.test('landBackfill reports each bounded batch', async () => {
   assertEquals(batches, [200, 200, 50])
   assertEquals(progress.map((p) => p.submitted), [0, 200, 400, 450])
   assertEquals(out, { found: 450, submitted: 450, landed: 450 })
+})
+
+// The prompt backfill re-reads the transcript line a native user entry came
+// from and tags the turn the harness marked typed; an injected turn and an
+// already-tagged one yield nothing, so a rerun is empty.
+Deno.test('historicalPrompts tags typed turns from their transcript lines', () => {
+  let db = open(':memory:')
+  let session = uid()
+  apply(db, [{
+    eid: session,
+    name: 'session',
+    comp: { id: `backfill-${uid()}`, transcript: '/t/one.jsonl' },
+  }])
+  let native = (line: number) => ({ source: 'native', line })
+  let [typed] = append(
+    db,
+    session,
+    [{
+      message: { role: 'user' },
+      content: { body: 'fix it' },
+    }],
+    null,
+    undefined,
+    native(2),
+  ).eids
+  append(
+    db,
+    session,
+    [{
+      message: { role: 'user' },
+      content: { body: 'Stop hook feedback: x' },
+    }],
+    null,
+    undefined,
+    native(3),
+  )
+  let lines = [
+    '{"type":"system"}',
+    '{"type":"user","origin":{"kind":"human"},"promptSource":"typed"}',
+    '{"type":"user","isMeta":true}',
+  ]
+  let read = (path: string) => {
+    assertEquals(path, '/t/one.jsonl')
+    return lines.join('\n')
+  }
+  let pending = historicalPrompts(db, read)
+  assertEquals(pending, [{ eid: typed, name: 'prompt', comp: {} }])
+  apply(db, pending)
+  assertEquals(historicalPrompts(db, read), [])
+  db.close()
 })

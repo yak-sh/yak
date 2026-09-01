@@ -3614,7 +3614,11 @@ let backfillRun = (kind: BackfillKind) => async () => {
       console.error(`${kind}: ${p.submitted}/${p.found} changes submitted`)
     }
   })
-  console.log(`${kind}: ${out.landed}/${out.found} historical edges landed`)
+  console.log(
+    `${kind}: ${out.landed}/${out.found} historical ${
+      kind == 'prompt' ? 'tags' : 'edges'
+    } landed`,
+  )
 }
 
 export let verbs = bind({
@@ -3650,6 +3654,7 @@ export let verbs = bind({
   backfill: () => print(help(['backfill'])),
   'backfill worked': backfillRun('worked'),
   'backfill referenced': backfillRun('referenced'),
+  'backfill prompt': backfillRun('prompt'),
   watch: subscribe('watch'),
   mute: subscribe('mute'),
   inbox: inboxList,

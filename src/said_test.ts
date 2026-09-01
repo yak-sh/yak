@@ -46,8 +46,14 @@ let base: Snapshot = {
 let spoke: Snapshot = {
   changes: [
     ...base.changes,
-    ...entry('e-2', S, 'second thing\nmore', '2026-09-01T19:40:00.000Z'),
-    ...entry('e-1', S, 'first thing', '2026-09-01T19:25:00.000Z'),
+    ...entry('e-2', S, 'second thing\nmore', '2026-09-01T19:40:00.000Z', {
+      prompt: {},
+    }),
+    ...entry('e-1', S, 'first thing', '2026-09-01T19:25:00.000Z', {
+      prompt: {},
+    }),
+    // A user turn without the prompt tag is one the harness injected.
+    ...entry('e-hook', S, 'Stop hook feedback: x', '2026-09-01T19:32:00.000Z'),
     ...entry(
       'e-wrap',
       S,
@@ -57,13 +63,18 @@ let spoke: Snapshot = {
     ...entry('e-tool', S, 'tool output', '2026-09-01T19:27:00.000Z', {
       result: {},
     }),
-    ...entry('e-brief', M, 'you are a coder', '2026-09-01T19:28:00.000Z'),
-    ...entry('e-sub', SUB, 'parent prompt', '2026-09-01T19:29:00.000Z'),
+    ...entry('e-brief', M, 'you are a coder', '2026-09-01T19:28:00.000Z', {
+      prompt: {},
+    }),
+    ...entry('e-sub', SUB, 'parent prompt', '2026-09-01T19:29:00.000Z', {
+      prompt: {},
+    }),
     ...entry(
       'e-cron',
       CRON,
       'You are running in sweep mode',
       '2026-09-01T19:30:00.000Z',
+      { prompt: {} },
     ),
     ...entry(
       'e-compact',

@@ -182,9 +182,18 @@ export let claudeEntries = (e: Event, state: IngestState): Batch => {
   let content = msg?.content
   let blocks = Array.isArray(content) ? content : [content]
   let batch = empty()
+  // A turn the human typed (or queued) at the prompt carries origin.kind
+  // 'human'. Everything the harness injects as the user role — hook feedback,
+  // task notifications, channel events, the compaction summary, the command
+  // wrappers — is isMeta, promptSource 'system', or unmarked. The typed turn
+  // wears the `prompt` tag, the same mark a managed run's brief wears, so a
+  // reader asks the graph which user turns were said rather than a body prefix.
+  let typed = role == 'user' &&
+    (e.origin as Event | undefined)?.kind == 'human'
   for (let raw of blocks) {
     let mapped = claudeBlock(role, raw as Block, state)
     if (!mapped) continue
+    if (typed && mapped.spec.message) mapped.spec.prompt = {}
     batch.specs.push(mapped.spec)
     batch.ids.push(mapped.id)
     if (mapped.call) batch.calls.push(mapped.call)

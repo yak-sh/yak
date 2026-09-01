@@ -570,6 +570,15 @@ export let manuals = declare({
       'last run missed.',
     args: [],
   },
+  'backfill prompt': {
+    about:
+      'tag the user turns a human typed in entries ingested before the tag',
+    detail:
+      "Explicit and idempotent. Re-reads each native user entry's transcript " +
+      'line (imported source/line) and stamps `prompt` where the harness ' +
+      'marked the turn typed — what `task said` and `## owner said` read.',
+    args: [],
+  },
   watch: {
     about: 'put an entity in your inbox even when nothing is aimed at you',
     examples: ['task watch T-3', 'task watch T-3 --gone'],

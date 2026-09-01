@@ -14,6 +14,50 @@ import {
 
 let fresh = (): IngestState => ({ calls: new Map() })
 
+// The harness marks what the human typed (origin.kind 'human'); what it
+// injects as the user role — hook feedback, the compaction summary, command
+// wrappers — is isMeta, promptSource 'system', or unmarked. Only the typed
+// turn wears the `prompt` tag.
+Deno.test('claude: a typed user turn wears prompt, an injected one does not', () => {
+  let s = fresh()
+  let typed = claudeEntries(
+    {
+      type: 'user',
+      message: { content: 'fix the tui' },
+      origin: { kind: 'human' },
+      promptSource: 'typed',
+    },
+    s,
+  )
+  assertEquals(typed.specs, [{
+    message: { role: 'user' },
+    content: { body: 'fix the tui' },
+    prompt: {},
+  }])
+  for (
+    let e of [
+      {
+        type: 'user',
+        message: { content: 'Stop hook feedback: x' },
+        isMeta: true,
+      },
+      {
+        type: 'user',
+        message: { content: 'This session is being continued…' },
+        isCompactSummary: true,
+      },
+      {
+        type: 'user',
+        message: { content: '<task-notification/>' },
+        promptSource: 'system',
+        origin: { kind: 'task-notification' },
+      },
+    ]
+  ) {
+    assertEquals(claudeEntries(e, s).specs[0].prompt, undefined)
+  }
+})
+
 Deno.test('claude: text and thinking become say + reasoning entries', () => {
   let s = fresh()
   let text = claudeEntries(
