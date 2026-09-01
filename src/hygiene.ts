@@ -209,30 +209,6 @@ type Artifact = {
   targets: string[]
 }
 
-let candidateArtifact = (
-  project: string,
-  rows: Candidate[],
-  now: number,
-): Artifact | undefined => {
-  if (!rows.length) return
-  let groups = ['merge', 'archive', 'shorten', 'persona'].flatMap((kind) => {
-    let lines = rows.filter((r) => r.kind == kind).map((r) => r.line)
-    return lines.length ? [`## ${kind}\n\n${lines.join('\n')}`] : []
-  })
-  let keys = rows.map((r) => r.key).sort().join('\n')
-  return {
-    key: `hygiene:memory:${project}:${digest(keys)}`,
-    title: 'review memory hygiene candidates',
-    body: `Derived ${new Date(now).toISOString()}. Review and decide each ` +
-      `candidate; this sweep changed none of the source entities.\n\n${
-        groups.join('\n\n')
-      }`,
-    project,
-    priority: 3,
-    targets: [...new Set(rows.flatMap((r) => r.targets))],
-  }
-}
-
 let errorArtifact = (
   project: string,
   rows: Log[],
@@ -359,10 +335,13 @@ export let hygieneSweep = (
 ): HygieneResult => {
   let found = candidates(project, now)
   let errors = recurringErrors(project, since)
-  let artifacts = [
-    candidateArtifact(project, found, now),
-    errorArtifact(project, errors, since, now),
-  ].filter((a): a is Artifact => !!a)
+  // Memory candidates are counted but never filed: each sweep's candidate set
+  // differed, so every run minted a fresh "review memory hygiene candidates"
+  // task (ten open duplicates on one persona), and the owner's direction is
+  // that agents do not file memory process work on his board (M-31946).
+  // Recurring errors are telemetry, which he values, so those still file.
+  let artifacts = [errorArtifact(project, errors, since, now)]
+    .filter((a): a is Artifact => !!a)
   let result: HygieneResult = {
     candidates: found.length,
     errors: errors.length,

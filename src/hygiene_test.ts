@@ -136,53 +136,18 @@ slow(
 )
 
 slow(
-  'hygieneSweep files one proposed review task and verifies recurrence',
+  'hygieneSweep counts memory candidates but files no review task',
   () => {
     let p = project('Proposal scope')
-    let m = memory(p, 'Verbose memory', 'x'.repeat(5000))
+    memory(p, 'Verbose memory', 'x'.repeat(5000))
     let first = hygieneSweep(p, ago(1), () => {})
     assertEquals(first.candidates, 1)
-    assertEquals(first.filed, 1)
-    assertEquals(first.verified.length, 1)
-
-    let eid = first.verified[0]
-    let row = db.prepare(
-      `select f.hits,
-            exists(select 1 from proposed p where p.entity = t.entity) as proposed,
-            exists(select 1 from dependency d
-              where d.parent = t.entity and d.type = 'about'
-                and d.child = (select id from entity where eid = ?)) as aimed
-       from task t join finding f on f.entity = t.entity
-      where t.entity = (select id from entity where eid = ?)`,
-    ).get(m, eid) as {
-      hits: number
-      proposed: number
-      aimed: number
-    }
-    assertEquals(row, { hits: 1, proposed: 1, aimed: 1 })
-    let source = db.prepare(
-      `select doc.body,
-            exists(select 1 from archived a where a.entity = doc.entity) as archived,
-            exists(select 1 from dependency d
-              where d.child = doc.entity and d.type = 'supersedes') as superseded
-       from doc_value doc where doc.entity = (select id from entity where eid = ?)`,
-    ).get(m)
-    assertEquals(source, {
-      body: 'x'.repeat(5000),
-      archived: 0,
-      superseded: 0,
-    })
-
-    let second = hygieneSweep(p, ago(1), () => {})
-    assertEquals(second.filed, 0)
-    assertEquals(second.recurred, 1)
-    assertEquals(second.verified, [eid])
-
-    // Acceptance freezes the proposal body under the operator's decision.
-    apply(db, [{ eid, name: 'decided', comp: {} }])
-    let third = hygieneSweep(p, ago(1), () => {})
-    assertEquals(third.skipped, 1)
-    assertEquals(third.verified, [])
+    assertEquals(first.filed, 0)
+    assertEquals(first.verified, [])
+    let filed = db.prepare(
+      `select count(*) as n from finding where key like 'hygiene:memory:%'`,
+    ).get() as { n: number }
+    assertEquals(filed.n, 0)
   },
 )
 
