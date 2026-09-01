@@ -65,6 +65,12 @@ let spoke: Snapshot = {
       'You are running in sweep mode',
       '2026-09-01T19:30:00.000Z',
     ),
+    ...entry(
+      'e-compact',
+      S,
+      'This session is being continued from a previous conversation that ran out of context. The summary…',
+      '2026-09-01T19:31:00.000Z',
+    ),
   ],
   deps: [],
 }

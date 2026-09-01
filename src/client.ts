@@ -3513,35 +3513,23 @@ export let sessionMeta = (all: Row[], sid: string) => {
   ].join('\n')
 }
 
-// The injection-loop digest: what a session sees at start — its claimed
-// work (with unresolved gates and who holds them), or the top of the open
-// board when it holds nothing, then the three tail tiers (below). ≤48
-// lines by construction: the tracker stays out of the way, it just makes
-// the working set — and the recent past — impossible to lose.
-// The digest is MARKDOWN, like every body in the graph — and dense on
-// purpose: headings and lists interrupt paragraphs (CommonMark), so no
-// blank line ever spends a budget line.
-// No session = the PREVIEW: the digest a fresh session would boot with
-// (open work, the project pulse, fleet memory — nothing claimed, nothing
-// acked). Two LAYERS: a PROJECT layer (a pure function of scope — open
-// work, pulse, fleet memory, mail) and a SESSION layer that adds to it
-// (your claims replace the suggestions, onMine, previously, unheard). So a
-// bare `task context` in a repo shows exactly the project layer its
-// operator sees, minus the session extras — parity by construction.
-// Scope resolves via scopeFor: an explicit arg, else the cwd's repo, else
-// the worn persona's home, else the actor-as-project (client.ts scopeFor).
 // The owner's own words: a user-role message entry of a session a human sat
 // at — one with a terminal pane. Not a managed run (its user turns are the
 // brief and injected comments), not a subagent (its user turns are the
 // parent's prompts), and not a scripted run (a cron sweep's `claude -p` has
 // no pane; its one user turn is the launcher's prompt). Harness wrappers
-// (`<local-command-caveat>`, `<command-name>`, `<system-reminder>`) ride the
-// user role too and are nothing anyone said.
-export let spoken = (r: Row, s?: Row) =>
-  r.comps.message?.role == 'user' && !!r.comps.content?.body &&
-  !r.comps.result && !!s?.comps.session?.pane &&
-  s.comps.session.origin != 'managed' && s.comps.session.agent_type == null &&
-  !/^\s*</.test(String(r.comps.content.body))
+// (`<local-command-caveat>`, `<command-name>`, `<system-reminder>`) and the
+// compaction summary ("This session is being continued from a previous
+// conversation…") ride the user role too and are nothing anyone said.
+let COMPACTION = 'This session is being continued from a previous conversation'
+export let spoken = (r: Row, s?: Row) => {
+  let body = String(r.comps.content?.body ?? '').trimStart()
+  return r.comps.message?.role == 'user' && !!body &&
+    !r.comps.result && !!s?.comps.session?.pane &&
+    s.comps.session.origin != 'managed' &&
+    s.comps.session.agent_type == null &&
+    !body.startsWith('<') && !body.startsWith(COMPACTION)
+}
 
 let when = (at: string) => at.slice(5, 16).replace('T', ' ')
 
@@ -3583,6 +3571,23 @@ export let ownerSaid = async (n = 20, q: Querier = query) => {
   return saidLines(entries, new Map(sessions.map((r) => [r.eid, r])), n)
 }
 
+// The injection-loop digest: what a session sees at start — its claimed
+// work (with unresolved gates and who holds them), or the top of the open
+// board when it holds nothing, then the three tail tiers (below). ≤48
+// lines by construction: the tracker stays out of the way, it just makes
+// the working set — and the recent past — impossible to lose.
+// The digest is MARKDOWN, like every body in the graph — and dense on
+// purpose: headings and lists interrupt paragraphs (CommonMark), so no
+// blank line ever spends a budget line.
+// No session = the PREVIEW: the digest a fresh session would boot with
+// (open work, the project pulse, fleet memory — nothing claimed, nothing
+// acked). Two LAYERS: a PROJECT layer (a pure function of scope — open
+// work, pulse, fleet memory, mail) and a SESSION layer that adds to it
+// (your claims replace the suggestions, onMine, previously, unheard). So a
+// bare `task context` in a repo shows exactly the project layer its
+// operator sees, minus the session extras — parity by construction.
+// Scope resolves via scopeFor: an explicit arg, else the cwd's repo, else
+// the worn persona's home, else the actor-as-project (client.ts scopeFor).
 export let contextDigest = (
   snap: Snapshot,
   session?: string,
