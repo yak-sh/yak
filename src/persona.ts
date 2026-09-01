@@ -97,23 +97,76 @@ export let indexLine = (r: Row, _now?: number) => {
 // index. `seen` guards a persona cycle — a memory's contribution is
 // path-independent, so visiting a base once anywhere yields the right set.
 // Dead or docless children still drop silently — a tier names what it can say.
+// The prompt reads stable-first, identity-last (M-31946 §2): what this
+// project IS, then what the owner decided, then how the fleet works, and only
+// then who this agent is. Each group is a graph fact, never a hand list:
+//   0 — project documentation: a scoped memory reached through a COMMON
+//       persona (one a project contains, the global base, or a persona a
+//       common one contains)
+//   1 — owner direction: a feedback memory, whichever persona it rides
+//   2 — working rules: an unscoped memory reached through a common persona
+//   3 — identity: what a specialist persona says of itself
+// Edge order and warmth still decide within a group.
+let commonish = (all: Row[], deps: Dep[]) => {
+  let personas = new Set(all.filter((r) => r.comps.persona).map((r) => r.eid))
+  let projects = new Set(all.filter((r) => r.comps.project).map((r) => r.eid))
+  let set = new Set(
+    all.filter((r) => idOf(r) == GLOBAL_BASE).map((r) => r.eid),
+  )
+  for (let d of deps) {
+    if (
+      d.type == 'contains' && projects.has(d.parent) && personas.has(d.child)
+    ) {
+      set.add(d.child)
+    }
+  }
+  let grew = true
+  while (grew) {
+    grew = false
+    for (let d of deps) {
+      if (
+        (d.type == 'contains' || d.type == 'reads') && set.has(d.parent) &&
+        personas.has(d.child) && !set.has(d.child)
+      ) {
+        set.add(d.child)
+        grew = true
+      }
+    }
+  }
+  return set
+}
+let groupOf = (r: Row, viaCommon: boolean) =>
+  r.comps.feedback ? 1 : !viaCommon ? 3 : r.comps.memory?.scope ? 0 : 2
+
+type Member = { row: Row; rank: number; seq: number; group: number }
 let tiers = (
   all: Row[],
   deps: Dep[],
   eid: string,
   order: number | null,
   seen = new Set<string>(),
-): { pre: Row[]; idx: Row[] } => {
-  type Member = { row: Row; rank: number; seq: number }
+  common = commonish(all, deps),
+): { pre: Row[]; idx: Row[]; groups: Map<string, number> } => {
   let pre = new Map<string, Member>()
   let idx = new Map<string, Member>()
-  let put = (tier: Map<string, Member>, row: Row, rank: number) => {
+  let viaCommon = common.has(eid)
+  let put = (
+    tier: Map<string, Member>,
+    row: Row,
+    rank: number,
+    group = groupOf(row, viaCommon),
+  ) => {
     let at = tier.get(row.eid)
-    if (!at) tier.set(row.eid, { row, rank, seq: tier.size })
-    // A direct authored order still wins when the same memory also arrived
-    // through a persona. Map insertion stays put, preserving the first
-    // deterministic path for every otherwise-unranked member.
-    else if (rank < at.rank) at.rank = rank
+    if (!at) tier.set(row.eid, { row, rank, seq: tier.size, group })
+    else {
+      // A direct authored order still wins when the same memory also arrived
+      // through a persona. Map insertion stays put, preserving the first
+      // deterministic path for every otherwise-unranked member.
+      if (rank < at.rank) at.rank = rank
+      // The stabler group wins: a rule the common persona carries is a rule
+      // even when a specialist restates it.
+      if (group < at.group) at.group = group
+    }
   }
   seen.add(eid)
   let kids = (type: Edge) =>
@@ -132,12 +185,16 @@ let tiers = (
     for (let { d, r } of kids(type)) {
       if (r.comps.persona) {
         if (seen.has(r.eid)) continue
-        let sub = tiers(all, deps, r.eid, order, seen)
+        let sub = tiers(all, deps, r.eid, order, seen, common)
         // The child's arrays already embody its authored order. Give their
         // members stable parent-local sequence numbers instead of discarding
         // that order and re-sorting them by entity identity at every ancestor.
-        for (let m of sub.pre) put(pre, m, Number.MAX_SAFE_INTEGER)
-        for (let m of sub.idx) put(idx, m, Number.MAX_SAFE_INTEGER)
+        for (let m of sub.pre) {
+          put(pre, m, Number.MAX_SAFE_INTEGER, sub.groups.get(m.eid))
+        }
+        for (let m of sub.idx) {
+          put(idx, m, Number.MAX_SAFE_INTEGER, sub.groups.get(m.eid))
+        }
       } else {
         put(here, r, d.ord ?? Number.MAX_SAFE_INTEGER)
       }
@@ -153,13 +210,29 @@ let tiers = (
     a.rank - b.rank || a.seq - b.seq || a.row.num - b.row.num ||
     a.row.eid.localeCompare(b.row.eid)
   let byWarm = (a: Member, b: Member) =>
-    order == null
+    a.group - b.group ||
+    (order == null
       ? byGraph(a, b)
-      : hot(b.row.comps, order) - hot(a.row.comps, order) || byGraph(a, b)
+      : hot(b.row.comps, order) - hot(a.row.comps, order) || byGraph(a, b))
   let warm = (m: Map<string, Member>) =>
     [...m.values()].sort(byWarm).map((x) => x.row)
-  return { pre: warm(pre), idx: warm(idx) }
+  let groups = new Map(
+    [...pre.values(), ...idx.values()].map((m) => [m.row.eid, m.group]),
+  )
+  return { pre: warm(pre), idx: warm(idx), groups }
 }
+
+// The standing goals a persona's reader works toward (M-31946 §5): fleet-wide
+// ones plus its home project's, titles only, rendered with the owner's
+// direction — what the work is FOR sits beside what he said, before the rules.
+let goalsOf = (all: Row[], p: Row) =>
+  all
+    .filter((r) => r.comps.goal && r.comps.doc)
+    .filter((r) =>
+      !r.comps.goal!.scope || r.comps.goal!.scope == p.comps.persona?.home
+    )
+    .sort((a, b) => a.num - b.num)
+    .map((r) => `- ${idOf(r)} ${r.comps.doc?.title ?? ''}`)
 
 // What one persona DELIVERS, as eid sets — the dedup currency between
 // delivery files (T-21957). `pre` is what it preloads in full; `idx` is
@@ -205,7 +278,7 @@ let render = (
   d: Dialect = DIALECT,
   omit?: Delivered,
 ) => {
-  let { pre, idx } = tiers(all, deps, p.eid, order)
+  let { pre, idx, groups } = tiers(all, deps, p.eid, order)
   if (omit) {
     pre = pre.filter((r) => !omit.pre.has(r.eid))
     idx = idx.filter((r) => !omit.idx.has(r.eid))
@@ -215,14 +288,22 @@ let render = (
     String(p.comps.doc?.title ?? 'persona'),
     agentName(p),
   )
+  let body = (r: Row) => [
+    d.rule,
+    `# ${idOf(r)} ${r.comps.doc?.title ?? ''}\n\n${
+      String(r.comps.doc?.body ?? '').trim()
+    }`,
+  ]
+  // Goals ride with the owner's direction: after documentation and feedback,
+  // before the working rules and any identity.
+  let stable = pre.filter((r) => (groups.get(r.eid) ?? 3) <= 1)
+  let rest = pre.filter((r) => (groups.get(r.eid) ?? 3) > 1)
+  let goals = goalsOf(all, p)
   let parts = [
     header,
-    ...pre.flatMap((r) => [
-      d.rule,
-      `# ${idOf(r)} ${r.comps.doc?.title ?? ''}\n\n${
-        String(r.comps.doc?.body ?? '').trim()
-      }`,
-    ]),
+    ...stable.flatMap(body),
+    ...(goals.length ? [d.rule, `## Goals\n\n${goals.join('\n')}`] : []),
+    ...rest.flatMap(body),
     ...(idx.length
       ? [
         d.rule,

@@ -585,9 +585,20 @@ export let wirePersonaSync = (
     created: (eid, comp) => personaish(eid, comp.child as string) && syncSoon(),
     doc: 'a tier edge (or common flip) at a persona re-renders its files',
   })
+  // Every rendered persona lists the standing goals, so a goal's birth, death,
+  // or retitling is a persona change too.
+  let goalish = (eid: string) =>
+    !!store.prepare(
+      `select 1 from goal where entity = (select id from entity where eid = ?)`,
+    ).get(eid)
+  on('goal', {
+    created: syncSoon,
+    removed: syncSoon,
+    doc: 'a standing goal rides every persona file, so it re-renders them',
+  })
   on('doc', {
     changed: {
-      title: (eid) => personaish(eid) && syncSoon(),
+      title: (eid) => (personaish(eid) || goalish(eid)) && syncSoon(),
       body: (eid) => personaish(eid) && syncSoon(),
     },
     doc: 'a doc edit on a persona or a tiered memory re-renders its files',

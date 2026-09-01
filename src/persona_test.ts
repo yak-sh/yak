@@ -1123,3 +1123,62 @@ Deno.test('tiers: a proposed memory reaches no prompt until a person accepts it'
   assertStringIncludes(indexLine(pending), '? agent idea')
   assert(!indexLine(decide()).includes('?'))
 })
+
+Deno.test('materialize: stable-first, identity-last (M-31946 §2)', () => {
+  let project = row({ doc: { title: 'proj', body: '' }, project: {} })
+  let common = row({
+    doc: { title: 'proj common', body: '' },
+    persona: { home: project.eid },
+  })
+  let docs = row({
+    doc: { title: 'what this is', body: 'One SQLite graph.' },
+    memory: { scope: project.eid },
+  })
+  let rule = row({
+    doc: { title: 'how we work', body: 'Land with task land.' },
+    memory: { scope: null },
+  })
+  let said = row({
+    doc: { title: 'owner direction', body: 'Signal over noise.' },
+    memory: { scope: null },
+    feedback: { by: 'p1' },
+  })
+  let me = row({
+    doc: { title: 'operator', body: 'I run the graph.' },
+    memory: { scope: project.eid },
+  })
+  let special = row({
+    doc: { title: 'TaskMaster', body: '' },
+    persona: { home: project.eid },
+  })
+  let goal = row({ doc: { title: 'reduce noise', body: '' }, goal: {} })
+  let all = [project, common, docs, rule, said, me, special, goal]
+  let deps = [
+    edge(project, 'contains', common),
+    edge(common, 'contains', rule, 0),
+    edge(common, 'contains', said, 1),
+    edge(common, 'contains', docs, 2),
+    edge(special, 'contains', me, 0),
+    edge(special, 'contains', common, 1),
+  ]
+  let at = (md: string, s: string) => {
+    let i = md.indexOf(s)
+    assert(i >= 0, `missing ${s}`)
+    return i
+  }
+  // The specialist: project docs, then the owner's words and goals, then the
+  // fleet's rules, and only then who it is — whatever the edge order said.
+  let md = materialize(all, deps, special, NOW)
+  assert(at(md, 'One SQLite graph.') < at(md, 'Signal over noise.'))
+  assert(at(md, 'Signal over noise.') < at(md, '## Goals\n\n- V-'))
+  assert(at(md, '## Goals') < at(md, 'Land with task land.'))
+  assert(at(md, 'Land with task land.') < at(md, 'I run the graph.'))
+  // The common persona alone reads the same way and says nothing of identity.
+  let cm = materialize(all, deps, common, NOW)
+  assert(at(cm, 'One SQLite graph.') < at(cm, 'Signal over noise.'))
+  assert(at(cm, '## Goals') < at(cm, 'Land with task land.'))
+  assert(!cm.includes('I run the graph.'))
+  // A goal scoped elsewhere stays out.
+  let far = row({ doc: { title: 'far goal', body: '' }, goal: { scope: 'x' } })
+  assert(!materialize([...all, far], deps, special, NOW).includes('far goal'))
+})

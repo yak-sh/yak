@@ -1958,20 +1958,29 @@ export let spawned =
     let common = project && repo && adopted(repo.path)
       ? commonOf(all, deps, String(project))
       : undefined
+    let voices = wornPersona(
+      all,
+      deps,
+      spawnPersona,
+      project ? String(project) : undefined,
+      globalBase,
+    )
     let worn = composeWorn(
       all,
       deps,
-      wornPersona(
-        all,
-        deps,
-        spawnPersona,
-        project ? String(project) : undefined,
-        globalBase,
-      ),
+      voices,
       Date.now(),
       undefined,
       common ? deliveredBy(all, deps, common.eid, Date.now()) : undefined,
     )
+    // Identity arrives WITH the instruction, not ahead of it (M-31946 §2): the
+    // system prompt reads project-first, and the first message names whom the
+    // agent acts as while it does this.
+    let voice = voices.at(-1)
+    let actingAs = voice &&
+      `Acting as ${voice.comps.doc?.title ?? human(db, voice.eid)} (${
+        human(db, voice.eid)
+      })${project ? ` for ${human(db, String(project))}` : ''}.`
     let { num } = db.prepare('select num from entity where eid = ?')
       .get(eid) as { num: number }
     let sid = `S-${num}`
@@ -1986,6 +1995,7 @@ export let spawned =
     // Two aspects, seeded as two entries by the graph-native path (T-18991);
     // `instruction` folds them back for the process-backed argv door.
     let prompt = [
+      actingAs,
       !task && !role ? CHAT : repo ? undefined : NO_CODE,
       !task && !role
         ? (db.prepare(`select body from doc_value where ${OWNED}`).get(eid) as

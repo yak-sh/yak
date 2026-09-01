@@ -45,6 +45,21 @@ export let personaGraph = (
     }
     frontier = [...next]
   }
+  // The standing goals ride every rendered persona (M-31946 §5) yet hang off
+  // no persona edge, so they join the universe by their own table, not the
+  // walk. Few by design; titles only are read.
+  let goals = (db.prepare(
+    `select o.eid as eid from goal t join entity o on o.id = t.entity`,
+  ).all() as { eid: string }[]).map((r) => r.eid).filter((e) => !all.has(e))
+  for (let r of rowsOf(db, goals)) {
+    if (!r.comps.entity) continue
+    all.set(r.eid, {
+      eid: r.eid,
+      num: Number(r.comps.entity.num ?? 0),
+      kind: kindOf(r.comps),
+      comps: r.comps,
+    })
+  }
   return { all: [...all.values()], deps }
 }
 
