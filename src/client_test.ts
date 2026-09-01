@@ -491,7 +491,8 @@ Deno.test('notices: comments, acted knocks, and verified operator mail surface t
       { eid: C, name: 'doc', comp: { title: '', body: 'review this' } },
       { eid: C, name: 'comment', comp: { target: T1 } },
       { eid: K, name: 'entity', comp: { eid: K, num: 44 } },
-      { eid: K, name: 'created', comp: { at: '2026-01-03' } },
+      // born now: the bus drops a knock older than a week
+      { eid: K, name: 'created', comp: { at: new Date().toISOString() } },
       { eid: K, name: 'knock', comp: { target: T1 } },
       { eid: K, name: 'deliver', comp: { to: S } }, // WHO — the shared facet
       // The outcome is the shared error facet now (D-14945); the inbox
@@ -575,8 +576,8 @@ Deno.test('notices: an explicit context read is bounded and stateless', () => {
   }).flat()
   let g: Snapshot = { changes: [...snap.changes, ...comments], deps: snap.deps }
   let first = noticesFor(g, 'sess-x')
-  assertEquals(first.lines.length, 21) // 20 items + overflow summary
-  assertEquals(first.eids.length, 20)
+  assertEquals(first.lines.length, 11) // 10 items + overflow summary
+  assertEquals(first.eids.length, 10)
   assertEquals(noticesFor(g, 'sess-x'), first)
 })
 

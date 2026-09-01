@@ -94,9 +94,11 @@ let said = (
     comment: { target: target },
   })
 
+// A knock is born NOW: the bus drops one older than a week (client.ts
+// notices), so a fixed fixture date would age out of the very case it feeds.
 let knocked = (eid: string, num: number, to: string, target: string) =>
   ent(eid, num, {
-    created: { at: '2026-01-03', by: P, via: B },
+    created: { at: new Date().toISOString(), by: P, via: B },
     knock: { target: target },
     // WHO it is for rides the shared deliver.to now (D-14945).
     deliver: { to },
@@ -278,7 +280,8 @@ let cases: [string, Snapshot, number][] = [
           ),
       ),
     ),
-    21,
+    // ten served, one line counting the rest
+    11,
   ],
   // A specialist hears direct address and its own claimed work, never the
   // project's mail or a knock aimed at the venture.

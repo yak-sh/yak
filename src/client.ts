@@ -3441,17 +3441,20 @@ export let taskBlock = (
       authoring ? ` · ${authoring}` : ''
     }`,
   ]
-  for (let d of deps.filter((d) => d.parent == r.eid)) {
+  // A claimed PROJECT wants dozens of tasks; the digest is a glance, not a
+  // board, so the gates cap at a handful with a count for the rest.
+  let gates = deps.filter((d) => d.parent == r.eid).flatMap((d) => {
     let c = byEid.get(d.child)
-    if (!c || d.type == 'reads') continue
-    if (settled(taskStatus(c))) continue
+    if (!c || d.type == 'reads' || settled(taskStatus(c))) return []
     let who = claimant(all, c)
-    out.push(
+    return [
       `  - ${d.type} → ${idOf(c)} (${taskStatus(c) ?? c.kind}${
         who ? `, ⚑ ${who}` : ''
       })`,
-    )
-  }
+    ]
+  })
+  out.push(...gates.slice(0, 6))
+  if (gates.length > 6) out.push(`  - …and ${gates.length - 6} more open`)
   out.push(...taskContextBlock(all, deps, r, 6, byEid))
   return out
 }
@@ -3718,8 +3721,15 @@ export let notices = (all: Row[], who: Reader) => {
       bornAt(byEid.get(a.eid)!).localeCompare(bornAt(byEid.get(b.eid)!)) ||
       a.eid.localeCompare(b.eid)
     )
+  // A knock is a nudge to look now; one older than a week is archaeology
+  // (a boot digest opened with 77 of them, most weeks stale), so it drops
+  // here rather than crowding out what is live. Comments and mail stay.
+  let stale = new Date(Date.now() - 7 * 864e5).toISOString()
+  events = events.filter((ev) =>
+    ev.meta.kind != 'knock' || bornAt(byEid.get(ev.eid)!) >= stale
+  )
   if (!events.length) return none
-  let served = events.slice(0, 20)
+  let served = events.slice(0, 10)
   let lines = served.map((ev) => noticeLine(ev, byEid.get(ev.eid)))
   if (events.length > served.length) {
     lines.push(`…and ${events.length - served.length} more pending`)
