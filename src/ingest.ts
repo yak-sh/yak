@@ -23,7 +23,12 @@ type Event = Record<string, unknown>
 // arrives on a LATER line (claude emits `tool_use` then a separate
 // `tool_result`) looks its call up here; a daemon restart rebuilds it from
 // durable evidence (entries.ts `callKeys`), so correlation survives a crash.
-export type IngestState = { calls: Map<string, string> }
+export type IngestState = {
+  calls: Map<string, string>
+  // Texts the queue log said the running turn absorbed (claude), so a later
+  // `user` record carrying one of them is not minted a second time.
+  absorbed?: Set<string>
+}
 
 // What one source line becomes: the entry specs (with their pre-minted eids,
 // so intra-line result→call refs already resolve) plus any NEW call
@@ -175,7 +180,38 @@ let claudeBlock = (
 // The reusable Claude dialect mapper (T-16815 imports this). One
 // assistant/user event may carry SEVERAL content blocks — each becomes its own
 // entry, all in one line's batch.
+// A message typed while a turn was running goes through the harness's queue,
+// and the queue log is the only trace of one the turn ABSORBED: it never
+// becomes a `user` record. The shape: `{type:'queue-operation',
+// operation:'enqueue', content}` then either `{operation:'dequeue'}` — the
+// text becomes a `user` record (origin human, promptSource 'queued') on the
+// next turn — or `{operation:'remove', reason:'absorbed_mid_turn', content}`,
+// the running turn took it and nothing else will record it. So only the
+// absorbed removal mints a turn. Harness payloads ride the same queue with no
+// marker of their own; they are tagged blocks (`<task-notification>`), which
+// is the one shape test here.
+export let absorbedTurn = (e: Event): string | undefined => {
+  if (e.type != 'queue-operation' || e.operation != 'remove') return
+  if (e.reason != 'absorbed_mid_turn') return
+  let text = typeof e.content == 'string' ? e.content : ''
+  return text.trim() && !text.trimStart().startsWith('<') ? text : undefined
+}
+
+// The turn an absorbed queue record becomes — one door, so the live ingest and
+// `task backfill prompt` (finished transcripts) mint the same entry.
+export let absorbedSpec = (e: Event): EntrySpec | undefined => {
+  let text = absorbedTurn(e)
+  return text
+    ? { message: { role: 'user' }, content: { body: scrub(text) }, prompt: {} }
+    : undefined
+}
+
 export let claudeEntries = (e: Event, state: IngestState): Batch => {
+  let absorbed = absorbedSpec(e)
+  if (absorbed) {
+    ;(state.absorbed ??= new Set()).add(String(e.content))
+    return { specs: [absorbed], ids: [uuid()], calls: [] }
+  }
   if (e.type != 'assistant' && e.type != 'user') return empty()
   let role: 'user' | 'agent' = e.type == 'user' ? 'user' : 'agent'
   let msg = e.message as { content?: unknown } | undefined
@@ -190,6 +226,11 @@ export let claudeEntries = (e: Event, state: IngestState): Batch => {
   // reader asks the graph which user turns were said rather than a body prefix.
   let typed = role == 'user' &&
     (e.origin as Event | undefined)?.kind == 'human'
+  // Should the harness ever record an absorbed message as a `user` turn as
+  // well, the queue's copy already stands: the same text is not said twice.
+  if (typed && typeof content == 'string' && state.absorbed?.has(content)) {
+    return empty()
+  }
   for (let raw of blocks) {
     let mapped = claudeBlock(role, raw as Block, state)
     if (!mapped) continue

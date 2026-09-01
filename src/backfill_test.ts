@@ -126,3 +126,47 @@ Deno.test('historicalPrompts tags typed turns from their transcript lines', () =
   assertEquals(historicalPrompts(db, read), [])
   db.close()
 })
+
+// A finished session's absorbed mid-turn messages are minted as turns; a
+// harness payload absorbed the same way is not, and a rerun mints nothing.
+Deno.test('historicalPrompts mints absorbed turns for finished sessions', () => {
+  let db = open(':memory:')
+  let done = uid(), live = uid()
+  apply(db, [
+    {
+      eid: done,
+      name: 'session',
+      comp: { id: `bf-${uid()}`, transcript: '/t/done.jsonl' },
+    },
+    {
+      eid: live,
+      name: 'session',
+      comp: { id: `bf-${uid()}`, transcript: '/t/live.jsonl' },
+    },
+  ])
+  db.prepare(
+    `update session set finished_at = '2026-09-01T20:00:00.000Z'
+      where entity = (select id from entity where eid = ?)`,
+  ).run(done)
+  let lines = [
+    '{"type":"queue-operation","operation":"enqueue","content":"oh, i meant it"}',
+    '{"type":"queue-operation","operation":"remove","reason":"absorbed_mid_turn","content":"oh, i meant it"}',
+    '{"type":"queue-operation","operation":"remove","reason":"absorbed_mid_turn","content":"<task-notification/>"}',
+  ].join('\n')
+  let reads: string[] = []
+  let read = (path: string) => (reads.push(path), lines)
+  let pending = historicalPrompts(db, read)
+  // Only the finished session is read; the live one belongs to its tailer.
+  assertEquals(reads, ['/t/done.jsonl'])
+  assertEquals(pending.map((c) => c.name), [
+    'entry',
+    'message',
+    'content',
+    'prompt',
+  ])
+  assertEquals(pending[0].comp, { session: done })
+  assertEquals(pending[2].comp, { body: 'oh, i meant it' })
+  apply(db, pending)
+  assertEquals(historicalPrompts(db, read), [])
+  db.close()
+})

@@ -58,6 +58,60 @@ Deno.test('claude: a typed user turn wears prompt, an injected one does not', ()
   }
 })
 
+// A message typed mid-turn that the harness ABSORBED never becomes a `user`
+// record; its queue removal is the only trace and mints the turn. A dequeued
+// one does become a `user` record later, so its queue records mint nothing,
+// and a harness payload absorbed the same way is not a turn.
+Deno.test('claude: an absorbed queued message is a typed turn; other queue ops are not', () => {
+  let s = fresh()
+  let op = (operation: string, content?: string, reason?: string) => ({
+    type: 'queue-operation',
+    operation,
+    ...(content == null ? {} : { content }),
+    ...(reason ? { reason } : {}),
+  })
+  assertEquals(claudeEntries(op('enqueue', 'oh, i meant it'), s).specs, [])
+  assertEquals(claudeEntries(op('dequeue'), s).specs, [])
+  assertEquals(
+    claudeEntries(op('remove', 'oh, i meant it', 'absorbed_mid_turn'), s)
+      .specs,
+    [{
+      message: { role: 'user' },
+      content: { body: 'oh, i meant it' },
+      prompt: {},
+    }],
+  )
+  assertEquals(
+    claudeEntries(
+      op(
+        'remove',
+        '<task-notification>\n<task-id>x</task-id>',
+        'absorbed_mid_turn',
+      ),
+      s,
+    ).specs,
+    [],
+  )
+  assertEquals(
+    claudeEntries(op('remove', 'x', 'delivered_to_agent'), s).specs,
+    [],
+  )
+  // Were the harness to record the absorbed text as a user turn too, the
+  // queue's copy already stands.
+  assertEquals(
+    claudeEntries(
+      {
+        type: 'user',
+        message: { content: 'oh, i meant it' },
+        origin: { kind: 'human' },
+        promptSource: 'queued',
+      },
+      s,
+    ).specs,
+    [],
+  )
+})
+
 Deno.test('claude: text and thinking become say + reasoning entries', () => {
   let s = fresh()
   let text = claudeEntries(

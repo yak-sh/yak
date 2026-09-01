@@ -580,7 +580,10 @@ export let manuals = declare({
     detail:
       "Explicit and idempotent. Re-reads each native user entry's transcript " +
       'line (imported source/line) and stamps `prompt` where the harness ' +
-      'marked the turn typed — what `task said` and `## owner said` read.',
+      "marked the turn typed, and mints the turns a finished session's " +
+      'running turn absorbed from the queue — what `task said` and ' +
+      "`## owner said` read. An open session's transcript is re-read by its " +
+      'own tailer.',
     args: [],
   },
   watch: {
