@@ -4477,11 +4477,25 @@ Deno.test('contextSnapshot: claim read names only the current session', async ()
   }
 })
 
-Deno.test('commitChanges: one row aimed at the task, session reified', () => {
-  let git = { sha: 'abc1234', repo: '/r', message: 'Land it' }
+Deno.test('commitChanges: the sha is the eid; a known sha is found, not minted', () => {
+  let sha = 'ABCDEF0123456789abcdef0123456789abcdef01'
+  let git = { sha, repo: '/r', message: 'Land it\n\nWhy.' }
   let cs = commitChanges(all, T1, git, 'sess-x')
   let last = cs.at(-1)!
+  assertEquals(last.eid, sha.toLowerCase())
   assertEquals(last.name, 'commit')
-  assertEquals(last.comp, { target: T1, ...git })
+  assertEquals(last.comp, { target: T1, ...git, sha: sha.toLowerCase() })
   assertEquals(commitChanges(all, T1, git).length, 1)
+  let known = [...all, {
+    eid: sha.toLowerCase(),
+    num: 99,
+    kind: 'commit',
+    comps: { commit: { target: T1, sha: sha.toLowerCase() } },
+  } as Row]
+  assertEquals(commitChanges(known, T1, git), [])
+  assertEquals(commitChanges(known, T2, git), [{
+    eid: sha.toLowerCase(),
+    name: 'dependency',
+    comp: { type: 'about', child: T2 },
+  }])
 })

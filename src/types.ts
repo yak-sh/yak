@@ -1733,8 +1733,8 @@ export type Comment = {
 }
 
 // A commit: a git revision landed FOR its target (M-31946 §7) — the
-// structured twin of a comment, with no doc: sha, repo and subject are
-// columns, so nothing about it is prose.
+// structured twin of a comment, with no doc: sha, repo and the whole
+// message are columns; compact rows show the message's first line.
 export type Commit = {
   eid: string
   target: string

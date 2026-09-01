@@ -766,7 +766,7 @@ export let manuals = declare({
   commit: {
     about: 'record a git commit on a task — structure, not a comment',
     detail: 'The sha defaults to HEAD of the repo you stand in; the repo ' +
-      'root and subject line are read from git. Where a comment would have ' +
+      'root and full message are read from git. Where a comment would have ' +
       'said "landed abc123", a commit row says it as columns (M-31946 §7).',
     examples: ['task commit T-3', 'task commit T-3 abc1234'],
     root: true,

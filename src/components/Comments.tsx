@@ -3,6 +3,7 @@ import { commands, orderIn, suggest } from '../commands.ts'
 import { slotsOf } from '../verb.ts'
 import { ent, mutate, pending, repoUrl, uuid } from '../live.ts'
 import { useCommentsOn, useCommitsOn } from './useQuery.ts'
+import { subject } from '../client.ts'
 import { ago, block, pretty } from './ui.tsx'
 import { useDraft } from './drafts.ts'
 import {
@@ -283,7 +284,7 @@ export let Landed = ({ c }: { c: Ent }) => {
       </When>
       <Body>
         <code>{String(c.commit?.sha ?? '').slice(0, 7)}</code>{' '}
-        {c.commit?.message ?? ''}
+        {subject(c.commit?.message)}
       </Body>
     </Item>
   )

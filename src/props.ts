@@ -105,7 +105,8 @@ let fail = (p: Prop, grammar: string, v: unknown): never => {
 
 let DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i
 let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-let SHA = /^[0-9a-f]{64}$/i
+// A blob's eid is its content hash (64 hex); a commit's is its git sha (40).
+let SHA = /^[0-9a-f]{64}$|^[0-9a-f]{40}$/i
 
 let number = (p: Prop, v: unknown): number => {
   let s = typeof v == 'string' ? v.trim() : String(v)

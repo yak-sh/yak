@@ -136,7 +136,7 @@ struct Notice {
 
 // A commit: a git revision landed FOR the target — structure where a comment
 // would have been prose (M-31946 §7). sha and repo locate it, message is the
-// subject line; it dies with its target the way a comment does.
+// whole commit message; it dies with its target the way a comment does.
 #[derive(Comp)]
 #[comp(plugin = "kernel", rank = 715, kind_rank = 295, prefix = "G")]
 struct Commit {

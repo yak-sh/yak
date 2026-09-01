@@ -3,8 +3,6 @@
 Deno.env.set('DB_PATH', ':memory:')
 let {
   apply,
-  COMMENT_CHARS,
-  COMMENT_LINES,
   backfillJournalTouch,
   backfillLineage,
   backfillOpened,
@@ -18,6 +16,7 @@ let {
   delta,
   eager,
   epochOf,
+  findEid,
   hasCol,
   healInboundDeliver,
   historicalWorked,
@@ -5077,74 +5076,25 @@ slow('concurrent openers serialize one idempotent migration', async () => {
   Deno.removeSync(dir, { recursive: true })
 })
 
-// An agent's comment is bounded at apply() (M-31946 §7): past the budget it is
-// refused for every door and the refusal names the structured doors; a person's
-// is not. `writer` is what the door named — a person eid stands for itself, a
-// project eid is an agent, nothing at all is machinery.
-Deno.test('comment clamp: agents get a turn summary, people are unbounded', () => {
-  let d = fresh()
-  let target = tag(d, 'doc', { title: 'work' })
-  let person = tag(d, 'person')
-  let project = tag(d, 'project')
-  let long = 'x'.repeat(COMMENT_CHARS + 1)
-  let tall = Array(COMMENT_LINES + 1).fill('l').join('\n')
-  let say = (body: string, writer?: string | null) => {
-    let eid = uid()
-    apply(
-      d,
-      [
-        { eid, name: 'doc', comp: { title: '', body } },
-        { eid, name: 'comment', comp: { target } },
-      ],
-      undefined,
-      writer,
-    )
-    return eid
-  }
-  say('short', project)
-  say(long, person)
-  assertThrows(() => say(long, project), Error, 'comment refused')
-  assertThrows(() => say(tall, project), Error, 'task commit')
-  assertThrows(() => say(long, null), Error, 'comment refused')
-  // Growing an existing agent comment past the budget is the same refusal.
-  let mine = say('fine', project)
-  assertThrows(
-    () =>
-      apply(
-        d,
-        [{ eid: mine, name: 'doc', comp: { body: long } }],
-        undefined,
-        project,
-      ),
-    Error,
-    'comment refused',
-  )
-  // A long body on a doc that is NOT a comment (a task body) is untouched.
-  apply(
-    d,
-    [{ eid: uid(), name: 'doc', comp: { title: 't', body: long } }],
-    undefined,
-    project,
-  )
-})
-
 // A commit is a row aimed at its target (M-31946 §7) — columns, no doc — and
 // dies with the target the way a comment does.
 Deno.test('commit: a structured row on a task, cascading with it', () => {
   let d = fresh()
   let target = tag(d, 'doc', { title: 'work' })
-  let g = uid()
+  // The eid is the git sha, and resolves as an id the way a uuid does.
+  let g = 'abcdef0123456789abcdef0123456789abcdef01'
   apply(d, [{
     eid: g,
     name: 'commit',
-    comp: { target, sha: 'abc1234def', repo: '/r', message: 'Land it' },
+    comp: { target, sha: g, repo: '/r', message: 'Land it' },
   }])
+  assertEquals(findEid(d, g), g)
   let row = () =>
     d.prepare(
       `select sha, message from "commit"
        where entity = (select id from entity where eid = ?)`,
     ).get(g)
-  assertEquals(row(), { sha: 'abc1234def', message: 'Land it' })
+  assertEquals(row(), { sha: g, message: 'Land it' })
   apply(d, [{ eid: target, name: 'entity', comp: null }])
   assertEquals(row(), undefined)
 })

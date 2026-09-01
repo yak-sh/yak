@@ -2648,16 +2648,33 @@ export let noticeChanges = (
   ]
 }
 
+// A commit message's first line — what a compact row shows of it.
+export let subject = (message: unknown) => String(message ?? '').split('\n')[0]
+
 // A commit: a revision landed FOR the target (M-31946 §7) — the structured
-// twin of a comment for "here is the code". No doc: sha, repo and subject
-// are columns, so nothing about it is prose to read. The session reification
-// matches a comment's, so apply() stamps who landed it.
+// twin of a comment for "here is the code". No doc: sha, repo and the whole
+// message are columns; rows show the subject line, `task show` the message.
+// The session reification matches a comment's, so apply() stamps who landed it.
+//
+// The eid IS the sha, so a revision already in the graph is found, never
+// duplicated: recorded again for the same task it is a no-op ([]); for a
+// second task the existing entity gains an `about` edge to it, keeping the
+// first `target` where it was.
 export let commitChanges = (
   all: Row[],
   target: string,
   git: { sha: string; repo?: string; message?: string },
   session?: string,
 ): Change[] => {
+  let eid = git.sha.toLowerCase()
+  let prior = all.find((r) => r.eid == eid && r.comps.commit)
+  if (prior) {
+    return prior.comps.commit.target == target ? [] : [{
+      eid,
+      name: 'dependency',
+      comp: { type: 'about', child: target },
+    }]
+  }
   let s = session
     ? sessionFor(all, session, undefined, undefined, {
       actor: taskActor(all, target),
@@ -2665,9 +2682,19 @@ export let commitChanges = (
     : undefined
   return [
     ...(s?.changes ?? []),
-    { eid: uuid(), name: 'commit', comp: { target, ...git } },
+    { eid, name: 'commit', comp: { target, ...git, sha: eid } },
   ]
 }
+
+// The commits recorded for an entity: aimed at it by `target`, or reaching
+// it by an `about` edge when the same sha served a second task.
+export let commitsOn = (deps: Dep[], all: Row[], eid: string) =>
+  all.filter((r) =>
+    r.comps.commit && (
+      r.comps.commit.target == eid ||
+      deps.some((d) => d.parent == r.eid && d.type == 'about' && d.child == eid)
+    )
+  )
 
 // The operator loop is the session that TRIAGES a project — the only door that
 // receives project-wide mail and actor knocks. Every run still participates in
@@ -4662,9 +4689,8 @@ export let showMd = (snap: { deps: Dep[] }, all: Row[], row: Row) => {
   let body = String(row.comps.doc?.body ?? '')
   if (title) out.push('', `# ${title}`)
   if (body) out.push('', body)
-  // Commits are rows, not prose: one line each, sha first.
-  let commits = all
-    .filter((r) => r.comps.commit?.target == row.eid)
+  // Commits are rows, not prose: one line each, sha then the subject line.
+  let commits = commitsOn(snap.deps, all, row.eid)
     .sort((a, b) => bornAt(a).localeCompare(bornAt(b)))
   if (commits.length) {
     out.push('', '## Commits')
@@ -4672,7 +4698,7 @@ export let showMd = (snap: { deps: Dep[] }, all: Row[], row: Row) => {
       let { sha, message } = c.comps.commit
       let by = c.comps.created?.by
       out.push(
-        `- ${String(sha ?? '').slice(0, 7)} ${clip(message, 72)} · ${
+        `- ${String(sha ?? '').slice(0, 7)} ${clip(subject(message), 72)} · ${
           local(bornAt(c))
         }${by ? ` · ${said(by)}` : ''}`,
       )

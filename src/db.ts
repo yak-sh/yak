@@ -1976,7 +1976,8 @@ export let resolveId = (
     if (hit) return hit // else fall through — a bare token may be a short eid
   }
   let low = id.toLowerCase()
-  if (UUIDRE.test(id)) {
+  // A full eid: a uuid, a blob's content hash, or a commit's git sha.
+  if (UUIDRE.test(id) || CONTENT_EID.test(id) || SHA_EID.test(id)) {
     let hit = (prep(db, 'select eid from entity where eid = ?').get(low) as
       | { eid: string }
       | undefined)?.eid
@@ -2057,6 +2058,9 @@ export let human = (db: DatabaseSync, eid: string): string => {
 let ADDR = /@/
 let UUIDRE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 let CONTENT_EID = /^[0-9a-f]{64}$/i
+// A commit's eid IS its git sha (the way a blob's is its content hash), so
+// recording the same revision twice finds the same entity.
+let SHA_EID = /^[0-9a-f]{40}$/i
 
 // The entity already wearing this address: an address-book `email`, or an
 // id-shaped fleet address naming one by its human id (S-31@<fleet> → that
@@ -4400,19 +4404,6 @@ export let writerActor = (
   writer?: string | null,
 ): string | null => actorFor(db, writer, true)
 
-// Whether an actor is a human — the one writer whose comments go unbounded
-// (M-31946 §7). Nothing resolved is not a person: an anonymous write is
-// machinery until it says otherwise.
-let isPerson = (db: DatabaseSync, actor: string | null) =>
-  !!actor &&
-  !!prep(db, `select 1 from person where ${byEid}`).get(actor)
-
-// The comment budget an agent gets: the size of a turn's closing summary.
-export let COMMENT_CHARS = 1500
-export let COMMENT_LINES = 25
-export let overlong = (body: string) =>
-  body.length > COMMENT_CHARS || body.split('\n').length > COMMENT_LINES
-
 // Who may SIGN a letter: the same chain, minus the one inference provenance
 // is allowed to make. A tab at the owner's keyboard may be RECORDED as them;
 // it may not SPEAK as them, because that is the fleet's highest-trust byline
@@ -5280,31 +5271,6 @@ export let apply = (
       // ALREADY a comment is identity reuse — bounce the whole batch loudly, the
       // way a taken claim or alias does, rolling back the displacing doc write
       // with it, for every entry path (CLI, MCP, raw graph_apply, deno eval).
-      // An agent's comment is a turn summary, not a document (M-31946 §7):
-      // the graph is structure — status, edges, a commit row — and prose in
-      // it is noise the owner has to read. So a comment body written by
-      // anything that is not a person is bounded here, for every door at
-      // once, and the refusal names the structured doors. A person's is not.
-      if (name == 'doc' && comp && typeof comp.body == 'string') {
-        let aimed = changes.some((c) => c.eid == eid && c.name == 'comment') ||
-          !!prep(
-            db,
-            `select 1 from comment
-             where entity = (select id from entity where eid = ?)`,
-          ).get(eid)
-        if (
-          aimed && overlong(comp.body) && !isPerson(db, writerActor(db, writer))
-        ) {
-          throw new Error(
-            `comment refused: ${comp.body.length} chars / ${
-              comp.body.split('\n').length
-            } lines — an agent's comment is a turn summary (≤${COMMENT_CHARS} ` +
-              `chars, ≤${COMMENT_LINES} lines). Say it as structure instead: ` +
-              `task commit <id> <sha>, task set <id> .status=…, ` +
-              `task <a> requires <b>, or task session brief for the narrative.`,
-          )
-        }
-      }
       if (name == 'comment' && comp) {
         if (
           prep(

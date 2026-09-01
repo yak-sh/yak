@@ -2085,10 +2085,25 @@ let landed = async (got: Got) => {
   if (!at) throw new Error(`no such revision here: ${ref ?? 'HEAD'}`)
   let sid = me()
   let sess = sid ? await sessionRow(sid) : undefined
-  let made = commitChanges([row, ...(sess ? [sess] : [])], row.eid, at, sid)
+  // The sha is the eid, so the revision may already be in the graph.
+  let prior = await query([`id=${at.sha}`])
+  let made = commitChanges(
+    [row, ...prior, ...(sess ? [sess] : [])],
+    row.eid,
+    at,
+    sid,
+  )
+  let short = at.sha.slice(0, 7)
+  if (!made.length) {
+    return print(`${idOf(prior[0])} — ${short} already on ${idOf(row)}`)
+  }
   let applied = await send(made)
-  let mine = made.find((c) => c.name == 'commit')!.eid
-  print(`${mintedIn(applied, mine)} — ${at.sha.slice(0, 7)} on ${idOf(row)}`)
+  let mine = made.find((c) => c.name == 'commit')?.eid
+  print(
+    mine
+      ? `${mintedIn(applied, mine)} — ${short} on ${idOf(row)}`
+      : `${idOf(prior[0])} — ${short} now also about ${idOf(row)}`,
+  )
 }
 
 let show = async (got: Got) => {
