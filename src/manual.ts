@@ -401,14 +401,16 @@ export let manuals = declare({
     opts: [{ ...count, or: '50' }, json, verbose],
   },
   said: {
-    about: 'what the owner has said, in order, across every session',
+    about: 'everything the owner authored, in order, across the whole graph',
     examples: ['task said', 'task said -n 50', 'task said --full'],
     detail:
-      "The owner's own words are the signal (M-31946): the user turns of " +
-      'sessions a human drove, oldest first so the newest sits at the bottom. ' +
-      'Each line carries the entry id (`task show <id>` reads that turn ' +
-      'whole) and its session; `--full` prints whole bodies. The boot digest ' +
-      'carries the last five under `## owner said`.',
+      "The owner's own words are the signal (M-31946): turns typed at a " +
+      'prompt, and every act the stamps attribute to a person — a comment, ' +
+      'task, doc, design, memory or letter created, an edit, a decision ' +
+      '(decided.by), feedback a memory records — oldest first so the newest ' +
+      'sits at the bottom. Each line carries the entity id (`task show <id>` ' +
+      'reads it whole), the act, and where it sits; `--full` prints whole ' +
+      'texts. The boot digest carries the last five under `## owner said`.',
     root: true,
     opts: [{ ...count, or: '20' }, full],
   },

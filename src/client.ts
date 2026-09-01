@@ -3558,12 +3558,111 @@ export let spoken = (r: Row, s?: Row) =>
 
 let when = (at: string) => at.slice(5, 16).replace('T', ' ')
 
-// What the owner said, in order — the last `n` owner turns among `rows`,
-// oldest first so the newest sits at the bottom. One line each: when, the
-// entry's own id (`task show <id>` reads the turn whole), its session, and
-// the first line cut to `width`; `full` prints each whole body under its
-// line instead. This is the signal every context reads before the fleet's
-// own prose (M-31946); the digest carries a few, `task said` the rest.
+// Client state the web writes in the owner's name on every gesture — a
+// cursor move, a camera pan, a card opened — is not authorship.
+let GESTURE = new Set([
+  'client',
+  'cursor',
+  'camera',
+  'pin',
+  'card',
+  'layout',
+  'pane',
+  'fold',
+  'shelf',
+  'setting',
+  'favorite',
+  'subscription',
+])
+
+// One act of authorship: when, what kind of act, the entity, where it sits,
+// and its words (a titled thing leads with its title).
+export type Said = {
+  at: string
+  act: string
+  row: Row
+  where: string
+  text: string
+}
+
+let wordsOf = (r: Row) => {
+  let title = String(r.comps.doc?.title ?? '').trim()
+  let body = String(r.comps.content?.body ?? r.comps.doc?.body ?? '').trim()
+  return title && body ? `${title}\n${body}` : title || body
+}
+
+// Where an act sits: a turn's session, a comment's target, a letter's
+// recipient, a task's project, a memory's scope — named by id when the row
+// is at hand, else by the short eid.
+let whereOf = (r: Row, byEid: Map<string, Row>) => {
+  let ref = String(
+    r.comps.entry?.session ?? r.comps.comment?.target ??
+      r.comps.deliver?.to ?? r.comps.mail?.target ?? r.comps.task?.project ??
+      r.comps.memory?.scope ?? '',
+  )
+  if (!ref) return ''
+  let at = byEid.get(ref)
+  return at ? idOf(at) : ref.slice(0, 8)
+}
+
+// Everything a person authored, as acts on one timeline: a turn typed at a
+// prompt (spoken), and for every other entity the acts its stamps attribute
+// to a person — created, a later edit (updated by a person after creation),
+// a decision (decided.by), and feedback a memory records from them
+// (feedback.by) even when an agent wrote it down. The journal attributes
+// every write the same way; these stamps are its latest word per entity, so
+// this is a union over what the graph already holds, not new storage. The
+// people are the person rows among `rows`, so no name is hardcoded.
+export let authored = (rows: Row[], byEid: Map<string, Row>): Said[] => {
+  let people = new Set(rows.filter((r) => r.comps.person).map((r) => r.eid))
+  let by = (stamp?: Record<string, unknown>) =>
+    people.has(String(stamp?.by ?? ''))
+  let out: Said[] = []
+  for (let r of rows) {
+    if (r.comps.entry) {
+      let s = byEid.get(String(r.comps.entry.session))
+      if (spoken(r, s)) {
+        out.push({
+          at: bornAt(r),
+          act: 'turn',
+          row: r,
+          where: s ? idOf(s) : '',
+          text: wordsOf(r),
+        })
+      }
+      continue
+    }
+    if (GESTURE.has(r.kind) || r.comps.person) continue
+    let { created, updated, decided, feedback } = r.comps
+    let where = whereOf(r, byEid)
+    let text = wordsOf(r)
+    let born = String(created?.at ?? '')
+    if (by(created)) out.push({ at: born, act: r.kind, row: r, where, text })
+    else if (by(feedback)) {
+      out.push({ at: born, act: 'feedback', row: r, where, text })
+    }
+    if (by(updated) && String(updated?.at) != born) {
+      out.push({ at: String(updated?.at), act: 'edit', row: r, where, text })
+    }
+    if (by(decided)) {
+      out.push({
+        at: String(decided?.at ?? ''),
+        act: 'decided',
+        row: r,
+        where: String(decided?.verdict ?? '') || where,
+        text,
+      })
+    }
+  }
+  return out.filter((s) => s.at).sort((a, b) => a.at.localeCompare(b.at))
+}
+
+// What the owner said, in order — the last `n` acts among `rows`, oldest
+// first so the newest sits at the bottom. One line each: when, the entity's
+// own id (`task show <id>` reads it whole), the act, where, and the first
+// line cut to `width`; `full` prints each whole text under its line instead.
+// This is the signal every context reads before the fleet's own prose
+// (M-31946); the digest carries a few, `task said` the rest.
 export let saidLines = (
   rows: Row[],
   byEid: Map<string, Row>,
@@ -3571,29 +3670,47 @@ export let saidLines = (
   width = 120,
   full = false,
 ) =>
-  rows
-    .filter((r) =>
-      r.comps.entry && spoken(r, byEid.get(String(r.comps.entry.session)))
-    )
-    .sort((a, b) => bornAt(a).localeCompare(bornAt(b)))
+  authored(rows, byEid)
     .slice(-Math.max(0, n))
-    .flatMap((r) => {
-      let s = byEid.get(String(r.comps.entry!.session))!
-      let body = String(r.comps.content!.body).trim()
-      let lead = `- ${when(bornAt(r))} ${idOf(r)} ${idOf(s)} · `
-      return full ? [lead.trimEnd(), body, ''] : [
+    .flatMap(({ at, act, row, where, text }) => {
+      let lead = `- ${when(at)} ${idOf(row)} ${act}${
+        where ? ` ${where}` : ''
+      } · `
+      return full ? [lead.trimEnd(), text, ''] : [
         snip(
-          `${lead}${body.split('\n')[0]}`,
+          `${lead}${text.split('\n')[0]}`,
           Math.max(lead.length + 8, width),
         ),
       ]
     })
 
-// The owner's latest words over the wire: the newest user turns across every
-// session (the entry partition answers newest-first when unscoped), their
-// sessions fetched to tell a human's turn from a managed run's, then the
-// same lines the digest prints. Over-read, since managed prompts share the
-// role and are screened here.
+// The stamps that name a person, as filters over the eager graph: what they
+// created, edited, decided, or gave as feedback since `since`.
+export let authoredQueries = (people: string, since: string) => [
+  [`.created.by=${people}`, `.created.at>=${since}`],
+  [`.updated.by=${people}`, `.updated.at>=${since}`],
+  [`.decided.by=${people}`, `.decided.at>=${since}`],
+  [`.feedback.by=${people}`, `.created.at>=${since}`],
+]
+
+// The rows an act points at, so `where` can say T-3 rather than a short eid.
+let whereRefs = (rows: Row[]) =>
+  rows.flatMap((r) =>
+    [
+      r.comps.comment?.target,
+      r.comps.deliver?.to,
+      r.comps.mail?.target,
+      r.comps.task?.project,
+      r.comps.memory?.scope,
+    ].filter(Boolean).map(String)
+  )
+
+// The owner's authored stream over the wire: the people, the newest user
+// turns across every session (the entry partition answers newest-first when
+// unscoped) with their sessions to tell a human's turn from a managed run's,
+// everything the stamps attribute to a person, and the rows those acts point
+// at — then the same lines the digest prints. Turns are over-read, since
+// managed prompts share the role and are screened here.
 export let ownerSaid = async (
   n = 20,
   q: Querier = query,
@@ -3601,24 +3718,27 @@ export let ownerSaid = async (
   full = false,
 ) => {
   let since = new Date(Date.now() - 30 * DAY).toISOString()
-  let entries = await q([
-    '.message.role=user',
-    '.content!',
-    `.created.at>=${since}`,
-    `.limit=${Math.max(200, n * 5)}`,
+  let people = await q(['.kind=person'])
+  let ids = people.map((r) => r.eid).join(',')
+  let [entries, ...acts] = await Promise.all([
+    q([
+      '.message.role=user',
+      '.content!',
+      `.created.at>=${since}`,
+      `.limit=${Math.max(200, n * 5)}`,
+    ]),
+    ...(ids ? authoredQueries(ids, since).map((f) => q(f)) : []),
   ])
-  let sessions = await fetched(
-    entries.map((r) => String(r.comps.entry?.session ?? '')).filter(Boolean),
+  let refs = await fetched(
+    [
+      ...entries.map((r) => String(r.comps.entry?.session ?? '')),
+      ...whereRefs(acts.flat()),
+    ].filter(Boolean),
     [],
     q,
   )
-  return saidLines(
-    entries,
-    new Map(sessions.map((r) => [r.eid, r])),
-    n,
-    width,
-    full,
-  )
+  let rows = uniq([...people, ...entries, ...acts.flat(), ...refs])
+  return saidLines(rows, new Map(rows.map((r) => [r.eid, r])), n, width, full)
 }
 
 // The injection-loop digest: what a session sees at start — its claimed
@@ -4126,10 +4246,20 @@ export let contextSnapshot = async (
     [],
     q,
   )
-  // The sessions the owner's turns belong to, so the digest can tell a
-  // human's turn from a managed run's brief (spoken).
+  // The owner's authored stream for `## owner said`: the people, what their
+  // stamps attribute to them, the sessions their turns belong to (so the
+  // digest can tell a human's turn from a managed run's brief), and the rows
+  // their acts point at.
+  let people = await q(['.kind=person'])
+  let ids = people.map((r) => r.eid).join(',')
+  let acts = ids
+    ? (await Promise.all(authoredQueries(ids, since).map((f) => q(f)))).flat()
+    : []
   let spoke = await fetched(
-    said.map((r) => String(r.comps.entry?.session ?? '')).filter(Boolean),
+    [
+      ...said.map((r) => String(r.comps.entry?.session ?? '')),
+      ...whereRefs(acts),
+    ].filter(Boolean),
     [],
     q,
   )
@@ -4138,6 +4268,8 @@ export let contextSnapshot = async (
     ...near.rows,
     ...unheardRows,
     ...refs,
+    ...people,
+    ...acts,
     ...said,
     ...spoke,
   ])
