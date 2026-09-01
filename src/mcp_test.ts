@@ -161,6 +161,41 @@ Deno.test('task_update adds and removes empty writable facets', async () => {
   db.close()
 })
 
+// A tool call that names its session is written BY that session's actor,
+// through that session — never by the person whose browser client is also
+// in the graph. The MCP door carries no client identity at all; only a
+// socket does, and a socket is a human at a keyboard.
+Deno.test("a session-named tool call is not attributed to a client's person", async () => {
+  let { db, io } = graph()
+  let jeff = crypto.randomUUID(), browser = crypto.randomUUID()
+  let project = crypto.randomUUID(), session = crypto.randomUUID()
+  apply(db, [
+    { eid: jeff, name: 'person', comp: {} },
+    { eid: browser, name: 'client', comp: { actor: jeff } },
+    { eid: project, name: 'project', comp: {} },
+    {
+      eid: session,
+      name: 'session',
+      comp: { id: 'agent-at-the-desk', actor: project },
+    },
+  ])
+  await protocol(io, async (client) => {
+    let out = await client.callTool({
+      name: 'memory_save',
+      arguments: {
+        title: 'the owner said nothing here',
+        body: 'an agent wrote this',
+        session: 'agent-at-the-desk',
+      },
+    }) as ToolResult
+    assertEquals(out.isError, undefined, said(out))
+    let saved = rows(snapshot(db)).find((r) => r.comps.memory)!
+    assertEquals(saved.comps.created.by, project)
+    assertEquals(saved.comps.created.via, session)
+  })
+  db.close()
+})
+
 Deno.test('task_update expands derived lifecycle status with attribution', async () => {
   let { db, io } = graph()
   let task = crypto.randomUUID(), session = crypto.randomUUID()
