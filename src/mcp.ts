@@ -1768,10 +1768,15 @@ your read is refused, with their text and a fresh token. ${BUS}`,
       await io.write(made.changes, session)
       let after = (await io.get([made.eid]))[0]
       let dupe = await similarHint(`${title}\n${body ?? ''}`, made.eid)
+      let mid = after ? idOf(after) : made.eid
+      // An agent's memory lands proposed (db.ts apply): say so, and name the
+      // one door that makes it count, so the writer never assumes it did.
+      let pending = after?.comps.proposed
+        ? `\nsaved as proposed — a person accepts it: task set ${mid} ` +
+          `.decided.verdict=approved`
+        : ''
       return bus(
-        `saved ${after ? idOf(after) : made.eid}${dupe ? `\n${dupe}` : ''}${
-          wall(body)
-        }`,
+        `saved ${mid}${pending}${dupe ? `\n${dupe}` : ''}${wall(body)}`,
         session,
       )
     },

@@ -50,49 +50,58 @@ let cast = (changes: Change[]) => casts.push(changes)
 let project = uid()
 let persona = uid()
 let memory = uid()
-apply(db, [
-  { eid: project, name: 'doc', comp: { title: 'Verifier tests' } },
-  { eid: project, name: 'project', comp: {} },
-  {
-    eid: project,
-    name: 'repo',
-    comp: { path: '/tmp/verifier-tests', base_branch: 'main' },
-  },
-  { eid: persona, name: 'doc', comp: { title: 'verifier' } },
-  { eid: persona, name: 'alias', comp: { slug: 'verifier' } },
-  { eid: persona, name: 'persona', comp: { home: project } },
-  {
-    eid: persona,
-    name: 'role',
-    comp: {
-      state: 'running',
-      surface: 'managed',
-      scope: project,
-      quiet: 0,
-      cooldown: VERIFIER_TUNING.cooldown,
-      cap: VERIFIER_TUNING.cap,
+// The fixture is the owner's hand: an accepted memory on a persona is a
+// person's write (db.ts apply), so the seed batch is jeff's.
+let jeff = uid()
+apply(db, [{ eid: jeff, name: 'person', comp: {} }])
+apply(
+  db,
+  [
+    { eid: project, name: 'doc', comp: { title: 'Verifier tests' } },
+    { eid: project, name: 'project', comp: {} },
+    {
+      eid: project,
+      name: 'repo',
+      comp: { path: '/tmp/verifier-tests', base_branch: 'main' },
     },
-  },
-  {
-    eid: persona,
-    name: 'spawn',
-    comp: { provider: 'fake', model: 'fake-fast', effort: 'high' },
-  },
-  {
-    eid: memory,
-    name: 'doc',
-    comp: {
-      title: 'verify independently',
-      body: 'DRIVE THE ACCEPTANCE SURFACES.',
+    { eid: persona, name: 'doc', comp: { title: 'verifier' } },
+    { eid: persona, name: 'alias', comp: { slug: 'verifier' } },
+    { eid: persona, name: 'persona', comp: { home: project } },
+    {
+      eid: persona,
+      name: 'role',
+      comp: {
+        state: 'running',
+        surface: 'managed',
+        scope: project,
+        quiet: 0,
+        cooldown: VERIFIER_TUNING.cooldown,
+        cap: VERIFIER_TUNING.cap,
+      },
     },
-  },
-  { eid: memory, name: 'memory', comp: { scope: project } },
-  {
-    eid: persona,
-    name: 'dependency',
-    comp: { type: 'contains', child: memory },
-  },
-])
+    {
+      eid: persona,
+      name: 'spawn',
+      comp: { provider: 'fake', model: 'fake-fast', effort: 'high' },
+    },
+    {
+      eid: memory,
+      name: 'doc',
+      comp: {
+        title: 'verify independently',
+        body: 'DRIVE THE ACCEPTANCE SURFACES.',
+      },
+    },
+    { eid: memory, name: 'memory', comp: { scope: project } },
+    {
+      eid: persona,
+      name: 'dependency',
+      comp: { type: 'contains', child: memory },
+    },
+  ],
+  undefined,
+  jeff,
+)
 
 let reset = () => {
   db.exec('delete from claim')

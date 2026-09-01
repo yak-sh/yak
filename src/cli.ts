@@ -2925,7 +2925,13 @@ let remember = async (got: Got) => {
     session,
   })
   let applied = await send(made.changes)
-  print(`${mintedIn(applied, made.eid)} remembered`)
+  let id = mintedIn(applied, made.eid)
+  // The server stamps an agent's memory proposed (db.ts apply); the echoed
+  // batch carries that stamp, so the door can say what it did.
+  let pending = applied.some((c) => c.eid == made.eid && c.name == 'proposed')
+    ? ` as proposed — a person accepts it: task set ${id} .decided.verdict=approved`
+    : ''
+  print(`${id} remembered${pending}`)
   let hint = await similarHint(`${title}\n${body ?? ''}`, made.eid)
   if (hint) print(hint)
 }

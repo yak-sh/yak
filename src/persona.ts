@@ -11,7 +11,7 @@
 // only syncFiles() touches the filesystem, and it stops at the write —
 // committing what it wrote is git.ts's job, at the callers.
 import { type Dep, type Edge, idOf } from './types.ts'
-import { memoryHead, type Row } from './client.ts'
+import { accepted, memoryHead, type Row } from './client.ts'
 import { hot } from './query.ts'
 import { entityUrl } from './url.ts'
 
@@ -119,7 +119,9 @@ let tiers = (
   let kids = (type: Edge) =>
     deps.filter((d) => d.parent == eid && d.type == type)
       .map((d) => ({ d, r: all.find((r) => r.eid == d.child) }))
-      .filter((x): x is { d: Dep; r: Row } => !!x.r?.comps.doc)
+      // A proposed memory nobody has decided is a suggestion, not a rule:
+      // it reaches no prompt, by either edge, until a person accepts it.
+      .filter((x): x is { d: Dep; r: Row } => !!x.r?.comps.doc && accepted(x.r))
       .sort((a, b) =>
         (a.d.ord ?? Number.MAX_SAFE_INTEGER) -
           (b.d.ord ?? Number.MAX_SAFE_INTEGER) ||

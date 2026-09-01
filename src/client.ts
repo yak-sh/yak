@@ -4594,7 +4594,15 @@ export let feedbackChange = (
 // kind of thing to re-read than a fact. The SOURCE stays off the line: it
 // is one word on the row (`.feedback.by`) and naming it here would cost a
 // graph lookup in both renderers to repeat what `task show` already says.
-export let memoryHead = (r: Row) => r.comps.feedback ? 'feedback: ' : ''
+// A memory counts once a person has accepted it. An agent's memory lands
+// proposed (db.ts apply) and stays a suggestion — indexed with a `?`, never
+// preloaded — until `decided` lands on it without a declined verdict. A
+// memory with no proposed stamp predates the gate and reads as accepted.
+export let accepted = (r: Row) =>
+  !r.comps.proposed ||
+  (!!r.comps.decided && r.comps.decided.verdict != 'declined')
+export let memoryHead = (r: Row) =>
+  `${accepted(r) ? '' : '? '}${r.comps.feedback ? 'feedback: ' : ''}`
 
 // The `decided` stamp as a change: WHEN the decision was taken. The value
 // speaks the same time grammar as every other door — '2026-06-01',

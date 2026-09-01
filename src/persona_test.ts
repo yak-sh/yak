@@ -1091,3 +1091,35 @@ Deno.test('adopted: the CLAUDE.md symlink chain into .tasks, and only that', () 
     Deno.removeSync(dir, { recursive: true })
   }
 })
+
+// An agent's memory lands proposed (db.ts apply) and is a suggestion until a
+// person decides it: no tier carries it, the index marks it, and a declined
+// one stays out for good.
+Deno.test('tiers: a proposed memory reaches no prompt until a person accepts it', () => {
+  let pending = row({
+    doc: { title: 'agent idea', body: 'PENDING.' },
+    memory: {},
+    proposed: { at: day(1) },
+  }, 1)
+  let deps = [
+    edge(persona, 'contains', pending),
+    edge(persona, 'reads', pending),
+  ]
+  let md = materialize([persona, pending], deps, persona, NOW)
+  assert(!md.includes('PENDING.'))
+  assert(!md.includes('agent idea'))
+  let decide = (verdict?: string) => ({
+    ...pending,
+    comps: { ...pending.comps, decided: { at: day(0), verdict } },
+  })
+  assertStringIncludes(
+    materialize([persona, decide()], deps, persona, NOW),
+    'PENDING.',
+  )
+  assert(
+    !materialize([persona, decide('declined')], deps, persona, NOW)
+      .includes('PENDING.'),
+  )
+  assertStringIncludes(indexLine(pending), '? agent idea')
+  assert(!indexLine(decide()).includes('?'))
+})

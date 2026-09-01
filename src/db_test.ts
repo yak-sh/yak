@@ -5099,3 +5099,81 @@ Deno.test('commit: a structured row on a task, cascading with it', () => {
   apply(d, [{ eid: target, name: 'entity', comp: null }])
   assertEquals(row(), undefined)
 })
+
+// What reaches the next agent's prompt is the owner's to accept (M-31946):
+// an agent's memory lands proposed, only a person decides it, and a
+// persona's tiers and body take only a person's hand.
+Deno.test('memory gate: an agent memory lands proposed; a person decides it', () => {
+  let d = fresh()
+  let jeff = uid()
+  apply(d, [{ eid: jeff, name: 'person', comp: {} }])
+  let m = uid()
+  let out = apply(d, [
+    { eid: m, name: 'doc', comp: { title: 'lesson' } },
+    { eid: m, name: 'memory', comp: {} },
+  ])
+  assertEquals(!!readComp(d, m, 'proposed'), true)
+  // the stamp rides the effective batch, so every cache hears it
+  assertEquals(out.some((c) => c.eid == m && c.name == 'proposed'), true)
+  // an agent cannot accept it for itself; a person can
+  assertThrows(
+    () => apply(d, [{ eid: m, name: 'decided', comp: {} }]),
+    Error,
+    'a person decides it',
+  )
+  apply(d, [{ eid: m, name: 'decided', comp: {} }], undefined, jeff)
+  assertEquals(!!readComp(d, m, 'decided'), true)
+  // a person's own memory is accepted as written
+  let mine = uid()
+  apply(
+    d,
+    [
+      { eid: mine, name: 'doc', comp: { title: 'owner rule' } },
+      { eid: mine, name: 'memory', comp: {} },
+    ],
+    undefined,
+    jeff,
+  )
+  assertEquals(!!readComp(d, mine, 'proposed'), false)
+})
+
+Deno.test("persona gate: composition and body are a person's writes", () => {
+  let d = fresh()
+  let jeff = uid()
+  apply(d, [{ eid: jeff, name: 'person', comp: {} }])
+  let p = uid(), m = uid()
+  apply(
+    d,
+    [
+      { eid: p, name: 'doc', comp: { title: 'operator', body: 'be brief' } },
+      { eid: p, name: 'persona', comp: {} },
+      { eid: m, name: 'doc', comp: { title: 'lesson' } },
+      { eid: m, name: 'memory', comp: {} },
+    ],
+    undefined,
+    jeff,
+  )
+  let link = {
+    eid: p,
+    name: 'dependency',
+    comp: { type: 'contains', child: m },
+  }
+  assertThrows(() => apply(d, [link]), Error, 'composition is the owner')
+  assertThrows(
+    () => apply(d, [{ eid: p, name: 'doc', comp: { body: 'be long' } }]),
+    Error,
+    'body is the owner',
+  )
+  apply(d, [link], undefined, jeff)
+  apply(
+    d,
+    [{ eid: p, name: 'doc', comp: { body: 'be brief.' } }],
+    undefined,
+    jeff,
+  )
+  assertEquals(readComp(d, p, 'doc')?.body, 'be brief.')
+  // unlinking is the same move
+  assertThrows(() =>
+    apply(d, [{ ...link, comp: { ...link.comp, gone: true } }])
+  )
+})

@@ -21,11 +21,17 @@ let NOW = Date.parse('2026-08-25T00:00:00Z')
 
 let seed = () => {
   let db = freshDb()
+  // The fixture is the owner's hand: persona composition and an accepted
+  // memory are a person's writes (db.ts apply), so every seed write is jeff's.
+  let jeff = uuid()
+  apply(db, [{ eid: jeff, name: 'person', comp: {} }])
+  let put = (changes: Parameters<typeof apply>[1]) =>
+    apply(db, changes, undefined, jeff)
   let e = () => uuid()
   let doc = (eid: string, title: string, body = `${title} body`) =>
-    apply(db, [{ eid, name: 'doc', comp: { title, body } }])
+    put([{ eid, name: 'doc', comp: { title, body } }])
   let edge = (parent: string, type: string, child: string) =>
-    apply(db, [{ eid: parent, name: 'dependency', comp: { type, child } }])
+    put([{ eid: parent, name: 'dependency', comp: { type, child } }])
 
   let proj = e() // managed venture
   doc(proj, 'Venture')
@@ -54,15 +60,15 @@ let seed = () => {
 
   let m1 = e() // preloaded via the base — must surface through recursion
   doc(m1, 'Base memory')
-  apply(db, [{ eid: m1, name: 'memory', comp: { scope: proj } }])
+  put([{ eid: m1, name: 'memory', comp: { scope: proj } }])
   edge(base, 'contains', m1)
   let m2 = e() // index tier on the common persona
   doc(m2, 'Indexed memory')
-  apply(db, [{ eid: m2, name: 'memory', comp: {} }])
+  put([{ eid: m2, name: 'memory', comp: {} }])
   edge(common, 'reads', m2)
   let m3 = e() // in scope, on no tier — the derived scoped set, not the text
   doc(m3, 'Untiered memory')
-  apply(db, [{ eid: m3, name: 'memory', comp: { scope: proj } }])
+  put([{ eid: m3, name: 'memory', comp: { scope: proj } }])
 
   let noise = e() // unrelated row — present in snapshot, absent from the walk
   doc(noise, 'A task')

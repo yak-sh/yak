@@ -4407,6 +4407,25 @@ export let writerActor = (
   writer?: string | null,
 ): string | null => actorFor(db, writer, true)
 
+// Whether a writer's actor is a human. What reaches the next agent's prompt
+// — a persona's composition and body, and whether a memory counts as
+// accepted — is the owner's to decide (M-31946): an agent proposes, never
+// programs. Nothing resolved is not a person: an anonymous write is
+// machinery until it says otherwise.
+export let isPerson = (db: DatabaseSync, actor: string | null) =>
+  !!actor && !!prep(db, `select 1 from person where ${byEid}`).get(actor)
+
+// The entity already wears `persona` on disk (a persona minted in this same
+// batch is nobody's prompt yet, so it is not guarded).
+let wornPersona = (db: DatabaseSync, eid: string) =>
+  !!prep(db, `select 1 from persona where ${byEid}`).get(eid)
+
+// A proposed memory: the memory row is on disk or in this batch, and the
+// proposed stamp is on disk. Only a person may decide one.
+let proposedMemory = (db: DatabaseSync, eid: string) =>
+  !!prep(db, `select 1 from memory where ${byEid}`).get(eid) &&
+  !!prep(db, `select 1 from proposed where ${byEid}`).get(eid)
+
 // Who may SIGN a letter: the same chain, minus the one inference provenance
 // is allowed to make. A tab at the owner's keyboard may be RECORDED as them;
 // it may not SPEAK as them, because that is the fleet's highest-trust byline
@@ -4839,6 +4858,10 @@ export let apply = (
   let touched = new Set<string>()
   let minted = new Set<string>()
   let createdComps = new Set<string>()
+  // Whether this batch's writer is a human — asked lazily, once, by the
+  // rules that keep agents from programming the next agent's prompt.
+  let personKnown: boolean | undefined
+  let person = () => personKnown ??= isPerson(db, writerActor(db, writer))
   let refWrites = new Map<string, [Ref, string]>()
   let targetDrops = new Map<string, [Ref, string]>()
   // Whose provenance `by` the WIRE named this batch — the server keeps it
@@ -4984,6 +5007,20 @@ export let apply = (
         if (spines.n != 2) {
           console.warn(`sync: edge for ${eid} dropped — missing endpoint`)
           continue
+        }
+        // A persona's tiers are what an agent boots into. Linking or
+        // unlinking them is the owner's move (M-31946); an agent that wants
+        // a memory preloaded saves it and says so, and a person decides.
+        if (
+          (comp.type == 'contains' || comp.type == 'reads') &&
+          wornPersona(db, eid) && !createdComps.has(`persona ${eid}`) &&
+          !person()
+        ) {
+          throw new Error(
+            `${human(db, eid)} is a persona — its composition is the ` +
+              `owner's. Save the memory (it lands proposed) and a person ` +
+              `links it.`,
+          )
         }
         // Endpoints are int ids in storage; both spines exist (checked above).
         let pid = toId(db, eid)
@@ -5290,6 +5327,24 @@ export let apply = (
       }
       if (name == 'blob' && comp && !CONTENT_EID.test(eid)) {
         throw new Error('blob eid must be its SHA-256')
+      }
+      // A persona's own words reach every agent that wears it, so only a
+      // person rewrites them (M-31946). Same rule, same door, as its edges.
+      if (
+        name == 'doc' && comp && wornPersona(db, eid) &&
+        !createdComps.has(`persona ${eid}`) && !person()
+      ) {
+        throw new Error(
+          `${human(db, eid)} is a persona — its body is the owner's to edit.`,
+        )
+      }
+      // Accepting a proposed memory is the decision an agent may not take
+      // for itself: `decided` on one is a person's stamp only.
+      if (name == 'decided' && comp && proposedMemory(db, eid) && !person()) {
+        throw new Error(
+          `${human(db, eid)} is a proposed memory — a person decides it ` +
+            `(task set ${human(db, eid)} .decided.verdict=approved).`,
+        )
       }
       if (comp == null) {
         if (name != 'entity') {
@@ -5731,6 +5786,24 @@ export let apply = (
       else cNew.run(eid, now, actorId, viaId)
       let row = readComp(db, eid, 'created')
       if (row) extra.push({ eid, name: 'created', comp: row })
+    }
+    // A memory born of anything that is not a person lands PROPOSED
+    // (M-31946): recallable and searchable, but no persona preloads it and
+    // no index calls it accepted until a person decides. A person's own
+    // memory is accepted as written. Server-stamped here so every door —
+    // MCP, CLI, a raw /apply — says the same thing.
+    if (!person()) {
+      let propose = prep(
+        db,
+        `insert or ignore into proposed (entity, at, "by", via)
+         values ((select id from entity where eid = ?), ?, ?, ?)`,
+      )
+      for (let eid of minted) {
+        if (!createdComps.has(`memory ${eid}`) || !alive.get(eid)) continue
+        propose.run(eid, now, actorId, viaId)
+        let row = readComp(db, eid, 'proposed')
+        if (row) extra.push({ eid, name: 'proposed', comp: row })
+      }
     }
     let uSet = prep(
       db,
