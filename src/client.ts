@@ -3506,14 +3506,16 @@ export let sessionMeta = (all: Row[], sid: string) => {
 // operator sees, minus the session extras — parity by construction.
 // Scope resolves via scopeFor: an explicit arg, else the cwd's repo, else
 // the worn persona's home, else the actor-as-project (client.ts scopeFor).
-// The owner's own words: a user-role message entry of a session a human
-// drove. Not a managed run (its user turns are the brief and injected
-// comments) and not a subagent (its user turns are the parent's prompts).
-// Harness wrappers (`<local-command-caveat>`, `<command-name>`,
-// `<system-reminder>`) ride the user role too and are nothing anyone said.
+// The owner's own words: a user-role message entry of a session a human sat
+// at — one with a terminal pane. Not a managed run (its user turns are the
+// brief and injected comments), not a subagent (its user turns are the
+// parent's prompts), and not a scripted run (a cron sweep's `claude -p` has
+// no pane; its one user turn is the launcher's prompt). Harness wrappers
+// (`<local-command-caveat>`, `<command-name>`, `<system-reminder>`) ride the
+// user role too and are nothing anyone said.
 export let spoken = (r: Row, s?: Row) =>
   r.comps.message?.role == 'user' && !!r.comps.content?.body &&
-  !r.comps.result && !!s?.comps.session &&
+  !r.comps.result && !!s?.comps.session?.pane &&
   s.comps.session.origin != 'managed' && s.comps.session.agent_type == null &&
   !/^\s*</.test(String(r.comps.content.body))
 

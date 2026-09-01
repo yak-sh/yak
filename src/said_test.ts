@@ -9,6 +9,7 @@ import type { Snapshot } from './types.ts'
 let S = 'aaaaaaaa-0000-4000-8000-000000000001'
 let M = 'cccccccc-0000-4000-8000-000000000001'
 let SUB = 'cccccccc-0000-4000-8000-000000000002'
+let CRON = 'cccccccc-0000-4000-8000-000000000003'
 
 let entry = (
   eid: string,
@@ -27,7 +28,13 @@ let entry = (
 let base: Snapshot = {
   changes: [
     { eid: S, name: 'entity', comp: { eid: S, num: 1, created_at: '' } },
-    { eid: S, name: 'session', comp: { id: 'sess-x', cwd: '/w' } },
+    { eid: S, name: 'session', comp: { id: 'sess-x', cwd: '/w', pane: '%1' } },
+    { eid: CRON, name: 'entity', comp: { eid: CRON, num: 8, created_at: '' } },
+    {
+      eid: CRON,
+      name: 'session',
+      comp: { id: 'sess-cron', origin: 'external' },
+    },
     { eid: M, name: 'entity', comp: { eid: M, num: 9, created_at: '' } },
     { eid: M, name: 'session', comp: { id: 'sess-m', origin: 'managed' } },
     { eid: SUB, name: 'entity', comp: { eid: SUB, num: 10, created_at: '' } },
@@ -52,6 +59,12 @@ let spoke: Snapshot = {
     }),
     ...entry('e-brief', M, 'you are a coder', '2026-09-01T19:28:00.000Z'),
     ...entry('e-sub', SUB, 'parent prompt', '2026-09-01T19:29:00.000Z'),
+    ...entry(
+      'e-cron',
+      CRON,
+      'You are running in sweep mode',
+      '2026-09-01T19:30:00.000Z',
+    ),
   ],
   deps: [],
 }
