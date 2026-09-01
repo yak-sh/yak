@@ -13,6 +13,11 @@ use crate::app::{short_when, App, View};
 use crate::theme;
 
 pub fn draw(f: &mut Frame, app: &App) {
+    // The inbox paints its own header, body and footer.
+    if matches!(app.view, View::Inbox) {
+        crate::inbox_ui::draw(f, app);
+        return;
+    }
     f.render_widget(Block::default().style(Style::default().bg(theme::BG)), f.area());
     let rows = Layout::default()
         .direction(Direction::Vertical)
@@ -24,6 +29,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         View::Projects => projects(f, rows[1], app),
         View::Project(_) => sessions(f, rows[1], app),
         View::Session(_) => session(f, rows[1], app),
+        View::Inbox => {}
     }
     footer(f, rows[2], app);
 }
@@ -43,6 +49,7 @@ fn header(f: &mut Frame, area: Rect, app: &App) {
             let s = app.open_session();
             format!("session · {}", s.map(|s| s.id.clone()).unwrap_or_default())
         }
+        View::Inbox => "inbox".to_string(),
     };
     let line = Line::from(vec![
         Span::styled(
@@ -224,7 +231,7 @@ fn entries(f: &mut Frame, area: Rect, app: &App) {
 }
 
 // Greedy word wrap that also honors existing newlines, bounded to `max` lines.
-fn wrap(s: &str, width: usize, max: usize) -> Vec<String> {
+pub(crate) fn wrap(s: &str, width: usize, max: usize) -> Vec<String> {
     let width = width.max(8);
     let mut out: Vec<String> = vec![];
     for para in s.split('\n') {
@@ -275,6 +282,14 @@ fn footer(f: &mut Frame, area: Rect, app: &App) {
         spans.push(key("f"));
         spans.push(hint("fork"));
     }
+    spans.push(sep());
+    spans.push(key("i"));
+    let inbox = if app.inbox.unread > 0 {
+        format!("inbox {}●", app.inbox.unread)
+    } else {
+        "inbox".to_string()
+    };
+    spans.push(hint(&inbox));
     spans.push(sep());
     spans.push(key("q"));
     spans.push(hint("quit"));

@@ -19,14 +19,16 @@ use yak_kernel::{
     WriteStore,
 };
 
+use crate::inbox::{Inbox, Tab};
 use crate::theme;
 
-// Which level of the drill the cockpit is showing.
+// Which level of the drill the cockpit is showing — or the owner's inbox.
 #[derive(Clone, PartialEq)]
 pub enum View {
     Projects,
     Project(String), // project eid
     Session(String), // session eid
+    Inbox,
 }
 
 // A lean session row for the list — the transcript bodies are never loaded here.
@@ -79,6 +81,9 @@ pub struct App {
     entries: Vec<EntryLine>,
     fork_origin: Option<String>,
 
+    // the owner's inbox (inbox.rs) — its own tabs, cursor and panes
+    pub inbox: Inbox,
+
     // navigation
     pub view: View,
     pub sel: usize,
@@ -121,9 +126,17 @@ pub fn short_when(iso: &str) -> String {
 }
 
 impl App {
-    pub fn new(store: Store, write: WriteStore, db: String, cwd: &str) -> App {
+    pub fn new(
+        store: Store,
+        write: WriteStore,
+        db: String,
+        cwd: &str,
+        owner: Option<&str>,
+        start_in_inbox: bool,
+    ) -> App {
         let feed = Feed::from_tip(&store.conn);
         let last_version = data_version(&store.conn);
+        let inbox = Inbox::new(&store, owner);
         let mut app = App {
             db,
             store,
@@ -136,7 +149,8 @@ impl App {
             actor_name: HashMap::new(),
             entries: vec![],
             fork_origin: None,
-            view: View::Projects,
+            inbox,
+            view: if start_in_inbox { View::Inbox } else { View::Projects },
             sel: 0,
             stack: vec![],
             quit: false,
@@ -148,7 +162,10 @@ impl App {
         app.reload();
         // Open on the cwd's project (its repo is an ancestor of cwd), seeding
         // the back-stack so `h` returns to the project list positioned on it.
-        // The project list otherwise.
+        // The project list otherwise. An inbox start keeps the inbox in front.
+        if start_in_inbox {
+            return app;
+        }
         if let Some(p) = app.project_of(cwd) {
             if let Some(i) = app.projects.iter().position(|r| r.eid == p) {
                 app.stack.push((View::Projects, i));
@@ -401,8 +418,11 @@ impl App {
         }
         self.live_events += n;
         self.reload();
-        if let View::Session(eid) = self.view.clone() {
-            self.load_entries(&eid);
+        match self.view.clone() {
+            View::Session(eid) => self.load_entries(&eid),
+            // A reading stays open; the list beneath it refreshes.
+            View::Inbox => self.inbox.load(&self.store),
+            _ => {}
         }
         self.clamp();
     }
@@ -415,6 +435,7 @@ impl App {
             View::Projects => self.project_list().len(),
             View::Project(p) => self.by_project.get(p).map(|v| v.len()).unwrap_or(0),
             View::Session(_) => self.entries.len(),
+            View::Inbox => self.inbox.len(),
         }
     }
 
@@ -501,26 +522,39 @@ impl App {
     }
 
     pub fn down(&mut self) {
+        if matches!(self.view, View::Inbox) {
+            return self.inbox.down();
+        }
         if self.sel + 1 < self.visible_len() {
             self.sel += 1;
         }
     }
 
     pub fn up(&mut self) {
+        if matches!(self.view, View::Inbox) {
+            return self.inbox.up();
+        }
         self.sel = self.sel.saturating_sub(1);
     }
 
     pub fn top(&mut self) {
+        if matches!(self.view, View::Inbox) {
+            return self.inbox.top();
+        }
         self.sel = 0;
     }
 
     pub fn bottom(&mut self) {
+        if matches!(self.view, View::Inbox) {
+            return self.inbox.bottom();
+        }
         self.sel = self.visible_len().saturating_sub(1);
     }
 
     // `l`/enter: descend into the selected row.
     pub fn enter(&mut self) {
         match &self.view {
+            View::Inbox => self.inbox.open(&self.store, &self.write, &self.gates),
             View::Projects => {
                 let list = self.project_list();
                 let Some(p) = list.get(self.sel) else { return };
@@ -544,7 +578,12 @@ impl App {
     }
 
     // `h`/Ctrl-D: back out to the parent view, restoring where the cursor was.
+    // In the inbox, back first closes an input or a reading; only the list
+    // itself backs out to the cockpit.
     pub fn back(&mut self) {
+        if matches!(self.view, View::Inbox) && self.inbox.back() {
+            return;
+        }
         if let Some((view, sel)) = self.stack.pop() {
             self.view = view;
             self.sel = sel;
@@ -557,10 +596,41 @@ impl App {
 
     pub fn refresh(&mut self) {
         self.reload();
-        if let View::Session(eid) = self.view.clone() {
-            self.load_entries(&eid);
+        match self.view.clone() {
+            View::Session(eid) => self.load_entries(&eid),
+            View::Inbox => self.inbox.load(&self.store),
+            _ => {}
         }
         self.clamp();
+    }
+
+    // --- the inbox's doors (inbox.rs), reached from the key loop ---
+
+    // `i`: into the owner's inbox from anywhere in the cockpit.
+    pub fn open_inbox(&mut self) {
+        if matches!(self.view, View::Inbox) {
+            return;
+        }
+        let here = self.view.clone();
+        self.stack.push((here, self.sel));
+        self.view = View::Inbox;
+        self.inbox.load(&self.store);
+    }
+
+    pub fn inbox_tab(&mut self, back: bool) {
+        self.inbox.next_tab(&self.store, back);
+    }
+
+    pub fn inbox_go(&mut self, tab: Tab) {
+        self.inbox.go_tab(&self.store, tab);
+    }
+
+    pub fn inbox_archive(&mut self) -> Result<String, String> {
+        self.inbox.archive(&self.store, &self.write, &self.gates)
+    }
+
+    pub fn inbox_submit(&mut self) -> Result<String, String> {
+        self.inbox.submit(&self.store, &self.write, &self.gates)
     }
 
     // The write seam: one batch through the gated kernel apply() on the

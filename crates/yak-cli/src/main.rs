@@ -31,7 +31,9 @@ fn usage() -> String {
   show <id>                one entity as markdown
   search <words…>          full-text hits (trailing * = prefix)
   inbox | history | telemetry | context        (file only)
-  tui [--db path]          the interactive cockpit — live wants/requires tree
+  tui [--db path] [--inbox] [--as <owner>]
+                           the interactive cockpit — sessions live, and the
+                           owner's inbox (`i`, or --inbox to open on it)
   apply [--db path] …      one batch through the write path (file only)
 
 list, show and search read a FILE or a SERVER, whichever the environment

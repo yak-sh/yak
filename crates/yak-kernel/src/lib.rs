@@ -20,6 +20,8 @@ pub mod journal;
 pub mod literal;
 pub mod model;
 #[cfg(feature = "native")]
+pub mod owner;
+#[cfg(feature = "native")]
 pub mod profiling;
 pub mod query;
 #[cfg(feature = "native")]

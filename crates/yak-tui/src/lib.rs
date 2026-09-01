@@ -6,12 +6,16 @@
 // drills project -> recent sessions -> a session's entries — the current model
 // of an agent run. It reads the live graph directly through the kernel `Store`
 // (D-23308: a local caller reads SQLite directly, no server) and keeps a
-// separate READ_WRITE connection wired for the fork write that lands next. It
-// stays live by tailing the journal's catchup feed rather than polling the whole
-// graph. The terminal is ALWAYS restored — on quit, on error, and through a
-// panic hook — so a crash never leaves a broken terminal.
+// separate READ_WRITE connection for the writes it makes: the session fork,
+// and the owner's inbox (inbox.rs — `i`, or `--inbox` to open on it): the
+// open-stamp, the archive, the reply, each one gated kernel apply() as the
+// owner. It stays live by tailing the journal's catchup feed rather than
+// polling the whole graph. The terminal is ALWAYS restored — on quit, on error,
+// and through a panic hook — so a crash never leaves a broken terminal.
 
 mod app;
+mod inbox;
+mod inbox_ui;
 mod theme;
 mod ui;
 
@@ -27,16 +31,21 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use yak_kernel::{db_path, Store, WriteStore};
 
-use app::App;
+use app::{App, View};
+use inbox::Tab;
 
 type Term = Terminal<CrosstermBackend<Stdout>>;
 
 // The db this cockpit reads: an explicit `--db <path>` wins, else the CLI's own
 // resolution (DB_PATH, then the home graph) — the same door every reader names
 // itself by, and the seam that points the TUI at a scratch copy for testing
-// without touching the owner's board.
+// without touching the owner's board. `--inbox` opens on the owner's inbox;
+// `--as <id|address>` names the owner when the graph's first person is not
+// the one at the keyboard (YAK_OWNER does the same).
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut path: Option<String> = None;
+    let mut owner: Option<String> = None;
+    let mut inbox = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -44,8 +53,16 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 i += 1;
                 path = args.get(i).cloned();
             }
+            "--as" => {
+                i += 1;
+                owner = args.get(i).cloned();
+            }
+            "--inbox" | "inbox" => inbox = true,
             "-h" | "--help" => {
-                println!("yak tui [--db <path>] — project -> sessions -> entries, live");
+                println!(
+                    "yak tui [--db <path>] [--inbox] [--as <owner>] — project -> sessions -> \
+                     entries, live; `i` (or --inbox) for the owner's inbox"
+                );
                 return Ok(());
             }
             other => return Err(format!("yak tui: unknown flag {other}")),
@@ -56,13 +73,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // The read/write split yak-bridge uses: a read-only `Store` (URI form so a
     // bare path still opens the WAL sidecar for reads — the door yak-cli's
     // open_store() uses) for rendering and the journal feed, and a READ_WRITE
-    // `WriteStore` kept ready for the fork write. A library client opens an
+    // `WriteStore` for the fork and inbox writes. A library client opens an
     // existing file; it never creates or migrates.
     let store =
         Store::open(&format!("file:{db}?mode=ro")).map_err(|e| format!("cannot open {db}: {e}"))?;
     let write = WriteStore::open(&db).map_err(|e| format!("cannot open {db} read-write: {e}"))?;
     let cwd = std::env::current_dir().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
-    let app = App::new(store, write, db, &cwd);
+    let app = App::new(store, write, db, &cwd, owner.as_deref(), inbox);
 
     install_panic_hook();
     let mut term = setup().map_err(|e| e.to_string())?;
@@ -123,6 +140,9 @@ fn on_key(app: &mut App, code: KeyCode, mods: KeyModifiers) {
         app.quit = true;
         return;
     }
+    if matches!(app.view, View::Inbox) {
+        return inbox_key(app, code, mods);
+    }
     if ctrl('d') {
         app.back();
         return;
@@ -136,6 +156,7 @@ fn on_key(app: &mut App, code: KeyCode, mods: KeyModifiers) {
         KeyCode::Char('g') | KeyCode::Home => app.top(),
         KeyCode::Char('G') | KeyCode::End => app.bottom(),
         KeyCode::Char('r') => app.refresh(),
+        KeyCode::Char('i') => app.open_inbox(),
         // Fork the open session at the selected entry — a new session sharing
         // the prefix up to here, navigated straight into. A refusal is durable
         // in the footer rather than lost.
@@ -144,6 +165,59 @@ fn on_key(app: &mut App, code: KeyCode, mods: KeyModifiers) {
                 app.flash = Some(format!("fork refused: {e}"));
             }
         }
+        _ => {}
+    }
+}
+
+// The inbox's keys. While a reply or a search is being typed every printable
+// key is text; enter submits, esc cancels. Otherwise: browse, open, tab
+// between received/said/recent/attention (1-4 jump), `a` archive, `r` reply,
+// `/` search, `R` refresh, `h`/esc back (closing a reading first), `q` quit.
+fn inbox_key(app: &mut App, code: KeyCode, mods: KeyModifiers) {
+    let ctrl = |c: char| mods.contains(KeyModifiers::CONTROL) && code == KeyCode::Char(c);
+    if app.inbox.typing() {
+        match code {
+            KeyCode::Esc => app.back(),
+            KeyCode::Enter => match app.inbox_submit() {
+                Ok(msg) if !msg.is_empty() => app.flash = Some(msg),
+                Ok(_) => {}
+                Err(e) => app.flash = Some(format!("refused: {e}")),
+            },
+            KeyCode::Backspace => app.inbox.backspace(),
+            KeyCode::Char(c) if !mods.contains(KeyModifiers::CONTROL) => app.inbox.type_char(c),
+            _ => {}
+        }
+        return;
+    }
+    if ctrl('d') {
+        app.back();
+        return;
+    }
+    match code {
+        KeyCode::Char('q') => app.quit = true,
+        KeyCode::Esc | KeyCode::Char('h') | KeyCode::Left => app.back(),
+        KeyCode::Char('j') | KeyCode::Down => app.down(),
+        KeyCode::Char('k') | KeyCode::Up => app.up(),
+        KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => app.enter(),
+        KeyCode::Char('g') | KeyCode::Home => app.top(),
+        KeyCode::Char('G') | KeyCode::End => app.bottom(),
+        KeyCode::Tab => app.inbox_tab(false),
+        KeyCode::BackTab => app.inbox_tab(true),
+        KeyCode::Char('1') => app.inbox_go(Tab::Received),
+        KeyCode::Char('2') => app.inbox_go(Tab::Said),
+        KeyCode::Char('3') => app.inbox_go(Tab::Recent),
+        KeyCode::Char('4') => app.inbox_go(Tab::Attention),
+        KeyCode::Char('a') => match app.inbox_archive() {
+            Ok(msg) => app.flash = Some(msg),
+            Err(e) => app.flash = Some(format!("refused: {e}")),
+        },
+        KeyCode::Char('r') => {
+            if let Err(e) = app.inbox.start_reply() {
+                app.flash = Some(format!("refused: {e}"));
+            }
+        }
+        KeyCode::Char('/') => app.inbox.start_search(),
+        KeyCode::Char('R') => app.refresh(),
         _ => {}
     }
 }
