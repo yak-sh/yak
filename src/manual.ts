@@ -402,13 +402,15 @@ export let manuals = declare({
   },
   said: {
     about: 'what the owner has said, in order, across every session',
-    examples: ['task said', 'task said -n 50'],
+    examples: ['task said', 'task said -n 50', 'task said --full'],
     detail:
       "The owner's own words are the signal (M-31946): the user turns of " +
       'sessions a human drove, oldest first so the newest sits at the bottom. ' +
-      'The boot digest carries the last five under `## owner said`.',
+      'Each line carries the entry id (`task show <id>` reads that turn ' +
+      'whole) and its session; `--full` prints whole bodies. The boot digest ' +
+      'carries the last five under `## owner said`.',
     root: true,
-    opts: [{ ...count, or: '20' }],
+    opts: [{ ...count, or: '20' }, full],
   },
   hooks: {
     about: 'install the lifecycle hooks into ~/.claude/settings.json',

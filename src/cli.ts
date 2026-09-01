@@ -2135,7 +2135,9 @@ let past = async (got: Got) => {
 // the inbox; the boot digest carries the last five of these same lines.
 let said = async (got: Got) => {
   let n = Number(got.opts['-n'] ?? 20)
-  let lines = await ownerSaid(n)
+  let full = got.flags.has('--full')
+  let width = Deno.stdout.isTerminal() ? Deno.consoleSize().columns : 120
+  let lines = await ownerSaid(n, undefined, width, full)
   if (!lines.length) return warn('(nothing said in the last 30 days)')
   for (let l of lines) print(l)
 }

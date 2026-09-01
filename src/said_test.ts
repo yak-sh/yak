@@ -89,17 +89,32 @@ let spoke: Snapshot = {
 Deno.test("saidLines: the owner's turns only, oldest first", () => {
   let all = rows(spoke)
   let byEid = new Map(all.map((r) => [r.eid, r]))
+  // Each line names the entry (its own id, `task show`-able) and the session.
   assertEquals(saidLines(all, byEid, 5), [
-    '- 09-01 19:25 S-1 · first thing',
-    '- 09-01 19:40 S-1 · second thing',
+    '- 09-01 19:25 e-1 S-1 · first thing',
+    '- 09-01 19:40 e-2 S-1 · second thing',
   ])
-  assertEquals(saidLines(all, byEid, 1), ['- 09-01 19:40 S-1 · second thing'])
+  assertEquals(saidLines(all, byEid, 1), [
+    '- 09-01 19:40 e-2 S-1 · second thing',
+  ])
+  // The line is cut to the given width, never a fixed count.
+  assertEquals(saidLines(all, byEid, 1, 34), [
+    '- 09-01 19:40 e-2 S-1 · second thi…',
+  ])
+  // --full prints each whole body under its line, blank-line separated.
+  assertEquals(saidLines(all, byEid, 1, 30, true), [
+    '- 09-01 19:40 e-2 S-1 ·',
+    'second thing\nmore',
+    '',
+  ])
 })
 
 Deno.test('contextDigest carries `## owner said`, and omits it with nothing said', () => {
   let d = contextDigest(spoke, 'sess-x')
   assertEquals(
-    d.includes('## owner said (task said)\n- 09-01 19:25 S-1 · first thing'),
+    d.includes(
+      '## owner said (task said)\n- 09-01 19:25 e-1 S-1 · first thing',
+    ),
     true,
   )
   assertEquals(contextDigest(base, 'sess-x').includes('## owner said'), false)

@@ -3532,20 +3532,34 @@ export let spoken = (r: Row, s?: Row) =>
 let when = (at: string) => at.slice(5, 16).replace('T', ' ')
 
 // What the owner said, in order — the last `n` owner turns among `rows`,
-// oldest first so the newest sits at the bottom, one line each: when, which
-// session, the first line. This is the signal every context reads before the
-// fleet's own prose (M-31946); the digest carries a few, `task said` the rest.
-export let saidLines = (rows: Row[], byEid: Map<string, Row>, n: number) =>
+// oldest first so the newest sits at the bottom. One line each: when, the
+// entry's own id (`task show <id>` reads the turn whole), its session, and
+// the first line cut to `width`; `full` prints each whole body under its
+// line instead. This is the signal every context reads before the fleet's
+// own prose (M-31946); the digest carries a few, `task said` the rest.
+export let saidLines = (
+  rows: Row[],
+  byEid: Map<string, Row>,
+  n: number,
+  width = 120,
+  full = false,
+) =>
   rows
     .filter((r) =>
       r.comps.entry && spoken(r, byEid.get(String(r.comps.entry.session)))
     )
     .sort((a, b) => bornAt(a).localeCompare(bornAt(b)))
     .slice(-Math.max(0, n))
-    .map((r) => {
+    .flatMap((r) => {
       let s = byEid.get(String(r.comps.entry!.session))!
-      let head = String(r.comps.content!.body).trim().split('\n')[0]
-      return `- ${when(bornAt(r))} ${idOf(s)} · ${snip(head, 96)}`
+      let body = String(r.comps.content!.body).trim()
+      let lead = `- ${when(bornAt(r))} ${idOf(r)} ${idOf(s)} · `
+      return full ? [lead.trimEnd(), body, ''] : [
+        snip(
+          `${lead}${body.split('\n')[0]}`,
+          Math.max(lead.length + 8, width),
+        ),
+      ]
     })
 
 // The owner's latest words over the wire: the newest user turns across every
@@ -3553,7 +3567,12 @@ export let saidLines = (rows: Row[], byEid: Map<string, Row>, n: number) =>
 // sessions fetched to tell a human's turn from a managed run's, then the
 // same lines the digest prints. Over-read, since managed prompts share the
 // role and are screened here.
-export let ownerSaid = async (n = 20, q: Querier = query) => {
+export let ownerSaid = async (
+  n = 20,
+  q: Querier = query,
+  width = 120,
+  full = false,
+) => {
   let since = new Date(Date.now() - 30 * DAY).toISOString()
   let entries = await q([
     '.message.role=user',
@@ -3566,7 +3585,13 @@ export let ownerSaid = async (n = 20, q: Querier = query) => {
     [],
     q,
   )
-  return saidLines(entries, new Map(sessions.map((r) => [r.eid, r])), n)
+  return saidLines(
+    entries,
+    new Map(sessions.map((r) => [r.eid, r])),
+    n,
+    width,
+    full,
+  )
 }
 
 // The injection-loop digest: what a session sees at start — its claimed
