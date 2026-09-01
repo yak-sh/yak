@@ -81,18 +81,22 @@ Deno.test('a pending proposal keeps deletion named as deletion', () => {
     },
   }
   let labels = () => actionsFor(ent('design')).map((a) => a.label)
-  assertEquals(labels().includes('accept'), true)
-  assertEquals(labels().includes('reject'), false)
+  assertEquals(labels().includes('approve'), true)
+  assertEquals(labels().includes('decline'), true)
   assertEquals(labels().includes('delete'), true)
 
+  // An OPEN task's approval arms dispatch, and the label says so.
   cache.value = {
-    design: {
-      ...cache.value.design,
-      task: { eid: 'design', priority: 1 },
-      cancelled: { eid: 'design' },
-    },
+    design: { ...cache.value.design, task: { eid: 'design', priority: 1 } },
   }
-  assertEquals(labels().includes('accept'), false)
+  assertEquals(labels().includes('approve · dispatches a coder'), true)
+  assertEquals(labels().includes('decline'), true)
+
+  cache.value = {
+    design: { ...cache.value.design, cancelled: { eid: 'design' } },
+  }
+  assertEquals(labels().some((l) => l.startsWith('approve')), false)
+  assertEquals(labels().includes('decline'), false)
   assertEquals(labels().includes('delete'), true)
 
   cache.value = {
@@ -101,8 +105,8 @@ Deno.test('a pending proposal keeps deletion named as deletion', () => {
       decided: { eid: 'design', at: '2026-08-07T01:00:00.000Z' },
     },
   }
-  assertEquals(labels().includes('accept'), false)
-  assertEquals(labels().includes('reject'), false)
+  assertEquals(labels().some((l) => l.startsWith('approve')), false)
+  assertEquals(labels().includes('decline'), false)
   assertEquals(labels().includes('delete'), true)
   cache.value = {}
 })

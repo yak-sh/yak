@@ -1765,6 +1765,9 @@ html {
 .Show_Proposal-proposed {
   color: var(--yellow);
 }
+.Show_Proposal[role='button'] {
+  cursor: pointer;
+}
 .Show_Proposal-approved {
   color: var(--accent);
 }

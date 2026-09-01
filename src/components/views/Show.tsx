@@ -15,7 +15,7 @@ import {
   settled,
   statuses,
 } from '../../live.ts'
-import { linkProps } from '../nav.tsx'
+import { actionsAt, linkProps } from '../nav.tsx'
 import { useBacklinks } from '../useQuery.ts'
 import { block, Stamp } from '../ui.tsx'
 import { Comments, viaName } from '../Comments.tsx'
@@ -27,7 +27,7 @@ import { title, TitleEdit } from '../title.tsx'
 import { editorFor, Prop } from '../editors.tsx'
 import { Relate } from './Relate.tsx'
 import { Id } from './Inline.tsx'
-import { Entity } from '../Entity.tsx'
+import { decisionActions, Entity } from '../Entity.tsx'
 import { Icon } from '../icons.tsx'
 import { Chat } from '../Chat.tsx'
 
@@ -551,8 +551,18 @@ let ProposalState = ({ e }: { e: Ent }) => {
     : cancelled
     ? 'cancelled'
     : 'proposed'
+  // Undecided, the icon IS the control: a click opens approve / decline.
+  let acts = decisionActions(e)
+  let open = acts.length ? actionsAt(acts) : undefined
   return (
-    <Proposal mod={state} aria-label={state} data-tip={state}>
+    <Proposal
+      mod={state}
+      aria-label={state}
+      data-tip={open ? 'proposed — approve or decline' : state}
+      role={open && 'button'}
+      tabIndex={open && 0}
+      onClick={open}
+    >
       <Icon
         name={approved
           ? 'stamp'

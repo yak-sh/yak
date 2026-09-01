@@ -1,6 +1,6 @@
 import { statusChanges, subChanges } from '../client.ts'
 import { ent, mutate, myActor, myMode, reveal, rows, shown } from '../live.ts'
-import { statusOf } from '../types.ts'
+import { type Ent, statusOf } from '../types.ts'
 import { type Action, define, defineActions, has, resolve } from './registry.ts'
 import { shelve } from './shelf.ts'
 import { memo } from './memo.ts'
@@ -283,6 +283,25 @@ define([
 // registry.ts). A task offers its status moves and a session to run on
 // it, a live claim offers release, and anything at all can be deleted
 // (the red row at the end).
+// The decision verbs a proposed, undecided thing offers: approve or decline,
+// writing `decided {verdict}`. `by` is the server's to derive from the
+// client's actor — a human clicking IS the person. Approving an OPEN task
+// arms dispatch (the sweep may spawn a coder within seconds), so its label
+// says so. Shared by the entity menu and the proposal icon (Show.tsx).
+export let decisionActions = (e: Ent): Action[] => {
+  if (!e.proposed || e.decided || statusOf(e) == 'cancelled') return []
+  let decide = (verdict: string) => () =>
+    mutate({ eid: e.eid, name: 'decided', comp: { verdict } })
+  let dispatches = !!e.task && statusOf(e) == 'open'
+  return [
+    {
+      label: dispatches ? 'approve · dispatches a coder' : 'approve',
+      run: decide('approved'),
+    },
+    { label: 'decline', run: decide('declined') },
+  ]
+}
+
 defineActions([
   {
     // The Shelf is universal screen chrome: any entity may become the
@@ -301,11 +320,8 @@ defineActions([
     }],
   },
   {
-    match: (e) => !!e.proposed && !e.decided && statusOf(e) != 'cancelled',
-    acts: (e) => [{
-      label: 'accept',
-      run: () => mutate({ eid: e.eid, name: 'decided', comp: {} }),
-    }],
+    match: (e) => decisionActions(e).length > 0,
+    acts: decisionActions,
   },
   {
     match: has('task'),
