@@ -149,6 +149,42 @@ let spoke: Snapshot = {
       name: 'updated',
       comp: { by: J, at: '2026-09-01T19:36:00.000Z' },
     },
+    // A letter the owner opened and archived: the read-state marks stamp
+    // `updated` in his name in the same batch, and reading is not writing.
+    {
+      eid: 'mail',
+      name: 'entity',
+      comp: { eid: 'mail', num: 13, created_at: '' },
+    },
+    { eid: 'mail', name: 'doc', comp: { title: 'alert', body: 'disk full' } },
+    { eid: 'mail', name: 'mail', comp: { target: null } },
+    {
+      eid: 'mail',
+      name: 'created',
+      comp: { by: A, at: '2026-09-01T18:00:00.000Z' },
+    },
+    {
+      eid: 'mail',
+      name: 'opened',
+      comp: { by: J, at: '2026-09-01T19:38:00.000Z' },
+    },
+    {
+      eid: 'mail',
+      name: 'archived',
+      comp: { by: J, at: '2026-09-01T19:39:00.000Z' },
+    },
+    {
+      eid: 'mail',
+      name: 'updated',
+      comp: { by: J, at: '2026-09-01T19:39:00.000Z' },
+    },
+    // The content-addressed blob the server mints beside a body edit.
+    { eid: 'blob', name: 'blob', comp: { bytes: 12 } },
+    {
+      eid: 'blob',
+      name: 'created',
+      comp: { by: J, at: '2026-09-01T19:39:30.000Z' },
+    },
     { eid: 'cur', name: 'cursor', comp: { client: 'x', target: T } },
     {
       eid: 'cur',

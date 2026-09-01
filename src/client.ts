@@ -3558,9 +3558,10 @@ export let spoken = (r: Row, s?: Row) =>
 
 let when = (at: string) => at.slice(5, 16).replace('T', ' ')
 
-// Client state the web writes in the owner's name on every gesture — a
-// cursor move, a camera pan, a card opened — is not authorship.
-let GESTURE = new Set([
+// Not authorship, though stamped in the owner's name: client state the web
+// writes on every gesture (a cursor move, a camera pan, a card opened), and
+// storage the server mints beside an edit (a body's content-addressed blob).
+let UNSAID = new Set([
   'client',
   'cursor',
   'camera',
@@ -3574,6 +3575,13 @@ let GESTURE = new Set([
   'favorite',
   'subscription',
 ])
+
+// Reading is not writing: opening, archiving, or being notified of a letter
+// stamps `updated` in the reader's name in the same batch as the mark, so an
+// `updated` that coincides with a read-state mark is that mark, not an edit.
+let READ = ['opened', 'archived', 'notified']
+let readAt = (r: Row) =>
+  READ.map((name) => String(r.comps[name]?.at ?? '')).filter(Boolean)
 
 // One act of authorship: when, what kind of act, the entity, where it sits,
 // and its words (a titled thing leads with its title).
@@ -3632,7 +3640,10 @@ export let authored = (rows: Row[], byEid: Map<string, Row>): Said[] => {
       }
       continue
     }
-    if (GESTURE.has(r.kind) || r.comps.person) continue
+    // A blob has no display kind of its own (kindOf says `entity`), so it is
+    // screened by component; so is anything else with no kind to name.
+    if (UNSAID.has(r.kind) || r.kind == 'entity' || r.comps.blob) continue
+    if (r.comps.person) continue
     let { created, updated, decided, feedback } = r.comps
     let where = whereOf(r, byEid)
     let text = wordsOf(r)
@@ -3641,8 +3652,9 @@ export let authored = (rows: Row[], byEid: Map<string, Row>): Said[] => {
     else if (by(feedback)) {
       out.push({ at: born, act: 'feedback', row: r, where, text })
     }
-    if (by(updated) && String(updated?.at) != born) {
-      out.push({ at: String(updated?.at), act: 'edit', row: r, where, text })
+    let edited = String(updated?.at ?? '')
+    if (by(updated) && edited != born && !readAt(r).includes(edited)) {
+      out.push({ at: edited, act: 'edit', row: r, where, text })
     }
     if (by(decided)) {
       out.push({
