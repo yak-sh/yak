@@ -1,0 +1,304 @@
+<!doctype html>
+<!--
+  The errors view (T-32601, V-32361 "No error should go unseen and unfixed"):
+  what is still broken in one app, drawn where the person already is. The
+  host fetches this page through `resources/read` on `ui://yaks/errors` — the
+  tool app_errors links it with `_meta.ui.resourceUri` — renders it in a
+  sandboxed iframe, and hands the tool's answer over postMessage.
+
+  The second view, so the protocol is public/apps.html's (spec 2026-01-26
+  §Communication): `ui/initialize`, then `ui/notifications/initialized`, the
+  answer in `ui/notifications/tool-result`, the height back in
+  `ui/notifications/size-changed`. What is new here is the other direction —
+  a card's `fixed` button sends a plain MCP `tools/call` for app_errors with
+  the break's eids in `fixed`, and the host answers with the listing that is
+  left, which redraws. The tool says `app` in its visibility or the host
+  refuses the call (§Tools).
+
+  One column, a card per break, everything inline: with no `ui.csp` metadata
+  the host serves this under `default-src 'none'`, where a stylesheet from
+  anywhere else would not load.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>What is broken</title>
+    <style>
+    /* The home page's palette (public/style.css), inlined. The host may
+       hand us its own theme variables; those win where it does. */
+    :root {
+      color-scheme: light dark;
+      --ground: #fdf5ee;
+      --paper: #fffaf5;
+      --ink: #4a3a30;
+      --soft-ink: #6f5d50;
+      --line: #efdfd2;
+      --meadow: #5c8a4c;
+      --nose: #d99a8d;
+      --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ground: #2a2320;
+        --paper: #352c28;
+        --ink: #f1e6d8;
+        --soft-ink: #c2b2a3;
+        --line: #4a3d37;
+        --meadow: #a7c080;
+      }
+    }
+
+    body {
+      margin: 0;
+      padding: 1rem;
+      background: var(--ground);
+      color: var(--ink);
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .Breaks {
+      margin: 0 auto;
+      max-width: 30rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .Breaks_App {
+      margin: 0;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--soft-ink);
+    }
+
+    .Break {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 1.25rem;
+      padding: 0.85rem 1rem;
+    }
+
+    .Break_What {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .Break_Where {
+      margin: 0.35rem 0 0;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--nose);
+      overflow-wrap: anywhere;
+    }
+
+    .Break_Foot {
+      margin-top: 0.6rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .Break_Meta {
+      margin: 0;
+      font-size: 0.85rem;
+      color: var(--soft-ink);
+    }
+
+    .Break_Fix {
+      flex: none;
+      font: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--paper);
+      background: var(--meadow);
+      border: 0;
+      border-radius: 999px;
+      padding: 0.3rem 0.9rem;
+      cursor: pointer;
+    }
+
+    .Break_Fix:hover {
+      filter: brightness(1.08);
+    }
+
+    .Break_Fix[disabled] {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .Breaks_Quiet {
+      color: var(--soft-ink);
+      font-style: italic;
+    }
+    </style>
+  </head>
+  <body>
+    <main class="Breaks" id="breaks">
+      <p class="Breaks_Quiet">Looking…</p>
+    </main>
+    <script>
+    let call = (method, params) =>
+      window.parent.postMessage({ jsonrpc: '2.0', method, params }, '*')
+
+    let asked = 1
+    let request = (method, params) =>
+      new Promise((resolve) => {
+        let id = asked++
+        window.addEventListener('message', function heard(e) {
+          if (e.data && e.data.id === id) {
+            window.removeEventListener('message', heard)
+            resolve(e.data)
+          }
+        })
+        window.parent.postMessage({ jsonrpc: '2.0', id, method, params }, '*')
+      })
+
+    let el = (tag, cls, text) => {
+      let node = document.createElement(tag)
+      if (cls) node.className = cls
+      if (text != null) node.textContent = text
+      return node
+    }
+
+    // When it last happened, said the way a person says it. An exact
+    // timestamp is for the log; what matters on a card is whether this is
+    // still happening.
+    let ago = (at) => {
+      let then = Date.parse(at || '')
+      if (!then) return ''
+      let mins = Math.round((Date.now() - then) / 60000)
+      if (mins < 1) return 'just now'
+      let [n, unit] = mins < 60
+        ? [mins, 'minute']
+        : mins < 1440
+        ? [Math.round(mins / 60), 'hour']
+        : [Math.round(mins / 1440), 'day']
+      return `${n} ${unit}${n == 1 ? '' : 's'} ago`
+    }
+
+    let meta = (e) =>
+      [
+        e.version ? `version ${e.version}` : 'before any release',
+        e.count == 1 ? 'once' : `${e.count} times`,
+        ago(e.at),
+      ].filter(Boolean).join(' · ')
+
+    // What the answer was about, kept so a button can name it again.
+    let about = {}
+
+    let quiet = (said) => {
+      let root = document.getElementById('breaks')
+      root.textContent = ''
+      root.append(el('p', 'Breaks_Quiet', said))
+      sized()
+    }
+
+    let fix = async (e, button) => {
+      button.disabled = true
+      button.textContent = 'fixing…'
+      let reply = await request('tools/call', {
+        name: 'app_errors',
+        arguments: { space: about.space, app: about.app, fixed: e.eids },
+      })
+      let out = reply.result
+      if (!out || out.isError || reply.error) {
+        button.disabled = false
+        button.textContent = 'fixed'
+        return
+      }
+      draw(out.structuredContent)
+    }
+
+    let card = (e) => {
+      let node = el('article', 'Break')
+      node.append(el('h2', 'Break_What', e.message || 'something broke'))
+      if (e.where) node.append(el('p', 'Break_Where', e.where))
+      let foot = el('div', 'Break_Foot')
+      foot.append(el('p', 'Break_Meta', meta(e)))
+      let button = el('button', 'Break_Fix', 'fixed')
+      button.addEventListener('click', () => fix(e, button))
+      foot.append(button)
+      node.append(foot)
+      return node
+    }
+
+    let draw = (data) => {
+      if (!data) return
+      about = data
+      let root = document.getElementById('breaks')
+      root.textContent = ''
+      let errors = data.errors || []
+      if (!errors.length) {
+        return quiet(
+          data.version
+            ? `Nothing has gone wrong since version ${data.version}.`
+            : 'Nothing has gone wrong yet.',
+        )
+      }
+      root.append(
+        el(
+          'p',
+          'Breaks_App',
+          `${data.title || data.app} — ${errors.length}${
+            errors.length == 1 ? ' break' : ' breaks'
+          } open`,
+        ),
+      )
+      for (let e of errors) root.append(card(e))
+      sized()
+    }
+
+    // The host sizes the frame from what we report (spec §Sizing), so the
+    // measure is the CONTENT's — the document fills whatever frame we were
+    // given and would only ever report that back.
+    let sized = () =>
+      call('ui/notifications/size-changed', {
+        width: document.body.scrollWidth,
+        height: document.body.scrollHeight,
+      })
+
+    window.addEventListener('message', (e) => {
+      let msg = e.data
+      if (!msg || msg.method != 'ui/notifications/tool-result') return
+      let result = msg.params || {}
+      // The data is the tool's structuredContent. A host that forwards only
+      // the text gets the same answer read out, which is what the model
+      // reads too.
+      if (result.structuredContent) return draw(result.structuredContent)
+      quiet((result.content || []).map((p) => p.text).join('\n'))
+    })
+
+    request('ui/initialize', {
+      protocolVersion: '2026-01-26',
+      appCapabilities: { availableDisplayModes: ['inline'] },
+      clientInfo: { name: 'yaks.app errors view', version: '1' },
+    }).then((reply) => {
+      let vars = (((reply || {}).result || {}).hostContext || {}).styles
+      vars = (vars || {}).variables || {}
+      // The host's own theme, where it has one to lend.
+      let lend = {
+        '--ground': '--color-background-primary',
+        '--ink': '--color-text-primary',
+        '--font': '--font-sans',
+      }
+      for (let ours in lend) {
+        let theirs = vars[lend[ours]]
+        if (theirs) document.documentElement.style.setProperty(ours, theirs)
+      }
+      call('ui/notifications/initialized', {})
+      sized()
+    })
+
+    new ResizeObserver(sized).observe(document.body)
+    </script>
+  </body>
+</html>

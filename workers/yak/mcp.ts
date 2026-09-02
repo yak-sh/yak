@@ -4,8 +4,9 @@
 // way the dev server mounts src/mcp.ts, so a restart strands nobody and a
 // Worker isolate holds nothing between calls. The protocol surface is six
 // methods — initialize, ping, tools/list, tools/call over the tool table in
-// tools.ts, and resources/list, resources/read over the one guide below,
-// which is what a connector that calls tools and reads a page asks for. The
+// tools.ts, and resources/list, resources/read over the guide and the two
+// views below, which is what a connector that calls tools, reads a page and
+// renders an answer asks for. The
 // `agents` package's McpAgent — a hibernating Durable
 // Object per client session — is the shape to grow into the day a tool
 // streams progress or the server pushes; it would cost a second DO class, a
@@ -29,7 +30,7 @@ import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { unauthorized, withAuth } from './identity.ts'
-import { APPS_VIEW, type Ctx, TOOLS } from './tools.ts'
+import { APPS_VIEW, type Ctx, ERRORS_VIEW, TOOLS } from './tools.ts'
 import { serve, unseenBlock } from './unseen.ts'
 
 // The versions this door speaks, newest first. A client asks for one in
@@ -124,7 +125,21 @@ let APPS = {
   page: 'https://yaks.app/apps.html',
 }
 
-let RESOURCES = [GUIDE, APPS]
+// And the second view (T-32601): what is still broken, one card per break,
+// each with the button that archives it — the view calls `app_errors` back
+// through the host to do it, which is why that tool says `app` in its
+// visibility below.
+let ERRORS = {
+  uri: ERRORS_VIEW,
+  name: 'errors',
+  title: 'What is broken',
+  description: 'Every break still open in an app, as cards with a fixed ' +
+    'button.',
+  mimeType: 'text/html;profile=mcp-app',
+  page: 'https://yaks.app/errors.html',
+}
+
+let RESOURCES = [GUIDE, APPS, ERRORS]
 
 // One resource's bytes, from the assets the apex serves. A redirect is
 // followed once: in production the assets binding drops a page's `.html` and
@@ -208,9 +223,17 @@ let handle = async (ctx: Ctx, rpc: Rpc) => {
         description: t.description,
         inputSchema: t.input,
         // A tool with a view names it; a host without MCP Apps ignores the
-        // field and reads the same answer as text.
+        // field and reads the same answer as text. Visibility is who may
+        // call it: the model, and 'app' where the view's own button does.
         ...(t.view
-          ? { _meta: { ui: { resourceUri: t.view, visibility: ['model'] } } }
+          ? {
+            _meta: {
+              ui: {
+                resourceUri: t.view,
+                visibility: t.visibility ?? ['model'],
+              },
+            },
+          }
           : {}),
       })),
     })

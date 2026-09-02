@@ -43,7 +43,7 @@ import { SLUG } from './route.ts'
 import { mayWrite, vouched, type Who } from './session.ts'
 import { canon, personOf } from './signin.ts'
 import { storeOf } from './store.ts'
-import { openIn, serve } from './unseen.ts'
+import { archive, cards, line, openIn, serve } from './unseen.ts'
 
 export type Ctx = { env: Env; dir: Directory; person: string }
 type Args = Record<string, unknown>
@@ -58,6 +58,10 @@ export type Tool = {
   description: string
   // The `ui://` resource that draws this tool's answer, if it has one.
   view?: string
+  // Who may call it (MCP Apps §Tools, `_meta.ui.visibility`): the model
+  // always; add 'app' for a tool a view's own button calls back through the
+  // host, which the host refuses for any tool that does not say so.
+  visibility?: ('model' | 'app')[]
   input: {
     type: 'object'
     properties: Record<string, unknown>
@@ -94,6 +98,12 @@ let text = (v: unknown, what: string) => {
   if (typeof v != 'string' || !v) throw new Error(`${what} is required`)
   return v
 }
+
+// A list argument, forgiving of a model that sends one id bare: a string
+// and a list of one mean the same thing, and refusing the string would only
+// teach the agent to guess again.
+let list = (v: unknown, what: string) =>
+  v == null ? [] : (Array.isArray(v) ? v : [v]).map((one) => text(one, what))
 
 let access = (v: unknown): Access => {
   let s = text(v, 'access')
@@ -243,9 +253,11 @@ let told = (access: Access | null) =>
     ? 'only its members can see it; member_add invites someone by email'
     : 'anyone with the link can see it; only its members can change it'
 
-// The view app_list draws its answer in — a `ui://` resource the door serves
-// from public/apps.html (mcp.ts) and the host renders in an iframe.
+// The views a tool's answer draws itself in — `ui://` resources the door
+// serves from public/apps.html and public/errors.html (mcp.ts) and the host
+// renders in an iframe.
 export let APPS_VIEW = 'ui://yaks/apps'
+export let ERRORS_VIEW = 'ui://yaks/errors'
 
 export let TOOLS: Tool[] = [
   {
@@ -589,17 +601,54 @@ export let TOOLS: Tool[] = [
     description:
       "Everything still broken in the app: what a page threw in someone's " +
       'browser, what a request threw on the way, and what the platform ' +
-      'reported. Each is an entity in the app store; archive one when it is ' +
-      'fixed. New ones also ride the end of your next reply, once.',
+      'reported. Each is an entity in the app store. New ones also ride the ' +
+      'end of your next reply, once. Pass `fixed` with the ids you have ' +
+      'fixed and they are archived, which is what stops them showing here ' +
+      'and there. It draws itself where the person can see it, with the ' +
+      'same button on each break.',
+    view: ERRORS_VIEW,
+    // The view's fixed button calls this tool back to archive a break.
+    visibility: ['model', 'app'],
     input: {
       type: 'object',
-      properties: { space: SPACE, app: APP },
+      properties: {
+        space: SPACE,
+        app: APP,
+        fixed: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'ids of breaks that are fixed — each is archived and stops ' +
+            'being listed. An id off a line here, or an eid.',
+        },
+      },
       required: ['app'],
     },
     run: async (ctx, args) => {
-      let { space, app, who } = await inApp(ctx, args)
-      let lines = await serve(ctx.env, space, who, app, true)
-      return { text: lines.join('\n') || 'no open errors', space }
+      let fixed = list(args.fixed, 'fixed')
+      // Archiving is a write, so it wants a writer; reading the list does
+      // not, and a viewer of the space still gets to see what is broken.
+      let { space, app, who } = await inApp(ctx, args, !!fixed.length)
+      let gone = fixed.length
+        ? await archive(ctx.env, space, app, who, fixed)
+        : 0
+      let seen = await serve(ctx.env, space, who, app, true)
+      let said = [
+        ...(gone ? [`archived ${gone}`] : []),
+        ...seen.map(line),
+      ]
+      return {
+        text: said.join('\n') || 'no open errors',
+        space,
+        data: {
+          space: space.slug,
+          app: app.slug,
+          title: app.title,
+          url: url(space, app),
+          version: app.version ?? 0,
+          errors: cards(seen),
+        },
+      }
     },
   },
   {

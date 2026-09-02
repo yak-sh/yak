@@ -16,6 +16,7 @@ import { connector, kernel, signedIn } from './probe.ts'
 
 let GUIDE = 'https://yaks.app/guide.md'
 let APPS = 'ui://yaks/apps'
+let ERRORS = 'ui://yaks/errors'
 
 slow(
   'the connector: tools, a space made, an app served, errors seen',
@@ -82,7 +83,7 @@ slow(
       let { resources } = await agent.call('resources/list')
       assertEquals(
         resources.map((r: { uri: string }) => r.uri),
-        [GUIDE, APPS],
+        [GUIDE, APPS, ERRORS],
       )
       let read = await agent.call('resources/read', { uri: GUIDE })
       assertMatch(read.contents[0].text, /api\/client\.js/)
@@ -106,6 +107,18 @@ slow(
         Error,
         'no resource',
       )
+
+      // The second view (T-32601), and the one thing its cards need that a
+      // listing does not: the host only lets a view call a tool back when
+      // the tool says `app` in its visibility.
+      let errors = tools.find((t: { name: string }) => t.name == 'app_errors')
+      assertEquals(errors._meta.ui.resourceUri, ERRORS)
+      assertEquals(errors._meta.ui.visibility, ['model', 'app'])
+      let cards = (await agent.call('resources/read', { uri: ERRORS }))
+        .contents[0]
+      assertEquals(cards.mimeType, 'text/html;profile=mcp-app')
+      assertStringIncludes(cards.text, 'ui/notifications/tool-result')
+      assertStringIncludes(cards.text, "name: 'app_errors'")
 
       // A space, then an app in it; the slugs are one per namespace.
       assertMatch(
@@ -344,6 +357,80 @@ slow(
       assert(
         !(await agent.tool('graph_query', { ...app, query: `id=${cake}` }))
           .includes('unseen'),
+      )
+
+      // A page's own break, reported the way public/report.js reports one:
+      // the stack names a file and a line in the app's OWN pages, which is
+      // what the card shows and what the person opens.
+      for (
+        let broke of [
+          { at: 'index.html:42:9', said: 'whisk is not a function' },
+          { at: 'cook.js:7:3', said: 'fold is not a function' },
+        ]
+      ) {
+        assertEquals(
+          (await k.at('jeff.yaks.app', '/recipes/api/report', {
+            method: 'POST',
+            body: JSON.stringify({
+              message: broke.said,
+              stack: `TypeError: ${broke.said}\n    at https://jeff.yaks` +
+                `.app/recipes/${broke.at}`,
+              url: 'https://jeff.yaks.app/recipes/',
+            }),
+          })).status,
+          204,
+        )
+      }
+
+      // The errors view (T-32601): the same answer as cards — one per break,
+      // the message, the file and line, the version it happened on, how many
+      // times. A break on the way in has no address to open, so it wears its
+      // request instead.
+      let asOf = async (args: unknown = app) =>
+        await agent.call('tools/call', { name: 'app_errors', arguments: args })
+      let seen = await asOf()
+      let breaks = seen.structuredContent.errors as {
+        eids: string[]
+        message: string
+        where: string
+        version: number
+        count: number
+      }[]
+      assertEquals(seen.structuredContent.app, 'recipes')
+      assertEquals(
+        breaks.map((b) => `${b.message} @ ${b.where} x${b.count}`).sort(),
+        [
+          'URI malformed @ GET /recipes/%E0%A4%A x1',
+          'URI malformed @ GET /recipes/%E0%A4%B x1',
+          'fold is not a function @ /recipes/cook.js:7 x1',
+          'whisk is not a function @ /recipes/index.html:42 x1',
+        ],
+      )
+      assert(breaks.every((b) => b.version == 3), 'the deploy it happened on')
+
+      // The fixed button: the view calls this same tool back through the
+      // host with the card's eids, and what it gets is the listing that is
+      // left — so the break stops showing here and in every later reply.
+      let whisk = breaks.find((b) => b.where == '/recipes/index.html:42')!
+      let after = await asOf({ ...app, fixed: whisk.eids })
+      assertStringIncludes(after.content[0].text, 'archived 1')
+      assertEquals(after.structuredContent.errors.length, 3)
+      assert(
+        !after.content[0].text.includes('whisk'),
+        'archived is not listed',
+      )
+
+      // The agent's own door is the same one, by the id it read off a line.
+      let said = String(after.content[0].text).split('\n')
+        .find((l) => l.includes('fold is not a function'))!
+      assertStringIncludes(
+        await agent.tool('app_errors', { ...app, fixed: [said.split(' ')[1]] }),
+        'archived 1',
+      )
+      await assertRejects(
+        () => agent.tool('app_errors', { ...app, fixed: ['X-99999'] }),
+        Error,
+        'nothing open here',
       )
 
       // Renaming: the title is what it is called, the slug is where it

@@ -6,7 +6,9 @@
 // `app_errors` shows it again. Open means not `archived`: a later deploy
 // that stops producing it, or the agent marking it fixed, archives it.
 // Reads and marks go through the store's own doors with the caller vouched,
-// never SQL; the apps of a space come from the directory part.
+// never SQL; the apps of a space come from the directory part. The same
+// rows fold into `cards` for the errors view (public/errors.html), where the
+// person's own button archives one through `archive`.
 import { idOf } from '../../src/types.ts'
 import * as dirPart from './directory.ts'
 import { type App, directory, type Space, storeName } from './directory.ts'
@@ -50,6 +52,7 @@ export let noted = async (store: Door, broke: {
 type Broke = {
   at?: string
   message?: string
+  stack?: string
   request?: string
   version?: number | null
 }
@@ -60,18 +63,101 @@ type Hit = {
   exception?: Broke
   error?: Broke
 }
+// One open item and the app it broke in — what serve() hands back, so a
+// caller can write the line, fold the cards, or archive by id from the one
+// read.
+export type Seen = { app: App; hit: Hit }
+
+let broke = (h: Hit) => h.exception ?? h.error ?? {}
 
 // One line: id, when, the route it happened on, the deploy, the message. An
 // item written before exceptions carried their own request still reads: its
 // doc's title said the same thing.
-let line = (app: App, h: Hit) => {
-  let e = h.exception ?? h.error ?? {}
-  let id = idOf({ eid: h.entity.eid, kind: h.kind, num: h.entity.num })
-  let facet = h.exception ? 'exception' : 'error'
-  let where = e.request ?? h.doc?.title ?? ''
+export let line = ({ app, hit }: Seen) => {
+  let e = broke(hit)
+  let id = idOf({ eid: hit.entity.eid, kind: hit.kind, num: hit.entity.num })
+  let facet = hit.exception ? 'exception' : 'error'
+  let where = e.request ?? hit.doc?.title ?? ''
   return `- ${id} ${e.at ?? ''} ${facet} ${app.slug}${
     e.version ? ` v${e.version}` : ''
   }: ${where} — ${e.message ?? ''}`
+}
+
+// The place in a stack a person opens to fix it. A break reported from a
+// browser arrives as `<source>:<line>` already (public/report.js through
+// apps.ts `broken`); one thrown in a page's own code arrives as a JS stack,
+// whose frames say the same with a column after them.
+//
+// Only an ADDRESS counts — a file the app serves, `/recipes/index.html:42`.
+// A break on the way in has a stack too, but its frames are inside the
+// kernel's own bundle, and `…/.wrangler/tmp/dev-Z7MP9l/index.js:12341` is
+// not a place the person can open. No spot leaves the card its request,
+// which for a route that threw is the useful half anyway.
+let AT = /([^\s()]+?):(\d+)(?::\d+)?(?=[^\d/]|$)/
+
+export let spot = (stack = '') => {
+  for (let l of stack.split('\n')) {
+    let m = AT.exec(l)
+    if (!m) continue
+    let at
+    try {
+      at = new URL(m[1])
+    } catch {
+      continue
+    }
+    if (at.protocol != 'https:' && at.protocol != 'http:') continue
+    return `${at.pathname}:${m[2]}`
+  }
+  return ''
+}
+
+// One card: a break as a person reads it, however many times it happened.
+// The same message from the same place is ONE break — a render loop that
+// throws every frame writes twenty rows and is one thing to fix — so the
+// entities fold together and the card keeps all their eids, which is what
+// the view's fixed button hands back to `fixed`.
+export type Card = {
+  eids: string[]
+  app: string
+  message: string
+  where: string
+  version: number | null
+  count: number
+  at: string
+}
+
+export let cards = (seen: Seen[]) => {
+  let by = new Map<string, Card>()
+  for (let { app, hit } of seen) {
+    let e = broke(hit)
+    let message = e.message ?? hit.doc?.title ?? ''
+    let where = spot(e.stack) || e.request || hit.doc?.title || ''
+    let key = `${app.slug}\n${message}\n${where}`
+    let card = by.get(key)
+    if (!card) {
+      by.set(
+        key,
+        card = {
+          eids: [],
+          app: app.slug,
+          message,
+          where,
+          version: e.version ?? null,
+          count: 0,
+          at: e.at ?? '',
+        },
+      )
+    }
+    card.eids.push(hit.entity.eid)
+    card.count++
+    // The card wears the LAST time it happened, and the deploy it happened
+    // on then: a break that survived a release is news about that release.
+    if ((e.at ?? '') >= card.at) {
+      card.at = e.at ?? ''
+      card.version = e.version ?? null
+    }
+  }
+  return [...by.values()].sort((a, b) => a.at < b.at ? 1 : -1)
 }
 
 // The space's apps, asked of the directory the way apps.ts asks it.
@@ -97,8 +183,8 @@ export let openIn = async (
   return hits
 }
 
-// Serve, then mark: the lines for the reply, and `notified` on each item
-// that had none, so the next reply is quiet about them.
+// Serve, then mark: what is open, and `notified` on each item that had
+// none, so the next reply is quiet about them.
 export let serve = async (
   env: Env,
   space: Space,
@@ -107,10 +193,10 @@ export let serve = async (
   all = false,
 ) => {
   let apps = app ? [app] : await appsOf(env, space)
-  let lines: string[] = []
+  let seen: Seen[] = []
   for (let a of apps) {
     let hits = await openIn(env, space, a, who, all)
-    lines.push(...hits.map((h) => line(a, h)))
+    seen.push(...hits.map((hit) => ({ app: a, hit })))
     let fresh = hits.filter((h) => !('notified' in h))
     if (!fresh.length) continue
     let marked = await storeOf(env.STORE, storeName(space, a))('/apply', {
@@ -121,9 +207,37 @@ export let serve = async (
     }, vouched(who))
     if (!marked.ok) throw new Error(`${a.slug}: ${await marked.text()}`)
   }
-  return lines
+  return seen
+}
+
+// Fixed, so it stops showing — here, in the unseen section, and in the view.
+// An id is whatever the caller read: the human id off a line, or the eid a
+// card carries, since the view's button hands back the whole fold. Nothing
+// matched is worth saying; a stale id is how a person learns it is already
+// archived.
+export let archive = async (
+  env: Env,
+  space: Space,
+  app: App,
+  who: Who,
+  ids: string[],
+) => {
+  let want = new Set(ids)
+  let hits = (await openIn(env, space, app, who, true)).filter((h) =>
+    want.has(h.entity.eid) ||
+    want.has(idOf({ eid: h.entity.eid, kind: h.kind, num: h.entity.num }))
+  )
+  if (!hits.length) throw new Error(`nothing open here by ${ids.join(', ')}`)
+  let done = await storeOf(env.STORE, storeName(space, app))('/apply', {
+    method: 'POST',
+    body: JSON.stringify(
+      hits.map((h) => ({ eid: h.entity.eid, name: 'archived', comp: {} })),
+    ),
+  }, vouched(who))
+  if (!done.ok) throw new Error(`${app.slug}: ${await done.text()}`)
+  return hits.length
 }
 
 // The section a tool reply carries: nothing when nothing is unseen.
-export let unseenBlock = (lines: string[]) =>
-  lines.length ? `\n\n## unseen errors\n${lines.join('\n')}` : ''
+export let unseenBlock = (seen: Seen[]) =>
+  seen.length ? `\n\n## unseen errors\n${seen.map(line).join('\n')}` : ''
