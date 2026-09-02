@@ -164,14 +164,15 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     )
     assertEquals((await viewer.put('/x.txt', 'no')).status, 403)
     assertEquals((await viewer.get(`id=${cake}`)).length, 1)
-    // The meta space admits nobody new once it has an owner.
+    // The directory has no public face once it has an owner: a stranger is
+    // not refused at it, they never find it at all.
     let stranger = client(
       k,
       'yak.yaks.app',
       'platform',
       await signedIn(k, maya),
     )
-    assertEquals((await stranger.post([])).status, 403)
+    assertEquals((await stranger.post([])).status, 404)
 
     // A route that throws — a malformed escape in a file path — answers with
     // the soft page and leaves an exception entity in the app's store, naming

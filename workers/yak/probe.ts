@@ -221,8 +221,13 @@ export let seed = async (
   let eids: Record<string, string> = {}
   let batch: unknown[] = [{ eid: person, name: 'person', comp: {} }]
   let meta = crypto.randomUUID()
+  // Signed in, because the directory has no public face (apps.ts): its API
+  // answers an owner of `yak` and nobody else, and a memberless meta space
+  // makes the first signed-in person one — which is exactly this bootstrap.
+  let cookie = await signedIn(k, person)
   // The meta space already exists (seeded on first touch); read its eid.
-  let [yak] = await client(k, 'yak.yaks.app', 'platform').get('.space.slug=yak')
+  let [yak] = await client(k, 'yak.yaks.app', 'platform', cookie)
+    .get('.space.slug=yak')
   batch.push({
     eid: meta,
     name: 'member',
@@ -250,8 +255,7 @@ export let seed = async (
       })
     }
   }
-  await client(k, 'yak.yaks.app', 'platform', await signedIn(k, person))
-    .applied(batch)
+  await client(k, 'yak.yaks.app', 'platform', cookie).applied(batch)
   return eids
 }
 
