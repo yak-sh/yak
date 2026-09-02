@@ -341,7 +341,7 @@ fn resolve_eid(conn: &Connection, s: &str) -> Result<String> {
 
 // The in-db text backend of one blob identity. The doc wire continues to
 // speak text; only the component table stores this integer reference.
-fn text_blob(conn: &Connection, value: &str) -> Result<i64> {
+pub(crate) fn text_blob(conn: &Connection, value: &str) -> rusqlite::Result<i64> {
     let eid = sha(&Value::from(value));
     spine(conn, &eid)?;
     let id: i64 = conn.query_row("select id from entity where eid = ?1", [&eid], |r| r.get(0))?;
@@ -2372,7 +2372,7 @@ fn writer_via(conn: &Connection, writer: Option<&str>) -> Option<String> {
     None
 }
 
-fn spine(conn: &Connection, eid: &str) -> Result<bool> {
+fn spine(conn: &Connection, eid: &str) -> rusqlite::Result<bool> {
     Ok(conn.execute("insert or ignore into entity (eid) values (?1)", [eid])? > 0)
 }
 
@@ -2592,19 +2592,38 @@ fn journal_write(
                 }
             }
             // An upsert records one present after-image per field, JSON-encoded.
+            // A content-addressed text (doc.body) refs its blob instead of
+            // repeating the bytes; `eid` is the change's entity, not a field,
+            // and is not recorded (db.ts journalFields / casField).
             Some(m) => {
-                for (i, (field, val)) in m.iter().enumerate() {
-                    exec_change(
-                        conn,
-                        "insert into journal_field (change, ordinal, field, present, value) \
-                         values (?1, ?2, ?3, 1, ?4)",
-                        &[
-                            Value::from(change_id),
-                            Value::from(i as i64),
-                            Value::from(field.as_str()),
-                            Value::from(val.to_string()),
-                        ],
-                    )?;
+                for (i, (field, val)) in m.iter().filter(|(f, _)| *f != "eid").enumerate() {
+                    let cas = ch.name == "doc" && field == "body" && val.is_string();
+                    if cas {
+                        let blob = text_blob(conn, val.as_str().unwrap_or(""))?;
+                        exec_change(
+                            conn,
+                            "insert into journal_field (change, ordinal, field, present, value, ref) \
+                             values (?1, ?2, ?3, 1, null, ?4)",
+                            &[
+                                Value::from(change_id),
+                                Value::from(i as i64),
+                                Value::from(field.as_str()),
+                                Value::from(blob),
+                            ],
+                        )?;
+                    } else {
+                        exec_change(
+                            conn,
+                            "insert into journal_field (change, ordinal, field, present, value) \
+                             values (?1, ?2, ?3, 1, ?4)",
+                            &[
+                                Value::from(change_id),
+                                Value::from(i as i64),
+                                Value::from(field.as_str()),
+                                Value::from(val.to_string()),
+                            ],
+                        )?;
+                    }
                 }
             }
         }

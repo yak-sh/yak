@@ -82,17 +82,26 @@ pub fn batch_of(conn: &Connection, tx: i64, eid: Option<&str>) -> Vec<Change> {
                 return Change::new(&ceid, &comp, None);
             }
             let mut m = Map::new();
+            // A ref'd field reads its text back through the content it names.
             if let Ok(mut fst) = conn.prepare_cached(
-                "select field, value from journal_field \
-                 where change = ?1 and present = 1 order by ordinal",
+                "select jf.field, jf.value, bt.value from journal_field jf \
+                 left join blob_text bt on bt.entity = jf.ref \
+                 where jf.change = ?1 and jf.present = 1 order by jf.ordinal",
             ) {
                 if let Ok(fields) = fst.query_map([cid], |r| {
-                    Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?))
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, Option<String>>(1)?,
+                        r.get::<_, Option<String>>(2)?,
+                    ))
                 }) {
-                    for (field, value) in fields.flatten() {
-                        let v = value
-                            .and_then(|s| serde_json::from_str(&s).ok())
-                            .unwrap_or(Value::Null);
+                    for (field, value, text) in fields.flatten() {
+                        let v = match text {
+                            Some(t) => Value::from(t),
+                            None => value
+                                .and_then(|s| serde_json::from_str(&s).ok())
+                                .unwrap_or(Value::Null),
+                        };
                         m.insert(field, v);
                     }
                 }

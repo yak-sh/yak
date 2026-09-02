@@ -622,14 +622,19 @@ pub static SCHEMA: &[SchemaOp] = &[
   -- diffs and undo stay self-contained and no value leaks across a component
   -- removal and later recreation (D-18861). An upsert with no fields (empty
   -- component presence) writes none -- its journal_change alone marks it.
-  -- ordinal is the field's order within its change.
+  -- ordinal is the field's order within its change. A content-addressed
+  -- field (doc.body) carries no text: ref names the content's blob entity,
+  -- the one copy blob_text keeps, and value stays null -- history shares the
+  -- graph's bytes instead of repeating them. An eid field is never
+  -- journaled: it is the row's own identity, already the change's entity.
   create table if not exists journal_field (
     id       integer primary key,
     change   integer not null references journal_change(id),
     ordinal  integer not null,
     field    text not null,
     present  integer not null,
-    value    text
+    value    text,
+    ref      integer references entity(id)
   );
   -- Reconstruct a batch in order (by tx), per-entity history and predecessor
   -- lookup (by entity+component), and the field rows of a change (by change).
@@ -1020,6 +1025,7 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "session", col: "stderr", sql: r#"alter table "session" add column stderr text"# },
     SchemaOp::AddColumn { table: "client", col: "actor", sql: r#"alter table "client" add column actor integer references entity(id)"# },
     SchemaOp::AddColumn { table: "session", col: "actor", sql: r#"alter table "session" add column actor integer references entity(id)"# },
+    SchemaOp::Index { name: "journal_field_ref", sql: r#"create index journal_field_ref on journal_field(ref) where ref is not null;"# },
     SchemaOp::Exec(r#"create index if not exists dependency_child on "dependency" ("child");"#),
     SchemaOp::Exec(r#"create index if not exists task_project on "task" ("project");"#),
     SchemaOp::Exec(r#"create index if not exists task_assignee on "task" ("assignee");"#),

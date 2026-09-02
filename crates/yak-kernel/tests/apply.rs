@@ -43,11 +43,12 @@ const SCHEMA: &str = "
   create table journal_field (
     id integer primary key, change integer not null references journal_change(id),
     ordinal integer not null, field text not null, present integer not null,
-    value text
+    value text, ref integer references entity(id)
   );
   create index journal_change_tx on journal_change(tx, ordinal);
   create index journal_change_ent on journal_change(entity, component);
   create index journal_field_change on journal_field(change, ordinal);
+  create index journal_field_ref on journal_field(ref) where ref is not null;
   create table blob (
     entity integer primary key references entity(id),
     bytes integer not null
@@ -317,12 +318,14 @@ fn create_stamps_numbers_and_journals() {
     // completed to the persisted shape (body default rides the batch)
     let txs: i64 = one(&s, "select count(*) from journal_tx");
     assert_eq!(txs, 1);
+    // A doc body is journaled by reference to its content blob, never inline.
     let body: String = one(
         &s,
-        "select jf.value from journal_field jf join journal_change jc on jc.id = jf.change \
-         where jc.component = 'doc' and jf.field = 'body'",
+        "select bt.value from journal_field jf join journal_change jc on jc.id = jf.change \
+         join blob_text bt on bt.entity = jf.ref \
+         where jc.component = 'doc' and jf.field = 'body' and jf.value is null",
     );
-    assert_eq!(body, "\"\"");
+    assert_eq!(body, "");
     let echoed: i64 = one(&s, "select count(*) from journal_change where component = 'created'");
     assert_eq!(echoed, 0);
     // trace is null unless the caller fed the journal

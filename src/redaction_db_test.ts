@@ -21,10 +21,12 @@ let { bareDb } = await import('./testdb.ts')
 
 bareDb()
 let uid = () => crypto.randomUUID()
-// Every value the journal holds — the one historical copy of content.
+// Every value the journal holds — inline, or through the content a field refs.
 let batches = (db: ReturnType<typeof bareDb>) =>
   (db.prepare(
-    'select value from journal_field where value is not null order by id',
+    `select coalesce(jf.value, json_quote(bt.value)) as value
+     from journal_field jf left join blob_text bt on bt.entity = jf.ref
+     where jf.present = 1 order by jf.id`,
   ).all() as { value: string }[]).map((row) => row.value)
 
 Deno.test('redact: live doc, journal, indexes, embedding, and audit move atomically', () => {
@@ -103,7 +105,9 @@ Deno.test('redact: scrubs the normalized journal_field, so the new readers canno
   // The value is in journal_field before redaction.
   let fieldHits = () =>
     (db.prepare(
-      `select count(*) as n from journal_field where instr(value, ?) > 0`,
+      `select count(*) as n from journal_field jf
+       left join blob_text bt on bt.entity = jf.ref
+       where instr(coalesce(jf.value, bt.value), ?) > 0`,
     ).get(secret) as { n: number }).n
   assert(fieldHits() > 0)
 

@@ -887,14 +887,19 @@ let schema = `
   -- diffs and undo stay self-contained and no value leaks across a component
   -- removal and later recreation (D-18861). An upsert with no fields (empty
   -- component presence) writes none -- its journal_change alone marks it.
-  -- ordinal is the field's order within its change.
+  -- ordinal is the field's order within its change. A content-addressed
+  -- field (doc.body) carries no text: ref names the content's blob entity,
+  -- the one copy blob_text keeps, and value stays null -- history shares the
+  -- graph's bytes instead of repeating them. An eid field is never
+  -- journaled: it is the row's own identity, already the change's entity.
   create table if not exists journal_field (
     id       integer primary key,
     change   integer not null references journal_change(id),
     ordinal  integer not null,
     field    text not null,
     present  integer not null,
-    value    text
+    value    text,
+    ref      integer references entity(id)
   );
   -- Reconstruct a batch in order (by tx), per-entity history and predecessor
   -- lookup (by entity+component), and the field rows of a change (by change).
@@ -1876,11 +1881,58 @@ let gcJournal = (db: DatabaseSync) => {
     change: count('select count(*) as n from journal_change'),
     field: count('select count(*) as n from journal_field'),
   }
-  console.warn(
-    `journal: collected — tx ${before.tx} → ${after.tx}, ` +
-      `changes ${before.change} → ${after.change}, ` +
-      `fields ${before.field} → ${after.field}`,
-  )
+  if (before.tx != after.tx || before.field != after.field) {
+    console.warn(
+      `journal: collected — tx ${before.tx} → ${after.tx}, ` +
+        `changes ${before.change} → ${after.change}, ` +
+        `fields ${before.field} → ${after.field}`,
+    )
+  }
+}
+
+// Share the graph's bytes with its history (T-18883): a journaled doc.body
+// that still carries its text is pointed at the content blob that text hashes
+// to (minted through textBlob if the graph no longer holds it -- content-
+// addressed, so this is idempotent) and the copy is dropped, and every `eid`
+// field row goes (the row's own identity, never a field). Guarded on the ref
+// column, so a later open is a pure read; the ref index is realized here on
+// every shape, since the schema template cannot name a column an old table
+// lacks.
+let migrateJournalRefs = (db: DatabaseSync) => {
+  if (!tableExists(db, 'journal_field')) return
+  if (!hasCol(db, 'journal_field', 'ref')) {
+    db.exec(
+      'alter table journal_field add column ref integer references entity(id)',
+    )
+    let rows = prep(
+      db,
+      `select jf.id as id, jf.value as value
+         from journal_field jf join journal_change jc on jc.id = jf.change
+        where jc.component = 'doc' and jf.field = 'body'
+          and jf.present = 1 and jf.value is not null`,
+    ).all() as { id: number; value: string }[]
+    let point = prep(
+      db,
+      'update journal_field set ref = ?, value = null where id = ?',
+    )
+    let moved = 0
+    for (let r of rows) {
+      let text = JSON.parse(r.value)
+      if (typeof text != 'string') continue
+      point.run(textBlob(db, text), r.id)
+      moved++
+    }
+    let gone = prep(db, `delete from journal_field where field = 'eid'`).run()
+      .changes
+    console.warn(
+      `journal: ${moved} body after-image(s) now ref their content, ${gone} eid field(s) dropped`,
+    )
+  }
+  if (!hasIdx(db, 'journal_field_ref')) {
+    db.exec(
+      'create index journal_field_ref on journal_field(ref) where ref is not null;',
+    )
+  }
 }
 
 // memory.type → the `feedback` tag (T-12585). The enum said four things the
@@ -3654,6 +3706,7 @@ export let migrate = (db: DatabaseSync) => {
       retireJsonJournal(db)
       migrateJournalKeys(db)
       gcJournal(db)
+      migrateJournalRefs(db)
       // The dormant columns are migration INPUT, and every one of them has now
       // been read for the last time (T-6670, T-7113, T-7006). A retired column
       // that lingers still answers a schema read, so it keeps teaching a
@@ -6407,6 +6460,19 @@ export let vocabularyDoc = (db: DatabaseSync, body: string): void => {
   )
 }
 
+// The fields a component's after-image records: everything but `eid`, the
+// row's own identity, already the change's entity (a server-synthesized
+// change spells it inside comp for convenience; the wire keeps it, the
+// journal does not).
+let journalFields = (comp: Record<string, unknown>) =>
+  Object.entries(comp).filter(([field]) => field != 'eid')
+
+// Is this field's text content-addressed in the graph (doc.body, the one
+// column apply() lands through textBlob)? Then the journal refs the blob
+// instead of repeating the text; a null body is a present null like any.
+let casField = (name: string, field: string, v: unknown): v is string =>
+  name == 'doc' && field == 'body' && typeof v == 'string'
+
 // The journal write (D-18860/D-18861): journal_tx keeps the batch's provenance
 // and mints the transaction id -- an integer primary key, so the next rowid,
 // which is the log's monotonic total order and the cursor delta clients hold;
@@ -6441,8 +6507,8 @@ export let journalWrite = (
   )
   let insField = prep(
     db,
-    `insert into journal_field (change, ordinal, field, present, value)
-     values (?, ?, ?, ?, ?)`,
+    `insert into journal_field (change, ordinal, field, present, value, ref)
+     values (?, ?, ?, ?, ?, ?)`,
   )
   // The fields (eid, component) still shows as present: newest after-image wins
   // — journal_field.id is monotonic, so the max-id row per field is the latest
@@ -6466,14 +6532,19 @@ export let journalWrite = (
       // A component removal tombstones every field it still had, so field
       // history stays self-contained across a removal and a later recreation.
       ;(present.all(eid, name) as { field: string }[]).forEach(({ field }, i) =>
-        insField.run(change, i, field, 0, null)
+        insField.run(change, i, field, 0, null, null)
       )
     } else {
       // An upsert records one present after-image per field, JSON-encoded so a
       // present null (present=1, value='null') stays distinct from a tombstone.
       // An empty component writes none — its journal_change alone marks presence.
-      Object.keys(comp).forEach((field, i) =>
-        insField.run(change, i, field, 1, JSON.stringify(comp[field]))
+      // A content-addressed text lands as a ref to its blob (the bytes the
+      // graph already holds); an `eid` field is the change's entity, not a
+      // field, and is not recorded.
+      journalFields(comp).forEach(([field, v], i) =>
+        casField(name, field, v)
+          ? insField.run(change, i, field, 1, null, textBlob(db, v))
+          : insField.run(change, i, field, 1, JSON.stringify(v), null)
       )
     }
   })
@@ -6540,23 +6611,31 @@ type RedactionHit = {
   tx: number
   ts: string
   decoded: string
+  // The content the field refs (its blob eid), when it carries no text of
+  // its own — scrubbed by repointing, never by rewriting shared bytes.
+  blob: string | null
 }
 let redactionHits = (db: DatabaseSync, value: string): RedactionHit[] => {
   let encoded = JSON.stringify(value).slice(1, -1)
   let rows = prep(
     db,
-    `select jf.id as id, jf.value as value, jf.field as field,
+    `select jf.id as id, jf.value as value, bt.value as text, jf.field as field,
             ${refEid('jc.entity')} as eid, jc.component as component,
-            jt.id as tx, jt.ts as ts
+            ${refEid('jf.ref')} as blob, jt.id as tx, jt.ts as ts
        from journal_field jf
        join journal_change jc on jc.id = jf.change
        join journal_tx jt on jt.id = jc.tx
-      where jf.present = 1 and instr(jf.value, ?) > 0
+       left join blob_text bt on bt.entity = jf.ref
+      where jf.present = 1
+        and (instr(jf.value, ?) > 0 or instr(bt.value, ?) > 0)
       order by jf.id`,
-  ).all(encoded) as (Omit<RedactionHit, 'decoded'> & { value: string })[]
-  return rows.flatMap(({ value: raw, ...f }) => {
+  ).all(encoded, value) as (Omit<RedactionHit, 'decoded'> & {
+    value: string | null
+    text: string | null
+  })[]
+  return rows.flatMap(({ value: raw, text, ...f }) => {
     if (!scrubbable(f.component, f.field)) return []
-    let decoded = JSON.parse(raw)
+    let decoded = text ?? JSON.parse(raw ?? 'null')
     return typeof decoded == 'string' && decoded.includes(value)
       ? [{ ...f, decoded }]
       : []
@@ -6568,7 +6647,8 @@ let redactionHits = (db: DatabaseSync, value: string): RedactionHit[] => {
 // text attachments share by content hash; forgetting a doc body repoints it at a
 // clean blob, which can strand the old content with no live referrer. This
 // collects the VALUE — the blob_text row — only when NOTHING needs it: no
-// doc.body points at the blob, no attachment.blob does, and it is not itself an
+// doc.body points at the blob, no attachment.blob does, no journal_field refs
+// it (history reads its text through the same row), and it is not itself an
 // image facet sharing the sha. A referenced (shared) value is never touched, so
 // a body two docs hold survives forgetting one. The blob entity's byte-count
 // shell stays (it carries no content and, being content-addressed, no num), so
@@ -6603,6 +6683,7 @@ export let collectBlobText = (
       where not exists (select 1 from doc where body = bt.entity)
         and not exists (select 1 from attachment where blob = bt.entity)
         and not exists (select 1 from image where entity = bt.entity)
+        and not exists (select 1 from journal_field where ref = bt.entity)
         ${scope}`,
   ).all(...(only ?? [])) as { eid: string; id: number }[]
   let del = prep(db, 'delete from blob_text where entity = ?')
@@ -6686,20 +6767,26 @@ export let redact = (
     // leave the journal (every history/replay reader, and the backup dump) or
     // it leaks through the door that keeps history. Rows are kept, values
     // rewritten, so the tx/change chain stays navigable and reads [redacted].
+    // A ref'd field is repointed at the clean content instead, and the blobs
+    // it left are collected below once nothing else holds them.
     let scrubField = prep(db, 'update journal_field set value = ? where id = ?')
+    let scrubRef = prep(db, 'update journal_field set ref = ? where id = ?')
     let txs = new Set<number>()
+    let stranded = new Set<string>()
     let replacements = 0
     let firstSeen: string | undefined
     for (let h of hits) {
-      scrubField.run(
-        JSON.stringify(h.decoded.replaceAll(value, REDACTED)),
-        h.id,
-      )
+      let clean = h.decoded.replaceAll(value, REDACTED)
+      if (h.blob) {
+        scrubRef.run(textBlob(db, clean), h.id)
+        stranded.add(h.blob)
+      } else scrubField.run(JSON.stringify(clean), h.id)
       replacements += h.decoded.split(value).length - 1
       txs.add(h.tx)
       firstSeen ??= h.ts
     }
     let journalRows = txs.size
+    if (stranded.size) collectBlobText(db, [...stranded])
 
     let docChange: Change | undefined
     if (doc) {
@@ -6856,10 +6943,12 @@ let changeRows = `select jc.id as id, e.eid as eid, jc.component as component,
           jc.operation as operation
    from journal_change jc join entity e on e.id = jc.entity`
 let rebuildChanges = (db: DatabaseSync, rows: ChangeRow[]): Change[] => {
+  // A ref'd field reads its text back through the content it names.
   let fieldsOf = prep(
     db,
-    `select field, value from journal_field
-     where change = ? and present = 1 order by ordinal`,
+    `select jf.field as field, jf.value as value, bt.value as text
+     from journal_field jf left join blob_text bt on bt.entity = jf.ref
+     where jf.change = ? and jf.present = 1 order by jf.ordinal`,
   )
   return canonicalChanges(rows.map((ch) => {
     if (ch.operation == 'remove') {
@@ -6867,8 +6956,12 @@ let rebuildChanges = (db: DatabaseSync, rows: ChangeRow[]): Change[] => {
     }
     let comp: Record<string, unknown> = {}
     for (
-      let f of fieldsOf.all(ch.id) as { field: string; value: string }[]
-    ) comp[f.field] = JSON.parse(f.value)
+      let f of fieldsOf.all(ch.id) as {
+        field: string
+        value: string | null
+        text: string | null
+      }[]
+    ) comp[f.field] = f.text ?? JSON.parse(f.value ?? 'null')
     return { eid: ch.eid, name: ch.component, comp }
   }))
 }

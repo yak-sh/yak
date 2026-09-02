@@ -23,7 +23,7 @@
 // reshape is the one explicit non-additive pass; it precedes the generated
 // current schema and is tested against legacy data.
 
-use crate::write::{has_col, sha, WriteStore};
+use crate::write::{has_col, sha, text_blob, WriteStore};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior};
 use serde_json::Value;
 use std::time::Duration;
@@ -281,6 +281,51 @@ fn gc_journal(conn: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
+// Share the graph's bytes with its history (db.ts migrateJournalRefs): a
+// journaled doc.body still carrying its text is pointed at its content blob
+// (minted through text_blob if absent) and the copy dropped; every `eid`
+// field row goes. Guarded on the ref column; the ref index is realized on
+// every shape.
+fn migrate_journal_refs(conn: &Connection) -> rusqlite::Result<()> {
+    if !has_table(conn, "journal_field") {
+        return Ok(());
+    }
+    if !has_col(conn, "journal_field", "ref") {
+        conn.execute_batch(
+            "alter table journal_field add column ref integer references entity(id);",
+        )?;
+        let rows: Vec<(i64, String)> = {
+            let mut st = conn.prepare(
+                "select jf.id, jf.value \
+                   from journal_field jf join journal_change jc on jc.id = jf.change \
+                  where jc.component = 'doc' and jf.field = 'body' \
+                    and jf.present = 1 and jf.value is not null",
+            )?;
+            let rows = st
+                .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            rows
+        };
+        for (id, value) in rows {
+            let Ok(Value::String(text)) = serde_json::from_str::<Value>(&value) else {
+                continue;
+            };
+            let blob = text_blob(conn, &text)?;
+            conn.execute(
+                "update journal_field set ref = ?1, value = null where id = ?2",
+                rusqlite::params![blob, id],
+            )?;
+        }
+        conn.execute("delete from journal_field where field = 'eid'", [])?;
+    }
+    if !has_idx(conn, "journal_field_ref") {
+        conn.execute_batch(
+            "create index journal_field_ref on journal_field(ref) where ref is not null;",
+        )?;
+    }
+    Ok(())
+}
+
 // `instruction` was the empty Session-prompt marker before executable
 // instructions claimed that name. Move only that one-column legacy shape;
 // contract-bearing instruction tables belong to the evaluator and must remain.
@@ -424,6 +469,7 @@ pub fn apply_schema(conn: &Connection) -> rusqlite::Result<()> {
     retire_json_journal(conn)?;
     migrate_journal_keys(conn)?;
     gc_journal(conn)?;
+    migrate_journal_refs(conn)?;
     conn.execute_batch(
         "insert or ignore into prompt (entity) \
          select e.entity from entry e \

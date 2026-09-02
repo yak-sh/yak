@@ -18,9 +18,19 @@ let uid = () => crypto.randomUUID()
 type DB = InstanceType<typeof DatabaseSync>
 
 // What apply() journals: its returned batch minus the server-stamped provenance
-// echoes (created/updated repeat the ts + actor the journal_tx row keeps).
+// echoes (created/updated repeat the ts + actor the journal_tx row keeps) and
+// minus any `eid` a comp spells (the change's entity, never a field).
 let logged = (out: Change[]): Change[] =>
-  out.filter((c) => c.name != 'created' && c.name != 'updated')
+  out.filter((c) => c.name != 'created' && c.name != 'updated').map((c) =>
+    c.comp && 'eid' in c.comp
+      ? {
+        ...c,
+        comp: Object.fromEntries(
+          Object.entries(c.comp).filter(([k]) => k != 'eid'),
+        ),
+      }
+      : c
+  )
 
 // Reconstruct the newest transaction's batch from the journal rows: each
 // journal_change in applied order, its comp rebuilt from the present after-image
@@ -43,15 +53,17 @@ let normalizedBatch = (d: DB): Change[] => {
   }[]
   return changes.map(({ id, eid, component, operation }) => {
     if (operation == 'remove') return { eid, name: component, comp: null }
+    // A content-addressed field (doc.body) refs its blob; read the text back.
     let fields = d.prepare(
-      `select field, value from journal_field
-       where change = ? and present = 1 order by ordinal`,
-    ).all(id) as { field: string; value: string }[]
+      `select jf.field as field, jf.value as value, bt.value as text
+       from journal_field jf left join blob_text bt on bt.entity = jf.ref
+       where jf.change = ? and jf.present = 1 order by jf.ordinal`,
+    ).all(id) as { field: string; value: string | null; text: string | null }[]
     return {
       eid,
       name: component,
       comp: Object.fromEntries(
-        fields.map((f) => [f.field, JSON.parse(f.value)]),
+        fields.map((f) => [f.field, f.text ?? JSON.parse(f.value ?? 'null')]),
       ),
     }
   })

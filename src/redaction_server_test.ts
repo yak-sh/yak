@@ -38,7 +38,9 @@ slow(
     assertMatch(out.audit, /^X-\d+$/)
     assertEquals(
       db.prepare(
-        'select count(*) as n from journal_field where instr(value, ?) > 0',
+        `select count(*) as n from journal_field jf
+         left join blob_text bt on bt.entity = jf.ref
+         where instr(coalesce(jf.value, bt.value), ?) > 0`,
       )
         .get(secret),
       { n: 0 },
