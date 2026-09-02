@@ -9,7 +9,12 @@ name = "yak"
 main = "index.ts"
 account_id = "0f9613dfd3f0451df0bd0f12a1372ea3"
 compatibility_date = "2025-05-08"
-compatibility_flags = ["nodejs_compat"]
+# global_fetch_strictly_public sends every outbound fetch out to the public
+# internet instead of routing a same-zone hostname back to this Worker. The
+# OAuth provider requires it before it will fetch a Client ID Metadata
+# Document (identity.ts), because a client_id is a URL a stranger chose and
+# same-zone routing would make that URL an SSRF into our own origin.
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
 # The apex and every first-level space hostname, both on the yaks.app zone;
 # the zone's Universal certificate covers the wildcard.

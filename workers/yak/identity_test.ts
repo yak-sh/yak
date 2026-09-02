@@ -126,12 +126,33 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assertMatch(as.authorization_endpoint, /\/oauth\/authorize$/)
     assertMatch(as.token_endpoint, /\/oauth\/token$/)
     assertMatch(as.registration_endpoint, /\/oauth\/register$/)
+    // Both ways to name a client are open, and the provider says so only
+    // when the option and the `global_fetch_strictly_public` flag agree.
+    assert(as.client_id_metadata_document_supported, 'CIMD advertised')
     let prm = await (await k.at(
       'yaks.app',
       '/.well-known/oauth-protected-resource/mcp',
     )).json()
     assertMatch(prm.resource, /\/mcp$/)
     assertEquals(prm.scopes_supported, ['graph'])
+
+    // A client that names itself with a URL (CIMD) is looked up by fetching
+    // that URL, not by looking in KV: a client_id nobody registered is no
+    // longer refused out of hand, it is a document we went and asked for.
+    // The document itself must be https, so no local server can stand in
+    // for one — `.invalid` never resolves, which is the failure we can see.
+    let doc = 'https://probe.invalid/client_metadata.json'
+    let bare = await k.at(
+      'yaks.app',
+      `/oauth/authorize?response_type=code&client_id=${
+        encodeURIComponent(doc)
+      }&redirect_uri=https%3A%2F%2Fprobe.invalid%2Fcb`,
+    )
+    assertEquals(bare.status, 400)
+    assertEquals(
+      await bare.text(),
+      `Could not read the client metadata document at ${doc}`,
+    )
 
     // A client registers itself (RFC 7591) — what the Claude and ChatGPT
     // connectors do today.

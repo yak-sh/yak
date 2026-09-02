@@ -9,12 +9,14 @@
 //
 // An agent proves who it is with a bearer token from
 // `@cloudflare/workers-oauth-provider`, which owns `/oauth/token`,
-// `/oauth/register`, and the two well-known metadata documents. Dynamic
-// client registration is ON because that is what the Claude and ChatGPT
-// connectors do today; MCP's 2026-07-28 revision deprecates it in favor of
-// Client ID Metadata Documents, which the same library serves once we turn on
-// `clientIdMetadataDocumentEnabled` (it needs the
-// `global_fetch_strictly_public` compatibility flag). The provider's consent
+// `/oauth/register`, and the two well-known metadata documents. Both ways a
+// connector can name itself are open: Client ID Metadata Documents, which
+// MCP's 2026-07-28 revision prefers — the client_id IS an https URL serving
+// its own metadata, which the provider fetches and validates — and dynamic
+// registration, kept for clients that only speak RFC 7591. CIMD needs the
+// `global_fetch_strictly_public` compatibility flag beside the option
+// (wrangler.toml), and the provider advertises
+// `client_id_metadata_document_supported` only when it has both. The consent
 // page is the sign-in page: signing in IS granting, and an already-signed-in
 // browser gets one Allow button. The grant carries `{person}` as its props,
 // so a token resolves to the same eid a cookie does.
@@ -26,6 +28,7 @@
 import {
   AuthorizationError,
   type AuthRequest,
+  CimdFetchError,
   getOAuthApi,
   OAuthProvider,
   type OAuthProviderOptions,
@@ -139,13 +142,22 @@ let landed = async (req: Request, env: Env, person: string, q: string) => {
 
 // The authorize request as the provider reads it, re-parsed from the query
 // the browser carried back: `q` is untrusted, and parsing is what validates
-// it against the registered client, its redirect URI, and PKCE. A client we
-// cannot even name is refused here; one we can is told in its own language.
+// it against the client — registered, or fetched from the metadata document
+// its id points at — its redirect URI, and PKCE. A client we cannot even
+// name is refused here; one we can is told in its own language. A metadata
+// document we cannot fetch is the client's own outage, not ours, so it is
+// said plainly rather than thrown into the exception page.
 let asked = async (req: Request, env: Env, q: string) => {
   let url = new URL(`/oauth/authorize?${q}`, req.url)
   try {
     return await api(env).parseAuthRequest(new Request(url.href))
   } catch (e) {
+    if (e instanceof CimdFetchError) {
+      return new Response(
+        `Could not read the client metadata document at ${e.metadataUrl}`,
+        { status: 400 },
+      )
+    }
     if (!(e instanceof AuthorizationError)) throw e
     if (!e.redirectUri) return new Response(e.description, { status: 400 })
     let back = new URL(e.redirectUri)
@@ -278,6 +290,7 @@ let OPTS: OAuthProviderOptions<Env> = {
   authorizeEndpoint: '/oauth/authorize',
   tokenEndpoint: '/oauth/token',
   clientRegistrationEndpoint: '/oauth/register',
+  clientIdMetadataDocumentEnabled: true,
   scopesSupported: ['graph'],
   resourceMetadata: {
     scopes_supported: ['graph'],
