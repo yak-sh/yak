@@ -32,8 +32,9 @@ let refEid = (col: string) => `(select eid from entity where id = ${col})`
 // ANN index ranks them like real embeddings (cosines preserved to ~0.005).
 let vec = (...xs: number[]) => axes(...xs)
 let put = (d: DatabaseSync, eid: string, text: string, v: Float32Array) =>
-  d.prepare('insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)')
-    .run(eid, MODEL, hash(text), new Uint8Array(v.buffer))
+  d.prepare(
+    `insert into embedding (entity, model, hash, vec) values (${idOf}, ?, ?, ?)`,
+  ).run(eid, MODEL, hash(text), new Uint8Array(v.buffer))
 
 // Graph parts through apply() (the real writer mints the spine); the vector
 // beside it through put() (embeddings come from the sweep, never a patch).

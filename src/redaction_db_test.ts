@@ -42,7 +42,8 @@ Deno.test('redact: live doc, journal, indexes, embedding, and audit move atomica
     comp: { title: 'Target', body: `before ${secret} after ${secret}` },
   }])
   db.prepare(
-    `insert into embedding (eid, model, hash, vec) values (?, 'm', 'h', ?)`,
+    `insert into embedding (entity, model, hash, vec)
+     values ((select id from entity where eid = ?), 'm', 'h', ?)`,
   ).run(target, new Uint8Array([1, 2, 3, 4]))
 
   let out = redact(db, target, secret, actor)
@@ -58,7 +59,10 @@ Deno.test('redact: live doc, journal, indexes, embedding, and audit move atomica
     { n: 0 },
   )
   assertEquals(
-    db.prepare('select count(*) as n from embedding where eid = ?').get(target),
+    db.prepare(
+      `select count(*) as n from embedding
+       where entity = (select id from entity where eid = ?)`,
+    ).get(target),
     { n: 0 },
   )
   assert(batches(db).every((batch) => !batch.includes(secret)))
@@ -363,7 +367,8 @@ Deno.test('redact: a failed audit append rolls every copy back', () => {
     comp: { title: 'Target', body: secret },
   }])
   db.prepare(
-    `insert into embedding (eid, model, hash, vec) values (?, 'm', 'h', ?)`,
+    `insert into embedding (entity, model, hash, vec)
+     values ((select id from entity where eid = ?), 'm', 'h', ?)`,
   ).run(target, new Uint8Array([1, 2, 3, 4]))
   let before = batches(db)
   db.exec(`
@@ -382,7 +387,10 @@ Deno.test('redact: a failed audit append rolls every copy back', () => {
   assertEquals(readComp(db, target, 'doc')?.body, secret)
   assertEquals(batches(db), before)
   assertEquals(
-    db.prepare('select count(*) as n from embedding where eid = ?').get(target),
+    db.prepare(
+      `select count(*) as n from embedding
+       where entity = (select id from entity where eid = ?)`,
+    ).get(target),
     { n: 1 },
   )
   assertEquals(db.prepare('select count(*) as n from redaction').get(), {

@@ -54,7 +54,8 @@ let memory = (scope: string, title: string, body: string) => {
 
 let putVec = (eid: string, text: string, vec: Float32Array) =>
   db.prepare(
-    'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
+    `insert into embedding (entity, model, hash, vec)
+     values ((select id from entity where eid = ?), ?, ?, ?)`,
   ).run(eid, MODEL, hash(text), new Uint8Array(vec.buffer))
 
 Deno.test('the hard scope is explicit about proposals, source edits, and readback', () => {

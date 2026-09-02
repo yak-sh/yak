@@ -89,11 +89,10 @@ let WS = ' \t\n\r\v\f'
 // Correlated on purpose: `not exists` probes the comment index for the one
 // row at hand, so the same clause is cheap swept over every doc AND asked of
 // a single eid — one rule, never a second phrasing to fall out of step.
-// The `embedding` table is DERIVED and stays keyed by the doc's EID (D-18866
-// reshapes only graph tables; embedding refills from the sweep). `doc`, though,
-// is now keyed by the owner int id, so every doc↔embedding bridge joins the
-// spine to speak the eid the embedding rows hold. ELIGIBLE is correlated on the
-// unaliased `doc` table, so it uses doc.entity for its sibling probes.
+// The `embedding` table is DERIVED but keys on the doc's spine id like every
+// other table, so doc↔embedding joins are int-to-int and only the door speaks
+// the eid a caller holds. ELIGIBLE is correlated on the unaliased `doc` table,
+// so it uses doc.entity for its sibling probes.
 let ELIGIBLE =
   `not exists (select 1 from comment where comment.entity = doc.entity)
        and not exists (
@@ -114,10 +113,9 @@ export let stale = (db: DatabaseSync, limit = Infinity) =>
   (db.prepare(
     `select o.eid as eid, d.title, d.body, e.hash as had from doc_value d
      join entity o on o.id = d.entity
-     left join embedding e on e.eid = o.eid
-     where o.eid in (
-       select o2.eid from doc_value doc join entity o2 on o2.id = doc.entity
-       where ${ELIGIBLE}
+     left join embedding e on e.entity = d.entity
+     where d.entity in (
+       select doc.entity from doc_value doc where ${ELIGIBLE}
      )`,
   ).all(WS) as {
     eid: string
@@ -135,17 +133,14 @@ export let stale = (db: DatabaseSync, limit = Infinity) =>
 export let prune = (db: DatabaseSync) =>
   db.prepare(
     `delete from embedding
-     where eid not in (
-       select o.eid from doc_value doc join entity o on o.id = doc.entity
-       where ${ELIGIBLE}
-     )`,
+     where entity not in (select doc.entity from doc_value doc where ${ELIGIBLE})`,
   ).run(WS)
 
 let put = (db: DatabaseSync, eid: string, text: string, vec: Float32Array) =>
   db.prepare(
-    `insert into embedding (eid, model, hash, vec)
-     values (?, ?, ?, vector_as_f32(?, ?))
-     on conflict (eid) do update set
+    `insert into embedding (entity, model, hash, vec)
+     values ((select id from entity where eid = ?), ?, ?, vector_as_f32(?, ?))
+     on conflict (entity) do update set
        model = excluded.model, hash = excluded.hash, vec = excluded.vec,
        at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
   ).run(eid, MODEL, hash(text), new Uint8Array(vec.buffer), DIM)
@@ -237,7 +232,9 @@ export let stored = (
   text: string,
 ): Float32Array | null => {
   let row = db.prepare(
-    'select vec from embedding where eid = ? and model = ? and hash = ?',
+    `select vec from embedding
+     where entity = (select id from entity where eid = ?)
+       and model = ? and hash = ?`,
   ).get(eid, MODEL, hash(text)) as { vec: Uint8Array } | undefined
   return row ? new Float32Array(row.vec.slice().buffer) : null
 }

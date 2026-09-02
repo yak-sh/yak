@@ -20,8 +20,9 @@ slow('vector index: embedding writes dirty, rebuild, and answer KNN', () => {
     Math.floor(Math.random() * 1e9),
   )
   db.prepare(
-    `insert into embedding (eid, model, hash, vec)
-     values (?, 'test', 'test', vector_as_f32(?, ?))`,
+    `insert into embedding (entity, model, hash, vec)
+     values ((select id from entity where eid = ?), 'test', 'test',
+             vector_as_f32(?, ?))`,
   ).run(eid, new Uint8Array(vec.buffer), DIM)
   assertEquals(
     db.prepare('select dirty from embedding_index where id = 1').get(),
@@ -30,9 +31,10 @@ slow('vector index: embedding writes dirty, rebuild, and answer KNN', () => {
 
   assertEquals(refreshVector(db) > 0, true)
   let hit = db.prepare(
-    `select e.eid
+    `select o.eid as eid
      from vector_quantize_scan('embedding', 'vec', ?, 1) v
-     join embedding e on e.rowid = v.rowid`,
+     join embedding e on e.entity = v.rowid
+     join entity o on o.id = e.entity`,
   ).get(new Uint8Array(vec.buffer))
   assertEquals(hit, { eid })
   assertEquals(

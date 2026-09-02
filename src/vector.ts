@@ -143,9 +143,10 @@ export let knn = (
   let bytes = new Uint8Array(q.buffer, q.byteOffset, q.byteLength)
   try {
     return (db.prepare(
-      `select e.eid as eid, v.distance as distance
+      `select o.eid as eid, v.distance as distance
        from vector_quantize_scan('embedding', 'vec', ?, ?) v
-       join embedding e on e.rowid = v.id
+       join embedding e on e.entity = v.id
+       join entity o on o.id = e.entity
        ${model == null ? '' : 'where e.model = ?'}`,
     ).all(...(model == null ? [bytes, k] : [bytes, k, model])) as {
       eid: string

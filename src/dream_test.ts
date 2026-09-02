@@ -106,7 +106,8 @@ let vec = (...xs: number[]) => axes(...xs)
 // semantic search until whoever owns the index quantizes it.
 let putVec = (eid: string, v: Float32Array) => {
   db.prepare(
-    'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
+    `insert into embedding (entity, model, hash, vec)
+     values ((select id from entity where eid = ?), ?, ?, ?)`,
   ).run(eid, MODEL, hash(eid), new Uint8Array(v.buffer))
   refreshVector(db)
 }

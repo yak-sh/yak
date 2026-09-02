@@ -40,7 +40,8 @@ let vec = (...xs: number[]) => axes(...xs)
 // an unquantized write is invisible to similar() until its owner quantizes it.
 let put = (eid: string, text: string, v: Float32Array) => {
   db.prepare(
-    'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
+    `insert into embedding (entity, model, hash, vec)
+       values ((select id from entity where eid = ?), ?, ?, ?)`,
   ).run(eid, MODEL, hash(text), new Uint8Array(v.buffer))
   refreshVector(db)
 }
@@ -114,7 +115,9 @@ Deno.test('prune: every route out of eligibility takes its vector along', () => 
 
   prune(db)
   let held = (eid: string) =>
-    !!db.prepare('select eid from embedding where eid = ?').get(eid)
+    !!db.prepare(
+      `select 1 from embedding where entity = (select id from entity where eid = ?)`,
+    ).get(eid)
   assertEquals([held(live), held(emptied), held(spoke), held(dead)], [
     true,
     false,
@@ -154,7 +157,10 @@ Deno.test('stored: exact text reuses a doc vector; edits and misses do not', () 
   assertEquals([...stored(db, eid, text)!], [...vec(3, 4)])
   assertEquals(stored(db, eid, 'edited'), null)
   assertEquals(stored(db, uid(), text), null)
-  db.prepare("update embedding set model = 'older' where eid = ?").run(eid)
+  db.prepare(
+    `update embedding set model = 'older'
+     where entity = (select id from entity where eid = ?)`,
+  ).run(eid)
   assertEquals(stored(db, eid, text), null)
 })
 
@@ -202,7 +208,8 @@ slow(
     put(mine, 'active-space neighbour', vec(1, 0)) // stored under the active MODEL
     // A row from a DIFFERENT model at the SAME position — the mixed-space hazard.
     db.prepare(
-      'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
+      `insert into embedding (entity, model, hash, vec)
+       values ((select id from entity where eid = ?), ?, ?, ?)`,
     )
       .run(
         foreign,
@@ -231,8 +238,9 @@ slow('similar: an in-place re-embed answers with the new vector', () => {
     .run(e, 'generation probe', textBlob(d, ''))
   let store = (v: Float32Array) =>
     d.prepare(
-      `insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)
-       on conflict (eid) do update set vec = excluded.vec`,
+      `insert into embedding (entity, model, hash, vec)
+       values ((select id from entity where eid = ?), ?, ?, ?)
+       on conflict (entity) do update set vec = excluded.vec`,
     ).run(
       e,
       MODEL,
@@ -266,7 +274,8 @@ slow('similar: SQL KNN ranks the same neighbours the JS scan did', () => {
     d.prepare(`insert into doc (entity, title, body) values (${idOf}, ?, ?)`)
       .run(e, title, textBlob(d, ''))
     d.prepare(
-      'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
+      `insert into embedding (entity, model, hash, vec)
+       values ((select id from entity where eid = ?), ?, ?, ?)`,
     )
       .run(e, MODEL, hash(title), new Uint8Array(v.buffer))
     return e
@@ -287,7 +296,9 @@ slow('similar: SQL KNN ranks the same neighbours the JS scan did', () => {
   // The deleted JS scan, verbatim in spirit: exact cosine over every stored
   // vector, sorted, living head.
   let jsScan = (q: Float32Array, k: number) =>
-    (d.prepare('select eid, vec from embedding').all() as {
+    (d.prepare(
+      'select o.eid as eid, e.vec as vec from embedding e join entity o on o.id = e.entity',
+    ).all() as {
       eid: string
       vec: Uint8Array
     }[])

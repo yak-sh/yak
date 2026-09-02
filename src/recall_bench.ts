@@ -30,8 +30,10 @@ let vecAt = (i: number) => {
   return Float32Array.from(xs.map((x) => x / n))
 }
 let put = (eid: string, text: string, v: Float32Array) =>
-  d.prepare('insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)')
-    .run(eid, MODEL, hash(text), new Uint8Array(v.buffer))
+  d.prepare(
+    `insert into embedding (entity, model, hash, vec)
+     values ((select id from entity where eid = ?), ?, ?, ?)`,
+  ).run(eid, MODEL, hash(text), new Uint8Array(v.buffer))
 
 let p = uid()
 apply(d, [{ eid: p, name: 'project', comp: {} }])

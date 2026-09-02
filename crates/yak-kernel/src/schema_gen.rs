@@ -664,25 +664,18 @@ pub static SCHEMA: &[SchemaOp] = &[
     error      text,
     detail     text
   );
-  -- Derived data, not graph (like doc_fts): a doc's semantic vector,
-  -- written only by embed.ts's sweep. hash names the exact text embedded
-  -- (skip unchanged), model names the embedder (a model upgrade just
-  -- re-sweeps). Never on the wire, never in snapshot(); a stale or
-  -- missing row costs recall, never correctness.
   create table if not exists embedding (
-    eid   text primary key,
-    model text not null,
-    hash  text not null,
-    vec   blob not null,
-    at    text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    entity integer primary key references entity(id),
+    model  text not null,
+    hash   text not null,
+    vec    blob not null,
+    at     text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
-  -- The extension's ANN data is derived from embedding. These triggers are the
-  -- crash fence: any raw-vector write dirties the persisted index in the same
-  -- SQLite statement; vector.ts clears it only after a successful rebuild.
   create table if not exists embedding_index (
     id    integer primary key check (id = 1),
     dirty integer not null
   );
+  
   create trigger if not exists embedding_index_ai after insert on embedding
   begin update embedding_index set dirty = 1 where id = 1; end;
   create trigger if not exists embedding_index_au after update on embedding

@@ -197,6 +197,31 @@ let tombstoneDdl = `create table if not exists tombstone (
     deleted_at text not null
   )`
 
+// Derived data, not graph (like doc_fts): a doc's semantic vector, written
+// only by embed.ts's sweep, keyed by the doc's spine id — so its rowid IS the
+// entity id the ANN scan hands back. hash names the exact text embedded (skip
+// unchanged), model names the embedder (a model upgrade just re-sweeps). Never
+// on the wire, never in snapshot(); a stale or missing row costs recall, never
+// correctness. Named apart from `schema` because open() rebuilds a legacy
+// eid-keyed table to this shape (migrateEmbedding).
+let embeddingDdl = `create table if not exists embedding (
+    entity integer primary key references entity(id),
+    model  text not null,
+    hash   text not null,
+    vec    blob not null,
+    at     text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  )`
+// The extension's ANN data is derived from embedding. These triggers are the
+// crash fence: any raw-vector write dirties the persisted index in the same
+// SQLite statement; vector.ts clears it only after a successful rebuild.
+let embeddingTriggers = `
+  create trigger if not exists embedding_index_ai after insert on embedding
+  begin update embedding_index set dirty = 1 where id = 1; end;
+  create trigger if not exists embedding_index_au after update on embedding
+  begin update embedding_index set dirty = 1 where id = 1; end;
+  create trigger if not exists embedding_index_ad after delete on embedding
+  begin update embedding_index set dirty = 1 where id = 1; end;`
+
 // The primary key begins with parent; the reverse endpoint needs its own
 // index so backlinks and endpoint deletion never walk every edge. Dependency
 // is the graph's non-component table, so its access pattern stays beside its
@@ -888,31 +913,12 @@ let schema = `
   -- Log data, not graph: no eid, no components, so snapshot() (which walks
   -- the comps vocabulary) never carries it. telemetry.ts owns the rows.
   ${callDdl};
-  -- Derived data, not graph (like doc_fts): a doc's semantic vector,
-  -- written only by embed.ts's sweep. hash names the exact text embedded
-  -- (skip unchanged), model names the embedder (a model upgrade just
-  -- re-sweeps). Never on the wire, never in snapshot(); a stale or
-  -- missing row costs recall, never correctness.
-  create table if not exists embedding (
-    eid   text primary key,
-    model text not null,
-    hash  text not null,
-    vec   blob not null,
-    at    text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-  );
-  -- The extension's ANN data is derived from embedding. These triggers are the
-  -- crash fence: any raw-vector write dirties the persisted index in the same
-  -- SQLite statement; vector.ts clears it only after a successful rebuild.
+  ${embeddingDdl};
   create table if not exists embedding_index (
     id    integer primary key check (id = 1),
     dirty integer not null
   );
-  create trigger if not exists embedding_index_ai after insert on embedding
-  begin update embedding_index set dirty = 1 where id = 1; end;
-  create trigger if not exists embedding_index_au after update on embedding
-  begin update embedding_index set dirty = 1 where id = 1; end;
-  create trigger if not exists embedding_index_ad after delete on embedding
-  begin update embedding_index set dirty = 1 where id = 1; end;
+  ${embeddingTriggers}
   create virtual table if not exists doc_fts using fts5(
     title, body, content='doc_value', content_rowid='rowid'
   );
@@ -1483,6 +1489,30 @@ export let migrateTombstone = (db: DatabaseSync) => {
     ).get() as { n: number }
     if (n) console.warn(`tombstone: ${n} grave(s) named no spine — dropped`)
     db.exec('drop table tombstone_stale')
+  })
+}
+
+// Key the vectors by spine id. Every doc's spine row exists (a vector without
+// one is an orphan the sweep would prune anyway), so the copy is a join. The
+// rowids the persisted ANN data names are the OLD table's, so the index is
+// marked dirty for the sweep's next rebuild. No-op once the table wears
+// `entity`.
+export let migrateEmbedding = (db: DatabaseSync) => {
+  if (!hasCol(db, 'embedding', 'eid')) return
+  atomic(db, () => {
+    for (let t of ['ai', 'au', 'ad']) {
+      db.exec(`drop trigger if exists embedding_index_${t}`)
+    }
+    db.exec('alter table embedding rename to embedding_stale')
+    db.exec(embeddingDdl)
+    db.exec(
+      `insert or ignore into embedding (entity, model, hash, vec, at)
+       select e.id, s.model, s.hash, s.vec, s.at from embedding_stale s
+       join entity e on e.eid = s.eid`,
+    )
+    db.exec('drop table embedding_stale')
+    db.exec(embeddingTriggers)
+    db.exec('update embedding_index set dirty = 1 where id = 1')
   })
 }
 
@@ -2561,10 +2591,10 @@ let tableExists = (db: DatabaseSync, t: string) =>
     .get(t)
 
 // The graph tables the eid→id reshape reshapes (D-18866): the spine, the edge
-// table, and every component table. The eid-keyed log/derived tables (the
-// journal, tool_call, embedding, the FTS shadows) and the eid-keyed tombstone
-// stay as they are — D-18866 keeps the journal on eids, and the rest are
-// non-graph or rebuild themselves.
+// table, and every component table. The log/derived tables (the journal,
+// tool_call, embedding, the FTS shadows) and the grave are not reshaped here:
+// each keys on the spine through its own guarded step (migrateJournalKeys,
+// migrateTombstone, migrateEmbedding) or rebuilds itself.
 let graphTables = () => ['entity', 'dependency', ...Object.keys(comps)]
 
 // What one table's copy CLEANED — the anomalies a real legacy graph carries
@@ -3313,6 +3343,7 @@ export let migrate = (db: DatabaseSync) => {
       // The grave table keys on the spine's int id; a legacy eid-keyed one is
       // rebuilt to that shape (its num already rides the retained spine).
       migrateTombstone(db)
+      migrateEmbedding(db)
       // Both doc mirrors follow it by trigger from here on. Anything older,
       // any out-of-band writer, or shadow-table damage (overlapping watcher
       // restarts have managed it) shows up here as a failed integrity check
@@ -6427,7 +6458,7 @@ export let redact = (
     // A stale vector can retain the removed meaning until the next sweep.
     // Delete it in the same transaction; embedding's trigger dirties the ANN
     // index and the sweep later embeds only the sanitized doc.
-    prep(db, 'delete from embedding where eid = ?').run(target)
+    prep(db, 'delete from embedding where entity = ?').run(targetId)
 
     let now = new Date().toISOString()
     let actor = writerActor(db, writer)

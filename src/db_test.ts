@@ -31,6 +31,7 @@ let {
   buried,
   migrate,
   migrateBoardsToProjects,
+  migrateEmbedding,
   migrateErrors,
   migrateTombstone,
   mintEpoch,
@@ -4938,6 +4939,44 @@ Deno.test('the grave keys on the spine; a legacy eid-keyed one is rebuilt', () =
   assertEquals(buried(d, a), true)
   migrateTombstone(d) // idempotent
   assertEquals(buried(d, a), true)
+  d.close()
+})
+
+Deno.test('vectors key on the spine; a legacy eid-keyed table is rebuilt', () => {
+  let d = open(':memory:')
+  let a = uid()
+  apply(d, [{ eid: a, name: 'doc', comp: { title: 'embedded' } }])
+  assertEquals(hasCol(d, 'embedding', 'entity'), true)
+  d.exec(`
+    drop table embedding;
+    create table embedding (eid text primary key, model text not null,
+      hash text not null, vec blob not null, at text not null);
+    insert into embedding values ('${a}', 'm', 'h', x'00', '2026-01-01'),
+      ('${uid()}', 'm', 'h', x'00', '2026-01-01');
+    insert or replace into embedding_index (id, dirty) values (1, 0)`)
+  migrateEmbedding(d)
+  // Carried onto the spine's int id (the orphan cannot be keyed and goes);
+  // the ANN data named the old rowids, so the index is owed a rebuild.
+  assertEquals(
+    d.prepare(
+      `select o.eid as eid, e.model as model from embedding e
+       join entity o on o.id = e.entity`,
+    ).all(),
+    [{ eid: a, model: 'm' }],
+  )
+  assertEquals(
+    d.prepare('select dirty from embedding_index where id = 1').get(),
+    { dirty: 1 },
+  )
+  // The dirty fence survived the rebuild: a write still marks the index.
+  d.prepare('update embedding_index set dirty = 0 where id = 1').run()
+  d.prepare('delete from embedding').run()
+  assertEquals(
+    d.prepare('select dirty from embedding_index where id = 1').get(),
+    { dirty: 1 },
+  )
+  migrateEmbedding(d) // idempotent
+  assertEquals(hasCol(d, 'embedding', 'entity'), true)
   d.close()
 })
 

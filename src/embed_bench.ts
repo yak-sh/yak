@@ -33,8 +33,10 @@ for (let i = 0; i < N; i++) {
      values ((select id from entity where eid = ?), ?, ?)`,
   )
     .run(e, `Doc ${i}`, textBlob(d, ''))
-  d.prepare('insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)')
-    .run(e, MODEL, hash(`Doc ${i}`), new Uint8Array(vecAt(i).buffer))
+  d.prepare(
+    `insert into embedding (entity, model, hash, vec)
+     values ((select id from entity where eid = ?), ?, ?, ?)`,
+  ).run(e, MODEL, hash(`Doc ${i}`), new Uint8Array(vecAt(i).buffer))
 }
 let q = vecAt(N + 1) // an unstored query; the high floor keeps the head empty
 
