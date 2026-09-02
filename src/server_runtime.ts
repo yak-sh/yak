@@ -1,6 +1,7 @@
-// The whole backend in one Deno.serve: static files out of src/, TS/TSX
-// translated to JS per-request (sucrase strips types + compiles JSX — no
-// bundling, no type-checking; `deno task check` is the type gate), bare
+// The whole backend as one request handler over the host seam (host.ts;
+// host_deno.ts is the adapter this file runs on): static files out of src/,
+// TS/TSX translated to JS per-request (sucrase strips types + compiles JSX —
+// no bundling, no type-checking; `deno task check` is the type gate), bare
 // imports resolved by the import map in index.html to the vendored ESM in
 // src/vendor/, the sync websocket, and a src/ watcher that hot-swaps
 // clients: component edits re-import under a fresh ?v generation (state
@@ -12,6 +13,8 @@ import retiredDataDoorList from './retired_data_doors.json' with {
   type: 'json',
 }
 import { guard, type Serving } from './bind.ts'
+import type { Handler } from './host.ts'
+import { host } from './host_deno.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
 import { capabilities, type Change, type Dep, idOf } from './types.ts'
@@ -447,7 +450,7 @@ let workerN = 0
 // inline serving if one is ever needed.
 let workersWanted = Deno.env.get('TASKS_WS_WORKERS') != '0'
 let ws = (req: Request) => {
-  let { socket, response } = Deno.upgradeWebSocket(req)
+  let { socket, response } = host.upgrade(req)
   // The tab names itself once, at connect: ?client=<eid> is the writer for
   // every batch on this socket, so a browser write journals a resolved
   // actor instead of nothing (T-6669). A tab that names none resolves to
@@ -950,7 +953,7 @@ export let retiredDataDoors = new Set(retiredDataDoorList)
 // The request handler, DEFINED here but not yet listening. The bind happens at
 // the bottom of boot (just before booted()), after migration and reconciliation,
 // so the first accepted request can be answered immediately.
-let handle = async (req: Request) => {
+let handle: Handler = async (req) => {
   let url = new URL(req.url)
   let path = url.pathname
   // Answered BEFORE boot: a peer deciding whether it may join this address
@@ -1776,9 +1779,9 @@ let drain = async () => {
 // already stopped and reaped the old process, so the public port has one
 // serving process and needs no listener overlap.
 await warmBrowser()
-export let http = Deno.serve({ port }, handle)
-Deno.addSignalListener('SIGINT', drain)
-Deno.addSignalListener('SIGTERM', drain)
+export let http = host.serve(port, handle)
+host.onSignal('SIGINT', drain)
+host.onSignal('SIGTERM', drain)
 booted()
 // One readiness beat: fully migrated and serving.
 await signalReady()
