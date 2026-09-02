@@ -1,0 +1,411 @@
+/* yaks.app homepage. Hand-written, no build step, the repo's CSS DNA:
+   Block / Block_Element / Block-modifier names, custom properties as the
+   variant and theme mechanism. Warm and soft on purpose: the owner asked
+   for a page a friend could read over tea, not a product sheet. Dark is
+   cocoa, never black. */
+
+:root {
+  color-scheme: light;
+  --font: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --measure: 34rem;
+  --radius: 1.25rem;
+  --gap: 1rem;
+
+  --ground: #fdf5ee; /* warm linen, a peach lean */
+  --paper: #fffaf5; /* cards and bubbles */
+  --ink: #4a3a30; /* warm brown, never black */
+  --soft-ink: #6f5d50;
+  --line: #efdfd2;
+
+  --meadow: #5c8a4c; /* the one accent: links, focus, the "soon" pill */
+  --blush: #f8dcc8; /* your bubble */
+  --sky: #e5eef5; /* the assistant's bubble */
+
+  --yak: #8b6a52;
+  --yak-dark: #5e4634;
+  --yak-face: #a8846a;
+  --horn: #e6d2b5;
+  --nose: #d99a8d;
+  --eye: #3a2b22;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --ground: #2a2320;
+    --paper: #352c28;
+    --ink: #f1e6d8;
+    --soft-ink: #c2b2a3;
+    --line: #4a3d37;
+    --meadow: #a7c080;
+    --blush: #4d3a33;
+    --sky: #34404a;
+    --yak: #a37f63;
+    --yak-dark: #6b4f3c;
+    --yak-face: #b8957a;
+    --horn: #e6d2b5;
+    --nose: #d99a8d;
+    --eye: #2a1e17;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --ground: #2a2320;
+  --paper: #352c28;
+  --ink: #f1e6d8;
+  --soft-ink: #c2b2a3;
+  --line: #4a3d37;
+  --meadow: #a7c080;
+  --blush: #4d3a33;
+  --sky: #34404a;
+  --yak: #a37f63;
+  --yak-dark: #6b4f3c;
+  --yak-face: #b8957a;
+  --horn: #e6d2b5;
+  --nose: #d99a8d;
+  --eye: #2a1e17;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p,
+ul {
+  margin: 0;
+}
+
+ul {
+  padding: 0;
+  list-style: none;
+}
+
+:focus-visible {
+  outline: 3px solid var(--meadow);
+  outline-offset: 3px;
+  border-radius: 0.5rem;
+}
+
+/* The yak. One drawing, defined once in the hero and reused by the header
+   via <use>, colored through the theme so it stays warm in the dark. */
+.Yak {
+  display: block;
+  height: auto;
+}
+
+.Yak-big {
+  width: min(11rem, 55vw);
+  margin-inline: auto;
+}
+
+.Yak-small {
+  width: 2.25rem;
+}
+
+.Yak_Fur {
+  fill: var(--yak);
+}
+
+.Yak_Face {
+  fill: var(--yak-face);
+}
+
+.Yak_Fringe {
+  fill: var(--yak-dark);
+}
+
+.Yak_Horn {
+  fill: none;
+  stroke: var(--horn);
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+
+.Yak_Eye {
+  fill: var(--eye);
+}
+
+.Yak_Glint {
+  fill: #fff;
+}
+
+.Yak_Nose {
+  fill: var(--nose);
+}
+
+.Yak_Smile {
+  fill: none;
+  stroke: var(--eye);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+/* Header: just the name, so the page opens on the yak and the sentence. */
+.Top {
+  display: flex;
+  justify-content: center;
+  padding: 1.25rem var(--gap);
+}
+
+.Top_Name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 1.125rem;
+  text-decoration: none;
+}
+
+/* One column, a letter's width. */
+.Page {
+  display: grid;
+  gap: 4rem;
+  width: min(100% - 2 * var(--gap), var(--measure));
+  margin-inline: auto;
+  padding-block: 1.5rem 3rem;
+}
+
+.Hello {
+  display: grid;
+  gap: 1.25rem;
+  text-align: center;
+}
+
+.Hello_Title {
+  font-size: clamp(2rem, 5vw + 1rem, 2.75rem);
+  font-weight: 800;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.Hello_Lead {
+  font-size: 1.125rem;
+  color: var(--soft-ink);
+  text-wrap: pretty;
+}
+
+/* How it goes: three steps, told as a short conversation. */
+.How {
+  display: grid;
+  gap: 2.5rem;
+}
+
+.How_Title,
+.Make_Title,
+.Door_Title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+.Step {
+  display: grid;
+  gap: 0.875rem;
+}
+
+.Step_Name {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--meadow);
+}
+
+.Step_Note {
+  color: var(--soft-ink);
+  text-wrap: pretty;
+}
+
+/* Bubbles: yours leans right in blush, the assistant's leans left in sky.
+   The tail is a rotated corner, one square, no extra markup. */
+.Bubble {
+  --fill: var(--paper);
+  position: relative;
+  width: fit-content;
+  max-width: 88%;
+  padding: 0.875rem 1.125rem;
+  background: var(--fill);
+  border-radius: var(--radius);
+  text-wrap: pretty;
+}
+
+.Bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -0.25rem;
+  width: 1rem;
+  height: 1rem;
+  background: var(--fill);
+  border-radius: 0.2rem;
+  transform: rotate(45deg);
+}
+
+.Bubble-you {
+  --fill: var(--blush);
+  margin-inline-start: auto;
+  border-end-end-radius: 0.4rem;
+}
+
+.Bubble-you::after {
+  right: 0.6rem;
+}
+
+.Bubble-them {
+  --fill: var(--sky);
+  border-end-start-radius: 0.4rem;
+}
+
+.Bubble-them::after {
+  left: 0.6rem;
+}
+
+/* A little window: the finished thing at its own address. */
+.Window {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.Window_Bar {
+  display: flex;
+  justify-content: center;
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.Window_Address {
+  padding: 0.2rem 0.9rem;
+  border-radius: 999px;
+  background: var(--ground);
+  color: var(--soft-ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.Window_Body {
+  display: grid;
+  gap: 0.625rem;
+  padding: 1.125rem 1.25rem 1.25rem;
+}
+
+.Window_Heading {
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.Window_List {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.Window_List li {
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.75rem;
+  background: var(--ground);
+}
+
+.Window_Note {
+  color: var(--soft-ink);
+  font-size: 0.9375rem;
+}
+
+.Window_Who {
+  font-weight: 700;
+  color: var(--meadow);
+}
+
+/* Things people ask for: soft pills that wrap like a handful of notes. */
+.Make {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.Make_List {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+}
+
+.Make_List li {
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+
+/* The way in: two doors, both marked soon in the same soft voice.
+   They are plain list items, not buttons, so nothing pretends to work. */
+.Door {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.75rem;
+  border-radius: calc(var(--radius) * 1.4);
+  background: var(--paper);
+  text-align: center;
+}
+
+.Door_Lead {
+  color: var(--soft-ink);
+  text-wrap: pretty;
+}
+
+.Door_List {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.Door_Item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 999px;
+  border: 2px dashed var(--line);
+  font-weight: 700;
+}
+
+.Door_Soon {
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  background: var(--meadow);
+  color: var(--ground);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.Foot {
+  padding: 1.5rem var(--gap) 3rem;
+  color: var(--soft-ink);
+  font-size: 0.9375rem;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .Yak-big {
+    animation: breathe 6s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    50% {
+      transform: translateY(-3px);
+    }
+  }
+}

@@ -1,0 +1,13 @@
+// yaks.app homepage: a static page served as Worker assets, no script.
+// Deploy: npx wrangler deploy (from this directory). The kernel worker at
+// the apex can absorb these assets later; until then this is its own Worker.
+{
+  "name": "yaks-home",
+  "account_id": "0f9613dfd3f0451df0bd0f12a1372ea3",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./public",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}

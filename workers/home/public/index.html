@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>yaks.app</title>
+    <meta
+      name="description"
+      content="Ask the assistant you already talk to for the little app you have in mind. It gets built, and it lives at your own address."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="yak.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="Top">
+      <a class="Top_Name" href="/" aria-label="yaks.app, home">
+        <svg class="Yak Yak-small" viewBox="0 0 200 170" aria-hidden="true">
+          <use href="#yak" />
+        </svg>
+        <span>yaks.app</span>
+      </a>
+    </header>
+
+    <main class="Page">
+      <section class="Hello" aria-labelledby="hello">
+        <svg
+          class="Yak Yak-big"
+          viewBox="0 0 200 170"
+          role="img"
+          aria-labelledby="yak-title"
+        >
+          <title id="yak-title">
+            A friendly yak with a shaggy fringe and a small smile
+          </title>
+          <defs>
+            <g id="yak">
+              <ellipse class="Yak_Fur" cx="100" cy="112" rx="72" ry="44" />
+              <rect class="Yak_Fur" x="46" y="132" width="22" height="34"
+                rx="11" />
+              <rect class="Yak_Fur" x="76" y="136" width="22" height="34"
+                rx="11" />
+              <rect class="Yak_Fur" x="102" y="136" width="22" height="34"
+                rx="11" />
+              <rect class="Yak_Fur" x="132" y="132" width="22" height="34"
+                rx="11" />
+              <path class="Yak_Horn" d="M66 54c-16-4-28-20-22-40" />
+              <path class="Yak_Horn" d="M134 54c16-4 28-20 22-40" />
+              <ellipse class="Yak_Fur" cx="54" cy="78" rx="13" ry="9" />
+              <ellipse class="Yak_Fur" cx="146" cy="78" rx="13" ry="9" />
+              <circle class="Yak_Face" cx="100" cy="78" r="44" />
+              <path
+                class="Yak_Fringe"
+                d="M58 68c4-16 10-28 17-28 5 0 6 10 10 10 4 0 6-13 15-13s11 13 15 13c4 0 5-10 10-10 7 0 13 12 17 28-5-6-10-9-14-7-4 2-6 9-11 9s-7-9-13-9-9 9-13 9-7-7-11-9c-4-2-9 1-14 7z"
+              />
+              <circle class="Yak_Eye" cx="84" cy="82" r="4.5" />
+              <circle class="Yak_Eye" cx="116" cy="82" r="4.5" />
+              <circle class="Yak_Glint" cx="85.6" cy="80.4" r="1.5" />
+              <circle class="Yak_Glint" cx="117.6" cy="80.4" r="1.5" />
+              <ellipse class="Yak_Nose" cx="100" cy="100" rx="10" ry="7" />
+              <path class="Yak_Smile" d="M90 110c4 5 16 5 20 0" />
+            </g>
+          </defs>
+          <use href="#yak" />
+        </svg>
+        <h1 id="hello"
+          class="Hello_Title">Your ideas, made into little apps.</h1>
+        <p class="Hello_Lead">
+          Bring the assistant you already talk to, Claude or ChatGPT, and ask for
+          what you have in mind. It gets built, and it lives at an address that
+          is yours.
+        </p>
+      </section>
+
+      <section class="How" aria-labelledby="how">
+        <h2 id="how" class="How_Title">How it goes</h2>
+
+        <div class="Step">
+          <h3 class="Step_Name">You ask.</h3>
+          <p class="Bubble Bubble-you">
+            Could you make me a recipe box? Something I can share with my
+            sister.
+          </p>
+        </div>
+
+        <div class="Step">
+          <h3 class="Step_Name">It gets built.</h3>
+          <p class="Bubble Bubble-them">
+            Sure, give me a minute. Would you like a place for her to leave
+            notes on each recipe?
+          </p>
+          <p class="Step_Note">
+            Your assistant does the making. You watch it take shape and change
+            your mind as often as you like.
+          </p>
+        </div>
+
+        <div class="Step">
+          <h3 class="Step_Name">It's yours.</h3>
+          <div class="Window"
+            aria-label="A finished recipe box at its own address">
+            <div class="Window_Bar">
+              <span class="Window_Address">maya.yaks.app/recipes</span>
+            </div>
+            <div class="Window_Body">
+              <p class="Window_Heading">Our recipe box</p>
+              <ul class="Window_List">
+                <li>Grandma's lemon cake</li>
+                <li>Tuesday soup</li>
+                <li>The good pancakes</li>
+              </ul>
+              <p class="Window_Note">
+                <span class="Window_Who">Ana</span> left a note on the pancakes.
+              </p>
+            </div>
+          </div>
+          <p class="Step_Note">
+            A little address of your own, to keep or to share. Your own domain
+            works too, if you have one.
+          </p>
+        </div>
+      </section>
+
+      <section class="Make" aria-labelledby="make">
+        <h2 id="make" class="Make_Title">Things people ask for</h2>
+        <ul class="Make_List">
+          <li>a recipe box</li>
+          <li>a garden diary</li>
+          <li>a page for the book club</li>
+          <li>a little shop for your pottery</li>
+          <li>a place to plan the trip</li>
+          <li>a birthday guestbook</li>
+          <li>a chore chart that doesn't nag</li>
+        </ul>
+      </section>
+
+      <section class="Door" aria-labelledby="door">
+        <h2 id="door" class="Door_Title">Come on in, soon</h2>
+        <p class="Door_Lead">
+          We're still setting the table. When it's ready, you'll be able to sign
+          in here and connect your assistant in a minute or two.
+        </p>
+        <ul class="Door_List" aria-label="Coming soon">
+          <li
+            class="Door_Item">Sign in <small class="Door_Soon">soon</small></li>
+          <li class="Door_Item">
+            Connect your assistant <small class="Door_Soon">soon</small>
+          </li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="Foot">
+      <p>Made with care by a small herd. See you soon.</p>
+    </footer>
+  </body>
+</html>
