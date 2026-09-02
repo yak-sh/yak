@@ -3987,9 +3987,19 @@ export let contextSnapshot = async (
   let who = readerFor(seed, session, cwd, scope)
   scope = who.scope
   let since = new Date(Date.now() - 7 * DAY).toISOString()
+  let month = new Date(Date.now() - 30 * DAY).toISOString()
   let open = statuses.filter((s) => !settled(s)).join(',')
   let actor = who.actor
   let claims = [...(who.claims ?? [])]
+  // Every arm is a WINDOW, never a kind. The digest shows a handful of lines
+  // per section, and each arm below is sized to what its section can render
+  // (a few dozen rows) rather than what the graph holds: unbounded, the open
+  // tasks alone were 4,000 rows and 3.7 MB, the actor's sessions 2,000 rows
+  // and 4.3 MB, and one boot digest moved ~20 MB of JSON through the server's
+  // one thread — four sessions starting together queued each other into
+  // minutes. `.limit` is the newest N by num; `.order=hot` ranks by warmth
+  // and its window is a prefix of that ranking.
+  let here = scope ? [`.task.project=${scope}`] : []
   let [
     tasks,
     touched,
@@ -4003,25 +4013,74 @@ export let contextSnapshot = async (
     said,
     goals,
   ] = await Promise.all([
-    q(['.kind=task', `.task.status=${open}`]),
+    // Open work: the newest window in scope, plus every urgent row so a P0
+    // that predates the window still leads the board-ordered suggestions.
+    Promise.all([
+      q(['.kind=task', `.task.status=${open}`, ...here, '.limit=200']),
+      q([
+        '.kind=task',
+        `.task.status=${open}`,
+        ...here,
+        '.task.priority=P0,P1',
+      ]),
+    ]).then((sets) => sets.flat()),
     scope
       ? Promise.all([
-        q(
-          ['.kind=task', `.task.project=${scope}`, `.updated.at>=${since}`],
-        ),
-        q(
-          ['.kind=task', `.task.project=${scope}`, `.created.at>=${since}`],
-        ),
+        q([
+          '.kind=task',
+          `.task.project=${scope}`,
+          `.updated.at>=${since}`,
+          '.limit=60',
+        ]),
+        q([
+          '.kind=task',
+          `.task.project=${scope}`,
+          `.created.at>=${since}`,
+          '.limit=60',
+        ]),
       ]).then((sets) => sets.flat())
       : [],
-    q(['.decided!']),
-    q(['.kind=memory', '.memory.scope=']),
-    actor ? q(['.kind=session', `.session.actor=${actor}`]) : [],
-    actor ? q(['.kind=task', `.resume.actor=${actor}`]) : [],
+    q(['.decided!', `.decided.at>=${month}`, '.limit=200']),
+    q(['.kind=memory', '.memory.scope=', '.order=hot', '.limit=30']),
+    // The actor's sessions: the newest few (the recent-comment arm and the
+    // claim-holder map) plus the newest that carry a brief (the handoff).
     actor
       ? Promise.all([
-        q(['.kind=task', `.updated.by=${actor}`, `.updated.at>=${since}`]),
-        q(['.kind=task', `.created.by=${actor}`, `.created.at>=${since}`]),
+        q(['.kind=session', `.session.actor=${actor}`, '.limit=25']),
+        q(['.kind=session', `.session.actor=${actor}`, '.brief!', '.limit=5']),
+      ]).then((sets) => uniq(sets.flat()))
+      : [],
+    actor ? q(['.kind=task', `.resume.actor=${actor}`, '.limit=50']) : [],
+    actor
+      ? Promise.all([
+        q([
+          '.kind=task',
+          `.updated.by=${actor}`,
+          `.updated.at>=${since}`,
+          '.limit=60',
+        ]),
+        q([
+          '.kind=task',
+          `.created.by=${actor}`,
+          `.created.at>=${since}`,
+          '.limit=60',
+        ]),
+        // The resume stack's arms, asked directly instead of read off every
+        // open task: live claims held by the actor's OTHER sessions, and the
+        // actor's own open work whatever its age.
+        q(['.kind=task', `.claim.session.actor=${actor}`, '.limit=50']),
+        q([
+          '.kind=task',
+          `.task.status=${open}`,
+          `.created.by=${actor}`,
+          '.limit=50',
+        ]),
+        q([
+          '.kind=task',
+          `.task.status=${open}`,
+          `.updated.by=${actor}`,
+          '.limit=50',
+        ]),
       ]).then((sets) => sets.flat())
       : [],
     inboxRows(session, cwd, [], 'inbox', q),
