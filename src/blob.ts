@@ -6,23 +6,15 @@
 import { createHash } from 'node:crypto'
 import { type Change } from './types.ts'
 import { db } from './live_db.ts'
+import { dirBlobs } from './blobs.ts'
 
-let blobs = `${Deno.env.get('HOME')}/.tasks/blobs`
+let blobs = dirBlobs(`${Deno.env.get('HOME')}/.tasks/blobs`)
 
 // SHA-256 of the bytes, hex — the content address AND the dedup key. node's
 // createHash (as sha.ts uses) takes a byte view directly, dodging WebCrypto's
 // ArrayBuffer typing.
 let sha256 = (bytes: Uint8Array) =>
   createHash('sha256').update(bytes).digest('hex')
-
-let onDisk = async (path: string) => {
-  try {
-    await Deno.stat(path)
-    return true
-  } catch {
-    return false
-  }
-}
 
 // Image dimensions from a file's own header, for the formats a screenshot
 // arrives as — PNG, GIF, JPEG. Pure header math, no decoder; returns null for
@@ -68,9 +60,7 @@ export let landBlob = async (
   bytes: Uint8Array,
 ): Promise<Change[]> => {
   let sha = sha256(bytes)
-  await Deno.mkdir(blobs, { recursive: true })
-  let path = `${blobs}/${sha}`
-  if (!(await onDisk(path))) await Deno.writeFile(path, bytes)
+  if (!(await blobs.has(sha))) await blobs.put(sha, bytes)
   let dim = imageSize(bytes)
   return [
     { eid: sha, name: 'blob', comp: { bytes: bytes.length } },
@@ -79,36 +69,43 @@ export let landBlob = async (
   ]
 }
 
-// Serve a stored file. sha is validated to a bare 64-hex digest — no path
-// escapes. The mime + name come off any attachment that points at these bytes.
-// A sandbox
-// CSP with no scripts plus nosniff keeps an HTML/SVG attachment inert when
-// opened directly in a tab; content-addressed bytes are immutable, so they
-// cache forever.
-export let serveBlob = async (sha: string) => {
-  if (!/^[0-9a-f]{64}$/i.test(sha)) return new Response('no', { status: 400 })
+// The bytes plus whatever attachment metadata names them, kept apart from
+// Response shaping so a caller that isn't HTTP (a future MCP resource read,
+// a test) can ask for a blob without building a Request. Assumes sha is
+// already a validated 64-hex digest; null means no such blob on disk.
+export let readBlob = async (sha: string) => {
   let row = db.prepare(
     `select a.mime, a.name from attachment a
      where a.blob = (select id from entity where eid = ?) limit 1`,
   ).get(sha) as { mime: string | null; name: string | null } | undefined
   try {
-    let bytes = await Deno.readFile(`${blobs}/${sha}`)
-    return new Response(bytes, {
-      headers: {
-        'content-type': row?.mime || 'application/octet-stream',
-        'content-security-policy': "sandbox; script-src 'none'",
-        'x-content-type-options': 'nosniff',
-        'cache-control': 'public, max-age=31536000, immutable',
-        ...row?.name
-          ? {
-            'content-disposition': `inline; filename="${
-              row.name.replace(/["\\\r\n]/g, '')
-            }"`,
-          }
-          : {},
-      },
-    })
+    return { bytes: await blobs.get(sha), mime: row?.mime, name: row?.name }
   } catch {
-    return new Response('no blob', { status: 404 })
+    return null
   }
+}
+
+// Serve a stored file. sha is validated to a bare 64-hex digest — no path
+// escapes. A sandbox CSP with no scripts plus nosniff keeps an HTML/SVG
+// attachment inert when opened directly in a tab; content-addressed bytes
+// are immutable, so they cache forever.
+export let serveBlob = async (sha: string) => {
+  if (!/^[0-9a-f]{64}$/i.test(sha)) return new Response('no', { status: 400 })
+  let found = await readBlob(sha)
+  if (!found) return new Response('no blob', { status: 404 })
+  return new Response(found.bytes, {
+    headers: {
+      'content-type': found.mime || 'application/octet-stream',
+      'content-security-policy': "sandbox; script-src 'none'",
+      'x-content-type-options': 'nosniff',
+      'cache-control': 'public, max-age=31536000, immutable',
+      ...found.name
+        ? {
+          'content-disposition': `inline; filename="${
+            found.name.replace(/["\\\r\n]/g, '')
+          }"`,
+        }
+        : {},
+    },
+  })
 }

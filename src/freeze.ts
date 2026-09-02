@@ -9,6 +9,7 @@ import { type Change } from './types.ts'
 import { record, textBlob } from './db.ts'
 import { db } from './live_db.ts'
 import { errored, healthy } from './deliver.ts'
+import { dirBlobs } from './blobs.ts'
 
 // Freeze a pasted URL: monolith fetches the page and inlines every asset
 // into ONE self-contained, script-free, network-isolated HTML file. It
@@ -16,7 +17,14 @@ import { errored, healthy } from './deliver.ts'
 // stay lean), the entity's web comp gets frozen_at (server-stamped; the
 // wire allowlist doesn't carry it, so clients can't fake an archive), the
 // page <title> becomes the entity's doc, and everyone hears over the ws.
-let frozen = `${Deno.env.get('HOME')}/.tasks/frozen`
+// frozenDir stays a bare path only for monolith's -o argument, which needs
+// a real filesystem target the external binary writes to directly; every
+// read and write WE do goes through the frozen store.
+let frozenDir = `${Deno.env.get('HOME')}/.tasks/frozen`
+let frozen = dirBlobs(frozenDir)
+let htmlOf = (eid: string) => `${eid}.html`
+let encoder = new TextEncoder()
+let decoder = new TextDecoder()
 
 // Component tables key by the owner int id since D-18866; a consumer matching by
 // owner eid uses this correlated lookup, its bound eid param unchanged.
@@ -127,16 +135,16 @@ export let freeze = async (
   let row = webRow(eid)
   if (!row) return new Response('no such web entity', { status: 404 })
   try {
-    Deno.mkdirSync(frozen, { recursive: true })
-    let out = `${frozen}/${eid}.html`
-    let cmd = await save(row.url, out)
+    await Deno.mkdir(frozenDir, { recursive: true })
+    let key = htmlOf(eid)
+    let cmd = await save(row.url, `${frozenDir}/${key}`)
     if (!cmd.success) {
       throw new Error(
         new TextDecoder().decode(cmd.stderr).trim() || 'monolith failed',
       )
     }
-    let { html, title } = scrub(await Deno.readTextFile(out))
-    await Deno.writeTextFile(out, html)
+    let { html, title } = scrub(decoder.decode(await frozen.get(key)))
+    await frozen.put(key, encoder.encode(html))
     return land(eid, title, cast)
   } catch (e) {
     let message = String(e).slice(0, 2000)
@@ -159,11 +167,10 @@ export let store = async (
   scrubbed = false,
 ) => {
   if (!webRow(eid)) return new Response('no such web entity', { status: 404 })
-  Deno.mkdirSync(frozen, { recursive: true })
   let { html, title } = scrubbed
     ? scrub(raw)
     : { html: raw, title: titleOf(raw) }
-  await Deno.writeTextFile(`${frozen}/${eid}.html`, html)
+  await frozen.put(htmlOf(eid), encoder.encode(html))
   return land(eid, title, cast)
 }
 
@@ -188,7 +195,7 @@ export let serveFrozen = async (eid: string) => {
     : 'sandbox allow-scripts'
   let at = row?.frozen_at ? new Date(row.frozen_at) : null
   try {
-    return new Response(await Deno.readFile(`${frozen}/${eid}.html`), {
+    return new Response(await frozen.get(htmlOf(eid)), {
       headers: {
         'content-type': 'text/html; charset=utf-8',
         'content-security-policy': csp,
