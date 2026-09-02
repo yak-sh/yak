@@ -1,7 +1,11 @@
 // Human time phrases shared by scalar writes, filters, and schedulers.
 // A phrase names a range; callers that need one moment take its relevant edge.
 
-export type Span = { start: number; end: number }
+// `forward` marks a phrase that BEGINS at now and names its end (`in 5m`), the
+// one family instant() reads the end of. It is a fact about the phrase, not
+// about the numbers: an absolute stamp can land on this very millisecond, and
+// guessing `start == now` read that as forward and answered a second late.
+export type Span = { start: number; end: number; forward?: boolean }
 
 let SIZES: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 31_536_000],
@@ -181,7 +185,11 @@ export let span = (s: string, now = Date.now()): Span | null => {
   m = t.match(/^(?:in|after) (\d+) ?([a-z]+)$/)
   if (m && unit(m[2])) {
     let n = Number(m[1]), u = unit(m[2])!
-    return { start: now, end: UNIT_MS[u] ? now + n * UNIT_MS[u] : shift(n, u) }
+    return {
+      start: now,
+      end: UNIT_MS[u] ? now + n * UNIT_MS[u] : shift(n, u),
+      forward: true,
+    }
   }
   // A clock is today unless a day word rides along. It never rolls forward:
   // past input stays visibly past for filters and schedulers.
@@ -208,7 +216,7 @@ export let span = (s: string, now = Date.now()): Span | null => {
 // Forward phrases begin at now and name their end; other phrases name start.
 export let instant = (s: string, now = Date.now()): number | null => {
   let sp = span(s, now)
-  return sp ? (sp.start == now ? sp.end : sp.start) : null
+  return sp ? (sp.forward ? sp.end : sp.start) : null
 }
 
 // ——— Recurrence (T-18724, D-18722 part B prereq) ———

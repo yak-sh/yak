@@ -1,7 +1,7 @@
 // next() — the recurrence half of the time vocabulary (T-18724). Pure seam:
 // interval phrases ride the epoch grid, cron resolves local, junk is null.
 import { assertEquals } from '@std/assert'
-import { next } from './time.ts'
+import { instant, next } from './time.ts'
 
 // A local wall-clock moment, so cron assertions hold in any zone.
 let at = (
@@ -89,4 +89,18 @@ Deno.test('cron: never-matching and malformed are null, not a hang', () => {
   assertEquals(next('0 9 * * mon', 0), null) // names are not in the subset
   assertEquals(next('tomorrow', 0), null) // one-shot phrases are instant()'s
   assertEquals(next('', 0), null)
+})
+
+// instant() — the one-shot half. A forward phrase names its end; everything
+// else names its start, INCLUDING a stamp that happens to be this very
+// millisecond (the `start == now` guess read that as forward and answered a
+// second late — a backfill writing a recall's own birth found it, T-32471).
+Deno.test('instant: forward phrases end, absolute stamps stand', () => {
+  let now = at(2026, 3, 10, 9, 0, 0, 427)
+  assertEquals(instant('in 5 minutes', now), now + 5 * 60_000)
+  assertEquals(instant('after 2 hours', now), now + 2 * 3_600_000)
+  assertEquals(instant('now', now), now)
+  assertEquals(instant(new Date(now).toISOString(), now), now)
+  assertEquals(instant('5 minutes ago', now), now - 5 * 60_000)
+  assertEquals(instant('nonsense', now), null)
 })

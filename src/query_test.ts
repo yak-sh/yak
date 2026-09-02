@@ -759,7 +759,7 @@ let NOW = new Date(2026, 6, 15, 14, 30).getTime()
 let at = (...a: number[]) =>
   new Date(a[0], a[1], a[2], a[3] ?? 0, a[4] ?? 0).getTime()
 
-let spans: [string, number, number][] = [
+let spans: [string, number, number, boolean?][] = [
   ['today', at(2026, 6, 15), at(2026, 6, 16)],
   ['yesterday', at(2026, 6, 14), at(2026, 6, 15)],
   ['tomorrow', at(2026, 6, 16), at(2026, 6, 17)],
@@ -775,14 +775,14 @@ let spans: [string, number, number][] = [
   ['1 hour ago', NOW - 3_600_000, NOW],
   ['2 days ago', NOW - 2 * 86_400_000, NOW],
   ['1 month ago', at(2026, 5, 15, 14, 30), NOW],
-  ['in 2 hours', NOW, NOW + 7_200_000],
+  ['in 2 hours', NOW, NOW + 7_200_000, true],
   ['1-hour-ago', NOW - 3_600_000, NOW], // glue for quoteless boxes
   ['1_hour_ago', NOW - 3_600_000, NOW],
   // short units — what a hand types
-  ['in 60m', NOW, NOW + 3_600_000],
-  ['after 8h', NOW, NOW + 8 * 3_600_000],
-  ['after 8 hours', NOW, NOW + 8 * 3_600_000],
-  ['in 2d', NOW, NOW + 2 * 86_400_000],
+  ['in 60m', NOW, NOW + 3_600_000, true],
+  ['after 8h', NOW, NOW + 8 * 3_600_000, true],
+  ['after 8 hours', NOW, NOW + 8 * 3_600_000, true],
+  ['in 2d', NOW, NOW + 2 * 86_400_000, true],
   ['30 mins ago', NOW - 1_800_000, NOW],
   // clock times: an hour named alone spans its hour, a minute its minute
   ['9am', at(2026, 6, 15, 9), at(2026, 6, 15, 10)],
@@ -799,9 +799,13 @@ let spans: [string, number, number][] = [
   // an ISO stamp is that moment, its precision wide
   ['2026-07-25T09:00', at(2026, 6, 25, 9), at(2026, 6, 25, 9, 1)],
 ]
-for (let [phrase, start, end] of spans) {
+for (let [phrase, start, end, forward] of spans) {
+  // Only a forward phrase carries the flag instant() reads its end by.
   Deno.test(`span: ${phrase}`, () =>
-    assertEquals(span(phrase, NOW), { start, end }))
+    assertEquals(
+      span(phrase, NOW),
+      forward ? { start, end, forward } : { start, end },
+    ))
 }
 Deno.test('span: a zoned stamp keeps its own zone', () =>
   assertEquals(span('2026-07-25T09:00:00.000Z', NOW), {
