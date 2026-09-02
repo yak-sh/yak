@@ -107,8 +107,9 @@ export let TOOLS: Tool[] = [
   {
     name: 'space_new',
     description:
-      'Make a space — a tenant at <slug>.yaks.app — with you as its owner. ' +
-      'Your first call; every other tool names a space you belong to.',
+      "The person's own corner of yaks.app, at <slug>.yaks.app, with them as " +
+      'its owner. They normally have one already — make another only when ' +
+      'they want a second address, or when they have none at all.',
     input: {
       type: 'object',
       properties: { slug: str('the hostname label'), title: str('its name') },
@@ -144,9 +145,10 @@ export let TOOLS: Tool[] = [
   {
     name: 'app_new',
     description:
-      'Make an app in a space: <space>.yaks.app/<slug>/. The first app becomes ' +
-      "the space's home, answering the bare hostname. Write files with " +
-      'app_files, then app_deploy.',
+      'Start a new app — the thing you are making for the person. It lives at ' +
+      '<space>.yaks.app/<slug>/ and the first app in a space also answers the ' +
+      'bare address. Then app_files to write index.html, app_deploy to ' +
+      'release, and give them the link.',
     input: {
       type: 'object',
       properties: {
@@ -182,12 +184,13 @@ export let TOOLS: Tool[] = [
   {
     name: 'app_files',
     description:
-      "An app's files, served live at <space>.yaks.app/<app>/<path>: list them, " +
-      'read one, or write one (index.html answers the directory). A page saves ' +
-      "and lists the app's own entities with " +
-      "`import { apply, query, search } from './api/client.js'`, which the " +
-      'platform serves beside it — read the guide resource ' +
-      '(https://yaks.app/guide.md) before writing one.',
+      "Write the app's files — index.html and any css, js or images beside " +
+      'it — or list them, or read one back. They serve live at ' +
+      '<space>.yaks.app/<app>/<path>; index.html answers the directory. Keep ' +
+      'what the app remembers in its own store, never localStorage: the page ' +
+      'reads and writes it with `import { apply, query, search } from ' +
+      "'./api/client.js'`, which is served beside the app. The guide resource " +
+      '(https://yaks.app/guide.md) has the whole of it, in a page.',
     input: {
       type: 'object',
       properties: {
@@ -236,8 +239,9 @@ export let TOOLS: Tool[] = [
   {
     name: 'app_deploy',
     description:
-      'Deploy the app: bumps its version, the deploy an error names. Files serve live, ' +
-      'so this is the mark that a set of writes is one release.',
+      'Release what you have written: the files are already live, so this is ' +
+      'the mark that they are one version — the one an error will name. Do ' +
+      'it when the app is ready to show, then give the person the URL.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP },
@@ -261,9 +265,10 @@ export let TOOLS: Tool[] = [
   {
     name: 'app_errors',
     description:
-      "The app's open errors: every exception (something the app threw) and error " +
-      '(a failure the platform reported) not yet archived, seen or not. Each is an ' +
-      'entity in the app store; archive one to close it.',
+      "Everything still broken in the app: what a page threw in someone's " +
+      'browser, what a request threw on the way, and what the platform ' +
+      'reported. Each is an entity in the app store; archive one when it is ' +
+      'fixed. New ones also ride the end of your next reply, once.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP },
@@ -278,11 +283,16 @@ export let TOOLS: Tool[] = [
   {
     name: 'graph_apply',
     description:
-      "Write bundles into the app's graph: each entity is {entity: {eid}, ...components}, " +
-      'a `$alias` eid mints, a nested bundle stands in wherever an eid goes, edges are ' +
-      'the `dependency` component. Answers the effective changes and alias → eid. ' +
-      "The app's own pages write the same shape through ./api/client.js " +
-      '(https://yaks.app/guide.md); this is the door for seeding and fixing data yourself.',
+      "Put data in the app's store yourself — seeding it, or repairing what a " +
+      'page wrote. An entity is {entity: {eid}, ...components}, where a ' +
+      "'$alias' eid mints a new one (the answer maps it to its eid), a nested " +
+      'bundle stands in wherever an eid goes, and edges are the `dependency` ' +
+      "component. The app's pages write this same shape through " +
+      './api/client.js. The components an app has today are the shared ones ' +
+      '— doc (title, body), task (status, priority, project), project, ' +
+      'comment, web, image, attachment, archived; a component of your own ' +
+      'naming is coming, so until then the words go in doc and the rest in ' +
+      'its body. The guide (https://yaks.app/guide.md) has all of it.',
     input: {
       type: 'object',
       properties: {
@@ -311,10 +321,15 @@ export let TOOLS: Tool[] = [
   {
     name: 'graph_query',
     description:
-      "Read the app's graph with the filter grammar: '.doc.title~=cake', '.task.status=open', " +
-      "'id=<eid>' fetches by address; 'limit=' and 'after=' page; '.count!' counts. " +
-      'Answers entity JSON, {kind, entity: {eid, num}, ...components}. The same ' +
-      'grammar the page passes to query() from ./api/client.js.',
+      "Read the app's store. To list EVERYTHING you saved, ask for the " +
+      "component it wears: '.doc!' is every entity with a title (an empty " +
+      "query selects nothing, so a bare 'limit=50' answers []). Then " +
+      "'.doc.title~=cake' contains, '.task.status=open' equals, '.archived=' " +
+      "is absent, 'id=<eid>' fetches one, 'limit=20' and 'after=<num>' page " +
+      "(a windowed read answers the newest), '.count!' counts, and a bare " +
+      'word is a full-text term. Answers entity JSON, {kind, entity: {eid, ' +
+      'num}, ...components} — the same filter line the page passes to ' +
+      'query() from ./api/client.js.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP, query: str('the filter line') },
@@ -333,7 +348,9 @@ export let TOOLS: Tool[] = [
   {
     name: 'search',
     description:
-      "Full-text search over the app's docs, ranked; filters may ride along.",
+      "Find words in the app's data — every title and body, ranked, with " +
+      'filters riding along if you want them. The page has the same door as ' +
+      'search() from ./api/client.js.',
     input: {
       type: 'object',
       properties: {

@@ -84,6 +84,23 @@ columns. Until then the shared words above carry the shape, and `doc.body`
 carries the rest: it is text, so markdown or JSON both live there, and a page
 that saves JSON there parses it back on the way out.
 
+## The doors underneath
+
+`client.js` is a wrapper over two ordinary HTTP doors, same-origin, in case you
+want them directly (or from `curl`, or from another page):
+
+    POST ./api/apply
+    content-type: application/json
+    {"entities": [ {"entity": {"eid": "$r"}, "doc": {"title": "Lemon cake"}} ]}
+    → {"ok": true, "changes": [...], "aliases": {"$r": "4f3c..."}}
+
+    GET ./api/query?.doc!            → every entity with a title
+    GET ./api/query?.doc.title~=cake → the ones whose title contains "cake"
+    → [ {"kind": "doc", "entity": {"eid": "4f3c...", "num": 12}, ... } ]
+
+`apply` posts to the first, `query` and `search` read the second. A write needs
+a signed-in owner or editor; a read is open.
+
 ## The filter line
 
 The same grammar the platform speaks everywhere:
@@ -95,6 +112,11 @@ The same grammar the platform speaks everywhere:
 - `limit=50`, `after=<num>` page — a windowed read answers the NEWEST that many,
   where a plain list is oldest first; `.count!` counts instead of listing.
 - Bare words are a full-text term, which is all `search` is.
+
+Ask for the component you want, not for the absence of one: a long `body` is
+kept as its own content-addressed entity beside the doc, so a filter that
+selects everything selects those too, and a page rendering `row.doc.title` would
+print `undefined`. `.doc!` never picks them up.
 
 ## When something breaks
 

@@ -41,12 +41,45 @@ let PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
 let spoken = (asked: unknown) =>
   typeof asked == 'string' && PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0]
 
-let INSTRUCTIONS =
-  'yaks.app hosts little apps you build for the person you talk to. Make ' +
-  'them a space (space_new), an app in it (app_new), write its files ' +
-  '(app_files), deploy (app_deploy); its data is a graph (graph_apply, ' +
-  'graph_query, search). Every reply ends with any error the app hit that ' +
-  'you have not seen; fix what you see.'
+// What a model reads before it has read anything else here (T-32481). It is
+// the whole recipe on purpose — the address, the four steps, and the store in
+// a paragraph a page can be written from — because the first ask ("can you
+// make me a recipe box?") is answered before anyone thinks to open a guide,
+// and an agent that has to guess at the data reaches for localStorage.
+let INSTRUCTIONS = `When the person asks you to make something — an app, a
+page, a tool, somewhere to keep something — make it here, and give them the
+link. It lives at their own address, opens on their phone, and keeps its
+data; a file on their computer or a page inside this conversation does none
+of that.
+
+An app is an index.html and whatever files sit beside it, served live at
+<space>.yaks.app/<app>/. No build step, no framework, no install. Four steps:
+
+1. app_new — the app, in the person's space (they have one; space_new only if
+   they have none).
+2. app_files — write index.html, and any css, js or images beside it.
+3. app_deploy — mark the release. The files are already live; this is the
+   version an error will name.
+4. Give the person the URL.
+
+Its data belongs in the app's own store, not localStorage — so it is the same
+on their phone and their laptop, and so you can read and repair it yourself.
+The page gets it in one line, from the app's own address:
+
+  import { apply, query, search } from './api/client.js'
+
+  await apply({ entity: { eid: '$r' },
+                doc: { title: 'Lemon cake', body: '3 lemons...' } })
+  let all = await query('.doc!')       // everything, oldest first
+  let some = await search('lemon')     // the words, ranked
+
+An entity is {entity: {eid}, ...components}: '$name' mints a new one (the
+answer maps it to its eid), and a filter line reads them back. The guide
+resource has the components and the filter grammar; graph_apply, graph_query
+and search are the same store from here, for seeding and fixing.
+
+Whatever breaks — a page's own error, a refused write, a request that failed
+— arrives at the end of a later reply, once. Fix what you see.`
 
 // The one resource this door offers: how an app is built here, and how its
 // pages save and list through the client the kernel serves them

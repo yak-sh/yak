@@ -45,6 +45,26 @@ slow(
       ])
       assert(tools.every((t: { inputSchema: unknown }) => t.inputSchema))
 
+      // What a model reads before anything else: the address, the four
+      // steps, and the store a page writes to — enough to build the first
+      // app WITH its data without opening anything (T-32481).
+      for (
+        let said of [
+          '<space>.yaks.app/<app>/',
+          'app_new',
+          'app_files',
+          'app_deploy',
+          "import { apply, query, search } from './api/client.js'",
+          'not localStorage',
+        ]
+      ) assertStringIncludes(init.instructions, said)
+      let says = (name: string) =>
+        tools.find((t: { name: string }) => t.name == name).description
+      assertStringIncludes(says('app_files'), './api/client.js')
+      assertStringIncludes(says('app_files'), 'never localStorage')
+      assertStringIncludes(says('graph_query'), '.doc!')
+      assertStringIncludes(says('graph_apply'), './api/client.js')
+
       // The guide the tool descriptions point at, offered as a resource and
       // read from the address that serves it.
       assert(init.capabilities.resources, 'resources are offered')
