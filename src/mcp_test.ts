@@ -1824,14 +1824,16 @@ slow('MCP modes apply every accepted field and reject conflicts', async () => {
       let leaf = treeRows.find((r) => r.comps.doc?.title == 'Tree leaf')!
       assertEquals(root.comps.task?.project, project)
       assertEquals(leaf.comps.task?.project, project)
+      // deps come out ordered by the parent's uuid, so the pair is a set
       assertEquals(
-        snapshot(g.db).deps.filter((d) =>
-          d.child == root.eid || d.child == leaf.eid
-        ),
+        snapshot(g.db).deps
+          .filter((d) => d.child == root.eid || d.child == leaf.eid)
+          .map((d) => `${d.parent} ${d.type} ${d.child}`)
+          .sort(),
         [
-          { parent: project, type: 'wants', child: root.eid },
-          { parent: root.eid, type: 'requires', child: leaf.eid },
-        ],
+          `${project} wants ${root.eid}`,
+          `${root.eid} requires ${leaf.eid}`,
+        ].sort(),
       )
 
       let nested = await client.callTool({
