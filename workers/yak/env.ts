@@ -19,8 +19,21 @@ export type Env = {
   STORE: Namespace
   ASSETS: Fetcher
   BLOBS: R2
-  // The session-signing secret; unset, no session verifies (token.ts).
+  // The session-signing secret; unset, no session verifies (token.ts). It
+  // also keys the sign-in code digests (signin.ts).
   SESSION_SECRET?: string
+  // The OAuth provider's own store — clients, grants, tokens. Its shape is
+  // the library's (identity.ts); nothing in the kernel reads it, so `unknown`
+  // keeps a Cloudflare type name out of here.
+  OAUTH_KV: unknown
+  // The mail seam (mail.ts). MAIL_DEV=1 files a letter in the meta store
+  // instead of sending it — local runs only. The other three are Cloudflare
+  // Email Sending: the API token, the account, and a base URL a probe aims
+  // somewhere else.
+  MAIL_DEV?: string
+  MAIL_TOKEN?: string
+  MAIL_ACCOUNT?: string
+  MAIL_API?: string
   // A part split into its own Worker, when it has been; absent, in-process.
   IDENTITY?: Fetcher
   MCP?: Fetcher

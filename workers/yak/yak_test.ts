@@ -22,8 +22,8 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     // A dev host is the apex too; the reserved doors answer, softly.
     assertEquals((await k.at('127.0.0.1', '/')).status, 200)
     let login = await k.at('yaks.app', '/login')
-    assertEquals(login.status, 404)
-    assertMatch(await login.text(), /Sign-in/)
+    assertEquals(login.status, 200)
+    assertMatch(await login.text(), /Sign in to yaks.app/)
     // The connector answers POST only (mcp_test.ts drives it).
     let mcp = await k.at('yaks.app', '/mcp')
     assertEquals(mcp.status, 405)

@@ -45,7 +45,19 @@ new_sqlite_classes = ["Store"]
 binding = "BLOBS"
 bucket_name = "yak-blobs"
 
+# The OAuth provider's own store (identity.ts): registered clients, grants,
+# and tokens. The namespace does not exist yet — `wrangler kv namespace create
+# yak-oauth` once, then paste its id here; `wrangler dev` simulates it and
+# ignores the id.
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "yak-oauth"
+
 # Secrets never live in this file. SESSION_SECRET signs the platform session
-# cookie (src/token.ts): `wrangler secret put SESSION_SECRET` for the deploy;
-# locally a .dev.vars line, or `wrangler dev --var SESSION_SECRET:…` the way
-# the tests pass it. Unset, no session verifies.
+# cookie (src/token.ts) and keys the sign-in code digests (signin.ts);
+# MAIL_TOKEN and MAIL_ACCOUNT are the Cloudflare Email Sending credentials the
+# code letters go out on (mail.ts). Each is `wrangler secret put <NAME>` for
+# the deploy; locally a .dev.vars line, or `wrangler dev --var NAME:…` the way
+# the tests pass them. Unset, no session verifies and no letter sends.
+# MAIL_DEV=1 is the local override: a letter becomes an entity in the meta
+# store instead of going out. Never set it on a deploy.

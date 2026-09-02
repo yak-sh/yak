@@ -1,0 +1,8 @@
+{
+  "name": "yak",
+  "private": true,
+  "description": "The kernel Worker's npm dependencies, bundled by wrangler; node_modules is gitignored. Exact pins only.",
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "0.10.3"
+  }
+}

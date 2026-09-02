@@ -62,6 +62,9 @@ export let kernel = async () => {
       state,
       '--var',
       `SESSION_SECRET:${secret}`,
+      // Letters land in the meta store, where a test reads its own code.
+      '--var',
+      'MAIL_DEV:1',
       '--show-interactive-dev-session=false',
     ],
     cwd: root,
