@@ -1540,6 +1540,7 @@ type LiteralNode = {
   comps: Record<string, Record<string, unknown> | null>
   deps: { type: Edge; target: string | number | LiteralNode }[]
   was: Record<string, Record<string, string | null>>
+  dead?: boolean
 }
 
 let object = (v: unknown): v is Record<string, unknown> =>
@@ -1552,12 +1553,13 @@ let owns = (v: object, key: string) =>
 // existing entity, and each `dependency` sentence files under its edge type.
 // What a read carries beyond its components — kind, refs, backrefs, comments,
 // derived and stamped columns — is a projection, dropped here so a read sent
-// back unchanged writes nothing.
+// back unchanged writes nothing. `tombstone` is not a component but the
+// bundle's spelling of death, so it rides through as its own field.
 let LEGACY = ['key', 'id', 'comps', 'deps']
 let PROJECTED = new Set(['kind', 'refs', 'backrefs', 'comments'])
 let lowered = (literal: EntityLiteral): EntityLiteral => {
   if (LEGACY.some((field) => owns(literal, field))) return literal
-  let { entity, dependency, was, ...rest } = literal
+  let { entity, dependency, was, tombstone, ...rest } = literal
   if (entity != null && !object(entity)) {
     throw new Error('entity must be an object')
   }
@@ -1589,6 +1591,7 @@ let lowered = (literal: EntityLiteral): EntityLiteral => {
   }
   return {
     ...(eid?.startsWith('$') ? { key: eid } : eid ? { id: eid } : {}),
+    ...(owns(literal, 'tombstone') ? { tombstone } : {}),
     comps: flat,
     deps,
     ...(was != null ? { was } : {}),
@@ -1637,7 +1640,7 @@ export let normalizeLiterals = (
     active.add(given)
     let literal = lowered(given)
     let alien = Object.keys(literal).find((name) =>
-      !['key', 'id', 'comps', 'deps', 'was'].includes(name)
+      !['key', 'id', 'comps', 'deps', 'was', 'tombstone'].includes(name)
     )
     if (alien) throw new Error(`unknown entity literal field: ${alien}`)
 
@@ -1699,6 +1702,20 @@ export let normalizeLiterals = (
       for (let target of targets) {
         node.deps.push({ type, target: where(target, `${type} dependency`) })
       }
+    }
+    // `tombstone` is the bundle's spelling of death (D-23827), lowered to the
+    // flat entity-null change. A dead entity takes no patch, so nothing rides
+    // beside it, and a $alias names an entity this batch mints — there is
+    // nothing there to kill.
+    if (owns(literal, 'tombstone')) {
+      let beside = [...Object.keys(declared), ...Object.keys(declaredDeps)][0]
+      if (beside) {
+        throw new Error(
+          `a dead entity takes no patch: tombstone cannot ride beside ${beside}`,
+        )
+      }
+      if (!id) throw new Error('tombstone needs entity.eid to name an entity')
+      node.dead = true
     }
     if (!id && !Object.keys(declared).length) {
       throw new Error('a new entity literal needs at least one component')
@@ -1810,6 +1827,7 @@ export let normalizeLiterals = (
     if (written.has(node)) return
     written.add(node)
     for (let target of needs.get(node) ?? []) write(target)
+    if (node.dead) changes.push({ eid: node.eid, name: 'entity', comp: null })
     for (let [name, comp] of patches.get(node)!) {
       changes.push({
         eid: node.eid,

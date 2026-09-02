@@ -1998,6 +1998,8 @@ empty. ${GRAMMAR} ${FILTERS}`,
       num: z.number().optional(),
     }).strict().optional(),
     ...componentLiterals,
+    // Death, worn: it lowers to the entity-null change and stands alone.
+    tombstone: z.object({}).strict().optional(),
     dependency: z.union([dependencyLiteral, z.array(dependencyLiteral)])
       .optional(),
     was: z.object(guardedLiterals).strict().optional(),
@@ -2027,7 +2029,10 @@ dependency child — a $alias, a human id, or a nested bundle stands in
 ({entity: {eid: 'T-3'}} alone references; with components it defines).
 Edges are the dependency component: dependency: {type: ${
       edges.join('|')
-    }, child}, a list when there are several. A read's kind, num, refs,
+    }, child}, a list when there are several. A bundle that wears tombstone
+({entity: {eid: 'T-3'}, tombstone: {}}) DELETES that entity, and since a dead
+entity takes no patch it is refused beside any other component or a $alias.
+A read's kind, num, refs,
 backrefs, comments, and stamped or derived columns are ignored, so a read
 edited and sent back writes just the edit. Optional was is a PRECONDITION
 beside the components ({doc: {title: '<sha>'}}) — the graph's --ff-only: per

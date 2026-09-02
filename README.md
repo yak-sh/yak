@@ -83,8 +83,11 @@ ignored, so a read edited and sent back writes just the edit:
 }]
 ```
 
-`apply()` lowers bundles to the flat batch, which stays the administrative door;
-the older `{key|id, comps, deps, was}` literal is still accepted.
+A bundle wearing `tombstone` — `{"entity": {"eid": "T-3"}, "tombstone": {}}` —
+deletes that entity, and because a dead entity takes no patch it is refused
+beside any other component or a `$alias`. `apply()` lowers bundles to the flat
+batch, which stays the administrative door; the older
+`{key|id, comps, deps, was}` literal is still accepted.
 
 Beside the graph sit FTS5 full-text search over every doc and local semantic
 embeddings. Both are ranked `/query` evaluations whose ordinary entity rows

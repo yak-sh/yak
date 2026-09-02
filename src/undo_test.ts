@@ -148,6 +148,17 @@ Deno.test('a $alias in a column lands before the entity that names it', () => {
   assertEquals(depsOf(db, [out.aliases.$t]).map((d) => d.type), ['requires'])
 })
 
+Deno.test('a bundle wearing tombstone kills the entity; later bundles are void', () => {
+  let db = freshDb(), t = uid()
+  born(db, t)
+  let out = mutate(db, { entities: [{ entity: { eid: t }, tombstone: {} }] })
+  assertEquals(out.changes.some((c) => c.name == 'entity' && !c.comp), true)
+  assertEquals(alive(db, t), false)
+  // Death is final: the same door patching the dead eid writes nothing.
+  mutate(db, { entities: [{ entity: { eid: t }, doc: { title: 'zombie' } }] })
+  assertEquals(alive(db, t), false)
+})
+
 Deno.test('a stale nested literal rolls back every entity', () => {
   let db = freshDb(), existing = uid()
   born(db, existing)

@@ -1024,6 +1024,69 @@ Deno.test('normalizeLiterals: the read shape writes — $alias, nesting, human i
   }
 })
 
+Deno.test('normalizeLiterals: a bundle wearing tombstone deletes the entity', () => {
+  let T = 'dddddddd-0000-4000-8000-000000000003'
+  let plan = normalizeLiterals(
+    [
+      { entity: { eid: 'T-3' }, tombstone: {} },
+      { entity: { eid: '$note' }, doc: { title: 'after' } },
+    ],
+    {
+      resolve: (id) => id == 'T-3' ? T : undefined,
+      mint: () => 'dddddddd-0000-4000-8000-000000000009',
+    },
+  )
+  assertEquals(plan.changes, [
+    { eid: T, name: 'entity', comp: null },
+    {
+      eid: 'dddddddd-0000-4000-8000-000000000009',
+      name: 'doc',
+      comp: { title: 'after' },
+    },
+  ])
+  // A dead entity takes no patch, and there is nothing to kill in an entity
+  // this batch is minting. (That a LATER batch for a dead eid is void is the
+  // db's own rule — db_test 'entity delete tombstones; nothing resurrects'.)
+  let bad: [string, Record<string, unknown>[], string][] = [
+    [
+      'beside a component',
+      [{ entity: { eid: 'T-3' }, tombstone: {}, doc: { title: 'x' } }],
+      'a dead entity takes no patch: tombstone cannot ride beside doc',
+    ],
+    [
+      'beside an edge',
+      [{
+        entity: { eid: 'T-3' },
+        tombstone: {},
+        dependency: { type: 'requires', child: 'T-3' },
+      }],
+      'a dead entity takes no patch: tombstone cannot ride beside requires',
+    ],
+    [
+      'a $alias eid',
+      [{ entity: { eid: '$gone' }, tombstone: {} }],
+      'tombstone needs entity.eid to name an entity',
+    ],
+    [
+      'no eid at all',
+      [{ tombstone: {} }],
+      'tombstone needs entity.eid to name an entity',
+    ],
+  ]
+  for (let [name, literals, message] of bad) {
+    assertThrows(
+      () =>
+        normalizeLiterals(literals, {
+          resolve: (id) => id == 'T-3' ? T : undefined,
+          mint: () => crypto.randomUUID(),
+        }),
+      Error,
+      message,
+      name,
+    )
+  }
+})
+
 Deno.test('normalizeLiterals: invalid aliases, references, keys, and cycles reject', () => {
   let cases: [string, Record<string, unknown>[], string][] = [
     [
