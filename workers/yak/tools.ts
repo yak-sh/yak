@@ -47,7 +47,10 @@ export type Tool = {
 
 let str = (description: string) => ({ type: 'string', description })
 
-let SPACE = str('the space slug — <space>.yaks.app')
+let SPACE = str(
+  "the space slug — <space>.yaks.app. Leave it out and the person's own " +
+    'space is used; only name one when they have more than one',
+)
 let APP = str('the app slug within the space')
 
 let text = (v: unknown, what: string) => {
@@ -61,17 +64,32 @@ let slug = (v: unknown, what: string) => {
   return s
 }
 
+// The space the caller means when they name none: their own. Signing in
+// mints it, so this is one lookup and never a question; a person who signed
+// in before that existed gets theirs on this very call (T-32482). Several,
+// and the tools say which names there are rather than guess between them.
+let ownSpace = async (ctx: Ctx) => {
+  let spaces = await ctx.dir.spaces(ctx.person)
+  if (spaces.length > 1) {
+    throw new Error(
+      `space: name one of ${spaces.map((s) => s.slug).join(', ')}`,
+    )
+  }
+  return spaces[0] ?? await ctx.dir.own(ctx.person)
+}
+
 // The caller in the space: a member reads, an owner or editor writes.
 let inSpace = async (ctx: Ctx, args: Args, write = false) => {
-  let slug = text(args.space, 'space')
-  let space = await ctx.dir.space(slug)
-  if (!space) throw new Error(`no space ${slug}`)
+  let space = args.space == null
+    ? await ownSpace(ctx)
+    : await ctx.dir.space(text(args.space, 'space'))
+  if (!space) throw new Error(`no space ${args.space}`)
   let who: Who = {
     person: ctx.person,
     role: await ctx.dir.role(space, ctx.person),
   }
-  if (!who.role) throw new Error(`not a member of ${slug}`)
-  if (write && !mayWrite(who)) throw new Error(`not a writer of ${slug}`)
+  if (!who.role) throw new Error(`not a member of ${space.slug}`)
+  if (write && !mayWrite(who)) throw new Error(`not a writer of ${space.slug}`)
   return { space, who }
 }
 
@@ -106,9 +124,9 @@ export let TOOLS: Tool[] = [
   {
     name: 'space_new',
     description:
-      "The person's own corner of yaks.app, at <slug>.yaks.app, with them as " +
-      'its owner. They normally have one already — make another only when ' +
-      'they want a second address, or when they have none at all.',
+      'Another corner of yaks.app, at <slug>.yaks.app, with the person as its ' +
+      'owner. They already have one from signing in, and every other tool ' +
+      'uses it without being told — so this is only for a second address.',
     input: {
       type: 'object',
       properties: { slug: str('the hostname label'), title: str('its name') },
@@ -154,7 +172,7 @@ export let TOOLS: Tool[] = [
         slug: str('the path label'),
         title: str('its name'),
       },
-      required: ['space', 'slug', 'title'],
+      required: ['slug', 'title'],
     },
     run: async (ctx, args) => {
       let { space, who } = await inSpace(ctx, args, true)
@@ -198,7 +216,7 @@ export let TOOLS: Tool[] = [
         path: str('the file path, e.g. index.html'),
         content: str('the file text, for write'),
       },
-      required: ['space', 'app', 'op'],
+      required: ['app', 'op'],
     },
     run: async (ctx, args) => {
       let op = text(args.op, 'op')
@@ -243,7 +261,7 @@ export let TOOLS: Tool[] = [
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP },
-      required: ['space', 'app'],
+      required: ['app'],
     },
     run: async (ctx, args) => {
       let { space, app, who } = await inApp(ctx, args, true)
@@ -270,7 +288,7 @@ export let TOOLS: Tool[] = [
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP },
-      required: ['space', 'app'],
+      required: ['app'],
     },
     run: async (ctx, args) => {
       let { space, app, who } = await inApp(ctx, args)
@@ -303,7 +321,7 @@ export let TOOLS: Tool[] = [
           description: 'the bundles',
         },
       },
-      required: ['space', 'app', 'entities'],
+      required: ['app', 'entities'],
     },
     run: async (ctx, args) => {
       let { space, who, store } = await inApp(ctx, args, true)
@@ -332,7 +350,7 @@ export let TOOLS: Tool[] = [
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP, query: str('the filter line') },
-      required: ['space', 'app', 'query'],
+      required: ['app', 'query'],
     },
     run: async (ctx, args) => {
       let { space, who, store } = await inApp(ctx, args)
@@ -358,7 +376,7 @@ export let TOOLS: Tool[] = [
         text: str('words to find'),
         limit: { type: 'number', description: 'at most this many (20)' },
       },
-      required: ['space', 'app', 'text'],
+      required: ['app', 'text'],
     },
     run: async (ctx, args) => {
       let { space, who, store } = await inApp(ctx, args)

@@ -73,6 +73,18 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     let inn = await form(k, '/login/code', { email, code })
     assertEquals(inn.status, 302)
     assertEquals(inn.headers.get('location'), '/')
+    // Signing in IS having a space (T-32482): one named for their address,
+    // with them as its owner, so nothing ever asks them for a name.
+    let [them] = await metaOf(k).get(
+      `.person!&.email.address=${encodeURIComponent(email)}`,
+    )
+    let [theirs] = await metaOf(k).get(`.space.slug=${email.split('@')[0]}`)
+    assert(theirs, `a space named for ${email}`)
+    let [seat] = await metaOf(k).get(
+      `.member.space=${theirs.entity.eid}&.member.person=${them.entity.eid}`,
+    )
+    assertEquals((seat.member as { role: string }).role, 'owner')
+
     let set = inn.headers.get('set-cookie') ?? ''
     assertMatch(set, /^yak_session=/)
     assertMatch(set, /Domain=yaks\.app/)
@@ -91,7 +103,9 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assert(person, 'a person for ' + email)
     let me = person.entity.eid
     let [yak] = await metaOf(k).get('.space.slug=yak')
-    let [owner] = await metaOf(k).get(`.member.person=${me}`)
+    let [owner] = await metaOf(k).get(
+      `.member.person=${me}&.member.space=${yak.entity.eid}`,
+    )
     assertEquals(owner.member, {
       space: yak.entity.eid,
       person: me,

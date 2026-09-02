@@ -55,8 +55,8 @@ of that.
 An app is an index.html and whatever files sit beside it, served live at
 <space>.yaks.app/<app>/. No build step, no framework, no install. Four steps:
 
-1. app_new — the app, in the person's space (they have one; space_new only if
-   they have none).
+1. app_new — the app. Leave the space argument out: signing in gave them
+   one, and every tool uses it unless they have several.
 2. app_files — write index.html, and any css, js or images beside it.
 3. app_deploy — mark the release. The files are already live; this is the
    version an error will name.

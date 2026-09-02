@@ -117,11 +117,14 @@ let secret = (env: Env) => {
   return env.SESSION_SECRET
 }
 
-// The person is known: the cookie, the first-owner bootstrap, and wherever
-// they were going.
+// The person is known: the cookie, the space that is theirs, the first-owner
+// bootstrap, and wherever they were going.
 let landed = async (req: Request, env: Env, person: string, q: string) => {
   let store = meta(env)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  // Signing in IS having a space (T-32482): theirs already, or minted here
+  // from their address, so no agent ever has to ask them for a name.
+  await dir.own(person)
   let space = await dir.space(META.space)
   if (space && await dir.memberless(space)) {
     let r = await store('/apply', {

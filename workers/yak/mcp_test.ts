@@ -104,6 +104,23 @@ slow(
         }),
         /jeff\.yaks\.app\/recipes\//,
       )
+      // A space needs no naming: the caller's own is the default, and with
+      // more than one the tools say which names there are (T-32482).
+      assertMatch(
+        await agent.tool('app_new', { slug: 'garden', title: 'Garden' }),
+        /jeff\.yaks\.app\/garden\//,
+      )
+      assertEquals(
+        await agent.tool('app_files', { app: 'garden', op: 'list' }),
+        '(no files)',
+      )
+      await agent.tool('space_new', { slug: 'jeff-work', title: 'Work' })
+      await assertRejects(
+        () => agent.tool('app_new', { slug: 'x', title: 'X' }),
+        Error,
+        'name one of jeff, jeff-work',
+      )
+
       // Files written through the tool serve at the app's address, and the
       // first app answers the space's bare hostname.
       let page = '<!doctype html><h1>Our recipe box</h1>'
@@ -211,6 +228,12 @@ slow(
       // A stranger belongs to no space of ours: every tool refuses him by
       // name, and he may make his own.
       let stranger = connector(k, await signedIn(k, crypto.randomUUID()))
+      // Even someone who has never had a space gets one the moment they
+      // need it, rather than being asked to invent a name.
+      assertMatch(
+        await stranger.tool('app_new', { slug: 'notes', title: 'Notes' }),
+        /\.yaks\.app\/notes\//,
+      )
       await assertRejects(
         () => stranger.tool('app_files', { ...app, op: 'list' }),
         Error,

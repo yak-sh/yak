@@ -24,6 +24,7 @@
 // can describe its own store.
 import type { Mutation } from '../../src/mutation.ts'
 import type { Env, Fetcher } from './env.ts'
+import { SLUG } from './route.ts'
 import { storeOf } from './store.ts'
 
 export let META = { space: 'yak', app: 'platform' }
@@ -42,6 +43,17 @@ type Row = {
   space?: { slug: string; home: string | null }
   app?: { slug: string; space: string; version: number | null }
   member?: { space: string; person: string; role: Role }
+  email?: { address: string }
+}
+
+// A person's address as a hostname label: the local part, lowercased, with
+// anything that is not a slug character folded to a dash. `jeff@yak.sh`
+// becomes `jeff`; an address that leaves nothing usable becomes `space`,
+// and `own()` below numbers it until the name is free.
+export let slugFor = (email: string) => {
+  let name = email.split('@')[0].toLowerCase().replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '').slice(0, 40)
+  return SLUG.test(name) ? name : 'space'
 }
 
 let TTL = 30_000
@@ -133,7 +145,9 @@ export let directory = (via: Fetcher) => {
     return r.json()
   }
   let one = async (q: string) => (await query(q))[0]
-  return {
+  // Named, because two of the questions below are asked in terms of the
+  // others: a person's own space is read, minted, and read back.
+  let self = {
     // A write that changes the directory: the whole wire, either shape — a
     // bundle (which mints at an eid its author chose, T-32455) or a flat
     // Change batch.
@@ -167,8 +181,63 @@ export let directory = (via: Fetcher) => {
     role: async (space: Space, person: string) =>
       (await one(`.member.space=${space.eid}&.member.person=${person}`))
         ?.member?.role ?? null,
+    // Every space this person belongs to, the meta space left out: `yak` is
+    // the platform's own, and a person who owns it (the first to sign in)
+    // still means their own space when they name none.
+    spaces: async (person: string): Promise<Space[]> => {
+      // A filter resolves an eid to an entity, so a person the meta store has
+      // never seen — someone who signed in before it kept a row — makes the
+      // question itself unanswerable. No row, no memberships.
+      if (!(await one(`id=${person}`))) return []
+      let members = await query(`.member.person=${person}`)
+      let spaces: Space[] = []
+      for (let m of members) {
+        let row = m.member && await one(`id=${m.member.space}`)
+        if (row?.space && row.space.slug != META.space) {
+          spaces.push(spaceOf(row))
+        }
+      }
+      return spaces
+    },
+    // The person's own space, minted the moment they first need one — at
+    // sign-in, or at the first tool call by someone who signed in before this
+    // existed (T-32482). Nobody is ever asked to name a space. Theirs is the
+    // one their address spells, if they are in it, else the first they
+    // belong to; a race that loses on the unique slug re-reads and finds the
+    // winner.
+    own: async (person: string): Promise<Space> => {
+      let mine = await self.spaces(person)
+      let row = await one(`id=${person}`)
+      let wanted = slugFor(row?.email?.address ?? 'space')
+      if (mine.length) return mine.find((s) => s.slug == wanted) ?? mine[0]
+      let slug = wanted
+      for (let n = 2; await self.space(slug); n++) slug = `${wanted}${n}`
+      // The same batch space_new writes, for the same reasons: the person's
+      // own row (they may have none yet), the space, and their ownership of
+      // it — all bundles, since a bundle mints at an eid its author chose
+      // (T-32455).
+      try {
+        await self.apply({
+          entities: [
+            { entity: { eid: person }, person: {} },
+            {
+              entity: { eid: '$space' },
+              doc: { title: wanted },
+              space: { slug },
+            },
+            { member: { space: '$space', person, role: 'owner' } },
+          ],
+        }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
+      } catch (e) {
+        let [theirs] = await self.spaces(person)
+        if (!theirs) throw e
+        return theirs
+      }
+      return (await self.space(slug))!
+    },
     // Whether nobody belongs yet: read only to admit the first member.
     memberless: async (space: Space) =>
       !(await one(`.member.space=${space.eid}&limit=1`)),
   }
+  return self
 }
