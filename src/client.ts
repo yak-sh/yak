@@ -3599,9 +3599,9 @@ export let authored = (rows: Row[], byEid: Map<string, Row>): Said[] => {
       }
       continue
     }
-    // A blob has no display kind of its own (kindOf says `entity`), so it is
-    // screened by component; so is anything else with no kind to name.
-    if (UNSAID.has(r.kind) || r.kind == 'entity' || r.comps.blob) continue
+    // Anything with no display kind of its own — a content-addressed blob
+    // among them — has nothing to say on a timeline.
+    if (UNSAID.has(r.kind) || r.kind == 'entity') continue
     if (r.comps.person) continue
     let { created, updated, decided, feedback } = r.comps
     let where = whereOf(r, byEid)

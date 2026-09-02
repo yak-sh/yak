@@ -3,7 +3,7 @@
 // (space, app) the caller names and belongs to, each an IO over the Store
 // object's /apply and /query doors with the caller vouched server-side; and
 // the platform sugar, the least that makes an app: space_new, app_new,
-// app_files, app_deploy, app_errors. A tool is one row here — name, what it
+// app_files, app_deploy, app_set, app_errors. A tool is one row here — name, what it
 // does, its input as JSON Schema, and `run` — and the door (mcp.ts) reads the
 // table for tools/list and tools/call.
 //
@@ -117,6 +117,82 @@ let answer = async (r: Response) => {
   let body = await r.text()
   if (!r.ok) throw new Error(body)
   return body
+}
+
+// The platform's bookkeeping about a row — who wrote it and when, whether it
+// has been served — as opposed to what the person saved. `archived` is not
+// here: an app's agent reads and writes it (it is how an error is marked
+// fixed), so it is the person's business too.
+let STAMPS = ['created', 'updated', 'notified', 'opened', 'quarantined']
+
+// A listing as a person's agent should read it (C-32498 item 10): the rows
+// they saved, without the stamps the store keeps about saving them, and
+// without a row that is nothing but stamps. Naming a stamp in the filter
+// (`.created.by=…`) asks for it back — the tools never hide what was asked
+// for. Anything that is not a row listing (an aggregate, say) passes through
+// as it came.
+let listing = (body: string, asked: string) => {
+  let rows: unknown
+  try {
+    rows = JSON.parse(body)
+  } catch {
+    return body
+  }
+  if (!Array.isArray(rows)) return body
+  let hidden = STAMPS.filter((s) => !asked.includes(`.${s}`))
+  let out = []
+  for (let row of rows as Record<string, unknown>[]) {
+    let kept = Object.fromEntries(
+      Object.entries(row).filter(([k]) => !hidden.includes(k)),
+    )
+    // `entity` and `kind` name a row; one with nothing else left was a stamp.
+    if (Object.keys(kept).some((k) => k != 'entity' && k != 'kind')) {
+      out.push(kept)
+    }
+  }
+  return JSON.stringify(out)
+}
+
+type Change = { eid: string; name: string; comp: unknown }
+
+// What a write answers: one line a person's agent can repeat, naming every
+// entity it touched by id and every alias it minted, so the next call can
+// address them. The store's own answer is the wire's — a row per component
+// written, stamps included — which reads as noise beside the sentences the
+// app tools give (C-32531 item 5). `graph_query` reads the data back.
+let wrote = (body: string, where: string) => {
+  let out: { changes?: Change[]; aliases?: Record<string, string> }
+  try {
+    out = JSON.parse(body)
+  } catch {
+    return body
+  }
+  let changes = out.changes ?? []
+  // A doc's body is stored as a content-addressed blob entity (db.ts
+  // textBlob), so a batch of one recipe writes two rows. The person wrote
+  // the recipe; the blob is the store's own business, the way it is in a
+  // listing (query.ts selected()).
+  let blobs = new Set(
+    changes.filter((c) => c.name == 'blob').map((c) => c.eid),
+  )
+  changes = changes.filter((c) => !blobs.has(c.eid))
+  let named = new Map(
+    Object.entries(out.aliases ?? {}).map(([alias, eid]) => [eid, alias]),
+  )
+  let gone = new Set(
+    changes.filter((c) => c.name == 'entity' && c.comp == null)
+      .map((c) => c.eid),
+  )
+  let ids = [...new Set(changes.map((c) => c.eid))]
+  let said = ids.slice(0, 10).map((id) =>
+    `${named.has(id) ? `${named.get(id)}=` : ''}${id}${
+      gone.has(id) ? ' (deleted)' : ''
+    }`
+  )
+  if (ids.length > said.length) said.push(`…and ${ids.length - said.length}`)
+  return `wrote ${ids.length} ${
+    ids.length == 1 ? 'entity' : 'entities'
+  } in ${where}: ${said.join(', ')}`
 }
 
 // A file's key: the app's slugs, then its path from the slash (apps.ts keyOf).
@@ -389,7 +465,9 @@ export let TOOLS: Tool[] = [
       '— doc (title, body), task (status, priority, project), project, ' +
       'comment, web, image, attachment, archived; a component of your own ' +
       'naming is coming, so until then the words go in doc and the rest in ' +
-      'its body. The guide (https://yaks.app/guide.md) has all of it.',
+      'its body. The answer is one line naming what was written, by id; ' +
+      'graph_query reads the data back. The guide ' +
+      '(https://yaks.app/guide.md) has all of it.',
     input: {
       type: 'object',
       properties: {
@@ -412,7 +490,10 @@ export let TOOLS: Tool[] = [
         method: 'POST',
         body: JSON.stringify({ entities: args.entities }),
       }, vouched(who))
-      return { text: await answer(r), space }
+      return {
+        text: wrote(await answer(r), `${space.slug}/${text(args.app, 'app')}`),
+        space,
+      }
     },
   },
   {
@@ -434,12 +515,9 @@ export let TOOLS: Tool[] = [
     },
     run: async (ctx, args) => {
       let { space, who, store } = await inApp(ctx, args)
-      let r = await store(
-        `/query?${text(args.query, 'query')}`,
-        {},
-        vouched(who),
-      )
-      return { text: await answer(r), space }
+      let asked = text(args.query, 'query')
+      let r = await store(`/query?${asked}`, {}, vouched(who))
+      return { text: listing(await answer(r), asked), space }
     },
   },
   {
@@ -464,7 +542,7 @@ export let TOOLS: Tool[] = [
         Number(args.limit) || 20
       }`
       let r = await store(`/query?${q}`, {}, vouched(who))
-      return { text: await answer(r), space }
+      return { text: listing(await answer(r), q), space }
     },
   },
 ]

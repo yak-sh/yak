@@ -184,23 +184,31 @@ slow(
       let bare = await k.at('jeff.yaks.app', '/', { redirect: 'manual' })
       assertEquals(bare.headers.get('location'), '/recipes/')
 
-      // The graph tier: a bundle in, the same shape out, the search beside it.
-      let applied = JSON.parse(
-        await agent.tool('graph_apply', {
-          ...app,
-          entities: [{
-            entity: { eid: '$cake' },
-            doc: { title: "Grandma's lemon cake" },
-          }],
-        }),
-      )
-      let cake = applied.aliases.$cake
-      assert(cake, 'the alias resolved')
+      // The graph tier: a bundle in, the same shape out, the search beside
+      // it. A write answers one line naming what it wrote, by id, with the
+      // alias it minted (T-32506) — never the wire's change rows.
+      let applied = await agent.tool('graph_apply', {
+        ...app,
+        entities: [{
+          entity: { eid: '$cake' },
+          doc: { title: "Grandma's lemon cake" },
+        }],
+      })
+      assertMatch(applied, /^wrote 1 entity in jeff\/recipes: \$cake=\S+$/)
+      let cake = applied.match(/\$cake=(\S+)/)![1]
       let [hit] = JSON.parse(
         await agent.tool('graph_query', { ...app, query: `id=${cake}` }),
       )
       assertEquals(hit.entity.eid, cake)
       assertEquals(hit.doc.title, "Grandma's lemon cake")
+      // A listing is what the person saved: the store's stamps about saving
+      // it are not in the answer unless the filter names one.
+      assert(!('created' in hit), 'no stamp rides an unasked-for listing')
+      let stamped = JSON.parse(
+        await agent.tool('graph_query', { ...app, query: '.doc!&.created!' }),
+      )
+      assertEquals(stamped.length, 1)
+      assert(stamped[0].created, 'naming a stamp asks for it back')
       let found = JSON.parse(
         await agent.tool('search', { ...app, text: 'lemon' }),
       )
