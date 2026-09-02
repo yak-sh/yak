@@ -137,6 +137,10 @@
   },
   {
     "kind": "exec",
+    "sql": "create table if not exists \"signin\" (\n    entity integer primary key references entity(id),\n    \"email\" text,\n    \"code\" text,\n    \"expires\" text,\n    \"tries\" real\n  );"
+  },
+  {
+    "kind": "exec",
     "sql": "create table if not exists \"deliver\" (\n    entity integer primary key references entity(id),\n    \"to\" integer\n  );"
   },
   {
@@ -582,6 +586,30 @@
     "table": "member",
     "col": "role",
     "sql": "alter table member add column \"role\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "signin",
+    "col": "email",
+    "sql": "alter table signin add column \"email\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "signin",
+    "col": "code",
+    "sql": "alter table signin add column \"code\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "signin",
+    "col": "expires",
+    "sql": "alter table signin add column \"expires\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "signin",
+    "col": "tries",
+    "sql": "alter table signin add column \"tries\" real"
   },
   {
     "kind": "addColumn",

@@ -4,7 +4,7 @@
 // carries them. Kept to what routing and membership need: who a hostname is,
 // what apps it has, who may write to them.
 
-use yak_vocab::{Number, Ref, Sel, Text};
+use yak_vocab::{Number, Ref, Sel, Text, Time};
 use yak_vocab_derive::Comp;
 
 // A tenant: `<slug>.yaks.app`. doc carries its name; `home` is the app that
@@ -46,4 +46,24 @@ struct Member {
     person: Ref,
     #[col(sel(owner, editor, viewer))]
     role: Sel,
+}
+
+// A sign-in in flight (D-32318 §Auth): the six-digit code mailed to an
+// address, kept only as a keyed digest — HMAC under the session secret, so a
+// row read from the store cannot be brute-forced — with the moment it dies
+// and how many guesses it has taken. Wholly server-stamped: the kernel mints
+// one at `POST /login` and deletes it when the code is spent; no client
+// writes one. Several may stand for one address; the newest live one is the
+// code that counts.
+#[derive(Comp)]
+#[comp(plugin = "platform", rank = 1050, kind_rank = 420, stamped_rank = 370)]
+struct Signin {
+    #[stamped]
+    email: Text,
+    #[stamped]
+    code: Text,
+    #[stamped]
+    expires: Time,
+    #[stamped]
+    tries: Number,
 }

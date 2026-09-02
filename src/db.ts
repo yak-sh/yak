@@ -989,6 +989,8 @@ export let derived = [
   'space',
   'app',
   'member',
+  // A sign-in in flight: four stamped nullable columns, no FK, so it derives.
+  'signin',
   'deliver',
   'delivered',
   'error',

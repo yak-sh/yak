@@ -557,6 +557,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     person: { eid: 'person', death: 'cascade' },
     role: { enum: ['owner', 'editor', 'viewer'] },
   },
+  signin: {},
   edge: {
     from: { eid: 'entity', death: 'cascade' },
     to: { eid: 'entity', death: 'cascade' },
@@ -810,6 +811,12 @@ export let stamped: Record<string, Record<string, PropType>> = {
   cancelled: {
     via: { eid: 'entity', death: 'keep' },
   },
+  signin: {
+    email: 'text',
+    code: 'text',
+    expires: 'time',
+    tries: 'number',
+  },
 }
 
 // kind is DERIVED: the most specific component an entity carries
@@ -859,6 +866,7 @@ export let kindOrder = [
   'space',
   'app',
   'member',
+  'signin',
 ]
 
 // Kinds whose doc title is a NAME a caller can type (near.ts).

@@ -895,6 +895,13 @@ pub static SCHEMA: &[SchemaOp] = &[
     "person" integer references entity(id),
     "role" text
   );"#),
+    SchemaOp::Exec(r#"create table if not exists "signin" (
+    entity integer primary key references entity(id),
+    "email" text,
+    "code" text,
+    "expires" text,
+    "tries" real
+  );"#),
     SchemaOp::Exec(r#"create table if not exists "deliver" (
     entity integer primary key references entity(id),
     "to" integer
@@ -1038,6 +1045,10 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "member", col: "space", sql: r#"alter table member add column "space" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "member", col: "person", sql: r#"alter table member add column "person" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "member", col: "role", sql: r#"alter table member add column "role" text"# },
+    SchemaOp::AddColumn { table: "signin", col: "email", sql: r#"alter table signin add column "email" text"# },
+    SchemaOp::AddColumn { table: "signin", col: "code", sql: r#"alter table signin add column "code" text"# },
+    SchemaOp::AddColumn { table: "signin", col: "expires", sql: r#"alter table signin add column "expires" text"# },
+    SchemaOp::AddColumn { table: "signin", col: "tries", sql: r#"alter table signin add column "tries" real"# },
     SchemaOp::AddColumn { table: "deliver", col: "to", sql: r#"alter table deliver add column "to" integer"# },
     SchemaOp::AddColumn { table: "delivered", col: "at", sql: r#"alter table delivered add column "at" text"# },
     SchemaOp::AddColumn { table: "delivered", col: "via", sql: r#"alter table delivered add column "via" text"# },

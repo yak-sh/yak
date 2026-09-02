@@ -52,6 +52,17 @@
         }
       ]
     },
+    "signin": {
+      "rank": 1050,
+      "stamped_rank": 370,
+      "kind_rank": 420,
+      "stamped": {
+        "email": "text",
+        "code": "text",
+        "expires": "time",
+        "tries": "number"
+      }
+    },
     "space": {
       "rank": 1020,
       "kind_rank": 390,
