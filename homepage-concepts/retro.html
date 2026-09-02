@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description"
+      content="A sincere Web 1.0 homepage concept for yaks.app">
+    <title>yaks.app - Welcome!</title>
+    <link rel="stylesheet" href="base.css">
+    <style>
+    :root {
+      --paper: #fffdf0;
+      --blue: #1646d8;
+      --violet: #6a3bb7;
+      --navy: #17213a;
+      --green: #16734a;
+      --silver: #d7d7d2;
+    }
+    body {
+      padding: 18px;
+      color: var(--navy);
+      background: #d8dbe0
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Cpath d='M0 0h4v4H0zm4 4h4v4H4z' fill='%23cdd0d5'/%3E%3C/svg%3E");
+      font: 13px/1.48 Verdana,Geneva,sans-serif;
+    }
+    .page {
+      width: min(760px,100%);
+      margin: auto;
+      background: var(--paper);
+      border: 1px solid #777;
+      box-shadow: 4px 4px 0 #777;
+    }
+    .utility {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 8px;
+      color: #fff;
+      background: var(--navy);
+      font-size: 10px;
+    }
+    .online::before {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      margin-right: 5px;
+      background: #54e09c;
+      border: 1px solid #fff;
+      border-radius: 50%;
+      content: "";
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 13px 15px;
+      background: linear-gradient(90deg,#e6e9ec,#fff);
+    }
+    .logo {
+      color: var(--navy);
+      font: bold 24px/1 Georgia,serif;
+      text-decoration: none;
+      text-shadow: 1px 1px #fff;
+    }
+    header nav a {
+      margin-left: 14px;
+      color: var(--blue);
+    }
+    .welcome {
+      margin: 0 10px 10px;
+      padding: 7px;
+      border: 2px groove #eee;
+      background: #f3f1e5;
+    }
+    .addressbar {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px;
+      background: #d7d7d2;
+      border: 2px inset #eee;
+    }
+    .addressbar label {
+      font-size: 11px;
+    }
+    .address {
+      min-width: 0;
+      flex: 1;
+      padding: 4px 6px;
+      background: #fff;
+      border: 2px inset #eee;
+      font: 12px/1.2 monospace;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.25fr .75fr;
+      gap: 18px;
+      padding: 30px 24px;
+      border-bottom: 1px dotted #777;
+    }
+    h1 {
+      margin: 0 0 16px;
+      color: #0b245b;
+      font: bold clamp(35px,7vw,54px)/.96 Georgia,"Times New Roman",serif;
+      letter-spacing: -.025em;
+    }
+    .hero p {
+      margin: 0 0 18px;
+      font-size: 15px;
+    }
+    .button {
+      display: inline-block;
+      padding: 8px 12px;
+      color: #000;
+      background: #e7e7e7;
+      border: 2px outset #fff;
+      font-weight: bold;
+      text-decoration: none;
+    }
+    .button:active {
+      border-style: inset;
+    }
+    .aside {
+      padding: 8px;
+      background: #ffffd9;
+      border: 1px solid #a19d66;
+    }
+    .aside h2 {
+      margin: 0;
+      padding: 5px;
+      color: #fff;
+      background: var(--blue);
+      font: bold 12px/1 Verdana,sans-serif;
+    }
+    .aside__app {
+      padding: 14px 10px;
+      background: #fff;
+      border: 1px solid #aaa;
+      border-top: 0;
+    }
+    .aside__app strong {
+      display: block;
+      margin-bottom: 10px;
+      font: 20px/1.1 Georgia,serif;
+    }
+    .aside__app ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .how {
+      padding: 24px;
+    }
+    .rule-title {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin: 0 0 19px;
+      color: #333;
+      font: bold 17px/1 Georgia,serif;
+    }
+    .rule-title::before,
+    .rule-title::after {
+      height: 1px;
+      flex: 1;
+      background: #777;
+      content: "";
+    }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: 12px;
+    }
+    .step {
+      padding: 10px;
+      background: #f1f1ed;
+      border: 1px solid #aaa;
+    }
+    .step__head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 7px;
+      color: #fff;
+      background: var(--navy);
+      font-weight: bold;
+    }
+    .step__head b {
+      padding: 4px 7px;
+      color: var(--navy);
+      background: #f5d64e;
+    }
+    .step p {
+      margin: 0;
+    }
+    .directory {
+      padding: 5px 24px 28px;
+    }
+    .directory table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+    .directory caption {
+      padding: 6px;
+      color: #fff;
+      background: var(--violet);
+      font-weight: bold;
+      text-align: left;
+    }
+    .directory th,
+    .directory td {
+      padding: 8px;
+      border: 1px solid #aaa;
+      text-align: left;
+    }
+    .directory th {
+      background: #eee;
+    }
+    .directory a {
+      color: var(--blue);
+    }
+    .directory a:visited {
+      color: var(--violet);
+    }
+    .sample {
+      padding: 0;
+      border: 0;
+      color: var(--blue);
+      background: none;
+      text-decoration: underline;
+      cursor: pointer;
+      font: inherit;
+    }
+    .sample[aria-pressed="true"] {
+      color: var(--violet);
+      font-weight: bold;
+    }
+    .note {
+      margin: 0 24px 25px;
+      padding: 8px;
+      background: #e4f4e7;
+      border: 1px dashed var(--green);
+      text-align: center;
+    }
+    footer {
+      padding: 10px;
+      color: #555;
+      background: #eee;
+      border-top: 1px solid #aaa;
+      font-size: 10px;
+      text-align: center;
+    }
+    .blink {
+      display: inline-block;
+      color: #c40000;
+      font-weight: bold;
+      animation: blink 1.4s step-end infinite;
+    }
+    @keyframes blink {
+      50% {
+        opacity: 0;
+      }
+    }
+    @media (max-width:590px) {
+      body {
+        padding: 7px;
+      }
+      .page {
+        box-shadow: 2px 2px 0 #777;
+      }
+      .hero,
+      .steps {
+        grid-template-columns: 1fr;
+      }
+      .hero {
+        padding: 24px 15px;
+      }
+      .how,
+      .directory {
+        padding-left: 15px;
+        padding-right: 15px;
+      }
+      header nav a:not(:last-child) {
+        display: none;
+      }
+      .utility span:first-child {
+        display: none;
+      }
+    }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <div class="page">
+      <div
+        class="utility"><span>THE PERSONAL APP HOST FOR EVERYONE</span><span class="online">service status: coming soon</span></div>
+      <header><a class="logo" href="retro.html">yaks.app</a><nav aria-label="Main navigation"><a href="#how">How It Works</a><a href="#examples">Example Sites</a><a href="#join">Get An Address</a></nav></header>
+      <div class="welcome">
+        <div
+          class="addressbar"><label for="site-address">Address:</label><div class="address" id="site-address">https://maya.yaks.app/<strong data-path>recipes</strong></div><span aria-hidden="true">✓</span></div>
+      </div>
+      <main id="main">
+        <section class="hero">
+          <div><h1>Welcome to your part of the web.</h1><p>Tell your assistant what you’d like—a recipe box, a garden notebook, a club calendar. It makes the app. Yaks gives it an address.</p><p><a class="button" href="#join">Claim your yaks.app address →</a></p><small><span class="blink">NEW!</span> Works with the assistant you already use.</small></div>
+          <aside class="aside">
+            <h2>NOW VIEWING</h2>
+            <div
+              class="aside__app"><strong data-app-title>Our recipes</strong><ul><li>Sunday red sauce</li><li>Lemon olive cake</li><li>Dad’s pancakes</li></ul><hr><small>Updated just now</small></div>
+          </aside>
+        </section>
+        <section class="how" id="how">
+          <h2 class="rule-title">HOW IT WORKS</h2>
+          <div class="steps">
+            <article class="step">
+              <div class="step__head"><b>1</b> ASK FOR SOMETHING</div>
+              <p
+                data-prompt>“Make me a recipe box for the dishes we cook every week.”</p>
+            </article>
+            <article class="step">
+              <div class="step__head"><b>2</b> IT GETS MADE</div>
+              <p>Your assistant builds it. Ask again whenever you want to change it.</p>
+            </article>
+            <article class="step">
+              <div class="step__head"><b>3</b> OPEN YOUR ADDRESS</div>
+              <p>It works on your computer, your phone, and anywhere the web goes.</p>
+            </article>
+          </div>
+        </section>
+        <section class="directory" id="examples">
+          <table>
+            <caption>★ DIRECTORY OF POSSIBILITIES ★</caption>
+            <thead>
+              <tr>
+                <th>What you ask for</th>
+                <th>Your address</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><button class="sample" data-sample="recipes" aria-pressed="true">A recipe box</button></td>
+                <td>maya.yaks.app/recipes</td>
+              </tr>
+              <tr>
+                <td><button class="sample" data-sample="garden" aria-pressed="false">A garden notebook</button></td>
+                <td>maya.yaks.app/garden</td>
+              </tr>
+              <tr>
+                <td><button class="sample" data-sample="club" aria-pressed="false">A walking club calendar</button></td>
+                <td>maya.yaks.app/thursdays</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+        <p class="note"
+          id="join"><strong>Coming soon:</strong> bring your assistant and an idea. We’ll give it an address. <a href="mailto:hello@yaks.app">Email us to hear when it’s ready.</a></p>
+      </main>
+      <footer>yaks.app · Made for people who miss when the web felt personal · Best viewed in every browser</footer>
+    </div>
+    <nav class="concept-switcher"
+      aria-label="Switch concept"><a class="concept-switcher__home" href="index.html" title="All concepts">×</a><a href="soft.html">1</a><a href="classy.html">2</a><a href="retro.html" aria-current="page">3</a><a href="address.html">4</a><a href="sentence.html">5</a></nav>
+    <script type="module" src="concepts.js"></script>
+  </body>
+</html>

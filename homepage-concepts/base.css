@@ -1,0 +1,116 @@
+/* Shared structural rules only. Each concept owns its visual language. */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+a {
+  color: inherit;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+.skip {
+  position: fixed;
+  z-index: 100;
+  top: 12px;
+  left: 12px;
+  padding: 10px 14px;
+  color: #fff;
+  background: #111;
+  transform: translateY(-180%);
+}
+
+.skip:focus {
+  transform: translateY(0);
+}
+
+.concept-switcher {
+  position: fixed;
+  z-index: 50;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px;
+  color: #f5f2e8;
+  background: #171817e8;
+  border: 1px solid #ffffff24;
+  border-radius: 999px;
+  box-shadow: 0 10px 35px #0003;
+  font: 600 12px/1 ui-sans-serif, system-ui, sans-serif;
+  backdrop-filter: blur(10px);
+}
+
+.concept-switcher > a {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  place-items: center;
+  border-radius: 50%;
+  text-decoration: none;
+}
+
+.concept-switcher > a:hover,
+.concept-switcher > a:focus-visible {
+  background: #ffffff20;
+  outline: none;
+}
+
+.concept-switcher > a[aria-current="page"] {
+  color: #171817;
+  background: #f5f2e8;
+}
+
+.concept-switcher__home {
+  margin: 0 4px 0 2px;
+  opacity: .7;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

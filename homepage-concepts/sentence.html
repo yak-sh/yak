@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description"
+      content="A graphic, editorial homepage concept for yaks.app">
+    <title>yaks.app — Sentence to Software</title>
+    <link rel="stylesheet" href="base.css">
+    <style>
+    :root {
+      --bone: #f3f0e8;
+      --black: #171816;
+      --orange: #e65f3c;
+      --blue: #3756c8;
+      --moss: #62745a;
+      --line: #171816;
+    }
+    body {
+      color: var(--black);
+      background: var(--bone);
+      font: 16px/1.45 Arial,"Helvetica Neue",sans-serif;
+    }
+    .wrap {
+      width: min(1320px,calc(100% - 48px));
+      margin: auto;
+    }
+    .top {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      height: 82px;
+      align-items: center;
+      border-bottom: 2px solid var(--line);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .logo {
+      font: 700 20px/1 Georgia,serif;
+      letter-spacing: -.03em;
+      text-decoration: none;
+      text-transform: none;
+    }
+    .top__center {
+      justify-self: center;
+    }
+    .top__right {
+      justify-self: end;
+    }
+    .top__right a {
+      padding: 9px 13px;
+      color: var(--bone);
+      background: var(--black);
+      text-decoration: none;
+    }
+    .hero {
+      min-height: 760px;
+      padding: 46px 0 70px;
+      border-bottom: 2px solid var(--line);
+    }
+    .kicker {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    .kicker::before {
+      width: 11px;
+      height: 11px;
+      background: var(--orange);
+      content: "";
+      transform: rotate(45deg);
+    }
+    h1 {
+      max-width: 1180px;
+      margin: 24px 0 45px;
+      font: 400 clamp(64px,11vw,150px)/.79 Georgia,"Times New Roman",serif;
+      letter-spacing: -.065em;
+    }
+    .arrow-word {
+      color: var(--orange);
+      font-style: italic;
+    }
+    .transform {
+      display: grid;
+      grid-template-columns: 5fr 90px 5fr;
+      gap: 16px;
+      align-items: stretch;
+    }
+    .prompt,
+    .output {
+      min-height: 265px;
+      padding: 30px;
+      border: 2px solid var(--line);
+    }
+    .prompt {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: #fff;
+    }
+    .label {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .prompt blockquote {
+      max-width: 570px;
+      margin: 28px 0 0;
+      font: 400 clamp(25px,3vw,38px)/1.2 Georgia,serif;
+    }
+    .choices {
+      display: flex;
+      gap: 6px;
+      margin-top: 24px;
+    }
+    .choices button {
+      padding: 7px 10px;
+      background: transparent;
+      border: 1px solid var(--line);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .choices button[aria-pressed="true"] {
+      color: #fff;
+      background: var(--black);
+    }
+    .arrow {
+      display: grid;
+      place-items: center;
+      color: var(--orange);
+      font-size: 50px;
+    }
+    .arrow span {
+      display: grid;
+      width: 68px;
+      height: 68px;
+      place-items: center;
+      border: 2px solid var(--orange);
+      border-radius: 50%;
+    }
+    .output {
+      position: relative;
+      overflow: hidden;
+      color: #fff;
+      background: var(--blue);
+    }
+    .output::after {
+      position: absolute;
+      right: -80px;
+      bottom: -90px;
+      width: 260px;
+      height: 260px;
+      background: var(--orange);
+      border: 2px solid var(--black);
+      border-radius: 50%;
+      content: "";
+    }
+    .address {
+      font: 12px/1 ui-monospace,monospace;
+    }
+    .output h2 {
+      position: relative;
+      z-index: 1;
+      margin: 70px 0 8px;
+      font: 400 clamp(35px,5vw,61px)/.9 Georgia,serif;
+    }
+    .output p {
+      position: relative;
+      z-index: 1;
+      margin: 0;
+      font-size: 14px;
+    }
+    .pitch {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 45px;
+      padding: 100px 0;
+    }
+    .pitch__label {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    .pitch__body h2 {
+      max-width: 920px;
+      margin: 0;
+      font: 400 clamp(44px,6.4vw,84px)/.98 Georgia,serif;
+      letter-spacing: -.045em;
+    }
+    .pitch__body p {
+      max-width: 700px;
+      margin: 28px 0 0;
+      font-size: 19px;
+    }
+    .cases {
+      color: var(--bone);
+      background: var(--black);
+    }
+    .case {
+      display: grid;
+      grid-template-columns: 1fr 90px 1fr;
+      gap: 20px;
+      align-items: center;
+      padding: 55px 0;
+      border-bottom: 1px solid #f3f0e852;
+    }
+    .case:last-child {
+      border: 0;
+    }
+    .case blockquote {
+      margin: 0;
+      font: 400 clamp(24px,3vw,38px)/1.2 Georgia,serif;
+    }
+    .case__arrow {
+      color: var(--orange);
+      font-size: 34px;
+      text-align: center;
+    }
+    .case__out {
+      font: 16px/1.4 ui-monospace,monospace;
+    }
+    .case__out strong {
+      display: block;
+      margin-bottom: 7px;
+      color: #98a4e0;
+      font: 400 27px/1 Georgia,serif;
+    }
+    .close {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 60px;
+      align-items: end;
+      padding: 105px 0 125px;
+    }
+    .close h2 {
+      margin: 0;
+      font: 400 clamp(52px,8vw,105px)/.86 Georgia,serif;
+      letter-spacing: -.055em;
+    }
+    .close__side p {
+      margin: 0 0 24px;
+    }
+    .cta {
+      display: inline-flex;
+      gap: 40px;
+      align-items: center;
+      padding: 15px 18px;
+      color: #fff;
+      background: var(--orange);
+      border: 2px solid var(--black);
+      box-shadow: 5px 5px 0 var(--black);
+      font-weight: 800;
+      text-decoration: none;
+    }
+    .cta::after {
+      content: "→";
+    }
+    @media (max-width:800px) {
+      .wrap {
+        width: min(100% - 32px,1320px);
+      }
+      .top {
+        grid-template-columns: 1fr auto;
+      }
+      .top__center {
+        display: none;
+      }
+      .hero {
+        min-height: auto;
+      }
+      .transform,
+      .pitch,
+      .case,
+      .close {
+        grid-template-columns: 1fr;
+      }
+      .arrow {
+        height: 55px;
+        transform: rotate(90deg);
+      }
+      .pitch {
+        gap: 25px;
+      }
+      .case {
+        gap: 24px;
+      }
+      .case__arrow {
+        text-align: left;
+        transform: rotate(90deg);
+        transform-origin: left;
+      }
+      .close {
+        gap: 40px;
+      }
+    }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="wrap">
+      <nav class="top"
+        aria-label="Main navigation"><a class="logo" href="sentence.html">yaks.app</a><span class="top__center">Sentence → software</span><span class="top__right"><a href="#join">Bring an idea</a></span></nav>
+    </header>
+    <main id="main">
+      <section class="hero wrap">
+        <div
+          class="kicker">Apps made through the assistant you already use</div>
+        <h1>Say what you need. <span class="arrow-word">Open</span> what gets made.</h1>
+        <div class="transform">
+          <div
+            class="prompt"><span class="label">01 · Your words</span><blockquote data-prompt>“Make me a recipe box for the dishes we cook every week.”</blockquote><div class="choices" aria-label="Try another idea"><button data-sample="recipes" aria-pressed="true">Recipes</button><button data-sample="garden" aria-pressed="false">Garden</button><button data-sample="club" aria-pressed="false">Club</button></div></div>
+          <div class="arrow" aria-hidden="true"><span>→</span></div>
+          <div class="output">
+            <div
+              class="address">maya.yaks.app/<span data-path>recipes</span></div>
+            <h2 data-app-title>Our recipes</h2>
+            <p data-app-detail>18 keepers</p>
+          </div>
+        </div>
+      </section>
+      <section
+        class="pitch wrap"><span class="pitch__label">What Yaks does</span><div class="pitch__body"><h2>Your assistant builds it. Yaks gives it an address.</h2><p>No new editor to master. No technical ritual. Keep talking to the assistant you know, and open the result on any screen.</p></div></section>
+      <section class="cases">
+        <div class="wrap">
+          <article class="case">
+            <blockquote>“Keep our favorite recipes somewhere my phone can find them.”</blockquote>
+            <div class="case__arrow" aria-hidden="true">→</div>
+            <div
+              class="case__out"><strong>A recipe box</strong>noah.yaks.app/recipes</div>
+          </article>
+          <article class="case">
+            <blockquote>“Make a signup sheet for Thursday pottery.”</blockquote>
+            <div class="case__arrow" aria-hidden="true">→</div>
+            <div
+              class="case__out"><strong>A class list</strong>ana.yaks.app/pottery</div>
+          </article>
+          <article class="case">
+            <blockquote>“Help us remember what we planted this year.”</blockquote>
+            <div class="case__arrow" aria-hidden="true">→</div>
+            <div
+              class="case__out"><strong>A garden record</strong>maya.yaks.app/garden</div>
+          </article>
+        </div>
+      </section>
+      <section class="close wrap" id="join">
+        <h2>What should exist next?</h2>
+        <div
+          class="close__side"><p>Bring your assistant. Bring an idea. Yaks is opening soon.</p><a class="cta" href="mailto:hello@yaks.app">Get early access</a></div>
+      </section>
+    </main>
+    <nav class="concept-switcher"
+      aria-label="Switch concept"><a class="concept-switcher__home" href="index.html" title="All concepts">×</a><a href="soft.html">1</a><a href="classy.html">2</a><a href="retro.html">3</a><a href="address.html">4</a><a href="sentence.html" aria-current="page">5</a></nav>
+    <script type="module" src="concepts.js"></script>
+  </body>
+</html>

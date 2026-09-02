@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description"
+      content="A soft, friendly homepage concept for yaks.app">
+    <title>yaks.app — The Workshop</title>
+    <link rel="stylesheet" href="base.css">
+    <style>
+    :root {
+      --paper: #f7f2e8;
+      --ink: #203b32;
+      --sage: #a8b9a1;
+      --apricot: #d98b67;
+      --sky: #bdd6d2;
+      --line: #203b3229;
+    }
+    body {
+      color: var(--ink);
+      background: var(--paper);
+      font: 16px/1.55 ui-rounded, "Avenir Next", system-ui, sans-serif;
+    }
+    body::before {
+      position: fixed;
+      z-index: -1;
+      inset: 0;
+      background-image: radial-gradient(#203b3212 .7px,transparent .7px);
+      background-size: 8px 8px;
+      content: "";
+    }
+    .wrap {
+      width: min(1160px, calc(100% - 40px));
+      margin: auto;
+    }
+    nav {
+      display: flex;
+      height: 84px;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font: 700 21px/1 Georgia,serif;
+      text-decoration: none;
+    }
+    .logo__mark {
+      display: grid;
+      width: 31px;
+      height: 31px;
+      place-items: center;
+      background: var(--ink);
+      border-radius: 11px 11px 5px 11px;
+      color: var(--paper);
+      font-size: 14px;
+      transform: rotate(-3deg);
+    }
+    nav ul {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 14px;
+    }
+    nav a {
+      text-underline-offset: 5px;
+    }
+    .nav-cta {
+      padding: 10px 17px;
+      border: 1px solid var(--ink);
+      border-radius: 999px;
+      text-decoration: none;
+    }
+    .hero {
+      display: grid;
+      min-height: 670px;
+      grid-template-columns: 1fr 1fr;
+      gap: clamp(35px,7vw,100px);
+      align-items: center;
+      padding: 70px 0 80px;
+    }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 22px;
+      color: #48665b;
+      font-size: 13px;
+      font-weight: 750;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before {
+      width: 27px;
+      height: 2px;
+      background: var(--apricot);
+      content: "";
+    }
+    h1 {
+      max-width: 610px;
+      margin: 0;
+      font: 500 clamp(55px,7vw,92px)/.94 Georgia,"Times New Roman",serif;
+      letter-spacing: -.048em;
+    }
+    .lead {
+      max-width: 540px;
+      margin: 27px 0 30px;
+      color: #3d564c;
+      font-size: clamp(18px,2vw,21px);
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 11px;
+      align-items: center;
+    }
+    .button {
+      display: inline-flex;
+      min-height: 49px;
+      align-items: center;
+      justify-content: center;
+      padding: 0 21px;
+      border: 1px solid var(--ink);
+      border-radius: 14px;
+      font-weight: 720;
+      text-decoration: none;
+      box-shadow: 3px 3px 0 var(--ink);
+      transition: transform .18s,box-shadow .18s;
+    }
+    .button:hover {
+      transform: translate(2px,2px);
+      box-shadow: 1px 1px 0 var(--ink);
+    }
+    .button--solid {
+      color: var(--paper);
+      background: var(--ink);
+    }
+    .stage {
+      position: relative;
+      min-height: 510px;
+    }
+    .note {
+      position: absolute;
+      z-index: 2;
+      top: 8px;
+      left: 0;
+      width: min(385px,88%);
+      padding: 25px 26px 28px;
+      background: #fffdf7;
+      border: 1px solid var(--line);
+      border-radius: 18px 18px 18px 5px;
+      box-shadow: 0 18px 45px #23403417;
+      transform: rotate(-2deg);
+    }
+    .note::before {
+      display: block;
+      width: 55px;
+      height: 13px;
+      margin: -33px auto 18px;
+      background: #e8c9adcc;
+      content: "";
+      transform: rotate(3deg);
+    }
+    .note__label,
+    .preview__label {
+      color: #5b7067;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    .note blockquote {
+      margin: 16px 0 0;
+      font: 500 23px/1.38 Georgia,serif;
+    }
+    .preview {
+      position: absolute;
+      right: 0;
+      bottom: 5px;
+      width: min(430px,90%);
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: 0 28px 60px #23403420;
+      transform: rotate(1.5deg);
+    }
+    .preview__bar {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      padding: 13px 17px;
+      color: #66746e;
+      background: #ecf0e9;
+      border-bottom: 1px solid var(--line);
+      font: 12px/1 ui-monospace,monospace;
+    }
+    .dot {
+      width: 7px;
+      height: 7px;
+      background: var(--apricot);
+      border-radius: 50%;
+    }
+    .preview__address {
+      margin-left: 7px;
+    }
+    .preview__body {
+      min-height: 275px;
+      padding: 31px;
+      background: linear-gradient(150deg,#fff 60%,#dbe6d6);
+    }
+    .preview h2 {
+      margin: 10px 0 25px;
+      font: 500 34px/1 Georgia,serif;
+    }
+    .recipe {
+      display: grid;
+      grid-template-columns: 65px 1fr;
+      gap: 14px;
+      align-items: center;
+      padding: 12px;
+      background: #f8f2e8;
+      border-radius: 13px;
+    }
+    .recipe + .recipe {
+      margin-top: 9px;
+    }
+    .recipe__image {
+      height: 54px;
+      background: var(--apricot);
+      border-radius: 9px;
+    }
+    .recipe:nth-child(2) .recipe__image {
+      background: var(--sky);
+    }
+    .recipe strong {
+      display: block;
+    }
+    .recipe small {
+      color: #67776f;
+    }
+    .scribble {
+      position: absolute;
+      z-index: -1;
+      right: -22px;
+      bottom: 100px;
+      width: 130px;
+      height: 130px;
+      border: 2px solid var(--apricot);
+      border-radius: 43% 57% 48% 52%;
+      opacity: .35;
+      transform: rotate(18deg);
+    }
+    .steps {
+      padding: 80px 0;
+      background: #e8ede4;
+      border-block: 1px solid var(--line);
+    }
+    .steps__grid {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+    }
+    .step {
+      padding: 4px clamp(20px,4vw,54px);
+      border-right: 1px solid var(--line);
+    }
+    .step:first-child {
+      padding-left: 0;
+    }
+    .step:last-child {
+      border: 0;
+    }
+    .step__n {
+      display: grid;
+      width: 32px;
+      height: 32px;
+      place-items: center;
+      margin-bottom: 45px;
+      background: var(--paper);
+      border: 1px solid var(--ink);
+      border-radius: 50%;
+      font: 700 12px/1 ui-monospace,monospace;
+    }
+    .step h2 {
+      margin: 0 0 10px;
+      font: 500 27px/1.1 Georgia,serif;
+    }
+    .step p {
+      margin: 0;
+      color: #52675e;
+    }
+    .examples {
+      padding: 100px 0 120px;
+    }
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 30px;
+      margin-bottom: 38px;
+    }
+    .section-head h2 {
+      max-width: 610px;
+      margin: 0;
+      font: 500 clamp(38px,5vw,62px)/1 Georgia,serif;
+      letter-spacing: -.03em;
+    }
+    .section-head p {
+      max-width: 350px;
+      margin: 0;
+      color: #52675e;
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: 17px;
+    }
+    .card {
+      min-height: 250px;
+      padding: 25px;
+      border: 1px solid var(--line);
+      border-radius: 19px;
+      transition: transform .2s;
+    }
+    .card:hover {
+      transform: translateY(-4px) rotate(-.3deg);
+    }
+    .card:nth-child(1) {
+      background: #e7d0bc;
+    }
+    .card:nth-child(2) {
+      background: #cdd9c8;
+    }
+    .card:nth-child(3) {
+      background: #c9dede;
+    }
+    .card__icon {
+      font-size: 26px;
+    }
+    .card h3 {
+      max-width: 240px;
+      margin: 85px 0 7px;
+      font: 500 27px/1.1 Georgia,serif;
+    }
+    .card p {
+      margin: 0;
+      color: #40564d;
+      font-size: 14px;
+    }
+    footer {
+      padding: 33px 0 95px;
+      border-top: 1px solid var(--line);
+      color: #52675e;
+      font-size: 13px;
+    }
+    @media (max-width:780px) {
+      nav li:not(:last-child) {
+        display: none;
+      }
+      .hero {
+        grid-template-columns: 1fr;
+        padding-top: 55px;
+      }
+      .stage {
+        min-height: 480px;
+      }
+      .steps__grid,
+      .cards {
+        grid-template-columns: 1fr;
+      }
+      .step {
+        padding: 30px 0;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .step__n {
+        margin-bottom: 18px;
+      }
+      .section-head {
+        display: block;
+      }
+      .section-head p {
+        margin-top: 17px;
+      }
+      .card h3 {
+        margin-top: 50px;
+      }
+    }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="wrap">
+      <nav
+        aria-label="Main navigation"><a class="logo" href="soft.html"><span class="logo__mark">Y</span> yaks.app</a><ul><li><a href="#how">How it works</a></li><li><a href="#ideas">Ideas</a></li><li><a class="nav-cta" href="#join">Get early access</a></li></ul></nav>
+    </header>
+    <main id="main">
+      <section class="hero wrap">
+        <div>
+          <div class="eyebrow">A home for what you imagine</div>
+          <h1>Your ideas, made useful.</h1>
+          <p
+            class="lead">Tell your assistant what you’d like—a recipe box, a garden journal, a tool for your club. It builds the app. Yaks gives it a home.</p>
+          <div
+            class="actions"><a class="button button--solid" href="#join">Get early access</a><a class="button" href="#how">See how it works</a></div>
+        </div>
+        <div class="stage" aria-label="A request becoming an app">
+          <div class="note">
+            <div class="note__label">You say it</div>
+            <blockquote>“Make me a recipe box for the dishes we cook every week.”</blockquote>
+          </div>
+          <div class="preview">
+            <div
+              class="preview__bar"><span class="dot"></span><span class="preview__address">maya.yaks.app/recipes</span></div>
+            <div class="preview__body">
+              <div class="preview__label">Made for Maya</div>
+              <h2>Our recipes</h2>
+              <div
+                class="recipe"><span class="recipe__image"></span><span><strong>Sunday red sauce</strong><small>Nan’s handwritten card</small></span></div>
+              <div
+                class="recipe"><span class="recipe__image"></span><span><strong>Lemon olive cake</strong><small>Good with strong coffee</small></span></div>
+            </div>
+          </div>
+          <span class="scribble"></span>
+        </div>
+      </section>
+      <section class="steps" id="how">
+        <div class="wrap steps__grid">
+          <article
+            class="step"><span class="step__n">01</span><h2>Describe it</h2><p>Start with a sentence, not a specification.</p></article>
+          <article
+            class="step"><span class="step__n">02</span><h2>Your assistant makes it</h2><p>Use the assistant you already know. Ask for changes the same way.</p></article>
+          <article
+            class="step"><span class="step__n">03</span><h2>Open it anywhere</h2><p>Your app gets an address that works on your phone, tablet, or computer.</p></article>
+        </div>
+      </section>
+      <section class="examples wrap" id="ideas">
+        <div class="section-head">
+          <h2>What would make your day easier?</h2>
+          <p>No setup maze. No technical language. Just a useful corner of the web that belongs to you.</p>
+        </div>
+        <div class="cards">
+          <article
+            class="card"><span class="card__icon" aria-hidden="true">◇</span><h3>Recipes worth keeping</h3><p>Notes, photos, and family favorites in one place.</p></article>
+          <article
+            class="card"><span class="card__icon" aria-hidden="true">⌁</span><h3>A shared garden notebook</h3><p>What went where, when it bloomed, and what to try next.</p></article>
+          <article
+            class="card"><span class="card__icon" aria-hidden="true">○</span><h3>The club’s tidy list</h3><p>Dates, signups, and the details everyone needs.</p></article>
+        </div>
+      </section>
+    </main>
+    <footer class="wrap"
+      id="join">Bring the assistant you already use. Bring one good idea. We’ll give it an address. · Coming soon.</footer>
+    <nav class="concept-switcher"
+      aria-label="Switch concept"><a class="concept-switcher__home" href="index.html" title="All concepts">×</a><a href="soft.html" aria-current="page">1</a><a href="classy.html">2</a><a href="retro.html">3</a><a href="address.html">4</a><a href="sentence.html">5</a></nav>
+  </body>
+</html>

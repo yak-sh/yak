@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description"
+      content="An architectural, illustrated homepage concept for yaks.app">
+    <title>yaks.app — A Place of Your Own</title>
+    <link rel="stylesheet" href="base.css">
+    <style>
+    :root {
+      --parchment: #f4ecdd;
+      --green: #173f35;
+      --brick: #b95f46;
+      --sky: #afcbd0;
+      --butter: #e8c66a;
+      --ink: #282b29;
+      --line: #173f3540;
+    }
+    body {
+      color: var(--green);
+      background: var(--parchment);
+      font: 16px/1.55 "Trebuchet MS",ui-sans-serif,system-ui,sans-serif;
+    }
+    .wrap {
+      width: min(1180px,calc(100% - 40px));
+      margin: auto;
+    }
+    nav.top {
+      display: flex;
+      height: 86px;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+    }
+    .logo {
+      font: 700 21px/1 Georgia,serif;
+      text-decoration: none;
+    }
+    .top__links {
+      display: flex;
+      gap: 26px;
+      align-items: center;
+      font-size: 13px;
+    }
+    .top__links a {
+      text-underline-offset: 5px;
+    }
+    .top__links .cta {
+      padding: 10px 16px;
+      color: var(--parchment);
+      background: var(--green);
+      border-radius: 4px;
+      text-decoration: none;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 5fr 7fr;
+      gap: 55px;
+      align-items: center;
+      padding: 70px 0 35px;
+    }
+    .eyebrow {
+      margin-bottom: 20px;
+      color: #66796d;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      font: 500 clamp(55px,7.5vw,96px)/.92 Georgia,serif;
+      letter-spacing: -.055em;
+    }
+    .lead {
+      max-width: 510px;
+      margin: 27px 0 31px;
+      font-size: 19px;
+    }
+    .button {
+      display: inline-block;
+      padding: 14px 19px;
+      color: var(--parchment);
+      background: var(--brick);
+      border: 1px solid var(--green);
+      border-radius: 4px;
+      box-shadow: 4px 4px 0 var(--green);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .scene {
+      position: relative;
+      min-height: 530px;
+      padding-top: 85px;
+    }
+    .sun {
+      position: absolute;
+      top: 20px;
+      right: 13%;
+      width: 96px;
+      height: 96px;
+      background: var(--butter);
+      border: 1px solid var(--green);
+      border-radius: 50%;
+    }
+    .cloud {
+      position: absolute;
+      top: 76px;
+      left: 15%;
+      width: 85px;
+      height: 19px;
+      background: var(--sky);
+      border: 1px solid var(--green);
+      border-radius: 50%;
+    }
+    .cloud::before,
+    .cloud::after {
+      position: absolute;
+      bottom: -1px;
+      background: var(--sky);
+      border: 1px solid var(--green);
+      border-bottom: 0;
+      border-radius: 50% 50% 0 0;
+      content: "";
+    }
+    .cloud::before {
+      left: 13px;
+      width: 29px;
+      height: 28px;
+    }
+    .cloud::after {
+      left: 38px;
+      width: 34px;
+      height: 39px;
+    }
+    .buildings {
+      position: absolute;
+      right: 0;
+      bottom: 45px;
+      left: 0;
+      display: flex;
+      align-items: end;
+      justify-content: center;
+      border-bottom: 2px solid var(--green);
+    }
+    .building {
+      position: relative;
+      width: 31%;
+      max-width: 185px;
+      min-height: 280px;
+      padding: 0;
+      background: transparent;
+      border: 0;
+      color: inherit;
+      cursor: pointer;
+      transition: transform .2s;
+    }
+    .building:hover,
+    .building:focus-visible {
+      z-index: 2;
+      outline: none;
+      transform: translateY(-7px);
+    }
+    .building__roof {
+      height: 58px;
+      background: var(--roof);
+      border: 2px solid var(--green);
+      clip-path: polygon(50% 0,100% 100%,0 100%);
+    }
+    .building__body {
+      height: 220px;
+      padding: 25px 17px;
+      background: var(--wall);
+      border: 2px solid var(--green);
+      text-align: left;
+    }
+    .building:nth-child(2) {
+      max-width: 210px;
+    }
+    .building:nth-child(2) .building__body {
+      height: 285px;
+    }
+    .building:nth-child(2) .building__roof {
+      height: 70px;
+    }
+    .building:nth-child(1) {
+      --wall: #b95f46;
+      --roof: #8b4434;
+    }
+    .building:nth-child(2) {
+      --wall: #e5d5ae;
+      --roof: #e8c66a;
+    }
+    .building:nth-child(3) {
+      --wall: #afcbd0;
+      --roof: #769ca2;
+    }
+    .sign {
+      display: block;
+      padding: 7px 5px;
+      background: var(--parchment);
+      border: 1px solid var(--green);
+      font: 700 11px/1 ui-monospace,monospace;
+      text-align: center;
+    }
+    .window {
+      display: block;
+      width: 57%;
+      height: 65px;
+      margin: 35px auto 0;
+      background: #425d52;
+      border: 7px double var(--parchment);
+      box-shadow: inset 0 0 0 2px var(--green);
+      transition: background .2s;
+    }
+    .building:hover .window,
+    .building:focus-visible .window,
+    .building[aria-pressed="true"] .window {
+      background: var(--butter);
+    }
+    .door {
+      display: block;
+      width: 45px;
+      height: 76px;
+      margin: 45px auto 0;
+      background: var(--green);
+      border: 5px double var(--parchment);
+    }
+    .tree {
+      position: absolute;
+      right: 2%;
+      bottom: 45px;
+      width: 12px;
+      height: 95px;
+      background: var(--green);
+    }
+    .tree::before {
+      position: absolute;
+      right: -35px;
+      bottom: 58px;
+      width: 80px;
+      height: 110px;
+      background: #718d68;
+      border: 2px solid var(--green);
+      border-radius: 50%;
+      content: "";
+    }
+    .address-line {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 5px;
+      font: 12px/1 ui-monospace,monospace;
+    }
+    .address-line span {
+      padding: 7px 10px;
+      background: #fff9e9;
+      border: 1px solid var(--green);
+      border-radius: 3px;
+    }
+    .story {
+      margin-top: 20px;
+      padding: 80px 0;
+      color: var(--parchment);
+      background: var(--green);
+    }
+    .story__inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+    .story h2 {
+      margin: 0;
+      font: 500 clamp(43px,6vw,74px)/.98 Georgia,serif;
+      letter-spacing: -.04em;
+    }
+    .story__card {
+      padding: 28px;
+      color: var(--green);
+      background: var(--parchment);
+      border-radius: 5px;
+      box-shadow: 9px 9px 0 #0d2c24;
+    }
+    .story__label {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    .story blockquote {
+      margin: 16px 0 30px;
+      font: 500 24px/1.35 Georgia,serif;
+    }
+    .result {
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+      font: 13px/1.5 ui-monospace,monospace;
+    }
+    .result strong {
+      display: block;
+      font: 500 25px/1.2 Georgia,serif;
+    }
+    .uses {
+      padding: 95px 0 120px;
+    }
+    .uses__head {
+      display: flex;
+      justify-content: space-between;
+      gap: 30px;
+      align-items: end;
+      margin-bottom: 45px;
+    }
+    .uses h2 {
+      max-width: 600px;
+      margin: 0;
+      font: 500 clamp(40px,6vw,66px)/1 Georgia,serif;
+      letter-spacing: -.035em;
+    }
+    .uses__head p {
+      max-width: 350px;
+      margin: 0;
+    }
+    .uses__grid {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: 14px;
+    }
+    .use {
+      padding: 25px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+    }
+    .use__path {
+      font: 12px/1 ui-monospace,monospace;
+    }
+    .use h3 {
+      margin: 65px 0 8px;
+      font: 500 26px/1.1 Georgia,serif;
+    }
+    .use p {
+      margin: 0;
+      color: #51685e;
+      font-size: 14px;
+    }
+    footer {
+      padding: 30px 0 90px;
+      border-top: 1px solid var(--line);
+      font-size: 13px;
+    }
+    @media (max-width:800px) {
+      .top__links a:not(.cta) {
+        display: none;
+      }
+      .hero {
+        grid-template-columns: 1fr;
+      }
+      .scene {
+        min-height: 420px;
+      }
+      .building {
+        width: 33%;
+      }
+      .building__body {
+        height: 160px;
+        padding: 12px 8px;
+      }
+      .building:nth-child(2) .building__body {
+        height: 210px;
+      }
+      .window {
+        height: 45px;
+        margin-top: 22px;
+      }
+      .door {
+        height: 60px;
+        margin-top: 25px;
+      }
+      .tree {
+        display: none;
+      }
+      .story__inner,
+      .uses__grid {
+        grid-template-columns: 1fr;
+      }
+      .story__inner {
+        gap: 40px;
+      }
+      .uses__head {
+        display: block;
+      }
+      .uses__head p {
+        margin-top: 15px;
+      }
+      .use h3 {
+        margin-top: 35px;
+      }
+    }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="wrap">
+      <nav class="top"
+        aria-label="Main navigation"><a class="logo" href="address.html">yaks.app</a><div class="top__links"><a href="#how">How it works</a><a href="#ideas">What you can make</a><a class="cta" href="#join">Get an address</a></div></nav>
+    </header>
+    <main id="main">
+      <section class="hero wrap">
+        <div><div class="eyebrow">Apps made for your life</div><h1>Give your ideas a place to live.</h1><p class="lead">Ask your assistant for the tool you wish you had. It can make it, change it, and put it at your own yaks.app address.</p><a class="button" href="#join">Make a place for something</a></div>
+        <div>
+          <div class="scene"
+            aria-label="Three app spaces at a personal web address"><span class="sun"></span><span class="cloud"></span><div class="buildings"><button class="building" data-sample="recipes" aria-pressed="true"><span class="building__roof"></span><span class="building__body"><span class="sign">/recipes</span><span class="window"></span></span></button><button class="building" data-sample="garden" aria-pressed="false"><span class="building__roof"></span><span class="building__body"><span class="sign">/garden</span><span class="door"></span></span></button><button class="building" data-sample="club" aria-pressed="false"><span class="building__roof"></span><span class="building__body"><span class="sign">/thursdays</span><span class="window"></span></span></button></div><span class="tree"></span></div>
+          <div
+            class="address-line">Your place on the web: <span>maya.yaks.app/<strong data-path>recipes</strong></span></div>
+        </div>
+      </section>
+      <section class="story" id="how">
+        <div class="wrap story__inner">
+          <h2>One sentence opens the door.</h2>
+          <div
+            class="story__card"><span class="story__label">You tell your assistant</span><blockquote data-prompt>“Make me a recipe box for the dishes we cook every week.”</blockquote><div class="result"><span>It makes</span><strong data-app-title>Our recipes</strong><span>at maya.yaks.app/<span data-path>recipes</span></span></div></div>
+        </div>
+      </section>
+      <section class="uses wrap" id="ideas">
+        <div class="uses__head">
+          <h2>What belongs at your address?</h2>
+          <p>Useful things for your home, your work, and the people you spend time with.</p>
+        </div>
+        <div class="uses__grid">
+          <article
+            class="use"><span class="use__path">/recipes</span><h3>A family recipe box</h3><p>Save the food you make, exactly the way you make it.</p></article>
+          <article
+            class="use"><span class="use__path">/garden</span><h3>A garden record</h3><p>Remember what you planted, where it grew, and what worked.</p></article>
+          <article
+            class="use"><span class="use__path">/thursdays</span><h3>A club calendar</h3><p>Keep dates, plans, and signups easy for everyone to find.</p></article>
+        </div>
+      </section>
+    </main>
+    <footer class="wrap"
+      id="join">Bring the assistant you already talk to. Yaks is opening soon.</footer>
+    <nav class="concept-switcher"
+      aria-label="Switch concept"><a class="concept-switcher__home" href="index.html" title="All concepts">×</a><a href="soft.html">1</a><a href="classy.html">2</a><a href="retro.html">3</a><a href="address.html" aria-current="page">4</a><a href="sentence.html">5</a></nav>
+    <script type="module" src="concepts.js"></script>
+  </body>
+</html>

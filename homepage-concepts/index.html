@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Five homepage directions for yaks.app">
+    <title>yaks.app — five homepage directions</title>
+    <link rel="stylesheet" href="base.css">
+    <style>
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      min-height: 100vh;
+      padding: clamp(28px, 6vw, 88px);
+      color: #eeece4;
+      background: #171918;
+      font: 16px/1.5 ui-sans-serif, system-ui, sans-serif;
+    }
+    main {
+      width: min(1180px, 100%);
+      margin: auto;
+    }
+    header {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 40px;
+      align-items: end;
+    }
+    .eyebrow {
+      color: #a6b59f;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 760px;
+      margin: 14px 0 0;
+      font: 500 clamp(44px, 7vw, 88px)/.96 Georgia, serif;
+      letter-spacing: -.04em;
+    }
+    header p {
+      max-width: 470px;
+      margin: 0 0 5px;
+      color: #b7bbb5;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 14px;
+      margin-top: clamp(54px, 9vw, 110px);
+    }
+    article {
+      position: relative;
+      display: flex;
+      min-height: 315px;
+      grid-column: span 2;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      padding: 27px;
+      color: var(--ink);
+      background: var(--paper);
+      border-radius: 3px;
+      transition: transform .2s ease;
+    }
+    article:nth-child(1),
+    article:nth-child(2) {
+      grid-column: span 3;
+    }
+    article:hover {
+      transform: translateY(-4px);
+    }
+    article::after {
+      position: absolute;
+      right: -30px;
+      bottom: -45px;
+      width: 150px;
+      height: 150px;
+      background: var(--mark);
+      border-radius: 50%;
+      content: "";
+      opacity: .7;
+    }
+    .number {
+      font: 700 11px/1 ui-monospace, monospace;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    h2 {
+      max-width: 360px;
+      margin: 0 0 10px;
+      font: 500 clamp(28px, 3vw, 40px)/1 Georgia, serif;
+      letter-spacing: -.025em;
+    }
+    article p {
+      max-width: 390px;
+      margin: 0;
+      opacity: .72;
+    }
+    article a {
+      position: absolute;
+      z-index: 2;
+      inset: 0;
+    }
+    article a:focus-visible {
+      outline: 4px solid #fff;
+      outline-offset: -8px;
+    }
+    .one {
+      --paper: #f6efe4;
+      --ink: #24382f;
+      --mark: #c5d3ba;
+      border-radius: 24px;
+    }
+    .two {
+      --paper: #ece7dd;
+      --ink: #29251f;
+      --mark: #8c3744;
+    }
+    .three {
+      --paper: #fffdeb;
+      --ink: #152454;
+      --mark: #c9c9c1;
+      border: 2px outset #eee;
+      border-radius: 0;
+    }
+    .four {
+      --paper: #eee4cf;
+      --ink: #153b32;
+      --mark: #b95f46;
+      border-radius: 16px 16px 4px 4px;
+    }
+    .five {
+      --paper: #f1eee6;
+      --ink: #171816;
+      --mark: #e65f3c;
+    }
+    footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      margin-top: 38px;
+      color: #858b85;
+      font-size: 13px;
+    }
+    @media (max-width: 760px) {
+      header {
+        grid-template-columns: 1fr;
+      }
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      article,
+      article:nth-child(1),
+      article:nth-child(2) {
+        grid-column: auto;
+        min-height: 260px;
+      }
+      footer {
+        flex-direction: column;
+      }
+    }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#concepts">Skip to concepts</a>
+    <main>
+      <header>
+        <div>
+          <div class="eyebrow">yaks.app · homepage study</div>
+          <h1>Five ways to give an idea an address.</h1>
+        </div>
+        <p>Each direction tells the same story: describe what you need to your assistant, then open what it makes. No technical setup, no new tool to learn.</p>
+      </header>
+      <section class="grid" id="concepts" aria-label="Homepage concepts">
+        <article class="one">
+          <div class="number">01 · Soft + friendly</div>
+          <div>
+            <h2>The Workshop</h2>
+            <p>Warm, tactile, and useful. Everyday ideas shown as index cards and well-made tools.</p>
+          </div>
+          <a
+            href="soft.html"><span class="sr-only">Open The Workshop concept</span></a>
+        </article>
+        <article class="two">
+          <div class="number">02 · Friendly + classy</div>
+          <div>
+            <h2>An Open Door</h2>
+            <p>Editorial restraint, generous space, and the confidence of a permanent address.</p>
+          </div>
+          <a
+            href="classy.html"><span class="sr-only">Open An Open Door concept</span></a>
+        </article>
+        <article class="three">
+          <div class="number">03 · Web 1.0</div>
+          <div>
+            <h2>The Friendly Web</h2>
+            <p>A sincere return to personal sites, blue links, and a web made by people.</p>
+          </div>
+          <a
+            href="retro.html"><span class="sr-only">Open The Friendly Web concept</span></a>
+        </article>
+        <article class="four">
+          <div class="number">04 · Illustrated</div>
+          <div>
+            <h2>A Place of Your Own</h2>
+            <p>Your apps become calm, architectural spaces along your personal address.</p>
+          </div>
+          <a
+            href="address.html"><span class="sr-only">Open A Place of Your Own concept</span></a>
+        </article>
+        <article class="five">
+          <div class="number">05 · Graphic</div>
+          <div>
+            <h2>Sentence → Software</h2>
+            <p>An ordinary sentence visibly transforms into a useful app you can open.</p>
+          </div>
+          <a
+            href="sentence.html"><span class="sr-only">Open Sentence to Software concept</span></a>
+        </article>
+      </section>
+      <footer><span>Built from the product descriptions in the Tasks graph.</span><span>No external assets or build step.</span></footer>
+    </main>
+  </body>
+</html>
