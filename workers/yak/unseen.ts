@@ -9,7 +9,7 @@
 // never SQL; the apps of a space come from the directory part.
 import { idOf } from '../../src/types.ts'
 import * as dirPart from './directory.ts'
-import { type App, appOf, type Space, storeName } from './directory.ts'
+import { type App, directory, type Space, storeName } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { type Door, storeOf } from './store.ts'
@@ -64,14 +64,8 @@ let line = (app: App, h: Hit) => {
 }
 
 // The space's apps, asked of the directory the way apps.ts asks it.
-let appsOf = async (env: Env, space: Space): Promise<App[]> => {
-  let via = bound(env.DIRECTORY, dirPart.fetch, env)
-  let r = await via.fetch(
-    new Request(`http://directory/query?.app.space=${space.eid}`),
-  )
-  if (!r.ok) throw new Error(`directory: ${await r.text()}`)
-  return (await r.json() as Parameters<typeof appOf>[0][]).map(appOf)
-}
+let appsOf = (env: Env, space: Space) =>
+  directory(bound(env.DIRECTORY, dirPart.fetch, env)).apps(space)
 
 // The open items of one app: both facets, unseen only unless `all`.
 export let openIn = async (

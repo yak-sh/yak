@@ -29,7 +29,7 @@ import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { unauthorized, withAuth } from './identity.ts'
-import { type Ctx, TOOLS } from './tools.ts'
+import { APPS_VIEW, type Ctx, TOOLS } from './tools.ts'
 import { serve, unseenBlock } from './unseen.ts'
 
 // The versions this door speaks, newest first. A client asks for one in
@@ -62,6 +62,9 @@ An app is an index.html and whatever files sit beside it, served live at
    version an error will name.
 4. Give the person the URL.
 
+app_list is what they already have — every app, its address and what is
+broken in it — and it draws itself where they can see it.
+
 Its data belongs in the app's own store, not localStorage — so it is the same
 on their phone and their laptop, and so you can read and repair it yourself.
 The page gets it in one line, from the app's own address:
@@ -81,9 +84,9 @@ and search are the same store from here, for seeding and fixing.
 Whatever breaks — a page's own error, a refused write, a request that failed
 — arrives at the end of a later reply, once. Fix what you see.`
 
-// The one resource this door offers: how an app is built here, and how its
-// pages save and list through the client the kernel serves them
-// (public/guide.md). Its URI is the address that actually serves it, so a
+// The resources this door offers. The guide is how an app is built here, and
+// how its pages save and list through the client the kernel serves them
+// (public/guide.md); its URI is the address that actually serves it, so a
 // client may read it through this door or simply follow the link.
 let GUIDE = {
   uri: 'https://yaks.app/guide.md',
@@ -93,7 +96,24 @@ let GUIDE = {
     'What an app is, how its pages read and write its store through ' +
     './api/client.js, and the components and filters they have.',
   mimeType: 'text/markdown',
+  page: 'https://yaks.app/guide.md',
 }
+
+// The other is an MCP App view (T-32492, spec 2026-01-26 §Resources): a
+// `ui://` page the host renders in a sandboxed iframe and hands the tool's
+// answer to over postMessage. app_list links to it by `_meta.ui.resourceUri`
+// below; its bytes are public/apps.html, served from the same assets. The
+// mimeType is the profile the spec requires, not plain text/html.
+let APPS = {
+  uri: APPS_VIEW,
+  name: 'apps',
+  title: 'Your apps',
+  description: 'Every app the person has here, as a page they can look at.',
+  mimeType: 'text/html;profile=mcp-app',
+  page: 'https://yaks.app/apps.html',
+}
+
+let RESOURCES = [GUIDE, APPS]
 
 type Rpc = {
   jsonrpc: '2.0'
@@ -139,7 +159,13 @@ let call = async (ctx: Ctx, params: Record<string, unknown>) => {
     }
     text += unseenBlock(await serve(ctx.env, out.space, who))
   }
-  return { content: [{ type: 'text', text }], ...(isError ? { isError } : {}) }
+  return {
+    content: [{ type: 'text', text }],
+    // What the tool's view draws, if it has one: the host hands this to the
+    // iframe as `ui/notifications/tool-result`.
+    ...(out?.data ? { structuredContent: out.data } : {}),
+    ...(isError ? { isError } : {}),
+  }
 }
 
 let handle = async (ctx: Ctx, rpc: Rpc) => {
@@ -159,22 +185,38 @@ let handle = async (ctx: Ctx, rpc: Rpc) => {
         name: t.name,
         description: t.description,
         inputSchema: t.input,
+        // A tool with a view names it; a host without MCP Apps ignores the
+        // field and reads the same answer as text.
+        ...(t.view
+          ? { _meta: { ui: { resourceUri: t.view, visibility: ['model'] } } }
+          : {}),
       })),
     })
   }
   if (rpc.method == 'tools/call') return result(rpc.id, await call(ctx, params))
   if (rpc.method == 'resources/list') {
-    return result(rpc.id, { resources: [GUIDE] })
+    return result(rpc.id, {
+      resources: RESOURCES.map((
+        { uri, name, title, description, mimeType },
+      ) => ({
+        uri,
+        name,
+        title,
+        description,
+        mimeType,
+      })),
+    })
   }
   if (rpc.method == 'resources/read') {
-    if (params.uri != GUIDE.uri) {
-      return rpcError(rpc.id, -32602, `no resource ${params.uri}`)
-    }
-    let page = await ctx.env.ASSETS.fetch(new Request(GUIDE.uri))
+    let want = RESOURCES.find((r) => r.uri == params.uri)
+    if (!want) return rpcError(rpc.id, -32602, `no resource ${params.uri}`)
+    let page = await ctx.env.ASSETS.fetch(
+      new Request(want.page),
+    )
     return result(rpc.id, {
       contents: [{
-        uri: GUIDE.uri,
-        mimeType: GUIDE.mimeType,
+        uri: want.uri,
+        mimeType: want.mimeType,
         text: await page.text(),
       }],
     })

@@ -15,6 +15,7 @@ import { slow } from '../../src/testing.ts'
 import { connector, kernel, signedIn } from './probe.ts'
 
 let GUIDE = 'https://yaks.app/guide.md'
+let APPS = 'ui://yaks/apps'
 
 slow(
   'the connector: tools, a space made, an app served, errors seen',
@@ -40,6 +41,7 @@ slow(
         'app_deploy',
         'app_set',
         'app_errors',
+        'app_list',
         'graph_apply',
         'graph_query',
         'search',
@@ -72,10 +74,25 @@ slow(
       let { resources } = await agent.call('resources/list')
       assertEquals(
         resources.map((r: { uri: string }) => r.uri),
-        [GUIDE],
+        [GUIDE, APPS],
       )
       let read = await agent.call('resources/read', { uri: GUIDE })
       assertMatch(read.contents[0].text, /api\/client\.js/)
+
+      // The first MCP App view: a ui:// resource the host renders, named by
+      // the tool whose answer it draws (T-32492).
+      assertEquals(
+        tools.find((t: { name: string }) => t.name == 'app_list')._meta.ui
+          .resourceUri,
+        APPS,
+      )
+      let view = resources.find((r: { uri: string }) => r.uri == APPS)
+      assertEquals(view.mimeType, 'text/html;profile=mcp-app')
+      let drawn = (await agent.call('resources/read', { uri: APPS }))
+        .contents[0]
+      assertEquals(drawn.mimeType, 'text/html;profile=mcp-app')
+      assertStringIncludes(drawn.text, 'ui/notifications/tool-result')
+      assertStringIncludes(drawn.text, 'ui/initialize')
       await assertRejects(
         () => agent.call('resources/read', { uri: 'https://yaks.app/nope' }),
         Error,
@@ -358,6 +375,35 @@ slow(
         () => agent.tool('app_set', moved),
         Error,
         'nothing to change',
+      )
+
+      // What the person has, in a sentence for the model and as data for the
+      // view beside it: every space, every app, its address, its version and
+      // what is still broken in it.
+      let listing = await agent.call('tools/call', {
+        name: 'app_list',
+        arguments: {},
+      })
+      assertStringIncludes(listing.content[0].text, 'jeff — https://jeff')
+      assertMatch(
+        listing.content[0].text,
+        /Recipes \(cookbook\) v\d+, 2 open: https:\/\/jeff\.yaks\.app\/cookbook\//,
+      )
+      let { spaces } = listing.structuredContent
+      assertEquals(spaces.map((s: { slug: string }) => s.slug), [
+        'jeff',
+        'jeff-work',
+      ])
+      assertEquals(spaces[0].apps.map((a: { slug: string }) => a.slug), [
+        'cookbook',
+        'garden',
+      ])
+      assertEquals(spaces[0].apps[0].errors, 2)
+      assertEquals(spaces[0].apps[0].url, 'https://jeff.yaks.app/cookbook/')
+      assertEquals(spaces[1].apps, [])
+      assertEquals(
+        (await agent.tool('app_list', { space: 'jeff-work' })).split('\n'),
+        ['jeff-work — https://jeff-work.yaks.app/', '- no apps yet'],
       )
 
       // A stranger belongs to no space of ours: every tool refuses him by

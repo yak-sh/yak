@@ -32,12 +32,18 @@ export let META = { space: 'yak', app: 'platform' }
 // the platform's own and never move, so the name is a constant.
 export let META_STORE = `${META.space}/${META.app}`
 
-export type Space = { eid: string; slug: string; home: string | null }
+export type Space = {
+  eid: string
+  slug: string
+  home: string | null
+  title: string
+}
 export type App = {
   eid: string
   slug: string
   space: string
   version: number | null
+  title: string
   // The name of the Durable Object holding this app's data, pinned when the
   // app was born (`store` below); null for an app born before it was pinned,
   // which is named by its address the way it always was.
@@ -52,6 +58,7 @@ type Row = {
   member?: { space: string; person: string; role: Role }
   email?: { address: string }
   alias?: { slug: string }
+  doc?: { title?: string }
 }
 
 // A person's address as a hostname label: the local part, lowercased, with
@@ -134,6 +141,7 @@ let spaceOf = (r: Row): Space => ({
   eid: r.entity.eid,
   slug: r.space!.slug,
   home: r.space!.home,
+  title: r.doc?.title || r.space!.slug,
 })
 
 export let appOf = (r: Row): App => ({
@@ -141,6 +149,7 @@ export let appOf = (r: Row): App => ({
   slug: r.app!.slug,
   space: r.app!.space,
   version: r.app!.version,
+  title: r.doc?.title || r.app!.slug,
   store: r.alias?.slug ?? null,
 })
 
@@ -193,6 +202,9 @@ export let directory = (via: Fetcher) => {
       let row = await one(`.app.space=${space.eid}&.app.slug=${slug}`)
       return row ? appOf(row) : null
     },
+    // Every app in a space, oldest first — the order they were made.
+    apps: async (space: Space): Promise<App[]> =>
+      (await query(`.app.space=${space.eid}`)).map(appOf),
     // The app that answers the space's bare hostname, if it has one.
     home: async (space: Space) => {
       let row = space.home ? await one(`id=${space.home}`) : undefined

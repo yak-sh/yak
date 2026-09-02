@@ -33,17 +33,21 @@ import type { Env } from './env.ts'
 import { SLUG } from './route.ts'
 import { mayWrite, vouched, type Who } from './session.ts'
 import { storeOf } from './store.ts'
-import { serve } from './unseen.ts'
+import { openIn, serve } from './unseen.ts'
 
 export type Ctx = { env: Env; dir: Directory; person: string }
 type Args = Record<string, unknown>
-// What a tool answers: the text, and the space it worked in, so the door can
-// append what is unseen there.
-export type Out = { text: string; space?: Space }
+// What a tool answers: the text, the space it worked in (so the door can
+// append what is unseen there), and, for a tool with a view, the same answer
+// as data — the host hands it to the iframe as the result's
+// structuredContent (mcp.ts, MCP Apps spec §Notifications).
+export type Out = { text: string; space?: Space; data?: unknown }
 
 export type Tool = {
   name: string
   description: string
+  // The `ui://` resource that draws this tool's answer, if it has one.
+  view?: string
   input: {
     type: 'object'
     properties: Record<string, unknown>
@@ -202,6 +206,10 @@ let fileKey = (space: Space, app: App, path: string) =>
 
 let url = (space: Space, app: App) =>
   `https://${space.slug}.yaks.app/${app.slug}/`
+
+// The view app_list draws its answer in — a `ui://` resource the door serves
+// from public/apps.html (mcp.ts) and the host renders in an iframe.
+export let APPS_VIEW = 'ui://yaks/apps'
 
 export let TOOLS: Tool[] = [
   {
@@ -466,6 +474,68 @@ export let TOOLS: Tool[] = [
       let { space, app, who } = await inApp(ctx, args)
       let lines = await serve(ctx.env, space, who, app, true)
       return { text: lines.join('\n') || 'no open errors', space }
+    },
+  },
+  {
+    name: 'app_list',
+    description:
+      'What the person already has here: every app in every space of theirs, ' +
+      'with its address, the version it is at, and how many breaks are still ' +
+      'open in it. Read it before making a second app, and when they ask ' +
+      'what they have or where something lives.',
+    view: APPS_VIEW,
+    input: {
+      type: 'object',
+      properties: {
+        space: str('one space to list; leave it out for all of theirs'),
+      },
+    },
+    run: async (ctx, args) => {
+      let spaces = args.space == null
+        ? await ctx.dir.spaces(ctx.person)
+        : [await ctx.dir.space(text(args.space, 'space'))]
+      if (!spaces.length) spaces = [await ctx.dir.own(ctx.person)]
+      let lines: string[] = []
+      let out = []
+      for (let space of spaces) {
+        if (!space) throw new Error(`no space ${args.space}`)
+        let who: Who = {
+          person: ctx.person,
+          role: await ctx.dir.role(space, ctx.person),
+        }
+        if (!who.role) throw new Error(`not a member of ${space.slug}`)
+        let apps = await ctx.dir.apps(space)
+        lines.push(`${space.slug} — https://${space.slug}.yaks.app/`)
+        let listed = []
+        for (let app of apps) {
+          let errors = (await openIn(ctx.env, space, app, who, true)).length
+          listed.push({
+            slug: app.slug,
+            title: app.title,
+            url: url(space, app),
+            version: app.version ?? 0,
+            errors,
+          })
+          lines.push(
+            `- ${app.title} (${app.slug}) v${app.version ?? 0}${
+              errors ? `, ${errors} open` : ''
+            }: ${url(space, app)}`,
+          )
+        }
+        if (!apps.length) lines.push('- no apps yet')
+        out.push({
+          slug: space.slug,
+          title: space.title,
+          url: `https://${space.slug}.yaks.app/`,
+          apps: listed,
+        })
+      }
+      return {
+        text: lines.join('\n'),
+        data: { spaces: out },
+        // Only one space in hand has an unseen channel to append to.
+        space: spaces.length == 1 ? spaces[0]! : undefined,
+      }
     },
   },
   {
