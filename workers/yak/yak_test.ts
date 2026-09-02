@@ -181,6 +181,17 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     assertMatch(ex.message, /URI/)
     assertMatch(ex.stack, /URIError|decodeURIComponent/)
     assertEquals(await owner.get('.error!'), [])
+    // A signed-in page's write says who saved it: the kernel vouches for the
+    // person, the store learns them as a row of its own, and `created.by` is
+    // theirs (T-32534). A break the kernel reported names nobody.
+    let [mine] = await owner.get('.doc!')
+    assertEquals((mine.created as { by: string }).by, jeff)
+    assertEquals(
+      ((await owner.get('.person!'))[0].entity as { eid: string }).eid,
+      jeff,
+    )
+    assertEquals((broken.created as { by: string | null }).by, null)
+
     // The kernel flag is the kernel's: a client sending it is still a client,
     // and its server-owned change is dropped, not written.
     let forgedFlag = await k.at('jeff.yaks.app', '/recipes/api/apply', {

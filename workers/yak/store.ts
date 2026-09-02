@@ -31,6 +31,7 @@ import {
   cursorOf,
   epochOf,
   graft,
+  locate,
   mutate,
   plant,
   plantVocab,
@@ -81,6 +82,13 @@ type Held = {
 let HELD = 2048
 
 let why = (e: unknown) => e instanceof Error ? e.message : String(e)
+
+// Who the kernel says is writing. Attribution is an honesty header, not auth:
+// `x-via` names an instrument that named itself, while `x-yak-person` is the
+// kernel's own word about the session it verified — and neither reaches this
+// object except from the kernel, which builds its requests from scratch.
+let writerOf = (req: Request) =>
+  req.headers.get('x-via') ?? req.headers.get('x-yak-person')
 
 let methodNotAllowed = (allow: string) =>
   Response.json({ error: { code: 'method_not_allowed' } }, {
@@ -196,9 +204,25 @@ export class Store {
     }
   }
 
+  // Who a write acts as, known to THIS store. `created.by` resolves the
+  // writer against the store's own rows (db.ts actorFor), and an app's store
+  // has never heard of anyone: the directory keeps the person rows, one graph
+  // over. So the person the kernel vouched for is minted here the first time
+  // they write, and every row they save after that says who saved it
+  // (T-32534). Its own write is not cast: a person is not app data, and no
+  // page subscribes to one.
+  knows(who: string | null) {
+    if (who && !locate(this.db, who)) {
+      mutate(this.db, [{ eid: who, name: 'person', comp: {} }], fed(), who)
+    }
+    return who
+  }
+
   // One write: applied, then broadcast. The doors differ, the commit does not.
   commit(mutation: Mutation, via: string | null, kernel: boolean) {
-    let out = mutationResult(mutate(this.db, mutation, fed(), via, kernel))
+    let out = mutationResult(
+      mutate(this.db, mutation, fed(), this.knows(via), kernel),
+    )
     this.cast(out.changes)
     return out
   }
@@ -301,7 +325,7 @@ export class Store {
       pair[1].serializeAttachment(
         {
           write: req.headers.get('x-yak-write') == '1',
-          via: req.headers.get('x-via'),
+          via: writerOf(req),
           subs: {},
         } satisfies Held,
       )
@@ -332,7 +356,7 @@ export class Store {
         // one on every device watching.
         let out = this.commit(
           mutation,
-          req.headers.get('x-via'),
+          writerOf(req),
           req.headers.get('x-yak-kernel') == '1',
         )
         return Response.json(
