@@ -7,9 +7,13 @@
 //
 // Eligibility is the caller's own naming, decided by armPath(): an explicit
 // DB_PATH names a graph FILE (probe discipline pairs it with a probe server),
-// so local reads are exactly right; an explicit TASKS_HOST with no DB_PATH
-// names a SERVER whose file this process cannot know, so every read stays on
-// the wire; neither set names the live pairing (liveDb ↔ the default host).
+// so local reads are exactly right; a TASKS_HOST naming some OTHER server
+// with no DB_PATH names a graph whose file this process cannot know, so every
+// read stays on the wire; neither set — or TASKS_HOST naming the default
+// host — is the live pairing (liveDb ↔ DEFAULT_HOST). The default host is not
+// a remote: every spawned agent used to carry TASKS_HOST=127.0.0.1:5173 from
+// the launcher and so never armed, paying the server a burst of /query
+// requests per boot digest.
 // ':memory:' never arms — a private empty db is not the server's memory graph
 // — and TASKS_LOCAL=0 turns the arm off outright.
 //
@@ -25,6 +29,7 @@ import { depsOf, eager, journalBy, journalOf, scanAnomalies } from './db.ts'
 import { localQuery } from './graph_query.ts'
 import {
   arm,
+  DEFAULT_HOST,
   type DepsFn,
   httpDeps,
   httpHistory,
@@ -43,18 +48,17 @@ import { workCandidates, type WorkLane } from './work.ts'
 // envPath is the one reader of the process's own naming.
 export let armPath = (env: {
   dbPath?: string
-  hostSet?: boolean
+  host?: string
   disabled?: boolean
   live: string
 }): string | undefined =>
-  env.disabled || env.dbPath == ':memory:'
-    ? undefined
-    : env.dbPath ?? (env.hostSet ? undefined : env.live)
+  env.disabled || env.dbPath == ':memory:' ? undefined : env.dbPath ??
+    (env.host && env.host != DEFAULT_HOST ? undefined : env.live)
 
 let envPath = () =>
   armPath({
     dbPath: Deno.env.get('DB_PATH'),
-    hostSet: !!Deno.env.get('TASKS_HOST'),
+    host: Deno.env.get('TASKS_HOST'),
     disabled: Deno.env.get('TASKS_LOCAL') == '0',
     live: liveDb(),
   })

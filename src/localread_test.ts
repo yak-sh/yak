@@ -6,20 +6,26 @@
 // tier below, beside the proof that the armed CLI needs no listener at all.
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { armLocal, armPath, disarm, guarded } from './localread.ts'
+import { DEFAULT_HOST } from './client.ts'
 import { arm, type WorkProjection } from './client.ts'
 import { slow } from './testing.ts'
 
 Deno.test('armPath: explicit DB_PATH names the file — local, host or not', () => {
   let live = '/live'
   assertEquals(
-    armPath({ dbPath: '/tmp/x.db', hostSet: true, live }),
+    armPath({ dbPath: '/tmp/x.db', host: 'probe:5199', live }),
     '/tmp/x.db',
   )
   assertEquals(armPath({ dbPath: '/tmp/x.db', live }), '/tmp/x.db')
 })
 
-Deno.test('armPath: a host with no file stays on the wire', () => {
-  assertEquals(armPath({ hostSet: true, live: '/live' }), undefined)
+Deno.test('armPath: a foreign host with no file stays on the wire', () => {
+  assertEquals(armPath({ host: 'elsewhere:5173', live: '/live' }), undefined)
+  assertEquals(armPath({ host: '127.0.0.1:5199', live: '/live' }), undefined)
+})
+
+Deno.test('armPath: the default host IS the live pairing, so it arms', () => {
+  assertEquals(armPath({ host: DEFAULT_HOST, live: '/live' }), '/live')
 })
 
 Deno.test('armPath: neither set is the live pairing', () => {
@@ -29,7 +35,7 @@ Deno.test('armPath: neither set is the live pairing', () => {
 Deno.test('armPath: :memory: never arms — a private db is not the server graph', () => {
   assertEquals(armPath({ dbPath: ':memory:', live: '/live' }), undefined)
   assertEquals(
-    armPath({ dbPath: ':memory:', hostSet: true, live: '/live' }),
+    armPath({ dbPath: ':memory:', host: 'elsewhere:5173', live: '/live' }),
     undefined,
   )
 })

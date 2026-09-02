@@ -25,6 +25,7 @@ import {
   contextDigest,
   contextSnapshot,
   decidedAt,
+  DEFAULT_HOST,
   dependents,
   derefedChanges,
   derefedParams,
@@ -3282,9 +3283,12 @@ let terminal = async (
   args: string[],
   env: Record<string, string> = {},
 ) => {
+  // A child inherits locality: only a NON-default host is worth naming. Naming
+  // the default disarmed every spawned agent's local read arm (localread.ts)
+  // and sent each boot digest to the server over the wire.
   let { code } = await new Deno.Command(command, {
     args,
-    env: { TASKS_HOST: host(), ...env },
+    env: { ...(host() != DEFAULT_HOST ? { TASKS_HOST: host() } : {}), ...env },
     stdin: 'inherit',
     stdout: 'inherit',
     stderr: 'inherit',

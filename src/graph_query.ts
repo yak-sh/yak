@@ -45,6 +45,7 @@ import {
   matching,
   reaching,
   referrersOf,
+  rowsOf,
   search,
   textMatches,
   vocabHash,
@@ -1283,11 +1284,11 @@ async (filters, opts) => {
     referrersOf(db, [eid], { comp, prop }).map(read)
   let walk = walker(db)
   let fts = (eid: string, p: Pred) => textMatches(db, eid, p)
-  return withResults(
-    db,
-    preds,
-    only.map((eid) => rowed({ eid, comps: eager(db, eid) })),
-  )
+  // Hydrate the named set with one statement per component table (rowsOf),
+  // as the /query route does — an eager() per id is a statement per component
+  // PER ENTITY, which made the local arm's boot digest cost 10 s of CPU where
+  // the wire answered in under 2.
+  return withResults(db, preds, rowsOf(db, only).map(rowed))
     .filter((r) =>
       listed(r.comps, preds) &&
       matchQuery(r.comps, preds, read, undefined, kids, walk, fts)

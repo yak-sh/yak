@@ -73,7 +73,12 @@ export let proc = {
   tree: (): string | undefined => undefined,
 }
 
-export let host = () => proc.env('TASKS_HOST') ?? '127.0.0.1:5173'
+// The live pairing's host: what the default server binds and what the live
+// db file answers to. A TASKS_HOST naming it is not a "remote" — the local
+// read arm (localread.ts) still arms — and the launcher never exports it to a
+// child, so children inherit locality rather than a wire address.
+export let DEFAULT_HOST = '127.0.0.1:5173'
+export let host = () => proc.env('TASKS_HOST') ?? DEFAULT_HOST
 
 export type Row = {
   eid: string
