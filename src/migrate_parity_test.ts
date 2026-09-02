@@ -25,6 +25,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, snapshot, human } = await import('./db.ts')
 let { open } = await import('./store/sqlite.ts')
+import { statusOf } from './types.ts'
 import type { Change, Snapshot } from './types.ts'
 // DatabaseSync as a VALUE — test #4 below writes a raw eid-keyed legacy fixture
 // through a plain connection (never open(), the code under test) and needs the
@@ -311,7 +312,7 @@ let legacyGraph = (path: string) => {
       `('${task}', 'legacy task', 'body one'), ('${note}', '', 'a comment'), ` +
       `('${orphan}', 'orphan doc', 'no spine');` +
       `insert into task (eid, status, priority) values ` +
-      `('${task}', 'wip', 2), ('${orphan}', 'open', 0);` +
+      `('${task}', 'done', 2), ('${orphan}', 'open', 0);` +
       `insert into comment (eid, target) values ('${note}', '${task}');` +
       `insert into card (eid, target, view) values ('${card}', '${task}', 'Show');` +
       `insert into conflict (eid, target, loser, holder, at) values ` +
@@ -418,11 +419,12 @@ slow(
         'legacy task',
         'task doc did not survive',
       )
-      assertEquals(
-        comp(task, 'task')?.status,
-        'wip',
-        'task status did not survive',
+      // A stored status is retired into marks (retireTaskStatus, 536be3aa):
+      // 'done' mints `completed`, and the wire derives `done` from that bag.
+      let bag = Object.fromEntries(
+        snap.changes.filter((c) => c.eid == task).map((c) => [c.name, c.comp]),
       )
+      assertEquals(statusOf(bag), 'done', 'task status did not survive')
       assertEquals(
         comp(note, 'comment')?.target,
         task,
@@ -542,15 +544,17 @@ slow(
         1,
         'a pre-existing tombstone was not carried into the spine with its num',
       )
-      //     - its id is STRICTLY ABOVE the max seeded from the old entity table
-      //       — a carried grave never collides with a live id. (Excludes the
-      //       post-migration `fresh` mint, whose id is higher still.)
+      //     - its id is STRICTLY ABOVE every id seeded from the old entity
+      //       table — a carried grave never collides with a live id. Later
+      //       mints sit higher still: the blob entities migrateDocBodies
+      //       moves the doc bodies into (b0917781), and `fresh`.
       assertEquals(
         (db.prepare(
           `select case when (select id from entity where eid = ?)
-                          > (select max(id) from entity where eid not in (?, ?))
+                          > (select max(id) from entity
+                              where eid in (?, ?, ?, ?, ?))
                        then 1 else 0 end as n`,
-        ).get(dead, dead, fresh) as { n: number }).n,
+        ).get(dead, task, note, card, conf, res) as { n: number }).n,
         1,
         'a carried tombstone id did not exceed the live spine max',
       )

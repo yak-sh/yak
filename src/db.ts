@@ -2849,6 +2849,10 @@ let resolves = (col: string) =>
 // resolving every eid to its int id: the owner `eid`→`entity`, each `{eid}`
 // reference (and dependency's parent/child) to the referent's id, plain scalars
 // straight across. A fresh column the legacy table predates takes its default.
+// The reverse — a legacy column the fresh DDL no longer spells (task.status,
+// project.retired_at) — rides across under its legacy type: the reshape keys
+// the graph, it never retires, and the retirement that owns the column runs
+// later in migrate(), guarded by the column's presence, and drops it when done.
 // Real-data anomalies are cleaned per the policy above and returned as counts;
 // the INSERT only carries rows whose owner and every NOT NULL reference resolve.
 let copyLegacyTable = (
@@ -2856,7 +2860,10 @@ let copyLegacyTable = (
   t: string,
   old: string,
 ): CopyReport => {
-  let oldCols = new Set(colNames(db, old))
+  let legacy = prep(db, 'select name, type from pragma_table_info(?)')
+    .all(old) as { name: string; type: string }[]
+  let oldCols = new Set(legacy.map((c) => c.name))
+  let fresh = new Set(colNames(db, t))
   let notnull = new Map(
     (prep(db, 'select name, "notnull" as nn from pragma_table_info(?)')
       .all(t) as { name: string; nn: number }[]).map((r) => [r.name, !!r.nn]),
@@ -2882,6 +2889,12 @@ let copyLegacyTable = (
       dst.push(sqlName(c))
       src.push(`o.${sqlName(c)}`)
     }
+  }
+  for (let { name, type } of legacy) {
+    if (name == 'eid' || fresh.has(name)) continue
+    db.exec(`alter table ${sqlName(t)} add column ${sqlName(name)} ${type}`)
+    dst.push(sqlName(name))
+    src.push(`o.${sqlName(name)}`)
   }
   let count = (where: string) =>
     (prep(db, `select count(*) as n from ${sqlName(old)} o where ${where}`)
@@ -2953,6 +2966,17 @@ let reportMigration = (reports: CopyReport[]) => {
   }
 }
 
+// Every eid-keyed graph predates content-addressed bodies (T-18875): its doc
+// body is inline text, which the current `body integer references blob(entity)`
+// cannot hold — copied across, the text dangles against blob and the reshape's
+// foreign_key_check refuses the whole migration. So the reshape keys doc by id
+// and leaves the body text; migrateDocBodies, next in migrate(), moves the text
+// into blobs by the same guard it applies to any pre-blob doc table.
+let legacyDocDdl = `create table doc (
+  entity integer primary key references entity(id),
+  title text not null,
+  body text not null default '')`
+
 // The legacy eid→id migration (D-18866; the boot step the T-18883 cutover
 // rehearses). A db is legacy when its spine is still keyed by eid — no `id`
 // column. Reshape every graph table to the CANONICAL id-keyed shape (owner
@@ -3010,7 +3034,7 @@ let migrateToIdKeys = (db: Sql, fresh?: () => Sql) => {
       for (let t of graphTables()) {
         if (t == 'entity' || !tableExists(db, t)) continue
         db.exec(`alter table ${sqlName(t)} rename to __mig_${t}`)
-        db.exec(ddlOf(t))
+        db.exec(t == 'doc' ? legacyDocDdl : ddlOf(t))
         reports.push(copyLegacyTable(db, t, `__mig_${t}`))
         db.exec(`drop table __mig_${t}`)
       }
