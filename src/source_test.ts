@@ -167,17 +167,21 @@ let has = (
 // so it can actually be WRITTEN, which the loose read-test `source` above (it
 // forges an `actor` reference) cannot. Graduation goes through the real write
 // loop, so it exercises the real column set.
+// The handle is a uuid, like every provider session id — which is what lets a
+// reference VALUE be mistaken for an eid (T-32507), so the seam gets the real
+// shape rather than a token no column could ever hold.
 let gid = '00000000-0000-4000-8000-0000000ccccc'
+let gsid = '00000000-0000-4000-8000-0000000ddddd'
 let gradSource = {
   resolve: (id: string) =>
-    id == gid || id == 'grad-sid'
+    id == gid || id == gsid
       ? [
         {
           eid: gid,
           name: 'session',
-          comp: { id: 'grad-sid', provider: 'claude' },
+          comp: { id: gsid, provider: 'claude' },
         },
-        { eid: gid, name: 'doc', comp: { title: 'Session grad-sid' } },
+        { eid: gid, name: 'doc', comp: { title: 'Session grad' } },
       ]
       : undefined,
 }
@@ -203,13 +207,13 @@ Deno.test('graduation: a write to an ephemeral entity persists it, eid stable', 
       (db.prepare(`select id, provider from session where ${OWNED}`).get(
         gid,
       ) as { id: string; provider: string }).id,
-      'grad-sid',
+      gsid,
     )
     assertEquals(
       (db.prepare(`select title from doc_value where ${OWNED}`).get(gid) as {
         title: string
       }).title,
-      'Session grad-sid',
+      'Session grad',
     )
     // The comment persisted too, still aimed at the same eid.
     assertEquals(
@@ -252,6 +256,60 @@ Deno.test('graduation: a second write does not re-hydrate a persisted entity', (
       ) as { n: number }).n,
       1,
     )
+  } finally {
+    off()
+    clearSources()
+  }
+})
+
+// T-32507: `task set T-1 .decided.by=<session uuid>` answered
+// `UNIQUE constraint failed: session.id`. A source answers a HANDLE as well as
+// an eid, so a reference value that is some entity's handle hydrated a batch
+// for a DIFFERENT eid — a second, ephemeral twin of a session already on file.
+Deno.test('graduation: a source handle in a reference is not that entity graduating', () => {
+  let db = freshDb()
+  let off = addSource(gradSource)
+  try {
+    // A spawn request names the session's HANDLE where an eid belongs.
+    // requested_task is the one reference allowed to dangle (trustedRefs), so
+    // the batch lands — and must land WITHOUT dragging a whole past session
+    // into the graph behind it.
+    apply(db, [{
+      eid: crypto.randomUUID(),
+      name: 'session',
+      comp: { id: 'asker', requested_task: gsid },
+    }])
+    assertEquals(has(db, 'entity', gid), false)
+  } finally {
+    off()
+    clearSources()
+  }
+})
+
+Deno.test('graduation: a session already on file never graduates a source twin', () => {
+  let db = freshDb()
+  let off = addSource(gradSource)
+  try {
+    // The same session, persisted at the eid the graph minted for it — the
+    // stable `session.id` is its identity, not the eid a file store derives.
+    let mine = crypto.randomUUID()
+    apply(db, [{ eid: mine, name: 'session', comp: { id: gsid } }])
+    let n = count(db)
+    // Naming the store's eid for that same session is naming nobody: it is
+    // refused, where it used to land as a second row wearing the same id.
+    let refused = ''
+    try {
+      apply(db, [{
+        eid: crypto.randomUUID(),
+        name: 'comment',
+        comp: { target: gid },
+      }])
+    } catch (e) {
+      refused = (e as Error).message
+    }
+    assertEquals(refused.includes('no such entity'), true)
+    assertEquals(count(db), n)
+    assertEquals(has(db, 'session', gid), false)
   } finally {
     off()
     clearSources()

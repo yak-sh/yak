@@ -4982,6 +4982,16 @@ let eidCols: [string, string][] = Object.entries(comps).flatMap(
 // refToId refuses a name that resolves to nothing.
 let trustedRefs: [string, string][] = [['session', 'requested_task']]
 
+// Whether a source batch describes a session the graph already holds under a
+// different eid — asked of the one identity a file-backed session shares with
+// its persisted self, the stable `session.id`. The eid a file store derives
+// from that id is its own, so an `entity` lookup can never see this.
+let onFile = (db: Sql, batch: Change[]) =>
+  batch.some((change) =>
+    change.name == 'session' && change.comp?.id != null &&
+    prep(db, 'select 1 from session where id = ?').get(String(change.comp.id))
+  )
+
 // Graduation on interaction (D-17790): a write that attaches to a source-
 // materialized (ephemeral) entity hydrates that entity's source components into
 // THIS batch, so it persists and mints its num alongside the write. The engaged
@@ -5019,7 +5029,16 @@ let graduate = (
   for (let eid of engaged) {
     if (resolvedEids.has(eid) || live.get(eid) || dead.get(eid)) continue
     let batch = sourceResolve(eid)
-    if (batch) hydration.push(...batch)
+    // Two answers that are not this entity graduating (T-32507). A source
+    // answers a HANDLE as readily as an eid, so a reference value that is some
+    // session's stable id answers with a batch for a DIFFERENT eid — and a
+    // value naming no entity would drag a whole past session in behind it.
+    // And a session already persisted answers with an ephemeral twin of
+    // itself, which `live` cannot see (onFile) and which lands as a second row
+    // wearing the same unique id. Graduate only the entity the batch is FOR,
+    // and only one the graph does not already hold.
+    if (!batch?.length || batch[0].eid != eid || onFile(db, batch)) continue
+    hydration.push(...batch)
   }
   return hydration.length ? [...hydration, ...changes] : changes
 }
