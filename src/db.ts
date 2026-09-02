@@ -26,6 +26,7 @@ import {
   idOf,
   kindOrder,
   lazy,
+  learnKinds,
   propRenames,
   type PropType,
   sessionActive,
@@ -4123,15 +4124,18 @@ export let vocabOf = (db: Sql): Vocab => ownVocab.get(db) ?? {}
 export let ownsVocab = (db: Sql): boolean => ownVocab.has(db)
 
 // Plant an app's manifest: the tables and columns it names, additively, then
-// the word itself — into this handle, and into the filter grammar so
-// `.recipe.serves=4` parses (query.ts learn()). A store with a vocabulary door
-// also teaches that grammar's refusals in its own terms: a hosted app hears
-// about vocab.json, never about the fleet CLI or another graph's ids.
+// the word itself — into this handle, into the filter grammar so
+// `.recipe.serves=4` parses (query.ts learn()), and into the kinds so a row
+// wearing the word says the word (types.ts learnKinds). A store with a
+// vocabulary door also teaches that grammar's refusals in its own terms: a
+// hosted app hears about vocab.json, never about the fleet CLI or another
+// graph's ids.
 export let plantVocab = (db: Sql, vocab: Vocab): void => {
   let ops = vocabOps(vocab)
   if (ops.length) graft(db, ops)
   ownVocab.set(db, vocab)
   learn(vocab)
+  learnKinds(Object.keys(vocab))
   teaches(FILTERS)
 }
 

@@ -109,10 +109,40 @@ Deno.test('a store speaks its own word: write it, filter it, lose it', async () 
   assertEquals(eager(db, eid).recipe, { eid, title: 'Pancakes', serves: 4 })
   let rows = await query(db, '?.recipe.serves=4') as {
     entity: { eid: string }
+    kind: string
   }[]
   assertEquals(rows.map((r) => r.entity.eid), [eid])
   assertEquals((await query(db, '?.recipe.serves=9') as unknown[]).length, 0)
+  // A row wearing the store's own word says that word: `recipe` is the most
+  // specific thing about it, where `doc` is the title it also carries.
+  assertEquals(rows[0].kind, 'recipe')
   // And the row dies with its entity, like every other component's.
   mutate(db, [{ eid, name: 'entity', comp: null }])
   assertEquals(eager(db, eid).recipe, undefined)
+})
+
+// Every listing is creation-ordered, whichever lane answers it: a filter on an
+// app's own component declines to the JS matcher (sql.ts `known` reads the
+// platform vocabulary), and that lane used to hand back the candidate scan's
+// order — no order at all — where `.doc!` came off the spine (C-32574 item 3).
+Deno.test('a store lists its own word in creation order', async () => {
+  let db = bareDb()
+  plantVocab(db, parseVocab(recipes))
+  let titles = ['Pancakes', 'Waffles', 'Crepes', 'Grits']
+  for (let title of titles) {
+    mutate(db, {
+      entities: [{
+        entity: { eid: crypto.randomUUID() },
+        doc: { title },
+        recipe: { title, serves: 2 },
+      }],
+    })
+  }
+  let listed = async (q: string) =>
+    ((await query(db, q)) as { doc: { title: string } }[])
+      .map((r) => r.doc.title)
+  assertEquals(await listed('?.recipe!'), titles)
+  assertEquals(await listed('?.doc!'), titles)
+  // A window is the NEWEST page of that same order.
+  assertEquals(await listed('?.recipe!&limit=2'), titles.slice(-2))
 })

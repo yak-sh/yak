@@ -1161,15 +1161,25 @@ export let evalGraph = (
     })
     return { preds: asked, hits }
   }
+  // Creation order — the num the store minted, ascending — is what an eager
+  // listing answers in, whichever lane answered it. The ORDER lives here
+  // rather than in either lane because the lanes disagree otherwise: the
+  // index lane's rows come off the spine, while the JS-matcher lane's come in
+  // whatever order the candidate scan produced, which is no order at all. A
+  // filter naming an app's own component (store/vocab.ts) always declines to
+  // the matcher, so `.book!` listed 3,4,2 where `.doc!` listed 2,3,4 — two
+  // orders for one grammar (C-32574 item 3).
+  //
   // An EXPLICIT limit bounds an eager answer too — the newest `limit` by num,
   // returned in num order, and `after` continues that window below a num.
   // Entry pages keep their own seq paging; a caller that named no window keeps
   // the whole eager answer, as before.
   let cut = (hits: Row[]) => {
-    let rows = win.after != null ? hits.filter((r) => r.num < win.after!) : hits
-    return win.limit != null && rows.length > win.limit
-      ? rows.sort((a, b) => b.num - a.num).slice(0, win.limit)
+    let rows =
+      (win.after != null ? hits.filter((r) => r.num < win.after!) : hits)
         .sort((a, b) => a.num - b.num)
+    return win.limit != null && rows.length > win.limit
+      ? rows.slice(-win.limit)
       : rows
   }
   let fast = evalFast(db, q, false, win)
@@ -1178,7 +1188,7 @@ export let evalGraph = (
       preds: fast.preds,
       hits: fast.entries
         ? orderedEntries(fast.hits, after, limit)
-        : cut(fast.hits.sort((a, b) => a.num - b.num)),
+        : cut(fast.hits),
     }
   }
   let { preds, ent, hits } = evalQuery(db, q, after, limit)
