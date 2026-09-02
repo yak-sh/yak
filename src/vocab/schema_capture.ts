@@ -17,9 +17,12 @@ if (!out) throw new Error('schema_capture: needs an output path argument')
 
 let ops = schemaDdl(new DatabaseSync(':memory:'))
 
+// SQLite's own tables (sqlite_stat1, written by open()'s ANALYZE) are planner
+// state, not schema we emit, so they sit outside the comparison.
 let dump = (db: DatabaseSync) =>
   (db.prepare(
-    'select type, name, sql from sqlite_master where sql is not null order by type, name',
+    `select type, name, sql from sqlite_master where sql is not null
+     and name not like 'sqlite_%' order by type, name`,
   ).all() as { type: string; name: string; sql: string }[])
     .map((r) => `--[${r.type} ${r.name}]--\n${r.sql}`).join('\n')
 

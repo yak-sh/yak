@@ -278,6 +278,8 @@ slow(
       let raw = new DatabaseSync(path)
       // Bypass only doc_fts's update trigger: the content table stays sound, but
       // its derived token index no longer describes that content.
+      // the deep check runs daily; a day has passed
+      raw.exec(`delete from server_meta where k = 'fts_check'`)
       raw.exec('drop trigger doc_fts_au')
       raw.prepare(
         'update doc set title = title || ? where rowid = (select min(rowid) from doc_value)',
@@ -313,6 +315,7 @@ slow(
   () =>
     withFtsCopy((path) => {
       let raw = new DatabaseSync(path)
+      raw.exec(`delete from server_meta where k = 'fts_check'`)
       raw.exec('drop table doc_gram_data')
       let error = assertThrows(() => migrate(raw)) as AggregateError
       assertEquals(error instanceof AggregateError, true)

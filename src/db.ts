@@ -3470,11 +3470,23 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       }
       let diagnosis = (error: unknown) =>
         error instanceof Error ? error.message : String(error)
+      // The integrity-check reads both shadow tables whole — 2.3s of boot on
+      // the live graph — for damage none of our writers can cause, so it runs
+      // once a day (marked in server_meta); the count-check, which catches
+      // every drift a missed trigger leaves, stays on every boot.
+      let checked = prep(db, `select v from server_meta where k = 'fts_check'`)
+        .get() as { v: string } | undefined
+      let deep = !checked ||
+        !(Date.now() - Date.parse(checked.v) < 24 * 3_600_000)
       let fault = (t: string): FtsFault | undefined => {
-        try {
-          db.exec(`insert into ${t} (${t}, rank) values ('integrity-check', 1)`)
-        } catch (error) {
-          return { operation: 'integrity-check', error }
+        if (deep) {
+          try {
+            db.exec(
+              `insert into ${t} (${t}, rank) values ('integrity-check', 1)`,
+            )
+          } catch (error) {
+            return { operation: 'integrity-check', error }
+          }
         }
         try {
           let indexed = count(t), docs = count('doc')
@@ -3529,6 +3541,12 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
           )
         }
       }
+      if (deep) {
+        prep(
+          db,
+          `insert or replace into server_meta (k, v) values ('fts_check', ?)`,
+        ).run(new Date().toISOString())
+      }
       let { n } = prep(db, 'select count(*) as n from task').get() as {
         n: number
       }
@@ -3575,7 +3593,18 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       retireProposal(db)
       retireProjectRetiredAt(db)
       retireTaskStatus(db)
-      healStored(db)
+      // healStored re-parses every stored cell of every component table (6.6s
+      // of a 15s boot on the live graph) for what an older vocabulary let in.
+      // The vocabulary decides validity, so one pass per vocabulary is the
+      // whole job: marked in server_meta under the vocabulary's hash, and a
+      // boot that finds its own hash skips the pass. apply() validates every
+      // write in between.
+      let vocab = `heal:${sha(JSON.stringify([comps, stamped]))}`
+      if (!prep(db, `select 1 from server_meta where k = ?`).get(vocab)) {
+        healStored(db)
+        prep(db, `insert or ignore into server_meta (k, v) values (?, '1')`)
+          .run(vocab)
+      }
       // Indexes LAST — over EVERY component, not just `derived` (T-17678). SQLite
       // auto-indexes no foreign key, and the hand-written `schema` tables (comment,
       // cancel, card, stop_request, review, camera, fold, mail, …) carry {eid} ref
@@ -3626,6 +3655,48 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
     // state it inherited instead of enabling caching in its outer migration.
     caching = wasCaching
   }
+}
+
+// The planner's statistics, kept within 2x of the truth. ANALYZE had run once,
+// at 58k entities; at 294k the stale row had the planner scanning the spine
+// for a `.kind=` filter (1.2s where fresh stats answer in 0.4ms). `pragma
+// optimize` re-analyzes only past 25x, so the staleness test is our own —
+// entity's count against its stat row — and the cure a full ANALYZE (~0.5s
+// on the live graph). store/sqlite.ts open() runs it after migrate(), outside
+// the transaction schemaDdl() records.
+export let freshStats = (db: Sql) => {
+  let stat = tableExists(db, 'sqlite_stat1')
+    ? prep(
+      db,
+      `select stat from sqlite_stat1
+       where tbl = 'entity' and idx = 'sqlite_autoindex_entity_1'`,
+    ).get() as { stat: string } | undefined
+    : undefined
+  let have = Number(stat?.stat.split(' ')[0] ?? 0)
+  let n =
+    (prep(db, 'select count(*) as n from entity').get() as { n: number }).n
+  // A small graph (every test's, a fresh install's) plans well on defaults,
+  // and statistics over a handful of rows only teach the planner to prefer
+  // scanning tables that are tiny today — estimates a connection keeps until
+  // it reparses the schema. Statistics start mattering when a scan costs.
+  if (n < 1000) return false
+  let analyzed = !(have && n < have * 2 && have < n * 2)
+  if (analyzed) prep(db, 'analyze').run()
+  // ANALYZE writes no row for an EMPTY table, and a table without one is
+  // sized like any unknown table — so `.goal!` over an empty goal table
+  // scanned the spine (100ms) rather than the table. A synthetic one-row
+  // stat says "tiny"; `analyze sqlite_schema` loads it into the planner.
+  let known = prep(db, `select 1 from sqlite_stat1 where tbl = ?`)
+  let tiny = prep(
+    db,
+    `insert into sqlite_stat1 (tbl, idx, stat) values (?, null, '1')`,
+  )
+  let added = 0
+  for (let t of new Set([...Object.keys(comps), ...Object.keys(stamped)])) {
+    if (tableExists(db, t) && !known.get(t)) added += tiny.run(t).changes
+  }
+  if (analyzed || added) prep(db, 'analyze sqlite_schema').run()
+  return analyzed
 }
 
 // One schema-shaping DDL statement, classified so a non-Deno kernel can replay
@@ -8273,6 +8344,17 @@ export let locate = (db: Sql, id: string): string | undefined =>
 // D-18866 flip, delete removed the spine and locate simply missed; the spine now
 // survives, so the exclusion is explicit.
 export let buried = (db: Sql, eid: string): boolean => !!graveOf(db).get(eid)
+
+// Quarantined, keyed — what the deps and backlinks layers ask of every edge
+// endpoint. Reading it off eager() cost a statement per component table per
+// endpoint: 609 edges on one milestone task made `deps=1` a 1.6s fetch.
+let hiddenOf = (db: Sql) =>
+  prep(
+    db,
+    `select 1 from quarantined q join entity e on e.id = q.entity
+     where e.eid = ?`,
+  )
+export let hidden = (db: Sql, eid: string): boolean => !!hiddenOf(db).get(eid)
 
 // The page entity at a URL, keyed off the `web.url` index — a normalized
 // address reaches the same row it minted (url.ts), so the browser-extension
