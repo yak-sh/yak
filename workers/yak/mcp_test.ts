@@ -40,6 +40,7 @@ slow(
         'app_files',
         'app_deploy',
         'app_set',
+        'app_delete',
         'app_errors',
         'app_list',
         'graph_apply',
@@ -415,6 +416,57 @@ slow(
         (await agent.tool('app_list', { space: 'jeff-work' })).split('\n'),
         ['jeff-work — https://jeff-work.yaks.app/', '- no apps yet'],
       )
+
+      // Thrown away: an app made, written, deployed, then deleted whole —
+      // its address stops answering, the listing forgets it, and an app made
+      // at the same address afterwards starts with nothing, because the
+      // store it was born naming was emptied with it (T-32562).
+      let scratch = { space: 'jeff', app: 'scratch' }
+      await agent.tool('app_new', {
+        space: 'jeff',
+        slug: 'scratch',
+        title: 'Sc',
+      })
+      await agent.tool('app_files', {
+        ...scratch,
+        op: 'write',
+        path: 'index.html',
+        content: '<!doctype html><h1>throwaway</h1>',
+      })
+      await agent.tool('graph_apply', {
+        ...scratch,
+        entities: [{ entity: { eid: '$note' }, doc: { title: 'a secret' } }],
+      })
+      await agent.tool('app_deploy', scratch)
+      assertEquals((await k.at('jeff.yaks.app', '/scratch/')).status, 200)
+      assertMatch(
+        await agent.tool('app_delete', scratch),
+        /deleted jeff\/scratch: 1 file, everything it saved.*all gone/,
+      )
+      assertEquals((await k.at('jeff.yaks.app', '/scratch/')).status, 404)
+      await assertRejects(
+        () => agent.tool('app_delete', scratch),
+        Error,
+        'no app scratch in jeff',
+      )
+      assertEquals(
+        (await agent.tool('app_list', { space: 'jeff' })).includes('scratch'),
+        false,
+      )
+      await agent.tool('app_new', {
+        space: 'jeff',
+        slug: 'scratch',
+        title: 'Sc',
+      })
+      assertEquals(
+        await agent.tool('app_files', { ...scratch, op: 'list' }),
+        '(no files)',
+      )
+      assertEquals(
+        await agent.tool('graph_query', { ...scratch, query: '.doc!' }),
+        '[]',
+      )
+      await agent.tool('app_delete', scratch)
 
       // A stranger belongs to no space of ours: every tool refuses him by
       // name, and he may make his own.

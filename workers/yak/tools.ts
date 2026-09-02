@@ -3,9 +3,9 @@
 // (space, app) the caller names and belongs to, each an IO over the Store
 // object's /apply and /query doors with the caller vouched server-side; and
 // the platform sugar, the least that makes an app: space_new, app_new,
-// app_files, app_deploy, app_set, app_errors. A tool is one row here — name, what it
-// does, its input as JSON Schema, and `run` — and the door (mcp.ts) reads the
-// table for tools/list and tools/call.
+// app_files, app_deploy, app_set, app_delete, app_errors. A tool is one row
+// here — name, what it does, its input as JSON Schema, and `run` — and the
+// door (mcp.ts) reads the table for tools/list and tools/call.
 //
 // src/mcp.ts's registry is the shape mirrored, not imported. Its `IO` seam
 // wants fifteen methods — the whole eager graph, work lanes, the provider
@@ -26,6 +26,7 @@ import {
   type App,
   bornAt,
   type Directory,
+  META,
   type Space,
   storeName,
 } from './directory.ts'
@@ -454,6 +455,54 @@ export let TOOLS: Tool[] = [
         }: ${url(space, now)}${
           moving ? ` (moved from /${app.slug}/, which is gone)` : ''
         }`,
+        space,
+      }
+    },
+  },
+  {
+    name: 'app_delete',
+    description:
+      'Throw an app away: its files, everything it saved, and its address, ' +
+      'all gone for good — there is no undo and nothing is kept. Only when ' +
+      'the person asks for the app to be deleted; app_files delete removes ' +
+      'one file, and app_set moves an app rather than replacing it.',
+    input: {
+      type: 'object',
+      properties: { space: SPACE, app: APP },
+      required: ['app'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, who, store } = await inApp(ctx, args, true)
+      // The directory lives in the meta space's own app: deleting it would
+      // take every space, app and membership with it, so it is not an app to
+      // throw away, whoever owns `yak`.
+      if (space.slug == META.space && app.slug == META.app) {
+        throw new Error(`${META.space}/${META.app} is the platform itself`)
+      }
+      // The bytes, then the data, then the row that says the app exists —
+      // that order, because the row is the app. A delete that dies halfway
+      // leaves an app still named but emptied, which asking again finishes;
+      // the other order would leave an unnamed app's files and rows behind
+      // for whatever is made at this address next to inherit.
+      let blobs = r2Blobs(ctx.env.BLOBS)
+      let keys = await blobs.list(fileKey(space, app, ''))
+      for (let key of keys) await blobs.delete(key)
+      // The store is named for where the app was born (directory.ts
+      // storeName), so emptying it is what keeps a later app at the same
+      // address from waking up in this one's graph.
+      await answer(
+        await store('/', { method: 'DELETE' }, {
+          ...vouched(who),
+          'x-yak-kernel': '1',
+        }),
+      )
+      await ctx.dir.apply({
+        entities: [{ entity: { eid: app.eid }, tombstone: {} }],
+      }, vouched(who))
+      return {
+        text: `deleted ${space.slug}/${app.slug}: ${keys.length} ${
+          keys.length == 1 ? 'file' : 'files'
+        }, everything it saved, and ${url(space, app)} — all gone`,
         space,
       }
     },

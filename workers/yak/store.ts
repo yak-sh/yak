@@ -5,7 +5,8 @@
 // the same request and response bodies: POST /apply and GET /query, plus GET
 // /graph, the identity a joining peer reads, and POST /vocab, the app's own
 // components (store/vocab.ts) that app_deploy plants here and the object wakes
-// with. One flag beyond the wire:
+// with, and DELETE /, which empties the object when app_delete throws its app
+// away. One flag beyond the wire:
 // `x-yak-kernel`, set by the kernel on its own requests and never forwarded
 // from a client, opens apply()'s server-writer mode, so what a route threw
 // lands as a server-owned exception entity through the same door (D-32318
@@ -56,7 +57,9 @@ type Sock = WebSocket & {
   deserializeAttachment(): unknown
 }
 type Ctx = {
-  storage: DoStorage
+  // `deleteAll` is the ONE way to empty an object: dropping the tables leaves
+  // metadata behind, and an object whose storage is empty ceases to exist.
+  storage: DoStorage & { deleteAll(): Promise<void> }
   acceptWebSocket(ws: WebSocket): void
   getWebSockets(): Sock[]
 }
@@ -108,13 +111,19 @@ export class Store {
     this.ctx = ctx
     this.db = new DoSql(ctx.storage)
     this.name = String(ctx.storage.kv.get('name') ?? '')
-    // First touch plants the whole schema in one transaction. A store planted
-    // under an OLDER vocabulary grows into this one instead: every generated
-    // op is a guarded create-if-absent or add-column, so replaying them adds
-    // what a new component brought and leaves what is there alone. The
-    // vocabulary's own fingerprint says when that is worth doing, so a wake
-    // under the same words costs nothing. Nobody hand-migrates a Durable
-    // Object; this is the only door a column has.
+    this.born()
+  }
+
+  // Waking on this storage, whatever is in it. First touch plants the whole
+  // schema in one transaction. A store planted under an OLDER vocabulary
+  // grows into this one instead: every generated op is a guarded
+  // create-if-absent or add-column, so replaying them adds what a new
+  // component brought and leaves what is there alone. The vocabulary's own
+  // fingerprint says when that is worth doing, so a wake under the same words
+  // costs nothing. Nobody hand-migrates a Durable Object; this is the only
+  // door a column has. Emptying the object (`DELETE /`) is a second birth on
+  // the same handle, which is why this is not written inline above.
+  born() {
     let held = String(this.db.kv.get('vocab_hash') ?? '')
     if (!this.db.version) plant(this.db, ops as SchemaOp[])
     else if (held != vocabHash) graft(this.db, ops as SchemaOp[])
@@ -287,6 +296,30 @@ export class Store {
     if (!this.name) {
       this.name = req.headers.get('x-store') ?? ''
       this.db.kv.put('name', this.name)
+    }
+    // The app this store held is gone (app_delete): everything in it, at
+    // once. `deleteAll` is the only way to empty an object — dropping tables
+    // leaves metadata, and an object with empty storage ceases to exist — but
+    // THIS incarnation stays in memory with a handle onto nothing, so it is
+    // born again on the spot: an app made later at the same address finds a
+    // planted, empty graph rather than one with no tables at all. Kernel
+    // only, like the writer flag: a client's request never carries it.
+    if (path == '/' && req.method == 'DELETE') {
+      if (req.headers.get('x-yak-kernel') != '1') {
+        return new Response('not found', { status: 404 })
+      }
+      // The pages watching this app are watching nothing now.
+      for (let ws of this.ctx.getWebSockets()) {
+        try {
+          ws.close(1000, 'deleted')
+        } catch { /* already gone */ }
+      }
+      this.socks.clear()
+      await this.ctx.storage.deleteAll()
+      this.born()
+      // Its name went with the rest; the object still answers to it.
+      this.db.kv.put('name', this.name)
+      return Response.json({ ok: true })
     }
     if (path == '/graph') {
       return Response.json({
