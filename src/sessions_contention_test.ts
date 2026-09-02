@@ -43,7 +43,7 @@ let plant = () => {
 }
 
 let locker = async (ms: number) => {
-  let sqlite = new URL('./sqlite.ts', import.meta.url).href
+  let sqlite = new URL('./store/sqlite.ts', import.meta.url).href
   let code = `
     import { DatabaseSync } from '${sqlite}'
     let db = new DatabaseSync(Deno.args[0])
