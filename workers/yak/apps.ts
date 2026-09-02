@@ -310,6 +310,13 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   ) {
     who = { ...who, role: 'owner' }
   }
+  // The directory is the platform's own: people, sign-in codes, memberships.
+  // Its store has no public face. Only an owner of `yak` reaches it through
+  // this door; the kernel's parts reach it directly (directory.ts).
+  if (
+    space.slug == META.space && app.slug == META.app &&
+    r.path.startsWith('/api/') && who.role != 'owner'
+  ) return nothingHere()
   return reporting(
     await (r.path.startsWith('/api/')
       ? api(req, env, space, app, r.path.slice(4), who)
