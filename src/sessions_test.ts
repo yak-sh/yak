@@ -1952,10 +1952,7 @@ slow('a comment resumes nothing it should not', async () => {
   assertEquals(refusals(active), []) // delivery, not a failure to say
   // settled but never announced a provider thread: refused OUT LOUD
   let bare = plant([INIT])
-  db.prepare(
-    "update session set status = 'completed' where entity = (select id from entity where eid = ?)",
-  )
-    .run(bare)
+  writeSession(db, bare, { status: 'completed' })
   await write(say(bare, 'hi'))
   assertEquals(row(bare)?.status, 'completed')
   assertMatch(refusals(bare)[0], /never announced a provider thread/)
@@ -1985,10 +1982,7 @@ slow('a comment resumes nothing it should not', async () => {
     },
     { eid: roleRun, name: 'session', comp: { role: role } },
   ])
-  db.prepare(
-    "update session set status = 'completed' where entity = (select id from entity where eid = ?)",
-  )
-    .run(roleRun)
+  writeSession(db, roleRun, { status: 'completed' })
   let pending = say(roleRun, 'graph words stay in the graph')
   await write(pending)
   assertEquals(row(roleRun)?.status, 'completed')
@@ -2115,9 +2109,7 @@ slow('a failed run stays down until the next word resumes it', async () => {
 
 slow('refused words stay owed, never marked told', async () => {
   let bare = plant([INIT])
-  db.prepare(
-    "update session set status = 'completed' where entity = (select id from entity where eid = ?)",
-  ).run(bare)
+  writeSession(db, bare, { status: 'completed' })
   let s = say(bare, 'hello?')
   await write(s)
   assertMatch(refusals(bare)[0], /never announced a provider thread/)
