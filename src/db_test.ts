@@ -28,9 +28,11 @@ let {
   locate,
   mendCalls,
 
+  buried,
   migrate,
   migrateBoardsToProjects,
   migrateErrors,
+  migrateTombstone,
   mintEpoch,
   numbered,
   open,
@@ -4335,9 +4337,10 @@ Deno.test('num is monotonic: a grave keeps its number off the market', () => {
   apply(db, [{ eid: c, name: 'doc', comp: { title: 'after the grave' } }])
   assertEquals(num(c) > high, true)
   // and the tombstone remembers who it buried
-  let grave = db.prepare('select num from tombstone where eid = ?').get(b) as {
-    num: number
-  }
+  let grave = db.prepare(
+    `select e.num from tombstone t join entity e on e.id = t.entity
+     where e.eid = ?`,
+  ).get(b) as { num: number }
   assertEquals(grave.num, high)
 })
 
@@ -4905,6 +4908,39 @@ Deno.test('the wire cannot set num — it stays server-owned', () => {
   assertNotEquals(Number(comp(e, 'entity')?.num), 999999)
 })
 
+Deno.test('the grave keys on the spine; a legacy eid-keyed one is rebuilt', () => {
+  let d = open(':memory:')
+  let a = uid(), b = uid()
+  apply(d, [
+    { eid: a, name: 'doc', comp: { title: 'to bury' } },
+    { eid: b, name: 'doc', comp: { title: 'stays' } },
+  ])
+  apply(d, [{ eid: a, name: 'entity', comp: null }])
+  // The row IS the spine's int id — no eid, no num of its own.
+  assertEquals(hasCol(d, 'tombstone', 'entity'), true)
+  assertEquals(hasCol(d, 'tombstone', 'eid'), false)
+  assertEquals(buried(d, a), true)
+  assertEquals(buried(d, b), false)
+  // A legacy table (eid, num, deleted_at) rebuilds to that shape; a grave that
+  // names no spine cannot be keyed and is dropped, not invented.
+  d.exec('drop table tombstone')
+  d.exec(
+    `create table tombstone (eid text primary key, num integer, deleted_at text not null);
+     insert into tombstone values ('${a}', 7, '2026-01-01T00:00:00Z'),
+       ('${uid()}', 8, '2026-01-01T00:00:00Z')`,
+  )
+  migrateTombstone(d)
+  assertEquals(hasCol(d, 'tombstone', 'entity'), true)
+  assertEquals(
+    d.prepare('select count(*) as n from tombstone').get(),
+    { n: 1 },
+  )
+  assertEquals(buried(d, a), true)
+  migrateTombstone(d) // idempotent
+  assertEquals(buried(d, a), true)
+  d.close()
+})
+
 Deno.test('a deleted number is never reused — remint is strictly higher', () => {
   let a = uid()
   apply(db, [{ eid: a, name: 'doc', comp: { title: 'high' } }])
@@ -4982,7 +5018,10 @@ slow(
     // the redundant board entity is tombstoned
     assertEquals(compOf(d, board, 'board'), undefined)
     assertEquals(
-      !!d.prepare('select 1 from tombstone where eid = ?').get(board),
+      !!d.prepare(
+        `select 1 from tombstone t join entity e on e.id = t.entity
+         where e.eid = ?`,
+      ).get(board),
       true,
     )
 

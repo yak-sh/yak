@@ -115,13 +115,13 @@ impl Store {
     // in TS (`eid not in (select eid from tombstone)`, buried()). Unlike the
     // quarantine screen this is NOT lifted by reveal — a tombstoned member reads
     // as a DEATH (entity-null), never a not-listed drop, so row_revealed() must
-    // see it as gone too (subserve). The tombstone table keys by eid (text).
-    // Empty on a graph too old to have the table.
+    // see it as gone too (subserve). The grave keys on the spine's int id
+    // (write::grave decides by shape). Empty on a graph too old to have the table.
     fn buried(&self, alias: &str) -> String {
         if !self.has_table("tombstone") {
             return String::new();
         }
-        format!(" and not exists (select 1 from tombstone __t where __t.eid = {alias}.eid)")
+        format!(" and not {}", crate::write::grave(&self.conn, alias))
     }
 
     // resolveId's grammar: prefixed num (prefix is display-only, num rules),

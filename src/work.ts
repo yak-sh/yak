@@ -158,7 +158,7 @@ export let workLineageSql = (seed: string) =>
      select lineage.origin, dependency.parent
        from lineage
        join entity current on current.id = lineage.entity
-       left join tombstone current_dead on current_dead.eid = current.eid
+       left join tombstone current_dead on current_dead.entity = current.id
        left join proposed on proposed.entity = current.id
        left join decided choice on choice.entity = current.id
        left join quarantined hidden on hidden.entity = current.id
@@ -166,12 +166,12 @@ export let workLineageSql = (seed: string) =>
          on dependency.child = current.id
         and dependency.type = 'requires'
        join entity parent on parent.id = dependency.parent
-       left join tombstone parent_dead on parent_dead.eid = parent.eid
+       left join tombstone parent_dead on parent_dead.entity = parent.id
       where not (proposed.entity is not null and choice.entity is null)
         and coalesce(choice.verdict, '') != 'declined'
         and hidden.entity is null
-        and current_dead.eid is null
-        and parent_dead.eid is null
+        and current_dead.entity is null
+        and parent_dead.entity is null
    )`
 
 export let workRootsSql = `approved_root(entity, num) as (
@@ -183,13 +183,13 @@ export let workRootsSql = `approved_root(entity, num) as (
     left join cancelled on cancelled.entity = root.id
     left join claim on claim.entity = root.id
     left join quarantined on quarantined.entity = root.id
-    left join tombstone root_dead on root_dead.eid = root.eid
+    left join tombstone root_dead on root_dead.entity = root.id
    where coalesce(approval.verdict, 'approved') != 'declined'
      and completed.entity is null
      and cancelled.entity is null
      and claim.entity is null
      and quarantined.entity is null
-     and root_dead.eid is null
+     and root_dead.entity is null
 )`
 
 export let workAuthorizationSql = (recursive: boolean) =>
@@ -212,7 +212,7 @@ export let workReadyJoinsSql = `
          left join claim on claim.entity = entity.id
          left join blocked on blocked.entity = entity.id
          left join quarantined on quarantined.entity = entity.id
-         left join tombstone dead on dead.eid = entity.eid`
+         left join tombstone dead on dead.entity = entity.id`
 
 export let workReadyWhereSql = (authorization: string) => `
           completed.entity is null
@@ -220,7 +220,7 @@ export let workReadyWhereSql = (authorization: string) => `
           and claim.entity is null
           and blocked.entity is null
           and quarantined.entity is null
-          and dead.eid is null
+          and dead.entity is null
           and not (
             proposed.entity is not null and choice.entity is null
           )
@@ -229,7 +229,7 @@ export let workReadyWhereSql = (authorization: string) => `
             select 1
               from dependency needed
               left join entity endpoint on endpoint.id = needed.child
-              left join tombstone endpoint_dead on endpoint_dead.eid = endpoint.eid
+              left join tombstone endpoint_dead on endpoint_dead.entity = endpoint.id
               left join completed endpoint_completed
                 on endpoint_completed.entity = endpoint.id
               left join cancelled endpoint_cancelled
@@ -238,7 +238,7 @@ export let workReadyWhereSql = (authorization: string) => `
                and needed.type = 'requires'
                and (
                  endpoint.id is null
-                 or endpoint_dead.eid is not null
+                 or endpoint_dead.entity is not null
                  or (
                    endpoint_completed.entity is null
                    and endpoint_cancelled.entity is null

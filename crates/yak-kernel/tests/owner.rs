@@ -8,7 +8,7 @@ use yak_kernel::Store;
 
 const SCHEMA: &str = "
   create table entity (id integer primary key, eid text not null unique, num integer unique);
-  create table tombstone (eid text primary key, num integer, deleted_at text not null);
+  create table tombstone (entity integer primary key references entity(id), deleted_at text not null);
   create table person (entity integer primary key references entity(id));
   create table email (entity integer primary key references entity(id), address text);
   create table blob (entity integer primary key references entity(id), bytes integer not null);

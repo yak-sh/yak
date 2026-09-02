@@ -46,7 +46,8 @@ export type Sql = { sql: string; params: Bind[] }
 // (D-18866), but it is DEAD — snapshot() drops it and the JS matcher never sees
 // it. So every membership query over the spine excludes the graves, or it would
 // return dead eids the fallback never would (a break of the exactness contract).
-let LIVE = ` and "entity"."eid" not in (select eid from tombstone)`
+let LIVE =
+  ` and not exists (select 1 from tombstone "t" where "t"."entity" = "entity"."id")`
 let table = (name: string) =>
   name == 'doc' ? '"doc_value" as "doc"' : `"${name}"`
 let source = (name: string) => name == 'doc' ? '"doc_value"' : `"${name}"`

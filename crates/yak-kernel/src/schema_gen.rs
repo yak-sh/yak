@@ -565,8 +565,7 @@ pub static SCHEMA: &[SchemaOp] = &[
     unique (jrow, handler)
   );
   create table if not exists tombstone (
-    eid        text primary key,
-    num        integer,
+    entity     integer primary key references entity(id),
     deleted_at text not null
   );
   create table if not exists dependency (

@@ -167,11 +167,23 @@ fn to_id(conn: &Connection, eid: &str) -> Option<i64> {
 }
 
 fn is_dead(conn: &Connection, eid: &str) -> bool {
-    conn.query_row("select 1 from tombstone where eid = ?1", [eid], |r| r.get::<_, i64>(0))
-        .optional()
-        .ok()
-        .flatten()
-        .is_some()
+    let sql = format!("select 1 from entity e where e.eid = ?1 and {}", grave(conn, "e"));
+    conn.query_row(&sql, [eid], |r| r.get::<_, i64>(0)).optional().ok().flatten().is_some()
+}
+
+// The grave predicate for the entity row `alias`: `exists (select 1 from
+// tombstone …)`. The grave keys on the retained spine's int id; a file the TS
+// server has not yet rebuilt still keys it by eid, so the shape decides which
+// column is asked. A file with no grave table has no dead.
+pub(crate) fn grave(conn: &Connection, alias: &str) -> String {
+    if !has_table(conn, "tombstone") {
+        return "0".into();
+    }
+    if has_col(conn, "tombstone", "entity") {
+        format!("exists (select 1 from tombstone __t where __t.entity = {alias}.id)")
+    } else {
+        format!("exists (select 1 from tombstone __t where __t.eid = {alias}.eid)")
+    }
 }
 
 // A file may lack a plugin's tables (D-22530 §2: readable-but-inert); the
@@ -1628,18 +1640,18 @@ fn work_ready_sql(recursive: bool) -> String {
            select origin, entity from candidate union \
            select lineage.origin, dependency.parent from lineage \
            join entity current on current.id = lineage.entity \
-           left join tombstone current_dead on current_dead.eid = current.eid \
+           left join tombstone current_dead on current_dead.entity = current.id \
            left join proposed on proposed.entity = current.id \
            left join decided choice on choice.entity = current.id \
            left join quarantined hidden on hidden.entity = current.id \
            join dependency indexed by dependency_child \
              on dependency.child = current.id and dependency.type = 'requires' \
            join entity parent on parent.id = dependency.parent \
-           left join tombstone parent_dead on parent_dead.eid = parent.eid \
+           left join tombstone parent_dead on parent_dead.entity = parent.id \
           where not (proposed.entity is not null and choice.entity is null) \
             and coalesce(choice.verdict, '') != 'declined' \
-            and hidden.entity is null and current_dead.eid is null \
-            and parent_dead.eid is null), \
+            and hidden.entity is null and current_dead.entity is null \
+            and parent_dead.entity is null), \
          approved_root(entity, num) as (\
            select root.id, root.num from entity root \
            join task root_task on root_task.entity = root.id \
@@ -1648,11 +1660,11 @@ fn work_ready_sql(recursive: bool) -> String {
            left join cancelled on cancelled.entity = root.id \
            left join claim on claim.entity = root.id \
            left join quarantined on quarantined.entity = root.id \
-           left join tombstone root_dead on root_dead.eid = root.eid \
+           left join tombstone root_dead on root_dead.entity = root.id \
           where coalesce(approval.verdict, 'approved') != 'declined' \
             and completed.entity is null and cancelled.entity is null \
             and claim.entity is null and quarantined.entity is null \
-            and root_dead.eid is null)"
+            and root_dead.entity is null)"
     } else {
         ""
     };
@@ -1674,20 +1686,20 @@ fn work_ready_sql(recursive: bool) -> String {
          left join claim on claim.entity = entity.id \
          left join blocked on blocked.entity = entity.id \
          left join quarantined on quarantined.entity = entity.id \
-         left join tombstone dead on dead.eid = entity.eid \
+         left join tombstone dead on dead.entity = entity.id \
          where completed.entity is null and cancelled.entity is null \
            and claim.entity is null and blocked.entity is null \
-           and quarantined.entity is null and dead.eid is null \
+           and quarantined.entity is null and dead.entity is null \
            and not (proposed.entity is not null and choice.entity is null) \
            and coalesce(choice.verdict, '') != 'declined' \
            and not exists (\
              select 1 from dependency needed \
              left join entity endpoint on endpoint.id = needed.child \
-             left join tombstone endpoint_dead on endpoint_dead.eid = endpoint.eid \
+             left join tombstone endpoint_dead on endpoint_dead.entity = endpoint.id \
              left join completed endpoint_completed on endpoint_completed.entity = endpoint.id \
              left join cancelled endpoint_cancelled on endpoint_cancelled.entity = endpoint.id \
              where needed.parent = entity.id and needed.type = 'requires' \
-               and (endpoint.id is null or endpoint_dead.eid is not null or \
+               and (endpoint.id is null or endpoint_dead.entity is not null or \
                  (endpoint_completed.entity is null and endpoint_cancelled.entity is null))) \
            and ({authorization})"
     )
@@ -1767,14 +1779,14 @@ fn work_claim_refusal(conn: &Connection, eid: &str) -> Result<String> {
     }
     let blocker: Option<(Option<String>, i64, i64)> = conn
         .query_row(
-            "select child.eid, dead.eid is not null, hidden.entity is not null \
+            "select child.eid, dead.entity is not null, hidden.entity is not null \
                from dependency needed left join entity child on child.id = needed.child \
-               left join tombstone dead on dead.eid = child.eid \
+               left join tombstone dead on dead.entity = child.id \
                left join quarantined hidden on hidden.entity = child.id \
                left join completed on completed.entity = child.id \
                left join cancelled on cancelled.entity = child.id \
               where needed.parent = (select id from entity where eid = ?1) \
-                and needed.type = 'requires' and (child.id is null or dead.eid is not null or \
+                and needed.type = 'requires' and (child.id is null or dead.entity is not null or \
                   (completed.entity is null and cancelled.entity is null)) \
               order by needed.ord, child.num limit 1",
             [eid],
@@ -2411,12 +2423,8 @@ fn mint_num(conn: &Connection, eid: &str) -> Result<()> {
     if UNNUMBERED.contains(&kind.as_str()) {
         return Ok(());
     }
-    let n: i64 = conn.query_row(
-        "select coalesce(max(num), 0) + 1 from \
-         (select num from entity union all select num from tombstone)",
-        [],
-        |r| r.get(0),
-    )?;
+    let n: i64 =
+        conn.query_row("select coalesce(max(num), 0) + 1 from entity", [], |r| r.get(0))?;
     conn.execute("update entity set num = ?1 where eid = ?2 and num is null", (n, eid))?;
     Ok(())
 }
@@ -3169,8 +3177,8 @@ pub fn apply(
                 let stamp = now_iso();
                 for d in doomed {
                     conn.execute(
-                        "insert or ignore into tombstone (eid, num, deleted_at) \
-                         values (?1, (select num from entity where eid = ?1), ?2)",
+                        "insert or ignore into tombstone (entity, deleted_at) \
+                         values ((select id from entity where eid = ?1), ?2)",
                         [&d, &stamp],
                     )?;
                     if d != *eid {
@@ -3632,7 +3640,7 @@ pub fn apply(
             let born: Option<(String, Option<i64>)> = conn
                 .query_row(
                     "select eid, num from entity e where e.eid = ?1 and not exists \
-                     (select 1 from tombstone t where t.eid = e.eid)",
+                     (select 1 from tombstone t where t.entity = e.id)",
                     [eid],
                     |r| Ok((r.get(0)?, r.get(1)?)),
                 )

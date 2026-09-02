@@ -63,8 +63,8 @@ fn turns(store: &Store, n: usize) -> Vec<Said> {
             return vec![];
         }
     }
-    collect(
-        &store.conn,
+    let grave = crate::write::grave(&store.conn, "o");
+    let sql = format!(
         "select o.eid, coalesce(cr.at, ''), so.eid, c.body \
          from prompt p \
          join entity o on o.id = p.entity \
@@ -77,21 +77,20 @@ fn turns(store: &Store, n: usize) -> Vec<Said> {
          where s.pane is not null \
            and coalesce(s.origin, '') != 'managed' \
            and s.agent_type is null \
-           and not exists (select 1 from tombstone t where t.eid = o.eid) \
-         order by cr.at desc limit ?1",
-        [n as i64],
-        |r| {
-            let body: String = r.get(3)?;
-            Ok(Said {
-                eid: r.get(0)?,
-                at: r.get(1)?,
-                via: "turn".into(),
-                about: r.get(2)?,
-                line: first_line(&body),
-                body: body.trim().to_string(),
-            })
-        },
-    )
+           and not {grave} \
+         order by cr.at desc limit ?1"
+    );
+    collect(&store.conn, &sql, [n as i64], |r| {
+        let body: String = r.get(3)?;
+        Ok(Said {
+            eid: r.get(0)?,
+            at: r.get(1)?,
+            via: "turn".into(),
+            about: r.get(2)?,
+            line: first_line(&body),
+            body: body.trim().to_string(),
+        })
+    })
 }
 
 // Everything else the owner created — comments, tasks, memories, mail,
@@ -111,12 +110,13 @@ fn authored(store: &Store, owner: &str, n: usize) -> Vec<Said> {
     } else {
         ("''", "''", "")
     };
+    let grave = crate::write::grave(&store.conn, "o");
     let sql = format!(
         "select o.eid, cr.at, {title}, {body} \
          from created cr \
          join entity o on o.id = cr.entity \
          join entity ow on ow.id = cr.\"by\" and ow.eid = ?1{join} \
-         where not exists (select 1 from tombstone t where t.eid = o.eid) \
+         where not {grave} \
          order by cr.at desc limit ?2"
     );
     collect(&store.conn, &sql, rusqlite::params![owner, n as i64], |r| {
@@ -159,11 +159,12 @@ pub fn recent(store: &Store, owner: &str, n: usize) -> Vec<Touch> {
         if !store.has_table(table) {
             continue;
         }
+        let grave = crate::write::grave(&store.conn, "o");
         let sql = format!(
             "select o.eid, s.at from {table} s \
              join entity o on o.id = s.entity \
              join entity ow on ow.id = s.\"by\" and ow.eid = ?1 \
-             where not exists (select 1 from tombstone t where t.eid = o.eid) \
+             where not {grave} \
              order by s.at desc limit ?2"
         );
         out.extend(collect(&store.conn, &sql, rusqlite::params![owner, n as i64], |r| {
@@ -192,10 +193,11 @@ pub fn attention(store: &Store) -> Vec<(String, String)> {
     } else {
         ""
     };
+    let grave = crate::write::grave(&store.conn, "o");
     let sql = format!(
         "select o.eid, p.at from proposed p \
          join entity o on o.id = p.entity \
-         where not exists (select 1 from tombstone t where t.eid = o.eid){decided}{quarantined} \
+         where not {grave}{decided}{quarantined} \
          order by p.at, o.num"
     );
     collect(&store.conn, &sql, [], |r| Ok((r.get(0)?, r.get(1)?)))

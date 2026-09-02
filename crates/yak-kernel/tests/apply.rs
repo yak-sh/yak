@@ -19,8 +19,7 @@ const SCHEMA: &str = "
     num integer unique
   );
   create table tombstone (
-    eid text primary key,
-    num integer,
+    entity     integer primary key references entity(id),
     deleted_at text not null
   );
   create table dependency (
@@ -1099,7 +1098,11 @@ fn seq_of(s: &WriteStore, eid: &str) -> i64 {
 
 fn is_dead(s: &WriteStore, eid: &str) -> bool {
     s.conn
-        .query_row("select 1 from tombstone where eid = ?1", [eid], |_| Ok(()))
+        .query_row(
+            "select 1 from tombstone t join entity e on e.id = t.entity where e.eid = ?1",
+            [eid],
+            |_| Ok(()),
+        )
         .optional()
         .unwrap()
         .is_some()

@@ -711,7 +711,7 @@ export let verifyWorkSql = (
         join entity on entity.id = task.entity
         ${screen.joins}
        where ${screen.cond}
-         and entity.eid not in (select eid from tombstone)
+         and not exists (select 1 from tombstone t where t.entity = entity.id)
          and ${VERIFY_PENDING}
        order by completed.at desc, entity.num desc
        limit ?`,
@@ -935,13 +935,13 @@ export let workBlockers = (
          left join completed on completed.entity = child.id
          left join cancelled on cancelled.entity = child.id
          left join quarantined on quarantined.entity = child.id
-         left join tombstone child_dead on child_dead.eid = child.eid
+         left join tombstone child_dead on child_dead.entity = child.id
         where parent.eid in (${marks})
           and dependency.type = 'requires'
           and completed.entity is null
           and cancelled.entity is null
           and quarantined.entity is null
-          and child_dead.eid is null
+          and child_dead.entity is null
      )
      select parent, child, position from ranked
       where position <= ? order by parent, position`,

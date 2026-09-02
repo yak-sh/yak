@@ -188,6 +188,15 @@ let depDdl = `create table if not exists dependency (
     primary key (parent, type, child)
   )`
 
+// The grave keys on the retained spine (D-18866): a dead entity's row IS its
+// int id, and its num still lives on that spine, so the table carries only
+// when. Named apart from `schema` because open() rebuilds a legacy eid-keyed
+// grave table to this shape (migrateTombstone).
+let tombstoneDdl = `create table if not exists tombstone (
+    entity     integer primary key references entity(id),
+    deleted_at text not null
+  )`
+
 // The primary key begins with parent; the reverse endpoint needs its own
 // index so backlinks and endpoint deletion never walk every edge. Dependency
 // is the graph's non-component table, so its access pattern stays beside its
@@ -798,11 +807,7 @@ let schema = `
     lease_expiry  text,
     unique (jrow, handler)
   );
-  create table if not exists tombstone (
-    eid        text primary key,
-    num        integer,
-    deleted_at text not null
-  );
+  ${tombstoneDdl};
   ${depDdl};
   -- The journal (D-18860/D-18861) -- log data, not graph (like tool_call
   -- below): the record OF the wire, never part of it, written inside apply()'s
@@ -1072,10 +1077,10 @@ let mintNum = (db: DatabaseSync, eid: string) => {
       return
     }
   }
+  // The graves count too: a dead entity's spine row is retained with its num.
   let { n } = prep(
     db,
-    `select coalesce(max(num), 0) + 1 as n from
-       (select num from entity union all select num from tombstone)`,
+    'select coalesce(max(num), 0) + 1 as n from entity',
   ).get() as { n: number }
   prep(db, 'update entity set num = ? where eid = ? and num is null')
     .run(n, eid)
@@ -1453,6 +1458,31 @@ let rebuild = (db: DatabaseSync, name: string, ddl: string) => {
     let list = cols.map(sqlName).join(', ')
     db.exec(`insert into ${name} (${list}) select ${list} from ${name}_stale`)
     db.exec(`drop table ${name}_stale`)
+  })
+}
+
+// A legacy grave table keyed by eid becomes the spine-keyed one (tombstoneDdl).
+// Every grave's spine row is retained (migrateToIdKeys carries even pre-flip
+// deaths onto it), so the copy is a join; a grave naming no spine at all is a
+// record nothing can key and is reported, not invented. `num` falls away: the
+// retained spine already carries it. No-op once the table wears `entity`.
+export let migrateTombstone = (db: DatabaseSync) => {
+  if (!hasCol(db, 'tombstone', 'eid')) return
+  atomic(db, () => {
+    db.exec('alter table tombstone rename to tombstone_stale')
+    db.exec(tombstoneDdl)
+    db.exec(
+      `insert or ignore into tombstone (entity, deleted_at)
+       select e.id, t.deleted_at from tombstone_stale t
+       join entity e on e.eid = t.eid`,
+    )
+    let { n } = prep(
+      db,
+      `select count(*) as n from tombstone_stale t
+       where not exists (select 1 from entity e where e.eid = t.eid)`,
+    ).get() as { n: number }
+    if (n) console.warn(`tombstone: ${n} grave(s) named no spine — dropped`)
+    db.exec('drop table tombstone_stale')
   })
 }
 
@@ -2283,9 +2313,8 @@ export let migrateBoardsToProjects = (db: DatabaseSync) => {
         .run(bid, bid)
       prep(
         db,
-        `insert or ignore into tombstone (eid, num, deleted_at)
-         values (?, (select num from entity where eid = ?), ?)`,
-      ).run(eid, eid, now)
+        'insert or ignore into tombstone (entity, deleted_at) values (?, ?)',
+      ).run(bid, now)
     }
   })
 }
@@ -2478,6 +2507,18 @@ let refId = (db: DatabaseSync, v: unknown): number | null =>
 // old entity(eid) FK gave before an unknown eid could collapse to null and land
 // unnoticed. Death-time cascades (detach/release/keep) still let an EXISTING
 // reference outlive its target; this guards the write, not the grave.
+// The grave, asked two ways: by the spine's int id (the row itself), and by
+// eid through the spine, for the doors that still speak eids. One statement
+// each, prepared once, so every "is it dead?" reads the same table the same way.
+let grave = (db: DatabaseSync) =>
+  prep(db, 'select 1 from tombstone where entity = ?')
+let graveOf = (db: DatabaseSync) =>
+  prep(
+    db,
+    `select 1 from tombstone t join entity e on e.id = t.entity
+     where e.eid = ?`,
+  )
+
 let refToId = (
   db: DatabaseSync,
   name: string,
@@ -2488,7 +2529,7 @@ let refToId = (
   if (v == null) return null
   let eid = String(v)
   let id = toId(db, eid)
-  let gone = prep(db, 'select 1 from tombstone where eid = ?').get(eid)
+  let gone = id != null && grave(db).get(id)
   if (id == null || gone) {
     throw new Error(
       `${name} ${human(db, owner)} refused: ${col} → ${human(db, eid)} (${
@@ -2699,7 +2740,7 @@ let migrateToIdKeys = (db: DatabaseSync) => {
       // refToId still refuses writes AT these graves by reading it directly — history
       // resolves without any grave becoming writable. Guarded for a legacy db that
       // predates the tombstone table or its num column.
-      if (tableExists(db, 'tombstone')) {
+      if (hasCol(db, 'tombstone', 'eid')) {
         let tnum = hasCol(db, 'tombstone', 'num') ? 'num' : 'null'
         db.exec(
           `insert into entity (id, eid, num)
@@ -3269,9 +3310,9 @@ export let migrate = (db: DatabaseSync) => {
           db.exec('drop table send_request')
         })
       }
-      // Nums already recycled before this column existed stay unknowable —
-      // monotonic from here on; old graves just don't raise the high-water.
-      addCol('tombstone', 'num', 'num integer')
+      // The grave table keys on the spine's int id; a legacy eid-keyed one is
+      // rebuilt to that shape (its num already rides the retained spine).
+      migrateTombstone(db)
       // Both doc mirrors follow it by trigger from here on. Anything older,
       // any out-of-band writer, or shadow-table damage (overlapping watcher
       // restarts have managed it) shows up here as a failed integrity check
@@ -4127,8 +4168,7 @@ let refused = (
     )
     .map((f) =>
       `${f.col} → ${human(db, given[f.col] as string)} (${
-        prep(db, 'select 1 from tombstone where eid = ?')
-            .get(given[f.col] as string)
+        graveOf(db).get(given[f.col] as string)
           ? 'tombstoned'
           : `no such ${f.t}`
       })`
@@ -4217,7 +4257,7 @@ let graduate = (
     }
   }
   let live = prep(db, 'select 1 from entity where eid = ?')
-  let dead = prep(db, 'select 1 from tombstone where eid = ?')
+  let dead = graveOf(db)
   let hydration = [...resolved]
   let resolvedEids = new Set(resolved.map((change) => change.eid))
   for (let eid of engaged) {
@@ -4259,8 +4299,7 @@ let refRefused = (
     | { eid: string; target: string }
     | undefined
   if (!bad) return null
-  let gone = prep(db, 'select 1 from tombstone where eid = ?')
-    .get(bad.target)
+  let gone = graveOf(db).get(bad.target)
   return new Error(
     `${ref.name} ${human(db, bad.eid)} refused: ${ref.col} → ${
       human(db, bad.target)
@@ -4818,18 +4857,18 @@ let workClaimRefusal = (db: DatabaseSync, eid: string) => {
   }
   let blocker = prep(
     db,
-    `select child.eid as eid, dead.eid is not null as missing,
+    `select child.eid as eid, dead.entity is not null as missing,
             hidden.entity is not null as hidden
        from dependency needed
        left join entity child on child.id = needed.child
-       left join tombstone dead on dead.eid = child.eid
+       left join tombstone dead on dead.entity = child.id
        left join quarantined hidden on hidden.entity = child.id
        left join completed on completed.entity = child.id
        left join cancelled on cancelled.entity = child.id
       where needed.parent = (select id from entity where eid = ?)
         and needed.type = 'requires'
         and (
-          child.id is null or dead.eid is not null or
+          child.id is null or dead.entity is not null or
           (completed.entity is null and cancelled.entity is null)
         )
       order by needed.ord, child.num limit 1`,
@@ -4879,7 +4918,7 @@ export let apply = (
     let kept = admitted(db, change)
     return kept ? [kept] : []
   })
-  let dead = prep(db, 'select 1 from tombstone where eid = ?')
+  let dead = graveOf(db)
   let extra: Change[] = []
   let touched = new Set<string>()
   let minted = new Set<string>()
@@ -5494,9 +5533,9 @@ export let apply = (
           // excludes on.
           prep(
             db,
-            `insert or ignore into tombstone (eid, num, deleted_at)
-             values (?, (select num from entity where eid = ?), ?)`,
-          ).run(d, d, new Date().toISOString())
+            `insert or ignore into tombstone (entity, deleted_at)
+             values ((select id from entity where eid = ?), ?)`,
+          ).run(d, new Date().toISOString())
           if (d != eid) extra.push({ eid: d, name: 'entity', comp: null })
         }
         continue
@@ -5797,7 +5836,7 @@ export let apply = (
     let alive = prep(
       db,
       `select 1 from entity e where e.eid = ?
-       and not exists (select 1 from tombstone t where t.eid = e.eid)`,
+       and not exists (select 1 from tombstone t where t.entity = e.id)`,
     )
     let cNew = prep(
       db,
@@ -5975,7 +6014,7 @@ export let apply = (
     let born = prep(
       db,
       `select eid, num from entity e where e.eid = ?
-       and not exists (select 1 from tombstone t where t.eid = e.eid)`,
+       and not exists (select 1 from tombstone t where t.entity = e.id)`,
     )
     for (let eid of minted) {
       let row = born.get(eid) as Change['comp'] | undefined
@@ -7180,8 +7219,8 @@ export let touch = (
     if (
       !prep(
         db,
-        `select 1 from entity where eid = ?
-         and eid not in (select eid from tombstone)`,
+        `select 1 from entity e where e.eid = ?
+         and not exists (select 1 from tombstone t where t.entity = e.id)`,
       ).get(eid)
     ) continue
     prep(
@@ -7731,7 +7770,9 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
         // saving is nil and the wire-order cost is real. Verified byte-identical
         // on a live-size copy (T-20299).
         `${select(name)} where eid not in (select eid from _omit)
-           and eid not in (select eid from tombstone)`,
+           and eid not in (
+             select e.eid from tombstone t join entity e on e.id = t.entity
+           )`,
       ).all() as Record<string, unknown>[]
     ) {
       changes.push({ eid: row.eid as string, name, comp: row })
@@ -7962,7 +8003,7 @@ export let locate = (db: DatabaseSync, id: string): string | undefined =>
 // D-18866 flip, delete removed the spine and locate simply missed; the spine now
 // survives, so the exclusion is explicit.
 export let buried = (db: DatabaseSync, eid: string): boolean =>
-  !!prep(db, 'select 1 from tombstone where eid = ?').get(eid)
+  !!graveOf(db).get(eid)
 
 // The page entity at a URL, keyed off the `web.url` index — a normalized
 // address reaches the same row it minted (url.ts), so the browser-extension
