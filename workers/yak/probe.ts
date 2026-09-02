@@ -118,6 +118,55 @@ export let kernel = async () => {
   return { base, secret, at, stop, log }
 }
 
+// An origin that stands for `<space>.yaks.app` on a socket. `new WebSocket`
+// sends the URL's own Host and takes no headers, so `x-yak-host` — the header
+// a fetch-driven probe spells (route.ts) — has to go on the wire itself: this
+// relay inserts it (and a cookie) into the handshake it forwards, then copies
+// bytes both ways, so the socket a test holds is the kernel's own, framing
+// and all. HTTP through it works too, for one request per connection.
+export let relay = (k: Kernel, host: string, cookie?: string) => {
+  let up = Number(new URL(k.base).port)
+  let l = Deno.listen({ hostname: '127.0.0.1', port: 0 })
+  let open = new Set<Deno.Conn>()
+  let carry = async (down: Deno.Conn) => {
+    open.add(down)
+    let out = await Deno.connect({ hostname: '127.0.0.1', port: up })
+    open.add(out)
+    // The handshake is one write, and ASCII; read to its blank line.
+    let head = ''
+    let buf = new Uint8Array(4096)
+    while (!head.includes('\r\n\r\n')) {
+      let n = await down.read(buf)
+      if (n == null) return
+      head += new TextDecoder().decode(buf.subarray(0, n))
+    }
+    let extra = `x-yak-host: ${host}\r\n` +
+      (cookie ? `cookie: ${cookie}\r\n` : '')
+    await out.write(
+      new TextEncoder().encode(head.replace('\r\n', `\r\n${extra}`)),
+    )
+    await Promise.all([
+      down.readable.pipeTo(out.writable).catch(() => {}),
+      out.readable.pipeTo(down.writable).catch(() => {}),
+    ])
+  }
+  let serving = (async () => {
+    for await (let down of l) carry(down).catch(() => {})
+  })().catch(() => {})
+  return {
+    origin: `http://127.0.0.1:${(l.addr as Deno.NetAddr).port}`,
+    stop: async () => {
+      l.close()
+      for (let c of open) {
+        try {
+          c.close()
+        } catch { /* the pipe closed it */ }
+      }
+      await serving
+    },
+  }
+}
+
 // A signed-in person's Cookie header, an hour long.
 export let signedIn = async (k: Kernel, person: string) =>
   `${COOKIE}=${await sign(

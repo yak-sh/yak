@@ -122,6 +122,9 @@ let asset = async (env: Env, space: Space, app: App, path: string) => {
 // door, named as an endpoint group, with NEL asking for the failures that
 // never reached us at all.
 let reporting = (res: Response, req: Request, app: App) => {
+  // A socket is not a page: the 101 carries the runtime's own `webSocket`,
+  // which no Response constructor here can copy, and nothing about it reports.
+  if (res.status == 101) return res
   let headers = new Headers(res.headers)
   headers.set(
     'reporting-endpoints',
@@ -246,6 +249,21 @@ let api = async (
   }
   if (path == '/query') {
     return store(`/query${new URL(req.url).search}`, {}, headers)
+  }
+  // The live door: one socket per page onto this app's store, so a write from
+  // another device arrives here without asking. The upgrade goes to the object
+  // itself — the socket is the store's, and the kernel is out of the way once
+  // it is open — so whether this person may WRITE over it is decided here, at
+  // the handshake, and rides on the socket. Anyone may listen; reads are open
+  // the way an app's page is.
+  if (path == '/ws') {
+    if (req.headers.get('upgrade') != 'websocket') {
+      return json(426, 'expected_websocket')
+    }
+    return store('/ws', req, {
+      ...headers,
+      ...(mayWrite(who) ? { 'x-yak-write': '1' } : {}),
+    })
   }
   if (path == '/apply') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')

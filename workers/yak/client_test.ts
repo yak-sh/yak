@@ -15,8 +15,8 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { slow } from '../../src/testing.ts'
-import { client, type Kernel, kernel, seed, signedIn } from './probe.ts'
+import { slow, until } from '../../src/testing.ts'
+import { client, type Kernel, kernel, relay, seed, signedIn } from './probe.ts'
 
 // An origin that stands in for `<space>.yaks.app`: every request goes to the
 // kernel wearing that hostname, and the person's cookie if they have one.
@@ -37,7 +37,7 @@ let browser = (k: Kernel, host: string, cookie?: string) => {
   return { origin: `http://127.0.0.1:${port}`, stop: () => server.shutdown() }
 }
 
-slow('the served client: a page saves and lists its own entities', async () => {
+slow('the served client: a page saves, lists and watches', async () => {
   let k = await kernel()
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-client-' })
   let jeff = crypto.randomUUID()
@@ -52,7 +52,7 @@ slow('the served client: a page saves and lists its own entities', async () => {
     assertEquals(served.status, 200)
     assertMatch(served.headers.get('content-type') ?? '', /javascript/)
     let source = await served.text()
-    assertMatch(source, /export let \{ apply, query, search \}/)
+    assertMatch(source, /export let \{ apply, query, search, subscribe \}/)
 
     // The page a person would be given, and its script, run here.
     let page = '<!doctype html><h1>Recipes</h1>' +
@@ -102,6 +102,29 @@ slow('the served client: a page saves and lists its own entities', async () => {
       'Plum tart',
     ])
     assertEquals(titles(await store.query('.doc!&limit=1')), ['Plum tart'])
+
+    // The live half: the page watches a filter and sees a write it did not
+    // make. A socket carries the app's hostname on its handshake, which a
+    // probe can only put there at the wire (probe.ts relay).
+    let wire = relay(k, 'jeff.yaks.app', cookie)
+    let seen: { doc: { title: string } }[][] = []
+    let stop = mod.store(`${wire.origin}/recipes/api/`)
+      .subscribe(
+        '.task.status=open',
+        (rows: typeof seen[number]) => seen.push(rows),
+      )
+    try {
+      await until(() => seen.length == 1, { timeout: 15_000 })
+      assertEquals(titles(seen[0]), ['Lemon cake'])
+      // Another device writes: another tab, another phone, an agent — all the
+      // same door, and the page hears it without asking.
+      await store.apply({ entity: { eid: cake }, doc: { title: 'Lime cake' } })
+      await until(() => seen.length == 2, { timeout: 15_000 })
+      assertEquals(titles(seen[1]), ['Lime cake'])
+    } finally {
+      stop()
+      await wire.stop()
+    }
 
     // A refusal arrives as the server's own sentence, not a status code.
     await assertRejects(
