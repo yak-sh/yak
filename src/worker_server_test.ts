@@ -284,8 +284,14 @@ slow(
     })
     assertEquals(conflicts.length, 1)
     assertEquals(conflicts[0].kind, 'conflict')
-    assertEquals(conflicts[0].conflict.loser, rival.sid)
-    assertEquals(conflicts[0].conflict.holder, builder.sid)
+    // The audit names each side by its session ENTITY, not its sid label.
+    let sessionEid = async (id: string) =>
+      (await json<{ entity: { eid: string } }>('task_show', { id })).entity.eid
+    assertEquals(conflicts[0].conflict.loser, await sessionEid(rival.session))
+    assertEquals(
+      conflicts[0].conflict.holder,
+      await sessionEid(builder.session),
+    )
 
     let trail = [
       'progress: inspected design, acceptance, and dependencies',
