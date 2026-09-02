@@ -8,6 +8,7 @@
 // (asking the project or asking the persona both surface it).
 
 use rusqlite::Connection;
+use yak_kernel::edge::{edge_eid, natures};
 use yak_kernel::store::Store;
 use yak_kernel::vocab::{vocab, PropType};
 use yak_kernel::Dep;
@@ -70,11 +71,16 @@ fn seed() -> Fixture {
     let conn = Connection::open(&path).unwrap();
 
     let mut schema = String::from(
-        "create table entity (id integer primary key, eid text not null unique, num integer unique);\
-         create table dependency (parent integer not null, type text not null, child integer not null, ord integer, primary key (parent, type, child));",
+        "create table entity (id integer primary key, eid text not null unique, num integer unique);",
     );
-    for comp in ["doc", "task", "project", "persona", "quarantined"] {
-        schema.push_str(&ddl_for(comp));
+    // Every nature, because the untyped door asks each of them for the verb —
+    // a graph missing one is not a graph the reader ever meets.
+    for comp in ["doc", "task", "project", "persona", "quarantined", "edge"]
+        .iter()
+        .map(|c| c.to_string())
+        .chain(natures(vocab()))
+    {
+        schema.push_str(&ddl_for(&comp));
     }
     conn.execute_batch(&schema).unwrap();
     conn.execute_batch("begin").unwrap();
@@ -88,6 +94,20 @@ fn seed() -> Fixture {
         )
         .unwrap();
         conn.last_insert_rowid()
+    };
+
+    // One sentence: the edge ENTITY named by edge_eid, wearing its ends and its
+    // nature — the only edge store there is (T-32552).
+    let said = |from: &str, nature: &str, to: &str, from_id: i64, to_id: i64| {
+        let e = edge_eid(&eid(from), nature, &eid(to));
+        conn.execute("insert into entity (eid) values (?1)", [&e]).unwrap();
+        let id = conn.last_insert_rowid();
+        conn.execute(
+            "insert into edge (entity, \"from\", \"to\") values (?1, ?2, ?3)",
+            rusqlite::params![id, from_id, to_id],
+        )
+        .unwrap();
+        conn.execute(&format!("insert into \"{nature}\" (entity) values (?1)"), [id]).unwrap();
     };
 
     let proj = mint("proj");
@@ -108,11 +128,7 @@ fn seed() -> Fixture {
         .unwrap();
     }
     // pc already carries a stored contains edge from its home — no double sentence.
-    conn.execute(
-        "insert into dependency (parent, type, child) values (?1, 'contains', ?2)",
-        rusqlite::params![proj, pc],
-    )
-    .unwrap();
+    said("proj", "contains", "pc", proj, pc);
     // pd is quarantined.
     conn.execute("insert into quarantined (entity) values (?1)", [pd]).unwrap();
 
@@ -122,11 +138,7 @@ fn seed() -> Fixture {
     let t2 = mint("t2");
     conn.execute("insert into task (entity, priority) values (?1,0)", [t1]).unwrap();
     conn.execute("insert into task (entity, priority) values (?1,0)", [t2]).unwrap();
-    conn.execute(
-        "insert into dependency (parent, type, child) values (?1, 'requires', ?2)",
-        rusqlite::params![t1, t2],
-    )
-    .unwrap();
+    said("t1", "requires", "t2", t1, t2);
 
     conn.execute_batch("commit").unwrap();
     drop(conn);

@@ -4,6 +4,7 @@
 // is stored as. Never migrates: a library client connects, reads, and leaves
 // the schema alone (D-22530 §1).
 
+use crate::edge::sentences;
 pub use crate::model::{is_eid, is_uuid, Dep, Row};
 use crate::model::{Graph, Hit, Source};
 use crate::profiling;
@@ -782,27 +783,29 @@ impl Store {
         eid.and_then(|e| self.row(&e))
     }
 
-    // Both endpoints of every edge touching an eid. The filter must name the
-    // edge table's OWN columns: `pe.eid = ?1 or ce.eid = ?1` spans two joined
-    // copies of `entity`, so no single index answers it and sqlite falls back
-    // to SCANNING all of entity, seeking dependency once per row — 110ms of a
-    // 155ms `show`. Resolving the eid to its integer id in a scalar subquery
-    // (evaluated once, not correlated) turns the disjunction into two preds
-    // over one table, which sqlite answers as a MULTI-INDEX OR: the parent
-    // half seeks the primary key, the child half seeks dependency_child.
-    // The disjunction stays a top-level AND-term under the screens, so that
-    // plan survives them.
+    // Both endpoints of every edge touching an eid, read from the SENTENCE
+    // store through the one door (edge.rs `sentences`, src/edge.ts's mirror).
+    // The filter must name the edge's OWN columns: `pe.eid = ?1 or ce.eid = ?1`
+    // spans two joined copies of `entity`, so no single index answers it and
+    // sqlite falls back to SCANNING all of entity, seeking the edge once per
+    // row — 110ms of a 155ms `show`. Resolving the eid to its integer id in a
+    // scalar subquery (evaluated once, not correlated) turns the disjunction
+    // into two preds over one table, which sqlite answers as a MULTI-INDEX OR:
+    // each half seeks its own index (`edge_from`, `edge_to`). The narrowing
+    // rides INSIDE the door, so it is applied before the store is built.
     //
     // Both endpoints are screened, the way the route's deps=1 layer screens
     // them (localread.ts localDeps filters on either end).
     pub fn deps_of(&self, eid: &str) -> Vec<Dep> {
+        let mine = "(select id from entity where eid = ?1)";
+        let only = format!("g.\"from\" = {mine} or g.\"to\" = {mine}");
         let sql = format!(
-            "select pe.eid, d.type, ce.eid from dependency d \
+            "select pe.eid, d.type, ce.eid from ({}) d \
              join entity pe on pe.id = d.parent \
              join entity ce on ce.id = d.child \
-             where (d.parent = (select id from entity where eid = ?1) \
-                 or d.child  = (select id from entity where eid = ?1)){}{} \
+             where 1{}{} \
              order by pe.eid, d.type, d.ord, ce.eid",
+            sentences(vocab(), None, &only),
             self.unscreened("pe"),
             self.unscreened("ce")
         );
@@ -913,12 +916,17 @@ impl Store {
             ""
         };
         let mine = "in (select e.id from entity e where e.eid in (select eid from hit))";
+        // The screen rides OUTSIDE the disjunction — an endpoint is lazy or it
+        // isn't, whichever side of the OR selected the row — so the door's
+        // multi-index OR is untouched (db.ts incident).
+        let only = format!("g.\"from\" {mine} or g.\"to\" {mine}");
         let sql = format!(
-            "select p.eid, d.type, c.eid from dependency d \
+            "select p.eid, d.type, c.eid from ({}) d \
              join entity p on p.id = d.parent \
              join entity c on c.id = d.child \
-             where (d.parent {mine} or d.child {mine}){lazy} \
-             order by p.eid, d.type, d.ord, c.eid"
+             where 1{lazy} \
+             order by p.eid, d.type, d.ord, c.eid",
+            sentences(vocab(), None, &only)
         );
         collect(&self.conn, &sql, [], |r| {
             Ok(Dep { parent: r.get(0)?, type_: r.get(1)?, child: r.get(2)? })
@@ -927,9 +935,10 @@ impl Store {
 
     // Stored edges incident to a member set AFTER projecting endpoints through
     // one `{eid}` column (db.ts selectedDeps). The projection table's reverse
-    // index finds raw endpoints owned by members; dependency's parent PK and
-    // child index find the two edge halves. The lazy partition is never read as
-    // a result set — only its indexed ownership column is sought.
+    // index finds raw endpoints owned by members; the named nature is its own
+    // table in the door, so each half seeks its own endpoint index. The lazy
+    // partition is never read as a result set — only its indexed ownership
+    // column is sought.
     pub fn projected_deps(&self, eids: &[String], type_: &str, comp: &str, prop: &str) -> Vec<Dep> {
         if eids.is_empty() || !self.has_table(comp) {
             return vec![];
@@ -955,6 +964,7 @@ impl Store {
         }
         let table = q(comp);
         let col = q(prop);
+        let said = sentences(vocab(), Some(type_), "");
         let sql = format!(
             "with endpoint(id) as ( \
                select e.id from entity e \
@@ -966,11 +976,11 @@ impl Store {
                   select e.id from entity e where e.eid in (select eid from hit) \
                 ) \
              ), picked(parent, type, child, ord) as ( \
-               select d.parent, d.type, d.child, d.ord from dependency d \
-                where d.parent in (select id from endpoint) and d.type = ?1 \
+               select d.parent, d.type, d.child, d.ord from ({said}) d \
+                where d.parent in (select id from endpoint) \
                union \
-               select d.parent, d.type, d.child, d.ord from dependency d \
-                where d.child in (select id from endpoint) and d.type = ?1 \
+               select d.parent, d.type, d.child, d.ord from ({said}) d \
+                where d.child in (select id from endpoint) \
              ) \
              select distinct coalesce(pp.eid, p.eid), d.type, coalesce(pc.eid, c.eid) \
                from picked d \
@@ -982,7 +992,7 @@ impl Store {
                left join entity pc on pc.id = vc.{col} \
               order by 1, 2, d.ord, 3"
         );
-        collect(&self.conn, &sql, [type_], |r| {
+        collect(&self.conn, &sql, [], |r| {
             Ok(Dep { parent: r.get(0)?, type_: r.get(1)?, child: r.get(2)? })
         })
     }
@@ -1025,20 +1035,23 @@ impl Store {
 
     // The bounded transitive closure `.reaches[type,<=N]=id` selects: the eids
     // that reach `target` through at most `depth` edges of one type, walking
-    // child→parent so every step is a `dependency_child` seek. The target itself
-    // is excluded — reaching is a path of at least one hop. Byte-for-byte the
-    // JS matcher's half of the closure the compiler emits (db.ts reaching): the
-    // `+d.type` bans the type index so the walk drives off dependency_child.
+    // child→parent so every step is an `edge_to` seek (one nature, so the type
+    // is the branch and not a term the planner can prefer). The target itself is
+    // excluded — reaching is a path of at least one hop. The JS matcher's half
+    // of the same closure the compiler emits (db.ts reaching).
     pub fn reaching(&self, target: &str, type_: &str, depth: i64) -> Vec<String> {
-        let sql = "with recursive __reach(id, depth) as (
+        let sql = format!(
+            "with recursive __reach(id, depth) as (
              select id, 0 from entity where eid = ?1
-             union select d.parent, __reach.depth + 1 from dependency d
+             union select d.parent, __reach.depth + 1 from ({}) d
                join __reach on d.child = __reach.id
-               where __reach.depth < ?2 and +d.type = ?3
+               where __reach.depth < ?2
            )
            select o.eid as eid from __reach join entity o on o.id = __reach.id
-            where __reach.depth > 0";
-        collect(&self.conn, sql, rusqlite::params![target, depth, type_], |r| r.get(0))
+            where __reach.depth > 0",
+            sentences(vocab(), Some(type_), "")
+        );
+        collect(&self.conn, &sql, rusqlite::params![target, depth], |r| r.get(0))
     }
 
     // Who points AT these entities through a typed {eid} reference column — the

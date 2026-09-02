@@ -32,7 +32,7 @@
 #![allow(clippy::result_large_err)]
 
 use crate::change::Change;
-use crate::edge::{edge_eid, nature_of, natures, type_of};
+use crate::edge::{edge_eid, nature_of, natures, sentences, type_of};
 use crate::store::{resolve, resolve_checked};
 use crate::vocab::{vocab, PropType, Vocab};
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
@@ -1450,15 +1450,13 @@ fn stored_edge(conn: &Connection, v: &Vocab, eid: &str) -> Option<(String, Strin
     Some((from, nature, to))
 }
 
-// The dependency store's row for this sentence, with its listing order — None
-// when the store does not hold it at all, Some(None) when it holds it unordered
-// (db.ts storedDep).
-fn stored_dep(conn: &Connection, from: &str, word: &str, to: &str) -> Option<Option<f64>> {
+// The stored sentence's own row, with its listing order — None when the store
+// does not hold that sentence at all, Some(None) when it holds it unordered
+// (db.ts storedSentence). Read from `edge`, by the eid the sentence derives.
+fn stored_sentence(conn: &Connection, eid: &str) -> Option<Option<f64>> {
     conn.query_row(
-        "select ord from dependency \
-         where parent = (select id from entity where eid = ?1) and type = ?2 \
-           and child = (select id from entity where eid = ?3)",
-        rusqlite::params![from, word, to],
+        "select ord from edge where entity = (select id from entity where eid = ?1)",
+        [eid],
         |r| r.get::<_, Option<f64>>(0),
     )
     .optional()
@@ -1530,18 +1528,29 @@ fn unlink(conn: &Connection, out: &mut Vec<Change>, from: &str, nature: &str, to
     out.push(Change::new(&eid, "edge", None));
 }
 
-// While `dependency` is still the live edge store, every edge lands in BOTH
-// homes so readers on either side agree: a `dependency{type, child}` write on P
-// also mints edgeEid(P, nature, child) wearing edge{from, to} + the nature tag,
-// and its `gone: true` unlink strips that entity's comps; a native edge write
-// (edge + nature on one eid) also lands the dependency row, and deleting an
-// edge entity drops it. A claim's `worked` edge rides the same way, since the
-// claim gate inserts its row directly. Only the batch's own changes translate,
-// never this pass's output, so the two directions cannot feed each other. The
-// mint mirrors the dependency rule's tolerance — an endpoint that neither
-// exists nor arrives in this batch drops the edge alone rather than refusing
-// the batch. The WHOLE pass goes when T-23821 retires the dependency table.
-fn dual_edge(conn: &Connection, v: &Vocab, changes: Vec<Change>) -> Result<Vec<Change>> {
+// One edge store, one door (T-32552, db.ts dualEdge). `dependency{type, child,
+// ord, gone}` is the WIRE's spelling for a sentence and nothing else: this pass
+// lowers it, at the door, into the only write there is — the entity
+// edgeEid(P, nature, child) wearing edge{from, to} + the nature tag, or that
+// entity's comps taken away for `gone: true`. Nothing writes the `dependency`
+// table.
+//
+// The lowering is a WHOLE-BATCH pass rather than a step inside admitted(),
+// because a sentence may name an endpoint only this batch mints. It is also
+// two-way: a native `edge` write CASTS the `dependency` change a live cache
+// indexes by. That cast rides `extra`, beside the claim's `worked` echo — a
+// projection the server derived is not a second saying by the writer, so it
+// answers to no rule. Only the batch's own changes translate, never this pass's
+// output, so the two directions cannot feed each other. The mint mirrors the
+// dependency rule's tolerance — an endpoint that neither exists nor arrives in
+// this batch drops the edge alone rather than refusing the batch. The
+// `dependency` half goes when T-23821 retires the wire spelling.
+fn dual_edge(
+    conn: &Connection,
+    v: &Vocab,
+    changes: Vec<Change>,
+    cast: &mut Vec<Change>,
+) -> Result<Vec<Change>> {
     let in_batch: HashSet<String> =
         changes.iter().filter(|c| c.comp.is_some()).map(|c| c.eid.clone()).collect();
     // The natures this batch itself declares, so a native edge write finds its
@@ -1597,25 +1606,24 @@ fn dual_edge(conn: &Connection, v: &Vocab, changes: Vec<Change>) -> Result<Vec<C
                 )));
             }
             let word = type_of(v, &nature).unwrap_or_else(|| nature.clone());
-            let row = stored_dep(conn, from, &word, to);
-            // An echo that would write nothing is not written: the row already
+            let said = stored_sentence(conn, eid);
+            // An echo that would say nothing is not cast: the sentence already
             // stands, so re-stating it only journals a write that did not
-            // happen — and the dependency rule reads a repeat as a fresh link.
-            // A MOVED listing order is the one case where re-stating a stored
-            // sentence is a write and not a repeat.
+            // happen. A MOVED listing order is the one case where re-stating a
+            // stored sentence is news and not a repeat.
             let ord = comp.get("ord").cloned();
-            let moved = match (&ord, &row) {
+            let moved = match (&ord, &said) {
                 (Some(want), Some(cur)) => *want != cur.map(js_number).unwrap_or(Value::Null),
                 _ => false,
             };
-            if row.is_none() || moved {
+            if said.is_none() || moved {
                 let mut m = Map::new();
                 m.insert("type".into(), Value::from(word));
                 m.insert("child".into(), Value::from(to));
                 if let Some(o) = ord {
                     m.insert("ord".into(), o);
                 }
-                out.push(Change::new(from, "dependency", Some(m)));
+                cast.push(Change::new(from, "dependency", Some(m)));
             }
         } else if name == "entity" && comp.is_none() {
             if let Some((from, nature, to)) = stored_edge(conn, v, eid) {
@@ -1623,7 +1631,7 @@ fn dual_edge(conn: &Connection, v: &Vocab, changes: Vec<Change>) -> Result<Vec<C
                 m.insert("type".into(), Value::from(type_of(v, &nature).unwrap_or(nature)));
                 m.insert("child".into(), Value::from(to));
                 m.insert("gone".into(), Value::from(true));
-                out.push(Change::new(&from, "dependency", Some(m)));
+                cast.push(Change::new(&from, "dependency", Some(m)));
             }
         }
     }
@@ -1866,8 +1874,13 @@ pub struct WorkClaimGuard {
 }
 
 fn work_ready_sql(recursive: bool) -> String {
+    // The `requires` edges, read through the one door (src/work.ts's
+    // workLineageSql and workReadyWhereSql, which name the same subquery
+    // `dependency` and `needed` so the rest of the sentence is unchanged).
+    let requires = sentences(vocab(), Some("requires"), "");
     let lineage = if recursive {
-        ", lineage(origin, entity) as (\
+        format!(
+            ", lineage(origin, entity) as (\
            select origin, entity from candidate union \
            select lineage.origin, dependency.parent from lineage \
            join entity current on current.id = lineage.entity \
@@ -1875,8 +1888,7 @@ fn work_ready_sql(recursive: bool) -> String {
            left join proposed on proposed.entity = current.id \
            left join decided choice on choice.entity = current.id \
            left join quarantined hidden on hidden.entity = current.id \
-           join dependency indexed by dependency_child \
-             on dependency.child = current.id and dependency.type = 'requires' \
+           join ({requires}) dependency on dependency.child = current.id \
            join entity parent on parent.id = dependency.parent \
            left join tombstone parent_dead on parent_dead.entity = parent.id \
           where not (proposed.entity is not null and choice.entity is null) \
@@ -1896,8 +1908,9 @@ fn work_ready_sql(recursive: bool) -> String {
             and completed.entity is null and cancelled.entity is null \
             and claim.entity is null and quarantined.entity is null \
             and root_dead.entity is null)"
+        )
     } else {
-        ""
+        String::new()
     };
     let authorization = if recursive {
         "exists (select 1 from lineage l join approved_root root \
@@ -1924,12 +1937,12 @@ fn work_ready_sql(recursive: bool) -> String {
            and not (proposed.entity is not null and choice.entity is null) \
            and coalesce(choice.verdict, '') != 'declined' \
            and not exists (\
-             select 1 from dependency needed \
+             select 1 from ({requires}) needed \
              left join entity endpoint on endpoint.id = needed.child \
              left join tombstone endpoint_dead on endpoint_dead.entity = endpoint.id \
              left join completed endpoint_completed on endpoint_completed.entity = endpoint.id \
              left join cancelled endpoint_cancelled on endpoint_cancelled.entity = endpoint.id \
-             where needed.parent = entity.id and needed.type = 'requires' \
+             where needed.parent = entity.id \
                and (endpoint.id is null or endpoint_dead.entity is not null or \
                  (endpoint_completed.entity is null and endpoint_cancelled.entity is null))) \
            and ({authorization})"
@@ -2008,18 +2021,21 @@ fn work_claim_refusal(conn: &Connection, eid: &str) -> Result<String> {
             "{id} was declined — revise or explicitly replace that decision before claiming"
         ));
     }
+    let requires = sentences(vocab(), Some("requires"), "");
     let blocker: Option<(Option<String>, i64, i64)> = conn
         .query_row(
-            "select child.eid, dead.entity is not null, hidden.entity is not null \
-               from dependency needed left join entity child on child.id = needed.child \
+            &format!(
+                "select child.eid, dead.entity is not null, hidden.entity is not null \
+               from ({requires}) needed left join entity child on child.id = needed.child \
                left join tombstone dead on dead.entity = child.id \
                left join quarantined hidden on hidden.entity = child.id \
                left join completed on completed.entity = child.id \
                left join cancelled on cancelled.entity = child.id \
               where needed.parent = (select id from entity where eid = ?1) \
-                and needed.type = 'requires' and (child.id is null or dead.entity is not null or \
+                and (child.id is null or dead.entity is not null or \
                   (completed.entity is null and cancelled.entity is null)) \
-              order by needed.ord, child.num limit 1",
+              order by needed.ord, child.num limit 1"
+            ),
             [eid],
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
@@ -2089,37 +2105,26 @@ impl Gate for ClaimGate {
         }
         // A lease is temporary; having done the work is not. The edge is the
         // durable, indexed truth — the ENTITY, which dual_edge mints for this
-        // claim; the row lands beside it in the same transaction while both
-        // stores stand (T-23821 takes it). What decides the echo is therefore
-        // the SENTENCE's first landing, so every live cache learns the relation
-        // without a fetch or a journal read.
-        let sid = to_id(cx.conn, session);
-        let tid = to_id(cx.conn, &c.eid);
-        if let (Some(sid), Some(tid)) = (sid, tid) {
-            let sentence = edge_eid(session, "worked", &c.eid);
-            let first = cx
-                .conn
-                .query_row(
-                    "select 1 from edge where entity = \
-                     (select id from entity where eid = ?1)",
-                    [&sentence],
-                    |r| r.get::<_, i64>(0),
-                )
-                .optional()?
-                .is_none();
-            cx.conn.execute(
-                "insert or ignore into dependency (parent, type, child) \
-                 values (?1, 'worked', ?2)",
-                [sid, tid],
-            )?;
-            if first {
-                cx.touch.push(session.to_string());
-                cx.touch.push(c.eid.clone());
-                let mut m = Map::new();
-                m.insert("type".into(), Value::from("worked"));
-                m.insert("child".into(), Value::from(c.eid.as_str()));
-                cx.extra.push(Change::new(session, "dependency", Some(m)));
-            }
+        // claim. What decides the echo is the SENTENCE's first landing, so every
+        // live cache learns the relation without a fetch or a journal read.
+        let sentence = edge_eid(session, "worked", &c.eid);
+        let first = cx
+            .conn
+            .query_row(
+                "select 1 from edge where entity = \
+                 (select id from entity where eid = ?1)",
+                [&sentence],
+                |r| r.get::<_, i64>(0),
+            )
+            .optional()?
+            .is_none();
+        if first {
+            cx.touch.push(session.to_string());
+            cx.touch.push(c.eid.clone());
+            let mut m = Map::new();
+            m.insert("type".into(), Value::from("worked"));
+            m.insert("child".into(), Value::from(c.eid.as_str()));
+            cx.extra.push(Change::new(session, "dependency", Some(m)));
         }
         // A claim IS wip now (D-24102): status is derived, so the claim's mere
         // presence makes an open task read wip — no stored move to synthesize.
@@ -3120,10 +3125,10 @@ pub fn apply(
         changes = dual_facet(conn, v, changes, "worktree");
         changes = dual_facet(conn, v, changes, "runtime");
         changes = mirror_lineage(conn, changes);
-        // Every edge lands in BOTH stores (db.ts order: last of the transforms,
-        // so a claim on a session this batch mirrors finds its `worked`
-        // endpoint already here).
-        changes = dual_edge(conn, v, changes)?;
+        // The wire's edge spelling lowers to the sentence (db.ts order: last of
+        // the transforms, so a claim on a session this batch mirrors finds its
+        // `worked` endpoint already here).
+        changes = dual_edge(conn, v, changes, &mut extra)?;
         changes = cas_bodies(conn, changes)?;
         // Mint spines in first-touch order before writing components.
         let mut killed: HashSet<String> = HashSet::new();
@@ -3162,7 +3167,7 @@ pub fn apply(
         for change in &changes {
             let change = change.clone();
             let Change { eid, name, comp, was } = &change;
-            // ---- edges: a TRIPLE, not a row ----
+            // ---- edges: a SENTENCE, lowered at the door ----
             if name == "dependency" {
                 let Some(comp) = comp else { continue };
                 let child = comp.get("child").and_then(|c| c.as_str()).unwrap_or_default();
@@ -3178,46 +3183,12 @@ pub fn apply(
                     eprintln!("sync: edge for {eid} dropped — missing endpoint");
                     continue;
                 }
-                let pid = to_id(conn, eid).unwrap_or_default();
-                let cid = to_id(conn, child).unwrap_or_default();
-                let typ = comp.get("type").and_then(|t| t.as_str()).unwrap_or_default();
-                conn.execute_batch("savepoint change")?;
-                let done: rusqlite::Result<()> = (|| {
-                    if comp.get("gone").map(truthy).unwrap_or(false) {
-                        conn.execute(
-                            "delete from dependency where parent = ?1 and type = ?2 \
-                             and child = ?3",
-                            rusqlite::params![pid, typ, cid],
-                        )?;
-                    } else if comp.contains_key("ord") {
-                        let ord = comp.get("ord").cloned().unwrap_or(Value::Null);
-                        exec_change(
-                            conn,
-                            "insert into dependency (parent, type, child, ord) \
-                             values (?1, ?2, ?3, ?4) on conflict(parent, type, child) \
-                             do update set ord = excluded.ord",
-                            &[Value::from(pid), Value::from(typ), Value::from(cid), ord],
-                        )?;
-                    } else {
-                        conn.execute(
-                            "insert or ignore into dependency (parent, type, child) \
-                             values (?1, ?2, ?3)",
-                            rusqlite::params![pid, typ, cid],
-                        )?;
-                    }
-                    Ok(())
-                })();
-                match done {
-                    Ok(()) => {
-                        conn.execute_batch("release change")?;
-                        push_touch(&mut touched, eid);
-                        push_touch(&mut touched, child);
-                    }
-                    Err(e) => {
-                        conn.execute_batch("rollback to change; release change")?;
-                        eprintln!("sync: edge for {eid} dropped — {e}");
-                    }
-                }
+                // Nothing left to write: dual_edge lowered this sentence into
+                // its edge entity, the only edge store. What remains is the
+                // change itself — journalled and cast, so a catch-up client and
+                // a live one hear the sentence in the spelling they read.
+                push_touch(&mut touched, eid);
+                push_touch(&mut touched, child);
                 continue;
             }
             let cols: Vec<(String, PropType)> = if name == "entity" {
@@ -3437,7 +3408,6 @@ pub fn apply(
                         let _ = conn
                             .execute(&format!("delete from {} where entity = ?1", q(cname)), [did]);
                     }
-                    conn.execute("delete from dependency where parent = ?1 or child = ?1", [did])?;
                 }
                 let stamp = now_iso();
                 for d in doomed {

@@ -1,7 +1,11 @@
 // Project-root reachability over the durable governed corpus. The recursive
-// walk follows every dependency parent→child and uses UNION as its visited set,
-// so cycles terminate without assigning structural meaning to any edge type.
+// walk follows every edge parent→child and uses UNION as its visited set, so
+// cycles terminate without assigning structural meaning to any edge type. It
+// reads the ends alone (edge.rs LINKS): the nature is deliberately absent
+// because no relation is structural, and asking for one would re-walk the
+// twelve-branch union at every step of the recursion.
 
+use crate::edge::LINKS;
 use crate::vocab::vocab;
 use rusqlite::Connection;
 
@@ -25,7 +29,7 @@ pub fn project_reachability(conn: &Connection) -> rusqlite::Result<Reachability>
         "with recursive rooted(entity) as (\
            select \"{owner_col}\" from project \
            union \
-           select d.child from dependency d join rooted r on r.entity = d.parent\
+           select d.child from ({LINKS}) d join rooted r on r.entity = d.parent\
          ), corpus(entity) as (\
            {corpus}\
          ) \

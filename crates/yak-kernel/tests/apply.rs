@@ -770,20 +770,20 @@ fn session_parent_links_delegates_edge() {
     let s = store();
     seed_session(&s, B, "parent");
     run(&s, vec![ch(A, "session", json!({"id": "S-child", "parent": B}))]);
-    let n: i64 = one(&s, "select count(*) from dependency where type = 'delegates'");
-    assert_eq!(n, 1);
+    let said = edge_eid(B, "delegates", A);
+    assert_eq!(one::<i64>(&s, &format!("select count(*) from edge where {}", of(&said))), 1);
+    assert_eq!(one::<i64>(&s, &format!("select count(*) from delegates where {}", of(&said))), 1);
 }
 
 #[test]
 fn edges_link_and_unlink() {
     let s = store();
     run(&s, vec![ch(A, "task", json!({})), ch(B, "task", json!({}))]);
-    // BOTH stores, one write (T-32530): the row lands and so does the sentence
-    // entity, content-addressed from `from|nature|to`.
+    // ONE store (T-32552): the wire's `dependency` spelling lowers to the
+    // sentence entity, content-addressed from `from|nature|to`, and no row.
     let said = edge_eid(A, "requires", B);
     run(&s, vec![ch(A, "dependency", json!({"type": "requires", "child": B}))]);
-    let n: i64 = one(&s, "select count(*) from dependency where type = 'requires'");
-    assert_eq!(n, 1);
+    assert_eq!(one::<i64>(&s, "select count(*) from dependency"), 0);
     assert_eq!(one::<i64>(&s, &format!("select count(*) from edge where {}", of(&said))), 1);
     assert_eq!(one::<i64>(&s, &format!("select count(*) from requires where {}", of(&said))), 1);
     // an edge is bulk, never typed by a human, so its spine carries no num
@@ -797,8 +797,6 @@ fn edges_link_and_unlink() {
     // Unlinking is not a DEATH: the comps go, the spine stays, so the same
     // sentence can be said again — a tombstone would forbid it forever.
     run(&s, vec![ch(A, "dependency", json!({"type": "requires", "child": B, "gone": true}))]);
-    let n: i64 = one(&s, "select count(*) from dependency where type = 'requires'");
-    assert_eq!(n, 0);
     assert_eq!(one::<i64>(&s, &format!("select count(*) from edge where {}", of(&said))), 0);
     assert_eq!(one::<i64>(&s, &format!("select count(*) from requires where {}", of(&said))), 0);
     assert_eq!(one::<i64>(&s, "select count(*) from tombstone"), 0);
@@ -822,12 +820,10 @@ fn claim_lease_bounces_and_audits() {
     seed_session(&s, C, "sess-c");
     run(&s, vec![ch(A, "claim", json!({"session": B}))]);
     // a claim IS wip now (D-24102): the claim row is the derived wip, and the
-    // worked edge lands
+    // worked sentence lands — dual_edge's entity, and nothing else
     let claims: i64 = one(&s, "select count(*) from claim");
     assert_eq!(claims, 1);
-    let n: i64 = one(&s, "select count(*) from dependency where type = 'worked'");
-    assert_eq!(n, 1);
-    // and the sentence beside it — the claim gate's row and dual_edge's entity
+    assert_eq!(one::<i64>(&s, "select count(*) from dependency"), 0);
     let said = edge_eid(B, "worked", A);
     assert_eq!(one::<i64>(&s, &format!("select count(*) from edge where {}", of(&said))), 1);
     assert_eq!(one::<i64>(&s, &format!("select count(*) from worked where {}", of(&said))), 1);

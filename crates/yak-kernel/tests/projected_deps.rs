@@ -4,6 +4,7 @@
 // session→referenced→target sentence, selected from either projected endpoint.
 
 use rusqlite::Connection;
+use yak_kernel::edge::edge_eid;
 use yak_kernel::Store;
 
 struct Fixture {
@@ -31,11 +32,13 @@ fn seed() -> (Fixture, String, String) {
         "create table entity (
            id integer primary key, eid text not null unique, num integer unique
          );
-         create table dependency (
-           parent integer not null, type text not null, child integer not null,
-           ord integer, primary key (parent, type, child)
+         create table edge (
+           entity integer primary key, \"from\" integer not null,
+           \"to\" integer not null, ord integer
          );
-         create index dependency_child on dependency(child);
+         create index edge_from on edge(\"from\");
+         create index edge_to on edge(\"to\");
+         create table \"references\" (entity integer primary key);
          create table entry (
            entity integer primary key, session integer not null, seq integer not null
          );
@@ -64,11 +67,17 @@ fn seed() -> (Fixture, String, String) {
             rusqlite::params![entry, sid, seq],
         )
         .unwrap();
+        // The sentence: an edge entity wearing its ends and the `references`
+        // nature — `referenced` is its WIRE spelling (edge.rs).
+        let said = edge_eid(eid, "references", &target);
+        conn.execute("insert into entity (eid) values (?1)", [&said]).unwrap();
+        let edge = conn.last_insert_rowid();
         conn.execute(
-            "insert into dependency (parent, type, child) values (?1, 'referenced', ?2)",
-            rusqlite::params![entry, target_id],
+            "insert into edge (entity, \"from\", \"to\") values (?1, ?2, ?3)",
+            rusqlite::params![edge, entry, target_id],
         )
         .unwrap();
+        conn.execute("insert into \"references\" (entity) values (?1)", [edge]).unwrap();
     }
     drop(conn);
     (Fixture { path, dir }, session, target)

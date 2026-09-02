@@ -62,6 +62,73 @@ pub fn natures(v: &Vocab) -> Vec<String> {
     v.edges.iter().map(|e| present(e).to_string()).collect()
 }
 
+// The sentence store as SQL — the Rust half of src/edge.ts `sentences()`, and
+// it must say the same three shapes for the same reasons. `edge` names the two
+// ends and its listing order; the nature comp names the verb. The columns are
+// exactly what `dependency` had — parent, type, child, ord — so every reader
+// keeps the shape it has always spoken, and `type` is the WIRE's spelling
+// (`referenced`, never `references`).
+//
+// `only` is a WHERE over the EDGE's own columns (`g."from"`, `g."to"`,
+// `g.entity`) and belongs INSIDE: a narrowing left to the caller's outer query
+// is applied only after the whole store is built.
+//
+// Three shapes, because sqlite answers them differently:
+//   - a NAMED nature is its own table, so the join IS the type test.
+//   - NARROWED and untyped: seek `edge` once and ask each nature table for the
+//     verb — a few primary-key probes over the few rows found.
+//   - WHOLE and untyped: one branch per nature, unioned, so each nature table
+//     is walked once instead of every edge being probed once per nature.
+pub fn sentences(v: &Vocab, type_: Option<&str>, only: &str) -> String {
+    let head = |verb: &str| {
+        format!(
+            "select g.\"from\" as parent, {verb} as type, \
+             g.\"to\" as child, g.ord as ord from edge g"
+        )
+    };
+    let where_ = if only.is_empty() { String::new() } else { format!(" where {only}") };
+    if let Some(t) = type_ {
+        let nature = nature_of(v, t).unwrap_or_else(|| t.to_string());
+        return format!(
+            "{} join \"{nature}\" n on n.entity = g.entity{where_}",
+            head(&format!("'{t}'"))
+        );
+    }
+    if only.is_empty() {
+        return natures(v)
+            .iter()
+            .map(|n| {
+                let word = type_of(v, n).unwrap_or_else(|| n.clone());
+                format!("{} join \"{n}\" n on n.entity = g.entity", head(&format!("'{word}'")))
+            })
+            .collect::<Vec<_>>()
+            .join(" union all ");
+    }
+    // An `edge` row always wears a nature — every door writes both or neither
+    // — so a null verb is an anomaly, and it leaves here rather than reaching a
+    // reader as a sentence with no word in the middle.
+    let verb = format!(
+        "(case {} end)",
+        natures(v)
+            .iter()
+            .map(|n| {
+                let word = type_of(v, n).unwrap_or_else(|| n.clone());
+                format!(
+                    "when exists (select 1 from \"{n}\" x where x.entity = g.entity) then '{word}'"
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    format!("select parent, type, child, ord from ({}{where_}) where type is not null", head(&verb))
+}
+
+// The same store read WITHOUT the verb, for a walk that only asks whether one
+// entity links to another (rooted.rs, and db.ts `links`). Naming a nature there
+// is not just unused, it is expensive: the union is re-walked at every step of
+// the recursion.
+pub const LINKS: &str = "select g.\"from\" as parent, g.\"to\" as child from edge g";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,6 +174,20 @@ mod tests {
         for (from, nature, to, want) in cases {
             assert_eq!(&edge_eid(from, nature, to), want, "edgeEid({from}|{nature}|{to})");
         }
+    }
+
+    // The decisive cross-impl proof for the SQL door, the way edge_eid_matches_ts
+    // pins the identity: these are the byte output of the REAL TS `sentences()`
+    // and `links` (src/edge.ts), captured with `deno run` at authoring. A reader
+    // in either language must build the same store, or `yak show` and the wire
+    // answer differently about what an edge is.
+    #[test]
+    fn sentences_match_ts_byte_for_byte() {
+        let v = vocab();
+        assert_eq!(sentences(v, Some("requires"), ""), "select g.\"from\" as parent, 'requires' as type, g.\"to\" as child, g.ord as ord from edge g join \"requires\" n on n.entity = g.entity");
+        assert_eq!(sentences(v, None, ""), "select g.\"from\" as parent, 'requires' as type, g.\"to\" as child, g.ord as ord from edge g join \"requires\" n on n.entity = g.entity union all select g.\"from\" as parent, 'contains' as type, g.\"to\" as child, g.ord as ord from edge g join \"contains\" n on n.entity = g.entity union all select g.\"from\" as parent, 'reads' as type, g.\"to\" as child, g.ord as ord from edge g join \"reads\" n on n.entity = g.entity union all select g.\"from\" as parent, 'about' as type, g.\"to\" as child, g.ord as ord from edge g join \"about\" n on n.entity = g.entity union all select g.\"from\" as parent, 'supervises' as type, g.\"to\" as child, g.ord as ord from edge g join \"supervises\" n on n.entity = g.entity union all select g.\"from\" as parent, 'delegates' as type, g.\"to\" as child, g.ord as ord from edge g join \"delegates\" n on n.entity = g.entity union all select g.\"from\" as parent, 'recalled' as type, g.\"to\" as child, g.ord as ord from edge g join \"recalled\" n on n.entity = g.entity union all select g.\"from\" as parent, 'supersedes' as type, g.\"to\" as child, g.ord as ord from edge g join \"supersedes\" n on n.entity = g.entity union all select g.\"from\" as parent, 'worked' as type, g.\"to\" as child, g.ord as ord from edge g join \"worked\" n on n.entity = g.entity union all select g.\"from\" as parent, 'referenced' as type, g.\"to\" as child, g.ord as ord from edge g join \"references\" n on n.entity = g.entity union all select g.\"from\" as parent, 'wants' as type, g.\"to\" as child, g.ord as ord from edge g join \"wants\" n on n.entity = g.entity union all select g.\"from\" as parent, 'satisfies' as type, g.\"to\" as child, g.ord as ord from edge g join \"satisfies\" n on n.entity = g.entity");
+        assert_eq!(sentences(v, None, "g.\"from\" = 7"), "select parent, type, child, ord from (select g.\"from\" as parent, (case when exists (select 1 from \"requires\" x where x.entity = g.entity) then 'requires' when exists (select 1 from \"contains\" x where x.entity = g.entity) then 'contains' when exists (select 1 from \"reads\" x where x.entity = g.entity) then 'reads' when exists (select 1 from \"about\" x where x.entity = g.entity) then 'about' when exists (select 1 from \"supervises\" x where x.entity = g.entity) then 'supervises' when exists (select 1 from \"delegates\" x where x.entity = g.entity) then 'delegates' when exists (select 1 from \"recalled\" x where x.entity = g.entity) then 'recalled' when exists (select 1 from \"supersedes\" x where x.entity = g.entity) then 'supersedes' when exists (select 1 from \"worked\" x where x.entity = g.entity) then 'worked' when exists (select 1 from \"references\" x where x.entity = g.entity) then 'referenced' when exists (select 1 from \"wants\" x where x.entity = g.entity) then 'wants' when exists (select 1 from \"satisfies\" x where x.entity = g.entity) then 'satisfies' end) as type, g.\"to\" as child, g.ord as ord from edge g where g.\"from\" = 7) where type is not null");
+        assert_eq!(LINKS, "select g.\"from\" as parent, g.\"to\" as child from edge g");
     }
 
     #[test]
