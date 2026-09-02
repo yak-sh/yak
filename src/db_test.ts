@@ -3654,8 +3654,8 @@ slow('open heals canonical stored values once and preserves failures', () => {
       comp: { id: 'legacy-session', operator: 1 },
     },
   ])
-  // Two failures healing must PRESERVE (and warn about on every open): an
-  // enum cell outside its closed set, and a time cell that is not a time.
+  // Two failures healing must PRESERVE (and warn about, once per vocabulary):
+  // an enum cell outside its closed set, and a time cell that is not a time.
   legacy.prepare(`update session set pid = '', origin = 'gone' where ${OWNED}`)
     .run(session)
   legacy.prepare(`update created set at = ? where ${OWNED}`)
@@ -3663,6 +3663,10 @@ slow('open heals canonical stored values once and preserves failures', () => {
   legacy.exec('alter table project add column retired_at text')
   legacy.prepare(`update project set retired_at = 'never' where ${OWNED}`)
     .run(project)
+  // open() already marked this vocabulary's heal done; the cells above stand
+  // in for an older vocabulary's writes, so unmark it the way a vocabulary
+  // change would.
+  legacy.exec(`delete from server_meta where k like 'heal:%'`)
   let stable = legacy.prepare(
     `select quote(priority) as priority, typeof(priority) as priority_type,
             quote(project) as project,
@@ -3720,16 +3724,17 @@ slow('open heals canonical stored values once and preserves failures', () => {
     console.warn = warn
     Deno.removeSync(root, { recursive: true })
   }
+  // The second open found its own vocabulary's mark and re-parsed nothing.
   assertEquals(
     warnings.filter((w) =>
       w.includes(`${session} origin is one of external, managed`)
     ).length,
-    2,
+    1,
   )
   assertEquals(
     warnings.filter((w) => w.includes(`${project} archived.at is a time`))
       .length,
-    2,
+    1,
   )
 })
 
