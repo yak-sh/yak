@@ -1603,6 +1603,8 @@ fn normalize(conn: &Connection, changes: Vec<Change>) -> Result<Vec<Change>> {
 
 // ---- the gate registry (D-22530): in-transaction validators per comp ----
 
+// The sides of a bounced claim as eids; the audit resolves each to the spine
+// after the rollback (a loser born in the rolled-back batch resolves to null).
 pub struct Bounce {
     pub target: String,
     pub loser: String,
@@ -1832,20 +1834,11 @@ impl Gate for ClaimGate {
         if let Some((holder_eid, holder_id)) = cur {
             let holder_eid = holder_eid.unwrap_or_default();
             if holder_eid != session {
-                let loser: Option<String> = cx
-                    .conn
-                    .query_row(
-                        "select s.id from session s join entity o on o.id = s.entity \
-                         where o.eid = ?1",
-                        [session],
-                        |r| r.get(0),
-                    )
-                    .optional()?;
-                let holder_label = holder_id.clone().unwrap_or_else(|| human(cx.conn, &holder_eid));
+                let holder_label = holder_id.unwrap_or_else(|| human(cx.conn, &holder_eid));
                 cx.bounce = Some(Bounce {
                     target: c.eid.clone(),
-                    loser: loser.unwrap_or_else(|| session.to_string()),
-                    holder: holder_id.unwrap_or(holder_eid),
+                    loser: session.to_string(),
+                    holder: holder_eid,
                 });
                 return Err(refuse(format!(
                     "{} already claimed by {holder_label}",
@@ -3700,7 +3693,9 @@ pub fn apply(
                     conn.execute(
                         "insert into conflict (entity, target, loser, holder) values \
                          ((select id from entity where eid = ?1), \
-                          (select id from entity where eid = ?2), ?3, ?4)",
+                          (select id from entity where eid = ?2), \
+                          (select id from entity where eid = ?3), \
+                          (select id from entity where eid = ?4))",
                         [&ceid, &b.target, &b.loser, &b.holder],
                     )?;
                     let _ = mint_num(conn, &ceid);

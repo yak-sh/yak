@@ -409,11 +409,11 @@ pub static SCHEMA: &[SchemaOp] = &[
     address text not null
   );
   create table if not exists conflict (
-    entity        integer primary key references entity(id),
+    entity integer primary key references entity(id),
     target integer not null,
-    loser      text not null,
-    holder     text not null,
-    at         text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    loser  integer references entity(id),
+    holder integer references entity(id),
+    at     text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
   -- A value deliberately forgotten. The removed bytes never land here:
   -- target + column identify the slot and hash proves which value; the
@@ -1076,6 +1076,8 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::Exec(r#"create index if not exists mail_target on "mail" ("target");"#),
     SchemaOp::Exec(r#"create index if not exists mail_reply_to on "mail" ("reply_to");"#),
     SchemaOp::Exec(r#"create index if not exists conflict_target on "conflict" ("target");"#),
+    SchemaOp::Exec(r#"create index if not exists conflict_loser on "conflict" ("loser");"#),
+    SchemaOp::Exec(r#"create index if not exists conflict_holder on "conflict" ("holder");"#),
     SchemaOp::Exec(r#"create index if not exists redaction_target on "redaction" ("target");"#),
     SchemaOp::Exec(r#"create index if not exists comment_target on "comment" ("target");"#),
     SchemaOp::Exec(r#"create index if not exists commit_target on "commit" ("target");"#),

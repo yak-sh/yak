@@ -214,6 +214,18 @@ let embeddingDdl = `create table if not exists embedding (
 // The extension's ANN data is derived from embedding. These triggers are the
 // crash fence: any raw-vector write dirties the persisted index in the same
 // SQLite statement; vector.ts clears it only after a successful rebuild.
+// A bounced claim's audit row. Both sides reference the retained spine; a
+// loser whose session was born in the very batch that rolled back has no spine
+// row, so loser (and holder, symmetrically) admit null. Named apart from
+// `schema` because open() rebuilds a legacy label-keyed table to this shape
+// (migrateConflict).
+let conflictDdl = `create table if not exists conflict (
+    entity integer primary key references entity(id),
+    target integer not null,
+    loser  integer references entity(id),
+    holder integer references entity(id),
+    at     text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  )`
 let embeddingTriggers = `
   create trigger if not exists embedding_index_ai after insert on embedding
   begin update embedding_index set dirty = 1 where id = 1; end;
@@ -676,13 +688,7 @@ let schema = `
     entity     integer primary key references entity(id),
     address text not null
   );
-  create table if not exists conflict (
-    entity        integer primary key references entity(id),
-    target integer not null,
-    loser      text not null,
-    holder     text not null,
-    at         text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-  );
+  ${conflictDdl};
   -- A value deliberately forgotten. The removed bytes never land here:
   -- target + column identify the slot and hash proves which value; the
   -- universal created component carries when/by/via. Server-owned and
@@ -1513,6 +1519,50 @@ export let migrateEmbedding = (db: DatabaseSync) => {
     db.exec('drop table embedding_stale')
     db.exec(embeddingTriggers)
     db.exec('update embedding_index set dirty = 1 where id = 1')
+  })
+}
+
+// A column's declared type, for a migration that keys on a SHAPE change
+// rather than a column's presence.
+let colType = (db: DatabaseSync, table: string, col: string) =>
+  (prep(db, `select type from pragma_table_info('${table}') where name = ?`)
+    .get(col) as { type: string } | undefined)?.type
+
+// Point a conflict's sides at the spine. The legacy rows carried display
+// strings — a session's chosen label when it had one, else its eid, else a
+// human id — so each resolves through those doors in turn; what none of them
+// names (a session that rolled back with the batch, a hand-typed label) is
+// reported and left null. No-op once the sides are integers.
+export let migrateConflict = (db: DatabaseSync) => {
+  if (colType(db, 'conflict', 'loser') != 'TEXT') return
+  let side = (col: string) =>
+    `coalesce(
+       (select s.entity from session s where s.id = c.${col}),
+       (select e.id from entity e where e.eid = c.${col}),
+       (select e.id from entity e
+        where c.${col} glob '[A-Z]*-[0-9]*'
+          and substr(c.${col}, instr(c.${col}, '-') + 1) not glob '*[^0-9]*'
+          and e.num = cast(substr(c.${col}, instr(c.${col}, '-') + 1) as integer))
+     )`
+  atomic(db, () => {
+    db.exec('alter table conflict rename to conflict_stale')
+    db.exec(conflictDdl)
+    db.exec(
+      `insert into conflict (entity, target, loser, holder, at)
+       select c.entity, c.target, ${side('loser')}, ${side('holder')}, c.at
+       from conflict_stale c`,
+    )
+    let { losers, holders } = prep(
+      db,
+      `select count(*) filter (where loser is null) as losers,
+              count(*) filter (where holder is null) as holders from conflict`,
+    ).get() as { losers: number; holders: number }
+    if (losers || holders) {
+      console.warn(
+        `conflict: ${losers} loser(s) and ${holders} holder(s) named no spine — left null`,
+      )
+    }
+    db.exec('drop table conflict_stale')
   })
 }
 
@@ -3344,6 +3394,7 @@ export let migrate = (db: DatabaseSync) => {
       // rebuilt to that shape (its num already rides the retained spine).
       migrateTombstone(db)
       migrateEmbedding(db)
+      migrateConflict(db)
       // Both doc mirrors follow it by trigger from here on. Anything older,
       // any out-of-band writer, or shadow-table damage (overlapping watcher
       // restarts have managed it) shows up here as a failed integrity check
@@ -4971,10 +5022,10 @@ export let apply = (
     removedLog.set(eid, [...(removedLog.get(eid) ?? []), name])
     t?.removed.set(eid, [...(t.removed.get(eid) ?? []), name])
   }
-  // A bounced claim is worth remembering: noted here mid-transaction,
-  // written AFTER the rollback (an audit row can't ride the batch it
-  // condemns) as a conflict entity — display strings, not references,
-  // because the loser's session row may die in that same rollback.
+  // A bounced claim is worth remembering: noted here mid-transaction as
+  // eids, written AFTER the rollback (an audit row can't ride the batch it
+  // condemns) as a conflict entity referencing the retained spine — a loser
+  // whose session was born in the rolled-back batch has none, and is null.
   let bounced: { target: string; loser: string; holder: string } | null = null
   // This is a write transaction from birth. Taking its reserved lock before
   // the validation reads lets busy_timeout wait for a handoff peer; upgrading
@@ -5239,15 +5290,10 @@ export let apply = (
         `,
         ).get(eid) as { session: string; id: string | null } | undefined
         if (cur && cur.session != comp.session) {
-          let loser = prep(
-            db,
-            `select s.id as id from session s
-             join entity o on o.id = s.entity where o.eid = ?`,
-          ).get(String(comp.session)) as { id: string } | undefined
           bounced = {
             target: eid,
-            loser: loser?.id ?? String(comp.session),
-            holder: cur.id ?? cur.session,
+            loser: String(comp.session),
+            holder: cur.session,
           }
           // The holder is named by its session LABEL when it has one —
           // that's a name someone chose, not an eid; only the fallback
@@ -6097,7 +6143,9 @@ export let apply = (
         prep(
           db,
           `insert into conflict (entity, target, loser, holder)
-           values ((select id from entity where eid = ?), ?, ?, ?)`,
+           values ((select id from entity where eid = ?), ?,
+                   (select id from entity where eid = ?),
+                   (select id from entity where eid = ?))`,
         ).run(ceid, refId(db, bounced.target), bounced.loser, bounced.holder)
         mintNum(db, ceid) // spine no longer numbers at birth (T-3684)
         db.exec('commit')

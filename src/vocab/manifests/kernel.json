@@ -106,8 +106,14 @@
           "eid": "entity",
           "death": "keep"
         },
-        "loser": "text",
-        "holder": "text",
+        "loser": {
+          "eid": "session",
+          "death": "keep"
+        },
+        "holder": {
+          "eid": "session",
+          "death": "keep"
+        },
         "at": "time"
       }
     },

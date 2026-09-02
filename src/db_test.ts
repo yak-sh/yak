@@ -31,6 +31,7 @@ let {
   buried,
   migrate,
   migrateBoardsToProjects,
+  migrateConflict,
   migrateEmbedding,
   migrateErrors,
   migrateTombstone,
@@ -1625,8 +1626,8 @@ Deno.test('claim is a lease: conflict throws + audits, same session refreshes', 
     c.name == 'conflict' && c.comp?.target == task
   )
   assertEquals(audit.length, 1)
-  assertEquals(audit[0].comp?.loser, 'sess-b')
-  assertEquals(audit[0].comp?.holder, 'sess-a')
+  assertEquals(audit[0].comp?.loser, b)
+  assertEquals(audit[0].comp?.holder, a)
   // same session again: no-op, no throw, no extra audit
   apply(db, [{ eid: task, name: 'claim', comp: { session: a } }])
   // release, then the other side may take it
@@ -4977,6 +4978,54 @@ Deno.test('vectors key on the spine; a legacy eid-keyed table is rebuilt', () =>
   )
   migrateEmbedding(d) // idempotent
   assertEquals(hasCol(d, 'embedding', 'entity'), true)
+  d.close()
+})
+
+Deno.test('a conflict names its sides on the spine; legacy labels resolve', () => {
+  let d = open(':memory:')
+  let t = uid(), a = uid(), b = uid()
+  apply(d, [
+    { eid: t, name: 'doc', comp: { title: 'contested' } },
+    { eid: a, name: 'session', comp: { id: 'sess-a' } },
+    { eid: b, name: 'session', comp: { id: 'sess-b' } },
+  ])
+  let idOf = (
+    eid: string,
+  ) => (d.prepare('select id, num from entity where eid = ?').get(eid) as {
+    id: number
+    num: number
+  })
+  // The legacy table held display strings: a session's label, an eid, a
+  // human id, or a name nothing resolves.
+  d.exec(`
+    drop table conflict;
+    create table conflict (entity integer primary key references entity(id),
+      target integer not null, loser text not null, holder text not null,
+      at text not null default '2026-01-01')`)
+  let row = (loser: string, holder: string) => {
+    let c = uid()
+    d.prepare('insert into entity (eid) values (?)').run(c)
+    d.prepare(
+      'insert into conflict (entity, target, loser, holder) values (?, ?, ?, ?)',
+    ).run(idOf(c).id, idOf(t).id, loser, holder)
+  }
+  row('sess-b', 'sess-a')
+  row(b, `S-${idOf(a).num}`)
+  row('S-6076-gone', 'nobody')
+  migrateConflict(d)
+  assertEquals(
+    d.prepare(
+      `select (select eid from entity where id = loser) as loser,
+              (select eid from entity where id = holder) as holder
+       from conflict order by entity`,
+    ).all(),
+    [{ loser: b, holder: a }, { loser: b, holder: a }, {
+      loser: null,
+      holder: null,
+    }],
+  )
+  migrateConflict(d) // idempotent
+  assertEquals(d.prepare('select count(*) as n from conflict').get(), { n: 3 })
   d.close()
 })
 

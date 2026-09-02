@@ -500,8 +500,8 @@ pub(crate) fn baked() -> Vocab {
         ]),
         ("conflict".into(), vec![
             ("target".into(), PropType::Eid("entity".into())),
-            ("loser".into(), PropType::Text),
-            ("holder".into(), PropType::Text),
+            ("loser".into(), PropType::Eid("session".into())),
+            ("holder".into(), PropType::Eid("session".into())),
             ("at".into(), PropType::Time),
         ]),
         ("redaction".into(), vec![

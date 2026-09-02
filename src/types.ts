@@ -675,8 +675,8 @@ export let stamped: Record<string, Record<string, PropType>> = {
   },
   conflict: {
     target: { eid: 'entity', death: 'keep' },
-    loser: 'text',
-    holder: 'text',
+    loser: { eid: 'session', death: 'keep' },
+    holder: { eid: 'session', death: 'keep' },
     at: 'time',
   },
   redaction: {
@@ -1767,15 +1767,14 @@ export type Review = {
 }
 
 // A claim that BOUNCED, kept as an entity: who tried (loser), who held
-// (holder) — resolved to session-id strings at rejection time, because
-// the loser's session entity may have been minted in the very batch
-// that rolled back. Server-minted only; audit contention with
-// graph_query kind=conflict.
+// (holder) — session references; a loser whose session was minted in the
+// very batch that rolled back has no spine row and is null. Server-minted
+// only; audit contention with graph_query kind=conflict.
 export type Conflict = {
   eid: string
   target: string
-  loser: string
-  holder: string
+  loser: string | null
+  holder: string | null
   at?: string
 }
 

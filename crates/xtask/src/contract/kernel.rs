@@ -179,7 +179,9 @@ struct Redaction {
 }
 
 // A claim that BOUNCED, kept as an entity. Server-minted only; audit rows
-// outlive everything they mention.
+// outlive everything they mention — every side references the retained
+// spine, and a loser whose session was born in the batch that rolled back
+// has no spine row, so that side is null.
 #[derive(Comp)]
 #[comp(plugin = "kernel", rank = 680, kind_rank = 260, stamped_rank = 230)]
 struct Conflict {
@@ -187,9 +189,11 @@ struct Conflict {
     #[col(eid = "entity", death = "keep")]
     target: Ref,
     #[stamped]
-    loser: Text,
+    #[col(eid = "session", death = "keep")]
+    loser: Ref,
     #[stamped]
-    holder: Text,
+    #[col(eid = "session", death = "keep")]
+    holder: Ref,
     #[stamped]
     at: Time,
 }

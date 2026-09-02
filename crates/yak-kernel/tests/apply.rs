@@ -174,8 +174,8 @@ const SCHEMA: &str = "
   create table conflict (
     entity integer primary key references entity(id),
     target integer not null,
-    loser text not null,
-    holder text not null,
+    loser integer references entity(id),
+    holder integer references entity(id),
     at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
   create table comment (
@@ -780,10 +780,10 @@ fn claim_lease_bounces_and_audits() {
         &default_gates(),
     );
     assert!(err.unwrap_err().to_string().contains("already claimed by sess-b"));
-    let holder: String = one(&s, "select holder from conflict");
-    assert_eq!(holder, "sess-b");
-    let loser: String = one(&s, "select loser from conflict");
-    assert_eq!(loser, "sess-c");
+    let holder: String = one(&s, "select (select eid from entity where id = holder) from conflict");
+    assert_eq!(holder, B);
+    let loser: String = one(&s, "select (select eid from entity where id = loser) from conflict");
+    assert_eq!(loser, C);
     // the same session re-claiming is a no-op refresh
     run(&s, vec![ch(A, "claim", json!({"session": B}))]);
 }
