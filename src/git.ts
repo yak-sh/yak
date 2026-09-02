@@ -25,37 +25,17 @@
 // is a deploy. Granted, it also self-heals: the first sync after the grant
 // pushes the whole backlog, and every one after keeps the tree at zero.
 
-let dec = new TextDecoder()
+import { git as run, gitRepo, type Ran } from './repo.ts'
 
-type Result = { ok: boolean; out: string; err: string }
-
-let run = async (
-  cwd: string,
-  args: string[],
-  signal?: AbortSignal,
-): Promise<Result> => {
-  // No terminal prompts, ever: this runs from a server effect with no one
-  // to answer, and a credential prompt would hang the whole sync.
-  let cmd = new Deno.Command('git', {
-    args: ['-C', cwd, ...args],
-    env: { GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', SSH_ASKPASS: '' },
-    stdout: 'piped',
-    stderr: 'piped',
-    signal,
-  })
-  try {
-    let { success, stdout, stderr } = await cmd.output()
-    return {
-      ok: success,
-      out: dec.decode(stdout).trim(),
-      err: dec.decode(stderr).trim(),
-    }
-  } catch (e) {
-    return { ok: false, out: '', err: String(e) }
-  }
-}
-
+// The porcelain below repo.ts's verbs: tracking, upstreams, and the level-up
+// that keeps a SHARED checkout mergeable. None of it survives a hosted repo —
+// there is no shared working copy there to fall behind — so it stays here,
+// spelled in git, over the one spawn.
 let git = (cwd: string, ...args: string[]) => run(cwd, args)
+let text = async (cwd: string, ...args: string[]) => {
+  let r = await run(cwd, args)
+  return r.ok ? r.out.trim() : undefined
+}
 
 let dir = (p: string) => p.slice(0, p.lastIndexOf('/'))
 
@@ -71,19 +51,19 @@ let why = (s: string) =>
   pick(s, (l) => l.trimStart().startsWith('!')) ||
   pick(s, (l) => /^(remote: )?(error|fatal):/.test(l.trimStart())) ||
   line(s)
-let said = (done: Result, fallback: string) =>
+let said = (done: Ran, fallback: string) =>
   line(done.err) || line(done.out) || fallback
-let refusal = (done: Result) =>
+let refusal = (done: Ran) =>
   why(done.err) || line(done.out) || 'git push exited without a diagnostic'
 
 // The repo that tracks this path, or nothing. Asked from the file's own
 // directory so a path under a nested checkout answers for that checkout.
 let tracker = async (path: string) => {
   let at = dir(path)
-  let root = await git(at, 'rev-parse', '--show-toplevel')
-  if (!root.ok) return
+  let root = await text(at, 'rev-parse', '--show-toplevel')
+  if (root == null) return
   let known = await git(at, 'ls-files', '--error-unmatch', '--', path)
-  return known.ok ? root.out : undefined
+  return known.ok ? root : undefined
 }
 
 // The remote and branch this one tracks, split, or nothing when it
@@ -91,32 +71,28 @@ let tracker = async (path: string) => {
 // obeys push.default, and `origin HEAD` guesses at both halves — a
 // projection must land on the branch the tree already answers to.
 let upstream = async (root: string) => {
-  let ref = await git(root, 'rev-parse', '--abbrev-ref', '@{u}')
-  if (!ref.ok) return
-  let cut = ref.out.indexOf('/')
-  return { remote: ref.out.slice(0, cut), branch: ref.out.slice(cut + 1) }
+  let ref = await text(root, 'rev-parse', '--abbrev-ref', '@{u}')
+  if (ref == null) return
+  let cut = ref.indexOf('/')
+  return { remote: ref.slice(0, cut), branch: ref.slice(cut + 1) }
 }
 
 // The revision `task commit` records: the sha a ref resolves to (HEAD by
 // default), the repo root, and the whole commit message — or nothing when
 // cwd is not a repo or the ref names no commit.
 export let revision = async (cwd: string, ref = 'HEAD') => {
-  let sha = await git(cwd, 'rev-parse', '--verify', `${ref}^{commit}`)
+  let sha = await gitRepo(cwd).revAt(ref)
   if (!sha.ok) return
+  let at = sha.out.trim()
   let root = await git(cwd, 'rev-parse', '--show-toplevel')
-  let message = await git(cwd, 'log', '-1', '--format=%B', sha.out)
-  return { sha: sha.out, repo: root.out, message: message.out }
+  let message = await git(cwd, 'log', '-1', '--format=%B', at)
+  return { sha: at, repo: root.out.trim(), message: message.out.trim() }
 }
 
 // How this branch sits against its upstream, or nothing when it has no
 // upstream to sit against. Counts, not opinions: `ahead` is ours alone,
 // `behind` is theirs alone, and both non-zero is diverged.
-export let standing = async (root: string) => {
-  let counts = await git(root, 'rev-list', '--left-right', '--count', '@{u}...')
-  if (!counts.ok) return
-  let [behind, ahead] = counts.out.split(/\s+/).map(Number)
-  return { ahead, behind }
-}
+export let standing = (root: string) => gitRepo(root).upstreamCounts()
 
 // Bring the branch level with its upstream when that costs nothing: a
 // fast-forward can't manufacture a merge and can't discard work, so it is
@@ -199,7 +175,7 @@ export let commit = async (
       continue
     }
     if (dirty) {
-      let done = await git(root, 'commit', '-q', '-m', msg, '--', ...paths)
+      let done = await gitRepo(root).commitPaths(paths, msg)
       if (!done.ok) {
         failed.push(
           `${root}: commit failed (` +
@@ -216,7 +192,7 @@ export let commit = async (
     let up = push ? await upstream(root) : undefined
     if (!up) continue
     let to = `HEAD:${up.branch}`
-    let sent = await git(root, 'push', '--quiet', up.remote, to)
+    let sent = await gitRepo(root).push(up.remote, to)
     if (sent.ok) {
       pushed.push(root)
       continue
@@ -248,7 +224,7 @@ export let commit = async (
       )
       continue
     }
-    let retried = await git(root, 'push', '--quiet', up.remote, to)
+    let retried = await gitRepo(root).push(up.remote, to)
     if (retried.ok) pushed.push(root)
     else {
       failed.push(

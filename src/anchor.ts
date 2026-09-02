@@ -8,6 +8,8 @@
 // freshness the repo contradicts (M-14370: pointers over copies, and a pointer
 // only rots when nobody is watching). Nothing here writes the graph.
 
+import { gitRepo } from './repo.ts'
+
 // The anchored paths, split on newline OR comma and trimmed. Both spellings
 // ride the one column so a caller can write whichever reads cleaner.
 /// anchorPaths('src/db.ts, src/types.ts') -> ['src/db.ts', 'src/types.ts']
@@ -28,29 +30,6 @@ export type Freshness =
   | { state: 'stale'; moved: string[] }
   | { state: 'unknown'; why: string }
 
-let dec = new TextDecoder()
-
-// git in `cwd`, quiet and non-interactive — this may run against a checkout
-// with no one to answer a credential prompt. Never throws; a spawn failure
-// (no git, no repo) reads as a not-ok result the caller turns into 'unknown'.
-let git = async (cwd: string, ...args: string[]) => {
-  try {
-    let { success, stdout, stderr } = await new Deno.Command('git', {
-      args: ['-C', cwd, ...args],
-      env: { GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', SSH_ASKPASS: '' },
-      stdout: 'piped',
-      stderr: 'piped',
-    }).output()
-    return {
-      ok: success,
-      out: dec.decode(stdout).trim(),
-      err: dec.decode(stderr).trim(),
-    }
-  } catch (e) {
-    return { ok: false, out: '', err: String(e) }
-  }
-}
-
 // Ask git how one anchor stands in `cwd`. `git log <sha>..HEAD -- <paths>`
 // lists the commits that touched the paths AFTER the anchored sha; any line
 // means the code moved past it. The sha is checked FIRST (cat-file), because a
@@ -64,19 +43,15 @@ export let freshness = async (
   let paths = anchorPaths(a.paths)
   if (!a.sha) return { state: 'unknown', why: 'no sha' }
   if (!paths.length) return { state: 'unknown', why: 'no paths' }
-  let known = await git(cwd, 'cat-file', '-e', `${a.sha}^{commit}`)
+  let repo = gitRepo(cwd)
+  let known = await repo.catFile(a.sha)
   if (!known.ok) {
     return { state: 'unknown', why: `sha ${a.sha} not in this repo` }
   }
-  let log = await git(
-    cwd,
-    'log',
-    '--format=%h',
-    `${a.sha}..HEAD`,
-    '--',
-    ...paths,
-  )
-  if (!log.ok) return { state: 'unknown', why: log.err || 'git log failed' }
+  let log = await repo.logSince(a.sha, paths)
+  if (!log.ok) {
+    return { state: 'unknown', why: log.err.trim() || 'git log failed' }
+  }
   let moved = log.out.split('\n').filter(Boolean)
   return moved.length ? { state: 'stale', moved } : { state: 'clean' }
 }
@@ -234,31 +209,33 @@ export let resolve = async (
   let path = paths[0]
   let exact = a.hunk || a.start != null
   if (!path) return { state: 'broken', tier: 'paths', why: 'no paths' }
-  let head = await git(cwd, 'rev-parse', 'HEAD')
+  let repo = gitRepo(cwd)
+  let head = await repo.revAt()
   if (!head.ok) {
     return {
       state: 'broken',
       tier: exact ? (a.hunk ? 'hunk' : 'line') : 'paths',
-      why: head.err || 'not a git repo',
+      why: head.err.trim() || 'not a git repo',
     }
   }
   if (!exact) {
     // TODO(T-21317): the symbol tier resolves here once a parser is vendored;
     // until then a symbol-only anchor grades at path granularity like this.
     let f = await freshness(cwd, a)
-    let loc = { path: paths.join(', '), head: head.out }
+    let loc = { path: paths.join(', '), head: head.out.trim() }
     return f.state == 'clean'
       ? { state: 'fresh', tier: 'paths', location: loc }
       : f.state == 'stale'
       ? { state: 'moved', tier: 'paths', location: loc, commits: f.moved }
       : { state: 'broken', tier: 'paths', why: f.why }
   }
-  let shown = await git(cwd, 'show', `HEAD:${path}`)
+  let shown = await repo.readAt('HEAD', path)
+  let content = shown.out.trim()
   if (a.hunk) {
     if (!shown.ok) {
       return { state: 'broken', tier: 'hunk', why: `${path} is not at HEAD` }
     }
-    let found = locate(shown.out + '\n', a.hunk, a.start)
+    let found = locate(content + '\n', a.hunk, a.start)
     if (!found) {
       return {
         state: 'broken',
@@ -266,8 +243,13 @@ export let resolve = async (
         why: `hunk not found in ${path}`,
       }
     }
-    let location = { path, start: found.start, end: found.end, head: head.out }
-    let bytes = slice(shown.out, found.start, found.end)
+    let location = {
+      path,
+      start: found.start,
+      end: found.end,
+      head: head.out.trim(),
+    }
+    let bytes = slice(content, found.start, found.end)
     return found.exact && found.start == (a.start ?? found.start)
       ? { state: 'fresh', tier: 'hunk', location, bytes }
       : { state: 'moved', tier: 'hunk', location, bytes, exact: found.exact }
@@ -279,7 +261,7 @@ export let resolve = async (
     return { state: 'broken', tier: 'line', why: `${path} is not at HEAD` }
   }
   if (!a.sha) return { state: 'broken', tier: 'line', why: 'no sha' }
-  let known = await git(cwd, 'cat-file', '-e', `${a.sha}^{commit}`)
+  let known = await repo.catFile(a.sha)
   if (!known.ok) {
     return {
       state: 'broken',
@@ -287,9 +269,13 @@ export let resolve = async (
       why: `sha ${a.sha} not in this repo`,
     }
   }
-  let diff = await git(cwd, 'diff', '-U0', `${a.sha}..HEAD`, '--', path)
+  let diff = await repo.diff(a.sha, path)
   if (!diff.ok) {
-    return { state: 'broken', tier: 'line', why: diff.err || 'git diff failed' }
+    return {
+      state: 'broken',
+      tier: 'line',
+      why: diff.err.trim() || 'git diff failed',
+    }
   }
   let got = advance(diff.out, start, end)
   if (got.state == 'broken') {
@@ -300,8 +286,8 @@ export let resolve = async (
     }
   }
   let at = got.state == 'moved' ? got : { start, end }
-  let location = { path, start: at.start, end: at.end, head: head.out }
-  let bytes = slice(shown.out, at.start, at.end)
+  let location = { path, start: at.start, end: at.end, head: head.out.trim() }
+  let bytes = slice(content, at.start, at.end)
   return got.state == 'moved'
     ? { state: 'moved', tier: 'line', location, bytes }
     : { state: 'fresh', tier: 'line', location, bytes }

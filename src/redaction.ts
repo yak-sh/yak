@@ -3,6 +3,7 @@
 // the pure column test and the filesystem-facing git read independently
 // testable. Removed values never cross a process argv or appear in a report.
 
+import { git as spawn } from './repo.ts'
 import { comps, stamped } from './types.ts'
 
 export let REDACTED = '[redacted]'
@@ -62,16 +63,11 @@ export let withBackupLock = async <T>(root: string, run: () => Promise<T>) => {
   }
 }
 
-let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes).trim()
+// The report reads history through the one git door (repo.ts); `run` stays
+// injectable so the range calculation above stays testable without a repo.
 let git: Run = async (root, args) => {
-  let out = await new Deno.Command('git', {
-    args: ['-C', root, ...args],
-  }).output()
-  return {
-    success: out.success,
-    stdout: decode(out.stdout),
-    stderr: decode(out.stderr),
-  }
+  let r = await spawn(root, args)
+  return { success: r.ok, stdout: r.out.trim(), stderr: r.err.trim() }
 }
 
 let commit = (line: string): Commit | undefined => {

@@ -73,6 +73,7 @@ import {
   trace,
 } from './effects.ts'
 import { legacyWorktreesDir, worktreesDir } from './ground.ts'
+import { git as run, gitRepo, gitSync, type Ran } from './repo.ts'
 import {
   hookClaim,
   lapseChanges,
@@ -687,14 +688,6 @@ let repoOf = (row: Row) =>
     | { path: string; base_branch: string }
     | undefined
 
-let gitResult = (cwd: string, args: string[]) =>
-  new Deno.Command('git', {
-    args,
-    cwd,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).outputSync()
-
 // The session's own commits, named by the trailer installTrailer plants — so a
 // sha resolves to this session (and its task) through the GRAPH too: report()
 // rides them into the settle comment, which FTS indexes, so `task search <sha>`
@@ -710,15 +703,14 @@ let commitShas = (row: Row): string[] => {
     let num = (db.prepare('select num from entity where eid = ?')
       .get(String(row.eid)) as { num: number } | undefined)?.num
     if (num == null) return []
-    let out = gitResult(cwd, [
+    let out = gitSync(cwd, [
       'log',
       '--format=%h',
       `--grep=Tasks-Session: S-${num} `,
       `${base}..${branch}`,
     ])
     if (out.code) return []
-    return new TextDecoder().decode(out.stdout).trim().split('\n')
-      .filter(Boolean)
+    return out.out.trim().split('\n').filter(Boolean)
   } catch {
     return []
   }
@@ -746,24 +738,22 @@ let landStateOf = (row: Row): Unlanded | null | undefined => {
   let repo = repoOf(row)
   if (!cwd || !branch || !repo) return
   try {
-    let ancestry = gitResult(cwd, [
+    let ancestry = gitSync(cwd, [
       'merge-base',
       '--is-ancestor',
       branch,
       repo.base_branch,
     ])
     if (ancestry.code == 0) return null
-    if (ancestry.code != 1) {
-      throw new Error(new TextDecoder().decode(ancestry.stderr).trim())
-    }
-    let counted = gitResult(cwd, [
+    if (ancestry.code != 1) throw new Error(ancestry.err.trim())
+    let counted = gitSync(cwd, [
       'rev-list',
       '--count',
       `${repo.base_branch}..${branch}`,
     ])
-    let count = Number(new TextDecoder().decode(counted.stdout).trim())
+    let count = Number(counted.out.trim())
     if (counted.code || !Number.isInteger(count) || count < 1) {
-      throw new Error(new TextDecoder().decode(counted.stderr).trim())
+      throw new Error(counted.err.trim())
     }
     return unlanded(branch, repo.base_branch, count, landVerdict(row))
   } catch (e) {
@@ -804,21 +794,18 @@ let cleanup = async (row: Row, cast: Cast) => {
     let repo = repoOf(row)
     if (!repo) return
     if (await git(tree, ['status', '--porcelain'])) return // dirty: keep
-    let merged = gitResult(repo.path, [
+    let merged = gitSync(repo.path, [
       'merge-base',
       '--is-ancestor',
       branch,
       repo.base_branch,
     ])
-    let d = mergeDisposition(
-      merged.code,
-      new TextDecoder().decode(merged.stderr).trim(),
-    )
+    let d = mergeDisposition(merged.code, merged.err.trim())
     if (!d.remove) { // unmerged or unresolvable: keep for inspection
       if (d.warn) console.warn(`worktree ${tree} kept — merge-base: ${d.warn}`)
       return
     }
-    await git(repo.path, ['worktree', 'remove', tree])
+    ok(await gitRepo(repo.path).worktreeRemove(tree), 'worktree')
     await git(repo.path, ['branch', '-d', branch])
     stamp(String(row.eid), { branch: null }, cast)
   } catch (e) {
@@ -844,14 +831,14 @@ let regrow = async (row: Row) => {
   let tree = String(row.cwd ?? '') ||
     `${legacyWorktreesDir()}/${basename(repo.path)}/${sid}`
   Deno.mkdirSync(dirname(tree), { recursive: true })
-  await git(repo.path, [
+  ok(
+    await gitRepo(repo.path).worktreeCreate(
+      tree,
+      `session/${sid}`,
+      repo.base_branch,
+    ),
     'worktree',
-    'add',
-    tree,
-    '-b',
-    `session/${sid}`,
-    repo.base_branch,
-  ])
+  )
   await installTrailer(tree, String(row.eid))
   return { cwd: tree, branch: `session/${sid}` }
 }
@@ -1638,20 +1625,16 @@ let codeOf = (eid: string) => {
   }
 }
 
-let git = async (cwd: string, args: string[]) => {
-  let out = await new Deno.Command('git', {
-    args,
-    cwd,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
-  if (!out.success) {
-    throw new Error(
-      `git ${args[0]}: ${new TextDecoder().decode(out.stderr).trim()}`,
-    )
-  }
-  return new TextDecoder().decode(out.stdout).trim()
+// A git run that refuses out loud, in git's own words. The porcelain here —
+// config, rev-parse variants, branch -d — has no portable verb; the acts that
+// do (worktree add/remove, HEAD) go through gitRepo, and `ok` gives them the
+// same throw.
+let ok = (r: Ran, verb: string) => {
+  if (!r.ok) throw new Error(`git ${verb}: ${r.err.trim()}`)
+  return r.out.trim()
 }
+let git = async (cwd: string, args: string[]) =>
+  ok(await run(cwd, args), args[0])
 
 // The firebreak script, run inside the scope by `setsid sh <this file>`:
 // agent first, then the trap — armed strictly AFTER the fork, or the agent
@@ -2200,19 +2183,19 @@ export let prepareWorktree = async (
       branch != j.branch
     ) throw new Error('existing path is not the expected session worktree')
   } else {
-    await git(j.repo.path, [
+    ok(
+      await gitRepo(j.repo.path).worktreeCreate(
+        j.tree,
+        j.branch,
+        j.repo.base_branch,
+      ),
       'worktree',
-      'add',
-      j.tree,
-      '-b',
-      j.branch,
-      j.repo.base_branch,
-    ])
+    )
   }
   await installTrailer(j.tree, eid)
   stamp(
     eid,
-    { base_revision: await git(j.tree, ['rev-parse', 'HEAD']) },
+    { base_revision: ok(await gitRepo(j.tree).revAt(), 'rev-parse') },
     cast,
   )
 }

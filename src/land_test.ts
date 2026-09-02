@@ -380,17 +380,18 @@ slow('a transiently failing push publishes on the retry', async () => {
   try {
     let bare = await withUpstream(r)
     let pushes = 0
-    let real = async (bin: string, args: string[], cwd: string) => {
+    let real = async (args: string[], cwd: string) => {
       if (args[0] == 'push' && ++pushes == 1) {
-        return { code: 1, out: '', err: 'transient spawn blip' }
+        return { ok: false, code: 1, out: '', err: 'transient spawn blip' }
       }
-      let out = await new Deno.Command(bin, {
+      let out = await new Deno.Command('git', {
         args,
         cwd,
         stdout: 'piped' as const,
         stderr: 'piped' as const,
       }).output()
       return {
+        ok: out.success,
         code: out.code,
         out: new TextDecoder().decode(out.stdout),
         err: new TextDecoder().decode(out.stderr),

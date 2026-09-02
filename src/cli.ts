@@ -144,6 +144,7 @@ import {
 import { projection, syncFiles } from './persona.ts'
 import { anchorPaths, type Freshness, freshness } from './anchor.ts'
 import { commit, revision } from './git.ts'
+import { gitSync } from './repo.ts'
 import { land as landTree } from './land.ts'
 import { request } from './http.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
@@ -3028,12 +3029,12 @@ let session = (got: Got) => {
 // The main checkout behind whatever worktree we stand in: removing a
 // worktree and deleting its branch are the repo's acts, not the copy's.
 let repoRoot = () => {
-  let out = new Deno.Command('git', {
-    args: ['rev-parse', '--path-format=absolute', '--git-common-dir'],
-    stderr: 'null',
-  }).outputSync()
-  if (!out.success) return undefined
-  return new TextDecoder().decode(out.stdout).trim().replace(/\/\.git\/?$/, '')
+  let out = gitSync(Deno.cwd(), [
+    'rev-parse',
+    '--path-format=absolute',
+    '--git-common-dir',
+  ])
+  return out.ok ? out.out.trim().replace(/\/\.git\/?$/, '') : undefined
 }
 
 // What the fleet left running: probes whose session is gone, and worktrees

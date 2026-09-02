@@ -29,6 +29,7 @@
 // not this verb's — before landing, and again after a rebase if the incoming
 // diff could affect it. Land neither runs nor knows about a gate.
 import { resolve } from 'node:path'
+import { git as spawn, type Ran } from './repo.ts'
 
 export type Unlanded = { line: string; message: string }
 
@@ -53,26 +54,12 @@ export let unlanded = (
   }
 }
 
-type Result = { code: number; out: string; err: string }
-type Run = (bin: string, args: string[], cwd: string) => Promise<Result>
+// git is the only binary land runs, and repo.ts is the only place that spawns
+// it. Output stays as git wrote it: land prints it verbatim, and `diff --stat`
+// indents its first line.
+type Run = (args: string[], cwd: string) => Promise<Ran>
 
-let dec = new TextDecoder()
-let run: Run = async (bin, args, cwd) => {
-  let out = await new Deno.Command(bin, {
-    args,
-    cwd,
-    env: bin == 'git'
-      ? { GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', SSH_ASKPASS: '' }
-      : undefined,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
-  return {
-    code: out.code,
-    out: dec.decode(out.stdout),
-    err: dec.decode(out.stderr),
-  }
-}
+let run: Run = (args, cwd) => spawn(cwd, args)
 
 // Landed carries the merged sha and the shared checkout, so the caller can
 // sweep the siblings the merge left mergeable. Diverged says the base moved:
@@ -93,7 +80,7 @@ let defaultWrite = (text: string, error = false) => {
   if (text) (error ? console.error : console.log)(text)
 }
 
-let message = (label: string, r: Result) => {
+let message = (label: string, r: Ran) => {
   let detail = (r.err || r.out).trim().split('\n').find(Boolean)
   return `${label} failed with exit ${r.code}${detail ? `: ${detail}` : ''}`
 }
@@ -102,21 +89,21 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
   // A spawn-level failure (EAGAIN under fork pressure, a vanished binary)
   // REJECTS instead of returning a code, which would crash land after a
   // successful merge — the exact "Failed to spawn '/usr/bin/git'" seen when
-  // the box is loaded (T-22282). Convert it to a failed Result so every
+  // the box is loaded (T-22282). Convert it to a failed run so every
   // caller keeps its own contract: need() throws its labeled error, publish
   // stays best-effort.
   let chosen = ops.run ?? run
-  let command: Run = async (bin, args, cwd) => {
+  let command: Run = async (args, cwd) => {
     try {
-      return await chosen(bin, args, cwd)
+      return await chosen(args, cwd)
     } catch (e) {
-      return { code: -1, out: '', err: `${e}` }
+      return { ok: false, code: -1, out: '', err: `${e}` }
     }
   }
   let write = ops.write ?? defaultWrite
   let cwd = ops.cwd ?? Deno.cwd()
   let git = async (at: string, args: string[], show = true) => {
-    let r = await command('git', args, at)
+    let r = await command(args, at)
     if (show) {
       write(r.out)
       write(r.err, true)
@@ -235,7 +222,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
 // upstream is landed-but-unpublished, since the merge already took effect in
 // the tree that runs.
 let publish = async (
-  git: (at: string, args: string[], show?: boolean) => Promise<Result>,
+  git: (at: string, args: string[], show?: boolean) => Promise<Ran>,
   write: (text: string, error?: boolean) => void,
   root: string,
   base: string,
