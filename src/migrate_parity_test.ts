@@ -37,7 +37,8 @@ let tmp = () => Deno.makeTempFileSync({ prefix: 'parity-', suffix: '.db' })
 // An empty migrated graph — open()'s full schema with the demo seed stripped, so
 // snapshot() holds ONLY what a test writes and carries no persona `home` (whose
 // derived `reads` edges would double under a dep replay). FK off so table order
-// doesn't matter while clearing.
+// doesn't matter while clearing. Quoted: a component may be named after a
+// keyword (`commit`).
 let unseeded = (): DatabaseSync => {
   let db = open(':memory:')
   db.exec('pragma foreign_keys = off')
@@ -48,7 +49,7 @@ let unseeded = (): DatabaseSync => {
          and name not like '%_fts%'
          and name not like '%_gram%'`,
     ).all() as { name: string }[]
-  ) db.exec(`delete from ${name}`)
+  ) db.exec(`delete from "${name}"`)
   db.exec('pragma foreign_keys = on')
   return db
 }
