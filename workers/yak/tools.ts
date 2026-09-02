@@ -17,9 +17,8 @@
 // and /query. The rule for every write is session.ts's:
 // an owner or editor of the space writes, a member reads, nobody else is
 // answered at all. A write speaks the wire and nothing else — the entity
-// bundle, or a flat Change batch where one eid must be the caller's own. A
-// deploy in v1 is a version bump, since an app's files serve live from its
-// blob store.
+// bundle, or a flat Change batch. A deploy in v1 is a version bump, since an
+// app's files serve live from its blob store.
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import type { EntityLiteral } from '../../src/mutation.ts'
 import type { App, Directory, Space } from './directory.ts'
@@ -118,23 +117,22 @@ export let TOOLS: Tool[] = [
     run: async (ctx, args) => {
       let s = slug(args.slug, 'slug')
       if (await ctx.dir.space(s)) throw new Error(`space ${s} is taken`)
-      // The space, its owner, and the owner's person row in one batch. A flat
-      // Change batch, not a bundle: the person is keyed by the caller's
-      // sign-in, and only a Change mints at an eid the caller names — a
-      // bundle's `entity.eid` addresses an entity that already exists. Once
-      // identity writes that row at sign-in (T-32327) this line changes
-      // nothing and apply drops it.
-      let eid = crypto.randomUUID()
-      await ctx.dir.apply([
-        { eid: ctx.person, name: 'person', comp: {} },
-        { eid, name: 'doc', comp: { title: text(args.title, 'title') } },
-        { eid, name: 'space', comp: { slug: s } },
-        {
-          eid: crypto.randomUUID(),
-          name: 'member',
-          comp: { space: eid, person: ctx.person, role: 'owner' },
-        },
-      ], vouched({ person: ctx.person, role: 'owner' }))
+      // The space, its owner, and the owner's person row in one batch. The
+      // person is keyed by the caller's sign-in, and a bundle mints at an eid
+      // its author chose (T-32455), so the whole batch is bundles. Once
+      // identity writes that row at sign-in (T-32327) it changes nothing and
+      // apply drops it.
+      await ctx.dir.apply({
+        entities: [
+          { entity: { eid: ctx.person }, person: {} },
+          {
+            entity: { eid: '$space' },
+            doc: { title: text(args.title, 'title') },
+            space: { slug: s },
+          },
+          { member: { space: '$space', person: ctx.person, role: 'owner' } },
+        ],
+      }, vouched({ person: ctx.person, role: 'owner' }))
       let space = (await ctx.dir.space(s))!
       return {
         text: `space ${s} (${space.eid}): https://${s}.yaks.app/`,
@@ -285,10 +283,11 @@ export let TOOLS: Tool[] = [
     description:
       "Put data in the app's store yourself — seeding it, or repairing what a " +
       'page wrote. An entity is {entity: {eid}, ...components}, where a ' +
-      "'$alias' eid mints a new one (the answer maps it to its eid), a nested " +
-      'bundle stands in wherever an eid goes, and edges are the `dependency` ' +
-      "component. The app's pages write this same shape through " +
-      './api/client.js. The components an app has today are the shared ones ' +
+      "'$alias' eid mints a new one (the answer maps it to its eid), as does a " +
+      'uuid of your own that names nothing yet, a nested bundle stands in ' +
+      'wherever an eid goes, and edges are the `dependency` component. The ' +
+      "app's pages write this same shape through ./api/client.js. The " +
+      'components an app has today are the shared ones ' +
       '— doc (title, body), task (status, priority, project), project, ' +
       'comment, web, image, attachment, archived; a component of your own ' +
       'naming is coming, so until then the words go in doc and the rest in ' +

@@ -134,10 +134,9 @@ export let directory = (via: Fetcher) => {
   }
   let one = async (q: string) => (await query(q))[0]
   return {
-    // A write that changes the directory: the whole wire, either shape. A
-    // bundle where every eid it names already exists; a flat Change batch
-    // where one does not, since only a Change mints at an eid the caller
-    // chose — which is what a person keyed by their sign-in needs.
+    // A write that changes the directory: the whole wire, either shape — a
+    // bundle (which mints at an eid its author chose, T-32455) or a flat
+    // Change batch.
     apply: async (
       mutation: Mutation,
       headers: Record<string, string> = {},

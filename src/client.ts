@@ -1545,12 +1545,18 @@ type LiteralNode = {
   deps: { type: Edge; target: string | number | LiteralNode }[]
   was: Record<string, Record<string, string | null>>
   dead?: boolean
+  minted?: boolean
 }
 
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
 let owns = (v: object, key: string) =>
   Object.prototype.hasOwnProperty.call(v, key)
+
+// An eid a client is free to NAME an entity by: a uuid it minted, or the
+// content hash a blob (or commit) is its own name by. db.ts resolveId reads
+// the same two shapes as a whole eid.
+let MINTABLE = new RegExp(`${UUID.source}|^[0-9a-f]{64}$`, 'i')
 
 // The bundle shape lowered onto the older key/id/comps/deps literal, so one
 // compiler serves both: a `$` eid is a batch-local key, any other eid names an
@@ -1736,15 +1742,27 @@ export let normalizeLiterals = (
   let aliasEntries: [string, string][] = []
   let eids = new Set<string>()
   for (let node of nodes) {
-    let eid = node.id ? external(node.id) : mint()
+    let found = node.id ? external(node.id) : undefined
+    // Clients mint their own eids, so an `entity.eid` already SHAPED like one
+    // — a uuid, or the content hash a blob or commit is named by — that names
+    // nothing yet and carries comps DEFINES the entity here, the same freedom
+    // the flat wire has. A human id, a bare num, or a slug that resolves to
+    // nothing is a typo, and an eid with nothing to define is a reference.
+    let coined = !found && node.id && MINTABLE.test(node.id) &&
+        Object.keys(node.comps).length
+      ? node.id.toLowerCase()
+      : undefined
+    let eid = found ?? coined ?? (node.id ? undefined : mint())
     if (node.id && !eid) throw new Error(`no entity: ${node.id}`)
     if (!eid) throw new Error('literal mint returned no eid')
     if (eids.has(eid)) throw new Error(`entity appears twice: ${eid}`)
     eids.add(eid)
     node.eid = eid
+    node.minted = !found
     if (node.key) aliasEntries.push([node.key, eid])
   }
   let aliases = Object.fromEntries(aliasEntries)
+  let byEid = new Map(nodes.map((node) => [node.eid, node]))
 
   let ref = (value: string | number, where = '') => {
     let name = String(value)
@@ -1753,7 +1771,10 @@ export let normalizeLiterals = (
     if (local && found) {
       throw new Error(`ambiguous literal reference: ${name}`)
     }
-    let eid = local ?? found
+    // An eid this batch mints at names its own entity, the way a $alias does.
+    let low = name.toLowerCase()
+    let mine = byEid.get(low)?.minted ? low : undefined
+    let eid = local ?? found ?? mine
     if (!eid) throw new Error(`no entity or literal key: ${name}${where}`)
     return eid
   }
@@ -1765,7 +1786,6 @@ export let normalizeLiterals = (
       eid: typeof target == 'object' ? target.eid : ref(target),
     }))
   )
-  let byEid = new Map(nodes.map((node) => [node.eid, node]))
   // Component patches with every reference resolved to an eid. A ref column
   // must name a spine that exists when its change lands, so an entity this
   // batch mints is written before any entity whose column names it: those
@@ -1791,7 +1811,7 @@ export let normalizeLiterals = (
             : undefined
           if (!eid) throw new Error(`.${name}.${prop} must name an entity`)
           let target = byEid.get(eid)
-          if (target && !target.id) {
+          if (target?.minted) {
             needs.set(node, [...(needs.get(node) ?? []), target])
           }
           return [prop, eid]

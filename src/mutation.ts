@@ -5,7 +5,9 @@
 import type { Change, Edge } from './types.ts'
 
 // A write literal is the read shape (D-23827): `entity: {eid}` names an
-// existing entity or, as a `$alias`, one this batch mints; components ride
+// existing entity, or — as a `$alias`, or as an eid a client minted itself (a
+// uuid or a content hash) that names nothing yet — one this batch mints
+// alongside the components it carries; components ride
 // flat beside it exactly as a read shows them; edges are `dependency`
 // sentences, a list when there are several. Wherever an eid goes — entity.eid,
 // a ref column, a dependency child — a `$alias`, a human id, or a nested

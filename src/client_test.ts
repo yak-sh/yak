@@ -1087,6 +1087,69 @@ Deno.test('normalizeLiterals: a bundle wearing tombstone deletes the entity', ()
   }
 })
 
+Deno.test('normalizeLiterals: a bundle mints at a client-chosen eid', () => {
+  let T = 'cccccccc-0000-4000-8000-000000000003'
+  let plan = (literals: Record<string, unknown>[]) =>
+    normalizeLiterals(literals, {
+      resolve: (id) => id == 'T-3' || id == T ? T : undefined,
+      mint: () => 'cccccccc-0000-4000-8000-00000000000f',
+    })
+  // A uuid nothing wears yet, carrying comps, IS the new entity's eid — and
+  // an eid the batch names resolves for everything else in it. Uppercase in,
+  // canonical lowercase out, the shape db.ts stores.
+  let mine = 'CCCCCCCC-0000-4000-8000-0000000000AA'
+  let hash = 'a'.repeat(64)
+  assertEquals(
+    plan([
+      { entity: { eid: mine }, doc: { title: 'mine' } },
+      { comment: { target: mine, body: 'about mine' } },
+      // The old literal shape's `id` follows the same rule.
+      { id: hash, comps: { blob: { bytes: 1 } } },
+    ]).changes,
+    [
+      { eid: mine.toLowerCase(), name: 'doc', comp: { title: 'mine' } },
+      {
+        eid: 'cccccccc-0000-4000-8000-00000000000f',
+        name: 'comment',
+        comp: { target: mine.toLowerCase(), body: 'about mine' },
+      },
+      { eid: hash, name: 'blob', comp: { bytes: 1 } },
+    ],
+  )
+  // Everything else unresolved is a typo, not a new entity: only an eid's own
+  // shape licenses minting, and an eid with nothing to define is a reference.
+  let bad: [string, Record<string, unknown>[], string][] = [
+    [
+      'a human id',
+      [{ entity: { eid: 'T-9' }, doc: { title: 'x' } }],
+      'no entity: T-9',
+    ],
+    [
+      'a bare num',
+      [{ entity: { eid: '9' }, doc: { title: 'x' } }],
+      'no entity: 9',
+    ],
+    [
+      'a slug',
+      [{ entity: { eid: 'nowhere' }, doc: { title: 'x' } }],
+      'no entity: nowhere',
+    ],
+    [
+      'an eid with no components',
+      [{ entity: { eid: 'cccccccc-0000-4000-8000-0000000000bb' } }],
+      'no entity: cccccccc-0000-4000-8000-0000000000bb',
+    ],
+    [
+      'an unresolved eid where an eid goes',
+      [{ comment: { target: { entity: { eid: hash } }, body: 'x' } }],
+      `no entity or literal key: ${hash} (.comment.target)`,
+    ],
+  ]
+  for (let [name, literals, message] of bad) {
+    assertThrows(() => plan(literals), Error, message, name)
+  }
+})
+
 Deno.test('normalizeLiterals: invalid aliases, references, keys, and cycles reject', () => {
   let cases: [string, Record<string, unknown>[], string][] = [
     [

@@ -148,6 +148,23 @@ Deno.test('a $alias in a column lands before the entity that names it', () => {
   assertEquals(depsOf(db, [out.aliases.$t]).map((d) => d.type), ['requires'])
 })
 
+Deno.test('a bundle mints at the eid its author chose', () => {
+  let db = freshDb(), mine = uid()
+  // Nothing wears `mine` yet, so the bundle carrying comps defines it there —
+  // and the spine + num appear on that first touch, as for any other write.
+  let out = mutate(db, {
+    entities: [
+      { entity: { eid: mine }, doc: { title: 'chosen', body: '' }, task: {} },
+      { doc: { title: 'about it', body: '' }, comment: { target: mine } },
+    ],
+  })
+  assertEquals(out.changes.some((c) => c.eid == mine && c.name == 'doc'), true)
+  assertEquals(compOf(db, mine, 'doc')?.title, 'chosen')
+  let spine = compOf(db, mine, 'entity') as { eid: string; num: number }
+  assertEquals(spine.eid, mine)
+  assertEquals(typeof spine.num, 'number')
+})
+
 Deno.test('a bundle wearing tombstone kills the entity; later bundles are void', () => {
   let db = freshDb(), t = uid()
   born(db, t)

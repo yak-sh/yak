@@ -58,12 +58,14 @@ component named `kind`.
 A read is also a write. `POST /apply` and MCP `graph_apply` take
 `{entities: [...]}`, each entry the shape above: `entity: {eid}` names an
 existing entity or, as a `$alias`, one the batch mints (the result's `aliases`
-maps `$alias → eid`); components ride flat beside it as patches; edges are the
-`dependency` component, `{type, child}` or a list of them. Wherever an eid goes
-— `entity.eid`, a ref column, a dependency child — a `$alias`, a human id, or a
-nested bundle stands in. `was` beside the components guards per column. `kind`,
-`num`, `refs`, `backrefs`, `comments`, and stamped or derived columns are
-ignored, so a read edited and sent back writes just the edit:
+maps `$alias → eid`) — as does an eid the client minted itself, a uuid or a
+content hash naming nothing yet, on an entry carrying components; components
+ride flat beside it as patches; edges are the `dependency` component,
+`{type, child}` or a list of them. Wherever an eid goes — `entity.eid`, a ref
+column, a dependency child — a `$alias`, a human id, or a nested bundle stands
+in. `was` beside the components guards per column. `kind`, `num`, `refs`,
+`backrefs`, `comments`, and stamped or derived columns are ignored, so a read
+edited and sent back writes just the edit:
 
 ```json
 [{
