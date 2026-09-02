@@ -31,7 +31,7 @@
 // on refusal — a behavior/API change out of scope for this hygiene pass.
 #![allow(clippy::result_large_err)]
 
-use crate::change::{batch_json, Change};
+use crate::change::Change;
 use crate::store::{resolve, resolve_checked};
 use crate::vocab::{vocab, PropType, Vocab};
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
@@ -2508,22 +2508,21 @@ fn exec_change(conn: &Connection, sql: &str, params: &[Value]) -> rusqlite::Resu
     st.execute(refs.as_slice())
 }
 
-// The normalized parallel record (D-18860/D-18861), dual-written beside the
-// JSON journal row in the SAME transaction (T-18878) — the Rust mirror of
-// db.ts journalNormalized. journal_tx keeps the batch's provenance;
+// The journal write (D-18860/D-18861) — the Rust mirror of db.ts journalWrite.
+// journal_tx keeps the batch's provenance and mints the transaction id (an
+// integer primary key: the next rowid, the log's monotonic total order);
 // journal_change one ordered operation per Change ((tx, ordinal) reproduces the
 // applied order); journal_field the ordered after-image — one present row per
 // field an upsert wrote (JSON-encoded in value, so a present null stays distinct
 // from a tombstone), or a tombstone per then-present field when a component is
 // removed, keeping field history self-contained across a removal and later
 // recreation. An upsert with no fields (empty component presence) writes none.
-// `tx` is the JSON journal row's rowid, written as journal_tx.id so the two
-// logs share one transaction identity (journal.rowid == journal_tx.id). Both
-// serde_json Maps preserve insertion order, so the field ordinals match the
-// order db.ts records.
-fn journal_normalized(
+// Both serde_json Maps preserve insertion order, so the field ordinals match
+// the order db.ts records. Provenance and every change name spine ids,
+// resolved here from the eids the wire speaks (a death retains its spine row,
+// so each logged eid resolves; an actor or via resolves or is null).
+fn journal_write(
     conn: &Connection,
-    tx: i64,
     now: &str,
     actor: Option<&str>,
     via: Option<&str>,
@@ -2532,21 +2531,23 @@ fn journal_normalized(
 ) -> rusqlite::Result<()> {
     exec_change(
         conn,
-        "insert into journal_tx (id, ts, actor, via, trace) values (?1, ?2, ?3, ?4, ?5)",
+        "insert into journal_tx (ts, actor, via, trace) values \
+         (?1, (select id from entity where eid = ?2), \
+          (select id from entity where eid = ?3), ?4)",
         &[
-            Value::from(tx),
             Value::from(now),
             actor.map(Value::from).unwrap_or(Value::Null),
             via.map(Value::from).unwrap_or(Value::Null),
             trace.clone(),
         ],
     )?;
+    let tx = conn.last_insert_rowid();
     for (ordinal, ch) in logged.iter().enumerate() {
         let op = if ch.comp.is_none() { "remove" } else { "upsert" };
         exec_change(
             conn,
-            "insert into journal_change (tx, ordinal, eid, component, operation) \
-             values (?1, ?2, ?3, ?4, ?5)",
+            "insert into journal_change (tx, ordinal, entity, component, operation) \
+             values (?1, ?2, (select id from entity where eid = ?3), ?4, ?5)",
             &[
                 Value::from(tx),
                 Value::from(ordinal as i64),
@@ -2568,7 +2569,8 @@ fn journal_normalized(
                                 partition by jf.field order by jf.id desc \
                               ) as rn \
                        from journal_field jf join journal_change jc on jc.id = jf.change \
-                       where jc.eid = ?1 and jc.component = ?2 \
+                       where jc.entity = (select id from entity where eid = ?1) \
+                         and jc.component = ?2 \
                      ) where rn = 1 and present = 1",
                 )?;
                 let fields: Vec<String> = st
@@ -3666,42 +3668,10 @@ pub fn apply(
             } else {
                 Value::Null
             };
-            let jrow = {
-                exec_change(
-                    conn,
-                    "insert into journal (ts, actor, via, batch, trace) \
-                     values (?1, ?2, ?3, ?4, ?5)",
-                    &[
-                        Value::from(now.as_str()),
-                        actor.as_deref().map(Value::from).unwrap_or(Value::Null),
-                        via.as_deref().map(Value::from).unwrap_or(Value::Null),
-                        Value::from(batch_json(&logged)),
-                        trace.clone(),
-                    ],
-                )?;
-                conn.last_insert_rowid()
-            };
-            let mut seen = HashSet::new();
-            for c in &logged {
-                if seen.insert(c.eid.clone()) {
-                    conn.execute(
-                        "insert into journal_touch (jrow, eid) values (?1, ?2)",
-                        rusqlite::params![jrow, c.eid],
-                    )?;
-                }
-            }
-            // The normalized parallel record (T-18878), same transaction, same
-            // `logged` — so a Rust-written batch reads back through the switched
-            // readers (T-18880) identically to a TS-written one.
-            journal_normalized(
-                conn,
-                jrow,
-                &now,
-                actor.as_deref(),
-                via.as_deref(),
-                &trace,
-                &logged,
-            )?;
+            // The journal, same transaction, same `logged` — so a Rust-written
+            // batch reads back through every reader identically to a
+            // TS-written one.
+            journal_write(conn, &now, actor.as_deref(), via.as_deref(), &trace, &logged)?;
         }
         conn.execute_batch("commit")?;
         let mut out = changes;

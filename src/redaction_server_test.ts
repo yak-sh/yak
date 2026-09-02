@@ -37,7 +37,9 @@ slow(
     assertEquals(JSON.stringify(out).includes(secret), false)
     assertMatch(out.audit, /^X-\d+$/)
     assertEquals(
-      db.prepare('select count(*) as n from journal where instr(batch, ?) > 0')
+      db.prepare(
+        'select count(*) as n from journal_field where instr(value, ?) > 0',
+      )
         .get(secret),
       { n: 0 },
     )

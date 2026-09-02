@@ -53,6 +53,83 @@ fn has_idx(conn: &Connection, name: &str) -> bool {
     .is_some()
 }
 
+fn has_table(conn: &Connection, name: &str) -> bool {
+    conn.query_row("select 1 from sqlite_master where type = 'table' and name = ?1", [name], |_| {
+        Ok(())
+    })
+    .is_ok()
+}
+
+// Retire the JSON journal (db.ts retireJsonJournal, T-18883): the legacy
+// `journal` (one JSON batch per row) and `journal_touch` (its seek index) are
+// dropped once journal_tx holds a row for every parseable batch -- never
+// history the normalized log does not carry. Guarded by table presence, so a
+// later open is a pure read.
+fn retire_json_journal(conn: &Connection) -> rusqlite::Result<()> {
+    if !has_table(conn, "journal") {
+        return Ok(());
+    }
+    let missing: i64 = conn.query_row(
+        "select count(*) from journal j \
+         where json_valid(j.batch) \
+           and not exists (select 1 from journal_tx t where t.id = j.rowid)",
+        [],
+        |r| r.get(0),
+    )?;
+    if missing > 0 {
+        return Ok(());
+    }
+    conn.execute_batch("drop table if exists journal_touch; drop table if exists journal;")?;
+    conn.execute("delete from server_meta where k = 'journal_backfill'", [])?;
+    Ok(())
+}
+
+// Key the journal by spine id (db.ts migrateJournalKeys, T-18883):
+// journal_change.eid and journal_tx.actor/via were eid TEXT and are now
+// integers into entity(id). Each table is rebuilt beside itself from the fresh
+// DDL (a scratch graph hands it over, so this never restates the schema) and
+// swapped in, keeping every id and resolving each eid through the spine; a
+// change whose eid has no spine row keeps its tx and fields and names no
+// entity. Guarded on the old column, so a later open is a pure read. Foreign
+// keys are off on this connection, so the drops leave the kept children alone.
+fn migrate_journal_keys(conn: &Connection) -> rusqlite::Result<()> {
+    if !has_col(conn, "journal_change", "eid") {
+        return Ok(());
+    }
+    let scratch = Connection::open_in_memory()?;
+    apply_schema(&scratch)?;
+    let ddl_of = |t: &str| -> rusqlite::Result<String> {
+        let sql: String = scratch.query_row(
+            "select sql from sqlite_master where type = 'table' and name = ?1",
+            [t],
+            |r| r.get(0),
+        )?;
+        Ok(sql.replacen(t, &format!("__mig_{t}"), 1))
+    };
+    let tx_ddl = ddl_of("journal_tx")?;
+    let change_ddl = ddl_of("journal_change")?;
+    conn.execute_batch(&tx_ddl)?;
+    conn.execute_batch(
+        "insert into __mig_journal_tx (id, ts, actor, via, trace) \
+           select jt.id, jt.ts, a.id, v.id, jt.trace from journal_tx jt \
+             left join entity a on a.eid = jt.actor \
+             left join entity v on v.eid = jt.via; \
+         drop table journal_tx; \
+         alter table __mig_journal_tx rename to journal_tx;",
+    )?;
+    conn.execute_batch(&change_ddl)?;
+    conn.execute_batch(
+        "insert into __mig_journal_change (id, tx, ordinal, entity, component, operation) \
+           select jc.id, jc.tx, jc.ordinal, e.id, jc.component, jc.operation \
+             from journal_change jc left join entity e on e.eid = jc.eid; \
+         drop table journal_change; \
+         alter table __mig_journal_change rename to journal_change; \
+         create index journal_change_tx on journal_change(tx, ordinal); \
+         create index journal_change_ent on journal_change(entity, component);",
+    )?;
+    Ok(())
+}
+
 // `instruction` was the empty Session-prompt marker before executable
 // instructions claimed that name. Move only that one-column legacy shape;
 // contract-bearing instruction tables belong to the evaluator and must remain.
@@ -193,6 +270,8 @@ pub fn apply_schema(conn: &Connection) -> rusqlite::Result<()> {
             }
         }
     }
+    retire_json_journal(conn)?;
+    migrate_journal_keys(conn)?;
     conn.execute_batch(
         "insert or ignore into prompt (entity) \
          select e.entity from entry e \

@@ -79,9 +79,12 @@ pub fn of_eid(store: &Store, eid: &str, limit: i64) -> Vec<Value> {
     // The batches touching this entity, newest first — reconstructed from the
     // normalized rows (T-18880) and screened to the entity's own eid. Provenance
     // (ts/actor/via) rides journal_tx; the corrupt-gap batch is skipped.
-    let sql = "select jc.tx as tx, jt.ts as ts, jt.actor as actor, jt.via as via \
+    let sql = "select jc.tx as tx, jt.ts as ts, \
+                      (select eid from entity where id = jt.actor) as actor, \
+                      (select eid from entity where id = jt.via) as via \
                from journal_change jc join journal_tx jt on jt.id = jc.tx \
-               where jc.eid = ?1 group by jc.tx order by jc.tx desc limit ?2";
+               where jc.entity = (select id from entity where eid = ?1) \
+               group by jc.tx order by jc.tx desc limit ?2";
     let Ok(mut st) = store.conn.prepare(sql) else { return vec![] };
     let metas: Vec<(i64, String, Option<String>, Option<String>)> = st
         .query_map(rusqlite::params![eid, limit], |r| {
@@ -108,8 +111,10 @@ pub fn by_via(store: &Store, via: &str, limit: i64) -> Vec<Value> {
     if !store.has_table("journal_tx") {
         return vec![];
     }
-    let sql = "select id, ts, actor, via from journal_tx \
-               where via = ?1 order by id desc limit ?2";
+    let sql = "select id, ts, (select eid from entity where id = actor), \
+                      (select eid from entity where id = via) from journal_tx \
+               where via = (select id from entity where eid = ?1) \
+               order by id desc limit ?2";
     let Ok(mut st) = store.conn.prepare(sql) else { return vec![] };
     let metas: Vec<(i64, String, Option<String>, Option<String>)> = st
         .query_map(rusqlite::params![via, limit], |r| {

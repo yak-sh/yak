@@ -1190,7 +1190,7 @@ fn ro_conn(db_path: &str) -> rusqlite::Connection {
 
 fn journal_tip(db_path: &str) -> i64 {
     ro_conn(db_path)
-        .query_row("select coalesce(max(rowid),0) from journal", [], |r| r.get(0))
+        .query_row("select coalesce(max(id),0) from journal_tx", [], |r| r.get(0))
         .unwrap_or(0)
 }
 
@@ -1233,49 +1233,51 @@ fn doc_title_count(db_path: &str, title: &str) -> i64 {
         .unwrap_or(0)
 }
 
-// The (via, batch, trace) rows a batch committed, canonicalized and joined — one
-// string per surface (b) so a Vec compare pinpoints a differing row.
+// The (via, batch, trace) a transaction committed, read back through the
+// kernel's journal reader (journal_tx + journal_change + journal_field),
+// canonicalized and joined — one string per surface (b) so a Vec compare
+// pinpoints a differing row.
 fn journal_since(db_path: &str, base: i64) -> Vec<String> {
     let conn = ro_conn(db_path);
-    let mut st = conn
-        .prepare(
-            "select coalesce(via,''), batch, coalesce(trace,'') \
-             from journal where rowid > ?1 order by rowid",
-        )
-        .unwrap();
-    let rows = st
-        .query_map([base], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
-        })
-        .unwrap();
-    rows.filter_map(|x| x.ok())
-        .map(|(via, batch, trace)| {
+    yak_kernel::feed::journal_since(&conn, base)
+        .into_iter()
+        .map(|row| {
             let mut seen = vec![];
+            let via = row.via.clone().unwrap_or_default();
+            let batch = batch_value(&row.batch).to_string();
+            let trace = row.trace.as_ref().map(|t| {
+                serde_json::json!({
+                    "created": t.created,
+                    "removed": t.removed.iter().map(|(e, names)| serde_json::json!([e, names])).collect::<Vec<_>>(),
+                })
+                .to_string()
+            });
             format!(
                 "via={} | batch={} | trace={}",
                 canon_scalar(&via, &mut seen),
                 canon_text(&batch),
-                canon_text(&trace),
+                canon_text(&trace.unwrap_or_default()),
             )
         })
         .collect()
 }
 
-// Every eid a committed batch touched — the union across the journal rows since
-// baseline. Captures the batch's own eids, cascade casualties, AND a bounce's
-// minted conflict eid, so surface (c) reads back exactly what moved.
+// Every eid a committed batch touched — the union across the journal
+// transactions since baseline. Captures the batch's own eids, cascade
+// casualties, AND a bounce's minted conflict eid, so surface (c) reads back
+// exactly what moved.
 fn affected(db_path: &str, base: i64) -> Vec<String> {
     let conn = ro_conn(db_path);
-    let mut st = conn.prepare("select batch from journal where rowid > ?1 order by rowid").unwrap();
-    let batches: Vec<String> =
-        st.query_map([base], |r| r.get::<_, String>(0)).unwrap().filter_map(|x| x.ok()).collect();
     let mut set = std::collections::BTreeSet::new();
-    for b in batches {
-        if let Ok(v) = serde_json::from_str::<Value>(&b) {
-            collect_eids(&v, &mut set);
-        }
+    for row in yak_kernel::feed::journal_since(&conn, base) {
+        collect_eids(&batch_value(&row.batch), &mut set);
     }
     set.into_iter().collect()
+}
+
+// A reconstructed batch as the JSON array the wire carries.
+fn batch_value(batch: &[yak_kernel::Change]) -> Value {
+    Value::Array(batch.iter().map(|c| c.to_value()).collect())
 }
 
 fn collect_eids(v: &Value, out: &mut std::collections::BTreeSet<String>) {

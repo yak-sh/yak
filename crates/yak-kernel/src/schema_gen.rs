@@ -576,49 +576,25 @@ pub static SCHEMA: &[SchemaOp] = &[
     ord    integer,
     primary key (parent, type, child)
   );
-  -- Log data, not graph (like tool_call below): the journal is the record
-  -- OF the wire, never part of it — one row per applied batch, written
-  -- inside apply()'s transaction. No eid of its own, never in snapshot(),
-  -- never in a client cache; read it per-entity via journalOf(). The
-  -- symmetry: telemetry records READS, the journal records WRITES.
-  create table if not exists journal (
-    ts    text not null
-          default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    actor text,
-    via   text,
-    batch text not null
-  );
-  -- The journal's seek index (T-13915): one row per (batch rowid, eid) the
-  -- batch touched, written beside the batch inside apply()'s transaction. It
-  -- once made a per-entity read an index seek instead of a full json_each scan;
-  -- since the readers moved onto the normalized journal (T-18880) they seek
-  -- journal_change (eid, component) instead, so this index is still MAINTAINED
-  -- but unread, kept for reversibility pending the JSON journal's retirement
-  -- (T-18883). Still log data — jrow is the journal rowid, there is no eid of
-  -- its own, never in snapshot() or a client cache. Backfilled once
-  -- (backfillJournalTouch); the index arrives with the other seek indexes in
-  -- open(). Nothing deletes journal rows, so no delete-sync is needed.
-  create table if not exists journal_touch (
-    jrow integer not null,
-    eid  text not null
-  );
-  -- The NORMALIZED journal (D-18860/D-18861), written beside the JSON journal
-  -- above in the SAME apply() transaction -- DUAL-WRITE (T-18878). Three
-  -- append-only log tables: still log data, not graph -- no eid of their own,
-  -- never in snapshot() or a client cache, not vocabulary components (so no
-  -- xtask/codegen). The JSON journal stays AUTHORITATIVE and every reader still
-  -- reads it; these only ADD the parallel record the next stages backfill
-  -- (T-18879), switch readers onto (T-18880), and finally retire the JSON
-  -- journal for (T-18883).
+  -- The journal (D-18860/D-18861) -- log data, not graph (like tool_call
+  -- below): the record OF the wire, never part of it, written inside apply()'s
+  -- transaction. Three append-only tables with no eid of their own, never in
+  -- snapshot() or a client cache, not vocabulary components (so no
+  -- xtask/codegen); read per-entity via journalOf(), per-batch via
+  -- journalSince(). The symmetry: telemetry records READS, the journal records
+  -- WRITES.
   --
-  -- journal_tx: one row per applied batch, carrying the same provenance the JSON
-  -- row keeps (ts, actor, via, trace). Its rowid is the transaction's durable
-  -- total-order identity -- monotonic, so ordering never rests on ts alone.
+  -- journal_tx: one row per applied batch, its provenance (ts, actor, via,
+  -- trace). Its id is the transaction's durable total-order identity --
+  -- monotonic, so ordering never rests on ts alone -- and the cursor every
+  -- delta client holds. actor and via are spine ids like every other
+  -- reference (the actor it resolved to; the session or client that wrote),
+  -- null when unowned.
   create table if not exists journal_tx (
     id    integer primary key,
     ts    text not null,
-    actor text,
-    via   text,
+    actor integer references entity(id),
+    via   integer references entity(id),
     trace text
   );
   -- journal_change: one ordered operation per Change in the batch. (tx, ordinal)
@@ -626,12 +602,16 @@ pub static SCHEMA: &[SchemaOp] = &[
   -- upsert (comp != null -- a present component, an empty one being an upsert
   -- with no field rows) or remove (comp == null -- a component removal, or
   -- entity death when component = 'entity'). component is the wire component
-  -- name, eid its entity.
+  -- name, entity its spine id. A spine row outlives its entity (a death is
+  -- retained, D-18866), so every write names one; entity is nullable only for
+  -- history whose spine an out-of-band purge removed before the retention rule
+  -- -- those rows keep their tx and fields but name no entity, and every
+  -- per-entity reader skips them.
   create table if not exists journal_change (
     id        integer primary key,
     tx        integer not null references journal_tx(id),
     ordinal   integer not null,
-    eid       text not null,
+    entity    integer references entity(id),
     component text not null,
     operation text not null
   );
@@ -653,9 +633,9 @@ pub static SCHEMA: &[SchemaOp] = &[
     value    text
   );
   -- Reconstruct a batch in order (by tx), per-entity history and predecessor
-  -- lookup (by eid+component), and the field rows of a change (by change).
+  -- lookup (by entity+component), and the field rows of a change (by change).
   create index if not exists journal_change_tx on journal_change(tx, ordinal);
-  create index if not exists journal_change_ent on journal_change(eid, component);
+  create index if not exists journal_change_ent on journal_change(entity, component);
   create index if not exists journal_field_change on journal_field(change, ordinal);
   -- Server-local key/value, not graph: no eid, no components, so snapshot()
   -- (which walks the comps vocabulary) never carries it, and apply() never
@@ -1009,48 +989,46 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "anchor", col: "start", sql: r#"alter table anchor add column "start" real"# },
     SchemaOp::AddColumn { table: "anchor", col: "end", sql: r#"alter table anchor add column "end" real"# },
     SchemaOp::AddColumn { table: "fork", col: "from", sql: r#"alter table fork add column "from" integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "\"task\"", col: "project", sql: r#"alter table "task" add column project integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "\"task\"", col: "assignee", sql: r#"alter table "task" add column assignee integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "\"task\"", col: "domain", sql: r#"alter table "task" add column domain text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "pid", sql: r#"alter table "session" add column pid integer"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "pane", sql: r#"alter table "session" add column pane text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "turn", sql: r#"alter table "session" add column turn text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "notice_at", sql: r#"alter table "session" add column notice_at text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "notice_accepted_at", sql: r#"alter table "session" add column notice_accepted_at text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "notice_token", sql: r#"alter table "session" add column notice_token text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "transcript", sql: r#"alter table "session" add column transcript text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "agent_type", sql: r#"alter table "session" add column agent_type text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "source", sql: r#"alter table "session" add column source text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "operator", sql: r#"alter table "session" add column operator integer"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "parent", sql: r#"alter table "session" add column parent integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "\"journal\"", col: "trace", sql: r#"alter table "journal" add column trace text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "origin", sql: r#"alter table "session" add column origin text not null default 'external'"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "provider", sql: r#"alter table "session" add column provider text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "model", sql: r#"alter table "session" add column model text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "effort", sql: r#"alter table "session" add column effort text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "persona", sql: r#"alter table "session" add column persona integer"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "requested_task", sql: r#"alter table "session" add column requested_task integer"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "role", sql: r#"alter table "session" add column role integer"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "branch", sql: r#"alter table "session" add column branch text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "base_revision", sql: r#"alter table "session" add column base_revision text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "status", sql: r#"alter table "session" add column status text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "provider_session_id", sql: r#"alter table "session" add column provider_session_id text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "serving_model", sql: r#"alter table "session" add column serving_model text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "latest_seq", sql: r#"alter table "session" add column latest_seq integer not null default 0"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "standing", sql: r#"alter table "session" add column standing text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "started_at", sql: r#"alter table "session" add column started_at text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "stop_requested_at", sql: r#"alter table "session" add column stop_requested_at text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "input_at", sql: r#"alter table "session" add column input_at text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "finished_at", sql: r#"alter table "session" add column finished_at text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "exit_code", sql: r#"alter table "session" add column exit_code integer"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "stop_reason", sql: r#"alter table "session" add column stop_reason text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "final_text", sql: r#"alter table "session" add column final_text text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "usage_json", sql: r#"alter table "session" add column usage_json text"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "stderr", sql: r#"alter table "session" add column stderr text"# },
-    SchemaOp::AddColumn { table: "\"client\"", col: "actor", sql: r#"alter table "client" add column actor integer references entity(id)"# },
-    SchemaOp::AddColumn { table: "\"session\"", col: "actor", sql: r#"alter table "session" add column actor integer references entity(id)"# },
+    SchemaOp::AddColumn { table: "task", col: "project", sql: r#"alter table "task" add column project integer references entity(id)"# },
+    SchemaOp::AddColumn { table: "task", col: "assignee", sql: r#"alter table "task" add column assignee integer references entity(id)"# },
+    SchemaOp::AddColumn { table: "task", col: "domain", sql: r#"alter table "task" add column domain text"# },
+    SchemaOp::AddColumn { table: "session", col: "pid", sql: r#"alter table "session" add column pid integer"# },
+    SchemaOp::AddColumn { table: "session", col: "pane", sql: r#"alter table "session" add column pane text"# },
+    SchemaOp::AddColumn { table: "session", col: "turn", sql: r#"alter table "session" add column turn text"# },
+    SchemaOp::AddColumn { table: "session", col: "notice_at", sql: r#"alter table "session" add column notice_at text"# },
+    SchemaOp::AddColumn { table: "session", col: "notice_accepted_at", sql: r#"alter table "session" add column notice_accepted_at text"# },
+    SchemaOp::AddColumn { table: "session", col: "notice_token", sql: r#"alter table "session" add column notice_token text"# },
+    SchemaOp::AddColumn { table: "session", col: "transcript", sql: r#"alter table "session" add column transcript text"# },
+    SchemaOp::AddColumn { table: "session", col: "agent_type", sql: r#"alter table "session" add column agent_type text"# },
+    SchemaOp::AddColumn { table: "session", col: "source", sql: r#"alter table "session" add column source text"# },
+    SchemaOp::AddColumn { table: "session", col: "operator", sql: r#"alter table "session" add column operator integer"# },
+    SchemaOp::AddColumn { table: "session", col: "parent", sql: r#"alter table "session" add column parent integer references entity(id)"# },
+    SchemaOp::AddColumn { table: "session", col: "origin", sql: r#"alter table "session" add column origin text not null default 'external'"# },
+    SchemaOp::AddColumn { table: "session", col: "provider", sql: r#"alter table "session" add column provider text"# },
+    SchemaOp::AddColumn { table: "session", col: "model", sql: r#"alter table "session" add column model text"# },
+    SchemaOp::AddColumn { table: "session", col: "effort", sql: r#"alter table "session" add column effort text"# },
+    SchemaOp::AddColumn { table: "session", col: "persona", sql: r#"alter table "session" add column persona integer"# },
+    SchemaOp::AddColumn { table: "session", col: "requested_task", sql: r#"alter table "session" add column requested_task integer"# },
+    SchemaOp::AddColumn { table: "session", col: "role", sql: r#"alter table "session" add column role integer"# },
+    SchemaOp::AddColumn { table: "session", col: "branch", sql: r#"alter table "session" add column branch text"# },
+    SchemaOp::AddColumn { table: "session", col: "base_revision", sql: r#"alter table "session" add column base_revision text"# },
+    SchemaOp::AddColumn { table: "session", col: "status", sql: r#"alter table "session" add column status text"# },
+    SchemaOp::AddColumn { table: "session", col: "provider_session_id", sql: r#"alter table "session" add column provider_session_id text"# },
+    SchemaOp::AddColumn { table: "session", col: "serving_model", sql: r#"alter table "session" add column serving_model text"# },
+    SchemaOp::AddColumn { table: "session", col: "latest_seq", sql: r#"alter table "session" add column latest_seq integer not null default 0"# },
+    SchemaOp::AddColumn { table: "session", col: "standing", sql: r#"alter table "session" add column standing text"# },
+    SchemaOp::AddColumn { table: "session", col: "started_at", sql: r#"alter table "session" add column started_at text"# },
+    SchemaOp::AddColumn { table: "session", col: "stop_requested_at", sql: r#"alter table "session" add column stop_requested_at text"# },
+    SchemaOp::AddColumn { table: "session", col: "input_at", sql: r#"alter table "session" add column input_at text"# },
+    SchemaOp::AddColumn { table: "session", col: "finished_at", sql: r#"alter table "session" add column finished_at text"# },
+    SchemaOp::AddColumn { table: "session", col: "exit_code", sql: r#"alter table "session" add column exit_code integer"# },
+    SchemaOp::AddColumn { table: "session", col: "stop_reason", sql: r#"alter table "session" add column stop_reason text"# },
+    SchemaOp::AddColumn { table: "session", col: "final_text", sql: r#"alter table "session" add column final_text text"# },
+    SchemaOp::AddColumn { table: "session", col: "usage_json", sql: r#"alter table "session" add column usage_json text"# },
+    SchemaOp::AddColumn { table: "session", col: "stderr", sql: r#"alter table "session" add column stderr text"# },
+    SchemaOp::AddColumn { table: "client", col: "actor", sql: r#"alter table "client" add column actor integer references entity(id)"# },
+    SchemaOp::AddColumn { table: "session", col: "actor", sql: r#"alter table "session" add column actor integer references entity(id)"# },
     SchemaOp::Exec(r#"create index if not exists dependency_child on "dependency" ("child");"#),
-    SchemaOp::Index { name: "journal_touch_eid", sql: r#"create index journal_touch_eid on journal_touch (eid, jrow desc);"# },
     SchemaOp::Exec(r#"create index if not exists task_project on "task" ("project");"#),
     SchemaOp::Exec(r#"create index if not exists task_assignee on "task" ("assignee");"#),
     SchemaOp::Exec(r#"create index if not exists role_scope on "role" ("scope");"#),

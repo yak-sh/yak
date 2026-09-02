@@ -21,10 +21,11 @@ let { bareDb } = await import('./testdb.ts')
 
 bareDb()
 let uid = () => crypto.randomUUID()
+// Every value the journal holds — the one historical copy of content.
 let batches = (db: ReturnType<typeof bareDb>) =>
-  (db.prepare('select batch from journal order by rowid').all() as {
-    batch: string
-  }[]).map((row) => row.batch)
+  (db.prepare(
+    'select value from journal_field where value is not null order by id',
+  ).all() as { value: string }[]).map((row) => row.value)
 
 Deno.test('redact: live doc, journal, indexes, embedding, and audit move atomically', () => {
   let db = bareDb()
@@ -163,7 +164,7 @@ Deno.test('redact: a whole-column selector handles short values', () => {
   let out = redact(db, target, '.title')
   assertEquals(out.column, 'title')
   assertEquals(readComp(db, target, 'doc')?.title, '[redacted]')
-  assert(batches(db).every((batch) => !batch.includes('"title":"x"')))
+  assert(batches(db).every((value) => value != JSON.stringify('x')))
 })
 
 // blob_text is the content-addressed backend doc.body resolves through, and the
@@ -302,7 +303,8 @@ Deno.test('redact: mid-history redaction keeps the field chain consistent and th
     (db.prepare(
       `select count(*) as n from journal_field jf
          join journal_change jc on jc.id = jf.change
-       where jc.eid = ? and jc.component = 'doc' and jf.field = 'body'`,
+       where jc.entity = (select id from entity where eid = ?)
+         and jc.component = 'doc' and jf.field = 'body'`,
     ).get(target) as { n: number }).n
   let tx0 = txCount()
   let bf0 = bodyFields() // one after-image per body edit — the predecessor chain
@@ -365,7 +367,7 @@ Deno.test('redact: a failed audit append rolls every copy back', () => {
   ).run(target, new Uint8Array([1, 2, 3, 4]))
   let before = batches(db)
   db.exec(`
-    create trigger fail_redaction_journal before insert on journal
+    create trigger fail_redaction_journal before insert on journal_tx
     when exists (select 1 from redaction)
     begin
       select raise(abort, 'forced journal failure');
@@ -386,52 +388,4 @@ Deno.test('redact: a failed audit append rolls every copy back', () => {
   assertEquals(db.prepare('select count(*) as n from redaction').get(), {
     n: 0,
   })
-})
-
-// A historically-torn journal row (row #2106568; T-24020) whose batch is not
-// parseable JSON must not break redaction: the scrubber skips + warns on it,
-// exactly as the backfill does, and still removes the secret from every good
-// row and from live state.
-Deno.test('redact: a corrupt (unparseable) journal row is skipped, not fatal', () => {
-  let db = bareDb()
-  let target = uid()
-  let secret = 'torn-secret-24020'
-  apply(db, [{
-    eid: target,
-    name: 'doc',
-    comp: { title: 'Target', body: `keep ${secret} keep` },
-  }])
-  // Raw bytes straight into the column: the secret is present (so redactionRows'
-  // instr() pre-screen selects the row) but a control char makes it invalid JSON.
-  db.prepare(
-    'insert into journal (ts, actor, via, batch, trace) values (?, ?, ?, ?, ?)',
-  ).run(
-    '2026-01-01T00:00:00.000Z',
-    null,
-    null,
-    '[{"eid":"' + target + '","name":"doc","comp":{"body":"' + secret +
-      String.fromCharCode(1) + '"}}]',
-    null,
-  )
-
-  let warned: string[] = []
-  let realWarn = console.warn
-  console.warn = (...a: unknown[]) => warned.push(String(a[0]))
-  let out
-  try {
-    out = redact(db, target, secret)
-  } finally {
-    console.warn = realWarn
-  }
-
-  // Live state and every PARSEABLE batch are scrubbed …
-  assertEquals(out.column, 'body')
-  assertEquals(readComp(db, target, 'doc')?.body, 'keep [redacted] keep')
-  // … while the one torn row is left untouched (an honest gap the JSON readers
-  // skip), and the skip was WARNED, not thrown.
-  assert(warned.some((w) => w.includes('skipping unparseable batch')))
-  let corrupt = db.prepare(
-    `select batch from journal where instr(batch, char(1)) > 0`,
-  ).get() as { batch: string }
-  assert(corrupt.batch.includes(secret))
 })

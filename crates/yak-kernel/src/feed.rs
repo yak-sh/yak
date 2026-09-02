@@ -26,9 +26,8 @@ pub struct JournalRow {
 }
 
 pub fn cursor_of(conn: &Connection) -> i64 {
-    // journal_tx (T-18880), the SAME id-space journal_since seeks, so the cursor
-    // and the reader never drift — journal_tx.id == the JSON journal rowid, so
-    // the value is unchanged, but it no longer leans on the JSON journal.
+    // journal_tx.id — the SAME id-space journal_since seeks, so the cursor and
+    // the reader never drift.
     conn.query_row("select coalesce(max(id), 0) from journal_tx", [], |r| r.get(0)).unwrap_or(0)
 }
 
@@ -38,21 +37,23 @@ pub fn data_version(conn: &Connection) -> i64 {
     conn.query_row("pragma data_version", [], |r| r.get(0)).unwrap_or(0)
 }
 
-// Reconstruct one journaled batch's changes from the normalized rows
-// (journal_change + journal_field, D-18860/D-18861) — the parallel record's
-// read side that REPLACES parsing journal.batch (T-18880). An `upsert` change's
+// Reconstruct one journaled batch's changes from the journal rows
+// (journal_change + journal_field, D-18860/D-18861). An `upsert` change's
 // comp is rebuilt from its present after-image field rows (each JSON-decoded,
 // in field order; an empty component has no field rows and rebuilds as an empty
 // map); a `remove` change is comp None (a component removal, or entity death
 // when component='entity'). `was` (apply()'s CAS guard) was never stored here
 // and no reader reads it back. With `eid`, only that entity's changes; the
 // caller applies whatever canonicalization the TS reader it mirrors applies.
+// The spine join speaks the eid the wire speaks — a change naming no entity
+// (a purged spine, see the schema) is not read.
 pub fn batch_of(conn: &Connection, tx: i64, eid: Option<&str>) -> Vec<Change> {
     let rows: Vec<(i64, String, String, String)> = match eid {
         None => {
             let Ok(mut st) = conn.prepare_cached(
-                "select id, eid, component, operation from journal_change \
-                 where tx = ?1 order by ordinal",
+                "select jc.id, e.eid, jc.component, jc.operation \
+                 from journal_change jc join entity e on e.id = jc.entity \
+                 where jc.tx = ?1 order by jc.ordinal",
             ) else {
                 return vec![];
             };
@@ -62,8 +63,9 @@ pub fn batch_of(conn: &Connection, tx: i64, eid: Option<&str>) -> Vec<Change> {
         }
         Some(e) => {
             let Ok(mut st) = conn.prepare_cached(
-                "select id, eid, component, operation from journal_change \
-                 where tx = ?1 and eid = ?2 order by ordinal",
+                "select jc.id, e.eid, jc.component, jc.operation \
+                 from journal_change jc join entity e on e.id = jc.entity \
+                 where jc.tx = ?1 and e.eid = ?2 order by jc.ordinal",
             ) else {
                 return vec![];
             };
@@ -100,12 +102,14 @@ pub fn batch_of(conn: &Connection, tx: i64, eid: Option<&str>) -> Vec<Change> {
         .collect()
 }
 
-// One journal_tx row's provenance: (id, ts, actor, via, trace).
+// One journal_tx row's provenance: (id, ts, actor, via, trace) — actor and via
+// projected from spine id back to the eid the envelope carries.
 type TxMeta = (i64, String, Option<String>, Option<String>, Option<String>);
 
 pub fn journal_since(conn: &Connection, since: i64) -> Vec<JournalRow> {
     let Ok(mut st) = conn.prepare_cached(
-        "select id, ts, actor, via, trace from journal_tx \
+        "select id, ts, (select eid from entity where id = actor), \
+                (select eid from entity where id = via), trace from journal_tx \
          where id > ?1 order by id",
     ) else {
         return vec![];

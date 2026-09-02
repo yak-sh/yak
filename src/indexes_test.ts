@@ -91,12 +91,10 @@ Deno.test('indexes map matches the db and dependency plans use both ends', () =>
   let live = new Map<string, boolean>() // "table|cols" → is any index over them unique?
   for (let { name: t } of tables) {
     // The journal tables are hand-written log infrastructure, not part of the
-    // component vocabulary this map guards — journal_touch's (eid, jrow) seek
-    // index (T-13915) and the normalized journal's ordering/lookup indexes
-    // (T-18878) are declared in db.ts's schema template, not the indexes map.
+    // component vocabulary this map guards — their ordering/lookup indexes are
+    // declared in db.ts's schema template, not the indexes map.
     if (
-      t == 'journal_touch' || t == 'journal_tx' || t == 'journal_change' ||
-      t == 'journal_field'
+      t == 'journal_tx' || t == 'journal_change' || t == 'journal_field'
     ) continue
     let ixs = d.prepare(`pragma index_list("${t}")`).all() as {
       name: string

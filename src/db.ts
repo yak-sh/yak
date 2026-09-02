@@ -71,13 +71,7 @@ import {
   propOwners,
 } from './props.ts'
 import { canon, fleetLocal } from './mailaddr.ts'
-import {
-  type DocColumn,
-  docColumns,
-  REDACTED,
-  scrubbable,
-  scrubBatch,
-} from './redaction.ts'
+import { type DocColumn, REDACTED, scrubbable } from './redaction.ts'
 import {
   compsOf,
   type EntrySourceOutcome,
@@ -810,49 +804,25 @@ let schema = `
     deleted_at text not null
   );
   ${depDdl};
-  -- Log data, not graph (like tool_call below): the journal is the record
-  -- OF the wire, never part of it — one row per applied batch, written
-  -- inside apply()'s transaction. No eid of its own, never in snapshot(),
-  -- never in a client cache; read it per-entity via journalOf(). The
-  -- symmetry: telemetry records READS, the journal records WRITES.
-  create table if not exists journal (
-    ts    text not null
-          default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    actor text,
-    via   text,
-    batch text not null
-  );
-  -- The journal's seek index (T-13915): one row per (batch rowid, eid) the
-  -- batch touched, written beside the batch inside apply()'s transaction. It
-  -- once made a per-entity read an index seek instead of a full json_each scan;
-  -- since the readers moved onto the normalized journal (T-18880) they seek
-  -- journal_change (eid, component) instead, so this index is still MAINTAINED
-  -- but unread, kept for reversibility pending the JSON journal's retirement
-  -- (T-18883). Still log data — jrow is the journal rowid, there is no eid of
-  -- its own, never in snapshot() or a client cache. Backfilled once
-  -- (backfillJournalTouch); the index arrives with the other seek indexes in
-  -- open(). Nothing deletes journal rows, so no delete-sync is needed.
-  create table if not exists journal_touch (
-    jrow integer not null,
-    eid  text not null
-  );
-  -- The NORMALIZED journal (D-18860/D-18861), written beside the JSON journal
-  -- above in the SAME apply() transaction -- DUAL-WRITE (T-18878). Three
-  -- append-only log tables: still log data, not graph -- no eid of their own,
-  -- never in snapshot() or a client cache, not vocabulary components (so no
-  -- xtask/codegen). The JSON journal stays AUTHORITATIVE and every reader still
-  -- reads it; these only ADD the parallel record the next stages backfill
-  -- (T-18879), switch readers onto (T-18880), and finally retire the JSON
-  -- journal for (T-18883).
+  -- The journal (D-18860/D-18861) -- log data, not graph (like tool_call
+  -- below): the record OF the wire, never part of it, written inside apply()'s
+  -- transaction. Three append-only tables with no eid of their own, never in
+  -- snapshot() or a client cache, not vocabulary components (so no
+  -- xtask/codegen); read per-entity via journalOf(), per-batch via
+  -- journalSince(). The symmetry: telemetry records READS, the journal records
+  -- WRITES.
   --
-  -- journal_tx: one row per applied batch, carrying the same provenance the JSON
-  -- row keeps (ts, actor, via, trace). Its rowid is the transaction's durable
-  -- total-order identity -- monotonic, so ordering never rests on ts alone.
+  -- journal_tx: one row per applied batch, its provenance (ts, actor, via,
+  -- trace). Its id is the transaction's durable total-order identity --
+  -- monotonic, so ordering never rests on ts alone -- and the cursor every
+  -- delta client holds. actor and via are spine ids like every other
+  -- reference (the actor it resolved to; the session or client that wrote),
+  -- null when unowned.
   create table if not exists journal_tx (
     id    integer primary key,
     ts    text not null,
-    actor text,
-    via   text,
+    actor integer references entity(id),
+    via   integer references entity(id),
     trace text
   );
   -- journal_change: one ordered operation per Change in the batch. (tx, ordinal)
@@ -860,12 +830,16 @@ let schema = `
   -- upsert (comp != null -- a present component, an empty one being an upsert
   -- with no field rows) or remove (comp == null -- a component removal, or
   -- entity death when component = 'entity'). component is the wire component
-  -- name, eid its entity.
+  -- name, entity its spine id. A spine row outlives its entity (a death is
+  -- retained, D-18866), so every write names one; entity is nullable only for
+  -- history whose spine an out-of-band purge removed before the retention rule
+  -- -- those rows keep their tx and fields but name no entity, and every
+  -- per-entity reader skips them.
   create table if not exists journal_change (
     id        integer primary key,
     tx        integer not null references journal_tx(id),
     ordinal   integer not null,
-    eid       text not null,
+    entity    integer references entity(id),
     component text not null,
     operation text not null
   );
@@ -887,9 +861,9 @@ let schema = `
     value    text
   );
   -- Reconstruct a batch in order (by tx), per-entity history and predecessor
-  -- lookup (by eid+component), and the field rows of a change (by change).
+  -- lookup (by entity+component), and the field rows of a change (by change).
   create index if not exists journal_change_tx on journal_change(tx, ordinal);
-  create index if not exists journal_change_ent on journal_change(eid, component);
+  create index if not exists journal_change_ent on journal_change(entity, component);
   create index if not exists journal_field_change on journal_field(change, ordinal);
   -- Server-local key/value, not graph: no eid, no components, so snapshot()
   -- (which walks the comps vocabulary) never carries it, and apply() never
@@ -1547,34 +1521,97 @@ export let backfillVia = (db: DatabaseSync) => {
   }
 }
 
-// Fill journal_touch once from the existing journal (T-13915) — one row per
-// (batch rowid, eid), the same (rowid, '$.eid') pairs json_each found before the
-// index existed, so the reads it feeds stay behavior-identical. apply()/record()
-// keep it current from here on. Difference-guarded: a populated table (any later
-// boot) or an empty journal (a fresh db) is a pure read, so it is paid exactly
-// once. Runs after the mend* migrations that rewrite journal batches, so it
-// indexes the settled log.
-export let backfillJournalTouch = (db: DatabaseSync) => {
-  let touched =
-    (prep(db, 'select count(*) as n from journal_touch').get() as { n: number })
-      .n
-  if (touched) return
-  let entries = (prep(db, 'select max(rowid) as n from journal').get() as {
-    n: number | null
-  }).n
-  if (!entries) return
-  try {
-    atomic(db, () => {
-      db.exec(
-        `insert into journal_touch (jrow, eid)
-         select distinct j.rowid, json_extract(je.value, '$.eid')
-         from journal j, json_each(j.batch) je
-         where json_extract(je.value, '$.eid') is not null`,
-      )
-    })
-  } catch (e) {
-    console.warn('journal_touch backfill skipped —', e)
+// Retire the JSON journal (T-18883). Every reader and writer is on the
+// normalized tables, so the legacy `journal` (one JSON batch per row) and
+// `journal_touch` (its seek index) are dropped once the normalized log holds a
+// journal_tx for every parseable batch -- never history the new log does not
+// carry. The one torn, unparseable row (T-24020) has no normalized twin and is
+// not history anything can read, so it does not hold the drop. Guarded by table
+// presence, so every later boot is a pure read; the backup's git history keeps
+// the last JSON dumps.
+export let retireJsonJournal = (db: DatabaseSync) => {
+  if (!tableExists(db, 'journal')) return
+  let missing = (prep(
+    db,
+    `select count(*) as n from journal j
+     where json_valid(j.batch)
+       and not exists (select 1 from journal_tx t where t.id = j.rowid)`,
+  ).get() as { n: number }).n
+  if (missing) {
+    console.warn(
+      `journal: ${missing} JSON batches have no normalized row — keeping the legacy tables`,
+    )
+    return
   }
+  db.exec('drop table if exists journal_touch; drop table if exists journal;')
+  prep(db, `delete from server_meta where k = 'journal_backfill'`).run()
+}
+
+// Is the journal keyed by spine id yet? The guard both migrate()'s pragma and
+// the rebuild below read: a text `eid` column on journal_change is the old
+// shape (journal_tx's text actor/via arrived and leave with it).
+let journalKeyed = (db: DatabaseSync) =>
+  !tableExists(db, 'journal_change') || !hasCol(db, 'journal_change', 'eid')
+
+// Key the journal by spine id (T-18883). journal_change.eid and
+// journal_tx.actor/via were eid TEXT; every other reference in the graph is an
+// integer into entity(id), and now so are these. SQLite cannot retype a
+// column, so each table is rebuilt beside itself and swapped in, keeping every
+// id (journal_field points at journal_change ids, journal_change at journal_tx
+// ids) and resolving each eid through the spine. A change whose eid has no
+// spine row (an out-of-band purge that predates D-18866's retention) keeps its
+// tx and fields and names no entity -- nothing is minted for it, the count is
+// reported. Runs with foreign keys OFF (migrate() lifts them before BEGIN): the
+// drops would otherwise cascade-check the child rows being kept.
+let migrateJournalKeys = (db: DatabaseSync) => {
+  if (journalKeyed(db)) return
+  let scratch = open(':memory:')
+  let ddlOf = (t: string) =>
+    (scratch.prepare(
+      `select sql from sqlite_master where type = 'table' and name = ?`,
+    ).get(t) as { sql: string }).sql.replace(t, `__mig_${t}`)
+  let txDdl = ddlOf('journal_tx'), changeDdl = ddlOf('journal_change')
+  scratch.close()
+  let count = (sql: string) => (db.prepare(sql).get() as { n: number }).n
+
+  db.exec(txDdl)
+  db.exec(
+    `insert into __mig_journal_tx (id, ts, actor, via, trace)
+     select jt.id, jt.ts, a.id, v.id, jt.trace from journal_tx jt
+       left join entity a on a.eid = jt.actor
+       left join entity v on v.eid = jt.via`,
+  )
+  let txs = count('select count(*) as n from journal_tx')
+  let actors =
+    count('select count(*) as n from journal_tx where actor is not null') -
+    count('select count(*) as n from __mig_journal_tx where actor is not null')
+  let vias =
+    count('select count(*) as n from journal_tx where via is not null') -
+    count('select count(*) as n from __mig_journal_tx where via is not null')
+  db.exec('drop table journal_tx')
+  db.exec('alter table __mig_journal_tx rename to journal_tx')
+
+  db.exec(changeDdl)
+  db.exec(
+    `insert into __mig_journal_change (id, tx, ordinal, entity, component, operation)
+     select jc.id, jc.tx, jc.ordinal, e.id, jc.component, jc.operation
+       from journal_change jc left join entity e on e.eid = jc.eid`,
+  )
+  let changes = count('select count(*) as n from journal_change')
+  let orphans = count(
+    'select count(*) as n from __mig_journal_change where entity is null',
+  )
+  db.exec('drop table journal_change')
+  db.exec('alter table __mig_journal_change rename to journal_change')
+  db.exec(
+    `create index journal_change_tx on journal_change(tx, ordinal);
+     create index journal_change_ent on journal_change(entity, component);`,
+  )
+  console.warn(
+    `journal: keyed ${txs} transactions and ${changes} changes by spine id — ` +
+      `${orphans} change(s) name a purged eid with no spine, ` +
+      `${actors} actor(s) and ${vias} via(s) resolved to no entity`,
+  )
 }
 
 // memory.type → the `feedback` tag (T-12585). The enum said four things the
@@ -2474,16 +2511,19 @@ let byEid = `entity = (select id from entity where eid = ?)`
 // `select ${refEid('client.actor')} as actor from client`. A null id (detached
 // ref) projects to null, the same absence the eid column used to carry.
 let refEid = (col: string) => `(select eid from entity where id = ${col})`
+// The inverse, for a WRITE or a lookup that binds an eid where the column
+// holds a spine id: `insert … values (${spineId})`, `where jc.entity = ${spineId}`.
+let spineId = `(select id from entity where eid = ?)`
 
 let tableExists = (db: DatabaseSync, t: string) =>
   !!prep(db, `select 1 from sqlite_master where type = 'table' and name = ?`)
     .get(t)
 
 // The graph tables the eid→id reshape reshapes (D-18866): the spine, the edge
-// table, and every component table. The eid-keyed log/derived tables (journal,
-// journal_touch, tool_call, embedding, the FTS shadows) and the eid-keyed
-// tombstone stay as they are — D-18866 keeps the journal on eids (T-18878), and
-// the rest are non-graph or rebuild themselves.
+// table, and every component table. The eid-keyed log/derived tables (the
+// journal, tool_call, embedding, the FTS shadows) and the eid-keyed tombstone
+// stay as they are — D-18866 keeps the journal on eids, and the rest are
+// non-graph or rebuild themselves.
 let graphTables = () => ['entity', 'dependency', ...Object.keys(comps)]
 
 // What one table's copy CLEANED — the anomalies a real legacy graph carries
@@ -2938,10 +2978,12 @@ export let migrate = (db: DatabaseSync) => {
   let wasCaching = caching
   caching = false
   // The legacy reshape rebuilds tables whose old foreign keys name the old
-  // spine. This pragma must be set before BEGIN; SQLite deliberately ignores
+  // spine, and the journal rekey drops parent tables whose children it keeps.
+  // This pragma must be set before BEGIN; SQLite deliberately ignores
   // foreign_keys changes inside a transaction. Every other migration keeps FK
   // enforcement enabled.
-  let legacy = tableExists(db, 'entity') && !hasCol(db, 'entity', 'id')
+  let legacy = (tableExists(db, 'entity') && !hasCol(db, 'entity', 'id')) ||
+    !journalKeyed(db)
   if (legacy) db.exec('pragma foreign_keys = off')
   try {
     // WAL lets readers proceed during a write, removing the reader/writer
@@ -3116,16 +3158,6 @@ export let migrate = (db: DatabaseSync) => {
       ) {
         addCol(table, 'via', 'via integer')
       }
-      addCol('journal', 'via', 'via text')
-      // What apply() learned that the batch JSON doesn't say (D-22388): which
-      // comp rows were CREATED and which rows deletes took — the effects.ts
-      // Trace, serialized, so the journal feed (catchup.ts) can fire the same
-      // effects the writer would have. Written only for a fed() trace — a
-      // writer that DEFERRED dispatch to the feed. NULL means dispatch already
-      // happened at the call site or was never asked for (a plain/absent
-      // trace, the record() stamp door), and the feed broadcasts without
-      // dispatching, so an effect can never fire twice for one row.
-      addCol('journal', 'trace', 'trace text')
       // The managed-session lifecycle (src/sessions.ts): what it is doing and
       // how it ended. The old launch aliases are planted before backfillSpawn()
       // for live databases, then stay dormant as rollback input. The rest is
@@ -3337,10 +3369,8 @@ export let migrate = (db: DatabaseSync) => {
       }
       backfillVia(db)
       backfillOpened(db)
-      // Fill the journal seek index once (T-13915) before its index is built
-      // below — insert-then-index is the cheaper order for the one-time ~26k-row
-      // load, and later boots skip both (populated table, existing index).
-      backfillJournalTouch(db)
+      retireJsonJournal(db)
+      migrateJournalKeys(db)
       // The dormant columns are migration INPUT, and every one of them has now
       // been read for the last time (T-6670, T-7113, T-7006). A retired column
       // that lingers still answers a schema read, so it keeps teaching a
@@ -3379,15 +3409,6 @@ export let migrate = (db: DatabaseSync) => {
       let depIndexName = `dependency_${depIndex.cols.join('_')}`
       if (!hasIdx(db, depIndexName)) {
         db.exec(indexDdlOne('dependency', depIndex) + ';')
-      }
-      // The journal seek index (T-13915): (eid, jrow desc) so a per-entity read is
-      // an index seek, newest-first, then a fetch by rowid. hasIdx-guarded like
-      // the rest — a bare `create index if not exists` bumps the file change
-      // counter and breaks open()'s byte-idempotency.
-      if (!hasIdx(db, 'journal_touch_eid')) {
-        db.exec(
-          'create index journal_touch_eid on journal_touch (eid, jrow desc);',
-        )
       }
       for (
         let comp of new Set([...Object.keys(comps), ...Object.keys(stamped)])
@@ -3478,8 +3499,13 @@ export let schemaDdl = (): SchemaOp[] => {
 
   let classify = (sql: string): SchemaOp => {
     let t = sql.trim()
+    // The table is unquoted for the guard: pragma_table_info takes a bare name,
+    // and addCol quotes its DDL (a component may be named after a keyword).
     let add = t.match(/^alter\s+table\s+(\S+)\s+add\s+column\s+(\S+)/i)
-    if (add) return { kind: 'addColumn', table: add[1], col: add[2], sql }
+    if (add) {
+      let table = add[1].replace(/^"(.*)"$/, '$1').replaceAll('""', '"')
+      return { kind: 'addColumn', table, col: add[2], sql }
+    }
     // A bare `create index NAME` (no `if not exists`) needs a presence guard;
     // every other create/drop already carries its own `if [not] exists`.
     let idx = t.match(
@@ -5983,24 +6009,8 @@ export let apply = (
             removed: [...removedLog],
           })
           : null
-        let jrow = Number(
-          prep(
-            db,
-            'insert into journal (ts, actor, via, batch, trace) values (?, ?, ?, ?, ?)',
-          )
-            .run(
-              now,
-              actor, // the resolved writing actor (T-6669), same as the by-default
-              via,
-              JSON.stringify(logged),
-              trace,
-            ).lastInsertRowid,
-        )
-        touchJournal(db, jrow, logged)
-        // The normalized parallel record (T-18878), same transaction, same
-        // `logged` — the JSON row above stays authoritative. journal_tx.id is
-        // that JSON row's rowid, so the two logs share one transaction identity.
-        journalNormalized(db, jrow, now, actor, via, trace, logged)
+        // actor is the resolved writing actor (T-6669), same as the by-default.
+        journalWrite(db, now, actor, via, trace, logged)
       }
     } catch (e) {
       console.warn('journal skipped —', e)
@@ -6060,49 +6070,37 @@ export let vocabularyDoc = (db: DatabaseSync, body: string): void => {
   )
 }
 
-// The seek-index side of a journal write (T-13915): one journal_touch row per
-// distinct eid the batch touched, so journalOf & kin seek instead of scanning.
-// Indexes the same eids json_extract(value,'$.eid') found — every change's own
-// eid — so the reads it replaces stay behavior-identical. Called inside the
-// caller's transaction, beside the journal insert it describes.
-let touchJournal = (db: DatabaseSync, jrow: number, changes: Change[]) => {
-  let ins = prep(db, 'insert into journal_touch (jrow, eid) values (?, ?)')
-  for (let eid of new Set(changes.map((c) => c.eid))) ins.run(jrow, eid)
-}
-
-// The NORMALIZED journal write (D-18860/D-18861) — the parallel record beside
-// the JSON `journal` row, DUAL-WRITE (T-18878): same transaction, same `logged`
-// array, so the two can never disagree. journal_tx keeps the batch's provenance;
+// The journal write (D-18860/D-18861): journal_tx keeps the batch's provenance
+// and mints the transaction id -- an integer primary key, so the next rowid,
+// which is the log's monotonic total order and the cursor delta clients hold;
 // journal_change one ordered operation per Change; journal_field the ordered
 // after-image, present rows for an upsert and tombstones for a removal. Derived
 // wholly from `logged` plus the append-only field log itself, so it touches
-// nothing in the change loop. Called inside the caller's transaction, beside the
-// JSON insert it mirrors; the caller's try guards it — a broken parallel record
-// must not break the write it records, exactly like the JSON journal.
-//
-// `tx` is the JSON journal row's rowid, written as journal_tx.id EXPLICITLY so
-// the two logs share ONE transaction identity (journal.rowid = journal_tx.id):
-// a monotonic total order that never rests on ts, a free join for every reader
-// (T-18880), and the key the history backfill (T-18879) skips on to stay
-// idempotent. This is the SINGLE derivation both the live dual-write and the
-// backfill drive, so the parallel record cannot fork a second, drifting shape.
-export let journalNormalized = (
+// nothing in the change loop. Called inside the caller's transaction; the
+// caller's try guards it -- a broken journal must not break the write it
+// records. Returns the transaction id.
+export let journalWrite = (
   db: DatabaseSync,
-  tx: number,
   ts: string,
   actor: string | null,
   via: string | null,
   trace: string | null,
   logged: Change[],
-) => {
-  prep(
-    db,
-    'insert into journal_tx (id, ts, actor, via, trace) values (?, ?, ?, ?, ?)',
-  ).run(tx, ts, actor, via, trace)
+): number => {
+  // Provenance and every change name spine ids, resolved here from the eids
+  // the wire speaks: a death retains its spine row (D-18866), so each logged
+  // eid resolves, and an actor or via resolves or is null (unowned).
+  let tx = Number(
+    prep(
+      db,
+      `insert into journal_tx (ts, actor, via, trace)
+       values (?, ${spineId}, ${spineId}, ?)`,
+    ).run(ts, actor, via, trace).lastInsertRowid,
+  )
   let insChange = prep(
     db,
-    `insert into journal_change (tx, ordinal, eid, component, operation)
-     values (?, ?, ?, ?, ?)`,
+    `insert into journal_change (tx, ordinal, entity, component, operation)
+     values (?, ?, ${spineId}, ?, ?)`,
   )
   let insField = prep(
     db,
@@ -6112,15 +6110,14 @@ export let journalNormalized = (
   // The fields (eid, component) still shows as present: newest after-image wins
   // — journal_field.id is monotonic, so the max-id row per field is the latest
   // in total order (and reads THIS batch's earlier upserts, uncommitted but
-  // visible on the same connection). A component with no baseline yet (older
-  // than dual-write, until T-18879 backfills) names none, so it tombstones none.
+  // visible on the same connection).
   let present = prep(
     db,
     `select field from (
        select jf.field as field, jf.present as present,
               row_number() over (partition by jf.field order by jf.id desc) as rn
        from journal_field jf join journal_change jc on jc.id = jf.change
-       where jc.eid = ? and jc.component = ?
+       where jc.entity = ${spineId} and jc.component = ?
      ) where rn = 1 and present = 1`,
   )
   logged.forEach(({ eid, name, comp }, ordinal) => {
@@ -6143,144 +6140,7 @@ export let journalNormalized = (
       )
     }
   })
-}
-
-// One journal `batch` column decoded, or null if the row is a known-corrupt
-// torn write — a batch that is not parseable JSON (row #2106568, invalid bytes
-// from the Aug'25 SIGBUS/ENOSPC incident; T-24020). The normalized readers skip
-// such a row as an honest gap (the backfill wrote no journal_tx for it), and the
-// JSON readers still authoritative until T-18883 (the backfill itself, and the
-// redaction scrubber) share that policy: warn once and skip, so one torn row
-// cannot break a whole-log scan for the entire timeline. The catch is narrow,
-// around the parse alone, so a real bug still surfaces.
-let parseBatch = (batch: string, rowid: number): Change[] | null => {
-  try {
-    return JSON.parse(batch) as Change[]
-  } catch (e) {
-    console.warn(`journal: skipping unparseable batch #${rowid} —`, e)
-    return null
-  }
-}
-
-// Backfill the EXISTING JSON journal history into the normalized tables
-// (T-18879), so the parallel record covers ALL of history and not merely the
-// writes since dual-write (T-18878) began. Every legacy `journal` row is parsed
-// back into its Change[] and driven through the SAME journalNormalized()
-// derivation the live writer uses — one code path, so the two can never fork —
-// with journal_tx.id = the JSON row's rowid, which preserves the original total
-// order (rowid is monotonic in apply order) and every within-batch ordinal.
-//
-// Canonical form: each parsed change is passed through renamed() — exactly what
-// admitted() does before a live write logs — so a batch predating a forward
-// rename records the column spelling today's writer would produce, and one
-// entity's field history (predecessor lookup, tombstones) stays consistent
-// across the rename boundary. renamed() is add-only and idempotent, so on an
-// already-canonical batch (every batch today: the live rename map is empty) it
-// is the identity. Values are recorded verbatim — a doc body stays inline text
-// (casBodies journals the body inline and prepends a separate content-addressed
-// `blob` change; it never rewrites doc.body), and an entity/edge reference is
-// already its eid — so the derivation is a faithful round-trip of what the batch
-// holds.
-//
-// BASELINE (D-18861): because rows are processed in ascending rowid order and
-// each upsert's present after-images accumulate in journal_field, a historical
-// component removal tombstones exactly the fields present per the BACKFILLED
-// record up to that point — the predecessor frontier is established by the
-// backfill itself, not by live-only state.
-//
-// RESTARTABLE & IDEMPOTENT: a `journal_backfill` high-water mark in server_meta
-// records the highest rowid contiguously backfilled. Absent means no backfill
-// has run: the interim dual-write rows written before this identity mapping
-// existed carry auto-increment ids that do NOT equal their rowid, so the first
-// run clears the three normalized tables and rebuilds every row keyed by rowid —
-// a one-time reset guarded by the absent mark, never repeated. A resumed run
-// reads the mark and continues, and a per-row `journal_tx` existence check makes
-// a re-run (or a row a concurrent live apply already dual-wrote into the gap) a
-// skip rather than a double-insert. Work is chunked: each chunk is one atomic
-// transaction that advances the mark, so an interruption loses at most the
-// in-flight chunk and never a giant single transaction.
-//
-// RESILIENCE: a legacy batch that does not parse as JSON is a pre-existing
-// corruption (T-24020) that cannot be faithfully derived. The backfill decodes
-// through parseBatch, which WARNS and skips exactly that row (advancing past it,
-// leaving an honest gap with no journal_tx) rather than aborting the whole
-// migration; the catch is narrow, around the parse alone, so a real derivation
-// bug still surfaces. The remaining JSON readers (the redaction scrubber) share
-// that helper and policy. Returns the count of legacy rows written and of
-// unparseable rows skipped this call.
-export let backfillJournal = (
-  db: DatabaseSync,
-  { chunk = 1000, onChunk }: {
-    chunk?: number
-    onChunk?: (upto: number, wrote: number, skipped: number) => void
-  } = {},
-): { wrote: number; skipped: number } => {
-  let markGet = () =>
-    (prep(db, `select v from server_meta where k = 'journal_backfill'`)
-      .get() as { v: string } | undefined)?.v
-  let markSet = (v: number) =>
-    prep(
-      db,
-      `insert into server_meta (k, v) values ('journal_backfill', ?)
-       on conflict(k) do update set v = excluded.v`,
-    ).run(String(v))
-  let existing = markGet()
-  let hwm = existing == null ? 0 : Number(existing)
-  if (existing == null) {
-    // First run: drop the interim non-identity dual-write rows and establish the
-    // baseline mark, atomically, so a rebuilt log is keyed by rowid throughout.
-    db.exec('begin immediate')
-    db.exec('delete from journal_field')
-    db.exec('delete from journal_change')
-    db.exec('delete from journal_tx')
-    markSet(0)
-    db.exec('commit')
-  }
-  let has = prep(db, 'select 1 from journal_tx where id = ?')
-  let page = prep(
-    db,
-    `select rowid as id, ts, actor, via, batch, trace from journal
-     where rowid > ? order by rowid limit ?`,
-  )
-  let wrote = 0
-  let skipped = 0
-  for (;;) {
-    let rows = page.all(hwm, chunk) as {
-      id: number
-      ts: string
-      actor: string | null
-      via: string | null
-      batch: string
-      trace: string | null
-    }[]
-    if (!rows.length) break
-    db.exec('begin immediate')
-    try {
-      for (let r of rows) {
-        if (!has.get(r.id)) {
-          let parsed = parseBatch(r.batch, r.id)
-          if (!parsed) {
-            // A corrupt, unparseable legacy batch: leave a gap (no journal_tx
-            // for this rowid) rather than abort the migration.
-            skipped++
-            hwm = r.id
-            continue
-          }
-          let logged = parsed.map((c) => renamed(c))
-          journalNormalized(db, r.id, r.ts, r.actor, r.via, r.trace, logged)
-          wrote++
-        }
-        hwm = r.id
-      }
-      markSet(hwm)
-      db.exec('commit')
-    } catch (e) {
-      rollback(db)
-      throw e
-    }
-    onChunk?.(hwm, wrote, skipped)
-  }
-  return { wrote, skipped }
+  return tx
 }
 
 // The journal door for a server STAMP — a write the wire may not carry
@@ -6299,32 +6159,10 @@ export let record = (
     let now = new Date().toISOString()
     let actor = writerActor(db, writer)
     let via = writerVia(db, writer)
-    let jrow = Number(
-      prep(
-        db,
-        'insert into journal (ts, actor, via, batch, trace) values (?, ?, ?, ?, ?)',
-      )
-        .run(
-          now,
-          actor,
-          via,
-          JSON.stringify(changes),
-          effects?.fed
-            ? JSON.stringify({
-              created: [...effects.created],
-              removed: [...effects.removed],
-            })
-            : null,
-        ).lastInsertRowid,
-    )
-    touchJournal(db, jrow, changes)
-    // The normalized parallel record (T-18878): a server stamp is journaled
-    // too, so the two logs stay a faithful pair. journal_tx.id mirrors the JSON
-    // row's rowid. Most stamps carry no trace; the few effect-bearing lifecycle
-    // stamps pass the process driver's trace so split ownership is preserved.
-    journalNormalized(
+    // Most stamps carry no trace; the few effect-bearing lifecycle stamps pass
+    // the process driver's trace so split ownership is preserved.
+    journalWrite(
       db,
-      jrow,
       now,
       actor,
       via,
@@ -6352,25 +6190,40 @@ export type RedactionResult = {
   firstSeen?: string
 }
 
-type RedactionJournal = {
-  rowid: number
+// Every present after-image in the journal that carries the value, with the
+// transaction it rode: journal_field is the one historical copy. The
+// JSON-escaped spelling narrows the scan; the decoded compare is the authority,
+// and only content columns count (scrubbable) -- a structural string that
+// happens to contain the value is not forgotten, it is replay.
+type RedactionHit = {
+  id: number
+  eid: string | null
+  component: string
+  field: string
+  tx: number
   ts: string
-  batch: string
+  decoded: string
 }
-
-let redactionRows = (
-  db: DatabaseSync,
-  value: string,
-): RedactionJournal[] => {
-  // journal.batch is JSON, so pre-screen with the JSON-escaped spelling and
-  // parse only candidates. The parsed transform below is the authority — this
-  // merely avoids decoding every batch in a large graph.
+let redactionHits = (db: DatabaseSync, value: string): RedactionHit[] => {
   let encoded = JSON.stringify(value).slice(1, -1)
-  return prep(
+  let rows = prep(
     db,
-    `select rowid, ts, batch from journal
-     where instr(batch, ?) > 0 order by rowid`,
-  ).all(encoded) as RedactionJournal[]
+    `select jf.id as id, jf.value as value, jf.field as field,
+            ${refEid('jc.entity')} as eid, jc.component as component,
+            jt.id as tx, jt.ts as ts
+       from journal_field jf
+       join journal_change jc on jc.id = jf.change
+       join journal_tx jt on jt.id = jc.tx
+      where jf.present = 1 and instr(jf.value, ?) > 0
+      order by jf.id`,
+  ).all(encoded) as (Omit<RedactionHit, 'decoded'> & { value: string })[]
+  return rows.flatMap(({ value: raw, ...f }) => {
+    if (!scrubbable(f.component, f.field)) return []
+    let decoded = JSON.parse(raw)
+    return typeof decoded == 'string' && decoded.includes(value)
+      ? [{ ...f, decoded }]
+      : []
+  })
 }
 
 // Garbage-collect unreferenced content-addressed text (D-18862/D-18864). A
@@ -6467,7 +6320,7 @@ export let redact = (
       )
     }
 
-    let rows = redactionRows(db, value)
+    let hits = redactionHits(db, value)
     let column: DocColumn
     if (named) {
       column = named
@@ -6476,12 +6329,9 @@ export let redact = (
       for (let col of ['title', 'body'] as DocColumn[]) {
         if (doc?.[col]?.includes(value)) columns.add(col)
       }
-      for (let row of rows) {
-        let batch = parseBatch(row.batch, row.rowid)
-        if (!batch) continue
-        for (let col of docColumns(batch, target, value)) {
-          columns.add(col)
-        }
+      for (let h of hits) {
+        if (h.eid != target || h.component != 'doc') continue
+        if (h.field == 'title' || h.field == 'body') columns.add(h.field)
       }
       if (!columns.size) {
         throw new Error('redact: literal was not found on the target document')
@@ -6495,48 +6345,24 @@ export let redact = (
       column = [...columns][0]
     }
 
-    let journalRows = 0
+    // Scrub every after-image in place, in THIS transaction: the value must
+    // leave the journal (every history/replay reader, and the backup dump) or
+    // it leaks through the door that keeps history. Rows are kept, values
+    // rewritten, so the tx/change chain stays navigable and reads [redacted].
+    let scrubField = prep(db, 'update journal_field set value = ? where id = ?')
+    let txs = new Set<number>()
     let replacements = 0
     let firstSeen: string | undefined
-    let rewrite = prep(db, 'update journal set batch = ? where rowid = ?')
-    for (let row of rows) {
-      let batch = parseBatch(row.batch, row.rowid)
-      if (!batch) continue
-      let clean = scrubBatch(batch, value)
-      if (!clean.count) continue
-      rewrite.run(JSON.stringify(clean.batch), row.rowid)
-      journalRows++
-      replacements += clean.count
-      firstSeen ??= row.ts
+    for (let h of hits) {
+      scrubField.run(
+        JSON.stringify(h.decoded.replaceAll(value, REDACTED)),
+        h.id,
+      )
+      replacements += h.decoded.split(value).length - 1
+      txs.add(h.tx)
+      firstSeen ??= h.ts
     }
-
-    // The normalized parallel record holds the SAME content, and every history/
-    // replay reader now reads it (T-18880) — and backups dump it like the JSON
-    // journal — so the removed value must leave journal_field too or it leaks
-    // through the new door. Scrub every present after-image whose component/
-    // field is a content column (scrubBatch's test, lifted to the field rows),
-    // in THIS transaction. The pre-screen mirrors redactionRows: the JSON-
-    // escaped spelling narrows the scan, the decoded compare is the authority.
-    let encoded = JSON.stringify(value).slice(1, -1)
-    let scrubField = prep(db, 'update journal_field set value = ? where id = ?')
-    let fieldRows = prep(
-      db,
-      `select jf.id as id, jf.value as value,
-              jc.component as component, jf.field as field
-       from journal_field jf join journal_change jc on jc.id = jf.change
-       where jf.present = 1 and instr(jf.value, ?) > 0`,
-    ).all(encoded) as {
-      id: number
-      value: string
-      component: string
-      field: string
-    }[]
-    for (let f of fieldRows) {
-      if (!scrubbable(f.component, f.field)) continue
-      let decoded = JSON.parse(f.value)
-      if (typeof decoded != 'string' || !decoded.includes(value)) continue
-      scrubField.run(JSON.stringify(decoded.replaceAll(value, REDACTED)), f.id)
-    }
+    let journalRows = txs.size
 
     let docChange: Change | undefined
     if (doc) {
@@ -6627,36 +6453,11 @@ export let redact = (
       redaction,
       entity,
     ]
-    let jrow = Number(
-      prep(
-        db,
-        'insert into journal (ts, actor, via, batch, trace) values (?, ?, ?, ?, ?)',
-        // An EMPTY trace, not null: redaction historically dispatched with a
-        // fresh Trace (changed-handlers only — a role doc rewrite re-drives
-        // its role), and the journal consumer reproduces that.
-      ).run(
-        now,
-        actor,
-        via,
-        JSON.stringify(logged),
-        '{"created":[],"removed":[]}',
-      )
-        .lastInsertRowid,
-    )
-    touchJournal(db, jrow, logged)
-    // The normalized parallel record (T-18878) — this redaction AUDIT event is a
-    // fresh journaled transaction, so it mirrors like any apply. The historical
-    // batch rewrites above stay JSON-only; scrubbing existing history into these
-    // tables belongs to backfill (T-18879) and retirement (T-18883).
-    journalNormalized(
-      db,
-      jrow,
-      now,
-      actor,
-      via,
-      '{"created":[],"removed":[]}',
-      logged,
-    )
+    // The redaction AUDIT event is a fresh journaled transaction, like any
+    // apply. An EMPTY trace, not null: redaction historically dispatched with
+    // a fresh Trace (changed-handlers only — a role doc rewrite re-drives its
+    // role), and the journal consumer reproduces that.
+    journalWrite(db, now, actor, via, '{"created":[],"removed":[]}', logged)
 
     let changes: Change[] = [
       ...logged,
@@ -6680,10 +6481,9 @@ export let redact = (
   }
 }
 
-// A single entity's history, newest first: the journal rows that touched
-// the eid, each cut down to its changes. journal_touch (T-13915) makes this a
-// seek — the eid's rows by index, then the batch fetched by rowid and parsed —
-// rather than a full json_each scan of the whole log.
+// A single entity's history, newest first: the transactions that touched the
+// entity, each cut down to its changes -- a journal_change (entity, component)
+// index seek, then the batch rebuilt from its field rows.
 export type JournalEntry = {
   // The journal rowid — the batch's id, the handle `task undo` reverses. Blessed
   // rather than added as a column: the rowid is already stable within an epoch,
@@ -6694,11 +6494,9 @@ export type JournalEntry = {
   via: string | null
   changes: Change[]
 }
-// The read side of the normalized journal (D-18860/D-18861): the Change[] a
-// batch applied, reconstructed from journal_change + journal_field — the
-// parallel record's authoritative content, which REPLACES parsing the JSON
-// `journal.batch` in every history/replay/undo reader (T-18880). The JSON row
-// stays dual-written, but nothing reads it back. An operation is `remove`
+// The read side of the journal (D-18860/D-18861): the Change[] a batch
+// applied, reconstructed from journal_change + journal_field — the record
+// every history/replay/undo reader reads. An operation is `remove`
 // (comp: null — a component removal, or entity death when component='entity')
 // or `upsert` (comp rebuilt from its present after-image field rows, each
 // JSON-decoded, in field order; an empty component has no field rows and
@@ -6708,13 +6506,18 @@ export type JournalEntry = {
 // guard, a write-time precondition and never history (D-18861: canonical rows
 // do not duplicate before-values). No reader reads `was` back (historyLine
 // shows comp keys, delta column-merges, inverseBatch recomputes its own via
-// wasOf), so its absence is behavior-neutral.
+// wasOf), so its absence is behavior-neutral. Every reader below joins the
+// spine to speak the eid the wire speaks; a change that names no entity (a
+// purged spine, see the schema) has none and so is not read.
 type ChangeRow = {
   id: number
   eid: string
   component: string
   operation: string
 }
+let changeRows = `select jc.id as id, e.eid as eid, jc.component as component,
+          jc.operation as operation
+   from journal_change jc join entity e on e.id = jc.entity`
 let rebuildChanges = (db: DatabaseSync, rows: ChangeRow[]): Change[] => {
   let fieldsOf = prep(
     db,
@@ -6743,15 +6546,10 @@ let normalizedBatch = (
   rebuildChanges(
     db,
     (eid == null
-      ? prep(
-        db,
-        `select id, eid, component, operation from journal_change
-         where tx = ? order by ordinal`,
-      ).all(tx)
+      ? prep(db, `${changeRows} where jc.tx = ? order by jc.ordinal`).all(tx)
       : prep(
         db,
-        `select id, eid, component, operation from journal_change
-         where tx = ? and eid = ? order by ordinal`,
+        `${changeRows} where jc.tx = ? and e.eid = ? order by jc.ordinal`,
       ).all(tx, eid)) as ChangeRow[],
   )
 
@@ -6762,9 +6560,10 @@ export let journalOf = (
 ): JournalEntry[] =>
   (prep(
     db,
-    `select jc.tx as tx, jt.ts as ts, jt.actor as actor, jt.via as via
+    `select jc.tx as tx, jt.ts as ts, ${refEid('jt.actor')} as actor,
+            ${refEid('jt.via')} as via
      from journal_change jc join journal_tx jt on jt.id = jc.tx
-     where jc.eid = ?
+     where jc.entity = ${spineId}
      group by jc.tx
      order by jc.tx desc limit ?`,
   ).all(eid, limit) as {
@@ -6791,8 +6590,9 @@ export let journalBy = (
 ): JournalEntry[] =>
   (prep(
     db,
-    `select id, ts, actor, via from journal_tx
-     where via = ? order by id desc limit ?`,
+    `select id, ts, ${refEid('actor')} as actor, ${refEid('via')} as via
+     from journal_tx
+     where via = ${spineId} order by id desc limit ?`,
   ).all(via, limit) as {
     id: number
     ts: string
@@ -6818,7 +6618,7 @@ let stateBefore = (
   before: number,
 ): Record<string, Record<string, unknown>> => {
   // This entity's own changes across every batch below `before`, oldest first
-  // (journal_change (eid, component) index, then applied order) — per-entity
+  // (journal_change (entity, component) index, then applied order) — per-entity
   // and bounded, never a whole-log scan. Reconstructed from the normalized
   // rows, so the corrupt-gap batch (no journal_change) is skipped like every
   // other reader.
@@ -6826,8 +6626,8 @@ let stateBefore = (
     db,
     prep(
       db,
-      `select id, eid, component, operation from journal_change
-       where eid = ? and tx < ? order by tx, ordinal`,
+      `${changeRows} where jc.entity = ${spineId} and jc.tx < ?
+       order by jc.tx, jc.ordinal`,
     ).all(eid, before) as ChangeRow[],
   )
   let state: Record<string, Record<string, unknown>> = {}
@@ -6892,7 +6692,7 @@ export let inverseBatch = (db: DatabaseSync, id: number): Change[] => {
   )
   let touchedSince = prep(
     db,
-    `select 1 from journal_change where eid = ? and tx > ? limit 1`,
+    `select 1 from journal_change where entity = ${spineId} and tx > ? limit 1`,
   )
   let priors = new Map<string, Record<string, Record<string, unknown>>>()
   let priorOf = (eid: string) => {
@@ -7157,7 +6957,7 @@ export let lastBatch = (db: DatabaseSync, eid: string): number =>
   Number(
     (prep(
       db,
-      `select max(tx) as id from journal_change where eid = ?`,
+      `select max(tx) as id from journal_change where entity = ${spineId}`,
     ).get(eid) as { id: number | null } | undefined)?.id ?? 0,
   )
 
@@ -7170,13 +6970,13 @@ export let historicalWorked = (db: DatabaseSync): Change[] =>
     `
     select distinct
       json_extract(sess.value, '$') as parent,
-      jc.eid as child
+      te.eid as child
     from journal_change jc
     join journal_field sess
       on sess.change = jc.id and sess.field = 'session' and sess.present = 1
     join entity se on se.eid = json_extract(sess.value, '$')
     join session s on s.entity = se.id
-    join entity te on te.eid = jc.eid
+    join entity te on te.id = jc.entity
     join task t on t.entity = te.id
     left join dependency d
       on d.parent = se.id
@@ -7237,7 +7037,8 @@ export type JournalRow = {
 export let journalSince = (db: DatabaseSync, since: number): JournalRow[] =>
   (prep(
     db,
-    `select id, ts, actor, via, trace from journal_tx
+    `select id, ts, ${refEid('actor')} as actor, ${refEid('via')} as via, trace
+     from journal_tx
      where id > ? order by id`,
   ).all(since) as {
     id: number
@@ -7693,11 +7494,9 @@ export let vocabHash = vocabHashOf(comps, stamped)
 // The journal's current transaction id — the cursor a snapshot, a delta, or a
 // live subscription frame is current as of (T-6823/T-3683). A client stamps its
 // next `since` from it; a subscription rides it on every pushed frame so a
-// client can bridge to the catch-up delta. Read from journal_tx (T-18880), the
-// SAME id-space journalSince/delta seek, so the cursor and the reader can never
-// drift apart — journal_tx.id == the JSON journal rowid, so the value is
-// unchanged, but it no longer depends on the JSON journal that T-18883 retires.
-// 0 on an empty journal.
+// client can bridge to the catch-up delta. Read from journal_tx, the SAME
+// id-space journalSince/delta seek, so the cursor and the reader can never
+// drift apart. 0 on an empty journal.
 export let cursorOf = (db: DatabaseSync): number =>
   (prep(db, 'select max(id) as m from journal_tx')
     .get() as { m: number | null }).m ?? 0

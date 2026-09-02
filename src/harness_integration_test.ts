@@ -4,7 +4,15 @@
 // and replayable surface is scanned for credential markers.
 import { assertEquals, assertMatch } from '@std/assert'
 import { rows } from './client.ts'
-import { apply, depsOf, journalOf, mutate, open, snapshot } from './db.ts'
+import {
+  apply,
+  depsOf,
+  journalOf,
+  journalSince,
+  mutate,
+  open,
+  snapshot,
+} from './db.ts'
 import { readEntries } from './entries.ts'
 import { localQuery } from './graph_query.ts'
 import { combineTools, localTools, tasksTools } from './harness_tools.ts'
@@ -360,8 +368,10 @@ slow(
         undefined,
       )
 
-      let journal = db.prepare('select batch, via from journal order by rowid')
-        .all()
+      let journal = journalSince(db, 0).map((r) => ({
+        via: r.via,
+        batch: r.batch,
+      }))
       let surfaces = {
         graph: snapshot(db),
         entries,

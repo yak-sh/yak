@@ -98,8 +98,9 @@ fn create_produces_the_full_schema() {
         "task",
         "session",
         "dependency",
-        "journal",
-        "journal_touch",
+        "journal_tx",
+        "journal_change",
+        "journal_field",
         "server_meta",
         "mail",
         "comment",
@@ -126,7 +127,7 @@ fn create_produces_the_full_schema() {
     }
     // the bare index (guarded by name), a derived {eid} index, and the hand
     // edge-reverse index — all realized in the last pass.
-    for i in ["journal_touch_eid", "notice_target", "dependency_child", "completed_at"] {
+    for i in ["journal_change_ent", "notice_target", "dependency_child", "completed_at"] {
         assert!(has(c, "index", i), "missing index {i}");
     }
     // an ALTER-added column and a derived column both land.

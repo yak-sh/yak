@@ -163,8 +163,9 @@ slow(
         db,
         `select (select count(*) from wal_accept),
                 (select n from wal_account),
-                (select count(*) from journal_touch
-                  where eid in ('${before}','${after}'));
+                (select count(distinct jc.entity) from journal_change jc
+                  join entity e on e.id = jc.entity
+                  where e.eid in ('${before}','${after}'));
          pragma foreign_key_check;
          pragma integrity_check;`,
       )

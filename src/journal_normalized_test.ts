@@ -1,9 +1,8 @@
-// The normalized journal (D-18860/D-18861), dual-written beside the JSON
-// `journal` in apply()'s transaction (T-18878). These pure-seam tests hold the
-// parallel record faithful: the normalized rows reconstruct the authoritative
-// JSON batch exactly (dual-write consistency), preserve total and within-batch
-// order, tombstone a removed component's then-present fields, and mirror an
-// entity-deletion cascade. Raw SQL reads the log tables the way db_test.ts does.
+// The journal (D-18860/D-18861), written in apply()'s transaction. These
+// pure-seam tests hold the record faithful: the rows reconstruct the batch
+// apply() logged exactly, preserve total and within-batch order, tombstone a
+// removed component's then-present fields, and mirror an entity-deletion
+// cascade. Raw SQL reads the log tables the way db_test.ts does.
 Deno.env.set('DB_PATH', ':memory:')
 let { apply } = await import('./db.ts')
 let { bareDb } = await import('./testdb.ts')
@@ -18,23 +17,24 @@ let fresh = () => bareDb()
 let uid = () => crypto.randomUUID()
 type DB = InstanceType<typeof DatabaseSync>
 
-// The JSON journal's authoritative batch for the newest transaction.
-let jsonBatch = (d: DB): Change[] =>
-  JSON.parse(
-    (d.prepare('select batch from journal order by rowid desc limit 1')
-      .get() as { batch: string }).batch,
-  )
+// What apply() journals: its returned batch minus the server-stamped provenance
+// echoes (created/updated repeat the ts + actor the journal_tx row keeps).
+let logged = (out: Change[]): Change[] =>
+  out.filter((c) => c.name != 'created' && c.name != 'updated')
 
-// Reconstruct the newest transaction's batch from the normalized rows: each
+// Reconstruct the newest transaction's batch from the journal rows: each
 // journal_change in applied order, its comp rebuilt from the present after-image
-// rows (a remove is comp:null). If this equals jsonBatch, the two logs agree.
+// rows (a remove is comp:null). If this equals what apply() logged, the record
+// is faithful.
 let normalizedBatch = (d: DB): Change[] => {
   let tx = (d.prepare('select max(id) as id from journal_tx').get() as {
     id: number
   }).id
   let changes = d.prepare(
-    `select id, eid, component, operation from journal_change
-     where tx = ? order by ordinal`,
+    `select jc.id as id, e.eid as eid, jc.component as component,
+            jc.operation as operation
+     from journal_change jc join entity e on e.id = jc.entity
+     where jc.tx = ? order by jc.ordinal`,
   ).all(tx) as {
     id: number
     eid: string
@@ -70,49 +70,48 @@ let fieldsAt = (d: DB, ordinal: number) => {
   ).all(change) as { field: string; present: number; value: string | null }[]
 }
 
-Deno.test('normalized: rows reconstruct the JSON batch exactly, in order', () => {
+Deno.test('journal: rows reconstruct the applied batch exactly, in order', () => {
   let d = fresh()
   let t = uid()
-  apply(d, [
+  let out = apply(d, [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
     { eid: t, name: 'task', comp: { priority: 'P2' } },
   ])
-  // The parallel record is byte-for-byte the authoritative batch — same
-  // changes, same order (doc before task before the synthesized entity birth).
-  assertEquals(normalizedBatch(d), jsonBatch(d))
+  // The record is byte-for-byte the applied batch — same changes, same order
+  // (doc before task before the synthesized entity birth).
+  assertEquals(normalizedBatch(d), logged(out))
 })
 
-Deno.test('normalized: one journal_tx per apply carries the provenance', () => {
+Deno.test('journal: one journal_tx per apply carries the provenance', () => {
   let d = fresh()
   apply(d, [{ eid: uid(), name: 'doc', comp: { title: 'a', body: '' } }])
   apply(d, [{ eid: uid(), name: 'doc', comp: { title: 'b', body: '' } }])
   let txs = d.prepare('select id, ts, actor from journal_tx order by id')
     .all() as { id: number; ts: string; actor: string | null }[]
   assertEquals(txs.length, 2)
-  // ts is a real ISO stamp, mirroring the JSON journal's provenance envelope.
+  // ts is an ISO stamp — the provenance envelope delta re-derives from.
   assertEquals(txs.every((x) => x.ts.endsWith('Z')), true)
 })
 
-Deno.test('normalized: within-batch ordinals reproduce applied order', () => {
+Deno.test('journal: within-batch ordinals reproduce applied order', () => {
   let d = fresh()
   let t = uid()
-  apply(d, [
+  let batch = logged(apply(d, [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
     { eid: t, name: 'task', comp: { priority: 'P2' } },
-  ])
-  let batch = jsonBatch(d)
+  ]))
   let tx = (d.prepare('select max(id) as id from journal_tx').get() as {
     id: number
   }).id
   let rows = d.prepare(
     'select ordinal, component from journal_change where tx = ? order by ordinal',
   ).all(tx) as { ordinal: number; component: string }[]
-  // (tx, ordinal) is a dense 0..n-1 sequence matching the JSON batch positions.
+  // (tx, ordinal) is a dense 0..n-1 sequence matching the batch positions.
   assertEquals(rows.map((r) => r.ordinal), batch.map((_, i) => i))
   assertEquals(rows.map((r) => r.component), batch.map((c) => c.name))
 })
 
-Deno.test('normalized: a present null field is distinct from a tombstone', () => {
+Deno.test('journal: a present null field is distinct from a tombstone', () => {
   let d = fresh()
   let t = uid()
   apply(d, [{ eid: t, name: 'doc', comp: { title: 'a', body: '' } }])
@@ -124,7 +123,7 @@ Deno.test('normalized: a present null field is distinct from a tombstone', () =>
   assertEquals(field.value, 'null')
 })
 
-Deno.test('normalized: an empty component is an upsert with no field rows', () => {
+Deno.test('journal: an empty component is an upsert with no field rows', () => {
   let d = fresh()
   let t = uid()
   // `design` is a zero-column marker component — its presence carries no fields.
@@ -147,7 +146,7 @@ Deno.test('normalized: an empty component is an upsert with no field rows', () =
   )
 })
 
-Deno.test('normalized: removing a component tombstones its then-present fields', () => {
+Deno.test('journal: removing a component tombstones its then-present fields', () => {
   let d = fresh()
   let t = uid()
   apply(d, [
@@ -172,7 +171,7 @@ Deno.test('normalized: removing a component tombstones its then-present fields',
   assertEquals(names.has('priority'), true)
 })
 
-Deno.test('normalized: create-then-remove in one batch tombstones the fields', () => {
+Deno.test('journal: create-then-remove in one batch tombstones the fields', () => {
   let d = fresh()
   let t = uid()
   // The removal's predecessor lookup must see the upsert from earlier in THIS
@@ -195,7 +194,7 @@ Deno.test('normalized: create-then-remove in one batch tombstones the fields', (
   assertEquals(n >= 1, true)
 })
 
-Deno.test('normalized: entity deletion cascades to a remove per casualty', () => {
+Deno.test('journal: entity deletion cascades to a remove per casualty', () => {
   let d = fresh()
   let p = uid()
   let c = uid()
@@ -205,17 +204,17 @@ Deno.test('normalized: entity deletion cascades to a remove per casualty', () =>
     { eid: c, name: 'doc', comp: { title: '', body: 'about p' } },
   ])
   // Deleting p cascades to the comment aimed at it: both become entity removes.
-  apply(d, [{ eid: p, name: 'entity', comp: null }])
+  let out = apply(d, [{ eid: p, name: 'entity', comp: null }])
   let tx = (d.prepare('select max(id) as id from journal_tx').get() as {
     id: number
   }).id
   let removed = d.prepare(
-    `select eid from journal_change
-     where tx = ? and component = 'entity' and operation = 'remove'`,
+    `select e.eid as eid from journal_change jc join entity e on e.id = jc.entity
+     where jc.tx = ? and jc.component = 'entity' and jc.operation = 'remove'`,
   ).all(tx) as { eid: string }[]
   let eids = new Set(removed.map((r) => r.eid))
   assertEquals(eids.has(p), true)
   assertEquals(eids.has(c), true)
-  // And the normalized batch still reconstructs the authoritative JSON one.
-  assertEquals(normalizedBatch(d), jsonBatch(d))
+  // And the batch reconstructs what apply() logged, casualties included.
+  assertEquals(normalizedBatch(d), logged(out))
 })

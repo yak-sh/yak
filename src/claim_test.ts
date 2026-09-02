@@ -238,7 +238,9 @@ slow(
       })
     let sql = liveDb!
     let journal = Number(
-      (sql.prepare('select count(*) as n from journal').get() as { n: number })
+      (sql.prepare('select count(*) as n from journal_tx').get() as {
+        n: number
+      })
         .n,
     )
     let sourceRefusal = await sourceAttempt(sourceFailed, sourceSid)
@@ -253,7 +255,7 @@ slow(
     )
     assertEquals(
       Number(
-        (sql.prepare('select count(*) as n from journal').get() as {
+        (sql.prepare('select count(*) as n from journal_tx').get() as {
           n: number
         }).n,
       ),

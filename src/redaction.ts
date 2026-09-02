@@ -1,9 +1,9 @@
-// Value redaction's content mechanics and backup-history report. The database
-// transaction lives in db.ts, beside the journal it rewrites; this module keeps
-// the pure string transform and the filesystem-facing git read independently
+// Value redaction's content test and backup-history report. The database
+// transaction lives in db.ts, beside the journal it scrubs; this module keeps
+// the pure column test and the filesystem-facing git read independently
 // testable. Removed values never cross a process argv or appear in a report.
 
-import { type Change, comps, stamped } from './types.ts'
+import { comps, stamped } from './types.ts'
 
 export let REDACTED = '[redacted]'
 export type DocColumn = 'title' | 'body'
@@ -14,60 +14,15 @@ let textType = (name: string, prop: string) => {
     t == 'query' || (typeof t == 'object' && 'text' in t)
 }
 
-let replace = (text: string, value: string) => {
-  let count = text.split(value).length - 1
-  return count ? { text: text.replaceAll(value, REDACTED), count } : null
-}
-
-// scrubBatch's per-change test, lifted to one normalized journal_field row: a
-// content (text) column, never the redaction audit's own — so redact() can
-// scrub the parallel record (journal_field.value) in the same breath as the
-// JSON batch, keeping the two representations consistent for every reader that
-// now reads the normalized rows (T-18880).
+// Which journal_field rows redact() may rewrite: a content (text) column.
+// Structural strings (eids, enum states, timestamps) stay whole: corrupting
+// replay to hide a short value is not forgetting it. Never the redaction
+// audit's own columns — its target, column, and hash are structural even though
+// two happen to store as text, and scrubbing them would erase the proof of
+// forgetting while leaving its live row intact. A column the vocabulary does
+// not know is left alone: only what it says is text is content.
 export let scrubbable = (name: string, prop: string) =>
   name != 'redaction' && textType(name, prop)
-
-// Scrub content columns in one applied batch. Structural strings (eids, enum
-// states, timestamps) stay whole: corrupting replay to hide a short value is
-// not forgetting it. Unknown historical columns are treated as content so a
-// retired spelling cannot preserve what the current vocabulary no longer sees.
-export let scrubBatch = (batch: Change[], value: string) => {
-  let count = 0
-  let changes = batch.map((change) => {
-    // A prior redaction is the permanent proof of forgetting. Its target,
-    // column, and hash are structural even though two happen to store as text;
-    // redacting them would erase the audit while leaving its live row intact.
-    if (!change.comp || change.name == 'redaction') return change
-    let comp = { ...change.comp }
-    let moved = false
-    for (let [prop, old] of Object.entries(comp)) {
-      if (typeof old != 'string' || !textType(change.name, prop)) continue
-      let next = replace(old, value)
-      if (!next) continue
-      comp[prop] = next.text
-      count += next.count
-      moved = true
-    }
-    return moved ? { ...change, comp } : change
-  })
-  return { batch: changes, count }
-}
-
-export let docColumns = (
-  batch: Change[],
-  eid: string,
-  value: string,
-): DocColumn[] => {
-  let found = new Set<DocColumn>()
-  for (let change of batch) {
-    if (change.eid != eid || change.name != 'doc' || !change.comp) continue
-    for (let column of ['title', 'body'] as DocColumn[]) {
-      let text = change.comp[column]
-      if (typeof text == 'string' && text.includes(value)) found.add(column)
-    }
-  }
-  return [...found]
-}
 
 export type Commit = { sha: string; at: string }
 export type Published = {
@@ -125,10 +80,12 @@ let commit = (line: string): Commit | undefined => {
 }
 
 // The journal is append-only between redactions and every backup dumps it in
-// full, so the commit that first introduced the earliest scrubbed row is the
-// exact start of the published exposure range. Pickaxe searches for that row's
-// timestamp — never the removed value — and the row remains after its payload
-// is sanitized, so its occurrence is monotonic across later dumps.
+// full, so the commit that first introduced the earliest scrubbed transaction
+// is the exact start of the published exposure range. The search is for that
+// journal_tx row's timestamp in its INSERT — never the removed value — and the
+// row remains after its field values are sanitized, so its occurrence is
+// monotonic across later dumps. A regex (-G), since the row's id precedes the
+// timestamp in the dump and is not known here.
 export let published = async (
   root: string,
   since: string | undefined,
@@ -146,13 +103,14 @@ export let published = async (
   // so a quick snapshot+commit in the row's own second cannot fall outside
   // the walk; pickaxe still decides whether the row was present.
   let floor = new Date(+new Date(since) - 1000).toISOString()
-  let pattern = `INSERT INTO journal VALUES('${since.replaceAll("'", "''")}',`
+  let stamp = since.replaceAll("'", "''").replace(/[.+?^$()[\]{}|\\]/g, '\\$&')
+  let pattern = `INSERT INTO journal_tx VALUES\\([0-9]+,'${stamp}',`
   let intro = await run(root, [
     'log',
     '--format=%H%x09%cI',
     '--reverse',
     `--since=${floor}`,
-    `-S${pattern}`,
+    `-G${pattern}`,
     upstream.stdout,
     '--',
     ':(glob)snap/journal.sql.part.*',

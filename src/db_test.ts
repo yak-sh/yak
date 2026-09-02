@@ -3,7 +3,6 @@
 Deno.env.set('DB_PATH', ':memory:')
 let {
   apply,
-  backfillJournalTouch,
   backfillLineage,
   backfillOpened,
   backfillVia,
@@ -23,6 +22,7 @@ let {
   human,
   journalBy,
   journalOf,
+  journalSince,
   lastBatch,
   liveDb,
   locate,
@@ -38,6 +38,7 @@ let {
   readComp,
   refsOf,
   renamed,
+  rowChanges,
   resolveId,
   retireMemoryType,
   search,
@@ -762,13 +763,9 @@ Deno.test('graph-out carries declared columns only', () => {
 let outsideVocabulary: Record<string, string> = {
   dependency: 'edges: a triple keyed by (parent, type, child), no eid row',
   tombstone: 'death record: the eid is dead, nothing reads a component back',
-  journal: 'the write log: append-only audit, never walked by snapshot()',
-  journal_touch: "the journal's seek index (jrow, eid): log data, never synced",
-  journal_tx:
-    'normalized journal (T-18878): one row per applied batch, log data',
-  journal_change:
-    'normalized journal (T-18878): one ordered operation per Change',
-  journal_field: 'normalized journal (T-18878): ordered field after-images',
+  journal_tx: 'the journal: one row per applied batch, log data',
+  journal_change: 'the journal: one ordered operation per Change',
+  journal_field: 'the journal: ordered field after-images',
   blob_text:
     'the in-db text backend of blob identity, resolved through doc_value',
   tool_call: 'telemetry: no eid, no components — read at /telemetry',
@@ -912,9 +909,7 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
   ])
   assertEquals(comp(subject, 'task')?.priority, 2)
   assertEquals(comp(subject, 'session')?.operator, 1)
-  let logged = (db.prepare(
-    'select batch from journal order by rowid desc',
-  ).get() as { batch: string }).batch
+  let logged = JSON.stringify(rowChanges(journalSince(db, 0).at(-1)!))
   assertEquals(logged.includes('P02'), false)
 
   let num = Number(comp(target, 'entity')?.num)
@@ -1114,7 +1109,7 @@ Deno.test('a board query the grammar cannot parse is refused', () => {
 
 Deno.test('server-owned columns never ride persistence or effective batches', () => {
   let t = uid()
-  let since = (db.prepare('select max(rowid) as n from journal').get() as {
+  let since = (db.prepare('select max(id) as n from journal_tx').get() as {
     n: number | null
   }).n ?? 0
   let out = apply(db, [{
@@ -1137,9 +1132,7 @@ Deno.test('server-owned columns never ride persistence or effective batches', ()
 
 Deno.test('a write emptied by projection is wholly ignored', () => {
   let t = uid()
-  let before = (db.prepare('select count(*) as n from journal').get() as {
-    n: number
-  }).n
+  let before = journalCount()
   assertEquals(
     apply(db, [{
       eid: t,
@@ -1151,7 +1144,7 @@ Deno.test('a write emptied by projection is wholly ignored', () => {
   assertEquals(comp(t, 'entity'), undefined)
   assertEquals(comp(t, 'web'), undefined)
   assertEquals(
-    (db.prepare('select count(*) as n from journal').get() as { n: number }).n,
+    journalCount(),
     before,
   )
 })
@@ -3310,14 +3303,6 @@ slow('open renames every reference key, its filters, and its history', () => {
       `&.title~="literal .project_eid=value"`,
     board,
   )
-  legacy.prepare('insert into journal (actor, batch) values (?, ?)').run(
-    project,
-    JSON.stringify([{
-      eid: reply,
-      name: 'mail',
-      comp: { target_eid: task, reply_to_eid: first },
-    }]),
-  )
   let renames = [
     ['task', 'project', 'project_eid'],
     ['task', 'assignee', 'assignee_eid'],
@@ -3900,7 +3885,7 @@ Deno.test('touch confirm stamps the memory; death takes the recall row', () => {
 // ---- the journal: the wire's record ----
 
 let journalCount = () =>
-  (db.prepare('select count(*) as n from journal').get() as { n: number }).n
+  (db.prepare('select count(*) as n from journal_tx').get() as { n: number }).n
 
 Deno.test('journal: one row per batch, resolved to the writing actor; a rollback leaves none', () => {
   // The door names a writer (a session id); the journal keeps the ACTOR it
@@ -3919,10 +3904,11 @@ Deno.test('journal: one row per batch, resolved to the writing actor; a rollback
     `jw-${s}`,
   )
   assertEquals(journalCount(), before + 1)
-  let row = db.prepare('select actor, batch from journal order by rowid desc')
-    .get() as { actor: string; batch: string }
+  let row = journalOf(db, t)[0]
   assertEquals(row.actor, who) // the writer's session resolved to its actor
-  assertMatch(row.batch, /recorded/) // the batch as applied, spine included
+  // the batch as applied, spine included
+  assertEquals(row.changes.map((c) => c.name), ['doc', 'entity'])
+  assertEquals(row.changes[0].comp?.title, 'recorded')
   // A bounced claim rolls the whole batch back — no journal row either
   // (the conflict audit is its own transaction and deliberately unjournaled).
   let s1 = uid(), s2 = uid()
@@ -4102,11 +4088,7 @@ Deno.test('journal: cascade casualties ride the record', () => {
     { eid: c, name: 'comment', comp: { target: a } },
   ])
   apply(db, [{ eid: a, name: 'entity', comp: null }])
-  let last = JSON.parse(
-    (db.prepare('select batch from journal order by rowid desc').get() as {
-      batch: string
-    }).batch,
-  ) as { eid: string; name: string; comp: unknown }[]
+  let last = journalOf(db, c)[0].changes
   assertEquals(
     last.some((x) => x.eid == c && x.name == 'entity' && x.comp == null),
     true,
@@ -4146,12 +4128,12 @@ Deno.test('a change and its commentary land in one atomic batch', () => {
 })
 
 Deno.test('journal: recording failure never breaks the write', () => {
-  db.exec('alter table journal rename to journal_hidden')
+  db.exec('alter table journal_tx rename to journal_hidden')
   let t = uid()
   try {
     apply(db, [{ eid: t, name: 'doc', comp: { title: 'still lands' } }])
   } finally {
-    db.exec('alter table journal_hidden rename to journal')
+    db.exec('alter table journal_hidden rename to journal_tx')
   }
   assertEquals(comp(t, 'doc')?.title, 'still lands')
 })
@@ -4173,19 +4155,16 @@ Deno.test('journalOf: newest first, cut to the eid', () => {
   assertEquals(past.every((e) => e.changes.every((c) => c.eid == t)), true)
 })
 
-// T-18880: the readers reconstruct their changes from the NORMALIZED journal
-// (journal_change + journal_field), no longer from the JSON journal.batch.
-// Scribble every JSON batch to garbage and the content still reads back whole —
-// direct proof the JSON row is no longer the source that journalOf/delta read.
-Deno.test('journalOf/delta read the normalized rows, not the JSON batch', () => {
+// The readers reconstruct their changes from journal_change + journal_field:
+// per-entity history (journalOf) and the replay window (delta) agree on the
+// same content, births and all.
+Deno.test('journalOf/delta read the normalized rows', () => {
   let d = fresh()
   let t = uid()
   apply(d, [{ eid: t, name: 'doc', comp: { title: 'v1' } }]) // births t
   apply(d, [{ eid: t, name: 'doc', comp: { title: 'v2' } }]) // just the doc
   let cut = cursorOf(d)
   apply(d, [{ eid: t, name: 'doc', comp: { title: 'v3' } }])
-  // Corrupt the JSON journal — a JSON.parse of this would throw.
-  d.exec(`update journal set batch = 'not json at all'`)
   let past = journalOf(d, t)
   assertEquals(past.length, 3)
   assertEquals(past[0].changes, [{
@@ -4237,10 +4216,10 @@ Deno.test('normalized readers: removal, empty component, present-null', () => {
   d.close()
 })
 
-// journal_touch (T-13915) indexes every eid a batch touched, so a batch about
-// two entities is seekable from either — the same eids json_extract('$.eid')
-// found, so journalOf stays behavior-identical while becoming a seek.
-Deno.test('journal_touch: a multi-entity batch is seekable from each eid', () => {
+// journal_change names every entity a batch touched by spine id, so a batch
+// about two entities is seekable from either through the (entity, component)
+// index.
+Deno.test('journal: a multi-entity batch is seekable from each entity', () => {
   let a = uid(), b = uid()
   apply(db, [
     { eid: a, name: 'doc', comp: { title: 'a' } },
@@ -4250,50 +4229,96 @@ Deno.test('journal_touch: a multi-entity batch is seekable from each eid', () =>
   assertEquals(lastBatch(db, b), batch) // one batch, both entities see it
   assertEquals(journalOf(db, a)[0].id, batch)
   assertEquals(journalOf(db, b)[0].id, batch)
-  // one row per (batch, eid). The already-present empty-body content identity
-  // is reused, not journaled as a fresh touch.
+  // Two entities named, by spine id. The already-present empty-body content
+  // identity is reused, not journaled as a fresh touch.
   let rows = db.prepare(
-    'select count(*) as n from journal_touch where jrow = ?',
-  ).get(batch) as { n: number }
+    `select count(distinct jc.entity) as n from journal_change jc
+     where jc.tx = ? and jc.entity in (select id from entity where eid in (?, ?))`,
+  ).get(batch, a, b) as { n: number }
   assertEquals(rows.n, 2)
 })
 
-// The one-time migration path: a live db has 26k journal rows and an empty
-// journal_touch. backfillJournalTouch fills it once from the existing rows. The
-// per-entity readers now seek the normalized journal_change (T-18880), so the
-// index is maintained but unread pending its retirement (T-18883); this proves
-// the backfill still rebuilds journal_touch identically from the log and is
-// difference-guarded, a no-op once populated.
-Deno.test('backfillJournalTouch: rebuilds the index from the existing journal', () => {
-  let d = fresh()
-  let x = uid(), y = uid()
-  apply(d, [{ eid: x, name: 'doc', comp: { title: 'x1' } }])
-  apply(d, [
-    { eid: x, name: 'doc', comp: { title: 'x2' } },
-    { eid: y, name: 'doc', comp: { title: 'y1' } },
-  ])
-  let touches = () =>
-    d.prepare('select jrow, eid from journal_touch order by jrow, eid')
-      .all() as {
-        jrow: number
-        eid: string
-      }[]
-  let before = touches()
-  assertEquals(before.length >= 3, true) // x (x1), x+y (x2/y1), + blob ids
-  // Simulate a pre-index live db: the journal rows exist, the index does not.
-  d.exec('delete from journal_touch')
-  assertEquals(touches().length, 0)
-  backfillJournalTouch(d)
-  assertEquals(touches(), before) // rebuilt identically from the log
-  // Difference-guarded: a second run over the populated table changes nothing.
-  let n = (db2: typeof d) =>
-    (db2.prepare('select count(*) as n from journal_touch').get() as {
-      n: number
-    }).n
-  let filled = n(d)
-  backfillJournalTouch(d)
-  assertEquals(n(d), filled)
-  d.close()
+// The one-time rekey (T-18883): a graph whose journal still names eids as
+// text is rebuilt by spine id on open, ids kept, history readable as before.
+// A change naming an eid with no spine keeps its row and names no entity; an
+// actor with no spine reads as unowned.
+slow('open keys a text-eid journal by spine id once', () => {
+  let root = Deno.makeTempDirSync({ prefix: 'tasks-journal-keys-' })
+  let path = `${root}/tasks.db`
+  try {
+    let legacy = open(path)
+    let t = uid(), who = uid(), s = uid()
+    apply(legacy, [
+      { eid: who, name: 'doc', comp: { title: 'operator' } },
+      { eid: who, name: 'project', comp: {} },
+      { eid: s, name: 'session', comp: { id: `keys-${s}`, actor: who } },
+    ])
+    apply(
+      legacy,
+      [{ eid: t, name: 'doc', comp: { title: 'v1' } }],
+      undefined,
+      `keys-${s}`,
+    )
+    apply(legacy, [{ eid: t, name: 'doc', comp: { title: 'v2' } }])
+    let before = journalOf(legacy, t)
+    let tip = cursorOf(legacy)
+    // Regress to the text-keyed shape: eids where the ids are, plus one change
+    // and one actor nothing resolves.
+    legacy.exec(`pragma foreign_keys = off`)
+    legacy.exec(`
+      create table __old_tx (id integer primary key, ts text not null,
+        actor text, via text, trace text);
+      insert into __old_tx select id, ts, ${refEid('actor')}, ${
+      refEid('via')
+    }, trace from journal_tx;
+      drop table journal_tx;
+      alter table __old_tx rename to journal_tx;
+      create table __old_change (id integer primary key,
+        tx integer not null references journal_tx(id), ordinal integer not null,
+        eid text not null, component text not null, operation text not null);
+      insert into __old_change select jc.id, jc.tx, jc.ordinal, e.eid,
+        jc.component, jc.operation from journal_change jc
+        join entity e on e.id = jc.entity;
+      drop table journal_change;
+      alter table __old_change rename to journal_change;
+      create index journal_change_tx on journal_change(tx, ordinal);
+      create index journal_change_ent on journal_change(eid, component);
+      insert into journal_tx (ts, actor) values ('2026-01-01T00:00:00.000Z', 'nobody');
+      insert into journal_change (tx, ordinal, eid, component, operation)
+        values ((select max(id) from journal_tx), 0, 'purged', 'doc', 'upsert');
+    `)
+    legacy.close()
+
+    let keyed = open(path)
+    assertEquals(hasCol(keyed, 'journal_change', 'eid'), false)
+    assertEquals(hasCol(keyed, 'journal_change', 'entity'), true)
+    assertEquals(journalOf(keyed, t), before)
+    assertEquals(journalOf(keyed, t)[0].id <= tip, true)
+    assertEquals(
+      keyed.prepare(
+        `select count(*) as n from journal_change where entity is null`,
+      ).get(),
+      { n: 1 },
+    )
+    assertEquals(
+      keyed.prepare(`select actor from journal_tx order by id desc limit 1`)
+        .get(),
+      { actor: null },
+    )
+    assertEquals(
+      (keyed.prepare(`pragma index_info('journal_change_ent')`).all() as {
+        name: string
+      }[]).map((i) => i.name),
+      ['entity', 'component'],
+    )
+    assertEquals(keyed.prepare('pragma foreign_key_check').all(), [])
+    // Writes after the rekey land by spine id and read back through the join.
+    apply(keyed, [{ eid: t, name: 'doc', comp: { title: 'v3' } }])
+    assertEquals(journalOf(keyed, t)[0].changes[0].comp, { title: 'v3' })
+    keyed.close()
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
 })
 
 Deno.test('num is monotonic: a grave keeps its number off the market', () => {

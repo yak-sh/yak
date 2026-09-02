@@ -1,7 +1,7 @@
 // The graph-native managed lifecycle against an in-memory graph and injected
 // provider/tools. No process, credential, or owner graph participates.
 import { assert, assertEquals, assertMatch } from '@std/assert'
-import { apply, journalOf, open } from './db.ts'
+import { apply, journalOf, journalSince, open } from './db.ts'
 import {
   append,
   expiredLeases,
@@ -218,10 +218,9 @@ slow(
     assertEquals(rows[4].comps.usage.reasoning, 2)
     assertEquals(called, ['shell'])
     assertEquals(requests.length, 2)
-    let batches = db.prepare('select via, batch from journal order by rowid')
-      .all() as { via: string | null; batch: string }[]
+    let batches = journalSince(db, 0)
     let birth = batches.find((batch) => {
-      let changes = JSON.parse(batch.batch) as Change[]
+      let changes: Change[] = batch.batch
       return changes.some((change) => change.eid == rows[0].eid) &&
         changes.some((change) => change.eid == rows[1].eid)
     })

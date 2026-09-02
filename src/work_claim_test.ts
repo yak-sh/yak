@@ -223,12 +223,12 @@ Deno.test('claim_work replay is a no-op; collision audits one winner', () => {
   let target = uuid()
   apply(db, task(target, project, [{ eid: target, name: 'decided', comp: {} }]))
   let first = take(db, target, 'winner')
-  let journal = Number(cell(db, 'select count(*) as n from journal')?.n)
+  let journal = Number(cell(db, 'select count(*) as n from journal_tx')?.n)
   assert(first.length > 0)
   assertEquals(take(db, target, 'winner'), [])
   assertEquals(take(db, target, human(db, sessionEid(db, 'winner')!)), [])
   assertEquals(
-    Number(cell(db, 'select count(*) as n from journal')?.n),
+    Number(cell(db, 'select count(*) as n from journal_tx')?.n),
     journal,
   )
   assertEquals(
@@ -267,7 +267,7 @@ Deno.test('claim_work refuses non-session and ambiguous graph addresses without 
   ])
   db.prepare('update alias set slugs = ? where slug in (?, ?)')
     .run('ambiguous-worker', 'alias-a', 'alias-b')
-  let journal = Number(cell(db, 'select count(*) as n from journal')?.n)
+  let journal = Number(cell(db, 'select count(*) as n from journal_tx')?.n)
   for (let wrong of [wrongTask, design, comment]) {
     let id = human(db, wrong)
     assertThrows(() => take(db, target, id), Error, `${id} is not a session`)
@@ -280,7 +280,7 @@ Deno.test('claim_work refuses non-session and ambiguous graph addresses without 
   assertEquals(Number(cell(db, 'select count(*) as n from session')?.n), 0)
   assertEquals(Number(cell(db, 'select count(*) as n from claim')?.n), 0)
   assertEquals(
-    Number(cell(db, 'select count(*) as n from journal')?.n),
+    Number(cell(db, 'select count(*) as n from journal_tx')?.n),
     journal,
   )
 })
@@ -292,11 +292,11 @@ Deno.test('claim_work mints an unknown stable uuid and resumes an exact session'
   take(db, target, sid)
   let session = sessionEid(db, sid)!
   assertEquals(holder(db, target), session)
-  let journal = Number(cell(db, 'select count(*) as n from journal')?.n)
+  let journal = Number(cell(db, 'select count(*) as n from journal_tx')?.n)
   assertEquals(take(db, target, sid), [])
   assertEquals(take(db, target, human(db, session)), [])
   assertEquals(
-    Number(cell(db, 'select count(*) as n from journal')?.n),
+    Number(cell(db, 'select count(*) as n from journal_tx')?.n),
     journal,
   )
 })
@@ -335,7 +335,7 @@ Deno.test('claim_work atomically graduates a source Session at its existing iden
     },
   })
   try {
-    let journal = Number(cell(db, 'select count(*) as n from journal')?.n)
+    let journal = Number(cell(db, 'select count(*) as n from journal_tx')?.n)
     assertThrows(
       () => take(db, failed, sid),
       Error,
@@ -347,7 +347,7 @@ Deno.test('claim_work atomically graduates a source Session at its existing iden
       undefined,
     )
     assertEquals(
-      Number(cell(db, 'select count(*) as n from journal')?.n),
+      Number(cell(db, 'select count(*) as n from journal_tx')?.n),
       journal,
     )
     assertThrows(
@@ -395,7 +395,7 @@ Deno.test('claim_work atomically graduates a source Session at its existing iden
       ),
       { provider: null },
     )
-    journal = Number(cell(db, 'select count(*) as n from journal')?.n)
+    journal = Number(cell(db, 'select count(*) as n from journal_tx')?.n)
     assertEquals(take(db, target, sid), [])
     assertEquals(take(db, target, human(db, sourceEid)), [])
     assertEquals(
@@ -403,7 +403,7 @@ Deno.test('claim_work atomically graduates a source Session at its existing iden
       identity.num,
     )
     assertEquals(
-      Number(cell(db, 'select count(*) as n from journal')?.n),
+      Number(cell(db, 'select count(*) as n from journal_tx')?.n),
       journal,
     )
   } finally {
@@ -419,12 +419,12 @@ Deno.test('claim_work refuses a resolved non-task target before reifying a sessi
     { eid: comment, name: 'doc', comp: { title: 'A comment', body: '' } },
     { eid: comment, name: 'comment', comp: { target: project } },
   ])
-  let journal = Number(cell(db, 'select count(*) as n from journal')?.n)
+  let journal = Number(cell(db, 'select count(*) as n from journal_tx')?.n)
   let id = human(db, comment)
   assertThrows(() => take(db, id, 'wrong-target'), Error, `${id} is not a task`)
   assertEquals(sessionEid(db, 'wrong-target'), undefined)
   assertEquals(
-    Number(cell(db, 'select count(*) as n from journal')?.n),
+    Number(cell(db, 'select count(*) as n from journal_tx')?.n),
     journal,
   )
 })

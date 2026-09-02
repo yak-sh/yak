@@ -44,13 +44,15 @@ pub fn journal_of(store: &Store, eid: &str, limit: usize) -> Vec<Entry> {
     if !store.has_table("journal_change") {
         return vec![];
     }
-    // The batches touching this entity, newest first — the normalized
-    // (eid, component) index (T-18880), each batch's changes reconstructed
-    // from the normalized rows and screened to the entity's own eid. The
-    // corrupt-gap batch (no journal_change) is skipped like every reader.
-    let sql = "select jc.tx as tx, jt.ts as ts, jt.actor as actor \
+    // The batches touching this entity, newest first — the (entity, component)
+    // index, each batch's changes reconstructed from the normalized rows and
+    // screened to the entity's own eid. The corrupt-gap batch (no
+    // journal_change) is skipped like every reader.
+    let sql = "select jc.tx as tx, jt.ts as ts, \
+                      (select eid from entity where id = jt.actor) as actor \
                from journal_change jc join journal_tx jt on jt.id = jc.tx \
-               where jc.eid = ?1 group by jc.tx order by jc.tx desc limit ?2";
+               where jc.entity = (select id from entity where eid = ?1) \
+               group by jc.tx order by jc.tx desc limit ?2";
     let Ok(mut st) = store.conn.prepare(sql) else { return vec![] };
     let metas: Vec<(i64, String, Option<String>)> = st
         .query_map(rusqlite::params![eid, limit as i64], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
@@ -108,9 +110,12 @@ pub fn seen(store: &Store, eid: &str) -> bool {
     }
     store
         .conn
-        .query_row("select 1 from journal_change where eid = ?1 limit 1", [eid], |r| {
-            r.get::<_, i64>(0)
-        })
+        .query_row(
+            "select 1 from journal_change \
+             where entity = (select id from entity where eid = ?1) limit 1",
+            [eid],
+            |r| r.get::<_, i64>(0),
+        )
         .optional()
         .ok()
         .flatten()

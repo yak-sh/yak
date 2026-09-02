@@ -31,18 +31,15 @@ const SCHEMA: &str = "
     primary key (parent, type, child)
   );
   create index dependency_child on dependency(child);
-  create table journal (
-    ts text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    actor text, via text, batch text not null, trace text
-  );
-  create table journal_touch (jrow integer not null, eid text not null);
   create table journal_tx (
-    id integer primary key, ts text not null, actor text, via text, trace text
+    id integer primary key, ts text not null,
+    actor integer references entity(id), via integer references entity(id),
+    trace text
   );
   create table journal_change (
     id integer primary key, tx integer not null references journal_tx(id),
-    ordinal integer not null, eid text not null, component text not null,
-    operation text not null
+    ordinal integer not null, entity integer references entity(id),
+    component text not null, operation text not null
   );
   create table journal_field (
     id integer primary key, change integer not null references journal_change(id),
@@ -50,7 +47,7 @@ const SCHEMA: &str = "
     value text
   );
   create index journal_change_tx on journal_change(tx, ordinal);
-  create index journal_change_ent on journal_change(eid, component);
+  create index journal_change_ent on journal_change(entity, component);
   create index journal_field_change on journal_field(change, ordinal);
   create table blob (
     entity integer primary key references entity(id),
@@ -317,18 +314,23 @@ fn create_stamps_numbers_and_journals() {
     assert_eq!(num, 1);
     assert!(out.iter().any(|c| c.name == "entity" && c.comp.is_some()));
     assert!(out.iter().any(|c| c.name == "created"));
-    // journal: one row; created/updated echoes LEFT OUT; created comps are
+    // journal: one tx; created/updated echoes LEFT OUT; created comps are
     // completed to the persisted shape (body default rides the batch)
-    let batch: String = one(&s, "select batch from journal");
-    let v: Value = serde_json::from_str(&batch).unwrap();
-    let doc = v.as_array().unwrap().iter().find(|c| c["name"] == "doc").unwrap();
-    assert_eq!(doc["comp"]["body"], json!(""));
-    assert!(!batch.contains("\"created\""));
+    let txs: i64 = one(&s, "select count(*) from journal_tx");
+    assert_eq!(txs, 1);
+    let body: String = one(
+        &s,
+        "select jf.value from journal_field jf join journal_change jc on jc.id = jf.change \
+         where jc.component = 'doc' and jf.field = 'body'",
+    );
+    assert_eq!(body, "\"\"");
+    let echoed: i64 = one(&s, "select count(*) from journal_change where component = 'created'");
+    assert_eq!(echoed, 0);
     // trace is null unless the caller fed the journal
-    let trace: Option<String> = one(&s, "select trace from journal");
+    let trace: Option<String> = one(&s, "select trace from journal_tx");
     assert!(trace.is_none());
-    // journal_touch: the document and its synthesized empty-body blob.
-    let touched: i64 = one(&s, "select count(*) from journal_touch");
+    // the batch touched the document and its synthesized empty-body blob.
+    let touched: i64 = one(&s, "select count(distinct entity) from journal_change");
     assert_eq!(touched, 2);
 }
 
@@ -625,7 +627,7 @@ fn fed_trace_serializes_created_and_removed() {
     apply(&s, vec![ch(A, "doc", json!({"title": "x"}))], &opts, &default_gates()).unwrap();
     apply(&s, vec![ch(A, "doc", Value::Null)], &opts, &default_gates()).unwrap();
     let traces: Vec<String> = {
-        let mut st = s.conn.prepare("select trace from journal order by rowid").unwrap();
+        let mut st = s.conn.prepare("select trace from journal_tx order by id").unwrap();
         let rows = st.query_map([], |r| r.get(0)).unwrap();
         rows.flatten().collect()
     };
@@ -681,7 +683,7 @@ fn unknown_column_refuses_server_owned_drops() {
     // a server-owned comp is dropped in silence: nothing lands, no journal
     let out = run(&s, vec![ch(A, "resume", json!({"rank": 1}))]);
     assert!(out.is_empty());
-    let n: i64 = one(&s, "select count(*) from journal");
+    let n: i64 = one(&s, "select count(*) from journal_tx");
     assert_eq!(n, 0);
 }
 
@@ -819,7 +821,7 @@ fn guarded_worker_claim_approves_inherits_replays_and_rolls_back() {
     take(&s, A, "approver", true).unwrap();
     assert_eq!(one::<i64>(&s, "select count(*) from decided where entity = (select id from entity where eid = 'aaaaaaaa-0000-4000-8000-000000000001')"), 1);
     take(&s, C, "inherited", false).unwrap();
-    let journals = one::<i64>(&s, "select count(*) from journal");
+    let journals = one::<i64>(&s, "select count(*) from journal_tx");
     assert!(take(&s, C, "inherited", false).unwrap().is_empty());
     let human_session: String = one(
         &s,
@@ -827,7 +829,7 @@ fn guarded_worker_claim_approves_inherits_replays_and_rolls_back() {
          where session.id = 'inherited'",
     );
     assert!(take(&s, C, &human_session, false).unwrap().is_empty());
-    assert_eq!(one::<i64>(&s, "select count(*) from journal"), journals);
+    assert_eq!(one::<i64>(&s, "select count(*) from journal_tx"), journals);
 
     let blocked = store();
     run(
@@ -861,7 +863,7 @@ fn guarded_worker_claim_rejects_wrong_kinds_and_ambiguous_aliases_without_a_trac
         ],
     );
     s.conn.execute("update alias set slugs = 'ambiguous-worker'", []).unwrap();
-    let journals = one::<i64>(&s, "select count(*) from journal");
+    let journals = one::<i64>(&s, "select count(*) from journal_tx");
     for wrong in [B, C, D] {
         let id = human(&s.conn, wrong);
         let err = take(&s, A, &id, false).unwrap_err().to_string();
@@ -871,13 +873,13 @@ fn guarded_worker_claim_rejects_wrong_kinds_and_ambiguous_aliases_without_a_trac
     assert!(err.contains("ambiguous-worker is an ambiguous alias"), "{err}");
     assert_eq!(one::<i64>(&s, "select count(*) from session"), 0);
     assert_eq!(one::<i64>(&s, "select count(*) from claim"), 0);
-    assert_eq!(one::<i64>(&s, "select count(*) from journal"), journals);
+    assert_eq!(one::<i64>(&s, "select count(*) from journal_tx"), journals);
 
     let target = human(&s.conn, D);
     let err = take(&s, &target, "wrong-target", false).unwrap_err().to_string();
     assert!(err.contains(&format!("{target} is not a task")), "{err}");
     assert_eq!(one::<i64>(&s, "select count(*) from session"), 0);
-    assert_eq!(one::<i64>(&s, "select count(*) from journal"), journals);
+    assert_eq!(one::<i64>(&s, "select count(*) from journal_tx"), journals);
 }
 
 #[test]
@@ -891,10 +893,10 @@ fn guarded_worker_claim_mints_unknown_uuid_resumes_exact_session_and_rejects_emp
         "select e.eid from session join entity e on e.id = session.entity \
          where session.id = 'ffffffff-0000-4000-8000-000000000099'",
     );
-    let journals = one::<i64>(&s, "select count(*) from journal");
+    let journals = one::<i64>(&s, "select count(*) from journal_tx");
     assert!(take(&s, A, sid, false).unwrap().is_empty());
     assert!(take(&s, A, &human(&s.conn, &session), false).unwrap().is_empty());
-    assert_eq!(one::<i64>(&s, "select count(*) from journal"), journals);
+    assert_eq!(one::<i64>(&s, "select count(*) from journal_tx"), journals);
 
     let err = claim_work(
         &s,

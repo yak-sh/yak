@@ -37,7 +37,15 @@ Deno.env.set('POLL_MS', '10') // tests wait on facts, never on the clock
 // scheduled reliably before that deadline.
 Deno.env.set('STOP_GRACE_MS', '25')
 
-let { apply, delta, human, journalOf, snapshot, sweepSelect } = await import(
+let {
+  apply,
+  delta,
+  human,
+  journalOf,
+  journalSince,
+  snapshot,
+  sweepSelect,
+} = await import(
   './db.ts'
 )
 let { db } = await import('./live_db.ts')
@@ -1677,11 +1685,9 @@ slow('a settled lifecycle stamp is one replayable moved patch', async () => {
   recover(cast)
   await running.get(eid)!.done
 
-  let rows = db.prepare(
-    'select batch from journal where rowid > ? order by rowid',
-  ).all(c0) as { batch: string }[]
+  let rows = journalSince(db, c0)
   assertEquals(rows.length, 1)
-  let changes = JSON.parse(rows[0].batch) as Change[]
+  let changes: Change[] = rows[0].batch
   let want: Change[] = [
     {
       eid,

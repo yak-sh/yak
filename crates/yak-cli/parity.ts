@@ -232,8 +232,9 @@ let TABLES = [
   'alias',
   'created',
   'updated',
-  'journal',
-  'journal_touch',
+  'journal_tx',
+  'journal_change',
+  'journal_field',
 ]
 import { DatabaseSync } from 'node:sqlite'
 let dump = (path: string) => {

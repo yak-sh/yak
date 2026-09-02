@@ -1,37 +1,16 @@
-// Redaction's pure content transform and published-backup range calculation.
+// Redaction's pure column test and published-backup range calculation.
 // Tests keep removed values out of process execution entirely.
-import { docColumns, published, scrubBatch } from './redaction.ts'
+import { published, scrubbable } from './redaction.ts'
 import { assertEquals } from '@std/assert'
 
-let E = 'aaaaaaaa-0000-4000-8000-000000000001'
-
-Deno.test('scrubBatch replaces content but preserves structural values', () => {
-  let secret = 'open-secret'
-  let changes = [
-    {
-      eid: E,
-      name: 'doc',
-      comp: { title: secret, body: `two ${secret} values ${secret}` },
-    },
-    { eid: E, name: 'task', comp: { domain: secret } },
-    { eid: E, name: 'comment', comp: { target: secret } },
-    { eid: E, name: 'redaction', comp: { column: secret, hash: secret } },
-    { eid: E, name: 'retired', comp: { target: secret } },
-  ]
-  let out = scrubBatch(changes, secret)
-  assertEquals(out.count, 4)
-  assertEquals(out.batch, [
-    {
-      eid: E,
-      name: 'doc',
-      comp: { title: '[redacted]', body: 'two [redacted] values [redacted]' },
-    },
-    { eid: E, name: 'task', comp: { domain: '[redacted]' } },
-    { eid: E, name: 'comment', comp: { target: secret } },
-    { eid: E, name: 'redaction', comp: { column: secret, hash: secret } },
-    { eid: E, name: 'retired', comp: { target: secret } },
-  ])
-  assertEquals(docColumns(changes, E, secret), ['title', 'body'])
+Deno.test('scrubbable names content columns, never structural or audit ones', () => {
+  assertEquals(scrubbable('doc', 'title'), true)
+  assertEquals(scrubbable('doc', 'body'), true)
+  assertEquals(scrubbable('task', 'domain'), true)
+  assertEquals(scrubbable('comment', 'target'), false)
+  assertEquals(scrubbable('redaction', 'column'), false)
+  assertEquals(scrubbable('redaction', 'hash'), false)
+  assertEquals(scrubbable('retired', 'target'), false)
 })
 
 Deno.test('published finds the exact upstream range without the value', async () => {
@@ -58,7 +37,7 @@ Deno.test('published finds the exact upstream range without the value', async ()
     '--format=%H%x09%cI',
     '--reverse',
     '--since=2026-08-24T09:59:59.000Z',
-    "-SINSERT INTO journal VALUES('2026-08-24T10:00:00Z',",
+    "-GINSERT INTO journal_tx VALUES\\([0-9]+,'2026-08-24T10:00:00Z',",
     'origin/main',
     '--',
     ':(glob)snap/journal.sql.part.*',

@@ -331,7 +331,7 @@ slow(
     try {
       await watching.open(`entries:${session}`, `.entry.session=${session}`)
       await elsewhere.open('entries:elsewhere', `.entry.session=${uid()}`)
-      let before = db.prepare('select count(*) n from journal').get() as {
+      let before = db.prepare('select count(*) n from journal_tx').get() as {
         n: number
       }
       assertEquals(
@@ -354,7 +354,7 @@ slow(
       }])
       assertEquals(elsewhere.observations(), [])
       assertEquals(
-        db.prepare('select count(*) n from journal').get(),
+        db.prepare('select count(*) n from journal_tx').get(),
         before,
       )
       assertEquals(

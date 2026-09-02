@@ -22,7 +22,7 @@
 # rebuild themselves.
 #
 # SPLIT across files, and SHARDED into parts, because GitHub's hard 100 MB limit
-# is per FILE. The journal is the largest, fastest-growing table and append-only,
+# is per FILE. The journal is the largest, fastest-growing data and append-only,
 # so it gets its own file; and each big dump is split into <50 MB parts
 # (schema stays whole). Sharding keeps every byte — the alternative, pruning old
 # journal rows, would buy the same headroom by discarding the write history, and
@@ -126,11 +126,12 @@ sqlite3 -batch -init /dev/null snap/tasks.db \
        or name glob 'vector0_embedding*' or name = '_sqliteai_vector'
        or name glob 'sqlite_stat*'))
    order by rowid" > snap/schema.sql.tmp
-dump_data "name = 'journal'" > snap/journal.sql.tmp
-dump_data "name != 'journal'" > snap/graph.sql.tmp
+journal="name in ('journal_tx', 'journal_change', 'journal_field')"
+dump_data "$journal" > snap/journal.sql.tmp
+dump_data "not ($journal)" > snap/graph.sql.tmp
 
 # SHARD the big dumps into parts under GitHub's 100 MB hard limit (target <50 MB
-# to clear the soft warning too). The mixed write history in `journal` is
+# to clear the soft warning too). The write history in the journal tables is
 # legitimately large — every byte is kept; sharding buys the headroom that
 # pruning history would otherwise cost. `split` cuts on BYTE boundaries, which is
 # safe because the restore cats the parts back byte-for-byte before sqlite ever
