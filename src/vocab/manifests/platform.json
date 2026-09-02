@@ -1,0 +1,75 @@
+{
+  "name": "platform",
+  "comps": {
+    "app": {
+      "rank": 1030,
+      "kind_rank": 400,
+      "cols": {
+        "slug": "text",
+        "space": {
+          "eid": "space",
+          "death": "cascade"
+        },
+        "version": "number"
+      },
+      "indexes": [
+        {
+          "cols": [
+            "space",
+            "slug"
+          ],
+          "unique": true
+        }
+      ]
+    },
+    "member": {
+      "rank": 1040,
+      "kind_rank": 410,
+      "cols": {
+        "space": {
+          "eid": "space",
+          "death": "cascade"
+        },
+        "person": {
+          "eid": "person",
+          "death": "cascade"
+        },
+        "role": {
+          "enum": [
+            "owner",
+            "editor",
+            "viewer"
+          ]
+        }
+      },
+      "indexes": [
+        {
+          "cols": [
+            "space",
+            "person"
+          ],
+          "unique": true
+        }
+      ]
+    },
+    "space": {
+      "rank": 1020,
+      "kind_rank": 390,
+      "cols": {
+        "slug": "text",
+        "home": {
+          "eid": "app",
+          "death": "detach"
+        }
+      },
+      "indexes": [
+        {
+          "cols": [
+            "slug"
+          ],
+          "unique": true
+        }
+      ]
+    }
+  }
+}

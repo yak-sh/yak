@@ -983,6 +983,11 @@ export let derived = [
   // A commit (M-31946 §7): {target FK cascade, sha/repo/message text} — the
   // notice shape with three nullable text columns, so it derives.
   'commit',
+  // The platform directory (D-32318): nullable text/real columns and {eid}
+  // references by death word, so all three derive.
+  'space',
+  'app',
+  'member',
   'deliver',
   'delivered',
   'error',

@@ -103,6 +103,6 @@ mod tests {
         let ms = yak_vocab::manifests();
         assert!(ms.iter().any(|(p, _)| p == "kernel"));
         assert!(ms.iter().any(|(p, _)| p == "sessions"));
-        assert_eq!(ms.len(), 9, "expected nine plugins");
+        assert_eq!(ms.len(), 10, "expected ten plugins");
     }
 }

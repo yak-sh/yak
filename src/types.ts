@@ -541,6 +541,20 @@ export let comps: Record<string, Record<string, PropType>> = {
     by: { eid: 'entity', death: 'keep' },
   },
   effect: {},
+  space: {
+    slug: 'text',
+    home: { eid: 'app', death: 'detach' },
+  },
+  app: {
+    slug: 'text',
+    space: { eid: 'space', death: 'cascade' },
+    version: 'number',
+  },
+  member: {
+    space: { eid: 'space', death: 'cascade' },
+    person: { eid: 'person', death: 'cascade' },
+    role: { enum: ['owner', 'editor', 'viewer'] },
+  },
 }
 
 // Old spellings that still resolve — the compatibility promise in
@@ -567,6 +581,9 @@ export let indexes: Record<string, Idx[]> = {
   chat: [{ cols: ['actor', 'target'], unique: true }],
   completed: [{ cols: ['at'] }],
   effect: [{ cols: ['jrow', 'handler'], unique: true }],
+  space: [{ cols: ['slug'], unique: true }],
+  app: [{ cols: ['space', 'slug'], unique: true }],
+  member: [{ cols: ['space', 'person'], unique: true }],
 }
 
 // Snapshot partition: lazy comps never ride the boot snapshot.
@@ -821,6 +838,9 @@ export let kindOrder = [
   'doc',
   'email',
   'alias',
+  'space',
+  'app',
+  'member',
 ]
 
 // Kinds whose doc title is a NAME a caller can type (near.ts).

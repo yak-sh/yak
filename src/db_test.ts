@@ -542,6 +542,15 @@ let contracts = [
   contract('layout', 'root', 'pane'),
   contract('pane', 'layout', 'layout'),
   contract('pane', 'parent', 'pane'),
+  // the platform directory (D-32318)
+  contract('space', 'home', 'app'),
+  contract('app', 'space', 'space'),
+  contract('member', 'space', 'space', (d) => ({
+    person: tag(d, 'person'),
+  })),
+  contract('member', 'person', 'person', (d) => ({
+    space: tag(d, 'space', { slug: 'a-space' }),
+  })),
 ]
 
 Deno.test('create + patch + column clear', () => {

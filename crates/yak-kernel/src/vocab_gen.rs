@@ -397,6 +397,20 @@ pub(crate) fn baked() -> Vocab {
             ("by".into(), PropType::Eid("entity".into())),
         ]),
         ("effect".into(), vec![]),
+        ("space".into(), vec![
+            ("slug".into(), PropType::Text),
+            ("home".into(), PropType::Eid("app".into())),
+        ]),
+        ("app".into(), vec![
+            ("slug".into(), PropType::Text),
+            ("space".into(), PropType::Eid("space".into())),
+            ("version".into(), PropType::Number),
+        ]),
+        ("member".into(), vec![
+            ("space".into(), PropType::Eid("space".into())),
+            ("person".into(), PropType::Eid("person".into())),
+            ("role".into(), PropType::Enum(vec!["owner".into(), "editor".into(), "viewer".into()])),
+        ]),
     ];
     let stamped = HashMap::from([
         ("entity".into(), vec![
@@ -623,7 +637,7 @@ pub(crate) fn baked() -> Vocab {
         ("email".into(), "A".into()),
         ("memory".into(), "M".into()),
     ]);
-    let kind_order = vec!["design".into(), "goal".into(), "task".into(), "project".into(), "layout".into(), "board".into(), "canvas".into(), "web".into(), "card".into(), "pane".into(), "client".into(), "camera".into(), "fold".into(), "cursor".into(), "role".into(), "session".into(), "entry".into(), "runner".into(), "claim".into(), "subscription".into(), "stop_request".into(), "knock".into(), "wake".into(), "dream".into(), "mail".into(), "hook".into(), "conflict".into(), "redaction".into(), "review".into(), "notice".into(), "commit".into(), "comment".into(), "memory".into(), "person".into(), "persona".into(), "model".into(), "attachment".into(), "doc".into(), "email".into(), "alias".into()];
+    let kind_order = vec!["design".into(), "goal".into(), "task".into(), "project".into(), "layout".into(), "board".into(), "canvas".into(), "web".into(), "card".into(), "pane".into(), "client".into(), "camera".into(), "fold".into(), "cursor".into(), "role".into(), "session".into(), "entry".into(), "runner".into(), "claim".into(), "subscription".into(), "stop_request".into(), "knock".into(), "wake".into(), "dream".into(), "mail".into(), "hook".into(), "conflict".into(), "redaction".into(), "review".into(), "notice".into(), "commit".into(), "comment".into(), "memory".into(), "person".into(), "persona".into(), "model".into(), "attachment".into(), "doc".into(), "email".into(), "alias".into(), "space".into(), "app".into(), "member".into()];
     let statuses = vec!["open".into(), "wip".into(), "done".into(), "cancelled".into()];
     let renames = vec![
         ("view:Debug.ListItem".into(), "Debug.Tile".into()),
@@ -692,6 +706,10 @@ pub(crate) fn baked() -> Vocab {
         ("cancelled".into(), "by".into(), "keep".into()),
         ("decided".into(), "by".into(), "keep".into()),
         ("proposed".into(), "by".into(), "keep".into()),
+        ("space".into(), "home".into(), "detach".into()),
+        ("app".into(), "space".into(), "cascade".into()),
+        ("member".into(), "space".into(), "cascade".into()),
+        ("member".into(), "person".into(), "cascade".into()),
     ];
     let edges = vec!["requires".into(), "contains".into(), "reads".into(), "about".into(), "supervises".into(), "delegates".into(), "recalled".into(), "supersedes".into(), "worked".into(), "referenced".into(), "wants".into(), "satisfies".into()];
     let governed = vec!["task".into(), "architecture".into(), "memory".into(), "persona".into()];

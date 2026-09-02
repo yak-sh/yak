@@ -877,6 +877,23 @@ pub static SCHEMA: &[SchemaOp] = &[
     "repo" text,
     "message" text
   );"#),
+    SchemaOp::Exec(r#"create table if not exists "space" (
+    entity integer primary key references entity(id),
+    "slug" text,
+    "home" integer references entity(id)
+  );"#),
+    SchemaOp::Exec(r#"create table if not exists "app" (
+    entity integer primary key references entity(id),
+    "slug" text,
+    "space" integer references entity(id),
+    "version" real
+  );"#),
+    SchemaOp::Exec(r#"create table if not exists "member" (
+    entity integer primary key references entity(id),
+    "space" integer references entity(id),
+    "person" integer references entity(id),
+    "role" text
+  );"#),
     SchemaOp::Exec(r#"create table if not exists "deliver" (
     entity integer primary key references entity(id),
     "to" integer
@@ -973,6 +990,14 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "commit", col: "sha", sql: r#"alter table commit add column "sha" text"# },
     SchemaOp::AddColumn { table: "commit", col: "repo", sql: r#"alter table commit add column "repo" text"# },
     SchemaOp::AddColumn { table: "commit", col: "message", sql: r#"alter table commit add column "message" text"# },
+    SchemaOp::AddColumn { table: "space", col: "slug", sql: r#"alter table space add column "slug" text"# },
+    SchemaOp::AddColumn { table: "space", col: "home", sql: r#"alter table space add column "home" integer references entity(id)"# },
+    SchemaOp::AddColumn { table: "app", col: "slug", sql: r#"alter table app add column "slug" text"# },
+    SchemaOp::AddColumn { table: "app", col: "space", sql: r#"alter table app add column "space" integer references entity(id)"# },
+    SchemaOp::AddColumn { table: "app", col: "version", sql: r#"alter table app add column "version" real"# },
+    SchemaOp::AddColumn { table: "member", col: "space", sql: r#"alter table member add column "space" integer references entity(id)"# },
+    SchemaOp::AddColumn { table: "member", col: "person", sql: r#"alter table member add column "person" integer references entity(id)"# },
+    SchemaOp::AddColumn { table: "member", col: "role", sql: r#"alter table member add column "role" text"# },
     SchemaOp::AddColumn { table: "deliver", col: "to", sql: r#"alter table deliver add column "to" integer"# },
     SchemaOp::AddColumn { table: "delivered", col: "at", sql: r#"alter table delivered add column "at" text"# },
     SchemaOp::AddColumn { table: "delivered", col: "via", sql: r#"alter table delivered add column "via" text"# },
@@ -1116,5 +1141,12 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::Exec(r#"create index if not exists proposed_by on "proposed" ("by");"#),
     SchemaOp::Exec(r#"create index if not exists proposed_via on "proposed" ("via");"#),
     SchemaOp::Exec(r#"create unique index if not exists effect_jrow_handler on "effect" ("jrow", "handler");"#),
+    SchemaOp::Exec(r#"create unique index if not exists space_slug on "space" ("slug");"#),
+    SchemaOp::Exec(r#"create index if not exists space_home on "space" ("home");"#),
+    SchemaOp::Exec(r#"create unique index if not exists app_space_slug on "app" ("space", "slug");"#),
+    SchemaOp::Exec(r#"create index if not exists app_space on "app" ("space");"#),
+    SchemaOp::Exec(r#"create unique index if not exists member_space_person on "member" ("space", "person");"#),
+    SchemaOp::Exec(r#"create index if not exists member_space on "member" ("space");"#),
+    SchemaOp::Exec(r#"create index if not exists member_person on "member" ("person");"#),
     SchemaOp::Exec(r#"drop index if exists subscription_one"#),
 ];

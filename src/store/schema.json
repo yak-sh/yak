@@ -125,6 +125,18 @@
   },
   {
     "kind": "exec",
+    "sql": "create table if not exists \"space\" (\n    entity integer primary key references entity(id),\n    \"slug\" text,\n    \"home\" integer references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"app\" (\n    entity integer primary key references entity(id),\n    \"slug\" text,\n    \"space\" integer references entity(id),\n    \"version\" real\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"member\" (\n    entity integer primary key references entity(id),\n    \"space\" integer references entity(id),\n    \"person\" integer references entity(id),\n    \"role\" text\n  );"
+  },
+  {
+    "kind": "exec",
     "sql": "create table if not exists \"deliver\" (\n    entity integer primary key references entity(id),\n    \"to\" integer\n  );"
   },
   {
@@ -468,6 +480,54 @@
     "table": "commit",
     "col": "message",
     "sql": "alter table commit add column \"message\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "space",
+    "col": "slug",
+    "sql": "alter table space add column \"slug\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "space",
+    "col": "home",
+    "sql": "alter table space add column \"home\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "app",
+    "col": "slug",
+    "sql": "alter table app add column \"slug\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "app",
+    "col": "space",
+    "sql": "alter table app add column \"space\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "app",
+    "col": "version",
+    "sql": "alter table app add column \"version\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "member",
+    "col": "space",
+    "sql": "alter table member add column \"space\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "member",
+    "col": "person",
+    "sql": "alter table member add column \"person\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "member",
+    "col": "role",
+    "sql": "alter table member add column \"role\" text"
   },
   {
     "kind": "addColumn",
@@ -1149,6 +1209,34 @@
   {
     "kind": "exec",
     "sql": "create unique index if not exists effect_jrow_handler on \"effect\" (\"jrow\", \"handler\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists space_slug on \"space\" (\"slug\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists space_home on \"space\" (\"home\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists app_space_slug on \"app\" (\"space\", \"slug\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists app_space on \"app\" (\"space\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists member_space_person on \"member\" (\"space\", \"person\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists member_space on \"member\" (\"space\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists member_person on \"member\" (\"person\");"
   },
   {
     "kind": "exec",

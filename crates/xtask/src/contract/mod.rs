@@ -29,6 +29,7 @@ mod comms;
 mod identity;
 mod kernel;
 mod mail;
+mod platform;
 mod roles;
 mod sessions;
 mod work;

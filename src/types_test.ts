@@ -104,6 +104,11 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'entry.session',
       // an attachment cannot survive without the content it names
       'attachment.blob',
+      // the platform directory (D-32318): an app and a membership die with
+      // their space, a membership with its person
+      'app.space',
+      'member.space',
+      'member.person',
     ]),
   )
   assertEquals(
@@ -131,6 +136,8 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       // root orphans the layout rather than cascading through it
       'pane.content',
       'layout.root',
+      // a space outlives the app that answered its bare hostname
+      'space.home',
     ]),
   )
   assertEquals(
