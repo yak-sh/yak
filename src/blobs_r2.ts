@@ -11,6 +11,11 @@ export type R2 = {
   head(key: string): Promise<unknown | null>
   get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>
   put(key: string, value: ArrayBuffer | Uint8Array): Promise<unknown>
+  list(
+    opts: { prefix: string; cursor?: string },
+  ): Promise<
+    { objects: { key: string }[]; truncated: boolean; cursor?: string }
+  >
 }
 
 export let r2Blobs = (bucket: R2): Blobs => ({
@@ -22,5 +27,15 @@ export let r2Blobs = (bucket: R2): Blobs => ({
     let object = await bucket.get(key)
     if (!object) throw new Error(`no blob at ${key}`)
     return new Uint8Array(await object.arrayBuffer())
+  },
+  list: async (prefix) => {
+    let keys: string[] = []
+    let cursor: string | undefined
+    do {
+      let page = await bucket.list({ prefix, cursor })
+      keys.push(...page.objects.map((o) => o.key))
+      cursor = page.truncated ? page.cursor : undefined
+    } while (cursor)
+    return keys.sort()
   },
 })
