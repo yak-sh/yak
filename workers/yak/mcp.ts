@@ -16,32 +16,20 @@
 // each open exception or error not yet served, one line, then marked, so no
 // break in an app goes unseen by the agent that builds it (T-32362).
 //
-// Who is asking is `withAuth` — identity.ts's once T-32327 lands (the OAuth
-// bearer an agent carries). Until then the stub below reads the platform
-// session cookie and verifies it with the shared secret, the way session.ts
-// does; the swap is one import. It is deliberately NOT the vouched
-// `x-yak-person` header: the kernel sets that header on what it hands an
-// app, and this door is at the apex reading a request straight off the
-// internet, where the header is only ever a client's claim about itself.
-// What a 401 here does NOT yet carry is the `WWW-Authenticate` challenge
-// naming the protected-resource metadata — the line an MCP client follows
-// into the OAuth flow. That belongs with the provider that answers it.
-import { cookieValue, verify } from '../../src/token.ts'
+// Who is asking is identity.ts's `withAuth`: the platform session cookie a
+// browser carries, or the OAuth bearer an agent carries, one answer either
+// way. It is deliberately NOT the vouched `x-yak-person` header — the kernel
+// sets that header on what it hands an app, and this door is at the apex
+// reading a request straight off the internet, where the header is only ever
+// a client's claim about itself. A 401 carries identity's `WWW-Authenticate`
+// challenge, the line an MCP client follows into the OAuth flow.
 import { VERSION } from '../../src/version.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
+import { unauthorized, withAuth } from './identity.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { serve, unseenBlock } from './unseen.ts'
-
-export type Auth = { person: string; via: string }
-
-export let withAuth = async (env: Env, req: Request): Promise<Auth | null> => {
-  let token = cookieValue(req.headers.get('cookie'))
-  if (!token || !env.SESSION_SECRET) return null
-  let claims = await verify(token, env.SESSION_SECRET)
-  return claims ? { person: claims.person, via: 'cookie' } : null
-}
 
 // The versions this door speaks, newest first. A client asks for one in
 // initialize; we answer with the same when we know it, else with ours, and
@@ -139,7 +127,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     return json(405, { error: { code: 'method_not_allowed' } })
   }
   let auth = await withAuth(env, req)
-  if (!auth) return json(401, { error: { code: 'sign_in' } })
+  if (!auth) return unauthorized(req)
   let body: unknown
   try {
     body = await req.json()

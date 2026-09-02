@@ -209,13 +209,32 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assertEquals(mine.status, 200)
     assertEquals(await mine.json(), { person: me, via: 'oauth' })
 
+    // And the connector door takes it: the bearer is the same person there,
+    // which is the whole point of the OAuth half (mcp.ts `withAuth`).
+    let rpc = await k.at('yaks.app', '/mcp', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${bearer}`,
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize' }),
+    })
+    assertEquals(rpc.status, 200)
+    assert((await rpc.json()).result, 'the connector answered the bearer')
+
     // Nobody gets the challenge that tells them where to sign in.
-    let anon = await k.at('yaks.app', '/oauth/me')
-    assertEquals(anon.status, 401)
-    assertMatch(
-      anon.headers.get('www-authenticate') ?? '',
-      /resource_metadata=/,
-    )
+    for (
+      let anon of [
+        await k.at('yaks.app', '/oauth/me'),
+        await k.at('yaks.app', '/mcp', { method: 'POST', body: '{}' }),
+      ]
+    ) {
+      assertEquals(anon.status, 401)
+      assertMatch(
+        anon.headers.get('www-authenticate') ?? '',
+        /resource_metadata=/,
+      )
+    }
   } finally {
     await k.stop()
   }
