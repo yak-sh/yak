@@ -12,8 +12,7 @@
 // discipline — set DB_PATH before importing it. testing.ts (slow/tick/until)
 // stays db-free so the ~40 files that want only those primitives never trip it.
 
-import { DatabaseSync } from './sqlite.ts'
-import { open } from './db.ts'
+import { DatabaseSync, open } from './store/sqlite.ts'
 import { initVector, loadVector, ownVector } from './vector.ts'
 
 // The clones are isolated :memory: handles: busy_timeout has no peer to wait

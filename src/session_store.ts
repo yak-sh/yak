@@ -1,7 +1,7 @@
 // Server-owned persistence for a Session's split components. It keeps the
 // canonical facets and rolling aliases in one transaction owned by its caller,
 // and gives SQL consumers the same canonical-first projection as graph clients.
-import type { DatabaseSync, SQLInputValue } from './sqlite.ts'
+import type { Sql, SqlValue } from './store/sql.ts'
 import {
   type Change,
   comps,
@@ -44,7 +44,7 @@ let facet = (row: Row, name: Facet) => {
   ]))
 }
 
-let remove = (db: DatabaseSync, eid: string, name: Facet): Change[] => {
+let remove = (db: Sql, eid: string, name: Facet): Change[] => {
   let gone = db.prepare(
     `delete from ${sql(name)} where entity = ${ownerId}`,
   ).run(eid).changes
@@ -52,7 +52,7 @@ let remove = (db: DatabaseSync, eid: string, name: Facet): Change[] => {
 }
 
 let writeFacet = (
-  db: DatabaseSync,
+  db: Sql,
   eid: string,
   name: Facet,
   values: Row,
@@ -75,12 +75,12 @@ let writeFacet = (
      on conflict(entity) do update set ${
       cols.map((col) => `${sql(col)} = excluded.${sql(col)}`).join(', ')
     }`,
-  ).run(eid, ...cols.map((col) => values[col] as SQLInputValue))
+  ).run(eid, ...cols.map((col) => values[col] as SqlValue))
   return [{ eid, name, comp: moved }]
 }
 
 export let sessionRow = (
-  db: DatabaseSync,
+  db: Sql,
   eid: string,
 ): Session | undefined => {
   let session = readComp(db, eid, 'session') as Session | undefined
@@ -94,9 +94,9 @@ export let sessionRow = (
 }
 
 export let sessionRows = (
-  db: DatabaseSync,
+  db: Sql,
   tail = '',
-  args: SQLInputValue[] = [],
+  args: SqlValue[] = [],
 ) =>
   (db.prepare(
     `select o.eid as eid from session s
@@ -112,7 +112,7 @@ export let sessionRows = (
 // first for rollback readers; canonical component changes follow in the same
 // transaction and therefore win in every current projection.
 export let writeSession = (
-  db: DatabaseSync,
+  db: Sql,
   eid: string,
   patch: Row,
 ): Change[] => {
@@ -130,7 +130,7 @@ export let writeSession = (
       }
        where entity = ${ownerId}`,
     ).run(
-      ...cols.map((col) => moved[col] as SQLInputValue),
+      ...cols.map((col) => moved[col] as SqlValue),
       eid,
     )
     changes.push({ eid, name: 'session', comp: moved })

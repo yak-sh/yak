@@ -19,16 +19,9 @@
 // not know throws, guarded() answers it over the wire and disarms, and the
 // local error only surfaces when the wire fails too, so a dead server still
 // reports the local truth (a filter typo, not ECONNREFUSED).
-import { DatabaseSync } from './sqlite.ts'
+import { DatabaseSync, liveDb } from './store/sqlite.ts'
 import { resolve } from 'node:path'
-import {
-  depsOf,
-  eager,
-  journalBy,
-  journalOf,
-  liveDb,
-  scanAnomalies,
-} from './db.ts'
+import { depsOf, eager, journalBy, journalOf, scanAnomalies } from './db.ts'
 import { localQuery } from './graph_query.ts'
 import {
   arm,

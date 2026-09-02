@@ -16,7 +16,7 @@
 // sockets — which is what retires the handler-internal-cast residue T-22496
 // documented. Nothing here talks to a browser.
 import { db } from './live_db.ts'
-import { file as graph } from './db.ts'
+import { file as graph } from './store/sqlite.ts'
 import { catchup } from './catchup.ts'
 import { configureEffects, dispatch, type Where } from './effects.ts'
 import { takeEffectsLease } from './effects_lease.ts'

@@ -10,7 +10,7 @@
 // reach the embedder just has no hints: every door degrades to silence, but the
 // fault is no longer invisible — it is stamped on embedHealth() and recorded to
 // telemetry (M-16612). apply() never waits on any of this.
-import type { DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 import { DIM, knn, refreshVector, vectorReady } from './vector.ts'
 import { envConfig, type OllamaConfig, ollamaEmbed } from './ollama.ts'
 import { resolve } from './config.ts'
@@ -100,7 +100,7 @@ let ELIGIBLE =
        )
        and trim(coalesce(doc.title,'') || coalesce(doc.body,''), ?) != ''`
 
-let lives = (db: DatabaseSync, eid: string) =>
+let lives = (db: Sql, eid: string) =>
   !!db.prepare(
     `select o.eid as eid from doc_value doc join entity o on o.id = doc.entity
      where o.eid = ? and ${ELIGIBLE}`,
@@ -109,7 +109,7 @@ let lives = (db: DatabaseSync, eid: string) =>
 
 // The docs owed a (re)embedding: eligible, and whose stored hash no longer
 // names their text. Pure SQL + hash — the testable half of the sweep.
-export let stale = (db: DatabaseSync, limit = Infinity) =>
+export let stale = (db: Sql, limit = Infinity) =>
   (db.prepare(
     `select o.eid as eid, d.title, d.body, e.hash as had from doc_value d
      join entity o on o.id = d.entity
@@ -130,13 +130,13 @@ export let stale = (db: DatabaseSync, limit = Infinity) =>
 // Rows for the ineligible: an entity deleted, a doc emptied, a doc that
 // became a comment. Pruning reads the SAME rule stale() embeds by, so the
 // table can never keep a vector the sweep would never refresh.
-export let prune = (db: DatabaseSync) =>
+export let prune = (db: Sql) =>
   db.prepare(
     `delete from embedding
      where entity not in (select doc.entity from doc_value doc where ${ELIGIBLE})`,
   ).run(WS)
 
-let put = (db: DatabaseSync, eid: string, text: string, vec: Float32Array) =>
+let put = (db: Sql, eid: string, text: string, vec: Float32Array) =>
   db.prepare(
     `insert into embedding (entity, model, hash, vec)
      values ((select id from entity where eid = ?), ?, ?, vector_as_f32(?, ?))
@@ -156,7 +156,7 @@ let put = (db: DatabaseSync, eid: string, text: string, vec: Float32Array) =>
 // stays a parameter for a caller that wants a bounded slice, but defaults to the
 // full backlog. Interval-safe like the others: one sweep in flight, failures warn.
 let sweeping = false
-export let embedSweep = async (db: DatabaseSync, limit = Infinity) => {
+export let embedSweep = async (db: Sql, limit = Infinity) => {
   // put() stores vectors through the extension's vector_as_f32, so with the
   // extension unavailable there is nothing the sweep can safely do — skip it
   // whole. Embeddings and their ANN index rebuild once a healthy index loads.
@@ -210,7 +210,7 @@ let STALE_SLACK = 16
 // returns nearest-first, so the floor is a single break, and the head is
 // screened through lives() exactly as the scan's was.
 export let similar = (
-  db: DatabaseSync,
+  db: Sql,
   q: Float32Array,
   limit = 8,
   floor = 0,
@@ -227,7 +227,7 @@ export let similar = (
 // A doc's row is reusable only while it names this model and exact text.
 // A stale sweep row must never answer for freshly edited prose.
 export let stored = (
-  db: DatabaseSync,
+  db: Sql,
   eid: string,
   text: string,
 ): Float32Array | null => {
@@ -243,7 +243,7 @@ export let stored = (
 // embedder to ask (the caller shows nothing, never an error). A doc can
 // name its stored vector; arbitrary text still visits the embedder.
 export let similarTo = async (
-  db: DatabaseSync,
+  db: Sql,
   text: string,
   limit = 8,
   floor = 0,

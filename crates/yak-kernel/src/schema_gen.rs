@@ -687,6 +687,8 @@ pub static SCHEMA: &[SchemaOp] = &[
   begin update embedding_index set dirty = 1 where id = 1; end;
   create trigger if not exists embedding_index_ad after delete on embedding
   begin update embedding_index set dirty = 1 where id = 1; end;
+"#),
+    SchemaOp::Exec(r#"
   create virtual table if not exists doc_fts using fts5(
     title, body, content='doc_value', content_rowid='rowid'
   );

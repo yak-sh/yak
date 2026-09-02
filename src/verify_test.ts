@@ -20,7 +20,7 @@ let { db } = await import('./live_db.ts')
 let { rows, spawnChanges } = await import('./client.ts')
 let { rowsFor } = await import('./graph_query.ts')
 let { materialize } = await import('./persona.ts')
-let { textPresent } = await import('./sqlite.ts')
+let { textPresent } = await import('./store/sql.ts')
 let {
   hasVerifier,
   verificationArgs,

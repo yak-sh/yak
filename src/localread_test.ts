@@ -98,7 +98,8 @@ slow(
   async () => {
     let dir = await Deno.makeTempDir()
     let path = `${dir}/graph.db`
-    let { apply, open } = await import('./db.ts')
+    let { apply } = await import('./db.ts')
+    let { open } = await import('./store/sqlite.ts')
     let {
       history,
       historyBy,

@@ -6,7 +6,8 @@ import { assert, assertEquals } from '@std/assert'
 
 let graph = Deno.env.get('DB_PATH')!
 
-let { apply, eager, journalSince, open } = await import('./db.ts')
+let { apply, eager, journalSince } = await import('./db.ts')
+let { open } = await import('./store/sqlite.ts')
 let { db } = await import('./live_db.ts')
 let { catchup } = await import('./catchup.ts')
 let { attemptEligible, dispatchSweep } = await import('./dispatch.ts')

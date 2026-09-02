@@ -2,7 +2,7 @@
 // tests exercise in-process actions; this file proves remote telemetry and
 // the completion → verifier → independent-review lifecycle through /apply.
 import { assert, assertEquals } from '@std/assert'
-import type { DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 import { slow, until } from './testing.ts'
 import { statusOf } from './types.ts'
 
@@ -11,7 +11,7 @@ Deno.env.set('TASKS_VERIFIER_PROVIDER', 'fake')
 Deno.env.set('TASKS_VERIFIER_MODEL', 'fake-fast')
 
 let U = ''
-let db: DatabaseSync
+let db: Sql
 let task = ''
 let taskId = ''
 let lifecycleTask = ''

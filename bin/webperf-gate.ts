@@ -30,8 +30,7 @@
 // should be re-accepted (BENCH_ACCEPT) when scale moves materially. The 15%
 // band absorbs ordinary growth; per-scale calibration would remove the drift
 // but is out of scope here.
-
-import { liveDb } from '../src/db.ts'
+import { liveDb } from '../src/store/sqlite.ts'
 
 // Keys in the baseline file that are metadata, not ratcheted timings.
 let META = new Set(['_comment', 'tolerance_pct', '_tol'])

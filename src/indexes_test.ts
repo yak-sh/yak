@@ -5,7 +5,7 @@
 // declaration re-expresses EXACTLY the composite/unique indexes a fresh db
 // enforces, so a later generator (T-12764) is a no-op diff against the live db.
 Deno.env.set('DB_PATH', ':memory:')
-let { open } = await import('./db.ts')
+let { open } = await import('./store/sqlite.ts')
 import { indexesFor, refCols } from './index.ts'
 import { comps, indexes, stamped } from './types.ts'
 import { isRef } from './props.ts'

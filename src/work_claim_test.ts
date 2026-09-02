@@ -3,7 +3,7 @@
 // These cases hold the named mutation to the same boundaries as the build lane
 // and prove a refusal rolls back session reification and approval with it.
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
-import type { DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 import type { WorkClaimMutation } from './mutation.ts'
 import { type Change, uuid } from './types.ts'
 
@@ -33,7 +33,7 @@ let world = () => {
 }
 
 let take = (
-  db: DatabaseSync,
+  db: Sql,
   target: string,
   session: string,
   mode: 'ready' | 'approve' = 'ready',
@@ -52,12 +52,12 @@ let take = (
   )
 
 let cell = (
-  db: DatabaseSync,
+  db: Sql,
   sql: string,
   ...args: (string | number | null)[]
 ) => db.prepare(sql).get(...args) as Record<string, unknown> | undefined
 
-let sessionEid = (db: DatabaseSync, sid: string) =>
+let sessionEid = (db: Sql, sid: string) =>
   cell(
     db,
     `select owner.eid as eid from session
@@ -65,7 +65,7 @@ let sessionEid = (db: DatabaseSync, sid: string) =>
     sid,
   )?.eid as string | undefined
 
-let holder = (db: DatabaseSync, target: string) =>
+let holder = (db: Sql, target: string) =>
   cell(
     db,
     `select owner.eid as eid from claim

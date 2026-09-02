@@ -3,7 +3,7 @@
 // whether its current completion cycle already has a live verifier. This file
 // imports no server singleton or effect machinery, so query lanes, explicit
 // commands, and the role engine can share it without pulling in a runtime.
-import type { DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 import { sessionActive } from './types.ts'
 
 let activeSql = `s.status is null or s.status in (${
@@ -79,7 +79,7 @@ export type VerificationReview = {
 // compare the returned eid with the event they are handling to reject stale or
 // out-of-order effect delivery.
 export let latestVerificationReview = (
-  db: DatabaseSync,
+  db: Sql,
   eid: string,
 ): VerificationReview | undefined =>
   db.prepare(
@@ -99,7 +99,7 @@ export let latestVerificationReview = (
 // supplies an eid; the task/completed owner primary keys and
 // session_requested_task index bound the read to that one task.
 export let activeVerifier = (
-  db: DatabaseSync,
+  db: Sql,
   task: string,
 ): string | undefined =>
   (db.prepare(
@@ -118,14 +118,14 @@ export let activeVerifier = (
       limit 1`,
   ).get(task, ...activeArgs) as { eid: string } | undefined)?.eid
 
-export let hasVerifier = (db: DatabaseSync, task: string): boolean =>
+export let hasVerifier = (db: Sql, task: string): boolean =>
   !!activeVerifier(db, task)
 
 // The exact keyed form of VERIFY_PENDING. Imperative callers re-read it before
 // every spawn; derived lanes use VERIFY_PENDING directly in their own bounded
 // selection instead of reimplementing the policy in TypeScript.
 export let verificationPending = (
-  db: DatabaseSync,
+  db: Sql,
   eid: string,
 ): boolean =>
   !!db.prepare(

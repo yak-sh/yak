@@ -59,11 +59,11 @@ let { assertEquals } = await import('@std/assert')
 
 let eid = sidEid(sid)
 
-let count = (db: import('./sqlite.ts').DatabaseSync) =>
+let count = (db: import('./store/sqlite.ts').DatabaseSync) =>
   (db.prepare('select count(*) as n from entity').get() as { n: number }).n
 
 let withSource = (
-  fn: (db: import('./sqlite.ts').DatabaseSync) => void,
+  fn: (db: import('./store/sqlite.ts').DatabaseSync) => void,
   written = 0,
 ) => {
   let db = freshDb()

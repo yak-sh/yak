@@ -11,7 +11,7 @@
 // and costing no per-tab process spawn; permissions inherit from the server
 // (-A), and the read-only open means a bug here cannot write the graph.
 /// <reference lib="webworker" />
-import { DatabaseSync } from './sqlite.ts'
+import { DatabaseSync } from './store/sqlite.ts'
 import { registerCodexSource } from './source_codex.ts'
 import { registerManagedSource } from './source_managed.ts'
 import { registerSessionSource } from './source_session.ts'

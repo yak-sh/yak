@@ -6,7 +6,7 @@
 // semantics. This module depends on nothing in server.ts: everything it reads
 // is a db-parameterized function, so a read-only connection serves as well as
 // the writer's.
-import type { DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 import type { Change, Dep } from './types.ts'
 import { kindOrder, statusOf } from './types.ts'
 import {
@@ -245,7 +245,7 @@ let outside = (deps: Iterable<Dep>, members: Set<string>) => {
 // that edge — so it must never carry a body or a component nobody asked for.
 // One batched read for the whole set (rowsOf), never one eager() each.
 let peerPayload = (
-  db: DatabaseSync,
+  db: Sql,
   peers: Hop[],
   eids: string[],
 ): Change[] => {
@@ -282,7 +282,7 @@ let peerPayload = (
 // Open a rider over a fresh member set: its incident edges, the far endpoints
 // they name, and the state every later delta speaks from.
 let riderOpen = (
-  db: DatabaseSync,
+  db: Sql,
   peers: Hop[],
   members: Set<string>,
   select?: EdgeSelector,
@@ -310,7 +310,7 @@ let riderOpen = (
 // indexed selector when its inputs move, then diff against the standing map:
 // removing one stored edge cannot withdraw a projection another still proves.
 let selectedRiderDelta = (
-  db: DatabaseSync,
+  db: Sql,
   r: Rider,
   members: Set<string>,
   joined: string[],
@@ -350,7 +350,7 @@ let selectedRiderDelta = (
 }
 
 let resultDelta = (
-  db: DatabaseSync,
+  db: Sql,
   d: NonNullable<Sub['results']>,
   members: Set<string>,
   batch: Change[],
@@ -397,7 +397,7 @@ let rider = (d: ReturnType<typeof riderDelta>) =>
 // and a touched eid that IS a held peer re-projects, so a blocker's status
 // reaches the tree without a subscription per blocker.
 let riderDelta = (
-  db: DatabaseSync,
+  db: Sql,
   r: Rider,
   members: Set<string>,
   joined: string[],
@@ -470,7 +470,7 @@ let riderDelta = (
 // only when the source itself changes. Walk each possible touched rung back to
 // the source through the predicate's own columns. The reverse queries are
 // component-keyed; ordinary subscriptions keep the touched-eid fast path.
-let pathSources = (db: DatabaseSync, preds: Pred[], touched: string[]) => {
+let pathSources = (db: Sql, preds: Pred[], touched: string[]) => {
   let out = new Set(touched)
   for (let p of preds) {
     // A reverse hop: a touched CHILD moves its PARENT — read the child's ref
@@ -503,7 +503,7 @@ let pathSources = (db: DatabaseSync, preds: Pred[], touched: string[]) => {
 // `comp.prop` (referrersOf), each hydrated to its eager bag by `read`, bound
 // per pass to that pass's memoised fetcher.
 export let dbKids = (
-  db: DatabaseSync,
+  db: Sql,
   read: (eid: string) => Record<string, Record<string, unknown>>,
 ) =>
 (eid: string, comp: string, prop: string) =>
@@ -514,7 +514,7 @@ export let dbKids = (
 // on a tombstone). Shaped like an evalFast/evalQuery hit so control() ships it
 // through the one payload path.
 let rowsFor = (
-  db: DatabaseSync,
+  db: Sql,
   eids: Iterable<string>,
 ): { eid: string; comps: Record<string, Record<string, unknown>> }[] => {
   let out: { eid: string; comps: Record<string, Record<string, unknown>> }[] =
@@ -528,7 +528,7 @@ let rowsFor = (
 
 export type Subserve = ReturnType<typeof subserve>
 
-export let subserve = (db: DatabaseSync, send: (json: string) => void) => {
+export let subserve = (db: Sql, send: (json: string) => void) => {
   let map = new Map<string, Sub>()
   // `joined` = the {since} handshake ran, so the live stream may reach this
   // socket; `filtered` = a non-shadow sub owns the socket's cache, so the

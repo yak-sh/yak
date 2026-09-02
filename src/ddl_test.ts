@@ -6,7 +6,8 @@
 // hand-written) still carries every column the vocabulary declares, so a
 // vocabulary edit that outran the schema fails loudly here.
 Deno.env.set('DB_PATH', ':memory:')
-let { open, derived } = await import('./db.ts')
+let { derived } = await import('./db.ts')
+let { open } = await import('./store/sqlite.ts')
 import { derivedCols, sqlType } from './ddl.ts'
 import { comps, type PropType, stamped } from './types.ts'
 import { assert, assertEquals } from '@std/assert'

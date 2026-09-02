@@ -17,7 +17,7 @@ let { vectorDb } = await import('./testdb.ts')
 let { axes } = await import('./testvec.ts')
 let { slow } = await import('./testing.ts')
 let { assertEquals } = await import('@std/assert')
-import type { DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 
 let uid = (): string => crypto.randomUUID()
 // Component/edge tables are keyed by the integer `entity` spine id now; eids stay
@@ -31,14 +31,14 @@ let refEid = (col: string) => `(select eid from entity where id = ${col})`
 // dense basis (testvec.ts) at full dimensionality, so the vector extension's
 // ANN index ranks them like real embeddings (cosines preserved to ~0.005).
 let vec = (...xs: number[]) => axes(...xs)
-let put = (d: DatabaseSync, eid: string, text: string, v: Float32Array) =>
+let put = (d: Sql, eid: string, text: string, v: Float32Array) =>
   d.prepare(
     `insert into embedding (entity, model, hash, vec) values (${idOf}, ?, ?, ?)`,
   ).run(eid, MODEL, hash(text), new Uint8Array(v.buffer))
 
 // Graph parts through apply() (the real writer mints the spine); the vector
 // beside it through put() (embeddings come from the sweep, never a patch).
-let mem = (d: DatabaseSync, title: string, v: Float32Array, scope?: string) => {
+let mem = (d: Sql, title: string, v: Float32Array, scope?: string) => {
   let e = uid()
   apply(d, [
     { eid: e, name: 'doc', comp: { title, body: '' } },
@@ -47,13 +47,13 @@ let mem = (d: DatabaseSync, title: string, v: Float32Array, scope?: string) => {
   put(d, e, title, v)
   return e
 }
-let proj = (d: DatabaseSync) => {
+let proj = (d: Sql) => {
   let e = uid()
   apply(d, [{ eid: e, name: 'project', comp: {} }])
   return e
 }
 let taskIn = (
-  d: DatabaseSync,
+  d: Sql,
   title: string,
   v: Float32Array,
   project: string,
@@ -68,7 +68,7 @@ let taskIn = (
 }
 // A plain doc (a design/persona/prior-session stands in the same catch-all
 // `doc` bucket): titled + embedded but neither task nor memory.
-let plain = (d: DatabaseSync, title: string, v: Float32Array) => {
+let plain = (d: Sql, title: string, v: Float32Array) => {
   let e = uid()
   apply(d, [{ eid: e, name: 'doc', comp: { title, body: '' } }])
   put(d, e, title, v)

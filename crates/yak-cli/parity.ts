@@ -9,7 +9,8 @@
 //
 // A slow harness by design — run it by hand or from the slow tier, never the
 // 1ms gate.
-import { apply, open } from '../../src/db.ts'
+import { apply } from '../../src/db.ts'
+import { open } from '../../src/store/sqlite.ts'
 import { fed } from '../../src/effects.ts'
 import type { Change } from '../../src/types.ts'
 

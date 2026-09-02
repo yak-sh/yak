@@ -11,7 +11,7 @@
 // booting the server (server.ts owns the one live db and closes over it at each
 // call site). sql_test.ts holds the index and the matcher against each other,
 // entry predicates included, so the fast path cannot silently disagree.
-import type { DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 import {
   capabilities,
   type Change,
@@ -117,7 +117,7 @@ let narrows = (preds: Pred[]) =>
 // row, so it is resolved once (one recursive CTE, db.ts reaching) and every row
 // then tests it with a Set lookup. Built per call so nothing caches a closure
 // across writes — an edge landing between two queries must move the answer.
-export let walker = (db: DatabaseSync): Walk => {
+export let walker = (db: Sql): Walk => {
   let memo = new Map<string, Set<string>>()
   return (r, target) => {
     let key = `${r.type}\0${r.depth}\0${target}`
@@ -164,7 +164,7 @@ export let rowed = (
 // or a miss drops out, as find() over a full graph would return undefined too.
 // Deduped by eid so two spellings of the same entity yield one row.
 export let rowsFor = (
-  db: DatabaseSync,
+  db: Sql,
   ids: (string | null | undefined)[],
 ): Row[] => {
   let eids = new Set<string>()
@@ -223,7 +223,7 @@ let entryScope = (preds: Pred[]): string | null | undefined => {
 }
 
 export let entryUniverse = (
-  db: DatabaseSync,
+  db: Sql,
   preds: Pred[],
   after: number,
   limit: number,
@@ -288,7 +288,7 @@ export let merged = (a: Win, b?: Win): Win => {
 // statement can say it: a declining predicate, or a registered SOURCE, whose
 // pass-through entities join the answer AFTER the statement (matching()) and so
 // are invisible to a count. A total nobody can vouch for is not stated.
-let countOf = (db: DatabaseSync, preds: Pred[]): number | undefined => {
+let countOf = (db: Sql, preds: Pred[]): number | undefined => {
   if (hasSources()) return undefined
   let sql = countSql(preds)
   if (!sql) return undefined
@@ -302,7 +302,7 @@ let countOf = (db: DatabaseSync, preds: Pred[]): number | undefined => {
 // names the lazy partition, or a subscription forces it. Otherwise the eager
 // partition is the complete scope and entries stay out.
 export let evalFast = (
-  db: DatabaseSync,
+  db: Sql,
   q: string,
   forceEntries = false,
   w?: Win,
@@ -357,7 +357,7 @@ export let evalFast = (
 // entries (matching() omits them the way snapshot did, so entryUniverse adds
 // them back, keyed + bounded). `ent` rides out for whoever ranks on top (hot).
 export let evalQuery = (
-  db: DatabaseSync,
+  db: Sql,
   q: string,
   after = 0,
   limit = ENTRY_PAGE,
@@ -408,7 +408,7 @@ export let evalQuery = (
 // HTTP /query door still pages the exact, complete answer.
 export let SUB_CAP = 1000
 export let evalCapped = (
-  db: DatabaseSync,
+  db: Sql,
   q: string,
   cap = SUB_CAP,
   after?: number,
@@ -470,7 +470,7 @@ export type SubAnswer = {
 }
 
 export let evalSub = (
-  db: DatabaseSync,
+  db: Sql,
   q: string,
   details = false,
   cap = SUB_CAP,
@@ -531,7 +531,7 @@ export let evalSub = (
 // Every shape answers as one value→count map: `count` uses the empty key, which
 // no tally can collide with (tally drops empties, exactly as the census does).
 export let evalAgg = (
-  db: DatabaseSync,
+  db: Sql,
   q: string,
 ):
   | { op: 'distinct' | 'tally' | 'count'; values: Map<string, number> }
@@ -566,7 +566,7 @@ export let evalAgg = (
 // and pending/declined rows are admitted as boundaries but never expanded.
 // Readiness is screened before ORDER/LIMIT, making the returned prefix exactly
 // priority ASC, newest spine first rather than a re-ranked recent sample.
-let workInputs = (db: DatabaseSync, q: string) => {
+let workInputs = (db: Sql, q: string) => {
   let preds = workPredicates(
     resolveRefs(parseQuery(q), (id) => locate(db, id)),
   )
@@ -589,7 +589,7 @@ let workInputs = (db: DatabaseSync, q: string) => {
   ]
 }
 
-let workBase = (db: DatabaseSync, q: string) => {
+let workBase = (db: Sql, q: string) => {
   // Unlike an ordinary graph query, work has no reveal mode. These outer
   // screens are unconditional even if a future predicate classifier changes:
   // candidates are visible eager entities before readiness or LIMIT runs.
@@ -604,7 +604,7 @@ let workBase = (db: DatabaseSync, q: string) => {
 }
 
 let workSelectionSql = (
-  db: DatabaseSync,
+  db: Sql,
   q: string,
   opts: {
     limit: number | null
@@ -646,7 +646,7 @@ let workSelectionSql = (
 }
 
 export let buildWorkSql = (
-  db: DatabaseSync,
+  db: Sql,
   q: string,
   opts: { limit?: number; recursive?: boolean } = {},
 ) =>
@@ -657,7 +657,7 @@ export let buildWorkSql = (
   })
 
 export let evalBuildWork = (
-  db: DatabaseSync,
+  db: Sql,
   q: string,
   opts: { limit?: number; recursive?: boolean } = {},
 ): Row[] => {
@@ -673,7 +673,7 @@ export let evalBuildWork = (
 // applied afterward and may skip any prefix, so a limit here would make an
 // eligible tail disappear.
 export let evalDispatchWork = (
-  db: DatabaseSync,
+  db: Sql,
   q: string,
   recursive = false,
 ): Row[] => {
@@ -692,7 +692,7 @@ export let evalDispatchWork = (
 // caller filter is screened on that same indexed walk, and the authoritative
 // policy is applied before LIMIT.
 export let verifyWorkSql = (
-  db: DatabaseSync,
+  db: Sql,
   q: string,
   opts: { limit?: number } = {},
 ) => {
@@ -720,7 +720,7 @@ export let verifyWorkSql = (
 }
 
 export let evalVerifyWork = (
-  db: DatabaseSync,
+  db: Sql,
   q: string,
   opts: { limit?: number } = {},
 ): Row[] => {
@@ -848,7 +848,7 @@ export let workVerifierSql = (ids: string[]) => ({
 // screened for quarantine before its human id is formed. The review WHERE and
 // ordering are the same fragments VERIFY_PENDING uses.
 let workVerifications = (
-  db: DatabaseSync,
+  db: Sql,
   candidates: Row[],
 ) => {
   let ids = [...new Set(candidates.map((r) => r.eid))].slice(0, 100)
@@ -914,7 +914,7 @@ let workVerifications = (
 // indexes answer this one scoped window per parent; CAP+1 proves truncation,
 // and only the CAP rows that will be emitted are hydrated.
 export let workBlockers = (
-  db: DatabaseSync,
+  db: Sql,
   parents: string[],
   limit = 20,
 ): { parent: string; items: Row[]; truncated: boolean }[] => {
@@ -968,7 +968,7 @@ export let workBlockers = (
 }
 
 let workAuthorizations = (
-  db: DatabaseSync,
+  db: Sql,
   candidates: Row[],
   limit = WORK_REFS_LIMIT,
 ) => {
@@ -1023,7 +1023,7 @@ let workAuthorizations = (
 // HTTP, MCP stdio, and an armed CLI share quarantine screening and never walk
 // authorization depth over the transport.
 export let evalWork = (
-  db: DatabaseSync,
+  db: Sql,
   q: string,
   opts: {
     work: 'evaluate' | 'build' | 'verify'
@@ -1118,7 +1118,7 @@ export let evalWork = (
 // pred inside q (query.ts scopes), so it screens through the same seam as
 // `.status`.
 export let evalGraph = (
-  db: DatabaseSync,
+  db: Sql,
   q: string,
   opts: { after?: number; limit?: number } = {},
 ): { preds: Pred[]; hits: Row[] } => {
@@ -1231,7 +1231,7 @@ export let WS_SETS = [
 //     and LEAVES — with the card that shows it.
 // `deps: []` stays in the frame because Snapshot's shape is the client's seed
 // contract; it is now always empty, and seedFrom no longer reads it as truth.
-export let workingSet = (db: DatabaseSync): Snapshot => {
+export let workingSet = (db: Sql): Snapshot => {
   let ids = new Set<string>()
   for (let q of WS_SETS) for (let r of evalGraph(db, q).hits) ids.add(r.eid)
   let changes: Change[] = []
@@ -1258,7 +1258,7 @@ export let workingSet = (db: DatabaseSync): Snapshot => {
 // only its answerer swaps. `id=` FETCHES by address (locate: T-3, num, slug,
 // uuid) then screens by any remaining filter — quarantine included, the same as
 // the route's id path; everything else runs evalGraph.
-export let localQuery = (db: DatabaseSync): Querier =>
+export let localQuery = (db: Sql): Querier =>
 // deno-lint-ignore require-await
 async (filters, opts) => {
   let named = filters.filter((s) => s.startsWith('id='))
@@ -1302,7 +1302,7 @@ async (filters, opts) => {
 // rows a command minted but hasn't applied yet — a filed page, a spec-line
 // task — so the verb that names them resolves them before the batch lands, the
 // way `rows({changes:[…snap, …out]})` used to overlay them on the snapshot.
-export let dbReader = (db: DatabaseSync, overlay: Row[] = []): Reader => {
+export let dbReader = (db: Sql, overlay: Row[] = []): Reader => {
   let read = (eid: string): Row | undefined => {
     let comps = eager(db, eid)
     return comps.entity ? rowed({ eid, comps }) : undefined

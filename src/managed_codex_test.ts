@@ -1,7 +1,7 @@
 // The graph-native managed lifecycle against an in-memory graph and injected
 // provider/tools. No process, credential, or owner graph participates.
 import { assert, assertEquals, assertMatch } from '@std/assert'
-import { apply, journalOf, journalSince, open } from './db.ts'
+import { apply, journalOf, journalSince } from './db.ts'
 import {
   append,
   expiredLeases,
@@ -28,6 +28,7 @@ import { type ToolHost } from './harness_tools.ts'
 import { type Change, uuid } from './types.ts'
 import { slow, until } from './testing.ts'
 import { freshDb } from './testdb.ts'
+import { open } from './store/sqlite.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 

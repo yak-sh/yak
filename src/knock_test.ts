@@ -5,7 +5,8 @@
 import { type Change } from './types.ts'
 import { fakeClaude } from './door_fake.ts'
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, open } = await import('./db.ts')
+let { apply } = await import('./db.ts')
+let { open } = await import('./store/sqlite.ts')
 let { db } = await import('./live_db.ts')
 let { knocked } = await import('./knock.ts')
 let { assertEquals, assertMatch } = await import('@std/assert')

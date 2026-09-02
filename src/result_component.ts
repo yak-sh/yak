@@ -1,7 +1,7 @@
 // Query-result components: declared indexed inputs, projection, and bounded
 // invalidation for components that exist only in a query answer. The graph
 // vocabulary remains the sole write contract; these values cannot ride /apply.
-import type { DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 import type { Change } from './types.ts'
 import { eager } from './db.ts'
 import { materialize } from './persona.ts'
@@ -17,12 +17,12 @@ export type ResultState = {
 type Declaration = {
   name: ResultComp
   inputs: Pred[]
-  read: (db: DatabaseSync, eid: string, now: number) => ResultState
-  dirty: (db: DatabaseSync, state: ResultState, batch: Change[]) => boolean
+  read: (db: Sql, eid: string, now: number) => ResultState
+  dirty: (db: Sql, state: ResultState, batch: Change[]) => boolean
 }
 
 let materializedRead = (
-  db: DatabaseSync,
+  db: Sql,
   eid: string,
   now: number,
 ): ResultState => {
@@ -58,7 +58,7 @@ let materializedRead = (
 }
 
 let materializedDirty = (
-  db: DatabaseSync,
+  db: Sql,
   state: ResultState,
   batch: Change[],
 ) => {
@@ -135,7 +135,7 @@ export let inputsOf = (preds: Pred[]): Pred[] => {
 }
 
 export let resultStates = (
-  db: DatabaseSync,
+  db: Sql,
   names: ResultComp[],
   eids: Iterable<string>,
   now = Date.now(),
@@ -157,7 +157,7 @@ export let withResults = <
     comps: Record<string, Record<string, unknown>>
   },
 >(
-  db: DatabaseSync,
+  db: Sql,
   preds: Pred[],
   rows: T[],
   now = Date.now(),
@@ -175,7 +175,7 @@ export let withResults = <
 }
 
 export let resultDirty = (
-  db: DatabaseSync,
+  db: Sql,
   name: ResultComp,
   state: ResultState,
   batch: Change[],

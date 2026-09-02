@@ -23,12 +23,13 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 // db.ts is imported (its module-init opens the default graph) — a throwaway
 // :memory: keeps that import off any real file.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, open, snapshot, human } = await import('./db.ts')
+let { apply, snapshot, human } = await import('./db.ts')
+let { open } = await import('./store/sqlite.ts')
 import type { Change, Snapshot } from './types.ts'
 // DatabaseSync as a VALUE — test #4 below writes a raw eid-keyed legacy fixture
 // through a plain connection (never open(), the code under test) and needs the
 // constructor, not just the type.
-import { DatabaseSync } from './sqlite.ts'
+import { DatabaseSync } from './store/sqlite.ts'
 
 let uid = () => crypto.randomUUID()
 let tmp = () => Deno.makeTempFileSync({ prefix: 'parity-', suffix: '.db' })

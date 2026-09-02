@@ -1,6 +1,5 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { DatabaseSync } from './sqlite.ts'
-import { open } from './db.ts'
+import { DatabaseSync, open } from './store/sqlite.ts'
 import { slow, until } from './testing.ts'
 import {
   acquireServerOwnership,

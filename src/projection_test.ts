@@ -18,7 +18,8 @@ import { uuid } from './types.ts'
 import { addSource, clearSources } from './source.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, open } = await import('./db.ts')
+let { apply } = await import('./db.ts')
+let { open } = await import('./store/sqlite.ts')
 let { subserve } = await import('./subserve.ts')
 let { bareDb } = await import('./testdb.ts')
 

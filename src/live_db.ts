@@ -14,7 +14,8 @@
 // ownVector(), taken by whichever process runs the embed sweep (doing.ts).
 // The app-plane compatibility process opens read-only. Production refuses that
 // mode on the owner graph; disposable parity copies may still exercise it.
-import { appPlane, connect, file, liveDb, open, sameGraphFile } from './db.ts'
+import { appPlane } from './db.ts'
+import { connect, file, liveDb, open, sameGraphFile } from './store/sqlite.ts'
 
 if (appPlane() && sameGraphFile(file, liveDb())) {
   throw new Error(

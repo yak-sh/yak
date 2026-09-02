@@ -4,12 +4,13 @@
 // the feed to dispatch effects. The polling half (foreign wake) uses a file db
 // and lives in the slow tier.
 import { assert, assertEquals } from '@std/assert'
-import { apply, connect, journalSince, open, recast, record } from './db.ts'
+import { apply, journalSince, recast, record } from './db.ts'
 import { catchup } from './catchup.ts'
 import { dispatch, fed, on, trace } from './effects.ts'
 import type { Change } from './types.ts'
 import { bareDb } from './testdb.ts'
 import { slow, until } from './testing.ts'
+import { connect, open } from './store/sqlite.ts'
 
 let doc = (title: string): Change => ({
   eid: crypto.randomUUID(),

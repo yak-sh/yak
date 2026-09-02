@@ -37,10 +37,12 @@ let source = {
       : { state: 'found' as const, entries: [] },
 }
 
-let count = (db: import('./sqlite.ts').DatabaseSync) =>
+let count = (db: import('./store/sqlite.ts').DatabaseSync) =>
   (db.prepare('select count(*) as n from entity').get() as { n: number }).n
 
-let withSource = (fn: (db: import('./sqlite.ts').DatabaseSync) => void) => {
+let withSource = (
+  fn: (db: import('./store/sqlite.ts').DatabaseSync) => void,
+) => {
   let db = freshDb()
   let before = count(db)
   let off = addSource(source)
@@ -149,7 +151,11 @@ Deno.test('source: no source, no cost — a normal miss still returns undefined/
 // the same eid. The dot proof cases: engaged → graduated, un-engaged → still
 // pass-through, already-persisted → not re-hydrated, non-source eid → untouched.
 
-let has = (db: import('./sqlite.ts').DatabaseSync, table: string, id: string) =>
+let has = (
+  db: import('./store/sqlite.ts').DatabaseSync,
+  table: string,
+  id: string,
+) =>
   db.prepare(
     table == 'entity' || table == 'tombstone'
       ? `select 1 from ${table} where eid = ?`

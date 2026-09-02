@@ -22,7 +22,8 @@ import { graphLog, standingOf } from './entry_log.ts'
 import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, delta, numbered, open, snapshot } = await import('./db.ts')
+let { apply, delta, numbered, snapshot } = await import('./db.ts')
+let { open } = await import('./store/sqlite.ts')
 let { freshDb } = await import('./testdb.ts')
 
 let OWNED = `entity = (select id from entity where eid = ?)`

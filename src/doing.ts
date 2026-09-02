@@ -86,7 +86,7 @@ import { sweepSelect, vocabularyDoc } from './db.ts'
 import { projectionGraph } from './graph_query.ts'
 import { vocabularyMd } from './schema.ts'
 import { repeat } from './timers.ts'
-import type { DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -550,7 +550,7 @@ type Row = Record<string, unknown>
 // the database and reconcile callback so the daemon's invalidation contract is
 // testable without writing into a venture checkout.
 export let wirePersonaSync = (
-  store: DatabaseSync,
+  store: Sql,
   syncSoon: () => void,
 ) => {
   // Is this eid a persona, or on some persona's tier? The gate that keeps

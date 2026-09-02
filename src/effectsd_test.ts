@@ -23,7 +23,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { apply, journalSince, open } from './db.ts'
+import { apply, journalSince } from './db.ts'
 import { catchup } from './catchup.ts'
 import {
   commitEffects,
@@ -36,6 +36,7 @@ import { takeEffectsLease } from './effects_lease.ts'
 import { bareDb } from './testdb.ts'
 import { slow } from './testing.ts'
 import type { Change } from './types.ts'
+import { open } from './store/sqlite.ts'
 
 let doc = (eid: string, title: string): Change => ({
   eid,

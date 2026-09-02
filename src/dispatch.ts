@@ -18,7 +18,7 @@ import { type Provider } from './providers.ts'
 import { evalDispatchWork, evalGraph, rowsFor } from './graph_query.ts'
 import { resolve } from './config.ts'
 import { record as telemetry } from './telemetry.ts'
-import { type DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 import { approved, authorized, buildReady, workFilters } from './work.ts'
 
 export { approved, authorized } from './work.ts'
@@ -223,7 +223,7 @@ export let commitCandidates = (
 // Stable, durable address for every refused candidate. telemetry.record owns
 // sanitization; detail stays the human graph id rather than an opaque UUID.
 export let candidateRefusal = (
-  database: DatabaseSync,
+  database: Sql,
   target: Row,
   e: unknown,
 ) =>

@@ -14,7 +14,7 @@
 // wall-clock wait: `lease_expiry` is stored as an iso-8601 Z timestamp, which
 // sorts chronologically as text, so the `lease_expiry < at` guard is a plain
 // string comparison.
-import { DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 
 // A leased effect row as the claim returns it. `entity` is the claim entity's
 // integer id (the `effect` table's pk); `lease_token` is the guard a settle must
@@ -41,7 +41,7 @@ let plus = (at: string, ms: number) => iso(new Date(Date.parse(at) + ms))
 // so two workers racing one pending row serialize, and the loser re-reads an
 // empty frontier. Rolls back only a transaction that actually began (a
 // SQLITE_BUSY `begin immediate` opens none), mirroring db.ts's rule.
-let immediate = <T>(db: DatabaseSync, body: () => T): T => {
+let immediate = <T>(db: Sql, body: () => T): T => {
   db.exec('begin immediate')
   try {
     let value = body()
@@ -61,7 +61,7 @@ let immediate = <T>(db: DatabaseSync, body: () => T): T => {
 // minted. Minimal on purpose — the real dispatcher (T-23782) owns wiring this to
 // the journal feed; this is the seam the claim/settle tests enqueue against.
 export let enqueue = (
-  db: DatabaseSync,
+  db: Sql,
   jrow: number,
   handler: string,
 ): number =>
@@ -90,7 +90,7 @@ export let enqueue = (
 // an empty frontier and returns undefined. Returns the leased row, or undefined
 // when nothing is claimable.
 export let claim = (
-  db: DatabaseSync,
+  db: Sql,
   owner: string,
   {
     token = crypto.randomUUID(),
@@ -125,7 +125,7 @@ export let claim = (
 // so its settle matches no row and is a silent no-op — the new claimant's work
 // stands. Returns true when it settled, false on the token mismatch.
 let settle = (
-  db: DatabaseSync,
+  db: Sql,
   entity: number,
   token: string,
   state: 'delivered' | 'failed',
@@ -138,11 +138,11 @@ let settle = (
     .run(state, entity, token).changes === 1
 
 // Mark a claim delivered — its effect ran. Guarded by the lease token.
-export let deliver = (db: DatabaseSync, entity: number, token: string) =>
+export let deliver = (db: Sql, entity: number, token: string) =>
   settle(db, entity, token, 'delivered')
 
 // Mark a claim failed — its effect errored. Guarded by the lease token; a future
 // claim can retry it once the design promotes failed rows back to the frontier
 // (not this leaf's concern — it settles, it does not re-enqueue).
-export let fail = (db: DatabaseSync, entity: number, token: string) =>
+export let fail = (db: Sql, entity: number, token: string) =>
   settle(db, entity, token, 'failed')

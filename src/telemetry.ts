@@ -11,7 +11,7 @@
 //
 // Recording is best-effort BY CONTRACT — a telemetry failure must never
 // break the thing it watches, so record() swallows and warns. SERVER-ONLY.
-import { type DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 
 // What a caller reports. `ok` is the only judgement: a tool that answered
 // with an error is a call that happened AND failed — both facts matter.
@@ -76,7 +76,7 @@ let scrub = (s: string | null | undefined): string | null =>
 // (a future sink logging its own fault) is dropped, not chased.
 let inside = false
 
-export let record = (db: DatabaseSync, c: Call) => {
+export let record = (db: Sql, c: Call) => {
   if (inside) return
   inside = true
   try {
@@ -163,7 +163,7 @@ let cohort = (rows: Log[]): Log[] => {
 // Newest first. `only=errors` is the view you actually want most days.
 // The limit clamps: this is a debugging door, not a bulk export.
 export let recent = (
-  db: DatabaseSync,
+  db: Sql,
   { since, limit, only }: { since?: string; limit?: number; only?: string } =
     {},
 ): Log[] => {
@@ -203,7 +203,7 @@ export type Stat = {
 }
 
 export let stats = (
-  db: DatabaseSync,
+  db: Sql,
   { since, only }: { since?: string; only?: string } = {},
 ): Stat[] => {
   let where = ['ms is not null']

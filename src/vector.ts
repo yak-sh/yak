@@ -10,7 +10,8 @@
 // resolves lazily inside loadVector, and twin.ts carries the pieces the client
 // shares so nothing drags this loader across the wire (T-19451).
 
-import type { DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
+import type { DatabaseSync } from './store/sqlite.ts'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
@@ -59,8 +60,8 @@ let load = (): Binary => {
 // extension into every handle; the moment loading became opt-in (T-22622) that
 // global started claiming vector SQL on plain handles and migrate() died with
 // "no such function: vector_init".
-let ready = new WeakSet<DatabaseSync>()
-export let vectorReady = (db: DatabaseSync) => ready.has(db)
+let ready = new WeakSet<Sql>()
+export let vectorReady = (db: Sql) => ready.has(db)
 
 // WHO MAY QUANTIZE. `vector_quantize` is a native-extension WRITE, and it used
 // to ride the READ path (knn → refreshVector), so any process that reached
@@ -77,6 +78,7 @@ let owns = false
 export let ownVector = () => owns = true
 export let vectorOwner = () => owns
 
+// Loading is the file adapter's: loadExtension lives on its handle, not on Sql.
 export let loadVector = (db: DatabaseSync) => {
   try {
     db.loadExtension(load().path)
@@ -96,10 +98,10 @@ export let loadVector = (db: DatabaseSync) => {
   }
 }
 
-let count = (db: DatabaseSync) =>
+let count = (db: Sql) =>
   (db.prepare('select count(*) n from embedding').get() as { n: number }).n
 
-export let refreshVector = (db: DatabaseSync) => {
+export let refreshVector = (db: Sql) => {
   if (!ready.has(db) || !owns) return 0
   let row = db.prepare('select dirty from embedding_index where id = 1')
     .get() as { dirty: number } | undefined
@@ -133,7 +135,7 @@ export let refreshVector = (db: DatabaseSync) => {
 // k; the caller over-fetches (embed.ts STALE_SLACK) and the window self-heals as
 // the sweep completes (D-22781).
 export let knn = (
-  db: DatabaseSync,
+  db: Sql,
   q: Float32Array,
   k: number,
   model?: string,
@@ -173,7 +175,7 @@ export let knn = (
 // process that touches vector SQL calls this on ITS OWN handle; on a graph
 // already initialized and not dirty it is byte-identical (measured), so another
 // connection may call it freely.
-export let initVector = (db: DatabaseSync) => {
+export let initVector = (db: Sql) => {
   if (!ready.has(db)) return
   db.prepare(
     `select vector_init(

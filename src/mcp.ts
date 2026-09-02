@@ -16,7 +16,7 @@ import type {
   ToolAnnotations,
 } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import { DatabaseSync } from './sqlite.ts'
+import { DatabaseSync } from './store/sqlite.ts'
 import { VERSION } from './version.ts'
 import {
   type Change,

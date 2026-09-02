@@ -4,7 +4,7 @@
 // connections; after every connection closes, normal SQLite cleanup may remove
 // the sidecars and the next generation must contain the same history.
 import { assert, assertEquals } from '@std/assert'
-import { DatabaseSync } from './sqlite.ts'
+import { DatabaseSync } from './store/sqlite.ts'
 import { slow, until } from './testing.ts'
 
 let root = new URL('../', import.meta.url).pathname

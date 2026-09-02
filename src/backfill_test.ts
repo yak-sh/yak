@@ -4,7 +4,8 @@ import { assertEquals } from '@std/assert'
 import { type Change } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, open } = await import('./db.ts')
+let { apply } = await import('./db.ts')
+let { open } = await import('./store/sqlite.ts')
 let { historicalPrompts, landBackfill, readBackfill } = await import(
   './backfill.ts'
 )

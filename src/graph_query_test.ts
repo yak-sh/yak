@@ -16,9 +16,8 @@ import {
 } from './graph_query.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, eager, entriesOf, entriesScan, matching, open } = await import(
-  './db.ts'
-)
+let { apply, eager, entriesOf, entriesScan, matching } = await import('./db.ts')
+let { open } = await import('./store/sqlite.ts')
 let { append } = await import('./entries.ts')
 let { bareDb, freshDb } = await import('./testdb.ts')
 

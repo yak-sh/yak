@@ -17,10 +17,10 @@ import { uuid } from './types.ts'
 import { evalFast, evalGraph, rowed } from './graph_query.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, open, snapshot, entriesOf, entriesScan, textMatches } =
-  await import(
-    './db.ts'
-  )
+let { apply, snapshot, entriesOf, entriesScan, textMatches } = await import(
+  './db.ts'
+)
+let { open } = await import('./store/sqlite.ts')
 let { append } = await import('./entries.ts')
 let { freshDb } = await import('./testdb.ts')
 let { rows, find } = await import('./client.ts')

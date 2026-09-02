@@ -2,7 +2,8 @@
 // its target, and what comes back — against an in-memory db, driven the
 // way production drives it (apply, then dispatch the effect).
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, open } = await import('./db.ts')
+let { apply } = await import('./db.ts')
+let { open } = await import('./store/sqlite.ts')
 let { db } = await import('./live_db.ts')
 let { inert, obeyed } = await import('./obey.ts')
 let { orderIn } = await import('./commands.ts')

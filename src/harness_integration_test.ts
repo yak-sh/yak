@@ -10,7 +10,6 @@ import {
   journalOf,
   journalSince,
   mutate,
-  open,
   snapshot,
 } from './db.ts'
 import { readEntries } from './entries.ts'
@@ -25,6 +24,7 @@ import { sessionRow, writeSession } from './session_store.ts'
 import { uuid } from './types.ts'
 import { slow } from './testing.ts'
 import { freshDb } from './testdb.ts'
+import { open } from './store/sqlite.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 

@@ -1,7 +1,7 @@
 // The persona graph read: bounded, level-batched closures over persona tier
 // edges. Persona materialization and fleet projection share this indexed input
 // boundary so neither query nor daemon callers ever need a graph snapshot.
-import type { DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 import { depsOf, rowsOf } from './db.ts'
 import { type Dep, kindOf, sessionOf } from './types.ts'
 import type { Row } from './client.ts'
@@ -10,7 +10,7 @@ import type { Row } from './client.ts'
 // The walk is batched per level: one rowsOf + one depsOf per BFS generation,
 // not one statement bundle per tier member.
 export let personaGraph = (
-  db: DatabaseSync,
+  db: Sql,
   roots: string[],
 ): { all: Row[]; deps: Dep[] } => {
   let all = new Map<string, Row>()
@@ -65,7 +65,7 @@ export let personaGraph = (
 
 // Every persona and project is a bounded indexed root set, then the same tier
 // closure above. This is the daemon-side projection universe.
-export let projectionGraph = (db: DatabaseSync) => {
+export let projectionGraph = (db: Sql) => {
   let roots = (db.prepare(
     `select o.eid as eid from persona t join entity o on o.id = t.entity
      union

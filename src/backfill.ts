@@ -2,7 +2,7 @@
 // shared SQLite generators, then hand ordinary Change batches to a caller's
 // generic write boundary. This module never writes SQLite itself — /apply or
 // the in-process MCP write capability remains the one graph mutation path.
-import { DatabaseSync } from './sqlite.ts'
+import { DatabaseSync } from './store/sqlite.ts'
 import { historicalWorked } from './db.ts'
 import { historicalReferenced } from './reference_changes.ts'
 import { type Change, uuid } from './types.ts'

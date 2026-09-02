@@ -7,7 +7,7 @@
 // skips it, and it takes an ephemeral port handed back before the server binds.
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
 import { query } from './client.ts'
-import type { DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 import { slow } from './testing.ts'
 import type { Change } from './types.ts'
 
@@ -15,7 +15,7 @@ Deno.env.set('DB_PATH', ':memory:')
 let U = ''
 let sourceSid = '11111111-2222-4333-8444-555555555555'
 let sourceEid = ''
-let liveDb: DatabaseSync | undefined
+let liveDb: Sql | undefined
 let alone = { sanitizeOps: false, sanitizeResources: false }
 if (Deno.env.get('TASKS_SLOW')) {
   let sourceStore = Deno.makeTempDirSync()

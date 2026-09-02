@@ -9,33 +9,13 @@
 // a GUARDED replay of the ops (the exact logic the Rust kernel's apply_schema
 // runs) into a fresh db must equal a real migrate() open() byte-for-byte. So a
 // mis-captured or mis-classified op fails the codegen, not a later Rust boot.
-import { open, schemaDdl, type SchemaOp } from '../db.ts'
-import { DatabaseSync } from '../sqlite.ts'
+import { plant, schemaDdl } from '../db.ts'
+import { DatabaseSync, open } from '../store/sqlite.ts'
 
 let out = Deno.args[0]
 if (!out) throw new Error('schema_capture: needs an output path argument')
 
-let ops = schemaDdl()
-
-// The guard logic the Rust kernel replays with (schema.rs apply_schema): an
-// idempotent create/drop runs as-is; an add-column runs only when absent; a
-// bare create-index runs only when absent.
-let hasCol = (db: DatabaseSync, t: string, c: string) =>
-  (db.prepare(`select name from pragma_table_info('${t}')`)
-    .all() as { name: string }[]).some((r) => r.name === c)
-let hasIdx = (db: DatabaseSync, name: string) =>
-  !!db.prepare(
-    `select 1 from sqlite_master where type='index' and name=?`,
-  ).get(name)
-let replay = (db: DatabaseSync, ops: SchemaOp[]) => {
-  for (let op of ops) {
-    if (op.kind === 'addColumn') {
-      if (!hasCol(db, op.table, op.col)) db.exec(op.sql)
-    } else if (op.kind === 'index') {
-      if (!hasIdx(db, op.name)) db.exec(op.sql)
-    } else db.exec(op.sql)
-  }
-}
+let ops = schemaDdl(new DatabaseSync(':memory:'))
 
 let dump = (db: DatabaseSync) =>
   (db.prepare(
@@ -44,9 +24,9 @@ let dump = (db: DatabaseSync) =>
     .map((r) => `--[${r.type} ${r.name}]--\n${r.sql}`).join('\n')
 
 let truth = dump(open(':memory:'))
-let replayed = new DatabaseSync(':memory:')
-replay(replayed, ops)
-let got = dump(replayed)
+// plant() is the guarded replay itself (the logic the Rust kernel's
+// apply_schema runs), so this proof also covers a fresh backend's door.
+let got = dump(plant(new DatabaseSync(':memory:'), ops))
 if (truth !== got) {
   throw new Error(
     'schema_capture: guarded replay of schemaDdl() does NOT reproduce ' +

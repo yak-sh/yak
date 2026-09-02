@@ -1,7 +1,7 @@
 // Citation-derived graph changes: parse the ids and URLs an entry names, then
 // compute only its missing `referenced` edges from an injected SQLite reader.
 // Keeping this seam free of live_db lets operator backfills scan read-only.
-import { type DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 import { human, resolveId } from './db.ts'
 import { entityId, normalize } from './url.ts'
 import { type Change } from './types.ts'
@@ -26,13 +26,13 @@ export let cites = (text: string): Cites => {
   return { ids: [...ids], urls: [...urls] }
 }
 
-let pageOf = (db: DatabaseSync, url: string): string | undefined =>
+let pageOf = (db: Sql, url: string): string | undefined =>
   (db.prepare(
     'select o.eid as eid from web w join entity o on o.id = w.entity where w.url = ?',
   ).get(url) as { eid: string } | undefined)?.eid
 
 export let referencedChanges = (
-  db: DatabaseSync,
+  db: Sql,
   eid: string,
   text: string,
 ): Change[] => {
@@ -71,7 +71,7 @@ export let referencedChanges = (
 // The one historical sweep: every stored entry's missing referenced edges.
 // The caller lands these through the ordinary write boundary; reruns find only
 // what the last run missed.
-export let historicalReferenced = (db: DatabaseSync): Change[] =>
+export let historicalReferenced = (db: Sql): Change[] =>
   (db.prepare(
     `select o.eid as eid, c.body as body
        from entry e

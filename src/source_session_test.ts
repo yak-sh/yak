@@ -36,11 +36,11 @@ let eid = sidEid(sid)
 let OWNED = `entity = (select id from entity where eid = ?)`
 let idOf = `(select id from entity where eid = ?)`
 
-let count = (db: import('./sqlite.ts').DatabaseSync) =>
+let count = (db: import('./store/sqlite.ts').DatabaseSync) =>
   (db.prepare('select count(*) as n from entity').get() as { n: number }).n
 
 let withSource = (
-  fn: (db: import('./sqlite.ts').DatabaseSync) => void,
+  fn: (db: import('./store/sqlite.ts').DatabaseSync) => void,
   written = 0,
 ) => {
   let db = freshDb()

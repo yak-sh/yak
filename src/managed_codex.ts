@@ -5,7 +5,7 @@
 // Codex; a bounded `claude -p` is a sibling entry. Everything else — entry
 // readiness, leases, hosted calls, worktree preparation, attention, and stop —
 // is provider-agnostic. Process-backed compatibility remains in sessions.ts.
-import { DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 import { apply, record } from './db.ts'
 import {
   append,
@@ -67,7 +67,7 @@ type ManagedWorkspaceJob = ManagedJob & {
 }
 
 export type ManagedCodexOptions = {
-  db: DatabaseSync
+  db: Sql
   cast: Cast
   transport: ResponseTransport
   tools: (tree: string | undefined, session: string) => Promise<ToolHost>
@@ -93,7 +93,7 @@ let now = () => new Date()
 // entries to process-backed transcripts, and comments may append `attention`.
 // Imported generations (D-16704) remain file history. The generation is the
 // durable execution boundary runnerSessions() already drives from below.
-export let graphSession = (db: DatabaseSync, eid: string) =>
+export let graphSession = (db: Sql, eid: string) =>
   !!db.prepare(
     `select 1 from entry e join generation g on g.entity = e.entity
      where e.session = (select id from entity where eid = ?)
@@ -105,7 +105,7 @@ export let graphSession = (db: DatabaseSync, eid: string) =>
 // imported call without a correlated result (a claude tool_use whose result
 // line hasn't landed, a codex web_search that has none) is settled file
 // history, never a pending operation for the runner to lease.
-export let graphBusy = (db: DatabaseSync, eid: string) =>
+export let graphBusy = (db: Sql, eid: string) =>
   !!db.prepare(
     `select 1 from entry e
      where e.session = (select id from entity where eid = ?) and (
@@ -126,7 +126,7 @@ export let graphBusy = (db: DatabaseSync, eid: string) =>
      ) limit 1`,
   ).get(eid)
 
-let pendingAttention = (db: DatabaseSync, session: string) =>
+let pendingAttention = (db: Sql, session: string) =>
   !!db.prepare(
     `select 1 from entry a join attention n on n.entity = a.entity
      where a.session = (select id from entity where eid = ?) and not exists (
@@ -139,7 +139,7 @@ let pendingAttention = (db: DatabaseSync, session: string) =>
 // Attention carries no graph prose. The provider sees only runner.ts's fixed
 // notice and must retrieve the exact pending items through task_context.
 export let attention = (
-  db: DatabaseSync,
+  db: Sql,
   session: string,
   cast: Cast,
   writer?: string,
@@ -156,7 +156,7 @@ export let attention = (
 }
 
 let delivered = (
-  db: DatabaseSync,
+  db: Sql,
   eid: string,
   via: string,
   cast: Cast,
@@ -185,7 +185,7 @@ let delivered = (
 // the facet (below) before any boot, so only an UNRECOVERED one is ever filed.
 // A clean turn sheds both facets so a recovered Session reads well.
 let sessionFault = (
-  db: DatabaseSync,
+  db: Sql,
   eid: string,
   fault: string | null,
   cast: Cast,
@@ -228,7 +228,7 @@ let sessionFault = (
 // Imported generations are file history, never work. Driving this from every
 // entry partition makes an archive import multiply each 300 ms pass by every
 // historical Session even though none can produce a runnable operation.
-export let runnerSessions = (db: DatabaseSync) =>
+export let runnerSessions = (db: Sql) =>
   (db.prepare(
     `select distinct (select eid from entity where id = e.session) as session
      from generation g cross join entry e
@@ -237,7 +237,7 @@ export let runnerSessions = (db: DatabaseSync) =>
      order by e.session`,
   ).all() as { session: string }[]).map((row) => row.session)
 
-export let advanceable = (db: DatabaseSync) =>
+export let advanceable = (db: Sql) =>
   db.prepare(`
     with latest as (
       select e.session, max(e.seq) as seq
@@ -306,7 +306,7 @@ export let advanceable = (db: DatabaseSync) =>
   }[]
 
 let advance = (
-  db: DatabaseSync,
+  db: Sql,
   cast: Cast,
   writer: string,
   eligible: (session: string) => boolean,
@@ -326,7 +326,7 @@ let advance = (
   return ready.length > 0
 }
 
-let valid = (db: DatabaseSync, token: LeaseToken) =>
+let valid = (db: Sql, token: LeaseToken) =>
   !!db.prepare(
     `select 1 from lease l
      where l.entity = (select id from entity where eid = ?)

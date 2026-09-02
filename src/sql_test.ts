@@ -23,9 +23,10 @@ import {
   type Walk,
 } from './query.ts'
 import { aggregateSql, select, where } from './sql.ts'
-import { open, textBlob, textMatches } from './db.ts'
+import { textBlob, textMatches } from './db.ts'
 import { kindOf, kindOrder } from './types.ts'
 import { isRef } from './props.ts'
+import { open } from './store/sqlite.ts'
 
 let db = open(':memory:')
 

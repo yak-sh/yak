@@ -1,14 +1,16 @@
-// The fleet entity graph, in one SQLite file. Star ECS: `entity` holds the
+// The fleet entity graph, over one SQL handle. Star ECS: `entity` holds the
 // shared primary key (`eid`); component tables (`task`, `board`, `card`, …)
 // hang off it by that same id; `dependency` rows are typed eid↔eid edges that
-// read as sentences. This module owns the file, the seed, and the two wire
-// operations: apply (patch batches in) and snapshot (the whole graph out).
+// read as sentences. This module owns the schema, the seed, and the two wire
+// operations: apply (patch batches in) and snapshot (the whole graph out) —
+// all over the Sql interface (store/sql.ts), never a driver; the SQLite file
+// itself, its path and its pragmas, is store/sqlite.ts.
 // SERVER-ONLY — the browser reads the graph from its cache in live.ts.
 //
 // Ids: `eid` is a UUID so ANY side (client included) can mint entities;
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
-import { DatabaseSync, type StatementSync } from './sqlite.ts'
-import { initVector, loadVector } from './vector.ts'
+import type { Sql, Statement } from './store/sql.ts'
+import { initVector } from './vector.ts'
 import { dirname, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { sha } from './sha.ts'
@@ -54,7 +56,7 @@ import {
   resolveRefs,
   TEXT,
 } from './query.ts'
-import { type Sql, where } from './sql.ts'
+import { type Sql as Compiled, where } from './sql.ts'
 import {
   Invalid,
   spec as configSpec,
@@ -98,13 +100,13 @@ import {
 // get/all/run, which step to completion and reset (there is no .iterate() caller
 // in this file), and no call site configures a statement after preparing it.
 // prep() is the ONE door; a `db.prepare(` anywhere else defeats the cache.
-let stmtCache = new WeakMap<DatabaseSync, Map<string, StatementSync>>()
+let stmtCache = new WeakMap<Sql, Map<string, Statement>>()
 // Off during open(): migrations ALTER tables, so a statement cached against an
 // intermediate schema would strand. With caching off, prep() is exactly
 // db.prepare() — open()'s migrations behave identically to before — and only the
 // post-open runtime populates the cache.
 let caching = true
-let prep = (db: DatabaseSync, sql: string): StatementSync => {
+let prep = (db: Sql, sql: string): Statement => {
   if (!caching) return db.prepare(sql)
   let m = stmtCache.get(db)
   if (!m) stmtCache.set(db, m = new Map())
@@ -118,7 +120,7 @@ let prep = (db: DatabaseSync, sql: string): StatementSync => {
 // catch throws "no transaction is active" and MASKS the real BUSY that
 // sessionFault then bricks the session on. Every catch that rolls back a
 // begin it may not have reached calls this instead (T-19044).
-let rollback = (db: DatabaseSync) => {
+let rollback = (db: Sql) => {
   if (db.inTransaction) db.exec('rollback')
 }
 
@@ -127,7 +129,7 @@ let savepoint = 0
 // lock, while older focused migrations keep their all-or-nothing boundary as
 // savepoints. No process-level lock participates in database correctness.
 let atomic = <T>(
-  db: DatabaseSync,
+  db: Sql,
   run: () => T,
   immediate = false,
 ): T => {
@@ -148,31 +150,6 @@ let atomic = <T>(
     throw e
   }
 }
-
-// The owner's live graph — the one path a test must never open (open() below
-// refuses it under `deno test`). A function, not a constant, so it re-reads
-// HOME and the guard that holds this can't drift from a stale literal.
-export let liveDb = () => `${Deno.env.get('HOME')}/.tasks/tasks.db`
-
-// Same database by canonical path when it exists, normalized spelling when it
-// does not. Service-plane guards use this so a symlink cannot disguise owner
-// data as a disposable parity copy.
-export let sameGraphFile = (a: string, b: string) => {
-  let canonical = (path: string) => {
-    try {
-      return Deno.realPathSync(path)
-    } catch {
-      return resolve(path)
-    }
-  }
-  return canonical(a) == canonical(b)
-}
-
-// The db lives outside the repo (this is open source): a home-dir dotpath by
-// default, overridable with DB_PATH.
-// Exported because it is this process's IDENTITY on a shared port: which
-// graph it serves is what a joining peer must check (src/bind.ts).
-export let file = Deno.env.get('DB_PATH') ?? liveDb()
 
 // The edge table's check derives from the vocabulary (types.ts `edges`),
 // so a new verb there is a new verb here with no second edit. Named apart
@@ -930,6 +907,13 @@ let schema = `
     dirty integer not null
   );
   ${embeddingTriggers}
+`
+
+// The FTS5 mirrors, apart from `schema` because they are the one part of it a
+// backend may lack (Can.fts): both derive from doc and the integrity pass in
+// migrate() rebuilds them, so a store without FTS5 skips them whole and its
+// search() refuses instead of failing on a missing table.
+let ftsSchema = `
   create virtual table if not exists doc_fts using fts5(
     title, body, content='doc_value', content_rowid='rowid'
   );
@@ -1055,7 +1039,7 @@ export let derived = [
 // leaves it NULL for a numberless kind. No kind column: an entity is what its
 // components make it. Birth time is the `created` component's business
 // (T-6670), stamped by apply() from the batch's one clock — not taken here.
-let spine = (db: DatabaseSync, eid: string) =>
+let spine = (db: Sql, eid: string) =>
   prep(db, 'insert or ignore into entity (eid) values (?)').run(eid)
 
 // The kinds that get a human number. Cheap/bulk/ephemeral kinds stay out:
@@ -1073,7 +1057,7 @@ export let numbered = (kind: string) => !unnumbered.has(kind)
 // numbered, is gone (deleted later in the same batch), or wears an unnumbered
 // kind — the kind is derived only when the exclusion is non-empty, so part 1
 // pays nothing for the lookup.
-let mintNum = (db: DatabaseSync, eid: string) => {
+let mintNum = (db: Sql, eid: string) => {
   // A content hash is already the blob's durable human identity. Numbering
   // every deduplicated body/file would create a second, meaningless name.
   if (
@@ -1108,7 +1092,7 @@ let utf8 = new TextEncoder()
 // Land one internal text backend under the same blob identity attachments use.
 // The caller stores only the returned integer id; graph-out resolves the text
 // through blob_text, so the wire continues to speak the component value.
-export let textBlob = (db: DatabaseSync, value: string): number => {
+export let textBlob = (db: Sql, value: string): number => {
   let eid = sha(value)
   spine(db, eid)
   let { id } = prep(db, 'select id from entity where eid = ?').get(eid) as {
@@ -1122,7 +1106,7 @@ export let textBlob = (db: DatabaseSync, value: string): number => {
 }
 
 // Mint a bare entity; components hang off the returned eid.
-let ent = (db: DatabaseSync) => {
+let ent = (db: Sql) => {
   let eid = crypto.randomUUID()
   spine(db, eid)
   return eid
@@ -1132,11 +1116,11 @@ let ent = (db: DatabaseSync) => {
 // own eids to the int owner/reference keys the reshaped tables use (D-18866):
 // `(select id from entity where eid = ?)` for every owner and every reference.
 let ID = '(select id from entity where eid = ?)'
-let doc = (db: DatabaseSync, eid: string, title: string, body = '') =>
+let doc = (db: Sql, eid: string, title: string, body = '') =>
   prep(db, `insert into doc (entity, title, body) values (${ID}, ?, ?)`)
     .run(eid, title, textBlob(db, body))
 
-let addTask = (db: DatabaseSync, title: string, status: string, body = '') => {
+let addTask = (db: Sql, title: string, status: string, body = '') => {
   let eid = ent(db)
   doc(db, eid, title, body)
   prep(db, `insert into task (entity) values (${ID})`).run(eid)
@@ -1155,14 +1139,14 @@ let addTask = (db: DatabaseSync, title: string, status: string, body = '') => {
   return eid
 }
 
-let addProject = (db: DatabaseSync, title: string) => {
+let addProject = (db: Sql, title: string) => {
   let eid = ent(db)
   doc(db, eid, title)
   prep(db, `insert into project (entity) values (${ID})`).run(eid)
   return eid
 }
 
-let addBoard = (db: DatabaseSync, title: string) => {
+let addBoard = (db: Sql, title: string) => {
   let eid = ent(db)
   doc(db, eid, title)
   prep(db, `insert into board (entity) values (${ID})`).run(eid)
@@ -1170,7 +1154,7 @@ let addBoard = (db: DatabaseSync, title: string) => {
 }
 
 // A card views one entity through one lens; pinning places it on a canvas.
-let addCard = (db: DatabaseSync, target: string, view: string) => {
+let addCard = (db: Sql, target: string, view: string) => {
   let eid = ent(db)
   prep(db, `insert into card (entity, target, view) values (${ID}, ${ID}, ?)`)
     .run(eid, target, view)
@@ -1178,7 +1162,7 @@ let addCard = (db: DatabaseSync, target: string, view: string) => {
 }
 
 let pin = (
-  db: DatabaseSync,
+  db: Sql,
   canvas: string,
   card: string,
   x: number,
@@ -1192,7 +1176,7 @@ let pin = (
      values (${ID}, ${ID}, ?, ?, ?, ?)`,
   ).run(card, canvas, x, y, w, h)
 
-let link = (db: DatabaseSync, parent: string, type: string, child: string) =>
+let link = (db: Sql, parent: string, type: string, child: string) =>
   prep(
     db,
     `insert into dependency (parent, type, child) values (${ID}, ?, ${ID})`,
@@ -1201,7 +1185,7 @@ let link = (db: DatabaseSync, parent: string, type: string, child: string) =>
 // A handful of neutral demo rows — a board containing tasks, one edge of
 // each type, and a root canvas showing it as a Board plus one task
 // card. No fleet data in the repo.
-let seed = (db: DatabaseSync) => {
+let seed = (db: Sql) => {
   let schema = addTask(
     db,
     'Set up the database schema',
@@ -1258,11 +1242,11 @@ let seed = (db: DatabaseSync) => {
 // Does this table still carry that column? The one question both schema
 // guards ask, and the gate on every backfill that reads a retired column:
 // once the drop lands, the read that fed it must stop compiling away.
-export let hasCol = (db: DatabaseSync, table: string, col: string) =>
+export let hasCol = (db: Sql, table: string, col: string) =>
   (prep(db, `select name from pragma_table_info('${table}')`)
     .all() as { name: string }[]).some((c) => c.name == col)
 // Is the column declared NOT NULL? The guard a tightening migration reads.
-let colNotNull = (db: DatabaseSync, table: string, col: string) =>
+let colNotNull = (db: Sql, table: string, col: string) =>
   (prep(db, `select name, "notnull" as nn from pragma_table_info('${table}')`)
     .all() as { name: string; nn: number }[]).some((c) =>
       c.name == col && c.nn == 1
@@ -1271,7 +1255,7 @@ let colNotNull = (db: DatabaseSync, table: string, col: string) =>
 // A table's column names in declaration order — what rebuild() copies BY NAME
 // rather than by position, so a shape change never relies on `select *` lining
 // up value for value (T-18475).
-let colNames = (db: DatabaseSync, table: string) =>
+let colNames = (db: Sql, table: string) =>
   (prep(db, 'select name from pragma_table_info(?)')
     .all(table) as { name: string }[]).map((c) => c.name)
 
@@ -1281,7 +1265,7 @@ let colNames = (db: DatabaseSync, table: string) =>
 // a future executable instruction table has contract columns and must never be
 // mistaken for this retired one-column marker. The two-table arm makes an
 // interrupted/rolling migration idempotent without keeping two writable names.
-export let migratePrompt = (db: DatabaseSync) => {
+export let migratePrompt = (db: Sql) => {
   let legacy = colNames(db, 'instruction')
   if (legacy.length != 1 || legacy[0] != 'entity') return
   if (!colNames(db, 'prompt').length) {
@@ -1299,7 +1283,7 @@ export let migratePrompt = (db: DatabaseSync) => {
 // transaction that still bumps the file change counter, breaking open()'s
 // byte-idempotency — so the index realization guards each create with this,
 // the same shape addCol takes with hasCol.
-export let hasIdx = (db: DatabaseSync, name: string) =>
+export let hasIdx = (db: Sql, name: string) =>
   !!prep(db, `select 1 from sqlite_master where type = 'index' and name = ?`)
     .get(name)
 
@@ -1377,7 +1361,7 @@ let renameTeaching = (text: string) =>
       'a same-named reference column elsewhere',
     )
 
-export let migrateRefs = (db: DatabaseSync) => {
+export let migrateRefs = (db: Sql) => {
   let renames = refRenames.filter((r) => hasCol(db, r.table, r.old))
   let boards = hasCol(db, 'board', 'query')
     ? prep(
@@ -1462,10 +1446,10 @@ export let canonicalChanges = (changes: Change[]): Change[] => {
   }))
 }
 
-let ddlOf = (db: DatabaseSync, name: string) =>
+let ddlOf = (db: Sql, name: string) =>
   (prep(db, `select sql from sqlite_master where type = 'table' and name = ?`)
     .get(name) as { sql: string } | undefined)?.sql
-let rebuild = (db: DatabaseSync, name: string, ddl: string) => {
+let rebuild = (db: Sql, name: string, ddl: string) => {
   atomic(db, () => {
     db.exec(`alter table ${name} rename to ${name}_stale`)
     db.exec(ddl)
@@ -1489,7 +1473,7 @@ let rebuild = (db: DatabaseSync, name: string, ddl: string) => {
 // deaths onto it), so the copy is a join; a grave naming no spine at all is a
 // record nothing can key and is reported, not invented. `num` falls away: the
 // retained spine already carries it. No-op once the table wears `entity`.
-export let migrateTombstone = (db: DatabaseSync) => {
+export let migrateTombstone = (db: Sql) => {
   if (!hasCol(db, 'tombstone', 'eid')) return
   atomic(db, () => {
     db.exec('alter table tombstone rename to tombstone_stale')
@@ -1514,7 +1498,7 @@ export let migrateTombstone = (db: DatabaseSync) => {
 // rowids the persisted ANN data names are the OLD table's, so the index is
 // marked dirty for the sweep's next rebuild. No-op once the table wears
 // `entity`.
-export let migrateEmbedding = (db: DatabaseSync) => {
+export let migrateEmbedding = (db: Sql) => {
   if (!hasCol(db, 'embedding', 'eid')) return
   atomic(db, () => {
     for (let t of ['ai', 'au', 'ad']) {
@@ -1535,7 +1519,7 @@ export let migrateEmbedding = (db: DatabaseSync) => {
 
 // A column's declared type, for a migration that keys on a SHAPE change
 // rather than a column's presence.
-let colType = (db: DatabaseSync, table: string, col: string) =>
+let colType = (db: Sql, table: string, col: string) =>
   (prep(db, `select type from pragma_table_info('${table}') where name = ?`)
     .get(col) as { type: string } | undefined)?.type
 
@@ -1544,7 +1528,7 @@ let colType = (db: DatabaseSync, table: string, col: string) =>
 // human id — so each resolves through those doors in turn; what none of them
 // names (a session that rolled back with the batch, a hand-typed label) is
 // reported and left null. No-op once the sides are integers.
-export let migrateConflict = (db: DatabaseSync) => {
+export let migrateConflict = (db: Sql) => {
   if (colType(db, 'conflict', 'loser') != 'TEXT') return
   let side = (col: string) =>
     `coalesce(
@@ -1581,7 +1565,7 @@ export let migrateConflict = (db: DatabaseSync) => {
 // is dropped with a warning, and record() is by contract silent about its
 // own failures — so an unwidened live table would swallow the very reports
 // nobody else makes. No-ops once healed.
-export let mendCalls = (db: DatabaseSync) => {
+export let mendCalls = (db: Sql) => {
   if (!ddlOf(db, 'tool_call')?.includes("'cli'")) {
     rebuild(db, 'tool_call', callDdl)
   }
@@ -1592,7 +1576,7 @@ export let mendCalls = (db: DatabaseSync) => {
 // single-object body into a one-element array and rename the column, so a
 // legacy row and a batch read back under one name. Guarded on the old
 // column, so it runs once and no-ops thereafter.
-export let mendApply = (db: DatabaseSync) => {
+export let mendApply = (db: Sql) => {
   if (!hasCol(db, 'apply', 'change')) return
   atomic(db, () => {
     db.exec('update apply set change = json_array(json(change))')
@@ -1604,7 +1588,7 @@ export let mendApply = (db: DatabaseSync) => {
 // old mail.read_at column already marked read. `insert or ignore` on the pk
 // is idempotent, so a re-boot never moves an existing stamp. A no-op once
 // the column is gone — the stamp has been the only read-state since.
-export let backfillOpened = (db: DatabaseSync) => {
+export let backfillOpened = (db: Sql) => {
   if (!hasCol(db, 'mail', 'read_at')) return
   db.exec(
     `insert or ignore into opened (entity, at)
@@ -1615,7 +1599,7 @@ export let backfillOpened = (db: DatabaseSync) => {
 // Lift component-specific instruments into the universal register once
 // (T-7113). Each half is guarded on its own source column: the register is
 // the only home, and these reads are the last thing the columns are for.
-export let backfillVia = (db: DatabaseSync) => {
+export let backfillVia = (db: Sql) => {
   if (hasCol(db, 'comment', 'author_eid')) {
     db.exec(
       `update created set via = (
@@ -1650,7 +1634,7 @@ export let backfillVia = (db: DatabaseSync) => {
 // not history anything can read, so it does not hold the drop. Guarded by table
 // presence, so every later boot is a pure read; the backup's git history keeps
 // the last JSON dumps.
-export let retireJsonJournal = (db: DatabaseSync) => {
+export let retireJsonJournal = (db: Sql) => {
   if (!tableExists(db, 'journal')) return
   let missing = (prep(
     db,
@@ -1672,7 +1656,7 @@ export let retireJsonJournal = (db: DatabaseSync) => {
 // migrate()'s pragma and the rebuild below read: a text `eid` column on
 // journal_change is the old shape (journal_tx's text actor/via arrived and
 // leave with it), and a nullable `entity` is the interim keyed shape.
-let journalKeyed = (db: DatabaseSync) =>
+let journalKeyed = (db: Sql) =>
   !tableExists(db, 'journal_change') ||
   (!hasCol(db, 'journal_change', 'eid') &&
     colNotNull(db, 'journal_change', 'entity'))
@@ -1685,7 +1669,7 @@ let journalKeyed = (db: DatabaseSync) =>
 // the ts of the last transaction that named the eid, the latest moment it is
 // known to have existed. The grave is written in whichever shape the table
 // wears. Returns how many were buried.
-let buryJournalOrphans = (db: DatabaseSync) => {
+let buryJournalOrphans = (db: Sql) => {
   db.exec(
     `create temp table __orphan as
      select eid, max(ts) as last from (
@@ -1710,6 +1694,16 @@ let buryJournalOrphans = (db: DatabaseSync) => {
   return n
 }
 
+// The legacy reshapes read a table's target DDL off a fresh, migrated,
+// throwaway graph, so they reuse the one schema definition instead of
+// reconstructing it. Only the adapter can mint that sibling handle, so
+// migrate() takes it as `fresh`; a backend without one never holds a legacy
+// graph to reshape, and says so if it somehow does.
+let scratchOf = (fresh?: () => Sql) => {
+  if (!fresh) throw new Error('legacy reshape needs a scratch database')
+  return migrate(fresh())
+}
+
 // Key the journal by spine id (T-18883). journal_change.eid and
 // journal_tx.actor/via were eid TEXT; every other reference in the graph is an
 // integer into entity(id), and now so are these -- entity NOT NULL, since
@@ -1723,7 +1717,7 @@ let buryJournalOrphans = (db: DatabaseSync) => {
 // tightens in place when nothing names no entity; a row that does has lost
 // its eid and must be restored from a backup before the rebuild -- reported,
 // never invented.
-let migrateJournalKeys = (db: DatabaseSync) => {
+let migrateJournalKeys = (db: Sql, fresh?: () => Sql) => {
   if (journalKeyed(db)) return
   let count = (sql: string) => (db.prepare(sql).get() as { n: number }).n
   let text = hasCol(db, 'journal_change', 'eid')
@@ -1738,7 +1732,7 @@ let migrateJournalKeys = (db: DatabaseSync) => {
       return
     }
   }
-  let scratch = open(':memory:')
+  let scratch = scratchOf(fresh)
   let ddlOf = (t: string) =>
     (scratch.prepare(
       `select sql from sqlite_master where type = 'table' and name = ?`,
@@ -1828,7 +1822,7 @@ let JOURNAL_KEEP = [
 // left with no changes. Marked in server_meta so a later open is a pure read;
 // the SQL itself is idempotent. The `lost_and_found` tables an old .recover
 // left behind go with it. Children before parents, so foreign keys hold.
-let gcJournal = (db: DatabaseSync) => {
+let gcJournal = (db: Sql) => {
   if (
     !tableExists(db, 'journal_change') ||
     prep(db, `select 1 from server_meta where k = 'journal_gc'`).get()
@@ -1898,7 +1892,7 @@ let gcJournal = (db: DatabaseSync) => {
 // column, so a later open is a pure read; the ref index is realized here on
 // every shape, since the schema template cannot name a column an old table
 // lacks.
-let migrateJournalRefs = (db: DatabaseSync) => {
+let migrateJournalRefs = (db: Sql) => {
   if (!tableExists(db, 'journal_field')) return
   if (!hasCol(db, 'journal_field', 'ref')) {
     db.exec(
@@ -1943,7 +1937,7 @@ let migrateJournalRefs = (db: DatabaseSync) => {
 // gave the feedback, and an inferred author that is wrong is worse than an
 // absent one. The drop is what makes the retirement true: a column that
 // lingers keeps teaching a vocabulary the code no longer has.
-export let retireMemoryType = (db: DatabaseSync) => {
+export let retireMemoryType = (db: Sql) => {
   if (!hasCol(db, 'memory', 'type')) return
   db.exec(
     `insert or ignore into feedback (entity)
@@ -1956,7 +1950,7 @@ export let retireMemoryType = (db: DatabaseSync) => {
 // provenance of its own, so its filing stamp is the only authored fact it can
 // preserve. The board rewrite is independently guarded: a database interrupted
 // between old deployments may have lost the column while retaining its query.
-export let retireProposal = (db: DatabaseSync) => {
+export let retireProposal = (db: Sql) => {
   let legacy = hasCol(db, 'task', 'proposal')
   let stale = prep(
     db,
@@ -1990,7 +1984,7 @@ export let retireProposal = (db: DatabaseSync) => {
 // answers as the derived predicate, so saved queries keep working untouched. The
 // close moment and its actor come from `updated` (the done/cancel write was the
 // last edit for a settled task), falling back to `created`, then to now.
-export let retireTaskStatus = (db: DatabaseSync) => {
+export let retireTaskStatus = (db: Sql) => {
   if (!hasCol(db, 'task', 'status')) return
   let mint = (status: string, table: string) =>
     db.exec(`
@@ -2022,7 +2016,7 @@ let retireFilter = (query: string) => {
     .join('')
 }
 
-export let retireProjectRetiredAt = (db: DatabaseSync) => {
+export let retireProjectRetiredAt = (db: Sql) => {
   let legacy = hasCol(db, 'project', 'retired_at')
   let boards = prep(
     db,
@@ -2050,7 +2044,7 @@ export let retireProjectRetiredAt = (db: DatabaseSync) => {
 // Give every session its canonical launch facet before graph-out can observe
 // the handle, then mirror canonical values back for a rollback process. An
 // existing canonical row wins — including explicit null — on every open.
-export let backfillSpawn = (db: DatabaseSync) => {
+export let backfillSpawn = (db: Sql) => {
   let cols = ['provider', 'model', 'effort', 'persona']
   atomic(db, () => {
     db.exec(
@@ -2095,7 +2089,7 @@ export let backfillSpawn = (db: DatabaseSync) => {
 // backfills the edge from every stored column value — insert or ignore
 // against the (parent, type, child) primary key, live parents only, so a
 // settled backfill re-fires as a true no-op.
-export let backfillLineage = (db: DatabaseSync) => {
+export let backfillLineage = (db: Sql) => {
   db.exec(`
     insert or ignore into dependency (parent, type, child)
     select s.parent, 'delegates', s.entity from session s
@@ -2107,7 +2101,7 @@ export let backfillLineage = (db: DatabaseSync) => {
 // Lift the remaining Session aspects without inventing facets for rows that
 // never carried them. An existing canonical row wins — including its nulls —
 // so an interrupted rolling deploy can never revive a cleared legacy alias.
-export let backfillSessionFacets = (db: DatabaseSync) => {
+export let backfillSessionFacets = (db: Sql) => {
   atomic(db, () => {
     db.exec(`
       insert or ignore into worktree (entity, cwd, branch, base_revision)
@@ -2223,7 +2217,7 @@ export let backfillSessionFacets = (db: DatabaseSync) => {
 // Add every component first, verify the legacy messages all arrived, and only
 // then contract the old columns. A mismatch rolls the transaction back with
 // both sources intact rather than teaching two health vocabularies.
-export let migrateErrors = (db: DatabaseSync) => {
+export let migrateErrors = (db: Sql) => {
   let tables = ['role', 'session'].filter((table) => hasCol(db, table, 'error'))
   if (!tables.length) return
   let at: Record<string, string> = {
@@ -2267,7 +2261,7 @@ export let migrateErrors = (db: DatabaseSync) => {
 // column, so a re-open after the drop is a no-op. Success and failure split
 // on an `error` value being present — the resolver's fail() always set one,
 // its done() never did.
-export let migrateDelivery = (db: DatabaseSync) => {
+export let migrateDelivery = (db: Sql) => {
   let win = (table: string, via: string) => {
     if (!hasCol(db, table, 'acted_at')) return
     db.exec(
@@ -2322,7 +2316,7 @@ export let migrateDelivery = (db: DatabaseSync) => {
 let succ = (p: string) =>
   p.slice(0, -1) + String.fromCharCode(p.charCodeAt(p.length - 1) + 1)
 export let resolveId = (
-  db: DatabaseSync,
+  db: Sql,
   id: string,
 ): string | undefined => {
   let numOf = (n: number) =>
@@ -2401,7 +2395,7 @@ let ident = resolveId
 // than a kind-specific one. The raw-eid fallback is for an entity with no
 // num at all (a numless cheap/bulk entity, or a numless old grave), never
 // a demotion a death itself imposes.
-export let human = (db: DatabaseSync, eid: string): string => {
+export let human = (db: Sql, eid: string): string => {
   let row = prep(db, 'select num from entity where eid = ?').get(eid) as
     | { num: number }
     | undefined
@@ -2429,7 +2423,7 @@ let SHA_EID = /^[0-9a-f]{40}$/i
 // db.ts, and this is the pre-mint half of the same resolution: an address the
 // graph already knows must NOT get a second entity minted for it (that would
 // SHADOW the real one in homeOf).
-let addressed = (db: DatabaseSync, addr: string): string | undefined => {
+let addressed = (db: Sql, addr: string): string | undefined => {
   let a = addr.trim()
   let worn = (prep(
     db,
@@ -2454,7 +2448,7 @@ let addressed = (db: DatabaseSync, addr: string): string | undefined => {
 // the address so one entity answers every spelling. Direct spine+row write
 // (not apply()), for the migration and for a probe that never boots effects;
 // the apply() door mints THROUGH a change so a send gets provenance.
-export let addressEntity = (db: DatabaseSync, addr: string): string => {
+export let addressEntity = (db: Sql, addr: string): string => {
   // Store the canonical, deliverable spelling — a fleet address minted here
   // rides the same underscore-shedding rule as the wire write path, so the
   // direct-SQL door (migrations, probes) can never seed an undeliverable book
@@ -2483,7 +2477,7 @@ export let addressEntity = (db: DatabaseSync, addr: string): string => {
 // becomes an address, minting an `email` for it. Runs BEFORE mendMail so a
 // mail rebuild sees the trimmed shape; idempotent (insert-or-ignore on the
 // deliver pk, each source column guarded by hasCol, dedup by address on mint).
-export let migrateDeliver = (db: DatabaseSync) => {
+export let migrateDeliver = (db: Sql) => {
   // The knock/wake/mail bodies below run ONLY on a legacy db that still carries
   // the pre-facet columns (to_eid / mail.to); after the eid→id reshape those
   // columns are long gone, so every hasCol guard is false and none of this SQL
@@ -2552,7 +2546,7 @@ export let migrateDeliver = (db: DatabaseSync) => {
 // the num in the grave). Idempotent: a project already carrying a board comp is
 // skipped, so once every mirror is folded in a re-run finds nothing (this also
 // skips P-19, already board+project via `.project=<own eid>`).
-export let migrateBoardsToProjects = (db: DatabaseSync) => {
+export let migrateBoardsToProjects = (db: Sql) => {
   let boards = prep(
     db,
     'select o.eid as eid, query from board b join entity o on o.id = b.entity',
@@ -2620,7 +2614,7 @@ export let migrateBoardsToProjects = (db: DatabaseSync) => {
 // an address, set to_addr from that address and drop the stray deliver row.
 // Guarded by the data shape — no-ops the moment every stranded row is mended,
 // the mendMail/backfillOpened idiom.
-export let healInboundDeliver = (db: DatabaseSync) => {
+export let healInboundDeliver = (db: Sql) => {
   let rows = prep(
     db,
     `select mo.eid as eid, em.address as address from mail m
@@ -2648,7 +2642,7 @@ export let healInboundDeliver = (db: DatabaseSync) => {
 // the reference lands with provenance. knock/wake never carry an @, so this
 // only ever touches outbound mail. Deduped within the batch so two letters to
 // one new address mint it once.
-let mintAddresses = (db: DatabaseSync, changes: Change[]): Change[] => {
+let mintAddresses = (db: Sql, changes: Change[]): Change[] => {
   let mints: Change[] = []
   let seen = new Map<string, string>()
   let resolve = (addr: string): string => {
@@ -2694,7 +2688,7 @@ let sqlName = (name: string) => `"${name.replaceAll('"', '""')}"`
 
 // Stored values pass through the same language as incoming values. Invalid
 // cells stay visible for a deliberate repair; guessing would erase evidence.
-export let healStored = (db: DatabaseSync) => {
+export let healStored = (db: Sql) => {
   let fixes: {
     table: string
     col: string
@@ -2782,11 +2776,11 @@ export let healStored = (db: DatabaseSync) => {
 // eid, and a reference VALUE (eid or null) to the int id stored for it — an
 // unknown target resolves to null, which a NOT NULL / FK reference bounces on
 // the same way a missing eid bounced the old text FK.
-let toId = (db: DatabaseSync, eid: string): number | null =>
+let toId = (db: Sql, eid: string): number | null =>
   (prep(db, 'select id from entity where eid = ?').get(eid) as
     | { id: number }
     | undefined)?.id ?? null
-let refId = (db: DatabaseSync, v: unknown): number | null =>
+let refId = (db: Sql, v: unknown): number | null =>
   v == null ? null : toId(db, String(v))
 
 // Resolve a wire reference's eid to the target's stored int id, REFUSING a write
@@ -2801,9 +2795,8 @@ let refId = (db: DatabaseSync, v: unknown): number | null =>
 // The grave, asked two ways: by the spine's int id (the row itself), and by
 // eid through the spine, for the doors that still speak eids. One statement
 // each, prepared once, so every "is it dead?" reads the same table the same way.
-let grave = (db: DatabaseSync) =>
-  prep(db, 'select 1 from tombstone where entity = ?')
-let graveOf = (db: DatabaseSync) =>
+let grave = (db: Sql) => prep(db, 'select 1 from tombstone where entity = ?')
+let graveOf = (db: Sql) =>
   prep(
     db,
     `select 1 from tombstone t join entity e on e.id = t.entity
@@ -2811,7 +2804,7 @@ let graveOf = (db: DatabaseSync) =>
   )
 
 let refToId = (
-  db: DatabaseSync,
+  db: Sql,
   name: string,
   owner: string,
   col: string,
@@ -2847,7 +2840,7 @@ let refEid = (col: string) => `(select eid from entity where id = ${col})`
 // holds a spine id: `insert … values (${spineId})`, `where jc.entity = ${spineId}`.
 let spineId = `(select id from entity where eid = ?)`
 
-let tableExists = (db: DatabaseSync, t: string) =>
+let tableExists = (db: Sql, t: string) =>
   !!prep(db, `select 1 from sqlite_master where type = 'table' and name = ?`)
     .get(t)
 
@@ -2888,7 +2881,7 @@ let resolves = (col: string) =>
 // Real-data anomalies are cleaned per the policy above and returned as counts;
 // the INSERT only carries rows whose owner and every NOT NULL reference resolve.
 let copyLegacyTable = (
-  db: DatabaseSync,
+  db: Sql,
   t: string,
   old: string,
 ): CopyReport => {
@@ -2999,9 +2992,9 @@ let reportMigration = (reports: CopyReport[]) => {
 // definition rather than reconstructing it. One transaction, FK-deferred until
 // the whole graph is remapped, then foreign_key_check proves no reference was
 // left dangling. Idempotent: an id-keyed (or brand-new) db returns at the door.
-let migrateToIdKeys = (db: DatabaseSync) => {
+let migrateToIdKeys = (db: Sql, fresh?: () => Sql) => {
   if (!tableExists(db, 'entity') || hasCol(db, 'entity', 'id')) return []
-  let scratch = open(':memory:')
+  let scratch = scratchOf(fresh)
   let ddlOf = (t: string) =>
     (scratch.prepare(
       `select sql from sqlite_master where type = 'table' and name = ?`,
@@ -3070,7 +3063,7 @@ let migrateToIdKeys = (db: DatabaseSync) => {
 // address. Split it once: each distinct SHA becomes the eid of one blob entity,
 // attachments point to it, and intrinsic image dimensions move to that shared
 // content. This runs after eid→id, so every reference is born in final form.
-let migrateBlobEntities = (db: DatabaseSync) => {
+let migrateBlobEntities = (db: Sql) => {
   if (!tableExists(db, 'blob') || !hasCol(db, 'blob', 'sha')) return
   let invalid = prep(
     db,
@@ -3131,7 +3124,7 @@ let migrateBlobEntities = (db: DatabaseSync) => {
 // the internal blob backend atomically, keeping doc's owner rowids stable so
 // every component/reference join still addresses the same entity. FTS/gram are
 // derived and are rebuilt from the resolved projection by the current schema.
-let migrateDocBodies = (db: DatabaseSync) => {
+let migrateDocBodies = (db: Sql) => {
   if (!tableExists(db, 'doc') || !hasCol(db, 'doc', 'body')) return
   let col = prep(
     db,
@@ -3189,44 +3182,6 @@ let migrateDocBodies = (db: DatabaseSync) => {
   }
 }
 
-// A WAL-present boot follows a crash or overlaps another healthy connection,
-// so verify the complete SQLite view before migrations write anything. A
-// failed check is never repaired in place: WAL and SHM are live parts of the
-// database, and renaming either behind an open connection creates two WAL
-// generations. Recovery is an offline operation over a preserved copy of the
-// database/WAL/SHM set.
-let exists = (p: string) => {
-  try {
-    Deno.statSync(p)
-    return true
-  } catch {
-    return false
-  }
-}
-let probe = (db: DatabaseSync) => {
-  let row = db.prepare('pragma quick_check(1)').get() as Record<string, string>
-  let verdict = row?.quick_check ?? Object.values(row ?? {})[0]
-  if (verdict != 'ok') throw new Error(`quick_check: ${verdict}`)
-}
-let verifyWal = (db: DatabaseSync, path: string): DatabaseSync => {
-  if (path == ':memory:' || !exists(`${path}-wal`)) return db
-  try {
-    probe(db)
-    return db
-  } catch (e) {
-    throw new Error(
-      `SQLite integrity check failed for ${path} while ${path}-wal exists: ` +
-        `${e}. Startup stopped without copying, renaming, or deleting the ` +
-        `database, WAL, or SHM files. Stop every process using this graph, ` +
-        `preserve the three files as one set, and diagnose or recover an ` +
-        `offline copy.`,
-      { cause: e },
-    )
-  }
-}
-
-// Connect without migration. open() composes this with migrate(); read-only
-// consumers use connect() directly.
 // The app-plane-only boot switch (TASKS_PLANE=app, D-22804 §8 strangler). When
 // set, this Deno process opens the graph read-only and forwards writes. This is
 // retained for disposable parity copies; live_db.ts refuses it on owner data.
@@ -3243,53 +3198,11 @@ export let appPlane = () => Deno.env.get('TASKS_PLANE') == 'app'
 export let writerUrl = () =>
   Deno.env.get('TASKS_WRITER_URL')?.replace(/\/+$/, '') || undefined
 
-export let connect = (path = file, vector = false, readOnly = false) => {
-  // A test must NEVER open the owner's live graph. Under `deno test` the main
-  // module is always a *_test.ts file; reaching the live path there means a
-  // caller forgot DB_PATH (the `test` task sets :memory:). Refuse before we
-  // mkdir/migrate/lock it — loudly, so the next module-scope import that would
-  // reintroduce this footgun fails at the door instead of quietly reseeding
-  // the owner's board (T-14260).
-  if (
-    Deno.mainModule.endsWith('_test.ts') &&
-    sameGraphFile(path, liveDb())
-  ) {
-    throw new Error(
-      `refusing to open the live graph (${path}) under a test — set DB_PATH`,
-    )
-  }
-  Deno.mkdirSync(dirname(path), { recursive: true })
-  // readOnly (the app-plane reader, appPlane()): writing is made impossible at
-  // the SQLite layer, not merely avoided per-door.
-  let db = verifyWal(new DatabaseSync(path, { readOnly }), path)
-  // The vector extension is OPT-IN, because it is write-capable and connect()
-  // is the LIBRARY door (D-22530: such an extension loads only in the
-  // distribution that owns its write). Loading it here handed one to every
-  // consumer — the CLI's read arm, a probe, any future library client — and it
-  // is what put a native writer in a second process (T-22622). Only
-  // live_db.ts, the server-side handle, asks for it.
-  if (vector) loadVector(db)
-  // Connection-local settings only: busy_timeout and synchronous both live in
-  // the connection; the persistent journal-mode setting stays in migrate().
-  db.exec('pragma busy_timeout = 5000')
-  // Durability is tunable for throwaway graphs (TASKS_SYNC, like TASKS_BACKOFF):
-  // the default (unset) leaves SQLite's own `full`, which fsyncs every DDL
-  // statement — and migrate() runs ~200 of them (schema + migrations), so a
-  // fresh file on real disk costs ~2s. A test graph is ephemeral and never
-  // survives a crash, so the test task sets `off` and every file-backed open
-  // drops from ~2s to ~10ms. Production never sets it and stays fully durable.
-  let sync = Deno.env.get('TASKS_SYNC')
-  // Durability is a writer's concern; a read-only handle never fsyncs, so skip
-  // the pragma rather than run a connection setting a reader has no use for.
-  if (sync && !readOnly) db.exec(`pragma synchronous = ${sync}`)
-  return db
-}
-
 // Mint the durable sync epoch (T-20299) if absent — the cursor-lineage identity
 // a delta client checks (epochOf). This write runs once in transactional
 // migrate(), never on a read path. `insert or ignore` makes it idempotent — a no-op on a graph
 // that already carries the row, so a re-open writes nothing.
-export let mintEpoch = (db: DatabaseSync) =>
+export let mintEpoch = (db: Sql) =>
   db.exec(
     `insert or ignore into server_meta (k, v) values ('epoch', '${crypto.randomUUID()}')`,
   )
@@ -3304,7 +3217,7 @@ let schemaVersion = 1
 // The schema work runs under one BEGIN IMMEDIATE and is idempotent: concurrent
 // openers serialize in SQLite, and a waiter rechecks every guard after the
 // winner commits. Returns the same handle for the one-line open() below.
-export let migrate = (db: DatabaseSync) => {
+export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
   // Migrations ALTER tables; a cached statement would strand against an
   // intermediate schema. Compile raw until the schema is final, then restore.
   let wasCaching = caching
@@ -3318,28 +3231,6 @@ export let migrate = (db: DatabaseSync) => {
     !journalKeyed(db)
   if (legacy) db.exec('pragma foreign_keys = off')
   try {
-    // WAL lets readers proceed during a write, removing the reader/writer
-    // blocking of the default rollback journal. The fleet supports many
-    // ordinary read-write connections; SQLite serializes their write
-    // transactions. Unconditional since T-19444 (validated live via T-13905); an
-    // in-memory db answers `memory` and stays there — that is its only mode,
-    // not a failure. WAL's -wal/-shm sidecars are gitignored, and bin/backup's
-    // VACUUM INTO reads a consistent snapshot under WAL unchanged. Setting
-    // synchronous = normal is WAL's crash-safe pairing (a checkpoint still
-    // fsyncs), unless TASKS_SYNC already named a mode.
-    //
-    // This persistent setting lives in migrate(), never connect(). SQLite
-    // serializes the header change with every other connection.
-    {
-      let got = (db.prepare('pragma journal_mode = wal').get() as
-        | { journal_mode: string }
-        | undefined)?.journal_mode
-      if (got == 'wal') {
-        if (!Deno.env.get('TASKS_SYNC')) db.exec('pragma synchronous = normal')
-      } else if (got != 'memory') {
-        console.warn(`journal_mode is ${got}, not wal`)
-      }
-    }
     let reports: CopyReport[] = []
     let migrated = atomic(db, () => {
       // One SQLite transaction owns the schema transition. Concurrent openers
@@ -3361,7 +3252,7 @@ export let migrate = (db: DatabaseSync) => {
       // below assumes, so migrateRefs/schema/the backfills all see id-keyed
       // tables. Its focused atomic boundary becomes a savepoint inside this
       // transaction. A no-op on an already-id-keyed or brand-new db.
-      reports = migrateToIdKeys(db)
+      reports = migrateToIdKeys(db, fresh)
       // Split the legacy blob table into content/attachment/image entities,
       // minting each distinct SHA as a blob entity's eid. Runs after eid→id so
       // every reference is born on the canonical id-keyed spine.
@@ -3375,6 +3266,7 @@ export let migrate = (db: DatabaseSync) => {
       migrateRefs(db)
       migratePrompt(db)
       db.exec(schema)
+      if (db.can.fts) db.exec(ftsSchema)
       let addCol = (table: string, col: string, ddl: string) => {
         if (!hasCol(db, table, col)) {
           // Quoted: a component may be named after a keyword (`commit`).
@@ -3652,7 +3544,7 @@ export let migrate = (db: DatabaseSync) => {
           return `failed: ${diagnosis(error)}`
         }
       }
-      for (let t of ['doc_fts', 'doc_gram']) {
+      for (let t of db.can.fts ? ['doc_fts', 'doc_gram'] : []) {
         let before = fault(t)
         if (!before) continue
         try {
@@ -3704,7 +3596,7 @@ export let migrate = (db: DatabaseSync) => {
       backfillVia(db)
       backfillOpened(db)
       retireJsonJournal(db)
-      migrateJournalKeys(db)
+      migrateJournalKeys(db, fresh)
       gcJournal(db)
       migrateJournalRefs(db)
       // The dormant columns are migration INPUT, and every one of them has now
@@ -3781,11 +3673,6 @@ export let migrate = (db: DatabaseSync) => {
   }
 }
 
-// Open the file, migrate it transactionally in place, plant missing schema,
-// and seed once if the graph is empty. SQLite serializes concurrent openers.
-export let open = (path = file, vector = false) =>
-  migrate(connect(path, vector))
-
 // One schema-shaping DDL statement, classified so a non-Deno kernel can replay
 // it (D-22804 §8). The classes are the whole guard surface: an idempotent
 // create/drop runs as-is; an `add column` runs only when the column is absent;
@@ -3799,8 +3686,9 @@ export type SchemaOp =
 // source the codegen emits crates/yak-kernel/src/schema_gen.rs from, so the
 // Rust kernel owns schema CREATE + ADDITIVE migration off db.ts's own schema
 // (D-22804 §8), never a hand-kept copy. Captured by RECORDING db.exec over a
-// fresh :memory: migrate() through the SAME driver the live server writes with,
-// so the emitted DDL is byte-for-byte what this process would run; then
+// migrate() of the EMPTY handle the caller passes (the file adapter's :memory:,
+// the SAME driver the live server writes with, so the emitted DDL is
+// byte-for-byte what this process would run; closed here when done); then
 // augmented with the derived-component add-columns. Those last are the one thing
 // the capture cannot see: addDerivedCols runs one `add column` per derived
 // column, but on a FRESH db the column is already present (tableDdl created the
@@ -3811,26 +3699,25 @@ export type SchemaOp =
 // (migrateToIdKeys, board→project, the backfills/retirements) are no-ops on a
 // fresh db and never captured — the live graph is already past them, and
 // "anything shapier needs the owner" (M-17876).
-export let schemaDdl = (): SchemaOp[] => {
+export let schemaDdl = (real: Sql): SchemaOp[] => {
   let recorded: string[] = []
-  let real = new DatabaseSync(':memory:')
   let proxy = new Proxy(real, {
     get(t, p, _r) {
       if (p === 'exec') {
         return (sql: string) => {
           recorded.push(sql)
-          return (t as unknown as { exec: (s: string) => unknown }).exec(sql)
+          return t.exec(sql)
         }
       }
-      // Private-field accessors must receive the concrete DatabaseSync as
-      // `this`; using the proxy receiver breaks getters such as inTransaction.
+      // Private-field accessors must receive the concrete handle as `this`;
+      // using the proxy receiver breaks getters such as inTransaction.
       let v = Reflect.get(t, p, t)
       return typeof v === 'function'
         ? (v as (...a: unknown[]) => unknown).bind(t)
         : v
     },
   })
-  migrate(proxy as unknown as DatabaseSync)
+  migrate(proxy)
   real.close()
 
   let classify = (sql: string): SchemaOp => {
@@ -3877,6 +3764,35 @@ export let schemaDdl = (): SchemaOp[] => {
   return ops
 }
 
+// Plant the schema on an EMPTY handle from schemaDdl()'s ops, guarded the way
+// the Rust kernel replays them (schema.rs apply_schema): an idempotent
+// create/drop runs as-is, an add-column only when the column is absent, a bare
+// create-index only when the index is absent. This is a fresh backend's door
+// (D-32318): a store that begins empty runs it once and never the historical
+// migrations, which are no-ops on a fresh graph anyway. vocab/schema_capture.ts
+// proves it reproduces a fresh migrate() byte-for-byte at codegen time. No
+// seed: the demo graph belongs to the local file, not to a backend.
+export let plant = <D extends Sql>(db: D, ops: SchemaOp[]): D => {
+  let wasCaching = caching
+  caching = false
+  try {
+    return atomic(db, () => {
+      for (let op of ops) {
+        if (op.kind == 'addColumn') {
+          if (!hasCol(db, op.table, op.col)) db.exec(op.sql)
+        } else if (op.kind == 'index') {
+          if (!hasIdx(db, op.name)) db.exec(op.sql)
+        } else db.exec(op.sql)
+      }
+      mintEpoch(db)
+      db.exec(`pragma user_version = ${schemaVersion}`)
+      return db
+    }, true)
+  } finally {
+    caching = wasCaching
+  }
+}
+
 // The one live handle moved to live_db.ts: importing THIS module runs nothing
 // — it is library code (D-22388), safe in the CLI's read arm and in any test —
 // while importing live_db.ts is the deliberate act of opening the live graph.
@@ -3898,8 +3814,8 @@ let edgeCols = ['type', 'child', 'ord', 'gone']
 // authority for telling a name that EXISTS from a name that doesn't.
 // Memoized per table, per handle (a process can hold several graphs —
 // the live one and a probe's); an empty set means no such table.
-let stored = new WeakMap<DatabaseSync, Record<string, Set<string>>>()
-let columnsOf = (db: DatabaseSync, table: string): Set<string> => {
+let stored = new WeakMap<Sql, Record<string, Set<string>>>()
+let columnsOf = (db: Sql, table: string): Set<string> => {
   let mine = stored.get(db) ?? {}
   stored.set(db, mine)
   return mine[table] ??= new Set(
@@ -3996,7 +3912,7 @@ export let renamed = (
     : { ...change, name, comp }
 }
 
-let admitted = (db: DatabaseSync, change: Change): Change | undefined => {
+let admitted = (db: Sql, change: Change): Change | undefined => {
   change = renamed(change)
   let table = change.name
   let cols = table == 'dependency' ? edgeCols : cmps[table]
@@ -4034,7 +3950,7 @@ let spawnSpec = (comp: Record<string, unknown>) =>
 // every session gets a spawn facet, and a task hint can never mint session.
 // Coalescing the session twin into one change matters — created(session)
 // effects key off the Trace row and must fire once.
-let dualSpawn = (db: DatabaseSync, changes: Change[]): Change[] => {
+let dualSpawn = (db: Sql, changes: Change[]): Change[] => {
   let out = changes.map((change) => ({
     ...change,
     comp: change.comp && { ...change.comp },
@@ -4114,7 +4030,7 @@ let facetCols = (name: 'worktree' | 'runtime') => [
 // under one lock. Column-ward mirroring is deliberately absent: nothing
 // writes the edge directly yet, and the column retires only after this
 // rolling release proves out (T-16412).
-let mirrorLineage = (db: DatabaseSync, changes: Change[]): Change[] => {
+let mirrorLineage = (db: Sql, changes: Change[]): Change[] => {
   let last = new Map<string, string | null>()
   for (let change of changes) {
     if (change.name != 'session') continue
@@ -4152,7 +4068,7 @@ let mirrorLineage = (db: DatabaseSync, changes: Change[]): Change[] => {
 // making order significant, then write the same projection back to aliases
 // for a rollback server. A canonical component delete clears every alias.
 let dualFacet = (
-  db: DatabaseSync,
+  db: Sql,
   changes: Change[],
   name: 'worktree' | 'runtime',
 ): Change[] => {
@@ -4241,7 +4157,7 @@ let dualFacet = (
 }
 
 let syncFacetAliases = (
-  db: DatabaseSync,
+  db: Sql,
   changes: Change[],
   extra: Change[],
 ) => {
@@ -4330,7 +4246,7 @@ let select = (name: string): string => {
 // loosely, so a number sent as a string still matches its stored self. The
 // role heartbeat restamped decided_at 1.8M times before this held.
 let settled = (
-  db: DatabaseSync,
+  db: Sql,
   name: string,
   eid: string,
   comp: Record<string, unknown>,
@@ -4468,7 +4384,7 @@ let RELEASED = deaths('release')
 // value whose referent is missing. The caller rejects every SQL failure;
 // other errors keep their own message.
 let refused = (
-  db: DatabaseSync,
+  db: Sql,
   name: string,
   eid: string,
   comp: Record<string, unknown>,
@@ -4569,7 +4485,7 @@ let trustedRefs: [string, string][] = [['session', 'requested_task']]
 // exist, and only ever prepends — a batch that engages nothing ephemeral is
 // returned untouched, so the non-graduating write path is unchanged.
 let graduate = (
-  db: DatabaseSync,
+  db: Sql,
   changes: Change[],
   resolved: Change[] = [],
 ): Change[] => {
@@ -4599,7 +4515,7 @@ let graduate = (
 }
 
 let refRefused = (
-  db: DatabaseSync,
+  db: Sql,
   ref: Ref,
   eid?: string,
   target?: string,
@@ -4643,7 +4559,7 @@ let refRefused = (
 // rather than guess. Same rule T-3758 binds a browser's "you are" by.
 // Nothing else may reach for this: an agent is not its owner and the
 // server's own machinery is nobody, so both resolve blank instead (T-9934).
-let ownerActor = (db: DatabaseSync): string | null => {
+let ownerActor = (db: Sql): string | null => {
   let people = prep(
     db,
     'select o.eid as eid from person p join entity o on o.id = p.entity',
@@ -4674,7 +4590,7 @@ let worktreeGitdir = (cwd: string): string | null => {
 // The venture a path stands in: the repo whose path prefixes the cwd, or
 // whose gitdir owns the linked worktree. The cwd → repo → project rule every
 // operator-scoped door shares (client.ts repoAt is its cache-side twin).
-let ventureAt = (db: DatabaseSync, cwd?: string | null): string | null => {
+let ventureAt = (db: Sql, cwd?: string | null): string | null => {
   if (!cwd) return null
   let repos = prep(
     db,
@@ -4699,7 +4615,7 @@ let ventureAt = (db: DatabaseSync, cwd?: string | null): string | null => {
 // project of a task it claims (newest lease first), else of the task it was
 // spawned for. Reaches through claim/requested_task so a run outside any
 // repo still attributes to the scope it serves.
-let workProject = (db: DatabaseSync, sid: number): string | null => {
+let workProject = (db: Sql, sid: number): string | null => {
   let c = prep(
     db,
     `select ${refEid('t.project')} as eid
@@ -4721,7 +4637,7 @@ let workProject = (db: DatabaseSync, sid: number): string | null => {
 // wire spelling a session's model columns speak. A lookup, never a mint — an
 // unknown spelling leaves attribution null, the doctor-countable
 // configuration gap, rather than guessing.
-let modelActor = (db: DatabaseSync, name?: string | null): string | null =>
+let modelActor = (db: Sql, name?: string | null): string | null =>
   name
     ? (prep(
       db,
@@ -4752,7 +4668,7 @@ let modelActor = (db: DatabaseSync, name?: string | null): string | null =>
 // named an actor is still someone at a keyboard, so provenance reads it as
 // the box owner. A SIGNATURE won't — see senderActor.
 let actorFor = (
-  db: DatabaseSync,
+  db: Sql,
   writer: string | null | undefined,
   human: boolean,
 ): string | null => {
@@ -4798,7 +4714,7 @@ let actorFor = (
 }
 
 export let writerActor = (
-  db: DatabaseSync,
+  db: Sql,
   writer?: string | null,
 ): string | null => actorFor(db, writer, true)
 
@@ -4807,17 +4723,17 @@ export let writerActor = (
 // accepted — is the owner's to decide (M-31946): an agent proposes, never
 // programs. Nothing resolved is not a person: an anonymous write is
 // machinery until it says otherwise.
-export let isPerson = (db: DatabaseSync, actor: string | null) =>
+export let isPerson = (db: Sql, actor: string | null) =>
   !!actor && !!prep(db, `select 1 from person where ${byEid}`).get(actor)
 
 // The entity already wears `persona` on disk (a persona minted in this same
 // batch is nobody's prompt yet, so it is not guarded).
-let wornPersona = (db: DatabaseSync, eid: string) =>
+let wornPersona = (db: Sql, eid: string) =>
   !!prep(db, `select 1 from persona where ${byEid}`).get(eid)
 
 // A proposed memory: the memory row is on disk or in this batch, and the
 // proposed stamp is on disk. Only a person may decide one.
-let proposedMemory = (db: DatabaseSync, eid: string) =>
+let proposedMemory = (db: Sql, eid: string) =>
   !!prep(db, `select 1 from memory where ${byEid}`).get(eid) &&
   !!prep(db, `select 1 from proposed where ${byEid}`).get(eid)
 
@@ -4827,7 +4743,7 @@ let proposedMemory = (db: DatabaseSync, eid: string) =>
 // and exactly the tier a forged sender claimed (T-9511). Nothing resolved
 // means nothing signed, and mail.ts refuses to deliver an unsigned letter.
 export let senderActor = (
-  db: DatabaseSync,
+  db: Sql,
   writer?: string | null,
 ): string | null => actorFor(db, writer, false)
 
@@ -4835,7 +4751,7 @@ export let senderActor = (
 // label/eid, client eid, or runner eid resolves to that graph-visible writer.
 // Direct actor writes have no reified instrument.
 export let writerVia = (
-  db: DatabaseSync,
+  db: Sql,
   writer?: string | null,
 ): string | null => {
   if (!writer) return null
@@ -4938,7 +4854,7 @@ export class Stale extends Error {
 // than replacing, and `old` must still match (or the whole batch refuses).
 // Any OTHER `$`-keyed operator is a typo/unknown op — refused legibly here at
 // the operator layer, before it reaches storage as a non-scalar (bound()).
-let editOps = (db: DatabaseSync, changes: Change[]): Change[] =>
+let editOps = (db: Sql, changes: Change[]): Change[] =>
   changes.map((change) => {
     if (!change.comp) return change
     let ops = Object.entries(change.comp).filter(([, v]) => isFieldOp(v))
@@ -4982,7 +4898,7 @@ let editOps = (db: DatabaseSync, changes: Change[]): Change[] =>
 // reminder about that entity, so those stay independent of the cadence and of
 // one another. The rule lives at apply(), where concurrent doors serialize;
 // command-side replacement would let two stale snapshots both survive.
-let replaceWakes = (db: DatabaseSync, changes: Change[]): Change[] => {
+let replaceWakes = (db: Sql, changes: Change[]): Change[] => {
   let exists = prep(
     db,
     'select 1 from wake where entity = (select id from entity where eid = ?)',
@@ -5033,7 +4949,7 @@ let replaceWakes = (db: DatabaseSync, changes: Change[]): Change[] => {
 // consumer would later read. A value-only patch resolves its key from the
 // existing row; a key-only or bare touch is refused unless the key is catalogued.
 // The value is normalized IN PLACE so storage and the echoed batch are canonical.
-let guardSettings = (db: DatabaseSync, changes: Change[]): Change[] => {
+let guardSettings = (db: Sql, changes: Change[]): Change[] => {
   let keyOf = prep(
     db,
     'select key from setting where entity = (select id from entity where eid = ?)',
@@ -5069,7 +4985,7 @@ let guardSettings = (db: DatabaseSync, changes: Change[]): Change[] => {
 // plane of config.resolve() — server code passes this as the reader so a value
 // is read at the operation boundary, current as of the last committed write.
 export let settingValue = (
-  db: DatabaseSync,
+  db: Sql,
   key: string,
 ): string | undefined =>
   (prep(db, 'select value from setting where key = ?').get(key) as {
@@ -5081,7 +4997,7 @@ export let settingValue = (
 // (config.settingRows returns it) rather than mint a second, colliding key. The
 // eid-by-key half of the config panel's graph plane, beside settingValue.
 export let settingEid = (
-  db: DatabaseSync,
+  db: Sql,
   key: string,
 ): string | undefined =>
   (prep(
@@ -5094,7 +5010,7 @@ export let settingEid = (
 // A doc write speaks text but stores a blob reference. Materialize the blob as
 // an ordinary graph change before the doc so lifecycle, journal, and caches all
 // see a newly-created content entity; repeated values collapse by hash.
-let casBodies = (db: DatabaseSync, changes: Change[]): Change[] => {
+let casBodies = (db: Sql, changes: Change[]): Change[] => {
   let spoken = new Set(
     changes.filter((c) => c.name == 'blob').map((c) => c.eid),
   )
@@ -5135,7 +5051,7 @@ select 1
   ${workReadyJoinsSql}
  where ${workReadyWhereSql(workAuthorizationSql(recursive))}`
 
-let workClaimRefusal = (db: DatabaseSync, eid: string) => {
+let workClaimRefusal = (db: Sql, eid: string) => {
   let id = human(db, eid)
   let state = prep(
     db,
@@ -5218,7 +5134,7 @@ let workClaimRefusal = (db: DatabaseSync, eid: string) => {
 }
 
 export let apply = (
-  db: DatabaseSync,
+  db: Sql,
   changes: Change[],
   t?: Trace,
   writer?: string | null,
@@ -6437,7 +6353,7 @@ export let apply = (
 // no-op when the body already matches, so a quiet boot journals nothing.
 // Anyone may edit the doc between boots; the next boot writes it back —
 // server-minted, like every stamped column.
-export let vocabularyDoc = (db: DatabaseSync, body: string): void => {
+export let vocabularyDoc = (db: Sql, body: string): void => {
   let cur = prep(
     db,
     `
@@ -6483,7 +6399,7 @@ let casField = (name: string, field: string, v: unknown): v is string =>
 // caller's try guards it -- a broken journal must not break the write it
 // records. Returns the transaction id.
 export let journalWrite = (
-  db: DatabaseSync,
+  db: Sql,
   ts: string,
   actor: string | null,
   via: string | null,
@@ -6558,7 +6474,7 @@ export let journalWrite = (
 // silently loses the column (T-7437). Recording never throws, like the
 // journal insert in apply().
 export let record = (
-  db: DatabaseSync,
+  db: Sql,
   changes: Change[],
   writer?: string | null,
   effects?: Trace,
@@ -6615,7 +6531,7 @@ type RedactionHit = {
   // its own — scrubbed by repointing, never by rewriting shared bytes.
   blob: string | null
 }
-let redactionHits = (db: DatabaseSync, value: string): RedactionHit[] => {
+let redactionHits = (db: Sql, value: string): RedactionHit[] => {
   let encoded = JSON.stringify(value).slice(1, -1)
   let rows = prep(
     db,
@@ -6670,7 +6586,7 @@ let redactionHits = (db: DatabaseSync, value: string): RedactionHit[] => {
 // hash so the cost is O(candidates), not a full blob_text scan. Absent, it sweeps
 // every orphaned text value. Returns the eids whose content it collected.
 export let collectBlobText = (
-  db: DatabaseSync,
+  db: Sql,
   only?: string[],
 ): string[] => {
   let scope = only?.length
@@ -6698,7 +6614,7 @@ export let collectBlobText = (
 // Any failure — including the sanitized audit append — rolls the whole act
 // back. The removed bytes never appear in an error or return value.
 export let redact = (
-  db: DatabaseSync,
+  db: Sql,
   id: string,
   selector: string,
   writer?: string | null,
@@ -6942,7 +6858,7 @@ type ChangeRow = {
 let changeRows = `select jc.id as id, e.eid as eid, jc.component as component,
           jc.operation as operation
    from journal_change jc join entity e on e.id = jc.entity`
-let rebuildChanges = (db: DatabaseSync, rows: ChangeRow[]): Change[] => {
+let rebuildChanges = (db: Sql, rows: ChangeRow[]): Change[] => {
   // A ref'd field reads its text back through the content it names.
   let fieldsOf = prep(
     db,
@@ -6969,7 +6885,7 @@ let rebuildChanges = (db: DatabaseSync, rows: ChangeRow[]): Change[] => {
 // One journaled batch reconstructed whole (all eids) or, with `eid`, screened
 // to that entity's own changes — both in applied order (journal_change.ordinal).
 let normalizedBatch = (
-  db: DatabaseSync,
+  db: Sql,
   tx: number,
   eid?: string,
 ): Change[] =>
@@ -6984,7 +6900,7 @@ let normalizedBatch = (
   )
 
 export let journalOf = (
-  db: DatabaseSync,
+  db: Sql,
   eid: string,
   limit = 50,
 ): JournalEntry[] =>
@@ -7014,7 +6930,7 @@ export let journalOf = (
 // or client wrote, whole (no per-eid filtering — a wrap ledger wants the
 // batch's full sentence). Newest first, like journalOf.
 export let journalBy = (
-  db: DatabaseSync,
+  db: Sql,
   via: string,
   limit = 500,
 ): JournalEntry[] =>
@@ -7043,7 +6959,7 @@ export let journalBy = (
 // key exists; its value is the merged columns. undo restores from this: the
 // value to put back is the value a batch found when it wrote.
 let stateBefore = (
-  db: DatabaseSync,
+  db: Sql,
   eid: string,
   before: number,
 ): Record<string, Record<string, unknown>> => {
@@ -7103,7 +7019,7 @@ let wasOf = (name: string, comp: Record<string, unknown>, keys: string[]) => {
 //     concurrent edit refuses the whole undo rather than clobbering it.
 // Server-owned components (resume, imported — empty wire vocabulary) and the
 // provenance echoes are re-derived by apply(), never user intent: skipped.
-export let inverseBatch = (db: DatabaseSync, id: number): Change[] => {
+export let inverseBatch = (db: Sql, id: number): Change[] => {
   // The batch reconstructed from the normalized rows (every journal_change
   // shares this one tx). A tx always journals at least one change, so an empty
   // reconstruction means the batch does not exist — including the corrupt-gap
@@ -7186,7 +7102,7 @@ export let inverseBatch = (db: DatabaseSync, id: number): Change[] => {
 // their read and guarded write must be indivisible; HTTP and in-process MCP
 // both call this function, so transport cannot weaken that boundary.
 let claimWork = (
-  db: DatabaseSync,
+  db: Sql,
   ask: WorkClaimMutation,
   trace?: Trace,
   via?: string | null,
@@ -7340,7 +7256,7 @@ let claimWork = (
 }
 
 export let mutate = <T extends Mutation>(
-  db: DatabaseSync,
+  db: Sql,
   mutation: T,
   trace?: Trace,
   via?: string | null,
@@ -7383,7 +7299,7 @@ export let mutate = <T extends Mutation>(
 
 // The rowid of the latest batch that touched an entity — what `task undo <e>`
 // reverses. 0 when the entity has no history.
-export let lastBatch = (db: DatabaseSync, eid: string): number =>
+export let lastBatch = (db: Sql, eid: string): number =>
   Number(
     (prep(
       db,
@@ -7394,7 +7310,7 @@ export let lastBatch = (db: DatabaseSync, eid: string): number =>
 // History is paid for only by the explicit local backfill operation. The result is
 // ordinary graph changes, so the caller can land and broadcast them through
 // apply() rather than growing a second persistence path.
-export let historicalWorked = (db: DatabaseSync): Change[] =>
+export let historicalWorked = (db: Sql): Change[] =>
   (prep(
     db,
     `
@@ -7428,7 +7344,7 @@ export let historicalWorked = (db: DatabaseSync): Change[] =>
 // still sees the unfiltered batch through maintain(), and keyed readers stay
 // complete. A creation in this batch marks the eid even if a later batch has
 // already deleted it — important when filtering a journal window.
-export let rootChanges = (db: DatabaseSync, changes: Change[]): Change[] => {
+export let rootChanges = (db: Sql, changes: Change[]): Change[] => {
   let hidden = new Set(
     changes.filter((c) => c.name == 'entry' && c.comp).map((c) => c.eid),
   )
@@ -7464,7 +7380,7 @@ export type JournalRow = {
   trace: Trace | null
 }
 
-export let journalSince = (db: DatabaseSync, since: number): JournalRow[] =>
+export let journalSince = (db: Sql, since: number): JournalRow[] =>
   (prep(
     db,
     `select id, ts, ${refEid('actor')} as actor, ${refEid('via')} as via, trace
@@ -7551,7 +7467,7 @@ export let rowChanges = (r: JournalRow): Change[] => {
 }
 
 export let delta = (
-  db: DatabaseSync,
+  db: Sql,
   since: number,
 ): { changes: Change[]; cursor: number } => {
   let changes: Change[] = []
@@ -7571,7 +7487,7 @@ export let delta = (
 // the same state apply() echoed; a later row's overwrite re-broadcasts anyway,
 // so column-merge converges either way. A tombstoned eid reads no row and
 // echoes nothing.
-export let recast = (db: DatabaseSync, r: JournalRow): Change[] => {
+export let recast = (db: Sql, r: JournalRow): Change[] => {
   let out = rowChanges(r)
   let seen = new Set<string>()
   for (let { eid, name, comp } of r.batch) {
@@ -7597,7 +7513,7 @@ export let recast = (db: DatabaseSync, r: JournalRow): Change[] => {
 // or unknown). Returns the fresh rows as cast-able changes so every
 // cache hears the new warmth.
 export let touch = (
-  db: DatabaseSync,
+  db: Sql,
   eids: string[],
   confirm = false,
 ): Change[] => {
@@ -7663,17 +7579,24 @@ export let touch = (
 // Resolve a reference value server-side — the db's half of client.ts find().
 // One grammar for every door: num, full uuid, short-eid handle, alias slug
 // (resolveId, T-3684).
-export let findEid = (db: DatabaseSync, id: string): string | undefined =>
+export let findEid = (db: Sql, id: string): string | undefined =>
   resolveId(db, id)
+
+// A door that reads the FTS5 mirrors says so on a store without them, rather
+// than failing on a missing table deep inside a query.
+let needFts = (db: Sql) => {
+  if (!db.can.fts) throw new Error('search needs FTS5, which this store lacks')
+}
 
 // One row's exact TEXT membership for incremental subscription maintenance.
 // The database tokenizer is the definition; JavaScript never approximates
 // unicode61 (its diacritic behavior has boundary cases JS normalization lacks).
 export let textMatches = (
-  db: DatabaseSync,
+  db: Sql,
   eid: string,
   pred: Pred,
 ): boolean => {
+  needFts(db)
   let term = ftsTerm(pred.value)
   return !!term && !!prep(
     db,
@@ -7684,7 +7607,8 @@ export let textMatches = (
   ).get(term, eid)
 }
 
-export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
+export let search = (db: Sql, q: string, limit = 20): Hit[] => {
+  needFts(db)
   let preds = parseQuery(q)
   let addressed = preds.length == 1 && preds[0].op == TEXT
     ? findEid(db, preds[0].value)
@@ -7897,8 +7821,8 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
 // every read and snapshot path only reads. The row is present on any migrated graph; an un-minted graph
 // (never migrated, or a test that stripped server_meta) reads '' — distinct from
 // any real client's held epoch, so those clients reseed, the safe answer.
-let epochs = new WeakMap<DatabaseSync, string>()
-export let epochOf = (db: DatabaseSync): string => {
+let epochs = new WeakMap<Sql, string>()
+export let epochOf = (db: Sql): string => {
   let hit = epochs.get(db)
   if (hit) return hit
   // A never-migrated graph may not have the table. Absent table or row reads
@@ -7927,7 +7851,7 @@ export let vocabHash = vocabHashOf(comps, stamped)
 // client can bridge to the catch-up delta. Read from journal_tx, the SAME
 // id-space journalSince/delta seek, so the cursor and the reader can never
 // drift apart. 0 on an empty journal.
-export let cursorOf = (db: DatabaseSync): number =>
+export let cursorOf = (db: Sql): number =>
   (prep(db, 'select max(id) as m from journal_tx')
     .get() as { m: number | null }).m ?? 0
 
@@ -7948,7 +7872,7 @@ export let cursorOf = (db: DatabaseSync): number =>
 // Never fires in normal append-only operation: a live client's `since` is a
 // rowid the server issued, and cursorOf only grows within a lineage.
 export let cursorStale = (
-  db: DatabaseSync,
+  db: Sql,
   epochHeld: string | null | undefined,
   vocabHeld: string | null | undefined,
   since: number,
@@ -7960,7 +7884,7 @@ export let cursorStale = (
 // (eid→comp, entity as {eid,num}); a missing spine returns {} (tombstoned or
 // never minted), which reads as "not alive" to the matcher.
 export let eager = (
-  db: DatabaseSync,
+  db: Sql,
   eid: string,
 ): Record<string, Record<string, unknown>> => {
   let spine = prep(db, `${select('entity')} where eid = ?`)
@@ -7989,7 +7913,7 @@ export let eager = (
 // cached, keeping its title: exactly what a live body edit does. One
 // statement per component that declares a body, so a card asks for its own
 // body and all its comments' bodies in one trip.
-export let bodies = (db: DatabaseSync, eids: string[]): Change[] => {
+export let bodies = (db: Sql, eids: string[]): Change[] => {
   if (!eids.length) return []
   let out: Change[] = []
   let holes = eids.map(() => '?').join(', ')
@@ -8028,7 +7952,7 @@ export let bodies = (db: DatabaseSync, eids: string[]): Change[] => {
 // dropped to match the stored set. Applied through the client's ordinary
 // applyLocal, it undoes the optimistic apply precisely, cursor untouched (the
 // batch never committed, so the client's frontier has not moved).
-export let correct = (db: DatabaseSync, sent: Change[]): Change[] => {
+export let correct = (db: Sql, sent: Change[]): Change[] => {
   let out: Change[] = []
   for (let eid of new Set(sent.map((c) => c.eid))) {
     let comps = eager(db, eid)
@@ -8078,7 +8002,7 @@ export let correct = (db: DatabaseSync, sent: Change[]): Change[] => {
 // the persona's spine, `h` its home's. `only` is a where clause written against
 // those aliases (`o.eid`, `h.eid`), so the narrow door asks the same question
 // keyed without tripping the ref-column binding landmine (C-19763).
-let homes = (db: DatabaseSync, only = '') =>
+let homes = (db: Sql, only = '') =>
   prep(
     db,
     `select o.eid as eid, h.eid as home from persona t
@@ -8099,9 +8023,9 @@ let homes = (db: DatabaseSync, only = '') =>
 // handle, including stamps that deliberately do not journal; data_version sees
 // commits through another handle. Per-db keeps probe graphs apart.
 type SnapHit = { local: number; remote: number; snap: Snapshot }
-let snapCache = new WeakMap<DatabaseSync, SnapHit>()
+let snapCache = new WeakMap<Sql, SnapHit>()
 
-let snapKey = (db: DatabaseSync) => ({
+let snapKey = (db: Sql) => ({
   local: Number(
     (prep(db, 'select total_changes() as n').get() as { n: number }).n,
   ),
@@ -8123,7 +8047,7 @@ let snapKey = (db: DatabaseSync) => ({
 // ignore` folds the lazy tables the way `union` did; every eid is non-null
 // (entity.eid), so `not in` carries no NULL footgun. snapshot() AND allDeps()
 // share it, so an edge omitted from the components is omitted from the deps too.
-let fillOmit = (db: DatabaseSync) => {
+let fillOmit = (db: Sql) => {
   db.exec('create temp table if not exists _omit(eid text primary key)')
   db.exec('delete from _omit')
   for (let name of lazyTables) {
@@ -8136,7 +8060,7 @@ let fillOmit = (db: DatabaseSync) => {
   }
 }
 
-export let snapshot = (db: DatabaseSync): Snapshot => {
+export let snapshot = (db: Sql): Snapshot => {
   let cursor = cursorOf(db)
   let key = snapKey(db)
   let hit = snapCache.get(db)
@@ -8210,7 +8134,7 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
 // T-18336). Column-less facets stay 0 without a query. Aliases are quoted so a
 // component named like a SQL word stays safe; table names are `comps` keys,
 // already used unquoted as identifiers elsewhere.
-export let componentCounts = (db: DatabaseSync): Record<string, number> => {
+export let componentCounts = (db: Sql): Record<string, number> => {
   let out: Record<string, number> = {}
   let named: string[] = []
   for (let name of Object.keys(comps)) {
@@ -8266,7 +8190,7 @@ export type ProjectReachability = {
 // deliberately absent because no relation, including contains, is structural.
 // The governed facet list is generated vocabulary shared with later readers and
 // write gates, so the corpus boundary cannot drift between doors.
-export let projectReachability = (db: DatabaseSync): ProjectReachability => {
+export let projectReachability = (db: Sql): ProjectReachability => {
   let idKeyed = hasCol(db, 'entity', 'id')
   let spineKey = idKeyed ? 'id' : 'eid'
   let ownerCol = idKeyed ? 'entity' : 'eid'
@@ -8299,7 +8223,7 @@ export let projectReachability = (db: DatabaseSync): ProjectReachability => {
   }
 }
 
-export let scanAnomalies = (db: DatabaseSync): Anomalies => {
+export let scanAnomalies = (db: Sql): Anomalies => {
   let idKeyed = hasCol(db, 'entity', 'id')
   let spineKey = idKeyed ? 'id' : 'eid'
   let ownerCol = idKeyed ? 'entity' : 'eid'
@@ -8340,7 +8264,7 @@ export let scanAnomalies = (db: DatabaseSync): Anomalies => {
 // dirty mark that OUTLIVES the sweep interval means nobody is quantizing —
 // either no process claimed ownVector(), or the owner's connection never ran
 // vector_init and every rebuild throws "Vector context not found".
-let vectorState = (db: DatabaseSync): Anomalies['vector'] => {
+let vectorState = (db: Sql): Anomalies['vector'] => {
   if (!tableExists(db, 'embedding') || !tableExists(db, 'embedding_index')) {
     return undefined
   }
@@ -8357,7 +8281,7 @@ let vectorState = (db: DatabaseSync): Anomalies['vector'] => {
 // walks ~180 rows (~2ms); this hits the eid index (~µs). Undefined for an
 // absent row or a component with no readable columns.
 export let readComp = (
-  db: DatabaseSync,
+  db: Sql,
   eid: string,
   name: string,
 ): Record<string, unknown> | undefined =>
@@ -8369,6 +8293,7 @@ export let readComp = (
 
 // `deno task seed` (or a direct run) bootstraps the file without the server.
 if (import.meta.main) {
+  let { open } = await import('./store/sqlite.ts')
   let db = open()
   let n = (q: string) => (prep(db, q).get() as { n: number }).n
   console.log(
@@ -8384,7 +8309,7 @@ if (import.meta.main) {
 // resolve its own references without anyone building a snapshot first; keep the
 // two readings of "what names an entity" in step. resolveId is that one
 // reading (T-3684).
-export let locate = (db: DatabaseSync, id: string): string | undefined =>
+export let locate = (db: Sql, id: string): string | undefined =>
   resolveId(db, id)
 
 // A tombstoned entity keeps its spine row and its name (C-19754#2), so locate
@@ -8393,20 +8318,19 @@ export let locate = (db: DatabaseSync, id: string): string | undefined =>
 // name reads as absent rather than as a spine with no components. Before the
 // D-18866 flip, delete removed the spine and locate simply missed; the spine now
 // survives, so the exclusion is explicit.
-export let buried = (db: DatabaseSync, eid: string): boolean =>
-  !!graveOf(db).get(eid)
+export let buried = (db: Sql, eid: string): boolean => !!graveOf(db).get(eid)
 
 // The page entity at a URL, keyed off the `web.url` index — a normalized
 // address reaches the same row it minted (url.ts), so the browser-extension
 // door finds-or-mints without materializing the graph (M-21143). The caller
 // hands a NORMALIZED url, the same shape a write stores.
-export let webAt = (db: DatabaseSync, url: string): string | undefined =>
+export let webAt = (db: Sql, url: string): string | undefined =>
   (prep(
     db,
     'select o.eid as eid from web t join entity o on o.id = t.entity where t.url = ?',
   ).get(url) as { eid: string } | undefined)?.eid
 
-let clear = (db: DatabaseSync) => {
+let clear = (db: Sql) => {
   db.exec('create temp table if not exists hit (eid text primary key)')
   db.exec('delete from hit')
 }
@@ -8415,14 +8339,14 @@ let clear = (db: DatabaseSync) => {
 // `in (?,?,…)` list because a hit set has no ceiling (a query can match the
 // whole graph) and a bound parameter list does. `hit` is filled and read out
 // within one reader, never held across two.
-let stage = (db: DatabaseSync, eids: string[]) => {
+let stage = (db: Sql, eids: string[]) => {
   clear(db)
   let put = prep(db, 'insert or ignore into hit (eid) values (?)')
   for (let e of eids) put.run(e)
 }
 
 // The comps of whatever `hit` holds, shaped as `rows(snapshot())` shapes them.
-let staged = (db: DatabaseSync) => {
+let staged = (db: Sql) => {
   let out = new Map<string, Record<string, Record<string, unknown>>>()
   let only = `where eid in (select eid from hit)`
   let spine = prep(db, `${select('entity')} ${only}`)
@@ -8456,7 +8380,7 @@ let staged = (db: DatabaseSync) => {
 // (sql.ts) is that predicate: answered forty times it is slower than the JS
 // matcher it replaces, and answered once it is several times faster.
 export let matching = (
-  db: DatabaseSync,
+  db: Sql,
   filter: { sql: string; params: (string | number)[] },
 ): { eid: string; comps: Record<string, Record<string, unknown>> }[] => {
   clear(db)
@@ -8482,7 +8406,7 @@ export let matching = (
 // NAME its sources (an id and a title come off the whole row, since kind is
 // derived from which components are there). One eager() each would cost a
 // statement per component per row; this costs one per component.
-export let rowsOf = (db: DatabaseSync, eids: string[]) => {
+export let rowsOf = (db: Sql, eids: string[]) => {
   if (!eids.length) return []
   stage(db, eids)
   let out = staged(db)
@@ -8500,7 +8424,7 @@ export let rowsOf = (db: DatabaseSync, eids: string[]) => {
 }
 
 let entryRows = (
-  db: DatabaseSync,
+  db: Sql,
   index: { eid: string; seq: number }[],
 ) => {
   if (!index.length) return []
@@ -8525,7 +8449,7 @@ let entryRows = (
 
 // One entry by identity. Hosted work names its call directly; its Session
 // partition is unrelated to locating or hydrating that immutable row.
-export let entryOf = (db: DatabaseSync, eid: string) => {
+export let entryOf = (db: Sql, eid: string) => {
   let row = prep(
     db,
     `select o.eid as eid, t.seq as seq from entry t
@@ -8541,7 +8465,7 @@ export let entryOf = (db: DatabaseSync, eid: string) => {
 // entities from the root cache. `through` gives replay a closed upper bound;
 // ordinary UI and audit reads omit it and retain the complete tail.
 export let entriesOf = (
-  db: DatabaseSync,
+  db: Sql,
   session: string,
   after = 0,
   limit = 500,
@@ -8596,7 +8520,7 @@ export let entriesOf = (
 // lookup. Returned entry identities and source seqs are untouched; only the
 // entry.session reference is projected to the requested persisted identity.
 export let sourceEntriesOf = (
-  db: DatabaseSync,
+  db: Sql,
   session: string,
   after = 0,
   limit = 500,
@@ -8642,10 +8566,10 @@ export let sourceEntriesOf = (
 // over its preds), so the bound is spent on rows that can match rather than
 // on every tool call between two user turns.
 export let entriesScan = (
-  db: DatabaseSync,
+  db: Sql,
   after = 0,
   limit = 500,
-  narrow?: Sql,
+  narrow?: Compiled,
 ) => {
   let index = prep(
     db,
@@ -8698,7 +8622,7 @@ let notLazy = (endpoint: string) =>
 // `eagerOnly` screens the answer to the entities a CLIENT can hold — see
 // eagerDeps below.
 let incident = (
-  db: DatabaseSync,
+  db: Sql,
   eids: string[],
   eagerOnly: boolean,
 ): Dep[] => {
@@ -8733,7 +8657,7 @@ let incident = (
   ]
 }
 
-export let depsOf = (db: DatabaseSync, eids: string[]): Dep[] =>
+export let depsOf = (db: Sql, eids: string[]): Dep[] =>
   incident(db, eids, false)
 
 // The same edges, screened to the EAGER graph: the edges a CLIENT may hold.
@@ -8744,7 +8668,7 @@ export let depsOf = (db: DatabaseSync, eids: string[]): Dep[] =>
 // IS. Not a nicety: one card on a well-referenced task draws 522 incident edges,
 // 469 of them from entries, and the rider would have shipped every one along
 // with a projected peer row for each.
-export let eagerDeps = (db: DatabaseSync, eids: string[]): Dep[] =>
+export let eagerDeps = (db: Sql, eids: string[]): Dep[] =>
   incident(db, eids, true)
 
 // Stored dependency edges incident to `eids` AFTER an optional endpoint
@@ -8755,7 +8679,7 @@ export let eagerDeps = (db: DatabaseSync, eids: string[]): Dep[] =>
 // half seeks dependency by its own endpoint index. No component partition is
 // enumerated.
 export let selectedDeps = (
-  db: DatabaseSync,
+  db: Sql,
   eids: string[],
   select: EdgeSelector,
 ): Dep[] => {
@@ -8812,7 +8736,7 @@ export let selectedDeps = (
 // dump every joining client used to receive — is gone (T-22371). Edges are
 // delivered SCOPED, by depsOf above, to whatever a subscription selected.
 export let reaching = (
-  db: DatabaseSync,
+  db: Sql,
   target: string,
   type: string,
   depth: number,
@@ -8835,7 +8759,7 @@ export let reaching = (
 // reading walks every column of every row. `via` names the column. A column
 // is a reference by its PropType, not its name, so `created.by` and
 // `deliver.to` counts as surely as `project` — isRef reads the declared type.
-export let refsOf = (db: DatabaseSync, eids: string[]) => {
+export let refsOf = (db: Sql, eids: string[]) => {
   if (!eids.length) return []
   stage(db, eids)
   let out: { from: string; via: string; to: string }[] = []
@@ -8863,7 +8787,7 @@ export let refsOf = (db: DatabaseSync, eids: string[]) => {
 // far-side change re-tests only sources reachable through that predicate's
 // own path, not every row that happens to reference the same entity.
 export let referrersOf = (
-  db: DatabaseSync,
+  db: Sql,
   eids: string[],
   { comp, prop }: { comp: string; prop: string },
 ): string[] => {
@@ -8891,7 +8815,7 @@ export let referrersOf = (
 // (a comment moves; its comment.target parent must re-test). Only the given
 // component's own column, so a touched non-child yields nothing.
 export let refValuesOf = (
-  db: DatabaseSync,
+  db: Sql,
   eids: string[],
   { comp, prop }: { comp: string; prop: string },
 ): string[] => {

@@ -8,7 +8,6 @@ let {
   backfillVia,
   bodies,
   componentCounts,
-  connect,
   correct,
   cursorOf,
   cursorStale,
@@ -24,10 +23,8 @@ let {
   journalOf,
   journalSince,
   lastBatch,
-  liveDb,
   locate,
   mendCalls,
-
   buried,
   migrate,
   migrateBoardsToProjects,
@@ -37,7 +34,6 @@ let {
   migrateTombstone,
   mintEpoch,
   numbered,
-  open,
   projectReachability,
   readComp,
   refsOf,
@@ -46,7 +42,6 @@ let {
   resolveId,
   retireMemoryType,
   search,
-  sameGraphFile,
   senderActor,
   sha,
   snapshot,
@@ -57,9 +52,8 @@ let {
   vocabHashOf,
   vocabularyDoc,
   writerActor,
-} = await import(
-  './db.ts'
-)
+} = await import('./db.ts')
+let { connect, liveDb, open, sameGraphFile } = await import('./store/sqlite.ts')
 let { db } = await import('./live_db.ts')
 let { assertEquals, assertMatch, assertNotEquals, assertThrows } = await import(
   '@std/assert'
@@ -77,7 +71,7 @@ let {
   './types.ts'
 )
 let { bareDb } = await import('./testdb.ts')
-let { DatabaseSync } = await import('./sqlite.ts')
+let { DatabaseSync } = await import('./store/sqlite.ts')
 let { slow } = await import('./testing.ts')
 
 // The apply/snapshot suite just needs a working migrated graph, not a DDL

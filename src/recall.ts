@@ -12,7 +12,7 @@
 // effect resolves the scope. WHO delivers the floaters (the tasks channel's
 // kind=recall item, replayed into a native session's transcript) lives in
 // channel.ts and imports only this.
-import { type DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 import { embed, similar } from './embed.ts'
 import { apply, human, rowsOf } from './db.ts'
 import { db } from './live_db.ts'
@@ -86,7 +86,7 @@ let NO_PROJECT = 'no-project'
 // a pure function of (graph, query, scope, seen). Classification and scoping
 // read one batched rowsOf() over the ranked head, never a per-candidate probe.
 export let recallFrom = (
-  db: DatabaseSync,
+  db: Sql,
   q: Float32Array,
   scope?: string,
   seen: Set<string> = new Set(),
@@ -120,7 +120,7 @@ export let recallFrom = (
 // and says so with silence, never an error — exactly how the dupe hint degrades.
 // The embedder is the one slow step, so it stays outside the pure core above.
 export let recall = async (
-  db: DatabaseSync,
+  db: Sql,
   text: string,
   scope?: string,
   seen: Set<string> = new Set(),

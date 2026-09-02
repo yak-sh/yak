@@ -7,7 +7,8 @@ import { editChange, parsePropPatch, patchHint } from './edit.ts'
 import { type Row, rows } from './client.ts'
 import type { Change } from './types.ts'
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, bound, open, snapshot } = await import('./db.ts')
+let { apply, bound, snapshot } = await import('./db.ts')
+let { open } = await import('./store/sqlite.ts')
 let { db } = await import('./live_db.ts')
 
 open()

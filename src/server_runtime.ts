@@ -25,7 +25,6 @@ import {
   depsOf,
   eager,
   epochOf,
-  file as graph,
   human,
   journalBy,
   journalOf,
@@ -43,6 +42,7 @@ import {
   touch,
   writerUrl,
 } from './db.ts'
+import { file as graph } from './store/sqlite.ts'
 import { db } from './live_db.ts'
 import { catchup } from './catchup.ts'
 import { published, withBackupLock } from './redaction.ts'

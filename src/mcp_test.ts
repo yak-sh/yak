@@ -34,19 +34,13 @@ import {
 import { type Mutation, mutationResult } from './mutation.ts'
 import { slow } from './testing.ts'
 import { backfillChanges } from './backfill.ts'
-import { DatabaseSync } from './sqlite.ts'
+import { DatabaseSync } from './store/sqlite.ts'
 import { workCandidates } from './work.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let {
-  apply,
-  depsOf,
-  journalOf,
-  mutate: applyMutation,
-  open,
-  snapshot,
-  touch,
-} = await import('./db.ts')
+let { apply, depsOf, journalOf, mutate: applyMutation, snapshot, touch } =
+  await import('./db.ts')
+let { open } = await import('./store/sqlite.ts')
 let { freshDb } = await import('./testdb.ts')
 let { append } = await import('./entries.ts')
 

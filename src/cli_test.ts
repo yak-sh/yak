@@ -1846,7 +1846,8 @@ slow(
   'task backfill reads local SQLite and writes only through /apply',
   async () => {
     let path = await Deno.makeTempFile({ suffix: '.db' })
-    let { apply, open } = await import('./db.ts')
+    let { apply } = await import('./db.ts')
+    let { open } = await import('./store/sqlite.ts')
     let db = open(path)
     let session = crypto.randomUUID(), task = crypto.randomUUID()
     apply(db, [
@@ -1925,7 +1926,8 @@ slow(
   async () => {
     let dir = await Deno.makeTempDir()
     let path = `${dir}/graph.db`
-    let { apply, human, open } = await import('./db.ts')
+    let { apply, human } = await import('./db.ts')
+    let { open } = await import('./store/sqlite.ts')
     let { record } = await import('./telemetry.ts')
     let db = open(path)
     let project = crypto.randomUUID(), item = crypto.randomUUID()

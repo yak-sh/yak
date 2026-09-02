@@ -2,7 +2,7 @@
 // entities, read one ordered partition, and lease one bounded runner action.
 // Model projection and tool execution live in runner.ts; process-backed JSONL
 // sessions stay in sessions.ts.
-import { DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 import { apply, entriesOf, entryOf, record } from './db.ts'
 import { type Trace, trace } from './effects.ts'
 import { checkpointValid, type EntryRow } from './replay.ts'
@@ -54,7 +54,7 @@ let forbidden = new Set(['entity', 'entry', 'lease', 'usage', 'imported'])
 // e.g. created(message) → auto-recall (T-17306). Callers ingesting history
 // (backfill, initial catch-up) ignore it and no effect fires.
 export let append = (
-  db: DatabaseSync,
+  db: Sql,
   session: string,
   specs: EntrySpec[],
   writer?: string | null,
@@ -88,7 +88,7 @@ export let append = (
 // mutable cursor row. Loaded once when a tailer starts so a re-drain skips
 // every line it already ingested in memory, appending only the gaps.
 export let importedLines = (
-  db: DatabaseSync,
+  db: Sql,
   session: string,
   source: string,
 ): Set<number> =>
@@ -104,7 +104,7 @@ export let importedLines = (
 // line (claude's tool_result references an earlier tool_use) can name the call
 // it answers even across a daemon restart, when the in-memory map was lost.
 export let callKeys = (
-  db: DatabaseSync,
+  db: Sql,
   session: string,
 ): Map<string, string> =>
   new Map(
@@ -123,7 +123,7 @@ export let callKeys = (
 // takes the whole log; standing maintenance takes only the current turn's tail
 // (from its generation edge, standingWindow — T-21829), keeping that hot write
 // path O(turn) instead of O(N) per turn edge.
-export let entriesFrom = (db: DatabaseSync, session: string, from: number) => {
+export let entriesFrom = (db: Sql, session: string, from: number) => {
   let all: ReturnType<typeof entriesOf> = []
   for (let after = from - 1;;) {
     let page = entriesOf(db, session, after, 5000)
@@ -134,7 +134,7 @@ export let entriesFrom = (db: DatabaseSync, session: string, from: number) => {
 }
 
 // UI and audit reads retain the complete immutable partition.
-export let readEntries = (db: DatabaseSync, session: string) =>
+export let readEntries = (db: Sql, session: string) =>
   entriesFrom(db, session, 1)
 
 // The seq boundary standingOf's verdict depends on (T-21829): the LAST
@@ -149,7 +149,7 @@ export let readEntries = (db: DatabaseSync, session: string) =>
 // the same `edge` internally. No generation yet → 1 (a short pre-turn log, read
 // whole). The tail-scan back to the last generation is itself bounded by one
 // turn (the runner appends generations, then that turn's tool loop after them).
-export let standingWindow = (db: DatabaseSync, session: string): number => {
+export let standingWindow = (db: Sql, session: string): number => {
   let row = db.prepare(
     `select coalesce(t.seq, e.seq) as edge
        from entry e
@@ -161,7 +161,7 @@ export let standingWindow = (db: DatabaseSync, session: string): number => {
   return row?.edge ?? 1
 }
 
-export let readEntry = (db: DatabaseSync, eid: string) => entryOf(db, eid)
+export let readEntry = (db: Sql, eid: string) => entryOf(db, eid)
 
 type CheckpointRow = {
   eid: string
@@ -173,7 +173,7 @@ type CheckpointRow = {
 }
 
 let checkpoint = (
-  db: DatabaseSync,
+  db: Sql,
   session: string,
   through: number,
   provider: string,
@@ -214,7 +214,7 @@ let checkpoint = (
 // checkpoint replaces everything before it; projection needs only that
 // checkpoint's source generation, the closed tail through generation.through,
 // and the generation row itself.
-export let readReplay = (db: DatabaseSync, generation: string) => {
+export let readReplay = (db: Sql, generation: string) => {
   let current = readEntry(db, generation)
   if (!current?.comps.generation) throw new Error('no generation entry')
   let provider = String(current.comps.generation.provider ?? '')
@@ -266,10 +266,10 @@ let readySql = `
 // Ready means no runner has attempted the operation. Expired leases are a
 // separate audit path because replaying an external side effect blindly is
 // less safe than surfacing an ambiguous outcome.
-export let readyEntries = (db: DatabaseSync, session: string) =>
+export let readyEntries = (db: Sql, session: string) =>
   db.prepare(readySql).all(session) as { eid: string; seq: number }[]
 
-export let expiredLeases = (db: DatabaseSync, at = new Date().toISOString()) =>
+export let expiredLeases = (db: Sql, at = new Date().toISOString()) =>
   db.prepare(
     `select lo.eid as eid, ${refEid('l.holder')} as holder, l.at, l.until,
             ${refEid('e.session')} as session, e.seq
@@ -279,7 +279,7 @@ export let expiredLeases = (db: DatabaseSync, at = new Date().toISOString()) =>
      where l.until <= ? order by l.until`,
   ).all(at) as (LeaseToken & { session: string; seq: number })[]
 
-let owns = (db: DatabaseSync, token: LeaseToken) =>
+let owns = (db: Sql, token: LeaseToken) =>
   db.prepare(
     `select 1 from lease where ${OWNED} and holder = ${idOf} and at = ?`,
   ).get(token.eid, token.holder, token.at)
@@ -287,7 +287,7 @@ let owns = (db: DatabaseSync, token: LeaseToken) =>
 // One absent lease wins. Reclaim is deliberate: the caller must first settle
 // the expired attempt as ambiguous or prove this operation idempotent.
 export let takeEntry = (
-  db: DatabaseSync,
+  db: Sql,
   eid: string,
   holder: string,
   ttl = 30_000,
@@ -340,7 +340,7 @@ export let takeEntry = (
 // repeat the caller's side effect. Reclaim only those classes under the
 // expired lease's full CAS; every other call remains ambiguous.
 export let reclaimEntry = (
-  db: DatabaseSync,
+  db: Sql,
   stale: LeaseToken,
   holder: string,
   ttl = 30_000,
@@ -409,7 +409,7 @@ export let reclaimEntry = (
 // is untouched) and refuses a cancelled one. undefined means the lease is gone
 // — the caller's heartbeat simply stops.
 export let renewEntry = (
-  db: DatabaseSync,
+  db: Sql,
   token: LeaseToken,
   ttl = 30_000,
   clock = () => new Date(),
@@ -443,7 +443,7 @@ let normalizedUsage = (value: UsageValue) => ({
   reasoning: Math.max(0, Math.trunc(value.reasoning)),
 })
 
-let runnerName = (db: DatabaseSync, eid: string) =>
+let runnerName = (db: Sql, eid: string) =>
   (db.prepare(`select name from runner where ${OWNED}`).get(eid) as {
     name: string
   }).name
@@ -451,7 +451,7 @@ let runnerName = (db: DatabaseSync, eid: string) =>
 // The provider returned and its output entries have already appended. Usage,
 // generation settlement, and lease release land together under the lease CAS.
 export let settleGeneration = (
-  db: DatabaseSync,
+  db: Sql,
   token: LeaseToken,
   value?: UsageValue,
   clock = () => new Date(),
@@ -524,7 +524,7 @@ export let settleGeneration = (
 // matching lease prevents a late provider/tool result from settling while
 // preserving the request that stopped it.
 export let cancelEntry = (
-  db: DatabaseSync,
+  db: Sql,
   token: LeaseToken,
 ): Change[] => {
   let change: Change = { eid: token.eid, name: 'lease', comp: null }
@@ -549,7 +549,7 @@ export let cancelEntry = (
 
 // A call is complete only after its correlated result entry exists. Removing
 // the lease is the only mutable fact; the call/result pair remains immutable.
-export let settleCall = (db: DatabaseSync, token: LeaseToken): Change[] => {
+export let settleCall = (db: Sql, token: LeaseToken): Change[] => {
   let change: Change = { eid: token.eid, name: 'lease', comp: null }
   db.exec('begin immediate')
   try {
@@ -574,7 +574,7 @@ export let settleCall = (db: DatabaseSync, token: LeaseToken): Change[] => {
 // Infrastructure failure is an outcome facet on the attempted entry. Error
 // text is caller-scrubbed; this boundary never accepts a provider credential.
 export let failEntry = (
-  db: DatabaseSync,
+  db: Sql,
   token: LeaseToken,
   message: string,
   clock = () => new Date(),

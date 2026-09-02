@@ -16,7 +16,7 @@
 // loses is the row's effects — at-most-once, the same contract effects.ts
 // documents, healed by the boot sweeps (relay()); broadcast loss heals itself
 // because every client reconnects through the same journal.
-import type { DatabaseSync } from './sqlite.ts'
+import type { Sql } from './store/sql.ts'
 import { cursorOf, type JournalRow, journalSince } from './db.ts'
 
 // PRAGMA data_version: bumped when ANOTHER connection commits, never by our
@@ -26,13 +26,13 @@ import { cursorOf, type JournalRow, journalSince } from './db.ts'
 // event. Doing that beside SQLite silently drops the connection's locks and
 // lets another process treat an idle connection as absent during WAL cleanup.
 // SQLite polling stays entirely inside the VFS that owns those locks.
-let version = (db: DatabaseSync): number =>
+let version = (db: Sql): number =>
   Number(
     (db.prepare('pragma data_version').get() as { data_version: number })
       .data_version,
   )
 
-export let catchup = (db: DatabaseSync, onRow: (r: JournalRow) => void) => {
+export let catchup = (db: Sql, onRow: (r: JournalRow) => void) => {
   // Boot starts AT the top: history is never replayed — a restart must not
   // re-fire yesterday's effects; the boot reconciliation sweeps own that gap.
   let cursor = cursorOf(db)

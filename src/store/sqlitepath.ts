@@ -1,9 +1,9 @@
 // The driver-path prelude, its own module so it can evaluate BEFORE
 // @db/sqlite in any module graph that needs the ordering statically — a
-// worker's graph refuses sqlite.ts's dynamic bare import ("not a
-// dependency"), so wsworker.ts imports this, then '@db/sqlite', then
-// sqlite.ts, and evaluation order (depth-first, declaration order) makes the
-// env var visible when the driver initializes. Linux uses the system library
+// worker's graph refuses a dynamic bare import ("not a dependency"), so
+// store/sqlite.ts imports this, then '@db/sqlite', and evaluation order
+// (depth-first, declaration order) makes the env var visible when the driver
+// initializes. Linux uses the system library
 // because @db/sqlite's bundled x86_64 library crashes during
 // sqlite3_initialize on Deno 2.9.
 let paths: Record<string, string> = {

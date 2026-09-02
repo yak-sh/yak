@@ -7,7 +7,7 @@ Deno.env.set('DB_PATH', ':memory:')
 let { apply } = await import('./db.ts')
 let { bareDb } = await import('./testdb.ts')
 let { assertEquals } = await import('@std/assert')
-let { DatabaseSync } = await import('./sqlite.ts')
+let { DatabaseSync } = await import('./store/sqlite.ts')
 import { type Change } from './types.ts'
 
 // Build the migrated snapshot once — setup, not the per-test 1ms work.
