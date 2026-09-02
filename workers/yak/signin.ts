@@ -65,11 +65,13 @@ let ask = async (store: Door, q: string) => {
 }
 
 // The whole entity goes, not just the component: a spent code leaves nothing
-// behind. The flat change is the wire's delete door until a bundle can wear
-// its own tombstone (T-32429), at which point this is one more bundle.
+// behind. `tombstone` is the bundle's spelling of death (T-32429), so this
+// is one more bundle like every other write here.
 let forget = (store: Door, eids: string[]) =>
   eids.length
-    ? apply(store, eids.map((eid) => ({ eid, name: 'entity', comp: null })))
+    ? apply(store, {
+      entities: eids.map((eid) => ({ entity: { eid }, tombstone: {} })),
+    })
     : Promise.resolve(null)
 
 // Every code standing for an address, newest first: `mint` clears the old

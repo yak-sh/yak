@@ -31,11 +31,11 @@ let past = () => new Date(Date.now() - 1).toISOString()
 let SECRET = 'a probe secret'
 let ME = 'me@yaks.app'
 
-// A batch that removes the entity, whatever door it went through.
+// A bundle that buries the entity: the tombstone spelling of death.
 let forgotten = (wrote: Record<string, unknown>[]) =>
   wrote.some((b) =>
-    Array.isArray(b) &&
-    b.some((c) => c.name == 'entity' && c.comp === null)
+    ((b as { entities?: { tombstone?: unknown }[] }).entities ?? [])
+      .some((e) => e.tombstone)
   )
 
 Deno.test('the live code opens, and is spent', async () => {
