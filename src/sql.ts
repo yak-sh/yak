@@ -18,6 +18,7 @@
 // spelling (`comp: ''`, which reads whichever component happens to carry the
 // column), and a substring too short for a useful index narrowing (see `grams`).
 import { isRef, propAt } from './props.ts'
+import { sentences } from './edge.ts'
 import {
   AGG,
   EDGES,
@@ -690,30 +691,29 @@ let revSql = (p: Pred, now: number): Sql | null => {
 }
 
 // The bounded traversal compiled: `.reaches[requires,<=3]=T-42` is a recursive
-// CTE that walks the dependency table BACKWARD from the target — each step reads
-// `d.child = <current>`, which is the `dependency_child` index (the reverse
-// endpoint's own index, db.ts depIndex), so the closure is a sequence of index
-// SEARCHES and never a scan of the edge table. The depth cap is the recursion's
-// own guard, so a cycle terminates by arithmetic rather than by SQLite's
-// dedupe alone. `depth > 0` excludes the target: reaching is at least one hop.
+// CTE that walks the sentence store BACKWARD from the target — each step reads
+// `d.child = <current>`, which is `edge_to` (the reverse endpoint's own index),
+// so the closure is a sequence of index SEARCHES and never a scan. The depth cap
+// is the recursion's own guard, so a cycle terminates by arithmetic rather than
+// by SQLite's dedupe alone. `depth > 0` excludes the target: reaching is at
+// least one hop.
 //
-// `+d.type` is not decoration. Both terms are indexable and the planner picks
-// ONE; on the live graph it picks `type` and builds an automatic index over the
-// whole edge table per step — a scan wearing an index's name — because the
-// stored ANALYZE stats for `dependency_child` are stale (they claim 205 rows per
-// child where the graph has 9). The `+` says which term this walk is ABOUT: the
-// endpoint, whose index makes every step a seek regardless of what stats say.
+// One nature, one branch (edge.ts sentences), so the type is no longer a term
+// the planner can prefer over the endpoint — which is what the old `+d.type`
+// existed to prevent, back when a stale ANALYZE made the type index look
+// cheaper than a seek.
 let reachSql = (p: Pred): Sql | null => {
   let r = p.reach
   if (!r || !p.value) return null
   return {
     sql: `"entity"."id" in (with recursive __reach(id, depth) as (` +
       ` select id, 0 from entity where eid = ?` +
-      ` union select d.parent, __reach.depth + 1 from dependency d` +
+      ` union select d.parent, __reach.depth + 1` +
+      ` from (${sentences(r.type)}) d` +
       ` join __reach on d.child = __reach.id` +
-      ` where __reach.depth < ? and +d.type = ?` +
+      ` where __reach.depth < ?` +
       `) select id from __reach where depth > 0)`,
-    params: [p.value, r.depth, r.type],
+    params: [p.value, r.depth],
   }
 }
 

@@ -9,6 +9,7 @@ import type {
   VerificationProjection,
   WorkProjection,
 } from './client.ts'
+import { sentences } from './edge.ts'
 import { leafOf, parseQuery, type Pred } from './query.ts'
 import { type Dep, idOf, settled, statusOf } from './types.ts'
 
@@ -162,9 +163,8 @@ export let workLineageSql = (seed: string) =>
        left join proposed on proposed.entity = current.id
        left join decided choice on choice.entity = current.id
        left join quarantined hidden on hidden.entity = current.id
-       join dependency indexed by dependency_child
+       join (${sentences('requires')}) dependency
          on dependency.child = current.id
-        and dependency.type = 'requires'
        join entity parent on parent.id = dependency.parent
        left join tombstone parent_dead on parent_dead.entity = parent.id
       where not (proposed.entity is not null and choice.entity is null)
@@ -227,7 +227,7 @@ export let workReadyWhereSql = (authorization: string) => `
           and coalesce(choice.verdict, '') != 'declined'
           and not exists (
             select 1
-              from dependency needed
+              from (${sentences('requires')}) needed
               left join entity endpoint on endpoint.id = needed.child
               left join tombstone endpoint_dead on endpoint_dead.entity = endpoint.id
               left join completed endpoint_completed
@@ -235,7 +235,6 @@ export let workReadyWhereSql = (authorization: string) => `
               left join cancelled endpoint_cancelled
                 on endpoint_cancelled.entity = endpoint.id
              where needed.parent = entity.id
-               and needed.type = 'requires'
                and (
                  endpoint.id is null
                  or endpoint_dead.entity is not null

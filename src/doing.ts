@@ -26,6 +26,7 @@
 // journaled row (apply() and record() both journal). That is what retires the
 // handler-internal-cast residue T-22496 documented.
 import { type Change } from './types.ts'
+import { sentences } from './edge.ts'
 import { db } from './live_db.ts'
 import { docs, on, relay } from './effects.ts'
 import { PENDING } from './deliver.ts'
@@ -560,9 +561,13 @@ export let wirePersonaSync = (
       e && store.prepare(
         `select 1 from persona
            where entity = (select id from entity where eid = :e)
-         union select 1 from dependency d
-           join persona p on p.entity = d.parent
-           where d.child = (select id from entity where eid = :e)`,
+         union select 1 from (${
+          sentences(
+            undefined,
+            'g."to" = (select id from entity where eid = :e)',
+          )
+        }) d
+           join persona p on p.entity = d.parent`,
       ).get({ e })
     )
   on('persona', {

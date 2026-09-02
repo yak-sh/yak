@@ -1115,7 +1115,9 @@ Deno.test('lane membership queries compile to indexed component scans', () => {
     ...built.params,
   ) as { detail: string }[]
   assertEquals(plan.some((row) => row.detail == 'SCAN entity'), false)
-  assert(plan.some((row) => row.detail.includes('dependency_child')))
+  // The lineage walk steps by the reverse endpoint's own index — `edge_to`
+  // now that a sentence is an edge entity, where it was `dependency_child`.
+  assert(plan.some((row) => row.detail.includes('edge_to')))
   let path = buildWorkSql(
     w.db,
     `${workFilters('build').join('&')}&.task.project.doc.title=Task Graph`,

@@ -11,6 +11,7 @@ let { historicalPrompts, landBackfill, readBackfill } = await import(
 )
 let { append } = await import('./entries.ts')
 let { graph } = await import('./reload.ts')
+let { edgeEid } = await import('./edge.ts')
 
 let uid = () => crypto.randomUUID()
 let idOf = `(select id from entity where eid = ?)`
@@ -30,10 +31,16 @@ Deno.test('readBackfill scans SQLite while landBackfill owns no write path', asy
   ])
   apply(db, [{ eid: task, name: 'claim', comp: { session } }])
   apply(db, [{ eid: task, name: 'claim', comp: null }])
+  // The graph a claim left before the `worked` edge existed at all: the row
+  // AND the sentence gone, raw, with no tombstone to say one ever stood —
+  // which is the only state historicalWorked has anything to find.
   db.prepare(`
     delete from dependency
     where parent = ${idOf} and type = 'worked' and child = ${idOf}
   `).run(session, task)
+  let sentence = edgeEid(session, 'worked', task)
+  db.prepare(`delete from edge where entity = ${idOf}`).run(sentence)
+  db.prepare(`delete from worked where entity = ${idOf}`).run(sentence)
   db.close()
 
   let pending = readBackfill(path, 'worked')

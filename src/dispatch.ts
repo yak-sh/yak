@@ -9,6 +9,7 @@
 // A sweep like the others (scribe.ts is the sibling) — graduates to a
 // `system` entity under T-3906.
 import { apply, depsOf, settingValue } from './db.ts'
+import { sentences } from './edge.ts'
 import { db } from './live_db.ts'
 import { commitEffects } from './effects.ts'
 import { type Change, type Dep, statusOf } from './types.ts'
@@ -417,10 +418,9 @@ export let dispatchSweep = async (
     let sessions = evalGraph(db, '.kind=session').hits
     let wants = db.prepare(
       `select p.eid as parent, d.type as type, c.eid as child
-       from dependency d
+       from (${sentences('wants')}) d
        join entity p on p.id = d.parent
-       join entity c on c.id = d.child
-       where d.type = 'wants'`,
+       join entity c on c.id = d.child`,
     ).all() as Dep[]
     // Validate endpoints before expanding a neighborhood. In particular, a
     // project wearing a stale wants edge must not make its unrelated reads

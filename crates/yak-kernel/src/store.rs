@@ -1081,6 +1081,13 @@ impl Store {
             if !self.has_table(name) {
                 continue;
             }
+            // An edge's endpoints are not a reference like any other: the
+            // sentence is reported by its VERB, once, beside the deps layer.
+            // Counting `edge.from`/`edge.to` here too would answer every stored
+            // edge twice, in a spelling no client has ever been told (T-23824).
+            if name == "edge" {
+                continue;
+            }
             for (col, t) in v.readable(name) {
                 if !t.is_ref() {
                     continue;

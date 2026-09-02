@@ -181,7 +181,7 @@
   },
   {
     "kind": "exec",
-    "sql": "create table if not exists \"edge\" (\n    entity integer primary key references entity(id),\n    \"from\" integer references entity(id),\n    \"to\" integer references entity(id)\n  );"
+    "sql": "create table if not exists \"edge\" (\n    entity integer primary key references entity(id),\n    \"from\" integer references entity(id),\n    \"to\" integer references entity(id),\n    \"ord\" real\n  );"
   },
   {
     "kind": "exec",
@@ -712,6 +712,12 @@
     "table": "edge",
     "col": "to",
     "sql": "alter table edge add column \"to\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "edge",
+    "col": "ord",
+    "sql": "alter table edge add column \"ord\" real"
   },
   {
     "kind": "addColumn",

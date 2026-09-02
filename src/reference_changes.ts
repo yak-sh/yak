@@ -4,6 +4,7 @@
 import type { Sql } from './store/sql.ts'
 import { human, resolveId } from './db.ts'
 import { entityId, normalize } from './url.ts'
+import { sentences } from './edge.ts'
 import { type Change } from './types.ts'
 
 let idOf = `(select id from entity where eid = ?)`
@@ -57,8 +58,9 @@ export let referencedChanges = (
   if (!targets.size) return []
   let worn = new Set(
     (db.prepare(
-      `select ${refEid('d.child')} as child from dependency d
-        where d.parent = ${idOf} and d.type = 'referenced'`,
+      `select ${refEid('d.child')} as child
+         from (${sentences('referenced')}) d
+        where d.parent = ${idOf}`,
     ).all(eid) as { child: string }[]).map((r) => r.child),
   )
   return [...targets].filter((t) => !worn.has(t)).map((child): Change => ({

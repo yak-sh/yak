@@ -15,6 +15,7 @@
 // handler, and the handler re-reads the graph, so it is idempotent: dedup and
 // the tri-state recovery check hold whoever calls it.
 import { apply, human, locate, readComp } from './db.ts'
+import { sentences } from './edge.ts'
 import { db } from './live_db.ts'
 import { type Change, kindOf, sessionActive } from './types.ts'
 import { spawnChanges } from './client.ts'
@@ -488,6 +489,7 @@ export let fileBug =
 // task yet points at (via the about edge every filing lands). Idempotent to
 // re-drive — the handler dedups by key regardless — so this only spares the
 // already-ticketed from a needless re-check.
-export let HEAL_PENDING =
-  `not exists (select 1 from dependency d join bug b on b.entity = d.parent
-     where d.type = 'about' and d.child = exception.entity)`
+export let HEAL_PENDING = `not exists (select 1 from (${
+  sentences('about')
+}) d join bug b on b.entity = d.parent
+     where d.child = exception.entity)`

@@ -4,6 +4,7 @@
 // supersedes authored graph data. SERVER-ONLY (imports db).
 import { createHash } from 'node:crypto'
 import { apply, human } from './db.ts'
+import { sentences } from './edge.ts'
 import { db } from './live_db.ts'
 import { commitEffects } from './effects.ts'
 import { FLOOR, similar, stored, textOf } from './embed.ts'
@@ -94,8 +95,8 @@ let memories = (project: string): MemoryRow[] =>
       )))
         and not exists (select 1 from archived a where a.entity = m.entity)
         and not exists (
-          select 1 from dependency dep
-           where dep.child = m.entity and dep.type = 'supersedes'
+          select 1 from (${sentences('supersedes')}) dep
+           where dep.child = m.entity
         )`,
   ).all(project, Number(fleet(project))) as MemoryRow[]
 

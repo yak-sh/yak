@@ -34,3 +34,52 @@ export let typeOf: Record<string, string> = Object.fromEntries(
   Object.entries(natureOf).map(([t, n]) => [n, t]),
 )
 export let natures = Object.values(natureOf)
+
+// The sentence store as SQL, read from the edge ENTITIES (T-23824). `edge`
+// names the two ends and its listing order; the nature comp names the verb. The
+// columns are exactly what `dependency` had — parent, type, child, ord — so
+// every reader keeps the shape it has always spoken and no client learns a new
+// word. `type` is the WIRE's spelling (`referenced`, never `references`): the
+// read shape is what it was. The nature list is the vocabulary's, so a new
+// nature joins every reader here with no further edit.
+//
+// `only` is a WHERE over the EDGE's own columns (`g."from"`, `g."to"`,
+// `g.entity`), and it belongs INSIDE: a narrowing left to the caller's outer
+// query is applied only after the whole store is built, which measured 26ms
+// against 1.4ms for one entity's edges on the live graph.
+//
+// Three shapes, because sqlite answers them differently:
+//   - a NAMED nature is its own table, so the join IS the type test — no union,
+//     and no `+d.type` trick needed to stop the planner preferring the type
+//     over the endpoint it should be seeking.
+//   - NARROWED and untyped: seek `edge` once and ask each nature table for the
+//     verb — twelve primary-key probes over the few rows found (0.2ms).
+//   - WHOLE and untyped: one branch per nature, unioned, so each nature table
+//     is walked once (56ms) instead of 125k rows being probed twelve times
+//     over (265ms).
+export let sentences = (type?: string, only = '') => {
+  let head = (verb: string) =>
+    `select g."from" as parent, ${verb} as type,` +
+    ` g."to" as child, g.ord as ord from edge g`
+  let where = only ? ` where ${only}` : ''
+  if (type) {
+    return `${head(`'${type}'`)}` +
+      ` join "${natureOf[type]}" n on n.entity = g.entity${where}`
+  }
+  if (!only) {
+    return natures.map((n) =>
+      `${head(`'${typeOf[n]}'`)} join "${n}" n on n.entity = g.entity`
+    ).join(' union all ')
+  }
+  // An `edge` row always wears a nature — every door writes both or neither —
+  // so a null verb is an anomaly, and it leaves here rather than reaching a
+  // reader as a sentence with no word in the middle.
+  let verb = `(case ${
+    natures.map((n) =>
+      `when exists (select 1 from "${n}" x where x.entity = g.entity)` +
+      ` then '${typeOf[n]}'`
+    ).join(' ')
+  } end)`
+  return `select parent, type, child, ord from (${head(verb)}${where})` +
+    ` where type is not null`
+}

@@ -416,6 +416,7 @@ pub(crate) fn baked() -> Vocab {
         ("edge".into(), vec![
             ("from".into(), PropType::Eid("entity".into())),
             ("to".into(), PropType::Eid("entity".into())),
+            ("ord".into(), PropType::Number),
         ]),
         ("requires".into(), vec![]),
         ("contains".into(), vec![]),

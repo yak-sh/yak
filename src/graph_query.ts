@@ -64,6 +64,7 @@ import {
   whereSome,
   windowed,
 } from './sql.ts'
+import { sentences } from './edge.ts'
 import { hasSources } from './source.ts'
 import {
   AGG,
@@ -937,7 +938,7 @@ export let workBlockers = (
                 partition by dependency.parent
                 order by dependency.ord, child.num
               ) as position
-         from dependency
+         from (${sentences('requires')}) dependency
          join entity parent on parent.id = dependency.parent
          join entity child on child.id = dependency.child
          left join completed on completed.entity = child.id
@@ -945,7 +946,6 @@ export let workBlockers = (
          left join quarantined on quarantined.entity = child.id
          left join tombstone child_dead on child_dead.entity = child.id
         where parent.eid in (${marks})
-          and dependency.type = 'requires'
           and completed.entity is null
           and cancelled.entity is null
           and quarantined.entity is null

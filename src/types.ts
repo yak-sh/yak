@@ -561,6 +561,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   edge: {
     from: { eid: 'entity', death: 'cascade' },
     to: { eid: 'entity', death: 'cascade' },
+    ord: 'number',
   },
   requires: {},
   contains: {},

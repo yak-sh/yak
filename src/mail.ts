@@ -13,6 +13,7 @@
 // an addressed project's tasks — the graph's replacement for holdco's
 // delivery.js. SERVER-ONLY (imports db).
 import { apply, human, readComp } from './db.ts'
+import { sentences } from './edge.ts'
 import { db } from './live_db.ts'
 import { delivered, errored, settled, toOf } from './deliver.ts'
 import { commitEffects } from './effects.ts'
@@ -387,8 +388,9 @@ export let fanout =
     if (String(actor?.by ?? '') == t.project) return
     if (
       db.prepare(`
-      select 1 from dependency d join mail s on s.entity = d.parent
-      where d.type = 'about' and d.child = ${idOf}
+      select 1 from (${sentences('about')}) d
+      join mail s on s.entity = d.parent
+      where d.child = ${idOf}
     `).get(eid)
     ) return
     let num = (db.prepare('select num from entity where eid = ?').get(
@@ -457,8 +459,9 @@ export let FANOUT_PENDING = `
     where cr.at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'))
   and
   not exists (
-    select 1 from dependency d join mail s on s.entity = d.parent
-    where d.type = 'about' and d.child = comment.entity)
+    select 1 from (${sentences('about')}) d
+    join mail s on s.entity = d.parent
+    where d.child = comment.entity)
   and
   not ${BORN_WITH_TARGET}
 `.trim()

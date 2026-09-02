@@ -7,6 +7,7 @@
 // entries lives in sql_test.ts; this proves the door on top of it.
 import { assertEquals, assertThrows } from '@std/assert'
 import { kindOf, uuid } from './types.ts'
+import { edgeEid } from './edge.ts'
 import {
   evalAgg,
   evalCapped as evalCappedDoor,
@@ -545,4 +546,26 @@ Deno.test('evalSub: exact for narrowing and aggregate queries, capped otherwise'
   // Aggregate: exact tally path, never capped (all opens counted).
   let agg = evalAgg(db, '.task!&.tally=task.status')
   assertEquals((agg?.values.get('open') ?? 0) >= 4, true)
+})
+
+// D-23820's spelling, answered by the ORDINARY dot-param grammar: an edge is an
+// entity, so `.edge.to=X` is a plain reference filter and `.<nature>!` a plain
+// presence one. No `.edges[...]`-style special case was needed for it — the
+// vocabulary already carries the words. `.edges[...]` stays as the SUGAR that
+// delivers triples beside a result set (T-23821 retires it).
+Deno.test('an edge answers the plain grammar: .edge.to=X & .<nature>!', () => {
+  let db = bareDb()
+  let p = uuid(), c = uuid()
+  apply(db, [
+    { eid: p, name: 'doc', comp: { title: 'parent' } },
+    { eid: c, name: 'doc', comp: { title: 'child' } },
+    { eid: p, name: 'dependency', comp: { type: 'requires', child: c } },
+  ])
+  let sentence = edgeEid(p, 'requires', c)
+  let eids = (q: string) => evalGraph(db, q).hits.map((r) => r.eid)
+  assertEquals(eids(`.edge.to=${c}`), [sentence])
+  assertEquals(eids(`.edge.from=${p}`), [sentence])
+  assertEquals(eids(`.edge.to=${c}&.requires!`), [sentence])
+  // a consumer names the nature it knows; another's stays invisible
+  assertEquals(eids(`.edge.to=${c}&.contains!`), [])
 })

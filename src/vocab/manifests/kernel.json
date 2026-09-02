@@ -185,7 +185,8 @@
         "to": {
           "eid": "entity",
           "death": "cascade"
-        }
+        },
+        "ord": "number"
       }
     },
     "effect": {

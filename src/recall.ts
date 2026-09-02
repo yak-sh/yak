@@ -18,6 +18,7 @@ import { apply, human, rowsOf } from './db.ts'
 import { db } from './live_db.ts'
 import { commitEffects } from './effects.ts'
 import { belongs, type Scoped, scopeFor } from './client.ts'
+import { sentences } from './edge.ts'
 import { type Change } from './types.ts'
 
 export type Floater = { id: string; eid: string; title: string; score: number }
@@ -208,9 +209,10 @@ export let recallEntry =
     if (!text) return
     let seen = new Set(
       (db.prepare(
-        `select distinct ${refEid('d.child')} as child from dependency d
+        `select distinct ${refEid('d.child')} as child
+           from (${sentences('recalled')}) d
            join entry e on e.entity = d.parent
-          where e.session = ${idOf} and d.type = 'recalled'`,
+          where e.session = ${idOf}`,
       ).all(session) as { child: string }[]).map((r) => r.child),
     )
     let floaters = await recallFn(db, text, scopeOf(session), seen)

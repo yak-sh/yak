@@ -950,7 +950,8 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::Exec(r#"create table if not exists "edge" (
     entity integer primary key references entity(id),
     "from" integer references entity(id),
-    "to" integer references entity(id)
+    "to" integer references entity(id),
+    "ord" real
   );"#),
     SchemaOp::Exec(r#"create table if not exists "requires" (
     entity integer primary key references entity(id)
@@ -1066,6 +1067,7 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "fork", col: "from", sql: r#"alter table fork add column "from" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "edge", col: "from", sql: r#"alter table edge add column "from" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "edge", col: "to", sql: r#"alter table edge add column "to" integer references entity(id)"# },
+    SchemaOp::AddColumn { table: "edge", col: "ord", sql: r#"alter table edge add column "ord" real"# },
     SchemaOp::AddColumn { table: "task", col: "project", sql: r#"alter table "task" add column project integer references entity(id)"# },
     SchemaOp::AddColumn { table: "task", col: "assignee", sql: r#"alter table "task" add column assignee integer references entity(id)"# },
     SchemaOp::AddColumn { table: "task", col: "domain", sql: r#"alter table "task" add column domain text"# },

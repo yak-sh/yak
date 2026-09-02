@@ -1309,16 +1309,12 @@ slow(
         .json()) as { backlinks: { from: string; via: string }[] }[])[0]
         .backlinks.map((b) => b.via).sort()
     assertEquals(await backs(spec), ['reads'])
-    // A stored edge answers twice while both stores are live (T-23825): the
-    // `dependency` row as its type, and the edge ENTITY through `edge.to`.
-    // T-23821 retires the row and leaves the entity alone.
-    assertEquals(await backs(common), ['contains', 'edge.to'])
-    // the project is pointed at by both personas' home column — and by the
-    // `contains` edge entity it owns.
-    assertEquals(
-      await backs(proj),
-      ['edge.from', 'persona.home', 'persona.home'],
-    )
+    // One answer per stored edge (T-23824): the sentence is reported by its
+    // VERB, beside the deps layer, and its own endpoint columns are held out of
+    // the reference walk so nothing is counted twice.
+    assertEquals(await backs(common), ['contains'])
+    // the project is pointed at by both personas' home column
+    assertEquals(await backs(proj), ['persona.home', 'persona.home'])
   },
 )
 

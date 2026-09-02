@@ -64,7 +64,7 @@ import {
   validate as validateSetting,
 } from './config.ts'
 import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'
-import { edgeEid, natureOf, natures, typeOf } from './edge.ts'
+import { edgeEid, natureOf, natures, sentences, typeOf } from './edge.ts'
 import { indexesFor } from './index.ts'
 import {
   bodyCols,
@@ -2082,16 +2082,32 @@ export let backfillSpawn = (db: Sql) => {
 
 // Lineage rides an edge (T-16412, D-16328): `parent delegates child` is the
 // canonical form of session.parent; the column is its rolling alias. Boot
-// backfills the edge from every stored column value — insert or ignore
-// against the (parent, type, child) primary key, live parents only, so a
-// settled backfill re-fires as a true no-op.
+// backfills the edge from every stored column value, live parents only, and it
+// goes through apply() rather than straight into the row store — the sentence
+// entity is what readers read now, and a door that writes only one of the two
+// stores is a divergence (T-23824). The anti-join is what keeps the promise
+// `insert or ignore` used to: a settled backfill re-fires as a true no-op.
 export let backfillLineage = (db: Sql) => {
-  db.exec(`
-    insert or ignore into dependency (parent, type, child)
-    select s.parent, 'delegates', s.entity from session s
-    join entity p on p.id = s.parent
-    where s.parent is not null
-  `)
+  let rows = prep(
+    db,
+    `select p.eid as parent, e.eid as child
+       from session s
+       join entity p on p.id = s.parent
+       join entity e on e.id = s.entity
+       left join (${sentences('delegates')}) d
+         on d.parent = s.parent and d.child = s.entity
+      where s.parent is not null and d.parent is null`,
+  ).all() as { parent: string; child: string }[]
+  for (let i = 0; i < rows.length; i += 2000) {
+    apply(
+      db,
+      rows.slice(i, i + 2000).map(({ parent, child }): Change => ({
+        eid: parent,
+        name: 'dependency',
+        comp: { type: 'delegates', child },
+      })),
+    )
+  }
 }
 
 // Lift the remaining Session aspects without inventing facets for rows that
@@ -3773,7 +3789,8 @@ export let backfillEdges = (db: Sql) => {
     prep(db, `insert or ignore into server_meta (k, v) values (?, '1')`).run(k)
   let links = !marked('edge_backfill')
   let recalls = !marked('edge_backfill_recalled')
-  if (!links && !recalls) return 0
+  let orders = !marked('edge_backfill_ord')
+  if (!links && !recalls && !orders) return 0
   let began = Date.now()
   // The resume point: every edge entity that already stands. Small on the
   // first boot, the whole set on a resumed one.
@@ -3868,6 +3885,34 @@ export let backfillEdges = (db: Sql) => {
     }
     cleared = stale.length
     mark('edge_backfill_recalled')
+  }
+  if (orders) {
+    // `ord` moved from the row to the sentence (T-23824), so the listing
+    // orders the graph holds follow it. This pass PATCHES rather than skips —
+    // the sentences it names were minted by the first sweep — and it names the
+    // nature too, so an edge somehow missing is minted whole rather than
+    // refused for want of one. Five rows in the owner's graph carry an ord.
+    let rows = prep(
+      db,
+      `select f.eid as "from", d.type as type, t.eid as "to", d.ord as ord
+         from dependency d
+         join entity f on f.id = d.parent
+         join entity t on t.id = d.child
+        where d.ord is not null
+          and not exists (select 1 from tombstone x where x.entity = d.parent)
+          and not exists (select 1 from tombstone x where x.entity = d.child)`,
+    ).all() as { from: string; type: string; to: string; ord: number }[]
+    for (let r of rows) {
+      let nature = natureOf[r.type]
+      if (!nature) continue
+      let eid = edgeEid(r.from, nature, r.to)
+      batch.push(
+        { eid, name: 'edge', comp: { from: r.from, to: r.to, ord: r.ord } },
+        { eid, name: nature, comp: {} },
+      )
+    }
+    land()
+    mark('edge_backfill_ord')
   }
   if (minted || cleared) {
     console.warn(
@@ -4307,13 +4352,14 @@ let storedEdge = (
   return nature ? { ...row!, nature } : undefined
 }
 
-// Does the dependency store already hold this sentence?
+// The dependency store's row for this sentence, with its listing order —
+// undefined when the store does not hold it at all.
 let storedDep = (db: Sql, from: string, type: string, to: string) =>
-  !!prep(
+  prep(
     db,
-    `select 1 from dependency
+    `select ord from dependency
      where parent = ${spineId} and type = ? and child = ${spineId}`,
-  ).get(from, type, to)
+  ).get(from, type, to) as { ord: number | null } | undefined
 
 // Two edge stores, one write (T-23825). While `dependency` is still the live
 // edge store, every edge lands in BOTH homes so readers on either side agree:
@@ -4336,11 +4382,17 @@ let dualEdge = (db: Sql, changes: Change[]): Change[] => {
   let live = (eid: string) =>
     inBatch.has(eid) || (toId(db, eid) != null && !dead.get(eid))
   let out: Change[] = []
-  let link = (from: string, nature: string, to: string) => {
+  let link = (from: string, nature: string, to: string, ord?: unknown) => {
     if (!live(from) || !live(to)) return
     let eid = edgeEid(from, nature, to)
     out.push(
-      { eid, name: 'edge', comp: { from, to } },
+      // `ord` is PATCH-shaped on both sides: naming it sets the listing order,
+      // omitting it leaves the sentence's own untouched.
+      {
+        eid,
+        name: 'edge',
+        comp: ord === undefined ? { from, to } : { from, to, ord },
+      },
       // Every nature is a bare tag but `recalled`, which is an event: the edge
       // carries the recall's clock (D-23820, T-32471). Now IS the recalling
       // entry's birth — recall.ts mints the entry and its links in one batch —
@@ -4352,9 +4404,23 @@ let dualEdge = (db: Sql, changes: Change[]): Change[] => {
       },
     )
   }
+  // Unlinking is not a DEATH. The sentence is no longer said, and the same
+  // sentence may be said again tomorrow — so its COMPS go and the spine stays.
+  // An entity wearing nothing is invisible to every reader; deleting the entity
+  // instead would tombstone an eid that is DERIVED from the sentence, and a
+  // tombstone is forever, so `A requires B` could never be said again (T-23824,
+  // which is when a reader would first have seen the loss). An endpoint's death
+  // still reaps the whole entity through edge's own cascades: that sentence
+  // cannot become true again, because one of its ends is gone.
   let unlink = (from: string, nature: string, to: string) => {
     let eid = edgeEid(from, nature, to)
-    if (live(eid)) out.push({ eid, name: 'entity', comp: null })
+    if (!prep(db, `select 1 from edge where entity = ${spineId}`).get(eid)) {
+      return
+    }
+    out.push(
+      { eid, name: nature, comp: null },
+      { eid, name: 'edge', comp: null },
+    )
   }
   let batchNature = new Map<string, string>()
   for (let c of changes) {
@@ -4368,7 +4434,7 @@ let dualEdge = (db: Sql, changes: Change[]): Change[] => {
       if (!nature) continue
       let to = String(comp.child)
       if (comp.gone) unlink(eid, nature, to)
-      else link(eid, nature, to)
+      else link(eid, nature, to, 'ord' in comp ? comp.ord : undefined)
     } else if (name == 'claim' && comp?.session) {
       link(String(comp.session), 'worked', eid)
     } else if (name == 'edge' && comp) {
@@ -4393,11 +4459,19 @@ let dualEdge = (db: Sql, changes: Change[]): Change[] => {
       // persona's `contains` is the owner's move, refused for anyone else).
       // The backfill leans on this: it re-mints edge entities over rows that
       // are already there.
-      if (!storedDep(db, String(from), typeOf[nature], String(to))) {
+      let row = storedDep(db, String(from), typeOf[nature], String(to))
+      // A MOVED listing order is the one case where re-stating a stored
+      // sentence is a write and not a repeat — the echo patches the row's ord.
+      let ord = 'ord' in comp ? (comp.ord ?? null) : undefined
+      if (!row || (ord !== undefined && ord !== (row.ord ?? null))) {
         out.push({
           eid: String(from),
           name: 'dependency',
-          comp: { type: typeOf[nature], child: String(to) },
+          comp: {
+            type: typeOf[nature],
+            child: String(to),
+            ...(ord !== undefined ? { ord } : {}),
+          },
         })
       }
     } else if (name == 'entity' && comp == null) {
@@ -5457,14 +5531,13 @@ let workClaimRefusal = (db: Sql, eid: string) => {
     db,
     `select child.eid as eid, dead.entity is not null as missing,
             hidden.entity is not null as hidden
-       from dependency needed
+       from (${sentences('requires')}) needed
        left join entity child on child.id = needed.child
        left join tombstone dead on dead.entity = child.id
        left join quarantined hidden on hidden.entity = child.id
        left join completed on completed.entity = child.id
        left join cancelled on cancelled.entity = child.id
       where needed.parent = (select id from entity where eid = ?)
-        and needed.type = 'requires'
         and (
           child.id is null or dead.entity is not null or
           (completed.entity is null and cancelled.entity is null)
@@ -5846,19 +5919,21 @@ export let apply = (
           throw new Error(workClaimRefusal(db, eid))
         }
         // A lease is temporary; having done the work is not. The edge is the
-        // durable, indexed truth used by Session Tiles. Insert it in the same
-        // transaction as the claim and echo only its first landing so every
-        // live cache learns the relation without a fetch or a journal read.
+        // durable, indexed truth used by Session Tiles — the ENTITY, which
+        // dualEdge mints for this claim; the row lands beside it in the same
+        // transaction while both stores stand (T-23821 takes it). What decides
+        // the echo is therefore the SENTENCE's first landing, so every live
+        // cache learns the relation without a fetch or a journal read.
         let session = String(comp.session)
-        if (
-          prep(
-            db,
-            `
-            insert or ignore into dependency (parent, type, child)
-            values (?, 'worked', ?)
-          `,
-          ).run(toId(db, session), toId(db, eid)).changes
-        ) {
+        let sentence = edgeEid(session, 'worked', eid)
+        let first = !prep(db, `select 1 from edge where entity = ${spineId}`)
+          .get(sentence)
+        prep(
+          db,
+          `insert or ignore into dependency (parent, type, child)
+           values (?, 'worked', ?)`,
+        ).run(toId(db, session), toId(db, eid))
+        if (first) {
           touched.add(session)
           touched.add(eid)
           extra.push({
@@ -7718,9 +7793,8 @@ export let historicalWorked = (db: Sql): Change[] =>
     join session s on s.entity = se.id
     join entity te on te.id = jc.entity
     join task t on t.entity = te.id
-    left join dependency d
+    left join (${sentences('worked')}) d
       on d.parent = se.id
-     and d.type = 'worked'
      and d.child = te.id
     where jc.component = 'claim'
       and jc.operation = 'upsert'
@@ -8498,7 +8572,7 @@ export let snapshot = (db: Sql): Snapshot => {
   let deps = (prep(
     db,
     `select p.eid as parent, d.type as type, c.eid as child, d.ord as ord
-     from dependency d
+     from (${sentences()}) d
      join entity p on p.id = d.parent
      join entity c on c.id = d.child
      where p.eid not in (select eid from _omit)
@@ -8586,8 +8660,8 @@ export type ProjectReachability = {
 
 // One cycle-safe project-root closure over every semantic edge. UNION is the
 // visited set: detached cycles terminate and remain outside the closure. The
-// recursive step reads dependency's parent-leading primary key; edge type is
-// deliberately absent because no relation, including contains, is structural.
+// recursive step seeks `edge_from`; the nature is deliberately absent because
+// no relation, including contains, is structural.
 // The governed facet list is generated vocabulary shared with later readers and
 // write gates, so the corpus boundary cannot drift between doors.
 export let projectReachability = (db: Sql): ProjectReachability => {
@@ -8602,7 +8676,7 @@ export let projectReachability = (db: Sql): ProjectReachability => {
     `with recursive rooted(entity) as (
        select ${sqlName(ownerCol)} from project
        union
-       select d.child from dependency d join rooted r on r.entity = d.parent
+       select d.child from (${sentences()}) d join rooted r on r.entity = d.parent
      ), corpus(entity) as (
        ${corpus}
      )
@@ -9032,10 +9106,10 @@ let incident = (
   // matches nothing in silence; the cure it prescribes is resolving eid→id
   // BEFORE binding, which is what `myIds` does here. Filtering the projected
   // p.eid/c.eid instead spans two joined copies of `entity`, so no single
-  // index answers the disjunction and sqlite SCANS all of entity, seeking
-  // dependency once per row. Naming the edge table's own columns keeps both
-  // halves on one table, which sqlite answers as a MULTI-INDEX OR: the parent
-  // half seeks the primary key, the child half seeks dependency_child.
+  // index answers the disjunction and sqlite SCANS all of entity, seeking the
+  // edge once per row. Naming the sentence's own endpoint columns keeps both
+  // halves on one table, which sqlite answers as a MULTI-INDEX OR: each half
+  // seeks its own index (`edge_from`, `edge_to`).
   let myIds = `in (select e.id from entity e where e.eid ${mine})`
   // The screen rides OUTSIDE the disjunction — an endpoint is lazy or it isn't,
   // whichever side of the OR selected the row — so the multi-index OR above is
@@ -9044,10 +9118,10 @@ let incident = (
   let deps = (prep(
     db,
     `select p.eid as parent, d.type as type, c.eid as child, d.ord as ord
-      from dependency d
+      from (${sentences(undefined, `g."from" ${myIds} or g."to" ${myIds}`)}) d
       join entity p on p.id = d.parent
       join entity c on c.id = d.child
-      where (d.parent ${myIds} or d.child ${myIds})${live}
+      where 1${live}
       order by p.eid, d.type, d.ord, c.eid`,
   ).all() as Dep[]).map(shedOrd)
   return [
@@ -9101,11 +9175,15 @@ export let selectedDeps = (
           select e.id from entity e where e.eid in (select eid from hit)
         )
      ), picked(parent, type, child, ord) as (
-       select d.parent, d.type, d.child, d.ord from dependency d
-        where d.parent in (select id from endpoint) and d.type = ?
+       select d.parent, d.type, d.child, d.ord from (${
+      sentences(select.type)
+    }) d
+        where d.parent in (select id from endpoint)
        union
-       select d.parent, d.type, d.child, d.ord from dependency d
-        where d.child in (select id from endpoint) and d.type = ?
+       select d.parent, d.type, d.child, d.ord from (${
+      sentences(select.type)
+    }) d
+        where d.child in (select id from endpoint)
      )
      select distinct coalesce(pp.eid, p.eid) as parent,
             d.type as type,
@@ -9119,14 +9197,14 @@ export let selectedDeps = (
        left join ${table} vc on vc.entity = d.child
        left join entity pc on pc.id = vc.${col}
       order by parent, type, ord, child`,
-  ).all(select.type, select.type) as Dep[]
+  ).all() as Dep[]
   return rows.map(shedOrd)
 }
 
 // The bounded transitive closure `.reaches[type,<=N]=id` selects: the eids that
 // reach `target` through at most `depth` edges of one type, walking child→parent
-// so every step is a `dependency_child` seek (sql.ts reachSql documents why the
-// type term is held back with `+`). The target itself is excluded — reaching is
+// so every step is an `edge_to` seek (one nature, so the type is the branch and
+// not a term the planner can prefer). The target itself is excluded — reaching is
 // a path of at least one hop. This is the JS matcher's half of the same closure
 // the compiler emits, so a query mixing `.reaches` with a pred SQL declines
 // still answers, and answers identically.
@@ -9144,13 +9222,13 @@ export let reaching = (
     db,
     `with recursive __reach(id, depth) as (
        select id, 0 from entity where eid = ?
-       union select d.parent, __reach.depth + 1 from dependency d
+       union select d.parent, __reach.depth + 1 from (${sentences(type)}) d
          join __reach on d.child = __reach.id
-         where __reach.depth < ? and +d.type = ?
+         where __reach.depth < ?
      )
      select o.eid as eid from __reach join entity o on o.id = __reach.id
       where __reach.depth > 0`,
-  ).all(target, depth, type) as { eid: string }[]).map((r) => r.eid)
+  ).all(target, depth) as { eid: string }[]).map((r) => r.eid)
 
 // Who points AT these entities through a typed eid column — one keyed
 // statement per column in the readable vocabulary (`stamped` included, so an
@@ -9163,6 +9241,11 @@ export let refsOf = (db: Sql, eids: string[]) => {
   stage(db, eids)
   let out: { from: string; via: string; to: string }[] = []
   for (let [name, cols] of Object.entries(readable)) {
+    // An edge's endpoints are not a reference like any other: the sentence is
+    // reported by its VERB, once, beside the deps layer (graph_query layered).
+    // Counting `edge.from`/`edge.to` here too would answer every stored edge
+    // twice, in a spelling no client has ever been told (T-23824).
+    if (name == 'edge') continue
     for (let col of cols.filter((c) => isRef(name, c))) {
       // Owner and the reference are int ids; join the spine for both eids and
       // filter on the referenced eid (not the base int, C-19763).

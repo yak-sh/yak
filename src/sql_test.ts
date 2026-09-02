@@ -25,6 +25,7 @@ import {
 import { aggregateSql, select, where } from './sql.ts'
 import { textBlob, textMatches } from './db.ts'
 import { kindOf, kindOrder } from './types.ts'
+import { edgeEid, natureOf } from './edge.ts'
 import { isRef } from './props.ts'
 import { open } from './store/sqlite.ts'
 
@@ -210,6 +211,21 @@ let link = (parent: string, type: string, child: string) => {
        (select id from entity where eid = ?), ?,
        (select id from entity where eid = ?))`,
   ).run(parent, type, child)
+  // The SENTENCE entity beside the row, written just as straight: the compiler
+  // reads the edge store now (edge.ts sentences), and this fixture's whole
+  // point is to compare two readers of what is STORED.
+  let eid = edgeEid(parent, natureOf[type], child)
+  db.prepare('insert into entity (eid) values (?)').run(eid)
+  db.prepare(
+    `insert into edge (entity, "from", "to") values (
+       (select id from entity where eid = ?),
+       (select id from entity where eid = ?),
+       (select id from entity where eid = ?))`,
+  ).run(eid, parent, child)
+  db.prepare(
+    `insert into "${natureOf[type]}" (entity)
+     values ((select id from entity where eid = ?))`,
+  ).run(eid)
   EDGES.push({ parent, type, child })
 }
 let EDGES: { parent: string; type: string; child: string }[] = []

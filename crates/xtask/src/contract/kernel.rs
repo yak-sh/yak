@@ -391,6 +391,11 @@ struct Edge {
     from: Ref,
     #[col(eid = "entity", death = "cascade")]
     to: Ref,
+    // The sentence's listing order — `dependency.ord` in its new home
+    // (T-23824). Nature-agnostic like the ends themselves, and the reason it
+    // sits here rather than in a comp of its own: a persona orders its tiers
+    // by it, and five edges in the whole graph carry one. Null is the case.
+    ord: Number,
 }
 
 // The natures — one tag comp per relation, present tense (a live relationship,

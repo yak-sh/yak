@@ -3182,7 +3182,7 @@ Deno.test('edge: a dependency write mints the sentence entity, once', () => {
     comp: { type: 'referenced', child: c },
   }
   apply(db, [link])
-  assertEquals(comp(e, 'edge'), { eid: e, from: p, to: c })
+  assertEquals(comp(e, 'edge'), { eid: e, from: p, to: c, ord: null })
   assertEquals(comp(e, 'references'), { eid: e })
   assertEquals(comp(e, 'entity')?.num, null) // an edge is num-less
   let again = apply(db, [link])
@@ -3190,22 +3190,25 @@ Deno.test('edge: a dependency write mints the sentence entity, once', () => {
   assertEquals(edgeRows(p).n, 1)
 })
 
-Deno.test('edge: gone unlinks the entity by its eid, tombstoned', () => {
+Deno.test('edge: gone unsays the sentence, and it can be said again', () => {
   let [p, c] = pair()
   let e = edgeEid(p, 'requires', c)
-  apply(db, [
-    { eid: p, name: 'dependency', comp: { type: 'requires', child: c } },
-  ])
-  apply(db, [
-    {
-      eid: p,
-      name: 'dependency',
-      comp: { type: 'requires', child: c, gone: true },
-    },
-  ])
+  let link = {
+    eid: p,
+    name: 'dependency',
+    comp: { type: 'requires', child: c },
+  }
+  apply(db, [link])
+  apply(db, [{ ...link, comp: { ...link.comp, gone: true } }])
   assertEquals(comp(e, 'edge'), undefined)
-  assertEquals(buried(db, e), true)
+  assertEquals(comp(e, 'requires'), undefined)
   assertEquals(dep(p), [])
+  // NOT buried: the eid is the sentence, so a grave would make `p requires c`
+  // unsayable forever. The spine stays, wearing nothing.
+  assertEquals(buried(db, e), false)
+  apply(db, [link])
+  assertEquals(comp(e, 'edge'), { eid: e, from: p, to: c, ord: null })
+  assertEquals(dep(p), [['requires', c]])
 })
 
 Deno.test('edge: a native write lands the dependency row; its delete drops it', () => {
@@ -3279,7 +3282,7 @@ Deno.test('edge: a claim lands its worked edge in both stores', () => {
   ])
   apply(db, [{ eid: task, name: 'claim', comp: { session } }])
   let e = edgeEid(session, 'worked', task)
-  assertEquals(comp(e, 'edge'), { eid: e, from: session, to: task })
+  assertEquals(comp(e, 'edge'), { eid: e, from: session, to: task, ord: null })
   assertEquals(comp(e, 'worked'), { eid: e })
   assertEquals(dep(session), [['worked', task]])
 })
@@ -3297,7 +3300,7 @@ Deno.test('recalled: the sentence carries the clock, the entry the marker', () =
     { eid: rid, name: 'dependency', comp: { type: 'recalled', child: m } },
   ])
   let e = edgeEid(rid, 'recalled', m)
-  assertEquals(comp(e, 'edge'), { eid: e, from: rid, to: m })
+  assertEquals(comp(e, 'edge'), { eid: e, from: rid, to: m, ord: null })
   // The one nature that is an event: the recall of THIS memory, timed.
   assertMatch(String(comp(e, 'recalled')?.at), /^20\d\d-/)
   // The entry keeps only what it was born with — the source of the thinking.
@@ -3332,7 +3335,7 @@ Deno.test('backfill: stored rows become sentence entities, once per graph', () =
   apply(d, [{ eid: p, name: 'dependency', comp: { type: 'wants', child: c } }])
   assertEquals(backfillEdges(d), 2)
   let e = edgeEid(p, 'requires', c)
-  assertEquals(compOf(d, e, 'edge'), { eid: e, from: p, to: c })
+  assertEquals(compOf(d, e, 'edge'), { eid: e, from: p, to: c, ord: null })
   assertEquals(compOf(d, e, 'requires'), { eid: e })
   assertEquals(compOf(d, e, 'entity')?.num, null) // an edge is num-less
   assertEquals(compOf(d, edgeEid(voice, 'contains', m), 'contains'), {
@@ -3355,7 +3358,12 @@ Deno.test('backfill: a recalled row is a sentence timed by the entry', () => {
   legacy(d, e, 'recalled', m)
   assertEquals(backfillEdges(d), 1)
   let edge = edgeEid(e, 'recalled', m)
-  assertEquals(compOf(d, edge, 'edge'), { eid: edge, from: e, to: m })
+  assertEquals(compOf(d, edge, 'edge'), {
+    eid: edge,
+    from: e,
+    to: m,
+    ord: null,
+  })
   // The stored row offers no clock of its own, so the recall is dated by the
   // entry whose birth it was.
   assertEquals(compOf(d, edge, 'recalled')?.at, compOf(d, e, 'created')?.at)
@@ -4245,10 +4253,15 @@ Deno.test('historical worked edges materialize explicitly and idempotently', () 
   ])
   apply(db, [{ eid: task, name: 'claim', comp: { session } }])
   apply(db, [{ eid: task, name: 'claim', comp: null }])
+  // A graph that predates the `worked` edge: row and sentence both gone, raw,
+  // with no tombstone to say one ever stood.
   db.prepare(`
     delete from dependency
     where parent = ${idOf} and type = 'worked' and child = ${idOf}
   `).run(session, task)
+  let sentence = edgeEid(session, 'worked', task)
+  db.prepare(`delete from edge where entity = ${idOf}`).run(sentence)
+  db.prepare(`delete from worked where entity = ${idOf}`).run(sentence)
 
   let missing = historicalWorked(db)
   assertEquals(missing, [{
