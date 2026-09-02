@@ -64,7 +64,25 @@ let cases: Case[] = [
     ],
   },
   {
-    name: 'link and unlink an edge',
+    name: 'link an edge (row + sentence entity)',
+    batch: [
+      { eid: E1, name: 'dependency', comp: { type: 'requires', child: T } },
+    ],
+  },
+  {
+    // Unlinking is not a death: the comps go, the spine stays, so the same
+    // sentence can be said again — the next case says it.
+    name: 'unlink it (comps go, spine stays)',
+    batch: [
+      {
+        eid: E1,
+        name: 'dependency',
+        comp: { type: 'requires', child: T, gone: true },
+      },
+    ],
+  },
+  {
+    name: 'say it again (the derived eid is re-usable)',
     batch: [
       { eid: E1, name: 'dependency', comp: { type: 'requires', child: T } },
     ],
@@ -222,6 +240,12 @@ let TABLES = [
   'entity',
   'tombstone',
   'dependency',
+  // The SENTENCE store beside the row store: both doors must mint the same
+  // edge entity wearing the same nature, or a Rust-written edge is invisible
+  // to every TS reader (T-23824, T-32530).
+  'edge',
+  'requires',
+  'worked',
   'doc',
   'task',
   'project',

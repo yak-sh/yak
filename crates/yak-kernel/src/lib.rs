@@ -12,6 +12,8 @@ pub mod cache;
 pub mod candidates;
 pub mod change;
 #[cfg(feature = "native")]
+pub mod edge;
+#[cfg(feature = "native")]
 pub mod feed;
 #[cfg(feature = "native")]
 pub mod inbox;

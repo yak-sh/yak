@@ -32,6 +32,7 @@
 #![allow(clippy::result_large_err)]
 
 use crate::change::Change;
+use crate::edge::{edge_eid, nature_of, natures, type_of};
 use crate::store::{resolve, resolve_checked};
 use crate::vocab::{vocab, PropType, Vocab};
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
@@ -430,11 +431,15 @@ fn parse_value(conn: &Connection, t: &PropType, name: &str, v: &Value) -> Result
             }
             _ => Err(refuse(format!("{name} expects a priority"))),
         },
-        PropType::Bool => match v {
-            Value::Bool(b) => Ok(Value::from(*b)),
-            Value::Number(n) => Ok(Value::from(n.as_i64() == Some(1))),
-            Value::String(s) if s == "true" => Ok(Value::from(true)),
-            Value::String(s) if s == "false" => Ok(Value::from(false)),
+        // The canonical form is the NUMBER, as the TS value language spells it
+        // (props.ts `bool`): a bool column stores 1/0, and the journal's
+        // after-image records the value as PARSED — so a Rust-written
+        // `dependency.gone` journaled `true` where TS journaled `1`, and a
+        // catch-up client replaying the two saw different batches. Same
+        // spellings TS accepts, trimmed and case-folded.
+        PropType::Bool => match js_string(v).trim().to_lowercase().as_str() {
+            "true" | "1" | "yes" => Ok(Value::from(1)),
+            "false" | "0" | "no" => Ok(Value::from(0)),
             _ => Err(refuse(format!("{name} expects a bool"))),
         },
         PropType::Eid(_) => {
@@ -1406,6 +1411,230 @@ fn mirror_lineage(conn: &Connection, changes: Vec<Change>) -> Vec<Change> {
     out
 }
 
+// ---- two edge stores, one write (db.ts dualEdge, T-23825; ported T-32530) ----
+
+// An eid as a refusal names it (types.ts shortId) — by CHARACTER, so a short
+// or malformed id names itself instead of panicking mid-write.
+fn short_id(eid: &str) -> String {
+    eid.chars().take(8).collect()
+}
+
+// The sentence store's entity for one eid — its ends and its verb — or None
+// when the store does not hold it (db.ts storedEdge).
+fn stored_edge(conn: &Connection, v: &Vocab, eid: &str) -> Option<(String, String, String)> {
+    let (from, to): (String, String) = conn
+        .query_row(
+            "select f.eid, t.eid from edge e \
+             join entity f on f.id = e.\"from\" join entity t on t.id = e.\"to\" \
+             where e.entity = (select id from entity where eid = ?1)",
+            [eid],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()
+        .ok()
+        .flatten()?;
+    let nature = natures(v).into_iter().find(|n| {
+        conn.query_row(
+            &format!(
+                "select 1 from {} where entity = (select id from entity where eid = ?1)",
+                q(n)
+            ),
+            [eid],
+            |r| r.get::<_, i64>(0),
+        )
+        .optional()
+        .ok()
+        .flatten()
+        .is_some()
+    })?;
+    Some((from, nature, to))
+}
+
+// The dependency store's row for this sentence, with its listing order — None
+// when the store does not hold it at all, Some(None) when it holds it unordered
+// (db.ts storedDep).
+fn stored_dep(conn: &Connection, from: &str, word: &str, to: &str) -> Option<Option<f64>> {
+    conn.query_row(
+        "select ord from dependency \
+         where parent = (select id from entity where eid = ?1) and type = ?2 \
+           and child = (select id from entity where eid = ?3)",
+        rusqlite::params![from, word, to],
+        |r| r.get::<_, Option<f64>>(0),
+    )
+    .optional()
+    .ok()
+    .flatten()
+}
+
+// An endpoint a sentence may name: it stands in the graph, or it arrives in
+// this very batch.
+fn edge_live(conn: &Connection, in_batch: &HashSet<String>, eid: &str) -> bool {
+    in_batch.contains(eid) || (to_id(conn, eid).is_some() && !is_dead(conn, eid))
+}
+
+// Say the sentence: mint the edge ENTITY wearing its two ends and its nature.
+// `ord` is PATCH-shaped — None leaves the sentence's own listing order
+// untouched, Some sets it.
+fn link(
+    conn: &Connection,
+    in_batch: &HashSet<String>,
+    out: &mut Vec<Change>,
+    from: &str,
+    nature: &str,
+    to: &str,
+    ord: Option<Value>,
+) {
+    if !edge_live(conn, in_batch, from) || !edge_live(conn, in_batch, to) {
+        return;
+    }
+    let eid = edge_eid(from, nature, to);
+    let mut ends = Map::new();
+    ends.insert("from".into(), Value::from(from));
+    ends.insert("to".into(), Value::from(to));
+    if let Some(o) = ord {
+        ends.insert("ord".into(), o);
+    }
+    out.push(Change::new(&eid, "edge", Some(ends)));
+    // Every nature is a bare tag but `recalled`, which is an EVENT: the edge
+    // carries the recall's clock (D-23820, T-32471). Now IS the recalling
+    // entry's birth — recall.ts mints the entry and its links in one batch.
+    let mut tag = Map::new();
+    if nature == "recalled" {
+        tag.insert("at".into(), Value::from(now_iso()));
+    }
+    out.push(Change::new(&eid, nature, Some(tag)));
+}
+
+// Unlinking is not a DEATH. The sentence is no longer said, and the same
+// sentence may be said again tomorrow — so its COMPS go and the spine stays.
+// An entity wearing nothing is invisible to every reader; deleting the entity
+// instead would tombstone an eid DERIVED from the sentence, and a tombstone is
+// forever, so `A requires B` could never be said again. An endpoint's death
+// still reaps the whole entity through edge's own cascades.
+fn unlink(conn: &Connection, out: &mut Vec<Change>, from: &str, nature: &str, to: &str) {
+    let eid = edge_eid(from, nature, to);
+    let said = conn
+        .query_row(
+            "select 1 from edge where entity = (select id from entity where eid = ?1)",
+            [&eid],
+            |r| r.get::<_, i64>(0),
+        )
+        .optional()
+        .ok()
+        .flatten()
+        .is_some();
+    if !said {
+        return;
+    }
+    out.push(Change::new(&eid, nature, None));
+    out.push(Change::new(&eid, "edge", None));
+}
+
+// While `dependency` is still the live edge store, every edge lands in BOTH
+// homes so readers on either side agree: a `dependency{type, child}` write on P
+// also mints edgeEid(P, nature, child) wearing edge{from, to} + the nature tag,
+// and its `gone: true` unlink strips that entity's comps; a native edge write
+// (edge + nature on one eid) also lands the dependency row, and deleting an
+// edge entity drops it. A claim's `worked` edge rides the same way, since the
+// claim gate inserts its row directly. Only the batch's own changes translate,
+// never this pass's output, so the two directions cannot feed each other. The
+// mint mirrors the dependency rule's tolerance — an endpoint that neither
+// exists nor arrives in this batch drops the edge alone rather than refusing
+// the batch. The WHOLE pass goes when T-23821 retires the dependency table.
+fn dual_edge(conn: &Connection, v: &Vocab, changes: Vec<Change>) -> Result<Vec<Change>> {
+    let in_batch: HashSet<String> =
+        changes.iter().filter(|c| c.comp.is_some()).map(|c| c.eid.clone()).collect();
+    // The natures this batch itself declares, so a native edge write finds its
+    // verb with no read.
+    let batch_nature: HashMap<String, String> = changes
+        .iter()
+        .filter(|c| c.comp.is_some() && type_of(v, &c.name).is_some())
+        .map(|c| (c.eid.clone(), c.name.clone()))
+        .collect();
+    let mut out: Vec<Change> = vec![];
+    for Change { eid, name, comp, .. } in &changes {
+        if name == "dependency" {
+            let Some(comp) = comp else { continue };
+            // An unknown word is the dependency rule's refusal, not ours.
+            let word = comp.get("type").and_then(|t| t.as_str()).unwrap_or_default();
+            let Some(nature) = nature_of(v, word) else { continue };
+            let to = comp.get("child").and_then(|c| c.as_str()).unwrap_or_default();
+            if comp.get("gone").map(truthy).unwrap_or(false) {
+                unlink(conn, &mut out, eid, &nature, to);
+            } else {
+                link(conn, &in_batch, &mut out, eid, &nature, to, comp.get("ord").cloned());
+            }
+        } else if name == "claim" {
+            let session = comp
+                .as_ref()
+                .and_then(|m| m.get("session"))
+                .and_then(|s| s.as_str())
+                .filter(|s| !s.is_empty());
+            let Some(session) = session else { continue };
+            link(conn, &in_batch, &mut out, session, "worked", eid, None);
+        } else if name == "edge" {
+            let Some(comp) = comp else { continue };
+            // The endpoints ARE the identity, so an edge write carries both,
+            // and its eid must be the sentence's — a random uuid would be a
+            // second entity for the same edge, the duplicate the derivation
+            // exists to prevent (the blob-eid rule, in edge clothes).
+            let ends = (
+                comp.get("from").and_then(|x| x.as_str()),
+                comp.get("to").and_then(|x| x.as_str()),
+            );
+            let (Some(from), Some(to)) = ends else {
+                return Err(refuse(format!("edge {} needs both from and to", short_id(eid))));
+            };
+            let nature = batch_nature
+                .get(eid)
+                .cloned()
+                .or_else(|| stored_edge(conn, v, eid).map(|(_, n, _)| n))
+                .ok_or_else(|| refuse(format!("edge {} needs a nature", short_id(eid))))?;
+            if *eid != edge_eid(from, &nature, to) {
+                return Err(refuse(format!(
+                    "edge {} eid must be edgeEid(from, {nature}, to)",
+                    short_id(eid)
+                )));
+            }
+            let word = type_of(v, &nature).unwrap_or_else(|| nature.clone());
+            let row = stored_dep(conn, from, &word, to);
+            // An echo that would write nothing is not written: the row already
+            // stands, so re-stating it only journals a write that did not
+            // happen — and the dependency rule reads a repeat as a fresh link.
+            // A MOVED listing order is the one case where re-stating a stored
+            // sentence is a write and not a repeat.
+            let ord = comp.get("ord").cloned();
+            let moved = match (&ord, &row) {
+                (Some(want), Some(cur)) => *want != cur.map(js_number).unwrap_or(Value::Null),
+                _ => false,
+            };
+            if row.is_none() || moved {
+                let mut m = Map::new();
+                m.insert("type".into(), Value::from(word));
+                m.insert("child".into(), Value::from(to));
+                if let Some(o) = ord {
+                    m.insert("ord".into(), o);
+                }
+                out.push(Change::new(from, "dependency", Some(m)));
+            }
+        } else if name == "entity" && comp.is_none() {
+            if let Some((from, nature, to)) = stored_edge(conn, v, eid) {
+                let mut m = Map::new();
+                m.insert("type".into(), Value::from(type_of(v, &nature).unwrap_or(nature)));
+                m.insert("child".into(), Value::from(to));
+                m.insert("gone".into(), Value::from(true));
+                out.push(Change::new(&from, "dependency", Some(m)));
+            }
+        }
+    }
+    if out.is_empty() {
+        return Ok(changes);
+    }
+    let mut all = changes;
+    all.extend(out);
+    Ok(all)
+}
+
 // syncFacetAliases (db.ts:3409-3440): the POST-write half of the mirror. After
 // every component patch lands, each facet a batch TOUCHED has its FINAL row
 // (every facet column, stamped branch/base_revision/provider_session_id/
@@ -1858,16 +2087,32 @@ impl Gate for ClaimGate {
                 }
             }
         }
-        // The durable edge, echoed on first landing only.
+        // A lease is temporary; having done the work is not. The edge is the
+        // durable, indexed truth — the ENTITY, which dual_edge mints for this
+        // claim; the row lands beside it in the same transaction while both
+        // stores stand (T-23821 takes it). What decides the echo is therefore
+        // the SENTENCE's first landing, so every live cache learns the relation
+        // without a fetch or a journal read.
         let sid = to_id(cx.conn, session);
         let tid = to_id(cx.conn, &c.eid);
         if let (Some(sid), Some(tid)) = (sid, tid) {
-            let n = cx.conn.execute(
+            let sentence = edge_eid(session, "worked", &c.eid);
+            let first = cx
+                .conn
+                .query_row(
+                    "select 1 from edge where entity = \
+                     (select id from entity where eid = ?1)",
+                    [&sentence],
+                    |r| r.get::<_, i64>(0),
+                )
+                .optional()?
+                .is_none();
+            cx.conn.execute(
                 "insert or ignore into dependency (parent, type, child) \
                  values (?1, 'worked', ?2)",
                 [sid, tid],
             )?;
-            if n > 0 {
+            if first {
                 cx.touch.push(session.to_string());
                 cx.touch.push(c.eid.clone());
                 let mut m = Map::new();
@@ -2376,7 +2621,11 @@ fn spine(conn: &Connection, eid: &str) -> rusqlite::Result<bool> {
     Ok(conn.execute("insert or ignore into entity (eid) values (?1)", [eid])? > 0)
 }
 
-const UNNUMBERED: [&str; 2] = ["entry", "wake"];
+// `entry` (log lines) and `wake` (one per pace cycle) are never typed by a
+// human, so a num is pure overload. An `edge` (D-23820) is bulk the same way —
+// tens of thousands, named by what they join, never typed — so it stays out
+// too (db.ts unnumbered).
+const UNNUMBERED: [&str; 3] = ["entry", "wake", "edge"];
 
 fn mint_num(conn: &Connection, eid: &str) -> Result<()> {
     // A content hash is already the blob's durable human identity. Numbering
@@ -2871,6 +3120,10 @@ pub fn apply(
         changes = dual_facet(conn, v, changes, "worktree");
         changes = dual_facet(conn, v, changes, "runtime");
         changes = mirror_lineage(conn, changes);
+        // Every edge lands in BOTH stores (db.ts order: last of the transforms,
+        // so a claim on a session this batch mirrors finds its `worked`
+        // endpoint already here).
+        changes = dual_edge(conn, v, changes)?;
         changes = cas_bodies(conn, changes)?;
         // Mint spines in first-touch order before writing components.
         let mut killed: HashSet<String> = HashSet::new();

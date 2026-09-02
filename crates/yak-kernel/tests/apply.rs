@@ -6,6 +6,7 @@
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Map, Value};
 use yak_kernel::change::Change;
+use yak_kernel::edge::edge_eid;
 use yak_kernel::feed::{cursor_of, journal_since, row_changes, Feed};
 use yak_kernel::write::{
     apply, claim_work, default_gates, human, native_safe, ApplyError, ApplyOpts, ClaimWork,
@@ -247,6 +248,31 @@ const SCHEMA: &str = "
     key   text not null unique,
     value text
   );
+  -- The SENTENCE store beside `dependency` (D-23820): an edge is an entity
+  -- wearing its two ends and one nature comp. Every nature is here because
+  -- stored_edge asks each table which verb an eid wears.
+  create table edge (
+    entity integer primary key references entity(id),
+    \"from\" integer references entity(id),
+    \"to\"   integer references entity(id),
+    ord    real
+  );
+  create table requires   (entity integer primary key references entity(id));
+  create table contains   (entity integer primary key references entity(id));
+  create table reads      (entity integer primary key references entity(id));
+  create table about      (entity integer primary key references entity(id));
+  create table supervises (entity integer primary key references entity(id));
+  create table delegates  (entity integer primary key references entity(id));
+  create table supersedes (entity integer primary key references entity(id));
+  create table worked     (entity integer primary key references entity(id));
+  create table \"references\" (entity integer primary key references entity(id));
+  create table wants      (entity integer primary key references entity(id));
+  create table satisfies  (entity integer primary key references entity(id));
+  create table recalled (
+    entity integer primary key references entity(id),
+    source integer,
+    at     text
+  );
 ";
 
 fn store() -> WriteStore {
@@ -294,6 +320,12 @@ fn seed_session(s: &WriteStore, eid: &str, label: &str) {
             [eid, label],
         )
         .unwrap();
+}
+
+// A where-clause naming one entity by eid — the sentence store is keyed by the
+// spine id, so every edge assertion joins through it.
+fn of(eid: &str) -> String {
+    format!("entity = (select id from entity where eid = '{eid}')")
 }
 
 fn one<T: rusqlite::types::FromSql>(s: &WriteStore, sql: &str) -> T {
@@ -746,12 +778,32 @@ fn session_parent_links_delegates_edge() {
 fn edges_link_and_unlink() {
     let s = store();
     run(&s, vec![ch(A, "task", json!({})), ch(B, "task", json!({}))]);
+    // BOTH stores, one write (T-32530): the row lands and so does the sentence
+    // entity, content-addressed from `from|nature|to`.
+    let said = edge_eid(A, "requires", B);
     run(&s, vec![ch(A, "dependency", json!({"type": "requires", "child": B}))]);
     let n: i64 = one(&s, "select count(*) from dependency where type = 'requires'");
     assert_eq!(n, 1);
+    assert_eq!(one::<i64>(&s, &format!("select count(*) from edge where {}", of(&said))), 1);
+    assert_eq!(one::<i64>(&s, &format!("select count(*) from requires where {}", of(&said))), 1);
+    // an edge is bulk, never typed by a human, so its spine carries no num
+    assert_eq!(
+        s.conn
+            .query_row("select num from entity where eid = ?1", [&said], |r| r
+                .get::<_, Option<i64>>(0))
+            .unwrap(),
+        None,
+    );
+    // Unlinking is not a DEATH: the comps go, the spine stays, so the same
+    // sentence can be said again — a tombstone would forbid it forever.
     run(&s, vec![ch(A, "dependency", json!({"type": "requires", "child": B, "gone": true}))]);
     let n: i64 = one(&s, "select count(*) from dependency where type = 'requires'");
     assert_eq!(n, 0);
+    assert_eq!(one::<i64>(&s, &format!("select count(*) from edge where {}", of(&said))), 0);
+    assert_eq!(one::<i64>(&s, &format!("select count(*) from requires where {}", of(&said))), 0);
+    assert_eq!(one::<i64>(&s, "select count(*) from tombstone"), 0);
+    run(&s, vec![ch(A, "dependency", json!({"type": "requires", "child": B}))]);
+    assert_eq!(one::<i64>(&s, &format!("select count(*) from edge where {}", of(&said))), 1);
     // an unknown edge word refuses in normalize, like TS parseProp
     let err = apply(
         &s,
@@ -775,6 +827,10 @@ fn claim_lease_bounces_and_audits() {
     assert_eq!(claims, 1);
     let n: i64 = one(&s, "select count(*) from dependency where type = 'worked'");
     assert_eq!(n, 1);
+    // and the sentence beside it — the claim gate's row and dual_edge's entity
+    let said = edge_eid(B, "worked", A);
+    assert_eq!(one::<i64>(&s, &format!("select count(*) from edge where {}", of(&said))), 1);
+    assert_eq!(one::<i64>(&s, &format!("select count(*) from worked where {}", of(&said))), 1);
     // a second session's claim bounces the batch and mints a conflict audit
     let err = apply(
         &s,
@@ -953,8 +1009,12 @@ fn delete_cascades_by_death_word() {
     // releases, and the return carries the casualties + the release
     let out = run(&s, vec![ch(A, "entity", Value::Null)]);
     assert!(out.iter().any(|c| c.eid == B && c.name == "entity" && c.comp.is_none()));
+    // The task, the comment about it, and the `C worked A` SENTENCE the claim
+    // minted: an edge exists ABOUT both its ends, so an endpoint's death reaps
+    // the whole edge entity through edge.from/edge.to's cascade.
     let dead: i64 = one(&s, "select count(*) from tombstone");
-    assert_eq!(dead, 2);
+    assert_eq!(dead, 3);
+    assert_eq!(one::<i64>(&s, "select count(*) from edge"), 0);
     let comments: i64 = one(&s, "select count(*) from comment");
     assert_eq!(comments, 0);
     let claims: i64 = one(&s, "select count(*) from claim");
