@@ -37,21 +37,10 @@ export let iso = (at: Date = new Date()) => at.toISOString()
 // `at` shifted by `ms`, in the same iso spelling — the lease's expiry stamp.
 let plus = (at: string, ms: number) => iso(new Date(Date.parse(at) + ms))
 
-// Run `body` inside a short `begin immediate` — the write lock the claim takes
-// so two workers racing one pending row serialize, and the loser re-reads an
-// empty frontier. Rolls back only a transaction that actually began (a
-// SQLITE_BUSY `begin immediate` opens none), mirroring db.ts's rule.
-let immediate = <T>(db: Sql, body: () => T): T => {
-  db.exec('begin immediate')
-  try {
-    let value = body()
-    db.exec('commit')
-    return value
-  } catch (e) {
-    if (db.inTransaction) db.exec('rollback')
-    throw e
-  }
-}
+// Run `body` inside a short immediate transaction — the write lock the claim
+// takes so two workers racing one pending row serialize, and the loser re-reads
+// an empty frontier.
+let immediate = <T>(db: Sql, body: () => T): T => db.transaction(body, true)
 
 // Create a pending claim for one committed effect — the journal ROW that carried
 // the change plus the HANDLER key, its durable (jrow, handler) identity. Mints

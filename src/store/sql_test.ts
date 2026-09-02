@@ -5,11 +5,67 @@
 Deno.env.set('DB_PATH', ':memory:')
 import { assertEquals, assertThrows } from '@std/assert'
 import { slow } from '../testing.ts'
-import type { Can, Sql } from './sql.ts'
+import { type Can, present, type Sql, textPresent, WHITESPACE } from './sql.ts'
 let { DatabaseSync } = await import('./sqlite.ts')
 let { apply, migrate, plant, schemaDdl, search, snapshot } = await import(
   '../db.ts'
 )
+
+// The WHITESPACE list is String.prototype.trim's, proven over the whole BMP
+// (every Unicode space lives there); present() is that test as SQL, and the
+// file adapter agrees with textPresent() on the values that used to need the
+// text_present function.
+slow('WHITESPACE is String.prototype.trim over the BMP', () => {
+  let ws = new Set(WHITESPACE)
+  let off: string[] = []
+  for (let cp = 0; cp < 0x10000; cp++) {
+    if (cp >= 0xd800 && cp <= 0xdfff) continue
+    if ((String.fromCodePoint(cp).trim() == '') != ws.has(cp)) {
+      off.push(`U+${cp.toString(16)}`)
+    }
+  }
+  assertEquals(off, [])
+})
+
+Deno.test('present() in SQL is textPresent() in JS', () => {
+  let db = new DatabaseSync(':memory:')
+  let ask = db.prepare(`select ${present('?')} as p`)
+  for (let v of ['', ' \t\n', '\u00a0\ufeff\u3000', ' x ', '\u2028y', null]) {
+    assertEquals(!!ask.get(v)?.p, textPresent(v), JSON.stringify(v))
+  }
+  db.close()
+})
+
+// The transaction door's contract: a nested run is a savepoint whose failure
+// leaves the outer's writes; an outer failure leaves nothing and no open
+// transaction; the version round-trips.
+Deno.test('transaction(): nested failure rolls back alone, outer keeps', () => {
+  let db = new DatabaseSync(':memory:')
+  db.exec('create table t (n integer)')
+  let rows = () => db.prepare('select n from t').all()
+  db.transaction(() => {
+    db.exec('insert into t values (1)')
+    assertThrows(() =>
+      db.transaction(() => {
+        db.exec('insert into t values (2)')
+        throw new Error('inner')
+      })
+    )
+    assertEquals(db.inTransaction, true)
+  }, true)
+  assertEquals(rows(), [{ n: 1 }])
+  assertThrows(() =>
+    db.transaction(() => {
+      db.exec('insert into t values (3)')
+      throw new Error('outer')
+    })
+  )
+  assertEquals(db.inTransaction, false)
+  assertEquals(rows(), [{ n: 1 }])
+  db.version = 7
+  assertEquals(db.version, 7)
+  db.close()
+})
 
 // A backend is whatever answers Sql: delegate to the adapter, own the `can`.
 let backend = (can: Can): Sql => {
@@ -26,6 +82,13 @@ let backend = (can: Can): Sql => {
     get isOpen() {
       return db.isOpen
     },
+    get version() {
+      return db.version
+    },
+    set version(v: number) {
+      db.version = v
+    },
+    transaction: (fn, immediate) => db.transaction(fn, immediate),
     can,
     close: () => db.close(),
   }
@@ -37,7 +100,7 @@ let tables = (db: Sql) =>
   ).all() as { name: string }[]).map((r) => r.name)
 
 slow('a store without FTS5 migrates whole and its search says so', () => {
-  let db = migrate(backend({ fts: false }))
+  let db = migrate(backend({ fts: false, temp: true }))
   assertEquals(tables(db).some((t) => t.startsWith('doc_fts')), false)
   assertEquals(tables(db).includes('task'), true)
   assertThrows(() => search(db, 'anything'), Error, 'FTS5')
@@ -46,7 +109,7 @@ slow('a store without FTS5 migrates whole and its search says so', () => {
 
 slow('plant() from schemaDdl() serves the wire without a migration', () => {
   let ops = schemaDdl(new DatabaseSync(':memory:'))
-  let db = plant(backend({ fts: true }), ops)
+  let db = plant(backend({ fts: true, temp: true }), ops)
   let eid = crypto.randomUUID()
   apply(db, [
     { eid, name: 'doc', comp: { title: 'planted' } },

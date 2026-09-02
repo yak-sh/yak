@@ -43,6 +43,7 @@ import {
 } from './mutation.ts'
 import { type Trace } from './effects.ts'
 import { ancestorAt, normalizeLiterals } from './client.ts'
+import { env } from './http.ts'
 import { editHunks, isEditOp, isFieldOp, patchText } from './edit.ts'
 import { homeReads } from './persona.ts'
 import {
@@ -115,41 +116,11 @@ let prep = (db: Sql, sql: string): Statement => {
   return s
 }
 
-// Roll back only what actually began. A `begin`/`begin immediate` that fails
-// on SQLITE_BUSY opens no transaction, so an unconditional `rollback` in the
-// catch throws "no transaction is active" and MASKS the real BUSY that
-// sessionFault then bricks the session on. Every catch that rolls back a
-// begin it may not have reached calls this instead (T-19044).
-let rollback = (db: Sql) => {
-  if (db.inTransaction) db.exec('rollback')
-}
-
-let savepoint = 0
-// Migrations compose: the outer BEGIN IMMEDIATE is the SQLite-owned schema
-// lock, while older focused migrations keep their all-or-nothing boundary as
-// savepoints. No process-level lock participates in database correctness.
-let atomic = <T>(
-  db: Sql,
-  run: () => T,
-  immediate = false,
-): T => {
-  let nested = db.inTransaction
-  let name = `tasks_${++savepoint}`
-  db.exec(
-    nested ? `savepoint ${name}` : immediate ? 'begin immediate' : 'begin',
-  )
-  try {
-    let value = run()
-    db.exec(nested ? `release ${name}` : 'commit')
-    return value
-  } catch (e) {
-    if (nested) {
-      db.exec(`rollback to ${name}`)
-      db.exec(`release ${name}`)
-    } else rollback(db)
-    throw e
-  }
-}
+// Every transaction goes through the seam's one door, db.transaction(): the
+// file adapter spells it as BEGIN/savepoints, a hosted store as its runtime's
+// transaction call. Migrations compose: the outer immediate transaction is the
+// schema lock, while older focused migrations keep their all-or-nothing
+// boundary as nested runs. No process-level lock participates in correctness.
 
 // The edge table's check derives from the vocabulary (types.ts `edges`),
 // so a new verb there is a new verb here with no second edit. Named apart
@@ -1396,7 +1367,7 @@ export let migrateRefs = (db: Sql) => {
     nextBody: renameTeaching(r.body),
   })).filter((r) => r.nextTitle != r.title || r.nextBody != r.body)
   if (!renames.length && !staleBoards.length && !staleDocs.length) return
-  atomic(db, () => {
+  db.transaction(() => {
     for (let { table, old, col } of renames) {
       if (hasCol(db, table, col)) {
         throw new Error(
@@ -1450,7 +1421,7 @@ let ddlOf = (db: Sql, name: string) =>
   (prep(db, `select sql from sqlite_master where type = 'table' and name = ?`)
     .get(name) as { sql: string } | undefined)?.sql
 let rebuild = (db: Sql, name: string, ddl: string) => {
-  atomic(db, () => {
+  db.transaction(() => {
     db.exec(`alter table ${name} rename to ${name}_stale`)
     db.exec(ddl)
     // Copy BY NAME, over the columns common to both shapes — never `select *`.
@@ -1475,7 +1446,7 @@ let rebuild = (db: Sql, name: string, ddl: string) => {
 // retained spine already carries it. No-op once the table wears `entity`.
 export let migrateTombstone = (db: Sql) => {
   if (!hasCol(db, 'tombstone', 'eid')) return
-  atomic(db, () => {
+  db.transaction(() => {
     db.exec('alter table tombstone rename to tombstone_stale')
     db.exec(tombstoneDdl)
     db.exec(
@@ -1500,7 +1471,7 @@ export let migrateTombstone = (db: Sql) => {
 // `entity`.
 export let migrateEmbedding = (db: Sql) => {
   if (!hasCol(db, 'embedding', 'eid')) return
-  atomic(db, () => {
+  db.transaction(() => {
     for (let t of ['ai', 'au', 'ad']) {
       db.exec(`drop trigger if exists embedding_index_${t}`)
     }
@@ -1539,7 +1510,7 @@ export let migrateConflict = (db: Sql) => {
           and substr(c.${col}, instr(c.${col}, '-') + 1) not glob '*[^0-9]*'
           and e.num = cast(substr(c.${col}, instr(c.${col}, '-') + 1) as integer))
      )`
-  atomic(db, () => {
+  db.transaction(() => {
     db.exec('alter table conflict rename to conflict_stale')
     db.exec(conflictDdl)
     db.exec(
@@ -1578,7 +1549,7 @@ export let mendCalls = (db: Sql) => {
 // column, so it runs once and no-ops thereafter.
 export let mendApply = (db: Sql) => {
   if (!hasCol(db, 'apply', 'change')) return
-  atomic(db, () => {
+  db.transaction(() => {
     db.exec('update apply set change = json_array(json(change))')
     db.exec('alter table apply rename column change to changes')
   })
@@ -1957,7 +1928,7 @@ export let retireProposal = (db: Sql) => {
     "select 1 from board where instr(query, '.proposal=true') > 0 limit 1",
   ).get()
   if (!legacy && !stale) return
-  atomic(db, () => {
+  db.transaction(() => {
     if (legacy) {
       db.exec(`
         insert or ignore into proposed (entity, at, "by", via)
@@ -1997,7 +1968,7 @@ export let retireTaskStatus = (db: Sql) => {
       left join created c on c.entity = t.entity
       where t.status = '${status}'
     `)
-  atomic(db, () => {
+  db.transaction(() => {
     mint('done', 'completed')
     mint('cancelled', 'cancelled')
     db.exec('alter table task drop column status')
@@ -2027,7 +1998,7 @@ export let retireProjectRetiredAt = (db: Sql) => {
   let stale = boards.map((r) => ({ ...r, next: retireFilter(r.query) }))
     .filter((r) => r.next != r.query)
   if (!legacy && !stale.length) return
-  atomic(db, () => {
+  db.transaction(() => {
     if (legacy) {
       db.exec(`insert or ignore into archived (entity, at)
         select entity, retired_at from project where retired_at is not null`)
@@ -2046,7 +2017,7 @@ export let retireProjectRetiredAt = (db: Sql) => {
 // existing canonical row wins — including explicit null — on every open.
 export let backfillSpawn = (db: Sql) => {
   let cols = ['provider', 'model', 'effort', 'persona']
-  atomic(db, () => {
+  db.transaction(() => {
     db.exec(
       `insert or ignore into spawn (entity, provider, model, effort, persona)
          select entity, provider, model, effort, persona from session`,
@@ -2102,7 +2073,7 @@ export let backfillLineage = (db: Sql) => {
 // never carried them. An existing canonical row wins — including its nulls —
 // so an interrupted rolling deploy can never revive a cleared legacy alias.
 export let backfillSessionFacets = (db: Sql) => {
-  atomic(db, () => {
+  db.transaction(() => {
     db.exec(`
       insert or ignore into worktree (entity, cwd, branch, base_revision)
       select entity, cwd, branch, base_revision from session
@@ -2225,7 +2196,7 @@ export let migrateErrors = (db: Sql) => {
     session: `case when status in
       ('completed', 'failed', 'interrupted', 'lost') then finished_at end`,
   }
-  atomic(db, () => {
+  db.transaction(() => {
     for (let table of tables) {
       db.exec(
         `insert into error (entity, at, message)
@@ -2555,7 +2526,7 @@ export let migrateBoardsToProjects = (db: Sql) => {
     query: string | null
   }[]
   let now = new Date().toISOString()
-  atomic(db, () => {
+  db.transaction(() => {
     for (let { eid, query } of boards) {
       if (!query) continue
       let preds
@@ -2747,7 +2718,7 @@ export let healStored = (db: Sql) => {
     }
   }
   if (!fixes.length) return { changed: 0, invalid }
-  atomic(db, () => {
+  db.transaction(() => {
     for (let fix of fixes) {
       if (fix.table == 'doc' && fix.col == 'body') {
         prep(
@@ -3001,7 +2972,7 @@ let migrateToIdKeys = (db: Sql, fresh?: () => Sql) => {
     ).get(t) as { sql: string }).sql
   let reports: CopyReport[]
   try {
-    reports = atomic(db, () => {
+    reports = db.transaction(() => {
       // The spine first, so every reference below resolves against real ids.
       db.exec('alter table entity rename to __mig_entity')
       db.exec(ddlOf('entity'))
@@ -3076,8 +3047,7 @@ let migrateBlobEntities = (db: Sql) => {
       `cannot migrate ${invalid.n} blob row(s) without SHA-256 content identity`,
     )
   }
-  db.exec('savepoint blob_entities')
-  try {
+  db.transaction(() =>
     db.exec(`
       drop index if exists blob_sha;
       alter table blob rename to __legacy_blob;
@@ -3112,12 +3082,7 @@ let migrateBlobEntities = (db: Sql) => {
         group by e.id;
       drop table __legacy_blob;
     `)
-    db.exec('release blob_entities')
-  } catch (e) {
-    db.exec('rollback to blob_entities')
-    db.exec('release blob_entities')
-    throw e
-  }
+  )
 }
 
 // doc.body is a wire value and a storage reference. Move legacy inline text to
@@ -3131,8 +3096,7 @@ let migrateDocBodies = (db: Sql) => {
     `select lower(type) as type from pragma_table_info('doc') where name = 'body'`,
   ).get() as { type: string } | undefined
   if (col?.type == 'integer') return
-  db.exec('savepoint doc_bodies')
-  try {
+  db.transaction(() => {
     db.exec(`
       drop trigger if exists doc_ai;
       drop trigger if exists doc_ad;
@@ -3173,19 +3137,14 @@ let migrateDocBodies = (db: Sql) => {
       create view doc_value as
         select d.entity as rowid, d.entity, d.title, b.value as body
         from doc d join blob_text b on b.entity = d.body;
-      release doc_bodies;
     `)
-  } catch (e) {
-    db.exec('rollback to doc_bodies')
-    db.exec('release doc_bodies')
-    throw e
-  }
+  })
 }
 
 // The app-plane-only boot switch (TASKS_PLANE=app, D-22804 §8 strangler). When
 // set, this Deno process opens the graph read-only and forwards writes. This is
 // retained for disposable parity copies; live_db.ts refuses it on owner data.
-export let appPlane = () => Deno.env.get('TASKS_PLANE') == 'app'
+export let appPlane = () => env('TASKS_PLANE') == 'app'
 
 // The data-plane writer's HTTP base URL (TASKS_WRITER_URL) — the Deno→bridge
 // direction of the strangler write-proxy (T-22927), the mirror of the bridge's
@@ -3196,7 +3155,7 @@ export let appPlane = () => Deno.env.get('TASKS_PLANE') == 'app'
 // write straight back into the read-only process it came from. Read at the door,
 // not cached, so a probe can point a fresh reader at a fresh bridge per boot.
 export let writerUrl = () =>
-  Deno.env.get('TASKS_WRITER_URL')?.replace(/\/+$/, '') || undefined
+  env('TASKS_WRITER_URL')?.replace(/\/+$/, '') || undefined
 
 // Mint the durable sync epoch (T-20299) if absent — the cursor-lineage identity
 // a delta client checks (epochOf). This write runs once in transactional
@@ -3232,15 +3191,13 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
   if (legacy) db.exec('pragma foreign_keys = off')
   try {
     let reports: CopyReport[] = []
-    let migrated = atomic(db, () => {
+    let migrated = db.transaction(() => {
       // One SQLite transaction owns the schema transition. Concurrent openers
       // wait at BEGIN IMMEDIATE, then re-run the idempotent guards against the
       // schema the winner committed; no application sidecar lock is involved.
       // The version check belongs after that wait: reading it before BEGIN lets
       // an older waiter overwrite a newer migrator's version after it commits.
-      let stored = (db.prepare('pragma user_version').get() as {
-        user_version: number
-      }).user_version
+      let stored = db.version
       if (stored > schemaVersion) {
         throw new Error(
           `database schema version ${stored} is newer than this binary's ` +
@@ -3488,7 +3445,7 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
         `select 1 from sqlite_master where type = 'table' and name = 'send_request'`,
       ).get()
       if (sr) {
-        atomic(db, () => {
+        db.transaction(() => {
           db.exec('insert into mail select * from send_request')
           db.exec('drop table send_request')
         })
@@ -3656,9 +3613,7 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       // boot the row stands, so every later epochOf() is a pure SELECT.
       mintEpoch(db)
       initVector(db)
-      if (stored != schemaVersion) {
-        db.exec(`pragma user_version = ${schemaVersion}`)
-      }
+      if (stored != schemaVersion) db.version = schemaVersion
       return db
     }, true)
     // Announce cleanup only after the encompassing schema transaction commits;
@@ -3776,7 +3731,7 @@ export let plant = <D extends Sql>(db: D, ops: SchemaOp[]): D => {
   let wasCaching = caching
   caching = false
   try {
-    return atomic(db, () => {
+    return db.transaction(() => {
       for (let op of ops) {
         if (op.kind == 'addColumn') {
           if (!hasCol(db, op.table, op.col)) db.exec(op.sql)
@@ -3785,7 +3740,7 @@ export let plant = <D extends Sql>(db: D, ops: SchemaOp[]): D => {
         } else db.exec(op.sql)
       }
       mintEpoch(db)
-      db.exec(`pragma user_version = ${schemaVersion}`)
+      db.version = schemaVersion
       return db
     }, true)
   } finally {
@@ -4567,9 +4522,10 @@ let ownerActor = (db: Sql): string | null => {
   return people.length == 1 ? people[0].eid : null
 }
 
+// A hosted store has no filesystem (and no worktrees to place): nothing read.
 let read = (path: string) => {
   try {
-    return Deno.readTextFileSync(path)
+    return typeof Deno == 'undefined' ? '' : Deno.readTextFileSync(path)
   } catch {
     return ''
   }
@@ -5189,19 +5145,13 @@ export let apply = (
     removedLog.set(eid, [...(removedLog.get(eid) ?? []), name])
     t?.removed.set(eid, [...(t.removed.get(eid) ?? []), name])
   }
-  // A bounced claim is worth remembering: noted here mid-transaction as
-  // eids, written AFTER the rollback (an audit row can't ride the batch it
-  // condemns) as a conflict entity referencing the retained spine — a loser
-  // whose session was born in the rolled-back batch has none, and is null.
-  let bounced: { target: string; loser: string; holder: string } | null = null
   // This is a write transaction from birth. Taking its reserved lock before
   // the validation reads lets busy_timeout wait for a handoff peer; upgrading
   // a deferred read transaction can fail immediately to avoid a deadlock.
   // claimWork() takes this lock before resolving and synthesizing its batch;
   // apply owns the remainder and commits/rolls it back exactly as if it had
   // opened the transaction itself.
-  if (!workClaim) db.exec('begin immediate')
-  try {
+  let run = () => {
     // Claim release is the interruption event. Capture the holder before the
     // row can vanish — including through a session cascade — then derive the
     // durable actor stack from the transaction's final state below.
@@ -5341,49 +5291,49 @@ export let apply = (
         // Endpoints are int ids in storage; both spines exist (checked above).
         let pid = toId(db, eid)
         let cid = toId(db, String(comp.child))
-        db.exec('savepoint change')
+        // The narrowed comp, captured for the closure's benefit.
+        let edge = comp
         try {
-          if (comp.gone) {
-            prep(
-              db,
-              `
+          db.transaction(() => {
+            if (edge.gone) {
+              prep(
+                db,
+                `
               delete from dependency
               where parent = ? and type = ? and child = ?
             `,
-            ).run(pid, String(comp.type), cid)
-          } else if ('ord' in comp) {
-            // An edge carrying a listing order create-or-PATCHes its ord:
-            // re-linking the same sentence with a new ord sets it (an
-            // editable field, not a second edge). Absent ord (the else)
-            // leaves an existing edge's ord untouched.
-            prep(
-              db,
-              `
+              ).run(pid, String(edge.type), cid)
+            } else if ('ord' in edge) {
+              // An edge carrying a listing order create-or-PATCHes its ord:
+              // re-linking the same sentence with a new ord sets it (an
+              // editable field, not a second edge). Absent ord (the else)
+              // leaves an existing edge's ord untouched.
+              prep(
+                db,
+                `
               insert into dependency (parent, type, child, ord)
               values (?, ?, ?, ?)
               on conflict(parent, type, child) do update set ord = excluded.ord
             `,
-            ).run(
-              pid,
-              String(comp.type),
-              cid,
-              (comp.ord ?? null) as number | null,
-            )
-          } else {
-            prep(
-              db,
-              `
+              ).run(
+                pid,
+                String(edge.type),
+                cid,
+                (edge.ord ?? null) as number | null,
+              )
+            } else {
+              prep(
+                db,
+                `
               insert or ignore into dependency (parent, type, child)
               values (?, ?, ?)
             `,
-            ).run(pid, String(comp.type), cid)
-          }
-          db.exec('release change')
+              ).run(pid, String(edge.type), cid)
+            }
+          })
           touched.add(eid) // a moved edge is news at both ends
           touched.add(String(comp.child))
         } catch (e) {
-          db.exec('rollback to change')
-          db.exec('release change')
           console.warn(`sync: edge for ${eid} dropped —`, e)
         }
         continue
@@ -5462,18 +5412,16 @@ export let apply = (
         `,
         ).get(eid) as { session: string; id: string | null } | undefined
         if (cur && cur.session != comp.session) {
-          bounced = {
-            target: eid,
-            loser: String(comp.session),
-            holder: cur.session,
-          }
           // The holder is named by its session LABEL when it has one —
           // that's a name someone chose, not an eid; only the fallback
           // needs speaking.
-          throw new Error(
+          throw new Bounced(
             `${human(db, eid)} already claimed by ${
               cur.id ?? human(db, cur.session)
             }`,
+            eid,
+            String(comp.session),
+            cur.session,
           )
         }
         // A worker take is stricter than raw graph mutation. The collision
@@ -5861,65 +5809,65 @@ export let apply = (
       // batch: "applied N change(s)" means every accepted row landed.
       // Semantic no-ops (unknown comps, invalid edges, dead eids) were
       // decided above, before SQL.
-      db.exec('savepoint change')
-      try {
-        if (spine(db, eid).changes) minted.add(eid)
-        if (name == 'entry' && sent.length) {
-          let session = String(comp.session)
-          let sid = toId(db, session)
-          let { seq } = prep(
-            db,
-            `select coalesce(max(seq), 0) + 1 as seq from entry
+      db.transaction(() => {
+        try {
+          if (spine(db, eid).changes) minted.add(eid)
+          if (name == 'entry' && sent.length) {
+            let session = String(comp.session)
+            let sid = toId(db, session)
+            let { seq } = prep(
+              db,
+              `select coalesce(max(seq), 0) + 1 as seq from entry
              where session = ?`,
-          ).get(sid) as { seq: number }
-          // entry owner and session are int ids; the owner spine was minted
-          // above, the session must already exist for the entry to append.
-          prep(db, 'insert into entry (entity, session, seq) values (?, ?, ?)')
-            .run(toId(db, eid), sid, seq)
-          // A graph-native session has no log FILE to tail, so its summary
-          // is advanced here at the single door that assigns seq — same
-          // transaction, so entry.seq and session.latest_seq cannot drift.
-          // Not cast (like the JSONL tail, T-7063): it rides the snapshot's
-          // whole-row select, not a per-entry broadcast.
-          prep(db, 'update session set latest_seq = ? where entity = ?')
-            .run(seq, sid)
-          createdComps.add(`${name} ${eid}`)
-          t?.created.add(`${name} ${eid}`)
-          extra.push({ eid, name: 'entry', comp: { eid, seq } })
-        } else if (sent.length) {
-          prep(
-            db,
-            `insert into ${sqlName(name)} (entity${
-              sent.map((c) => `, ${sqlName(c)}`).join('')
-            })
-             values ((select id from entity where eid = ?)${
-              ', ?'.repeat(sent.length)
-            })`,
-          ).run(eid, ...vals)
-          createdComps.add(`${name} ${eid}`)
-          t?.created.add(`${name} ${eid}`)
-        } else {
-          // A bare {} touch: create with defaults if possible, else no-op.
-          let made = prep(
-            db,
-            `insert or ignore into ${sqlName(name)} (entity)
-               values ((select id from entity where eid = ?))`,
-          )
-            .run(eid).changes
-          if (made) {
+            ).get(sid) as { seq: number }
+            // entry owner and session are int ids; the owner spine was minted
+            // above, the session must already exist for the entry to append.
+            prep(
+              db,
+              'insert into entry (entity, session, seq) values (?, ?, ?)',
+            )
+              .run(toId(db, eid), sid, seq)
+            // A graph-native session has no log FILE to tail, so its summary
+            // is advanced here at the single door that assigns seq — same
+            // transaction, so entry.seq and session.latest_seq cannot drift.
+            // Not cast (like the JSONL tail, T-7063): it rides the snapshot's
+            // whole-row select, not a per-entry broadcast.
+            prep(db, 'update session set latest_seq = ? where entity = ?')
+              .run(seq, sid)
             createdComps.add(`${name} ${eid}`)
             t?.created.add(`${name} ${eid}`)
+            extra.push({ eid, name: 'entry', comp: { eid, seq } })
+          } else if (sent.length) {
+            prep(
+              db,
+              `insert into ${sqlName(name)} (entity${
+                sent.map((c) => `, ${sqlName(c)}`).join('')
+              })
+             values ((select id from entity where eid = ?)${
+                ', ?'.repeat(sent.length)
+              })`,
+            ).run(eid, ...vals)
+            createdComps.add(`${name} ${eid}`)
+            t?.created.add(`${name} ${eid}`)
+          } else {
+            // A bare {} touch: create with defaults if possible, else no-op.
+            let made = prep(
+              db,
+              `insert or ignore into ${sqlName(name)} (entity)
+               values ((select id from entity where eid = ?))`,
+            )
+              .run(eid).changes
+            if (made) {
+              createdComps.add(`${name} ${eid}`)
+              t?.created.add(`${name} ${eid}`)
+            }
           }
+        } catch (e) {
+          // Decode BEFORE the rollback: FK diagnostics need the freshly
+          // minted spine so the entity's eid can't read as a false offender.
+          throw refused(db, name, eid, comp, e) ?? e // the batch rolls back
         }
-        db.exec('release change')
-      } catch (e) {
-        // Decode BEFORE the rollback: FK diagnostics need the freshly
-        // minted spine so the entity's eid can't read as a false offender.
-        let refusal = refused(db, name, eid, comp, e)
-        db.exec('rollback to change')
-        db.exec('release change')
-        throw refusal ?? e // the outer catch rolls the whole batch back
-      }
+      })
     }
     if (dropped.size) changes = changes.filter((c) => !dropped.has(c))
     // Canonical session facets are the read truth. Mirror their final state
@@ -6319,30 +6267,52 @@ export let apply = (
     } catch (e) {
       console.warn('journal skipped —', e)
     }
-    db.exec('commit')
     return [...changes, ...extra]
+  }
+  // claimWork() opened its own transaction around the synthesized batch; this
+  // run nests inside it as a savepoint and commits or rolls back with it.
+  try {
+    return db.transaction(run, true)
   } catch (e) {
-    rollback(db)
-    if (bounced) {
-      try {
-        db.exec('begin')
-        let ceid = crypto.randomUUID()
-        spine(db, ceid)
-        prep(
-          db,
-          `insert into conflict (entity, target, loser, holder)
-           values ((select id from entity where eid = ?), ?,
-                   (select id from entity where eid = ?),
-                   (select id from entity where eid = ?))`,
-        ).run(ceid, refId(db, bounced.target), bounced.loser, bounced.holder)
-        mintNum(db, ceid) // spine no longer numbers at birth (T-3684)
-        db.exec('commit')
-      } catch (audit) {
-        rollback(db)
-        console.warn('conflict audit failed —', audit) // never mask the claim error
-      }
-    }
+    auditBounce(db, e)
     throw e
+  }
+}
+
+// A bounced claim is worth remembering: the refusal carries the sides as
+// eids, and the audit is written AFTER the rollback (an audit row can't ride
+// the batch it condemns) as a conflict entity referencing the retained spine —
+// a loser whose session was born in the rolled-back batch has none, and is
+// null. Whoever owns the outermost transaction writes it: apply() itself, or
+// claimWork() around a nested apply(), once its own rollback has run.
+export class Bounced extends Error {
+  constructor(
+    message: string,
+    public target: string,
+    public loser: string,
+    public holder: string,
+  ) {
+    super(message)
+  }
+}
+
+let auditBounce = (db: Sql, e: unknown) => {
+  if (!(e instanceof Bounced) || db.inTransaction) return
+  try {
+    db.transaction(() => {
+      let ceid = crypto.randomUUID()
+      spine(db, ceid)
+      prep(
+        db,
+        `insert into conflict (entity, target, loser, holder)
+         values ((select id from entity where eid = ?), ?,
+                 (select id from entity where eid = ?),
+                 (select id from entity where eid = ?))`,
+      ).run(ceid, refId(db, e.target), e.loser, e.holder)
+      mintNum(db, ceid) // spine no longer numbers at birth (T-3684)
+    })
+  } catch (audit) {
+    console.warn('conflict audit failed —', audit) // never mask the claim error
   }
 }
 
@@ -6618,9 +6588,8 @@ export let redact = (
   id: string,
   selector: string,
   writer?: string | null,
-): RedactionResult => {
-  db.exec('begin immediate')
-  try {
+): RedactionResult =>
+  db.transaction(() => {
     let target = resolveId(db, id)
     let targetId = target &&
       (prep(db, 'select id from entity where eid = ?').get(target) as
@@ -6804,7 +6773,6 @@ export let redact = (
       created,
       ...(updated ? [updated] : []),
     ]
-    db.exec('commit')
     return {
       changes,
       audit,
@@ -6815,11 +6783,7 @@ export let redact = (
       replacements,
       firstSeen,
     }
-  } catch (e) {
-    rollback(db)
-    throw e
-  }
-}
+  }, true)
 
 // A single entity's history, newest first: the transactions that touched the
 // entity, each cut down to its changes -- a journal_change (entity, component)
@@ -7135,122 +7099,121 @@ let claimWork = (
   if (ask.cwd !== undefined && !ask.cwd.trim()) {
     throw new Error('claim_work cwd must not be empty')
   }
-  db.exec('begin immediate')
   try {
-    let target = resolveId(db, ask.target)
-    if (!target) throw new Error(`no entity: ${ask.target}`)
-    if (
-      !prep(
-        db,
-        `select 1 from task
+    return db.transaction(() => {
+      let target = resolveId(db, ask.target)
+      if (!target) throw new Error(`no entity: ${ask.target}`)
+      if (
+        !prep(
+          db,
+          `select 1 from task
        where entity = (select id from entity where eid = ?)`,
-      ).get(target)
-    ) {
-      throw new Error(`${human(db, target)} is not a task`)
-    }
-    let held = prep(
-      db,
-      `select holder.eid as session
+        ).get(target)
+      ) {
+        throw new Error(`${human(db, target)} is not a task`)
+      }
+      let held = prep(
+        db,
+        `select holder.eid as session
          from claim
          join entity holder on holder.id = claim.session
         where claim.entity = (select id from entity where eid = ?)`,
-    ).get(target) as { session: string } | undefined
-    // A session address may be its graph id (S-3/eid/alias), its stable
-    // session.id, or a pass-through Session owned by a registered source. A
-    // persisted graph address is authoritative; a source address graduates at
-    // its existing eid through apply() below instead of minting a lookalike.
-    let sessionAddress = resolveId(db, ask.session)
-    if (!sessionAddress && /^[A-Za-z]+-\d+$/.test(ask.session)) {
-      throw new Error(`no entity: ${ask.session}`)
-    }
-    let storedAddress = sessionAddress && prep(
-      db,
-      'select 1 from entity where eid = ?',
-    ).get(sessionAddress)
-    let session = sessionAddress
-      ? prep(
+      ).get(target) as { session: string } | undefined
+      // A session address may be its graph id (S-3/eid/alias), its stable
+      // session.id, or a pass-through Session owned by a registered source. A
+      // persisted graph address is authoritative; a source address graduates at
+      // its existing eid through apply() below instead of minting a lookalike.
+      let sessionAddress = resolveId(db, ask.session)
+      if (!sessionAddress && /^[A-Za-z]+-\d+$/.test(ask.session)) {
+        throw new Error(`no entity: ${ask.session}`)
+      }
+      let storedAddress = sessionAddress && prep(
         db,
-        `select owner.eid as eid, s.cwd, actor.eid as actor
+        'select 1 from entity where eid = ?',
+      ).get(sessionAddress)
+      let session = sessionAddress
+        ? prep(
+          db,
+          `select owner.eid as eid, s.cwd, actor.eid as actor
            from session s
            join entity owner on owner.id = s.entity
            left join entity actor on actor.id = s.actor
           where owner.eid = ?`,
-      ).get(sessionAddress) as
-        | { eid: string; cwd: string | null; actor: string | null }
-        | undefined
-      : undefined
-    if (sessionAddress && storedAddress && !session) {
-      throw new Error(`${human(db, sessionAddress)} is not a session`)
-    }
-    if (!session) {
-      session = prep(
-        db,
-        `select owner.eid as eid, s.cwd, actor.eid as actor
+        ).get(sessionAddress) as
+          | { eid: string; cwd: string | null; actor: string | null }
+          | undefined
+        : undefined
+      if (sessionAddress && storedAddress && !session) {
+        throw new Error(`${human(db, sessionAddress)} is not a session`)
+      }
+      if (!session) {
+        session = prep(
+          db,
+          `select owner.eid as eid, s.cwd, actor.eid as actor
            from session s
            join entity owner on owner.id = s.entity
            left join entity actor on actor.id = s.actor
           where s.id = ?`,
-      ).get(ask.session) as
-        | { eid: string; cwd: string | null; actor: string | null }
-        | undefined
-    }
-    let source: Change[] | undefined
-    if (!session && sessionAddress) {
-      source = sourceResolve(ask.session) ?? sourceResolve(sessionAddress)
-      let facet = source?.find((change) =>
-        change.eid == sessionAddress && change.name == 'session' && change.comp
-      )?.comp
-      if (
-        !source?.length || source.some((change) =>
-          change.eid != sessionAddress
-        ) ||
-        !facet
-      ) {
-        throw new Error(`${human(db, sessionAddress)} is not a session`)
+        ).get(ask.session) as
+          | { eid: string; cwd: string | null; actor: string | null }
+          | undefined
       }
-      if (typeof facet.id != 'string' || !facet.id.trim()) {
-        throw new Error(
-          `source Session ${human(db, sessionAddress)} has no stable id`,
-        )
+      let source: Change[] | undefined
+      if (!session && sessionAddress) {
+        source = sourceResolve(ask.session) ?? sourceResolve(sessionAddress)
+        let facet = source?.find((change) =>
+          change.eid == sessionAddress && change.name == 'session' &&
+          change.comp
+        )?.comp
+        if (
+          !source?.length || source.some((change) =>
+            change.eid != sessionAddress
+          ) ||
+          !facet
+        ) {
+          throw new Error(`${human(db, sessionAddress)} is not a session`)
+        }
+        if (typeof facet.id != 'string' || !facet.id.trim()) {
+          throw new Error(
+            `source Session ${human(db, sessionAddress)} has no stable id`,
+          )
+        }
+        session = {
+          eid: sessionAddress,
+          cwd: typeof facet.cwd == 'string' ? facet.cwd : null,
+          actor: typeof facet.actor == 'string' ? facet.actor : null,
+        }
       }
-      session = {
-        eid: sessionAddress,
-        cwd: typeof facet.cwd == 'string' ? facet.cwd : null,
-        actor: typeof facet.actor == 'string' ? facet.actor : null,
-      }
-    }
-    // A replay by the same stable session is a true no-op: no stamp, journal
-    // row, worked edge refresh, or cwd edit.
-    if (session && held?.session == session.eid) {
-      db.exec('commit')
-      return []
-    }
-    let actor = prep(
-      db,
-      `select project.eid as eid from task
+      // A replay by the same stable session is a true no-op: no stamp, journal
+      // row, worked edge refresh, or cwd edit.
+      if (session && held?.session == session.eid) return []
+      let actor = prep(
+        db,
+        `select project.eid as eid from task
        left join entity project on project.id = task.project
        where task.entity = (select id from entity where eid = ?)`,
-    ).get(target) as { eid: string | null } | undefined
-    let seid = session?.eid ?? uuid()
-    let comp: Record<string, unknown> = session ? {} : { id: ask.session }
-    if (ask.cwd !== undefined && session?.cwd != ask.cwd) comp.cwd = ask.cwd
-    if (actor?.eid && !session?.actor) comp.actor = actor.eid
-    let changes: Change[] = [
-      ...(Object.keys(comp).length
-        ? [{ eid: seid, name: 'session', comp }]
-        : []),
-      ...(ask.mode == 'approve'
-        ? [{ eid: target, name: 'decided', comp: {} } as Change]
-        : []),
-      { eid: target, name: 'claim', comp: { session: seid } },
-    ]
-    return apply(db, changes, trace, via, undefined, {
-      target,
-      recursive: ask.recursive !== false,
-      source,
-    })
+      ).get(target) as { eid: string | null } | undefined
+      let seid = session?.eid ?? uuid()
+      let comp: Record<string, unknown> = session ? {} : { id: ask.session }
+      if (ask.cwd !== undefined && session?.cwd != ask.cwd) comp.cwd = ask.cwd
+      if (actor?.eid && !session?.actor) comp.actor = actor.eid
+      let changes: Change[] = [
+        ...(Object.keys(comp).length
+          ? [{ eid: seid, name: 'session', comp }]
+          : []),
+        ...(ask.mode == 'approve'
+          ? [{ eid: target, name: 'decided', comp: {} } as Change]
+          : []),
+        { eid: target, name: 'claim', comp: { session: seid } },
+      ]
+      return apply(db, changes, trace, via, undefined, {
+        target,
+        recursive: ask.recursive !== false,
+        source,
+      })
+    }, true)
   } catch (e) {
-    rollback(db)
+    auditBounce(db, e)
     throw e
   }
 }
@@ -8035,6 +7998,12 @@ let snapKey = (db: Sql) => ({
   ),
 })
 
+// A connection-scoped scratch table where the store has one; a hosted SQLite
+// (workerd refuses `create temp table`) keeps it as an ordinary table, cleared
+// before each use by the caller's `delete from`.
+let scratch = (db: Sql, ddl: string) =>
+  db.exec(`create ${db.can.temp ? 'temp ' : ''}table if not exists ${ddl}`)
+
 // Materialize the lazy omit-set ONCE into an indexed temp table, then read it
 // as the `not in` source per component table, instead of re-materializing a
 // ~36k-row spine-join UNION subquery inside each of the 89 per-table scans
@@ -8048,7 +8017,7 @@ let snapKey = (db: Sql) => ({
 // (entity.eid), so `not in` carries no NULL footgun. snapshot() AND allDeps()
 // share it, so an edge omitted from the components is omitted from the deps too.
 let fillOmit = (db: Sql) => {
-  db.exec('create temp table if not exists _omit(eid text primary key)')
+  scratch(db, '_omit(eid text primary key)')
   db.exec('delete from _omit')
   for (let name of lazyTables) {
     db.exec(
@@ -8291,18 +8260,6 @@ export let readComp = (
       | undefined
     : undefined
 
-// `deno task seed` (or a direct run) bootstraps the file without the server.
-if (import.meta.main) {
-  let { open } = await import('./store/sqlite.ts')
-  let db = open()
-  let n = (q: string) => (prep(db, q).get() as { n: number }).n
-  console.log(
-    `seeded ${n('select count(*) as n from task')} tasks, ${
-      n('select count(*) as n from dependency')
-    } edges`,
-  )
-}
-
 // An id to an eid, through the index — client.ts `find()`'s rules (X-123 or a
 // bare number by num, an eid verbatim or by its short handle, an alias slug)
 // asked of SQLite instead of of a materialized graph. It exists so a query can
@@ -8331,7 +8288,7 @@ export let webAt = (db: Sql, url: string): string | undefined =>
   ).get(url) as { eid: string } | undefined)?.eid
 
 let clear = (db: Sql) => {
-  db.exec('create temp table if not exists hit (eid text primary key)')
+  scratch(db, 'hit (eid text primary key)')
   db.exec('delete from hit')
 }
 

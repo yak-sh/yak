@@ -3,7 +3,7 @@
 // whether its current completion cycle already has a live verifier. This file
 // imports no server singleton or effect machinery, so query lanes, explicit
 // commands, and the role engine can share it without pulling in a runtime.
-import type { Sql } from './store/sql.ts'
+import { present, type Sql } from './store/sql.ts'
 import { sessionActive } from './types.ts'
 
 let activeSql = `s.status is null or s.status in (${
@@ -23,7 +23,7 @@ let reviewTables = `comment _vm
 let reviewWhere = (target: string, at: string, via: string) => `
   _vm.target = ${target}
   and _vr.verdict in ('approved', 'rejected', 'changes_requested')
-  and text_present(_vd.body)
+  and ${present('_vd.body')}
   and _va.at > ${at}
   and _va.via != ${via}`
 

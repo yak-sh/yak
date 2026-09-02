@@ -1,0 +1,1157 @@
+[
+  {
+    "kind": "exec",
+    "sql": "\n  create table if not exists entity (\n    id          integer primary key,\n    eid         text not null unique,\n    num         integer unique\n  );\n  create table if not exists doc (\n    entity   integer primary key references entity(id),\n    title text not null,\n    body  integer not null references blob(entity)\n  );\n  -- Canonical in-db bytes for text content. Identity and length live on the\n  -- blob entity; this is one storage backend attached to that identity, not a\n  -- second CAS. doc_value is the direct-SQL projection of component values.\n  create table if not exists blob_text (\n    entity integer primary key references blob(entity),\n    value text not null\n  );\n  create view if not exists doc_value as\n    select d.entity as rowid, d.entity, d.title, b.value as body\n    from doc d join blob_text b on b.entity = d.body;\n  create table if not exists task (\n    entity    integer primary key references entity(id),\n    priority real not null default 0\n  );\n  create table if not exists repo (\n    entity  integer primary key references entity(id),\n    path text not null,\n    url text,\n    base_branch text not null default 'main',\n    gate text,\n    push integer not null default 0\n  );\n  create table if not exists role (\n    entity          integer primary key references entity(id),\n    state        text not null default 'stopped',\n    surface      text not null default 'native',\n    scope    integer references entity(id),\n    checkout integer references entity(id),\n    schedule text,\n    wake_policy text not null default 'always',\n    wake_target integer references entity(id),\n    applied_hash text,\n    applied_at   text,\n    stopped_at   text,\n    retry_at     text,\n    quiet        integer,\n    cooldown     integer,\n    cap          integer,\n    decision     text,\n    reason       text,\n    observed     text,\n    decided_at   text\n  );\n  -- One pane: container (dir) or leaf (content/view). size is a\n  -- weight among siblings; \"order\" quoted — an SQL keyword, like \"to\".\n  create table if not exists pane (\n    entity         integer primary key references entity(id),\n    layout  integer references entity(id),\n    parent  integer references entity(id),\n    size        real not null default 1,\n    \"order\"     real not null default 0,\n    dir         text,\n    content integer references entity(id),\n    view        text\n  );\n  create table if not exists web (\n    entity integer primary key references entity(id),\n    url text not null,\n    frozen_at text\n  );\n  -- Immutable content. Its entity eid is the SHA-256; external bytes live at\n  -- ~/.tasks/blobs/<eid>. Attachments point here, so dedup is structural.\n  create table if not exists blob (\n    entity   integer primary key references entity(id),\n    bytes integer\n  );\n  create table if not exists attachment (\n    entity integer primary key references entity(id),\n    blob   integer not null references entity(id),\n    mime   text,\n    name   text\n  );\n  create index if not exists attachment_blob on attachment(blob);\n  create table if not exists image (\n    entity integer primary key references blob(entity),\n    w     integer,\n    h     integer\n  );\n  create table if not exists card (\n    entity        integer primary key references entity(id),\n    target integer not null references entity(id),\n    view       text not null\n  );\n  create table if not exists pin (\n    entity        integer primary key references card(entity),\n    canvas integer not null references entity(id),\n    x integer not null,\n    y integer not null,\n    w integer not null,\n    h integer not null,\n    z integer not null default 0\n  );\n  create table if not exists client (\n    entity        integer primary key references entity(id),\n    user_agent text not null default '',\n    ip         text not null default ''\n  );\n  create table if not exists camera (\n    entity        integer primary key references entity(id),\n    client integer not null references entity(id),\n    canvas integer not null references entity(id),\n    x    real not null default 0,\n    y    real not null default 0,\n    zoom real not null default 1,\n    w    real not null default 0,\n    h    real not null default 0,\n    unique (client, canvas)\n  );\n  create table if not exists fold (\n    entity        integer primary key references entity(id),\n    client integer not null references entity(id),\n    board  integer not null references entity(id),\n    statuses   text not null default '',\n    unique (client, board)\n  );\n  create table if not exists shelf (\n    entity        integer primary key references entity(id),\n    client integer not null references entity(id),\n    unique (client)\n  );\n  create table if not exists cursor (\n    entity    integer primary key references entity(id),\n    client integer not null references entity(id),\n    target integer references entity(id),\n    view   text,\n    unique (client)\n  );\n  create table if not exists session (\n    entity integer primary key references entity(id),\n    id  text not null unique,\n    cwd text\n  );\n  -- The handoff a session leaves for its successor (D-19459), its own\n  -- component so it never contends with the session doc's narrative.\n  create table if not exists brief (\n    entity  integer primary key references entity(id),\n    text text not null\n  );\n  create table if not exists runtime (\n    entity                 integer primary key references entity(id),\n    pid                 integer,\n    pane                text,\n    transcript          text,\n    provider_session_id text,\n    serving_model       text\n  );\n  -- A Session's provider lifecycle is three cohesive, server-owned facets.\n  -- run and settled are mutually exclusive; yield is independent of\n  -- either because a failed interaction may still produce diagnostics.\n  create table if not exists run (\n    entity            integer primary key references entity(id),\n    status             text,\n    started_at         text,\n    stop_requested_at  text,\n    input_at           text\n  );\n  create table if not exists settled (\n    entity       integer primary key references entity(id),\n    at           text,\n    status       text,\n    exit_code    integer,\n    stop_reason  text\n  );\n  create table if not exists \"yield\" (\n    entity      integer primary key references entity(id),\n    final_text  text,\n    usage_json  text,\n    stderr      text\n  );\n  -- A Session's ordered graph-native log (D-15656). seq is assigned inside\n  -- apply()'s write transaction; every other table below is an independent\n  -- facet worn by the same entry entity.\n  create table if not exists entry (\n    entity     integer primary key references entity(id),\n    session integer not null references entity(id),\n    seq     integer not null,\n    unique (session, seq)\n  );\n  -- The ingest coordinate (D-16704): where an imported entry came from. Both\n  -- columns are server-owned (stamped through the trusted append path, refused\n  -- from the wire) and immutable. source is a stable stream key (managed/\n  -- native/an archive key, never a filesystem path); line is the 1-based\n  -- SOURCE line, distinct from entry.seq. The set of (entry.session, source,\n  -- line) present IS the durable ingest cursor — no mutable cursor row. A\n  -- wholly new table, so create-if-not-exists is the additive add.\n  create table if not exists imported (\n    entity    integer primary key references entity(id),\n    source text not null,\n    line   integer not null\n  );\n  create table if not exists content (\n    entity  integer primary key references entity(id),\n    body text not null default ''\n  );\n  create table if not exists message (\n    entity  integer primary key references entity(id),\n    role text not null\n  );\n  create table if not exists generation (\n    entity      integer primary key references entity(id),\n    through  integer not null,\n    provider text not null,\n    model    text not null,\n    effort   text,\n    serving_model text\n  );\n  create table if not exists output (\n    entity    integer primary key references entity(id),\n    source integer not null,\n    key    text,\n    phase  text\n  );\n  create table if not exists call (\n    entity integer primary key references entity(id),\n    key text not null\n  );\n  create table if not exists bash (\n    entity     integer primary key references entity(id),\n    command text not null,\n    cwd     text\n  );\n  create table if not exists fetch (\n    entity    integer primary key references entity(id),\n    url    text not null,\n    method text not null\n  );\n  create table if not exists patch (\n    entity  integer primary key references entity(id),\n    path text not null,\n    diff text not null\n  );\n  -- Provider-neutral named-tool facet (D-16704): an imported tool call with no\n  -- first-class facet (bash/patch/fetch/task_context/graph_query/apply) keeps\n  -- its real name and a one-line arg detail here. Wire-writable like the\n  -- other tool facets; a wholly new table = create-if-not-exists.\n  create table if not exists tool (\n    entity    integer primary key references entity(id),\n    name   text not null,\n    detail text\n  );\n  create table if not exists graph_query (\n    entity   integer primary key references entity(id),\n    query text not null default ''\n  );\n  create table if not exists \"apply\" (\n    entity     integer primary key references entity(id),\n    changes text not null\n  );\n  create table if not exists result (\n    entity  integer primary key references entity(id),\n    call integer not null\n  );\n  create table if not exists exit (\n    entity  integer primary key references entity(id),\n    code integer not null\n  );\n  create table if not exists response (\n    entity    integer primary key references entity(id),\n    status integer not null\n  );\n  create table if not exists headers (\n    entity  integer primary key references entity(id),\n    data text not null\n  );\n  create table if not exists stderr (\n    entity  integer primary key references entity(id),\n    text text not null\n  );\n  create table if not exists timeout (\n    entity integer primary key references entity(id),\n    ms  integer not null\n  );\n  create table if not exists checkpoint (\n    entity     integer primary key references entity(id),\n    through integer not null\n  );\n  create table if not exists cancel (\n    entity    integer primary key references entity(id),\n    target integer not null\n  );\n  create table if not exists opaque (\n    entity    integer primary key references entity(id),\n    format text not null,\n    data   text not null\n  );\n  create table if not exists runner (\n    entity  integer primary key references entity(id),\n    name text not null\n  );\n  -- Runtime ownership and usage are server-only outcome facets. Their refs\n  -- deliberately carry no FK: runner/generation history survives a target's\n  -- tombstone, like every death:'keep' association.\n  create table if not exists lease (\n    entity    integer primary key references entity(id),\n    holder integer not null,\n    at     text not null,\n    until  text not null\n  );\n  create table if not exists usage (\n    entity       integer primary key references entity(id),\n    input     integer not null,\n    cached    integer not null,\n    output    integer not null,\n    reasoning integer not null\n  );\n  create table if not exists claim (\n    entity         integer primary key references entity(id),\n    session integer not null references entity(id),\n    claimed_at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))\n  );\n  -- An actor's standing instruction about one entity (watch / mute).\n  -- One row per (actor, target); the derived unique index\n  -- (subscription_actor_target, from the indexes map in types.ts) is what\n  -- makes setting it twice idempotent rather than a pile.\n  create table if not exists subscription (\n    entity        integer primary key references entity(id),\n    actor  integer not null references entity(id),\n    target integer not null references entity(id),\n    mode       text not null\n  );\n  create table if not exists stop_request (\n    entity        integer primary key references entity(id),\n    target integer not null references entity(id)\n  );\n  -- A knock: bring target to the recipient's attention now (knock.ts\n  -- resolves; WHO looks is the shared deliver.to below, the outcome the\n  -- shared delivered/error facet — neither a column here).\n  create table if not exists knock (\n    entity        integer primary key references entity(id),\n    target integer not null references entity(id)\n  );\n  -- A wake: mint that knock at 'at' (absolute, resolved at mint).\n  -- wake.ts arms one timer at the earliest UNACTED row (no delivered/error)\n  -- and reconciles at boot; WHO to wake is the shared deliver.to, the outcome\n  -- the shared facet. target is nullable — absent means the wake is its\n  -- own subject.\n  create table if not exists wake (\n    entity        integer primary key references entity(id),\n    at         text not null,\n    target integer references entity(id),\n    note   text\n  );\n  -- Self-healing's diagnosis facet (D-17077, heal.ts): a task auto-filed\n  -- about a break. fault (kind + normalized message + stack head) is the dedup\n  -- key a storm keys to; hits/last tally its recurrences in place. Column names\n  -- are unique so dot-param routing stays unambiguous. Wire-writable, so it\n  -- rides the ordinary apply() insert path like task/doc.\n  create table if not exists bug (\n    entity   integer primary key references entity(id),\n    fault text,\n    hits  integer,\n    last  text\n  );\n  -- The dream's dedup marker (T-17407), bug's consolidation twin: a filed\n  -- finding's shape key + recurrence, riding on the consider-task or memory it\n  -- became so one keyed lookup dedups across both.\n  create table if not exists finding (\n    entity  integer primary key references entity(id),\n    key  text,\n    hits integer,\n    last text\n  );\n  -- The BLOCK facet (D-17094): this task is stuck on something EXTERNAL — no\n  -- entity, so a requires edge can't name it. \"on\" (a SQL keyword, so quoted)\n  -- is the free-text reason and rides the wire; \"since\" is server-owned — the\n  -- clock default stamps it on insert and it stays put on a re-word, so it\n  -- reads as when the block began. A wholly new table = create-if-not-exists\n  -- is the additive add; the entity-death cascade takes the row.\n  create table if not exists blocked (\n    entity    integer primary key references entity(id),\n    \"on\"   text,\n    since  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))\n  );\n  create table if not exists mail (\n    entity         integer primary key references entity(id),\n    \"from\"      text,\n    target  integer,\n    to_addr     text,\n    message_id  text,\n    received_at text,\n    verified    integer,\n    reply_to integer,\n    sent_id     text,\n    in_reply_to text,\n    headers text\n  );\n  create table if not exists email (\n    entity     integer primary key references entity(id),\n    address text not null\n  );\n  create table if not exists conflict (\n    entity integer primary key references entity(id),\n    target integer not null,\n    loser  integer references entity(id),\n    holder integer references entity(id),\n    at     text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))\n  );\n  -- A value deliberately forgotten. The removed bytes never land here:\n  -- target + column identify the slot and hash proves which value; the\n  -- universal created component carries when/by/via. Server-owned and\n  -- permanent — redact() below is the only writer, and entity deletion\n  -- refuses an audit row.\n  create table if not exists redaction (\n    entity integer primary key references entity(id),\n    target integer not null,\n    \"column\" text not null check (\"column\" in ('title', 'body')),\n    hash text not null\n  );\n  create table if not exists comment (\n    entity        integer primary key references entity(id),\n    target integer not null references entity(id)\n  );\n  create table if not exists review (\n    entity     integer primary key references entity(id),\n    verdict text not null\n  );\n  create table if not exists alias (\n    entity   integer primary key references entity(id),\n    slug  text not null unique,\n    slugs text\n  );\n  -- A non-secret runtime override (D-18092, config.ts): one row per catalog\n  -- key, with key unique so a second override of the same key bounces the batch\n  -- (concurrent-write safety) rather than shadowing the first. Hand-DDL like\n  -- alias, its keyed-handle twin: the single-column unique on a NON-reference\n  -- column is what keeps this table out of the derived set. apply() validates\n  -- the value against the catalog and refuses an unknown key. No secrets here.\n  create table if not exists setting (\n    entity   integer primary key references entity(id),\n    key   text not null unique,\n    value text\n  );\n  -- recall's not-null columns have no defaults ON PURPOSE: they refuse\n  -- even apply()'s bare {} touch, so touch() below stays the one writer.\n  create table if not exists recall (\n    entity      integer primary key references entity(id),\n    count    integer not null default 1,\n    first_at text not null,\n    last_at  text not null\n  );\n  -- Provenance, paired when+who+how (types.ts, T-6670/T-7113): \"at\" is\n  -- server-frozen\n  -- (default now on insert, overwritten by apply()'s stamp); \"by\" is the\n  -- actor eid — wire-writable, NO FK (death 'keep': a tombstoned spine\n  -- would veto an FK'd reference). \"by\" is quoted because\n  -- BY is a SQLite keyword. created is set once at birth; updated appears\n  -- on the first edit after it.\n  create table if not exists created (\n    entity integer primary key references entity(id),\n    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n    \"by\" integer,\n    via integer\n  );\n  create table if not exists updated (\n    entity integer primary key references entity(id),\n    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n    \"by\" integer,\n    via integer\n  );\n  -- Notification lifecycle (T-7006): presence IS the fact. Same shape as\n  -- created/updated — \"at\" default-stamped then frozen, \"by\" the writing\n  -- actor and \"via\" its instrument (no FKs; provenance outlives them). All\n  -- are server-only (out of comps): the wire writes a bare row and apply()'s\n  -- stampedPresence loop fills and returns the stamp.\n  create table if not exists notified (\n    entity integer primary key references entity(id),\n    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n    \"by\" integer,\n    via integer\n  );\n  create table if not exists opened (\n    entity integer primary key references entity(id),\n    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n    \"by\" integer,\n    via integer\n  );\n  create table if not exists archived (\n    entity integer primary key references entity(id),\n    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n    \"by\" integer,\n    via integer\n  );\n  create table if not exists quarantined (\n    entity integer primary key references entity(id),\n    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n    \"by\" integer,\n    via integer\n  );\n  -- A fleet proposal awaiting a decision: like decided, its authored time\n  -- and byline ride the wire while the server alone names the instrument.\n  create table if not exists proposed (\n    entity integer primary key references entity(id),\n    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n    \"by\" integer,\n    via integer\n  );\n  -- A decision taken (T-12574): the same three columns, but \"at\" and \"by\"\n  -- arrive on the WIRE — a decision is often written up after the fact, so\n  -- the default clock is only the fallback. Only \"via\" is stamped.\n  -- verdict (D-21212): approved | declined; null reads as approved — what\n  -- every row stamped before the column meant.\n  create table if not exists decided (\n    entity integer primary key references entity(id),\n    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n    \"by\" integer,\n    via integer,\n    verdict text\n  );\n  -- A task FINISHED / CALLED OFF (D-24102): the marks the dissolved task.status\n  -- becomes. Same stamp shape as decided — \"at\"/\"by\" ride the wire (a completion\n  -- recorded after the fact), the server alone stamps \"via\" — so they carry a\n  -- default clock and stay HAND-written rather than derived. cancelled adds its\n  -- optional \"reason\". Presence IS the status: statusOf reads these two + claim.\n  create table if not exists completed (\n    entity integer primary key references entity(id),\n    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n    \"by\" integer,\n    via integer\n  );\n  create table if not exists cancelled (\n    entity integer primary key references entity(id),\n    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n    \"by\" integer,\n    reason text,\n    via integer\n  );\n  -- A durable per-effect claim (D-23772, docs/EFFECT_CLAIMS.md): the SQLite\n  -- coordination that replaces the effects-lock dispatcher election, so one or\n  -- one thousand effects workers are equivalent. Identity is (jrow, handler) --\n  -- the journal ROW that carried the change plus the HANDLER key -- unique, so\n  -- the same committed effect is claimed at most once. Every column is server-\n  -- owned (all stamped, so comps.effect is empty and the wire can't write it); a\n  -- worker leases, settles conditionally on lease_token, and reclaims on expiry\n  -- via direct SQL. A wholly new table, so create-if-not-exists is the additive\n  -- add. Nothing consumes it yet -- the dispatcher is unchanged.\n  create table if not exists effect (\n    entity        integer primary key references entity(id),\n    jrow          integer,\n    handler       text,\n    state         text,\n    attempts      integer,\n    lease_owner   text,\n    lease_token   text,\n    lease_expiry  text,\n    unique (jrow, handler)\n  );\n  create table if not exists tombstone (\n    entity     integer primary key references entity(id),\n    deleted_at text not null\n  );\n  create table if not exists dependency (\n    parent integer not null references entity(id),\n    type       text not null check (type in ('requires','contains','reads','about','supervises','delegates','recalled','supersedes','worked','referenced','wants','satisfies')),\n    child  integer not null references entity(id),\n    ord    integer,\n    primary key (parent, type, child)\n  );\n  -- The journal (D-18860/D-18861) -- log data, not graph (like tool_call\n  -- below): the record OF the wire, never part of it, written inside apply()'s\n  -- transaction. Three append-only tables with no eid of their own, never in\n  -- snapshot() or a client cache, not vocabulary components (so no\n  -- xtask/codegen); read per-entity via journalOf(), per-batch via\n  -- journalSince(). The symmetry: telemetry records READS, the journal records\n  -- WRITES.\n  --\n  -- journal_tx: one row per applied batch, its provenance (ts, actor, via,\n  -- trace). Its id is the transaction's durable total-order identity --\n  -- monotonic, so ordering never rests on ts alone -- and the cursor every\n  -- delta client holds. actor and via are spine ids like every other\n  -- reference (the actor it resolved to; the session or client that wrote),\n  -- null when unowned.\n  create table if not exists journal_tx (\n    id    integer primary key,\n    ts    text not null,\n    actor integer references entity(id),\n    via   integer references entity(id),\n    trace text\n  );\n  -- journal_change: one ordered operation per Change in the batch. (tx, ordinal)\n  -- reproduces the exact applied order within a transaction. operation is\n  -- upsert (comp != null -- a present component, an empty one being an upsert\n  -- with no field rows) or remove (comp == null -- a component removal, or\n  -- entity death when component = 'entity'). component is the wire component\n  -- name, entity its spine id. A spine row outlives its entity (a death is\n  -- retained, D-18866), so every change names one; history whose spine an\n  -- out-of-band purge removed was given a retained spine and a grave when the\n  -- journal was keyed (migrateJournalKeys), so the reference never goes\n  -- unmet.\n  create table if not exists journal_change (\n    id        integer primary key,\n    tx        integer not null references journal_tx(id),\n    ordinal   integer not null,\n    entity    integer not null references entity(id),\n    component text not null,\n    operation text not null\n  );\n  -- journal_field: ordered after-image rows, one per field an operation wrote.\n  -- present = 1 records a written value (JSON-encoded in value, so a present\n  -- null -- present=1, value='null' -- stays distinct from a tombstone);\n  -- present = 0 is a TOMBSTONE (value null), emitted for each then-present\n  -- field when its component is removed, so field history, predecessor lookup,\n  -- diffs and undo stay self-contained and no value leaks across a component\n  -- removal and later recreation (D-18861). An upsert with no fields (empty\n  -- component presence) writes none -- its journal_change alone marks it.\n  -- ordinal is the field's order within its change. A content-addressed\n  -- field (doc.body) carries no text: ref names the content's blob entity,\n  -- the one copy blob_text keeps, and value stays null -- history shares the\n  -- graph's bytes instead of repeating them. An eid field is never\n  -- journaled: it is the row's own identity, already the change's entity.\n  create table if not exists journal_field (\n    id       integer primary key,\n    change   integer not null references journal_change(id),\n    ordinal  integer not null,\n    field    text not null,\n    present  integer not null,\n    value    text,\n    ref      integer references entity(id)\n  );\n  -- Reconstruct a batch in order (by tx), per-entity history and predecessor\n  -- lookup (by entity+component), and the field rows of a change (by change).\n  create index if not exists journal_change_tx on journal_change(tx, ordinal);\n  create index if not exists journal_change_ent on journal_change(entity, component);\n  create index if not exists journal_field_change on journal_field(change, ordinal);\n  -- Server-local key/value, not graph: no eid, no components, so snapshot()\n  -- (which walks the comps vocabulary) never carries it, and apply() never\n  -- writes it. Holds the durable sync epoch (epochOf): the cursor-lineage\n  -- identity a delta client checks, minted ONCE per graph and stable across\n  -- process restarts, so a plain restart/deploy/listener-handoff lets a\n  -- returning client resume via a small delta instead of a full resnapshot\n  -- (T-20299). A restore that rewinds this graph's own journal keeps the same\n  -- epoch -- the since-past-tip guard in the join handshake reseeds any client\n  -- whose frontier is now beyond the journal -- while a different graph carries\n  -- its own epoch, so its rows can never be replayed against a stale cursor.\n  -- (Named server_meta, not meta -- meta is already a component table.)\n  create table if not exists server_meta (\n    k text primary key,\n    v text not null\n  );\n  -- Log data, not graph: no eid, no components, so snapshot() (which walks\n  -- the comps vocabulary) never carries it. telemetry.ts owns the rows.\n  create table if not exists tool_call (\n    ts         text not null\n               default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n    source     text not null check (source in ('mcp','http','web','srv','cli')),\n    name       text not null,\n    session_id text,\n    ok         integer not null,\n    ms         integer,\n    error      text,\n    detail     text\n  );\n  create table if not exists embedding (\n    entity integer primary key references entity(id),\n    model  text not null,\n    hash   text not null,\n    vec    blob not null,\n    at     text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))\n  );\n  create table if not exists embedding_index (\n    id    integer primary key check (id = 1),\n    dirty integer not null\n  );\n  \n  create trigger if not exists embedding_index_ai after insert on embedding\n  begin update embedding_index set dirty = 1 where id = 1; end;\n  create trigger if not exists embedding_index_au after update on embedding\n  begin update embedding_index set dirty = 1 where id = 1; end;\n  create trigger if not exists embedding_index_ad after delete on embedding\n  begin update embedding_index set dirty = 1 where id = 1; end;\n"
+  },
+  {
+    "kind": "exec",
+    "sql": "\n  create virtual table if not exists doc_fts using fts5(\n    title, body, content='doc_value', content_rowid='rowid'\n  );\n  create trigger if not exists doc_fts_ai after insert on doc begin\n    insert into doc_fts (rowid, title, body)\n    values (new.rowid, new.title,\n      (select value from blob_text where entity = new.body));\n  end;\n  create trigger if not exists doc_fts_ad after delete on doc begin\n    insert into doc_fts (doc_fts, rowid, title, body)\n    values ('delete', old.rowid, old.title,\n      (select value from blob_text where entity = old.body));\n  end;\n  create trigger if not exists doc_fts_au after update on doc begin\n    insert into doc_fts (doc_fts, rowid, title, body)\n    values ('delete', old.rowid, old.title,\n      (select value from blob_text where entity = old.body));\n    insert into doc_fts (rowid, title, body)\n    values (new.rowid, new.title,\n      (select value from blob_text where entity = new.body));\n  end;\n  -- The SUBSTRING index, and the reason it cannot be doc_fts: doc_fts indexes\n  -- TOKENS, so a search for idget finds none of the rows holding widget — a\n  -- prefix search is a strict subset of a substring one and loses rows\n  -- silently. The trigram tokenizer indexes every 3-character window instead,\n  -- which is what lets SQLite answer LIKE %x% from an index (sql.ts) rather\n  -- than by lowercasing every body in the graph. Derived like doc_fts: never\n  -- on the wire, never dumped (bin/backup), healed by the same check below.\n  create virtual table if not exists doc_gram using fts5(\n    title, body, content='doc_value', content_rowid='rowid', tokenize='trigram'\n  );\n  create trigger if not exists doc_gram_ai after insert on doc begin\n    insert into doc_gram (rowid, title, body)\n    values (new.rowid, new.title,\n      (select value from blob_text where entity = new.body));\n  end;\n  create trigger if not exists doc_gram_ad after delete on doc begin\n    insert into doc_gram (doc_gram, rowid, title, body)\n    values ('delete', old.rowid, old.title,\n      (select value from blob_text where entity = old.body));\n  end;\n  create trigger if not exists doc_gram_au after update on doc begin\n    insert into doc_gram (doc_gram, rowid, title, body)\n    values ('delete', old.rowid, old.title,\n      (select value from blob_text where entity = old.body));\n    insert into doc_gram (rowid, title, body)\n    values (new.rowid, new.title,\n      (select value from blob_text where entity = new.body));\n  end;\n"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"project\" (\n    entity integer primary key references entity(id),\n    \"color\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"accept\" (\n    entity integer primary key references entity(id),\n    \"body\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"venture\" (\n    entity integer primary key references entity(id),\n    \"phase\" text,\n    \"paused_from\" text,\n    \"hold_from\" text,\n    \"run_mode\" text,\n    \"agent_model\" text,\n    \"operated_by\" text,\n    \"tagline\" text,\n    \"site\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"board\" (\n    entity integer primary key references entity(id),\n    \"query\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"layout\" (\n    entity integer primary key references entity(id),\n    \"root\" integer references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"design\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"goal\" (\n    entity integer primary key references entity(id),\n    \"scope\" integer\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"architecture\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"canvas\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"favorite\" (\n    entity integer primary key references entity(id),\n    \"at\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"worktree\" (\n    entity integer primary key references entity(id),\n    \"cwd\" text,\n    \"branch\" text,\n    \"base_revision\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"attention\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"prompt\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"task_context\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"reasoning\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"recalled\" (\n    entity integer primary key references entity(id),\n    \"source\" integer\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"spawn\" (\n    entity integer primary key references entity(id),\n    \"provider\" text,\n    \"model\" text,\n    \"effort\" text,\n    \"persona\" integer references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"hook\" (\n    entity integer primary key references entity(id),\n    \"source\" text,\n    \"event\" text,\n    \"payload\" text,\n    \"spool_id\" text,\n    \"received_at\" text,\n    \"method\" text,\n    \"path\" text,\n    \"headers\" text,\n    \"sig_ok\" integer\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"person\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"persona\" (\n    entity integer primary key references entity(id),\n    \"home\" integer references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"model\" (\n    entity integer primary key references entity(id),\n    \"name\" text,\n    \"vendor\" text,\n    \"grade\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"memory\" (\n    entity integer primary key references entity(id),\n    \"scope\" integer,\n    \"last_confirmed_at\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"feedback\" (\n    entity integer primary key references entity(id),\n    \"by\" integer\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"meta\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"resume\" (\n    entity integer primary key references entity(id),\n    \"actor\" integer,\n    \"at\" text,\n    \"rank\" real\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"chat\" (\n    entity integer primary key references entity(id),\n    \"actor\" integer references entity(id),\n    \"target\" integer references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"dream\" (\n    entity integer primary key references entity(id),\n    \"scope\" integer references entity(id),\n    \"floor\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"notice\" (\n    entity integer primary key references entity(id),\n    \"target\" integer references entity(id),\n    \"event\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"commit\" (\n    entity integer primary key references entity(id),\n    \"target\" integer references entity(id),\n    \"sha\" text,\n    \"repo\" text,\n    \"message\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"deliver\" (\n    entity integer primary key references entity(id),\n    \"to\" integer\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"delivered\" (\n    entity integer primary key references entity(id),\n    \"at\" text,\n    \"via\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"error\" (\n    entity integer primary key references entity(id),\n    \"at\" text,\n    \"message\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"exception\" (\n    entity integer primary key references entity(id),\n    \"at\" text,\n    \"message\" text,\n    \"stack\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"fixer\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"verifier\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"nofix\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"noverify\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"anchor\" (\n    entity integer primary key references entity(id),\n    \"paths\" text,\n    \"sha\" text,\n    \"symbol\" text,\n    \"hunk\" text,\n    \"start\" real,\n    \"end\" real\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"fork\" (\n    entity integer primary key references entity(id),\n    \"from\" integer references entity(id)\n  );"
+  },
+  {
+    "kind": "addColumn",
+    "table": "project",
+    "col": "color",
+    "sql": "alter table project add column \"color\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "accept",
+    "col": "body",
+    "sql": "alter table accept add column \"body\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "venture",
+    "col": "phase",
+    "sql": "alter table venture add column \"phase\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "venture",
+    "col": "paused_from",
+    "sql": "alter table venture add column \"paused_from\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "venture",
+    "col": "hold_from",
+    "sql": "alter table venture add column \"hold_from\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "venture",
+    "col": "run_mode",
+    "sql": "alter table venture add column \"run_mode\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "venture",
+    "col": "agent_model",
+    "sql": "alter table venture add column \"agent_model\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "venture",
+    "col": "operated_by",
+    "sql": "alter table venture add column \"operated_by\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "venture",
+    "col": "tagline",
+    "sql": "alter table venture add column \"tagline\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "venture",
+    "col": "site",
+    "sql": "alter table venture add column \"site\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "board",
+    "col": "query",
+    "sql": "alter table board add column \"query\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "layout",
+    "col": "root",
+    "sql": "alter table layout add column \"root\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "goal",
+    "col": "scope",
+    "sql": "alter table goal add column \"scope\" integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "favorite",
+    "col": "at",
+    "sql": "alter table favorite add column \"at\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "worktree",
+    "col": "cwd",
+    "sql": "alter table worktree add column \"cwd\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "worktree",
+    "col": "branch",
+    "sql": "alter table worktree add column \"branch\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "worktree",
+    "col": "base_revision",
+    "sql": "alter table worktree add column \"base_revision\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "recalled",
+    "col": "source",
+    "sql": "alter table recalled add column \"source\" integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "spawn",
+    "col": "provider",
+    "sql": "alter table spawn add column \"provider\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "spawn",
+    "col": "model",
+    "sql": "alter table spawn add column \"model\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "spawn",
+    "col": "effort",
+    "sql": "alter table spawn add column \"effort\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "spawn",
+    "col": "persona",
+    "sql": "alter table spawn add column \"persona\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "hook",
+    "col": "source",
+    "sql": "alter table hook add column \"source\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "hook",
+    "col": "event",
+    "sql": "alter table hook add column \"event\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "hook",
+    "col": "payload",
+    "sql": "alter table hook add column \"payload\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "hook",
+    "col": "spool_id",
+    "sql": "alter table hook add column \"spool_id\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "hook",
+    "col": "received_at",
+    "sql": "alter table hook add column \"received_at\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "hook",
+    "col": "method",
+    "sql": "alter table hook add column \"method\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "hook",
+    "col": "path",
+    "sql": "alter table hook add column \"path\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "hook",
+    "col": "headers",
+    "sql": "alter table hook add column \"headers\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "hook",
+    "col": "sig_ok",
+    "sql": "alter table hook add column \"sig_ok\" integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "persona",
+    "col": "home",
+    "sql": "alter table persona add column \"home\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "model",
+    "col": "name",
+    "sql": "alter table model add column \"name\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "model",
+    "col": "vendor",
+    "sql": "alter table model add column \"vendor\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "model",
+    "col": "grade",
+    "sql": "alter table model add column \"grade\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "memory",
+    "col": "scope",
+    "sql": "alter table memory add column \"scope\" integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "memory",
+    "col": "last_confirmed_at",
+    "sql": "alter table memory add column \"last_confirmed_at\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "feedback",
+    "col": "by",
+    "sql": "alter table feedback add column \"by\" integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "resume",
+    "col": "actor",
+    "sql": "alter table resume add column \"actor\" integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "resume",
+    "col": "at",
+    "sql": "alter table resume add column \"at\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "resume",
+    "col": "rank",
+    "sql": "alter table resume add column \"rank\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "chat",
+    "col": "actor",
+    "sql": "alter table chat add column \"actor\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "chat",
+    "col": "target",
+    "sql": "alter table chat add column \"target\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "dream",
+    "col": "scope",
+    "sql": "alter table dream add column \"scope\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "dream",
+    "col": "floor",
+    "sql": "alter table dream add column \"floor\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "notice",
+    "col": "target",
+    "sql": "alter table notice add column \"target\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "notice",
+    "col": "event",
+    "sql": "alter table notice add column \"event\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "commit",
+    "col": "target",
+    "sql": "alter table commit add column \"target\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "commit",
+    "col": "sha",
+    "sql": "alter table commit add column \"sha\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "commit",
+    "col": "repo",
+    "sql": "alter table commit add column \"repo\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "commit",
+    "col": "message",
+    "sql": "alter table commit add column \"message\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "deliver",
+    "col": "to",
+    "sql": "alter table deliver add column \"to\" integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "delivered",
+    "col": "at",
+    "sql": "alter table delivered add column \"at\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "delivered",
+    "col": "via",
+    "sql": "alter table delivered add column \"via\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "error",
+    "col": "at",
+    "sql": "alter table error add column \"at\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "error",
+    "col": "message",
+    "sql": "alter table error add column \"message\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "exception",
+    "col": "at",
+    "sql": "alter table exception add column \"at\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "exception",
+    "col": "message",
+    "sql": "alter table exception add column \"message\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "exception",
+    "col": "stack",
+    "sql": "alter table exception add column \"stack\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "anchor",
+    "col": "paths",
+    "sql": "alter table anchor add column \"paths\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "anchor",
+    "col": "sha",
+    "sql": "alter table anchor add column \"sha\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "anchor",
+    "col": "symbol",
+    "sql": "alter table anchor add column \"symbol\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "anchor",
+    "col": "hunk",
+    "sql": "alter table anchor add column \"hunk\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "anchor",
+    "col": "start",
+    "sql": "alter table anchor add column \"start\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "anchor",
+    "col": "end",
+    "sql": "alter table anchor add column \"end\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "fork",
+    "col": "from",
+    "sql": "alter table fork add column \"from\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "task",
+    "col": "project",
+    "sql": "alter table \"task\" add column project integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "task",
+    "col": "assignee",
+    "sql": "alter table \"task\" add column assignee integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "task",
+    "col": "domain",
+    "sql": "alter table \"task\" add column domain text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "pid",
+    "sql": "alter table \"session\" add column pid integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "pane",
+    "sql": "alter table \"session\" add column pane text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "turn",
+    "sql": "alter table \"session\" add column turn text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "notice_at",
+    "sql": "alter table \"session\" add column notice_at text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "notice_accepted_at",
+    "sql": "alter table \"session\" add column notice_accepted_at text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "notice_token",
+    "sql": "alter table \"session\" add column notice_token text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "transcript",
+    "sql": "alter table \"session\" add column transcript text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "agent_type",
+    "sql": "alter table \"session\" add column agent_type text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "source",
+    "sql": "alter table \"session\" add column source text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "operator",
+    "sql": "alter table \"session\" add column operator integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "parent",
+    "sql": "alter table \"session\" add column parent integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "origin",
+    "sql": "alter table \"session\" add column origin text not null default 'external'"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "provider",
+    "sql": "alter table \"session\" add column provider text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "model",
+    "sql": "alter table \"session\" add column model text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "effort",
+    "sql": "alter table \"session\" add column effort text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "persona",
+    "sql": "alter table \"session\" add column persona integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "requested_task",
+    "sql": "alter table \"session\" add column requested_task integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "role",
+    "sql": "alter table \"session\" add column role integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "branch",
+    "sql": "alter table \"session\" add column branch text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "base_revision",
+    "sql": "alter table \"session\" add column base_revision text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "status",
+    "sql": "alter table \"session\" add column status text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "provider_session_id",
+    "sql": "alter table \"session\" add column provider_session_id text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "serving_model",
+    "sql": "alter table \"session\" add column serving_model text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "latest_seq",
+    "sql": "alter table \"session\" add column latest_seq integer not null default 0"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "standing",
+    "sql": "alter table \"session\" add column standing text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "started_at",
+    "sql": "alter table \"session\" add column started_at text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "stop_requested_at",
+    "sql": "alter table \"session\" add column stop_requested_at text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "input_at",
+    "sql": "alter table \"session\" add column input_at text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "finished_at",
+    "sql": "alter table \"session\" add column finished_at text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "exit_code",
+    "sql": "alter table \"session\" add column exit_code integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "stop_reason",
+    "sql": "alter table \"session\" add column stop_reason text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "final_text",
+    "sql": "alter table \"session\" add column final_text text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "usage_json",
+    "sql": "alter table \"session\" add column usage_json text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "stderr",
+    "sql": "alter table \"session\" add column stderr text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "client",
+    "col": "actor",
+    "sql": "alter table \"client\" add column actor integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "session",
+    "col": "actor",
+    "sql": "alter table \"session\" add column actor integer references entity(id)"
+  },
+  {
+    "kind": "index",
+    "name": "journal_field_ref",
+    "sql": "create index journal_field_ref on journal_field(ref) where ref is not null;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists dependency_child on \"dependency\" (\"child\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists task_project on \"task\" (\"project\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists task_assignee on \"task\" (\"assignee\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists role_scope on \"role\" (\"scope\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists role_checkout on \"role\" (\"checkout\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists role_wake_target on \"role\" (\"wake_target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists role_observed on \"role\" (\"observed\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists layout_root on \"layout\" (\"root\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists pane_layout on \"pane\" (\"layout\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists pane_parent on \"pane\" (\"parent\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists pane_content on \"pane\" (\"content\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists goal_scope on \"goal\" (\"scope\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists card_target on \"card\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists pin_canvas on \"pin\" (\"canvas\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists client_actor on \"client\" (\"actor\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists camera_client_canvas on \"camera\" (\"client\", \"canvas\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists camera_client on \"camera\" (\"client\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists camera_canvas on \"camera\" (\"canvas\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists fold_client_board on \"fold\" (\"client\", \"board\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists fold_client on \"fold\" (\"client\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists fold_board on \"fold\" (\"board\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists shelf_client on \"shelf\" (\"client\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists cursor_client on \"cursor\" (\"client\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists cursor_target on \"cursor\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists session_requested_task on \"session\" (\"requested_task\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists session_role on \"session\" (\"role\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists session_persona on \"session\" (\"persona\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists session_actor on \"session\" (\"actor\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists session_parent on \"session\" (\"parent\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists entry_session_seq on \"entry\" (\"session\", \"seq\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists entry_session on \"entry\" (\"session\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists generation_through on \"generation\" (\"through\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists output_source_key on \"output\" (\"source\", \"key\") where key is not null;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists output_source on \"output\" (\"source\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists result_call on \"result\" (\"call\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists checkpoint_through on \"checkpoint\" (\"through\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists cancel_target on \"cancel\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists recalled_source on \"recalled\" (\"source\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists lease_holder on \"lease\" (\"holder\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists spawn_persona on \"spawn\" (\"persona\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists claim_session on \"claim\" (\"session\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists resume_actor on \"resume\" (\"actor\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists subscription_actor_target on \"subscription\" (\"actor\", \"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists subscription_actor on \"subscription\" (\"actor\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists subscription_target on \"subscription\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists chat_actor_target on \"chat\" (\"actor\", \"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists chat_actor on \"chat\" (\"actor\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists chat_target on \"chat\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists stop_request_target on \"stop_request\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists fork_from on \"fork\" (\"from\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists knock_target on \"knock\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists wake_target on \"wake\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists dream_scope on \"dream\" (\"scope\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists mail_target on \"mail\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists mail_reply_to on \"mail\" (\"reply_to\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists conflict_target on \"conflict\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists conflict_loser on \"conflict\" (\"loser\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists conflict_holder on \"conflict\" (\"holder\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists redaction_target on \"redaction\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists comment_target on \"comment\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists commit_target on \"commit\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists notice_target on \"notice\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists persona_home on \"persona\" (\"home\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists memory_scope on \"memory\" (\"scope\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists feedback_by on \"feedback\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists created_by on \"created\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists created_via on \"created\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists updated_by on \"updated\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists updated_via on \"updated\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists notified_by on \"notified\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists notified_via on \"notified\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists opened_by on \"opened\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists opened_via on \"opened\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists archived_by on \"archived\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists archived_via on \"archived\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists quarantined_by on \"quarantined\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists quarantined_via on \"quarantined\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists deliver_to on \"deliver\" (\"to\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists completed_at on \"completed\" (\"at\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists completed_by on \"completed\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists completed_via on \"completed\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists cancelled_by on \"cancelled\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists cancelled_via on \"cancelled\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists decided_by on \"decided\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists decided_via on \"decided\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists proposed_by on \"proposed\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists proposed_via on \"proposed\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists effect_jrow_handler on \"effect\" (\"jrow\", \"handler\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "drop index if exists subscription_one"
+  }
+]

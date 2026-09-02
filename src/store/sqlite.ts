@@ -23,7 +23,6 @@ import {
   type Sql,
   type SqlValue,
   type Statement,
-  textPresent,
 } from './sql.ts'
 let DriverDatabase = sqlite.Database
 type DriverStatement = InstanceType<typeof sqlite.Statement>
@@ -57,6 +56,7 @@ let reset = (statement: DriverStatement) => {
 }
 
 let MAIN = new TextEncoder().encode('main\0')
+let depth = 0
 let bytesAt = (pointer: Deno.PointerObject, size: number) =>
   new Uint8Array(new Deno.UnsafePointerView(pointer).getArrayBuffer(size))
 
@@ -109,7 +109,7 @@ export class StatementSync implements Statement {
 
 export class DatabaseSync implements Sql {
   #db: InstanceType<typeof DriverDatabase>
-  can: Can = { fts: true }
+  can: Can = { fts: true, temp: true }
 
   constructor(path: string | URL, options: Options = {}) {
     this.#db = new DriverDatabase(path, {
@@ -117,11 +117,6 @@ export class DatabaseSync implements Sql {
       parseJson: false,
       readonly: options.readOnly,
     })
-    this.#db.function(
-      'text_present',
-      (value: unknown) => textPresent(value) ? 1 : 0,
-      { deterministic: true },
-    )
     this.#db.exec('pragma foreign_keys = on')
   }
 
@@ -135,6 +130,41 @@ export class DatabaseSync implements Sql {
 
   get lastInsertRowId() {
     return this.#db.lastInsertRowId
+  }
+
+  get version() {
+    return (this.#db.prepare('pragma user_version').get() as {
+      user_version: number
+    }).user_version
+  }
+
+  set version(v: number) {
+    this.exec(`pragma user_version = ${v}`)
+  }
+
+  // A file's transaction is the SQL: the outer level is BEGIN (IMMEDIATE takes
+  // the reserved lock before the first read, so a peer waits on busy_timeout
+  // instead of failing on a deferred upgrade), a nested one a savepoint.
+  // Roll back only what began: a `begin immediate` that fails on SQLITE_BUSY
+  // opens no transaction, and an unconditional `rollback` there throws "no
+  // transaction is active" and MASKS the BUSY (T-19044).
+  transaction<T>(fn: () => T, immediate = false): T {
+    let nested = this.inTransaction
+    let name = `tx_${++depth}`
+    this.exec(
+      nested ? `savepoint ${name}` : immediate ? 'begin immediate' : 'begin',
+    )
+    try {
+      let value = fn()
+      this.exec(nested ? `release ${name}` : 'commit')
+      return value
+    } catch (e) {
+      if (nested) {
+        this.exec(`rollback to ${name}`)
+        this.exec(`release ${name}`)
+      } else if (this.inTransaction) this.exec('rollback')
+      throw e
+    }
   }
 
   prepare(sql: string) {
@@ -348,3 +378,14 @@ let wal = (db: DatabaseSync) => {
 // fresh graph (db.ts scratchOf).
 export let open = (path = file, vector = false) =>
   migrate(wal(connect(path, vector)), () => connect(':memory:'))
+
+// `deno task seed` (or a direct run) bootstraps the file without the server.
+if (import.meta.main) {
+  let db = open()
+  let n = (q: string) => (db.prepare(q).get() as { n: number }).n
+  console.log(
+    `seeded ${n('select count(*) as n from task')} tasks, ${
+      n('select count(*) as n from dependency')
+    } edges`,
+  )
+}

@@ -600,12 +600,18 @@ if (import.meta.main) {
   let rustTarget = `${dir}../../crates/yak-kernel/src/vocab_gen.rs`
   let rustBody = emitRust(assembled)
   let schemaTarget = `${dir}../../crates/yak-kernel/src/schema_gen.rs`
+  // The same ops as JSON, for a backend that plants at runtime and cannot
+  // capture them itself (a Durable Object has no scratch SQLite to record a
+  // migrate() over): workers/store imports it and hands it to plant().
+  let opsTarget = `${dir}../store/schema.json`
+  let opsJson = (ops: SchemaOp[]) => JSON.stringify(ops, null, 2) + '\n'
 
   let current = await Deno.readTextFile(target).catch(() => '')
   let currentFixture = await Deno.readTextFile(`${dir}fixture.json`)
     .catch(() => '')
   let currentRust = await Deno.readTextFile(rustTarget).catch(() => '')
   let currentSchema = await Deno.readTextFile(schemaTarget).catch(() => '')
+  let currentOps = await Deno.readTextFile(opsTarget).catch(() => '')
   if (check) {
     if (current != fresh) {
       console.error(typesStaleDiagnostic)
@@ -624,16 +630,20 @@ if (import.meta.main) {
       Deno.exit(1)
     }
     // types.ts on disk is now known-current, so the capture reflects it.
-    let schemaRust = emitRustSchema(await captureSchema())
-    if (currentSchema != schemaRust) {
+    let ops = await captureSchema()
+    if (currentSchema != emitRustSchema(ops)) {
       console.error(
         'crates/yak-kernel/src/schema_gen.rs is stale — run `deno task codegen`',
       )
       Deno.exit(1)
     }
+    if (currentOps != opsJson(ops)) {
+      console.error('src/store/schema.json is stale — run `deno task codegen`')
+      Deno.exit(1)
+    }
     console.log(
-      'vocab: types.ts, fixture.json, vocab_gen.rs and schema_gen.rs match ' +
-        'the manifests',
+      'vocab: types.ts, fixture.json, vocab_gen.rs, schema_gen.rs and ' +
+        'store/schema.json match the manifests',
     )
   } else {
     // types.ts first, so the schema capture (a subprocess importing db.ts)
@@ -641,12 +651,14 @@ if (import.meta.main) {
     await Deno.writeTextFile(target, fresh)
     await Deno.writeTextFile(`${dir}fixture.json`, fixture)
     await Deno.writeTextFile(rustTarget, rustBody)
-    let schemaRust = emitRustSchema(await captureSchema())
+    let ops = await captureSchema()
+    let schemaRust = emitRustSchema(ops)
     await Deno.writeTextFile(schemaTarget, schemaRust)
+    await Deno.writeTextFile(opsTarget, opsJson(ops))
     console.log(
       `vocab: wrote types.ts (${fresh.length} bytes) + fixture.json + ` +
         `vocab_gen.rs (${rustBody.length} bytes) + schema_gen.rs ` +
-        `(${schemaRust.length} bytes)`,
+        `(${schemaRust.length} bytes) + store/schema.json (${ops.length} ops)`,
     )
   }
 }

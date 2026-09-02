@@ -301,15 +301,13 @@ export let takeEntry = (
     until: new Date(now.getTime() + Math.max(1, ttl)).toISOString(),
   }
   let change: Change = { eid, name: 'lease', comp: { ...token } }
-  db.exec('begin immediate')
-  try {
+  return db.transaction(() => {
     let row = db.prepare(
       `select ${refEid('session')} as session from entry where ${OWNED}`,
     ).get(eid) as
       | { session: string }
       | undefined
     if (!row) {
-      db.exec('rollback')
       return undefined
     }
     let runnable = db.prepare(
@@ -319,7 +317,6 @@ export let takeEntry = (
       !runnable ||
       !db.prepare(`select 1 from runner where ${OWNED}`).get(holder)
     ) {
-      db.exec('rollback')
       return undefined
     }
     db.prepare(
@@ -327,12 +324,8 @@ export let takeEntry = (
          values (${idOf}, ${idOf}, ?, ?)`,
     ).run(eid, holder, token.at, token.until)
     record(db, [change], holder)
-    db.exec('commit')
     return { token, changes: [change] }
-  } catch (e) {
-    db.exec('rollback')
-    throw e
-  }
+  }, true)
 }
 
 // Generations and read-only graph calls only observe external state. Replaying
@@ -356,8 +349,7 @@ export let reclaimEntry = (
     until: new Date(now.getTime() + Math.max(1, ttl)).toISOString(),
   }
   let change: Change = { eid: stale.eid, name: 'lease', comp: { ...token } }
-  db.exec('begin immediate')
-  try {
+  return db.transaction(() => {
     let safe = db.prepare(
       `select case
          when exists (select 1 from generation g where g.entity = l.entity)
@@ -386,19 +378,14 @@ export let reclaimEntry = (
       | undefined
     let runner = db.prepare(`select 1 from runner where ${OWNED}`).get(holder)
     if (!safe || !runner) {
-      db.exec('rollback')
       return undefined
     }
     db.prepare(
       `update lease set holder = ${idOf}, at = ?, until = ? where ${OWNED}`,
     ).run(holder, token.at, token.until, token.eid)
     record(db, [change], holder)
-    db.exec('commit')
     return { token, kind: safe.kind, changes: [change] }
-  } catch (error) {
-    db.exec('rollback')
-    throw error
-  }
+  }, true)
 }
 
 // A lease is a liveness lease: while its holder is alive and still working an
@@ -417,23 +404,17 @@ export let renewEntry = (
   let until = new Date(clock().getTime() + Math.max(1, ttl)).toISOString()
   let next: LeaseToken = { ...token, until }
   let change: Change = { eid: token.eid, name: 'lease', comp: { ...next } }
-  db.exec('begin immediate')
-  try {
+  return db.transaction(() => {
     let n = db.prepare(
       `update lease set until = ? where ${OWNED} and holder = ${idOf} and at = ?
        and not exists (select 1 from cancel c where c.target = lease.entity)`,
     ).run(until, token.eid, token.holder, token.at).changes
     if (!n) {
-      db.exec('rollback')
       return undefined
     }
     record(db, [change], token.holder)
-    db.exec('commit')
     return { token: next, changes: [change] }
-  } catch (e) {
-    db.exec('rollback')
-    throw e
-  }
+  }, true)
 }
 
 let normalizedUsage = (value: UsageValue) => ({
@@ -482,13 +463,11 @@ export let settleGeneration = (
     },
     { eid: token.eid, name: 'lease', comp: null },
   ]
-  db.exec('begin immediate')
-  try {
+  return db.transaction(() => {
     if (
       !owns(db, token) ||
       db.prepare(`select 1 from cancel where target = ${idOf}`).get(token.eid)
     ) {
-      db.exec('rollback')
       return []
     }
     if (usage) {
@@ -512,12 +491,8 @@ export let settleGeneration = (
     ).run(token.eid, at, via)
     db.prepare(`delete from lease where ${OWNED}`).run(token.eid)
     record(db, changes, token.holder)
-    db.exec('commit')
     return changes
-  } catch (e) {
-    db.exec('rollback')
-    throw e
-  }
+  }, true)
 }
 
 // Cancellation has already landed as an immutable audit entry. Releasing the
@@ -528,47 +503,35 @@ export let cancelEntry = (
   token: LeaseToken,
 ): Change[] => {
   let change: Change = { eid: token.eid, name: 'lease', comp: null }
-  db.exec('begin immediate')
-  try {
+  return db.transaction(() => {
     if (
       !owns(db, token) ||
       !db.prepare(`select 1 from cancel where target = ${idOf}`).get(token.eid)
     ) {
-      db.exec('rollback')
       return []
     }
     db.prepare(`delete from lease where ${OWNED}`).run(token.eid)
     record(db, [change], token.holder)
-    db.exec('commit')
     return [change]
-  } catch (e) {
-    db.exec('rollback')
-    throw e
-  }
+  }, true)
 }
 
 // A call is complete only after its correlated result entry exists. Removing
 // the lease is the only mutable fact; the call/result pair remains immutable.
 export let settleCall = (db: Sql, token: LeaseToken): Change[] => {
   let change: Change = { eid: token.eid, name: 'lease', comp: null }
-  db.exec('begin immediate')
-  try {
+  return db.transaction(() => {
     if (
       !owns(db, token) ||
       !db.prepare(`select 1 from result where call = ${idOf}`).get(token.eid) ||
       db.prepare(`select 1 from cancel where target = ${idOf}`).get(token.eid)
     ) {
-      db.exec('rollback')
       return []
     }
     db.prepare(`delete from lease where ${OWNED}`).run(token.eid)
     record(db, [change], token.holder)
-    db.exec('commit')
     return [change]
-  } catch (e) {
-    db.exec('rollback')
-    throw e
-  }
+  }, true)
 }
 
 // Infrastructure failure is an outcome facet on the attempted entry. Error
@@ -584,10 +547,8 @@ export let failEntry = (
     { eid: token.eid, name: 'error', comp },
     { eid: token.eid, name: 'lease', comp: null },
   ]
-  db.exec('begin immediate')
-  try {
+  return db.transaction(() => {
     if (!owns(db, token)) {
-      db.exec('rollback')
       return []
     }
     db.prepare(
@@ -596,10 +557,6 @@ export let failEntry = (
       .run(token.eid, comp.at, message)
     db.prepare(`delete from lease where ${OWNED}`).run(token.eid)
     record(db, changes, token.holder)
-    db.exec('commit')
     return changes
-  } catch (e) {
-    db.exec('rollback')
-    throw e
-  }
+  }, true)
 }

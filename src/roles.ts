@@ -405,16 +405,11 @@ let preserveDeadPane = async (
     ...(code == null ? {} : { exit_code: code }),
     ...(stderr ? { stderr: stderr.slice(0, 20_000) } : {}),
   }
-  let changes: Change[] = []
-  db.exec('begin immediate')
-  try {
-    changes = writeSession(db, String(session.eid), patch)
+  let changes = db.transaction(() => {
+    let changes = writeSession(db, String(session.eid), patch)
     if (changes.length) record(db, changes)
-    db.exec('commit')
-  } catch (e) {
-    db.exec('rollback')
-    throw e
-  }
+    return changes
+  }, true)
   if (changes.length) cast(changes)
 }
 
@@ -711,8 +706,7 @@ export let stamp = (eid: string, patch: DbRow, cast: Cast) => {
   )
   let cols = Object.keys(moved)
   let changes: Change[] = []
-  db.exec('begin')
-  try {
+  db.transaction(() => {
     if (cols.length) {
       db.prepare(
         `update role set ${
@@ -729,11 +723,7 @@ export let stamp = (eid: string, patch: DbRow, cast: Cast) => {
       if (change) changes.push(change)
     }
     if (changes.length) record(db, changes)
-    db.exec('commit')
-  } catch (e) {
-    db.exec('rollback')
-    throw e
-  }
+  })
   if (changes.length) cast(changes)
 }
 
