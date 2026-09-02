@@ -34,6 +34,7 @@ import * as mcp from './mcp.ts'
 import { lost, oops } from './pages.ts'
 import { hostOf, type Route, route } from './route.ts'
 import { storeOf } from './store.ts'
+import { noted } from './unseen.ts'
 
 export { Store } from './store.ts'
 
@@ -63,29 +64,16 @@ let report = async (env: Env, r: Route, req: Request, e: unknown) => {
   let store = app
     ? storeOf(env.STORE, space!.slug, app.slug)
     : storeOf(env.STORE, META.space, META.app)
-  // One entity: a doc naming the request and the deploy it happened on, and
-  // the `exception` facet — the BREAK, something our code hit unexpectedly,
-  // the self-healing trigger (kernel.rs; `error` is a known failure state,
-  // kept for what the platform reports deliberately) — carrying the message
-  // and stack. Server-owned, so it rides the kernel flag into apply()'s
-  // server-writer mode; the shape is the wire's own entity literal.
-  let sent = await store('/apply', {
-    method: 'POST',
-    body: JSON.stringify({
-      entities: [{
-        doc: {
-          title: `${req.method} ${new URL(req.url).pathname}`,
-          body: `version: ${app?.version ?? 'none'}`,
-        },
-        exception: {
-          at: new Date().toISOString(),
-          message: e instanceof Error ? e.message : String(e),
-          stack: e instanceof Error ? e.stack ?? '' : '',
-        },
-      }],
-    }),
-  }, { 'x-yak-kernel': '1' })
-  if (!sent.ok) throw new Error(`report refused: ${await sent.text()}`)
+  // The BREAK, something our code hit unexpectedly — the self-healing
+  // trigger (kernel.rs; `error` is a known failure state, kept for what the
+  // platform reports deliberately). unseen.ts owns the entity's shape,
+  // because a page reporting its own break writes the same one.
+  await noted(store, {
+    title: `${req.method} ${new URL(req.url).pathname}`,
+    version: app?.version,
+    message: e instanceof Error ? e.message : String(e),
+    stack: e instanceof Error ? e.stack ?? '' : '',
+  })
 }
 
 export default {

@@ -100,5 +100,12 @@ The same grammar the platform speaks everywhere:
 
 A request to the app that fails becomes an entity in the app's own store, and
 the person's agent hears about it on its next reply — once, then `app_errors`
-lists what is still open. Nothing is swallowed, so build for the person and fix
-what comes back.
+lists what is still open.
+
+Pages report themselves, with nothing to add: the kernel puts a reporter in
+every page it serves, so a script error, a promise nobody caught, a refusal from
+`/api/*`, a blocked resource or a failed request all arrive at
+`POST ./api/report` and show up the same way. (A page may post there itself —
+`{message, stack?, url?, line?}` — but it rarely needs to.)
+
+Nothing is swallowed, so build for the person and fix what comes back.

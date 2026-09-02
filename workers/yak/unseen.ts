@@ -12,7 +12,38 @@ import * as dirPart from './directory.ts'
 import type { App, Space } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
-import { storeOf } from './store.ts'
+import { type Door, storeOf } from './store.ts'
+
+// One break, written where the person's agent reads it: a doc naming what
+// happened and the deploy it happened on, plus the `exception` facet — the
+// unexpected thing, carrying the message and the stack. Every source of one
+// goes through here: a route that threw (index.ts) and a page that reported
+// its own (apps.ts). Server-owned, so it rides the kernel flag into apply()'s
+// server-writer mode; the shape is the wire's own entity literal.
+export let noted = async (store: Door, broke: {
+  title: string
+  version?: number | null
+  message: string
+  stack?: string
+}) => {
+  let sent = await store('/apply', {
+    method: 'POST',
+    body: JSON.stringify({
+      entities: [{
+        doc: {
+          title: broke.title,
+          body: `version: ${broke.version ?? 'none'}`,
+        },
+        exception: {
+          at: new Date().toISOString(),
+          message: broke.message,
+          stack: broke.stack ?? '',
+        },
+      }],
+    }),
+  }, { 'x-yak-kernel': '1' })
+  if (!sent.ok) throw new Error(`report refused: ${await sent.text()}`)
+}
 
 type Hit = {
   kind: string

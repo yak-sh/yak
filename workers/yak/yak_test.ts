@@ -2,7 +2,12 @@
 // apex and its soft 404, a space and app born in the directory and served,
 // the session cookie forged and signed, the file door, the graph API, and a
 // route that threw becoming an error entity behind a soft page.
-import { assert, assertEquals, assertMatch } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertStringIncludes,
+} from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { client, kernel, seed, signedIn } from './probe.ts'
 
@@ -68,7 +73,8 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     let served = await k.at('jeff.yaks.app', '/recipes/')
     assertEquals(served.status, 200)
     assertMatch(served.headers.get('content-type') ?? '', /text\/html/)
-    assertEquals(await served.text(), page)
+    // The page as written, plus the reporter the kernel injects (apps.ts).
+    assertStringIncludes(await served.text(), page)
     let style = await k.at('jeff.yaks.app', '/recipes/style.css')
     assertMatch(style.headers.get('content-type') ?? '', /text\/css/)
     assertEquals(await style.text(), 'h1 { color: peru }')

@@ -10,6 +10,14 @@
 // Platforms dispatch — an app's own Worker answering here — is the second
 // implementation and waits on T-32345; it slots in where `asset` is called,
 // with the same `vouched` headers, and nothing here pretends to.
+//
+// A page's own breaks come back here too (T-32486), without the page asking:
+// every HTML response is rewritten on its way out to carry the reporter
+// script (public/report.js), every app response carries `Reporting-Endpoints`
+// and `NEL` so the browser itself reports CSP violations, crashes,
+// deprecations and network errors, and both land on `POST /api/report`, which
+// writes the same `exception` entity a route that threw does. Rate-limited
+// per app: a page in a loop is a bug to see once, not a write flood.
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { type App, directory, META, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -18,6 +26,22 @@ import { nothingHere } from './pages.ts'
 import { hostOf, route } from './route.ts'
 import { mayWrite, vouched, type Who, whoIs } from './session.ts'
 import { storeOf } from './store.ts'
+import { noted } from './unseen.ts'
+
+// The runtime's streaming HTML rewriter, the slice this file asks for, so
+// `deno check` reads the Worker without @cloudflare/workers-types (env.ts).
+type Html = { html: boolean }
+type Rewriter = {
+  on(
+    selector: string,
+    handlers: { element(el: { prepend(s: string, o: Html): void }): void },
+  ): Rewriter
+  onDocument(
+    handlers: { end(end: { append(s: string, o: Html): void }): void },
+  ): Rewriter
+  transform(res: Response): Response
+}
+declare let HTMLRewriter: { new (): Rewriter }
 
 let MIME: Record<string, string> = {
   html: 'text/html; charset=utf-8',
@@ -58,12 +82,123 @@ let json = (status: number, code: string) =>
 let redirect = (to: string) =>
   new Response(null, { status: 302, headers: { location: to } })
 
+// The reporter, into every page the kernel serves, wherever the page has a
+// place to put it: first inside `<head>`, else first inside `<body>`, else
+// at the end of a document with neither. Streaming — the bytes are never
+// held — and once, whichever came first.
+let reported = (app: App, page: Response) => {
+  let tag = `<script src="/${app.slug}/api/report.js"></script>`
+  let done = false
+  let once = (put: (s: string, o: { html: boolean }) => void) => {
+    if (done) return
+    done = true
+    put(tag, { html: true })
+  }
+  return new HTMLRewriter()
+    .on('head', { element: (el) => once((s, o) => el.prepend(s, o)) })
+    .on('body', { element: (el) => once((s, o) => el.prepend(s, o)) })
+    .onDocument({ end: (end) => once((s, o) => end.append(s, o)) })
+    .transform(page)
+}
+
 let asset = async (env: Env, space: Space, app: App, path: string) => {
   let blobs = r2Blobs(env.BLOBS)
   let key = keyOf(space, app, path)
   if (!(await blobs.has(key))) return nothingHere()
-  return new Response(await blobs.get(key), {
-    headers: { 'content-type': mimeOf(key) },
+  let type = mimeOf(key)
+  let file = new Response(await blobs.get(key), {
+    headers: { 'content-type': type },
+  })
+  return type.startsWith('text/html') ? reported(app, file) : file
+}
+
+// Where the browser sends what it notices on its own: the app's own report
+// door, named as an endpoint group, with NEL asking for the failures that
+// never reached us at all.
+let reporting = (res: Response, req: Request, app: App) => {
+  let headers = new Headers(res.headers)
+  headers.set(
+    'reporting-endpoints',
+    `yak="${new URL(`/${app.slug}/api/report`, req.url).href}"`,
+  )
+  headers.set(
+    'nel',
+    '{"report_to":"yak","max_age":86400,"success_fraction":0,' +
+      '"failure_fraction":1}',
+  )
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+  })
+}
+
+// A flood guard, not a quota: reports per app per minute, counted in this
+// isolate and no further. A page in a render loop that throws every frame
+// must not write a thousand entities a second; a busy app spread over many
+// isolates reporting a few extra breaks is the harmless direction to err.
+let RATE = 30
+let counted = new Map<string, { minute: number; n: number }>()
+
+let flooding = (space: Space, app: App) => {
+  let key = `${space.slug}/${app.slug}`
+  let minute = Math.floor(Date.now() / 60_000)
+  let hit = counted.get(key)
+  if (!hit || hit.minute != minute) {
+    counted.set(key, { minute, n: 1 })
+    return false
+  }
+  return ++hit.n > RATE
+}
+
+let pathOf = (url: unknown) => {
+  try {
+    return new URL(String(url)).pathname
+  } catch {
+    return String(url ?? '')
+  }
+}
+
+// What one report says broke, in whatever words its sender has: the
+// injected script's `message`, or the fields the Reporting API fills in for
+// a CSP violation, a crash, a deprecation, a network error.
+let said = (b: Record<string, unknown>) =>
+  String(
+    b.message ??
+      [b.type, b.effectiveDirective, b.blockedURL, b.statusCode, b.phase]
+        .filter(Boolean).join(' '),
+  ).slice(0, 4000)
+
+// A report body, either shape: the small `{message, stack?, url?, line?}` the
+// injected script posts, or the Reporting API's array of `{type, url, body}`.
+// Junk answers with nothing — a malformed body is the sender's bug, not a
+// break in this app, and writing it as one would be the noise we are here to
+// stop.
+let broken = (body: string) => {
+  let sent: unknown
+  try {
+    sent = JSON.parse(body)
+  } catch {
+    return []
+  }
+  let reports = (Array.isArray(sent) ? sent : [sent]) as Record<
+    string,
+    unknown
+  >[]
+  return reports.flatMap((r) => {
+    if (!r || typeof r != 'object') return []
+    let b = (r.body ?? r) as Record<string, unknown>
+    let message = said(b)
+    if (!message) return []
+    let at = pathOf(r.url ?? b.url ?? b.documentURL)
+    let source = b.sourceFile ?? b.url
+    return [{
+      title: `${typeof r.type == 'string' ? r.type : 'page'} ${at}`.trim(),
+      message,
+      stack: String(
+        b.stack ?? (source ? `${source}:${b.lineNumber ?? b.line ?? ''}` : ''),
+      ),
+    }]
   })
 }
 
@@ -82,10 +217,21 @@ let api = async (
   // The store client an app's pages import (public/client.js), served beside
   // the doors it wraps so a page needs no address but its own. One file for
   // every app, so it comes from the platform's assets, not the app's blobs.
-  if (path == '/client.js') {
-    return env.ASSETS.fetch(new Request(new URL('/client.js', req.url)))
+  if (path == '/client.js' || path == '/report.js') {
+    return env.ASSETS.fetch(new Request(new URL(path, req.url)))
   }
   let store = storeOf(env.STORE, space.slug, app.slug)
+  // What the page (or the browser itself) says broke. Anyone may report —
+  // a break belongs to whoever was looking at the page, and asking a
+  // stranger to sign in first would lose exactly the breaks nobody sees.
+  if (path == '/report') {
+    if (req.method != 'POST') return json(405, 'method_not_allowed')
+    if (flooding(space, app)) return json(429, 'too_many_reports')
+    for (let broke of broken(await req.text())) {
+      await noted(store, { ...broke, version: app.version })
+    }
+    return new Response(null, { status: 204 })
+  }
   let headers = vouched(who)
   let refused = () => json(who.person ? 403 : 401, 'not_a_writer')
   if (path == '/graph') {
@@ -134,7 +280,11 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   ) {
     who = { ...who, role: 'owner' }
   }
-  return r.path.startsWith('/api/')
-    ? api(req, env, space, app, r.path.slice(4), who)
-    : asset(env, space, app, r.path)
+  return reporting(
+    await (r.path.startsWith('/api/')
+      ? api(req, env, space, app, r.path.slice(4), who)
+      : asset(env, space, app, r.path)),
+    req,
+    app,
+  )
 }

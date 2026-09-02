@@ -4,7 +4,13 @@
 // read back through the graph tier, and a route that threw reaching the
 // agent as the next reply's unseen section — once — then through
 // app_errors.
-import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { connector, kernel, signedIn } from './probe.ts'
 
@@ -110,7 +116,7 @@ slow(
       assertMatch(await agent.tool('app_deploy', app), /v2/)
       let served = await k.at('jeff.yaks.app', '/recipes/')
       assertEquals(served.status, 200)
-      assertEquals(await served.text(), page)
+      assertStringIncludes(await served.text(), page)
       let bare = await k.at('jeff.yaks.app', '/', { redirect: 'manual' })
       assertEquals(bare.headers.get('location'), '/recipes/')
 

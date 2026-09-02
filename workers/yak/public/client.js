@@ -11,6 +11,11 @@
 // bound trio is made of. Every app in a space shares one hostname, so
 // `store('/other/api/')` reads a sibling app's graph the same way.
 //
+// Errors need no wiring here: the kernel injects a reporter into every page
+// it serves (public/report.js), so a throw, an uncaught rejection, or a
+// refusal from these doors is already on its way to the app's store and the
+// person's agent. Catch what you want to SHOW; the telling is done.
+//
 // A refusal is thrown with the server's own words — 'not a writer of jeff',
 // or what the store said about the batch — because that sentence is what the
 // person's agent reads next (D-32318 §Errors are surfaced).

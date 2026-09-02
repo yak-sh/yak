@@ -8,7 +8,13 @@
 // `x-yak-host`, and the cookie that says who is asking — so `browser()` below
 // is a loopback origin that adds both and passes everything through. The
 // client reaches its own doors through it exactly as a page's would.
-import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { client, type Kernel, kernel, seed, signedIn } from './probe.ts'
 
@@ -56,7 +62,10 @@ slow('the served client: a page saves and lists its own entities', async () => {
       '/index.html',
       page,
     )
-    assertEquals(await (await k.at('jeff.yaks.app', '/recipes/')).text(), page)
+    assertStringIncludes(
+      await (await k.at('jeff.yaks.app', '/recipes/')).text(),
+      page,
+    )
 
     Deno.writeTextFileSync(`${dir}/client.js`, source)
     let mod = await import(`file://${dir}/client.js`)
