@@ -14,6 +14,7 @@ let { configureEffects } = await import('./effects.ts')
 let { hash, MODEL } = await import('./embed.ts')
 let { recallEntry, recallFrom } = await import('./recall.ts')
 let { vectorDb } = await import('./testdb.ts')
+let { refreshVector } = await import('./vector.ts')
 let { axes } = await import('./testvec.ts')
 let { slow } = await import('./testing.ts')
 let { assertEquals } = await import('@std/assert')
@@ -31,10 +32,14 @@ let refEid = (col: string) => `(select eid from entity where id = ${col})`
 // dense basis (testvec.ts) at full dimensionality, so the vector extension's
 // ANN index ranks them like real embeddings (cosines preserved to ~0.005).
 let vec = (...xs: number[]) => axes(...xs)
-let put = (d: Sql, eid: string, text: string, v: Float32Array) =>
+// knn() reads the last quantization and never writes one (T-22525), so an
+// unquantized write is invisible to similar() until its owner quantizes it.
+let put = (d: Sql, eid: string, text: string, v: Float32Array) => {
   d.prepare(
     `insert into embedding (entity, model, hash, vec) values (${idOf}, ?, ?, ?)`,
   ).run(eid, MODEL, hash(text), new Uint8Array(v.buffer))
+  refreshVector(d)
+}
 
 // Graph parts through apply() (the real writer mints the spine); the vector
 // beside it through put() (embeddings come from the sweep, never a patch).
