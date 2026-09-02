@@ -4,10 +4,11 @@
 // entity. Every case drives real apply() batches so the journal, the was-guard,
 // and the tombstone rule are the ones under test, not a mock of them.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, depsOf, inverseBatch, lastBatch, mutate, snapshot } = await import(
-  './db.ts'
-)
+let { apply, depsOf, eager, inverseBatch, lastBatch, mutate, snapshot } =
+  await import('./db.ts')
 let { freshDb } = await import('./testdb.ts')
+let { jsonOf } = await import('./client.ts')
+let { rowed } = await import('./graph_query.ts')
 let { statusOf } = await import('./types.ts')
 let { assertEquals, assertNotEquals, assertThrows } = await import(
   '@std/assert'
@@ -98,6 +99,53 @@ Deno.test('the mutation capability normalizes nested literals atomically', () =>
     ),
     true,
   )
+})
+
+Deno.test('a read sent back through the bundle door writes nothing', () => {
+  let db = freshDb(), t = uid(), p = uid()
+  apply(db, [
+    { eid: p, name: 'doc', comp: { title: 'p', body: '' } },
+    { eid: p, name: 'project', comp: {} },
+  ])
+  born(db, t)
+  apply(db, [{ eid: t, name: 'task', comp: { project: p } }])
+  let read: Record<string, unknown> = {
+    ...jsonOf(rowed({ eid: t, comps: eager(db, t) })),
+    refs: [],
+    backrefs: [],
+  }
+  assertEquals(read.kind, 'task')
+  assertEquals((read.task as { status: string }).status, 'open')
+  let before = lastBatch(db, t)
+  let out = mutate(db, { entities: [read] })
+  assertEquals(out.changes, [])
+  assertEquals(lastBatch(db, t), before)
+  // The same read with one edit writes just the edit (plus its stamp).
+  let edited = mutate(db, {
+    entities: [{ ...read, doc: { ...(read.doc as object), title: 'y' } }],
+  })
+  assertEquals(
+    edited.changes.filter((c) => c.name != 'updated'),
+    [{ eid: t, name: 'doc', comp: { title: 'y' } }],
+  )
+  assertEquals(compOf(db, t, 'doc')?.title, 'y')
+})
+
+Deno.test('a $alias in a column lands before the entity that names it', () => {
+  let db = freshDb()
+  let out = mutate(db, {
+    entities: [
+      {
+        entity: { eid: '$t' },
+        doc: { title: 't', body: '' },
+        task: { project: '$p' },
+        dependency: { type: 'requires', child: { doc: { title: 'gate' } } },
+      },
+      { entity: { eid: '$p' }, doc: { title: 'p', body: '' }, project: {} },
+    ],
+  })
+  assertEquals(compOf(db, out.aliases.$t, 'task')?.project, out.aliases.$p)
+  assertEquals(depsOf(db, [out.aliases.$t]).map((d) => d.type), ['requires'])
 })
 
 Deno.test('a stale nested literal rolls back every entity', () => {

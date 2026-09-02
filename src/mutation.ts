@@ -4,13 +4,26 @@
 // generated component vocabulary.
 import type { Change, Edge } from './types.ts'
 
+// A write literal is the read shape (D-23827): `entity: {eid}` names an
+// existing entity or, as a `$alias`, one this batch mints; components ride
+// flat beside it exactly as a read shows them; edges are `dependency`
+// sentences, a list when there are several. Wherever an eid goes — entity.eid,
+// a ref column, a dependency child — a `$alias`, a human id, or a nested
+// bundle stands in. `was` guards per column beside the components. A read's
+// projections (kind, num, refs, backrefs, comments, derived and stamped
+// columns) are ignored, so a read edits and goes straight back. The older
+// key/id/comps/deps literal is still accepted through the same door.
 export type LiteralRef = string | number | EntityLiteral
+export type DependencyLiteral = { type: Edge; child: LiteralRef }
 export type EntityLiteral = {
+  entity?: { eid?: string; num?: number }
+  dependency?: DependencyLiteral | DependencyLiteral[]
+  was?: Record<string, Record<string, string | null>>
   key?: string
   id?: string
   comps?: Record<string, Record<string, unknown> | null>
   deps?: Partial<Record<Edge, LiteralRef | LiteralRef[]>>
-  was?: Record<string, Record<string, string | null>>
+  [comp: string]: unknown
 }
 
 export type LiteralMutation = { entities: EntityLiteral[] }

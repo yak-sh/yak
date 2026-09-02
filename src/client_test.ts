@@ -918,6 +918,112 @@ Deno.test('normalizeLiterals: nested aliases compile to one canonical batch', ()
   ])
 })
 
+Deno.test('normalizeLiterals: the read shape writes — $alias, nesting, human ids, was', () => {
+  let P = 'ffffffff-0000-4000-8000-000000000019'
+  let T = 'ffffffff-0000-4000-8000-000000000030'
+  // Minted in visit order: goal, its nested gate, space, the note, its
+  // nested memory.
+  let [goal, gate, space, note, m] = [1, 2, 3, 4, 5].map((n) =>
+    `ffffffff-0000-4000-8000-00000000000${n}`
+  )
+  let minted = [goal, gate, space, note, m]
+  let known: Record<string, string> = { 'P-19': P, 'T-3': T }
+  let was = { title: 'old-title-hash' }
+  let plan = normalizeLiterals([
+    {
+      // A forward $alias in a ref column: $space is defined below, yet its
+      // changes land first, so the column names a spine that exists.
+      entity: { eid: '$goal' },
+      doc: { title: 'Goal' },
+      task: { project: '$space' },
+      was: { doc: was },
+      dependency: [
+        { type: 'requires', child: 'T-3' },
+        {
+          type: 'requires',
+          child: { entity: { eid: '$gate' }, doc: { title: 'Gate' } },
+        },
+      ],
+    },
+    { entity: { eid: '$space' }, doc: { title: 'Space' }, project: {} },
+    {
+      // A read sent back: its projections and stamps ride along and drop.
+      kind: 'task',
+      entity: { eid: 'T-3', num: 3 },
+      task: { status: 'open', priority: 1 },
+      created: { at: '2026-09-02T00:00:00Z', by: 'P-19' },
+      refs: [],
+      backrefs: [],
+      comments: [],
+    },
+    {
+      // A nested bundle where an eid goes; a reference bundle is just its eid.
+      comment: { target: { entity: { eid: 'P-19' } }, body: 'note' },
+      recalled: { source: { entity: { eid: '$m' }, memory: {} } },
+    },
+  ], {
+    resolve: (id) => known[id],
+    mint: () => minted.shift()!,
+  })
+  assertEquals(plan.aliases, { $goal: goal, $gate: gate, $space: space, $m: m })
+  assertEquals(plan.changes[2].was === was, true, 'was rides unchanged')
+  assertEquals(plan.changes, [
+    { eid: space, name: 'doc', comp: { title: 'Space' } },
+    { eid: space, name: 'project', comp: {} },
+    { eid: goal, name: 'doc', comp: { title: 'Goal' }, was },
+    { eid: goal, name: 'task', comp: { project: space } },
+    { eid: gate, name: 'doc', comp: { title: 'Gate' } },
+    { eid: T, name: 'task', comp: { priority: 1 } },
+    { eid: T, name: 'created', comp: { at: '2026-09-02T00:00:00Z', by: P } },
+    { eid: m, name: 'memory', comp: {} },
+    { eid: note, name: 'recalled', comp: { source: m } },
+    { eid: note, name: 'comment', comp: { target: P, body: 'note' } },
+    { eid: goal, name: 'dependency', comp: { type: 'requires', child: T } },
+    { eid: goal, name: 'dependency', comp: { type: 'requires', child: gate } },
+  ])
+  let bad: [string, Record<string, unknown>[], string][] = [
+    [
+      'dangling $alias',
+      [{ doc: { title: 'x' }, task: { project: '$nowhere' } }],
+      'no entity or literal key: $nowhere (.task.project)',
+    ],
+    [
+      'double definition',
+      [
+        { entity: { eid: '$a' }, doc: {} },
+        { entity: { eid: '$a' }, doc: {} },
+      ],
+      'duplicate literal key: $a',
+    ],
+    [
+      'a $alias with nothing to define',
+      [{ entity: { eid: '$a' } }],
+      'a new entity literal needs at least one component',
+    ],
+    [
+      'column cycle among new entities',
+      [
+        { entity: { eid: '$a' }, comment: { target: '$b' } },
+        { entity: { eid: '$b' }, comment: { target: '$a' } },
+      ],
+      'literal cycle at $a',
+    ],
+    [
+      'shapeless dependency',
+      [{ doc: {}, dependency: { type: 'requires' } }],
+      'a dependency is {type, child}',
+    ],
+  ]
+  for (let [name, literals, message] of bad) {
+    assertThrows(
+      () => normalizeLiterals(literals, { mint: () => crypto.randomUUID() }),
+      Error,
+      message,
+      name,
+    )
+  }
+})
+
 Deno.test('normalizeLiterals: invalid aliases, references, keys, and cycles reject', () => {
   let cases: [string, Record<string, unknown>[], string][] = [
     [
