@@ -37,7 +37,7 @@ const SCHEMA: &str = "
   );
   create table journal_change (
     id integer primary key, tx integer not null references journal_tx(id),
-    ordinal integer not null, entity integer references entity(id),
+    ordinal integer not null, entity integer not null references entity(id),
     component text not null, operation text not null
   );
   create table journal_field (

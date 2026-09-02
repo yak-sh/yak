@@ -4244,8 +4244,9 @@ Deno.test('journal: a multi-entity batch is seekable from each entity', () => {
 
 // The one-time rekey (T-18883): a graph whose journal still names eids as
 // text is rebuilt by spine id on open, ids kept, history readable as before.
-// A change naming an eid with no spine keeps its row and names no entity; an
-// actor with no spine reads as unowned.
+// An eid the journal names and no spine carries -- a purged change, an actor
+// slug -- is given a retained spine (num null) and a grave dated by the last
+// transaction that named it, so entity is NOT NULL and every actor resolves.
 slow('open keys a text-eid journal by spine id once', () => {
   let root = Deno.makeTempDirSync({ prefix: 'tasks-journal-keys-' })
   let path = `${root}/tasks.db`
@@ -4295,19 +4296,39 @@ slow('open keys a text-eid journal by spine id once', () => {
 
     let keyed = open(path)
     assertEquals(hasCol(keyed, 'journal_change', 'eid'), false)
-    assertEquals(hasCol(keyed, 'journal_change', 'entity'), true)
+    assertEquals(
+      (keyed.prepare(
+        `select "notnull" as nn from pragma_table_info('journal_change')
+         where name = 'entity'`,
+      ).get() as { nn: number }).nn,
+      1,
+    )
     assertEquals(journalOf(keyed, t), before)
     assertEquals(journalOf(keyed, t)[0].id <= tip, true)
+    // The purged change and the slug actor were buried: a retained spine
+    // (num null) and a grave dated by the one transaction that named them.
+    let grave = (eid: string) =>
+      keyed.prepare(
+        `select e.num as num, t.deleted_at as at from entity e
+         join tombstone t on t.entity = e.id where e.eid = ?`,
+      ).get(eid)
+    assertEquals(grave('purged'), { num: null, at: '2026-01-01T00:00:00.000Z' })
+    assertEquals(grave('nobody'), { num: null, at: '2026-01-01T00:00:00.000Z' })
     assertEquals(
       keyed.prepare(
-        `select count(*) as n from journal_change where entity is null`,
+        `select ${refEid('actor')} as actor from journal_tx
+         order by id desc limit 1`,
       ).get(),
-      { n: 1 },
+      { actor: 'nobody' },
     )
-    assertEquals(
-      keyed.prepare(`select actor from journal_tx order by id desc limit 1`)
-        .get(),
-      { actor: null },
+    assertEquals(journalOf(keyed, 'purged')[0].changes, [{
+      eid: 'purged',
+      name: 'doc',
+      comp: {},
+    }])
+    // Buried means dead: the grave refuses a write at that eid.
+    assertThrows(() =>
+      apply(keyed, [{ eid: 'purged', name: 'doc', comp: { title: 'back' } }])
     )
     assertEquals(
       (keyed.prepare(`pragma index_info('journal_change_ent')`).all() as {

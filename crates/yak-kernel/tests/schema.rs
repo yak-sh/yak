@@ -265,3 +265,82 @@ fn migration_moves_inline_doc_bodies_to_shared_content() {
         .unwrap()
         .is_none());
 }
+
+// The journal rekey (db.ts migrateJournalKeys): a text-eid journal comes out
+// keyed by spine id with entity NOT NULL, every eid it named and no spine
+// carried given a retained spine and a grave dated by its last transaction.
+#[test]
+fn migration_keys_the_journal_and_buries_its_orphans() {
+    let uniq =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+    let dir = std::env::temp_dir().join(format!("yak-journal-keys-{}-{uniq}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("graph.db");
+    let path = path.to_str().unwrap();
+    let ws = WriteStore::create_or_migrate(path).unwrap();
+    ws.conn
+        .execute_batch(
+            "insert into entity (eid, num) values ('aaaaaaaa-0000-4000-8000-000000000001', 1); \
+         drop table journal_change; drop table journal_tx; \
+         create table journal_tx (id integer primary key, ts text not null, \
+           actor text, via text, trace text); \
+         create table journal_change (id integer primary key, \
+           tx integer not null references journal_tx(id), ordinal integer not null, \
+           eid text not null, component text not null, operation text not null); \
+         create index journal_change_tx on journal_change(tx, ordinal); \
+         create index journal_change_ent on journal_change(eid, component); \
+         insert into journal_tx (id, ts, actor) values \
+           (1, '2026-01-01T00:00:00.000Z', 'nobody'), \
+           (2, '2026-01-02T00:00:00.000Z', 'aaaaaaaa-0000-4000-8000-000000000001'); \
+         insert into journal_change (tx, ordinal, eid, component, operation) values \
+           (1, 0, 'purged', 'doc', 'upsert'), \
+           (2, 0, 'purged', 'doc', 'remove'), \
+           (2, 1, 'aaaaaaaa-0000-4000-8000-000000000001', 'task', 'upsert');",
+        )
+        .unwrap();
+    drop(ws);
+    // The door itself keys it (foreign keys lifted for the rebuild), and a
+    // second open is a pure read.
+    let ws = WriteStore::create_or_migrate(path).unwrap();
+    let c = &ws.conn;
+    apply_schema(c).unwrap();
+    assert!(!has_col(c, "journal_change", "eid"));
+    let nn: i64 = c
+        .query_row(
+            "select \"notnull\" from pragma_table_info('journal_change') where name = 'entity'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(nn, 1);
+    let grave = |eid: &str| -> (Option<i64>, String) {
+        c.query_row(
+            "select e.num, t.deleted_at from entity e join tombstone t on t.entity = e.id \
+             where e.eid = ?1",
+            [eid],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap()
+    };
+    assert_eq!(grave("purged"), (None, "2026-01-02T00:00:00.000Z".into()));
+    assert_eq!(grave("nobody"), (None, "2026-01-01T00:00:00.000Z".into()));
+    let unresolved: i64 = c
+        .query_row(
+            "select count(*) from journal_change jc \
+             where not exists (select 1 from entity e where e.id = jc.entity)",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(unresolved, 0);
+    let actor: String = c
+        .query_row(
+            "select e.eid from journal_tx jt join entity e on e.id = jt.actor where jt.id = 1",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(actor, "nobody");
+    drop(ws);
+    let _ = std::fs::remove_dir_all(&dir);
+}

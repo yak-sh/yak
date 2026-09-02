@@ -84,17 +84,73 @@ fn retire_json_journal(conn: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
+// Is the column declared NOT NULL? The guard a tightening migration reads.
+fn col_not_null(conn: &Connection, t: &str, c: &str) -> bool {
+    conn.query_row("select \"notnull\" from pragma_table_info(?1) where name = ?2", [t, c], |r| {
+        r.get::<_, i64>(0)
+    })
+    .optional()
+    .ok()
+    .flatten()
+        == Some(1)
+}
+
+// Every eid the journal names and no spine carries gets a RETAINED spine row
+// and a grave (db.ts buryJournalOrphans): num stays null, deleted_at is the ts
+// of the last transaction that named it, the grave written in whichever shape
+// the table wears. Returns how many were buried.
+fn bury_journal_orphans(conn: &Connection) -> rusqlite::Result<i64> {
+    conn.execute_batch(
+        "create temp table __orphan as \
+           select eid, max(ts) as last from ( \
+             select jc.eid as eid, jt.ts as ts \
+               from journal_change jc join journal_tx jt on jt.id = jc.tx \
+             union all select actor, ts from journal_tx where actor is not null \
+             union all select via, ts from journal_tx where via is not null \
+           ) where eid not in (select eid from entity) group by eid; \
+         insert into entity (eid, num) select eid, null from __orphan;",
+    )?;
+    conn.execute_batch(if has_col(conn, "tombstone", "entity") {
+        "insert or ignore into tombstone (entity, deleted_at) \
+           select e.id, o.last from __orphan o join entity e on e.eid = o.eid;"
+    } else {
+        "insert or ignore into tombstone (eid, deleted_at) select eid, last from __orphan;"
+    })?;
+    let n: i64 = conn.query_row("select count(*) from __orphan", [], |r| r.get(0))?;
+    conn.execute_batch("drop table __orphan;")?;
+    Ok(n)
+}
+
 // Key the journal by spine id (db.ts migrateJournalKeys, T-18883):
 // journal_change.eid and journal_tx.actor/via were eid TEXT and are now
-// integers into entity(id). Each table is rebuilt beside itself from the fresh
-// DDL (a scratch graph hands it over, so this never restates the schema) and
-// swapped in, keeping every id and resolving each eid through the spine; a
-// change whose eid has no spine row keeps its tx and fields and names no
-// entity. Guarded on the old column, so a later open is a pure read. Foreign
-// keys are off on this connection, so the drops leave the kept children alone.
+// integers into entity(id), entity NOT NULL once the orphans are buried. Each
+// table is rebuilt beside itself from the fresh DDL (a scratch graph hands it
+// over, so this never restates the schema) and swapped in, keeping every id.
+// The interim keyed shape (nullable entity, no eid column) tightens in place
+// when nothing names no entity; a row that does has lost its eid and is left
+// for a restore, never invented. Guarded, so a later open is a pure read.
+// Needs foreign keys OFF (create_or_migrate lifts them before BEGIN, as db.ts
+// migrate() does): the drops would otherwise cascade-check the child rows
+// being kept.
+pub fn journal_keyed(conn: &Connection) -> bool {
+    !has_table(conn, "journal_change")
+        || (!has_col(conn, "journal_change", "eid")
+            && col_not_null(conn, "journal_change", "entity"))
+}
+
 fn migrate_journal_keys(conn: &Connection) -> rusqlite::Result<()> {
-    if !has_col(conn, "journal_change", "eid") {
+    if journal_keyed(conn) {
         return Ok(());
+    }
+    let text = has_col(conn, "journal_change", "eid");
+    if !text {
+        let lost: i64 =
+            conn.query_row("select count(*) from journal_change where entity is null", [], |r| {
+                r.get(0)
+            })?;
+        if lost > 0 {
+            return Ok(());
+        }
     }
     let scratch = Connection::open_in_memory()?;
     apply_schema(&scratch)?;
@@ -108,21 +164,29 @@ fn migrate_journal_keys(conn: &Connection) -> rusqlite::Result<()> {
     };
     let tx_ddl = ddl_of("journal_tx")?;
     let change_ddl = ddl_of("journal_change")?;
-    conn.execute_batch(&tx_ddl)?;
-    conn.execute_batch(
-        "insert into __mig_journal_tx (id, ts, actor, via, trace) \
-           select jt.id, jt.ts, a.id, v.id, jt.trace from journal_tx jt \
-             left join entity a on a.eid = jt.actor \
-             left join entity v on v.eid = jt.via; \
-         drop table journal_tx; \
-         alter table __mig_journal_tx rename to journal_tx;",
-    )?;
+    if text {
+        bury_journal_orphans(conn)?;
+        conn.execute_batch(&tx_ddl)?;
+        conn.execute_batch(
+            "insert into __mig_journal_tx (id, ts, actor, via, trace) \
+               select jt.id, jt.ts, a.id, v.id, jt.trace from journal_tx jt \
+                 left join entity a on a.eid = jt.actor \
+                 left join entity v on v.eid = jt.via; \
+             drop table journal_tx; \
+             alter table __mig_journal_tx rename to journal_tx;",
+        )?;
+    }
     conn.execute_batch(&change_ddl)?;
-    conn.execute_batch(
+    conn.execute_batch(if text {
         "insert into __mig_journal_change (id, tx, ordinal, entity, component, operation) \
            select jc.id, jc.tx, jc.ordinal, e.id, jc.component, jc.operation \
-             from journal_change jc left join entity e on e.eid = jc.eid; \
-         drop table journal_change; \
+             from journal_change jc join entity e on e.eid = jc.eid;"
+    } else {
+        "insert into __mig_journal_change (id, tx, ordinal, entity, component, operation) \
+           select id, tx, ordinal, entity, component, operation from journal_change;"
+    })?;
+    conn.execute_batch(
+        "drop table journal_change; \
          alter table __mig_journal_change rename to journal_change; \
          create index journal_change_tx on journal_change(tx, ordinal); \
          create index journal_change_ent on journal_change(entity, component);",
@@ -311,6 +375,13 @@ impl WriteStore {
         conn.busy_timeout(Duration::from_millis(5000))?;
         conn.pragma_update(None, "journal_mode", "wal")?;
         conn.pragma_update(None, "synchronous", "normal")?;
+        // The journal rekey drops parent tables whose children it keeps, so
+        // it runs with enforcement off; the pragma is ignored inside a
+        // transaction, so it is set before BEGIN and restored after.
+        let rekey = !journal_keyed(&conn);
+        if rekey {
+            conn.pragma_update(None, "foreign_keys", false)?;
+        }
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         // Read the version after BEGIN IMMEDIATE. A concurrent newer migrator
         // may commit while this process waits for the write lock; a pre-lock
@@ -327,6 +398,9 @@ impl WriteStore {
             tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }
         tx.commit()?;
+        if rekey {
+            conn.pragma_update(None, "foreign_keys", true)?;
+        }
         Ok(WriteStore { conn })
     }
 }

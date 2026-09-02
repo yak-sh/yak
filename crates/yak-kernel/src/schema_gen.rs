@@ -602,15 +602,15 @@ pub static SCHEMA: &[SchemaOp] = &[
   -- with no field rows) or remove (comp == null -- a component removal, or
   -- entity death when component = 'entity'). component is the wire component
   -- name, entity its spine id. A spine row outlives its entity (a death is
-  -- retained, D-18866), so every write names one; entity is nullable only for
-  -- history whose spine an out-of-band purge removed before the retention rule
-  -- -- those rows keep their tx and fields but name no entity, and every
-  -- per-entity reader skips them.
+  -- retained, D-18866), so every change names one; history whose spine an
+  -- out-of-band purge removed was given a retained spine and a grave when the
+  -- journal was keyed (migrateJournalKeys), so the reference never goes
+  -- unmet.
   create table if not exists journal_change (
     id        integer primary key,
     tx        integer not null references journal_tx(id),
     ordinal   integer not null,
-    entity    integer references entity(id),
+    entity    integer not null references entity(id),
     component text not null,
     operation text not null
   );

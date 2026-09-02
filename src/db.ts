@@ -867,15 +867,15 @@ let schema = `
   -- with no field rows) or remove (comp == null -- a component removal, or
   -- entity death when component = 'entity'). component is the wire component
   -- name, entity its spine id. A spine row outlives its entity (a death is
-  -- retained, D-18866), so every write names one; entity is nullable only for
-  -- history whose spine an out-of-band purge removed before the retention rule
-  -- -- those rows keep their tx and fields but name no entity, and every
-  -- per-entity reader skips them.
+  -- retained, D-18866), so every change names one; history whose spine an
+  -- out-of-band purge removed was given a retained spine and a grave when the
+  -- journal was keyed (migrateJournalKeys), so the reference never goes
+  -- unmet.
   create table if not exists journal_change (
     id        integer primary key,
     tx        integer not null references journal_tx(id),
     ordinal   integer not null,
-    entity    integer references entity(id),
+    entity    integer not null references entity(id),
     component text not null,
     operation text not null
   );
@@ -1256,6 +1256,12 @@ let seed = (db: DatabaseSync) => {
 export let hasCol = (db: DatabaseSync, table: string, col: string) =>
   (prep(db, `select name from pragma_table_info('${table}')`)
     .all() as { name: string }[]).some((c) => c.name == col)
+// Is the column declared NOT NULL? The guard a tightening migration reads.
+let colNotNull = (db: DatabaseSync, table: string, col: string) =>
+  (prep(db, `select name, "notnull" as nn from pragma_table_info('${table}')`)
+    .all() as { name: string; nn: number }[]).some((c) =>
+      c.name == col && c.nn == 1
+    )
 
 // A table's column names in declaration order — what rebuild() copies BY NAME
 // rather than by position, so a shape change never relies on `select *` lining
@@ -1657,24 +1663,76 @@ export let retireJsonJournal = (db: DatabaseSync) => {
   prep(db, `delete from server_meta where k = 'journal_backfill'`).run()
 }
 
-// Is the journal keyed by spine id yet? The guard both migrate()'s pragma and
-// the rebuild below read: a text `eid` column on journal_change is the old
-// shape (journal_tx's text actor/via arrived and leave with it).
+// Is the journal keyed by spine id, every change naming one? The guard both
+// migrate()'s pragma and the rebuild below read: a text `eid` column on
+// journal_change is the old shape (journal_tx's text actor/via arrived and
+// leave with it), and a nullable `entity` is the interim keyed shape.
 let journalKeyed = (db: DatabaseSync) =>
-  !tableExists(db, 'journal_change') || !hasCol(db, 'journal_change', 'eid')
+  !tableExists(db, 'journal_change') ||
+  (!hasCol(db, 'journal_change', 'eid') &&
+    colNotNull(db, 'journal_change', 'entity'))
+
+// Give every eid the journal names and no spine carries a RETAINED spine row
+// and a grave, so the keyed journal can reference each one (D-18866's
+// representation of a death, applied to history whose deletion predates it:
+// session entries purged out of band, an actor slug that never was an entity).
+// num stays null -- these never carried one -- and the grave's deleted_at is
+// the ts of the last transaction that named the eid, the latest moment it is
+// known to have existed. The grave is written in whichever shape the table
+// wears. Returns how many were buried.
+let buryJournalOrphans = (db: DatabaseSync) => {
+  db.exec(
+    `create temp table __orphan as
+     select eid, max(ts) as last from (
+       select jc.eid as eid, jt.ts as ts
+         from journal_change jc join journal_tx jt on jt.id = jc.tx
+       union all select actor, ts from journal_tx where actor is not null
+       union all select via, ts from journal_tx where via is not null
+     ) where eid not in (select eid from entity) group by eid`,
+  )
+  db.exec('insert into entity (eid, num) select eid, null from __orphan')
+  db.exec(
+    hasCol(db, 'tombstone', 'entity')
+      ? `insert or ignore into tombstone (entity, deleted_at)
+         select e.id, o.last from __orphan o join entity e on e.eid = o.eid`
+      : `insert or ignore into tombstone (eid, deleted_at)
+         select eid, last from __orphan`,
+  )
+  let { n } = db.prepare('select count(*) as n from __orphan').get() as {
+    n: number
+  }
+  db.exec('drop table __orphan')
+  return n
+}
 
 // Key the journal by spine id (T-18883). journal_change.eid and
 // journal_tx.actor/via were eid TEXT; every other reference in the graph is an
-// integer into entity(id), and now so are these. SQLite cannot retype a
-// column, so each table is rebuilt beside itself and swapped in, keeping every
-// id (journal_field points at journal_change ids, journal_change at journal_tx
-// ids) and resolving each eid through the spine. A change whose eid has no
-// spine row (an out-of-band purge that predates D-18866's retention) keeps its
-// tx and fields and names no entity -- nothing is minted for it, the count is
-// reported. Runs with foreign keys OFF (migrate() lifts them before BEGIN): the
-// drops would otherwise cascade-check the child rows being kept.
+// integer into entity(id), and now so are these -- entity NOT NULL, since
+// every eid the journal names has a spine once the orphans are buried above;
+// actor and via stay nullable for the unowned write. SQLite cannot retype a
+// column, so each table is rebuilt beside itself from the fresh DDL and
+// swapped in, keeping every id (journal_field points at journal_change ids,
+// journal_change at journal_tx ids). Runs with foreign keys OFF (migrate()
+// lifts them before BEGIN): the drops would otherwise cascade-check the child
+// rows being kept. The interim keyed shape (nullable entity, no eid column)
+// tightens in place when nothing names no entity; a row that does has lost
+// its eid and must be restored from a backup before the rebuild -- reported,
+// never invented.
 let migrateJournalKeys = (db: DatabaseSync) => {
   if (journalKeyed(db)) return
+  let count = (sql: string) => (db.prepare(sql).get() as { n: number }).n
+  let text = hasCol(db, 'journal_change', 'eid')
+  if (!text) {
+    let lost = count(
+      'select count(*) as n from journal_change where entity is null',
+    )
+    if (lost) {
+      console.warn(
+        `journal: ${lost} change(s) name no entity and carry no eid — restore them before the journal can be keyed NOT NULL`,
+      )
+      return
+    }
+  }
   let scratch = open(':memory:')
   let ddlOf = (t: string) =>
     (scratch.prepare(
@@ -1682,34 +1740,28 @@ let migrateJournalKeys = (db: DatabaseSync) => {
     ).get(t) as { sql: string }).sql.replace(t, `__mig_${t}`)
   let txDdl = ddlOf('journal_tx'), changeDdl = ddlOf('journal_change')
   scratch.close()
-  let count = (sql: string) => (db.prepare(sql).get() as { n: number }).n
 
-  db.exec(txDdl)
-  db.exec(
-    `insert into __mig_journal_tx (id, ts, actor, via, trace)
-     select jt.id, jt.ts, a.id, v.id, jt.trace from journal_tx jt
-       left join entity a on a.eid = jt.actor
-       left join entity v on v.eid = jt.via`,
-  )
+  let buried = text ? buryJournalOrphans(db) : 0
   let txs = count('select count(*) as n from journal_tx')
-  let actors =
-    count('select count(*) as n from journal_tx where actor is not null') -
-    count('select count(*) as n from __mig_journal_tx where actor is not null')
-  let vias =
-    count('select count(*) as n from journal_tx where via is not null') -
-    count('select count(*) as n from __mig_journal_tx where via is not null')
-  db.exec('drop table journal_tx')
-  db.exec('alter table __mig_journal_tx rename to journal_tx')
-
+  let changes = count('select count(*) as n from journal_change')
+  if (text) {
+    db.exec(txDdl)
+    db.exec(
+      `insert into __mig_journal_tx (id, ts, actor, via, trace)
+       select jt.id, jt.ts, a.id, v.id, jt.trace from journal_tx jt
+         left join entity a on a.eid = jt.actor
+         left join entity v on v.eid = jt.via`,
+    )
+    db.exec('drop table journal_tx')
+    db.exec('alter table __mig_journal_tx rename to journal_tx')
+  }
   db.exec(changeDdl)
   db.exec(
     `insert into __mig_journal_change (id, tx, ordinal, entity, component, operation)
-     select jc.id, jc.tx, jc.ordinal, e.id, jc.component, jc.operation
-       from journal_change jc left join entity e on e.eid = jc.eid`,
-  )
-  let changes = count('select count(*) as n from journal_change')
-  let orphans = count(
-    'select count(*) as n from __mig_journal_change where entity is null',
+     select jc.id, jc.tx, jc.ordinal, ${
+      text ? 'e.id' : 'jc.entity'
+    }, jc.component, jc.operation
+       from journal_change jc${text ? ' join entity e on e.eid = jc.eid' : ''}`,
   )
   db.exec('drop table journal_change')
   db.exec('alter table __mig_journal_change rename to journal_change')
@@ -1719,8 +1771,7 @@ let migrateJournalKeys = (db: DatabaseSync) => {
   )
   console.warn(
     `journal: keyed ${txs} transactions and ${changes} changes by spine id — ` +
-      `${orphans} change(s) name a purged eid with no spine, ` +
-      `${actors} actor(s) and ${vias} via(s) resolved to no entity`,
+      `${buried} purged eid(s) given a retained spine and a grave`,
   )
 }
 
