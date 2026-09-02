@@ -887,7 +887,8 @@ pub static SCHEMA: &[SchemaOp] = &[
     entity integer primary key references entity(id),
     "slug" text,
     "space" integer references entity(id),
-    "version" real
+    "version" real,
+    "access" text
   );"#),
     SchemaOp::Exec(r#"create table if not exists "member" (
     entity integer primary key references entity(id),
@@ -1045,6 +1046,7 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "app", col: "slug", sql: r#"alter table app add column "slug" text"# },
     SchemaOp::AddColumn { table: "app", col: "space", sql: r#"alter table app add column "space" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "app", col: "version", sql: r#"alter table app add column "version" real"# },
+    SchemaOp::AddColumn { table: "app", col: "access", sql: r#"alter table app add column "access" text"# },
     SchemaOp::AddColumn { table: "member", col: "space", sql: r#"alter table member add column "space" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "member", col: "person", sql: r#"alter table member add column "person" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "member", col: "role", sql: r#"alter table member add column "role" text"# },

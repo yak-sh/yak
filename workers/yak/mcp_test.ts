@@ -43,6 +43,8 @@ slow(
         'app_delete',
         'app_errors',
         'app_list',
+        'member_add',
+        'member_remove',
         'graph_apply',
         'graph_query',
         'search',
@@ -62,6 +64,9 @@ slow(
           'vocab.json',
           "subscribe('.doc!', draw)",
           'not localStorage',
+          // Who an app is for is part of making it (T-32504).
+          "access 'open'",
+          'member_add',
         ]
       ) assertStringIncludes(init.instructions, said)
       let says = (name: string) =>

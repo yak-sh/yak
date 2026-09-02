@@ -67,6 +67,12 @@ An app is an index.html and whatever files sit beside it, served live at
 app_list is what they already have — every app, its address and what is
 broken in it — and it draws itself where they can see it.
 
+An app is readable by anyone with the link and writable by its members. When
+it is for other people too, say so: app_new (or app_set) takes access 'open',
+where anyone with the link can vote, add a line or sign up without signing in,
+and 'private', where only members see it at all; member_add invites someone
+into the space by email address, and they sign in at yaks.app with it.
+
 Its data belongs in the app's own store, not localStorage — so it is the same
 on their phone and their laptop, and so you can read and repair it yourself.
 The page gets it in one line, from the app's own address:

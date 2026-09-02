@@ -6,10 +6,12 @@
 // send them: every internal request is built from scratch (app.ts).
 //
 // The write rule, one line: a member with role owner or editor writes; a
-// viewer, a signed-in stranger, and nobody read. Reads are open, the way an
-// app's page is — an app that wants private data is a later leaf's.
+// viewer, a signed-in stranger, and nobody read. An app may widen or narrow
+// that for its own data with `app.access` (T-32504), which `reads` and
+// `writes` below answer; the app's FILES are never widened — a deploy is a
+// member's, whatever the app lets its visitors save.
 import { cookieValue, verify } from '../../src/token.ts'
-import type { Role } from './directory.ts'
+import type { Access, Role } from './directory.ts'
 
 export type Who = { person: string | null; role: Role | null }
 
@@ -28,6 +30,14 @@ export let whoIs = async (
 }
 
 export let mayWrite = (who: Who) => who.role == 'owner' || who.role == 'editor'
+
+// What an app lets someone who is not a member do with its store. Absent is
+// `public` — every app born before the word keeps what it had.
+export let reads = (who: Who, access: Access | null) =>
+  access != 'private' || !!who.role
+
+export let writes = (who: Who, access: Access | null) =>
+  access == 'open' || mayWrite(who)
 
 // The headers an app is handed in the cookie's place.
 export let vouched = (who: Who): Record<string, string> => ({

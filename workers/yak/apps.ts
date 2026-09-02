@@ -30,7 +30,7 @@ import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { nothingHere } from './pages.ts'
 import { hostOf, route } from './route.ts'
-import { mayWrite, vouched, type Who, whoIs } from './session.ts'
+import { mayWrite, reads, vouched, type Who, whoIs, writes } from './session.ts'
 import { storeOf } from './store.ts'
 import { noted } from './unseen.ts'
 
@@ -211,10 +211,13 @@ let broken = (body: string) => {
   })
 }
 
-// The graph API, and the file door beside it. A write needs a member who may
-// write — 401 to nobody, 403 to a member who may not — and every internal
-// request is built here, so the store sees the vouched headers and never the
-// cookie.
+// The graph API, and the file door beside it. Who may do what to the store is
+// the app's own `access` (T-32504): `public` reads to anyone and writes to a
+// member, `open` writes to anyone with the link, `private` neither without a
+// role — 401 to nobody, 403 to a member who may not. The FILE door is not
+// part of that bargain: writing an app's bytes is always a member's, whatever
+// the app lets its visitors save. Every internal request is built here, so the
+// store sees the vouched headers and never the cookie.
 let api = async (
   req: Request,
   env: Env,
@@ -242,32 +245,35 @@ let api = async (
     return new Response(null, { status: 204 })
   }
   let headers = vouched(who)
-  let refused = () => json(who.person ? 403 : 401, 'not_a_writer')
+  let refused = (what = 'not_a_writer') => json(who.person ? 403 : 401, what)
+  let mayRead = reads(who, app.access)
+  let mayPost = writes(who, app.access)
   if (path == '/graph') {
     let r = await (await store('/graph', {}, headers)).json()
     return Response.json({ ...r, person: who.person, role: who.role })
   }
   if (path == '/query') {
+    if (!mayRead) return refused('not_a_reader')
     return store(`/query${new URL(req.url).search}`, {}, headers)
   }
   // The live door: one socket per page onto this app's store, so a write from
   // another device arrives here without asking. The upgrade goes to the object
   // itself — the socket is the store's, and the kernel is out of the way once
   // it is open — so whether this person may WRITE over it is decided here, at
-  // the handshake, and rides on the socket. Anyone may listen; reads are open
-  // the way an app's page is.
+  // the handshake, and rides on the socket. Whoever may read may listen.
   if (path == '/ws') {
     if (req.headers.get('upgrade') != 'websocket') {
       return json(426, 'expected_websocket')
     }
+    if (!mayRead) return refused('not_a_reader')
     return store('/ws', req, {
       ...headers,
-      ...(mayWrite(who) ? { 'x-yak-write': '1' } : {}),
+      ...(mayPost ? { 'x-yak-write': '1' } : {}),
     })
   }
   if (path == '/apply') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
-    if (!mayWrite(who)) return refused()
+    if (!mayPost) return refused()
     return store('/apply', { method: 'POST', body: await req.text() }, headers)
   }
   if (path.startsWith('/files/')) {

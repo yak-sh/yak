@@ -3,9 +3,12 @@
 // (space, app) the caller names and belongs to, each an IO over the Store
 // object's /apply and /query doors with the caller vouched server-side; and
 // the platform sugar, the least that makes an app: space_new, app_new,
-// app_files, app_deploy, app_set, app_delete, app_errors. A tool is one row
-// here — name, what it does, its input as JSON Schema, and `run` — and the
-// door (mcp.ts) reads the table for tools/list and tools/call.
+// app_files, app_deploy, app_set, app_delete, app_errors, app_list, and the
+// two that say who an app is for — member_add and member_remove, the space
+// owner's guest list, beside `app.access`, which is what an app lets a
+// stranger with the link do (T-32504). A tool is one row here — name, what it
+// does, its input as JSON Schema, and `run` — and the door (mcp.ts) reads the
+// table for tools/list and tools/call.
 //
 // src/mcp.ts's registry is the shape mirrored, not imported. Its `IO` seam
 // wants fifteen methods — the whole eager graph, work lanes, the provider
@@ -22,17 +25,22 @@
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { EXAMPLE } from '../../src/store/vocab.ts'
 import type { EntityLiteral } from '../../src/mutation.ts'
+import { appAccess } from '../../src/types.ts'
 import {
+  type Access,
   type App,
   bornAt,
   type Directory,
   META,
+  META_STORE,
+  type Role,
   type Space,
   storeName,
 } from './directory.ts'
 import type { Env } from './env.ts'
 import { SLUG } from './route.ts'
 import { mayWrite, vouched, type Who } from './session.ts'
+import { canon, personOf } from './signin.ts'
 import { storeOf } from './store.ts'
 import { openIn, serve } from './unseen.ts'
 
@@ -65,9 +73,51 @@ let SPACE = str(
 )
 let APP = str('the app slug within the space')
 
+// What an app lets someone who is not a member do with its data (T-32504).
+// The person's agent picks it from their ask, which is why the words are the
+// ask and not the mechanism.
+let ACCESS = {
+  type: 'string',
+  enum: [...appAccess],
+  description:
+    "who may read and write the app's data: public (the default) — anyone " +
+    'with the link reads it, the person and whoever they invite write it; ' +
+    'open — anyone with the link writes too, which is what a vote page, a ' +
+    'shared list or a signup sheet needs; private — nobody but the person ' +
+    'and whoever they invite, either way',
+}
+
+let ROLES: Role[] = ['owner', 'editor', 'viewer']
+
 let text = (v: unknown, what: string) => {
   if (typeof v != 'string' || !v) throw new Error(`${what} is required`)
   return v
+}
+
+let access = (v: unknown): Access => {
+  let s = text(v, 'access')
+  if (!(appAccess as readonly string[]).includes(s)) {
+    throw new Error(`access: one of ${appAccess.join(', ')}`)
+  }
+  return s as Access
+}
+
+let role = (v: unknown): Role => {
+  let s = text(v, 'role')
+  if (!(ROLES as string[]).includes(s)) {
+    throw new Error(`role: one of ${ROLES.join(', ')}`)
+  }
+  return s as Role
+}
+
+// An address, in the one spelling the platform stores (signin.ts canon), so
+// an invite and the sign-in that answers it are the same person.
+let address = (v: unknown) => {
+  let at = canon(text(v, 'email'))
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(at)) {
+    throw new Error('email: an address like name@example.com')
+  }
+  return at
 }
 
 let slug = (v: unknown, what: string) => {
@@ -102,6 +152,14 @@ let inSpace = async (ctx: Ctx, args: Args, write = false) => {
   }
   if (!who.role) throw new Error(`not a member of ${space.slug}`)
   if (write && !mayWrite(who)) throw new Error(`not a writer of ${space.slug}`)
+  return { space, who }
+}
+
+// The caller as the space's OWNER: who belongs is the owner's to say. An
+// editor writes the data and the files; they do not hand out keys.
+let owns = async (ctx: Ctx, args: Args) => {
+  let { space, who } = await inSpace(ctx, args, true)
+  if (who.role != 'owner') throw new Error(`not the owner of ${space.slug}`)
   return { space, who }
 }
 
@@ -208,6 +266,16 @@ let fileKey = (space: Space, app: App, path: string) =>
 let url = (space: Space, app: App) =>
   `https://${space.slug}.yaks.app/${app.slug}/`
 
+// What an app's access means where it is felt: what happens when the person
+// sends someone the link. Said on every tool that sets it, so the agent can
+// repeat it and the person is never surprised by who can act on their app.
+let told = (access: Access | null) =>
+  access == 'open'
+    ? 'anyone with the link can use it, signed in or not'
+    : access == 'private'
+    ? 'only its members can see it; member_add invites someone by email'
+    : 'anyone with the link can see it; only its members can change it'
+
 // The view app_list draws its answer in — a `ui://` resource the door serves
 // from public/apps.html (mcp.ts) and the host renders in an iframe.
 export let APPS_VIEW = 'ui://yaks/apps'
@@ -256,13 +324,17 @@ export let TOOLS: Tool[] = [
       'Start a new app — the thing you are making for the person. It lives at ' +
       '<space>.yaks.app/<slug>/ and the first app in a space also answers the ' +
       'bare address. Then app_files to write index.html, app_deploy to ' +
-      'release, and give them the link.',
+      'release, and give them the link. Pass access when the app is for other ' +
+      "people too: 'open' if anyone with the link should be able to act on it " +
+      "— vote, add a line, sign up — and 'private' if only they and whoever " +
+      'they invite (member_add) should see it at all.',
     input: {
       type: 'object',
       properties: {
         space: SPACE,
         slug: str('the path label'),
         title: str('its name'),
+        access: ACCESS,
       },
       required: ['slug', 'title'],
     },
@@ -278,7 +350,12 @@ export let TOOLS: Tool[] = [
       let entities: EntityLiteral[] = [{
         entity: { eid: '$app' },
         doc: { title: text(args.title, 'title') },
-        app: { slug: s, space: space.eid, version: 0 },
+        app: {
+          slug: s,
+          space: space.eid,
+          version: 0,
+          access: args.access == null ? 'public' : access(args.access),
+        },
         alias: { slug: bornAt(space, s) },
       }]
       // The first app in a space answers its bare hostname.
@@ -288,7 +365,8 @@ export let TOOLS: Tool[] = [
       await ctx.dir.apply({ entities }, vouched(who))
       let app = (await ctx.dir.app(space, s))!
       return {
-        text: `app ${space.slug}/${s} (${app.eid}): ${url(space, app)}`,
+        text: `app ${space.slug}/${s} (${app.eid}): ${url(space, app)}` +
+          ` — ${told(app.access)}`,
         space,
       }
     },
@@ -403,11 +481,13 @@ export let TOOLS: Tool[] = [
   {
     name: 'app_set',
     description:
-      'Rename an app or change its title. The title is what it is called; ' +
-      'the slug is its address, so changing it moves the app to ' +
-      '<space>.yaks.app/<new>/ — its files and everything it has saved come ' +
-      'with it, and the old address stops answering. Give the person the ' +
-      'new link.',
+      'Rename an app, change its title, or change who may use it. The title ' +
+      'is what it is called; the slug is its address, so changing it moves ' +
+      'the app to <space>.yaks.app/<new>/ — its files and everything it has ' +
+      'saved come with it, and the old address stops answering. Give the ' +
+      'person the new link. access is the same choice app_new takes: set it ' +
+      "to 'open' when they want everyone with the link to be able to act on " +
+      "the app, 'private' to shut it to everyone but its members.",
     input: {
       type: 'object',
       properties: {
@@ -415,6 +495,7 @@ export let TOOLS: Tool[] = [
         app: APP,
         slug: str('the new path label, to move the app'),
         title: str('the new name'),
+        access: ACCESS,
       },
       required: ['app'],
     },
@@ -422,8 +503,9 @@ export let TOOLS: Tool[] = [
       let { space, app, who } = await inApp(ctx, args, true)
       let title = args.title == null ? null : text(args.title, 'title')
       let to = args.slug == null ? null : slug(args.slug, 'slug')
-      if (title == null && to == null) {
-        throw new Error('nothing to change: pass title, slug, or both')
+      let open = args.access == null ? null : access(args.access)
+      if (title == null && to == null && open == null) {
+        throw new Error('nothing to change: pass title, slug, access, or all')
       }
       let moving = to != null && to != app.slug
       if (moving && await ctx.dir.app(space, to!)) {
@@ -444,7 +526,14 @@ export let TOOLS: Tool[] = [
         entities: [{
           entity: { eid: app.eid },
           ...(title == null ? {} : { doc: { title } }),
-          ...(moving ? { app: { slug: to! } } : {}),
+          ...(moving || open
+            ? {
+              app: {
+                ...(moving ? { slug: to! } : {}),
+                ...(open ? { access: open } : {}),
+              },
+            }
+            : {}),
         }],
       }, vouched(who))
       for (let key of keys) await blobs.delete(key)
@@ -454,7 +543,7 @@ export let TOOLS: Tool[] = [
           title == null ? '' : ` "${title}"`
         }: ${url(space, now)}${
           moving ? ` (moved from /${app.slug}/, which is gone)` : ''
-        }`,
+        }${open ? ` — ${told(open)}` : ''}`,
         space,
       }
     },
@@ -584,6 +673,92 @@ export let TOOLS: Tool[] = [
         data: { spaces: out },
         // Only one space in hand has an unseen channel to append to.
         space: spaces.length == 1 ? spaces[0]! : undefined,
+      }
+    },
+  },
+  {
+    name: 'member_add',
+    description:
+      'Invite someone into the space by email address, so they can change ' +
+      'what its apps hold: an editor writes, a viewer only reads, an owner ' +
+      'may also invite. They sign in at https://yaks.app with that same ' +
+      'address — there is nothing to install and no account to make first. ' +
+      'Only the space owner may invite. For an app that everyone with the ' +
+      'link should be able to act on without signing in at all, give it ' +
+      "access 'open' instead (app_set).",
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        email: str('their email address'),
+        role: {
+          type: 'string',
+          enum: [...ROLES],
+          description:
+            'editor (the default) reads and writes, viewer only reads, ' +
+            'owner may invite others too',
+        },
+      },
+      required: ['email'],
+    },
+    run: async (ctx, args) => {
+      let { space, who } = await owns(ctx, args)
+      let email = address(args.email)
+      let want = args.role == null ? 'editor' : role(args.role)
+      // The platform's row for that address, minted if it has never seen
+      // one: the invitation is what makes the person, and their sign-in
+      // later finds this same row by the same address (signin.ts personOf).
+      let person = await personOf(storeOf(ctx.env.STORE, META_STORE), email)
+      let had = await ctx.dir.member(space, person)
+      if (person == ctx.person && had) {
+        throw new Error(`${email} is you, and you own ${space.slug}`)
+      }
+      await ctx.dir.apply({
+        entities: [
+          had
+            ? { entity: { eid: had.eid }, member: { role: want } }
+            : { member: { space: space.eid, person, role: want } },
+        ],
+      }, vouched(who))
+      return {
+        text:
+          `${email} is ${want == 'editor' || want == 'owner' ? 'an' : 'a'}` +
+          ` ${want} of ` +
+          `${space.slug}${had ? ` (was ${had.role})` : ''} — tell them to ` +
+          `sign in at https://yaks.app with that address, and everything ` +
+          `at https://${space.slug}.yaks.app/ is theirs to ` +
+          `${want == 'viewer' ? 'read' : 'use'}`,
+        space,
+      }
+    },
+  },
+  {
+    name: 'member_remove',
+    description:
+      'Take someone back out of the space: they keep their sign-in and lose ' +
+      'this space. Only the space owner may, and the last owner cannot be ' +
+      'removed — a space with nobody to say who belongs is one nobody can ' +
+      'ever open again.',
+    input: {
+      type: 'object',
+      properties: { space: SPACE, email: str('their email address') },
+      required: ['email'],
+    },
+    run: async (ctx, args) => {
+      let { space, who } = await owns(ctx, args)
+      let email = address(args.email)
+      let person = await ctx.dir.personAt(email)
+      let had = person && await ctx.dir.member(space, person)
+      if (!had) throw new Error(`${email} is not a member of ${space.slug}`)
+      if (had.role == 'owner' && (await ctx.dir.owners(space)) < 2) {
+        throw new Error(`${email} is the only owner of ${space.slug}`)
+      }
+      await ctx.dir.apply({
+        entities: [{ entity: { eid: had.eid }, tombstone: {} }],
+      }, vouched(who))
+      return {
+        text: `${email} is no longer a member of ${space.slug}`,
+        space,
       }
     },
   },

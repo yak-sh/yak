@@ -30,9 +30,13 @@ other device, and it hands back a function that stops it.
 
     let stop = subscribe('.doc!', (recipes) => draw(recipes))
 
-A refusal throws with the server's own sentence, so `try/catch` and show it.
-Reads are open to anyone; writes need a signed-in owner or editor of the space
-(yaks.app signs people in — the page does nothing about it).
+A refusal throws with the server's own sentence, so `try/catch` and show it. Who
+may read and write is the app's `access`: `public` (the default) reads to anyone
+with the link and writes to a member, `open` writes to anyone with the link —
+the vote page, the shared list — and `private` answers members only. `app_new`
+and `app_set` set it; `member_add` invites someone into the space by email
+address, and they sign in at yaks.app with it (the page does nothing about
+signing in).
 
 ## What you save
 
@@ -125,8 +129,9 @@ want them directly (or from `curl`, or from another page):
     GET ./api/query?.doc.title~=cake → the ones whose title contains "cake"
     → [ {"kind": "doc", "entity": {"eid": "4f3c...", "num": 12}, ... } ]
 
-`apply` posts to the first, `query` and `search` read the second. A write needs
-a signed-in owner or editor; a read is open.
+`apply` posts to the first, `query` and `search` read the second, and both
+answer by the app's `access` above: a refused write is 401 to a stranger and 403
+to a member who may not.
 
 ## The filter line
 

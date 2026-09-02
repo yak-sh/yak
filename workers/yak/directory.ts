@@ -44,17 +44,27 @@ export type App = {
   space: string
   version: number | null
   title: string
+  // Who may read and write its store (T-32504): 'public', 'open', or
+  // 'private'. Null for an app born before the word, which means public —
+  // what every app did before there was one.
+  access: Access | null
   // The name of the Durable Object holding this app's data, pinned when the
   // app was born (`store` below); null for an app born before it was pinned,
   // which is named by its address the way it always was.
   store: string | null
 }
 export type Role = 'owner' | 'editor' | 'viewer'
+export type Access = 'public' | 'open' | 'private'
 
 type Row = {
   entity: { eid: string }
   space?: { slug: string; home: string | null }
-  app?: { slug: string; space: string; version: number | null }
+  app?: {
+    slug: string
+    space: string
+    version: number | null
+    access?: Access | null
+  }
   member?: { space: string; person: string; role: Role }
   email?: { address: string }
   alias?: { slug: string }
@@ -149,6 +159,7 @@ export let appOf = (r: Row): App => ({
   slug: r.app!.slug,
   space: r.app!.space,
   version: r.app!.version,
+  access: r.app!.access ?? null,
   title: r.doc?.title || r.app!.slug,
   store: r.alias?.slug ?? null,
 })
@@ -210,9 +221,28 @@ export let directory = (via: Fetcher) => {
       let row = space.home ? await one(`id=${space.home}`) : undefined
       return row?.app ? appOf(row) : null
     },
+    // A person's membership row: the eid, so an invite can revise or remove
+    // the one that stands, and the role, which is the same question asked
+    // shorter.
+    member: async (space: Space, person: string) => {
+      let row = await one(
+        `.member.space=${space.eid}&.member.person=${person}`,
+      )
+      return row?.member ? { eid: row.entity.eid, role: row.member.role } : null
+    },
     role: async (space: Space, person: string) =>
-      (await one(`.member.space=${space.eid}&.member.person=${person}`))
-        ?.member?.role ?? null,
+      (await self.member(space, person))?.role ?? null,
+    // How many owners a space has, so removing a member can refuse to leave
+    // it with none.
+    owners: async (space: Space) =>
+      (await query(`.member.space=${space.eid}&.member.role=owner`)).length,
+    // Who is at an address, if the platform has met them. signin.ts's
+    // `personOf` asks this same question and mints when the answer is
+    // nobody, which is how an invited person's later sign-in finds the row
+    // the invite made.
+    personAt: async (email: string) =>
+      (await one(`.person!&.email.address=${encodeURIComponent(email)}`))
+        ?.entity.eid ?? null,
     // Every space this person belongs to, the meta space left out: `yak` is
     // the platform's own, and a person who owns it (the first to sign in)
     // still means their own space when they name none.

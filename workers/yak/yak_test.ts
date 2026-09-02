@@ -6,10 +6,11 @@ import {
   assert,
   assertEquals,
   assertMatch,
+  assertRejects,
   assertStringIncludes,
 } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { client, kernel, seed, signedIn } from './probe.ts'
+import { client, connector, kernel, seed, signedIn } from './probe.ts'
 
 slow('the kernel routes, vouches, serves, and surfaces', async () => {
   let k = await kernel()
@@ -205,6 +206,174 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     })
     assertEquals(forgedFlag.status, 200)
     assertEquals((await owner.get('.exception!')).length, 1)
+  } finally {
+    await k.stop()
+  }
+})
+
+// What an app lets a stranger with the link do (T-32504), and the guest list
+// beside it: three apps, one per access word, each asked by the person who
+// owns it, by nobody at all, and by someone invited into the space by email.
+slow('an app says who may read it and who may write it', async () => {
+  let k = await kernel()
+  try {
+    let jeff = crypto.randomUUID()
+    let cookie = await signedIn(k, jeff)
+    let agent = connector(k, cookie)
+    await agent.tool('space_new', { slug: 'club', title: 'Book club' })
+    let born = (slug: string, access?: string) =>
+      agent.tool('app_new', {
+        space: 'club',
+        slug,
+        title: slug,
+        ...(access ? { access } : {}),
+      })
+    // Every tool that sets access says what it means where it is felt: what
+    // happens when the person sends someone the link.
+    assertStringIncludes(await born('list'), 'only its members can change it')
+    assertStringIncludes(
+      await born('vote', 'open'),
+      'anyone with the link can use it',
+    )
+    assertStringIncludes(
+      await born('diary', 'private'),
+      'only its members can see it',
+    )
+    await assertRejects(
+      () => born('junk', 'sideways'),
+      Error,
+      'access: one of public, open, private',
+    )
+
+    let owner = (app: string) => client(k, 'club.yaks.app', app, cookie)
+    let anyone = (app: string) => client(k, 'club.yaks.app', app)
+    let line = (title: string) => [{
+      eid: crypto.randomUUID(),
+      name: 'doc',
+      comp: { title },
+    }]
+    for (let app of ['list', 'vote', 'diary']) {
+      await owner(app).applied(line(`the ${app}`))
+    }
+
+    // public, the default: anyone with the link reads, and a stranger's write
+    // is refused — 401, because nobody signed in.
+    assertEquals((await anyone('list').get('.doc!')).length, 1)
+    let refused = await anyone('list').post(line('not mine to add'))
+    assertEquals(refused.status, 401)
+    assertEquals((await refused.json()).error.code, 'not_a_writer')
+
+    // open: the vote page. Anyone with the link writes, without signing in.
+    await anyone('vote').applied(line('my vote'))
+    assertEquals((await anyone('vote').get('.doc!')).length, 2)
+
+    // private: the data answers members only, both ways. The PAGE still
+    // serves — an app's bytes are not its data, and a visitor who is asked to
+    // sign in has to have somewhere to be asked.
+    await agent.tool('app_files', {
+      space: 'club',
+      app: 'diary',
+      op: 'write',
+      path: 'index.html',
+      content: '<!doctype html><h1>the diary</h1>',
+    })
+    assertEquals((await k.at('club.yaks.app', '/diary/')).status, 200)
+    let shut = await k.at('club.yaks.app', '/diary/api/query?.doc!')
+    assertEquals(shut.status, 401)
+    assertEquals((await shut.json()).error.code, 'not_a_reader')
+    assertEquals((await anyone('diary').post(line('no'))).status, 401)
+    assertEquals((await owner('diary').get('.doc!')).length, 1)
+
+    // The guest list: an invitation is an address, and the person behind it is
+    // minted here so their sign-in later finds this same row.
+    let said = await agent.tool('member_add', {
+      space: 'club',
+      email: ' Maya@Example.COM ',
+    })
+    assertStringIncludes(said, 'maya@example.com is an editor of club')
+    assertStringIncludes(said, 'sign in at https://yaks.app')
+    let [row] = await client(k, 'yak.yaks.app', 'platform', cookie)
+      .get('.email.address=maya@example.com')
+    let maya = row.entity.eid
+    let mayaIn = await signedIn(k, maya)
+    let editor = (app: string) => client(k, 'club.yaks.app', app, mayaIn)
+    await editor('list').applied(line('her line'))
+    assertEquals((await anyone('list').get('.doc!')).length, 2)
+    // The private app is hers to read and to write.
+    await editor('diary').applied(line('her secret'))
+    assertEquals((await editor('diary').get('.doc!')).length, 2)
+    // An editor writes the data; who belongs is the owner's alone.
+    await assertRejects(
+      () =>
+        connector(k, mayaIn).tool('member_add', {
+          space: 'club',
+          email: 'someone@example.com',
+        }),
+      Error,
+      'not the owner of club',
+    )
+
+    // Taken back out, she is a signed-in stranger: 403, not 401.
+    assertStringIncludes(
+      await agent.tool('member_remove', {
+        space: 'club',
+        email: 'maya@example.com',
+      }),
+      'maya@example.com is no longer a member of club',
+    )
+    assertEquals((await editor('list').post(line('again'))).status, 403)
+    let out = await k.at('club.yaks.app', '/diary/api/query?.doc!', {
+      headers: { cookie: mayaIn },
+    })
+    assertEquals(out.status, 403)
+    await assertRejects(
+      () =>
+        agent.tool('member_remove', {
+          space: 'club',
+          email: 'maya@example.com',
+        }),
+      Error,
+      'not a member of club',
+    )
+
+    // A space is never left with nobody to say who belongs. Jeff wears an
+    // address of his own for this: the meta space admits its first person as
+    // owner, which is how any directory row gets written at all.
+    await client(k, 'yak.yaks.app', 'platform', cookie).applied([
+      { eid: jeff, name: 'person', comp: {} },
+      { eid: jeff, name: 'email', comp: { address: 'jeff@example.com' } },
+    ])
+    await assertRejects(
+      () =>
+        agent.tool('member_remove', {
+          space: 'club',
+          email: 'jeff@example.com',
+        }),
+      Error,
+      'the only owner of club',
+    )
+
+    // The word is not fixed at birth: a list the whole club may add to, and
+    // then a list shut to everyone but them.
+    assertStringIncludes(
+      await agent.tool('app_set', {
+        space: 'club',
+        app: 'list',
+        access: 'open',
+      }),
+      'anyone with the link can use it',
+    )
+    await anyone('list').applied(line('everyone can now'))
+    assertEquals((await anyone('list').get('.doc!')).length, 3)
+    await agent.tool('app_set', {
+      space: 'club',
+      app: 'list',
+      access: 'private',
+    })
+    assertEquals(
+      (await k.at('club.yaks.app', '/list/api/query?.doc!')).status,
+      401,
+    )
   } finally {
     await k.stop()
   }

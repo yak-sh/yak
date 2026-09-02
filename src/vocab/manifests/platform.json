@@ -1,5 +1,15 @@
 {
   "name": "platform",
+  "enums": {
+    "appAccess": {
+      "rank": 160,
+      "values": [
+        "public",
+        "open",
+        "private"
+      ]
+    }
+  },
   "comps": {
     "app": {
       "rank": 1030,
@@ -10,7 +20,10 @@
           "eid": "space",
           "death": "cascade"
         },
-        "version": "number"
+        "version": "number",
+        "access": {
+          "enum": "appAccess"
+        }
       },
       "indexes": [
         {

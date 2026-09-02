@@ -129,7 +129,7 @@
   },
   {
     "kind": "exec",
-    "sql": "create table if not exists \"app\" (\n    entity integer primary key references entity(id),\n    \"slug\" text,\n    \"space\" integer references entity(id),\n    \"version\" real\n  );"
+    "sql": "create table if not exists \"app\" (\n    entity integer primary key references entity(id),\n    \"slug\" text,\n    \"space\" integer references entity(id),\n    \"version\" real,\n    \"access\" text\n  );"
   },
   {
     "kind": "exec",
@@ -568,6 +568,12 @@
     "table": "app",
     "col": "version",
     "sql": "alter table app add column \"version\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "app",
+    "col": "access",
+    "sql": "alter table app add column \"access\" text"
   },
   {
     "kind": "addColumn",

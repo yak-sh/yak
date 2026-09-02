@@ -52,6 +52,7 @@ export let verdicts = ['approved', 'rejected', 'changes_requested'] as const
 export let grades = ['frontier', 'mid', 'small'] as const
 export let noticeKinds = ['lapse', 'sweep', 'scene', 'wake'] as const
 export let effectStates = ['pending', 'leased', 'delivered', 'failed'] as const
+export let appAccess = ['public', 'open', 'private'] as const
 
 // The graph-native Session-log vocabulary (comps marked log = true).
 export let sessionComps: Record<string, Record<string, PropType>> = {
@@ -551,6 +552,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     slug: 'text',
     space: { eid: 'space', death: 'cascade' },
     version: 'number',
+    access: { enum: appAccess },
   },
   member: {
     space: { eid: 'space', death: 'cascade' },

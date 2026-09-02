@@ -7,6 +7,14 @@
 use yak_vocab::{Number, Ref, Sel, Text, Time};
 use yak_vocab_derive::Comp;
 
+// What an app lets someone who is not a member do (T-32504). `public` is the
+// default and what every app had before there was a word for it: anyone with
+// the link reads, members write. `open` is the vote page and the shared list
+// — anyone with the link writes too. `private` answers members only, both
+// ways. It governs the app's DATA, never its files: a deploy is always a
+// member's.
+venum!("platform", "appAccess", 160, ["public", "open", "private"]);
+
 // A tenant: `<slug>.yaks.app`. doc carries its name; `home` is the app that
 // answers the bare hostname, null while the space has none. Slugs are unique
 // — a hostname names one space — so a doubled seed bounces instead of
@@ -21,8 +29,10 @@ struct Space {
 }
 
 // An app inside a space: `<space>.yaks.app/<slug>`. doc carries its title;
-// `version` counts deploys, so an error names the deploy it happened on. Dies
-// with its space; one slug per space.
+// `version` counts deploys, so an error names the deploy it happened on;
+// `access` is who may read and write its store, absent meaning `public`, so
+// every app born before the word keeps the behavior it had. Dies with its
+// space; one slug per space.
 #[derive(Comp)]
 #[comp(plugin = "platform", rank = 1030, kind_rank = 400)]
 #[index(cols(space, slug), unique)]
@@ -31,6 +41,8 @@ struct App {
     #[col(eid = "space", death = "cascade")]
     space: Ref,
     version: Number,
+    #[col(sel = "appAccess")]
+    access: Sel,
 }
 
 // A person's standing in a space — the one fact the kernel hands an app as

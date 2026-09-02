@@ -406,6 +406,7 @@ pub(crate) fn baked() -> Vocab {
             ("slug".into(), PropType::Text),
             ("space".into(), PropType::Eid("space".into())),
             ("version".into(), PropType::Number),
+            ("access".into(), PropType::Enum(vec!["public".into(), "open".into(), "private".into()])),
         ]),
         ("member".into(), vec![
             ("space".into(), PropType::Eid("space".into())),
