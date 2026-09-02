@@ -29,8 +29,11 @@ routes = [
 [dev]
 host = "127.0.0.1"
 
-# The home page. run_worker_first: the Worker decides what an asset answers
-# for, so a space's hostname never serves the apex's page.
+# The apex's static files: the home page, the store client an app's pages
+# import (served back to them at <space>.yaks.app/<app>/api/client.js), and
+# the guide the MCP door offers as its one resource. run_worker_first: the
+# Worker decides what an asset answers for, so a space's hostname never
+# serves the apex's page.
 [assets]
 directory = "./public"
 binding = "ASSETS"

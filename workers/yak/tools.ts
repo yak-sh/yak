@@ -183,7 +183,11 @@ export let TOOLS: Tool[] = [
     name: 'app_files',
     description:
       "An app's files, served live at <space>.yaks.app/<app>/<path>: list them, " +
-      'read one, or write one (index.html answers the directory).',
+      'read one, or write one (index.html answers the directory). A page saves ' +
+      "and lists the app's own entities with " +
+      "`import { apply, query, search } from './api/client.js'`, which the " +
+      'platform serves beside it — read the guide resource ' +
+      '(https://yaks.app/guide.md) before writing one.',
     input: {
       type: 'object',
       properties: {
@@ -276,7 +280,9 @@ export let TOOLS: Tool[] = [
     description:
       "Write bundles into the app's graph: each entity is {entity: {eid}, ...components}, " +
       'a `$alias` eid mints, a nested bundle stands in wherever an eid goes, edges are ' +
-      'the `dependency` component. Answers the effective changes and alias → eid.',
+      'the `dependency` component. Answers the effective changes and alias → eid. ' +
+      "The app's own pages write the same shape through ./api/client.js " +
+      '(https://yaks.app/guide.md); this is the door for seeding and fixing data yourself.',
     input: {
       type: 'object',
       properties: {
@@ -306,8 +312,9 @@ export let TOOLS: Tool[] = [
     name: 'graph_query',
     description:
       "Read the app's graph with the filter grammar: '.doc.title~=cake', '.task.status=open', " +
-      "'id=<eid>' fetches by address; 'limit=' and 'after=' page; '.count' counts. " +
-      'Answers entity JSON, {kind, entity: {eid, num}, ...components}.',
+      "'id=<eid>' fetches by address; 'limit=' and 'after=' page; '.count!' counts. " +
+      'Answers entity JSON, {kind, entity: {eid, num}, ...components}. The same ' +
+      'grammar the page passes to query() from ./api/client.js.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP, query: str('the filter line') },

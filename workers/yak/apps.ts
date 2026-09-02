@@ -79,6 +79,12 @@ let api = async (
   path: string,
   who: Who,
 ) => {
+  // The store client an app's pages import (public/client.js), served beside
+  // the doors it wraps so a page needs no address but its own. One file for
+  // every app, so it comes from the platform's assets, not the app's blobs.
+  if (path == '/client.js') {
+    return env.ASSETS.fetch(new Request(new URL('/client.js', req.url)))
+  }
   let store = storeOf(env.STORE, space.slug, app.slug)
   let headers = vouched(who)
   let refused = () => json(who.person ? 403 : 401, 'not_a_writer')

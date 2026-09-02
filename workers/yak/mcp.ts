@@ -2,9 +2,10 @@
 // MCP server over Streamable HTTP in its stateless form — one JSON-RPC
 // request in, one JSON reply out, no session id, no event stream — the same
 // way the dev server mounts src/mcp.ts, so a restart strands nobody and a
-// Worker isolate holds nothing between calls. The protocol surface is four
-// methods (initialize, ping, tools/list, tools/call) over the tool table in
-// tools.ts, which is all a connector that only calls tools asks for. The
+// Worker isolate holds nothing between calls. The protocol surface is six
+// methods — initialize, ping, tools/list, tools/call over the tool table in
+// tools.ts, and resources/list, resources/read over the one guide below,
+// which is what a connector that calls tools and reads a page asks for. The
 // `agents` package's McpAgent — a hibernating Durable
 // Object per client session — is the shape to grow into the day a tool
 // streams progress or the server pushes; it would cost a second DO class, a
@@ -46,6 +47,20 @@ let INSTRUCTIONS =
   '(app_files), deploy (app_deploy); its data is a graph (graph_apply, ' +
   'graph_query, search). Every reply ends with any error the app hit that ' +
   'you have not seen; fix what you see.'
+
+// The one resource this door offers: how an app is built here, and how its
+// pages save and list through the client the kernel serves them
+// (public/guide.md). Its URI is the address that actually serves it, so a
+// client may read it through this door or simply follow the link.
+let GUIDE = {
+  uri: 'https://yaks.app/guide.md',
+  name: 'building-an-app',
+  title: 'Building an app on yaks.app',
+  description:
+    'What an app is, how its pages read and write its store through ' +
+    './api/client.js, and the components and filters they have.',
+  mimeType: 'text/markdown',
+}
 
 type Rpc = {
   jsonrpc: '2.0'
@@ -99,7 +114,7 @@ let handle = async (ctx: Ctx, rpc: Rpc) => {
   if (rpc.method == 'initialize') {
     return result(rpc.id, {
       protocolVersion: spoken(params.protocolVersion),
-      capabilities: { tools: {} },
+      capabilities: { tools: {}, resources: {} },
       serverInfo: { name: 'yaks.app', version: VERSION },
       instructions: INSTRUCTIONS,
     })
@@ -115,6 +130,22 @@ let handle = async (ctx: Ctx, rpc: Rpc) => {
     })
   }
   if (rpc.method == 'tools/call') return result(rpc.id, await call(ctx, params))
+  if (rpc.method == 'resources/list') {
+    return result(rpc.id, { resources: [GUIDE] })
+  }
+  if (rpc.method == 'resources/read') {
+    if (params.uri != GUIDE.uri) {
+      return rpcError(rpc.id, -32602, `no resource ${params.uri}`)
+    }
+    let page = await ctx.env.ASSETS.fetch(new Request(GUIDE.uri))
+    return result(rpc.id, {
+      contents: [{
+        uri: GUIDE.uri,
+        mimeType: GUIDE.mimeType,
+        text: await page.text(),
+      }],
+    })
+  }
   return rpcError(rpc.id, -32601, `no method ${rpc.method}`)
 }
 

@@ -8,6 +8,8 @@ import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { connector, kernel, signedIn } from './probe.ts'
 
+let GUIDE = 'https://yaks.app/guide.md'
+
 slow(
   'the connector: tools, a space made, an app served, errors seen',
   async () => {
@@ -36,6 +38,22 @@ slow(
         'search',
       ])
       assert(tools.every((t: { inputSchema: unknown }) => t.inputSchema))
+
+      // The guide the tool descriptions point at, offered as a resource and
+      // read from the address that serves it.
+      assert(init.capabilities.resources, 'resources are offered')
+      let { resources } = await agent.call('resources/list')
+      assertEquals(
+        resources.map((r: { uri: string }) => r.uri),
+        [GUIDE],
+      )
+      let read = await agent.call('resources/read', { uri: GUIDE })
+      assertMatch(read.contents[0].text, /api\/client\.js/)
+      await assertRejects(
+        () => agent.call('resources/read', { uri: 'https://yaks.app/nope' }),
+        Error,
+        'no resource',
+      )
 
       // A space, then an app in it; the slugs are one per namespace.
       assertMatch(
