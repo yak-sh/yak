@@ -144,6 +144,9 @@ The same grammar the platform speaks everywhere:
 - `limit=50`, `after=<num>` page — a windowed read answers the NEWEST that many,
   where a plain list is oldest first; `.count!` counts instead of listing.
 - Bare words are a full-text term, which is all `search` is.
+- `.created!` asks for the platform's stamps — who saved a row and when. A
+  listing leaves them out unless you name them, so what comes back is what you
+  saved.
 
 Ask for the component you want, not for the absence of one: a long `body` is
 kept as its own content-addressed entity beside the doc, so a filter that
@@ -151,6 +154,11 @@ selects everything selects those too, and a page rendering `row.doc.title` would
 print `undefined`. `.doc!` never picks them up.
 
 ## When something breaks
+
+A door that refuses answers a code for you and a sentence for the person —
+`{"error": {"code": "not_a_writer", "message": "sign in to change this app"}}`.
+`client.js` throws the sentence, so `catch (e) { show(e.message) }` is the whole
+of it.
 
 A request to the app that fails becomes an entity in the app's own store, and
 the person's agent hears about it on its next reply — once, then `app_errors`

@@ -64,7 +64,9 @@ export let store = (base) => {
       }),
     })
   // The filter line, the grammar the boards speak: '.doc.title~=cake',
-  // '.opaque.format=recipe', 'id=<eid>', 'limit=', 'after='. Newest first.
+  // '.opaque.format=recipe', 'id=<eid>', 'limit=', 'after='. Oldest first,
+  // by the number the store minted; a windowed read is the newest page of
+  // that same order.
   let query = (filter = '') => ask(`query?${filter}`)
   // Full-text over the docs, ranked; a filter may ride along.
   let search = (text, filter = '') =>
