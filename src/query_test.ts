@@ -982,10 +982,17 @@ Deno.test('bareRenamesOf: only a changed column name earns a bare redirect', () 
 // door instead of the sketch — every door through route() inherits it.
 Deno.test('an edge-ish prop names the edge door, not the sketch', () => {
   for (let prop of ['blocked-by', 'depends_on', 'parent', 'subtasks']) {
+    // The wire spelling first — a hosted app's store has no `task` CLI —
+    // and the CLI's beside it.
     assertThrows(
       () => route(prop),
       Error,
-      "link one with 'task <parent> requires <child>'",
+      'write one as the `dependency` component, {type, child}',
+    )
+    assertThrows(
+      () => route(prop),
+      Error,
+      "'task <parent> requires <child>'",
     )
   }
   assertThrows(
@@ -1300,14 +1307,14 @@ Deno.test('paths: a non-reference middle hop is refused', () => {
   )
 })
 
-Deno.test('paths: an edge word as a hop points at the edge-hop ticket', () => {
+Deno.test('paths: an edge word as a hop says traversal is not served', () => {
   assertThrows(
     () => pred('.dependency.child.task.status=open'),
     Error,
-    'T-14078',
+    'edge-hop traversal is not served',
   )
-  // A single-segment edge word keeps teaching the link door, not traversal.
-  assertThrows(() => pred('.depends_on=T-9'), Error, 'link one')
+  // A single-segment edge word keeps teaching the edge door, not traversal.
+  assertThrows(() => pred('.depends_on=T-9'), Error, 'an EDGE, not a prop')
 })
 
 Deno.test('provenance: .created.via filters by instrument', () => {

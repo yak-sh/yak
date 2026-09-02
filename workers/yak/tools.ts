@@ -20,6 +20,7 @@
 // bundle, or a flat Change batch. A deploy in v1 is a version bump, since an
 // app's files serve live from its blob store.
 import { r2Blobs } from '../../src/blobs_r2.ts'
+import { EXAMPLE } from '../../src/store/vocab.ts'
 import type { EntityLiteral } from '../../src/mutation.ts'
 import {
   type App,
@@ -354,23 +355,38 @@ export let TOOLS: Tool[] = [
     description:
       'Release what you have written: the files are already live, so this is ' +
       'the mark that they are one version — the one an error will name. Do ' +
-      'it when the app is ready to show, then give the person the URL.',
+      'it when the app is ready to show, then give the person the URL. It ' +
+      "also plants the components the app's vocab.json declares — " +
+      `${EXAMPLE} — so the app gets typed components of its own.`,
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP },
       required: ['app'],
     },
     run: async (ctx, args) => {
-      let { space, app, who } = await inApp(ctx, args, true)
+      let { space, app, who, store } = await inApp(ctx, args, true)
+      // The app's own components, if it declares any. A manifest the store
+      // refuses fails the deploy: the words and the tables must agree, and a
+      // half-planted vocabulary is what `unknown component` is made of.
+      let key = fileKey(space, app, 'vocab.json')
+      let blobs = r2Blobs(ctx.env.BLOBS)
+      let planted: string[] = []
+      if (await blobs.has(key)) {
+        let r = await store('/vocab', {
+          method: 'POST',
+          body: new TextDecoder().decode(await blobs.get(key)),
+        }, vouched(who))
+        planted = JSON.parse(await answer(r)).comps ?? []
+      }
       let version = (app.version ?? 0) + 1
       await ctx.dir.apply(
         { entities: [{ entity: { eid: app.eid }, app: { version } }] },
         vouched(who),
       )
       return {
-        text: `deployed ${space.slug}/${app.slug} v${version}: ${
-          url(space, app)
-        }`,
+        text:
+          `deployed ${space.slug}/${app.slug} v${version}: ${url(space, app)}` +
+          (planted.length ? `\ncomponents: ${planted.join(', ')}` : ''),
         space,
       }
     },
@@ -461,12 +477,12 @@ export let TOOLS: Tool[] = [
       'uuid of your own that names nothing yet, a nested bundle stands in ' +
       'wherever an eid goes, and edges are the `dependency` component. The ' +
       "app's pages write this same shape through ./api/client.js. The " +
-      'components an app has today are the shared ones ' +
+      'components every app shares are ' +
       '— doc (title, body), task (status, priority, project), project, ' +
-      'comment, web, image, attachment, archived; a component of your own ' +
-      'naming is coming, so until then the words go in doc and the rest in ' +
-      'its body. The answer is one line naming what was written, by id; ' +
-      'graph_query reads the data back. The guide ' +
+      "comment, web, image, attachment, archived; components of the app's " +
+      'own naming ride here too, once its vocab.json declares them and ' +
+      'app_deploy has planted them. The answer is one line naming what was ' +
+      'written, by id; graph_query reads the data back. The guide ' +
       '(https://yaks.app/guide.md) has all of it.',
     input: {
       type: 'object',

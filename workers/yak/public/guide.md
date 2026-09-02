@@ -78,11 +78,31 @@ The platform's own vocabulary, shared by every app:
 - `dependency` — how two entities relate: `{type, child}`, where type is one of
   `contains`, `requires`, `about`, `references`, `supersedes`.
 
-Components an app declares for itself — a `recipe` with `serves` and `minutes`
-of its own — are coming; an app will name its vocabulary and get its own
-columns. Until then the shared words above carry the shape, and `doc.body`
-carries the rest: it is text, so markdown or JSON both live there, and a page
-that saves JSON there parses it back on the way out.
+## Components of your own
+
+An app names its own components in a `vocab.json` at its root, and `app_deploy`
+plants them in that app's store:
+
+    { "recipe": { "title": "text", "serves": "number", "minutes": "number" } }
+
+After the deploy `recipe` is a component like any other — write it in a bundle,
+read it back in the row, filter on it:
+
+    await apply({
+      entity: { eid: '$pancakes' },
+      doc: { title: 'Pancakes' },
+      recipe: { serves: 4, minutes: 20 },
+    })
+
+    let quick = await query('.recipe.minutes<=30')
+
+A column is one of `text`, `number`, `bool`, `time`, `url`. The manifest only
+ever grows: a later deploy may add a column, but one that already has rows is
+never dropped or retyped, and a name the platform already uses (`doc`, `task`,
+…) is refused. Your words are yours — no other app's store has heard of them.
+
+Anything the columns don't cover still lives in `doc.body`: it is text, so
+markdown or JSON both keep there.
 
 ## The doors underneath
 

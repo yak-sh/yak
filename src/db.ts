@@ -27,6 +27,7 @@ import {
   kindOrder,
   lazy,
   propRenames,
+  type PropType,
   sessionActive,
   sessionComps,
   SHORT,
@@ -51,10 +52,12 @@ import {
   ftsQuery,
   ftsTerm,
   leafOf,
+  learn,
   matchQuery,
   parseQuery,
   type Pred,
   resolveRefs,
+  teaches,
   TEXT,
 } from './query.ts'
 import { type Sql as Compiled, where } from './sql.ts'
@@ -64,6 +67,7 @@ import {
   validate as validateSetting,
 } from './config.ts'
 import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'
+import { FILTERS, type Vocab, vocabOps } from './store/vocab.ts'
 import { edgeEid, natureOf, natures, sentences, typeOf } from './edge.ts'
 import { indexesFor } from './index.ts'
 import {
@@ -4023,26 +4027,50 @@ export let schemaDdl = (real: Sql): SchemaOp[] => {
 // migrations, which are no-ops on a fresh graph anyway. vocab/schema_capture.ts
 // proves it reproduces a fresh migrate() byte-for-byte at codegen time. No
 // seed: the demo graph belongs to the local file, not to a backend.
-export let plant = <D extends Sql>(db: D, ops: SchemaOp[]): D => {
+export let plant = <D extends Sql>(db: D, ops: SchemaOp[]): D =>
+  shaped(db, () => {
+    raise(db, ops)
+    mintEpoch(db)
+    db.version = schemaVersion
+    return db
+  })
+
+// The guarded replay itself: an idempotent create/drop runs as-is, an
+// add-column only when the column is absent, a bare create-index only when the
+// index is absent.
+let raise = (db: Sql, ops: SchemaOp[]) => {
+  for (let op of ops) {
+    if (op.kind == 'addColumn') {
+      if (!hasCol(db, op.table, op.col)) db.exec(op.sql)
+    } else if (op.kind == 'index') {
+      if (!hasIdx(db, op.name)) db.exec(op.sql)
+    } else db.exec(op.sql)
+  }
+}
+
+// One DDL transaction, with the statement cache off (a statement prepared
+// against the intermediate schema would strand) and the column memo dropped
+// after (a new table changes what columnsOf() knows).
+let shaped = <T>(db: Sql, fn: () => T): T => {
   let wasCaching = caching
   caching = false
   try {
-    return db.transaction(() => {
-      for (let op of ops) {
-        if (op.kind == 'addColumn') {
-          if (!hasCol(db, op.table, op.col)) db.exec(op.sql)
-        } else if (op.kind == 'index') {
-          if (!hasIdx(db, op.name)) db.exec(op.sql)
-        } else db.exec(op.sql)
-      }
-      mintEpoch(db)
-      db.version = schemaVersion
-      return db
-    }, true)
+    return db.transaction(fn, true)
   } finally {
     caching = wasCaching
+    stored.delete(db)
   }
 }
+
+// The same replay, additive and on its own: an app's declared components
+// (store/vocab.ts) land in a store that is already planted, so no epoch is
+// minted and no schema version moves — the app's vocabulary grew, the
+// platform's schema did not.
+export let graft = <D extends Sql>(db: D, ops: SchemaOp[]): D =>
+  shaped(db, () => {
+    raise(db, ops)
+    return db
+  })
 
 // The one live handle moved to live_db.ts: importing THIS module runs nothing
 // — it is library code (D-22388), safe in the CLI's read arm and in any test —
@@ -4071,6 +4099,57 @@ let owned: Record<string, string[]> = Object.fromEntries(
 )
 
 let edgeCols = ['type', 'child', 'ord', 'gone']
+
+// An APP's own components, declared by its vocab.json and planted in its own
+// store (T-32502, store/vocab.ts). Held per HANDLE, never as module state: one
+// Worker isolate holds many stores, and a word one app declares is not another
+// app's word. A handle that has never been told carries the platform
+// vocabulary alone, which is every local graph.
+let ownVocab = new WeakMap<Sql, Vocab>()
+
+export let vocabOf = (db: Sql): Vocab => ownVocab.get(db) ?? {}
+
+// Does this store have a vocabulary of its own to grow? An app store says yes
+// even before it declares anything — that is what makes "unknown component"
+// able to name vocab.json instead of shrugging.
+export let ownsVocab = (db: Sql): boolean => ownVocab.has(db)
+
+// Plant an app's manifest: the tables and columns it names, additively, then
+// the word itself — into this handle, and into the filter grammar so
+// `.recipe.serves=4` parses (query.ts learn()). A store with a vocabulary door
+// also teaches that grammar's refusals in its own terms: a hosted app hears
+// about vocab.json, never about the fleet CLI or another graph's ids.
+export let plantVocab = (db: Sql, vocab: Vocab): void => {
+  let ops = vocabOps(vocab)
+  if (ops.length) graft(db, ops)
+  ownVocab.set(db, vocab)
+  learn(vocab)
+  teaches(FILTERS)
+}
+
+// This store's whole writable vocabulary at one name: the platform's, then its
+// own. Undefined for a word neither knows.
+let colsOf = (db: Sql, name: string): string[] | undefined => {
+  let own = vocabOf(db)[name]
+  return cmps[name] ?? (own && Object.keys(own))
+}
+
+// The declared type of one column, either vocabulary — what bound() types a
+// value against.
+let typeAt = (db: Sql, name: string, col: string): PropType | undefined =>
+  comps[name]?.[col] ?? vocabOf(db)[name]?.[col]
+
+// Graph-out at one name, and every name this store reads. An app's component
+// has no stamped half, so its readable columns are exactly what it declared.
+let readOf = (db: Sql, name: string): string[] | undefined => {
+  let own = vocabOf(db)[name]
+  return readable[name] ?? (own && ['eid', ...Object.keys(own)])
+}
+
+let readNames = (db: Sql): string[] => [
+  ...Object.keys(readable),
+  ...Object.keys(vocabOf(db)),
+]
 
 // What the SCHEMA has, as opposed to what the wire may write — the
 // authority for telling a name that EXISTS from a name that doesn't.
@@ -4184,8 +4263,8 @@ let admitted = (
   let cols = table == 'dependency'
     ? edgeCols
     : server
-    ? owned[table]
-    : cmps[table]
+    ? owned[table] ?? colsOf(db, table)
+    : colsOf(db, table)
   if (!cols) return
   if (serverOwned.has(table) && !server) return
   if (change.comp == null) return change
@@ -4638,12 +4717,12 @@ let readable: Record<string, string[]> = Object.fromEntries(
 // spine also carries an `eid` column, so the bare name would otherwise be
 // ambiguous. The `entity` spine is eid-native (eid is a real column), so it
 // projects itself.
-let select = (name: string): string => {
+let select = (db: Sql, name: string): string => {
   if (name == 'entity') {
     return `select ${readable.entity.map(sqlName).join(', ')} from entity`
   }
   let joins: string[] = []
-  let cols = readable[name].map((c) => {
+  let cols = readOf(db, name)!.map((c) => {
     if (c == 'eid') return `__o.eid as eid`
     if (name == 'doc' && c == 'body') {
       joins.push('join blob_text __body on __body.entity = t.body')
@@ -4676,7 +4755,7 @@ let settled = (
   eid: string,
   comp: Record<string, unknown>,
 ): Record<string, unknown> | null => {
-  let row = prep(db, `${select(name)} where eid = ?`).get(eid) as
+  let row = prep(db, `${select(db, name)} where eid = ?`).get(eid) as
     | Record<string, unknown>
     | undefined
   if (!row) return comp
@@ -4684,7 +4763,9 @@ let settled = (
     if (!(col in row)) return false
     let want: unknown
     try {
-      want = isRef(name, col) ? comp[col] : bound(name, col, comp[col])
+      want = isRef(name, col)
+        ? comp[col]
+        : bound(name, col, comp[col], typeAt(db, name, col))
     } catch {
       return false // let the write path raise the shape error
     }
@@ -4750,8 +4831,12 @@ export let bound = (
   name: string,
   col: string,
   value: unknown,
+  // The declared type, when the caller holds a store whose vocabulary is
+  // wider than the platform's (typeAt): a store's own bool column takes a
+  // JSON `true` the way `repo.push` does.
+  type: PropType | undefined = comps[name]?.[col],
 ): string | number | bigint | null => {
-  if (comps[name]?.[col] == 'bool' && typeof value == 'boolean') {
+  if (type == 'bool' && typeof value == 'boolean') {
     return Number(value)
   }
   let kind = typeof value
@@ -5285,8 +5370,8 @@ let editOps = (db: Sql, changes: Change[]): Change[] =>
     if (!change.comp) return change
     let ops = Object.entries(change.comp).filter(([, v]) => isFieldOp(v))
     if (!ops.length) return change
-    if (!readable[change.name]) return change
-    let row = prep(db, `${select(change.name)} where eid = ?`).get(
+    if (!readOf(db, change.name)) return change
+    let row = prep(db, `${select(db, change.name)} where eid = ?`).get(
       change.eid,
     ) as Record<string, unknown> | undefined
     let comp = { ...change.comp }
@@ -5711,7 +5796,7 @@ export let apply = (
         continue
       }
       if (
-        comp == null || name == 'dependency' || !cmps[name] ||
+        comp == null || name == 'dependency' || !colsOf(db, name) ||
         killed.has(eid) || dead.get(eid)
       ) continue
       if (spine(db, eid).changes) minted.add(eid)
@@ -5820,7 +5905,7 @@ export let apply = (
         }
         continue
       }
-      let cols = server ? owned[name] : cmps[name]
+      let cols = server ? owned[name] ?? colsOf(db, name) : colsOf(db, name)
       if (!cols) continue
       // Whether THIS change is what first touched the eid — a no-op change
       // un-touches it below, so a batch of pure no-ops stamps nothing.
@@ -5859,12 +5944,12 @@ export let apply = (
         // Read through the PROJECTION (select()), so a reference column reads
         // back as the eid the caller named in `was` — not the int id it is
         // stored as. The guard columns are readable names (`eid`, refs, scalars).
-        let row = prep(db, `${select(name)} where eid = ?`).get(
+        let row = prep(db, `${select(db, name)} where eid = ?`).get(
           eid,
         ) as
           | Record<string, unknown>
           | undefined
-        let real = new Set(readable[name])
+        let real = new Set(readOf(db, name))
         for (let [col, want] of Object.entries(was)) {
           // A guard on a column that doesn't exist would read undefined,
           // compare equal to null, and protect nothing — the precondition
@@ -6201,7 +6286,10 @@ export let apply = (
               extra.push({ eid: orphan, name: t, comp: { [col]: null } })
             }
           }
-          for (let c of Object.keys(cmps).toReversed()) {
+          for (
+            let c of [...Object.keys(cmps), ...Object.keys(vocabOf(db))]
+              .toReversed()
+          ) {
             if (c != 'entity') {
               if (
                 prep(db, `delete from ${sqlName(c)} where entity = ?`).run(did)
@@ -6259,7 +6347,7 @@ export let apply = (
           ? textBlob(db, String(comp[c]))
           : isRef(name, c)
           ? refToId(db, name, eid, c, comp[c])
-          : bound(name, c, comp[c])
+          : bound(name, c, comp[c], typeAt(db, name, c))
       )
       // Update first (a patch can't re-satisfy not-null columns an insert
       // would demand). An existing row implies an existing spine. An FK
@@ -6694,7 +6782,7 @@ export let apply = (
       let cut = key.indexOf(' ')
       let name = key.slice(0, cut)
       let eid = key.slice(cut + 1)
-      let cols = cmps[name]
+      let cols = colsOf(db, name) ?? []
       if (!cols.length) continue
       // Project through select() so reference columns read back as eids, then
       // keep only the wire-writable cmps columns (server-owned stamped columns
@@ -7531,7 +7619,8 @@ export let inverseBatch = (db: Sql, id: number): Change[] => {
       })
       continue
     }
-    if (!cmps[c.name]?.length || !c.comp) continue // server-owned / derived
+    // server-owned / derived
+    if (!colsOf(db, c.name)?.length || !c.comp) continue
     let keys = Object.keys(c.comp).filter((k) => k != 'eid')
     if (!keys.length) continue
     let was = wasOf(c.name, c.comp, keys) as Change['was']
@@ -7734,6 +7823,9 @@ export let mutate = <T extends Mutation>(
   if ('entities' in mutation) {
     let plan = normalizeLiterals(mutation.entities, {
       resolve: (id) => resolveId(db, id),
+      // A store with a vocabulary of its own admits its own words, and its
+      // refusals say where a new one is declared.
+      own: ownsVocab(db) ? vocabOf(db) : undefined,
     })
     return {
       changes: apply(
@@ -8010,7 +8102,7 @@ export let touch = (
     out.push({
       eid,
       name: 'recall',
-      comp: prep(db, `${select('recall')} where eid = ?`)
+      comp: prep(db, `${select(db, 'recall')} where eid = ?`)
         .get(eid) as Change['comp'],
     })
     if (
@@ -8021,7 +8113,7 @@ export let touch = (
       out.push({
         eid,
         name: 'memory',
-        comp: prep(db, `${select('memory')} where eid = ?`)
+        comp: prep(db, `${select(db, 'memory')} where eid = ?`)
           .get(eid) as Change['comp'],
       })
     }
@@ -8193,9 +8285,13 @@ export let search = (db: Sql, q: string, limit = 20): Hit[] => {
         ...owners(p.comp, p.prop),
         ...(p.at ?? []).flatMap((h) => owners(h.comp, h.prop)),
       ]
+    // Only what THIS store has: a filter may name a component another store
+    // in this process declared (query.ts routes them process-wide, parse-time
+    // only), and a store hydrates none of a word it has never planted.
     let names = [...new Set(filters.flatMap(predComps))]
+      .filter((c) => readOf(db, c))
     let get = new Map(
-      names.map((c) => [c, prep(db, `${select(c)} where eid = ?`)]),
+      names.map((c) => [c, prep(db, `${select(db, c)} where eid = ?`)]),
     )
     let compsOf = (eid: string) => {
       let comps: Record<string, Record<string, unknown> | undefined> = {}
@@ -8355,7 +8451,7 @@ export let eager = (
   db: Sql,
   eid: string,
 ): Record<string, Record<string, unknown>> => {
-  let spine = prep(db, `${select('entity')} where eid = ?`)
+  let spine = prep(db, `${select(db, 'entity')} where eid = ?`)
     .get(eid) as Record<string, unknown> | undefined
   if (!spine) {
     // No persisted rows — a pass-through entity is hydrated from its source.
@@ -8366,9 +8462,9 @@ export let eager = (
     return {}
   }
   let out: Record<string, Record<string, unknown>> = { entity: spine }
-  for (let name of Object.keys(readable)) {
+  for (let name of readNames(db)) {
     if (name == 'entity') continue
-    let row = prep(db, `${select(name)} where eid = ?`)
+    let row = prep(db, `${select(db, name)} where eid = ?`)
       .get(eid) as Record<string, unknown> | undefined
     if (row) out[name] = row
   }
@@ -8541,7 +8637,7 @@ export let snapshot = (db: Sql): Snapshot => {
   if (hit?.local == key.local && hit.remote == key.remote) return hit.snap
   fillOmit(db)
   let changes: Change[] = []
-  for (let name of Object.keys(readable)) {
+  for (let name of readNames(db)) {
     for (
       let row of prep(
         db,
@@ -8558,7 +8654,7 @@ export let snapshot = (db: Sql): Snapshot => {
         // still shifts the plan), and tombstone is a tiny indexed scan, so the
         // saving is nil and the wire-order cost is real. Verified byte-identical
         // on a live-size copy (T-20299).
-        `${select(name)} where eid not in (select eid from _omit)
+        `${select(db, name)} where eid not in (select eid from _omit)
            and eid not in (
              select e.eid from tombstone t join entity e on e.id = t.entity
            )`,
@@ -8759,8 +8855,8 @@ export let readComp = (
   eid: string,
   name: string,
 ): Record<string, unknown> | undefined =>
-  readable[name]
-    ? prep(db, `${select(name)} where eid = ?`).get(eid) as
+  readOf(db, name)
+    ? prep(db, `${select(db, name)} where eid = ?`).get(eid) as
       | Record<string, unknown>
       | undefined
     : undefined
@@ -8822,13 +8918,13 @@ let stage = (db: Sql, eids: string[]) => {
 let staged = (db: Sql) => {
   let out = new Map<string, Record<string, Record<string, unknown>>>()
   let only = `where eid in (select eid from hit)`
-  let spine = prep(db, `${select('entity')} ${only}`)
+  let spine = prep(db, `${select(db, 'entity')} ${only}`)
     .all() as Record<string, unknown>[]
   for (let r of spine) out.set(String(r.eid), { entity: r })
   if (!out.size) return []
-  for (let name of Object.keys(readable)) {
+  for (let name of readNames(db)) {
     if (name == 'entity') continue
-    let rows = prep(db, `${select(name)} ${only}`)
+    let rows = prep(db, `${select(db, name)} ${only}`)
       .all() as Record<string, unknown>[]
     for (let r of rows) {
       let e = out.get(String(r.eid))

@@ -48,6 +48,7 @@ import {
   type Pred,
   route,
 } from './query.ts'
+import { TEACH } from './store/vocab.ts'
 import { FLOOR } from './twin.ts'
 import { type Provider, spawnDefault } from './providers.ts'
 import { env, request } from './http.ts'
@@ -1535,6 +1536,11 @@ export type LiteralPlan = {
 export type LiteralOptions = {
   resolve?: (id: string) => string | undefined
   mint?: () => string
+  // The components this STORE declares beyond the platform's (store/vocab.ts).
+  // Present at all — even empty — means the store has a vocab.json to grow, so
+  // an unknown component is taught where to declare itself instead of just
+  // refused.
+  own?: Record<string, Record<string, unknown>>
 }
 
 type LiteralNode = {
@@ -1620,6 +1626,11 @@ export let normalizeLiterals = (
   if (!literals.length) throw new Error('at least one entity literal is needed')
   let resolve = options.resolve ?? (() => undefined)
   let mint = options.mint ?? uuid
+  // A component name this store admits: the platform's vocabulary, plus the
+  // app's own if it has one. The same list is the WRITE ORDER below — a
+  // store's own components carry no references, so they land last.
+  let vocabulary = [...Object.keys(comps), ...Object.keys(options.own ?? {})]
+  let known = (name: string) => vocabulary.includes(name)
   let resolved = new Map<string, string | undefined>()
   let external = (id: string) => {
     if (!resolved.has(id)) resolved.set(id, resolve(id))
@@ -1666,7 +1677,9 @@ export let normalizeLiterals = (
     let declared = literal.comps ?? {}
     if (!object(declared)) throw new Error('literal comps must be an object')
     for (let [name, comp] of Object.entries(declared)) {
-      if (!owns(comps, name)) throw new Error(`unknown component: ${name}`)
+      if (!known(name)) {
+        throw new Error(`unknown component: ${name}${options.own ? TEACH : ''}`)
+      }
       if (comp != null && !object(comp)) {
         throw new Error(`${name} component must be an object or null`)
       }
@@ -1674,7 +1687,7 @@ export let normalizeLiterals = (
     let was = literal.was ?? {}
     if (!object(was)) throw new Error('literal was must be an object')
     for (let [name, guard] of Object.entries(was)) {
-      if (!owns(comps, name)) {
+      if (!known(name)) {
         throw new Error(`unknown guarded component: ${name}`)
       }
       if (!owns(declared, name)) {
@@ -1798,7 +1811,7 @@ export let normalizeLiterals = (
   >()
   for (let node of nodes) {
     let mine: [string, Record<string, unknown> | null][] = []
-    for (let name of Object.keys(comps)) {
+    for (let name of vocabulary) {
       if (!owns(node.comps, name)) continue
       let source = node.comps[name]
       let comp = source == null ? null : Object.fromEntries(

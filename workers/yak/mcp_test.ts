@@ -216,6 +216,59 @@ slow(
         found.map((r: { entity: { eid: string } }) => r.entity.eid),
         [cake],
       )
+      // The app's OWN components: vocab.json declares them, app_deploy plants
+      // them in this app's store, and nothing about them exists in any other.
+      // Both doors teach the same missing act, with no other graph's ids in
+      // the sentence.
+      for (
+        let ask of [
+          () =>
+            agent.tool('graph_apply', {
+              ...app,
+              entities: [{ entity: { eid: '$r' }, recipe: { serves: 4 } }],
+            }),
+          () => agent.tool('graph_query', { ...app, query: '.recipe!' }),
+        ]
+      ) {
+        let why = (await assertRejects(ask, Error)).message
+        assertStringIncludes(why, 'vocab.json')
+        assertStringIncludes(why, 'https://yaks.app/guide.md')
+        assertEquals(/P-\d|T-\d/.test(why), false)
+      }
+      await agent.tool('app_files', {
+        ...app,
+        op: 'write',
+        path: 'vocab.json',
+        content: '{"recipe":{"title":"text","serves":"number"}}',
+      })
+      assertStringIncludes(
+        await agent.tool('app_deploy', app),
+        'components: recipe',
+      )
+      let box = (await agent.tool('graph_apply', {
+        ...app,
+        entities: [{
+          entity: { eid: '$pancakes' },
+          doc: { title: 'Pancakes' },
+          recipe: { title: 'Pancakes', serves: 4 },
+        }],
+      })).match(/\$pancakes=(\S+)/)![1]
+      let [own] = JSON.parse(
+        await agent.tool('graph_query', { ...app, query: '.recipe.serves=4' }),
+      )
+      assertEquals(own.entity.eid, box)
+      assertEquals(own.recipe, { title: 'Pancakes', serves: 4 })
+      // A column the manifest never named is still a typo, not a new word.
+      await assertRejects(
+        () =>
+          agent.tool('graph_apply', {
+            ...app,
+            entities: [{ entity: { eid: box }, recipe: { calories: 500 } }],
+          }),
+        Error,
+        'unknown column: recipe.calories',
+      )
+
       // A refused store answer is the tool's error, not a 500.
       await assertRejects(
         () => agent.tool('graph_query', { ...app, query: 'work=build' }),
@@ -279,7 +332,7 @@ slow(
       assertEquals((await k.at('jeff.yaks.app', '/recipes/')).status, 404)
       assertEquals(
         await agent.tool('app_files', { ...moved, op: 'list' }),
-        'css/site.css\nindex.html',
+        'css/site.css\nindex.html\nvocab.json',
       )
       let still = JSON.parse(
         await agent.tool('graph_query', { ...moved, query: `id=${cake}` }),

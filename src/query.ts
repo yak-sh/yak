@@ -204,6 +204,29 @@ let routes: Record<string, readonly string[]> = Object.fromEntries(
   ]),
 )
 
+// An APP's own components (store/vocab.ts), learned when its store plants them
+// (db.ts plantVocab). They route QUALIFIED only — `.recipe.serves`, `.recipe!`
+// — never bare: a store's new word must not make `.title` ambiguous for every
+// reader of every graph. Parse-time only, so a word one store declares can at
+// worst let another store's filter parse and match nothing; no statement is
+// ever compiled against a table a store lacks (sql.ts `known` reads `comps`,
+// so these decline to the JS matcher, which reads the row's own components).
+let learned: Record<string, string[]> = {}
+
+export let learn = (vocab: Record<string, Record<string, unknown>>) => {
+  for (let [name, cols] of Object.entries(vocab)) {
+    if (name in routes) continue // the platform's word wins, always
+    learned[name] = [
+      ...new Set([...(learned[name] ?? []), ...Object.keys(cols)]),
+    ]
+  }
+}
+
+// The routing table as this reader sees it: the vocabulary, plus whatever
+// words the stores in this process have declared.
+let routed = (name: string): readonly string[] | undefined =>
+  routes[name] ?? learned[name]
+
 // A name a column or component already routes — the real props pred() resolves
 // before any scope. A scope may not shadow one, so this is how the pred seam
 // gives `.status`/`.project` priority over a same-named virtual prop.
@@ -282,9 +305,23 @@ for (let name of reserved) {
 }
 
 // The dot-param shape, sketched — the tail of every strict rejection
-// (FILTERS in grammar.ts spells the operators).
+// (FILTERS in grammar.ts spells the operators). Every example is a word the
+// vocabulary carries in EVERY graph: an error is read by whoever asked, and a
+// hosted app's store must never be taught with another graph's entity ids.
 let SKETCH =
-  'filters are dot-params: .status=open, .priority<=1, .project=P-19, .title~=word, …'
+  'filters are dot-params: .status=open, .priority<=1, .title~=word, ' +
+  '.doc.title~=word, …'
+
+// What THIS process teaches a reader who named a word it does not know. The
+// sketch above by default; a store with a vocabulary of its own replaces it
+// (db.ts plantVocab → store/vocab.ts FILTERS) so the tail says vocab.json
+// instead of a CLI the reader has never seen. Per process, because a process
+// serves one flavour of store: the fleet's local graph, or hosted apps.
+let taught = SKETCH
+
+export let teaches = (line: string) => {
+  taught = line
+}
 
 // The names agents reach for that are EDGES — a dependency has no column
 // and never will, so the sketch answers the wrong question in either
@@ -292,14 +329,16 @@ let SKETCH =
 // this is the shape of the mistake, not a listing verb.
 export let edgeish = /block|depend|require|parent|child|subtask/i
 export let EDGE_DOOR = 'a dependency is an EDGE, not a prop: ' +
-  "link one with 'task <parent> requires <child>'"
+  'write one as the `dependency` component, {type, child}' +
+  " — or 'task <parent> requires <child>'"
 
 // An edge word used as a path HOP: walking `dependency` triples is one-to-many
 // (any/all semantics), a different traversal than this {eid}-column deref, and
 // its own ticket. The refusal names it so the two are never conflated.
 export let EDGE_HOP = (word: string) =>
   `.${word} walks dependency edges, not an {eid} column — edge-hop traversal ` +
-  'is T-14078; a column path derefs reference props (.comment.target.doc.title)'
+  'is not served; a column path derefs reference props ' +
+  '(.comment.target.doc.title)'
 
 let sessionFacets = new Set<string>(sessionFacetNames)
 let sessionTwin = (owners: string[]) =>
@@ -397,14 +436,14 @@ export let route = (prop: string): { comp: string; prop: string } => {
   // A facet is itself filterable. Scalar and reference columns win above,
   // preserving `.project=P-3`; a component with no namesake column gets the
   // presence grammar (`=` absent, `~=` present) without a second vocabulary.
-  if (prop in routes) return { comp: prop, prop: '' }
+  if (routed(prop)) return { comp: prop, prop: '' }
   // The rejection is the teaching moment: agents keep reaching for eid as a
   // filter prop — name what the asker meant. (.kind is a SCOPE handled before
   // route() and .id routes through session.id, so neither reaches here.)
   throw new Error(
     prop == 'eid'
       ? 'address entities by id directly (T-3, E-9) — filters match component props'
-      : `unknown prop: .${prop} — ${edgeish.test(prop) ? EDGE_DOOR : SKETCH}`,
+      : `unknown prop: .${prop} — ${edgeish.test(prop) ? EDGE_DOOR : taught}`,
   )
 }
 
@@ -799,9 +838,10 @@ let groupsOf = (segs: string[]): Hop[] => {
   for (let i = 0; i < segs.length;) {
     // A component consumes its next segment as the explicit `comp.prop`
     // spelling; a component with nothing behind it is a bare facet (route()).
-    if (routes[segs[i]] && i + 1 < segs.length) {
+    let own = routed(segs[i])
+    if (own && i + 1 < segs.length) {
       let [a, b] = [segs[i], segs[i + 1]]
-      if (!routes[a].includes(b)) throw new Error(`no such prop: .${a}.${b}`)
+      if (!own.includes(b)) throw new Error(`no such prop: .${a}.${b}`)
       out.push({ comp: a, prop: b })
       i += 2
     } else {
@@ -1101,7 +1141,7 @@ export let preds = (token: string): Pred[] | null => {
   // A trailing bang completes a component sentence. This must win over a
   // same-named column (`persona` is both a facet and a session reference);
   // the column's explicit spelling remains `.session.persona!`.
-  if (segs.length == 1 && !value && op == '!' && segs[0] in routes) {
+  if (segs.length == 1 && !value && op == '!' && routed(segs[0])) {
     p = { comp: segs[0], prop: '', op: OPS[op], value }
   } else {
     let groups = groupsOf(segs)
@@ -1160,7 +1200,7 @@ export let pred = (token: string): Pred | null => {
 export let noFilter = (f: string) =>
   `not a filter: ${f} — ${
     f.startsWith('kind=') ? `write it dotted: .${f}; ` : ''
-  }${SKETCH}`
+  }${taught}`
 
 // A bare word: an FTS5 term over doc title/body. comp/prop are for show —
 // matchQuery treats TEXT specially (one pred, two columns).

@@ -3,7 +3,9 @@
 // from the generated schema ops on first touch and never migrated. It serves
 // the two HTTP doors src/server_runtime.ts serves for headless clients, with
 // the same request and response bodies: POST /apply and GET /query, plus GET
-// /graph, the identity a joining peer reads. One flag beyond the wire:
+// /graph, the identity a joining peer reads, and POST /vocab, the app's own
+// components (store/vocab.ts) that app_deploy plants here and the object wakes
+// with. One flag beyond the wire:
 // `x-yak-kernel`, set by the kernel on its own requests and never forwarded
 // from a client, opens apply()'s server-writer mode, so what a route threw
 // lands as a server-owned exception entity through the same door (D-32318
@@ -12,10 +14,17 @@
 // learns that name from the first request. Not here yet, deliberately: /ws (a hibernating socket plus
 // broadcast), the journal feed that fires effects, `work=` lanes and
 // `.order=similar` (both reach outside the store) — see query.ts.
-import { epochOf, mutate, plant, type SchemaOp } from '../../src/db.ts'
+import {
+  epochOf,
+  mutate,
+  plant,
+  plantVocab,
+  type SchemaOp,
+} from '../../src/db.ts'
 import { fed } from '../../src/effects.ts'
 import { type Mutation, mutationResult } from '../../src/mutation.ts'
 import { DoSql, type DoStorage } from '../../src/store/do.ts'
+import { grow, parseVocab, type Vocab } from '../../src/store/vocab.ts'
 import ops from '../../src/store/schema.json' with { type: 'json' }
 import { query } from './query.ts'
 
@@ -44,6 +53,23 @@ export class Store {
     // First touch plants the whole schema in one transaction; a planted store
     // carries the schema version and skips it forever after.
     if (!this.db.version) plant(this.db, ops as SchemaOp[])
+    // The app's own components (vocab.json, T-32502) are storage the object
+    // wakes with: the manifest it last accepted is replayed into this handle
+    // so apply(), the query grammar and the graph-out projection speak the
+    // app's words again. The tables are already there — planting is what the
+    // /vocab door did — so this is the word, not the DDL. Empty is meaningful:
+    // a store that has a vocabulary door says so, and its refusals teach.
+    plantVocab(this.db, this.vocab())
+  }
+
+  // What this store last accepted, as written. Junk in the slot is nothing:
+  // the object must wake even if a manifest it once stored no longer parses.
+  vocab(): Vocab {
+    try {
+      return parseVocab(JSON.parse(String(this.db.kv.get('vocab') ?? '{}')))
+    } catch {
+      return {}
+    }
   }
 
   async fetch(req: Request): Promise<Response> {
@@ -61,6 +87,23 @@ export class Store {
         epoch: epochOf(db),
         pid: 0,
       })
+    }
+    // The app's own vocabulary: the manifest app_deploy read out of the app's
+    // files. Planting is ADDITIVE and idempotent — a deploy that changed
+    // nothing re-plants nothing, a deploy that added a column adds it, and a
+    // column this store already has is never dropped or retyped, because its
+    // rows are already written. The kernel is the only caller.
+    if (path == '/vocab') {
+      if (req.method != 'POST') return methodNotAllowed('POST')
+      try {
+        let grown = grow(this.vocab(), parseVocab(await req.text()))
+        plantVocab(db, grown)
+        db.kv.put('vocab', JSON.stringify(grown))
+        return Response.json({ ok: true, comps: Object.keys(grown) })
+      } catch (e) {
+        let why = e instanceof Error ? e.message : String(e)
+        return new Response(why, { status: 400 })
+      }
     }
     if (path == '/query') {
       if (req.method != 'GET') return methodNotAllowed('GET')
