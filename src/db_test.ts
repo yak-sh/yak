@@ -3640,7 +3640,7 @@ slow('open heals canonical stored values once and preserves failures', () => {
   let root = Deno.makeTempDirSync({ prefix: 'tasks-heal-' })
   let path = `${root}/tasks.db`
   let legacy = open(path)
-  let project = uid(), task = uid(), bad = uid(), session = uid()
+  let project = uid(), task = uid(), session = uid()
   apply(legacy, [
     { eid: project, name: 'project', comp: {} },
     {
@@ -3648,23 +3648,23 @@ slow('open heals canonical stored values once and preserves failures', () => {
       name: 'task',
       comp: { priority: 2, project: project },
     },
-    { eid: bad, name: 'task', comp: {} },
     {
       eid: session,
       name: 'session',
       comp: { id: 'legacy-session', operator: 1 },
     },
   ])
-  legacy.prepare(`update session set pid = '' where ${OWNED}`).run(session)
+  // Two failures healing must PRESERVE (and warn about on every open): an
+  // enum cell outside its closed set, and a time cell that is not a time.
+  legacy.prepare(`update session set pid = '', origin = 'gone' where ${OWNED}`)
+    .run(session)
   legacy.prepare(`update created set at = ? where ${OWNED}`)
     .run('2026-07-26T12:34:56Z', task)
-  legacy.prepare(`update task set status = 'gone' where ${OWNED}`).run(bad)
   legacy.exec('alter table project add column retired_at text')
   legacy.prepare(`update project set retired_at = 'never' where ${OWNED}`)
     .run(project)
   let stable = legacy.prepare(
-    `select quote(status) as status, typeof(status) as status_type,
-            quote(priority) as priority, typeof(priority) as priority_type,
+    `select quote(priority) as priority, typeof(priority) as priority_type,
             quote(project) as project,
             typeof(project) as project_type
      from task where ${OWNED}`,
@@ -3677,9 +3677,10 @@ slow('open heals canonical stored values once and preserves failures', () => {
   try {
     let first = open(path)
     assertEquals(
-      first.prepare(`select pid, operator from session where ${OWNED}`)
-        .get(session),
-      { pid: null, operator: 1 },
+      first.prepare(
+        `select pid, operator, origin from session where ${OWNED}`,
+      ).get(session),
+      { pid: null, operator: 1, origin: 'gone' },
     )
     assertEquals(
       first.prepare(
@@ -3689,18 +3690,13 @@ slow('open heals canonical stored values once and preserves failures', () => {
     )
     assertEquals(
       first.prepare(
-        `select quote(status) as status, typeof(status) as status_type,
-                quote(priority) as priority,
+        `select quote(priority) as priority,
                 typeof(priority) as priority_type,
                 quote(project) as project,
                 typeof(project) as project_type
          from task where ${OWNED}`,
       ).get(task),
       stable,
-    )
-    assertEquals(
-      first.prepare(`select status from task where ${OWNED}`).get(bad),
-      { status: 'gone' },
     )
     assertEquals(
       first.prepare(`select at from archived where ${OWNED}`)
@@ -3713,7 +3709,7 @@ slow('open heals canonical stored values once and preserves failures', () => {
     let second = open(path)
     assertEquals(
       second.prepare(
-        `select status, priority, ${refEid('project')} as project
+        `select priority, ${refEid('project')} as project
          from task where ${OWNED}`,
       ).get(task),
       { priority: 2, project: project },
@@ -3726,7 +3722,7 @@ slow('open heals canonical stored values once and preserves failures', () => {
   }
   assertEquals(
     warnings.filter((w) =>
-      w.includes(`${bad} task.status is one of open, wip, done`)
+      w.includes(`${session} origin is one of external, managed`)
     ).length,
     2,
   )
