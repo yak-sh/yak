@@ -1775,6 +1775,114 @@ let migrateJournalKeys = (db: DatabaseSync) => {
   )
 }
 
+// The components whose history the journal keeps (T-18883). Everything else
+// is mechanical -- the role heartbeat, the session log partition, UI state,
+// delivery marks, lifecycle stamps -- and is collected below. `entity` and
+// `blob` stay only where a kept component's history names the entity, so a
+// kept birth stays a birth and nothing else's does.
+let JOURNAL_KEEP = [
+  'doc',
+  'task',
+  'comment',
+  'memory',
+  'design',
+  'goal',
+  'commit',
+  'project',
+  'persona',
+  'dependency',
+  'claim',
+  'decided',
+  'proposed',
+  'completed',
+  'cancelled',
+  'created',
+  'updated',
+  'mail',
+  'deliver',
+  'person',
+  'feedback',
+  'review',
+  'quarantined',
+  'accept',
+  'verifier',
+  'noverify',
+  'finding',
+  'bug',
+  'notice',
+  'brief',
+  'patch',
+  'alias',
+]
+
+// Collect the journal once (T-18883): drop every change of a component the
+// journal does not keep, every `eid` field (the row's own identity, already
+// the change's entity), the births of entities nothing kept ever named, the
+// no-op writes (a field equal to its previous present value, then the upsert
+// left with no fields and no presence change), and finally the transactions
+// left with no changes. Marked in server_meta so a later open is a pure read;
+// the SQL itself is idempotent. The `lost_and_found` tables an old .recover
+// left behind go with it. Children before parents, so foreign keys hold.
+let gcJournal = (db: DatabaseSync) => {
+  if (
+    !tableExists(db, 'journal_change') ||
+    prep(db, `select 1 from server_meta where k = 'journal_gc'`).get()
+  ) return
+  let count = (sql: string) => (db.prepare(sql).get() as { n: number }).n
+  let before = {
+    tx: count('select count(*) as n from journal_tx'),
+    change: count('select count(*) as n from journal_change'),
+    field: count('select count(*) as n from journal_field'),
+  }
+  let keep = JOURNAL_KEEP.map((c) => `'${c}'`).join(', ')
+  db.exec(`
+    delete from journal_field where change in
+      (select id from journal_change where component not in (${keep}, 'entity', 'blob'));
+    delete from journal_change where component not in (${keep}, 'entity', 'blob');
+    delete from journal_field where field = 'eid';
+    delete from journal_field where change in
+      (select id from journal_change jc where jc.component in ('entity', 'blob')
+        and not exists (select 1 from journal_change o
+          where o.entity = jc.entity and o.component not in ('entity', 'blob')));
+    delete from journal_change where component in ('entity', 'blob')
+      and not exists (select 1 from journal_change o
+        where o.entity = journal_change.entity
+          and o.component not in ('entity', 'blob'));
+    delete from journal_field where id in (
+      select id from (
+        select jf.id as id, jf.present as present, jf.value as value,
+               lag(jf.value) over (
+                 partition by jc.entity, jc.component, jf.field
+                 order by jc.tx, jc.ordinal, jf.ordinal) as prev
+          from journal_field jf join journal_change jc on jc.id = jf.change)
+       where present = 1 and value = prev);
+    delete from journal_change where id in (
+      select id from (
+        select jc.id as id, jc.operation as op,
+               lag(jc.operation) over (
+                 partition by jc.entity, jc.component
+                 order by jc.tx, jc.ordinal) as prev,
+               (select count(*) from journal_field jf where jf.change = jc.id) as n
+          from journal_change jc)
+       where op = 'upsert' and n = 0 and prev = 'upsert');
+    delete from journal_tx where not exists
+      (select 1 from journal_change jc where jc.tx = journal_tx.id);
+    drop table if exists lost_and_found;
+    drop table if exists lost_and_found_0;
+    insert or ignore into server_meta (k, v) values ('journal_gc', '1');
+  `)
+  let after = {
+    tx: count('select count(*) as n from journal_tx'),
+    change: count('select count(*) as n from journal_change'),
+    field: count('select count(*) as n from journal_field'),
+  }
+  console.warn(
+    `journal: collected — tx ${before.tx} → ${after.tx}, ` +
+      `changes ${before.change} → ${after.change}, ` +
+      `fields ${before.field} → ${after.field}`,
+  )
+}
+
 // memory.type → the `feedback` tag (T-12585). The enum said four things the
 // graph already knew: `project` restated scope, `user` had zero rows,
 // `reference` was the absence of anything else. Only `feedback` carried a
@@ -3545,6 +3653,7 @@ export let migrate = (db: DatabaseSync) => {
       backfillOpened(db)
       retireJsonJournal(db)
       migrateJournalKeys(db)
+      gcJournal(db)
       // The dormant columns are migration INPUT, and every one of them has now
       // been read for the last time (T-6670, T-7113, T-7006). A retired column
       // that lingers still answers a schema read, so it keeps teaching a

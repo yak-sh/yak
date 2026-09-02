@@ -194,6 +194,93 @@ fn migrate_journal_keys(conn: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
+// The components whose history the journal keeps (db.ts JOURNAL_KEEP).
+const JOURNAL_KEEP: &[&str] = &[
+    "doc",
+    "task",
+    "comment",
+    "memory",
+    "design",
+    "goal",
+    "commit",
+    "project",
+    "persona",
+    "dependency",
+    "claim",
+    "decided",
+    "proposed",
+    "completed",
+    "cancelled",
+    "created",
+    "updated",
+    "mail",
+    "deliver",
+    "person",
+    "feedback",
+    "review",
+    "quarantined",
+    "accept",
+    "verifier",
+    "noverify",
+    "finding",
+    "bug",
+    "notice",
+    "brief",
+    "patch",
+    "alias",
+];
+
+// Collect the journal once (db.ts gcJournal, T-18883): the same deletes in the
+// same order, marked in server_meta so a later open is a pure read.
+fn gc_journal(conn: &Connection) -> rusqlite::Result<()> {
+    if !has_table(conn, "journal_change")
+        || conn
+            .query_row("select 1 from server_meta where k = 'journal_gc'", [], |_| Ok(()))
+            .optional()?
+            .is_some()
+    {
+        return Ok(());
+    }
+    let keep = JOURNAL_KEEP.iter().map(|c| format!("'{c}'")).collect::<Vec<_>>().join(", ");
+    conn.execute_batch(&format!(
+        "delete from journal_field where change in \
+           (select id from journal_change where component not in ({keep}, 'entity', 'blob')); \
+         delete from journal_change where component not in ({keep}, 'entity', 'blob'); \
+         delete from journal_field where field = 'eid'; \
+         delete from journal_field where change in \
+           (select id from journal_change jc where jc.component in ('entity', 'blob') \
+             and not exists (select 1 from journal_change o \
+               where o.entity = jc.entity and o.component not in ('entity', 'blob'))); \
+         delete from journal_change where component in ('entity', 'blob') \
+           and not exists (select 1 from journal_change o \
+             where o.entity = journal_change.entity \
+               and o.component not in ('entity', 'blob')); \
+         delete from journal_field where id in ( \
+           select id from ( \
+             select jf.id as id, jf.present as present, jf.value as value, \
+                    lag(jf.value) over ( \
+                      partition by jc.entity, jc.component, jf.field \
+                      order by jc.tx, jc.ordinal, jf.ordinal) as prev \
+               from journal_field jf join journal_change jc on jc.id = jf.change) \
+            where present = 1 and value = prev); \
+         delete from journal_change where id in ( \
+           select id from ( \
+             select jc.id as id, jc.operation as op, \
+                    lag(jc.operation) over ( \
+                      partition by jc.entity, jc.component \
+                      order by jc.tx, jc.ordinal) as prev, \
+                    (select count(*) from journal_field jf where jf.change = jc.id) as n \
+               from journal_change jc) \
+            where op = 'upsert' and n = 0 and prev = 'upsert'); \
+         delete from journal_tx where not exists \
+           (select 1 from journal_change jc where jc.tx = journal_tx.id); \
+         drop table if exists lost_and_found; \
+         drop table if exists lost_and_found_0; \
+         insert or ignore into server_meta (k, v) values ('journal_gc', '1');"
+    ))?;
+    Ok(())
+}
+
 // `instruction` was the empty Session-prompt marker before executable
 // instructions claimed that name. Move only that one-column legacy shape;
 // contract-bearing instruction tables belong to the evaluator and must remain.
@@ -336,6 +423,7 @@ pub fn apply_schema(conn: &Connection) -> rusqlite::Result<()> {
     }
     retire_json_journal(conn)?;
     migrate_journal_keys(conn)?;
+    gc_journal(conn)?;
     conn.execute_batch(
         "insert or ignore into prompt (entity) \
          select e.entity from entry e \
