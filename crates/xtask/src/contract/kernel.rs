@@ -396,9 +396,10 @@ struct Edge {
 // The natures — one tag comp per relation, present tense (a live relationship,
 // D-23820): the `dependency.type` enum as comps nothing enumerates, so a new
 // nature is a new comp and `edge` never changes. NOT in kindOrder — the edge
-// is the kind, the nature is what it says. `recalled` is not here: it
-// re-sorted to a plain event comp on the recalling entity (T-23823,
-// sessions.rs).
+// is the kind, the nature is what it says. `recalled` is the one nature that
+// is not here and not present tense: it is an EVENT the edge wears with its
+// own clock, so it stays the sessions comp it always was (sessions.rs,
+// T-32471) and the entry keeps wearing it as its marker.
 #[derive(Comp)]
 #[comp(plugin = "kernel", rank = 1101)]
 struct Requires {}

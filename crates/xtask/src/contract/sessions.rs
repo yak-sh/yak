@@ -334,10 +334,15 @@ struct Cancel {
 #[comp(plugin = "sessions", rank = 510, log)]
 struct Reasoning {}
 
-// Memory auto-recall (T-17306): the memories surfaced for `source`. No message
-// facet, so recall cannot recall itself. A plain event comp, not an edge
-// nature (T-23823, D-23820): `at` is the recall's own clock, wire-writable the
-// way `decided.at` is so history can carry the moment it happened.
+// Memory auto-recall (T-17306), worn twice. On the recall ENTRY it is the
+// marker with `source`: the message whose thinking surfaced these memories (no
+// message facet, so recall cannot recall itself). On an EDGE entity it is the
+// NATURE — `edge{from: entry, to: memory}` + `recalled{at}`, the recall of one
+// memory with its own clock (T-32471). That is the case D-23820 names: a
+// relation with a time is the edge carrying an event comp, not the time forced
+// onto either end. `at` is wire-writable the way `decided.at` is, so history
+// can carry the moment it happened; a stored recall has no other clock, so the
+// backfill reads the entry's `created.at`.
 #[derive(Comp)]
 #[comp(plugin = "sessions", rank = 520, log)]
 struct Recalled {

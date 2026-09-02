@@ -22,12 +22,13 @@ export let edgeEid = (from: string, nature: string, to: string): string => {
 }
 
 // The transition table, dual-write only (T-23825; T-23821 removes it with the
-// dependency table): each `dependency.type` and its present-tense nature comp.
-// `recalled` is absent — it re-sorted to a plain event comp on the recalling
-// entity (T-23823), never an edge — so a recalled row mints no edge entity.
+// dependency table): each `dependency.type` and its nature comp, present tense
+// for a live relationship (`references` for `referenced`). `recalled` keeps its
+// past tense because it is the one nature that is an EVENT: the edge wears
+// `recalled{at}` — the case D-23820 names, a relation with a time carried by
+// the sentence rather than forced onto either end (T-32471).
 export let natureOf: Record<string, string> = Object.fromEntries(
-  edges.filter((t) => t != 'recalled')
-    .map((t) => [t, t == 'referenced' ? 'references' : t]),
+  edges.map((t) => [t, t == 'referenced' ? 'references' : t]),
 )
 export let typeOf: Record<string, string> = Object.fromEntries(
   Object.entries(natureOf).map(([t, n]) => [n, t]),

@@ -3752,21 +3752,28 @@ export let freshStats = (db: Sql) => {
 // graph. The eid IS the sentence (edge.ts edgeEid), so the sweep is additive
 // and idempotent: it writes exactly the changes dualEdge() mints for a new
 // write, over rows that already stand, and skips a sentence whose entity is
-// already there — nothing to cut over, no half-state to be in. `recalled` is
-// not an edge (T-23823): its rows become the plain `recalled{at}` comp on the
-// recalling entity, timed by that entity's OWN birth, since a dependency row
-// carries no clock of its own.
+// already there — nothing to cut over, no half-state to be in.
+//
+// TWO marks, one walk each. The natures landed first (T-23822); `recalled` came
+// back as a nature after them (T-23823's correction, T-32471), so its sentences
+// need their own sweep on a graph that already ran the first. Re-keying the one
+// mark would re-walk 111k settled rows to reach 14k new ones — a second mark
+// walks only the recalls, and each is still written LAST.
 //
 // Runs OUTSIDE migrate()'s one schema transaction (store/sqlite.ts open(),
-// beside freshStats): it commits a few thousand sentences at a time and writes
-// its mark LAST, so a boot interrupted mid-sweep resumes where it stopped
-// rather than restarting, and no single transaction holds the writer for the
-// whole walk. Server-minted, so it names no writer — the journal keeps these
-// as the unowned rows they are, like every other boot migration.
+// beside freshStats): it commits a few thousand sentences at a time, so a boot
+// interrupted mid-sweep resumes where it stopped rather than restarting, and no
+// single transaction holds the writer for the whole walk. Server-minted, so it
+// names no writer — the journal keeps these as the unowned rows they are, like
+// every other boot migration.
 export let backfillEdges = (db: Sql) => {
-  if (prep(db, `select 1 from server_meta where k = 'edge_backfill'`).get()) {
-    return 0
-  }
+  let marked = (k: string) =>
+    !!prep(db, `select 1 from server_meta where k = ?`).get(k)
+  let mark = (k: string) =>
+    prep(db, `insert or ignore into server_meta (k, v) values (?, '1')`).run(k)
+  let links = !marked('edge_backfill')
+  let recalls = !marked('edge_backfill_recalled')
+  if (!links && !recalls) return 0
   let began = Date.now()
   // The resume point: every edge entity that already stands. Small on the
   // first boot, the whole set on a resumed one.
@@ -3777,17 +3784,6 @@ export let backfillEdges = (db: Sql) => {
     )
       .all() as { eid: string }[]).map((r) => r.eid),
   )
-  let rows = prep(
-    db,
-    `select p.eid as parent, d.type as type, c.eid as child
-       from dependency d
-       join entity p on p.id = d.parent
-       join entity c on c.id = d.child
-      where d.type != 'recalled'
-        and not exists (select 1 from tombstone t where t.entity = d.parent)
-        and not exists (select 1 from tombstone t where t.entity = d.child)
-      order by d.parent, d.type, d.child`,
-  ).all() as { parent: string; type: string; child: string }[]
   let batch: Change[] = []
   let minted = 0
   let land = () => {
@@ -3795,67 +3791,88 @@ export let backfillEdges = (db: Sql) => {
     apply(db, batch)
     batch = []
   }
-  for (let { parent, type, child } of rows) {
-    let nature = natureOf[type]
-    if (!nature) continue
-    let eid = edgeEid(parent, nature, child)
-    if (done.has(eid)) continue
-    done.add(eid)
-    minted++
-    batch.push(
-      { eid, name: 'edge', comp: { from: parent, to: child } },
-      { eid, name: nature, comp: {} },
-    )
-    if (batch.length >= 4000) land()
-  }
-  land()
-  // A recall's clock: the recalling entity's `created.at`. The dependency row
-  // has no timestamp column of its own, and the recall IS the entity's birth
-  // in every case that made these rows — recall.ts mints the entry and marks
-  // it in one batch.
-  //
-  // Written as a server STAMP (direct SQL + record()), not through apply():
-  // the recalling entity is a log `entry`, and a log entry is an append-only
-  // fact — apply() refuses every late touch of one, rightly. The stamp still
-  // reaches the journal, so a tab that boots by catch-up replay hears it.
-  let recalls = prep(
-    db,
-    `select distinct p.eid as eid, cr.at as born
-       from dependency d
-       join entity p on p.id = d.parent
-       join created cr on cr.entity = d.parent
-       left join recalled r on r.entity = d.parent
-      where d.type = 'recalled' and r.at is null
-        and not exists (select 1 from tombstone t where t.entity = d.parent)`,
-  ).all() as { eid: string; born: string }[]
-  let stamp = prep(
-    db,
-    `insert into recalled (entity, at) values (${spineId}, ?)
-     on conflict(entity) do update set at = excluded.at`,
-  )
-  for (let i = 0; i < recalls.length; i += 2000) {
-    let slice = recalls.slice(i, i + 2000)
-    db.transaction(() => {
-      for (let { eid, born } of slice) stamp.run(eid, born)
-      record(
-        db,
-        slice.map(({ eid, born }): Change => ({
-          eid,
-          name: 'recalled',
-          comp: { at: born },
-        })),
+  // One slice of the store as its sentences. `born` is the parent's
+  // `created.at`, which is a recall's only possible clock: the dependency row
+  // carries no timestamp of its own, and the recall IS the entry's birth in
+  // every case that made these rows — recall.ts mints the entry and its links
+  // in one batch, the same moment dualEdge() times a live one with.
+  let sweep = (only: string) => {
+    let rows = prep(
+      db,
+      `select p.eid as parent, d.type as type, c.eid as child, cr.at as born
+         from dependency d
+         join entity p on p.id = d.parent
+         join entity c on c.id = d.child
+         left join created cr on cr.entity = d.parent
+        where d.type ${only}
+          and not exists (select 1 from tombstone t where t.entity = d.parent)
+          and not exists (select 1 from tombstone t where t.entity = d.child)
+        order by d.parent, d.type, d.child`,
+    ).all() as {
+      parent: string
+      type: string
+      child: string
+      born: string | null
+    }[]
+    for (let { parent, type, child, born } of rows) {
+      let nature = natureOf[type]
+      if (!nature) continue
+      let eid = edgeEid(parent, nature, child)
+      if (done.has(eid)) continue
+      done.add(eid)
+      minted++
+      batch.push(
+        { eid, name: 'edge', comp: { from: parent, to: child } },
+        { eid, name: nature, comp: nature == 'recalled' ? { at: born } : {} },
       )
-    })
+      if (batch.length >= 4000) land()
+    }
+    land()
   }
-  prep(
-    db,
-    `insert or ignore into server_meta (k, v) values ('edge_backfill', '1')`,
-  )
-    .run()
-  if (minted || recalls.length) {
+  if (links) {
+    sweep(`!= 'recalled'`)
+    mark('edge_backfill')
+  }
+  let cleared = 0
+  if (recalls) {
+    sweep(`= 'recalled'`)
+    // The entry-side `recalled{at}` the first pass stamped (a7dbea85) is
+    // superseded: the clock rides the sentence now, so the entry keeps only the
+    // marker it was born with. Un-written by the same door that wrote it —
+    // direct SQL plus record(), since apply() refuses every late touch of a log
+    // entry — and the journal carries the clear, so a catch-up replay hears it.
+    // An edge's own row is the one this defers to, so an edge is left alone.
+    let stale = (prep(
+      db,
+      `select e.eid as eid from recalled r join entity e on e.id = r.entity
+        where r.at is not null
+          and not exists (select 1 from edge g where g.entity = r.entity)`,
+    ).all() as { eid: string }[]).map((r) => r.eid)
+    let clear = prep(
+      db,
+      `update recalled set at = null where entity = ${spineId}`,
+    )
+    for (let i = 0; i < stale.length; i += 2000) {
+      let slice = stale.slice(i, i + 2000)
+      db.transaction(() => {
+        for (let eid of slice) clear.run(eid)
+        record(
+          db,
+          slice.map((eid): Change => ({
+            eid,
+            name: 'recalled',
+            comp: { at: null },
+          })),
+        )
+      })
+    }
+    cleared = stale.length
+    mark('edge_backfill_recalled')
+  }
+  if (minted || cleared) {
     console.warn(
       `edges: ${minted} edge entit${minted == 1 ? 'y' : 'ies'} minted, ` +
-        `${recalls.length} recall${recalls.length == 1 ? '' : 's'} timed ` +
+        `${cleared} entry clock${cleared == 1 ? '' : 's'} cleared ` +
         `in ${Date.now() - began}ms`,
     )
   }
@@ -4324,7 +4341,15 @@ let dualEdge = (db: Sql, changes: Change[]): Change[] => {
     let eid = edgeEid(from, nature, to)
     out.push(
       { eid, name: 'edge', comp: { from, to } },
-      { eid, name: nature, comp: {} },
+      // Every nature is a bare tag but `recalled`, which is an event: the edge
+      // carries the recall's clock (D-23820, T-32471). Now IS the recalling
+      // entry's birth — recall.ts mints the entry and its links in one batch —
+      // which is the same clock the backfill reads for a stored recall.
+      {
+        eid,
+        name: nature,
+        comp: nature == 'recalled' ? { at: new Date().toISOString() } : {},
+      },
     )
   }
   let unlink = (from: string, nature: string, to: string) => {
@@ -5576,12 +5601,18 @@ export let apply = (
       changes.filter((c) => c.name == 'entry' && c.comp?.session)
         .map((c) => c.eid),
     )
+    // An EDGE wearing `recalled{at}` is a sentence, not a log facet: the recall
+    // of one memory, timed on its own entity (D-23820, T-32471). The rule below
+    // guards entries, so it reads past anything this batch also makes an edge.
+    let edged = new Set(
+      changes.filter((c) => c.name == 'edge' && c.comp).map((c) => c.eid),
+    )
     let existed = prep(
       db,
       'select 1 from entry where entity = (select id from entity where eid = ?)',
     )
     for (let { eid, name, comp } of changes) {
-      if (!facts.has(name)) continue
+      if (!facts.has(name) || edged.has(eid)) continue
       // The one late mark: `prompt` may be ADDED to an existing turn, never
       // revised or removed. `task backfill prompt` re-reads the turn's own
       // transcript line for the tag ingest stamps at birth today; a tag is

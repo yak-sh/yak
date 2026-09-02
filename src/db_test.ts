@@ -3284,19 +3284,25 @@ Deno.test('edge: a claim lands its worked edge in both stores', () => {
   assertEquals(dep(session), [['worked', task]])
 })
 
-Deno.test('recalled: a plain event comp with its clock, no edge entity', () => {
-  let session = uid(), rid = uid(), m = uid()
+Deno.test('recalled: the sentence carries the clock, the entry the marker', () => {
+  let session = uid(), src = uid(), rid = uid(), m = uid()
   apply(db, [
     { eid: session, name: 'session', comp: { id: session } },
     { eid: m, name: 'doc', comp: { title: 'a memory' } },
   ])
+  apply(db, [{ eid: src, name: 'entry', comp: { session } }])
   apply(db, [
     { eid: rid, name: 'entry', comp: { session } },
-    { eid: rid, name: 'recalled', comp: { at: '2026-09-02T00:00:00.000Z' } },
+    { eid: rid, name: 'recalled', comp: { source: src } },
     { eid: rid, name: 'dependency', comp: { type: 'recalled', child: m } },
   ])
-  assertEquals(comp(rid, 'recalled')?.at, '2026-09-02T00:00:00.000Z')
-  assertEquals(edgeRows(rid).n, 0)
+  let e = edgeEid(rid, 'recalled', m)
+  assertEquals(comp(e, 'edge'), { eid: e, from: rid, to: m })
+  // The one nature that is an event: the recall of THIS memory, timed.
+  assertMatch(String(comp(e, 'recalled')?.at), /^20\d\d-/)
+  // The entry keeps only what it was born with — the source of the thinking.
+  assertEquals(comp(rid, 'recalled')?.source, src)
+  assertEquals(comp(rid, 'recalled')?.at, null)
 })
 
 // The boot backfill (T-23822): every row the dependency store held before the
@@ -3338,7 +3344,7 @@ Deno.test('backfill: stored rows become sentence entities, once per graph', () =
   assertEquals(compOf(d, edgeEid(c, 'reads', p), 'edge'), undefined)
 })
 
-Deno.test('backfill: a recalled row times the entry, and mints no edge', () => {
+Deno.test('backfill: a recalled row is a sentence timed by the entry', () => {
   let d = fresh()
   let s = uid(), e = uid(), m = uid()
   apply(d, [
@@ -3347,11 +3353,40 @@ Deno.test('backfill: a recalled row times the entry, and mints no edge', () => {
   ])
   apply(d, [{ eid: e, name: 'entry', comp: { session: s } }])
   legacy(d, e, 'recalled', m)
-  backfillEdges(d)
-  // A log entry is immutable, so the clock is a server stamp — and the only
-  // clock the row can offer is the recalling entity's own birth.
-  assertEquals(compOf(d, e, 'recalled')?.at, compOf(d, e, 'created')?.at)
-  assertEquals(compOf(d, edgeEid(e, 'recalled', m), 'edge'), undefined)
+  assertEquals(backfillEdges(d), 1)
+  let edge = edgeEid(e, 'recalled', m)
+  assertEquals(compOf(d, edge, 'edge'), { eid: edge, from: e, to: m })
+  // The stored row offers no clock of its own, so the recall is dated by the
+  // entry whose birth it was.
+  assertEquals(compOf(d, edge, 'recalled')?.at, compOf(d, e, 'created')?.at)
+  assertEquals(backfillEdges(d), 0)
+})
+
+// The graph the first pass (a7dbea85) left: its mark set, and the clock stamped
+// on the entry instead of the sentence. The second mark walks only the recalls
+// and takes that stamp back — one meaning for `recalled.at`, and it is the
+// edge's.
+Deno.test('backfill: the recalls sweep alone, and the entry clock goes', () => {
+  let d = fresh()
+  let s = uid(), e = uid(), m = uid()
+  apply(d, [
+    { eid: s, name: 'session', comp: { id: s } },
+    { eid: m, name: 'memory', comp: {} },
+  ])
+  apply(d, [{ eid: e, name: 'entry', comp: { session: s } }])
+  legacy(d, e, 'recalled', m)
+  legacy(d, e, 'referenced', m)
+  d.prepare(`insert into server_meta (k, v) values ('edge_backfill', '1')`)
+    .run()
+  d.prepare(`insert into recalled (entity, at) values (${idOf}, ?)`)
+    .run(e, '2026-01-01T00:00:00.000Z')
+  assertEquals(backfillEdges(d), 1) // the recall only — the first mark holds
+  assertEquals(compOf(d, edgeEid(e, 'references', m), 'edge'), undefined)
+  assertEquals(compOf(d, e, 'recalled')?.at, null)
+  assertEquals(
+    compOf(d, edgeEid(e, 'recalled', m), 'recalled')?.at,
+    compOf(d, e, 'created')?.at,
+  )
 })
 
 // Supersession is a plain edge, but the invariant is its own: the replaced

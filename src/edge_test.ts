@@ -14,13 +14,12 @@ Deno.test('edgeEid: one sentence, one uuid; direction and nature distinguish', (
   assertNotEquals(a, edgeEid('a', 'contains', 'b'))
 })
 
-Deno.test('natureOf: every edge type but recalled, present tense, each a comp', () => {
-  assertEquals(
-    Object.keys(natureOf).sort(),
-    edges.filter((t) => t != 'recalled').sort(),
-  )
+Deno.test('natureOf: every edge type, present tense but the event, each a comp', () => {
+  assertEquals(Object.keys(natureOf).sort(), [...edges].sort())
   assertEquals(natureOf.referenced, 'references')
   assertEquals(natureOf.requires, 'requires')
+  // The one nature that is an event, so the one that stays past tense.
+  assertEquals(natureOf.recalled, 'recalled')
   for (let n of natures) {
     assertEquals(n in comps, true, `${n} is not a comp`)
     assertEquals(natureOf[typeOf[n]], n)
