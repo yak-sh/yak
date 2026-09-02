@@ -81,6 +81,7 @@ import {
   REACHES,
   resolveRefs,
   screened,
+  selected,
   tally,
   TEXT,
   type Walk,
@@ -337,7 +338,7 @@ export let evalFast = (
   let hits = matching(db, bounded ? windowed(built, win) : built).map(rowed)
     .filter((r) => entries || !r.comps.entry)
   hits = withResults(db, preds, hits)
-    .filter((r) => listed(r.comps, preds))
+    .filter((r) => selected(r.comps, preds))
   if (resultsOf(preds).length) {
     hits = hits.filter((r) => matchQuery(r.comps, preds))
   }
@@ -395,7 +396,7 @@ export let evalQuery = (
       .filter((r) => !r.comps.entry)
   all = withResults(db, preds, all)
   let hits = all.filter((r) =>
-    listed(r.comps, preds) &&
+    selected(r.comps, preds) &&
     matchQuery(r.comps, preds, ent, undefined, kids, walk, fts)
   )
   return { preds, hits, ent }
@@ -440,7 +441,7 @@ export let evalCapped = (
   let raw = withResults(db, preds, matching(db, base).map(rowed))
   let hits = raw
     .filter((r) =>
-      listed(r.comps, preds) &&
+      selected(r.comps, preds) &&
       matchQuery(r.comps, preds, ent, undefined, kids, walk, fts)
     )
     .sort((a, b) => b.num - a.num)

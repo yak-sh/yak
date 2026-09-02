@@ -99,6 +99,34 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     let [hit] = await owner.get(`id=${cake}`)
     assertEquals((hit.doc as { title: string }).title, "Grandma's lemon cake")
     assertEquals(await nobody.get(`id=${cake}`), [hit])
+    // A body is stored as a content-addressed blob ENTITY, so the store's own
+    // rows live in the spine a filter selects from. A listing must answer docs
+    // and nothing else: the tester's first list rendered `undefined` for each
+    // blob it got back (C-32498 item 4). An empty needle is the case that found
+    // it — `.doc.title~=` asks whether the column is there, not whether every
+    // string contains ''.
+    let pie = crypto.randomUUID()
+    await owner.applied([
+      {
+        eid: pie,
+        name: 'doc',
+        comp: { title: 'Rhubarb pie', body: 'rhubarb' },
+      },
+    ])
+    let listing = await owner.get('.doc.title~=')
+    assertEquals(
+      listing.map((r) => (r.doc as { title: string }).title).sort(),
+      [
+        "Grandma's lemon cake",
+        'Rhubarb pie',
+      ],
+    )
+    assert(
+      (await owner.get('.created.at!')).every((r) => !r.blob),
+      'a filter answers the graph, never the store rows behind it',
+    )
+    // Naming the component is how a caller asks for them at all.
+    assert((await owner.get('.blob!')).length > 0, 'the bodies are stored')
     assertEquals(
       await client(k, 'jeff.yaks.app', 'garden').get(`id=${cake}`),
       [],

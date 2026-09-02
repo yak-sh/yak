@@ -15,6 +15,8 @@
 //   .prop!            present (including an empty string)
 //   .prop!=v         not — negates any value form above
 //   .prop~=v         contains, case-insensitive
+//   .prop~=          present — an empty needle asks for the COLUMN, the same
+//                    thing `.prop!` asks (never "every row contains ''")
 //   .prop<v <=v >v >=v   comparisons (numeric when both sides are numbers)
 //
 //   .limit=200       a WINDOW: the newest 200 matches, not the whole set
@@ -624,13 +626,29 @@ export let reveals = (preds: Pred[]) =>
 export let listed = (comps: Comps, preds: Pred[]) =>
   !comps.quarantined || reveals(preds)
 
+// A `blob` is content-addressed STORAGE wearing an entity's clothes: every doc
+// body lands as one (db.ts textBlob), and an attachment's bytes as another, so
+// the store's own rows sit in the spine a filter selects from. They carry no
+// doc and no kind, so a listing that catches one renders nothing for it — which
+// is what a person saw (C-32498 item 4). Naming the component is the deliberate
+// opt-in, the same step `quarantined` asks for.
+export let namesBlobs = (preds: Pred[]) =>
+  preds.some((p) => p.comp == 'blob' || leafOf(p).comp == 'blob')
+
+// Does this row belong in the answer a FILTER selects? The caller's own preds
+// decided that; these are the two screens every listing carries beside them.
+// `id=` addresses entities instead of selecting them, so it keeps `listed`
+// alone — naming a blob's sha IS asking for it.
+export let selected = (comps: Comps, preds: Pred[]) =>
+  listed(comps, preds) && (!comps.blob || namesBlobs(preds))
+
 // The pred list a COMPILED membership statement should carry: the caller's
-// filter plus the two universal screens a door otherwise applies in JS after
-// the statement — quarantine (listed) and the lazy entry partition (namesLazy).
-// Both are spelled as ordinary component-ABSENCE preds, so the existing
-// compiler answers them from the same LEFT JOIN it gives any facet, and
-// namesLazy's `.prop == '' && .op == ''` guard keeps the entry screen from
-// reading as an opt-IN to the partition.
+// filter plus the universal screens a door otherwise applies in JS after the
+// statement — quarantine and the store's blob rows (selected) and the lazy
+// entry partition (namesLazy). All three are spelled as ordinary
+// component-ABSENCE preds, so the existing compiler answers them from the same
+// LEFT JOIN it gives any facet, and namesLazy's `.prop == '' && .op == ''`
+// guard keeps the entry screen from reading as an opt-IN to the partition.
 //
 // Why it matters beyond tidiness: a JS filter that runs AFTER a statement's
 // LIMIT under-fills the page, so a window can only be exact once the screens
@@ -640,6 +658,7 @@ let absent = (comp: string): Pred => ({ comp, prop: '', op: '', value: '' })
 export let screened = (preds: Pred[], entries: boolean): Pred[] => [
   ...preds,
   ...reveals(preds) ? [] : [absent('quarantined')],
+  ...namesBlobs(preds) ? [] : [absent('blob')],
   ...entries ? [] : [absent('entry')],
 ]
 
@@ -1291,7 +1310,14 @@ let test = (v: unknown, p: Pred, now?: number): boolean => {
     case '!':
       return !eq(v, p.value)
     case '~':
-      return String(v ?? '').toLowerCase().includes(p.value.toLowerCase())
+      // An empty needle asks PRESENCE — what `.prop~=` means everywhere else
+      // in this grammar (a bare component, a reverse hop, the completion that
+      // labels it 'present'). `''.includes('')` said the opposite: a filter
+      // NAMING a column selected every entity in the graph, including the
+      // store's own content-addressed rows, which wear no doc at all (T-32503).
+      return p.value == ''
+        ? v != null
+        : String(v ?? '').toLowerCase().includes(p.value.toLowerCase())
     default: // < <= > >=
       if (v == null) return false
       return p.op == '<'

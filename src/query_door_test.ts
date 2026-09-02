@@ -22,9 +22,12 @@ let { freshDb } = await import('./testdb.ts')
 // every rider the doors carry. Built ONCE: these tests only read, and freshDb +
 // apply is production cost paid per call, which is the difference between a
 // file that runs in milliseconds and one that runs in seconds.
-let a = uuid(), b = uuid(), hidden = uuid()
+let a = uuid(), b = uuid(), hidden = uuid(), bodied = uuid()
 let db = freshDb()
 apply(db, [
+  // A body is stored as a content-addressed blob ENTITY (db.ts textBlob), so
+  // writing one plants a store row in the same spine every filter selects from.
+  { eid: bodied, name: 'doc', comp: { title: 'gamma', body: 'flour' } },
   { eid: a, name: 'doc', comp: { title: 'alpha' } },
   { eid: a, name: 'task', comp: { priority: 1 } },
   { eid: b, name: 'doc', comp: { title: 'beta' } },
@@ -130,6 +133,28 @@ Deno.test('askRows: every arm both doors share, one answer', async () => {
     (await askRows(db, askOf([`id=${b},${a}`]))).map((r) => r.num),
     (await askRows(db, askOf([`id=${a},${b}`]))).map((r) => r.num),
   )
+})
+
+// A doc's body lands as a blob entity, so the store's own content-addressed
+// rows share the spine with the graph a filter asks about. They wear no doc
+// and render as nothing — a page listing showed `undefined` for each of them
+// (C-32498 item 4) — so a filter answers with one only when it NAMES `.blob`.
+Deno.test("askRows: a filter answers the graph, not the store's blob rows", async () => {
+  let rows = async (q: string) => ids(await askRows(db, askOf(q.split('&'))))
+  let blobs = await rows('.blob!')
+  let none = async (q: string) =>
+    (await rows(q)).filter((e) => blobs.includes(e))
+  // The case that found it: an empty needle is a PRESENCE test, not a contains
+  // that every string — and every absent column — satisfies.
+  assertEquals(await rows('.doc.title~=gamma'), [bodied])
+  assertEquals(await none('.doc.title~='), [])
+  // Every entity carries a created stamp; the blob rows still stay out.
+  assertEquals(await none('.created.at!'), [])
+  // Naming the component is how a caller asks for them, and the flour body's
+  // blob is one of the rows that answers.
+  assertEquals(blobs.length > 0, true)
+  // Addressed by name, a blob is still itself: `id=` selects, it does not list.
+  assertEquals(ids(await askRows(db, askOf([`id=${blobs[0]}`]))), [blobs[0]])
 })
 
 Deno.test('askRows: a similarity order is refused, not answered some other way', async () => {

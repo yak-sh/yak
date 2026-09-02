@@ -237,6 +237,21 @@ Deno.test('query: component names test facet absence and presence', () => {
   )
 })
 
+Deno.test('query: a contains with no needle is a presence test', () => {
+  let matches = (q: string, r: ReturnType<typeof row>) =>
+    matchQuery(r, parseQuery(q))
+  let titled = row({})
+  let untitled = row({}, { doc: { body: '' } })
+  let nodoc = { entity: { eid: 'bare', num: 8 } }
+  assertEquals(matches('.doc.title~=flux', titled), true)
+  assertEquals(matches('.doc.title~=', titled), true)
+  // `''.includes('')` used to make an empty needle true of every row — a
+  // filter naming a column then selected entities that wear neither the
+  // column nor its component at all (T-32503).
+  assertEquals(matches('.doc.title~=', untitled), false)
+  assertEquals(matchQuery(nodoc, parseQuery('.doc.title~=')), false)
+})
+
 Deno.test('query: a trailing bang names a facet before its namesake prop', () => {
   assertEquals(parseQuery('.persona!'), [{
     comp: 'persona',

@@ -30,15 +30,16 @@ let {
   namesLazy,
   scopedSessions,
   matchQuery,
-  listed,
+  selected,
   kidsOf,
   orderOf,
 } = await import('./query.ts')
 
 // The OLD evalQuery, verbatim: snapshot the whole graph, add the lazy entry
 // universe when the query names the partition, and screen every row through the
-// JS matcher over an in-memory reverse index. This is the definition evalGraph's
-// scoped path must reproduce exactly.
+// JS matcher over an in-memory reverse index — `selected` being the listing
+// screens (quarantine, and the store's content-addressed blob rows). This is
+// the definition evalGraph's scoped path must reproduce exactly.
 type DB = ReturnType<typeof open>
 let viaSnapshot = (db: DB, q: string, after = 0, limit = 500) => {
   let snap = snapshot(db)
@@ -54,7 +55,7 @@ let viaSnapshot = (db: DB, q: string, after = 0, limit = 500) => {
   let byEid = new Map(all.map((r) => [r.eid, r.comps]))
   let kids = kidsOf(byEid)
   return all.filter((r) =>
-    listed(r.comps, preds) &&
+    selected(r.comps, preds) &&
     matchQuery(
       r.comps,
       preds,

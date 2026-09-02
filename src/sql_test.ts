@@ -428,8 +428,8 @@ let COMPILES = [
   'WIDGET',
   'widget&.task.status=wip',
   'nothing-matches-this',
-  // an empty needle is true of every string, so a TEXT pred asks only whether
-  // the doc exists — and `~=` over a body asks nothing at all
+  // an empty TEXT term asks only whether the doc exists; an empty `~=` needle
+  // asks the same of the body COLUMN, rather than admitting every row
   '""',
   '.doc.body~=',
   // a substring over a body, where the needle carries LIKE's own wildcards:

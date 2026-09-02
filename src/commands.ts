@@ -43,7 +43,7 @@ import {
   workClaimMutation,
 } from './client.ts'
 import type { WorkClaimMutation } from './mutation.ts'
-import { adopt, listed, matchQuery, parseQuery } from './query.ts'
+import { adopt, matchQuery, parseQuery, selected } from './query.ts'
 import { instant } from './time.ts'
 import { type Arg, id, slotsOf, text } from './verb.ts'
 
@@ -125,7 +125,7 @@ export let rowsReader = (all: Row[]): Reader => ({
   select: (filter) => {
     let preds = parseQuery(filter)
     return all.filter((r) =>
-      listed(r.comps, preds) && matchQuery(r.comps, preds)
+      selected(r.comps, preds) && matchQuery(r.comps, preds)
     )
   },
   deps: () => [],

@@ -33,7 +33,6 @@ import {
   EXISTS,
   type Field,
   fieldsOf,
-  listed,
   matchQuery,
   namesLazy,
   parseQuery,
@@ -43,6 +42,7 @@ import {
   type ResultComp,
   resultComps,
   scopedSessions,
+  selected,
   TEXT,
   textual,
   warm,
@@ -381,7 +381,7 @@ let refreshServerSets = (eids: Set<string>) => {
       let had = next.includes(eid)
       // FTS5 membership belongs to SQLite. A local write may refresh projected
       // values, but only the subscription frame may add or remove a text hit.
-      let wants = serverOwned ? had : !!r && listed(r, s.preds) &&
+      let wants = serverOwned ? had : !!r && selected(r, s.preds) &&
         matchQuery(r, s.preds, read, undefined, kidsVia(read))
       if (had != wants) {
         next = wants ? [...next, eid] : next.filter((x) => x != eid)

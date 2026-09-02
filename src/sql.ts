@@ -301,10 +301,11 @@ let timeSql = (p: Pred, c: string, now: number): Sql | null => {
   return s ? stampish(c, edge(c, p.op, s)) : null
 }
 
-// `~=` is String(v ?? '').toLowerCase().includes(needle). instr() rather than
-// LIKE so a '%' or '_' in the needle needs no escaping; coalesce so a missing
-// column reads as '' exactly as the JS does. An empty needle is true of every
-// string, including that ''.
+// `~=` is String(v).toLowerCase().includes(needle). instr() rather than LIKE
+// so a '%' or '_' in the needle needs no escaping; coalesce so a missing column
+// reads as '' exactly as the JS does. An EMPTY needle is the presence test the
+// matcher makes it — the column is there — never `1`, which admitted every row
+// in the graph whose component the LEFT JOIN left null.
 //
 // A NON-ASCII needle declines, because the two case foldings are not the same
 // one: SQLite's lower() touches A-Z and nothing else, while JS's toLowerCase()
@@ -315,10 +316,14 @@ let timeSql = (p: Pred, c: string, now: number): Sql | null => {
 // lowercase IS ASCII — cannot be seen from a needle and stays uncompiled-for.)
 let ascii = (s: string) => [...s].every((c) => c.charCodeAt(0) < 128)
 let has = (c: string, value: string): Sql | null =>
-  !ascii(value) ? null : value == '' ? { sql: '1', params: [] } : {
-    sql: `instr(lower(coalesce(${asText(c)}, '')), lower(?)) > 0`,
-    params: [value],
-  }
+  !ascii(value)
+    ? null
+    : value == ''
+    ? { sql: `${c} is not null`, params: [] }
+    : {
+      sql: `instr(lower(coalesce(${asText(c)}, '')), lower(?)) > 0`,
+      params: [value],
+    }
 
 // A substring over a body is the one predicate instr() cannot afford — it
 // lowercases every body in the graph, ~60ms a pass. `doc_gram` (db.ts) is the

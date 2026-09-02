@@ -22,6 +22,7 @@ import {
   type Pred,
   predComps,
   resolveRefs,
+  selected,
 } from './query.ts'
 import {
   cursorOf,
@@ -922,7 +923,7 @@ export let subserve = (db: Sql, send: (json: string) => void) => {
           : c
         // A route sub matches its fixed id; a query sub runs the matcher.
         let hit = alive &&
-          (sub.only ? sub.only.has(eid) : listed(projected, sub.preds) &&
+          (sub.only ? sub.only.has(eid) : selected(projected, sub.preds) &&
             matchQuery(
               projected,
               sub.preds,
@@ -1011,7 +1012,7 @@ export let subserve = (db: Sql, send: (json: string) => void) => {
         let projected = alive && sub.results
           ? withResults(db, sub.preds, [{ eid, comps: c }], now)[0].comps
           : c
-        let hit = alive && listed(projected, sub.preds) &&
+        let hit = alive && selected(projected, sub.preds) &&
           matchQuery(
             projected,
             sub.preds,

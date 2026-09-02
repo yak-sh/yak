@@ -12,9 +12,9 @@ import {
   type Field,
   fieldsOf,
   type Kids,
-  listed,
   matchQuery,
   type Pred,
+  selected,
   textual,
 } from './query.ts'
 
@@ -85,7 +85,7 @@ export let memoryResolver = (store: Store): MemoryResolver => {
   // never .value — resolving a query must not subscribe the caller to the cache.
   let matches = (eid: string, preds: Pred[]) => {
     let r = store.read(eid)
-    return !!r && listed(r, preds) &&
+    return !!r && selected(r, preds) &&
       matchQuery(r, preds, store.read, undefined, store.kids)
   }
 
