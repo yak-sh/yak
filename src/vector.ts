@@ -31,8 +31,10 @@ let aliases: Record<string, string> = {
 
 // Resolve and load this platform's binary once, on first use. createRequire is
 // synchronous — loadVector runs inside the synchronous open(), so the path must
-// be in hand without awaiting a dynamic import.
-let require = createRequire(import.meta.url)
+// be in hand without awaiting a dynamic import. Built here, not at module
+// level: a bundled Worker has no import.meta.url, and building the require at
+// import would throw before the store ever ran (this module runs NOTHING on
+// import).
 let binary: Binary | undefined
 let load = (): Binary => {
   if (binary) return binary
@@ -41,6 +43,7 @@ let load = (): Binary => {
   if (!alias) throw new Error(`SQLite Vector has no binary for ${platform}`)
   // require() hands back the CJS module.exports directly (`{ path }`); the
   // `.default` is only there under ESM interop. Accept either.
+  let require = createRequire(import.meta.url)
   let m = require(fileURLToPath(import.meta.resolve(alias)))
   return binary = (m.default ?? m) as Binary
 }

@@ -8,6 +8,9 @@
 # npm droppings — this project has no node_modules
 node_modules/
 
+# wrangler dev's bundle scratch beside a Worker's config (workers/*)
+.wrangler/
+
 # agent worktrees parked inside the repo
 .claude/worktrees/
 

@@ -5145,12 +5145,11 @@ export let apply = (
     removedLog.set(eid, [...(removedLog.get(eid) ?? []), name])
     t?.removed.set(eid, [...(t.removed.get(eid) ?? []), name])
   }
-  // This is a write transaction from birth. Taking its reserved lock before
-  // the validation reads lets busy_timeout wait for a handoff peer; upgrading
-  // a deferred read transaction can fail immediately to avoid a deadlock.
-  // claimWork() takes this lock before resolving and synthesizing its batch;
-  // apply owns the remainder and commits/rolls it back exactly as if it had
-  // opened the transaction itself.
+  // This is a write transaction from birth: the run takes the write lock
+  // before its validation reads (a file store's `begin immediate`), so a
+  // waiting peer serializes at the door instead of failing on a deferred
+  // upgrade. Under claimWork() the run nests inside the transaction that
+  // resolved and synthesized the batch, and commits or rolls back with it.
   let run = () => {
     // Claim release is the interruption event. Capture the holder before the
     // row can vanish — including through a session cascade — then derive the
@@ -6269,8 +6268,6 @@ export let apply = (
     }
     return [...changes, ...extra]
   }
-  // claimWork() opened its own transaction around the synthesized batch; this
-  // run nests inside it as a savepoint and commits or rolls back with it.
   try {
     return db.transaction(run, true)
   } catch (e) {
