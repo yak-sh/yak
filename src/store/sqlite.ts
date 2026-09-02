@@ -15,7 +15,7 @@
 import { sqlitePath as path } from './sqlitepath.ts'
 import * as sqlite from 'jsr:@db/sqlite@0.13.0'
 import { dirname, resolve } from 'node:path'
-import { freshStats, migrate } from '../db.ts'
+import { backfillEdges, freshStats, migrate } from '../db.ts'
 import { loadVector } from '../vector.ts'
 import {
   type Can,
@@ -376,10 +376,14 @@ let wal = (db: DatabaseSync) => {
 // and seed once if the graph is empty. SQLite serializes concurrent openers.
 // The scratch handle is for a legacy reshape that reads target DDL off a
 // fresh graph (db.ts scratchOf). Planner statistics are refreshed after the
-// migration commits (db.ts freshStats), never inside the DDL it records.
+// migration commits (db.ts freshStats), never inside the DDL it records — and
+// the edge backfill (db.ts backfillEdges) runs after them both, for the same
+// reason plus one: it commits in batches, which the schema transaction could
+// not give it.
 export let open = (path = file, vector = false) => {
   let db = migrate(wal(connect(path, vector)), () => connect(':memory:'))
   freshStats(db)
+  backfillEdges(db)
   return db
 }
 

@@ -3748,6 +3748,120 @@ export let freshStats = (db: Sql) => {
   return analyzed
 }
 
+// Every stored `dependency` row as an edge entity (D-23820, T-23822), once per
+// graph. The eid IS the sentence (edge.ts edgeEid), so the sweep is additive
+// and idempotent: it writes exactly the changes dualEdge() mints for a new
+// write, over rows that already stand, and skips a sentence whose entity is
+// already there — nothing to cut over, no half-state to be in. `recalled` is
+// not an edge (T-23823): its rows become the plain `recalled{at}` comp on the
+// recalling entity, timed by that entity's OWN birth, since a dependency row
+// carries no clock of its own.
+//
+// Runs OUTSIDE migrate()'s one schema transaction (store/sqlite.ts open(),
+// beside freshStats): it commits a few thousand sentences at a time and writes
+// its mark LAST, so a boot interrupted mid-sweep resumes where it stopped
+// rather than restarting, and no single transaction holds the writer for the
+// whole walk. Server-minted, so it names no writer — the journal keeps these
+// as the unowned rows they are, like every other boot migration.
+export let backfillEdges = (db: Sql) => {
+  if (prep(db, `select 1 from server_meta where k = 'edge_backfill'`).get()) {
+    return 0
+  }
+  let began = Date.now()
+  // The resume point: every edge entity that already stands. Small on the
+  // first boot, the whole set on a resumed one.
+  let done = new Set(
+    (prep(
+      db,
+      `select e.eid as eid from edge join entity e on e.id = edge.entity`,
+    )
+      .all() as { eid: string }[]).map((r) => r.eid),
+  )
+  let rows = prep(
+    db,
+    `select p.eid as parent, d.type as type, c.eid as child
+       from dependency d
+       join entity p on p.id = d.parent
+       join entity c on c.id = d.child
+      where d.type != 'recalled'
+        and not exists (select 1 from tombstone t where t.entity = d.parent)
+        and not exists (select 1 from tombstone t where t.entity = d.child)
+      order by d.parent, d.type, d.child`,
+  ).all() as { parent: string; type: string; child: string }[]
+  let batch: Change[] = []
+  let minted = 0
+  let land = () => {
+    if (!batch.length) return
+    apply(db, batch)
+    batch = []
+  }
+  for (let { parent, type, child } of rows) {
+    let nature = natureOf[type]
+    if (!nature) continue
+    let eid = edgeEid(parent, nature, child)
+    if (done.has(eid)) continue
+    done.add(eid)
+    minted++
+    batch.push(
+      { eid, name: 'edge', comp: { from: parent, to: child } },
+      { eid, name: nature, comp: {} },
+    )
+    if (batch.length >= 4000) land()
+  }
+  land()
+  // A recall's clock: the recalling entity's `created.at`. The dependency row
+  // has no timestamp column of its own, and the recall IS the entity's birth
+  // in every case that made these rows — recall.ts mints the entry and marks
+  // it in one batch.
+  //
+  // Written as a server STAMP (direct SQL + record()), not through apply():
+  // the recalling entity is a log `entry`, and a log entry is an append-only
+  // fact — apply() refuses every late touch of one, rightly. The stamp still
+  // reaches the journal, so a tab that boots by catch-up replay hears it.
+  let recalls = prep(
+    db,
+    `select distinct p.eid as eid, cr.at as born
+       from dependency d
+       join entity p on p.id = d.parent
+       join created cr on cr.entity = d.parent
+       left join recalled r on r.entity = d.parent
+      where d.type = 'recalled' and r.at is null
+        and not exists (select 1 from tombstone t where t.entity = d.parent)`,
+  ).all() as { eid: string; born: string }[]
+  let stamp = prep(
+    db,
+    `insert into recalled (entity, at) values (${spineId}, ?)
+     on conflict(entity) do update set at = excluded.at`,
+  )
+  for (let i = 0; i < recalls.length; i += 2000) {
+    let slice = recalls.slice(i, i + 2000)
+    db.transaction(() => {
+      for (let { eid, born } of slice) stamp.run(eid, born)
+      record(
+        db,
+        slice.map(({ eid, born }): Change => ({
+          eid,
+          name: 'recalled',
+          comp: { at: born },
+        })),
+      )
+    })
+  }
+  prep(
+    db,
+    `insert or ignore into server_meta (k, v) values ('edge_backfill', '1')`,
+  )
+    .run()
+  if (minted || recalls.length) {
+    console.warn(
+      `edges: ${minted} edge entit${minted == 1 ? 'y' : 'ies'} minted, ` +
+        `${recalls.length} recall${recalls.length == 1 ? '' : 's'} timed ` +
+        `in ${Date.now() - began}ms`,
+    )
+  }
+  return minted
+}
+
 // One schema-shaping DDL statement, classified so a non-Deno kernel can replay
 // it (D-22804 §8). The classes are the whole guard surface: an idempotent
 // create/drop runs as-is; an `add column` runs only when the column is absent;
@@ -4176,6 +4290,14 @@ let storedEdge = (
   return nature ? { ...row!, nature } : undefined
 }
 
+// Does the dependency store already hold this sentence?
+let storedDep = (db: Sql, from: string, type: string, to: string) =>
+  !!prep(
+    db,
+    `select 1 from dependency
+     where parent = ${spineId} and type = ? and child = ${spineId}`,
+  ).get(from, type, to)
+
 // Two edge stores, one write (T-23825). While `dependency` is still the live
 // edge store, every edge lands in BOTH homes so readers on either side agree:
 // a `dependency{type, child}` write on P also mints the entity
@@ -4240,11 +4362,19 @@ let dualEdge = (db: Sql, changes: Change[]): Change[] => {
           `edge ${shortId(eid)} eid must be edgeEid(from, ${nature}, to)`,
         )
       }
-      out.push({
-        eid: String(from),
-        name: 'dependency',
-        comp: { type: typeOf[nature], child: String(to) },
-      })
+      // An echo that would write nothing is not written: the row already
+      // stands, so re-stating it only journals a write that did not happen
+      // — and the dependency rule reads a repeat as a fresh link (a
+      // persona's `contains` is the owner's move, refused for anyone else).
+      // The backfill leans on this: it re-mints edge entities over rows that
+      // are already there.
+      if (!storedDep(db, String(from), typeOf[nature], String(to))) {
+        out.push({
+          eid: String(from),
+          name: 'dependency',
+          comp: { type: typeOf[nature], child: String(to) },
+        })
+      }
     } else if (name == 'entity' && comp == null) {
       let edge = storedEdge(db, eid)
       if (edge) {

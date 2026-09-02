@@ -3,6 +3,7 @@
 Deno.env.set('DB_PATH', ':memory:')
 let {
   apply,
+  backfillEdges,
   backfillLineage,
   backfillOpened,
   backfillVia,
@@ -3296,6 +3297,61 @@ Deno.test('recalled: a plain event comp with its clock, no edge entity', () => {
   ])
   assertEquals(comp(rid, 'recalled')?.at, '2026-09-02T00:00:00.000Z')
   assertEquals(edgeRows(rid).n, 0)
+})
+
+// The boot backfill (T-23822): every row the dependency store held before the
+// dual-write, as its sentence entity. A legacy row is written straight into
+// the table here, the way every row in the owner's graph was written.
+let legacy = (d: ReturnType<typeof open>, p: string, t: string, c: string) =>
+  d.prepare(
+    `insert into dependency (parent, type, child) values (${idOf}, ?, ${idOf})`,
+  ).run(p, t, c)
+
+Deno.test('backfill: stored rows become sentence entities, once per graph', () => {
+  let d = fresh()
+  let p = uid(), c = uid(), voice = uid(), m = uid()
+  apply(d, [
+    { eid: p, name: 'doc', comp: { title: 'parent' } },
+    { eid: c, name: 'doc', comp: { title: 'child' } },
+    { eid: voice, name: 'persona', comp: {} },
+    { eid: m, name: 'memory', comp: {} },
+  ])
+  legacy(d, p, 'requires', c)
+  // A persona's tiers: linking one is the owner's move, so the dual-write's
+  // dependency echo would refuse the whole sweep — it is not written at all,
+  // because the row it would write already stands.
+  legacy(d, voice, 'contains', m)
+  // A row the dual-write already minted is skipped, not re-minted: this is
+  // also how an interrupted sweep resumes where it stopped.
+  apply(d, [{ eid: p, name: 'dependency', comp: { type: 'wants', child: c } }])
+  assertEquals(backfillEdges(d), 2)
+  let e = edgeEid(p, 'requires', c)
+  assertEquals(compOf(d, e, 'edge'), { eid: e, from: p, to: c })
+  assertEquals(compOf(d, e, 'requires'), { eid: e })
+  assertEquals(compOf(d, e, 'entity')?.num, null) // an edge is num-less
+  assertEquals(compOf(d, edgeEid(voice, 'contains', m), 'contains'), {
+    eid: edgeEid(voice, 'contains', m),
+  })
+  // Marked: a later boot walks nothing, however the graph has grown.
+  legacy(d, c, 'reads', p)
+  assertEquals(backfillEdges(d), 0)
+  assertEquals(compOf(d, edgeEid(c, 'reads', p), 'edge'), undefined)
+})
+
+Deno.test('backfill: a recalled row times the entry, and mints no edge', () => {
+  let d = fresh()
+  let s = uid(), e = uid(), m = uid()
+  apply(d, [
+    { eid: s, name: 'session', comp: { id: s } },
+    { eid: m, name: 'memory', comp: {} },
+  ])
+  apply(d, [{ eid: e, name: 'entry', comp: { session: s } }])
+  legacy(d, e, 'recalled', m)
+  backfillEdges(d)
+  // A log entry is immutable, so the clock is a server stamp — and the only
+  // clock the row can offer is the recalling entity's own birth.
+  assertEquals(compOf(d, e, 'recalled')?.at, compOf(d, e, 'created')?.at)
+  assertEquals(compOf(d, edgeEid(e, 'recalled', m), 'edge'), undefined)
 })
 
 // Supersession is a plain edge, but the invariant is its own: the replaced

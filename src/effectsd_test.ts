@@ -123,6 +123,10 @@ Deno.test('configured driver journals nested cross-owner effects exactly once', 
   let writer = open(path)
   let serving = open(path)
   let daemon = open(path)
+  // Boot writes journal rows of its own (the edge backfill over the seed's
+  // dependency rows, T-23822) and they carry no trace. This test's window
+  // starts after them.
+  let booted = journalSince(writer, 0).at(-1)?.rowid ?? 0
   let serveCalls = 0
   let sameOwnerCalls = 0
   let serveToDoCalls = 0
@@ -186,7 +190,7 @@ Deno.test('configured driver journals nested cross-owner effects exactly once', 
   assertEquals(serveCalls, 0, 'the daemon never invokes the serve consequence')
   assertEquals(sameOwnerCalls, 1, 'same-owner nested consequence fires once')
   assert(
-    journalSince(writer, 0).every((r) => r.trace),
+    journalSince(writer, booted).every((r) => r.trace),
     'root and nested births carry fed traces',
   )
 
