@@ -20,6 +20,9 @@
     "bench:gate:web": "deno run -A --unstable-net --unstable-worker-options bin/webperf-gate.ts",
     "bench:accept:web": "BENCH_ACCEPT=1 deno run -A --unstable-net --unstable-worker-options bin/webperf-gate.ts"
   },
+  "workspace": [
+    "./workers/yak"
+  ],
   "exclude": [
     "src/vendor",
     "**/.wrangler",

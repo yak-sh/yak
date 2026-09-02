@@ -1325,6 +1325,15 @@
       "npm:preact@^10.29.1",
       "npm:sucrase@^3.35.0",
       "npm:zod@^3.24.0"
-    ]
+    ],
+    "members": {
+      "workers/yak": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@cloudflare/workers-oauth-provider@0.10.3"
+          ]
+        }
+      }
+    }
   }
 }
