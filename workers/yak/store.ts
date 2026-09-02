@@ -65,7 +65,7 @@ export class Store {
     if (path == '/query') {
       if (req.method != 'GET') return methodNotAllowed('GET')
       try {
-        return Response.json(query(db, url.search))
+        return Response.json(await query(db, url.search))
       } catch (e) {
         return new Response(String((e as Error).message ?? e), { status: 400 })
       }

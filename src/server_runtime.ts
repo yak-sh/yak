@@ -17,32 +17,25 @@ import type { Handler } from './host.ts'
 import { host } from './host_deno.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
-import { capabilities, type Change, type Dep, idOf } from './types.ts'
+import { capabilities, type Change } from './types.ts'
+import { eager, locate } from './db.ts'
 import { type Mutation, mutationResult } from './mutation.ts'
 import {
   apply,
   appPlane,
-  buried,
   correct,
   cursorOf,
-  eager,
-  eagerDeps,
   epochOf,
-  hidden,
   human,
   journalBy,
   journalOf,
-  locate,
   mutate,
   recast,
   redact as redactValue,
-  refsOf,
-  rowsOf,
   scanAnomalies,
   settingEid,
   settingValue,
   sweepSelect,
-  textMatches,
   touch,
   writerUrl,
 } from './db.ts'
@@ -50,7 +43,7 @@ import { file as graph } from './store/sqlite.ts'
 import { db } from './live_db.ts'
 import { catchup } from './catchup.ts'
 import { published, withBackupLock } from './redaction.ts'
-import { dbKids, type Subserve, subserve } from './subserve.ts'
+import { type Subserve, subserve } from './subserve.ts'
 import {
   configureEffects,
   dispatch,
@@ -96,20 +89,43 @@ import { type Observation, safeObservation } from './observations.ts'
 import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { graph as browserGraph, serverFile } from './reload.ts'
-import { jsonOf, type Row } from './client.ts'
+import { nearOf, TEXT } from './query.ts'
 import { requestVerifier } from './verify.ts'
 import {
-  listed,
-  matchQuery,
-  nearOf,
-  orderOf,
-  parseQuery,
-  resolveRefs,
-  TEXT,
-} from './query.ts'
-import { evalAgg, evalGraph, rowed } from './graph_query.ts'
+  askOf,
+  askRows,
+  evalAgg,
+  layered,
+  rowed,
+  setRanker,
+} from './graph_query.ts'
+
+// The app plane owns the embedding provider, so it is the plane that teaches
+// the query door to rank. graph_query.ts holds the arm but not the import: the
+// Cloudflare worker reads the same module over a store that has no vector
+// backend, and refuses a similarity order instead. `.near=` lets an entity
+// supply its current doc and its reusable stored vector; bare text remains
+// available for an arbitrary query.
+setRanker(async (db, asked, limit) => {
+  let near = nearOf(asked)
+  let eid = near ? locate(db, near) : undefined
+  let comps = eid ? eager(db, eid) : undefined
+  let text = eid
+    ? textOf(comps?.doc?.title, comps?.doc?.body)
+    : asked.filter((p) => p.op == TEXT).map((p) => p.value).join(' ')
+  if (!text) return []
+  let found = await similarTo(db, text, limit ?? 8, FLOOR, eid)
+  return (found ?? []).map((h) => {
+    let row = rowed({ eid: h.eid, comps: eager(db, h.eid) })
+    row.comps.rank = {
+      score: h.score,
+      open: h.eid,
+      title: String(row.comps.doc?.title ?? ''),
+    }
+    return row
+  })
+})
 import type { WorkLane } from './work.ts'
-import { withResults } from './result_component.ts'
 import { nativeSoon } from './tmux.ts'
 import { loadPlugins, pluginSpecifiers } from './plugins.ts'
 import { stop as stopTimers } from './timers.ts'
@@ -1021,82 +1037,33 @@ let handle: Handler = async (req) => {
     // `deps=1` the hit's own edges both ways; `id=` names entities outright.
     // A malformed filter is the typist's news, not a server error.
     try {
+      // The route is an ADAPTER: segments in, JSON out. Everything between —
+      // `id=` addressing, the quarantine reveal, paging, similarity ranking,
+      // the deps/backlinks layers — is graph_query.ts, which the CLI's local
+      // arm and the in-process MCP tool read through the same askOf/askRows.
+      // Two parses is how 0d4d4b4a's per-id hydration fix missed the arm and
+      // had to be made twice; there is one now.
       let segs = url.search.slice(1).split('&').filter(Boolean)
         .map(decodeURIComponent)
-      let backs = segs.includes('backlinks=1')
-      let edged = segs.includes('deps=1')
-      let reveal = segs.includes('quarantined=1')
-      // Paging for the lazy entry partition: `after=` is an entry.seq cursor,
-      // `limit=` the page size. Ignored by an eager query, which the snapshot
-      // path already answers whole in num order.
-      let after = Number(
-        segs.find((s) => s.startsWith('after='))?.slice(6),
-      ) ||
-        0
-      let limit = Number(
-        segs.find((s) => s.startsWith('limit='))?.slice(6),
-      ) || undefined
-      let work = segs.find((s) => s.startsWith('work='))?.slice(5)
-      let recursive = segs.includes('recursive=1')
-      // `id=` FETCHES rather than filters: each value is an ADDRESS — T-3, a
-      // bare num, an alias slug, a uuid — and locate() is the index's own
-      // reading of "what names an entity", the same four rules find() spells
-      // over a materialized graph. It is a parameter beside backlinks=
-      // rather than a predicate because addressing is not filtering:
-      // `.entity.eid~=abc` would be a substring search over uuids, legal and
-      // meaningless.
-      //
-      // An id naming nothing is simply absent, the way a filter matching
-      // nothing returns no rows — a caller asking for five and getting three
-      // learns which two are gone by their absence.
-      let named = segs.filter((s) => s.startsWith('id='))
-        .flatMap((s) => s.slice(3).split(',')).filter(Boolean)
-      let only = named.length
-        ? new Set(
-          (named.map((i) => locate(db, i)).filter(Boolean) as string[])
-            .filter((eid) => !buried(db, eid)),
-        )
-        : null
-      segs = segs.filter((s) =>
-        s != 'backlinks=1' && s != 'deps=1' && s != 'quarantined=1' &&
-        !s.startsWith('after=') &&
-        !s.startsWith('limit=') &&
-        !s.startsWith('work=') &&
-        s != 'recursive=1' &&
-        !s.startsWith('id=')
-      )
-      let q = segs.join('&')
-      // Work is its own exact row selection. Validate and execute it before
-      // aggregate/ranking riders can consume the same query string through a
-      // different response shape; unsupported work grammar must fail as work,
-      // not quietly become a normal query result.
-      if (work) {
-        if (work != 'evaluate' && work != 'build' && work != 'verify') {
-          throw new Error(`unknown work lane: ${work}`)
-        }
-        if (named.length) throw new Error('work queries do not accept id=')
-        if (reveal) {
-          throw new Error('work queries do not reveal quarantined entities')
-        }
-        if (backs || edged) {
-          throw new Error('work queries do not accept backlinks or edge riders')
-        }
+      let ask = askOf(segs)
+      // Work is its own exact row selection, and its ENVELOPE (the bounded
+      // project/claim/persona hydration) is a projection over that selection,
+      // so it runs through the IO's work reader rather than the row door.
+      // askOf has already refused the riders a work query cannot carry.
+      if (ask.work) {
         return Response.json(
-          await graphIO.work!(work as WorkLane, {
-            filters: segs,
-            limit,
-            recursive,
+          await graphIO.work!(ask.work as WorkLane, {
+            filters: ask.filters,
+            limit: ask.limit,
+            recursive: ask.recursive,
           }),
         )
       }
-      let asked = q.trim()
-        ? resolveRefs(parseQuery(q), (id) => locate(db, id))
-        : []
       // An aggregate projection (`.count!` / `.distinct=col` / `.tally=col`)
       // answers with the reduction, not a row set — the census asks for values,
       // so rows, layers and id= addressing don't apply. Keys come back sorted
       // the way the census always has; `.count!` is one number under `count`.
-      let agg = evalAgg(db, q)
+      let agg = evalAgg(db, ask.filters.join('&'))
       if (agg) {
         if (agg.op == 'count') {
           return Response.json({ count: agg.values.get('') ?? 0 })
@@ -1110,149 +1077,7 @@ let handle: Handler = async (req) => {
           },
         )
       }
-      // Any remaining filter line still screens, so `id=` composes with the
-      // grammar rather than replacing it.
-      let screen = (hits: Row[]) =>
-        only ? hits.filter((r) => only.has(r.eid)) : hits
-
-      // Semantic retrieval is a ranking of ordinary entities, so it shares
-      // /query and projects the same transient rank facet as FTS. `.near=`
-      // lets an entity supply its current doc and reusable stored vector; bare
-      // text remains available for an arbitrary query. The embedding provider
-      // is external I/O, so this is deliberately the one query evaluator the
-      // Deno app plane owns while both runtimes keep ordinary reads local.
-      let semantic = orderOf(asked) == 'similar'
-      let semanticHits: Row[] | undefined = semantic
-        ? await (async () => {
-          let near = nearOf(asked)
-          let eid = near ? locate(db, near) : undefined
-          let comps = eid ? eager(db, eid) : undefined
-          let text = eid
-            ? textOf(comps?.doc?.title, comps?.doc?.body)
-            : asked.filter((p) => p.op == TEXT).map((p) => p.value).join(' ')
-          if (!text) return []
-          let found = await similarTo(db, text, limit ?? 8, FLOOR, eid)
-          return (found ?? []).map((h) => {
-            let row = rowed({ eid: h.eid, comps: eager(db, h.eid) })
-            row.comps.rank = {
-              score: h.score,
-              open: h.eid,
-              title: String(row.comps.doc?.title ?? ''),
-            }
-            return row
-          })
-        })()
-        : undefined
-      // What a hit carries BESIDE its components: its own edges (deps=1)
-      // and who points at it (backlinks=1). Both are keyed off the hits —
-      // eagerDeps and refsOf read the edge table and each typed eid column
-      // by eid — so a one-entity question costs one entity. Backlinks used
-      // to walk every row of the graph for this, which is what held the
-      // whole door on the snapshot path; now every path serves both layers
-      // the same way, and `deps` is the first door outside /snapshot to
-      // carry an entity's OUTGOING edges at all (`task show` prints them).
-      //
-      // `deps` are the snap.deps triples touching the hit, eids and all: an
-      // endpoint's id and status come from fetching it, and a caller
-      // rendering edges is fetching those rows anyway — which is why the
-      // layer is EAGER, as snap.deps and the `.edges!` rider are: an edge
-      // from a session-log entry names a row no client holds, and a
-      // well-referenced task carries hundreds (T-3683: 559 of 609). Serving
-      // them made `task show` print 780 lines and the boot digest hydrate
-      // ~1,400 entries (13 MB) per session start.
-      let layers = (hits: Row[]) => {
-        let eids = hits.map((r) => r.eid)
-        if (!backs && !edged) {
-          return hits.map((r) => jsonOf(r))
-        }
-        let deps = eagerDeps(db, eids).filter((d) =>
-          reveal || (!hidden(db, d.parent) && !hidden(db, d.child))
-        )
-        let mine = new Map<string, Dep[]>()
-        for (let d of deps) {
-          for (let e of [d.parent, d.child]) {
-            if (mine.has(e)) mine.get(e)!.push(d)
-            else mine.set(e, [d])
-          }
-        }
-        let back = new Map<
-          string,
-          { from: string; via: string; title: string }[]
-        >()
-        if (backs) {
-          let wanted = new Set(eids)
-          // An edge is a reference like any other; its verb IS the `via`.
-          let refs = [
-            ...refsOf(db, eids).filter((r) => reveal || !hidden(db, r.from)),
-            ...deps.filter((d) => wanted.has(d.child))
-              .map((d) => ({ from: d.parent, via: d.type, to: d.child })),
-          ]
-          // The title rides along because a backlink is READ, not chased:
-          // the extension's "what references this page" panel is one query
-          // or it is two, and the id alone would force the second.
-          let named = new Map(
-            rowsOf(db, [...new Set(refs.map((r) => r.from))])
-              .map(rowed).map((r) => [r.eid, r]),
-          )
-          for (let { from, via, to } of refs) {
-            let r = named.get(from)
-            if (!r) continue // a comp row whose spine is gone names nobody
-            let list = back.get(to) ?? []
-            list.push({
-              from: idOf(r),
-              via,
-              title: String(r.comps.doc?.title ?? ''),
-            })
-            back.set(to, list)
-          }
-        }
-        return hits.map((r) => ({
-          ...jsonOf(r),
-          ...(edged ? { deps: mine.get(r.eid) ?? [] } : {}),
-          ...(backs ? { backlinks: back.get(r.eid) ?? [] } : {}),
-        }))
-      }
-      // Named entities are read through rowsOf — one statement per component
-      // over the staged set, where an eager() per id cost a statement per
-      // component per id (the digest names ~1,300 in batches of 50: 2.5ms
-      // an id) — against a filter that would otherwise select everything and
-      // drag the whole graph in behind it.
-      // A dead entity is gone before this: `only` was built above with the
-      // tombstone excluded (buried), so it holds live eids only and eager()
-      // always finds a spine with components. Since the D-18866 flip retains a
-      // tombstoned spine row, that exclusion is explicit rather than a side
-      // effect of delete removing the row.
-      if (only) {
-        // `id=` already SELECTED; a remaining filter only screens. No
-        // remaining filter means no screen — an empty QUERY would select
-        // nothing, so this door states its meaning before parsing.
-        let preds = asked
-        let hits = withResults(db, preds, rowsOf(db, [...only]).map(rowed))
-          .filter((r) => reveal || listed(r.comps, preds))
-          .filter((r) =>
-            matchQuery(
-              r.comps,
-              preds,
-              (e) => eager(db, e),
-              undefined,
-              dbKids(db, (e: string) => eager(db, e)),
-              undefined,
-              (eid, p) => textMatches(db, eid, p),
-            )
-          )
-        return Response.json(
-          layers(screen(hits).sort((a, b) => a.num - b.num)),
-        )
-      }
-      // The authoritative pipeline (evalGraph): the index answers when it can
-      // (a one-row question cost a 27 MB snapshot and 0.29s before sql.ts,
-      // 100x), else the JS matcher over the full universe — which now carries
-      // the lazy entry partition whenever the query names it. Kind is a filter
-      // in q now (`.kind=`), hot ranking and entry ordering/paging all settle
-      // inside evalGraph, so this door and the in-process graph_query tool
-      // read one answer.
-      let hits = semanticHits ?? evalGraph(db, q, { after, limit }).hits
-      return Response.json(layers(hits))
+      return Response.json(layered(db, await askRows(db, ask), ask))
     } catch (e) {
       return new Response(String((e as Error).message ?? e), { status: 400 })
     }

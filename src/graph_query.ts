@@ -16,6 +16,7 @@ import {
   capabilities,
   type Change,
   deaths,
+  type Dep,
   kindOf,
   sessionActive,
   sessionOf,
@@ -25,8 +26,11 @@ import {
 import {
   find,
   idOf,
+  jsonOf,
   need,
   type Querier,
+  queryArgs,
+  type QueryOpts,
   type Row,
   WORK_REFS_LIMIT,
   type WorkProjection,
@@ -40,11 +44,13 @@ import {
   entriesOf,
   entriesScan,
   epochOf,
+  hidden,
   human,
   locate,
   matching,
   reaching,
   referrersOf,
+  refsOf,
   rowsOf,
   search,
   textMatches,
@@ -1251,49 +1257,199 @@ export let workingSet = (db: Sql): Snapshot => {
   }
 }
 
-// The /query door as a Querier bound to a db — the same id=+evalGraph
-// resolution the HTTP route runs, minus the backlinks/deps/paging presentation
-// a client.ts enumeration never asks for. This is what lets a server route
-// drive readerRows/inboxFor against the LIVE graph with no HTTP round-trip and
-// ONE query semantics (T-18105): the inbox predicate stays in client.ts, and
-// only its answerer swaps. `id=` FETCHES by address (locate: T-3, num, slug,
-// uuid) then screens by any remaining filter — quarantine included, the same as
-// the route's id path; everything else runs evalGraph.
-export let localQuery = (db: Sql): Querier =>
-// deno-lint-ignore require-await
-async (filters, opts) => {
-  let named = filters.filter((s) => s.startsWith('id='))
-    .flatMap((s) => s.slice(3).split(',')).filter(Boolean)
-  let q = filters.filter((s) => !s.startsWith('id=')).join('&')
-  if (opts?.work) {
-    if (named.length) throw new Error('work queries do not accept id=')
-    return evalWork(db, q, { ...opts, work: opts.work })
+// What a filter line carries BESIDE its predicates. `id=` ADDRESSES (locate:
+// T-3, num, slug, uuid) where the rest of the line SCREENS; the others name the
+// window, the quarantine reveal, the work lane, and the layers a hit ships
+// with. It is one type because it was twice a parse: the /query route read
+// these off a URL's segments and localQuery off a filters array, and the two
+// drifted — 0d4d4b4a fixed per-id hydration in the route, and the identical bug
+// had to be fixed again here hours later (2f0b8ed7). Now the doors differ only
+// in where the segments come from and how the answer is serialized.
+export type Ask = {
+  ids: string[]
+  filters: string[]
+  after?: number
+  limit?: number
+  reveal?: boolean
+  backlinks?: boolean
+  deps?: boolean
+  work?: NonNullable<QueryOpts['work']>
+  recursive?: boolean
+}
+
+let RIDERS = ['id=', 'after=', 'limit=', 'work=']
+let FLAGS = ['backlinks=1', 'deps=1', 'quarantined=1', 'recursive=1']
+let rider = (segs: string[], key: string) =>
+  segs.find((s) => s.startsWith(key))?.slice(key.length)
+
+// segs → Ask. A segment that is not a rider stays in the filter line, so the
+// grammar keeps its one parser (query.ts) and this only lifts the addressing
+// and presentation words off the front. The work lane's refusals live here
+// rather than at a door: an unsupported work grammar must fail AS work, never
+// quietly become an ordinary query result through some other caller.
+export let askOf = (segs: string[]): Ask => {
+  let lane = rider(segs, 'work=')
+  if (lane && lane != 'evaluate' && lane != 'build' && lane != 'verify') {
+    throw new Error(`unknown work lane: ${lane}`)
   }
-  if (!named.length) return evalGraph(db, q, opts).hits
+  let ask: Ask = {
+    ids: segs.filter((s) => s.startsWith('id='))
+      .flatMap((s) => s.slice(3).split(',')).filter(Boolean),
+    filters: segs.filter((s) =>
+      !FLAGS.includes(s) && !RIDERS.some((k) => s.startsWith(k))
+    ),
+    after: Number(rider(segs, 'after=')) || 0,
+    limit: Number(rider(segs, 'limit=')) || undefined,
+    reveal: segs.includes('quarantined=1'),
+    backlinks: segs.includes('backlinks=1'),
+    deps: segs.includes('deps=1'),
+    work: lane as Ask['work'],
+    recursive: segs.includes('recursive=1'),
+  }
+  if (ask.work) {
+    if (ask.ids.length) throw new Error('work queries do not accept id=')
+    if (ask.reveal) {
+      throw new Error('work queries do not reveal quarantined entities')
+    }
+    if (ask.backlinks || ask.deps) {
+      throw new Error('work queries do not accept backlinks or edge riders')
+    }
+  }
+  return ask
+}
+
+// Semantic retrieval is a RANKING of ordinary entities, so it shares this door
+// and projects the same transient rank facet FTS does. It is the one arm that
+// reaches OUTSIDE SQLite — the embedding provider is external I/O — so it is
+// REGISTERED rather than imported: this module is read by the Cloudflare
+// worker's store too, where embed.ts's native vector backend cannot go, and a
+// static import would drag it into that bundle. An unregistered store refuses a
+// similarity order in the same words evalGraph does, rather than answering it
+// some other way.
+export type Ranker = (
+  db: Sql,
+  asked: Pred[],
+  limit?: number,
+) => Promise<Row[]>
+let ranker: Ranker | undefined
+export let setRanker = (r: Ranker) => ranker = r
+
+// THE answer: rows. `id=` fetches by address then screens by any remaining
+// filter; a similarity order ranks; everything else is evalGraph's
+// authoritative pipeline, which carries the lazy entry partition and its
+// paging. Every door reads this, so a fix to any arm is a fix everywhere.
+export let askRows = async (db: Sql, ask: Ask): Promise<Row[]> => {
+  let q = ask.filters.join('&')
+  if (ask.work) {
+    return evalWork(db, q, {
+      work: ask.work,
+      limit: ask.limit,
+      recursive: ask.recursive,
+    })
+  }
+  if (!ask.ids.length) {
+    let asked = q.trim()
+      ? resolveRefs(parseQuery(q), (id) => locate(db, id))
+      : []
+    if (orderOf(asked) != 'similar') {
+      return evalGraph(db, q, { after: ask.after, limit: ask.limit }).hits
+    }
+    if (!ranker) {
+      throw new Error('similarity rank requires the embedding query evaluator')
+    }
+    return await ranker(db, asked, ask.limit)
+  }
   // A tombstoned entity still resolves by name but has left the graph, and its
   // spine row now survives the delete (D-18866) — exclude it so `id=` addresses
-  // live entities only, matching the /query door and snapshot().
-  let only = (named.map((i) => locate(db, i)).filter(Boolean) as string[])
+  // live entities only, matching snapshot().
+  let only = (ask.ids.map((i) => locate(db, i)).filter(Boolean) as string[])
     .filter((eid) => !buried(db, eid))
   // `id=` already SELECTED — the addresses are the selection, and a remaining
   // filter only SCREENS them. No remaining filter means no screen, so this
-  // caller states that before parsing (an empty QUERY would select nothing).
+  // states that before parsing (an empty QUERY would select nothing).
   let preds = q.trim() ? resolveRefs(parseQuery(q), (id) => locate(db, id)) : []
   let read = (e: string) => eager(db, e)
   let kids = (eid: string, comp: string, prop: string) =>
     referrersOf(db, [eid], { comp, prop }).map(read)
   let walk = walker(db)
   let fts = (eid: string, p: Pred) => textMatches(db, eid, p)
-  // Hydrate the named set with one statement per component table (rowsOf),
-  // as the /query route does — an eager() per id is a statement per component
-  // PER ENTITY, which made the local arm's boot digest cost 10 s of CPU where
-  // the wire answered in under 2.
+  // Hydrate the named set with one statement per component table (rowsOf); an
+  // eager() per id is a statement per component PER ENTITY, which cost the boot
+  // digest 10 s of CPU where the same work in one pass takes under 2.
   return withResults(db, preds, rowsOf(db, only).map(rowed))
     .filter((r) =>
-      listed(r.comps, preds) &&
+      (ask.reveal || listed(r.comps, preds)) &&
       matchQuery(r.comps, preds, read, undefined, kids, walk, fts)
     )
+    .sort((a, b) => a.num - b.num)
 }
+
+// What a hit carries BESIDE its components: its own edges (deps) and who points
+// at it (backlinks). Both are keyed off the hits — eagerDeps and refsOf read
+// the edge table and each typed eid column by eid — so a one-entity question
+// costs one entity. Backlinks used to walk every row of the graph for this,
+// which is what held the whole door on the snapshot path.
+//
+// `deps` are the snap.deps triples touching the hit, eids and all: an
+// endpoint's id and status come from fetching it, and a caller rendering edges
+// is fetching those rows anyway — which is why the layer is EAGER, as snap.deps
+// and the `.edges!` rider are: an edge from a session-log entry names a row no
+// client holds, and a well-referenced task carries hundreds (T-3683: 559 of
+// 609). Serving them made `task show` print 780 lines and the boot digest
+// hydrate ~1,400 entries (13 MB) per session start.
+export let layered = (db: Sql, hits: Row[], ask: Ask) => {
+  if (!ask.backlinks && !ask.deps) return hits.map((r) => jsonOf(r))
+  let eids = hits.map((r) => r.eid)
+  let deps = eagerDeps(db, eids).filter((d) =>
+    ask.reveal || (!hidden(db, d.parent) && !hidden(db, d.child))
+  )
+  let mine = new Map<string, Dep[]>()
+  for (let d of deps) {
+    for (let e of [d.parent, d.child]) {
+      if (mine.has(e)) mine.get(e)!.push(d)
+      else mine.set(e, [d])
+    }
+  }
+  let back = new Map<string, { from: string; via: string; title: string }[]>()
+  if (ask.backlinks) {
+    let wanted = new Set(eids)
+    // An edge is a reference like any other; its verb IS the `via`.
+    let refs = [
+      ...refsOf(db, eids).filter((r) => ask.reveal || !hidden(db, r.from)),
+      ...deps.filter((d) => wanted.has(d.child))
+        .map((d) => ({ from: d.parent, via: d.type, to: d.child })),
+    ]
+    // The title rides along because a backlink is READ, not chased: the
+    // extension's "what references this page" panel is one query or it is two,
+    // and the id alone would force the second.
+    let named = new Map(
+      rowsOf(db, [...new Set(refs.map((r) => r.from))])
+        .map(rowed).map((r) => [r.eid, r]),
+    )
+    for (let { from, via, to } of refs) {
+      let r = named.get(from)
+      if (!r) continue // a comp row whose spine is gone names nobody
+      let list = back.get(to) ?? []
+      list.push({ from: idOf(r), via, title: String(r.comps.doc?.title ?? '') })
+      back.set(to, list)
+    }
+  }
+  return hits.map((r) => ({
+    ...jsonOf(r),
+    ...(ask.deps ? { deps: mine.get(r.eid) ?? [] } : {}),
+    ...(ask.backlinks ? { backlinks: back.get(r.eid) ?? [] } : {}),
+  }))
+}
+
+// The door as a Querier bound to a db — the rows half of what /query serves,
+// which is all a client.ts enumeration ever asks for. This is what lets a
+// server route drive readerRows/inboxFor against the LIVE graph with no HTTP
+// round-trip and ONE query semantics (T-18105): the inbox predicate stays in
+// client.ts, and only its answerer swaps. queryArgs is the CLIENT's serializer,
+// so running it here means the local arm parses the exact segment line it would
+// otherwise have put on the wire.
+export let localQuery = (db: Sql): Querier => (filters, opts) =>
+  askRows(db, askOf(queryArgs(filters, opts)))
 
 // The colon-command executor's graph access, keyed off the live db — the
 // db-backed twin of commands.ts rowsReader (M-21143: the executor never rides a

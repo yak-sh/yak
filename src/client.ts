@@ -311,7 +311,11 @@ export type WorkProjection = {
 
 export let WORK_REFS_LIMIT = 20
 
-let queryArgs = (filters: string[], opts?: QueryOpts) => [
+// The riders a filter line puts on the wire, ahead of the filters themselves.
+// Exported because the LOCAL arm runs it too (graph_query.ts localQuery) and
+// then parses the result with the same askOf the /query route uses — so the two
+// doors cannot disagree about what a segment means.
+export let queryArgs = (filters: string[], opts?: QueryOpts) => [
   ...(opts?.after ? [`after=${opts.after}`] : []),
   ...(opts?.limit ? [`limit=${opts.limit}`] : []),
   ...(opts?.work ? [`work=${opts.work}`] : []),
