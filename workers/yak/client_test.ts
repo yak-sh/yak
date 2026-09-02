@@ -126,17 +126,28 @@ slow('the served client: a page saves, lists and watches', async () => {
       await wire.stop()
     }
 
-    // A refusal arrives as the server's own sentence, not a status code.
+    // A refusal arrives as the server's own sentence, not a status code and
+    // not a machine word (C-32574 item 2).
     await assertRejects(
       () => mod.store(`${anyone.origin}/recipes/api/`).apply({ doc: {} }),
       Error,
-      'not_a_writer',
+      'sign in to change this app',
     )
     await assertRejects(
       () => store.query('work=build'),
       Error,
       'work lanes',
     )
+    // A door that answers a PAGE — the platform's 404 — is not quoted at the
+    // person: the status and a short line of it, never the whole document
+    // (C-32574 item 4, where a club saw the HTML in its error line).
+    let dumped = await assertRejects(
+      () => mod.store(`${mine.origin}/nowhere/api/`).query('.doc!'),
+      Error,
+    )
+    assertEquals(dumped.message.includes('<'), false)
+    assertMatch(dumped.message, /^404 /)
+    assert(dumped.message.length < 140, dumped.message)
   } finally {
     await mine.stop()
     await anyone.stop()

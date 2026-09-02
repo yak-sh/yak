@@ -23,6 +23,7 @@
 // written as an entity literal through the store's /apply, so the directory
 // can describe its own store.
 import type { Mutation } from '../../src/mutation.ts'
+import { slugsOf } from '../../src/types.ts'
 import type { Env, Fetcher } from './env.ts'
 import { SLUG } from './route.ts'
 import { storeOf } from './store.ts'
@@ -52,6 +53,10 @@ export type App = {
   // app was born (`store` below); null for an app born before it was pinned,
   // which is named by its address the way it always was.
   store: string | null
+  // Every address this app has ever answered at — its birth address first,
+  // then each one a rename left behind. They resolve like ids (types.ts
+  // slugsOf), which is how an old link still finds the app it was made for.
+  slugs: string[]
 }
 export type Role = 'owner' | 'editor' | 'viewer'
 export type Access = 'public' | 'open' | 'private'
@@ -67,7 +72,7 @@ type Row = {
   }
   member?: { space: string; person: string; role: Role }
   email?: { address: string }
-  alias?: { slug: string }
+  alias?: { slug: string; slugs?: string | null }
   doc?: { title?: string }
 }
 
@@ -144,7 +149,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (!r.ok) return r
   let body = await r.text()
   if (body != '[]') cache.set(url.search, { at: Date.now(), body })
-  return new Response(body, { headers: { 'content-type': 'application/json' } })
+  return new Response(body, {
+    headers: { 'content-type': 'application/json' },
+  })
 }
 
 let spaceOf = (r: Row): Space => ({
@@ -162,6 +169,7 @@ export let appOf = (r: Row): App => ({
   access: r.app!.access ?? null,
   title: r.doc?.title || r.app!.slug,
   store: r.alias?.slug ?? null,
+  slugs: slugsOf(r.alias),
 })
 
 // A Durable Object cannot be renamed, so an app's store must not be named by
@@ -212,6 +220,16 @@ export let directory = (via: Fetcher) => {
     app: async (space: Space, slug: string) => {
       let row = await one(`.app.space=${space.eid}&.app.slug=${slug}`)
       return row ? appOf(row) : null
+    },
+    // An address the app has LEFT, still pointing at it. A rename moves
+    // `app.slug` and keeps the old address on the app's alias, and every
+    // alias resolves like an id — so this is the id door, asked in the meta
+    // store, and an answer that is an app of THIS space is a move to follow
+    // (T-32576: a rename used to strand every open page).
+    former: async (space: Space, slug: string) => {
+      let row = await one(`id=${bornAt(space, slug)}`)
+      let app = row?.app && row.app.space == space.eid ? appOf(row) : null
+      return app && app.slug != slug ? app : null
     },
     // Every app in a space, oldest first — the order they were made.
     apps: async (space: Space): Promise<App[]> =>

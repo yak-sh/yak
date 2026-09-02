@@ -362,7 +362,52 @@ slow(
       let atNew = await k.at('jeff.yaks.app', '/cookbook/')
       assertEquals(atNew.status, 200)
       assertStringIncludes(await atNew.text(), page)
-      assertEquals((await k.at('jeff.yaks.app', '/recipes/')).status, 404)
+      // The address it left keeps answering, permanently, as the move it
+      // was: a link someone already has still finds the app, and a page still
+      // open on the old address still writes to it (C-32574 item 4, where a
+      // rename broke every open phone in silence).
+      let asked = (path: string, init?: RequestInit) =>
+        k.at('jeff.yaks.app', path, { ...init, redirect: 'manual' })
+      let gone = await asked('/recipes/')
+      assertEquals(gone.status, 301)
+      assertEquals(gone.headers.get('location'), '/cookbook/')
+      assertEquals(
+        (await asked('/recipes/css/site.css')).headers.get('location'),
+        '/cookbook/css/site.css',
+      )
+      // A write keeps its method — a 301 is retried as a GET, which would
+      // land a page's `apply` on the query door.
+      let write = await asked('/recipes/api/apply', {
+        method: 'POST',
+        body: '[]',
+      })
+      assertEquals(write.status, 308)
+      assertEquals(write.headers.get('location'), '/cookbook/api/apply')
+      // A second move keeps the first address too: every address the app has
+      // ever had points at where it is now.
+      await agent.tool('app_set', { ...moved, slug: 'kitchen' })
+      for (let was of ['/recipes/', '/cookbook/']) {
+        assertEquals((await asked(was)).headers.get('location'), '/kitchen/')
+      }
+      // An address is not free just because an app left it.
+      await assertRejects(
+        () =>
+          agent.tool('app_new', {
+            space: 'jeff',
+            slug: 'recipes',
+            title: 'Recipes again',
+          }),
+        Error,
+        'used to be',
+      )
+      // …and back, so the rest of this reads of the cookbook. An address the
+      // app returns to is its own again, never a redirect to itself.
+      await agent.tool('app_set', {
+        space: 'jeff',
+        app: 'kitchen',
+        slug: 'cookbook',
+      })
+      assertEquals((await asked('/cookbook/')).status, 200)
       assertEquals(
         await agent.tool('app_files', { ...moved, op: 'list' }),
         'css/site.css\nindex.html\nvocab.json',

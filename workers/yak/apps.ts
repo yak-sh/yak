@@ -28,6 +28,7 @@ import {
 } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
+import { listing } from './listing.ts'
 import { nothingHere } from './pages.ts'
 import { hostOf, route } from './route.ts'
 import { mayWrite, reads, vouched, type Who, whoIs, writes } from './session.ts'
@@ -82,11 +83,44 @@ let keyOf = (space: Space, app: App, path: string) =>
     decodeURIComponent(path.endsWith('/') ? `${path}index.html` : path)
   }`
 
-let json = (status: number, code: string) =>
-  Response.json({ error: { code } }, { status })
+// A refusal is READ — by the page that catches it, and by the person's agent
+// after that — so it answers a SENTENCE beside its code (C-32574 item 2, where
+// a club member's vote showed them `{"error":{"code":"not_a_writer"}}`). The
+// code is the machine's half and never moves; the message is what someone is
+// told.
+let SAYS: Record<string, string> = {
+  method_not_allowed: 'that door does not answer this method',
+  too_many_reports: 'this app has reported too many breaks this minute',
+  expected_websocket: 'the live door takes a websocket upgrade',
+  not_found: "no such door: this app's api is apply, query, graph, ws, " +
+    'and files/<path>',
+  not_a_writer: 'sign in to change this app',
+  not_a_reader: 'sign in to see this app',
+}
+
+// The same refusals to someone who IS signed in: signing in is no longer the
+// way through, so the sentence says whose it is to grant.
+let MEMBER: Record<string, string> = {
+  not_a_writer: 'you can read this app but not change it — its owner can ' +
+    'make you an editor',
+  not_a_reader: "this app is its owner's — they can let you in",
+}
+
+let json = (status: number, code: string, says = SAYS[code]) =>
+  Response.json({ error: { code, message: says ?? code } }, { status })
 
 let redirect = (to: string) =>
   new Response(null, { status: 302, headers: { location: to } })
+
+// An address the app has left, answered as the move it was. Permanent, so a
+// link someone holds heals itself — 301 for a read, 308 for everything else,
+// because a 301 is retried as a GET and a page writing to its old `/api/apply`
+// would land on the new one as a read (C-32574 item 4).
+let moved = (req: Request, to: string) =>
+  new Response(null, {
+    status: req.method == 'GET' || req.method == 'HEAD' ? 301 : 308,
+    headers: { location: to },
+  })
 
 // The reporter, into every page the kernel serves, wherever the page has a
 // place to put it: first inside `<head>`, else first inside `<body>`, else
@@ -245,7 +279,10 @@ let api = async (
     return new Response(null, { status: 204 })
   }
   let headers = vouched(who)
-  let refused = (what = 'not_a_writer') => json(who.person ? 403 : 401, what)
+  // Signed out, the way through is to sign in (SAYS); signed in, it is the
+  // owner's to grant, so the sentence says so.
+  let refused = (what = 'not_a_writer') =>
+    who.person ? json(403, what, MEMBER[what]) : json(401, what)
   let mayRead = reads(who, app.access)
   let mayPost = writes(who, app.access)
   if (path == '/graph') {
@@ -254,7 +291,14 @@ let api = async (
   }
   if (path == '/query') {
     if (!mayRead) return refused('not_a_reader')
-    return store(`/query${new URL(req.url).search}`, {}, headers)
+    let asked = new URL(req.url).search
+    let r = await store(`/query${asked}`, {}, headers)
+    if (!r.ok) return r
+    // The same rule the person's agent reads a listing by (listing.ts): one
+    // filter line, one answer, whichever door asked it.
+    return new Response(listing(await r.text(), asked), {
+      headers: { 'content-type': 'application/json' },
+    })
   }
   // The live door: one socket per page onto this app's store, so a write from
   // another device arrives here without asking. The upgrade goes to the object
@@ -296,9 +340,17 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     let home = r.path == '/' ? await dir.home(space) : null
     return home ? redirect(`/${home.slug}/`) : nothingHere()
   }
+  let url = new URL(req.url)
   let app = await dir.app(space, r.app)
-  if (!app) return nothingHere()
-  if (r.path == '') return redirect(`${new URL(req.url).pathname}/`)
+  if (!app) {
+    // Not an app here — but it may be where one USED to be (directory.ts
+    // former): a rename moves the address and keeps the old one pointing at
+    // it, files and `/api/…` alike.
+    let was = await dir.former(space, r.app)
+    if (!was) return nothingHere()
+    return moved(req, `/${was.slug}${r.path || '/'}${url.search}`)
+  }
+  if (r.path == '') return redirect(`${url.pathname}/`)
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
   // The meta space's first member: while `yak` has no members at all, any
   // signed-in person may write it — that is how the first owner is written,

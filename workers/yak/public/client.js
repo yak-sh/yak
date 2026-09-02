@@ -27,10 +27,27 @@
 // or what the store said about the batch — because that sentence is what the
 // person's agent reads next (D-32318 §Errors are surfaced).
 
+// A refusal in one line. The kernel and the store both answer a sentence —
+// `{error: {code, message}}` from the kernel, plain words from the store —
+// and that sentence is the whole of what a page shows and an agent reads.
+// A body that is neither is a PAGE (a 404 answers the platform's "Nothing
+// here yet." HTML), so it never rides the throw: the status and a short line
+// of it say what happened without dumping a document into an error message
+// (C-32574 items 2 and 4).
+let refusal = (r, body) => {
+  try {
+    let e = JSON.parse(body).error
+    if (e) return e.message ?? e.code
+  } catch { /* not JSON: the status and a short line of whatever it was */ }
+  let line = body.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+    .slice(0, 120)
+  return `${r.status} ${line || r.statusText}`
+}
+
 let door = (base) => async (path, init) => {
   let r = await fetch(new URL(path, base), init)
   let body = await r.text()
-  if (!r.ok) throw new Error(body || `${r.status} ${r.statusText}`)
+  if (!r.ok) throw new Error(refusal(r, body))
   return body ? JSON.parse(body) : null
 }
 

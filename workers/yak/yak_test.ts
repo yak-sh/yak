@@ -97,7 +97,14 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     let anon = await (await k.at('jeff.yaks.app', '/recipes/api/graph')).json()
     assertEquals([anon.person, anon.role], [null, null])
     let cake = crypto.randomUUID()
-    assertEquals((await nobody.post([])).status, 401)
+    // A refusal answers a SENTENCE beside its code: the page catches it and
+    // shows it, and the person's agent reads it after that (C-32574 item 2,
+    // where a club member's vote showed them the bare code).
+    let refusal = await nobody.post([])
+    assertEquals(refusal.status, 401)
+    assertEquals(await refusal.json(), {
+      error: { code: 'not_a_writer', message: 'sign in to change this app' },
+    })
     await owner.applied([
       { eid: cake, name: 'doc', comp: { title: "Grandma's lemon cake" } },
     ])
@@ -149,7 +156,12 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
       },
     ])
     let viewer = client(k, 'jeff.yaks.app', 'recipes', await signedIn(k, maya))
-    assertEquals((await viewer.post([])).status, 403)
+    let seen = await viewer.post([])
+    assertEquals(seen.status, 403)
+    assertStringIncludes(
+      (await seen.json()).error.message,
+      'read this app but not change it',
+    )
     assertEquals((await viewer.put('/x.txt', 'no')).status, 403)
     assertEquals((await viewer.get(`id=${cake}`)).length, 1)
     // The meta space admits nobody new once it has an owner.
@@ -168,7 +180,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     let broke = await k.at('jeff.yaks.app', '/recipes/%E0%A4%A')
     assertEquals(broke.status, 500)
     assertMatch(await broke.text(), /Something went wrong/)
-    let [broken] = await owner.get('.exception!')
+    let [broken] = await owner.get('.exception!&.created!')
     assert(broken, 'an exception entity')
     let ex = broken.exception as {
       message: string
@@ -184,9 +196,13 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     assertEquals(await owner.get('.error!'), [])
     // A signed-in page's write says who saved it: the kernel vouches for the
     // person, the store learns them as a row of its own, and `created.by` is
-    // theirs (T-32534). A break the kernel reported names nobody.
-    let [mine] = await owner.get('.doc!')
+    // theirs (T-32534). A break the kernel reported names nobody. The stamp
+    // comes back because the filter NAMED it — a listing that did not ask
+    // carries the rows a person saved and no bookkeeping, at this door and at
+    // the tools' alike (listing.ts, C-32574 item 5).
+    let [mine] = await owner.get('.doc!&.created!')
     assertEquals((mine.created as { by: string }).by, jeff)
+    assertEquals((await owner.get('.doc!'))[0].created, undefined)
     assertEquals(
       ((await owner.get('.person!'))[0].entity as { eid: string }).eid,
       jeff,

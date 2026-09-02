@@ -38,6 +38,7 @@ import {
   storeName,
 } from './directory.ts'
 import type { Env } from './env.ts'
+import { listing } from './listing.ts'
 import { SLUG } from './route.ts'
 import { mayWrite, vouched, type Who } from './session.ts'
 import { canon, personOf } from './signin.ts'
@@ -183,40 +184,6 @@ let answer = async (r: Response) => {
   return body
 }
 
-// The platform's bookkeeping about a row — who wrote it and when, whether it
-// has been served — as opposed to what the person saved. `archived` is not
-// here: an app's agent reads and writes it (it is how an error is marked
-// fixed), so it is the person's business too.
-let STAMPS = ['created', 'updated', 'notified', 'opened', 'quarantined']
-
-// A listing as a person's agent should read it (C-32498 item 10): the rows
-// they saved, without the stamps the store keeps about saving them, and
-// without a row that is nothing but stamps. Naming a stamp in the filter
-// (`.created.by=…`) asks for it back — the tools never hide what was asked
-// for. Anything that is not a row listing (an aggregate, say) passes through
-// as it came.
-let listing = (body: string, asked: string) => {
-  let rows: unknown
-  try {
-    rows = JSON.parse(body)
-  } catch {
-    return body
-  }
-  if (!Array.isArray(rows)) return body
-  let hidden = STAMPS.filter((s) => !asked.includes(`.${s}`))
-  let out = []
-  for (let row of rows as Record<string, unknown>[]) {
-    let kept = Object.fromEntries(
-      Object.entries(row).filter(([k]) => !hidden.includes(k)),
-    )
-    // `entity` and `kind` name a row; one with nothing else left was a stamp.
-    if (Object.keys(kept).some((k) => k != 'entity' && k != 'kind')) {
-      out.push(kept)
-    }
-  }
-  return JSON.stringify(out)
-}
-
 type Change = { eid: string; name: string; comp: unknown }
 
 // What a write answers: one line a person's agent can repeat, naming every
@@ -343,6 +310,15 @@ export let TOOLS: Tool[] = [
       let s = slug(args.slug, 'slug')
       if (await ctx.dir.app(space, s)) {
         throw new Error(`app ${s} exists in ${space.slug}`)
+      }
+      // An address an app has LEFT still points at it (app_set below), so it
+      // is not free for a new app either.
+      let moved = await ctx.dir.former(space, s)
+      if (moved) {
+        throw new Error(
+          `${s} is where ${space.slug}/${moved.slug} used to be, and still ` +
+            'points there — pick another slug',
+        )
       }
       // The alias is the name of the app's store, pinned at birth so a
       // later rename moves the address and not the data (directory.ts
@@ -484,8 +460,9 @@ export let TOOLS: Tool[] = [
       'Rename an app, change its title, or change who may use it. The title ' +
       'is what it is called; the slug is its address, so changing it moves ' +
       'the app to <space>.yaks.app/<new>/ — its files and everything it has ' +
-      'saved come with it, and the old address stops answering. Give the ' +
-      'person the new link. access is the same choice app_new takes: set it ' +
+      'saved come with it, and the old address redirects to the new one, so ' +
+      'a link someone already has still works. Give the person the new link. ' +
+      'access is the same choice app_new takes: set it ' +
       "to 'open' when they want everyone with the link to be able to act on " +
       "the app, 'private' to shut it to everyone but its members.",
     input: {
@@ -511,6 +488,16 @@ export let TOOLS: Tool[] = [
       if (moving && await ctx.dir.app(space, to!)) {
         throw new Error(`app ${to} exists in ${space.slug}`)
       }
+      // The address it leaves keeps answering, as a permanent redirect to the
+      // new one: a page already open on a phone writes to the old address for
+      // as long as it stays open, and a link someone was given is forever
+      // (C-32574 item 4, where a rename broke every open tab in silence).
+      // Alias slugs resolve like ids, and the BIRTH address is already the
+      // primary one (app_new pins it), so only a later move adds a word.
+      let left = bornAt(space, app.slug)
+      let keeping = moving && !app.slugs.includes(left)
+        ? [...app.slugs.slice(1), left].join(' ')
+        : null
       // Files first and in that order — copy, then rename, then delete — so
       // whichever address is the app's at any moment has the whole app
       // behind it. Its store is untouched: it is named for where the app was
@@ -534,6 +521,7 @@ export let TOOLS: Tool[] = [
               },
             }
             : {}),
+          ...(keeping ? { alias: { slugs: keeping } } : {}),
         }],
       }, vouched(who))
       for (let key of keys) await blobs.delete(key)
@@ -542,7 +530,7 @@ export let TOOLS: Tool[] = [
         text: `app ${space.slug}/${now.slug}${
           title == null ? '' : ` "${title}"`
         }: ${url(space, now)}${
-          moving ? ` (moved from /${app.slug}/, which is gone)` : ''
+          moving ? ` (moved from /${app.slug}/, which now redirects here)` : ''
         }${open ? ` — ${told(open)}` : ''}`,
         space,
       }
