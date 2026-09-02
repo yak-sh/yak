@@ -202,3 +202,33 @@ export let seed = async (
     .applied(batch)
   return eids
 }
+
+// An agent on the connector: JSON-RPC over POST /mcp at the apex, as one
+// signed-in person. `tool` answers the reply's text, throwing when the tool
+// says it erred, so a test reads the words and not the envelope.
+export let connector = (k: Kernel, cookie?: string) => {
+  let n = 0
+  let call = async (method: string, params: unknown = {}) => {
+    let r = await k.at('yaks.app', '/mcp', {
+      method: 'POST',
+      headers: {
+        ...(cookie ? { cookie } : {}),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method, params }),
+    })
+    if (r.status != 200) throw new Error(`mcp ${r.status}: ${await r.text()}`)
+    let reply = await r.json()
+    if (reply.error) {
+      throw new Error(`mcp ${reply.error.code}: ${reply.error.message}`)
+    }
+    return reply.result
+  }
+  let tool = async (name: string, args: unknown = {}) => {
+    let out = await call('tools/call', { name, arguments: args })
+    let text = String(out.content[0].text)
+    if (out.isError) throw new Error(text)
+    return text
+  }
+  return { call, tool }
+}

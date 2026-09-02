@@ -1,11 +1,158 @@
-// The connector part (D-32318 §Code, build, deploy): the MCP door at `/mcp`
-// and the platform API under `/api/*` at the apex. T-32329 fills this
-// handler in — the graph tier scoped to the caller's space, app_new /
-// app_files / app_commit / app_deploy, unseen errors on every reply. Until
-// then it answers a JSON 404 that says so.
-import type { Env } from './env.ts'
+// The connector part (D-32318 §The agent door): `POST /mcp` at the apex, an
+// MCP server over Streamable HTTP in its stateless form — one JSON-RPC
+// request in, one JSON reply out, no session id, no event stream — the same
+// way the dev server mounts src/mcp.ts, so a restart strands nobody and a
+// Worker isolate holds nothing between calls. The protocol surface is four
+// methods (initialize, ping, tools/list, tools/call) over the tool table in
+// tools.ts, which is all a connector that only calls tools asks for. The
+// `agents` package's McpAgent — a hibernating Durable
+// Object per client session — is the shape to grow into the day a tool
+// streams progress or the server pushes; it would cost a second DO class, a
+// migration, and the MCP SDK bundled into a Worker that today has no
+// package.json, to hold state nothing yet reads. Its handler composes with
+// this router, so that day is a swap inside this file.
+//
+// Every tool reply for a space ends with what is unseen there (unseen.ts):
+// each open exception or error not yet served, one line, then marked, so no
+// break in an app goes unseen by the agent that builds it (T-32362).
+//
+// Who is asking is `withAuth` — identity.ts's once T-32327 lands (the OAuth
+// bearer an agent carries). Until then the stub below reads the platform
+// session cookie and verifies it with the shared secret, the way session.ts
+// does; the swap is one import. It is deliberately NOT the vouched
+// `x-yak-person` header: the kernel sets that header on what it hands an
+// app, and this door is at the apex reading a request straight off the
+// internet, where the header is only ever a client's claim about itself.
+// What a 401 here does NOT yet carry is the `WWW-Authenticate` challenge
+// naming the protected-resource metadata — the line an MCP client follows
+// into the OAuth flow. That belongs with the provider that answers it.
+import { cookieValue, verify } from '../../src/token.ts'
+import { VERSION } from '../../src/version.ts'
+import * as dirPart from './directory.ts'
+import { directory } from './directory.ts'
+import { bound, type Env } from './env.ts'
+import { type Ctx, TOOLS } from './tools.ts'
+import { serve, unseenBlock } from './unseen.ts'
 
-export let fetch = (_req: Request, _env: Env): Promise<Response> =>
-  Promise.resolve(
-    Response.json({ error: { code: 'not_here_yet' } }, { status: 404 }),
-  )
+export type Auth = { person: string; via: string }
+
+export let withAuth = async (env: Env, req: Request): Promise<Auth | null> => {
+  let token = cookieValue(req.headers.get('cookie'))
+  if (!token || !env.SESSION_SECRET) return null
+  let claims = await verify(token, env.SESSION_SECRET)
+  return claims ? { person: claims.person, via: 'cookie' } : null
+}
+
+// The versions this door speaks, newest first. A client asks for one in
+// initialize; we answer with the same when we know it, else with ours, and
+// the client decides whether it can live with that — echoing whatever was
+// asked would claim a protocol we have never seen.
+let PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
+
+let spoken = (asked: unknown) =>
+  typeof asked == 'string' && PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0]
+
+let INSTRUCTIONS =
+  'yaks.app hosts little apps you build for the person you talk to. Make ' +
+  'them a space (space_new), an app in it (app_new), write its files ' +
+  '(app_files), deploy (app_deploy); its data is a graph (graph_apply, ' +
+  'graph_query, search). Every reply ends with any error the app hit that ' +
+  'you have not seen; fix what you see.'
+
+type Rpc = {
+  jsonrpc: '2.0'
+  id: string | number
+  method: string
+  params?: Record<string, unknown>
+}
+
+let json = (status: number, body: unknown) => Response.json(body, { status })
+
+let rpcError = (id: unknown, code: number, message: string) =>
+  json(200, { jsonrpc: '2.0', id, error: { code, message } })
+
+let result = (id: unknown, result: unknown) =>
+  json(200, { jsonrpc: '2.0', id, result })
+
+// One tool call: the answer, or the failure as the tool's own error text —
+// a bad argument or a refused write is for the agent to read, never a 500.
+// Either way the unseen section rides when a space was in hand.
+let call = async (ctx: Ctx, params: Record<string, unknown>) => {
+  let tool = TOOLS.find((t) => t.name == params.name)
+  if (!tool) {
+    return {
+      content: [{ type: 'text', text: `no tool ${params.name}` }],
+      isError: true,
+    }
+  }
+  let args = (params.arguments ?? {}) as Record<string, unknown>
+  let text: string
+  let isError = false
+  let out: Awaited<ReturnType<typeof tool.run>> | undefined
+  try {
+    out = await tool.run(ctx, args)
+    text = out.text
+  } catch (e) {
+    text = e instanceof Error ? e.message : String(e)
+    isError = true
+  }
+  if (out?.space) {
+    let who = {
+      person: ctx.person,
+      role: await ctx.dir.role(out.space, ctx.person),
+    }
+    text += unseenBlock(await serve(ctx.env, out.space, who))
+  }
+  return { content: [{ type: 'text', text }], ...(isError ? { isError } : {}) }
+}
+
+let handle = async (ctx: Ctx, rpc: Rpc) => {
+  let params = rpc.params ?? {}
+  if (rpc.method == 'initialize') {
+    return result(rpc.id, {
+      protocolVersion: spoken(params.protocolVersion),
+      capabilities: { tools: {} },
+      serverInfo: { name: 'yaks.app', version: VERSION },
+      instructions: INSTRUCTIONS,
+    })
+  }
+  if (rpc.method == 'ping') return result(rpc.id, {})
+  if (rpc.method == 'tools/list') {
+    return result(rpc.id, {
+      tools: TOOLS.map((t) => ({
+        name: t.name,
+        description: t.description,
+        inputSchema: t.input,
+      })),
+    })
+  }
+  if (rpc.method == 'tools/call') return result(rpc.id, await call(ctx, params))
+  return rpcError(rpc.id, -32601, `no method ${rpc.method}`)
+}
+
+export let fetch = async (req: Request, env: Env): Promise<Response> => {
+  if (new URL(req.url).pathname != '/mcp') {
+    return json(404, { error: { code: 'not_found' } })
+  }
+  // No stream to open and no session to end: the stateless form.
+  if (req.method != 'POST') {
+    return json(405, { error: { code: 'method_not_allowed' } })
+  }
+  let auth = await withAuth(env, req)
+  if (!auth) return json(401, { error: { code: 'sign_in' } })
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return rpcError(null, -32700, 'parse error')
+  }
+  if (Array.isArray(body)) return json(400, { error: { code: 'no_batches' } })
+  let rpc = body as Rpc
+  if (rpc.id == null) return new Response(null, { status: 202 }) // a notification
+  let ctx: Ctx = {
+    env,
+    dir: directory(bound(env.DIRECTORY, dirPart.fetch, env)),
+    person: auth.person,
+  }
+  return handle(ctx, rpc)
+}

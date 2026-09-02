@@ -1,21 +1,28 @@
 // The directory part (D-32318 §The meta-space): spaces, apps, and members
 // are entities in the meta-space's store — the Store object named
-// yak/platform — and this handler is that store's read door, `GET /query`,
-// in the graph's own wire: the filter grammar in, entity JSON out. No shape
-// of its own: a caller in this Worker and a caller across a service binding
-// ask the same query, and `directory(fetcher)` below is the typed client
-// that phrases the questions the kernel asks (a space by slug, an app in it,
-// its home, a person's role) and reads the rows back.
+// yak/platform — and this handler is that store's door, `GET /query` and
+// `POST /apply`, in the graph's own wire: the filter grammar or an entity
+// bundle in, entity JSON out. No shape of its own: a caller in this Worker
+// and a caller across a service binding ask the same question, and
+// `directory(fetcher)` below is the typed client that phrases the ones the
+// kernel asks (a space by slug, an app in it, its home, a person's role) and
+// writes the ones that change it (a space born, an app born, a deploy).
 //
 // Answers are cached in a Map private to this module with a 30-second TTL
 // rather than the Cache API: a resolution is a few hundred bytes, the Cache
 // API is per-colo anyway and wants a synthetic Request as its key, and a Map
 // costs nothing to reason about; a rename shows within the TTL. An empty
 // answer is never cached, so an app is served the moment it is created. The
-// cache is this part's own — no other module reads it — and moves with it.
+// write door is here for that cache: a directory write empties it, so the
+// space whose home app was just named answers its own hostname at once
+// rather than a TTL later. A write that goes around this door — the generic
+// graph tier aimed at (yak, platform) — is seen within the TTL like any
+// change made elsewhere. The cache is this part's own — no other module
+// reads it — and moves with it.
 // The meta space seeds itself on first touch (space `yak`, app `platform`),
 // written as an entity literal through the store's /apply, so the directory
 // can describe its own store.
+import type { Mutation } from '../../src/mutation.ts'
 import type { Env, Fetcher } from './env.ts'
 import { storeOf } from './store.ts'
 
@@ -70,10 +77,29 @@ let seed = async (env: Env) => {
 
 let notFound = () => new Response('not found', { status: 404 })
 
+// The headers a caller's request carries through to the store: who is
+// asking, and nothing a client could have sent — `x-yak-kernel` is never
+// forwarded, so a directory write is an ordinary one.
+let VOUCH = ['x-yak-person', 'x-yak-role', 'x-via']
+
+let forwarded = (req: Request) =>
+  Object.fromEntries(
+    VOUCH.map((h) => [h, req.headers.get(h)]).filter(([, v]) => v),
+  ) as Record<string, string>
+
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let url = new URL(req.url)
-  if (url.pathname != '/query' || req.method != 'GET') return notFound()
   await (seeded ??= seed(env))
+  if (url.pathname == '/apply' && req.method == 'POST') {
+    let r = await storeOf(env.STORE, META.space, META.app)('/apply', {
+      method: 'POST',
+      body: await req.text(),
+    }, forwarded(req))
+    // The directory just moved; nothing read before it is still true.
+    if (r.ok) cache.clear()
+    return r
+  }
+  if (url.pathname != '/query' || req.method != 'GET') return notFound()
   let hit = cache.get(url.search)
   if (hit && hit.at > Date.now() - TTL) {
     return Response.json(JSON.parse(hit.body))
@@ -109,6 +135,24 @@ export let directory = (via: Fetcher) => {
   }
   let one = async (q: string) => (await query(q))[0]
   return {
+    // A write that changes the directory: the whole wire, either shape. A
+    // bundle where every eid it names already exists; a flat Change batch
+    // where one does not, since only a Change mints at an eid the caller
+    // chose — which is what a person keyed by their sign-in needs.
+    apply: async (
+      mutation: Mutation,
+      headers: Record<string, string> = {},
+    ): Promise<{ changes: unknown[]; aliases?: Record<string, string> }> => {
+      let r = await via.fetch(
+        new Request('http://directory/apply', {
+          method: 'POST',
+          body: JSON.stringify(mutation),
+          headers,
+        }),
+      )
+      if (!r.ok) throw new Error(await r.text())
+      return r.json()
+    },
     space: async (slug: string) => {
       let row = await one(`.space.slug=${slug}`)
       return row ? spaceOf(row) : null

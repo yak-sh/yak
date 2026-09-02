@@ -24,9 +24,10 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     let login = await k.at('yaks.app', '/login')
     assertEquals(login.status, 404)
     assertMatch(await login.text(), /Sign-in/)
+    // The connector answers POST only (mcp_test.ts drives it).
     let mcp = await k.at('yaks.app', '/mcp')
-    assertEquals(mcp.status, 404)
-    assertEquals((await mcp.json()).error.code, 'not_here_yet')
+    assertEquals(mcp.status, 405)
+    assertEquals((await mcp.json()).error.code, 'method_not_allowed')
 
     // A space nobody made, and a space made through the meta store.
     let nowhere = await k.at('nowhere.yaks.app', '/')

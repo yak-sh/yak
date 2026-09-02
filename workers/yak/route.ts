@@ -17,7 +17,7 @@ export type Route = {
   path: string
 }
 
-let SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/
+export let SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/
 
 let dev = (host: string) =>
   host == 'localhost' || host == '127.0.0.1' || host.endsWith('.localhost') ||
