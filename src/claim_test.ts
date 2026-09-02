@@ -31,7 +31,10 @@ if (Deno.env.get('TASKS_SLOW')) {
   let emptySources = Deno.makeTempDirSync()
   Deno.env.set('CLAUDE_PROJECTS', sourceStore)
   Deno.env.set('CODEX_SESSIONS', emptySources)
-  Deno.env.set('LOGS_DIR', emptySources)
+  // Empty managed logs via a temp HOME, never a global LOGS_DIR: the isolated
+  // pass shares one process, and a leaked LOGS_DIR pointed roles_test's
+  // managed resume at this dir while it read `$HOME/.tasks/logs`.
+  Deno.env.set('HOME', Deno.makeTempDirSync({ prefix: 'tasks-claim-' }))
   sourceEid = (await import('./source_file.ts')).sidEid(sourceSid)
   Deno.env.set('PORT', '0')
   let { http } = await import('./server.ts')
