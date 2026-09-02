@@ -1046,6 +1046,22 @@ slow('managed attention resumes once with no graph content', async () => {
   ])
   let wakeDeps = { ...deps, now: () => new Date().toISOString() }
   await rolesSweep(cast, wakeDeps)
+  // The fixture itself wrote `completed`, so that status proves nothing about
+  // the resume; the launcher creates the log beside its spawn. Wait on the
+  // words the resume owes the session, then on the run settling again.
+  let path = `${Deno.env.get('HOME')}/.tasks/logs/${run.eid}.jsonl`
+  let log = () => {
+    try {
+      return Deno.readTextFileSync(path)
+    } catch {
+      return ''
+    }
+  }
+  await until(
+    () =>
+      /You have pending Tasks messages\. Call task_context now\./.test(log()),
+    { label: 'the resumed session to be told its messages' },
+  )
   await until(
     () =>
       (db.prepare(`select status from session where entity = ${R}`).get(
@@ -1053,13 +1069,7 @@ slow('managed attention resumes once with no graph content', async () => {
       ) as { status: string }).status == 'completed',
     { label: 'the native role session to complete' },
   )
-  assertEquals(
-    db.prepare(`select status from session where entity = ${R}`).get(run.eid),
-    { status: 'completed' },
-  )
-  let path = `${Deno.env.get('HOME')}/.tasks/logs/${run.eid}.jsonl`
-  let text = Deno.readTextFileSync(path)
-  assertMatch(text, /You have pending Tasks messages\. Call task_context now\./)
+  let text = log()
   assert(!text.includes('SECRET GRAPH WORDS'))
   assertEquals(
     db.prepare(`select 1 from notified where entity = ${R}`).get(message),
