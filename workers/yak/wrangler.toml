@@ -39,19 +39,16 @@ class_name = "Store"
 tag = "v1"
 new_sqlite_classes = ["Store"]
 
-# An app's files. The bucket does not exist yet: `wrangler r2 bucket create
-# yak-blobs` once before the first deploy. `wrangler dev` simulates it.
+# An app's files. `wrangler dev` simulates the bucket.
 [[r2_buckets]]
 binding = "BLOBS"
 bucket_name = "yak-blobs"
 
 # The OAuth provider's own store (identity.ts): registered clients, grants,
-# and tokens. The namespace does not exist yet — `wrangler kv namespace create
-# yak-oauth` once, then paste its id here; `wrangler dev` simulates it and
-# ignores the id.
+# and tokens. `wrangler dev` simulates it and ignores the id.
 [[kv_namespaces]]
 binding = "OAUTH_KV"
-id = "yak-oauth"
+id = "64fa009267934abe8bc0c9d23ae01b17"
 
 # Secrets never live in this file. SESSION_SECRET signs the platform session
 # cookie (src/token.ts) and keys the sign-in code digests (signin.ts);

@@ -22,9 +22,15 @@ import type { Door } from './store.ts'
 export type Letter = { to: string; subject: string; body: string }
 export type Mail = (l: Letter) => Promise<void>
 
-// Who the platform writes as. A space that white-labels its login will want
-// its own; that is a later leaf's, and this is the fleet's own address.
-export let FROM = 'hello@yaks.app'
+// Who the platform writes as. The envelope sender must be an address the
+// fleet's Email Sending domain (src/mailaddr.ts `mailDomain`, bot.yak.sh —
+// DKIM signed, SPF/DMARC on cf-bounce.bot.yak.sh) is authorized to send;
+// yaks.app has no Email Sending setup, so a letter from there is refused at
+// the API. The reader still answers the platform: REPLY_TO is the yaks.app
+// address, and the display name is the platform's. A space that white-labels
+// its login will want its own pair; that is a later leaf's.
+export let FROM = 'hello@bot.yak.sh'
+export let REPLY_TO = 'hello@yaks.app'
 
 export let kept = (store: Door): Mail => async (l) => {
   let sent = await store('/apply', {
@@ -51,7 +57,7 @@ export let sending =
       body: JSON.stringify({
         from: { address: FROM, name: 'yaks.app' },
         to: [l.to],
-        reply_to: FROM,
+        reply_to: REPLY_TO,
         subject: l.subject,
         text: l.body,
         html: `<p>${esc(l.body).replaceAll('\n\n', '</p><p>')}</p>`,
