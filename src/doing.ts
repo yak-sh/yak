@@ -611,17 +611,26 @@ export let wirePersonaSync = (
 // operator (T-11139). So the guard is the SHAPE here, not a `.catch` each
 // caller has to remember. `boot` runs the first pass now, as the boot-time
 // reconcile most of them want; the returned runner is the debounce door.
+// One pass in flight at a time: an interval keeps firing while a slow sweep
+// (a remote mail pull, an embed backlog) is still running, and the second
+// pass would race the first over the same rows — a tick that lands mid-pass
+// is skipped, and the next one finds the work.
 export let tick = (
   name: string,
   sweep: () => unknown,
   ms: number,
   boot = true,
 ) => {
+  let busy = false
   let run = async () => {
+    if (busy) return
+    busy = true
     try {
       await sweep()
     } catch (e) {
       console.warn(`${name} sweep —`, e)
+    } finally {
+      busy = false
     }
   }
   if (boot) run()

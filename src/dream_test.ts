@@ -7,7 +7,8 @@ Deno.env.set('DB_PATH', ':memory:')
 let { apply } = await import('./db.ts')
 let { db } = await import('./live_db.ts')
 let {
-  advance,
+  bounds,
+  CADENCE,
   considerChanges,
   dreamComb,
   dreamRun,
@@ -145,23 +146,81 @@ Deno.test('parseFindings: parses JSON Lines, skips junk, unknown kinds, and titl
   assertEquals(f[2].decided, '2026-01-01')
 })
 
-Deno.test('advance: one day forward, held to the max(20 entries, 7 days) window', () => {
-  let now = Date.parse('2026-08-12T00:00:00.000Z')
-  let iso = (ms: number) => new Date(ms).toISOString()
-  // Far-back floor: +1 day, since 7-days-ago is later and no 20th entry.
-  assertEquals(
-    advance('P', iso(now - 30 * DAY), now, undefined),
-    iso(now - 29 * DAY),
-  )
-  // Close floor: clamped back to now-7d — the window never shrinks below 7 days.
-  assertEquals(
-    advance('P', iso(now - 2 * DAY), now, undefined),
-    iso(now - 7 * DAY),
-  )
-  // A 20th entry older than both pulls the floor further back still.
-  let twenty = iso(now - 40 * DAY)
-  assertEquals(advance('P', iso(now - 2 * DAY), now, twenty), twenty)
-})
+// The pending cadence wake aimed at a dream, if any: when it fires.
+let wakeAt = (d: string) =>
+  (db.prepare(
+    `select w.at as at from wake w join deliver dv on dv.entity = w.entity
+      where dv."to" = (select id from entity where eid = ?)
+        and not exists (select 1 from delivered x where x.entity = w.entity)`,
+  ).get(d) as { at: string } | undefined)?.at
+let floorOf = (d: string) =>
+  (db.prepare(
+    'select floor from dream where entity = (select id from entity where eid = ?)',
+  ).get(d) as { floor: string }).floor
+
+slow(
+  'dreamComb: sessions comb once, a run takes one batch, a backlog re-arms sooner',
+  async () => {
+    let p = proj('Batch venture')
+    let d = dreamEnt(p, ago(30))
+    let f1 = ago(3)
+    let first = sess(p, f1)
+    let second = sess(p, ago(2))
+    msg(first.eid, 'first session')
+    msg(second.eid, 'second session')
+    let start = Date.now()
+    let was = bounds.batch
+    bounds.batch = 1
+    try {
+      await dreamComb(noop, says(null) as never)(knock(d))
+      // Batch of one: the floor sits exactly on the first session, and the
+      // re-arm is the catch-up, well inside the daily cadence.
+      assertEquals(floorOf(d), f1)
+      let at = Date.parse(wakeAt(d)!)
+      assertEquals(at - start <= bounds.catchupMs + 5_000, true)
+      assertEquals(at - start < CADENCE, true)
+      // The next run reaches the second session and, with nothing remaining,
+      // re-arms on the full cadence.
+      await dreamComb(noop, says(null) as never)(knock(d))
+      assertEquals(floorOf(d) > f1, true)
+      assertEquals(Date.parse(wakeAt(d)!) - start > bounds.catchupMs, true)
+    } finally {
+      bounds.batch = was
+    }
+  },
+)
+
+slow(
+  'dreamComb: a dream mid-comb is armed, not unwoken, and a second knock is busy',
+  async () => {
+    let p = proj('Busy venture')
+    let d = dreamEnt(p, ago(30))
+    let s = sess(p, ago(2))
+    msg(s.eid, 'a long comb')
+    let release!: () => void
+    let held = new Promise<null>((r) => (release = () => r(null)))
+    let running = dreamComb(noop, (() => held) as never)(knock(d))
+    await new Promise((r) => setTimeout(r, 0))
+    // Armed BEFORE the comb, so the reconcile tick has nothing to seed …
+    assertEquals(!!wakeAt(d), true)
+    // … and even with that wake gone, a busy dream is never unwoken.
+    db.prepare(
+      `delete from wake where entity in (select dv.entity from deliver dv
+        where dv."to" = (select id from entity where eid = ?))`,
+    ).run(d)
+    assertEquals(unwoken().includes(d), false)
+    // A second knock meanwhile is consumed as busy, never combed twice.
+    let k2 = knock(d)
+    await dreamComb(noop, says(null) as never)(k2)
+    let via = db.prepare(
+      'select via from delivered where entity = (select id from entity where eid = ?)',
+    ).get(k2) as { via: string } | undefined
+    assertEquals(via?.via, 'dream busy')
+    release()
+    await running
+    assertEquals(unwoken().includes(d), true)
+  },
+)
 
 Deno.test('considerChanges: a drift finding becomes a consider task about its source', () => {
   let cs = considerChanges(
@@ -350,18 +409,20 @@ slow(
   async () => {
     let p = proj('Dedup venture')
     let d = dreamEnt(p, ago(30))
-    let s = sess(p, ago(2))
+    let s = sess(p, ago(3))
+    let later = sess(p, ago(2))
     msg(s.eid, 'reached for a frobnicate verb that did not exist')
+    msg(later.eid, 'reached for a frobnicate verb again')
     let reply = says(JSON.stringify({
       kind: 'gap',
       title: 'add a frobnicate verb',
       body: 'no warm path',
       priority: 3,
     }))
-    // Two runs re-comb the same session (the floor clamps back inside 7 days).
+    // One run combs both sessions (each is combed once, ever); the second
+    // session's same-shape finding hit-counts the first's artifact.
     await dreamComb(noop, reply as never)(knock(d))
-    await dreamComb(noop, reply as never)(knock(d))
-    // Exactly ONE consider task about this session, its finding hit-counted to 2.
+    // Exactly ONE consider task about the first session, hit-counted to 2.
     let hits = db.prepare(
       `select fd.hits as hits from finding fd
        join dependency dep on dep.parent = fd.entity

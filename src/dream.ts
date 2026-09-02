@@ -78,11 +78,29 @@ let dreamTuning = (): { cadenceMs: number; off: boolean } => {
 // for last, what it wrapped with). Take the tail past the cap.
 let TAIL = Number(Deno.env.get('TASKS_DREAM_TAIL')) || 48_000
 
-// How many session combs run at once (T-17407 gate 4). A 7-day window is
-// dozens of sessions and one complete() apiece run in series is minutes of
-// wall clock; bounded so a wide window never fires dozens of provider
-// processes at once. Env-tunable, the CADENCE/TAIL way.
-export let CONCURRENCY = Number(Deno.env.get('TASKS_DREAM_CONCURRENCY')) || 8
+// How many session combs run at once (T-17407 gate 4): one complete() apiece,
+// each a provider process. Env-tunable, the CADENCE/TAIL way.
+export let CONCURRENCY = Number(Deno.env.get('TASKS_DREAM_CONCURRENCY')) || 3
+
+// A run is BOUNDED two ways, because the model calls are its whole cost (the
+// graph side of a 271-session window reads in ~5s): at most BATCH sessions per
+// run, and no new session started past BUDGET_MS of wall clock. What a run
+// does not reach stays uncombed for the next one, which CATCHUP_MS re-arms
+// instead of the full cadence — so a backlog drains in hourly bites while an
+// idle venture keeps the daily clock. Twenty-four overlapping three-hour runs
+// were the alternative (T-32384).
+// Read at comb time, so a test can narrow one run without a second process.
+export let bounds = {
+  batch: Number(Deno.env.get('TASKS_DREAM_BATCH')) || 32,
+  budgetMs: Number(Deno.env.get('TASKS_DREAM_BUDGET_MS')) || 15 * 60_000,
+  catchupMs: Number(Deno.env.get('TASKS_DREAM_CATCHUP_MS')) || 60 * 60_000,
+}
+
+// The dreams mid-comb in this process. One comb per dream at a time: a second
+// knock while one runs is consumed, not combed, and unwoken() never seeds a
+// dream that is busy — that seed was the overlap (a consumed wake, the next
+// not yet armed, the reconcile tick seeding a fresh one every ten minutes).
+let combing = new Set<string>()
 
 // The charge (T-12800), asked for as JSON Lines so parsing stays tolerant: one
 // object per line, unparseable lines skipped. The five kinds are the doctrine's
@@ -136,42 +154,21 @@ let pathOf = (project: string): string | undefined =>
 // the same link `belongs`/`previously` use — NOT a cwd match: a managed spawn
 // runs in a worktree, never the repo root, so cwd scoping would miss most of
 // them. Finished in (floor, ceil], oldest first.
+type Sess = { eid: string; id: string | null; finished: string }
 let sessionsSince = (project: string, floor: string, ceil: string) =>
   db.prepare(
-    `select o.eid as eid, s.id from session s
+    `select o.eid as eid, s.id, s.finished_at as finished from session s
      join entity o on o.id = s.entity
      where s.actor = ${idOf} and s.finished_at is not null
        and s.finished_at > ? and s.finished_at <= ?
      order by s.finished_at`,
-  ).all(project, floor, ceil) as { eid: string; id: string | null }[]
+  ).all(project, floor, ceil) as Sess[]
 
-// The created.at of the 20th-most-recent entry across the venture's sessions,
-// or undefined below 20 — the entries half of the max(20 entries, 7 days)
-// clamp below.
-let twentiethAt = (project: string): string | undefined =>
-  (db.prepare(
-    `select c.at as at from entry e
-       join session s on s.entity = e.session
-       join created c on c.entity = e.entity
-      where s.actor = ${idOf} order by c.at desc limit 1 offset 19`,
-  ).get(project) as { at?: string } | undefined)?.at ?? undefined
-
-// One calendar day forward, held back so the re-read window is never smaller
-// than max(20 entries, 7 days): a burst or a too-frequent dream cannot starve
-// the window a recurring reflex needs to be noticed across sessions. Both
-// clamps only pull the floor BACK (earlier), toward more re-read.
-export let advance = (
-  project: string,
-  floor: string,
-  now: number,
-  twenty = twentiethAt(project),
-): string => {
-  let next = iso(Date.parse(floor) + DAY)
-  let seven = iso(now - 7 * DAY)
-  if (seven < next) next = seven
-  if (twenty && twenty < next) next = twenty
-  return next
-}
+// Each session is combed ONCE: the floor moves to the finished_at of the last
+// session this run reached, and nothing below it is read again. A recurring
+// drift is still noticed across sessions — findingKey dedup counts hits on the
+// open artifact — so re-reading a 7-day window every day only multiplied the
+// model calls by seven.
 
 // A session's transcript as the reviewer text — provider-neutral entry rows
 // rendered to lines, tail-capped. The #-tagged /meta memos ride as ordinary
@@ -433,24 +430,26 @@ let fileFinding = async (
   return 'filed'
 }
 
-// Run `fn` over items with at most `n` in flight (T-17407 gate 4). Results
-// match input order; a wide window batches instead of firing one provider
-// process at a time in series.
+// Run `fn` over items with at most `n` in flight (T-17407 gate 4), taking
+// items in order and starting none past `deadline`. Returns the results of
+// the items taken — a prefix of the input, so the caller knows exactly how far
+// it got.
 let pool = async <T, R>(
   items: T[],
   n: number,
+  deadline: number,
   fn: (x: T) => Promise<R>,
 ): Promise<R[]> => {
-  let out: R[] = new Array(items.length)
+  let out: R[] = []
   let i = 0
   let worker = async () => {
-    while (i < items.length) {
+    while (i < items.length && Date.now() < deadline) {
       let j = i++
       out[j] = await fn(items[j])
     }
   }
   await Promise.all(Array.from({ length: Math.min(n, items.length) }, worker))
-  return out
+  return out.slice(0, i)
 }
 
 // Comb the window: complete() each session in a bounded batch, then file its
@@ -477,6 +476,7 @@ let comb = async (
         verified: [],
       },
       floor: d.floor ?? '',
+      remaining: 0,
     }
     return { ...empty, pass: passRecord(to, empty, cast) }
   }
@@ -484,19 +484,28 @@ let comb = async (
   let now = Date.now()
   let ceil = iso(now)
   let floor = d.floor ?? iso(now - 7 * DAY)
-  let sessions = sessionsSince(project, floor, ceil)
+  let all = sessionsSince(project, floor, ceil)
+  let sessions = all.slice(0, bounds.batch)
   // Gate 4: the model calls run concurrently (bounded), the graph writes stay
   // sequential below so same-shape findings across sessions dedup in one run.
-  let replies = await pool(sessions, CONCURRENCY, async (s) => {
-    let text = transcriptOf(s.eid)
-    if (!text.trim()) return { s, combed: false, reply: null as string | null }
-    let reply = await completeFn(DREAM_MODEL, DREAM_SYSTEM, text, {
-      effort: 'low',
-      deadline: 120_000,
-      ...(repo ? { cwd: repo } : {}),
-    })
-    return { s, combed: true, reply }
-  })
+  let replies = await pool(
+    sessions,
+    CONCURRENCY,
+    now + bounds.budgetMs,
+    async (s) => {
+      let text = transcriptOf(s.eid)
+      if (!text.trim()) {
+        return { s, combed: false, reply: null as string | null }
+      }
+      let reply = await completeFn(DREAM_MODEL, DREAM_SYSTEM, text, {
+        effort: 'low',
+        deadline: 120_000,
+        ...(repo ? { cwd: repo } : {}),
+      })
+      return { s, combed: true, reply }
+    },
+  )
+  let remaining = all.length - replies.length
   let tally = { ...base }
   for (let { s, combed, reply } of replies) {
     if (combed) tally.combed++
@@ -509,9 +518,9 @@ let comb = async (
       else tally.skipped++
     }
   }
-  let next = advance(project, floor, now)
+  let next = replies.length ? replies[replies.length - 1].s.finished : floor
   let hygiene = hygieneSweep(project, floor, cast, now)
-  let result = { ...tally, hygiene, floor: next }
+  let result = { ...tally, hygiene, floor: next, remaining }
   return { ...result, pass: passRecord(to, result, cast) }
 }
 
@@ -523,6 +532,7 @@ type Pass = {
   skipped: number
   hygiene: HygieneResult
   floor: string
+  remaining: number
 }
 
 // One graph-native run record, atomically beside the advanced cursor. Its
@@ -539,7 +549,8 @@ let passRecord = (to: string, r: Pass, cast: Cast): string => {
     `hygiene: ${r.hygiene.candidates} candidates, ${r.hygiene.errors} ` +
     `recurring error cohorts; filed ${r.hygiene.filed}, recurred ` +
     `${r.hygiene.recurred}, skipped ${r.hygiene.skipped}\n` +
-    `verified artifacts: ${verified}\nfloor: ${r.floor}`
+    `verified artifacts: ${verified}\nfloor: ${r.floor}\n` +
+    `remaining: ${r.remaining}`
   land([
     ...(r.floor
       ? [{ eid: to, name: 'dream', comp: { floor: r.floor } } as Change]
@@ -565,17 +576,15 @@ let passRecord = (to: string, r: Pass, cast: Cast): string => {
 // Re-arm the next dream: an UNTARGETED cadence wake with deliver.to = the
 // dream entity. Untargeted so replaceWakes collapses a duplicate to the same
 // recipient (one cadence clock per dream, db.ts); the dispatch fires waking()
-// so the server's one timer picks it up now, not only at next boot.
-let rearm = (to: string, cast: Cast) => {
+// so the server's one timer picks it up now, not only at next boot. `inMs`
+// overrides the cadence — the catch-up re-arm after a run that left sessions
+// uncombed.
+let rearm = (to: string, cast: Cast, inMs = dreamTuning().cadenceMs) => {
   let w = uuid()
   commitEffects(
     (t) =>
       apply(db, [
-        {
-          eid: w,
-          name: 'wake',
-          comp: { at: iso(Date.now() + dreamTuning().cadenceMs) },
-        },
+        { eid: w, name: 'wake', comp: { at: iso(Date.now() + inMs) } },
         { eid: w, name: 'deliver', comp: { to } },
       ], t),
     cast,
@@ -586,8 +595,10 @@ let rearm = (to: string, cast: Cast) => {
 // The created(knock) handler. EVERY knock reaches it, so it abstains unless the
 // recipient is a dream — the same shape as the knock ladder's dream guard. It
 // stamps delivered up front (the wake did its job; a crash mid-comb re-combs
-// the window next cadence rather than storming the boot sweep), combs, and
-// ALWAYS re-arms.
+// from the floor next cadence rather than storming the boot sweep), re-arms
+// the next cadence BEFORE combing (so no tick ever sees an unarmed dream and
+// seeds a second run — the wake that protects a run cannot live at its end),
+// combs, and re-arms sooner when sessions remain.
 export let dreamComb =
   (cast: Cast, completeFn = complete, embedFn = embed) =>
   async (
@@ -603,7 +614,13 @@ export let dreamComb =
       delivered(eid, 'dream off', cast)
       return
     }
+    if (combing.has(to)) {
+      delivered(eid, 'dream busy', cast)
+      return
+    }
+    combing.add(to)
     delivered(eid, 'dream comb', cast)
+    rearm(to, cast)
     let at = Date.now()
     try {
       let r = await comb(to, d, cast, completeFn, embedFn)
@@ -616,8 +633,11 @@ export let dreamComb =
           `recurred ${r.recurred}, reinforced ${r.reinforced}, ` +
           `skipped ${r.skipped}; hygiene ${r.hygiene.candidates} candidates, ` +
           `${r.hygiene.errors} error cohorts; pass ${human(db, r.pass)}, ` +
-          `floor→${r.floor.slice(0, 10)}`,
+          `floor→${r.floor.slice(0, 10)}, remaining ${r.remaining}`,
       })
+      if (r.remaining > 0) {
+        rearm(to, cast, Math.min(bounds.catchupMs, dreamTuning().cadenceMs))
+      }
     } catch (e) {
       telemetry(db, {
         source: 'srv',
@@ -627,7 +647,7 @@ export let dreamComb =
         error: String(e),
       })
     } finally {
-      rearm(to, cast)
+      combing.delete(to)
     }
   }
 
@@ -667,7 +687,7 @@ export let unwoken = (): string[] =>
     `select o.eid as eid from dream dr join entity o on o.id = dr.entity
      where not exists (select 1 from wake join deliver dv on dv.entity = wake.entity
        where dv."to" = dr.entity and ${PENDING('wake')})`,
-  ).all() as { eid: string }[]).map((r) => r.eid)
+  ).all() as { eid: string }[]).map((r) => r.eid).filter((e) => !combing.has(e))
 
 // The role's reconcile (T-18730): what the boot-only seed did once, the system
 // tick does continuously — every dream with no pending cadence wake is seeded
