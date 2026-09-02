@@ -1,7 +1,7 @@
 // A Durable Object's SQLite as the store seam's second adapter (D-32318
 // §Storage): `ctx.storage.sql` behind the Sql interface (store/sql.ts), so
 // db.ts runs unchanged inside a Worker. Everything Cloudflare-shaped about the
-// store lives here and in workers/store/; nothing above the seam knows. The
+// store lives here and in workers/yak/; nothing above the seam knows. The
 // storage surface is typed structurally below — the slice this adapter
 // touches, mirroring @cloudflare/workers-types — so src/ carries no Cloudflare
 // dependency and `deno check` reads it without one.

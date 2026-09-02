@@ -23,3 +23,6 @@ node_modules/
 # commit the derived output.
 .tasks/
 /target/
+
+# wrangler dev secrets beside a Worker (workers/*)
+.dev.vars

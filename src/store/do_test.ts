@@ -1,90 +1,28 @@
-// The store seam's contract, held in workerd itself: `wrangler dev` boots
-// workers/store on a probe port with a throwaway persistence directory, and
-// the doors are driven over HTTP the way a headless client drives the Deno
-// server. Slow tier only — a real runtime boots. The pinned wrangler runs
-// through npx (WRANGLER overrides the command); the process is its own
-// session so the reap takes workerd down with it, and the test proves the
-// reap before it returns.
+// The store seam's contract, held in workerd itself: the kernel Worker boots
+// under `wrangler dev` (workers/yak/probe.ts), a space and app are born in
+// the directory, and that app's Store object is driven through the graph API
+// the way a headless client drives the Deno server. Slow tier only — a real
+// runtime boots.
 import { assert, assertEquals, assertMatch } from '@std/assert'
-import { slow, until } from '../testing.ts'
-
-let root = new URL('../../workers/store/', import.meta.url).pathname
-let wrangler = (Deno.env.get('WRANGLER') ?? 'npx --yes wrangler@4.42.2')
-  .split(' ')
-
-let freePort = () => {
-  let l = Deno.listen({ hostname: '127.0.0.1', port: 0 })
-  let { port } = l.addr as Deno.NetAddr
-  l.close()
-  return port
-}
-
-let listening = async (port: number) => {
-  try {
-    ;(await Deno.connect({ hostname: '127.0.0.1', port })).close()
-    return true
-  } catch {
-    return false
-  }
-}
-
-type Row = { entity: { eid: string; num: number }; [k: string]: unknown }
+import { slow } from '../testing.ts'
+import { client, kernel, seed, signedIn } from '../../workers/yak/probe.ts'
 
 slow('the store on Durable Object SQLite serves the wire', async () => {
-  let port = freePort()
-  let state = Deno.makeTempDirSync({ prefix: 'tasks-do-' })
-  let log = Deno.makeTempFileSync({ prefix: 'tasks-do-', suffix: '.log' })
-  // One handle per stream: a WritableStream locks to a single piper.
-  let out = Deno.openSync(log, { write: true, append: true })
-  let err = Deno.openSync(log, { write: true, append: true })
-  let child = new Deno.Command('setsid', {
-    args: [
-      ...wrangler,
-      'dev',
-      '--config',
-      'wrangler.toml',
-      '--port',
-      String(port),
-      '--ip',
-      '127.0.0.1',
-      '--persist-to',
-      state,
-      '--show-interactive-dev-session=false',
-    ],
-    cwd: root,
-    stdin: 'null',
-    stdout: 'piped',
-    stderr: 'piped',
-  }).spawn()
-  let logged = Promise.all([
-    child.stdout.pipeTo(out.writable, { preventClose: true }),
-    child.stderr.pipeTo(err.writable, { preventClose: true }),
-  ])
-  let base = `http://127.0.0.1:${port}`
-  let get = async (q: string) =>
-    (await (await fetch(`${base}/query?${q}`)).json()) as Row[]
-  let post = (body: unknown) =>
-    fetch(`${base}/apply`, { method: 'POST', body: JSON.stringify(body) })
-  let applied = async (body: unknown) => {
-    let r = await post(body)
-    assertEquals(r.status, 200, await r.clone().text())
-    return (await r.json()) as {
-      ok: boolean
-      changes: { eid: string; name: string; comp: unknown }[]
-    }
-  }
+  let k = await kernel()
   try {
-    await until(async () => {
-      try {
-        return (await fetch(`${base}/graph`)).ok
-      } catch {
-        return false
-      }
-    }, { timeout: 60_000, poll: 250, label: () => Deno.readTextFileSync(log) })
+    let person = crypto.randomUUID()
+    await seed(k, person, [{ slug: 'lab', apps: ['graph'] }])
+    let host = 'lab.yaks.app'
+    let { get, post, applied } = client(
+      k,
+      host,
+      'graph',
+      await signedIn(k, person),
+    )
     // Planted on first touch: the identity door answers with an epoch.
-    let serving = await (await fetch(`${base}/graph`)).json()
+    let serving = await (await k.at(host, '/graph/api/graph')).json()
     assertMatch(serving.epoch, /^[0-9a-f-]{36}$/)
-    assertEquals(serving.db, 'do:default/default')
+    assertEquals(serving.db, 'do:lab/graph')
 
     // A batch: a task, a second task it requires, a comment on it.
     let task = crypto.randomUUID(), dep = crypto.randomUUID()
@@ -151,21 +89,6 @@ slow('the store on Durable Object SQLite serves the wire', async () => {
     await applied([{ eid: task, name: 'doc', comp: { title: 'ghost' } }])
     assertEquals(await get(`id=${task}`), [])
   } finally {
-    // The whole session — wrangler and the workerd it spawned — and proof.
-    try {
-      await new Deno.Command('kill', { args: ['-TERM', `-${child.pid}`] })
-        .output()
-    } catch { /* already gone */ }
-    await until(async () => !(await listening(port)), {
-      timeout: 15_000,
-      poll: 100,
-      label: 'the probe port to close',
-    })
-    await child.status
-    await logged
-    out.close()
-    err.close()
-    Deno.removeSync(state, { recursive: true })
-    Deno.removeSync(log)
+    await k.stop()
   }
 })

@@ -602,7 +602,7 @@ if (import.meta.main) {
   let schemaTarget = `${dir}../../crates/yak-kernel/src/schema_gen.rs`
   // The same ops as JSON, for a backend that plants at runtime and cannot
   // capture them itself (a Durable Object has no scratch SQLite to record a
-  // migrate() over): workers/store imports it and hands it to plant().
+  // migrate() over): workers/yak imports it and hands it to plant().
   let opsTarget = `${dir}../store/schema.json`
   let opsJson = (ops: SchemaOp[]) => JSON.stringify(ops, null, 2) + '\n'
 

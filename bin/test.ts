@@ -35,7 +35,7 @@ let collect = async (dir: string): Promise<void> => {
     }
   }
 }
-for (let dir of ['src', 'bin', 'channels']) await collect(dir)
+for (let dir of ['src', 'bin', 'channels', 'workers']) await collect(dir)
 tests.sort()
 
 // A server import is itself process-global state: server.ts binds once, owns

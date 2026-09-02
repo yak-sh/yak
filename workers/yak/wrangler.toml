@@ -1,0 +1,51 @@
+# The kernel Worker (D-32318 §The meta-space, §v1 sequencing): the ONE Worker
+# below the app line — hostname and path routing, the Store Durable Object
+# (one SQLite graph per (space, app)), session verification, the apex's static
+# home page, and an app's files out of R2. Everything above it is an app.
+# Local: `wrangler dev` here, or the tests (workers/yak/yak_test.ts and
+# src/store/do_test.ts boot it on a probe port). Deploy: `wrangler deploy`
+# once the owner points DNS at it — nothing deploys on its own.
+name = "yak"
+main = "index.ts"
+account_id = "0f9613dfd3f0451df0bd0f12a1372ea3"
+compatibility_date = "2025-05-08"
+compatibility_flags = ["nodejs_compat"]
+
+# The apex and every first-level space hostname, both on the yaks.app zone;
+# the zone's Universal certificate covers the wildcard.
+routes = [
+  { pattern = "yaks.app/*", zone_name = "yaks.app" },
+  { pattern = "*.yaks.app/*", zone_name = "yaks.app" },
+]
+
+# Under `wrangler dev` a request's URL carries the first route's hostname
+# unless told otherwise; the loopback keeps local dev a dev host (route.ts),
+# where `x-yak-host` picks the hostname a request stands for.
+[dev]
+host = "127.0.0.1"
+
+# The home page. run_worker_first: the Worker decides what an asset answers
+# for, so a space's hostname never serves the apex's page.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+
+[[durable_objects.bindings]]
+name = "STORE"
+class_name = "Store"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Store"]
+
+# An app's files. The bucket does not exist yet: `wrangler r2 bucket create
+# yak-blobs` once before the first deploy. `wrangler dev` simulates it.
+[[r2_buckets]]
+binding = "BLOBS"
+bucket_name = "yak-blobs"
+
+# Secrets never live in this file. SESSION_SECRET signs the platform session
+# cookie (src/token.ts): `wrangler secret put SESSION_SECRET` for the deploy;
+# locally a .dev.vars line, or `wrangler dev --var SESSION_SECRET:…` the way
+# the tests pass it. Unset, no session verifies.
