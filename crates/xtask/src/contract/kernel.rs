@@ -295,6 +295,10 @@ struct Quarantined {
 
 // The BREAK facet (D-17077): our code hit something UNEXPECTED — the
 // self-healing trigger. Server-owned/effect-written, mirroring error.
+// `request` is what was being served when it broke (a method and path, or the
+// page a browser reported), and `version` the deploy it happened on: the
+// kernel wrote both as a `doc` beside this facet until T-32533, which put a
+// crash in the person's own listing of what they had saved.
 #[derive(Comp)]
 #[comp(plugin = "kernel", rank = 920, stamped_rank = 170)]
 struct Exception {
@@ -304,6 +308,10 @@ struct Exception {
     message: Text,
     #[stamped]
     stack: Text,
+    #[stamped]
+    request: Text,
+    #[stamped]
+    version: Number,
 }
 
 // The git-anchor facet (D-18378): the revision an entity was VERIFIED against.

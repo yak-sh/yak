@@ -307,7 +307,15 @@ slow(
       })
       assertMatch(
         told,
-        /## unseen errors\n- \S+ \S+ exception recipes: GET \/recipes\/%E0%A4%A — .*URI/,
+        /## unseen errors\n- \S+ \S+ exception recipes v\d+: GET \/recipes\/%E0%A4%A — .*URI/,
+      )
+      // A crash is the platform's row, not the person's: `.doc!` — the query
+      // the instructions teach as everything they saved — has only the cake
+      // (T-32533, C-32531 item 1).
+      assertEquals(
+        JSON.parse(await agent.tool('graph_query', { ...app, query: '.doc!' }))
+          .map((r: { doc: { title: string } }) => r.doc.title),
+        ["Grandma's lemon cake", 'Pancakes'],
       )
       let quiet = await agent.tool('graph_query', {
         ...app,

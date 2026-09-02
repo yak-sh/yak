@@ -14,14 +14,18 @@ import { bound, type Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { type Door, storeOf } from './store.ts'
 
-// One break, written where the person's agent reads it: a doc naming what
-// happened and the deploy it happened on, plus the `exception` facet — the
-// unexpected thing, carrying the message and the stack. Every source of one
-// goes through here: a route that threw (index.ts) and a page that reported
-// its own (apps.ts). Server-owned, so it rides the kernel flag into apply()'s
+// One break, written where the person's agent reads it: the `exception`
+// facet, and nothing else. It carries what was being served, the deploy it
+// happened on, the message and the stack. Every source of one goes through
+// here: a route that threw (index.ts) and a page that reported its own
+// (apps.ts). Server-owned, so it rides the kernel flag into apply()'s
 // server-writer mode; the shape is the wire's own entity literal.
+//
+// It wore a `doc` until T-32533, and that put the platform's own crashes in
+// `.doc!` — the query a person's agent is taught as "everything you saved" —
+// where one showed up in a recipe box as a recipe (C-32531 item 1).
 export let noted = async (store: Door, broke: {
-  title: string
+  request: string
   version?: number | null
   message: string
   stack?: string
@@ -30,12 +34,10 @@ export let noted = async (store: Door, broke: {
     method: 'POST',
     body: JSON.stringify({
       entities: [{
-        doc: {
-          title: broke.title,
-          body: `version: ${broke.version ?? 'none'}`,
-        },
         exception: {
           at: new Date().toISOString(),
+          request: broke.request,
+          version: broke.version ?? null,
           message: broke.message,
           stack: broke.stack ?? '',
         },
@@ -45,22 +47,31 @@ export let noted = async (store: Door, broke: {
   if (!sent.ok) throw new Error(`report refused: ${await sent.text()}`)
 }
 
+type Broke = {
+  at?: string
+  message?: string
+  request?: string
+  version?: number | null
+}
 type Hit = {
   kind: string
   entity: { eid: string; num: number }
   doc?: { title?: string }
-  exception?: { at?: string; message?: string }
-  error?: { at?: string; message?: string }
+  exception?: Broke
+  error?: Broke
 }
 
-// One line: id, when, the route it happened on, the message.
+// One line: id, when, the route it happened on, the deploy, the message. An
+// item written before exceptions carried their own request still reads: its
+// doc's title said the same thing.
 let line = (app: App, h: Hit) => {
   let e = h.exception ?? h.error ?? {}
   let id = idOf({ eid: h.entity.eid, kind: h.kind, num: h.entity.num })
   let facet = h.exception ? 'exception' : 'error'
-  return `- ${id} ${e.at ?? ''} ${facet} ${app.slug}: ${h.doc?.title ?? ''} — ${
-    e.message ?? ''
-  }`
+  let where = e.request ?? h.doc?.title ?? ''
+  return `- ${id} ${e.at ?? ''} ${facet} ${app.slug}${
+    e.version ? ` v${e.version}` : ''
+  }: ${where} — ${e.message ?? ''}`
 }
 
 // The space's apps, asked of the directory the way apps.ts asks it.

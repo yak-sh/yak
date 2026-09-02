@@ -920,7 +920,9 @@ pub static SCHEMA: &[SchemaOp] = &[
     entity integer primary key references entity(id),
     "at" text,
     "message" text,
-    "stack" text
+    "stack" text,
+    "request" text,
+    "version" real
   );"#),
     SchemaOp::Exec(r#"create table if not exists "fixer" (
     entity integer primary key references entity(id)
@@ -1058,6 +1060,8 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "exception", col: "at", sql: r#"alter table exception add column "at" text"# },
     SchemaOp::AddColumn { table: "exception", col: "message", sql: r#"alter table exception add column "message" text"# },
     SchemaOp::AddColumn { table: "exception", col: "stack", sql: r#"alter table exception add column "stack" text"# },
+    SchemaOp::AddColumn { table: "exception", col: "request", sql: r#"alter table exception add column "request" text"# },
+    SchemaOp::AddColumn { table: "exception", col: "version", sql: r#"alter table exception add column "version" real"# },
     SchemaOp::AddColumn { table: "anchor", col: "paths", sql: r#"alter table anchor add column "paths" text"# },
     SchemaOp::AddColumn { table: "anchor", col: "sha", sql: r#"alter table anchor add column "sha" text"# },
     SchemaOp::AddColumn { table: "anchor", col: "symbol", sql: r#"alter table anchor add column "symbol" text"# },

@@ -30,6 +30,7 @@ import {
   correct,
   cursorOf,
   epochOf,
+  graft,
   mutate,
   plant,
   plantVocab,
@@ -99,9 +100,17 @@ export class Store {
     this.ctx = ctx
     this.db = new DoSql(ctx.storage)
     this.name = String(ctx.storage.kv.get('name') ?? '')
-    // First touch plants the whole schema in one transaction; a planted store
-    // carries the schema version and skips it forever after.
+    // First touch plants the whole schema in one transaction. A store planted
+    // under an OLDER vocabulary grows into this one instead: every generated
+    // op is a guarded create-if-absent or add-column, so replaying them adds
+    // what a new component brought and leaves what is there alone. The
+    // vocabulary's own fingerprint says when that is worth doing, so a wake
+    // under the same words costs nothing. Nobody hand-migrates a Durable
+    // Object; this is the only door a column has.
+    let held = String(this.db.kv.get('vocab_hash') ?? '')
     if (!this.db.version) plant(this.db, ops as SchemaOp[])
+    else if (held != vocabHash) graft(this.db, ops as SchemaOp[])
+    if (held != vocabHash) this.db.kv.put('vocab_hash', vocabHash)
     // The app's own components (vocab.json, T-32502) are storage the object
     // wakes with: the manifest it last accepted is replayed into this handle
     // so apply(), the query grammar and the graph-out projection speak the

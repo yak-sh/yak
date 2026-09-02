@@ -70,7 +70,7 @@ let report = async (env: Env, r: Route, req: Request, e: unknown) => {
   // platform reports deliberately). unseen.ts owns the entity's shape,
   // because a page reporting its own break writes the same one.
   await noted(store, {
-    title: `${req.method} ${new URL(req.url).pathname}`,
+    request: `${req.method} ${new URL(req.url).pathname}`,
     version: app?.version,
     message: e instanceof Error ? e.message : String(e),
     stack: e instanceof Error ? e.stack ?? '' : '',

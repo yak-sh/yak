@@ -226,7 +226,9 @@
       "stamped": {
         "at": "time",
         "message": "text",
-        "stack": "text"
+        "stack": "text",
+        "request": "text",
+        "version": "number"
       }
     },
     "favorite": {

@@ -497,6 +497,8 @@ pub(crate) fn baked() -> Vocab {
             ("at".into(), PropType::Time),
             ("message".into(), PropType::Text),
             ("stack".into(), PropType::Text),
+            ("request".into(), PropType::Text),
+            ("version".into(), PropType::Number),
         ]),
         ("blocked".into(), vec![
             ("since".into(), PropType::Time),

@@ -169,11 +169,15 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     assertMatch(await broke.text(), /Something went wrong/)
     let [broken] = await owner.get('.exception!')
     assert(broken, 'an exception entity')
-    let ex = broken.exception as { message: string; stack: string }
-    assertEquals(
-      (broken.doc as { title: string }).title,
-      'GET /recipes/%E0%A4%A',
-    )
+    let ex = broken.exception as {
+      message: string
+      stack: string
+      request: string
+    }
+    assertEquals(ex.request, 'GET /recipes/%E0%A4%A')
+    // The platform's own row wears no doc, so a person's `.doc!` is theirs
+    // alone (T-32533).
+    assertEquals(broken.doc, undefined)
     assertMatch(ex.message, /URI/)
     assertMatch(ex.stack, /URIError|decodeURIComponent/)
     assertEquals(await owner.get('.error!'), [])

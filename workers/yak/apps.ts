@@ -202,7 +202,7 @@ let broken = (body: string) => {
     let at = pathOf(r.url ?? b.url ?? b.documentURL)
     let source = b.sourceFile ?? b.url
     return [{
-      title: `${typeof r.type == 'string' ? r.type : 'page'} ${at}`.trim(),
+      request: `${typeof r.type == 'string' ? r.type : 'page'} ${at}`.trim(),
       message,
       stack: String(
         b.stack ?? (source ? `${source}:${b.lineNumber ?? b.line ?? ''}` : ''),

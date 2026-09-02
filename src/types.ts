@@ -676,6 +676,8 @@ export let stamped: Record<string, Record<string, PropType>> = {
     at: 'time',
     message: 'text',
     stack: 'text',
+    request: 'text',
+    version: 'number',
   },
   blocked: {
     since: 'time',

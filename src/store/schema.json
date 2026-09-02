@@ -153,7 +153,7 @@
   },
   {
     "kind": "exec",
-    "sql": "create table if not exists \"exception\" (\n    entity integer primary key references entity(id),\n    \"at\" text,\n    \"message\" text,\n    \"stack\" text\n  );"
+    "sql": "create table if not exists \"exception\" (\n    entity integer primary key references entity(id),\n    \"at\" text,\n    \"message\" text,\n    \"stack\" text,\n    \"request\" text,\n    \"version\" real\n  );"
   },
   {
     "kind": "exec",
@@ -658,6 +658,18 @@
     "table": "exception",
     "col": "stack",
     "sql": "alter table exception add column \"stack\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "exception",
+    "col": "request",
+    "sql": "alter table exception add column \"request\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "exception",
+    "col": "version",
+    "sql": "alter table exception add column \"version\" real"
   },
   {
     "kind": "addColumn",
