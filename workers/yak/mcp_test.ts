@@ -57,7 +57,9 @@ slow(
           'app_new',
           'app_files',
           'app_deploy',
-          "import { apply, query, search } from './api/client.js'",
+          "import { apply, query, search, subscribe } from './api/client.js'",
+          'vocab.json',
+          "subscribe('.doc!', draw)",
           'not localStorage',
         ]
       ) assertStringIncludes(init.instructions, said)

@@ -59,7 +59,9 @@ An app is an index.html and whatever files sit beside it, served live at
    one, and every tool uses it unless they have several.
 2. app_files — write index.html, and any css, js or images beside it.
 3. app_deploy — mark the release. The files are already live; this is the
-   version an error will name.
+   version an error will name. It also plants any components the app declares
+   in a vocab.json beside index.html — {"recipe": {"serves": "number"}} and
+   the app has a recipe of its own, filterable like doc.
 4. Give the person the URL.
 
 app_list is what they already have — every app, its address and what is
@@ -69,12 +71,14 @@ Its data belongs in the app's own store, not localStorage — so it is the same
 on their phone and their laptop, and so you can read and repair it yourself.
 The page gets it in one line, from the app's own address:
 
-  import { apply, query, search } from './api/client.js'
+  import { apply, query, search, subscribe } from './api/client.js'
 
   await apply({ entity: { eid: '$r' },
                 doc: { title: 'Lemon cake', body: '3 lemons...' } })
   let all = await query('.doc!')       // everything, oldest first
   let some = await search('lemon')     // the words, ranked
+  subscribe('.doc!', draw)             // and again whenever it changes,
+                                       // including on their other device
 
 An entity is {entity: {eid}, ...components}: '$name' mints a new one (the
 answer maps it to its eid), and a filter line reads them back. The guide

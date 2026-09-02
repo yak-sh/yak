@@ -13,15 +13,22 @@ give the person the URL.
 The kernel serves a client beside every app, at `./api/client.js`:
 
     <script type="module">
-      import { apply, query, search } from './api/client.js'
+      import { apply, query, search, subscribe } from './api/client.js'
     </script>
 
-Three functions, all same-origin, all talking to this app's own graph:
+Four functions, all same-origin, all talking to this app's own graph:
 
 - `apply(bundles)` saves. One bundle or an array; it answers
   `{ok, changes, aliases}`.
 - `query(filter)` lists. The filter line below.
 - `search(text)` finds words across the app's docs, ranked.
+- `subscribe(filter, cb)` is `query` that keeps answering.
+
+`subscribe` is how a page stays true while it is open: it calls back with the
+rows now and again on every change to them, including one made on the person's
+other device, and it hands back a function that stops it.
+
+    let stop = subscribe('.doc!', (recipes) => draw(recipes))
 
 A refusal throws with the server's own sentence, so `try/catch` and show it.
 Reads are open to anyone; writes need a signed-in owner or editor of the space
