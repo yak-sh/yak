@@ -1,4 +1,5 @@
-// A key-addressed byte store: has/put/get, and list over a key prefix, behind
+// A key-addressed byte store: has/put/get/delete, and list over a key prefix,
+// behind
 // one interface, so a hosted backend can stand in for a local directory
 // without touching a caller. dirBlobs is the local adapter — a plain
 // directory of files named by key, created lazily on first write; r2Blobs
@@ -7,6 +8,8 @@ export interface Blobs {
   has(key: string): Promise<boolean>
   put(key: string, bytes: Uint8Array): Promise<void>
   get(key: string): Promise<Uint8Array<ArrayBuffer>>
+  // Gone, whether or not it was there: deleting twice is not an error.
+  delete(key: string): Promise<void>
   // Every key under a prefix, sorted — an app's file listing.
   list(prefix: string): Promise<string[]>
 }
@@ -28,6 +31,13 @@ export let dirBlobs = (root: string): Blobs => ({
     await Deno.writeFile(at, bytes)
   },
   get: (key) => Deno.readFile(`${root}/${key}`),
+  delete: async (key) => {
+    try {
+      await Deno.remove(`${root}/${key}`)
+    } catch {
+      // already gone
+    }
+  },
   // Walk from the deepest directory the prefix names, then screen: a prefix
   // is a string, not a directory, the way a bucket reads it.
   list: async (prefix) => {

@@ -9,7 +9,7 @@
 // never SQL; the apps of a space come from the directory part.
 import { idOf } from '../../src/types.ts'
 import * as dirPart from './directory.ts'
-import type { App, Space } from './directory.ts'
+import { type App, appOf, type Space, storeName } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { type Door, storeOf } from './store.ts'
@@ -70,11 +70,7 @@ let appsOf = async (env: Env, space: Space): Promise<App[]> => {
     new Request(`http://directory/query?.app.space=${space.eid}`),
   )
   if (!r.ok) throw new Error(`directory: ${await r.text()}`)
-  let rows = await r.json() as {
-    entity: { eid: string }
-    app: { slug: string; space: string; version: number | null }
-  }[]
-  return rows.map((r) => ({ eid: r.entity.eid, ...r.app }))
+  return (await r.json() as Parameters<typeof appOf>[0][]).map(appOf)
 }
 
 // The open items of one app: both facets, unseen only unless `all`.
@@ -85,7 +81,7 @@ export let openIn = async (
   who: Who,
   all = false,
 ) => {
-  let store = storeOf(env.STORE, space.slug, app.slug)
+  let store = storeOf(env.STORE, storeName(space, app))
   let seen = all ? '' : '&.notified='
   let hits: Hit[] = []
   for (let facet of ['exception', 'error']) {
@@ -112,7 +108,7 @@ export let serve = async (
     lines.push(...hits.map((h) => line(a, h)))
     let fresh = hits.filter((h) => !('notified' in h))
     if (!fresh.length) continue
-    let marked = await storeOf(env.STORE, space.slug, a.slug)('/apply', {
+    let marked = await storeOf(env.STORE, storeName(space, a))('/apply', {
       method: 'POST',
       body: JSON.stringify(
         fresh.map((h) => ({ eid: h.entity.eid, name: 'notified', comp: {} })),

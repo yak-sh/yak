@@ -38,6 +38,7 @@ slow(
         'app_new',
         'app_files',
         'app_deploy',
+        'app_set',
         'app_errors',
         'graph_apply',
         'graph_query',
@@ -149,6 +150,32 @@ slow(
         }),
         page,
       )
+      // A file a person asks to be rid of: gone from the listing and from
+      // the address, and asking twice says so rather than pretending.
+      await agent.tool('app_files', {
+        ...app,
+        op: 'write',
+        path: 'draft.html',
+        content: '<p>oops',
+      })
+      assertMatch(
+        await agent.tool('app_files', {
+          ...app,
+          op: 'delete',
+          path: 'draft.html',
+        }),
+        /deleted draft\.html/,
+      )
+      await assertRejects(
+        () =>
+          agent.tool('app_files', { ...app, op: 'delete', path: 'draft.html' }),
+        Error,
+        'no file draft.html',
+      )
+      assertEquals(
+        (await k.at('jeff.yaks.app', '/recipes/draft.html')).status,
+        404,
+      )
       assertMatch(await agent.tool('app_deploy', app), /v1/)
       assertMatch(await agent.tool('app_deploy', app), /v2/)
       let served = await k.at('jeff.yaks.app', '/recipes/')
@@ -223,6 +250,53 @@ slow(
       assert(
         !(await agent.tool('graph_query', { ...app, query: `id=${cake}` }))
           .includes('unseen'),
+      )
+
+      // Renaming: the title is what it is called, the slug is where it
+      // lives. The app moves whole — its files serve at the new address and
+      // everything it saved is still there, because its store is named for
+      // where it was born and not for where it lives.
+      assertMatch(
+        await agent.tool('app_set', {
+          ...app,
+          slug: 'cookbook',
+          title: 'The cookbook',
+        }),
+        /jeff\.yaks\.app\/cookbook\/.*moved from \/recipes\//,
+      )
+      let moved = { space: 'jeff', app: 'cookbook' }
+      let atNew = await k.at('jeff.yaks.app', '/cookbook/')
+      assertEquals(atNew.status, 200)
+      assertStringIncludes(await atNew.text(), page)
+      assertEquals((await k.at('jeff.yaks.app', '/recipes/')).status, 404)
+      assertEquals(
+        await agent.tool('app_files', { ...moved, op: 'list' }),
+        'css/site.css\nindex.html',
+      )
+      let still = JSON.parse(
+        await agent.tool('graph_query', { ...moved, query: `id=${cake}` }),
+      )
+      assertEquals(still[0].doc.title, "Grandma's lemon cake")
+      assertEquals(
+        (await agent.tool('app_errors', moved)).split('\n')
+          .filter((l) => l.startsWith('- ')).length,
+        2,
+      )
+      // A retitle alone leaves the address alone; a slug already taken and
+      // an empty ask are both refused.
+      assertMatch(
+        await agent.tool('app_set', { ...moved, title: 'Recipes' }),
+        /jeff\.yaks\.app\/cookbook\/$/,
+      )
+      await assertRejects(
+        () => agent.tool('app_set', { ...moved, slug: 'garden' }),
+        Error,
+        'app garden exists in jeff',
+      )
+      await assertRejects(
+        () => agent.tool('app_set', moved),
+        Error,
+        'nothing to change',
       )
 
       // A stranger belongs to no space of ours: every tool refuses him by

@@ -36,6 +36,15 @@ slow('dirBlobs: nested keys, and list by prefix', async () => {
     assertEquals(await blobs.list('jeff/n'), ['jeff/notes/a.md'])
     assertEquals(await blobs.list('nothing/'), [])
     assertEquals((await blobs.list('')).length, 4)
+
+    // Deleting takes the key out of the listing, and deleting what is not
+    // there is quiet.
+    await blobs.delete('jeff/recipes/index.html')
+    await blobs.delete('jeff/recipes/index.html')
+    assertEquals(await blobs.has('jeff/recipes/index.html'), false)
+    assertEquals(await blobs.list('jeff/recipes/'), [
+      'jeff/recipes/css/site.css',
+    ])
   } finally {
     await Deno.remove(root, { recursive: true })
   }

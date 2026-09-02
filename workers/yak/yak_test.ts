@@ -58,7 +58,11 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     // The file door: nobody and a forgery are refused, the owner is not; the
     // planted file then serves at its path with its type.
     let cookie = await signedIn(k, jeff)
-    let forged = cookie.replace(/.$/, (c) => (c == 'A' ? 'B' : 'A'))
+    // A forgery is one character of the mac changed — the FIRST one. The
+    // last character of a base64url mac carries only padding bits, so
+    // flipping it decodes to the same 32 bytes and verifies, which made this
+    // check pass or fail with the secret of the run.
+    let forged = cookie.replace(/\.(.)/, (_, c) => `.${c == 'A' ? 'B' : 'A'}`)
     let owner = client(k, 'jeff.yaks.app', 'recipes', cookie)
     let nobody = client(k, 'jeff.yaks.app', 'recipes')
     let forger = client(k, 'jeff.yaks.app', 'recipes', forged)

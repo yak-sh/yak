@@ -28,6 +28,9 @@ import { SLUG } from './route.ts'
 import { storeOf } from './store.ts'
 
 export let META = { space: 'yak', app: 'platform' }
+// The meta space's own store, named the way every app's is. Its slugs are
+// the platform's own and never move, so the name is a constant.
+export let META_STORE = `${META.space}/${META.app}`
 
 export type Space = { eid: string; slug: string; home: string | null }
 export type App = {
@@ -35,6 +38,10 @@ export type App = {
   slug: string
   space: string
   version: number | null
+  // The name of the Durable Object holding this app's data, pinned when the
+  // app was born (`store` below); null for an app born before it was pinned,
+  // which is named by its address the way it always was.
+  store: string | null
 }
 export type Role = 'owner' | 'editor' | 'viewer'
 
@@ -44,6 +51,7 @@ type Row = {
   app?: { slug: string; space: string; version: number | null }
   member?: { space: string; person: string; role: Role }
   email?: { address: string }
+  alias?: { slug: string }
 }
 
 // A person's address as a hostname label: the local part, lowercased, with
@@ -65,7 +73,7 @@ let cache = new Map<string, { at: number; body: string }>()
 let seeded: Promise<void> | undefined
 
 let seed = async (env: Env) => {
-  let meta = storeOf(env.STORE, META.space, META.app)
+  let meta = storeOf(env.STORE, META_STORE)
   let found = await (await meta(`/query?.space.slug=${META.space}`)).json()
   if ((found as Row[]).length) return
   await meta('/apply', {
@@ -102,7 +110,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let url = new URL(req.url)
   await (seeded ??= seed(env))
   if (url.pathname == '/apply' && req.method == 'POST') {
-    let r = await storeOf(env.STORE, META.space, META.app)('/apply', {
+    let r = await storeOf(env.STORE, META_STORE)('/apply', {
       method: 'POST',
       body: await req.text(),
     }, forwarded(req))
@@ -115,7 +123,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (hit && hit.at > Date.now() - TTL) {
     return Response.json(JSON.parse(hit.body))
   }
-  let r = await storeOf(env.STORE, META.space, META.app)(`/query${url.search}`)
+  let r = await storeOf(env.STORE, META_STORE)(`/query${url.search}`)
   if (!r.ok) return r
   let body = await r.text()
   if (body != '[]') cache.set(url.search, { at: Date.now(), body })
@@ -128,12 +136,24 @@ let spaceOf = (r: Row): Space => ({
   home: r.space!.home,
 })
 
-let appOf = (r: Row): App => ({
+export let appOf = (r: Row): App => ({
   eid: r.entity.eid,
   slug: r.app!.slug,
   space: r.app!.space,
   version: r.app!.version,
+  store: r.alias?.slug ?? null,
 })
+
+// A Durable Object cannot be renamed, so an app's store must not be named by
+// anything a person may change: renaming `recipes` to `cookbook` would strand
+// every recipe in it. So the name is pinned at birth as the app's alias — the
+// address it was born at — and read back here. An app born before that
+// (`store` null) is named by its address, which for it has never moved.
+export let storeName = (space: Space, app: App) =>
+  app.store ?? `${space.slug}/${app.slug}`
+
+// What app_new pins, and what a rename must therefore leave alone.
+export let bornAt = (space: Space, slug: string) => `${space.slug}/${slug}`
 
 // The typed client over the handler, in-process or across a binding.
 export type Directory = ReturnType<typeof directory>

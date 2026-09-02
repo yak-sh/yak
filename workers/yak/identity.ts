@@ -34,7 +34,7 @@ import {
   type OAuthProviderOptions,
 } from '@cloudflare/workers-oauth-provider'
 import { cookie, cookieValue, sign, verify } from '../../src/token.ts'
-import { directory, META } from './directory.ts'
+import { directory, META, META_STORE } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { mail } from './mail.ts'
@@ -107,7 +107,7 @@ let domainOf = (req: Request) => {
   return host == PLATFORM || host.endsWith(`.${PLATFORM}`) ? PLATFORM : ''
 }
 
-let meta = (env: Env) => storeOf(env.STORE, META.space, META.app)
+let meta = (env: Env) => storeOf(env.STORE, META_STORE)
 
 // The secret signs sessions and keys the code digests. Unset, sign-in cannot
 // work at all, and saying so out loud beats a token nobody can verify: the

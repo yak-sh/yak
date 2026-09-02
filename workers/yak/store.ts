@@ -103,17 +103,17 @@ export class Store {
   }
 }
 
-// The kernel's door to one store: a caller on the object named
-// `<space>/<app>`, told its name on every call (the object keeps the first).
-// The kernel spells the name from its route; a client never names a store.
+// The kernel's door to one store: a caller on the object named for the app
+// (directory.ts storeName — the address it was born at, which a rename never
+// moves), told its name on every call (the object keeps the first). The
+// kernel spells the name; a client never names a store.
 export type Door = (
   path: string,
   init?: RequestInit,
   headers?: Record<string, string>,
 ) => Promise<Response>
 
-export let storeOf = (ns: Namespace, space: string, app: string): Door => {
-  let name = `${space}/${app}`
+export let storeOf = (ns: Namespace, name: string): Door => {
   let stub = ns.get(ns.idFromName(name))
   return (path, init = {}, headers = {}) =>
     stub.fetch(

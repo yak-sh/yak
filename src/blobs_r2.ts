@@ -11,6 +11,7 @@ export type R2 = {
   head(key: string): Promise<unknown | null>
   get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>
   put(key: string, value: ArrayBuffer | Uint8Array): Promise<unknown>
+  delete(key: string): Promise<unknown>
   list(
     opts: { prefix: string; cursor?: string },
   ): Promise<
@@ -27,6 +28,9 @@ export let r2Blobs = (bucket: R2): Blobs => ({
     let object = await bucket.get(key)
     if (!object) throw new Error(`no blob at ${key}`)
     return new Uint8Array(await object.arrayBuffer())
+  },
+  delete: async (key) => {
+    await bucket.delete(key)
   },
   list: async (prefix) => {
     let keys: string[] = []

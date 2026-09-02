@@ -27,7 +27,7 @@
 //     /<app>/<path>           the app's file at that path, a directory's index
 import * as apps from './apps.ts'
 import * as dirPart from './directory.ts'
-import { directory, META } from './directory.ts'
+import { directory, META_STORE, storeName } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import * as identity from './identity.ts'
 import * as mcp from './mcp.ts'
@@ -61,9 +61,10 @@ let report = async (env: Env, r: Route, req: Request, e: unknown) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let space = r.space ? await dir.space(r.space) : null
   let app = space && r.app ? await dir.app(space, r.app) : null
-  let store = app
-    ? storeOf(env.STORE, space!.slug, app.slug)
-    : storeOf(env.STORE, META.space, META.app)
+  let store = storeOf(
+    env.STORE,
+    app ? storeName(space!, app) : META_STORE,
+  )
   // The BREAK, something our code hit unexpectedly — the self-healing
   // trigger (kernel.rs; `error` is a known failure state, kept for what the
   // platform reports deliberately). unseen.ts owns the entity's shape,

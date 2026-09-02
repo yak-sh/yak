@@ -21,7 +21,13 @@
 // app's files serve live from its blob store.
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import type { EntityLiteral } from '../../src/mutation.ts'
-import type { App, Directory, Space } from './directory.ts'
+import {
+  type App,
+  bornAt,
+  type Directory,
+  type Space,
+  storeName,
+} from './directory.ts'
 import type { Env } from './env.ts'
 import { SLUG } from './route.ts'
 import { mayWrite, vouched, type Who } from './session.ts'
@@ -102,7 +108,7 @@ let inApp = async (ctx: Ctx, args: Args, write = false) => {
     space,
     app,
     who,
-    store: storeOf(ctx.env.STORE, space.slug, app.slug),
+    store: storeOf(ctx.env.STORE, storeName(space, app)),
   }
 }
 
@@ -180,10 +186,14 @@ export let TOOLS: Tool[] = [
       if (await ctx.dir.app(space, s)) {
         throw new Error(`app ${s} exists in ${space.slug}`)
       }
+      // The alias is the name of the app's store, pinned at birth so a
+      // later rename moves the address and not the data (directory.ts
+      // storeName).
       let entities: EntityLiteral[] = [{
         entity: { eid: '$app' },
         doc: { title: text(args.title, 'title') },
         app: { slug: s, space: space.eid, version: 0 },
+        alias: { slug: bornAt(space, s) },
       }]
       // The first app in a space answers its bare hostname.
       if (!space.home) {
@@ -201,7 +211,7 @@ export let TOOLS: Tool[] = [
     name: 'app_files',
     description:
       "Write the app's files — index.html and any css, js or images beside " +
-      'it — or list them, or read one back. They serve live at ' +
+      'it — or list them, read one back, or delete one. They serve live at ' +
       '<space>.yaks.app/<app>/<path>; index.html answers the directory. Keep ' +
       'what the app remembers in its own store, never localStorage: the page ' +
       'reads and writes it with `import { apply, query, search } from ' +
@@ -212,7 +222,7 @@ export let TOOLS: Tool[] = [
       properties: {
         space: SPACE,
         app: APP,
-        op: { type: 'string', enum: ['list', 'read', 'write'] },
+        op: { type: 'string', enum: ['list', 'read', 'write', 'delete'] },
         path: str('the file path, e.g. index.html'),
         content: str('the file text, for write'),
       },
@@ -220,7 +230,11 @@ export let TOOLS: Tool[] = [
     },
     run: async (ctx, args) => {
       let op = text(args.op, 'op')
-      let { space, app } = await inApp(ctx, args, op == 'write')
+      let { space, app } = await inApp(
+        ctx,
+        args,
+        op == 'write' || op == 'delete',
+      )
       let blobs = r2Blobs(ctx.env.BLOBS)
       let prefix = fileKey(space, app, '')
       if (op == 'list') {
@@ -239,7 +253,14 @@ export let TOOLS: Tool[] = [
           space,
         }
       }
-      if (op != 'write') throw new Error(`op: one of list, read, write`)
+      if (op == 'delete') {
+        if (!(await blobs.has(key))) throw new Error(`no file ${args.path}`)
+        await blobs.delete(key)
+        return { text: `deleted ${key.slice(prefix.length)}`, space }
+      }
+      if (op != 'write') {
+        throw new Error(`op: one of list, read, write, delete`)
+      }
       await blobs.put(
         key,
         new TextEncoder().encode(text(args.content, 'content')),
@@ -273,6 +294,65 @@ export let TOOLS: Tool[] = [
       return {
         text: `deployed ${space.slug}/${app.slug} v${version}: ${
           url(space, app)
+        }`,
+        space,
+      }
+    },
+  },
+  {
+    name: 'app_set',
+    description:
+      'Rename an app or change its title. The title is what it is called; ' +
+      'the slug is its address, so changing it moves the app to ' +
+      '<space>.yaks.app/<new>/ — its files and everything it has saved come ' +
+      'with it, and the old address stops answering. Give the person the ' +
+      'new link.',
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        slug: str('the new path label, to move the app'),
+        title: str('the new name'),
+      },
+      required: ['app'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, who } = await inApp(ctx, args, true)
+      let title = args.title == null ? null : text(args.title, 'title')
+      let to = args.slug == null ? null : slug(args.slug, 'slug')
+      if (title == null && to == null) {
+        throw new Error('nothing to change: pass title, slug, or both')
+      }
+      let moving = to != null && to != app.slug
+      if (moving && await ctx.dir.app(space, to!)) {
+        throw new Error(`app ${to} exists in ${space.slug}`)
+      }
+      // Files first and in that order — copy, then rename, then delete — so
+      // whichever address is the app's at any moment has the whole app
+      // behind it. Its store is untouched: it is named for where the app was
+      // born, not where it lives (directory.ts storeName).
+      let blobs = r2Blobs(ctx.env.BLOBS)
+      let from = fileKey(space, app, '')
+      let onto = moving ? `${space.slug}/${to}/` : from
+      let keys = moving ? await blobs.list(from) : []
+      for (let key of keys) {
+        await blobs.put(onto + key.slice(from.length), await blobs.get(key))
+      }
+      await ctx.dir.apply({
+        entities: [{
+          entity: { eid: app.eid },
+          ...(title == null ? {} : { doc: { title } }),
+          ...(moving ? { app: { slug: to! } } : {}),
+        }],
+      }, vouched(who))
+      for (let key of keys) await blobs.delete(key)
+      let now = (await ctx.dir.app(space, to ?? app.slug))!
+      return {
+        text: `app ${space.slug}/${now.slug}${
+          title == null ? '' : ` "${title}"`
+        }: ${url(space, now)}${
+          moving ? ` (moved from /${app.slug}/, which is gone)` : ''
         }`,
         space,
       }

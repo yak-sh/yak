@@ -19,7 +19,13 @@
 // writes the same `exception` entity a route that threw does. Rate-limited
 // per app: a page in a loop is a bug to see once, not a write flood.
 import { r2Blobs } from '../../src/blobs_r2.ts'
-import { type App, directory, META, type Space } from './directory.ts'
+import {
+  type App,
+  directory,
+  META,
+  type Space,
+  storeName,
+} from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { nothingHere } from './pages.ts'
@@ -220,7 +226,7 @@ let api = async (
   if (path == '/client.js' || path == '/report.js') {
     return env.ASSETS.fetch(new Request(new URL(path, req.url)))
   }
-  let store = storeOf(env.STORE, space.slug, app.slug)
+  let store = storeOf(env.STORE, storeName(space, app))
   // What the page (or the browser itself) says broke. Anyone may report —
   // a break belongs to whoever was looking at the page, and asking a
   // stranger to sign in first would lose exactly the breaks nobody sees.
