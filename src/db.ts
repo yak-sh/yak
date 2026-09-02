@@ -3863,6 +3863,17 @@ let cmps: Record<string, string[]> = {
   ),
 }
 
+// Every column a server writer may name: the wire-writable ones plus the
+// stamped, server-owned ones. apply()'s `server` mode (below) admits these —
+// the way a hosted kernel mints an exception entity through the same door a
+// client uses, with a flag the client can never set.
+let owned: Record<string, string[]> = Object.fromEntries(
+  Object.keys(cmps).map((name) => [name, [
+    ...cmps[name],
+    ...Object.keys(stamped[name] ?? {}),
+  ]]),
+)
+
 let edgeCols = ['type', 'child', 'ord', 'gone']
 
 // What the SCHEMA has, as opposed to what the wire may write — the
@@ -3967,12 +3978,20 @@ export let renamed = (
     : { ...change, name, comp }
 }
 
-let admitted = (db: Sql, change: Change): Change | undefined => {
+let admitted = (
+  db: Sql,
+  change: Change,
+  server = false,
+): Change | undefined => {
   change = renamed(change)
   let table = change.name
-  let cols = table == 'dependency' ? edgeCols : cmps[table]
+  let cols = table == 'dependency'
+    ? edgeCols
+    : server
+    ? owned[table]
+    : cmps[table]
   if (!cols) return
-  if (serverOwned.has(table)) return
+  if (serverOwned.has(table) && !server) return
   if (change.comp == null) return change
   // `eid` is the entity's identity, projected into every snapshot row by
   // select(); it is never a writable column (the owner key is the int `entity`
@@ -5205,6 +5224,11 @@ export let apply = (
   // be validated under this transaction's writer lock. Raw Change[] leaves it
   // absent and retains the administrative graph capability.
   workClaim?: { target: string; recursive: boolean; source?: Change[] },
+  // The server-writer mode: the caller is trusted server code (a hosted
+  // kernel reporting what a route threw), so server-owned components and
+  // stamped columns are admitted and written. Every wire door passes
+  // nothing; the Store object sets it from a kernel-only flag.
+  server = false,
 ): Change[] => {
   // A raw @-address in `deliver.to` names no eid the parser could resolve —
   // fold it into its address-book entity (find-or-mint) before normalize.
@@ -5217,7 +5241,7 @@ export let apply = (
     now: Date.now(),
     resolve: (id) => ident(db, id),
   }).flatMap((change) => {
-    let kept = admitted(db, change)
+    let kept = admitted(db, change, server)
     return kept ? [kept] : []
   })
   let dead = graveOf(db)
@@ -5437,7 +5461,7 @@ export let apply = (
         }
         continue
       }
-      let cols = cmps[name]
+      let cols = server ? owned[name] : cmps[name]
       if (!cols) continue
       // Whether THIS change is what first touched the eid — a no-op change
       // un-touches it below, so a batch of pure no-ops stamps nothing.
@@ -7326,9 +7350,19 @@ export let mutate = <T extends Mutation>(
   mutation: T,
   trace?: Trace,
   via?: string | null,
+  // apply()'s server-writer mode; only a trusted caller sets it.
+  server = false,
 ): MutationOutput<T> => {
   if (Array.isArray(mutation)) {
-    return apply(db, mutation, trace, via) as MutationOutput<T>
+    return apply(
+      db,
+      mutation,
+      trace,
+      via,
+      undefined,
+      undefined,
+      server,
+    ) as MutationOutput<T>
   }
   if ('mutation' in mutation && mutation.mutation == 'claim_work') {
     return claimWork(db, mutation, trace, via) as MutationOutput<T>
@@ -7341,7 +7375,15 @@ export let mutate = <T extends Mutation>(
       resolve: (id) => resolveId(db, id),
     })
     return {
-      changes: apply(db, plan.changes, trace, via),
+      changes: apply(
+        db,
+        plan.changes,
+        trace,
+        via,
+        undefined,
+        undefined,
+        server,
+      ),
       aliases: plan.aliases,
     } as MutationOutput<T>
   }

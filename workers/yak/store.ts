@@ -3,11 +3,13 @@
 // from the generated schema ops on first touch and never migrated. It serves
 // the two HTTP doors src/server_runtime.ts serves for headless clients, with
 // the same request and response bodies: POST /apply and GET /query, plus GET
-// /graph, the identity a joining peer reads, and POST /error, the kernel's
-// own door for what an app threw (D-32318 §Errors) — server-owned rows the
-// wire may not mint. The object is named `<space>/<app>` by the kernel's
-// route (index.ts), never by a client, and learns that name from the first
-// request. Not here yet, deliberately: /ws (a hibernating socket plus
+// /graph, the identity a joining peer reads. One flag beyond the wire:
+// `x-yak-kernel`, set by the kernel on its own requests and never forwarded
+// from a client, opens apply()'s server-writer mode, so what a route threw
+// lands as a server-owned exception entity through the same door (D-32318
+// §Errors) — no second shape, no SQL outside db.ts. The object is named
+// `<space>/<app>` by the kernel's route (index.ts), never by a client, and
+// learns that name from the first request. Not here yet, deliberately: /ws (a hibernating socket plus
 // broadcast), the journal feed that fires effects, `work=` lanes and
 // `.order=similar` (both reach outside the store) — see query.ts.
 import { epochOf, mutate, plant, type SchemaOp } from '../../src/db.ts'
@@ -24,15 +26,6 @@ export type Stub = { fetch(req: Request): Promise<Response> }
 export type Namespace = {
   idFromName(name: string): unknown
   get(id: unknown): Stub
-}
-
-// What the kernel reports about a request that threw.
-export type Thrown = {
-  method: string
-  path: string
-  message: string
-  stack: string
-  version: number | null
 }
 
 let methodNotAllowed = (allow: string) =>
@@ -86,7 +79,13 @@ export class Store {
         // is fed so the journal row is the one a server writes; the feed
         // that fires effects off it is still to come.
         let out = mutationResult(
-          mutate(db, mutation, fed(), req.headers.get('x-via')),
+          mutate(
+            db,
+            mutation,
+            fed(),
+            req.headers.get('x-via'),
+            req.headers.get('x-yak-kernel') == '1',
+          ),
         )
         return Response.json(
           !Array.isArray(mutation) && 'entities' in mutation
@@ -100,42 +99,7 @@ export class Store {
         return new Response(why, { status: 400 })
       }
     }
-    if (path == '/error') {
-      if (req.method != 'POST') return methodNotAllowed('POST')
-      let t = await req.json() as Thrown
-      return Response.json({ eid: this.thrown(t) })
-    }
     return new Response('not found', { status: 404 })
-  }
-
-  // One error entity for one failed request: a doc names the request and
-  // carries the stack and the deploy it happened on; the `error` row is
-  // server-owned, so it is written by direct SQL the way deliver.ts writes
-  // it, never through the wire path that refuses it. One transaction: no
-  // doc without its error, no error without its doc.
-  thrown({ method, path, message, stack, version }: Thrown) {
-    let eid = crypto.randomUUID()
-    let db = this.db
-    db.transaction(() => {
-      mutate(
-        db,
-        [{
-          eid,
-          name: 'doc',
-          comp: {
-            title: `${method} ${path}`,
-            body: `version: ${version ?? 'none'}\n\n\`\`\`\n${stack}\n\`\`\`\n`,
-          },
-        }],
-        fed(),
-        null,
-      )
-      db.prepare(
-        `insert into error (entity, at, message)
-         values ((select id from entity where eid = ?), ?, ?)`,
-      ).run(eid, new Date().toISOString(), message)
-    })
-    return eid
   }
 }
 

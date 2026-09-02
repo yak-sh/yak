@@ -2,7 +2,7 @@
 // a person sees when there is nothing at an address, or when an app broke.
 // One shell, three sentences; the palette is the home page's, inlined so a
 // space's hostname needs no asset of the apex. Never a stack trace — the
-// error entity carries that to the person's agent (D-32318 §Errors).
+// exception entity carries that to the person's agent (D-32318 §Errors).
 let shell = (title: string, lead: string, status: number) =>
   new Response(
     `<!doctype html>

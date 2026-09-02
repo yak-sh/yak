@@ -1,17 +1,22 @@
-// Serving one app at `<space>.yaks.app/<app>/…` — the deploy seam's first
-// hosted implementation (D-32318 §v1 sequencing): the app's files out of its
-// blob store, and beside them the graph API for its (space, app) store,
-// `/api/{apply,query,graph}` mapped onto the Store object's doors with the
-// store named from the route, never from the client. `PUT /api/files/<path>`
-// is the write side, what a deploy is until app_deploy (T-32329) exists.
-// Workers for Platforms dispatch — an app's own Worker answering here — is
-// the second implementation and waits on T-32345; it slots in where `asset`
-// is called, with the same `vouched` headers, and nothing here pretends to.
+// The app-serving part: `<space>.yaks.app/<app>/…` — the deploy seam's first
+// hosted implementation (D-32318 §v1 sequencing). One fetch handler: it
+// reads the hostname and path (route.ts), resolves the space and app through
+// the directory part (directory.ts, in-process or across a binding), verifies
+// the session (session.ts), and serves the app's files out of its blob store
+// with the graph API for its (space, app) store beside them —
+// `/api/{apply,query,graph}` mapped onto the Store object's doors, the store
+// named from the route, never by the client. `PUT /api/files/<path>` is the
+// write side, what a deploy is until app_deploy (T-32329) exists. Workers for
+// Platforms dispatch — an app's own Worker answering here — is the second
+// implementation and waits on T-32345; it slots in where `asset` is called,
+// with the same `vouched` headers, and nothing here pretends to.
 import { r2Blobs } from '../../src/blobs_r2.ts'
-import type { App, Space } from './directory.ts'
-import type { Env } from './env.ts'
+import { type App, directory, META, type Space } from './directory.ts'
+import * as dirPart from './directory.ts'
+import { bound, type Env } from './env.ts'
 import { nothingHere } from './pages.ts'
-import { mayWrite, vouched, type Who } from './session.ts'
+import { hostOf, route } from './route.ts'
+import { mayWrite, vouched, type Who, whoIs } from './session.ts'
 import { storeOf } from './store.ts'
 
 let MIME: Record<string, string> = {
@@ -41,7 +46,7 @@ let mimeOf = (path: string) =>
 
 // A file's key in the blob store: the app's slugs then its path, a directory
 // answering with its index. Decoded, so the key is the name the file was
-// put under; a malformed escape throws, and the kernel reports it.
+// put under; a malformed escape throws, and the router reports it.
 let keyOf = (space: Space, app: App, path: string) =>
   `${space.slug}/${app.slug}${
     decodeURIComponent(path.endsWith('/') ? `${path}index.html` : path)
@@ -49,6 +54,9 @@ let keyOf = (space: Space, app: App, path: string) =>
 
 let json = (status: number, code: string) =>
   Response.json({ error: { code } }, { status })
+
+let redirect = (to: string) =>
+  new Response(null, { status: 302, headers: { location: to } })
 
 let asset = async (env: Env, space: Space, app: App, path: string) => {
   let blobs = r2Blobs(env.BLOBS)
@@ -96,14 +104,31 @@ let api = async (
   return json(404, 'not_found')
 }
 
-export let serveApp = (
-  req: Request,
-  env: Env,
-  space: Space,
-  app: App,
-  path: string,
-  who: Who,
-) =>
-  path.startsWith('/api/')
-    ? api(req, env, space, app, path.slice(4), who)
-    : asset(env, space, app, path)
+export let fetch = async (req: Request, env: Env): Promise<Response> => {
+  let r = route(hostOf(req), new URL(req.url).pathname)
+  if (r.space == null) return nothingHere()
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let space = await dir.space(r.space)
+  if (!space) return nothingHere()
+  if (r.app == null) {
+    let home = r.path == '/' ? await dir.home(space) : null
+    return home ? redirect(`/${home.slug}/`) : nothingHere()
+  }
+  let app = await dir.app(space, r.app)
+  if (!app) return nothingHere()
+  if (r.path == '') return redirect(`${new URL(req.url).pathname}/`)
+  let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
+  // The meta space's first member: while `yak` has no members at all, any
+  // signed-in person may write it — that is how the first owner is written,
+  // by the first sign-in (T-32327). Once one member exists the rule is the
+  // ordinary one.
+  if (
+    who.person && !mayWrite(who) && space.slug == META.space &&
+    await dir.memberless(space)
+  ) {
+    who = { ...who, role: 'owner' }
+  }
+  return r.path.startsWith('/api/')
+    ? api(req, env, space, app, r.path.slice(4), who)
+    : asset(env, space, app, r.path)
+}

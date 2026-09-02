@@ -122,19 +122,35 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     assertEquals((await stranger.post([])).status, 403)
 
     // A route that throws — a malformed escape in a file path — answers with
-    // the soft page and leaves an error entity in the app's store, naming the
-    // request and carrying the stack.
+    // the soft page and leaves an exception entity in the app's store, naming
+    // the request and carrying the message and stack; nothing wears `error`,
+    // the facet for a failure the platform expected.
     let broke = await k.at('jeff.yaks.app', '/recipes/%E0%A4%A')
     assertEquals(broke.status, 500)
     assertMatch(await broke.text(), /Something went wrong/)
-    let [error] = await owner.get('.error!')
-    assert(error, 'an error entity')
+    let [broken] = await owner.get('.exception!')
+    assert(broken, 'an exception entity')
+    let ex = broken.exception as { message: string; stack: string }
     assertEquals(
-      (error.doc as { title: string }).title,
+      (broken.doc as { title: string }).title,
       'GET /recipes/%E0%A4%A',
     )
-    assertMatch((error.doc as { body: string }).body, /URIError|malformed/)
-    assertMatch((error.error as { message: string }).message, /URI/)
+    assertMatch(ex.message, /URI/)
+    assertMatch(ex.stack, /URIError|decodeURIComponent/)
+    assertEquals(await owner.get('.error!'), [])
+    // The kernel flag is the kernel's: a client sending it is still a client,
+    // and its server-owned change is dropped, not written.
+    let forgedFlag = await k.at('jeff.yaks.app', '/recipes/api/apply', {
+      method: 'POST',
+      headers: { cookie, 'x-yak-kernel': '1' },
+      body: JSON.stringify([{
+        eid: crypto.randomUUID(),
+        name: 'exception',
+        comp: { message: 'forged' },
+      }]),
+    })
+    assertEquals(forgedFlag.status, 200)
+    assertEquals((await owner.get('.exception!')).length, 1)
   } finally {
     await k.stop()
   }
