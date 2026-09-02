@@ -64,10 +64,13 @@ type Frame = {
   cursor?: number
 }
 
-let post = async (changes: Change[]) => {
+let post = async (changes: Change[], via?: string) => {
   let res = await fetch(`http://${U}/apply`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      ...(via ? { 'x-via': via } : {}),
+    },
     body: JSON.stringify(changes),
   })
   let text = await res.text()
@@ -255,6 +258,11 @@ slow(
   alone,
   async () => {
     let project = uid(), persona = uid(), tier = uid(), loose = uid()
+    // The seed is the owner's hand: an anonymous memory lands proposed and
+    // reaches no prompt until a person decides it (db.ts apply), so the
+    // batch rides x-via as a person.
+    let jeff = uid()
+    await post([{ eid: jeff, name: 'person', comp: {} }])
     await post([
       { eid: project, name: 'doc', comp: { title: 'Project' } },
       { eid: project, name: 'project', comp: {} },
@@ -269,7 +277,7 @@ slow(
         name: 'dependency',
         comp: { type: 'contains', child: tier },
       },
-    ])
+    ], jeff)
     let q = `id=${persona}&.materialized!`
     let http = async () => {
       let wire = q.split('&').map(encodeURIComponent).join('&')
