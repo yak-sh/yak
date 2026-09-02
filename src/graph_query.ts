@@ -35,8 +35,8 @@ import type { Reader } from './commands.ts'
 import {
   buried,
   cursorOf,
-  depsOf,
   eager,
+  eagerDeps,
   entriesOf,
   entriesScan,
   epochOf,
@@ -1344,7 +1344,7 @@ export let dbReader = (db: Sql, overlay: Row[] = []): Reader => {
       return [...found.values()]
     },
     select: (filter) => evalGraph(db, filter).hits,
-    deps: (eids) => depsOf(db, eids),
+    deps: (eids) => eagerDeps(db, eids),
   }
   return g
 }

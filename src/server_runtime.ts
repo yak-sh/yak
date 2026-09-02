@@ -25,9 +25,10 @@ import {
   buried,
   correct,
   cursorOf,
-  depsOf,
   eager,
+  eagerDeps,
   epochOf,
+  hidden,
   human,
   journalBy,
   journalOf,
@@ -1144,25 +1145,28 @@ let handle: Handler = async (req) => {
         : undefined
       // What a hit carries BESIDE its components: its own edges (deps=1)
       // and who points at it (backlinks=1). Both are keyed off the hits —
-      // depsOf and refsOf read the edge table and each typed eid column by
-      // eid — so a one-entity question costs one entity. Backlinks used to
-      // walk every row of the graph for this, which is what held the whole
-      // door on the snapshot path; now every path serves both layers the
-      // same way, and `deps` is the first door outside /snapshot to carry an
-      // entity's OUTGOING edges at all (`task show` prints them).
+      // eagerDeps and refsOf read the edge table and each typed eid column
+      // by eid — so a one-entity question costs one entity. Backlinks used
+      // to walk every row of the graph for this, which is what held the
+      // whole door on the snapshot path; now every path serves both layers
+      // the same way, and `deps` is the first door outside /snapshot to
+      // carry an entity's OUTGOING edges at all (`task show` prints them).
       //
       // `deps` are the snap.deps triples touching the hit, eids and all: an
       // endpoint's id and status come from fetching it, and a caller
-      // rendering edges is fetching those rows anyway.
+      // rendering edges is fetching those rows anyway — which is why the
+      // layer is EAGER, as snap.deps and the `.edges!` rider are: an edge
+      // from a session-log entry names a row no client holds, and a
+      // well-referenced task carries hundreds (T-3683: 559 of 609). Serving
+      // them made `task show` print 780 lines and the boot digest hydrate
+      // ~1,400 entries (13 MB) per session start.
       let layers = (hits: Row[]) => {
         let eids = hits.map((r) => r.eid)
         if (!backs && !edged) {
           return hits.map((r) => jsonOf(r))
         }
-        let deps = depsOf(db, eids).filter((d) =>
-          reveal ||
-          (!eager(db, d.parent).quarantined &&
-            !eager(db, d.child).quarantined)
+        let deps = eagerDeps(db, eids).filter((d) =>
+          reveal || (!hidden(db, d.parent) && !hidden(db, d.child))
         )
         let mine = new Map<string, Dep[]>()
         for (let d of deps) {
@@ -1179,9 +1183,7 @@ let handle: Handler = async (req) => {
           let wanted = new Set(eids)
           // An edge is a reference like any other; its verb IS the `via`.
           let refs = [
-            ...refsOf(db, eids).filter((r) =>
-              reveal || !eager(db, r.from).quarantined
-            ),
+            ...refsOf(db, eids).filter((r) => reveal || !hidden(db, r.from)),
             ...deps.filter((d) => wanted.has(d.child))
               .map((d) => ({ from: d.parent, via: d.type, to: d.child })),
           ]
@@ -1210,9 +1212,11 @@ let handle: Handler = async (req) => {
           ...(backs ? { backlinks: back.get(r.eid) ?? [] } : {}),
         }))
       }
-      // Named entities are read one eager() each — a handful of keyed reads,
-      // against a filter that would otherwise select everything and drag the
-      // whole graph in behind it.
+      // Named entities are read through rowsOf — one statement per component
+      // over the staged set, where an eager() per id cost a statement per
+      // component per id (the digest names ~1,300 in batches of 50: 2.5ms
+      // an id) — against a filter that would otherwise select everything and
+      // drag the whole graph in behind it.
       // A dead entity is gone before this: `only` was built above with the
       // tombstone excluded (buried), so it holds live eids only and eager()
       // always finds a spine with components. Since the D-18866 flip retains a
@@ -1223,11 +1227,7 @@ let handle: Handler = async (req) => {
         // remaining filter means no screen — an empty QUERY would select
         // nothing, so this door states its meaning before parsing.
         let preds = asked
-        let hits = withResults(
-          db,
-          preds,
-          [...only].map((eid) => rowed({ eid, comps: eager(db, eid) })),
-        )
+        let hits = withResults(db, preds, rowsOf(db, [...only]).map(rowed))
           .filter((r) => reveal || listed(r.comps, preds))
           .filter((r) =>
             matchQuery(
