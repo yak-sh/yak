@@ -2507,7 +2507,16 @@ let resume = async (
   // continues — so the transcript shows the words as they were said.
   let path = logFile(eid)
   Deno.mkdirSync(logsDir(), { recursive: true })
-  let prior = Deno.readTextFileSync(path).split('\n')
+  // A log never written — a run minted before this file existed, or one whose
+  // file is gone — is an empty history, not a refusal: the append below
+  // creates it.
+  let text = ''
+  try {
+    text = Deno.readTextFileSync(path)
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e
+  }
+  let prior = text.split('\n')
   if (prior.at(-1) == '') prior.pop()
   let inputs = (prompt ? [{ body: prompt }] : msgs).map((m) => ({
     text: 'id' in m ? `${m.id}: ${m.body}` : m.body,
