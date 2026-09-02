@@ -6,6 +6,12 @@
 // runtime boots. The pinned wrangler runs through npx (WRANGLER overrides the
 // command); the process is its own session so `stop` takes workerd down with
 // it, and proves the port closed before it returns.
+//
+// TWO ports, both free ones: the server's, and the devtools inspector's.
+// Wrangler binds the inspector on a FIXED 9229 unless told otherwise, so a
+// second `wrangler dev` anywhere on the box dies with "Address already in
+// use" — and the test suite runs its files in parallel (bin/test.ts), so
+// every kernel here would be a second one for somebody.
 import { until } from '../../src/testing.ts'
 import { COOKIE, sign } from '../../src/token.ts'
 
@@ -33,6 +39,7 @@ export type Kernel = Awaited<ReturnType<typeof kernel>>
 
 export let kernel = async () => {
   let port = freePort()
+  let inspector = freePort()
   let secret = crypto.randomUUID()
   let state = Deno.makeTempDirSync({ prefix: 'tasks-yak-' })
   let log = Deno.makeTempFileSync({ prefix: 'tasks-yak-', suffix: '.log' })
@@ -47,6 +54,8 @@ export let kernel = async () => {
       'wrangler.toml',
       '--port',
       String(port),
+      '--inspector-port',
+      String(inspector),
       '--ip',
       '127.0.0.1',
       '--persist-to',
