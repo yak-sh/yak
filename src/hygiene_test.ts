@@ -12,11 +12,22 @@ let {
 } = await import('./hygiene.ts')
 let { hash, MODEL, textOf } = await import('./embed.ts')
 let { record } = await import('./telemetry.ts')
+let { ownVector, refreshVector } = await import('./vector.ts')
+// This test process is the sole writer of its own :memory: graph, so it owns
+// the quantize the way the embed sweep's process does (T-22622).
+ownVector()
 let { axes } = await import('./testvec.ts')
 let { slow } = await import('./testing.ts')
 let { assertEquals, assertStringIncludes } = await import('@std/assert')
 
 let uid = () => crypto.randomUUID()
+// The fixture is the owner's hand: a persona's composition and an accepted
+// memory are a person's writes (db.ts apply); an anonymous memory lands
+// proposed and reaches no tier, so the persona would never bloat.
+let jeff = uid()
+apply(db, [{ eid: jeff, name: 'person', comp: {} }])
+let put = (changes: Parameters<typeof apply>[1]) =>
+  apply(db, changes, undefined, jeff)
 let ago = (days: number) =>
   new Date(Date.now() - days * 86_400_000).toISOString()
 
@@ -41,7 +52,7 @@ let homeProject = () =>
 
 let memory = (scope: string, title: string, body: string) => {
   let eid = uid()
-  apply(db, [
+  put([
     { eid, name: 'doc', comp: { title, body } },
     { eid, name: 'memory', comp: { scope } },
   ])
@@ -52,11 +63,15 @@ let memory = (scope: string, title: string, body: string) => {
   return eid
 }
 
-let putVec = (eid: string, text: string, vec: Float32Array) =>
+// knn() reads the last quantization and never writes one (T-22525), so an
+// unquantized write is invisible to similar() until its owner quantizes it.
+let putVec = (eid: string, text: string, vec: Float32Array) => {
   db.prepare(
     `insert into embedding (entity, model, hash, vec)
      values ((select id from entity where eid = ?), ?, ?, ?)`,
   ).run(eid, MODEL, hash(text), new Uint8Array(vec.buffer))
+  refreshVector(db)
+}
 
 Deno.test('the hard scope is explicit about proposals, source edits, and readback', () => {
   assertStringIncludes(HARD_SCOPE, 'MAY:')
@@ -77,7 +92,7 @@ slow(
     putVec(b, textOf('second wording', 'same lesson'), vec)
 
     let persona = uid()
-    apply(db, [
+    put([
       { eid: persona, name: 'doc', comp: { title: 'Large persona', body: '' } },
       { eid: persona, name: 'persona', comp: { home: p } },
       {
