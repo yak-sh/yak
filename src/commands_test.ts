@@ -10,7 +10,8 @@ import {
   run,
   suggest,
 } from './commands.ts'
-import { cascade, inflate, rows } from './client.ts'
+import { cascade, rows } from './client.ts'
+import { inflate } from './client_host.ts'
 import { type Snapshot } from './types.ts'
 import { text } from './verb.ts'
 import { assertEquals, assertThrows } from '@std/assert'

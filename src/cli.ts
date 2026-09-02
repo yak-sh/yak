@@ -44,8 +44,6 @@ import {
   idOf,
   inboxItem,
   inboxRows,
-  inflate,
-  isFile,
   isUnread,
   journalRows,
   jsonAuthored,
@@ -98,13 +96,13 @@ import {
   taskTreeText,
   taskTreeWarning,
   undo,
-  unreadPipe,
   verificationLine,
   verifyTask,
   workClaimMutation,
   WORKING_SET,
   wrapChanges,
 } from './client.ts'
+import { inflate, isFile, unreadPipe } from './client_host.ts'
 import { editChange, parsePropPatch } from './edit.ts'
 import { entityUrl } from './url.ts'
 import { prune, reap, sweep } from './probes.ts'

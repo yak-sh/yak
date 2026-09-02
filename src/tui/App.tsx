@@ -41,7 +41,8 @@ import {
   type SpawnIntent,
   spawnTask,
 } from '../commands.ts'
-import { inflate, sessionFrames, spawnPlan } from '../client.ts'
+import { sessionFrames, spawnPlan } from '../client.ts'
+import { inflate } from '../client_host.ts'
 import {
   applicable,
   has,

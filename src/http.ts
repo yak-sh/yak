@@ -7,17 +7,19 @@ type Fetch = (
   init?: RequestInit,
 ) => Promise<Response>
 
-// The restart-tolerance schedule. An operator (or the test suite pointed at a
-// dead host) overrides it with TASKS_BACKOFF — comma-separated ms, empty string
-// = fail on the first refusal. Read once, guarded: the browser has no Deno and
-// keeps the default rather than throwing on the env read.
-let env = (k: string) => {
+// The process environment as the wire sees it, guarded: the browser has no
+// Deno and reads nothing rather than throwing. client.ts reads its host and
+// identity through this same door, so the wire names no runtime of its own.
+export let env = (k: string) => {
   try {
     return typeof Deno == 'undefined' ? undefined : Deno.env.get(k)
   } catch {
     return undefined
   }
 }
+// The restart-tolerance schedule. An operator (or the test suite pointed at a
+// dead host) overrides it with TASKS_BACKOFF — comma-separated ms, empty string
+// = fail on the first refusal. Read once.
 let schedule = (v = env('TASKS_BACKOFF')) =>
   v == null
     ? [100, 200, 400, 800, 1600, 3200]

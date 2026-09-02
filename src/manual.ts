@@ -5,15 +5,13 @@
 import { commands } from './commands.ts'
 import { providers } from './adapters.ts'
 import {
-  inflate,
   type Param,
   param,
-  separated,
   type Stdin,
-  stdin,
   TASK_TREE_ADOPTION,
   WORKING_SET,
 } from './client.ts'
+import { inflate, separated, stdin } from './client_host.ts'
 import { EDIT_OP, FILTERS, GRAMMAR } from './grammar.ts'
 import { comps, edges, kindOrder, plurals, statuses } from './types.ts'
 import {
