@@ -387,6 +387,17 @@ let COMPILES = [
   // Forward paths: one-to-one reference dereferences compile as correlated
   // indexed lookups. Cover scalar/ref/derived/component leaves, a second hop,
   // and the broken-link NULL semantics where `!=` and absence still hold.
+  // an eid equality over a reference column is an int comparison against a
+  // spine lookup (refEq), any-of and `!=` included; a range or an empty part
+  // stays on the text road
+  '.task.project=p1',
+  '.task.project=p1,nope',
+  '.task.project=nope',
+  '.task.project!=p1',
+  '.task.project=p1,',
+  '.comment.target=e1',
+  '.comment.target=e1,e2',
+  '.comment.target!=e1',
   '.task.project.doc.title=a project',
   '.task.project.doc.title~=PROJECT',
   '.task.project.doc.title!=other',

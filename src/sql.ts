@@ -424,6 +424,53 @@ let scalar = (
   return null
 }
 
+// An eid equality over a REFERENCE column compares int to int: the operand is
+// looked up on the spine once (`= (select id …)`, which the planner drives
+// through the column's own index — an `in (select …)` it does not) and
+// presence reads the int column itself. Projecting the column to its eid
+// (col()) compares text per row through a correlated lookup no index can
+// answer — it scanned the whole spine, 145ms for `.comment.target=X` against
+// an empty answer. Any-of is an OR of those equalities (a multi-index OR);
+// `!=` keeps the matcher's reading of an absent ref (eq(undefined, v) is
+// false, so `!=` holds). A range or an empty list part is not an eid and takes
+// the text road as before; so does `~=`.
+let refEqs = (p: Pred) =>
+  isRef(p.comp, p.prop) && p.prop != 'eid' &&
+  (p.op == EXISTS || p.op == '' || p.op == '!') &&
+  !p.value.includes('..') &&
+  (p.value == '' || p.value.split(',').every(Boolean))
+let refEq = (p: Pred): Sql => {
+  let c = `"${p.comp}"."${p.prop}"`
+  if (p.op == EXISTS || (p.op == '!' && p.value == '')) {
+    return { sql: `${c} is not null`, params: [] }
+  }
+  if (p.value == '') return { sql: `${c} is null`, params: [] }
+  let eids = p.value.split(',')
+  let hit = `(${
+    eids.map(() => `${c} = (select id from entity where eid = ?)`).join(' or ')
+  })`
+  return p.op == '!'
+    ? { sql: `(${c} is null or not ${hit})`, params: eids }
+    : { sql: hit, params: eids }
+}
+
+// A path predicate can only hold on a row that WEARS its root component (an
+// absent root reads as undefined, and every op but `!=` and absence misses
+// it). Saying so in SQL — `"claim"."entity" is not null` beside the nested
+// lookup — is what lets the planner drive from the root's table rather than
+// scan the spine and probe per row: `.claim.session!` went from 104ms to
+// sub-ms. It is also the narrowing a DECLINED path keeps (build's drop mode),
+// so a path the compiler cannot say still reads only the root's rows.
+let needsRoot = (p: Pred) =>
+  !!p.at?.length && p.comp != 'entity' && (
+    p.op == EXISTS || CMP[p.op] != null ||
+    ((p.op == '' || p.op == '~') && p.value != '')
+  )
+let rooted = (p: Pred, s: Sql): Sql => ({
+  sql: `("${p.comp}"."entity" is not null and ${s.sql})`,
+  params: s.params,
+})
+
 // A forward path is a chain of one-to-one reference lookups. Component rows
 // and reference columns are both indexed by their integer owner/target ids, so
 // nested correlated scalar subqueries walk the chain without widening the
@@ -481,7 +528,7 @@ let pathSql = (p: Pred, now: number): Sql | null => {
     c = `(select "${a}"."${leaf.prop}" from ${source(leaf.comp)} as "${a}"` +
       ` where "${a}"."entity" = ${target})`
   }
-  return scalar(
+  let s = scalar(
     { ...p, comp: leaf.comp, prop: leaf.prop },
     c,
     tagOf(
@@ -491,6 +538,7 @@ let pathSql = (p: Pred, now: number): Sql | null => {
     now,
     true,
   )
+  return s && needsRoot(p) ? rooted(p, s) : s
 }
 
 let one = (p: Pred, now: number): Sql | null => {
@@ -508,6 +556,7 @@ let one = (p: Pred, now: number): Sql | null => {
   if (p.rev) return revSql(p, now) // a reverse hop: a correlated EXISTS/count
   if (p.at) return pathSql(p, now)
   if (!known(p.comp, p.prop)) return null
+  if (refEqs(p)) return refEq(p)
   if (!p.prop) {
     return {
       sql: `${col(p.comp, 'eid')} is ${
@@ -550,8 +599,11 @@ let build = (
   for (let p of preds) {
     let s = one(p, now)
     if (!s) {
-      if (drop) continue // partial narrowing: refine this pred in JS
-      return null
+      if (!drop) return null
+      // partial narrowing: refine this pred in JS — over the root's rows
+      // when it is a path, over everything otherwise
+      if (!needsRoot(p)) continue
+      s = { sql: `"${p.comp}"."entity" is not null`, params: [] }
     }
     parts.push(s)
     kept.push(p)
