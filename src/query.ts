@@ -309,8 +309,9 @@ let sessionTwin = (owners: string[]) =>
 // bare filter of a different concept already owns it, so the newcomer is
 // reached only through its component (`.fork.from`, `.accept.body`). The fork
 // point yields bare `.from` to mail's sender; acceptance criteria yield bare
-// `.body` to the shipped doc-body filter.
-let bareShy = new Set(['fork.from', 'accept.body'])
+// `.body` to the shipped doc-body filter; an edge's endpoints (D-23820) yield
+// `.from` and `.to` the same way — `.edge.from=X` is the reverse-index read.
+let bareShy = new Set(['fork.from', 'accept.body', 'edge.from', 'edge.to'])
 
 // These associations already had one bare filter across several suffixed
 // columns. Keep that reading after the columns take their canonical names;

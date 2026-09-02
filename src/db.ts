@@ -1006,6 +1006,21 @@ export let derived = [
   // derived DDL quotes the reserved "from" column name and plants the auto index
   // on the reference for the shared-prefix walk.
   'fork',
+  // An edge entity (D-23820): {from, to} both FK cascade — the notice shape
+  // twice over, so it derives; its natures are bare tags. Additive beside
+  // `dependency` until T-23821 retires the god-table.
+  'edge',
+  'requires',
+  'contains',
+  'reads',
+  'about',
+  'supervises',
+  'delegates',
+  'supersedes',
+  'worked',
+  'references',
+  'wants',
+  'satisfies',
 ]
 
 // Insert a bare entity spine — the eid, and nothing else. num is NOT minted
@@ -1021,8 +1036,10 @@ let spine = (db: Sql, eid: string) =>
 // The kinds that get a human number. Cheap/bulk/ephemeral kinds stay out:
 // `entry` (log lines) and `wake` (one per pace cycle, read only by kind=wake and
 // self-replaced per actor) are never typed by a human, so a num is pure overload.
-// Their spines carry a NULL num; every other kind is numbered (T-3684).
-let unnumbered = new Set(['entry', 'wake'])
+// Their spines carry a NULL num; every other kind is numbered (T-3684). An
+// `edge` (D-23820) is bulk the same way — tens of thousands, named by what
+// they join, never typed — so it stays out too.
+let unnumbered = new Set(['entry', 'wake', 'edge'])
 export let numbered = (kind: string) => !unnumbered.has(kind)
 
 // Assign the next human number to a newly-created entity — the allocator

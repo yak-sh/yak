@@ -4944,8 +4944,8 @@ Deno.test('num moved off first-touch: a new task still mints the next number', (
   assertEquals(na > 0 && nb == na + 1, true) // consecutive, minted after comps landed
 })
 
-Deno.test('entry and wake are the num-less kinds', () => {
-  let numless = new Set(['entry', 'wake'])
+Deno.test('entry, wake and edge are the num-less kinds', () => {
+  let numless = new Set(['entry', 'wake', 'edge'])
   for (let k of kindOrder) assertEquals(numbered(k), !numless.has(k))
 })
 

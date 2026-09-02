@@ -130,6 +130,7 @@ export let sessionComps: Record<string, Record<string, PropType>> = {
   reasoning: {},
   recalled: {
     source: { eid: 'entry', death: 'keep' },
+    at: 'time',
   },
   opaque: {
     format: 'text',
@@ -379,6 +380,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   reasoning: {},
   recalled: {
     source: { eid: 'entry', death: 'keep' },
+    at: 'time',
   },
   opaque: {
     format: 'text',
@@ -555,6 +557,21 @@ export let comps: Record<string, Record<string, PropType>> = {
     person: { eid: 'person', death: 'cascade' },
     role: { enum: ['owner', 'editor', 'viewer'] },
   },
+  edge: {
+    from: { eid: 'entity', death: 'cascade' },
+    to: { eid: 'entity', death: 'cascade' },
+  },
+  requires: {},
+  contains: {},
+  reads: {},
+  about: {},
+  supervises: {},
+  delegates: {},
+  supersedes: {},
+  worked: {},
+  references: {},
+  wants: {},
+  satisfies: {},
 }
 
 // Old spellings that still resolve — the compatibility promise in
@@ -834,6 +851,7 @@ export let kindOrder = [
   'person',
   'persona',
   'model',
+  'edge',
   'attachment',
   'doc',
   'email',

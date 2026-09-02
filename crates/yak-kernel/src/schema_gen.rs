@@ -803,7 +803,8 @@ pub static SCHEMA: &[SchemaOp] = &[
   );"#),
     SchemaOp::Exec(r#"create table if not exists "recalled" (
     entity integer primary key references entity(id),
-    "source" integer
+    "source" integer,
+    "at" text
   );"#),
     SchemaOp::Exec(r#"create table if not exists "spawn" (
     entity integer primary key references entity(id),
@@ -939,6 +940,44 @@ pub static SCHEMA: &[SchemaOp] = &[
     entity integer primary key references entity(id),
     "from" integer references entity(id)
   );"#),
+    SchemaOp::Exec(r#"create table if not exists "edge" (
+    entity integer primary key references entity(id),
+    "from" integer references entity(id),
+    "to" integer references entity(id)
+  );"#),
+    SchemaOp::Exec(r#"create table if not exists "requires" (
+    entity integer primary key references entity(id)
+  );"#),
+    SchemaOp::Exec(r#"create table if not exists "contains" (
+    entity integer primary key references entity(id)
+  );"#),
+    SchemaOp::Exec(r#"create table if not exists "reads" (
+    entity integer primary key references entity(id)
+  );"#),
+    SchemaOp::Exec(r#"create table if not exists "about" (
+    entity integer primary key references entity(id)
+  );"#),
+    SchemaOp::Exec(r#"create table if not exists "supervises" (
+    entity integer primary key references entity(id)
+  );"#),
+    SchemaOp::Exec(r#"create table if not exists "delegates" (
+    entity integer primary key references entity(id)
+  );"#),
+    SchemaOp::Exec(r#"create table if not exists "supersedes" (
+    entity integer primary key references entity(id)
+  );"#),
+    SchemaOp::Exec(r#"create table if not exists "worked" (
+    entity integer primary key references entity(id)
+  );"#),
+    SchemaOp::Exec(r#"create table if not exists "references" (
+    entity integer primary key references entity(id)
+  );"#),
+    SchemaOp::Exec(r#"create table if not exists "wants" (
+    entity integer primary key references entity(id)
+  );"#),
+    SchemaOp::Exec(r#"create table if not exists "satisfies" (
+    entity integer primary key references entity(id)
+  );"#),
     SchemaOp::AddColumn { table: "project", col: "color", sql: r#"alter table project add column "color" text"# },
     SchemaOp::AddColumn { table: "accept", col: "body", sql: r#"alter table accept add column "body" text"# },
     SchemaOp::AddColumn { table: "venture", col: "phase", sql: r#"alter table venture add column "phase" text"# },
@@ -957,6 +996,7 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "worktree", col: "branch", sql: r#"alter table worktree add column "branch" text"# },
     SchemaOp::AddColumn { table: "worktree", col: "base_revision", sql: r#"alter table worktree add column "base_revision" text"# },
     SchemaOp::AddColumn { table: "recalled", col: "source", sql: r#"alter table recalled add column "source" integer"# },
+    SchemaOp::AddColumn { table: "recalled", col: "at", sql: r#"alter table recalled add column "at" text"# },
     SchemaOp::AddColumn { table: "spawn", col: "provider", sql: r#"alter table spawn add column "provider" text"# },
     SchemaOp::AddColumn { table: "spawn", col: "model", sql: r#"alter table spawn add column "model" text"# },
     SchemaOp::AddColumn { table: "spawn", col: "effort", sql: r#"alter table spawn add column "effort" text"# },
@@ -1013,6 +1053,8 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "anchor", col: "start", sql: r#"alter table anchor add column "start" real"# },
     SchemaOp::AddColumn { table: "anchor", col: "end", sql: r#"alter table anchor add column "end" real"# },
     SchemaOp::AddColumn { table: "fork", col: "from", sql: r#"alter table fork add column "from" integer references entity(id)"# },
+    SchemaOp::AddColumn { table: "edge", col: "from", sql: r#"alter table edge add column "from" integer references entity(id)"# },
+    SchemaOp::AddColumn { table: "edge", col: "to", sql: r#"alter table edge add column "to" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "task", col: "project", sql: r#"alter table "task" add column project integer references entity(id)"# },
     SchemaOp::AddColumn { table: "task", col: "assignee", sql: r#"alter table "task" add column assignee integer references entity(id)"# },
     SchemaOp::AddColumn { table: "task", col: "domain", sql: r#"alter table "task" add column domain text"# },
@@ -1148,5 +1190,7 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::Exec(r#"create unique index if not exists member_space_person on "member" ("space", "person");"#),
     SchemaOp::Exec(r#"create index if not exists member_space on "member" ("space");"#),
     SchemaOp::Exec(r#"create index if not exists member_person on "member" ("person");"#),
+    SchemaOp::Exec(r#"create index if not exists edge_from on "edge" ("from");"#),
+    SchemaOp::Exec(r#"create index if not exists edge_to on "edge" ("to");"#),
     SchemaOp::Exec(r#"drop index if exists subscription_one"#),
 ];

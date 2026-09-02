@@ -376,3 +376,70 @@ struct Effect {
     #[stamped]
     lease_expiry: Time,
 }
+
+// An edge is an ENTITY (D-23820): `edge{from, to}` is the one nature-agnostic
+// shape — two entity refs, read `from <nature> to`. Both cascade, so deleting
+// either endpoint reaps the edge through this comp's own auto indexes, with no
+// nature-aware walk; the comp never names a nature, so it never becomes the
+// god-table `dependency` was. Additive beside `dependency` until T-23821
+// retires it. kind_rank ahead of doc: an edge that grows a title is still an
+// edge.
+#[derive(Comp)]
+#[comp(plugin = "kernel", rank = 1100, kind_rank = 345)]
+struct Edge {
+    #[col(eid = "entity", death = "cascade")]
+    from: Ref,
+    #[col(eid = "entity", death = "cascade")]
+    to: Ref,
+}
+
+// The natures — one tag comp per relation, present tense (a live relationship,
+// D-23820): the `dependency.type` enum as comps nothing enumerates, so a new
+// nature is a new comp and `edge` never changes. NOT in kindOrder — the edge
+// is the kind, the nature is what it says. `recalled` is not here: it
+// re-sorted to a plain event comp on the recalling entity (T-23823,
+// sessions.rs).
+#[derive(Comp)]
+#[comp(plugin = "kernel", rank = 1101)]
+struct Requires {}
+
+#[derive(Comp)]
+#[comp(plugin = "kernel", rank = 1102)]
+struct Contains {}
+
+#[derive(Comp)]
+#[comp(plugin = "kernel", rank = 1103)]
+struct Reads {}
+
+#[derive(Comp)]
+#[comp(plugin = "kernel", rank = 1104)]
+struct About {}
+
+#[derive(Comp)]
+#[comp(plugin = "kernel", rank = 1105)]
+struct Supervises {}
+
+#[derive(Comp)]
+#[comp(plugin = "kernel", rank = 1106)]
+struct Delegates {}
+
+#[derive(Comp)]
+#[comp(plugin = "kernel", rank = 1107)]
+struct Supersedes {}
+
+#[derive(Comp)]
+#[comp(plugin = "kernel", rank = 1108)]
+struct Worked {}
+
+// `referenced` in the edge list; present tense as a nature.
+#[derive(Comp)]
+#[comp(plugin = "kernel", rank = 1109)]
+struct References {}
+
+#[derive(Comp)]
+#[comp(plugin = "kernel", rank = 1110)]
+struct Wants {}
+
+#[derive(Comp)]
+#[comp(plugin = "kernel", rank = 1111)]
+struct Satisfies {}

@@ -21,6 +21,9 @@
     }
   },
   "comps": {
+    "about": {
+      "rank": 1104
+    },
     "alias": {
       "rank": 750,
       "kind_rank": 380,
@@ -117,6 +120,9 @@
         "at": "time"
       }
     },
+    "contains": {
+      "rank": 1102
+    },
     "created": {
       "rank": 830,
       "stamped_rank": 20,
@@ -157,12 +163,29 @@
         }
       }
     },
+    "delegates": {
+      "rank": 1106
+    },
     "doc": {
       "rank": 10,
       "kind_rank": 360,
       "cols": {
         "title": "text",
         "body": "body"
+      }
+    },
+    "edge": {
+      "rank": 1100,
+      "kind_rank": 345,
+      "cols": {
+        "from": {
+          "eid": "entity",
+          "death": "cascade"
+        },
+        "to": {
+          "eid": "entity",
+          "death": "cascade"
+        }
       }
     },
     "effect": {
@@ -297,6 +320,9 @@
         }
       }
     },
+    "reads": {
+      "rank": 1103
+    },
     "recall": {
       "rank": 820,
       "stamped_rank": 220,
@@ -325,12 +351,27 @@
         "hash": "text"
       }
     },
+    "references": {
+      "rank": 1109
+    },
+    "requires": {
+      "rank": 1101
+    },
+    "satisfies": {
+      "rank": 1111
+    },
     "setting": {
       "rank": 230,
       "cols": {
         "key": "text",
         "value": "text"
       }
+    },
+    "supersedes": {
+      "rank": 1107
+    },
+    "supervises": {
+      "rank": 1105
     },
     "updated": {
       "rank": 840,
@@ -348,6 +389,12 @@
           "death": "keep"
         }
       }
+    },
+    "wants": {
+      "rank": 1110
+    },
+    "worked": {
+      "rank": 1108
     }
   },
   "renames": {

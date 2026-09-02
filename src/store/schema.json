@@ -69,7 +69,7 @@
   },
   {
     "kind": "exec",
-    "sql": "create table if not exists \"recalled\" (\n    entity integer primary key references entity(id),\n    \"source\" integer\n  );"
+    "sql": "create table if not exists \"recalled\" (\n    entity integer primary key references entity(id),\n    \"source\" integer,\n    \"at\" text\n  );"
   },
   {
     "kind": "exec",
@@ -174,6 +174,54 @@
   {
     "kind": "exec",
     "sql": "create table if not exists \"fork\" (\n    entity integer primary key references entity(id),\n    \"from\" integer references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"edge\" (\n    entity integer primary key references entity(id),\n    \"from\" integer references entity(id),\n    \"to\" integer references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"requires\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"contains\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"reads\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"about\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"supervises\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"delegates\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"supersedes\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"worked\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"references\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"wants\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"satisfies\" (\n    entity integer primary key references entity(id)\n  );"
   },
   {
     "kind": "addColumn",
@@ -282,6 +330,12 @@
     "table": "recalled",
     "col": "source",
     "sql": "alter table recalled add column \"source\" integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "recalled",
+    "col": "at",
+    "sql": "alter table recalled add column \"at\" text"
   },
   {
     "kind": "addColumn",
@@ -618,6 +672,18 @@
     "table": "fork",
     "col": "from",
     "sql": "alter table fork add column \"from\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "edge",
+    "col": "from",
+    "sql": "alter table edge add column \"from\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "edge",
+    "col": "to",
+    "sql": "alter table edge add column \"to\" integer references entity(id)"
   },
   {
     "kind": "addColumn",
@@ -1237,6 +1303,14 @@
   {
     "kind": "exec",
     "sql": "create index if not exists member_person on \"member\" (\"person\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists edge_from on \"edge\" (\"from\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists edge_to on \"edge\" (\"to\");"
   },
   {
     "kind": "exec",

@@ -109,6 +109,9 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'app.space',
       'member.space',
       'member.person',
+      // an edge dies with either endpoint (D-23820): the reverse-index reap
+      'edge.from',
+      'edge.to',
     ]),
   )
   assertEquals(

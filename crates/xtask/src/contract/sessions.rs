@@ -335,12 +335,15 @@ struct Cancel {
 struct Reasoning {}
 
 // Memory auto-recall (T-17306): the memories surfaced for `source`. No message
-// facet, so recall cannot recall itself.
+// facet, so recall cannot recall itself. A plain event comp, not an edge
+// nature (T-23823, D-23820): `at` is the recall's own clock, wire-writable the
+// way `decided.at` is so history can carry the moment it happened.
 #[derive(Comp)]
 #[comp(plugin = "sessions", rank = 520, log)]
 struct Recalled {
     #[col(eid = "entry", death = "keep")]
     source: Ref,
+    at: Time,
 }
 
 // Same-provider replay evidence only.
