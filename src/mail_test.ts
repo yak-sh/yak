@@ -6,6 +6,7 @@ Deno.env.set('DB_PATH', ':memory:')
 let { apply } = await import('./db.ts')
 let { open } = await import('./store/sqlite.ts')
 let { db } = await import('./live_db.ts')
+let { sentences } = await import('./edge.ts')
 let { addressOf, FANOUT_PENDING, fanout, mailed, named, rfcId } = await import(
   './mail.ts'
 )
@@ -270,11 +271,11 @@ let mintedFor = (c: string) =>
   db.prepare(`
     select o.eid as eid, s."from" as "from",
       ${refEid('s.target')} as target, ${refEid('dl."to"')} as deliver_to
-    from dependency d
+    from (${sentences('about')}) d
     join mail s on s.entity = d.parent
     join entity o on o.id = s.entity
     left join deliver dl on dl.entity = s.entity
-    where d.type = 'about' and d.child = ${idOf}
+    where d.child = ${idOf}
   `).all(c) as Record<string, string>[]
 
 Deno.test('fanout: mints to the project REFERENCE, once, with the receipt', () => {

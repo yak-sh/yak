@@ -8,6 +8,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { type Change } from './types.ts'
 import { on } from './effects.ts'
+import { sentences } from './edge.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 // The fixer spawns the in-repo `fake` provider, so no phase-2 test launches a
@@ -86,7 +87,8 @@ Deno.test('a single break files one keyed, pointed, open ticket', () => {
 
   // the pointer: an about edge to the broken entity, and its id in the body
   let edge = db.prepare(
-    `select 1 from dependency where parent = ${idOf} and type = 'about' and child = ${idOf}`,
+    `select 1 from (${sentences('about')}) d
+      where d.parent = ${idOf} and d.child = ${idOf}`,
   ).get(mine[0].eid, eid)
   assert(edge, 'bug points at the broken entity')
   let body = (db.prepare(`select body from doc_value where ${OWNED}`)

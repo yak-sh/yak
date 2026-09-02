@@ -6,6 +6,7 @@
 Deno.env.set('DB_PATH', ':memory:')
 let { apply } = await import('./db.ts')
 let { db } = await import('./live_db.ts')
+let { sentences } = await import('./edge.ts')
 let {
   bounds,
   CADENCE,
@@ -294,8 +295,8 @@ slow(
               (select eid from entity where id = t.project) as project,
               doc.title from task t
        join doc_value doc on doc.entity = t.entity
-       join dependency dep on dep.parent = t.entity
-      where dep.type = 'about' and dep.child = (select id from entity where eid = ?)`,
+       join (${sentences('about')}) dep on dep.parent = t.entity
+      where dep.child = (select id from entity where eid = ?)`,
     ).get(s.eid) as
       | { status: string; project: string; title: string }
       | undefined
@@ -425,8 +426,8 @@ slow(
     // Exactly ONE consider task about the first session, hit-counted to 2.
     let hits = db.prepare(
       `select fd.hits as hits from finding fd
-       join dependency dep on dep.parent = fd.entity
-      where dep.type = 'about' and dep.child = (select id from entity where eid = ?)`,
+       join (${sentences('about')}) dep on dep.parent = fd.entity
+      where dep.child = (select id from entity where eid = ?)`,
     ).all(s.eid) as { hits: number }[]
     assertEquals(hits.length, 1)
     assertEquals(hits[0].hits, 2)
@@ -450,8 +451,8 @@ slow(
     await dreamComb(noop, reply as never)(knock(d))
     // No consider task filed about this session — the finding named closed work.
     let n = db.prepare(
-      `select count(*) as n from dependency dep
-      where dep.type = 'about' and dep.child = (select id from entity where eid = ?)
+      `select count(*) as n from (${sentences('about')}) dep
+      where dep.child = (select id from entity where eid = ?)
         and exists (select 1 from task t where t.entity = dep.parent)`,
     ).get(s.eid) as { n: number }
     assertEquals(n.n, 0)

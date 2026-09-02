@@ -68,7 +68,7 @@ import {
 } from './config.ts'
 import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'
 import { FILTERS, type Vocab, vocabOps } from './store/vocab.ts'
-import { edgeEid, natureOf, natures, sentences, typeOf } from './edge.ts'
+import { edgeEid, links, natureOf, natures, sentences, typeOf } from './edge.ts'
 import { indexesFor } from './index.ts'
 import {
   bodyCols,
@@ -1176,11 +1176,19 @@ let pin = (
      values (${ID}, ${ID}, ?, ?, ?, ?)`,
   ).run(card, canvas, x, y, w, h)
 
-let link = (db: Sql, parent: string, type: string, child: string) =>
+// A demo sentence, said the way every writer says one: the edge ENTITY named
+// by edgeEid, wearing its two ends and its nature (edge.ts).
+let link = (db: Sql, parent: string, type: string, child: string) => {
+  let nature = natureOf[type]
+  let eid = edgeEid(parent, nature, child)
+  spine(db, eid)
   prep(
     db,
-    `insert into dependency (parent, type, child) values (${ID}, ?, ${ID})`,
-  ).run(parent, type, child)
+    `insert into edge (entity, "from", "to") values (${ID}, ${ID}, ${ID})`,
+  )
+    .run(eid, parent, child)
+  prep(db, `insert into ${sqlName(nature)} (entity) values (${ID})`).run(eid)
+}
 
 // A handful of neutral demo rows — a board containing tasks, one edge of
 // each type, and a root canvas showing it as a Board plus one task
@@ -4431,29 +4439,35 @@ let storedEdge = (
   return nature ? { ...row!, nature } : undefined
 }
 
-// The dependency store's row for this sentence, with its listing order —
-// undefined when the store does not hold it at all.
-let storedDep = (db: Sql, from: string, type: string, to: string) =>
-  prep(
-    db,
-    `select ord from dependency
-     where parent = ${spineId} and type = ? and child = ${spineId}`,
-  ).get(from, type, to) as { ord: number | null } | undefined
+// The stored sentence's own row, with its listing order — undefined when the
+// store does not hold that sentence at all. Read from `edge`, by the eid the
+// sentence derives: the store that answers this is the one that holds it.
+let storedSentence = (db: Sql, eid: string) =>
+  prep(db, `select ord from edge where entity = ${spineId}`)
+    .get(eid) as { ord: number | null } | undefined
 
-// Two edge stores, one write (T-23825). While `dependency` is still the live
-// edge store, every edge lands in BOTH homes so readers on either side agree:
-// a `dependency{type, child}` write on P also mints the entity
-// edgeEid(P, nature, child) wearing edge{from: P, to: child} + the nature
-// tag, and its `gone: true` unlink deletes that entity; a native edge write
-// (edge + nature on one eid) also lands the dependency row, and deleting an
-// edge entity drops it. A claim's `worked` edge rides the same way, since the
-// claim rule inserts its row directly. Only the batch's own changes translate,
-// never this pass's output, so the two directions cannot feed each other. The
-// mint mirrors the dependency rule's tolerance — an endpoint that neither
-// exists nor arrives in this batch drops the edge alone rather than refusing
-// the batch. The WHOLE pass, with `natureOf`, goes when T-23821 retires the
-// dependency table.
-let dualEdge = (db: Sql, changes: Change[]): Change[] => {
+// One edge store, one door (T-32552). `dependency{type, child, ord, gone}` is
+// the WIRE's spelling for a sentence and nothing else now: this pass lowers it,
+// at apply()'s door, into the only write there is — the entity
+// edgeEid(P, nature, child) wearing edge{from: P, to: child} + the nature tag,
+// or that entity's comps taken away for `gone: true`. Nothing writes the
+// `dependency` table; snapshot() and every reader project the wire's shape back
+// out of the sentences (edge.ts `sentences()`), so no client moves.
+//
+// The lowering is a WHOLE-BATCH pass rather than a step inside admitted(),
+// because a sentence may name an endpoint that only this batch mints — one
+// change cannot know that alone. It is also two-way: a native `edge` write
+// CASTS the `dependency` change a live cache indexes by (live.ts). That cast
+// rides `extra`, beside the claim's `worked` echo and every other server-
+// derived change — a projection the server computed is not a second saying by
+// the writer, so it answers to no rule (a persona's tiers are the owner's, and
+// the backfill re-minting one must not be refused as if an agent had asked).
+// Only the batch's own changes translate, never this pass's output, so the two
+// directions cannot feed each other. The mint mirrors the dependency rule's
+// tolerance — an endpoint that neither exists nor arrives in this batch drops
+// the edge alone rather than refusing the batch. The `dependency` half of this
+// pass, with `natureOf`, goes when T-23821 retires the wire spelling.
+let dualEdge = (db: Sql, changes: Change[], cast: Change[]): Change[] => {
   let dead = graveOf(db)
   let inBatch = new Set(
     changes.filter((c) => c.comp != null).map((c) => c.eid),
@@ -4532,18 +4546,18 @@ let dualEdge = (db: Sql, changes: Change[]): Change[] => {
           `edge ${shortId(eid)} eid must be edgeEid(from, ${nature}, to)`,
         )
       }
-      // An echo that would write nothing is not written: the row already
+      // An echo that would say nothing is not cast: the sentence already
       // stands, so re-stating it only journals a write that did not happen
       // — and the dependency rule reads a repeat as a fresh link (a
       // persona's `contains` is the owner's move, refused for anyone else).
-      // The backfill leans on this: it re-mints edge entities over rows that
-      // are already there.
-      let row = storedDep(db, String(from), typeOf[nature], String(to))
+      // The backfill leans on this: it re-mints edge entities over sentences
+      // that are already there.
+      let said = storedSentence(db, eid)
       // A MOVED listing order is the one case where re-stating a stored
-      // sentence is a write and not a repeat — the echo patches the row's ord.
+      // sentence is news and not a repeat — the echo carries the new ord.
       let ord = 'ord' in comp ? (comp.ord ?? null) : undefined
-      if (!row || (ord !== undefined && ord !== (row.ord ?? null))) {
-        out.push({
+      if (!said || (ord !== undefined && ord !== (said.ord ?? null))) {
+        cast.push({
           eid: String(from),
           name: 'dependency',
           comp: {
@@ -4556,7 +4570,7 @@ let dualEdge = (db: Sql, changes: Change[]): Change[] => {
     } else if (name == 'entity' && comp == null) {
       let edge = storedEdge(db, eid)
       if (edge) {
-        out.push({
+        cast.push({
           eid: edge.from,
           name: 'dependency',
           comp: { type: typeOf[edge.nature], child: edge.to, gone: true },
@@ -5763,7 +5777,7 @@ export let apply = (
     if (hasSources()) changes = graduate(db, changes, workClaim?.source)
     // After graduation, so a claim on a just-hydrated session finds its
     // `worked` endpoint in the batch.
-    changes = dualEdge(db, changes)
+    changes = dualEdge(db, changes, extra)
     changes = casBodies(db, changes)
     // A log entry is an append-only fact. Every request/content facet is
     // born in the same batch as entry membership and can never be revised,
@@ -5840,11 +5854,12 @@ export let apply = (
       let { eid, name, was } = change
       let comp = change.comp
       // An edge is a TRIPLE, not a row keyed by eid: the comp names the
-      // whole (parent=eid, type, child) sentence, so linking is
-      // insert-or-ignore, and unlinking says the same sentence with
-      // gone: true — comp: null could never name WHICH edge to drop.
-      // Both endpoints must be live; a bad edge (unknown type, missing
-      // spine) drops alone in its savepoint like any malformed create.
+      // whole (parent=eid, type, child) sentence, and unlinking says the same
+      // sentence with gone: true — comp: null could never name WHICH edge to
+      // drop. dualEdge lowered it into the edge entity already; the rules the
+      // wire spelling answers to are still said here, at the door the wire
+      // knocks on. Both endpoints must be live; a bad edge (unknown type,
+      // missing spine) drops alone rather than refusing the batch.
       if (name == 'dependency') {
         if (!comp || dead.get(eid) || dead.get(String(comp.child))) {
           continue
@@ -5874,54 +5889,12 @@ export let apply = (
               `links it.`,
           )
         }
-        // Endpoints are int ids in storage; both spines exist (checked above).
-        let pid = toId(db, eid)
-        let cid = toId(db, String(comp.child))
-        // The narrowed comp, captured for the closure's benefit.
-        let edge = comp
-        try {
-          db.transaction(() => {
-            if (edge.gone) {
-              prep(
-                db,
-                `
-              delete from dependency
-              where parent = ? and type = ? and child = ?
-            `,
-              ).run(pid, String(edge.type), cid)
-            } else if ('ord' in edge) {
-              // An edge carrying a listing order create-or-PATCHes its ord:
-              // re-linking the same sentence with a new ord sets it (an
-              // editable field, not a second edge). Absent ord (the else)
-              // leaves an existing edge's ord untouched.
-              prep(
-                db,
-                `
-              insert into dependency (parent, type, child, ord)
-              values (?, ?, ?, ?)
-              on conflict(parent, type, child) do update set ord = excluded.ord
-            `,
-              ).run(
-                pid,
-                String(edge.type),
-                cid,
-                (edge.ord ?? null) as number | null,
-              )
-            } else {
-              prep(
-                db,
-                `
-              insert or ignore into dependency (parent, type, child)
-              values (?, ?, ?)
-            `,
-              ).run(pid, String(edge.type), cid)
-            }
-          })
-          touched.add(eid) // a moved edge is news at both ends
-          touched.add(String(comp.child))
-        } catch (e) {
-          console.warn(`sync: edge for ${eid} dropped —`, e)
-        }
+        // Nothing left to write: dualEdge above already lowered this sentence
+        // into its edge entity, which is the only edge store (T-32552). What
+        // remains is the change itself — journalled and cast, so a catch-up
+        // client and a live one hear the sentence in the spelling they read.
+        touched.add(eid) // a moved edge is news at both ends
+        touched.add(String(comp.child))
         continue
       }
       let cols = server ? owned[name] ?? colsOf(db, name) : colsOf(db, name)
@@ -6024,19 +5997,13 @@ export let apply = (
         }
         // A lease is temporary; having done the work is not. The edge is the
         // durable, indexed truth used by Session Tiles — the ENTITY, which
-        // dualEdge mints for this claim; the row lands beside it in the same
-        // transaction while both stores stand (T-23821 takes it). What decides
-        // the echo is therefore the SENTENCE's first landing, so every live
-        // cache learns the relation without a fetch or a journal read.
+        // dualEdge mints for this claim. What decides the echo is the
+        // SENTENCE's first landing, so every live cache learns the relation
+        // without a fetch or a journal read.
         let session = String(comp.session)
         let sentence = edgeEid(session, 'worked', eid)
         let first = !prep(db, `select 1 from edge where entity = ${spineId}`)
           .get(sentence)
-        prep(
-          db,
-          `insert or ignore into dependency (parent, type, child)
-           values (?, 'worked', ?)`,
-        ).run(toId(db, session), toId(db, eid))
         if (first) {
           touched.add(session)
           touched.add(eid)
@@ -6318,10 +6285,6 @@ export let apply = (
               }
             }
           }
-          prep(db, 'delete from dependency where parent = ? or child = ?').run(
-            did,
-            did,
-          )
         }
         for (let d of doomed) {
           // The num rides into the grave: a dead entity keeps its name
@@ -8791,7 +8754,7 @@ export let projectReachability = (db: Sql): ProjectReachability => {
     `with recursive rooted(entity) as (
        select ${sqlName(ownerCol)} from project
        union
-       select d.child from (${sentences()}) d join rooted r on r.entity = d.parent
+       select d.child from (${links}) d join rooted r on r.entity = d.parent
      ), corpus(entity) as (
        ${corpus}
      )

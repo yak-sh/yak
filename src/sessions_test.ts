@@ -17,6 +17,7 @@ import {
   assertStringIncludes,
   assertThrows,
 } from '@std/assert'
+import { sentences } from './edge.ts'
 import { existsSync } from 'node:fs'
 import { type Change } from './types.ts'
 import { adapters } from './adapters.ts'
@@ -246,10 +247,9 @@ let refusals = (target: string) =>
 // Model attention is the transcript entry's reference to the graph item.
 let told = (eid: string) =>
   !!db.prepare(
-    `select 1 from dependency d
+    `select 1 from (${sentences('referenced')}) d
      join entry x on x.entity = d.parent
-     where d.type = 'referenced'
-       and d.child = (select id from entity where eid = ?)`,
+     where d.child = (select id from entity where eid = ?)`,
   ).get(eid)
 
 // A session row + log file exactly as a dead child would have left them.

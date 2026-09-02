@@ -55,6 +55,7 @@ import { type Change, edges, type Snapshot } from './types.ts'
 import { slow } from './testing.ts'
 import { VERSION } from './version.ts'
 import { sha } from './sha.ts'
+import { edgeEid } from './edge.ts'
 
 let transcript = (...events: unknown[]) => {
   let path = Deno.makeTempFileSync()
@@ -1857,12 +1858,11 @@ slow(
     ])
     apply(db, [{ eid: task, name: 'claim', comp: { session } }])
     apply(db, [{ eid: task, name: 'claim', comp: null }])
-    db.prepare(`
-    delete from dependency
-    where parent = (select id from entity where eid = ?)
-      and type = 'worked'
-      and child = (select id from entity where eid = ?)
-  `).run(session, task)
+    // The graph a claim left before the `worked` sentence existed at all.
+    let id = `(select id from entity where eid = ?)`
+    let sentence = edgeEid(session, 'worked', task)
+    db.prepare(`delete from edge where entity = ${id}`).run(sentence)
+    db.prepare(`delete from worked where entity = ${id}`).run(sentence)
     db.close()
 
     let fake = fakeGraph({ changes: [], deps: [] })

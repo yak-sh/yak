@@ -15,6 +15,7 @@
 // write is synchronous through the death branch (followWrite runs its stamp
 // before the first await), so these assert without waiting on the clock.
 import { assert, assertEquals } from '@std/assert'
+import { sentences } from './edge.ts'
 import { type Change } from './types.ts'
 import { on } from './effects.ts'
 
@@ -57,8 +58,8 @@ let finishedAt = (eid: string) =>
     | undefined)?.finished_at
 let filedBugAbout = (eid: string) =>
   !!db.prepare(
-    `select 1 from dependency d join bug b on b.entity = d.parent
-     where d.type = 'about' and d.child = ${idOf}`,
+    `select 1 from (${sentences('about')}) d join bug b on b.entity = d.parent
+     where d.child = ${idOf}`,
   ).get(eid)
 
 // A reified external session with a ghost provider pid (present() false), dead

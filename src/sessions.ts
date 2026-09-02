@@ -32,6 +32,7 @@
 //    the truth exactly once and none of it ever rode the wire inbound.
 import { basename, dirname, resolve } from 'node:path'
 import { childEnv } from './agent_env.ts'
+import { sentences } from './edge.ts'
 import {
   type Adapter,
   adapters,
@@ -2417,8 +2418,8 @@ let unheard = (eid: string) =>
        )
      ) and not exists (
        select 1 from entry x
-       join dependency r
-         on r.parent = x.entity and r.type = 'referenced'
+       join (${sentences('referenced')}) r
+         on r.parent = x.entity
        where x.session = ${idOf} and r.child = c.entity
      )
        and b.via is not ${idOf} and trim(d.body) != ''

@@ -57,6 +57,15 @@ export let natures = Object.values(natureOf)
 //   - WHOLE and untyped: one branch per nature, unioned, so each nature table
 //     is walked once (56ms) instead of 125k rows being probed twelve times
 //     over (265ms).
+// The same store read WITHOUT the verb, for a walk that only asks whether one
+// entity links to another (projectReachability's rooted closure, and the Rust
+// mirror in rooted.rs). Naming a nature there is not just unused, it is
+// expensive: the twelve-branch union is re-walked at EVERY step of the
+// recursion, which measured 81ms against 7ms for the bare `edge` table on the
+// live graph — the whole of the closure's regression against the row store.
+// The ends are the edge's own columns, so this is one indexed table.
+export let links = `select g."from" as parent, g."to" as child from edge g`
+
 export let sentences = (type?: string, only = '') => {
   let head = (verb: string) =>
     `select g."from" as parent, ${verb} as type,` +

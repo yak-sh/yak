@@ -235,8 +235,8 @@ Deno.test('claim_work replay is a no-op; collision audits one winner', () => {
     Number(
       cell(
         db,
-        `select count(*) as n from dependency
-         where type = 'worked' and child = (select id from entity where eid = ?)`,
+        `select count(*) as n from edge g join worked w on w.entity = g.entity
+         where g."to" = (select id from entity where eid = ?)`,
         target,
       )?.n,
     ),

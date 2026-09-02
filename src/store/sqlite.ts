@@ -393,7 +393,7 @@ if (import.meta.main) {
   let n = (q: string) => (db.prepare(q).get() as { n: number }).n
   console.log(
     `seeded ${n('select count(*) as n from task')} tasks, ${
-      n('select count(*) as n from dependency')
+      n('select count(*) as n from edge')
     } edges`,
   )
 }

@@ -4253,12 +4253,8 @@ Deno.test('historical worked edges materialize explicitly and idempotently', () 
   ])
   apply(db, [{ eid: task, name: 'claim', comp: { session } }])
   apply(db, [{ eid: task, name: 'claim', comp: null }])
-  // A graph that predates the `worked` edge: row and sentence both gone, raw,
-  // with no tombstone to say one ever stood.
-  db.prepare(`
-    delete from dependency
-    where parent = ${idOf} and type = 'worked' and child = ${idOf}
-  `).run(session, task)
+  // A graph that predates the `worked` edge: the sentence gone, raw, with no
+  // tombstone to say one ever stood.
   let sentence = edgeEid(session, 'worked', task)
   db.prepare(`delete from edge where entity = ${idOf}`).run(sentence)
   db.prepare(`delete from worked where entity = ${idOf}`).run(sentence)

@@ -4,6 +4,7 @@
 // anywhere but here).
 import type { Change } from './types.ts'
 import type { FleetMsg, SpoolReq } from './inbound.ts'
+import { sentences } from './edge.ts'
 Deno.env.set('DB_PATH', ':memory:')
 Deno.env.set('TASKS_MAIL_DOMAIN', 'bot.test')
 let { apply } = await import('./db.ts')
@@ -384,8 +385,8 @@ Deno.test('the sweep: mints once, stamps back, and dir=out never lands', async (
   assertEquals(hooks[0].payload, '{"action":"ping"}')
   assertEquals(hooks[0].sig_ok, 1)
   let aimed = db.prepare(
-    `select ${refEid('child')} as child from dependency
-     where parent = ${idOf} and type = 'about'`,
+    `select ${refEid('d.child')} as child from (${sentences('about')}) d
+     where d.parent = ${idOf}`,
   ).get(hooks[0].eid) as { child: string }
   assertEquals(aimed.child, cafecar)
   // sweep again: idempotent on the provenance keys, stamps still answer

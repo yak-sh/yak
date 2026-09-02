@@ -13,6 +13,7 @@ let {
 } = await import('./referenced.ts')
 let { assertEquals } = await import('@std/assert')
 import type { Change } from './types.ts'
+import { sentences } from './edge.ts'
 
 let uid = (): string => crypto.randomUUID()
 let idOf = `(select id from entity where eid = ?)`
@@ -88,8 +89,8 @@ let entry = (session: string, text: string, comps: Change[] = []) => {
 let children = (parent: string) =>
   (db.prepare(
     `select (select eid from entity where id = d.child) as child
-       from dependency d
-      where d.parent = ${idOf} and d.type = 'referenced'`,
+       from (${sentences('referenced')}) d
+      where d.parent = ${idOf}`,
   ).all(parent) as { child: string }[]).map((r) => r.child)
 
 Deno.test('referencedChanges: a cited entity becomes an edge, once', () => {

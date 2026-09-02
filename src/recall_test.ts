@@ -19,6 +19,7 @@ let { axes } = await import('./testvec.ts')
 let { slow } = await import('./testing.ts')
 let { assertEquals } = await import('@std/assert')
 import type { Sql } from './store/sql.ts'
+import { sentences } from './edge.ts'
 
 let uid = (): string => crypto.randomUUID()
 // Component/edge tables are keyed by the integer `entity` spine id now; eids stay
@@ -216,7 +217,8 @@ Deno.test('recallEntry: a message writes a recall entry into its session, linked
   assertEquals(rec!.body.includes('escalation is a bug report'), true)
   // a `recalled` edge to the surfaced memory — the dedup ledger
   let edge = db.prepare(
-    `select 1 from dependency where parent = ${idOf} and type = 'recalled' and child = ${idOf}`,
+    `select 1 from (${sentences('recalled')}) d
+      where d.parent = ${idOf} and d.child = ${idOf}`,
   ).get(rec!.eid, m)
   assertEquals(!!edge, true)
 })
