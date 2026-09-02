@@ -9,14 +9,12 @@
 // on the served bytes.
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { client, connector, kernel, seed, signedIn } from './probe.ts'
+import { client, connector, kernel, seed } from './probe.ts'
 
 slow('a page reports its own breaks, and the agent hears', async () => {
   let k = await kernel()
   try {
-    let jeff = crypto.randomUUID()
-    let cookie = await signedIn(k, jeff)
-    await seed(k, jeff, [{ slug: 'jeff', apps: ['recipes'], home: 'recipes' }])
+    let { cookie } = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
     let files = client(k, 'jeff.yaks.app', 'recipes', cookie)
     let agent = connector(k, cookie)
     let app = { space: 'jeff', app: 'recipes' }

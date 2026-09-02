@@ -5,26 +5,14 @@
 // runtime boots.
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { slow, until } from '../testing.ts'
-import {
-  client,
-  kernel,
-  relay,
-  seed,
-  signedIn,
-} from '../../workers/yak/probe.ts'
+import { client, kernel, relay, seed } from '../../workers/yak/probe.ts'
 
 slow('the store on Durable Object SQLite serves the wire', async () => {
   let k = await kernel()
   try {
-    let person = crypto.randomUUID()
-    await seed(k, person, [{ slug: 'lab', apps: ['graph'] }])
+    let { cookie } = await seed(k, [{ slug: 'lab', apps: ['graph'] }])
     let host = 'lab.yaks.app'
-    let { get, post, applied } = client(
-      k,
-      host,
-      'graph',
-      await signedIn(k, person),
-    )
+    let { get, post, applied } = client(k, host, 'graph', cookie)
     // Planted on first touch: the identity door answers with an epoch.
     let serving = await (await k.at(host, '/graph/api/graph')).json()
     assertMatch(serving.epoch, /^[0-9a-f-]{36}$/)
@@ -128,14 +116,12 @@ let socket = async (origin: string, path: string) => {
 
 slow('the store on Durable Object SQLite serves the live wire', async () => {
   let k = await kernel()
-  let person = crypto.randomUUID()
-  let cookie = await signedIn(k, person)
+  let { cookie } = await seed(k, [{ slug: 'lab', apps: ['graph'] }])
   // Two devices on one app: one signed in as the owner, one just looking.
   let device = relay(k, 'lab.yaks.app', cookie)
   let onlooker = relay(k, 'lab.yaks.app')
   let sockets: { close(): Promise<void> }[] = []
   try {
-    await seed(k, person, [{ slug: 'lab', apps: ['graph'] }])
     let { applied } = client(k, 'lab.yaks.app', 'graph', cookie)
 
     let a = await socket(device.origin, '/graph/api/ws')

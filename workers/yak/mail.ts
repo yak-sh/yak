@@ -9,15 +9,16 @@
 // markdown door — a whole vendored parser for a six-digit code that has no
 // markup in it. A change to the API's shape is a change to both.
 //
-// `kept` is the local adapter: the letter as an entity in the meta store —
-// `doc` (subject, body) plus `mail` (from, to_addr), the graph's own outbound
-// vocabulary — so a local run reads its own codes out of the graph and no
-// second channel exists. It is chosen ONLY when MAIL_DEV says so: a deploy
-// missing its mail secrets fails loudly at the send rather than quietly
-// filing everybody's codes where they can be read.
+// `printed` is the local adapter: the letter on the Worker's own log, where
+// whoever is running `wrangler dev` reads it (and a probe reads it out of the
+// captured output). It is chosen ONLY when MAIL_DEV says so: a deploy missing
+// its mail secrets fails loudly at the send rather than quietly filing
+// everybody's codes where they can be read. A code is a key, and a key is
+// never written down: nothing in any store holds one in a form that opens
+// anything (signin.ts keeps a mac of it, never the digits), so a read of the
+// graph — however it is reached — can never mint a session (T-32585).
 import type { Env } from './env.ts'
 import { esc } from './pages.ts'
-import type { Door } from './store.ts'
 
 export type Letter = { to: string; subject: string; body: string }
 export type Mail = (l: Letter) => Promise<void>
@@ -32,17 +33,11 @@ export type Mail = (l: Letter) => Promise<void>
 export let FROM = 'hello@bot.yak.sh'
 export let REPLY_TO = 'hello@yaks.app'
 
-export let kept = (store: Door): Mail => async (l) => {
-  let sent = await store('/apply', {
-    method: 'POST',
-    body: JSON.stringify({
-      entities: [{
-        doc: { title: l.subject, body: l.body },
-        mail: { from: FROM, to_addr: l.to },
-      }],
-    }),
-  }, { 'x-yak-kernel': '1' })
-  if (!sent.ok) throw new Error(`mail: ${await sent.text()}`)
+// One line, JSON, tagged: a person reads it at a glance and a probe parses
+// the letter back out of the log (probe.ts `mailed`).
+export let printed = (): Mail => (l) => {
+  console.log(`yak-mail ${JSON.stringify({ from: FROM, ...l })}`)
+  return Promise.resolve()
 }
 
 export let sending =
@@ -72,8 +67,8 @@ export let sending =
 
 let API = 'https://api.cloudflare.com/client/v4'
 
-export let mail = (env: Env, store: Door): Mail =>
-  env.MAIL_DEV == '1' ? kept(store) : sending(
+export let mail = (env: Env): Mail =>
+  env.MAIL_DEV == '1' ? printed() : sending(
     env.MAIL_TOKEN ?? '',
     env.MAIL_ACCOUNT ?? '',
     env.MAIL_API ?? API,

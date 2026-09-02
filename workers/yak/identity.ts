@@ -22,9 +22,10 @@
 // so a token resolves to the same eid a cookie does.
 //
 // The first person ever to sign in owns the meta space: while `yak` has no
-// members at all, this writes `member(yak, person, owner)` — the same
-// memberless bootstrap apps.ts opens for the first write (directory.ts
-// `memberless`). After that the ordinary membership rule holds.
+// members at all, this writes `member(yak, person, owner)` (directory.ts
+// `memberless`). After that the ordinary membership rule holds. It is the
+// only way that row is ever written: nothing serves the meta store at an
+// address (apps.ts), so no request can write the directory from outside.
 import {
   AuthorizationError,
   type AuthRequest,
@@ -221,9 +222,8 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     if (!email.includes('@')) {
       return askEmail(field('q') || null, undefined, 400)
     }
-    let store = meta(env)
-    let code = await mint(store, secret(env), email)
-    await mail(env, store)({
+    let code = await mint(meta(env), secret(env), email)
+    await mail(env)({
       to: email,
       subject: `${code} is your yaks.app code`,
       body: `Your yaks.app sign-in code is ${code}.\n\n` +

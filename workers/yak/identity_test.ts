@@ -4,12 +4,14 @@
 // softly — and an agent walks the whole OAuth 2.1 flow, from a client that
 // registers itself to a bearer token that resolves to the same person.
 //
-// The dev mail adapter files each letter in the meta store (mail.ts `kept`),
-// so the test reads its own code out of the graph the way anything else reads
-// the graph. Nothing here knows the code before the kernel mails it.
+// The dev mail adapter prints each letter on the Worker's log (mail.ts
+// `printed`), which is where the test reads its own code; no store anywhere
+// holds one. Nothing here knows the code before the kernel mails it. The
+// directory itself is read back through the MCP graph tier as the owner of
+// `yak` — the one door into the meta store (probe.ts `meta`, T-32585).
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { client, type Kernel, kernel, signedIn } from './probe.ts'
+import { type Kernel, kernel, mailed, meta } from './probe.ts'
 
 let form = (
   k: Kernel,
@@ -26,24 +28,6 @@ let form = (
     },
     body: new URLSearchParams(fields).toString(),
   })
-
-// The meta store, which answers an owner of `yak` and nobody else (apps.ts):
-// the letters, the people, the members. Every read here carries a cookie —
-// before the first sign-in, any signed-in person is its owner (the memberless
-// rule), and after it, the person who signed in is.
-let metaOf = (k: Kernel, cookie?: string) =>
-  client(k, 'yak.yaks.app', 'platform', cookie)
-
-// The six digits out of the letter the kernel just filed.
-let mailed = async (k: Kernel, email: string, cookie: string) => {
-  let [letter] = await metaOf(k, cookie).get(
-    `.mail.to_addr=${encodeURIComponent(email)}`,
-  )
-  assert(letter, 'a letter for ' + email)
-  let hit = /\b(\d{6})\b/.exec(String((letter.doc as { title: string }).title))
-  assert(hit, 'a code in the letter')
-  return hit[1]
-}
 
 let b64u = (b: ArrayBuffer) =>
   btoa(String.fromCharCode(...new Uint8Array(b)))
@@ -62,10 +46,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     let sent = await form(k, '/login', { email })
     assertEquals(sent.status, 200)
     assertMatch(await sent.text(), new RegExp(email))
-    // Nobody owns `yak` yet, so any signed-in person reads its store — which
-    // is how the platform's own first letter is read here.
-    let keeper = await signedIn(k, crypto.randomUUID())
-    let code = await mailed(k, email, keeper)
+    let code = await mailed(k, email)
     assertMatch(code, /^\d{6}$/)
 
     // A mistyped code is refused softly — a page in the same voice, and the
@@ -80,38 +61,39 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assertEquals(inn.status, 302)
     assertEquals(inn.headers.get('location'), '/')
     let set = inn.headers.get('set-cookie') ?? ''
-    let cookie = set.split(';')[0]
-    // Signing in IS having a space (T-32482): one named for their address,
-    // with them as its owner, so nothing ever asks them for a name.
-    let [them] = await metaOf(k, cookie).get(
-      `.person!&.email.address=${encodeURIComponent(email)}`,
-    )
-    let [theirs] = await metaOf(k, cookie).get(
-      `.space.slug=${email.split('@')[0]}`,
-    )
-    assert(theirs, `a space named for ${email}`)
-    let [seat] = await metaOf(k, cookie).get(
-      `.member.space=${theirs.entity.eid}&.member.person=${them.entity.eid}`,
-    )
-    assertEquals((seat.member as { role: string }).role, 'owner')
-
     assertMatch(set, /^yak_session=/)
     assertMatch(set, /Domain=yaks\.app/)
     assertMatch(set, /HttpOnly/)
     assertMatch(set, /SameSite=Lax/)
+    let cookie = set.split(';')[0]
+    // The first person ever to sign in owns the meta space, and the graph
+    // tier is their door into it.
+    let dir = meta(k, cookie)
+
+    // Signing in IS having a space (T-32482): one named for their address,
+    // with them as its owner, so nothing ever asks them for a name.
+    let [them] = await dir.query(
+      `.person!&.email.address=${encodeURIComponent(email)}`,
+    )
+    let [theirs] = await dir.query(`.space.slug=${email.split('@')[0]}`)
+    assert(theirs, `a space named for ${email}`)
+    let [seat] = await dir.query(
+      `.member.space=${theirs.entity.eid}&.member.person=${them.entity.eid}`,
+    )
+    assertEquals((seat.member as { role: string }).role, 'owner')
 
     // Spent: the same code opens nothing twice.
     assertEquals((await form(k, '/login/code', { email, code })).status, 400)
 
     // The person the address minted, and their ownership of the meta space —
     // the first sign-in ever is the platform's owner.
-    let [person] = await metaOf(k, cookie).get(
+    let [person] = await dir.query(
       `.person!&.email.address=${encodeURIComponent(email)}`,
     )
     assert(person, 'a person for ' + email)
     let me = person.entity.eid
-    let [yak] = await metaOf(k, cookie).get('.space.slug=yak')
-    let [owner] = await metaOf(k, cookie).get(
+    let [yak] = await dir.query('.space.slug=yak')
+    let [owner] = await dir.query(
       `.member.person=${me}&.member.space=${yak.entity.eid}`,
     )
     assertEquals(owner.member, {
@@ -120,20 +102,32 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
       role: 'owner',
     })
 
+    // A code that is standing right now, as the store holds it: a mac, never
+    // the digits (signin.ts). Reading the row — by any door there is — mints
+    // nothing, and the mac itself opens nothing without the secret.
+    let waiting = `waiting-${crypto.randomUUID().slice(0, 8)}@yaks.app`
+    assertEquals((await form(k, '/login', { email: waiting })).status, 200)
+    let live = await mailed(k, waiting)
+    let [row] = await dir.query(
+      `.signin.email=${encodeURIComponent(waiting)}`,
+    )
+    let held = (row.signin as { code: string; email: string }).code
+    assertMatch(held, /^[0-9a-f]{64}$/)
+    assert(!held.includes(live), 'the digits are nowhere in the row')
+    assertEquals(await dir.query(`.mail.to_addr=${waiting}`), [])
+
     // The cookie is that person everywhere: an app route vouches for them.
-    await metaOf(k, cookie).applied({
-      entities: [
-        {
-          entity: { eid: '$s' },
-          doc: { title: 'probe' },
-          space: {
-            slug: 'probe',
-          },
+    await dir.apply([
+      {
+        entity: { eid: '$s' },
+        doc: { title: 'probe' },
+        space: {
+          slug: 'probe',
         },
-        { doc: { title: 'box' }, app: { slug: 'box', space: '$s' } },
-        { member: { space: '$s', person: me, role: 'owner' } },
-      ],
-    })
+      },
+      { doc: { title: 'box' }, app: { slug: 'box', space: '$s' } },
+      { member: { space: '$s', person: me, role: 'owner' } },
+    ])
     let who = await (await k.at('probe.yaks.app', '/box/api/graph', {
       headers: { cookie },
     })).json()

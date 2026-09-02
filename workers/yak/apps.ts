@@ -330,15 +330,27 @@ let api = async (
   return json(404, 'not_found')
 }
 
+// The directory store is the platform's own — people, addresses, sign-in
+// codes, memberships — and it is kernel data, not an app (T-32585). Nothing
+// is served at its address to anyone, owner included: the kernel's parts read
+// it directly through `storeOf` (directory.ts), and the owner's door to it is
+// the MCP graph tier. `yak/platform` is an entity in the directory so the
+// directory can describe its own store; it is not an app this handler serves.
+let kernels = (space: Space, app: string | null) =>
+  space.slug == META.space && app == META.app
+
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let r = route(hostOf(req), new URL(req.url).pathname)
   if (r.space == null) return nothingHere()
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let space = await dir.space(r.space)
   if (!space) return nothingHere()
+  if (kernels(space, r.app)) return nothingHere()
   if (r.app == null) {
     let home = r.path == '/' ? await dir.home(space) : null
-    return home ? redirect(`/${home.slug}/`) : nothingHere()
+    return home && !kernels(space, home.slug)
+      ? redirect(`/${home.slug}/`)
+      : nothingHere()
   }
   let url = new URL(req.url)
   let app = await dir.app(space, r.app)
@@ -352,23 +364,6 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   if (r.path == '') return redirect(`${url.pathname}/`)
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
-  // The meta space's first member: while `yak` has no members at all, any
-  // signed-in person may write it — that is how the first owner is written,
-  // by the first sign-in (T-32327). Once one member exists the rule is the
-  // ordinary one.
-  if (
-    who.person && !mayWrite(who) && space.slug == META.space &&
-    await dir.memberless(space)
-  ) {
-    who = { ...who, role: 'owner' }
-  }
-  // The directory is the platform's own: people, sign-in codes, memberships.
-  // Its store has no public face. Only an owner of `yak` reaches it through
-  // this door; the kernel's parts reach it directly (directory.ts).
-  if (
-    space.slug == META.space && app.slug == META.app &&
-    r.path.startsWith('/api/') && who.role != 'owner'
-  ) return nothingHere()
   return reporting(
     await (r.path.startsWith('/api/')
       ? api(req, env, space, app, r.path.slice(4), who)

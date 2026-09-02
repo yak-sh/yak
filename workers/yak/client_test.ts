@@ -16,7 +16,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { slow, until } from '../../src/testing.ts'
-import { client, type Kernel, kernel, relay, seed, signedIn } from './probe.ts'
+import { client, type Kernel, kernel, relay, seed } from './probe.ts'
 
 // An origin that stands in for `<space>.yaks.app`: every request goes to the
 // kernel wearing that hostname, and the person's cookie if they have one.
@@ -40,13 +40,10 @@ let browser = (k: Kernel, host: string, cookie?: string) => {
 slow('the served client: a page saves, lists and watches', async () => {
   let k = await kernel()
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-client-' })
-  let jeff = crypto.randomUUID()
-  let cookie = await signedIn(k, jeff)
+  let { cookie } = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
   let mine = browser(k, 'jeff.yaks.app', cookie)
   let anyone = browser(k, 'jeff.yaks.app')
   try {
-    await seed(k, jeff, [{ slug: 'jeff', apps: ['recipes'], home: 'recipes' }])
-
     // The kernel serves one client for every app, beside the doors it wraps.
     let served = await k.at('jeff.yaks.app', '/recipes/api/client.js')
     assertEquals(served.status, 200)

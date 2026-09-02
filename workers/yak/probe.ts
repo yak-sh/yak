@@ -13,7 +13,7 @@
 // use" — and the test suite runs its files in parallel (bin/test.ts), so
 // every kernel here would be a second one for somebody.
 import { until } from '../../src/testing.ts'
-import { COOKIE, sign } from '../../src/token.ts'
+import { COOKIE, sign, verify } from '../../src/token.ts'
 
 let root = new URL('./', import.meta.url).pathname
 let wrangler = (Deno.env.get('WRANGLER') ?? 'npx --yes wrangler@4.42.2')
@@ -43,11 +43,16 @@ export let kernel = async () => {
   let secret = crypto.randomUUID()
   let state = Deno.makeTempDirSync({ prefix: 'tasks-yak-' })
   let log = Deno.makeTempFileSync({ prefix: 'tasks-yak-', suffix: '.log' })
-  // One handle per stream: a WritableStream locks to a single piper.
-  let out = Deno.openSync(log, { write: true, append: true })
-  let err = Deno.openSync(log, { write: true, append: true })
+  // The child writes the log ITSELF, both streams into the one file: the
+  // shell's own redirect, `$0` the file and `"$@"` the command, so nothing
+  // depends on this process pumping a pipe. Piping them here read empty —
+  // which left the boot-failure label blank and every letter unreadable.
   let child = new Deno.Command('setsid', {
     args: [
+      'sh',
+      '-c',
+      'exec "$@" >>"$0" 2>&1',
+      log,
       ...wrangler,
       'dev',
       '--config',
@@ -62,20 +67,18 @@ export let kernel = async () => {
       state,
       '--var',
       `SESSION_SECRET:${secret}`,
-      // Letters land in the meta store, where a test reads its own code.
+      // Letters are printed on the Worker's log, which lands in `log` below,
+      // where a test reads its own code (`mailed`). Nothing ever files a
+      // code in a store.
       '--var',
       'MAIL_DEV:1',
       '--show-interactive-dev-session=false',
     ],
     cwd: root,
     stdin: 'null',
-    stdout: 'piped',
-    stderr: 'piped',
+    stdout: 'null',
+    stderr: 'null',
   }).spawn()
-  let logged = Promise.all([
-    child.stdout.pipeTo(out.writable, { preventClose: true }),
-    child.stderr.pipeTo(err.writable, { preventClose: true }),
-  ])
   let base = `http://127.0.0.1:${port}`
   // One request, at one hostname.
   let at = (host: string, path: string, init: RequestInit = {}) =>
@@ -97,9 +100,6 @@ export let kernel = async () => {
       label: 'the probe port to close',
     })
     await child.status
-    await logged
-    out.close()
-    err.close()
     Deno.removeSync(state, { recursive: true })
     Deno.removeSync(log)
   }
@@ -210,55 +210,6 @@ export let client = (
   return { get, post, applied, put, headers }
 }
 
-// The directory's first rows, written by `person` through the meta space's
-// bootstrap (index.ts): the person, their ownership of `yak`, and each space
-// with its apps and the person as its owner. Returns the eids by slug.
-export let seed = async (
-  k: Kernel,
-  person: string,
-  spaces: { slug: string; apps: string[]; home?: string }[],
-) => {
-  let eids: Record<string, string> = {}
-  let batch: unknown[] = [{ eid: person, name: 'person', comp: {} }]
-  let meta = crypto.randomUUID()
-  // Signed in, because the directory has no public face (apps.ts): its API
-  // answers an owner of `yak` and nobody else, and a memberless meta space
-  // makes the first signed-in person one — which is exactly this bootstrap.
-  let cookie = await signedIn(k, person)
-  // The meta space already exists (seeded on first touch); read its eid.
-  let [yak] = await client(k, 'yak.yaks.app', 'platform', cookie)
-    .get('.space.slug=yak')
-  batch.push({
-    eid: meta,
-    name: 'member',
-    comp: { space: yak.entity.eid, person, role: 'owner' },
-  })
-  for (let s of spaces) {
-    let space = eids[s.slug] = crypto.randomUUID()
-    batch.push({ eid: space, name: 'doc', comp: { title: s.slug } })
-    batch.push({ eid: space, name: 'space', comp: { slug: s.slug } })
-    batch.push({
-      eid: crypto.randomUUID(),
-      name: 'member',
-      comp: { space, person, role: 'owner' },
-    })
-    for (let a of s.apps) {
-      let app = eids[`${s.slug}/${a}`] = crypto.randomUUID()
-      batch.push({ eid: app, name: 'doc', comp: { title: a } })
-      batch.push({ eid: app, name: 'app', comp: { slug: a, space } })
-    }
-    if (s.home) {
-      batch.push({
-        eid: space,
-        name: 'space',
-        comp: { home: eids[`${s.slug}/${s.home}`] },
-      })
-    }
-  }
-  await client(k, 'yak.yaks.app', 'platform', cookie).applied(batch)
-  return eids
-}
-
 // An agent on the connector: JSON-RPC over POST /mcp at the apex, as one
 // signed-in person. `tool` answers the reply's text, throwing when the tool
 // says it erred, so a test reads the words and not the envelope.
@@ -287,4 +238,89 @@ export let connector = (k: Kernel, cookie?: string) => {
     return text
   }
   return { call, tool }
+}
+
+// A letter the kernel just sent, read off its own log: MAIL_DEV prints one
+// line per letter (mail.ts `printed`), so no store anywhere holds a code a
+// read could spend.
+export let mailed = (k: Kernel, to: string) => {
+  let letters = () =>
+    [...Deno.readTextFileSync(k.log).matchAll(/yak-mail (\{.*\})/g)]
+      .map((m) => JSON.parse(m[1]) as { to: string; subject: string })
+      .filter((l) => l.to == to)
+  return until(
+    () => /\b(\d{6})\b/.exec(letters().at(-1)?.subject ?? '')?.[1] ?? '',
+    { timeout: 20_000, poll: 100, label: `a letter for ${to}` },
+  )
+}
+
+// A person signs in the way a browser does — an address, the code off the
+// log, the cookie back — and the kernel mints their person row and their own
+// space. The FIRST sign-in on a fresh kernel owns the meta space, which is
+// how any directory row comes to be written at all (identity.ts).
+export let signIn = async (
+  k: Kernel,
+  email = `probe-${crypto.randomUUID().slice(0, 8)}@yaks.app`,
+) => {
+  let form = (path: string, fields: Record<string, string>) =>
+    k.at('yaks.app', path, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(fields).toString(),
+    })
+  let asked = await form('/login', { email })
+  if (asked.status != 200) throw new Error(`login: ${await asked.text()}`)
+  await asked.body?.cancel()
+  let code = await mailed(k, email)
+  let inn = await form('/login/code', { email, code })
+  if (inn.status != 302) throw new Error(`code: ${await inn.text()}`)
+  await inn.body?.cancel()
+  let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
+  let claims = await verify(cookie.slice(COOKIE.length + 1), k.secret)
+  if (!claims) throw new Error('the sign-in set no session')
+  return { person: claims.person, cookie, email, code }
+}
+
+// The directory, as an owner of `yak` reads and writes it: the MCP graph
+// tier, the one door left into the meta store — apps.ts serves nothing at
+// its address, to anyone (T-32585).
+export let meta = (k: Kernel, cookie: string) => {
+  let agent = connector(k, cookie)
+  let where = { space: 'yak', app: 'platform' }
+  return {
+    query: async (query: string) =>
+      JSON.parse(await agent.tool('graph_query', { ...where, query })) as Row[],
+    apply: (entities: unknown[]) =>
+      agent.tool('graph_apply', { ...where, entities }),
+  }
+}
+
+// A person with spaces and apps, made through their own agent's doors: they
+// sign in, then space_new and app_new. The first app in a space answers its
+// bare hostname. Returns who they are, and the eids by slug.
+export let seed = async (
+  k: Kernel,
+  spaces: { slug: string; apps: string[] }[],
+) => {
+  let them = await signIn(k)
+  let agent = connector(k, them.cookie)
+  // Each of those tools names what it made as `slug (eid)`.
+  let idOf = (said: string) => {
+    let hit = /\(([0-9a-f-]{36})\)/.exec(said)
+    if (!hit) throw new Error(`no eid in: ${said}`)
+    return hit[1]
+  }
+  let eids: Record<string, string> = {}
+  for (let s of spaces) {
+    eids[s.slug] = idOf(
+      await agent.tool('space_new', { slug: s.slug, title: s.slug }),
+    )
+    for (let a of s.apps) {
+      eids[`${s.slug}/${a}`] = idOf(
+        await agent.tool('app_new', { space: s.slug, slug: a, title: a }),
+      )
+    }
+  }
+  return { ...them, eids }
 }

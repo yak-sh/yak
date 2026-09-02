@@ -10,7 +10,15 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { client, connector, kernel, seed, signedIn } from './probe.ts'
+import {
+  client,
+  connector,
+  kernel,
+  meta,
+  seed,
+  signedIn,
+  signIn,
+} from './probe.ts'
 
 slow('the kernel routes, vouches, serves, and surfaces', async () => {
   let k = await kernel()
@@ -39,11 +47,9 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     let nowhere = await k.at('nowhere.yaks.app', '/')
     assertEquals(nowhere.status, 404)
     assertMatch(await nowhere.text(), /Nothing here yet/)
-    let jeff = crypto.randomUUID()
-    let eids = await seed(k, jeff, [{
+    let { person: jeff, cookie, eids } = await seed(k, [{
       slug: 'jeff',
       apps: ['recipes', 'garden'],
-      home: 'recipes',
     }])
     let bare = await k.at('jeff.yaks.app', '/', { redirect: 'manual' })
     assertEquals(bare.status, 302)
@@ -58,7 +64,6 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
 
     // The file door: nobody and a forgery are refused, the owner is not; the
     // planted file then serves at its path with its type.
-    let cookie = await signedIn(k, jeff)
     // A forgery is one character of the mac changed — the FIRST one. The
     // last character of a base64url mac carries only padding bits, so
     // flipping it decodes to the same 32 bytes and verifies, which made this
@@ -147,13 +152,11 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     await owner.applied([
       { eid: maya, name: 'person', comp: {} },
     ])
-    await client(k, 'yak.yaks.app', 'platform', cookie).applied([
-      { eid: maya, name: 'person', comp: {} },
-      {
-        eid: crypto.randomUUID(),
-        name: 'member',
-        comp: { space: eids.jeff, person: maya, role: 'viewer' },
-      },
+    // The directory is written through the graph tier, by the owner of `yak`
+    // — the only door into the meta store there is.
+    await meta(k, cookie).apply([
+      { entity: { eid: maya }, person: {} },
+      { member: { space: eids.jeff, person: maya, role: 'viewer' } },
     ])
     let viewer = client(k, 'jeff.yaks.app', 'recipes', await signedIn(k, maya))
     let seen = await viewer.post([])
@@ -164,15 +167,32 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     )
     assertEquals((await viewer.put('/x.txt', 'no')).status, 403)
     assertEquals((await viewer.get(`id=${cake}`)).length, 1)
-    // The directory has no public face once it has an owner: a stranger is
-    // not refused at it, they never find it at all.
-    let stranger = client(
-      k,
-      'yak.yaks.app',
-      'platform',
-      await signedIn(k, maya),
-    )
-    assertEquals((await stranger.post([])).status, 404)
+
+    // The platform's own rows never leave the kernel (T-32585): the meta
+    // store is not an app, so nothing answers at its address — not for a
+    // stranger, not for the owner of `yak` himself, who reaches it through
+    // the graph tier instead.
+    for (
+      let path of [
+        '/platform/',
+        '/platform/api/query?.signin!',
+        '/platform/api/apply',
+        '/platform/api/ws',
+        '/platform/api/graph',
+      ]
+    ) {
+      for (let as of [undefined, cookie, await signedIn(k, maya)]) {
+        let shut = await k.at('yak.yaks.app', path, {
+          headers: as ? { cookie: as } : {},
+        })
+        assertEquals(
+          shut.status,
+          404,
+          `${path} as ${as ? 'someone' : 'nobody'}`,
+        )
+        assertMatch(await shut.text(), /Nothing here yet/)
+      }
+    }
 
     // A route that throws — a malformed escape in a file path — answers with
     // the soft page and leaves an exception entity in the app's store, naming
@@ -234,8 +254,9 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
 slow('an app says who may read it and who may write it', async () => {
   let k = await kernel()
   try {
-    let jeff = crypto.randomUUID()
-    let cookie = await signedIn(k, jeff)
+    // He signs in for real: the address is his, and the first sign-in on a
+    // fresh kernel owns the meta space.
+    let { cookie, email } = await signIn(k)
     let agent = connector(k, cookie)
     await agent.tool('space_new', { slug: 'club', title: 'Book club' })
     let born = (slug: string, access?: string) =>
@@ -309,8 +330,7 @@ slow('an app says who may read it and who may write it', async () => {
     })
     assertStringIncludes(said, 'maya@example.com is an editor of club')
     assertStringIncludes(said, 'sign in at https://yaks.app')
-    let [row] = await client(k, 'yak.yaks.app', 'platform', cookie)
-      .get('.email.address=maya@example.com')
+    let [row] = await meta(k, cookie).query('.email.address=maya@example.com')
     let maya = row.entity.eid
     let mayaIn = await signedIn(k, maya)
     let editor = (app: string) => client(k, 'club.yaks.app', app, mayaIn)
@@ -353,19 +373,10 @@ slow('an app says who may read it and who may write it', async () => {
       'not a member of club',
     )
 
-    // A space is never left with nobody to say who belongs. Jeff wears an
-    // address of his own for this: the meta space admits its first person as
-    // owner, which is how any directory row gets written at all.
-    await client(k, 'yak.yaks.app', 'platform', cookie).applied([
-      { eid: jeff, name: 'person', comp: {} },
-      { eid: jeff, name: 'email', comp: { address: 'jeff@example.com' } },
-    ])
+    // A space is never left with nobody to say who belongs. He is found by
+    // the address he signed in with — the row his sign-in wrote.
     await assertRejects(
-      () =>
-        agent.tool('member_remove', {
-          space: 'club',
-          email: 'jeff@example.com',
-        }),
+      () => agent.tool('member_remove', { space: 'club', email }),
       Error,
       'the only owner of club',
     )
