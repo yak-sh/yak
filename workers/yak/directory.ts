@@ -61,14 +61,13 @@ let seed = async (env: Env) => {
     body: JSON.stringify({
       entities: [
         {
-          key: 'space',
-          comps: { doc: { title: META.space }, space: { slug: META.space } },
+          entity: { eid: '$space' },
+          doc: { title: META.space },
+          space: { slug: META.space },
         },
         {
-          comps: {
-            doc: { title: META.app },
-            app: { slug: META.app, space: 'space' },
-          },
+          doc: { title: META.app },
+          app: { slug: META.app, space: '$space' },
         },
       ],
     }),

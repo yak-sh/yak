@@ -12,7 +12,9 @@
 // The route table:
 //   yaks.app (and any dev host)
 //     /                       the home page, from ./public
-//     /login, /oauth/*        identity.ts (T-32327; a soft page until then)
+//     /login, /login/code     identity.ts: the email-code sign-in
+//     /oauth/*                identity.ts: the OAuth 2.1 door for agents
+//     /.well-known/oauth-*    identity.ts: the provider's metadata
 //     /mcp, /api/*            mcp.ts (T-32329; a JSON 404 until then)
 //     anything else           ./public, else a soft 404
 //   <space>.yaks.app          apps.ts:
@@ -38,7 +40,10 @@ export { Store } from './store.ts'
 let serve = async (req: Request, env: Env, r: Route) => {
   if (r.space != null) return bound(env.APPS, apps.fetch, env).fetch(req)
   let path = r.path
-  if (path == '/login' || path.startsWith('/oauth/')) {
+  if (
+    path == '/login' || path.startsWith('/login/') ||
+    path.startsWith('/oauth/') || path.startsWith('/.well-known/oauth-')
+  ) {
     return bound(env.IDENTITY, identity.fetch, env).fetch(req)
   }
   if (path == '/mcp' || path.startsWith('/api/')) {
@@ -68,16 +73,14 @@ let report = async (env: Env, r: Route, req: Request, e: unknown) => {
     method: 'POST',
     body: JSON.stringify({
       entities: [{
-        comps: {
-          doc: {
-            title: `${req.method} ${new URL(req.url).pathname}`,
-            body: `version: ${app?.version ?? 'none'}`,
-          },
-          exception: {
-            at: new Date().toISOString(),
-            message: e instanceof Error ? e.message : String(e),
-            stack: e instanceof Error ? e.stack ?? '' : '',
-          },
+        doc: {
+          title: `${req.method} ${new URL(req.url).pathname}`,
+          body: `version: ${app?.version ?? 'none'}`,
+        },
+        exception: {
+          at: new Date().toISOString(),
+          message: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack ?? '' : '',
         },
       }],
     }),
