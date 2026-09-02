@@ -64,6 +64,7 @@ import {
   validate as validateSetting,
 } from './config.ts'
 import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'
+import { edgeEid, natureOf, natures, typeOf } from './edge.ts'
 import { indexesFor } from './index.ts'
 import {
   bodyCols,
@@ -4154,6 +4155,108 @@ let mirrorLineage = (db: Sql, changes: Change[]): Change[] => {
   return out
 }
 
+// The edge entity a stored edge eid wears, spoken in eids, with its nature —
+// found by asking each nature table; an edge wears exactly one.
+let storedEdge = (
+  db: Sql,
+  eid: string,
+): { from: string; to: string; nature: string } | undefined => {
+  let row = prep(
+    db,
+    `select f.eid as "from", t.eid as "to" from edge e
+     join entity f on f.id = e."from" join entity t on t.id = e."to"
+     where e.${byEid}`,
+  ).get(eid) as { from: string; to: string } | undefined
+  let nature = row &&
+    natures.find((n) =>
+      prep(db, `select 1 from ${sqlName(n)} where ${byEid}`).get(eid)
+    )
+  return nature ? { ...row!, nature } : undefined
+}
+
+// Two edge stores, one write (T-23825). While `dependency` is still the live
+// edge store, every edge lands in BOTH homes so readers on either side agree:
+// a `dependency{type, child}` write on P also mints the entity
+// edgeEid(P, nature, child) wearing edge{from: P, to: child} + the nature
+// tag, and its `gone: true` unlink deletes that entity; a native edge write
+// (edge + nature on one eid) also lands the dependency row, and deleting an
+// edge entity drops it. A claim's `worked` edge rides the same way, since the
+// claim rule inserts its row directly. Only the batch's own changes translate,
+// never this pass's output, so the two directions cannot feed each other. The
+// mint mirrors the dependency rule's tolerance — an endpoint that neither
+// exists nor arrives in this batch drops the edge alone rather than refusing
+// the batch. The WHOLE pass, with `natureOf`, goes when T-23821 retires the
+// dependency table.
+let dualEdge = (db: Sql, changes: Change[]): Change[] => {
+  let dead = graveOf(db)
+  let inBatch = new Set(
+    changes.filter((c) => c.comp != null).map((c) => c.eid),
+  )
+  let live = (eid: string) =>
+    inBatch.has(eid) || (toId(db, eid) != null && !dead.get(eid))
+  let out: Change[] = []
+  let link = (from: string, nature: string, to: string) => {
+    if (!live(from) || !live(to)) return
+    let eid = edgeEid(from, nature, to)
+    out.push(
+      { eid, name: 'edge', comp: { from, to } },
+      { eid, name: nature, comp: {} },
+    )
+  }
+  let unlink = (from: string, nature: string, to: string) => {
+    let eid = edgeEid(from, nature, to)
+    if (live(eid)) out.push({ eid, name: 'entity', comp: null })
+  }
+  let batchNature = new Map<string, string>()
+  for (let c of changes) {
+    if (c.comp && typeOf[c.name]) batchNature.set(c.eid, c.name)
+  }
+  for (let { eid, name, comp } of changes) {
+    if (name == 'dependency' && comp) {
+      // An unknown type is the dependency rule's refusal, not ours; recalled
+      // is not an edge.
+      let nature = natureOf[String(comp.type)]
+      if (!nature) continue
+      let to = String(comp.child)
+      if (comp.gone) unlink(eid, nature, to)
+      else link(eid, nature, to)
+    } else if (name == 'claim' && comp?.session) {
+      link(String(comp.session), 'worked', eid)
+    } else if (name == 'edge' && comp) {
+      // The endpoints ARE the identity, so an edge write carries both, and
+      // its eid must be the sentence's — a random uuid would be a second
+      // entity for the same edge, the duplicate the derivation exists to
+      // prevent (the blob-eid rule, in edge clothes).
+      let { from, to } = comp
+      if (from == null || to == null) {
+        throw new Error(`edge ${shortId(eid)} needs both from and to`)
+      }
+      let nature = batchNature.get(eid) ?? storedEdge(db, eid)?.nature
+      if (!nature) throw new Error(`edge ${shortId(eid)} needs a nature`)
+      if (eid != edgeEid(String(from), nature, String(to))) {
+        throw new Error(
+          `edge ${shortId(eid)} eid must be edgeEid(from, ${nature}, to)`,
+        )
+      }
+      out.push({
+        eid: String(from),
+        name: 'dependency',
+        comp: { type: typeOf[nature], child: String(to) },
+      })
+    } else if (name == 'entity' && comp == null) {
+      let edge = storedEdge(db, eid)
+      if (edge) {
+        out.push({
+          eid: edge.from,
+          name: 'dependency',
+          comp: { type: typeOf[edge.nature], child: edge.to, gone: true },
+        })
+      }
+    }
+  }
+  return out.length ? [...changes, ...out] : changes
+}
+
 // Old and new session doors overlap during a rolling release. Apply sees the
 // whole batch under one lock, so it can make the canonical facet win without
 // making order significant, then write the same projection back to aliases
@@ -5324,6 +5427,9 @@ export let apply = (
     // a hydrated session.provider is never promoted to a spawn request; a
     // historical session must not launch an agent.
     if (hasSources()) changes = graduate(db, changes, workClaim?.source)
+    // After graduation, so a claim on a just-hydrated session finds its
+    // `worked` endpoint in the batch.
+    changes = dualEdge(db, changes)
     changes = casBodies(db, changes)
     // A log entry is an append-only fact. Every request/content facet is
     // born in the same batch as entry membership and can never be revised,

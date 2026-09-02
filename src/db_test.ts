@@ -71,6 +71,7 @@ let {
   './types.ts'
 )
 let { bareDb } = await import('./testdb.ts')
+let { edgeEid } = await import('./edge.ts')
 let { DatabaseSync } = await import('./store/sqlite.ts')
 let { slow } = await import('./testing.ts')
 
@@ -3151,6 +3152,150 @@ Deno.test('edges: a dead endpoint voids the link; delete prunes edges', () => {
     { eid: p, name: 'dependency', comp: { type: 'requires', child: c } },
   ])
   assertEquals(snapshot(db).deps.some((d) => d.parent == p), false) // voided
+})
+
+// Edges as entities (D-23820, T-23825): every edge lands in both stores
+// while `dependency` is still live. `pair()` mints two docs; `dep()` reads
+// the dependency rows out of P.
+let pair = () => {
+  let p = uid(), c = uid()
+  apply(db, [
+    { eid: p, name: 'doc', comp: { title: 'parent' } },
+    { eid: c, name: 'doc', comp: { title: 'child' } },
+  ])
+  return [p, c]
+}
+let dep = (p: string) =>
+  snapshot(db).deps.filter((d) => d.parent == p).map((d) => [d.type, d.child])
+let edgeRows = (p: string) =>
+  db.prepare(`select count(*) as n from edge where "from" = ${idOf}`).get(
+    p,
+  ) as { n: number }
+
+Deno.test('edge: a dependency write mints the sentence entity, once', () => {
+  let [p, c] = pair()
+  let e = edgeEid(p, 'references', c)
+  let link = {
+    eid: p,
+    name: 'dependency',
+    comp: { type: 'referenced', child: c },
+  }
+  apply(db, [link])
+  assertEquals(comp(e, 'edge'), { eid: e, from: p, to: c })
+  assertEquals(comp(e, 'references'), { eid: e })
+  assertEquals(comp(e, 'entity')?.num, null) // an edge is num-less
+  let again = apply(db, [link])
+  assertEquals(again.some((ch) => ch.eid == e), false) // nothing new to say
+  assertEquals(edgeRows(p).n, 1)
+})
+
+Deno.test('edge: gone unlinks the entity by its eid, tombstoned', () => {
+  let [p, c] = pair()
+  let e = edgeEid(p, 'requires', c)
+  apply(db, [
+    { eid: p, name: 'dependency', comp: { type: 'requires', child: c } },
+  ])
+  apply(db, [
+    {
+      eid: p,
+      name: 'dependency',
+      comp: { type: 'requires', child: c, gone: true },
+    },
+  ])
+  assertEquals(comp(e, 'edge'), undefined)
+  assertEquals(buried(db, e), true)
+  assertEquals(dep(p), [])
+})
+
+Deno.test('edge: a native write lands the dependency row; its delete drops it', () => {
+  let [p, c] = pair()
+  let e = edgeEid(p, 'contains', c)
+  apply(db, [
+    { eid: e, name: 'edge', comp: { from: p, to: c } },
+    { eid: e, name: 'contains', comp: {} },
+  ])
+  assertEquals(dep(p), [['contains', c]])
+  apply(db, [{ eid: e, name: 'entity', comp: null }])
+  assertEquals(dep(p), [])
+  assertEquals(buried(db, e), true)
+})
+
+Deno.test('edge: deleting either endpoint reaps it through edge.from/to', () => {
+  for (let end of [0, 1]) {
+    let [p, c] = pair()
+    let e = edgeEid(p, 'wants', c)
+    apply(db, [
+      { eid: p, name: 'dependency', comp: { type: 'wants', child: c } },
+    ])
+    let out = apply(db, [{ eid: [p, c][end], name: 'entity', comp: null }])
+    assertEquals(comp(e, 'edge'), undefined)
+    assertEquals(buried(db, e), true)
+    assertEquals(out.some((ch) => ch.eid == e && ch.comp == null), true)
+  }
+})
+
+Deno.test('edge: the eid is the sentence — a random one, or no nature, refuses', () => {
+  let [p, c] = pair()
+  assertThrows(
+    () =>
+      apply(db, [
+        { eid: uid(), name: 'edge', comp: { from: p, to: c } },
+        { eid: uid(), name: 'reads', comp: {} },
+      ]),
+    Error,
+    'needs a nature',
+  )
+  let e = uid()
+  assertThrows(
+    () =>
+      apply(db, [
+        { eid: e, name: 'edge', comp: { from: p, to: c } },
+        { eid: e, name: 'reads', comp: {} },
+      ]),
+    Error,
+    'must be edgeEid',
+  )
+  assertEquals(dep(p), [])
+})
+
+Deno.test('edge: a missing endpoint drops the entity with the row, never the batch', () => {
+  let [p] = pair()
+  let ghost = uid()
+  apply(db, [
+    { eid: p, name: 'dependency', comp: { type: 'reads', child: ghost } },
+    { eid: p, name: 'doc', comp: { body: 'survives' } },
+  ])
+  assertEquals(comp(edgeEid(p, 'reads', ghost), 'edge'), undefined)
+  assertEquals(comp(p, 'doc')?.body, 'survives')
+})
+
+Deno.test('edge: a claim lands its worked edge in both stores', () => {
+  let session = uid(), task = uid()
+  apply(db, [
+    { eid: session, name: 'session', comp: { id: session } },
+    { eid: task, name: 'doc', comp: { title: 'claimed' } },
+    { eid: task, name: 'task', comp: { priority: 1 } },
+  ])
+  apply(db, [{ eid: task, name: 'claim', comp: { session } }])
+  let e = edgeEid(session, 'worked', task)
+  assertEquals(comp(e, 'edge'), { eid: e, from: session, to: task })
+  assertEquals(comp(e, 'worked'), { eid: e })
+  assertEquals(dep(session), [['worked', task]])
+})
+
+Deno.test('recalled: a plain event comp with its clock, no edge entity', () => {
+  let session = uid(), rid = uid(), m = uid()
+  apply(db, [
+    { eid: session, name: 'session', comp: { id: session } },
+    { eid: m, name: 'doc', comp: { title: 'a memory' } },
+  ])
+  apply(db, [
+    { eid: rid, name: 'entry', comp: { session } },
+    { eid: rid, name: 'recalled', comp: { at: '2026-09-02T00:00:00.000Z' } },
+    { eid: rid, name: 'dependency', comp: { type: 'recalled', child: m } },
+  ])
+  assertEquals(comp(rid, 'recalled')?.at, '2026-09-02T00:00:00.000Z')
+  assertEquals(edgeRows(rid).n, 0)
 })
 
 // Supersession is a plain edge, but the invariant is its own: the replaced
