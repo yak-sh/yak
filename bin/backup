@@ -36,21 +36,46 @@
 set -eu
 export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
 
+# BOUNDED, or it is not a backup but an outage. At 3.3 GB one run took over an
+# hour, the cron stacked the next on top, the dump and its verify copy filled
+# the disk, and the server died under the I/O. So the whole run re-execs itself
+# under a hard timeout (15 min; TERM, then KILL 30s later), and every temp file
+# it makes is removed on ANY exit, so an aborted run leaves no half-written
+# parts or verify copy behind for the next one to trip on.
+if [ -z "${TASKS_BACKUP_BOUND:-}" ]; then
+  TASKS_BACKUP_BOUND=1 exec timeout -k 30 "${TASKS_BACKUP_TIMEOUT:-900}" "$0" "$@"
+fi
+
 data="${TASKS_DATA:-$HOME/.tasks}"
 cd "$data"
 
 [ -d .git ] || { echo "backup: $data is not a git repo (git init it first)" >&2; exit 1; }
 
+started=$(date +%s)
+echo "backup: start $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+cleanup() {
+  rm -f snap/.verify.db snap/*.sql.tmp
+}
+trap cleanup EXIT
+trap 'echo "backup: aborted (timeout or signal)" >&2; exit 124' TERM INT
+
 # Redaction holds the same lock through its database scrub and published-
 # history report. Otherwise this job could snapshot the old bytes first, wait
 # while redaction reports, then commit and push one new leak afterward.
+# Wait a minute at most: a lock still held past that is a stuck run, and
+# queueing behind it is how runs stacked up before.
 exec 9>.git/tasks-backup.lock
-flock -x 9
+flock -w 60 -x 9 || { echo "backup: another backup or redaction holds the lock" >&2; exit 1; }
+
+# Only one snapshot ever lives on disk: the previous run's snapshot, parts and
+# verify copy go before this run writes anything, so peak disk use is one
+# snapshot + one dump + one verify copy, never two runs' worth.
+mkdir -p snap
+rm -f snap/tasks.db snap/.verify.db snap/*.sql.tmp
 
 # Plain output regardless of any ~/.sqliterc (box modes break the checks).
 sq() { sqlite3 -batch -init /dev/null -noheader -list "$@"; }
 
-mkdir -p snap
 # The snapshot is still taken atomically and still checked — it is just no
 # longer what history stores. It lives outside the repo (.gitignore) as the
 # consistent point-in-time source the text dump is written from, so the dump
@@ -131,14 +156,18 @@ dump_data "$journal" > snap/journal.sql.tmp
 dump_data "not ($journal)" > snap/graph.sql.tmp
 
 # SHARD the big dumps into parts under GitHub's 100 MB hard limit (target <50 MB
-# to clear the soft warning too). The write history in the journal tables is
-# legitimately large — every byte is kept; sharding buys the headroom that
-# pruning history would otherwise cost. `split` cuts on BYTE boundaries, which is
-# safe because the restore cats the parts back byte-for-byte before sqlite ever
-# parses them; zero-padded numeric suffixes glob in order. schema stays whole.
+# to clear the soft warning too); zero-padded numeric suffixes glob in order and
+# the restore cats them back before sqlite parses them. schema stays whole.
+#
+# Cut on LINE boundaries (-C: as many whole lines as fit), not bytes. One
+# inserted row shifts every byte after it, so a byte split changed EVERY later
+# part on every run and git stored each as a new blob — that, hourly, is how
+# the data repo grew by a gigabyte a day and filled the disk. With whole rows
+# per part, a run that touches a few rows changes a few parts and the rest
+# dedupe to the blobs history already holds.
 rm -f snap/graph.sql.part.* snap/journal.sql.part.*
-split -b 45M -d -a 3 snap/graph.sql.tmp   snap/graph.sql.part.
-split -b 45M -d -a 3 snap/journal.sql.tmp snap/journal.sql.part.
+split -C 45M -d -a 3 snap/graph.sql.tmp   snap/graph.sql.part.
+split -C 45M -d -a 3 snap/journal.sql.tmp snap/journal.sql.part.
 
 # The gate: the dump must restore to the same graph it came from — and it must do
 # so FROM THE SHARDS, so a bad split is caught here, not at restore. Comparing row
@@ -219,25 +248,14 @@ if git remote get-url origin >/dev/null 2>&1; then
 fi
 echo "backup: committed $n entities"
 
-# Pack, or the history is 15x its own size: gc had never once run here, and
-# 1644 loose objects had reached 2.56 GiB that packed down to 171 MB in 130s.
-#
-# NOT `gc --auto`, which does not fire for this repo's shape. Its default
-# threshold is 6700 loose objects and this repo writes ~5 an hour, so that alone
-# is years away — but lowering it does not help either, because --auto does not
-# COUNT loose objects, it ESTIMATES them by sampling one of the 256 fanout
-# directories and multiplying. With a handful of huge objects the estimate is
-# quantized to 0 or 256, so it misfires both ways: measured here, ten loose
-# objects against a threshold of five packed nothing at all.
-#
-# `count-objects -v` is an exact count, so this fires when it should. ~5 objects
-# per commit puts it under a day.
-# Failure is not fatal: an unpacked repo is a big repo, not a lost one, and the
-# backup itself already succeeded above.
-loose=$(git count-objects -v | awk '/^count:/ { print $2 }')
-if [ "${loose:-0}" -ge 100 ]; then
-  git gc --quiet || echo "backup: gc failed (repo is unpacked, not broken)" >&2
-fi
+# No `git gc` here. A backup is snapshot, dump, restore-proof, commit, push —
+# packing is repo maintenance, and on this history (5+ GB) a full gc runs past
+# any sane backup timeout: measured, the commit and push finished in under 3
+# minutes and gc then ran 12 more before the 15-minute bound killed it. Pack
+# from the separate weekly cron line (`git -C ~/.tasks gc`), never in-line.
+# A gc killed mid-pack leaves a tmp_pack_* the size of the repo that git never
+# reclaims on its own; drop any older than two hours (a live gc is younger).
+find .git/objects/pack -name 'tmp_pack_*' -mmin +120 -delete 2>/dev/null || true
 
 # The commit landed, so say so above — but a rejected push means the only
 # off-box copy has stopped advancing, which is the failure this backup exists
@@ -248,3 +266,4 @@ if [ "$pushed" = 0 ]; then
   echo "backup: push REJECTED — off-box copy is now stale" >&2
   exit 1
 fi
+echo "backup: done in $(( $(date +%s) - started ))s"
