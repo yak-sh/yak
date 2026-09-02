@@ -119,18 +119,18 @@ let json = (
   )
 
 // Where a refusal sends someone who has not signed in: the platform's login
-// page, already carrying the page they are on, so the code hands them back to
-// it (T-32593). The page is the Referer — an `/api/` door is nowhere to
-// return to — and the request's own address when the browser sent none.
-// Whether that address is one to follow is the login door's to decide.
-let signInAt = (req: Request) => {
+// page, already carrying the page to hand them back to (T-32593). At the file
+// door that page is the request itself; at an `/api/` door — nowhere to return
+// to — it is the Referer, and the request's own address when the browser sent
+// none. Whether that address is one to follow is the login door's to decide.
+let signInAt = (page: string) => {
   let to = new URL(`https://${PLATFORM}/login`)
-  to.searchParams.set('return', req.headers.get('referer') || req.url)
+  to.searchParams.set('return', page)
   return to.href
 }
 
-let redirect = (to: string) =>
-  new Response(null, { status: 302, headers: { location: to } })
+let redirect = (to: string, status = 302) =>
+  new Response(null, { status, headers: { location: to } })
 
 // An address the app has left, answered as the move it was. Permanent, so a
 // link someone holds heals itself — 301 for a read, 308 for everything else,
@@ -302,9 +302,12 @@ let api = async (
   // Signed out, the way through is to sign in (SAYS); signed in, it is the
   // owner's to grant, so the sentence says so.
   let refused = (what = 'not_a_writer') =>
-    who.person
-      ? json(403, what, MEMBER[what])
-      : json(401, what, SAYS[what], signInAt(req))
+    who.person ? json(403, what, MEMBER[what]) : json(
+      401,
+      what,
+      SAYS[what],
+      signInAt(req.headers.get('referer') || req.url),
+    )
   let mayRead = reads(who, app.access)
   let mayPost = writes(who, app.access)
   if (path == '/graph') {
@@ -386,6 +389,15 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   if (r.path == '') return redirect(`${url.pathname}/`)
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
+  // A private app hides its PAGE too, not only its data (C-32607 item 5):
+  // `access: private` says only its members can see it, and its files are
+  // part of what they see. A stranger is sent to sign in and handed back to
+  // the page (T-32593); someone signed in who is nobody here gets the same
+  // nothing-here a wrong address gets — whether the app exists at all is its
+  // owner's to tell. The `/api/` doors keep their own refusals, which speak.
+  if (!r.path.startsWith('/api/') && !reads(who, app.access)) {
+    return who.person ? nothingHere() : redirect(signInAt(req.url), 303)
+  }
   return reporting(
     await (r.path.startsWith('/api/')
       ? api(req, env, space, app, r.path.slice(4), who)

@@ -308,9 +308,9 @@ slow('an app says who may read it and who may write it', async () => {
     await anyone('vote').applied(line('my vote'))
     assertEquals((await anyone('vote').get('.doc!')).length, 2)
 
-    // private: the data answers members only, both ways. The PAGE still
-    // serves — an app's bytes are not its data, and a visitor who is asked to
-    // sign in has to have somewhere to be asked.
+    // private: members only, and the PAGE is part of what only they see
+    // (C-32607 item 5). A stranger is sent to sign in, holding the page as
+    // the address to come back to; its owner reads it.
     await agent.tool('app_files', {
       space: 'club',
       app: 'diary',
@@ -318,7 +318,18 @@ slow('an app says who may read it and who may write it', async () => {
       path: 'index.html',
       content: '<!doctype html><h1>the diary</h1>',
     })
-    assertEquals((await k.at('club.yaks.app', '/diary/')).status, 200)
+    let stranger = await k.at('club.yaks.app', '/diary/', {
+      redirect: 'manual',
+    })
+    assertEquals(stranger.status, 303)
+    assertMatch(
+      stranger.headers.get('location') ?? '',
+      /^https:\/\/yaks\.app\/login\?return=.*%2Fdiary%2F$/,
+    )
+    assertEquals(
+      (await k.at('club.yaks.app', '/diary/', { headers: { cookie } })).status,
+      200,
+    )
     let shut = await k.at('club.yaks.app', '/diary/api/query?.doc!')
     assertEquals(shut.status, 401)
     assertEquals((await shut.json()).error.code, 'not_a_reader')
@@ -339,9 +350,14 @@ slow('an app says who may read it and who may write it', async () => {
     let editor = (app: string) => client(k, 'club.yaks.app', app, mayaIn)
     await editor('list').applied(line('her line'))
     assertEquals((await anyone('list').get('.doc!')).length, 2)
-    // The private app is hers to read and to write.
+    // The private app is hers to read and to write — its page included.
     await editor('diary').applied(line('her secret'))
     assertEquals((await editor('diary').get('.doc!')).length, 2)
+    assertEquals(
+      (await k.at('club.yaks.app', '/diary/', { headers: { cookie: mayaIn } }))
+        .status,
+      200,
+    )
     // An editor writes the data; who belongs is the owner's alone.
     await assertRejects(
       () =>
@@ -366,6 +382,14 @@ slow('an app says who may read it and who may write it', async () => {
       headers: { cookie: mayaIn },
     })
     assertEquals(out.status, 403)
+    // Signed in and nobody here: the page is the nothing-here a wrong address
+    // gets, never a redirect to a sign-in she has already done.
+    let gone = await k.at('club.yaks.app', '/diary/', {
+      headers: { cookie: mayaIn },
+      redirect: 'manual',
+    })
+    assertEquals(gone.status, 404)
+    assertMatch(await gone.text(), /Nothing here yet/)
     await assertRejects(
       () =>
         agent.tool('member_remove', {
