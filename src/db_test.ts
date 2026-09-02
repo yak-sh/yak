@@ -712,6 +712,12 @@ Deno.test('comment: distinct writes are distinct, reuse is refused, edits allowe
   // comment-hood, so the guard leaves it untouched.
   apply(d, [{ eid: a, name: 'doc', comp: { body: 'edited' } }])
   assertEquals(bodies(), ['edited', 'second'])
+
+  // A retarget is a comment-only patch: no doc rides with it, nothing is
+  // displaced, so the comment moves.
+  let elsewhere = tag(d, 'doc', { title: 'elsewhere' })
+  apply(d, [{ eid: b, name: 'comment', comp: { target: elsewhere } }])
+  assertEquals(bodies(), ['edited'])
   d.close()
 })
 

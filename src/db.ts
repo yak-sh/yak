@@ -5643,7 +5643,13 @@ export let apply = (
       // ALREADY a comment is identity reuse — bounce the whole batch loudly, the
       // way a taken claim or alias does, rolling back the displacing doc write
       // with it, for every entry path (CLI, MCP, raw graph_apply, deno eval).
-      if (name == 'comment' && comp) {
+      // Reuse wears the CREATE shape, doc + comment on one eid; a `comment`
+      // arriving alone moves `target` and displaces nothing — an ordinary
+      // patch (M-17872), the retarget an aggregate tally follows.
+      if (
+        name == 'comment' && comp &&
+        changes.some((c) => c.eid == eid && c.name == 'doc' && c.comp)
+      ) {
         if (
           prep(
             db,
