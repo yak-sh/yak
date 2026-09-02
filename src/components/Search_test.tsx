@@ -54,14 +54,16 @@ slow('search sends only the settled query while typing', async () => {
   })
   let { document, window } = parseHTML('<main></main>')
   let asked: string[] = []
+  // The line rides /query as its leading bare term (hits.ts), not a param.
+  let term = (input: string | URL | Request) =>
+    decodeURIComponent(
+      new URL(String(input), 'http://tasks.test').search.slice(1).split('&')[0],
+    )
   Object.defineProperties(globalThis, {
     document: { value: document, configurable: true },
     fetch: {
       value: (input: string | URL | Request) => {
-        asked.push(
-          new URL(String(input), 'http://tasks.test').searchParams
-            .get('q') ?? '',
-        )
+        asked.push(term(input))
         return Promise.resolve(Response.json([]))
       },
       configurable: true,
