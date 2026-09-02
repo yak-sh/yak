@@ -124,11 +124,16 @@ slow('the served client: a page saves, lists and watches', async () => {
     }
 
     // A refusal arrives as the server's own sentence, not a status code and
-    // not a machine word (C-32574 item 2).
-    await assertRejects(
+    // not a machine word (C-32574 item 2) — and, when signing in is the way
+    // through, the door that does it, carrying this page back (T-32593).
+    let strangers = await assertRejects(
       () => mod.store(`${anyone.origin}/recipes/api/`).apply({ doc: {} }),
       Error,
       'sign in to change this app',
+    )
+    assertMatch(
+      (strangers as Error & { signIn: string }).signIn,
+      /^https:\/\/yaks\.app\/login\?return=/,
     )
     await assertRejects(
       () => store.query('work=build'),

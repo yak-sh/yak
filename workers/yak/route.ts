@@ -30,6 +30,24 @@ export let hostOf = (req: Request) => {
     : host
 }
 
+// An address on the platform's own zone: https, and the apex or a hostname
+// under it. It is what a sign-in may hand someone back to (T-32593) — a
+// stranger's address is nowhere we send anyone, so it answers null and the
+// caller goes home instead. Pure, like the rest of this file.
+export let onZone = (href: string) => {
+  let url
+  try {
+    url = new URL(href)
+  } catch {
+    return null
+  }
+  let host = url.hostname.toLowerCase()
+  return url.protocol == 'https:' &&
+      (host == PLATFORM || host.endsWith(`.${PLATFORM}`))
+    ? url.href
+    : null
+}
+
 export let route = (host: string, pathname: string): Route => {
   let space = host.endsWith(`.${PLATFORM}`)
     ? host.slice(0, -PLATFORM.length - 1)

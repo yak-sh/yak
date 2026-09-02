@@ -71,7 +71,8 @@ An app is readable by anyone with the link and writable by its members. When
 it is for other people too, say so: app_new (or app_set) takes access 'open',
 where anyone with the link can vote, add a line or sign up without signing in,
 and 'private', where only members see it at all; member_add invites someone
-into the space by email address, and they sign in at yaks.app with it.
+into the space by email address, and they sign in at yaks.app with it and land
+back on the page they were on.
 
 Its data belongs in the app's own store, not localStorage — so it is the same
 on their phone and their laptop, and so you can read and repair it yourself.

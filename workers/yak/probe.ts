@@ -274,7 +274,7 @@ export let signIn = async (
   await asked.body?.cancel()
   let code = await mailed(k, email)
   let inn = await form('/login/code', { email, code })
-  if (inn.status != 302) throw new Error(`code: ${await inn.text()}`)
+  if (inn.status != 303) throw new Error(`code: ${await inn.text()}`)
   await inn.body?.cancel()
   let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
   let claims = await verify(cookie.slice(COOKIE.length + 1), k.secret)

@@ -5,7 +5,10 @@
 // A person proves who they are by receiving mail: `POST /login` mints a
 // six-digit code (signin.ts) and hands it to the mail seam (mail.ts);
 // `POST /login/code` spends it, finds or mints the person, and sets the
-// platform session cookie (src/token.ts). No password exists to lose.
+// platform session cookie (src/token.ts). No password exists to lose. A person
+// sent here from a page they could not use arrives as `/login?return=<url>`:
+// both cards carry that address forward, and the spent code lands them back on
+// it when it is one of ours (T-32593).
 //
 // An agent proves who it is with a bearer token from
 // `@cloudflare/workers-oauth-provider`, which owns `/oauth/token`,
@@ -40,7 +43,7 @@ import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { mail } from './mail.ts'
 import { askAllow, askCode, askEmail, lost } from './pages.ts'
-import { hostOf, PLATFORM } from './route.ts'
+import { hostOf, onZone, PLATFORM } from './route.ts'
 import { canon, mint, personOf, spend } from './signin.ts'
 import { storeOf } from './store.ts'
 
@@ -94,11 +97,16 @@ export let unauthorized = (req: Request) => {
   })
 }
 
-let redirect = (to: string, set?: string) =>
+let redirect = (to: string, set?: string, status = 302) =>
   new Response(null, {
-    status: 302,
+    status,
     headers: { location: to, ...(set ? { 'set-cookie': set } : {}) },
   })
+
+// Where a signed-in person lands: the page they came from, when it is on our
+// own zone, else the apex as ever. An off-zone address is ignored and never
+// followed — the field is a stranger's to fill in (route.ts `onZone`).
+let backTo = (back: string) => (back && onZone(back)) || '/'
 
 // The cookie's Domain: the platform's own apex, so one sign-in serves every
 // space's hostname. On a dev host there is no domain to share — an IP takes
@@ -120,7 +128,13 @@ let secret = (env: Env) => {
 
 // The person is known: the cookie, the space that is theirs, the first-owner
 // bootstrap, and wherever they were going.
-let landed = async (req: Request, env: Env, person: string, q: string) => {
+let landed = async (
+  req: Request,
+  env: Env,
+  person: string,
+  q: string,
+  back: string,
+) => {
   let store = meta(env)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   // Signing in IS having a space (T-32482): theirs already, or minted here
@@ -141,7 +155,9 @@ let landed = async (req: Request, env: Env, person: string, q: string) => {
     secret(env),
   )
   let set = cookie(token, domainOf(req), SESSION)
-  return q ? allow(req, env, q, person, set) : redirect('/', set)
+  // See Other: the code was POSTed, and where it sends them is a page to GET,
+  // never that form again.
+  return q ? allow(req, env, q, person, set) : redirect(backTo(back), set, 303)
 }
 
 // The authorize request as the provider reads it, re-parsed from the query
@@ -213,14 +229,17 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     : new FormData()
   let field = (name: string) => String(form.get(name) ?? '')
 
-  if (path == '/login' && req.method == 'GET') return askEmail(null)
+  if (path == '/login' && req.method == 'GET') {
+    return askEmail(null, url.searchParams.get('return'))
+  }
 
   // An address, and a code on its way to it. The address is never checked
   // against a person here: whether one exists is not a stranger's business.
   if (path == '/login' && req.method == 'POST') {
     let email = canon(field('email'))
+    let back = field('return') || null
     if (!email.includes('@')) {
-      return askEmail(field('q') || null, undefined, 400)
+      return askEmail(field('q') || null, back, undefined, 400)
     }
     let code = await mint(meta(env), secret(env), email)
     await mail(env)({
@@ -230,21 +249,23 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         'It lasts ten minutes. If you did not ask for it, nothing has ' +
         'happened and you can ignore this.',
     })
-    return askCode(email, field('q') || null)
+    return askCode(email, field('q') || null, back)
   }
 
   if (path == '/login/code' && req.method == 'POST') {
     let email = canon(field('email'))
     let q = field('q')
+    let back = field('return')
     if (!await spend(meta(env), secret(env), email, field('code'))) {
       return askCode(
         email,
         q || null,
+        back || null,
         'That code has expired or was mistyped. Ask for a fresh one?',
         400,
       )
     }
-    return landed(req, env, await personOf(meta(env), email), q)
+    return landed(req, env, await personOf(meta(env), email), q, back)
   }
 
   // The consent page: the sign-in card wearing the client's name, or one
@@ -254,7 +275,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let ask = await asked(req, env, q)
     if (ask instanceof Response) return ask
     let who = await withAuth(env, req)
-    if (!who) return askEmail(q, await clientName(env, ask))
+    if (!who) return askEmail(q, null, await clientName(env, ask))
     let [row] = await (await meta(env)(`/query?id=${who.person}`)).json() as {
       email?: { address: string }
     }[]
@@ -268,7 +289,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   if (path == '/oauth/allow' && req.method == 'POST') {
     let who = await withAuth(env, req)
     let q = field('q')
-    if (!who) return askEmail(q || null)
+    if (!who) return askEmail(q || null, null)
     return allow(req, env, q, who.person)
   }
 

@@ -1,6 +1,6 @@
 // The route table as data: hostname + path in, (space, app, path) out.
 import { assertEquals } from '@std/assert'
-import { hostOf, route } from './route.ts'
+import { hostOf, onZone, route } from './route.ts'
 
 let cases: [string, string, ReturnType<typeof route>][] = [
   ['yaks.app', '/', { space: null, app: null, path: '/' }],
@@ -39,4 +39,22 @@ Deno.test('hostOf: x-yak-host stands in on a dev host only', () => {
   assertEquals(at('http://127.0.0.1:8787/'), '127.0.0.1')
   assertEquals(at('https://yaks.app/', 'jeff.yaks.app'), 'yaks.app')
   assertEquals(at('https://maya.yaks.app/', 'jeff.yaks.app'), 'maya.yaks.app')
+})
+
+// What a sign-in is allowed to hand someone back to (T-32593). A stranger's
+// address is not one of ours however it is spelled.
+Deno.test('onZone: our own https hostnames, and nothing else', () => {
+  let ours: [string, string | null][] = [
+    ['https://jeff.yaks.app/notes/', 'https://jeff.yaks.app/notes/'],
+    ['https://yaks.app/', 'https://yaks.app/'],
+    ['https://JEFF.yaks.app/x?a=1', 'https://jeff.yaks.app/x?a=1'],
+    ['http://jeff.yaks.app/notes/', null],
+    ['https://yaks.app.example.com/', null],
+    ['https://example.com/?to=https://yaks.app/', null],
+    ['//jeff.yaks.app/notes/', null],
+    ['/notes/', null],
+    ['javascript:alert(1)', null],
+    ['', null],
+  ]
+  for (let [href, want] of ours) assertEquals(onZone(href), want, href)
 })

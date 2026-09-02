@@ -73,14 +73,26 @@ export let oops = () =>
 export let soon = (what: string) =>
   shell(`${what} is on its way.`, "We're still setting the table.", 404)
 
-// A hidden field, only when there is something to carry: the authorize
-// request's own query string, so the code form lands back where it started.
-let carried = (q: string | null) =>
-  q ? `<input type="hidden" name="q" value="${esc(q)}">` : ''
+// A hidden field, only when there is something to carry.
+let held = (name: string, value?: string | null) =>
+  value ? `<input type="hidden" name="${name}" value="${esc(value)}">` : ''
+
+// What each card carries forward: the authorize request's own query string,
+// so the code form lands back where it started, and the page the person was
+// on before they were asked to sign in, so the code hands them back to it
+// (T-32593). Whether that address is one to follow is the login door's to
+// decide, never this page's.
+let carried = (q: string | null, back?: string | null) =>
+  held('q', q) + held('return', back)
 
 // Ask for an address. `who` names the app asking, when one is (the OAuth
 // consent page IS this page — signing in is the consent).
-export let askEmail = (q: string | null, who?: string, status = 200) =>
+export let askEmail = (
+  q: string | null,
+  back: string | null,
+  who?: string,
+  status = 200,
+) =>
   shell(
     'Sign in to yaks.app',
     who
@@ -88,7 +100,7 @@ export let askEmail = (q: string | null, who?: string, status = 200) =>
         "we'll send a code."
       : "Pop in your email and we'll send you a six-digit code.",
     status,
-    `<form method="post" action="/login">${carried(q)}
+    `<form method="post" action="/login">${carried(q, back)}
 <input name="email" type="email" required autofocus autocomplete="email" placeholder="you@example.com" aria-label="Your email">
 <button type="submit">Send me a code</button>
 </form>${home}`,
@@ -98,6 +110,7 @@ export let askEmail = (q: string | null, who?: string, status = 200) =>
 export let askCode = (
   email: string,
   q: string | null,
+  back: string | null,
   why?: string,
   status = 200,
 ) =>
@@ -105,7 +118,7 @@ export let askCode = (
     'Check your email',
     why ?? `We sent a six-digit code to ${esc(email)}. It lasts ten minutes.`,
     status,
-    `<form method="post" action="/login/code">${carried(q)}
+    `<form method="post" action="/login/code">${carried(q, back)}
 <input type="hidden" name="email" value="${esc(email)}">
 <input class="Code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus autocomplete="one-time-code" aria-label="Your six-digit code">
 <button type="submit">Sign in</button>

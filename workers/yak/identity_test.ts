@@ -56,9 +56,10 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assertEquals(wrong.status, 400)
     assertMatch(await wrong.text(), /expired or was mistyped/)
 
-    // The code itself: a session cookie for the whole platform.
+    // The code itself: a session cookie for the whole platform. See Other,
+    // because the form is not what to do next.
     let inn = await form(k, '/login/code', { email, code })
-    assertEquals(inn.status, 302)
+    assertEquals(inn.status, 303)
     assertEquals(inn.headers.get('location'), '/')
     let set = inn.headers.get('set-cookie') ?? ''
     assertMatch(set, /^yak_session=/)
@@ -81,6 +82,37 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
       `.member.space=${theirs.entity.eid}&.member.person=${them.entity.eid}`,
     )
     assertEquals((seat.member as { role: string }).role, 'owner')
+
+    // Somebody sent here from a page they could not use comes back to it
+    // (T-32593). The address rides both cards as a hidden field, and only an
+    // address on our own zone is followed — a stranger's is ignored.
+    let comeback = async (back: string) => {
+      let addr = `probe-${crypto.randomUUID().slice(0, 8)}@yaks.app`
+      let card = await k.at(
+        'yaks.app',
+        `/login?return=${encodeURIComponent(back)}`,
+      )
+      assertMatch(
+        await card.text(),
+        new RegExp(`name="return" value="${back}"`),
+      )
+      let asked = await form(k, '/login', { email: addr, return: back })
+      assertMatch(
+        await asked.text(),
+        new RegExp(`name="return" value="${back}"`),
+      )
+      let r = await form(k, '/login/code', {
+        email: addr,
+        code: await mailed(k, addr),
+        return: back,
+      })
+      assertMatch(r.headers.get('set-cookie') ?? '', /^yak_session=/)
+      assertEquals(r.status, 303)
+      return r.headers.get('location')
+    }
+    let notes = 'https://someone.yaks.app/notes/'
+    assertEquals(await comeback(notes), notes)
+    assertEquals(await comeback('https://elsewhere.example/notes/'), '/')
 
     // Spent: the same code opens nothing twice.
     assertEquals((await form(k, '/login/code', { email, code })).status, 400)

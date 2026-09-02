@@ -30,7 +30,7 @@ import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { listing } from './listing.ts'
 import { nothingHere } from './pages.ts'
-import { hostOf, route } from './route.ts'
+import { hostOf, PLATFORM, route } from './route.ts'
 import { mayWrite, reads, vouched, type Who, whoIs, writes } from './session.ts'
 import { storeOf } from './store.ts'
 import { noted } from './unseen.ts'
@@ -87,7 +87,8 @@ let keyOf = (space: Space, app: App, path: string) =>
 // after that — so it answers a SENTENCE beside its code (C-32574 item 2, where
 // a club member's vote showed them `{"error":{"code":"not_a_writer"}}`). The
 // code is the machine's half and never moves; the message is what someone is
-// told.
+// told. When signing in is the way through it also answers `signIn`, the
+// address that does it and comes back (T-32593).
 let SAYS: Record<string, string> = {
   method_not_allowed: 'that door does not answer this method',
   too_many_reports: 'this app has reported too many breaks this minute',
@@ -106,8 +107,27 @@ let MEMBER: Record<string, string> = {
   not_a_reader: "this app is its owner's — they can let you in",
 }
 
-let json = (status: number, code: string, says = SAYS[code]) =>
-  Response.json({ error: { code, message: says ?? code } }, { status })
+let json = (
+  status: number,
+  code: string,
+  says = SAYS[code],
+  signIn?: string,
+) =>
+  Response.json(
+    { error: { code, message: says ?? code, ...(signIn ? { signIn } : {}) } },
+    { status },
+  )
+
+// Where a refusal sends someone who has not signed in: the platform's login
+// page, already carrying the page they are on, so the code hands them back to
+// it (T-32593). The page is the Referer — an `/api/` door is nowhere to
+// return to — and the request's own address when the browser sent none.
+// Whether that address is one to follow is the login door's to decide.
+let signInAt = (req: Request) => {
+  let to = new URL(`https://${PLATFORM}/login`)
+  to.searchParams.set('return', req.headers.get('referer') || req.url)
+  return to.href
+}
 
 let redirect = (to: string) =>
   new Response(null, { status: 302, headers: { location: to } })
@@ -282,7 +302,9 @@ let api = async (
   // Signed out, the way through is to sign in (SAYS); signed in, it is the
   // owner's to grant, so the sentence says so.
   let refused = (what = 'not_a_writer') =>
-    who.person ? json(403, what, MEMBER[what]) : json(401, what)
+    who.person
+      ? json(403, what, MEMBER[what])
+      : json(401, what, SAYS[what], signInAt(req))
   let mayRead = reads(who, app.access)
   let mayPost = writes(who, app.access)
   if (path == '/graph') {

@@ -107,9 +107,12 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     // where a club member's vote showed them the bare code).
     let refusal = await nobody.post([])
     assertEquals(refusal.status, 401)
-    assertEquals(await refusal.json(), {
-      error: { code: 'not_a_writer', message: 'sign in to change this app' },
-    })
+    let said = (await refusal.json()).error
+    assertEquals(said.code, 'not_a_writer')
+    assertEquals(said.message, 'sign in to change this app')
+    // ...and where signing in happens, holding this page as its return
+    // address, so the person comes back to it (T-32593).
+    assertMatch(said.signIn, /^https:\/\/yaks\.app\/login\?return=/)
     await owner.applied([
       { eid: cake, name: 'doc', comp: { title: "Grandma's lemon cake" } },
     ])
