@@ -55,6 +55,37 @@ the former top-level `eid`/`num` and `comps` wrapper do not exist. `kind` is a
 reserved key in the component namespace, so extensions must not register a
 component named `kind`.
 
+A read is also a write. `POST /apply` and MCP `graph_apply` take
+`{entities: [...]}`, each entry the shape above: `entity: {eid}` names an
+existing entity or, as a `$alias`, one the batch mints (the result's `aliases`
+maps `$alias → eid`); components ride flat beside it as patches; edges are the
+`dependency` component, `{type, child}` or a list of them. Wherever an eid goes
+— `entity.eid`, a ref column, a dependency child — a `$alias`, a human id, or a
+nested bundle stands in. `was` beside the components guards per column. `kind`,
+`num`, `refs`, `backrefs`, `comments`, and stamped or derived columns are
+ignored, so a read edited and sent back writes just the edit:
+
+```json
+[{
+  "entity": { "eid": "$box" },
+  "doc": { "title": "Recipe box" },
+  "project": {},
+  "dependency": [
+    { "type": "requires", "child": "T-3" },
+    {
+      "type": "contains",
+      "child": {
+        "doc": { "title": "First recipe" },
+        "task": { "project": "$box" }
+      }
+    }
+  ]
+}]
+```
+
+`apply()` lowers bundles to the flat batch, which stays the administrative door;
+the older `{key|id, comps, deps, was}` literal is still accepted.
+
 Beside the graph sit FTS5 full-text search over every doc and local semantic
 embeddings. Both are ranked `/query` evaluations whose ordinary entity rows
 carry a result-only `rank` component; `/` in the web UI, `task search`, and MCP

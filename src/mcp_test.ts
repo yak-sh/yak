@@ -2210,6 +2210,35 @@ Deno.test('graph_apply accepts nested literals and reports aliases', async () =>
           type: 'requires',
         }],
       )
+      // The bundle shape through the same door: a $alias, a nested child,
+      // and a human-id ref back to what the first call made.
+      let bundled = await client.callTool({
+        name: 'graph_apply',
+        arguments: {
+          entities: [{
+            entity: { eid: '$box' },
+            doc: { title: 'recipe box' },
+            task: {},
+            dependency: [
+              { type: 'requires', child: result.aliases.step },
+              {
+                type: 'contains',
+                child: { doc: { title: 'recipe' }, task: {} },
+              },
+            ],
+          }],
+        },
+      })
+      assertEquals(bundled.isError, undefined)
+      let box = JSON.parse(said(bundled)) as {
+        aliases: Record<string, string>
+      }
+      let deps = depsOf(g.db, [box.aliases.$box])
+      assertEquals(deps.map((d) => d.type).sort(), ['contains', 'requires'])
+      assertEquals(
+        deps.find((d) => d.type == 'requires')?.child,
+        result.aliases.step,
+      )
     })
   } finally {
     g.db.close()

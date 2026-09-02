@@ -1980,42 +1980,69 @@ empty. ${GRAMMAR} ${FILTERS}`,
     z.string(),
     z.number(),
     z.record(z.unknown()).describe(
-      'Nested entity literal with the same key/id/comps/deps/was shape.',
+      'A nested bundle in the same shape: {entity: {eid}} alone references ' +
+        'that entity; with components it defines one here.',
     ),
   ])
+  let dependencyLiteral = z.object({
+    type: z.enum(edges),
+    child: literalRef,
+  }).strict()
   for (let type of edges) {
     dependencyLiterals[type] = z.union([literalRef, z.array(literalRef)])
       .optional()
   }
   let entityLiteral = z.object({
+    entity: z.object({
+      eid: z.string().optional(),
+      num: z.number().optional(),
+    }).strict().optional(),
+    ...componentLiterals,
+    dependency: z.union([dependencyLiteral, z.array(dependencyLiteral)])
+      .optional(),
+    was: z.object(guardedLiterals).strict().optional(),
+    // A read's projections: accepted and ignored so a read goes straight back.
+    kind: z.unknown().optional(),
+    refs: z.unknown().optional(),
+    backrefs: z.unknown().optional(),
+    comments: z.unknown().optional(),
+    // The older key/id/comps/deps literal, still accepted.
     key: z.string().optional(),
     id: z.string().optional(),
     comps: z.object(componentLiterals).strict().optional(),
     deps: z.object(dependencyLiterals).strict().optional(),
-    was: z.object(guardedLiterals).strict().optional(),
   }).strict()
 
   tool(
     'graph_apply',
-    `Raw wire access: apply a flat change batch OR nested entity literals
-atomically (exactly one of changes/entities). A change is
-{eid, name, comp} — comp is a PATCH (omitted columns untouched), comp:
-null deletes the component, {name:'entity', comp:null} deletes the
-entity. Mint uuids for new entities. eid and reference comp values accept
-human ids (T-3, P-19) for EXISTING entities. Edges: name 'dependency',
-comp {type: ${edges.join('|')}, child} links eid→child; add gone:
-true to unlink (a triple has no row key, so the comp names the whole
-edge). Unknown component names are forward-compatible no-ops. Optional
-was is a PRECONDITION — the graph's --ff-only: a map of column → the
-SHA-256 of the value you read (or null for "I read no value"), and
-apply() refuses the WHOLE batch if any named column has moved since. It
-rides beside comp (never inside it), per column, so a stale guarded write
-is rejected while the newer value is preserved. Same allowlist and
-claim-lease rules as every other client; writes broadcast live to all
-screens. The result reports submitted intent and the authoritative
-effective batch returned by apply(), plus request-local alias mappings for
-nested literals. A nested entity has optional key/id, generated comps, and
-generated deps whose values name, number, or nest another entity.
+    `Raw wire access: apply entity bundles OR a flat change batch
+atomically (exactly one of entities/changes). A bundle is the shape a read
+returns — {entity: {eid}, doc: {...}, task: {...}} — components flat beside
+entity, each a PATCH (omitted columns untouched, prop: null clears a column,
+comp: null deletes the component). entity.eid names an existing entity (uuid
+or a human id such as T-3) or, as a $alias ({entity: {eid: '$goal'}}), one
+this batch mints; the result's aliases map $alias → eid. Wherever an eid goes
+— entity.eid, a ref column such as task.project or comment.target, a
+dependency child — a $alias, a human id, or a nested bundle stands in
+({entity: {eid: 'T-3'}} alone references; with components it defines).
+Edges are the dependency component: dependency: {type: ${
+      edges.join('|')
+    }, child}, a list when there are several. A read's kind, num, refs,
+backrefs, comments, and stamped or derived columns are ignored, so a read
+edited and sent back writes just the edit. Optional was is a PRECONDITION
+beside the components ({doc: {title: '<sha>'}}) — the graph's --ff-only: per
+column, the SHA-256 of the value you read (or null for "I read no value"),
+and apply() refuses the WHOLE batch if any named column has moved since, so
+a stale guarded write is rejected while the newer value is preserved. The
+older {key|id, comps, deps, was} literal is still accepted. A change is
+{eid, name, comp} — the lowered form: comp a PATCH as above, {name:'entity',
+comp:null} deletes the entity, name 'dependency' with comp {type, child}
+links eid→child and gone: true unlinks (a triple has no row key, so the comp
+names the whole edge), was rides beside comp per column. Unknown component
+names are forward-compatible no-ops. Same allowlist and claim-lease rules as
+every other client; writes broadcast live to all screens. The result reports
+submitted intent and the authoritative effective batch returned by apply(),
+plus aliases for bundles.
 
 ${EDIT_OP}
 
