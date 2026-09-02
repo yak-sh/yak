@@ -119,6 +119,17 @@ let APPS = {
 
 let RESOURCES = [GUIDE, APPS]
 
+// One resource's bytes, from the assets the apex serves. A redirect is
+// followed once: in production the assets binding drops a page's `.html` and
+// answers 307, and a resource that came back as an empty redirect would be a
+// view that renders nothing.
+let asset = async (ctx: Ctx, url: string) => {
+  let page = await ctx.env.ASSETS.fetch(new Request(url))
+  let to = page.status > 299 && page.status < 400 &&
+    page.headers.get('location')
+  return to ? ctx.env.ASSETS.fetch(new Request(new URL(to, url).href)) : page
+}
+
 type Rpc = {
   jsonrpc: '2.0'
   id: string | number
@@ -214,9 +225,7 @@ let handle = async (ctx: Ctx, rpc: Rpc) => {
   if (rpc.method == 'resources/read') {
     let want = RESOURCES.find((r) => r.uri == params.uri)
     if (!want) return rpcError(rpc.id, -32602, `no resource ${params.uri}`)
-    let page = await ctx.env.ASSETS.fetch(
-      new Request(want.page),
-    )
+    let page = await asset(ctx, want.page)
     return result(rpc.id, {
       contents: [{
         uri: want.uri,
