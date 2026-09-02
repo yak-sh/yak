@@ -21,7 +21,7 @@ import { mutationResult } from './mutation.ts'
 import { responses } from './responses.ts'
 import { attentionPrompt } from './runner.ts'
 import { sessionRow, writeSession } from './session_store.ts'
-import { uuid } from './types.ts'
+import { statusOf, uuid } from './types.ts'
 import { slow } from './testing.ts'
 import { freshDb } from './testdb.ts'
 import { open } from './store/sqlite.ts'
@@ -428,7 +428,10 @@ slow(
       assertEquals(ok.failed, false)
       let landed = rows(snapshot(db)).find((row) => row.eid == eid)
       assertEquals(landed?.comps.doc?.title, 'batched')
-      assertEquals(landed?.comps.task?.status, 'open')
+      // status is derived, never stored (D-24102): the task comp shows as its
+      // schema default, and the bare row reads open.
+      assertEquals(landed?.comps.task?.priority, 0)
+      assertEquals(statusOf(landed!.comps), 'open')
 
       let nested = await tasks.call('graph_apply', {
         entities: [{
