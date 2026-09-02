@@ -5369,3 +5369,58 @@ Deno.test("persona gate: composition and body are a person's writes", () => {
     apply(d, [{ ...link, comp: { ...link.comp, gone: true } }])
   )
 })
+
+// A write that changes nothing writes nothing (settled()): no journal row, no
+// cast, no `updated` stamp — the role heartbeat restamped decided_at 1.8M
+// times through a door that journaled every unchanged value.
+Deno.test('a write that changes nothing writes nothing', () => {
+  let t = uid()
+  apply(db, [{ eid: t, name: 'doc', comp: { title: 'same', body: 'b' } }])
+  let before = journalCount()
+  let out = apply(db, [
+    { eid: t, name: 'doc', comp: { title: 'same', body: 'b' } },
+  ])
+  assertEquals(out.filter((c) => c.eid == t), [])
+  assertEquals(journalCount(), before)
+  assertEquals(comp(t, 'updated'), undefined) // a no-op is not an edit
+})
+
+Deno.test('a patch journals only the columns that moved', () => {
+  let t = uid()
+  apply(db, [{ eid: t, name: 'doc', comp: { title: 'same', body: 'one' } }])
+  apply(db, [{ eid: t, name: 'doc', comp: { title: 'same', body: 'two' } }])
+  let doc = journalOf(db, t)[0].changes.find((c) => c.name == 'doc')!
+  assertEquals(doc.comp, { body: 'two' })
+  assertEquals(!!comp(t, 'updated'), true)
+})
+
+Deno.test('a bare touch on a present tag and a removal of an absent comp are no-ops', () => {
+  let t = uid()
+  apply(db, [
+    { eid: t, name: 'doc', comp: { title: 't' } },
+    { eid: t, name: 'favorite', comp: {} },
+  ])
+  let before = journalCount()
+  let touch = apply(db, [{ eid: t, name: 'favorite', comp: {} }])
+  assertEquals(touch.filter((c) => c.eid == t), [])
+  let gone = apply(db, [{ eid: t, name: 'web', comp: null }])
+  assertEquals(gone.filter((c) => c.eid == t), [])
+  assertEquals(journalCount(), before)
+})
+
+Deno.test('an explicit null still clears; a stale guard refuses even a matching write', () => {
+  let t = uid(), slug = `nop-${uid().slice(0, 8)}`
+  apply(db, [{ eid: t, name: 'alias', comp: { slug, slugs: 'one two' } }])
+  apply(db, [{ eid: t, name: 'alias', comp: { slugs: null } }])
+  assertEquals(comp(t, 'alias')?.slugs, null)
+  let before = journalCount()
+  assertThrows(() =>
+    apply(db, [{
+      eid: t,
+      name: 'alias',
+      comp: { slugs: null },
+      was: { slugs: sha('one two') },
+    }])
+  )
+  assertEquals(journalCount(), before)
+})

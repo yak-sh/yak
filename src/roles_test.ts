@@ -47,6 +47,7 @@ let {
   ventureOf,
   working,
   workingNow,
+  stamp,
 } = await import('./roles.ts')
 
 let uid = () => crypto.randomUUID()
@@ -1592,4 +1593,27 @@ Deno.test('system role: cap rides the tuning only for specs that declare it', as
   await until(() => calls.length == 2, { label: 'the tuned cap pass' })
   assertEquals(calls.at(-1), { quiet: 0, cooldown: 60, cap: 5 })
   apply(db, [{ eid: role, name: 'entity', comp: null }])
+})
+
+// decided_at is when the DECISION was made: a reason that rewords itself is
+// the same decision and must not restamp (nor journal a heartbeat).
+Deno.test('stamp: a reworded reason keeps decided_at; a new decision restamps', () => {
+  let { role } = seed('native')
+  let read = () =>
+    db.prepare(`select decided_at, reason from role where entity = ${R}`)
+      .get(role) as { decided_at: string; reason: string }
+  let tick = (decision: string, reason: string, decided_at: string) =>
+    stamp(role, {
+      decision,
+      reason,
+      observed: null,
+      decided_at,
+      error: null,
+    }, cast)
+  tick('skip', '1 waiting', 'T1')
+  assertEquals(read(), { decided_at: 'T1', reason: '1 waiting' })
+  tick('skip', '2 waiting', 'T2')
+  assertEquals(read(), { decided_at: 'T1', reason: '2 waiting' })
+  tick('spawn', '2 waiting', 'T3')
+  assertEquals(read().decided_at, 'T3')
 })

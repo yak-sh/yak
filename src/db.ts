@@ -4108,6 +4108,41 @@ let select = (name: string): string => {
     }) __s`
 }
 
+// A write that changes nothing IS nothing. Given a comp bound for an existing
+// row, return it with every column whose value already matches the stored one
+// removed; `null` when nothing is left (the change is a no-op: not written,
+// not journaled, not cast, no `updated` stamp). A comp for a row that does
+// not exist yet is returned whole — presence is the change. Compared through
+// the same projection a precondition reads (refs as eids, doc.body as text),
+// loosely, so a number sent as a string still matches its stored self. The
+// role heartbeat restamped decided_at 1.8M times before this held.
+let settled = (
+  db: DatabaseSync,
+  name: string,
+  eid: string,
+  comp: Record<string, unknown>,
+): Record<string, unknown> | null => {
+  let row = prep(db, `${select(name)} where eid = ?`).get(eid) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return comp
+  let same = (col: string) => {
+    if (!(col in row)) return false
+    let want: unknown
+    try {
+      want = isRef(name, col) ? comp[col] : bound(name, col, comp[col])
+    } catch {
+      return false // let the write path raise the shape error
+    }
+    // deno-lint-ignore eqeqeq
+    return (want ?? null) == (row[col] ?? null)
+  }
+  let left = Object.fromEntries(
+    Object.entries(comp).filter(([col]) => !same(col)),
+  )
+  return Object.keys(left).length ? left : null
+}
+
 // A boot sweep replays a deliverable's created() effect as if its row were a
 // fresh wire write, so the row must read back the way the wire delivered it:
 // the owner eid under `eid`, and every {eid} REFERENCE projected to its target's
@@ -5003,6 +5038,9 @@ export let apply = (
   let dead = graveOf(db)
   let extra: Change[] = []
   let touched = new Set<string>()
+  // Changes that turned out to write nothing (settled()) — left out of the
+  // journal and the returned batch, since nothing happened.
+  let dropped = new Set<Change>()
   let minted = new Set<string>()
   let createdComps = new Set<string>()
   // Whether this batch's writer is a human — asked lazily, once, by the
@@ -5133,7 +5171,9 @@ export let apply = (
         if (spine(db, t).changes) minted.add(t)
       }
     }
-    for (let { eid, name, comp, was } of changes) {
+    for (let change of changes) {
+      let { eid, name, was } = change
+      let comp = change.comp
       // An edge is a TRIPLE, not a row keyed by eid: the comp names the
       // whole (parent=eid, type, child) sentence, so linking is
       // insert-or-ignore, and unlinking says the same sentence with
@@ -5221,6 +5261,9 @@ export let apply = (
       }
       let cols = cmps[name]
       if (!cols) continue
+      // Whether THIS change is what first touched the eid — a no-op change
+      // un-touches it below, so a batch of pure no-ops stamps nothing.
+      let fresh = !touched.has(eid)
       touched.add(eid)
       // The wire naming an author/editor (created.by / updated.by) — noted
       // so the server-default below leaves that value alone.
@@ -5498,6 +5541,10 @@ export let apply = (
             ).run(eid).changes
           ) {
             took(eid, name)
+          } else {
+            // Removing what isn't there changes nothing.
+            dropped.add(change)
+            if (fresh) touched.delete(eid)
           }
           continue
         }
@@ -5622,6 +5669,17 @@ export let apply = (
         if (spine(db, eid).changes) minted.add(eid)
         continue
       }
+      // Every rule above has had its say; what reaches SQL is only what
+      // differs from the stored row. A change with no difference left is
+      // dropped whole — after the precondition, so a stale read is refused
+      // even when what it writes happens to match.
+      let left = settled(db, name, eid, comp)
+      if (!left) {
+        dropped.add(change)
+        if (fresh) touched.delete(eid)
+        continue
+      }
+      comp = change.comp = left
       let sent = cols.filter((c) => c in comp)
       // A reference column stores the target's int id; resolve the sent eid to
       // it (null passes through). refToId REFUSES a non-null eid that names no
@@ -5734,6 +5792,7 @@ export let apply = (
         throw refusal ?? e // the outer catch rolls the whole batch back
       }
     }
+    if (dropped.size) changes = changes.filter((c) => !dropped.has(c))
     // Canonical session facets are the read truth. Mirror their final state
     // after every component patch, including a deletion, so a rollback server
     // and an old client see the same values without gaining stamp authority.
