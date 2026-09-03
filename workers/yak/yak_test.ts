@@ -464,6 +464,42 @@ slow('an app says who may read it and who may write it', async () => {
       '.person!&.email.address=maya@example.com&.doc?',
     )
     assertEquals((named.doc as { title: string }).title, 'Maya')
+    // An invitation with nothing added is the letter above, unchanged; with a
+    // note, the inviter's own words ride at the TOP of it, attributed and
+    // quoted, so nobody reads them as the platform's (T-32963).
+    let hello = 'Come add what you are bringing — potluck is Saturday at 6.'
+    let withNote = await agent.tool('member_add', {
+      space: 'club',
+      email: 'sam@example.com',
+      app: 'list',
+      name: 'Sam',
+      note: hello,
+    })
+    assertStringIncludes(withNote, 'your note are on its way')
+    let noted = await letter(k, 'sam@example.com', hello)
+    assertStringIncludes(noted.body, `Hi Sam,\n\n${name} wrote:\n\n> ${hello}`)
+    assert(
+      noted.body.indexOf(hello) < noted.body.indexOf('invited you to'),
+      'the note is under the platform lines',
+    )
+    assertStringIncludes(noted.body, 'https://club.yaks.app/list/')
+    // A note past a paragraph is refused in a sentence — and refused BEFORE
+    // anything is written, so an invitation and its note stand or fall
+    // together rather than half-arriving.
+    await assertRejects(
+      () =>
+        agent.tool('member_add', {
+          space: 'club',
+          email: 'lee@example.com',
+          note: 'x'.repeat(501),
+        }),
+      Error,
+      'a note is at most 500',
+    )
+    assertEquals(
+      (await meta(k, cookie).query('.email.address=lee@example.com')).length,
+      0,
+    )
     // An app the space does not have is a refusal, not a link to nothing.
     await assertRejects(
       () =>

@@ -688,6 +688,34 @@ let told = (access: Access | null) =>
     ? 'only its members can see it; member_add mails an invitation to one'
     : 'anyone with the link can see it; only its members can change it'
 
+// The inviter's own message, where they sent one (T-32963): a line or two
+// saying what this is, carried at the top of the invitation. A paragraph, not
+// a newsletter — an invitation mails an address the SENDER chose, so free text
+// stays modest, and past the cap it is a refusal rather than a silent trim,
+// which would send half a sentence in somebody's name. Control characters go
+// because a letter is lines; markup cannot happen at all, since mail.ts
+// escapes the whole body into the html part.
+let NOTE = 500
+
+let noteOf = (v: unknown) => {
+  let said = text(v, 'note')
+    // deno-lint-ignore no-control-regex
+    .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
+    .trim()
+  if (said.length > NOTE) {
+    throw new Error(
+      `note: ${said.length} characters, and a note is at most ${NOTE} — ` +
+        'a line or two saying what this is, not a newsletter',
+    )
+  }
+  return said
+}
+
+// Their words, marked as theirs: quoted the way a letter quotes, so a reader
+// can tell what the person wrote from what the platform did.
+let quoted = (said: string) =>
+  said.split('\n').map((l) => `> ${l}`.trimEnd()).join('\n')
+
 // How many of these one person gets in an hour. A few is plenty: feedback is
 // a person noticing something, not a stream, and the fourth in an hour is
 // far likelier to be an agent in a loop than a fourth thing wrong.
@@ -1820,7 +1848,11 @@ export let TOOLS: Tool[] = [
       'may also invite. The invitation is MAILED to them — who invited them, ' +
       'the link, and that signing in at it with that address is all it takes ' +
       '— so name the app they are being invited to and the letter points at ' +
-      'it instead of the space. Pass their name if you know it and their ' +
+      "it instead of the space. Pass a note and the person's own message " +
+      'goes at the top of that letter, as written and quoted as theirs: a ' +
+      'line or two saying what this is ("the potluck list for Saturday"), ' +
+      'which is the difference between an invitation someone opens and one ' +
+      'they wonder about. Pass their name if you know it and their ' +
       'apps will show it beside what they write, so nobody sees an address; ' +
       'they can say for themselves at their first sign-in. There is nothing ' +
       'for them to install and no account to make first. ' +
@@ -1840,6 +1872,11 @@ export let TOOLS: Tool[] = [
           'what to call them — the name their apps show beside what they ' +
             'write. Leave it out and the first sign-in asks them',
         ),
+        note: str(
+          "the person's own message to them, carried at the top of the " +
+            'letter as written and quoted as theirs — a line or two, not a ' +
+            'newsletter. Leave it out and the letter is the invitation alone',
+        ),
         role: {
           type: 'string',
           enum: [...ROLES],
@@ -1854,6 +1891,9 @@ export let TOOLS: Tool[] = [
       let { space, who } = await owns(ctx, args)
       let email = address(args.email)
       let want = args.role == null ? 'editor' : role(args.role)
+      // Read before anything is written: a note too long is a refusal, and a
+      // refused invitation mails nothing at all (T-32963).
+      let note = args.note == null ? '' : noteOf(args.note)
       // What they were invited TO: the app, if one was named, else the
       // space. A link to the space root is a link to nothing when the app
       // does not answer the bare hostname (C-32624 item 4).
@@ -1909,6 +1949,9 @@ export let TOOLS: Tool[] = [
         to: email,
         subject: `${by ?? 'Someone'} invited you to ${what}`,
         body: (name ? `Hi ${name},\n\n` : '') +
+          // Their words first, and marked as theirs, so a reader never takes
+          // the platform to be saying them (T-32963).
+          (note ? `${by ?? 'They'} wrote:\n\n${quoted(note)}\n\n` : '') +
           `${by ?? 'Someone'} invited you to ${what} on yaks.app:\n\n` +
           `${link}\n\n` +
           `Sign in there with this address (${email}) and it is yours to ` +
@@ -1921,7 +1964,9 @@ export let TOOLS: Tool[] = [
           ` ${want} of ` +
           `${space.slug}${had ? ` (was ${had.role})` : ''} — ` +
           (sent
-            ? `the invitation is on its way to them, with the link: ${link}`
+            ? `the invitation${
+              note ? ' and your note are' : ' is'
+            } on its way to them, with the link: ${link}`
             : stopped
             ? `${stopped} So send them the link yourself: ${link}`
             : `the invitation could not be mailed, so send them the link ` +
