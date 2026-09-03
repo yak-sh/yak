@@ -170,9 +170,19 @@ let reported = (app: App, page: Response) => {
     .transform(page)
 }
 
+// A path behind no file whose last segment names no file TYPE is a route,
+// not a miss (T-32769): `/recipes/42` is the page asking to be opened at a
+// place, so the app's own index.html answers it with 200 and the page routes
+// on `location.pathname`. Anything with an extension is a file that is not
+// there, and stays the soft 404 — a missing stylesheet must not answer HTML.
+let pretty = (path: string) => !path.split('/').pop()!.includes('.')
+
 let asset = async (env: Env, space: Space, app: App, path: string) => {
   let blobs = r2Blobs(env.BLOBS)
   let key = keyOf(space, app, path)
+  // The index the fallback serves is the app's own, so the reporter and the
+  // reporting headers ride along exactly as they do at `/`.
+  if (!(await blobs.has(key)) && pretty(path)) key = keyOf(space, app, '/')
   if (!(await blobs.has(key))) return nothingHere()
   let type = mimeOf(key)
   let file = new Response(await blobs.get(key), {

@@ -93,6 +93,19 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     let style = await k.at('jeff.yaks.app', '/recipes/style.css')
     assertMatch(style.headers.get('content-type') ?? '', /text\/css/)
     assertEquals(await style.text(), 'h1 { color: peru }')
+    // A place inside the app, named by a path with no file behind it: the
+    // page itself answers, reporter and all, and routes on the pathname
+    // (T-32769). A missing FILE — it has an extension — is still nothing.
+    let deep = await k.at('jeff.yaks.app', '/recipes/recipes/42')
+    assertEquals(deep.status, 200)
+    assertMatch(deep.headers.get('content-type') ?? '', /text\/html/)
+    let inside = await deep.text()
+    assertStringIncludes(inside, page)
+    assertStringIncludes(inside, '/recipes/api/report.js')
+    assertEquals(
+      (await k.at('jeff.yaks.app', '/recipes/missing.css')).status,
+      404,
+    )
     // Another app in the space has its own files and its own store.
     assertEquals((await k.at('jeff.yaks.app', '/garden/')).status, 404)
 
@@ -362,6 +375,22 @@ slow('an app says who may read it and who may write it', async () => {
     )
     assertEquals(
       (await k.at('club.yaks.app', '/diary/', { headers: { cookie } })).status,
+      200,
+    )
+    // A pretty path inside it is the same page, so it is hidden the same way:
+    // the fallback is served behind the access rule, never around it.
+    let deeper = await k.at('club.yaks.app', '/diary/entries/7', {
+      redirect: 'manual',
+    })
+    assertEquals(deeper.status, 303)
+    assertMatch(
+      deeper.headers.get('location') ?? '',
+      /^https:\/\/yaks\.app\/login\?return=/,
+    )
+    assertEquals(
+      (await k.at('club.yaks.app', '/diary/entries/7', {
+        headers: { cookie },
+      })).status,
       200,
     )
     let shut = await k.at('club.yaks.app', '/diary/api/query?.doc!')

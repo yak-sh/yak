@@ -9,6 +9,15 @@ Make one with `app_new`, write files with `app_files` — the whole set in one
 call, as `files: [{path, content}, ...]` — then `app_deploy`, and give the
 person the URL.
 
+A page with more than one screen routes itself. The simplest way is the hash —
+`location.hash`, and a `hashchange` listener redrawing — which needs nothing
+from the kernel. Pretty paths work too: under an app, an address that names no
+file and ends in no extension (`/recipes/42`) is served the app's `index.html`,
+so a page using the History API can read `location.pathname` and draw that
+place, and a link straight to it opens. A missing file — anything with an
+extension, like `/style.css` — is still a 404. A server answering routes with
+CODE of its own comes later.
+
 ## The store, from a page
 
 The kernel serves a client beside every app, at `./api/client.js`:
