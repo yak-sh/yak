@@ -2306,6 +2306,8 @@ slow('the free tier: a warning once, then the refusals', async () => {
       Error,
       'which is 5 apps',
     )
+    // And where the ceiling lifts: the pricing page, never a checkout link
+    // (usage.ts `atCeiling`).
     await assertRejects(
       () => agent.tool('app_new', { space: 'brim', slug: 'a6', title: 'A6' }),
       Error,
