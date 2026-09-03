@@ -416,10 +416,13 @@ export class Store {
     // and abandoned is not declared forever (C-32624 item 1). The whole
     // manifest is read and refused before any of it is planted, so a refusal
     // leaves the store exactly as it was.
+    //
+    // The answer says what moved — `added` and `kept` beside `dropped` — so a
+    // renamed column is visible to whoever deployed it (C-32652 item 4).
     if (path == '/vocab') {
       if (req.method != 'POST') return methodNotAllowed('POST')
       try {
-        let { vocab, dropped } = grow(
+        let { vocab, dropped, added, kept } = grow(
           this.vocab(),
           parseVocab(await req.text()),
           (name) => this.rows(name),
@@ -427,7 +430,13 @@ export class Store {
         if (dropped.length) graft(db, dropOps(dropped))
         plantVocab(db, vocab)
         db.kv.put('vocab', JSON.stringify(vocab))
-        return Response.json({ ok: true, comps: Object.keys(vocab), dropped })
+        return Response.json({
+          ok: true,
+          comps: Object.keys(vocab),
+          dropped,
+          added,
+          kept,
+        })
       } catch (e) {
         let why = e instanceof Error ? e.message : String(e)
         return new Response(why, { status: 400 })

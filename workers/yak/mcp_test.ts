@@ -411,6 +411,14 @@ slow(
       await manifest('{"note":{"text":"text"}}')
       let shed = await agent.tool('app_deploy', app)
       assertStringIncludes(shed, 'dropped (no rows): jot')
+      // The deploy says what it planted, and what the store still has that
+      // this manifest did not name (C-32652 item 4).
+      assertStringIncludes(shed, 'added: note.text')
+      assertStringIncludes(
+        shed,
+        'kept, not in vocab.json (the rows are there): recipe.title, ' +
+          'recipe.serves',
+      )
       await assertRejects(
         () =>
           agent.tool('graph_apply', {
@@ -432,6 +440,34 @@ slow(
         ).length,
         1,
       )
+
+      // A RENAMED column is two columns: the new spelling arrives, the old
+      // one keeps every row already written under it, and the deploy says
+      // both — the manifest reads as one word and the store answers two.
+      await agent.tool('graph_apply', {
+        ...app,
+        entities: [{ entity: { eid: '$n' }, note: { text: 'wrote it' } }],
+      })
+      await manifest(
+        '{"recipe":{"title":"text","serves":"number"},"note":{"body":"text"}}',
+      )
+      let renamed = await agent.tool('app_deploy', app)
+      assertStringIncludes(renamed, 'added: note.body')
+      assertStringIncludes(
+        renamed,
+        'kept, not in vocab.json (the rows are there): note.text',
+      )
+      await agent.tool('graph_apply', {
+        ...app,
+        entities: [{ entity: { eid: '$n2' }, note: { body: 'said it' } }],
+      })
+      let notes = JSON.parse(
+        await agent.tool('graph_query', { ...app, query: '.note!' }),
+      ) as { note: { text: string | null; body: string | null } }[]
+      assertEquals(notes.map((n) => n.note), [
+        { text: 'wrote it', body: null },
+        { text: null, body: 'said it' },
+      ])
 
       // A refused store answer is the tool's error, not a 500.
       await assertRejects(
@@ -546,9 +582,10 @@ slow(
           'whisk is not a function @ /recipes/index.html:42 x1',
         ],
       )
-      // v5: two files, a vocabulary, the word it dropped — every deploy
-      // above bumped it, and a break wears the version it happened on.
-      assert(breaks.every((b) => b.version == 5), 'the deploy it happened on')
+      // v6: two files, a vocabulary, the word it dropped, the column it
+      // renamed — every deploy above bumped it, and a break wears the version
+      // it happened on.
+      assert(breaks.every((b) => b.version == 6), 'the deploy it happened on')
 
       // The fixed button: the view calls this same tool back through the
       // host with the card's eids, and what it gets is the listing that is

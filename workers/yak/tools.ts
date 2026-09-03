@@ -388,7 +388,8 @@ export let TOOLS: Tool[] = [
     description:
       "Write the app's files — index.html and any css, js or images beside " +
       'it — or list them, read one back, or delete one. Write a whole app in ' +
-      'ONE call with files: [{path, content}, …]; path and content write a ' +
+      'ONE call with files: [{path, content}, …] — a files batch IS the ' +
+      'write, so leave op out; path and content write a ' +
       'single file. They serve live at ' +
       '<space>.yaks.app/<app>/<path>; index.html answers the directory. Keep ' +
       'what the app remembers in its own store, never localStorage: the page ' +
@@ -400,7 +401,12 @@ export let TOOLS: Tool[] = [
       properties: {
         space: SPACE,
         app: APP,
-        op: { type: 'string', enum: [...OPS] },
+        op: {
+          type: 'string',
+          enum: [...OPS],
+          description:
+            'what to do; leave it out when passing files, which is a write',
+        },
         path: str('the file path, e.g. index.html'),
         content: str('the file text, for write'),
         files: {
@@ -488,7 +494,10 @@ export let TOOLS: Tool[] = [
       `${EXAMPLE} — so the app gets typed components of its own. A word the ` +
       'platform already says is refused, the whole manifest at once and ' +
       'before anything is planted; one this manifest stops naming, and that ' +
-      'holds no rows, goes.',
+      'holds no rows, goes. It answers the columns it ADDED and the ones the ' +
+      'store still has that this manifest did not name — a column is never ' +
+      'renamed or retyped, so a new spelling arrives beside the old one, ' +
+      'which keeps every row already written under it.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP },
@@ -503,6 +512,11 @@ export let TOOLS: Tool[] = [
       let blobs = r2Blobs(ctx.env.BLOBS)
       let planted: string[] = []
       let dropped: string[] = []
+      // What this manifest MOVED, which naming the components does not say: a
+      // renamed column arrives beside the old one, and the old one keeps
+      // every row already written under it (C-32652 item 4).
+      let added: string[] = []
+      let kept: string[] = []
       if (await blobs.has(key)) {
         let r = await store('/vocab', {
           method: 'POST',
@@ -511,6 +525,8 @@ export let TOOLS: Tool[] = [
         let said = JSON.parse(await answer(r))
         planted = said.comps ?? []
         dropped = said.dropped ?? []
+        added = said.added ?? []
+        kept = said.kept ?? []
       }
       let version = (app.version ?? 0) + 1
       await ctx.dir.apply(
@@ -521,6 +537,12 @@ export let TOOLS: Tool[] = [
         text:
           `deployed ${space.slug}/${app.slug} v${version}: ${url(space, app)}` +
           (planted.length ? `\ncomponents: ${planted.join(', ')}` : '') +
+          (added.length ? `\nadded: ${added.join(', ')}` : '') +
+          (kept.length
+            ? `\nkept, not in vocab.json (the rows are there): ${
+              kept.join(', ')
+            }`
+            : '') +
           (dropped.length ? `\ndropped (no rows): ${dropped.join(', ')}` : ''),
         space,
       }

@@ -57,6 +57,14 @@ Deno.test('vocab.json grows: a column arrives, none leaves or retypes', () => {
   })
   // And one that drops a column keeps it declared: its rows are still there.
   assertEquals(grow(was, { recipe: { title: 'text' } }).vocab, was)
+  // A rename is an arrival beside a survivor, and the answer says both, so
+  // it is not silent (C-32652 item 4).
+  let moved = grow(was, { recipe: { title: 'text', portions: 'number' } })
+  assertEquals(moved.added, ['recipe.portions'])
+  assertEquals(moved.kept, ['recipe.serves'])
+  // A manifest that changed nothing says neither.
+  assertEquals(grow(was, was).added, [])
+  assertEquals(grow(was, was).kept, [])
   assertThrows(
     () => grow(was, { recipe: { serves: 'text' } }),
     Error,

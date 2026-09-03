@@ -139,15 +139,24 @@ export let parseVocab = (source: unknown): Vocab => {
 // item 1). `rows` counts what a component holds — the store's question, since
 // only it has the tables — and a caller that cannot count says so by leaving
 // it out: nothing is dropped unless something says it is empty.
+//
+// It also says WHAT MOVED, because additive growth is silent where it matters
+// most: rename a column and the manifest reads as one word while the store
+// holds two, the old one still under every row already written (C-32652
+// item 4, where `minutes` became `mins` and the rows went
+// `"minutes":46,"mins":null` with nothing said). `added` is every column this
+// manifest planted; `kept` is every column the store still declares that this
+// manifest did not name. A manifest that changed nothing says neither.
 export let grow = (
   was: Vocab,
   next: Vocab,
   rows: (name: string) => number = () => 1,
-): { vocab: Vocab; dropped: string[] } => {
+): { vocab: Vocab; dropped: string[]; added: string[]; kept: string[] } => {
   let dropped = Object.keys(was).filter((name) =>
     !(name in next) && !rows(name)
   )
   let out: Vocab = { ...was }
+  let added: string[] = []
   for (let name of dropped) delete out[name]
   for (let [name, cols] of Object.entries(next)) {
     let had = was[name] ?? {}
@@ -158,10 +167,16 @@ export let grow = (
             'a column keeps the type its rows were written under',
         )
       }
+      if (!(col in had)) added.push(`${name}.${col}`)
     }
     out[name] = { ...had, ...cols }
   }
-  return { vocab: out, dropped }
+  let kept = Object.entries(out).flatMap(([name, cols]) =>
+    Object.keys(cols)
+      .filter((col) => !(col in (next[name] ?? {})))
+      .map((col) => `${name}.${col}`)
+  )
+  return { vocab: out, dropped, added, kept }
 }
 
 // How a store counts one component's rows, in this module because this module
