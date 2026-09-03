@@ -57,6 +57,11 @@ export type Space = {
   // reached yet, which means free — the terms every space is on today.
   tier: Tier | null
   meter: Meter | null
+  // Whether the agent has already been told where this space stands against
+  // its ceilings (unseen.ts `ceiling`). The mark is `notified`, the same one
+  // an error wears once it has been served; the sweep clears it when the
+  // standing changes, so a new line is one the agent has not heard.
+  told: boolean
 }
 export type App = {
   eid: string
@@ -105,6 +110,7 @@ type Row = {
   doc?: { title?: string }
   plan?: { tier?: Tier | null }
   meter?: Partial<Meter>
+  notified?: unknown
 }
 
 // The meter as a whole number, however little of the row is written: a column
@@ -228,6 +234,7 @@ let spaceOf = (r: Row): Space => ({
   title: r.doc?.title || r.space!.slug,
   tier: r.plan?.tier ?? null,
   meter: meterOf(r),
+  told: r.notified != null,
 })
 
 export let appOf = (r: Row): App => ({
@@ -284,7 +291,7 @@ export let directory = (via: Fetcher) => {
       return r.json()
     },
     space: async (slug: string) => {
-      let row = await one(`.space.slug=${slug}&.doc?&.plan?&.meter?`)
+      let row = await one(`.space.slug=${slug}&.doc?&.plan?&.meter?&.notified?`)
       return row ? spaceOf(row) : null
     },
     app: async (space: Space, slug: string) => {
@@ -309,7 +316,7 @@ export let directory = (via: Fetcher) => {
     // Every space there is. Only the meter asks this (usage.ts): a tool
     // always works in one space, and a person only ever sees their own.
     all: async (): Promise<Space[]> =>
-      (await query('.space!&.doc?&.plan?&.meter?')).map(spaceOf),
+      (await query('.space!&.doc?&.plan?&.meter?&.notified?')).map(spaceOf),
     // The app that answers the space's bare hostname, if it has one.
     home: async (space: Space) => {
       let row = space.home ? await one(`id=${space.home}`) : undefined

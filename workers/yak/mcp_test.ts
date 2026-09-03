@@ -12,7 +12,15 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { slow, until } from '../../src/testing.ts'
-import { connector, kernel, meta, seed, signedIn, signIn } from './probe.ts'
+import {
+  client,
+  connector,
+  kernel,
+  meta,
+  seed,
+  signedIn,
+  signIn,
+} from './probe.ts'
 import { monthOf } from './usage.ts'
 
 let GUIDE = 'https://yaks.app/guide.md'
@@ -1633,6 +1641,93 @@ slow('app_list answers what the month cost', async () => {
       headers: { cookie },
     })
     assert((await graph.json()).bytes > 0, 'the store says what it weighs')
+
+    // Where the space stands against what it is allowed (T-32758), in the
+    // same answer: nothing here is near a ceiling, so it is only the numbers.
+    assertStringIncludes(said, 'metered (free tier')
+    assertStringIncludes(said, '1 of 5 apps')
+    assertStringIncludes(said, '4 of 100 emails')
+  } finally {
+    await k.stop()
+  }
+})
+
+// The ceilings the agent sees coming (T-32758): a line at 80%, said once; the
+// sixth app refused and the fifth not; data past 1 GB refused at the door.
+slow('the free tier: a warning once, then the refusals', async () => {
+  let k = await kernel()
+  try {
+    let { cookie, eids } = await seed(k, [
+      { slug: 'brim', apps: ['one'] },
+      { slug: 'heavy', apps: ['big'] },
+    ])
+    let agent = connector(k, cookie)
+    let month = monthOf(new Date())
+    let at = new Date().toISOString()
+    let row = {
+      month,
+      rows_read: 0,
+      rows_written: 0,
+      emails: 0,
+      at,
+    }
+    await meta(k, cookie).apply([
+      // 81% of the request ceiling, and nothing else near one.
+      {
+        entity: { eid: eids.brim },
+        plan: { tier: 'free' },
+        meter: { ...row, requests: 40_500, bytes: 0 },
+      },
+      // A gigabyte held: the byte ceiling, exactly at it.
+      {
+        entity: { eid: eids.heavy },
+        plan: { tier: 'free' },
+        meter: { ...row, requests: 0, bytes: 1024 ** 3 },
+      },
+    ])
+    // The seeding went in through the graph tier, which is not the door that
+    // empties the directory's read cache; a directory write is.
+    await agent.tool('space_new', { slug: 'brim-too', title: 'Too' })
+
+    // The line rides the unseen channel, once — the reply after is quiet.
+    let said = await agent.tool('app_list', { space: 'brim' })
+    assertStringIncludes(said, '## ceiling')
+    assertStringIncludes(said, '40,500 of 50,000 requests')
+    assertStringIncludes(said, 'Requests are never refused')
+    let again = await agent.tool('app_list', { space: 'brim' })
+    assert(!again.includes('## ceiling'), 'the ceiling line is said once')
+
+    // Four more apps make five, which is the tier. The fifth is fine.
+    for (let n of [2, 3, 4, 5]) {
+      await agent.tool('app_new', {
+        space: 'brim',
+        slug: `a${n}`,
+        title: `A${n}`,
+      })
+    }
+    await assertRejects(
+      () => agent.tool('app_new', { space: 'brim', slug: 'a6', title: 'A6' }),
+      Error,
+      'which is 5 apps',
+    )
+    await assertRejects(
+      () => agent.tool('app_new', { space: 'brim', slug: 'a6', title: 'A6' }),
+      Error,
+      'A paid tier is coming',
+    )
+
+    // Data past the ceiling is refused at the app's own door, in the
+    // platform's sentence, the way every other refusal is (unseen.ts
+    // `refusal`: a no is not a break).
+    let heavy = client(k, 'heavy.yaks.app', 'big', cookie)
+    let stopped = await heavy.post([{
+      entity: { eid: crypto.randomUUID() },
+      doc: { title: 'one more' },
+    }])
+    assertEquals(stopped.status, 413)
+    let why = (await stopped.json()).error
+    assertEquals(why.code, 'space_full')
+    assertStringIncludes(why.message, 'of app data')
   } finally {
     await k.stop()
   }

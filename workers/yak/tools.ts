@@ -47,7 +47,15 @@ import { mayWrite, reads, vouched, type Who } from './session.ts'
 import { canon, nameOf, personOf } from './signin.ts'
 import { storeOf } from './store.ts'
 import { archive, cards, line, openIn, serve } from './unseen.ts'
-import { monthOf, size } from './usage.ts'
+import {
+  atCeiling,
+  ceilings,
+  monthOf,
+  sending,
+  size,
+  spent,
+  standing,
+} from './usage.ts'
 
 export type Ctx = { env: Env; dir: Directory; person: string }
 type Args = Record<string, unknown>
@@ -408,6 +416,14 @@ export let TOOLS: Tool[] = [
     run: async (ctx, args) => {
       let { space, who } = await inSpace(ctx, args, true)
       let s = slug(args.slug, 'slug')
+      // The free tier's app ceiling (T-32758), at the one door that adds one.
+      // An app costs money to keep, so this is a refusal and not a warning —
+      // the warning came at 80%, on the unseen channel (unseen.ts `ceiling`).
+      let free = ceilings(space.tier)
+      let apps = await ctx.dir.apps(space)
+      if (free && apps.length >= free.apps) {
+        throw new Error(atCeiling(space, 'apps'))
+      }
       if (await ctx.dir.app(space, s)) {
         throw new Error(`app ${s} exists in ${space.slug}`)
       }
@@ -849,8 +865,9 @@ export let TOOLS: Tool[] = [
     name: 'app_list',
     description:
       'What the person already has here: every app in every space of theirs, ' +
-      'with its address, the version it is at, and how many breaks are still ' +
-      'open in it. Read it before making a second app, and when they ask ' +
+      'with its address, the version it is at, how many breaks are still ' +
+      'open in it, and what the month has cost against what the space is ' +
+      'allowed. Read it before making a second app, and when they ask ' +
       'what they have or where something lives.',
     view: APPS_VIEW,
     input: {
@@ -880,29 +897,37 @@ export let TOOLS: Tool[] = [
           let errors = (await openIn(ctx.env, space, app, who, true)).length
           // What this app spent this month, as the hourly sweep last read it
           // (usage.ts). Nothing metered yet says nothing.
-          let spent = app.meter?.month == monthOf(new Date()) ? app.meter : null
+          let its = app.meter?.month == monthOf(new Date()) ? app.meter : null
           listed.push({
             slug: app.slug,
             title: app.title,
             url: url(space, app),
             version: app.version ?? 0,
             errors,
-            usage: spent,
+            usage: its,
           })
           lines.push(
             `- ${app.title} (${app.slug}) v${app.version ?? 0}${
               errors ? `, ${errors} open` : ''
-            }${
-              spent ? `, ${spent.requests} requests, ${size(spent.bytes)}` : ''
-            }: ${url(space, app)}`,
+            }${its ? `, ${its.requests} requests, ${size(its.bytes)}` : ''}: ${
+              url(space, app)
+            }`,
           )
         }
         if (!apps.length) lines.push('- no apps yet')
+        // Where the space stands against what it is allowed (T-32758), in a
+        // person's words rather than fractions — so the agent knows before it
+        // makes the sixth app, not when the door says no. A space with
+        // nothing in it has nothing to stand against, and says nothing.
+        else lines.push(standing(space, apps.length))
         out.push({
           slug: space.slug,
           title: space.title,
           url: `https://${space.slug}.yaks.app/`,
           apps: listed,
+          tier: space.tier ?? 'free',
+          usage: spent(space),
+          ceilings: ceilings(space.tier),
         })
       }
       return {
@@ -999,7 +1024,14 @@ export let TOOLS: Tool[] = [
       // Who invited them, by name — an address is what the letter is sent
       // to, never what a person is called (T-32654).
       let by = await ctx.dir.nameAt(ctx.person)
-      let sent = await mail(ctx.env)({
+      // The month's letters (T-32758): counted before this one goes, and past
+      // the free tier's hundred there is no letter. The membership stands
+      // either way — it costs nothing — so a ceiling here reads like a letter
+      // that could not be sent, and the answer hands over the link to relay.
+      let stopped = await sending(ctx.env, space).then(() => '').catch((e) =>
+        e instanceof Error ? e.message : String(e)
+      )
+      let sent = !stopped && await mail(ctx.env)({
         to: email,
         subject: `${by ?? 'Someone'} invited you to ${what}`,
         body: (name ? `Hi ${name},\n\n` : '') +
@@ -1016,6 +1048,8 @@ export let TOOLS: Tool[] = [
           `${space.slug}${had ? ` (was ${had.role})` : ''} — ` +
           (sent
             ? `the invitation is on its way to them, with the link: ${link}`
+            : stopped
+            ? `${stopped} So send them the link yourself: ${link}`
             : `the invitation could not be mailed, so send them the link ` +
               `yourself: ${link}`) +
           `. They sign in there with that address, and it is theirs to ` +

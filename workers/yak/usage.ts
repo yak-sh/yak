@@ -29,7 +29,15 @@
 // a deploy standing before they do must not fail every hour.
 import type { EntityLiteral } from '../../src/mutation.ts'
 import * as dirPart from './directory.ts'
-import { directory, type Meter, stamp, storeName } from './directory.ts'
+import {
+  type App,
+  directory,
+  type Meter,
+  type Space,
+  stamp,
+  storeName,
+  type Tier,
+} from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { storeOf } from './store.ts'
 
@@ -190,7 +198,8 @@ export let sweep = async (env: Env, now = new Date()) => {
   let entities: EntityLiteral[] = []
   for (let space of await dir.all()) {
     let total = { ...none(), bytes: 0 }
-    for (let app of await dir.apps(space)) {
+    let apps = await dir.apps(space)
+    for (let app of apps) {
       let name = storeName(space, app)
       let bytes = await bytesOf(env, name)
       let got = counts.get(name) ?? none()
@@ -206,14 +215,22 @@ export let sweep = async (env: Env, now = new Date()) => {
     // The space's own reading: its apps summed, and the letters it sent left
     // alone — the send door counts those (mail rides no store), and this
     // sweep is only what starts them over when the month turns.
+    let meter = {
+      month,
+      ...total,
+      emails: thisMonth(space.meter, month)?.emails ?? 0,
+      at,
+    }
+    // A space that has just crossed a line — or fallen back under one — has
+    // something new to hear, so the mark that it was told goes (unseen.ts
+    // `ceiling` writes it back). A level that has not moved keeps its mark,
+    // which is what makes the line ride ONE reply.
+    let moved = level({ ...space, meter }, apps.length) !=
+      level(space, apps.length)
     entities.push({
       entity: { eid: space.eid },
-      meter: {
-        month,
-        ...total,
-        emails: thisMonth(space.meter, month)?.emails ?? 0,
-        at,
-      },
+      meter,
+      ...(moved ? { notified: null } : {}),
       // Every space is on the free tier until Stripe says otherwise
       // (D-32751); one that already carries a plan keeps it.
       ...(space.tier ? {} : { plan: { tier: 'free' } }),
@@ -228,4 +245,151 @@ export let metered = async (env: Env, now = new Date()) => {
   let n = await sweep(env, now)
   if (n) console.log(`yak-meter: ${n} rows at ${now.toISOString()}`)
   return n
+}
+
+// ---- the ceilings (T-32758) ------------------------------------------------
+//
+// Adoption over revenue (T-32756): a ceiling is something the person's agent
+// SEES COMING and is told about, not a wall the person hits. So only what
+// costs money is refused outright — a sixth app, data past the ceiling, the
+// 101st letter — and requests past 50,000 are served and reported. At 80% of
+// any of them the agent gets one line on the unseen channel (unseen.ts
+// `ceiling`), marked the way an error is, so it rides one reply.
+
+let GB = 1024 ** 3
+
+// The free tier, as decided (D-32751): what a space gets for nothing.
+export let FREE = { apps: 5, requests: 50_000, bytes: GB, emails: 100 }
+
+// Where the warning line sits, as a fraction of a ceiling.
+export let WARN = 0.8
+
+// What a tier is held to. Nothing is on `plus` yet — it waits on Stripe
+// (T-32760) — and a space that somehow is answers to no ceiling here rather
+// than to the free one.
+export let ceilings = (tier: Tier | null) => tier == 'plus' ? null : FREE
+
+let empty = (month: string): Meter => ({
+  month,
+  ...none(),
+  bytes: 0,
+  emails: 0,
+  at: '',
+})
+
+// This month's reading, whatever the row holds — a month behind is nothing
+// spent, and no row at all is the same.
+export let spent = (space: Space, now = new Date()) =>
+  thisMonth(space.meter, monthOf(now)) ?? empty(monthOf(now))
+
+// How full a space is, per ceiling, as a fraction: 1 is at it.
+export let fullness = (space: Space, apps: number, now = new Date()) => {
+  let free = ceilings(space.tier)
+  let m = spent(space, now)
+  return free
+    ? {
+      apps: apps / free.apps,
+      requests: m.requests / free.requests,
+      bytes: m.bytes / free.bytes,
+      emails: m.emails / free.emails,
+    }
+    : null
+}
+
+// Where a space stands: nothing to say, near a ceiling, or past one. The
+// sweep watches this for a change, which is what un-tells the agent.
+export let level = (space: Space, apps: number, now = new Date()) => {
+  let full = fullness(space, apps, now)
+  if (!full) return 'ok'
+  let worst = Math.max(...Object.values(full))
+  return worst >= 1 ? 'over' : worst >= WARN ? 'near' : 'ok'
+}
+
+let count = (n: number) => n.toLocaleString('en-US')
+
+// The line the agent reads: every number against its ceiling, and what
+// happens at each. One line, because the agent has work to get back to.
+export let standing = (space: Space, apps: number, now = new Date()) => {
+  let free = ceilings(space.tier)
+  if (!free) return `${space.slug}: no ceilings on this plan.`
+  let m = spent(space, now)
+  return `${space.slug} (free tier, ${m.month}): ${apps} of ${free.apps} apps, ` +
+    `${count(m.requests)} of ${count(free.requests)} requests, ` +
+    `${size(m.bytes)} of ${size(free.bytes)}, ` +
+    `${m.emails} of ${free.emails} emails. Requests are never refused; a ` +
+    `sixth app, data past ${size(free.bytes)}, or the ${free.emails + 1}st ` +
+    `letter is, until the paid tier lands.`
+}
+
+// The refusal, one sentence: what the ceiling is, and that paying for more is
+// coming. Every door that says no says it this way.
+export let atCeiling = (space: Space, what: 'apps' | 'bytes' | 'emails') => {
+  let free = ceilings(space.tier)!
+  let said = {
+    apps: `${space.slug} is on the free tier, which is ${free.apps} apps` +
+      ` — delete one (app_delete) to make another`,
+    bytes: `${space.slug} is on the free tier, which is ${
+      size(free.bytes)
+    } of app data — delete what it no longer needs to save more`,
+    emails: `${space.slug} is on the free tier, which is ${free.emails}` +
+      ` emails a month — it can send again on the 1st`,
+  }[what]
+  return `${said}. A paid tier is coming.`
+}
+
+// The byte ceiling, at the two doors that add data (apps.ts): the space's
+// last reading, with THIS app's share swapped for what its store weighs now
+// and the bytes on their way in added. The live read only happens near the
+// ceiling — under it an hour-old figure is close enough, and asking would
+// double the Durable Object requests we are metering in the first place.
+//
+// It is the STORE's bytes: an app's uploaded files live in R2, which nothing
+// meters per space yet (D-32751 open question 2), so those count only as the
+// bytes of the request carrying them.
+export let full = async (
+  env: Env,
+  space: Space,
+  app: App,
+  extra = 0,
+  now = new Date(),
+) => {
+  let free = ceilings(space.tier)
+  if (!free) return ''
+  let month = monthOf(now)
+  let held = thisMonth(space.meter, month)?.bytes ?? 0
+  if (held + extra < free.bytes * WARN) return ''
+  let mine = thisMonth(app.meter, month)?.bytes ?? 0
+  let live = await bytesOf(env, storeName(space, app))
+  return held - mine + live + extra > free.bytes
+    ? atCeiling(space, 'bytes')
+    : ''
+}
+
+// A letter counted against the space that sent it, before it goes: the
+// refusal when the month's hundred are gone, else the count, one higher. The
+// month turning is a fresh row here as it is in the sweep — the counters that
+// are the analytics' to answer wait for the next reading rather than carrying
+// last month's numbers under this month's name.
+//
+// The sign-in letter is NOT counted here, deliberately: the login door reads
+// nothing about an address but whether anyone has named it (identity.ts), and
+// counting would make it read whose space an address belongs to. Refusing one
+// would also lock a person out of the platform over a third of a cent, which
+// is the wall T-32756 says not to build.
+export let sending = async (env: Env, space: Space, now = new Date()) => {
+  let free = ceilings(space.tier)
+  if (!free) return
+  let month = monthOf(now)
+  let held = thisMonth(space.meter, month)
+  if ((held?.emails ?? 0) >= free.emails) {
+    throw new Error(atCeiling(space, 'emails'))
+  }
+  await stamp(env, {
+    entities: [{
+      entity: { eid: space.eid },
+      meter: held
+        ? { month, emails: held.emails + 1 }
+        : { ...empty(month), emails: 1, at: now.toISOString() },
+    }],
+  })
 }

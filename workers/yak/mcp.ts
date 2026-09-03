@@ -42,7 +42,7 @@ import {
   VIEW_MIME,
 } from './tools.ts'
 import { listen } from './stream.ts'
-import { serve, unseenBlock } from './unseen.ts'
+import { ceiling, serve, unseenBlock } from './unseen.ts'
 
 // The versions this door speaks, newest first. A client asks for one in
 // initialize; we answer with the same when we know it, else with ours, and
@@ -227,7 +227,8 @@ let call = async (ctx: Ctx, params: Record<string, unknown>) => {
       person: ctx.person,
       role: await ctx.dir.role(out.space, ctx.person),
     }
-    text += unseenBlock(await serve(ctx.env, out.space, who))
+    text += unseenBlock(await serve(ctx.env, out.space, who)) +
+      await ceiling(ctx.env, out.space)
   }
   return {
     content: [{ type: 'text', text }],

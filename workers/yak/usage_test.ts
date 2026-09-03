@@ -6,8 +6,9 @@
 // Object datasets documented at
 // https://developers.cloudflare.com/durable-objects/observability/metrics-and-analytics/
 // and the field names this account's own schema introspects to.
-import { assertEquals, assertThrows } from '@std/assert'
-import { read, size } from './usage.ts'
+import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
+import type { Meter, Space, Tier } from './directory.ts'
+import { atCeiling, FREE, level, read, size, standing } from './usage.ts'
 
 let ANSWER = {
   data: {
@@ -88,4 +89,65 @@ Deno.test('bytes read as a person says them', () => {
   assertEquals(size(1536), '1.5 KB')
   assertEquals(size(252_706_816), '241 MB')
   assertEquals(size(1024 ** 3), '1.0 GB')
+})
+
+// The ceilings, at the seam every door reads (T-32758).
+let NOW = new Date('2026-09-15T12:00:00Z')
+
+let space = (meter: Partial<Meter> = {}, tier: Tier | null = null): Space => ({
+  eid: 'e1',
+  slug: 'jeff',
+  home: null,
+  title: 'Jeff',
+  tier,
+  told: false,
+  meter: {
+    month: '2026-09',
+    requests: 0,
+    rows_read: 0,
+    rows_written: 0,
+    bytes: 0,
+    emails: 0,
+    at: NOW.toISOString(),
+    ...meter,
+  },
+})
+
+Deno.test('a space is near a ceiling at 80% and over it at 100%', () => {
+  assertEquals(level(space(), 1, NOW), 'ok')
+  assertEquals(level(space({ requests: 39_999 }), 1, NOW), 'ok')
+  assertEquals(level(space({ requests: 40_000 }), 1, NOW), 'near')
+  assertEquals(level(space({ requests: 50_000 }), 1, NOW), 'over')
+  // Any of the four is enough, and the apps are counted, not metered.
+  assertEquals(level(space(), 4, NOW), 'near')
+  assertEquals(level(space(), 5, NOW), 'over')
+  assertEquals(level(space({ emails: 81 }), 1, NOW), 'near')
+  assertEquals(level(space({ bytes: FREE.bytes }), 1, NOW), 'over')
+  // Last month's reading is not this month's usage.
+  assertEquals(
+    level(space({ month: '2026-08', requests: 60_000 }), 1, NOW),
+    'ok',
+  )
+})
+
+Deno.test('the line says every number against its ceiling', () => {
+  let said = standing(
+    space({ requests: 41_000, bytes: 900 * 1024 ** 2 }),
+    3,
+    NOW,
+  )
+  assertStringIncludes(said, '3 of 5 apps')
+  assertStringIncludes(said, '41,000 of 50,000 requests')
+  assertStringIncludes(said, '900 MB of 1.0 GB')
+  assertStringIncludes(said, '0 of 100 emails')
+  assertStringIncludes(said, 'Requests are never refused')
+})
+
+Deno.test('a refusal names the ceiling and says a paid tier is coming', () => {
+  for (let what of ['apps', 'bytes', 'emails'] as const) {
+    let said = atCeiling(space(), what)
+    assertStringIncludes(said, 'free tier')
+    assertStringIncludes(said, 'A paid tier is coming.')
+  }
+  assertStringIncludes(atCeiling(space(), 'apps'), '5 apps')
 })

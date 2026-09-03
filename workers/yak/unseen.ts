@@ -11,10 +11,17 @@
 // person's own button archives one through `archive`.
 import { idOf } from '../../src/types.ts'
 import * as dirPart from './directory.ts'
-import { type App, directory, type Space, storeName } from './directory.ts'
+import {
+  type App,
+  directory,
+  type Space,
+  stamp,
+  storeName,
+} from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { type Door, storeOf } from './store.ts'
+import { level, standing } from './usage.ts'
 
 // A refusal is NOT a break (C-32652 item 3, T-32655). Every door here answers
 // a deliberate no in one shape — a 4xx carrying `{"error":{"code":…}}`: the
@@ -266,3 +273,17 @@ export let archive = async (
 // The section a tool reply carries: nothing when nothing is unseen.
 export let unseenBlock = (seen: Seen[]) =>
   seen.length ? `\n\n## unseen errors\n${seen.map(line).join('\n')}` : ''
+
+// Where the space stands against its ceilings, said once (T-32758). It rides
+// this channel because it is the same kind of news as a break — something the
+// agent has to know and nobody said — and it wears the same mark: `notified`,
+// here on the space itself, cleared by the hourly sweep when the standing
+// moves (usage.ts). So the agent hears a line when it is news, and not on
+// every reply after. Nothing is said while a space is under 80% of every
+// ceiling.
+export let ceiling = async (env: Env, space: Space) => {
+  let apps = await appsOf(env, space)
+  if (space.told || level(space, apps.length) == 'ok') return ''
+  await stamp(env, { entities: [{ entity: { eid: space.eid }, notified: {} }] })
+  return `\n\n## ceiling\n${standing(space, apps.length)}`
+}

@@ -40,6 +40,7 @@ import { hostOf, PLATFORM, route } from './route.ts'
 import { mayWrite, reads, vouched, type Who, whoIs, writes } from './session.ts'
 import { type Door, storeOf } from './store.ts'
 import { noted, refusal } from './unseen.ts'
+import { full } from './usage.ts'
 
 // The runtime's streaming HTML rewriter, the slice this file asks for, so
 // `deno check` reads the Worker without @cloudflare/workers-types (env.ts).
@@ -601,7 +602,13 @@ let api = async (
   if (path == '/apply') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!mayPost) return refused()
-    return store('/apply', { method: 'POST', body: await req.text() }, {
+    let body = await req.text()
+    // The free tier's byte ceiling (T-32758). Data costs money to hold, so
+    // this is a refusal — one the page shows in the platform's own sentence,
+    // the way it shows every other.
+    let stopped = await full(env, space, app, body.length)
+    if (stopped) return json(413, 'space_full', stopped)
+    return store('/apply', { method: 'POST', body }, {
       ...headers,
       ...(await named(env, who)),
     })
@@ -613,6 +620,13 @@ let api = async (
   if (path == '/blob') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!mayPost) return refused()
+    let stopped = await full(
+      env,
+      space,
+      app,
+      Number(req.headers.get('content-length') ?? 0),
+    )
+    if (stopped) return json(413, 'space_full', stopped)
     return took(req, env, space, app, store, {
       ...headers,
       ...(await named(env, who)),
