@@ -2242,7 +2242,7 @@ slow('the free tier: a warning once, then the refusals', async () => {
     await assertRejects(
       () => agent.tool('app_new', { space: 'brim', slug: 'a6', title: 'A6' }),
       Error,
-      'A paid tier is coming',
+      'Plus lifts it: https://yaks.app/pricing',
     )
 
     // Data past the ceiling is refused at the app's own door, in the
