@@ -62,16 +62,23 @@ export type App = {
 export type Role = 'owner' | 'editor' | 'viewer'
 export type Access = 'public' | 'open' | 'private'
 
+// A reference column, as a READ hands it back: the bare eid, or `{eid, name}`
+// where the store could name what it points at (listing.ts `named`, T-32733).
+// What the directory wants either way is the id — the same lowering client.ts
+// `where` does on the write side.
+type Id = string | { eid: string }
+let idOf = (v: Id): string => typeof v == 'string' ? v : v.eid
+
 type Row = {
   entity: { eid: string }
-  space?: { slug: string; home: string | null }
+  space?: { slug: string; home: Id | null }
   app?: {
     slug: string
-    space: string
+    space: Id
     version: number | null
     access?: Access | null
   }
-  member?: { space: string; person: string; role: Role }
+  member?: { space: Id; person: Id; role: Role }
   email?: { address: string }
   alias?: { slug: string; slugs?: string | null }
   doc?: { title?: string }
@@ -162,14 +169,14 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
 let spaceOf = (r: Row): Space => ({
   eid: r.entity.eid,
   slug: r.space!.slug,
-  home: r.space!.home,
+  home: r.space!.home == null ? null : idOf(r.space!.home),
   title: r.doc?.title || r.space!.slug,
 })
 
 export let appOf = (r: Row): App => ({
   eid: r.entity.eid,
   slug: r.app!.slug,
-  space: r.app!.space,
+  space: idOf(r.app!.space),
   version: r.app!.version,
   access: r.app!.access ?? null,
   title: r.doc?.title || r.app!.slug,
@@ -262,7 +269,7 @@ export let directory = (via: Fetcher) => {
     // being in the space.
     members: async (space: Space): Promise<string[]> =>
       (await query(`.member.space=${space.eid}`))
-        .map((r) => r.member?.person)
+        .map((r) => r.member && idOf(r.member.person))
         .filter((p): p is string => !!p),
     // How many owners a space has, so removing a member can refuse to leave
     // it with none.
@@ -298,7 +305,7 @@ export let directory = (via: Fetcher) => {
       let members = await query(`.member.person=${person}`)
       let spaces: Space[] = []
       for (let m of members) {
-        let row = m.member && await one(`id=${m.member.space}`)
+        let row = m.member && await one(`id=${idOf(m.member.space)}`)
         if (row?.space && row.space.slug != META.space) {
           spaces.push(spaceOf(row))
         }
