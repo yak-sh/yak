@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>yaks.app — still and simple logo corrections</title>
+    <style>
+    :root {
+      --ground: #f8f0e6;
+      --paper: #fffaf2;
+      --ink: #3b3028;
+      --soft: #76665a;
+      --line: #e7d7c6;
+      --meadow: #52724a;
+      --night: #211e1c;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: radial-gradient(circle at 50% -12%, #fff 0, transparent 40rem),
+        var(--ground);
+      font: 16px/1.5 ui-rounded, "Avenir Next", system-ui, sans-serif;
+    }
+    header,
+    main,
+    footer {
+      width: min(1160px, calc(100% - 36px));
+      margin-inline: auto;
+    }
+    header {
+      padding: 64px 0 40px;
+    }
+    .Eyebrow {
+      color: var(--meadow);
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 860px;
+      margin: 10px 0 16px;
+      font-size: clamp(42px, 7vw, 76px);
+      line-height: .98;
+      letter-spacing: -.045em;
+    }
+    header p {
+      max-width: 760px;
+      margin: 0;
+      color: var(--soft);
+      font-size: 17px;
+    }
+    .Note {
+      display: inline-block;
+      margin-top: 18px;
+      padding: 8px 12px;
+      color: var(--meadow);
+      background: #e8efe3;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .Grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+    .Card {
+      overflow: hidden;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: 0 18px 48px #4938240c;
+    }
+    .Card_Header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 20px 22px;
+      border-bottom: 1px solid var(--line);
+    }
+    .Card h2 {
+      margin: 0;
+      font-size: 19px;
+    }
+    .Card_Header span {
+      color: var(--soft);
+      font-size: 12px;
+      text-align: right;
+    }
+    .Hero {
+      display: grid;
+      min-height: 390px;
+      place-items: center;
+      padding: 28px;
+      background-image:
+        linear-gradient(45deg, #eee3d5 25%, transparent 25%),
+        linear-gradient(-45deg, #eee3d5 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #eee3d5 75%),
+        linear-gradient(-45deg, transparent 75%, #eee3d5 75%);
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+      background-size: 16px 16px;
+    }
+    .Hero img {
+      width: min(340px, 90%);
+      height: 340px;
+      object-fit: contain;
+      filter: drop-shadow(0 16px 14px #35271920);
+    }
+    .Uses {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    .Use {
+      display: grid;
+      min-height: 136px;
+      place-items: center;
+      padding: 18px;
+      border-top: 1px solid var(--line);
+    }
+    .Use-dark {
+      color: #f5eadc;
+      background: var(--night);
+      border-color: #493f38;
+    }
+    .Lockup {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 19px;
+      font-weight: 750;
+      letter-spacing: -.02em;
+    }
+    .Lockup img {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+    }
+    .Sizes {
+      display: flex;
+      align-items: center;
+      gap: 17px;
+    }
+    .Sizes img {
+      object-fit: contain;
+    }
+    .Sizes img:nth-child(1) {
+      width: 64px;
+      height: 64px;
+    }
+    .Sizes img:nth-child(2) {
+      width: 32px;
+      height: 32px;
+    }
+    .Sizes img:nth-child(3) {
+      width: 16px;
+      height: 16px;
+    }
+    footer {
+      padding: 38px 0 72px;
+      color: var(--soft);
+      font-size: 13px;
+    }
+    @media (max-width: 760px) {
+      header {
+        padding-top: 42px;
+      }
+      .Grid,
+      .Uses {
+        grid-template-columns: 1fr;
+      }
+      .Hero {
+        min-height: 320px;
+      }
+      .Hero img {
+        height: 270px;
+      }
+    }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="Eyebrow">yaks.app · logo study · round four</div>
+      <h1>Still pose. Level gaze. Much simpler paint.</h1>
+      <p>Two detailed modeled icons, followed by three deliberately spare translations of the existing mark's basic geometry. No kawaii anatomy, head tilts, action poses, or converging eyes.</p>
+      <div class="Note">No image supplied to generation</div>
+    </header>
+    <main class="Grid" id="concepts"></main>
+    <footer>Small views are scaling stress tests. A selected direction still needs deliberate favicon and PWA redraws.</footer>
+    <script>
+    let concepts = [
+      ['01-skeuo-standing.png', '01 · Still standing', 'modeled · full body'],
+      ['02-skeuo-bell-bust.png', '02 · Bell bust', 'modeled · close crop'],
+      ['03-simple-gouache.png', '03 · Simple gouache', 'flat · broad shapes'],
+      [
+        '04-simple-watercolor.png',
+        '04 · Simple watercolor',
+        'flat · controlled wash',
+      ],
+      ['05-simple-cut-paper.png', '05 · Simple cut paper', 'flat · broad layers'],
+    ]
+    let root = document.querySelector('#concepts')
+    for (let [file, title, note] of concepts) {
+      let card = document.createElement('article')
+      card.className = 'Card'
+      card.innerHTML = `
+        <div class="Card_Header"><h2>${title}</h2><span>${note}</span></div>
+        <div class="Hero"><img src="${file}" alt="${title} yak logo"></div>
+        <div class="Uses">
+          <div class="Use"><div class="Lockup"><img src="${file}" alt=""> yaks.app</div></div>
+          <div class="Use Use-dark"><div class="Sizes"><img src="${file}" alt=""><img src="${file}" alt=""><img src="${file}" alt=""></div></div>
+        </div>`
+      root.append(card)
+    }
+    </script>
+  </body>
+</html>
