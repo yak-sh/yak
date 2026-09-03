@@ -93,7 +93,11 @@ let mine = (url) => url.origin == location.origin && url.href != door
 
 let plain = globalThis.fetch
 globalThis.fetch = async (input, init) => {
-  let where = new URL((input && input.url) || input, location.href)
+  // Against the page's BASE, not its address: the kernel gives every page a
+  // `<base>` at the app's own root (apps.ts `based`), so that is what the
+  // browser resolved `./api/query` against — resolving it against
+  // `location.href` here would name a path nothing was ever asked for.
+  let where = new URL((input && input.url) || input, document.baseURI)
   try {
     let r = await plain(input, init)
     if (!r.ok && mine(where)) {
