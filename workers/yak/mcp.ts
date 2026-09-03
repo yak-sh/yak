@@ -1,8 +1,10 @@
 // The connector part (D-32318 §The agent door): `POST /mcp` at the apex, an
-// MCP server over Streamable HTTP in its stateless form — one JSON-RPC
-// request in, one JSON reply out, no session id, no event stream — the same
-// way the dev server mounts src/mcp.ts, so a restart strands nobody and a
-// Worker isolate holds nothing between calls. The protocol surface is six
+// MCP server over Streamable HTTP — one JSON-RPC request in, one JSON reply
+// out, no session id — the same way the dev server mounts src/mcp.ts, so a
+// restart strands nobody and a Worker isolate holds nothing between calls
+// except a stream a client is holding open: `GET /mcp` is that stream
+// (stream.ts), and what goes down it is `notifications/tools/list_changed`
+// when an app's own tools move (T-32686). The protocol surface is six
 // methods — initialize, ping, tools/list, tools/call over the tool table in
 // tools.ts, and resources/list, resources/read over the guide and the two
 // views below, which is what a connector that calls tools, reads a page and
@@ -30,8 +32,9 @@ import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { unauthorized, withAuth } from './identity.ts'
-import { callDeclared } from './declared.ts'
+import { callDeclared, listDeclared } from './declared.ts'
 import { APPS_VIEW, type Ctx, ERRORS_VIEW, type Out, TOOLS } from './tools.ts'
+import { listen } from './stream.ts'
 import { serve, unseenBlock } from './unseen.ts'
 
 // The versions this door speaks, newest first. A client asks for one in
@@ -95,6 +98,11 @@ An entity is {entity: {eid}, ...components}: '$name' mints a new one (the
 answer maps it to its eid), and a filter line reads them back. The guide
 resource has the components and the filter grammar; graph_apply, graph_query
 and search are the same store from here, for seeding and fixing.
+
+An app can carry its OWN tools: a tools.json beside index.html declares them
+— a name, a sentence, an input, and an apply or query template over the app's
+store — and after app_deploy they are listed here as <app>__<tool>, for the
+person and for anyone else in the space. The guide has the shape.
 
 Whatever breaks — a page's own error, a refused write, a request that failed
 — arrives at the end of a later reply, once. Fix what you see.`
@@ -219,7 +227,9 @@ let handle = async (ctx: Ctx, rpc: Rpc) => {
   if (rpc.method == 'initialize') {
     return result(rpc.id, {
       protocolVersion: spoken(params.protocolVersion),
-      capabilities: { tools: {}, resources: {} },
+      // `listChanged` is a promise to say when the tool list moves, which is
+      // what an app deploying its own tools does (declared.ts).
+      capabilities: { tools: { listChanged: true }, resources: {} },
       serverInfo: { name: 'yaks.app', version: VERSION },
       instructions: INSTRUCTIONS,
     })
@@ -227,24 +237,32 @@ let handle = async (ctx: Ctx, rpc: Rpc) => {
   if (rpc.method == 'ping') return result(rpc.id, {})
   if (rpc.method == 'tools/list') {
     return result(rpc.id, {
-      tools: TOOLS.map((t) => ({
-        name: t.name,
-        description: t.description,
-        inputSchema: t.input,
-        // A tool with a view names it; a host without MCP Apps ignores the
-        // field and reads the same answer as text. Visibility is who may
-        // call it: the model, and 'app' where the view's own button does.
-        ...(t.view
-          ? {
-            _meta: {
-              ui: {
-                resourceUri: t.view,
-                visibility: t.visibility ?? ['model'],
+      tools: [
+        ...TOOLS.map((t) => ({
+          name: t.name,
+          description: t.description,
+          inputSchema: t.input,
+          // A tool with a view names it; a host without MCP Apps ignores the
+          // field and reads the same answer as text. Visibility is who may
+          // call it: the model, and 'app' where the view's own button does.
+          ...(t.view
+            ? {
+              _meta: {
+                ui: {
+                  resourceUri: t.view,
+                  visibility: t.visibility ?? ['model'],
+                },
               },
-            },
-          }
-          : {}),
-      })),
+            }
+            : {}),
+        })),
+        // And the tools the person's own apps declare (declared.ts, T-32686),
+        // for every app in every space they belong to: an app that grew a tool
+        // is one more thing their agent can do, without anything here knowing
+        // what it is. A deploy that moves that list says so on the stream
+        // below, so a client that listed once lists again.
+        ...await listDeclared(ctx),
+      ],
     })
   }
   if (rpc.method == 'tools/call') return result(rpc.id, await call(ctx, params))
@@ -280,12 +298,16 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (new URL(req.url).pathname != '/mcp') {
     return json(404, { error: { code: 'not_found' } })
   }
-  // No stream to open and no session to end: the stateless form.
-  if (req.method != 'POST') {
+  if (req.method != 'POST' && req.method != 'GET') {
     return json(405, { error: { code: 'method_not_allowed' } })
   }
   let auth = await withAuth(env, req)
   if (!auth) return unauthorized(req)
+  // The GET is the session's STREAM (stream.ts): a client holds it open to
+  // hear what the server says between its own calls, which today is one
+  // thing — that its tool list moved, because an app of theirs deployed new
+  // tools (T-32686). Everything else is still one POST in, one JSON out.
+  if (req.method == 'GET') return listen(auth.person)
   let body: unknown
   try {
     body = await req.json()

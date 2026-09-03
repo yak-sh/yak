@@ -11,7 +11,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow, until } from '../../src/testing.ts'
 import { connector, kernel, signedIn, signIn } from './probe.ts'
 
 let GUIDE = 'https://yaks.app/guide.md'
@@ -923,6 +923,142 @@ slow('an app declares its own tools, and the door calls them', async () => {
       'wrote 1 entity',
     )
   } finally {
+    await k.stop()
+  }
+})
+
+// The door LISTS what an app declared (T-32686): every app in every space the
+// caller belongs to, and nobody else's — then says on the session's stream
+// when a deploy moved that list.
+slow("the door lists an app's tools, and says when they moved", async () => {
+  let k = await kernel()
+  let reading: Promise<void> | undefined
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+  try {
+    let tools = (comp: string, name: string) =>
+      JSON.stringify({
+        [name]: {
+          description: `Write a ${comp}`,
+          input: { text: 'text' },
+          apply: { [comp]: { text: '{{text}}' } },
+        },
+      })
+    let made = async (
+      who: { cookie: string },
+      slug: string,
+      title: string,
+      comp: string,
+      name: string,
+      access?: string,
+    ) => {
+      let agent = connector(k, who.cookie)
+      let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
+        .exec(
+          await agent.tool('app_new', {
+            slug,
+            title,
+            ...(access ? { access } : {}),
+          }),
+        )![1]
+      await agent.tool('app_files', {
+        space,
+        app: slug,
+        files: [
+          {
+            path: 'vocab.json',
+            content: JSON.stringify({ [comp]: { text: 'text' } }),
+          },
+          { path: 'tools.json', content: tools(comp, name) },
+        ],
+      })
+      await agent.tool('app_deploy', { space, app: slug })
+      return { agent, space }
+    }
+    let jeff = await signIn(k)
+    let club = await made(jeff, 'runs', 'Run club', 'jog', 'log_run')
+    let maya = await signIn(k)
+    await made(maya, 'diary', 'Diary', 'entryline', 'note', 'private')
+
+    // Jeff sees his own app's tool beside the platform's, and nothing of
+    // hers: her app is in her space, and he is nobody there.
+    let named = async (agent: ReturnType<typeof connector>) =>
+      ((await agent.call('tools/list')).tools as { name: string }[])
+        .map((t) => t.name)
+    let his = await named(club.agent)
+    assert(his.includes('app_deploy'), 'the platform tools are still listed')
+    assert(his.includes('runs__log_run'), 'his own app tool is listed')
+    assertEquals(his.includes('diary__note'), false)
+    let hers = await named(connector(k, maya.cookie))
+    assert(hers.includes('diary__note'))
+    assertEquals(hers.includes('runs__log_run'), false)
+    // The app's TITLE rides in the description: a slug is not what the
+    // person called it.
+    let one = ((await club.agent.call('tools/list')).tools as {
+      name: string
+      description: string
+      inputSchema: { required: string[] }
+    }[]).find((t) => t.name == 'runs__log_run')!
+    assertStringIncludes(one.description, 'Run club')
+    assertStringIncludes(one.description, `${club.space}.yaks.app/runs/`)
+    assertEquals(one.inputSchema.required, ['text'])
+
+    // The door says it will announce a moved list, and the instructions say
+    // an app can carry tools at all.
+    let init = await club.agent.call('initialize', { capabilities: {} })
+    assertEquals(init.capabilities.tools.listChanged, true)
+    assertStringIncludes(init.instructions, 'tools.json')
+    assertStringIncludes(init.instructions, '<app>__<tool>')
+
+    // The session's stream: held open, and told when a deploy moved the list.
+    let stream = await k.at('yaks.app', '/mcp', {
+      headers: { cookie: jeff.cookie, accept: 'text/event-stream' },
+    })
+    assertEquals(stream.headers.get('content-type'), 'text/event-stream')
+    let heard = ''
+    reader = stream.body!.getReader()
+    let bytes = new TextDecoder()
+    reading = (async () => {
+      try {
+        while (true) {
+          let { done, value } = await reader!.read()
+          if (done) return
+          heard += bytes.decode(value, { stream: true })
+        }
+      } catch { /* cancelled with the test */ }
+    })()
+    await until(() => heard.includes(': open'), {
+      timeout: 10_000,
+      poll: 50,
+      label: 'the stream to open',
+    })
+    await club.agent.tool('app_files', {
+      space: club.space,
+      app: 'runs',
+      op: 'write',
+      path: 'tools.json',
+      content: JSON.stringify({
+        log_run: {
+          description: 'Write a jog',
+          input: { text: 'text' },
+          apply: { jog: { text: '{{text}}' } },
+        },
+        jogs: { description: 'Every jog', input: {}, query: '.jog!' },
+      }),
+    })
+    await club.agent.tool('app_deploy', { space: club.space, app: 'runs' })
+    await until(() => heard.includes('notifications/tools/list_changed'), {
+      timeout: 10_000,
+      poll: 50,
+      label: 'the tool list to be called stale',
+    })
+    assert((await named(club.agent)).includes('runs__jogs'))
+    // A deploy that moved nothing says nothing.
+    heard = ''
+    await club.agent.tool('app_deploy', { space: club.space, app: 'runs' })
+    assertEquals(heard.includes('list_changed'), false)
+  } finally {
+    await reader?.cancel().catch(() => {})
+    await reading
     await k.stop()
   }
 })

@@ -230,6 +230,45 @@ taken:
 Anything the columns don't cover still lives in `doc.body`: it is text, so
 markdown or JSON both keep there.
 
+## Tools of your own
+
+An app can also carry its own **tools**, so the person's agent can act on it
+without a page open. They go in a `tools.json` at the app's root, beside
+`vocab.json`, and the same `app_deploy` hands them over:
+
+    { "log_run": {
+        "description": "Log a run for the club leaderboard",
+        "input": { "who": "text", "miles": "number" },
+        "apply": { "entity": { "eid": "$run" },
+                   "jog": { "who": "{{who}}", "miles": "{{miles}}" } } },
+      "leaderboard": {
+        "description": "Every run since a date",
+        "input": { "since": "time" },
+        "query": ".jog!&.created.at>={{since}}" } }
+
+After the deploy those are `runs__log_run` and `runs__leaderboard` at the
+connector — `<app>__<tool>`, listed for the person and for everyone else in the
+space, with the app's title in the description.
+
+An entry is four things: a `description` (the sentence the model chooses by), an
+`input` of arguments typed like a component's columns (`text`, `number`, `bool`,
+`time`, `url` — all of them required), and exactly one act:
+
+- `apply` — an entity bundle, or a list of them, exactly as `apply()` takes on
+  the page.
+- `query` — a filter line, answered as the same listing `query()` gets.
+
+`{{arg}}` is a hole, filled from the call's arguments. A string that is nothing
+but a hole keeps the argument's own type, so `"{{miles}}"` writes the number; a
+hole inside a sentence is spliced in as text. A hole naming an argument the
+`input` never declared is refused at deploy, with everything else wrong in the
+file, in one sentence — nothing is planted until the whole manifest reads.
+
+A tool is a template, never code: the act goes through the app's own doors as
+the person calling it, so the app's `access` decides it, `created.by` names
+them, and a refusal is the same sentence the page would show. Nobody gets more
+through a tool than they have on the page.
+
 ## The doors underneath
 
 `client.js` is a wrapper over ordinary HTTP doors, same-origin, in case you want

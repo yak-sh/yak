@@ -18,10 +18,16 @@
 import { type App, type Space, storeName } from './directory.ts'
 import type { Env } from './env.ts'
 import { acting } from './apps.ts'
-import { filled, type ToolDef, type Tools } from '../../src/store/tools.ts'
+import {
+  filled,
+  schemaOf,
+  type ToolDef,
+  type Tools,
+} from '../../src/store/tools.ts'
 import type { Ctx, Out } from './tools.ts'
-import { storeOf } from './store.ts'
 import type { Who } from './session.ts'
+import { storeOf } from './store.ts'
+import { listening, told } from './stream.ts'
 
 // The two halves of a namespaced name. An app slug is `[a-z0-9-]` and a tool
 // name `[a-z0-9_]`, so the first `__` is the seam and nothing else can be.
@@ -127,5 +133,51 @@ let ran = async (
       ids.length == 1 ? 'entity' : 'entities'
     } in ${space.slug}/${app.slug}${said.length ? `: ${said.join(', ')}` : ''}`,
     data: { entities: ids, aliases },
+  }
+}
+
+// Every declared tool the caller can reach, as the agent door lists them
+// beside the platform's own (T-32686). A tool's name is `<app>__<tool>`; its
+// description carries the app's TITLE and address, since a slug is not what
+// the person called it and a model choosing between tools reads the words.
+// Two apps in two spaces can spell one slug: the first answers, and a call
+// for the other says which spaces have it (`callDeclared`).
+export let listDeclared = async (ctx: Ctx) => {
+  let out: {
+    name: string
+    title: string
+    description: string
+    inputSchema: unknown
+  }[] = []
+  let taken = new Set<string>()
+  for (let { space, app } of await reachable(ctx)) {
+    for (
+      let [name, tool] of Object.entries(await toolsOf(ctx.env, space, app))
+    ) {
+      let spelled = named(app, name)
+      if (taken.has(spelled)) continue
+      taken.add(spelled)
+      out.push({
+        name: spelled,
+        title: `${app.title || app.slug}: ${name}`,
+        description: `${tool.description} — ${app.title || app.slug}, an app ` +
+          `at ${space.slug}.yaks.app/${app.slug}/`,
+        inputSchema: schemaOf(tool),
+      })
+    }
+  }
+  return out
+}
+
+// A deploy that moved an app's tools is news to every agent connected who can
+// reach that app: their tool list is stale, and MCP's word for that is
+// `notifications/tools/list_changed` on the session's stream (stream.ts).
+// Only the people actually listening are asked about, so this costs a
+// directory read per open stream and nothing at all when none is open.
+export let toolsChanged = async (ctx: Ctx, space: Space) => {
+  for (let person of listening()) {
+    if (await ctx.dir.role(space, person)) {
+      told(person, 'notifications/tools/list_changed')
+    }
   }
 }

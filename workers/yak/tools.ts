@@ -38,6 +38,7 @@ import {
   type Space,
   storeName,
 } from './directory.ts'
+import { toolsChanged } from './declared.ts'
 import type { Env } from './env.ts'
 import { listing } from './listing.ts'
 import { mail } from './mail.ts'
@@ -547,6 +548,9 @@ export let TOOLS: Tool[] = [
         ),
       )
       let declared: string[] = tooled.tools ?? []
+      // A tool list that moved is news to every agent connected who can
+      // reach this app (declared.ts, T-32686).
+      if (tooled.changed) await toolsChanged(ctx, space)
       let version = (app.version ?? 0) + 1
       await ctx.dir.apply(
         { entities: [{ entity: { eid: app.eid }, app: { version } }] },
