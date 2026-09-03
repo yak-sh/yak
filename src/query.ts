@@ -1191,8 +1191,18 @@ export let preds = (token: string): Pred[] | null => {
   }
   // A trailing QUESTION asks for a component beside the filter, never about
   // it: one component name, no value, and nothing narrows.
+  //
+  // The word need not be one this graph plants. A request is not an
+  // assertion: `.loan!` over a word nobody planted must refuse, because an
+  // empty answer would lie about what is there, but `.loan?` only asks — a
+  // store that never planted it has none to give and says so by leaving the
+  // component off the row. That is what makes the SAME line askable of every
+  // store in reach (workers/yak/reach.ts): `.book!&.loan?` reached the
+  // reading list's own store as a refusal while the fan-out answered it.
+  // What is still refused is a shape that is not a request: a path, a value,
+  // or a COLUMN's name, where the person meant the component holding it.
   if (op == '?') {
-    if (segs.length != 1 || value || !routed(segs[0])) {
+    if (segs.length != 1 || value || (owned(segs[0]) && !routed(segs[0]))) {
       throw new Error(
         `.${segs.join('.')}? asks for a whole component beside the filter: ` +
           '.book!&.loan?',

@@ -1693,5 +1693,14 @@ Deno.test('query: a trailing question asks for a component, never about it', () 
     Error,
     'asks for a whole component',
   )
-  assertThrows(() => parseQuery('.nope?'), Error, 'asks for a whole component')
+  assertThrows(() => parseQuery('.title?'), Error, 'asks for a whole component')
+  // A word this graph never planted is not a mistake: a request narrows
+  // nothing, so a store that has none to give leaves the component off the
+  // row. `.loan!` still refuses it — an assertion over an unplanted word
+  // would answer empty and lie — but `.book!&.loan?` is one line every store
+  // in reach can be asked (workers/yak/reach.ts, C-32800 item 2).
+  assertEquals(parseQuery('.loan?'), [
+    { comp: 'loan', prop: '', op: WANT, value: '' },
+  ])
+  assertEquals(matchQuery(fix, parseQuery('.doc!&.loan?')), true)
 })

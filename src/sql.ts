@@ -619,6 +619,10 @@ let build = (
   let tables = new Set<string>()
   for (let p of kept) {
     if (p.rev) continue // its EXISTS is self-contained; nothing joins here
+    // A request names a component to CARRY, not one to test: its condition is
+    // `1`, the door hydrates the row's components itself, and a store that
+    // never planted the word has no table to join at all.
+    if (p.op == WANT) continue
     if (p.op == TEXT) tables.add('doc')
     else if (p.comp) tables.add(p.comp)
     // the far half of the updated.at fallback (readCol)

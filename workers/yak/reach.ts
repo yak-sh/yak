@@ -33,14 +33,22 @@ export let at = (r: Reach) => `${r.space.slug}/${r.app.slug}`
 // door answers by (listing.ts). A refusal is thrown as the store's own
 // sentence — the fan-out reads it as silence, a caller with one store reads
 // it as the error.
-let doorOf = (env: Env, r: Reach) => async (line: string) => {
+//
+// `said` is the line the CALLER asked, which the listing rule reads and the
+// store need not: a composed read asks each store a part of the line and
+// then gathers the bundle by `id=`, and the listing rule applied to those
+// words hid the stamps the caller had named — `.book!&.created!` came back
+// with no `created` at all, while the same filter naming one app kept it
+// (C-32800 item 4). The words a listing is cut by are the caller's, wherever
+// the rows were fetched from.
+let doorOf = (env: Env, r: Reach, said?: string) => async (line: string) => {
   let asked = line.replace(/^[?&]+/, '')
   let door = storeOf(env.STORE, storeName(r.space, r.app))
   let res = await door(`/query?${asked}`, {}, vouched(r.who))
   let body = await res.text()
   if (!res.ok) throw new Error(body)
   let rows = JSON.parse(body)
-  return Array.isArray(rows) ? listed(rows as Row[], asked) : rows
+  return Array.isArray(rows) ? listed(rows as Row[], said ?? asked) : rows
 }
 
 // The words a dotted segment can open with that name no component: the
@@ -99,10 +107,15 @@ let eidOf = (r: Row) => String((r.entity as { eid?: string })?.eid ?? '')
 // nothing — the word is another app's, or this one is not the caller's to
 // read — but a line EVERY store refuses is a line nobody can answer, and then
 // the first store's sentence is what the caller reads.
-let asked = async (env: Env, reach: Reach[], line: string) => {
+let asked = async (
+  env: Env,
+  reach: Reach[],
+  line: string,
+  said?: string,
+) => {
   let tried = await Promise.all(reach.map(async (r) => {
     try {
-      return { at: at(r), rows: await doorOf(env, r)(line) }
+      return { at: at(r), rows: await doorOf(env, r, said)(line) }
     } catch (e) {
       return { at: at(r), why: e instanceof Error ? e.message : String(e) }
     }
@@ -152,9 +165,21 @@ let ordered = (heard: { at: string; rows: unknown }[]) => {
 // A store's own word is the most specific thing said about a row, wherever it
 // was said (types.ts kindOf, C-32574 item 7) — so an app's kind outranks a
 // platform kind from another store, and the union decides the rest.
-let kindFrom = (kinds: string[], comps: Record<string, unknown>) =>
-  kinds.find((k) => k && !kindOrder.includes(k)) ??
+//
+// Between two app words the filter itself decides, and `must` names the
+// components it REQUIRED: `.loan?&.book!` asks for books, so a book is what
+// each answer is, and `.book!&.loan?` must not call the same row something
+// else. Clause order used to decide it, which made one entity a book or a
+// loan by where the caller happened to type the word (C-32800 item 3).
+let kindFrom = (
+  kinds: string[],
+  comps: Record<string, unknown>,
+  must: string[] = [],
+) => {
+  let own = kinds.filter((k) => k && !kindOrder.includes(k))
+  return own.find((k) => must.includes(k)) ?? own[0] ??
     kindOrder.find((k) => k in comps) ?? 'entity'
+}
 
 // Where one name means two things: the same word declared in two SPACES with
 // a column they spell differently (T-32728). Within a space a word has one
@@ -208,10 +233,18 @@ let gathered = async (
   reach: Reach[],
   eids: string[],
   apart: Set<string> = new Set(),
+  said?: string,
 ) => {
   let held = new Map<string, Held>()
   if (!eids.length) return held
-  for (let { at, rows } of await asked(env, reach, `id=${eids.join(',')}`)) {
+  for (
+    let { at, rows } of await asked(
+      env,
+      reach,
+      `id=${eids.join(',')}`,
+      said,
+    )
+  ) {
     for (let row of Array.isArray(rows) ? rows as Row[] : []) {
       let eid = eidOf(row)
       if (!eid) continue
@@ -242,14 +275,26 @@ let gathered = async (
 // `_stores` says which app holds which component, and rides only on a bundle
 // that actually spans two — where the composition is the news, and where a
 // caller who wants to write one component back needs to know whose it is.
+//
+// `ask` is the caller's own question, which the gather would otherwise lose:
+// the components the answer keeps (`want`), the words two spaces mean two
+// things by (`apart`), the line the listing rule cuts by (`said`), and the
+// words the filter required (`must`), which is what names the kind.
+export type Ask = {
+  want?: Set<string> | null
+  apart?: Set<string>
+  said?: string
+  must?: string[]
+}
+
 export let composed = async (
   env: Env,
   reach: Reach[],
   eids: string[],
-  want: Set<string> | null = null,
-  apart: Set<string> = new Set(),
+  ask: Ask = {},
 ) => {
-  let held = await gathered(env, reach, eids, apart)
+  let { want = null, apart = new Set<string>(), said, must } = ask
+  let held = await gathered(env, reach, eids, apart, said)
   let keeps = (name: string) => !want || want.has(name)
   let bundle = (
     one: Held,
@@ -270,6 +315,7 @@ export let composed = async (
           .filter(([at]) => !space || spaceOf(at) == space)
           .map(([, k]) => k),
         comps,
+        must,
       ),
       // Two spaces mean two things by this word, so the row says which one it
       // is answering for (T-32728).
@@ -378,7 +424,12 @@ export let read = async (
     ? new Set(named)
     : null
   let from = named.length ? [...new Set(named.flatMap(speak))] : reach
-  let bundles = await composed(env, from, eids, want, apart) as Row[]
+  let bundles = await composed(env, from, eids, {
+    want,
+    apart,
+    said: line,
+    must: need.map(([name]) => name),
+  }) as Row[]
   return bundles.map((b) => {
     let rank = ranks.get(eidOf(b))
     return rank ? { ...b, rank } : b

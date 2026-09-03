@@ -61,6 +61,9 @@ slow(
         'app_files',
         'app_deploy',
         'app_set',
+        'app_secret_set',
+        'app_secret_list',
+        'app_secret_remove',
         'app_delete',
         'app_errors',
         'app_list',
@@ -1390,13 +1393,16 @@ slow('a read with no app composes every app the caller can reach', async () => {
 
     // `id=` with no app answers everything known about it, in one bundle,
     // saying which app holds which component.
-    let rows = async (filter: string, who = agent) =>
-      JSON.parse(await who.tool('graph_query', { filter })) as {
+    let rows = async (filter: string, who = agent, app?: string) =>
+      JSON.parse(
+        await who.tool('graph_query', { filter, ...(app ? { app } : {}) }),
+      ) as {
         kind: string
         entity: { eid: string }
         doc?: { title: string }
         recipe?: { serves: number }
         loan?: { to: string }
+        created?: { by: string; at: string }
         _stores?: Record<string, string>
       }[]
     let [bundle] = await rows(`id=${cake}`)
@@ -1430,6 +1436,36 @@ slow('a read with no app composes every app the caller can reach', async () => {
     assertEquals(
       (await rows('.recipe!&.loan?')).map((r) => r.loan?.to),
       ['Maya', undefined],
+    )
+    // The fan-out answers what a single store answers (C-32800 items 2-4).
+    // A REQUEST rides anywhere in the line, last included: it asks for a
+    // component beside the filter and narrows nothing, so a store that never
+    // planted the word answers the same rows without it — which is what the
+    // guide's own example asks of the app the person names.
+    assertEquals(await rows('.recipe!&.loan?'), await rows('.loan?&.recipe!'))
+    assertEquals(
+      (await rows('.recipe!&.loan?', agent, 'recipes')).map((r) =>
+        r.recipe!.serves
+      ),
+      [4, 2],
+    )
+    // And the kind follows the component the filter REQUIRED, never the
+    // clause the caller happened to type first: a recipe is a recipe either
+    // way round, exactly as the recipes store alone calls it.
+    assertEquals(
+      (await rows('.loan?&.recipe!')).map((r) => r.kind),
+      (await rows('.recipe!', agent, 'recipes')).map((r) => r.kind),
+    )
+    // A stamp NAMED in the filter comes back from the fan-out too: the
+    // listing rule is cut by the caller's own line, not by the `id=` the
+    // composition gathers with, which dropped every byline (item 4).
+    assertEquals(
+      await rows('.recipe!&.created!'),
+      await rows('.recipe!&.created!', agent, 'recipes'),
+    )
+    assertEquals(
+      (await rows('.recipe!&.created!')).map((r) => !!r.created?.at),
+      [true, true],
     )
     // `.doc!` is a platform word both stores speak, so the answer is both
     // apps' rows — and the cake is one row, not two.

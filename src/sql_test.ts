@@ -766,3 +766,19 @@ Deno.test('a body column the index does not cover declines', () => {
     null,
   )
 })
+
+// A request (`.loan?`) names a component to CARRY, not one to test: its
+// condition is `1`, so joining its table buys nothing — and a hosted app's
+// store holds only the words it planted (workers/yak/store.ts), so there may
+// be no such table to join at all. Left in, the join compiled `no such table:
+// loan` against the reading list's own store for the guide's own
+// `.book!&.loan?` (C-32800 item 2). Membership is unmoved: a request selects
+// exactly what the filter beside it selects.
+Deno.test('a request joins no table, and narrows nothing', () => {
+  let asked = where(parseQuery('.doc!&.loan?'))!
+  let plain = where(parseQuery('.doc!'))!
+  assertEquals(asked.sql.includes('"loan"'), false)
+  // All the request leaves behind is its constant: no table, no condition.
+  assertEquals(asked.sql.replace(' and 1 ', ' '), plain.sql)
+  assertEquals(asked.params, plain.params)
+})
