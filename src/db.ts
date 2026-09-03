@@ -61,7 +61,8 @@ import {
   teaches,
   TEXT,
 } from './query.ts'
-import { type Sql as Compiled, where } from './sql.ts'
+import { where } from './sql.ts'
+import { type Frag, toSql } from './relation.ts'
 import {
   Invalid,
   spec as configSpec,
@@ -8330,10 +8331,11 @@ export let search = (db: Sql, q: string, limit = 20): Hit[] => {
     filters.unshift({ comp: 'quarantined', prop: '', op: '', value: '' })
   }
   let built = where(filters)
+  let narrow = built && toSql(built)
   // A sparse facet may sit outside any fixed candidate window. Compile the
   // filter into the selection when possible; an exactness decline reads every
   // candidate so the JS definition below still decides before the result cap.
-  let screen = built ? `and e.eid in (${built.sql})` : ''
+  let screen = narrow ? `and e.eid in (${narrow.sql})` : ''
   // A visible comment aimed at quarantined content is another route into the
   // same content. Keep it out before LIMIT so hidden hits cannot displace
   // visible ones.
@@ -8343,8 +8345,8 @@ export let search = (db: Sql, q: string, limit = 20): Hit[] => {
       where c.entity = e.id
     )`
   }
-  let cap = built ? 'limit ?' : ''
-  let params = built?.params ?? []
+  let cap = narrow ? 'limit ?' : ''
+  let params = narrow?.params ?? []
   let match = ftsQuery(preds)
   if (!match && !filters.length) return []
   // Filters screen AFTER the rank, so cast a wider net before the cap.
@@ -9286,7 +9288,7 @@ export let entriesScan = (
   db: Sql,
   after = 0,
   limit = 500,
-  narrow?: Compiled,
+  narrow?: Frag,
 ) => {
   let index = prep(
     db,

@@ -22,7 +22,8 @@ import {
   tally,
   type Walk,
 } from './query.ts'
-import { aggregateSql, select, where } from './sql.ts'
+import { aggregateSql, countSql, select, where, windowed } from './sql.ts'
+import { run, toSql } from './relation.ts'
 import { textBlob, textMatches } from './db.ts'
 import { kindOf, kindOrder } from './types.ts'
 import { edgeEid, natureOf } from './edge.ts'
@@ -334,10 +335,9 @@ let byJs = (q: string) => {
 }
 
 let bySql = (q: string) => {
-  let built = where(parseQuery(q), NOW)
-  if (!built) return null
-  return (db.prepare(built.sql).all(...built.params) as { eid: string }[])
-    .map((r) => r.eid).sort()
+  let rel = where(parseQuery(q), NOW)
+  if (!rel) return null
+  return run<{ eid: string }>(db, rel).map((r) => r.eid).sort()
 }
 
 // Every line either compiles and agrees, or declines. `declined` names the
@@ -600,21 +600,15 @@ for (let q of DECLINES) {
 Deno.test('aggregate: distinct SQL is the matcher census over a column', () => {
   let ps = parseQuery('.distinct=domain')
   let at = aggOf(ps)!.at
-  let built = aggregateSql(ps)!
-  let sql = (db.prepare(built.sql).all(...built.params) as { value: string }[])
-    .map((r) => r.value)
+  let sql = run<{ value: string }>(db, aggregateSql(ps)!).map((r) => r.value)
   assertEquals(sql, distinctValues(Object.values(world), at))
 })
 
 Deno.test('aggregate: tally SQL is the matcher tally over a column', () => {
   let ps = parseQuery('.tally=domain')
   let at = aggOf(ps)!.at
-  let built = aggregateSql(ps)!
   let sql = new Map(
-    (db.prepare(built.sql).all(...built.params) as {
-      value: string
-      n: number
-    }[])
+    run<{ value: string; n: number }>(db, aggregateSql(ps)!)
       .map((r) => [r.value, r.n] as [string, number]),
   )
   assertEquals(sql, tally(Object.values(world), at))
@@ -671,18 +665,12 @@ Deno.test('projection: select carries the named columns beside the eid', () => {
     pin: { canvas: 'other', x: 0, y: 0, w: 1, h: 1, z: 1 },
   })
   let q = '.pin.canvas=cv&.card!&.fields=pin.x,pin.y,pin.w,pin.h,pin.z~'
-  let built = select(parseQuery(q))!
-  let rows = pdb.prepare(built.sql).all(...built.params) as Record<
-    string,
-    unknown
-  >[]
+  let rows = run(pdb, select(parseQuery(q))!)
   // membership: the two cards pinned to canvas cv, and only those
   assertEquals(rows.map((r) => r.eid).sort(), ['pinA', 'pinB'])
   // and it is EXACTLY the eid-only membership where() gives the same filter
-  let w = where(parseQuery(q))!
   assertEquals(
-    (pdb.prepare(w.sql).all(...w.params) as { eid: string }[])
-      .map((r) => r.eid).sort(),
+    run<{ eid: string }>(pdb, where(parseQuery(q))!).map((r) => r.eid).sort(),
     rows.map((r) => r.eid).sort(),
   )
   // each projected column rides in aliased comp.prop; z is present though volatile
@@ -715,7 +703,10 @@ Deno.test('projection: unknown columns decline and paths compose', () => {
     null,
   )
   let path = select(parseQuery('.assignee.title~=j&.fields=pin.x'))
-  assertEquals(!!path?.sql.includes('select "__path_leaf"."title"'), true)
+  assertEquals(
+    !!path && toSql(path).sql.includes('select "__path_leaf"."title"'),
+    true,
+  )
 })
 
 // kind=K is not a filter STRING but a synthetic Pred[] (query.ts kindPreds):
@@ -730,10 +721,9 @@ let kindOfSet = (kind: string) =>
   Object.entries(world).filter(([, c]) => kindOf(c) == kind)
     .map(([eid]) => eid).sort()
 let bySqlKind = (kind: string) => {
-  let built = where(kindPreds(kind)!)
-  if (!built) return null
-  return (db.prepare(built.sql).all(...built.params) as { eid: string }[])
-    .map((r) => r.eid).sort()
+  let rel = where(kindPreds(kind)!)
+  if (!rel) return null
+  return run<{ eid: string }>(db, rel).map((r) => r.eid).sort()
 }
 let byJsKind = (kind: string) =>
   Object.entries(world).filter(([, c]) => matchQuery(c, kindPreds(kind)!))
@@ -775,10 +765,44 @@ Deno.test('a body column the index does not cover declines', () => {
 // `.book!&.loan?` (C-32800 item 2). Membership is unmoved: a request selects
 // exactly what the filter beside it selects.
 Deno.test('a request joins no table, and narrows nothing', () => {
-  let asked = where(parseQuery('.doc!&.loan?'))!
-  let plain = where(parseQuery('.doc!'))!
+  let asked = toSql(where(parseQuery('.doc!&.loan?'))!)
+  let plain = toSql(where(parseQuery('.doc!'))!)
   assertEquals(asked.sql.includes('"loan"'), false)
   // All the request leaves behind is its constant: no table, no condition.
   assertEquals(asked.sql.replace(' and 1 ', ' '), plain.sql)
   assertEquals(asked.params, plain.params)
+})
+
+// The skeleton every builder wraps a projection around, written out once. The
+// statements are RELATIONS now (relation.ts) rather than concatenated text, and
+// what a relation must keep emitting is exactly this: the projection, the
+// filter's LEFT JOINs, its condition, then the liveness test — and, windowed,
+// the cursor ANDed after that, the newest-first order, and the limit, with
+// binds in that order. A change to any of it is a change to every query the
+// server answers, so it is spelled here rather than derived.
+let SKELETON = 'select "entity"."eid" as eid from "entity"' +
+  ' left join "task" on "task"."entity" = "entity"."id"' +
+  ' where cast("task"."domain" as text) = ?' +
+  ' and not exists (select 1 from tombstone "t" where "t"."entity" = "entity"."id")'
+
+Deno.test('the compiled skeleton is unchanged, clause for clause', () => {
+  let ps = parseQuery('.task.domain=Eng')
+  assertEquals(toSql(where(ps)!), { sql: SKELETON, params: ['Eng'] })
+  assertEquals(toSql(countSql(ps)!), {
+    sql: SKELETON.replace(
+      'select "entity"."eid" as eid',
+      "select '' as value, count(*) as n",
+    ),
+    params: ['Eng'],
+  })
+  assertEquals(toSql(windowed(where(ps)!, { limit: 20, after: 9 })), {
+    sql: SKELETON + ' and "entity"."num" < ?' +
+      ' order by "entity"."num" desc limit ?',
+    params: ['Eng', 9, 20],
+  })
+  // No window is no clause: the same statement, untouched.
+  assertEquals(
+    toSql(windowed(where(ps)!, {})).sql,
+    SKELETON + ' order by "entity"."num" desc',
+  )
 })

@@ -65,6 +65,7 @@ import {
   whereSome,
   windowed,
 } from './sql.ts'
+import { run, toSql } from './relation.ts'
 import { sentences } from './edge.ts'
 import { hasSources } from './source.ts'
 import {
@@ -257,12 +258,12 @@ export let entryUniverse = (
       db,
       after,
       limit,
-      whereSome(
+      toSql(whereSome(
         screened(
           [...preds, { comp: 'entry', prop: '', op: EXISTS, value: '' }],
           true,
         ),
-      ),
+      )),
     )
     : doors.entriesOf(db, session, after, limit)
   return got.map((e) => rowed({ eid: e.eid, comps: e.comps }))
@@ -309,10 +310,9 @@ let heard = (db: Sql, q: string): Pred[] =>
 // are invisible to a count. A total nobody can vouch for is not stated.
 let countOf = (db: Sql, preds: Pred[]): number | undefined => {
   if (hasSources()) return undefined
-  let sql = countSql(preds)
-  if (!sql) return undefined
-  let row = db.prepare(sql.sql).get(...sql.params) as { n?: number } | undefined
-  return Number(row?.n ?? 0)
+  let rel = countSql(preds)
+  if (!rel) return undefined
+  return Number(run<{ n?: number }>(db, rel)[0]?.n ?? 0)
 }
 
 // The index's answer, or null when it declines (the caller falls back to
@@ -346,7 +346,8 @@ export let evalFast = (
   // Entries page by their own seq (orderedEntries), never by spine num, so a
   // lazy answer stays whole here and is windowed downstream.
   let bounded = !entries && (win.limit != null || win.after != null)
-  let hits = matching(db, bounded ? windowed(built, win) : built).map(rowed)
+  let hits = matching(db, toSql(bounded ? windowed(built, win) : built))
+    .map(rowed)
     .filter((r) => entries || !r.comps.entry)
   hits = withResults(db, preds, hits)
     .filter((r) => selected(r.comps, preds))
@@ -401,7 +402,7 @@ export let evalQuery = (
   // boundary, for every lazy predicate — not a query-string special case.
   let all = entries
     ? entryUniverse(db, preds, after, limit, doors)
-    : doors.matching(db, whereSome(inputs)).map(rowed)
+    : doors.matching(db, toSql(whereSome(inputs))).map(rowed)
       // matching() may union source rows wearing entry; eager queries do not
       // opt into that partition.
       .filter((r) => !r.comps.entry)
@@ -449,7 +450,7 @@ export let evalCapped = (
   // slice keeps the NEWEST matches, not an arbitrary cap-full.
   let walk = walker(db)
   let fts = (eid: string, p: Pred) => textMatches(db, eid, p)
-  let raw = withResults(db, preds, matching(db, base).map(rowed))
+  let raw = withResults(db, preds, matching(db, toSql(base)).map(rowed))
   let hits = raw
     .filter((r) =>
       selected(r.comps, preds) &&
@@ -558,12 +559,9 @@ export let evalAgg = (
   let preds = heard(db, q)
   let agg = aggOf(preds)
   if (!agg) return null
-  let sql = aggregateSql(preds)
-  if (sql) {
-    let rows = db.prepare(sql.sql).all(...sql.params) as {
-      value: string
-      n?: number
-    }[]
+  let rel = aggregateSql(preds)
+  if (rel) {
+    let rows = run<{ value: string; n?: number }>(db, rel)
     return {
       op: agg.op,
       values: new Map(rows.map((r) => [String(r.value), Number(r.n ?? 1)])),
@@ -629,7 +627,7 @@ let workSelectionSql = (
     order: 'worker' | 'dispatch'
   },
 ) => {
-  let base = workBase(db, q)
+  let base = toSql(workBase(db, q))
   let lineage = opts.recursive
     ? `, ${workLineageSql('candidate')}, ${workRootsSql}`
     : ''

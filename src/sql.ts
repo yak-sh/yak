@@ -38,18 +38,50 @@ import {
 } from './query.ts'
 import { type Span, span } from './time.ts'
 import { comps, stamped } from './types.ts'
+import { pipe } from './fp.ts'
+import {
+  also,
+  distinct,
+  type Frag,
+  from,
+  group,
+  type Join,
+  joined,
+  order,
+  outer,
+  project,
+  type Rel,
+  type Step,
+  take,
+  toSql,
+  where as cond,
+} from './relation.ts'
 
-// Bound values are only ever text or numbers — the grammar has no other
-// literal, and saying so keeps every caller off a cast.
-export type Bind = string | number
-export type Sql = { sql: string; params: Bind[] }
+// Every statement below is a RELATION (relation.ts), not a string: the
+// projection differs, the `from "entity" … where … and not dead` skeleton is
+// the same value-level steps every time, and `windowed` adds clauses to that
+// value rather than concatenating onto finished text. Rendering is toSql's job
+// and nothing here calls it except where a hand-written statement still splices
+// a fragment in (screenSql, revSql).
+//
+// A compiled predicate is a `Frag` — SQL text plus the binds it consumes — the
+// same shape a rendered statement has and the shape a relation's condition
+// takes, so a predicate IS a condition with no adapter. (It was named `Sql`
+// here, colliding with the store CONNECTION type of that name.)
 
 // A tombstoned entity keeps its spine row so its int id can never recycle
 // (D-18866), but it is DEAD — snapshot() drops it and the JS matcher never sees
 // it. So every membership query over the spine excludes the graves, or it would
 // return dead eids the fallback never would (a break of the exactness contract).
-let LIVE =
-  ` and not exists (select 1 from tombstone "t" where "t"."entity" = "entity"."id")`
+let LIVE: Frag = {
+  sql:
+    `not exists (select 1 from tombstone "t" where "t"."entity" = "entity"."id")`,
+  params: [],
+}
+// The spine, as it is spelled after FROM.
+let SPINE = '"entity"'
+// The one column every membership statement answers with.
+let EID = `"entity"."eid" as eid`
 let table = (name: string) =>
   name == 'doc' ? '"doc_value" as "doc"' : `"${name}"`
 let source = (name: string) => name == 'doc' ? '"doc_value"' : `"${name}"`
@@ -144,7 +176,7 @@ let numeric = (s: string) => /^-?\d+(\.\d+)?$/.test(s)
 // invariant (see `edge`), which is what makes any of this exact to begin with.
 let LO = '0000-01-01T00:00:00.000Z'
 let HI = '9999-12-31T23:59:59.999Z'
-let stampish = (c: string, s: Sql): Sql => ({
+let stampish = (c: string, s: Frag): Frag => ({
   sql: `(${c} between ? and ? and ${s.sql})`,
   params: [LO, HI, ...s.params],
 })
@@ -159,7 +191,7 @@ let stampish = (c: string, s: Sql): Sql => ({
 // through JS's own number formatting. `.priority=1.0` does not: no JS number
 // stringifies to '1.0', so the JS answer is empty for every row, and the
 // honest compilation is a constant false rather than a numeric 1.
-let eq = (c: string, value: string, knownTag = tagFor(c)): Sql | null => {
+let eq = (c: string, value: string, knownTag = tagFor(c)): Frag | null => {
   if (value == '') {
     return { sql: `(${c} is null or ${asText(c)} = '')`, params: [] }
   }
@@ -210,7 +242,7 @@ let cmp = (
   op: string,
   value: string,
   knownTag = tagFor(c),
-): Sql | null => {
+): Frag | null => {
   let tag = knownTag
   if (!tag) return null
   if (NUMERIC_TAGS.includes(tag)) {
@@ -249,15 +281,15 @@ let cmp = (
 // to the capped newest-first candidate prefix, and "Updated Today" showed 290
 // of its 1248 matches.
 let iso = (ms: number) => new Date(ms).toISOString()
-let bound = (c: string, op: string, ms: number): Sql => ({
+let bound = (c: string, op: string, ms: number): Frag => ({
   sql: `${c} ${op} ?`,
   params: [iso(ms)],
 })
-let all = (a: Sql, b: Sql): Sql => ({
+let all = (a: Frag, b: Frag): Frag => ({
   sql: `(${a.sql} and ${b.sql})`,
   params: [...a.params, ...b.params],
 })
-let any = (parts: Sql[]): Sql =>
+let any = (parts: Frag[]): Frag =>
   parts.length == 1 ? parts[0] : {
     sql: `(${parts.map((p) => p.sql).join(' or ')})`,
     params: parts.flatMap((p) => p.params),
@@ -267,7 +299,7 @@ let any = (parts: Sql[]): Sql =>
 // end is its start is an INSTANT (a phrase naming one moment), and there
 // inTime's `t == s.start` arms carry the whole answer; over a proper range those
 // arms are redundant, since `t == start` already satisfies `start <= t < end`.
-let edge = (c: string, op: string, s: Span): Sql => {
+let edge = (c: string, op: string, s: Span): Frag => {
   let point = s.end <= s.start
   return op == '<'
     ? bound(c, '<', s.start)
@@ -287,7 +319,7 @@ let edge = (c: string, op: string, s: Span): Sql => {
 // WHOLE value as one phrase; a value that is no phrase at all declines here and
 // takes the ordinary scalar road (an ISO range, an absence test), exactly as
 // the matcher does.
-let timeSql = (p: Pred, c: string, now: number): Sql | null => {
+let timeSql = (p: Pred, c: string, now: number): Frag | null => {
   let spans = p.value.split(',').map((v) => span(v, now))
   if (spans.every((s) => s) && (p.op == '' || p.op == '!')) {
     let hit = stampish(c, any(spans.map((s) => edge(c, '', s!))))
@@ -317,7 +349,7 @@ let timeSql = (p: Pred, c: string, now: number): Sql | null => {
 // case — an ASCII needle against text holding U+212A or U+0130, whose JS
 // lowercase IS ASCII — cannot be seen from a needle and stays uncompiled-for.)
 let ascii = (s: string) => [...s].every((c) => c.charCodeAt(0) < 128)
-let has = (c: string, value: string): Sql | null =>
+let has = (c: string, value: string): Frag | null =>
   !ascii(value)
     ? null
     : value == ''
@@ -348,7 +380,11 @@ let grams = (needle: string) =>
   needle.split(/[%_]/).some((run) => [...run].length >= GRAM)
 
 // Only doc's own columns are indexed, so the rowid is doc's.
-let narrow = (cols: string[], needle: string, exact: Sql | null): Sql | null =>
+let narrow = (
+  cols: string[],
+  needle: string,
+  exact: Frag | null,
+): Frag | null =>
   exact && grams(needle)
     ? {
       sql: `("doc"."rowid" in (${
@@ -362,7 +398,7 @@ let narrow = (cols: string[], needle: string, exact: Sql | null): Sql | null =>
 // A bare word is an exact FTS membership test over doc title/body. The same
 // quoted-term builder drives ranked retrieval, so an initial subscription
 // cannot widen token matches into legacy substring matches.
-let text = (value: string): Sql | null => {
+let text = (value: string): Frag | null => {
   let term = ftsTerm(value)
   return term
     ? {
@@ -377,7 +413,7 @@ let text = (value: string): Sql | null => {
 // A body is never scanned. `~=` over doc.body goes through the index; every
 // other op, and every other body column (hook.payload, session.final_text —
 // none of them indexed), declines and the JS matcher answers.
-let body = (p: Pred, c: string): Sql | null =>
+let body = (p: Pred, c: string): Frag | null =>
   p.op != '~' || p.comp != 'doc' || p.prop != 'body'
     ? null
     : p.value == ''
@@ -397,7 +433,7 @@ let scalar = (
   tag: string | undefined,
   now: number,
   path = false,
-): Sql | null => {
+): Frag | null => {
   if (p.op == EXISTS) return { sql: `${c} is not null`, params: [] }
   // doc.body's trigram narrowing is tied to the outer doc row. A path body has
   // a different owner, so only the empty contains (which needs no index) can
@@ -446,7 +482,7 @@ let refEqs = (p: Pred) =>
   (p.op == EXISTS || p.op == '' || p.op == '!') &&
   !p.value.includes('..') &&
   (p.value == '' || p.value.split(',').every(Boolean))
-let refEq = (p: Pred): Sql => {
+let refEq = (p: Pred): Frag => {
   let c = `"${p.comp}"."${p.prop}"`
   if (p.op == EXISTS || (p.op == '!' && p.value == '')) {
     return { sql: `${c} is not null`, params: [] }
@@ -473,7 +509,7 @@ let needsRoot = (p: Pred) =>
     p.op == EXISTS || CMP[p.op] != null ||
     ((p.op == '' || p.op == '~') && p.value != '')
   )
-let rooted = (p: Pred, s: Sql): Sql => ({
+let rooted = (p: Pred, s: Frag): Frag => ({
   sql: `("${p.comp}"."entity" is not null and ${s.sql})`,
   params: s.params,
 })
@@ -484,7 +520,7 @@ let rooted = (p: Pred, s: Sql): Sql => ({
 // candidate set or scanning the graph. Missing intermediate rows yield NULL:
 // equality/comparisons miss, `!=` holds, and an absent component leaf holds —
 // exactly the matcher reading a broken link as an undefined bag.
-let pathSql = (p: Pred, now: number): Sql | null => {
+let pathSql = (p: Pred, now: number): Frag | null => {
   if (!p.at?.length || !known(p.comp, p.prop) || !isRef(p.comp, p.prop)) {
     return null
   }
@@ -548,7 +584,7 @@ let pathSql = (p: Pred, now: number): Sql | null => {
   return s && needsRoot(p) ? rooted(p, s) : s
 }
 
-let one = (p: Pred, now: number): Sql | null => {
+let one = (p: Pred, now: number): Frag | null => {
   // The empty query's never-pred: a false condition, so the index answers
   // the empty set immediately — never a full scan, never a dropped pred.
   if (p.op == NEVER) return { sql: '0', params: [] }
@@ -594,15 +630,16 @@ let one = (p: Pred, now: number): Sql | null => {
 // a true match. Only the top-level `entity` base uses it; reverse-EXISTS
 // subqueries stay exact-or-decline, so a hop that cannot compile exactly drops
 // WHOLE (its one() returns null) and is refined in JS, never compiled partially.
+type Built = { joins: Join[]; cond: Frag }
 let build = (
   preds: Pred[],
   base: string,
-  also: string[] = [],
+  carry: string[] = [],
   drop = false,
   now = Date.now(),
   present: string[] = [],
-): { joins: string; cond: string; params: Bind[] } | null => {
-  let parts: Sql[] = []
+): Built | null => {
+  let parts: Frag[] = []
   let kept: Pred[] = []
   for (let p of preds) {
     let s = one(p, now)
@@ -628,9 +665,9 @@ let build = (
     // the far half of the updated.at fallback (readCol)
     if (!p.at && falls(p.comp, p.prop)) tables.add('created')
   }
-  // `also` carries the projected columns' components (select()): a projection may
+  // `carry` names the projected columns' components (select()): a projection may
   // name a table no filter joined, and it must still be LEFT JOINed to be read.
-  for (let t of also) if (t) tables.add(t)
+  for (let t of carry) if (t) tables.add(t)
   tables.delete(base)
   for (let t of present) tables.delete(t)
   if (base != 'entity' && tables.has('entity')) return null
@@ -638,23 +675,46 @@ let build = (
   // key: the spine's `id` when the base IS the spine, else the base table's own
   // `entity` owner.
   let key = base == 'entity' ? `"entity"."id"` : `"${base}"."entity"`
-  let joins = [...tables]
-    .filter((t) => t != 'entity')
-    .map((t) => ` left join ${table(t)} on "${t}"."entity" = ${key}`)
-    .join('')
-  let cond = parts.length ? parts.map((p) => p.sql).join(' and ') : '1'
-  return { joins, cond, params: parts.flatMap((p) => p.params) }
+  return {
+    joins: [...tables]
+      .filter((t) => t != 'entity')
+      .map((t) => ({ source: table(t), on: `"${t}"."entity" = ${key}` })),
+    // One condition, not a list: an empty conjunction is the literal `1` here,
+    // and a caller that ANDs another clause in front of it (aggregateSql) must
+    // keep that `1` where it was.
+    cond: {
+      sql: parts.length ? parts.map((p) => p.sql).join(' and ') : '1',
+      params: parts.flatMap((p) => p.params),
+    },
+  }
 }
+
+// A build as steps on a relation: its tables joined, its condition ANDed in.
+let joins = (b: Built): Step =>
+  pipe(...b.joins.map((j) => outer(j.source, j.on)))
+let screen = (b: Built): Step => pipe(joins(b), cond(b.cond))
 
 // Compile an exact filter against a caller-owned entity row. `present` names
 // component tables the caller already joined under their canonical names, so
 // a derived selection can choose its driving index without duplicate joins or
 // re-running a standalone candidate query first.
+//
+// Rendered rather than handed over as a relation, because both callers splice
+// it into a statement of their own (a work CTE, a completed_at walk) that this
+// layer does not build. `joined()` is the same renderer toSql uses, so the two
+// spellings of a join cannot drift.
 export let screenSql = (
   preds: Pred[],
   present: string[] = [],
   now = Date.now(),
-) => build(preds, 'entity', [], false, now, present)
+) => {
+  let built = build(preds, 'entity', [], false, now, present)
+  return built && {
+    joins: joined(built.joins),
+    cond: built.cond.sql,
+    params: built.cond.params,
+  }
+}
 
 // The correlated-EXISTS half of a reverse hop. `.comments…` compiles to an
 // EXISTS over the child ref table, correlated on the parent's eid and backed by
@@ -672,7 +732,7 @@ let COUNT_OPS: Record<string, string> = {
   '>': '>',
   '>=': '>=',
 }
-let revSql = (p: Pred, now: number): Sql | null => {
+let revSql = (p: Pred, now: number): Frag | null => {
   let r = p.rev!
   let base = r.comp
   // The child's int reference equals the parent spine's int id (both id-keyed),
@@ -688,11 +748,18 @@ let revSql = (p: Pred, now: number): Sql | null => {
   }
   let inner = build(r.preds, base, [], false, now)
   if (!inner) return null
-  let tail = inner.cond == '1' ? '' : ` and ${inner.cond}`
+  // A relation over the CHILD table, correlated to the outer row. The inner
+  // condition is dropped when it is the empty conjunction: `where corr and 1`
+  // and `where corr` are the same question, and this is the spelling.
+  let sub = toSql(from(
+    `"${base}"`,
+    project('1'),
+    joins(inner),
+    cond({ sql: corr, params: [] }, inner.cond.sql == '1' ? null : inner.cond),
+  ))
   return {
-    sql: `${r.not ? 'not ' : ''}exists (select 1 from "${base}"${inner.joins}` +
-      ` where ${corr}${tail})`,
-    params: inner.params,
+    sql: `${r.not ? 'not ' : ''}exists (${sub.sql})`,
+    params: sub.params,
   }
 }
 
@@ -708,7 +775,7 @@ let revSql = (p: Pred, now: number): Sql | null => {
 // the planner can prefer over the endpoint — which is what the old `+d.type`
 // existed to prevent, back when a stale ANALYZE made the type index look
 // cheaper than a seek.
-let reachSql = (p: Pred): Sql | null => {
+let reachSql = (p: Pred): Frag | null => {
   let r = p.reach
   if (!r || !p.value) return null
   return {
@@ -728,7 +795,7 @@ let reachSql = (p: Pred): Sql | null => {
 // the whole thing is `eid in (select … union select …)` — no wide join, the
 // `narrow()` doc_gram shape. Only the positive equality compiles; presence and
 // absence admit rows in no reverse map, so they decline and the matcher answers.
-let refsSql = (p: Pred): Sql | null => {
+let refsSql = (p: Pred): Frag | null => {
   if (p.op != '' || !p.value) return null
   // Each backlink is an int-id search: the child rows whose ref column equals
   // the target's id, yielding their owner ids, unioned — the parent matches if
@@ -753,17 +820,18 @@ let refsSql = (p: Pred): Sql | null => {
 // windowed reply states its page is a prefix of. One indexed count over the same
 // WHERE a membership query runs, so the two can never disagree about what the
 // selection is. null when any predicate declined.
-export let countSql = (preds: Pred[], now = Date.now()): Sql | null => {
+export let countSql = (preds: Pred[], now = Date.now()): Rel | null => {
   let built = build(preds, 'entity', [], false, now)
-  if (!built) return null
-  return {
-    sql: `select '' as value, count(*) as n from "entity"${built.joins}` +
-      ` where ${built.cond}${LIVE}`,
-    params: built.params,
-  }
+  return built &&
+    from(
+      SPINE,
+      project(`'' as value`, 'count(*) as n'),
+      screen(built),
+      cond(LIVE),
+    )
 }
 
-export let aggregateSql = (preds: Pred[], now = Date.now()): Sql | null => {
+export let aggregateSql = (preds: Pred[], now = Date.now()): Rel | null => {
   let agg = preds.find((p) => p.op == AGG)
   if (!agg) return null
   // `.count!` reduces the SELECTION, not a column: one indexed count over the
@@ -780,15 +848,22 @@ export let aggregateSql = (preds: Pred[], now = Date.now()): Sql | null => {
   let built = build(preds, 'entity', [], false, now)
   if (!built) return null
   let c = col(agg.comp, agg.prop)
-  let cond = `${c} is not null and ${asText(c)} != '' and ${built.cond}`
-  let sel = agg.agg == 'tally'
-    ? `select ${asText(c)} as value, count(*) as n`
-    : `select distinct ${asText(c)} as value`
-  return {
-    sql: `${sel} from "entity"${built.joins} where ${cond}${LIVE}` +
-      (agg.agg == 'tally' ? ' group by value' : '') + ' order by value',
-    params: built.params,
-  }
+  let value = `${asText(c)} as value`
+  return from(
+    SPINE,
+    agg.agg == 'tally'
+      ? pipe(project(value, 'count(*) as n'), group('value'))
+      : pipe(distinct(), project(value)),
+    // The empties the matcher's tally() drops, dropped in the statement — ahead
+    // of the filter's own condition, where they have always been.
+    cond({ sql: `${c} is not null`, params: [] }, {
+      sql: `${asText(c)} != ''`,
+      params: [],
+    }),
+    screen(built),
+    cond(LIVE),
+    order('value'),
+  )
 }
 
 // The whole filter as one statement, or null if any predicate declined.
@@ -797,14 +872,9 @@ export let aggregateSql = (preds: Pred[], now = Date.now()): Sql | null => {
 // `read()` already says by returning undefined for both. The spine is already
 // the FROM table, so `.entity.num=13882` must not join it to itself (SQLite
 // refuses "ambiguous column name: entity.eid") — build() drops it.
-export let where = (preds: Pred[], now = Date.now()): Sql | null => {
+export let where = (preds: Pred[], now = Date.now()): Rel | null => {
   let built = build(preds, 'entity', [], false, now)
-  if (!built) return null
-  return {
-    sql: `select "entity"."eid" as eid from "entity"${built.joins}` +
-      ` where ${built.cond}${LIVE}`,
-    params: built.params,
-  }
+  return built && from(SPINE, project(EID), screen(built), cond(LIVE))
 }
 
 // The partial-narrowing statement: like where(), but a predicate the compiler
@@ -819,14 +889,13 @@ export let where = (preds: Pred[], now = Date.now()): Sql | null => {
 // through the index, never a materialized snapshot. Never null: the top-level
 // `entity` base cannot reach build's only null branch (the entity-self-join
 // guard, which fires solely inside a reverse-EXISTS subquery).
-export let whereSome = (preds: Pred[], now = Date.now()): Sql => {
-  let built = build(preds, 'entity', [], true, now)!
-  return {
-    sql: `select "entity"."eid" as eid from "entity"${built.joins}` +
-      ` where ${built.cond}${LIVE}`,
-    params: built.params,
-  }
-}
+export let whereSome = (preds: Pred[], now = Date.now()): Rel =>
+  from(
+    SPINE,
+    project(EID),
+    screen(build(preds, 'entity', [], true, now)!),
+    cond(LIVE),
+  )
 
 // A PROJECTED membership query: the eids `where()` selects, PLUS the columns each
 // row carries beyond its eid (`.fields=pin.x,pin.z`). The projected columns'
@@ -838,7 +907,7 @@ export let whereSome = (preds: Pred[], now = Date.now()): Sql => {
 // and differ only in what the caller then believes about the rows. null if a
 // projected column is unknown or any filter declined — the exactness contract,
 // unbroken.
-export let select = (preds: Pred[], now = Date.now()): Sql | null => {
+export let select = (preds: Pred[], now = Date.now()): Rel | null => {
   let fields = fieldsOf(preds)
   if (!fields?.length) return where(preds, now)
   for (let f of fields) if (!known(f.comp, f.prop)) return null
@@ -847,11 +916,7 @@ export let select = (preds: Pred[], now = Date.now()): Sql | null => {
   let cols = fields.map((f) =>
     `${col(f.comp, f.prop)} as "${f.comp}.${f.prop}"`
   )
-  return {
-    sql: `select "entity"."eid" as eid, ${cols.join(', ')} from "entity"` +
-      `${built.joins} where ${built.cond}${LIVE}`,
-    params: built.params,
-  }
+  return from(SPINE, project(EID, ...cols), screen(built), cond(LIVE))
 }
 
 // A statement bounded to a WINDOW: the newest `limit` rows by spine num, and —
@@ -860,18 +925,18 @@ export let select = (preds: Pred[], now = Date.now()): Sql | null => {
 // definition, not a presentation choice: "newest first" is what makes a prefix
 // mean something and a cursor able to continue it.
 //
-// This may only ride a statement whose result needs no JS refinement — an EXACT
+// This may only ride a selection whose result needs no JS refinement — an EXACT
 // where(), over screened() preds — because a filter applied after the LIMIT
-// under-fills the page. That is why the quarantine and entry screens moved into
-// the compiled preds (query.ts screened) rather than staying post-filters.
-export let windowed = (base: Sql, w: Win): Sql => ({
-  sql: base.sql +
-    (w.after != null ? ` and "entity"."num" < ?` : '') +
-    ` order by "entity"."num" desc` +
-    (w.limit != null ? ` limit ?` : ''),
-  params: [
-    ...base.params,
-    ...w.after != null ? [w.after] : [],
-    ...w.limit != null ? [w.limit] : [],
-  ],
-})
+// under-fills the page. That is a fact about the ANSWER, and stays the caller's
+// to know. What used to ride beside it — that the statement had to END in a
+// WHERE clause for the concatenation to be legal — is gone: these are steps on
+// a relation, and a clause added to a value cannot land in the wrong place.
+export let windowed = (base: Rel, w: Win): Rel =>
+  also(
+    base,
+    cond(
+      w.after == null ? null : { sql: `"entity"."num" < ?`, params: [w.after] },
+    ),
+    order(`"entity"."num" desc`),
+    take(w.limit),
+  )

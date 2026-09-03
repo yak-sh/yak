@@ -25,6 +25,7 @@ import {
 import { dispatchSpawn } from './dispatch.ts'
 import { parseQuery } from './query.ts'
 import { where } from './sql.ts'
+import { toSql } from './relation.ts'
 import {
   buildReady,
   workCandidates,
@@ -1097,8 +1098,9 @@ Deno.test('verify lane and evidence plans stay on their keyed walks', () => {
 Deno.test('lane membership queries compile to indexed component scans', () => {
   let w = world()
   for (let lane of ['evaluate', 'build', 'verify'] as const) {
-    let built = where(parseQuery(workFilters(lane).join('&')))
-    assert(built, lane)
+    let rel = where(parseQuery(workFilters(lane).join('&')))
+    assert(rel, lane)
+    let built = toSql(rel)
     let plan = w.db.prepare(`explain query plan ${built.sql}`).all(
       ...built.params,
     ) as {
