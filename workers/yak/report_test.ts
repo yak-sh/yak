@@ -163,13 +163,40 @@ slow('a refusal the door meant is not a break', async () => {
       204,
     )
 
+    // And the same rule for a no the APP answered (C-32869 item 5, T-32874):
+    // the app's worker asked an outside service with a key its owner
+    // mistyped, was told 401, and answered the page a sentence in its own
+    // words. That is the app working; an outside service does not spell its
+    // no the way our doors spell theirs, so the rule reads the STATUS.
+    assertEquals(
+      (await report({
+        message: '401 /runs/weather: the weather service refused our key',
+        url: 'https://club.yaks.app/runs/',
+        status: 401,
+        answer: 'the weather service refused our key',
+      })).status,
+      204,
+    )
+    // A 5xx the app answered is nobody's choice, and still lands.
+    assertEquals(
+      (await report({
+        message: '500 /runs/weather: undefined is not an object',
+        url: 'https://club.yaks.app/runs/',
+        status: 500,
+        answer: 'undefined is not an object',
+      })).status,
+      204,
+    )
+
     let told = await agent.tool('app_errors', app)
     assert(!told.includes('not_a_writer'), 'the refusal filed nothing')
+    assert(!told.includes('refused our key'), "the app's own no filed nothing")
     assertMatch(told, /boom is not a function/)
+    assertMatch(told, /undefined is not an object/)
     assertEquals(
       told.split('\n').filter((l) => l.startsWith('- ')).length,
-      1,
-      'one line, and it is the break',
+      2,
+      'two lines, and both are breaks',
     )
   } finally {
     await k.stop()

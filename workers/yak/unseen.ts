@@ -23,26 +23,45 @@ import { vouched, type Who } from './session.ts'
 import { type Door, storeOf } from './store.ts'
 import { level, standing } from './usage.ts'
 
-// A refusal is NOT a break (C-32652 item 3, T-32655). Every door here answers
-// a deliberate no in one shape — a 4xx carrying `{"error":{"code":…}}`: the
-// app doors' `not_a_writer`/`not_a_reader` (apps.ts SAYS), identity's
-// `unauthorized`, the store's own `method_not_allowed` — and the page that
-// catches one is meant to ACT on it, since the guide teaches
-// `e.signIn ? location = e.signIn`. A signed-out visitor clicking a button is
-// the platform working, so it files nothing; the owner's only two open errors
-// on the sixth user test were both that.
+// A refusal is NOT a break (C-32652 item 3, T-32655; C-32869 item 5) — one
+// rule, read off whichever half of the answer the platform is holding.
 //
-// The shape is the whole test: what fell over never wears it, and no 5xx here
-// is written in it (a break answers `oops()`, which is a page).
-export let refusal = (answer: string) => {
+// The STATUS is the rule. A 4xx is somebody's deliberate no: the app doors'
+// `not_a_writer`/`not_a_reader` (apps.ts SAYS), identity's `unauthorized`,
+// the store's `method_not_allowed` — and equally an app's own worker saying
+// "no city by that name", or passing on the 401 an outside service gave it
+// for a key its owner mistyped. Nobody's code fell over, and the page that
+// catches one is meant to ACT on it, since the guide teaches
+// `e.signIn ? location = e.signIn`. A break is what nobody chose: a throw,
+// or a 5xx (`failed` below).
+//
+// Where there is no status — a kernel part that relayed a door's no by
+// THROWING what it was answered (index.ts's catch-all) — the answer's own
+// SHAPE stands in for it: every door here spells a no one way, a body
+// carrying `{"error":{"code":…}}`, and what fell over never wears it.
+//
+// The shape alone was the whole rule until C-32869 item 5, where a weather
+// worker answered the person a sentence about the mistyped key and the
+// platform filed two exceptions its owner archived by hand: an outside
+// service does not spell its no the way our doors spell theirs, and never
+// will. The shape was only ever a stand-in for the status.
+let shaped = (answer: string) => {
   try {
     let said = JSON.parse(answer) as { error?: { code?: unknown } }
     return typeof said?.error?.code == 'string'
   } catch {
-    // Not JSON at all — a door that fell over, or an app's own 400.
+    // Not JSON at all — a door that fell over.
     return false
   }
 }
+
+export let refusal = (answer: string, status?: number) =>
+  Number.isFinite(status) ? status! >= 400 && status! < 500 : shaped(answer)
+
+// The other side of the same rule, for an answer nobody threw: a 5xx is the
+// break. An app's worker answering one is written where the person's agent
+// reads it (dispatch.ts `ran`); everything under it is the app working.
+export let failed = (status: number) => status >= 500
 
 // One break, written where the person's agent reads it: the `exception`
 // facet, and nothing else. It carries what was being served, the deploy it

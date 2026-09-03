@@ -296,13 +296,13 @@ let broken = (body: string) => {
   return reports.flatMap((r) => {
     if (!r || typeof r != 'object') return []
     let b = (r.body ?? r) as Record<string, unknown>
-    // A no the door answered on purpose is not a break: the reporter sends
-    // the answer's own bytes beside its status (public/report.js), and this
-    // is the seam that can read them (unseen.ts `refusal`).
-    let status = Number(b.status)
-    if (status >= 400 && status < 500 && refusal(String(b.answer ?? ''))) {
-      return []
-    }
+    // A no somebody answered on purpose is not a break, whoever answered it
+    // — the platform's own doors, or the app's worker relaying an outside
+    // service's refusal (unseen.ts `refusal` is the one rule). The reporter
+    // sends the answer's status beside its bytes (public/report.js), and
+    // this is the seam that reads them; a report with no status at all is a
+    // script error or an unhandled rejection, and those are breaks.
+    if (refusal(String(b.answer ?? ''), Number(b.status))) return []
     let message = said(b)
     if (!message) return []
     let at = pathOf(r.url ?? b.url ?? b.documentURL)

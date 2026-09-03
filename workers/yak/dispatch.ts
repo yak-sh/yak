@@ -35,7 +35,7 @@ import { storeName } from './directory.ts'
 import type { Env, Fetcher } from './env.ts'
 import type { Who } from './session.ts'
 import { storeOf } from './store.ts'
-import { noted } from './unseen.ts'
+import { failed, noted } from './unseen.ts'
 
 // The dispatch namespace binding, the slice we ask of it (env.ts): a name in,
 // a fetcher out. `get` throws for a script that is not there, and the docs
@@ -187,7 +187,7 @@ let missing = (e: unknown) =>
 //
 // A worker that throws is left to throw: index.ts's catch-all writes the
 // exception with this app's version, which is the same entity a page's break
-// becomes. A 5xx is not a throw and would go unseen, so it is written here.
+// becomes.
 export let ran = async (
   env: Env,
   space: Space,
@@ -217,7 +217,10 @@ export let ran = async (
     await res.body?.cancel()
     return null
   }
-  if (res.status >= 500) {
+  // A 4xx the worker answered is its own deliberate no and files nothing —
+  // the same rule the report door reads (unseen.ts `refusal`). A 5xx is not
+  // a throw and would otherwise go unseen, so it is written here.
+  if (failed(res.status)) {
     await noted(storeOf(env.STORE, store), {
       request: `worker ${req.method} ${new URL(req.url).pathname}`,
       version: app.version,

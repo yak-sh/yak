@@ -188,8 +188,15 @@ Deno.test('a 404 from the worker, and no worker, both mean the files', async () 
   assertEquals(await ran({} as Env, space, app, visit(), who), null)
 })
 
-Deno.test("a worker's 5xx is written where the agent reads it", async () => {
+// A 4xx the worker answered is its own deliberate no — the outside service
+// that refused its key, a city it does not know — and the platform files
+// nothing about it (T-32874, C-32869 item 5). A 5xx is nobody's choice.
+Deno.test("a worker's own no is not a break; its 5xx is", async () => {
   wrote = []
+  let no = await ran(envOf(mirror(401).get), space, app, visit(), who)
+  assertEquals(no!.status, 401)
+  assertEquals(await no!.text(), 'from the worker')
+  assertEquals(wrote.length, 0, 'a refusal filed something')
   let out = await ran(envOf(mirror(503).get), space, app, visit(), who)
   assertEquals(out!.status, 503)
   let broke =
