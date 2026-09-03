@@ -214,3 +214,62 @@ export let vocabOps = (vocab: Vocab): SchemaOp[] =>
       sql: `alter table ${quote(name)} add column ${column(col, type)}`,
     })),
   ])
+
+// A word has ONE HOME (T-32728): the first app in the space to declare it.
+// A second app naming the same word is not a second declaration — it is a
+// USE. Nothing is planted here, the writes route to the home store
+// (reach.ts), and a column this manifest adds grows the HOME's table, by the
+// same additive rule `grow()` holds every store to.
+//
+// So a manifest arrives split three ways: `mine` the words this app homes,
+// `uses` the words it borrows and where each lives, and `grows` what each
+// home has to add. The one refusal is a SHAPE conflict — the same column
+// with two types — because the rows already written under the home's type
+// are the record of what that column is, and no manifest may rewrite them.
+export type Homes = Record<
+  string,
+  { at: string; cols: Record<string, PropType> }
+>
+
+export let homed = (next: Vocab, homes: Homes) => {
+  let mine: Vocab = {}
+  let uses: Record<string, string> = {}
+  let grows: Record<string, Vocab> = {}
+  for (let [name, cols] of Object.entries(next)) {
+    let home = homes[name]
+    if (!home) {
+      mine[name] = cols
+      continue
+    }
+    uses[name] = home.at
+    let add: Record<string, PropType> = {}
+    for (let [col, type] of Object.entries(cols)) {
+      let had = home.cols[col]
+      if (had && had != type) {
+        throw new Error(
+          `vocab.json: ${name}.${col} is ${type} here and ${had} in ` +
+            `${home.at}, where ${name} lives — a column keeps the type its ` +
+            'rows were written under',
+        )
+      }
+      if (!had) add[col] = type
+    }
+    if (Object.keys(add).length) {
+      grows[home.at] = { ...grows[home.at], [name]: add }
+    }
+  }
+  return { mine, uses, grows }
+}
+
+// What a deploy says about a word it does not own, in the sentence the person
+// asked for: where it lives, and that this app still reads and writes it.
+export let livesIn = (uses: Record<string, string>) =>
+  Object.entries(uses).map(([name, at]) =>
+    `${name} lives in ${at}; this app reads and writes it there`
+  )
+
+// A use as a vocabulary sees it: the word, with no columns of its own —
+// those are the home's to say. Enough for a check that asks only whether the
+// word is one this app may write (store.ts `tools`).
+export let borrowed = (uses: Record<string, string>): Vocab =>
+  Object.fromEntries(Object.keys(uses).map((name) => [name, {}]))

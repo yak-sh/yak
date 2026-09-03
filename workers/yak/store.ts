@@ -53,6 +53,7 @@ import { type Mutation, mutationResult } from '../../src/mutation.ts'
 import { DoSql, type DoStorage } from '../../src/store/do.ts'
 import { parseTools, type Tools } from '../../src/store/tools.ts'
 import {
+  borrowed,
   countSql,
   dropOps,
   grow,
@@ -181,16 +182,41 @@ export class Store {
     }
   }
 
+  // The words this app USES but does not home (T-32728): one word, one home,
+  // so a word another app in the space already declares is not planted here
+  // — it is recorded here, naming where it lives. Nothing is grafted for it:
+  // its table is the home's, and its rows go there (reach.ts routes them).
+  // A list, because where the word lives is the whole of what this store has
+  // to know; its columns are the home's to say.
+  uses(): Record<string, string> {
+    try {
+      let held = JSON.parse(String(this.db.kv.get('uses') ?? '{}'))
+      return held && typeof held == 'object' && !Array.isArray(held)
+        ? Object.fromEntries(
+          Object.entries(held as Record<string, unknown>)
+            .filter(([, at]) => typeof at == 'string'),
+        ) as Record<string, string>
+        : {}
+    } catch {
+      return {}
+    }
+  }
+
   // The tools this app declares (tools.json, T-32685), kept beside the
   // vocabulary because they are the same kind of thing: words this store
   // says that no other store does. Nothing is planted for them — a tool is a
   // template over the doors this store already has — so this slot is read at
   // the MCP door and written by a deploy, and junk in it is nothing.
+  //
+  // A tool may name a word this app USES as well as one it homes: the word
+  // is the app's to write either way, and the door sends it to the home
+  // store. The columns are the home's, so the use enters the check as a bare
+  // name.
   tools(): Tools {
     try {
       return parseTools(
         JSON.parse(String(this.db.kv.get('tools') ?? '{}')),
-        this.vocab(),
+        { ...this.vocab(), ...borrowed(this.uses()) },
       )
     } catch {
       return {}
@@ -504,6 +530,22 @@ export class Store {
         return new Response(why, { status: 400 })
       }
     }
+    // The words this app USES but does not home (T-32728). One word, one
+    // home: a word another app in the space already declares is recorded
+    // here and planted there, so nothing is grafted and no table is made.
+    // The deploy is the only caller — it is the one that can read the other
+    // apps' manifests and say where a word lives.
+    if (path == '/uses') {
+      if (req.method == 'GET') return Response.json(this.uses())
+      if (req.method != 'POST') return methodNotAllowed('GET, POST')
+      try {
+        let sent = JSON.parse(await req.text())
+        db.kv.put('uses', JSON.stringify(sent))
+        return Response.json({ ok: true, uses: Object.keys(this.uses()) })
+      } catch (e) {
+        return new Response(why(e), { status: 400 })
+      }
+    }
     // The app's own MCP tools (tools.json, T-32685): the manifest app_deploy
     // read out of the app's files, checked against THIS store's vocabulary —
     // a tool writing a component nobody declared is refused here, where the
@@ -516,7 +558,10 @@ export class Store {
       if (req.method == 'GET') return Response.json(this.tools())
       if (req.method != 'POST') return methodNotAllowed('GET, POST')
       try {
-        let now = JSON.stringify(parseTools(await req.text(), this.vocab()))
+        let now = JSON.stringify(parseTools(await req.text(), {
+          ...this.vocab(),
+          ...borrowed(this.uses()),
+        }))
         let changed = now != String(db.kv.get('tools') ?? '{}')
         if (changed) db.kv.put('tools', now)
         return Response.json({

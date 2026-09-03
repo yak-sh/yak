@@ -38,6 +38,8 @@ import { asking, listed, listing } from './listing.ts'
 import { nothingHere } from './pages.ts'
 import { hostOf, PLATFORM, route } from './route.ts'
 import { mayWrite, reads, vouched, type Who, whoIs, writes } from './session.ts'
+import { type Reach, split, written } from './reach.ts'
+import type { EntityLiteral } from '../../src/mutation.ts'
 import { type Door, storeOf } from './store.ts'
 import { noted, refusal } from './unseen.ts'
 import { full } from './usage.ts'
@@ -459,6 +461,63 @@ let named = async (env: Env, who: Who): Promise<Record<string, string>> => {
   return title ? { 'x-yak-title': title } : {}
 }
 
+// What a write answers, either way it was routed.
+type Wrote = {
+  changes?: { eid: string; name: string; comp: unknown }[]
+  aliases?: Record<string, string>
+}
+
+// The words this app USES but does not home (T-32728), as its own store last
+// accepted them: the word, and the app in this space whose store holds its
+// rows.
+let usesOf = async (env: Env, space: Space, app: App) => {
+  let r = await storeOf(env.STORE, storeName(space, app))('/uses')
+  if (!r.ok) {
+    await r.body?.cancel()
+    return {} as Record<string, string>
+  }
+  return await r.json() as Record<string, string>
+}
+
+let appsAt = async (env: Env, space: Space, slugs: string[]) => {
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  return (await Promise.all(slugs.map((s) => dir.app(space, s))))
+    .filter(Boolean) as App[]
+}
+
+// The other stores this app's acts reach: one per app it borrows a word from.
+let borrowed = async (
+  env: Env,
+  space: Space,
+  app: App,
+  who: Who,
+): Promise<Reach[]> => {
+  let slugs = [...new Set(Object.values(await usesOf(env, space, app)))]
+  if (!slugs.length) return []
+  return (await appsAt(env, space, slugs))
+    .map((one) => ({ space, app: one, who }))
+}
+
+// Where a filter line's words live, when every word it names is one this app
+// borrows from a SINGLE other app. Anything else is this app's own store: a
+// line spanning two stores is a composition, which the agent door's federated
+// read owns and a template's one line does not.
+let homeOf = async (
+  env: Env,
+  space: Space,
+  app: App,
+  line: string,
+): Promise<Door | null> => {
+  let uses = await usesOf(env, space, app)
+  if (!Object.keys(uses).length) return null
+  let names = [...split(line).parts.keys()]
+  if (!names.length || !names.every((n) => uses[n])) return null
+  let slugs = [...new Set(names.map((n) => uses[n]))]
+  if (slugs.length != 1) return null
+  let [home] = await appsAt(env, space, slugs)
+  return home ? storeOf(env.STORE, storeName(space, home)) : null
+}
+
 // The app's two acts, as one person: what a page does through the doors
 // below, without a page. An app's own MCP tools are templates over exactly
 // these (store/tools.ts, T-32685), so a tool call goes the page's way — the
@@ -476,21 +535,42 @@ export let acting = (env: Env, space: Space, app: App, who: Who) => {
   return {
     apply: async (mutation: unknown) => {
       if (!writes(who, app.access)) no('not_a_writer')
+      let mine = { space, app, who }
+      let homes = await borrowed(env, space, app, who)
+      // A word this app USES lives in another app's store (T-32728), so a
+      // bundle naming one is split the way the agent door splits it: the
+      // borrowed word to its home, everything else here. One logical batch —
+      // every part is admitted before any of them commits.
+      if (homes.length) {
+        let batch = (mutation as { entities?: EntityLiteral[] }).entities
+        if (batch) {
+          return JSON.parse(
+            (await written(
+              env,
+              [mine, ...homes],
+              mine,
+              batch,
+              await named(env, who),
+            )).body,
+          ) as Wrote
+        }
+      }
       let r = await store('/apply', {
         method: 'POST',
         body: JSON.stringify(mutation),
       }, { ...vouched(who), ...await named(env, who) })
       let body = await r.text()
       if (!r.ok) throw new Error(body)
-      return JSON.parse(body) as {
-        changes?: { eid: string; name: string; comp: unknown }[]
-        aliases?: Record<string, string>
-      }
+      return JSON.parse(body) as Wrote
     },
     query: async (line: string) => {
       if (!reads(who, app.access)) no('not_a_reader')
       let asked = asking(`?${line.replace(/^[?&]+/, '')}`)
-      let r = await store(`/query${asked}`, {}, vouched(who))
+      // A line about a borrowed word is asked where that word lives. One
+      // home per line: a filter spanning two stores is a composition, and
+      // the agent door's federated read is where that is done.
+      let door = await homeOf(env, space, app, line) ?? store
+      let r = await door(`/query${asked}`, {}, vouched(who))
       let body = await r.text()
       if (!r.ok) throw new Error(body)
       let rows = JSON.parse(body)

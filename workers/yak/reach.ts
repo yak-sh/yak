@@ -20,6 +20,7 @@ import { vouched, type Who, writes } from './session.ts'
 import { storeOf } from './store.ts'
 import type { EntityLiteral } from '../../src/mutation.ts'
 import { comps, kindOrder } from '../../src/types.ts'
+import type { Vocab } from '../../src/store/vocab.ts'
 import type { Change } from '../../src/types.ts'
 
 // One store in reach: the app, the space it is in, and who the caller is
@@ -155,31 +156,79 @@ let kindFrom = (kinds: string[], comps: Record<string, unknown>) =>
   kinds.find((k) => k && !kindOrder.includes(k)) ??
     kindOrder.find((k) => k in comps) ?? 'entity'
 
+// Where one name means two things: the same word declared in two SPACES with
+// a column they spell differently (T-32728). Within a space a word has one
+// home and the other apps use it, so a disagreement can only be across
+// spaces — and there the name is two words. Columns only ONE side declares
+// agree by construction: a vocabulary only ever grows.
+let apartIn = (vocabs: { r: Reach; vocab: Vocab }[]) => {
+  let seen = new Map<string, Map<string, Record<string, string>>>()
+  for (let { r, vocab } of vocabs) {
+    for (let [name, cols] of Object.entries(vocab)) {
+      let by = seen.get(name) ?? new Map()
+      seen.set(name, by)
+      by.set(r.space.slug, { ...by.get(r.space.slug), ...cols })
+    }
+  }
+  let apart = new Set<string>()
+  for (let [name, by] of seen) {
+    let sides = [...by.values()]
+    for (let i = 0; i < sides.length; i++) {
+      for (let j = i + 1; j < sides.length; j++) {
+        for (let [col, type] of Object.entries(sides[i])) {
+          if (sides[j][col] && sides[j][col] != type) apart.add(name)
+        }
+      }
+    }
+  }
+  return apart
+}
+
 type Held = {
   comps: Record<string, unknown>
-  kinds: string[]
+  // The kind each store called the row, by the store that said it.
+  kinds: Record<string, string>
   home: Record<string, string>
+  // A word two SPACES mean two things by (`apartIn`), held per space instead
+  // of merged: space → the store that has it and what it holds.
+  split: Record<string, Record<string, { at: string; comp: unknown }>>
 }
+
+let spaceOf = (at: string) => at.split('/')[0]
 
 // What every store holds about these eids, gathered in one fan-out: the
 // components, the kind each store called the row, and WHERE each component
 // lives. The read composes bundles out of it; the write routes by it.
-let gathered = async (env: Env, reach: Reach[], eids: string[]) => {
+//
+// `apart` names the words whose shapes DISAGREE across spaces. Those are kept
+// per space rather than merged, because one name meaning two things is two
+// answers, not one bundle.
+let gathered = async (
+  env: Env,
+  reach: Reach[],
+  eids: string[],
+  apart: Set<string> = new Set(),
+) => {
   let held = new Map<string, Held>()
   if (!eids.length) return held
   for (let { at, rows } of await asked(env, reach, `id=${eids.join(',')}`)) {
     for (let row of Array.isArray(rows) ? rows as Row[] : []) {
       let eid = eidOf(row)
       if (!eid) continue
-      let one = held.get(eid) ?? { comps: {}, kinds: [], home: {} }
+      let one = held.get(eid) ?? { comps: {}, kinds: {}, home: {}, split: {} }
       held.set(eid, one)
       for (let [name, comp] of Object.entries(row)) {
         if (name == 'kind') continue
+        if (apart.has(name)) {
+          one.split[name] ??= {}
+          one.split[name][spaceOf(at)] ??= { at, comp }
+          continue
+        }
         if (name in one.comps) continue
         one.comps[name] = comp
         if (name != 'entity') one.home[name] = at
       }
-      one.kinds.push(String(row.kind ?? ''))
+      one.kinds[at] ??= String(row.kind ?? '')
     }
   }
   return held
@@ -198,22 +247,69 @@ export let composed = async (
   reach: Reach[],
   eids: string[],
   want: Set<string> | null = null,
+  apart: Set<string> = new Set(),
 ) => {
-  let held = await gathered(env, reach, eids)
+  let held = await gathered(env, reach, eids, apart)
   let keeps = (name: string) => !want || want.has(name)
-  return eids.filter((e) => held.has(e)).map((eid) => {
-    let one = held.get(eid)!
-    let comps = Object.fromEntries(
-      Object.entries(one.comps).filter(([n]) => n == 'entity' || keeps(n)),
-    )
-    let home = Object.fromEntries(
-      Object.entries(one.home).filter(([n]) => keeps(n)),
+  let bundle = (
+    one: Held,
+    extra: Record<string, unknown>,
+    home: Record<string, string>,
+    space?: string,
+  ) => {
+    let comps = Object.fromEntries([
+      ...Object.entries(one.comps).filter(([n]) => n == 'entity' || keeps(n)),
+      ...Object.entries(extra).filter(([n]) => keeps(n)),
+    ])
+    let where = Object.fromEntries(
+      Object.entries({ ...one.home, ...home }).filter(([n]) => keeps(n)),
     )
     return {
-      kind: kindFrom(one.kinds, comps),
+      kind: kindFrom(
+        Object.entries(one.kinds)
+          .filter(([at]) => !space || spaceOf(at) == space)
+          .map(([, k]) => k),
+        comps,
+      ),
+      // Two spaces mean two things by this word, so the row says which one it
+      // is answering for (T-32728).
+      ...(space ? { space } : {}),
       ...comps,
-      ...(new Set(Object.values(home)).size > 1 ? { _stores: home } : {}),
+      ...(new Set(Object.values(where)).size > 1 ? { _stores: where } : {}),
     }
+  }
+  return eids.filter((e) => held.has(e)).flatMap((eid) => {
+    let one = held.get(eid)!
+    // The spaces this entity wears a disputed word in. None, and the bundle
+    // is one; two, and it is one per space — the same eid, answered twice,
+    // because the name is not one word.
+    let spaces = [
+      ...new Set(
+        Object.entries(one.split).filter(([n]) => keeps(n))
+          .flatMap(([, by]) => Object.keys(by)),
+      ),
+    ]
+    if (spaces.length < 2) {
+      let mine = Object.entries(one.split).flatMap(([n, by]) =>
+        Object.values(by).map((h) => [n, h] as const)
+      )
+      return [bundle(
+        one,
+        Object.fromEntries(mine.map(([n, h]) => [n, h.comp])),
+        Object.fromEntries(mine.map(([n, h]) => [n, h.at])),
+      )]
+    }
+    return spaces.map((space) => {
+      let mine = Object.entries(one.split).flatMap(([n, by]) =>
+        by[space] ? [[n, by[space]] as const] : []
+      )
+      return bundle(
+        one,
+        Object.fromEntries(mine.map(([n, h]) => [n, h.comp])),
+        Object.fromEntries(mine.map(([n, h]) => [n, h.at])),
+        space,
+      )
+    })
   })
 }
 
@@ -244,7 +340,7 @@ export let read = async (
   // (T-32728 — a word has one home, and a second app declaring it uses that
   // home), and every store for a word nobody declares, which is the
   // platform's and spoken everywhere.
-  let words = parts.size ? await spoken(env, reach) : new Map<string, Reach[]>()
+  let { words, apart } = await spoken(env, reach)
   let speak = (name: string) => words.get(name) ?? reach
   let need = [...parts].filter(([, part]) => !part.asks)
   let lines: [Reach[], string][] = need.length
@@ -282,7 +378,7 @@ export let read = async (
     ? new Set(named)
     : null
   let from = named.length ? [...new Set(named.flatMap(speak))] : reach
-  let bundles = await composed(env, from, eids, want) as Row[]
+  let bundles = await composed(env, from, eids, want, apart) as Row[]
   return bundles.map((b) => {
     let rank = ranks.get(eidOf(b))
     return rank ? { ...b, rank } : b
@@ -299,25 +395,30 @@ export let read = async (
 // The words one store declares as its own (its vocab.json, T-32502, as the
 // store last accepted it). A component nobody declares is the platform's, and
 // every store speaks it.
-let wordsOf = async (env: Env, r: Reach) => {
+let vocabAt = async (env: Env, r: Reach): Promise<Vocab> => {
   let res = await storeOf(env.STORE, storeName(r.space, r.app))('/vocab')
   if (!res.ok) {
     await res.body?.cancel()
-    return [] as string[]
+    return {}
   }
-  return Object.keys(await res.json() as Record<string, unknown>)
+  return await res.json() as Vocab
 }
 
 // Which stores declare which word — the routing table a write follows and the
 // reach set a read narrows by, in app order (oldest first), so the first
-// declarer is the word's home.
+// declarer is the word's home. `apart` is the other half of the same read:
+// the words two SPACES mean two things by, which a bundle must not merge.
 let spoken = async (env: Env, reach: Reach[]) => {
-  let own = await Promise.all(reach.map((r) => wordsOf(env, r)))
+  let own = await Promise.all(
+    reach.map(async (r) => ({ r, vocab: await vocabAt(env, r) })),
+  )
   let words = new Map<string, Reach[]>()
-  own.forEach((names, i) => {
-    for (let w of names) words.set(w, [...(words.get(w) ?? []), reach[i]])
-  })
-  return words
+  for (let { r, vocab } of own) {
+    for (let w of Object.keys(vocab)) {
+      words.set(w, [...(words.get(w) ?? []), r])
+    }
+  }
+  return { words, apart: apartIn(own) }
 }
 
 // The keys of a bundle that name no component: its address, its
@@ -371,7 +472,12 @@ type Part = { r: Reach; entities: EntityLiteral[] }
 // be admitted (store.ts) — nothing is written and nothing is cast. The access
 // rule is the page's: an owner or editor writes, and so does anyone at all
 // when the app is open.
-let sent = async (env: Env, part: Part, check: boolean) => {
+let sent = async (
+  env: Env,
+  part: Part,
+  check: boolean,
+  headers: Record<string, string> = {},
+) => {
   let r = part.r
   if (!writes(r.who, r.app.access)) {
     throw new Error(`not a writer of ${at(r)}`)
@@ -380,7 +486,7 @@ let sent = async (env: Env, part: Part, check: boolean) => {
   let res = await door(`/apply${check ? '?check=1' : ''}`, {
     method: 'POST',
     body: JSON.stringify({ entities: part.entities }),
-  }, vouched(r.who))
+  }, { ...vouched(r.who), ...headers })
   let body = await res.text()
   if (!res.ok) throw new Error(`${at(r)}: ${body}`)
   return JSON.parse(body) as {
@@ -397,7 +503,7 @@ let routed = async (
   batch: EntityLiteral[],
 ) => {
   let { entities, eids, aliases } = minted(batch)
-  let words = await spoken(env, reach)
+  let { words, apart } = await spoken(env, reach)
   // Where the entity already lives, read only when the answer depends on it:
   // a death fans out to whoever holds the eid, and a shared word with no app
   // named goes to the app that already wears it.
@@ -432,6 +538,15 @@ let routed = async (
       let where = mine[name] && by(mine[name])
       if (where && declared.includes(where)) return where
       if (named && declared.includes(named)) return named
+      // Across spaces the shapes may disagree, and then the name is two
+      // words: nothing here can pick between them, so the caller does.
+      let spaces = [...new Set(declared.map((r) => r.space.slug))]
+      if (apart.has(name) && spaces.length > 1) {
+        throw new Error(
+          `${name} means two things — ${spaces.join(' and ')} declare it ` +
+            'differently; name the app this goes in',
+        )
+      }
       return declared[0]
     }
     if (named) return named
@@ -517,11 +632,14 @@ export let written = async (
   reach: Reach[],
   named: Reach | undefined,
   batch: EntityLiteral[],
+  headers: Record<string, string> = {},
 ) => {
   let { parts, aliases } = await routed(env, reach, named, batch)
   if (!parts.length) throw new Error('entities: nothing to write')
-  if (parts.length > 1) await Promise.all(parts.map((p) => sent(env, p, true)))
-  let outs = await Promise.all(parts.map((p) => sent(env, p, false)))
+  if (parts.length > 1) {
+    await Promise.all(parts.map((p) => sent(env, p, true, headers)))
+  }
+  let outs = await Promise.all(parts.map((p) => sent(env, p, false, headers)))
   return {
     body: JSON.stringify({
       changes: outs.flatMap((o) => o.changes ?? []),

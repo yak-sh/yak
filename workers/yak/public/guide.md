@@ -285,6 +285,17 @@ A component lives with the app that DECLARES it, so nothing has to be agreed:
 app's. Anything shared — `doc`, `comment`, `image` — goes to the app you name,
 else the app where that entity already lives.
 
+One word, one home — the first app in the space to declare it. Name it in a
+second app's vocab.json and nothing is planted twice: the deploy answers
+`book lives in reading-list`, this app reads and writes it there, and a column
+you added grows that app's table.
+
+A shape conflict is the only refusal — the same column declared with two types,
+named with both types and with the app the word lives in.
+
+Across spaces a word means what its space says: bundles merge by name only where
+the shapes agree, and otherwise stay apart with the space named beside `kind`.
+
     graph_apply { app: 'reading', entities: [
       { entity: { eid: '$b' }, doc: { title: 'Piranesi' },
         book: { pages: 245 } } ] }

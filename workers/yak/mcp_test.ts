@@ -1732,3 +1732,216 @@ slow('the free tier: a warning once, then the refusals', async () => {
     await k.stop()
   }
 })
+
+// One word, one home (T-32728): a second app in the space naming a word the
+// space already has uses it there — nothing is planted twice, the writes land
+// in the home store, a new column grows the home's table, and a shape
+// conflict is the only refusal.
+slow('a word the space already has is used where it lives', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    let manifest = async (slug: string, vocab: unknown) => {
+      await agent.tool('app_files', {
+        app: slug,
+        op: 'write',
+        path: 'vocab.json',
+        content: JSON.stringify(vocab),
+      })
+      return await agent.tool('app_deploy', { app: slug })
+    }
+    let made = async (slug: string, vocab: unknown) => {
+      await agent.tool('app_new', { slug, title: slug })
+      return await manifest(slug, vocab)
+    }
+    // The reading list says `book` first, so `book` is the reading list's.
+    await made('reading-list', { book: { title: 'text', pages: 'number' } })
+    // The lending app says it second: the deploy plants its own word and
+    // names where the shared one lives.
+    let second = await made('lending', {
+      book: { title: 'text' },
+      loan: { to: 'text' },
+    })
+    assertStringIncludes(
+      second,
+      'book lives in reading-list; this app reads and writes it there',
+    )
+    assertStringIncludes(second, 'components: loan')
+    assertEquals(second.includes('components: book'), false)
+
+    // A book written through the lending app lands in the reading list's
+    // store, because that is where the word lives.
+    let said = await agent.tool('graph_apply', {
+      app: 'lending',
+      entities: [{ entity: { eid: '$b' }, book: { title: 'Piranesi' } }],
+    })
+    assertMatch(said, /reading-list/)
+    let piranesi = /\$b=([0-9a-f-]{36})/.exec(said)![1]
+    let rows = async (filter: string, app?: string) =>
+      JSON.parse(
+        await agent.tool('graph_query', { filter, ...(app ? { app } : {}) }),
+      ) as {
+        entity: { eid: string }
+        book?: { title?: string } & Record<string, unknown>
+      }[]
+    assertEquals(
+      (await rows('.book!', 'reading-list')).map((r) => r.entity.eid),
+      [piranesi],
+    )
+    // And there is no second copy: the fan-out answers one bundle, and the
+    // lending store holds no book row of its own.
+    assertEquals((await rows(`id=${piranesi}`))[0].book!.title, 'Piranesi')
+    assertEquals((await rows('.book!', 'lending')).length, 0)
+
+    // A column the lending app adds to the shared word grows the HOME's
+    // table, additively — and is then writable from either app.
+    let grew = await manifest('lending', {
+      book: { title: 'text', isbn: 'text' },
+      loan: { to: 'text' },
+    })
+    assertStringIncludes(grew, 'added: book.isbn')
+    await agent.tool('graph_apply', {
+      app: 'lending',
+      entities: [{ entity: { eid: piranesi }, book: { isbn: '978' } }],
+    })
+    assertEquals(
+      (await rows(`id=${piranesi}`, 'reading-list'))[0].book!.isbn,
+      '978',
+    )
+
+    // A TOOL of the lending app may name the borrowed word — the word is
+    // this app's to write either way — and the call goes where it lives.
+    await agent.tool('app_files', {
+      app: 'lending',
+      op: 'write',
+      path: 'tools.json',
+      content: JSON.stringify({
+        shelve: {
+          description: 'Add a book to the shelf',
+          input: { title: 'text' },
+          apply: { book: { title: '{{title}}' } },
+        },
+        shelf: { description: 'Every book', input: {}, query: '.book!' },
+      }),
+    })
+    let tooled = await agent.tool('app_deploy', { app: 'lending' })
+    assertStringIncludes(tooled, 'tools: lending__shelve, lending__shelf')
+    await agent.tool('lending__shelve', { title: 'Solenoid' })
+    // One store holds both books: the reading list's, where `book` lives.
+    assertEquals(
+      (await rows('.book!', 'reading-list')).map((r) => r.book!.title).sort(),
+      ['Piranesi', 'Solenoid'],
+    )
+    // And the lending app's own read tool answers from there too.
+    let shelf = await agent.call('tools/call', {
+      name: 'lending__shelf',
+      arguments: {},
+    })
+    assertStringIncludes(shelf.content[0].text, 'lending__shelf: 2 rows')
+
+    // The one refusal: the same column with two types, named with both and
+    // with the app the word lives in.
+    await agent.tool('app_files', {
+      app: 'lending',
+      op: 'write',
+      path: 'vocab.json',
+      content: JSON.stringify({
+        book: { pages: 'text' },
+        loan: { to: 'text' },
+      }),
+    })
+    let why = (await assertRejects(
+      () => agent.tool('app_deploy', { app: 'lending' }),
+      Error,
+    )).message
+    assertStringIncludes(why, 'book.pages is text here and number in')
+    assertStringIncludes(why, 'reading-list, where book lives')
+    // Refused whole: the home's column keeps the type its rows were written
+    // under, and nothing about it moved.
+    assertEquals(
+      (await rows(`id=${piranesi}`, 'reading-list'))[0].book!.pages,
+      null,
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
+// Across spaces a word means what its space says (T-32728): one name, two
+// vocabularies. A bundle merges by name only where the shapes agree, and
+// otherwise the rows stay apart with the space named beside `kind`.
+slow('a word two spaces spell differently stays two words', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    let made = async (space: string, slug: string, vocab: unknown) => {
+      await agent.tool('space_new', { slug: space, title: space })
+      await agent.tool('app_new', { space, slug, title: slug })
+      await agent.tool('app_files', {
+        space,
+        app: slug,
+        op: 'write',
+        path: 'vocab.json',
+        content: JSON.stringify(vocab),
+      })
+      await agent.tool('app_deploy', { space, app: slug })
+    }
+    let shelf = `shelf-${crypto.randomUUID().slice(0, 8)}`
+    let stall = `stall-${crypto.randomUUID().slice(0, 8)}`
+    // `book` agrees where both declare — `pages` is one space's alone, and a
+    // vocabulary only ever grows. `note.body` does not: text here, number
+    // there, so the name is two words.
+    await made(shelf, 'reading', {
+      book: { title: 'text', pages: 'number' },
+      note: { body: 'text' },
+    })
+    await made(stall, 'catalog', {
+      book: { title: 'text' },
+      note: { body: 'number' },
+    })
+    let piranesi = crypto.randomUUID()
+    await agent.tool('graph_apply', {
+      space: shelf,
+      app: 'reading',
+      entities: [{
+        entity: { eid: piranesi },
+        book: { title: 'Piranesi', pages: 245 },
+        note: { body: 'lovely' },
+      }],
+    })
+    await agent.tool('graph_apply', {
+      space: stall,
+      app: 'catalog',
+      entities: [{
+        entity: { eid: piranesi },
+        book: { title: 'Piranesi' },
+        note: { body: 3 },
+      }],
+    })
+    let rows = async (filter: string) =>
+      JSON.parse(await agent.tool('graph_query', { filter })) as {
+        kind: string
+        space?: string
+        book?: { title?: string; pages?: number }
+        note?: { body?: unknown }
+      }[]
+    // The shapes agree, so the name is one word and the answer is one bundle.
+    let agreed = await rows('.book!')
+    assertEquals(agreed.length, 1)
+    assertEquals(agreed[0].space, undefined)
+    assertEquals(agreed[0].book!.pages, 245)
+    // They do not agree, so the rows stay apart, each saying which space it
+    // is answering for.
+    let apart = await rows('.note!')
+    assertEquals(apart.length, 2)
+    assertEquals(apart.map((r) => r.space!).sort(), [shelf, stall].sort())
+    assertEquals(
+      apart.map((r) => r.note!.body).sort(),
+      ['lovely', 3].sort(),
+    )
+  } finally {
+    await k.stop()
+  }
+})

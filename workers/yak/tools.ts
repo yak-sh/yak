@@ -24,7 +24,14 @@
 // app's files serve live from its blob store.
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
-import { EXAMPLE } from '../../src/store/vocab.ts'
+import {
+  EXAMPLE,
+  homed,
+  type Homes,
+  livesIn,
+  parseVocab,
+  type Vocab,
+} from '../../src/store/vocab.ts'
 import type { EntityLiteral } from '../../src/mutation.ts'
 import { appAccess } from '../../src/types.ts'
 import {
@@ -241,6 +248,24 @@ let inApp = async (ctx: Ctx, args: Args, write = false) => {
     who,
     store: storeOf(ctx.env.STORE, storeName(space, app)),
   }
+}
+
+// What every app in the space declares as its OWN, in app order, oldest
+// first — the routing table a deploy reads to find a word's home (T-32728).
+// A store's `/vocab` answers only the words it homes, so a use never looks
+// like a second declaration and the first entry here is always the home.
+let vocabs = async (ctx: Ctx, space: Space, app: App) => {
+  let all = await ctx.dir.apps(space)
+  if (!all.some((a) => a.eid == app.eid)) all = [...all, app]
+  let read = await Promise.all(all.map(async (one) => {
+    let r = await storeOf(ctx.env.STORE, storeName(space, one))('/vocab')
+    if (!r.ok) {
+      await r.body?.cancel()
+      return [one.slug, {} as Vocab] as const
+    }
+    return [one.slug, await r.json() as Vocab] as const
+  }))
+  return new Map(read)
 }
 
 // Every store this call reaches. An app named is that one store, as it always
@@ -601,16 +626,62 @@ export let TOOLS: Tool[] = [
       // every row already written under it (C-32652 item 4).
       let added: string[] = []
       let kept: string[] = []
+      // And the words this app USES rather than homes (T-32728).
+      let uses: Record<string, string> = {}
       if (await blobs.has(key)) {
-        let r = await store('/vocab', {
-          method: 'POST',
-          body: new TextDecoder().decode(await blobs.get(key)),
-        }, vouched(who))
-        let said = JSON.parse(await answer(r))
-        planted = said.comps ?? []
-        dropped = said.dropped ?? []
-        added = said.added ?? []
-        kept = said.kept ?? []
+        let next = parseVocab(new TextDecoder().decode(await blobs.get(key)))
+        // One word, one home: a word another app in the space already
+        // declares is that app's, so this deploy records a USE of it instead
+        // of planting a second table, and any column it adds grows the
+        // HOME's. The homes are read in app order, oldest first — the first
+        // declarer is the home — and a word this app already declares stays
+        // its own, because a store's vocabulary is additive forever.
+        let said = await vocabs(ctx, space, app)
+        let homes: Homes = {}
+        for (let [slug, cols] of said) {
+          if (slug == app.slug) continue
+          for (let [name, one] of Object.entries(cols)) {
+            if (name in homes || name in (said.get(app.slug) ?? {})) continue
+            homes[name] = { at: slug, cols: one }
+          }
+        }
+        let split = homed(next, homes)
+        uses = split.uses
+        // The home's table grows first: a use whose column the home does not
+        // have yet is not a use anyone can write until it does.
+        for (let [slug, grown] of Object.entries(split.grows)) {
+          let home = await ctx.dir.app(space, slug)
+          if (!home) continue
+          let whole: Vocab = { ...said.get(slug) }
+          for (let [name, cols] of Object.entries(grown)) {
+            whole[name] = { ...whole[name], ...cols }
+            for (let col of Object.keys(cols)) added.push(`${name}.${col}`)
+          }
+          await answer(
+            await storeOf(ctx.env.STORE, storeName(space, home))('/vocab', {
+              method: 'POST',
+              body: JSON.stringify(whole),
+            }, vouched(who)),
+          )
+        }
+        let mine = JSON.parse(
+          await answer(
+            await store('/vocab', {
+              method: 'POST',
+              body: JSON.stringify(split.mine),
+            }, vouched(who)),
+          ),
+        )
+        planted = mine.comps ?? []
+        dropped = mine.dropped ?? []
+        added = [...added, ...(mine.added ?? [])]
+        kept = mine.kept ?? []
+        await answer(
+          await store('/uses', {
+            method: 'POST',
+            body: JSON.stringify(uses),
+          }, vouched(who)),
+        )
       }
       // And the app's own MCP tools (tools.json, T-32685), read the same way
       // and after the components, since a tool may write a word this very
@@ -655,6 +726,9 @@ export let TOOLS: Tool[] = [
             ? `\ntools: ${declared.map((t) => `${app.slug}__${t}`).join(', ')}`
             : '') +
           (planted.length ? `\ncomponents: ${planted.join(', ')}` : '') +
+          // A word another app in the space already homes: this app writes
+          // it, and the answer says where its rows land (T-32728).
+          livesIn(uses).map((said) => `\n${said}`).join('') +
           (added.length ? `\nadded: ${added.join(', ')}` : '') +
           // What to DO about a column the manifest stopped naming, which
           // the bare list never said: the board that read "5.2 mi in null

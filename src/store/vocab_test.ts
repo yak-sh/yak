@@ -5,9 +5,8 @@
 Deno.env.set('DB_PATH', ':memory:')
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 
-let { GUIDE, dropOps, grow, parseVocab, vocabOps } = await import(
-  './vocab.ts'
-)
+let { GUIDE, borrowed, dropOps, grow, homed, livesIn, parseVocab, vocabOps } =
+  await import('./vocab.ts')
 let { eager, mutate, plantVocab } = await import('../db.ts')
 let { bareDb } = await import('../testdb.ts')
 let { query } = await import('../../workers/yak/query.ts')
@@ -195,4 +194,41 @@ Deno.test('a store lists its own word in creation order', async () => {
   assertEquals(await listed('?.doc!'), titles)
   // A window is the NEWEST page of that same order.
   assertEquals(await listed('?.recipe!&.doc?&limit=2'), titles.slice(-2))
+})
+
+// One word, one home (T-32728): the second app in a space to name a word does
+// not plant it again — it uses it where it lives.
+Deno.test('vocab.json: a word the space already has is a use, not a home', () => {
+  let shelf = parseVocab({ book: { title: 'text', pages: 'number' } })
+  let homes = { book: { at: 'reading-list', cols: shelf.book } }
+  let out = homed(
+    parseVocab({ book: { title: 'text' }, loan: { to: 'text' } }),
+    homes,
+  )
+  // The word this app is the first to say stays its own; the shared one does
+  // not, and the answer says where it lives.
+  assertEquals(out.mine, { loan: { to: 'text' } })
+  assertEquals(out.uses, { book: 'reading-list' })
+  assertEquals(out.grows, {})
+  assertEquals(livesIn(out.uses), [
+    'book lives in reading-list; this app reads and writes it there',
+  ])
+  // A use enters a tools.json check as a bare word: the columns are the
+  // home's to say.
+  assertEquals(borrowed(out.uses), { book: {} })
+
+  // A column the home has never seen grows the HOME's table.
+  assertEquals(
+    homed(parseVocab({ book: { isbn: 'text' } }), homes).grows,
+    { 'reading-list': { book: { isbn: 'text' } } },
+  )
+
+  // And the one refusal: the same column, two types, named with both and
+  // with the app the word lives in.
+  let why = assertThrows(
+    () => homed(parseVocab({ book: { pages: 'text' } }), homes),
+    Error,
+  ).message
+  assertStringIncludes(why, 'book.pages is text here and number in')
+  assertStringIncludes(why, 'reading-list, where book lives')
 })
