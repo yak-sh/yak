@@ -137,6 +137,30 @@ export let whatChanged = (before: Files | null, after: Files) => {
   return before ? 'no files changed' : `${n} ${n == 1 ? 'file' : 'files'}`
 }
 
+// Two versions with the same files are the same release: the manifest is the
+// whole of what a version IS.
+let same = (a: Files, b: Files) => {
+  let paths = Object.keys(a)
+  return paths.length == Object.keys(b).length &&
+    paths.every((p) => a[p] == b[p])
+}
+
+// The version this one PUT BACK, or 0 where it put nothing back — what a
+// rollback did, said in the list rather than only in the moment (C-32905 item
+// 6). Read off the manifests, because restoring files is the whole of a
+// rollback and the files are therefore its own record: this version's files
+// are not the ones under it, and are exactly some earlier version's. `all` is
+// the list newest first, `i` the one being said.
+export let restored = (all: Version[], i: number) => {
+  let now = all[i]
+  let before = all[i + 1]
+  if (!before || same(before.files, now.files)) return 0
+  for (let j = i + 2; j < all.length; j++) {
+    if (same(all[j].files, now.files)) return all[j].version
+  }
+  return 0
+}
+
 // Every version of an app, newest first.
 export let versions = (dir: Directory, app: App) => dir.deploys(app)
 

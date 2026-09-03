@@ -332,8 +332,13 @@ export let bornAt = (space: Space, slug: string) => `${space.slug}/${slug}`
 // The typed client over the handler, in-process or across a binding.
 export type Directory = ReturnType<typeof directory>
 
-export let directory = (via: Fetcher) => {
-  let query = async (q: string, fresh = false): Promise<Row[]> => {
+// `now` makes every read of this client a fresh one (FRESH above): the agent
+// tier asks for it, because a tool answers right after a tool wrote, and the
+// cache is per-isolate — `app_versions` straight after `app_rollback` still
+// marked the version before it live (C-32905 item 5). Page traffic keeps the
+// cache; an agent's answer never disagrees with the write it just made.
+export let directory = (via: Fetcher, now = false) => {
+  let query = async (q: string, fresh = now): Promise<Row[]> => {
     let r = await via.fetch(
       new Request(
         `http://directory/query?${q}`,
@@ -343,7 +348,7 @@ export let directory = (via: Fetcher) => {
     if (!r.ok) throw new Error(`directory: ${await r.text()}`)
     return r.json()
   }
-  let one = async (q: string, fresh = false) => (await query(q, fresh))[0]
+  let one = async (q: string, fresh = now) => (await query(q, fresh))[0]
   // Named, because two of the questions below are asked in terms of the
   // others: a person's own space is read, minted, and read back.
   let self = {
@@ -371,7 +376,7 @@ export let directory = (via: Fetcher) => {
     // `fresh` skips the read cache: what a break names has to be the deploy
     // it happened on, not one the cache is still holding (unseen.ts
     // `serving`).
-    app: async (space: Space, slug: string, fresh = false) => {
+    app: async (space: Space, slug: string, fresh = now) => {
       let row = await one(
         `.app.space=${space.eid}&.app.slug=${slug}&${ABOUT}`,
         fresh,

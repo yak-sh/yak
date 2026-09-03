@@ -2407,3 +2407,132 @@ slow('a deploy is a version, and one word puts it back', async () => {
     await k.stop()
   }
 })
+
+// After a rollback the answers agree (T-32910, C-32905 items 5 and 6): the
+// list says which version is live and which one this version put back, and it
+// says it right after the write. The directory's read cache is 30 seconds
+// wide and private to an isolate, so a deploy made anywhere else is invisible
+// to an ordinary read — which is why the tool tier reads fresh (directory.ts).
+slow(
+  'after a rollback, the list says what is live and what came back',
+  async () => {
+    let k = await kernel()
+    try {
+      let { cookie, eids } = await seed(k, [{
+        slug: 'back',
+        apps: ['recipes'],
+      }])
+      let agent = connector(k, cookie)
+      let app = { space: 'back', app: 'recipes' }
+      let file = (content: string) =>
+        agent.tool('app_files', {
+          ...app,
+          files: [{ path: 'index.html', content }],
+        })
+
+      await file('<h1>lemon cake</h1>')
+      await agent.tool('app_deploy', app)
+      await file('<h1>OOPS</h1>')
+      await agent.tool('app_deploy', app)
+      assertStringIncludes(
+        await agent.tool('app_rollback', app),
+        'back to v1, live now as v3',
+      )
+
+      // A version a rollback made says so, beside what it changed to do it.
+      let list = await agent.tool('app_versions', app)
+      assertMatch(
+        list,
+        /- v3 \(live\) 20\d\d-\d\d-\d\dT.* — restored v1, changed index\.html/,
+      )
+      // And the ones that put nothing back say only what they changed.
+      assert(!/- v2 .*restored/.test(list), 'v2 restored nothing')
+      assert(!/- v1 .*restored/.test(list), 'v1 restored nothing')
+
+      // Serving the app warms the read cache; a version bump through the graph
+      // tier is NOT the door that empties it, so the kernel is now holding a
+      // version the app has moved past — exactly as it is in the seconds after
+      // somebody else's deploy.
+      await (await k.at('back.yaks.app', '/recipes/')).body?.cancel()
+      await meta(k, cookie).apply([
+        { entity: { eid: eids['back/recipes'] }, app: { version: 4 } },
+        {
+          deploy: {
+            app: eids['back/recipes'],
+            version: 4,
+            files: '{"index.html":"beef"}',
+            worker: '',
+          },
+        },
+      ])
+      let after = await agent.tool('app_versions', app)
+      assertStringIncludes(after, 'v4 (live)')
+      assert(!after.includes('v3 (live)'), 'the answer is not a cache old')
+    } finally {
+      await k.stop()
+    }
+  },
+)
+
+// D-32318 §Errors, verbatim: "One is open until a later deploy stops
+// producing it or the agent marks it fixed." So the deploy that carries the
+// fix closes it, with nobody archiving by hand (T-32910, C-32905 item 7).
+slow('the deploy that fixes a break closes it', async () => {
+  let k = await kernel()
+  try {
+    let { cookie } = await seed(k, [{ slug: 'mend', apps: ['weather'] }])
+    let agent = connector(k, cookie)
+    let app = { space: 'mend', app: 'weather' }
+    let report = (message: string) =>
+      k.at('mend.yaks.app', '/weather/api/report', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          url: 'https://mend.yaks.app/weather/',
+        }),
+      })
+
+    await agent.tool('app_files', {
+      ...app,
+      files: [{
+        path: 'index.html',
+        content: '<h1>W</h1><script src="app.js">',
+      }],
+    })
+    assertMatch(await agent.tool('app_deploy', app), /v1/)
+
+    // The page dies in someone's browser, on v1.
+    await (await report('failed to load script /weather/app.js')).body?.cancel()
+    let open = await agent.tool('app_errors', app)
+    assertStringIncludes(open, 'weather v1: page /weather/ — failed to load')
+    assertStringIncludes(
+      await agent.tool('app_list', { space: 'mend' }),
+      '1 open',
+    )
+
+    // The fix goes out. Nothing archives it by hand.
+    await agent.tool('app_files', {
+      ...app,
+      files: [{ path: 'app.js', content: 'document.title = "W"' }],
+    })
+    let out = await agent.tool('app_deploy', app)
+    assertMatch(out, /v2/)
+    assertStringIncludes(out, 'closed 1 break from earlier versions')
+    assertEquals(await agent.tool('app_errors', app), 'no open errors')
+    assert(
+      !(await agent.tool('app_list', { space: 'mend' })).includes('open'),
+      'the count follows',
+    )
+
+    // A break on the version now serving stays open: only the code that is
+    // gone is answered for.
+    await (await report('boom is not a function')).body?.cancel()
+    assertStringIncludes(
+      await agent.tool('app_errors', app),
+      'weather v2: page /weather/ — boom is not a function',
+    )
+  } finally {
+    await k.stop()
+  }
+})

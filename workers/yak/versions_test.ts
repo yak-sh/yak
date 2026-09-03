@@ -17,6 +17,7 @@ import {
   own,
   record,
   restore,
+  restored,
   snapshot,
   type Version,
   whatChanged,
@@ -139,6 +140,25 @@ Deno.test('a rollback restores the bytes, and only the files', async () => {
   // never rewritten, so its bytes are still pinned.
   await restore(blobs, PREFIX, two)
   assertEquals(await read(blobs, 'index.html'), '<h1>OOPS</h1>')
+})
+
+// What a version PUT BACK, read off the manifests: a rollback restores files,
+// so the files are its record (T-32910, C-32905 item 6).
+Deno.test('a version made by a rollback says which one it restored', () => {
+  let v = (version: number, index: string): Version => ({
+    eid: `d${version}`,
+    version,
+    at: '',
+    files: { 'index.html': index },
+    worker: '',
+  })
+  // v1 lemon, v2 oops, v3 the rollback, v4 a deploy of the same bytes again.
+  let all = [v(4, 'lemon'), v(3, 'lemon'), v(2, 'oops'), v(1, 'lemon')]
+  assertEquals(restored(all, 1), 1, 'v3 put v1 back')
+  assertEquals(restored(all, 2), 0, 'v2 is its own change')
+  assertEquals(restored(all, 3), 0, 'the first deploy put nothing back')
+  // A deploy that changed nothing is not a rollback, whatever it matches.
+  assertEquals(restored(all, 0), 0, 'v4 changed nothing')
 })
 
 // The retention rule, which is the one that decides whether the oldest

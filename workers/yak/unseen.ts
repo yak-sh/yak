@@ -278,11 +278,23 @@ export let serve = async (
   return seen
 }
 
-// Fixed, so it stops showing — here, in the unseen section, and in the view.
-// An id is whatever the caller read: the human id off a line, or the eid a
-// card carries, since the view's button hands back the whole fold. Nothing
-// matched is worth saying; a stale id is how a person learns it is already
-// archived.
+// Closed: the mark that stops an item showing, here, in the unseen section,
+// and in the view.
+let close = async (env: Env, space: Space, app: App, who: Who, hits: Hit[]) => {
+  let done = await storeOf(env.STORE, storeName(space, app))('/apply', {
+    method: 'POST',
+    body: JSON.stringify(
+      hits.map((h) => ({ eid: h.entity.eid, name: 'archived', comp: {} })),
+    ),
+  }, vouched(who))
+  if (!done.ok) throw new Error(`${app.slug}: ${await done.text()}`)
+  return hits.length
+}
+
+// Fixed, so it stops showing. An id is whatever the caller read: the human id
+// off a line, or the eid a card carries, since the view's button hands back
+// the whole fold. Nothing matched is worth saying; a stale id is how a person
+// learns it is already archived.
 export let archive = async (
   env: Env,
   space: Space,
@@ -296,14 +308,29 @@ export let archive = async (
     want.has(idOf({ eid: h.entity.eid, kind: h.kind, num: h.entity.num }))
   )
   if (!hits.length) throw new Error(`nothing open here by ${ids.join(', ')}`)
-  let done = await storeOf(env.STORE, storeName(space, app))('/apply', {
-    method: 'POST',
-    body: JSON.stringify(
-      hits.map((h) => ({ eid: h.entity.eid, name: 'archived', comp: {} })),
-    ),
-  }, vouched(who))
-  if (!done.ok) throw new Error(`${app.slug}: ${await done.text()}`)
-  return hits.length
+  return close(env, space, app, who, hits)
+}
+
+// And fixed by a RELEASE, which is how a break usually ends. D-32318 §Errors,
+// verbatim: "One is open until a later deploy stops producing it or the agent
+// marks it fixed." The code that produced it is not what serves any more, so
+// every deploy, install and rollback closes what the versions before it broke
+// (tools.ts `released`); a break the new code still produces is written again
+// the next time it happens, and `app_list`'s open count follows either way.
+// A break that names no version at all predates the counter, and goes with
+// them — nothing else can ever say whether it is still true.
+export let healed = async (
+  env: Env,
+  space: Space,
+  app: App,
+  who: Who,
+  version: number,
+) => {
+  let old = (await openIn(env, space, app, who, true)).filter((h) => {
+    let was = broke(h).version
+    return was == null || was < version
+  })
+  return old.length ? close(env, space, app, who, old) : 0
 }
 
 // The section a tool reply carries: nothing when nothing is unseen.

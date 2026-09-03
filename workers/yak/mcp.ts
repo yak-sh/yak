@@ -382,7 +382,11 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (rpc.id == null) return new Response(null, { status: 202 }) // a notification
   let ctx: Ctx = {
     env,
-    dir: directory(bound(env.DIRECTORY, dirPart.fetch, env)),
+    // Fresh, every read: a tool answers about what a tool just wrote, and the
+    // directory's read cache belongs to whichever isolate warmed it
+    // (directory.ts). A deploy from anywhere else is news this door has to
+    // have (C-32905 item 5).
+    dir: directory(bound(env.DIRECTORY, dirPart.fetch, env), true),
     person: auth.person,
   }
   return handle(ctx, rpc)

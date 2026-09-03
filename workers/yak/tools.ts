@@ -76,7 +76,7 @@ import { type Reach, read, written } from './reach.ts'
 import { mayWrite, reads, titling, vouched, type Who } from './session.ts'
 import { canon, nameOf, personOf } from './signin.ts'
 import { type Door, storeOf } from './store.ts'
-import { archive, cards, line, openIn, serve } from './unseen.ts'
+import { archive, cards, healed, line, openIn, serve } from './unseen.ts'
 import {
   atCeiling,
   ceilings,
@@ -91,6 +91,7 @@ import {
   own,
   record,
   restore,
+  restored,
   snapshot,
   type Version,
   versions,
@@ -508,9 +509,22 @@ let released = async (
   let pinned = await snapshot(blobs, prefix)
   let version = (app.version ?? 0) + 1
   await record(ctx.dir, blobs, prefix, who, app, version, pinned, worker)
+  // What the versions before this one broke is closed by this one: the code
+  // that produced it is not what serves any more (unseen.ts `healed`,
+  // D-32318 §Errors). The release already happened, so a store that cannot be
+  // asked leaves the breaks open rather than failing a deploy that is live.
+  let closed = 0
+  try {
+    closed = await healed(ctx.env, space, app, who, version)
+  } catch { /* the files are out; an open break is the softer wrong */ }
   return {
     version,
     said: ran +
+      (closed
+        ? `\nclosed ${closed} ${
+          closed == 1 ? 'break' : 'breaks'
+        } from earlier versions`
+        : '') +
       (declared.length
         ? `\ntools: ${declared.map((t) => `${app.slug}__${t}`).join(', ')}`
         : '') +
@@ -951,11 +965,16 @@ export let TOOLS: Tool[] = [
           `${space.slug}/${app.slug}: ${all.length} ${
             all.length == 1 ? 'version' : 'versions'
           }`,
-          ...all.map((v, i) =>
-            `- v${v.version}${v.version == app.version ? ' (live)' : ''}${
-              v.at ? ` ${v.at}` : ''
-            } — ${whatChanged(all[i + 1]?.files ?? null, v.files)}`
-          ),
+          ...all.map((v, i) => {
+            // A version a rollback made says so first: "restored v2" is what
+            // the person asked for, and the file list is how it did it.
+            let back = restored(all, i)
+            return `- v${v.version}${
+              v.version == app.version ? ' (live)' : ''
+            }${v.at ? ` ${v.at}` : ''} — ${back ? `restored v${back}, ` : ''}${
+              whatChanged(all[i + 1]?.files ?? null, v.files)
+            }`
+          }),
         ].join('\n'),
         space,
       }
