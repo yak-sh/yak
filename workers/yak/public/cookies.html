@@ -1,0 +1,101 @@
+<!doctype html>
+<!--
+  Cookies (T-32746): there is one, and this page is about it. The facts are
+  src/token.ts — the name `yak_session`, set on Domain=yaks.app so a space's
+  hostname carries it, a signed token of {person, exp}, thirty days
+  (workers/yak/identity.ts SESSION).
+
+  DRAFT — written for the owner to read with a lawyer before it is relied on.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cookies · yaks.app</title>
+    <meta
+      name="description"
+      content="yaks.app sets one cookie, so you stay signed in."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="yak.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="Top">
+      <a class="Top_Name" href="/" aria-label="yaks.app, home">
+        <img class="Yak Yak-small" src="yak.svg" alt="" />
+        <span>yaks.app</span>
+      </a>
+    </header>
+
+    <main class="Page Legal">
+      <div class="Legal_Head">
+        <h1 class="Legal_Title">Cookies</h1>
+        <p class="Legal_When">Last updated 3 September 2026</p>
+        <p>
+          There is one cookie. That's the whole story, but here are the details.
+        </p>
+      </div>
+
+      <section>
+        <h2>The one we set</h2>
+        <p>
+          <code>yak_session</code> — set after you sign in, on yaks.app and the
+          addresses under it, so your apps know it's you. It holds a signed note
+          saying which person you are and when it runs out, and it lasts thirty
+          days. It's ours and first-party: it goes nowhere else, and it isn't
+          used to follow you around.
+        </p>
+        <p>
+          Clear it and you're simply signed out. Refuse it and you can't stay
+          signed in — there's no other way for us to know you between one page
+          and the next.
+        </p>
+      </section>
+
+      <section>
+        <h2>What we don't set</h2>
+        <p>
+          No advertising cookies, no analytics cookies, nothing belonging to
+          anyone else. Cloudflare, who host this place, may set a cookie of
+          their own to tell people from bots; that's a security measure and it
+          isn't used to build a picture of you. The visitor counting they attach
+          uses no cookie at all, and we're switching it off regardless — the
+          <a href="/privacy">privacy policy</a> has that note.
+        </p>
+      </section>
+
+      <section>
+        <h2>Apps built here</h2>
+        <p>
+          An app in a yaks.app space rides on that same one cookie and asks
+          nothing more of us.
+        </p>
+      </section>
+
+      <section>
+        <h2>Asking about it</h2>
+        <p>
+          <a href="mailto:hello@yaks.app">hello@yaks.app</a>, any time.
+        </p>
+      </section>
+    </main>
+
+    <footer class="Foot">
+      <p>Made with care by a small herd. It's early days here — thanks for
+        coming by.</p>
+      <ul class="Foot_Links">
+        <li><a href="/terms">Terms</a></li>
+        <li><a href="/privacy">Privacy</a></li>
+        <li><a href="/acceptable-use">Acceptable use</a></li>
+        <li><a href="/cookies">Cookies</a></li>
+      </ul>
+    </footer>
+  </body>
+</html>

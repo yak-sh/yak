@@ -207,7 +207,8 @@ ul {
 
 .How_Title,
 .Make_Title,
-.Door_Title {
+.Yours_Title,
+.Join_Title {
   font-size: 1.5rem;
   font-weight: 800;
   text-wrap: balance;
@@ -347,55 +348,162 @@ ul {
   border: 1px solid var(--line);
 }
 
-/* The way in: two doors, both marked soon in the same soft voice.
-   They are plain list items, not buttons, so nothing pretends to work. */
-.Door {
+/* And then it's yours: a plain description list, not a grid of feature
+   cards. A term is a short sentence in the accent, its answer sits under it,
+   and nothing is boxed — it reads like a note, which is the point. */
+.Yours {
   display: grid;
   gap: 1.25rem;
+}
+
+.Yours_List {
+  display: grid;
+  gap: 1.5rem;
+  margin: 0;
+}
+
+.Yours_List dt {
+  font-weight: 700;
+  color: var(--meadow);
+}
+
+.Yours_List dd {
+  margin: 0.25rem 0 0;
+  color: var(--soft-ink);
+  text-wrap: pretty;
+}
+
+/* How to connect: one address a person hands their assistant, and the door
+   they sign in at. The address wraps rather than pushing the page sideways —
+   a phone is the first screen this is read on. */
+.Join {
+  display: grid;
+  gap: 1rem;
   padding: 1.75rem;
   border-radius: calc(var(--radius) * 1.4);
   background: var(--paper);
   text-align: center;
 }
 
-.Door_Lead {
+.Join_Lead,
+.Join_Note {
   color: var(--soft-ink);
   text-wrap: pretty;
 }
 
-.Door_List {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.75rem;
+.Join_Url {
+  overflow-wrap: anywhere;
 }
 
-.Door_Item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
+.Join_Url code {
+  display: inline-block;
+  padding: 0.5rem 1rem;
   border-radius: 999px;
-  border: 2px dashed var(--line);
-  font-weight: 700;
+  background: var(--ground);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9375rem;
 }
 
-.Door_Soon {
-  padding: 0.1rem 0.6rem;
+.Join_Doors {
+  margin-top: 0.25rem;
+}
+
+.Join_Go {
+  display: inline-block;
+  padding: 0.75rem 1.75rem;
   border-radius: 999px;
   background: var(--meadow);
   color: var(--ground);
-  font-size: 0.75rem;
   font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  text-decoration: none;
 }
 
 .Foot {
+  display: grid;
+  gap: 0.75rem;
   padding: 1.5rem var(--gap) 3rem;
   color: var(--soft-ink);
   font-size: 0.9375rem;
   text-align: center;
+  text-wrap: pretty;
+}
+
+.Foot_Links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1.25rem;
+}
+
+.Foot_Links a {
+  color: var(--soft-ink);
+}
+
+/* The legal pages: the same column and voice, set as plain prose. They are
+   read on a phone more often than not, so nothing here is wider than the
+   column and a long address breaks rather than scrolls. */
+.Legal {
+  display: grid;
+  gap: 2rem;
+  overflow-wrap: break-word;
+}
+
+.Legal_Head {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.Legal_Title {
+  font-size: clamp(1.75rem, 4vw + 1rem, 2.25rem);
+  font-weight: 800;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.Legal_When {
+  color: var(--soft-ink);
+  font-size: 0.9375rem;
+}
+
+.Legal section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.Legal h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+.Legal p,
+.Legal li {
+  color: var(--soft-ink);
+  text-wrap: pretty;
+}
+
+.Legal ul {
+  display: grid;
+  gap: 0.5rem;
+  padding-inline-start: 1.25rem;
+  list-style: disc;
+}
+
+.Legal a {
+  color: var(--meadow);
+}
+
+.Legal address {
+  font-style: normal;
+  color: var(--soft-ink);
+}
+
+.Legal code {
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.4rem;
+  background: var(--paper);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9375rem;
 }
 
 @media (prefers-reduced-motion: no-preference) {
