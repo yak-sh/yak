@@ -1138,10 +1138,11 @@ Deno.test('materialize: stable-first, identity-last (M-31946 §2)', () => {
     doc: { title: 'how we work', body: 'Land with task land.' },
     memory: { scope: null },
   })
+  let owner = row({ doc: { title: 'Jeff', body: '' }, person: {} })
   let said = row({
     doc: { title: 'owner direction', body: 'Signal over noise.' },
     memory: { scope: null },
-    feedback: { by: 'p1' },
+    feedback: { by: owner.eid },
   })
   let me = row({
     doc: { title: 'operator', body: 'I run the graph.' },
@@ -1152,7 +1153,7 @@ Deno.test('materialize: stable-first, identity-last (M-31946 §2)', () => {
     persona: { home: project.eid },
   })
   let goal = row({ doc: { title: 'reduce noise', body: '' }, goal: {} })
-  let all = [project, common, docs, rule, said, me, special, goal]
+  let all = [project, common, docs, rule, said, me, special, goal, owner]
   let deps = [
     edge(project, 'contains', common),
     edge(common, 'contains', rule, 0),
@@ -1181,4 +1182,43 @@ Deno.test('materialize: stable-first, identity-last (M-31946 §2)', () => {
   // A goal scoped elsewhere stays out.
   let far = row({ doc: { title: 'far goal', body: '' }, goal: { scope: 'x' } })
   assert(!materialize([...all, far], deps, special, NOW).includes('far goal'))
+})
+
+// The owner's direction reaches most personas through a base BUNDLE rather
+// than a direct edge, and an agent's own recorded correction wears `feedback`
+// too — so the band is decided by the author, at any depth.
+Deno.test('materialize: the owner speaks first, however deep the bundle', () => {
+  let project = row({ doc: { title: 'proj', body: '' }, project: {} })
+  let owner = row({ doc: { title: 'Jeff', body: '' }, person: {} })
+  let base = row({ doc: { title: 'fleet base', body: '' }, persona: {} })
+  let common = row({
+    doc: { title: 'proj common', body: '' },
+    persona: { home: project.eid },
+  })
+  let said = row({
+    doc: { title: 'owner direction', body: 'Signal over noise.' },
+    memory: { scope: null },
+    feedback: { by: owner.eid },
+  })
+  // An agent recorded this one, so it is a working rule wearing `feedback`.
+  let noted = row({
+    doc: { title: 'a rule we learned', body: 'Land with task land.' },
+    memory: { scope: null },
+    feedback: { by: project.eid },
+  })
+  let all = [project, owner, base, common, said, noted]
+  let deps = [
+    edge(project, 'contains', common),
+    edge(common, 'contains', base),
+    // Authored order puts the rule first; the band must still outrank it.
+    edge(base, 'contains', noted, 0),
+    edge(base, 'contains', said, 1),
+  ]
+  let md = materialize(all, deps, common, NOW)
+  let at = (s: string) => {
+    let i = md.indexOf(s)
+    assert(i >= 0, `missing ${s}`)
+    return i
+  }
+  assert(at('Signal over noise.') < at('Land with task land.'))
 })

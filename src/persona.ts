@@ -103,7 +103,12 @@ export let indexLine = (r: Row, _now?: number) => {
 //   0 — project documentation: a scoped memory reached through a COMMON
 //       persona (one a project contains, the global base, or a persona a
 //       common one contains)
-//   1 — owner direction: a feedback memory, whichever persona it rides
+//   1 — owner direction: a feedback memory a PERSON gave, whichever persona it
+//       rides. `feedback` alone is too broad a test: an agent's recorded
+//       correction wears it too (and so does an endorsed house style), and
+//       those are working rules, not the owner speaking. `feedback.by` is the
+//       fact that separates them — persona_graph.ts pulls those authors into
+//       the row set, since a reference is not an edge the tier walk follows.
 //   2 — working rules: an unscoped memory reached through a common persona
 //   3 — identity: what a specialist persona says of itself
 // Edge order and warmth still decide within a group.
@@ -135,8 +140,17 @@ let commonish = (all: Row[], deps: Dep[]) => {
   }
   return set
 }
-let groupOf = (r: Row, viaCommon: boolean) =>
-  r.comps.feedback ? 1 : !viaCommon ? 3 : r.comps.memory?.scope ? 0 : 2
+let peopleIn = (all: Row[]) =>
+  new Set(all.filter((r) => r.comps.person).map((r) => r.eid))
+
+let groupOf = (r: Row, viaCommon: boolean, people: Set<string>) =>
+  people.has(String(r.comps.feedback?.by ?? ''))
+    ? 1
+    : !viaCommon
+    ? 3
+    : r.comps.memory?.scope
+    ? 0
+    : 2
 
 type Member = { row: Row; rank: number; seq: number; group: number }
 let tiers = (
@@ -146,6 +160,7 @@ let tiers = (
   order: number | null,
   seen = new Set<string>(),
   common = commonish(all, deps),
+  people = peopleIn(all),
 ): { pre: Row[]; idx: Row[]; groups: Map<string, number> } => {
   let pre = new Map<string, Member>()
   let idx = new Map<string, Member>()
@@ -154,7 +169,7 @@ let tiers = (
     tier: Map<string, Member>,
     row: Row,
     rank: number,
-    group = groupOf(row, viaCommon),
+    group = groupOf(row, viaCommon, people),
   ) => {
     let at = tier.get(row.eid)
     if (!at) tier.set(row.eid, { row, rank, seq: tier.size, group })
@@ -185,7 +200,7 @@ let tiers = (
     for (let { d, r } of kids(type)) {
       if (r.comps.persona) {
         if (seen.has(r.eid)) continue
-        let sub = tiers(all, deps, r.eid, order, seen, common)
+        let sub = tiers(all, deps, r.eid, order, seen, common, people)
         // The child's arrays already embody its authored order. Give their
         // members stable parent-local sequence numbers instead of discarding
         // that order and re-sorting them by entity identity at every ancestor.
