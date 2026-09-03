@@ -99,27 +99,48 @@ Deno.test('onZone: our own https hostnames, and nothing else', () => {
   for (let [href, want] of ours) assertEquals(onZone(href), want, href)
 })
 
-// What the platform owns at every hostname (route.ts `platform`), so no
-// space's app can answer it — apex, space and custom domain alike.
-Deno.test('platform: top-level routing wins over a space app', () => {
-  let owned: [string, boolean][] = [
-    ['/.well-known/acme-challenge/tok', true],
-    ['/.well-known/pki-validation/ca3-0052.txt', true],
-    ['/.well-known/openai-apps-challenge', true],
-    // A CA asks at the ROOT, so the same name under an app's own prefix is
-    // that app's file and stays it.
-    ['/site/.well-known/acme-challenge/tok', false],
-    // Not ours: an app's own `.well-known` files keep reaching it, which is
-    // live behaviour since T-33040.
-    ['/.well-known/security.txt', false],
-    ['/.well-known/assetlinks.json', false],
-    ['/.well-known/apple-app-site-association', false],
-    // identity.ts owns its own metadata; this list does not reach for it.
-    ['/.well-known/oauth-authorization-server', false],
-    ['/.well-known/', false],
-    ['/', false],
+// Whose `/.well-known/` it is (route.ts `platform`): the place a site grants
+// authority over its own name, so it belongs to whoever owns the name — us
+// on `<space>.yaks.app`, the app on a domain of its own.
+Deno.test("platform: a grant on our name is not an app's to make", () => {
+  let owned: [string, string, boolean][] = [
+    // Our own hostnames: the whole prefix, because a list of the names that
+    // grant authority is a thing to forget.
+    ['jeff.yaks.app', '/.well-known/acme-challenge/tok', true],
+    ['jeff.yaks.app', '/.well-known/pki-validation/ca3-0052.txt', true],
+    ['jeff.yaks.app', '/.well-known/assetlinks.json', true],
+    ['jeff.yaks.app', '/.well-known/apple-app-site-association', true],
+    ['jeff.yaks.app', '/.well-known/security.txt', true],
+    ['jeff.yaks.app', '/.well-known/', true],
+    ['yaks.app', '/.well-known/openai-apps-challenge', true],
+    // identity.ts's own metadata is under the prefix too, and stays its
+    // door's: the apex answers what it owns (index.ts).
+    ['yaks.app', '/.well-known/oauth-authorization-server', true],
+    // A grant is read at the ROOT, so the same name under an app's own
+    // prefix is that app's file and stays it.
+    ['jeff.yaks.app', '/site/.well-known/acme-challenge/tok', false],
+    // `robots.txt` is about the whole host and grants nobody anything, so it
+    // is the app's — the line is authority, not scope.
+    ['jeff.yaks.app', '/robots.txt', false],
+    ['jeff.yaks.app', '/', false],
+    // A customer's own domain is one app's outright, so the whole prefix is
+    // the app's — no carve-out. Proving domain control to a third party,
+    // Apple Pay's merchant association, App Links, `security.txt`: all of it
+    // is what a domain is FOR, and our own renewal never depends on it,
+    // because Cloudflare's edge answers a CA before this Worker runs.
+    ['herbusiness.com', '/.well-known/acme-challenge/tok', false],
+    ['herbusiness.com', '/.well-known/pki-validation/ca3-0052.txt', false],
+    ['herbusiness.com', '/.well-known/assetlinks.json', false],
+    [
+      'herbusiness.com',
+      '/.well-known/apple-developer-merchantid-domain-association',
+      false,
+    ],
+    ['herbusiness.com', '/.well-known/security.txt', false],
   ]
-  for (let [path, want] of owned) assertEquals(platform(path), want, path)
+  for (let [host, path, want] of owned) {
+    assertEquals(platform(host, path), want, `${host}${path}`)
+  }
 })
 
 // Which paths the origin check guards (route.ts `doorway`): everywhere the

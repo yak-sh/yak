@@ -160,20 +160,44 @@ slow('the front page is served at the space root', async () => {
     for (let path of ['/style.css', '/deep/note.txt']) {
       assertEquals((await k.at('jeff.yaks.app', path)).status, 200, path)
     }
-    // Every path no app claims — except the ones the PLATFORM owns (route.ts
-    // `platform`). Top-level routing wins, and here it has to: an app
-    // answering `/.well-known/acme-challenge/<token>` on a hostname of ours
-    // could pass HTTP-01 at a public CA and hold a trusted certificate for
-    // `jeff.yaks.app`. Its own `.well-known` files are not in that set and
-    // still reach it (domain_test.ts holds the same rule on a domain).
-    await owner.put('/.well-known/acme-challenge/token', "not the CA's")
-    await owner.put('/.well-known/security.txt', 'Contact: mailto:her@x.com')
-    let ours = await k.at('jeff.yaks.app', '/.well-known/acme-challenge/token')
-    assertEquals(ours.status, 404)
-    assertEquals((await ours.text()).includes("not the CA's"), false)
-    let theirs = await k.at('jeff.yaks.app', '/.well-known/security.txt')
-    assertEquals(theirs.status, 200)
-    assertEquals(await theirs.text(), 'Contact: mailto:her@x.com')
+    // Every path no app claims — except `/.well-known/`, which is the
+    // PLATFORM's on a hostname of ours (route.ts `platform`). That is where a
+    // site GRANTS AUTHORITY over its own name, and this name is not the
+    // space's to grant on: `assetlinks.json` would hand a native Android app
+    // the right to intercept URLs for `jeff.yaks.app`, and an
+    // `acme-challenge` token would pass HTTP-01 at a public CA and yield a
+    // trusted certificate for it. So the front page answers none of them,
+    // however ordinary the file looks — the home app included, since it is
+    // the app that would otherwise get them all.
+    // domain_test.ts holds the other half: on a hostname one app owns
+    // outright the name is theirs, so the authority is theirs to grant.
+    let claims = [
+      '/.well-known/acme-challenge/token',
+      '/.well-known/pki-validation/ca3.txt',
+      '/.well-known/assetlinks.json',
+      '/.well-known/apple-app-site-association',
+      '/.well-known/apple-developer-merchantid-domain-association',
+      '/.well-known/security.txt',
+    ]
+    for (let path of claims) await owner.put(path, 'the app said so')
+    for (let path of claims) {
+      let r = await k.at('jeff.yaks.app', path)
+      assertEquals(r.status, 404, `${path} reached the app`)
+      assertEquals((await r.text()).includes('the app said so'), false, path)
+    }
+    // `robots.txt` is about the whole host too and is still the app's, which
+    // is the line the rule is actually drawn on: a robots file grants nobody
+    // anything, and the site's face is the home app. It is the obvious thing
+    // to sweep in beside the others, so it is held here on purpose.
+    await owner.put('/robots.txt', 'User-agent: *\nDisallow:')
+    let robots = await k.at('jeff.yaks.app', '/robots.txt')
+    assertEquals(robots.status, 200)
+    assertEquals(await robots.text(), 'User-agent: *\nDisallow:')
+    // Under the app's own prefix it is a file like any other: a grant is read
+    // at the root, and this is not the root.
+    let own = await k.at('jeff.yaks.app', '/site/.well-known/security.txt')
+    assertEquals(own.status, 200)
+    assertEquals(await own.text(), 'the app said so')
     // Its store's doors answer at the root too — named by the hostname and
     // nothing else, the way they are on a custom domain (domain_test.ts).
     let rows = await k.at('jeff.yaks.app', '/api/graph')

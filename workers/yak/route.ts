@@ -106,35 +106,58 @@ export let route = (host: string, pathname: string): Route => {
   }
 }
 
-// The paths the PLATFORM owns, at every hostname it answers on — the apex, a
-// space, and a customer's own domain alike. Top-level routing wins over
-// anything in a space's apps, and since T-33040 that has to be said out loud:
-// the home app answers every address no other app claims, so on a space's
-// hostname these landed in the app.
+// What the PLATFORM owns rather than an app, read from the hostname and the
+// path. The whole rule in one idea: `/.well-known/` is where a site GRANTS
+// AUTHORITY over its own name, and the name under `<space>.yaks.app` is ours
+// — a space rents a label of our hostname, it does not own it.
 //
-// The certificate-validation paths are the reason it matters. An app that can
-// serve bytes at `/.well-known/acme-challenge/<token>` on `<space>.yaks.app`
-// can pass HTTP-01 at a public CA and be issued a trusted certificate for a
-// hostname on OUR zone — a tenant holding a cert for our name, in the
-// certificate transparency logs, usable wherever it can put itself in front
-// of that name. That is what this list is for, and it holds for every space.
+// The test is NOT whether a file is host-scoped. `robots.txt` is host-scoped
+// and stays the app's, deliberately: a robots file grants nobody anything,
+// it is a preference about the site, and the site's face is the home app.
+// The test is whether the file hands somebody a CAPABILITY over a name we
+// own. `assetlinks.json` grants a native Android app the right to intercept
+// URLs for the whole hostname; `apple-app-site-association` does the same on
+// iOS; an HTTP-01 challenge yields a publicly trusted certificate for a
+// hostname on our zone. A space's app must not be able to grant those on our
+// name, and that holds for the HOME app too, which otherwise answers every
+// address no other app claims (T-33040) — which is how all of this landed in
+// an app in the first place, and why top-level routing has to say out loud
+// that it wins.
 //
-// It is ALSO the path Cloudflare validates our customers' domains on, and
-// this zone has a `*/*` Worker route (wrangler.toml, T-33036), which
-// Cloudflare warns can intercept a CA's request
+// The whole prefix rather than the three files, because a list of names that
+// grant authority is a thing to forget — the next one ships without us —
+// and on our own hostname there is nothing under it we lose by keeping.
+//
+// The SAME files are the app's on a customer's own domain (`foreign`), by
+// this idea rather than despite it: there the name is theirs, so the
+// authority is theirs to grant. Proving domain control to a third party is
+// exactly what `pki-validation` is for at Sectigo and DigiCert, Stripe asks
+// for `apple-developer-merchantid-domain-association` before Apple Pay
+// works, App Links, Universal Links, `security.txt`, WebFinger, Matrix
+// delegation and fediverse verification all live here, and obtaining a
+// certificate for your own domain is your own business. Nothing is reserved
+// there, and there is no list of exceptions to keep: a path is the
+// platform's when the platform has something to SERVE at it, and everything
+// else falls through to the app. The apps-directory token is the shape of
+// that — the apex has content at `/.well-known/openai-apps-challenge` and
+// answers it (index.ts), while `/.well-known/anything-else` is nobody's and
+// 404s. When Stripe or Apple Pay needs to answer somewhere, it will answer
+// because it HAS content, not because a string was added to a table.
+//
+// Our own renewal of a customer's custom-hostname certificate is not at risk
+// from that. This zone has a `*/*` Worker route (wrangler.toml, T-33036), and
+// Cloudflare warns it can intercept a CA's request
 // (developers.cloudflare.com/ssl/edge-certificates/changing-dcv-method/troubleshooting/).
 // MEASURED 2026-09-03: with that route live and the Worker answering these
 // paths itself, `dcv-probe.crayonbloom.com` was attached as a custom hostname
 // and ssl.com issued its certificate within a minute, while a request to
 // `/.well-known/acme-challenge/x` on that hostname reached the Worker and got
-// its soft 404. So Cloudflare's edge answers the CA before the route, and for
-// OUR issuance this list is defence in depth — which is why the platform can
-// answer these with its own 404 rather than trying to pass a request through
-// to a fallback origin that is deliberately originless (`AAAA 100::`).
-export let platform = (pathname: string) =>
-  pathname.startsWith('/.well-known/acme-challenge/') ||
-  pathname.startsWith('/.well-known/pki-validation/') ||
-  pathname == '/.well-known/openai-apps-challenge'
+// its soft 404. Cloudflare's edge answers the CA before the route ever runs.
+// That measurement is also why the platform can answer its own 404 on our
+// hostnames instead of passing a request through to a fallback origin that is
+// deliberately originless (`AAAA 100::`).
+export let platform = (host: string, pathname: string) =>
+  !foreign(host) && pathname.startsWith('/.well-known/')
 
 // The doors the graph answers at, read from the path a browser asked for:
 // an app's `/<app>/api/…`, a front page's own `/api/…` (apps.ts `fetch`

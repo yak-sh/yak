@@ -22,10 +22,11 @@
 // `scheduled` is the second entry point, and the only one no request reaches:
 // the hourly meter (usage.ts).
 //
-// The route table. Above every line of it sit the paths the PLATFORM owns
-// (route.ts `platform`) — certificate validation, the apps-directory token —
-// which are answered the way the apex answers them at every hostname, so no
-// space's app ever gets one:
+// The route table. Above every line of it sits what the PLATFORM owns
+// (route.ts `platform`): the whole `/.well-known/` prefix on our own
+// hostnames, because that is where a site grants authority over its own name
+// and `<space>.yaks.app` is OUR name, not the space's. A customer's own
+// domain is their name, so there the prefix is the app's, all of it:
 //   yaks.app (and any dev host)
 //     /                       the home page, from ./public
 //     /login, /login/code     identity.ts: the email-code sign-in
@@ -193,18 +194,20 @@ export default {
     let r = route(host, new URL(req.url).pathname)
     try {
       req = unmounted(req)
-      // What the platform owns, wherever it was asked for (route.ts
-      // `platform`): served the way the apex serves it, and never handed to a
-      // space's app. Before `aimed`, so a customer's domain cannot carry one
-      // of these into the app mounted at its root either.
+      // What the platform owns rather than an app (route.ts `platform`),
+      // decided from the hostname the request arrived at: `/.well-known/` on
+      // our own hostnames, where an app would otherwise grant authority over
+      // a name that is ours. A customer's own domain is never in here — the
+      // name is theirs, so the grant is theirs to make.
+      //
+      // At the apex the platform answers: `serve` hands the oauth metadata to
+      // identity.ts and the apps-directory token to its own line, and
+      // everything else under the prefix is a soft 404, since nothing else
+      // there is ours to publish. On a space's hostname the platform owns the
+      // address and has nothing to say at it — an app must not get it.
       let asked = new URL(req.url).pathname
-      if (platform(asked)) {
-        // At the apex these are the platform's own to answer — the
-        // apps-directory token below, and a soft 404 for the rest, since
-        // Cloudflare's edge answers a CA before this Worker ever runs.
-        // Everywhere else they are still the platform's, and the platform
-        // has nothing to say there: an app must not get them.
-        return foreign(host) || r.space != null
+      if (platform(host, asked)) {
+        return r.space != null
           ? lost()
           : await serve(req, env, { space: null, app: null, path: asked })
       }
