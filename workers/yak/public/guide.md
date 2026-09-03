@@ -95,24 +95,24 @@ deletes it.
 
 ## Who wrote it
 
-The store stamps every row with who saved it. Ask for the stamp with
-`.created!`, and read the names once — a person is a row here too, titled with
-the name they chose when they signed in (or the front of their address, if they
-skipped the question). It is a name and never an address: an address stays with
-the platform, so a page can show a byline to anyone:
+The store stamps every row with who saved it, and the stamp says their NAME: ask
+for it with `.created!` and the byline is on the row, so one query draws a list
+with its writers.
 
-    let by = new Map((await query('.person!'))
-      .map((p) => [p.entity.eid, p.doc.title]))
+    for (let e of await query('.doc!&.created!')) draw(e, e.created.by?.name)
 
-    for (let e of await query('.doc!&.created!')) draw(e, by.get(e.created.by))
+A reference to somebody this store knows answers `{eid, name}` — the name they
+chose when they signed in (or the front of their address, if they skipped the
+question), never an address: an address stays with the platform, so a page can
+show a byline to anyone. Anything else stays the bare eid it always was, and a
+write still takes that eid — a row read and handed back means the eid it named.
 
-People stay out of an ordinary listing — `query('.doc!')` answers what the page
-saved — so `.person!` is how you ask for them.
+A person is a row here too, so `query('.person!')` lists everyone the store has
+met; they stay out of an ordinary listing, which answers what the page saved.
 
 An `open` app takes writes from anyone with the link, and a guest who never
-signed in is nobody yet: their rows have no `created.by` and no `.person!` row
-to look up. If a byline matters there, ask for a name on the page and save it in
-your own row.
+signed in is nobody yet: their rows have no `created.by` to name. If a byline
+matters there, ask for a name on the page and save it in your own row.
 
 ## Files
 

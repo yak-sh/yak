@@ -98,7 +98,10 @@ export let isRef = (comp: string, prop: string): boolean =>
 export let bodyCols = (comp: string) =>
   Object.entries(types(comp)).filter(([, t]) => t == 'body').map(([p]) => p)
 
-let got = (v: unknown) => String(v)
+// What the caller sent, quoted back. An object says its shape rather than
+// '[object Object]': a refusal is read by whoever wrote the value.
+let got = (v: unknown) =>
+  v && typeof v == 'object' ? JSON.stringify(v) : String(v)
 let fail = (p: Prop, grammar: string, v: unknown): never => {
   throw new Error(`${p.name} is ${grammar} — got '${got(v)}'`)
 }
@@ -168,7 +171,13 @@ let oneOf = (p: Prop, v: unknown): string => {
 // project'). Nothing close: the grammar line, plainly, no guess.
 let noun = (p: Prop) => p.prop == 'eid' ? 'entity' : p.prop
 let eid = (p: Prop, v: unknown, ctx: PropContext): string => {
-  let s = String(v).trim()
+  // A read handed back. A reference ANSWERS `{eid, name}` wherever the reader
+  // could name what it points at (workers/yak/listing.ts `named`), so the row
+  // a page read and writes back means the eid it named — one more spelling of
+  // an id, at the door that already accepts every other one.
+  let s = String(
+    v && typeof v == 'object' && 'eid' in v ? (v as { eid: unknown }).eid : v,
+  ).trim()
   if (UUID.test(s) || SHA.test(s)) return s.toLowerCase()
   let found = ctx.resolve?.(s)
   if (found && (UUID.test(found) || SHA.test(found))) return found.toLowerCase()

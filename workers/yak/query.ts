@@ -12,7 +12,7 @@
 // still paid a statement per component per entity. There is one implementation
 // now, and a fix to any arm is a fix to every store.
 import type { Sql } from '../../src/store/sql.ts'
-import { locate, rowsOf } from '../../src/db.ts'
+import { isPerson, locate, rowsOf, titleOf, vocabOf } from '../../src/db.ts'
 import { orderOf, parseQuery, resolveRefs } from '../../src/query.ts'
 import {
   askOf,
@@ -22,8 +22,34 @@ import {
   rowed,
 } from '../../src/graph_query.ts'
 import type { Frame } from '../../src/subserve.ts'
-import type { Change } from '../../src/types.ts'
-import { listed, type Row } from './listing.ts'
+import { type Change, comps, stamped } from '../../src/types.ts'
+import { listed, named, type Ref, type Row } from './listing.ts'
+
+// Which columns hold a REFERENCE, in this store's whole vocabulary: the
+// platform's words, the stamps it keeps about a row, and the app's own.
+let refs = (db: Sql): Ref => (comp, col) => {
+  let type = comps[comp]?.[col] ?? stamped[comp]?.[col] ??
+    vocabOf(db)[comp]?.[col]
+  return !!type && typeof type == 'object' && 'eid' in type
+}
+
+// Who this store knows by name. It mints a person row for whoever writes to
+// it, titled with what to call them (store.ts `knows`), so a reference it can
+// name is a person it has met — and anything else keeps the eid it had.
+let people = (db: Sql) => (eids: string[]) => {
+  let out = new Map<string, string>()
+  for (let eid of eids) {
+    let name = isPerson(db, eid) ? titleOf(db, eid) : ''
+    if (name) out.set(eid, name)
+  }
+  return out
+}
+
+// The rows a door answers with, speaking human: one projection, so `query()`,
+// `subscribe()`, graph_query and a declared tool's `query` carry the same
+// byline (listing.ts `named`).
+let speaking = (db: Sql, rows: Row[]): Row[] =>
+  named(rows, refs(db), people(db))
 
 export let query = async (db: Sql, search: string): Promise<unknown> => {
   let segs = search.slice(1).split('&').filter(Boolean).map(decodeURIComponent)
@@ -47,7 +73,7 @@ export let query = async (db: Sql, search: string): Promise<unknown> => {
       tally: Object.fromEntries(keys.map((k) => [k, agg.values.get(k)])),
     }
   }
-  return layered(db, await askRows(db, ask), ask)
+  return speaking(db, layered(db, await askRows(db, ask), ask) as Row[])
 }
 
 // The rows a filter line answers for a KNOWN set of eids — the `id=` arm of
@@ -56,13 +82,16 @@ export let query = async (db: Sql, search: string): Promise<unknown> => {
 // door's own projection.
 let rowsAt = (db: Sql, eids: string[], asked: string): Row[] =>
   eids.length
-    ? listed(
-      layered(
-        db,
-        rowsOf(db, eids).map(rowed),
-        askOf(asked.split('&').filter(Boolean)),
-      ) as Row[],
-      asked,
+    ? speaking(
+      db,
+      listed(
+        layered(
+          db,
+          rowsOf(db, eids).map(rowed),
+          askOf(asked.split('&').filter(Boolean)),
+        ) as Row[],
+        asked,
+      ),
     )
     : []
 
@@ -74,7 +103,8 @@ let rowsAt = (db: Sql, eids: string[], asked: string): Row[] =>
 // had painted from `query()` (C-32624 item 2).
 //
 // So a row frame is re-read as ROWS: the eids the frame mentions, through
-// rowsOf → layered → listed, exactly as an `id=` ask would answer them. A death
+// rowsOf → layered → listed → named, exactly as an `id=` ask would answer
+// them — the byline included (listing.ts). A death
 // and a row the listing leaves out both become drops, since neither is in the
 // answer. Every other frame (an aggregate, an error, the join handshake) is not
 // a row listing and passes through as it came.

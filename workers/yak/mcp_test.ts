@@ -892,7 +892,7 @@ slow('an app declares its own tools, and the door calls them', async () => {
             leaderboard: {
               description: 'Every run so far',
               input: {},
-              query: '.jog!',
+              query: '.jog!&.created!',
               // The page the answer draws itself in (T-32687).
               view: 'leaderboard.html',
             },
@@ -952,16 +952,29 @@ slow('an app declares its own tools, and the door calls them', async () => {
     // typed by the declared input, and says who wrote it.
     let wrote = await agent.tool('runs__log_run', { who: 'Ada', miles: '5' })
     assertStringIncludes(wrote, 'runs__log_run: wrote 1 entity')
+    type Run = {
+      jog: { who: string; miles: number }
+      created: { by: { eid: string; name: string } }
+    }
     let rows = JSON.parse(
       await agent.tool('graph_query', { ...app, query: '.jog!&.created!' }),
-    ) as { jog: { who: string; miles: number }; created: { by: string } }[]
+    ) as Run[]
     assertEquals(rows.length, 1)
     assertEquals(rows[0].jog, { who: 'Ada', miles: 5 })
-    assertEquals(rows[0].created.by, jeff.person)
-    // And the read half answers the listing a page gets.
-    assertStringIncludes(
-      await agent.tool('runs__leaderboard', {}),
-      'runs__leaderboard: 1 row',
+    // Who wrote it, by name: a reference to somebody the store knows answers
+    // `{eid, name}`, so the leaderboard a VIEW draws from its one query says
+    // who ran instead of "someone" (C-32730 item 5).
+    assertEquals(rows[0].created.by, { eid: jeff.person, name: jeff.name })
+    // And the read half answers the listing a page gets — the same byline,
+    // through the declared tool's own query.
+    let board = await agent.call('tools/call', {
+      name: 'runs__leaderboard',
+      arguments: {},
+    })
+    assertStringIncludes(board.content[0].text, 'runs__leaderboard: 1 row')
+    assertEquals(
+      (board.structuredContent.rows as Run[])[0].created.by,
+      { eid: jeff.person, name: jeff.name },
     )
     // An argument the input declared and the call left out is the tool's own
     // refusal, not a half-written row.

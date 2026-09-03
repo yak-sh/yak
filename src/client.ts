@@ -1651,14 +1651,17 @@ export let normalizeLiterals = (
   let seen = new Set<object>()
 
   // Where an eid goes: a string or number resolves later; a bundle that is
-  // only `{entity: {eid}}` references that eid (D-23827); anything else
-  // defines an entity here.
+  // only `{entity: {eid}}` references that eid (D-23827); a read handed back
+  // — `{eid, name}`, what a reference ANSWERS with where the store could name
+  // what it points at (workers/yak/listing.ts `named`) — names that eid too;
+  // anything else defines an entity here.
   let where = (
     target: unknown,
     what: string,
   ): string | number | LiteralNode => {
     if (typeof target == 'string' || typeof target == 'number') return target
     if (!object(target)) throw new Error(`${what} must name or nest an entity`)
+    if (typeof target.eid == 'string') return target.eid
     let bare = Object.keys(target).length == 1 && object(target.entity) &&
       typeof target.entity.eid == 'string'
     return bare ? (target.entity as { eid: string }).eid : visit(target)

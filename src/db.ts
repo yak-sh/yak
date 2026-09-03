@@ -5376,6 +5376,16 @@ export let writerActor = (
 export let isPerson = (db: Sql, actor: string | null) =>
   !!actor && !!prep(db, `select 1 from person where ${byEid}`).get(actor)
 
+// What this graph CALLS an entity, in its own words — the doc title on the
+// row, empty when it has none. `human()` answers the id every door speaks;
+// this answers the name a reader reads, which is what a byline needs.
+export let titleOf = (db: Sql, eid: string): string =>
+  String(
+    (prep(db, `select title from doc where ${byEid}`).get(eid) as
+      | { title?: string }
+      | undefined)?.title ?? '',
+  )
+
 // The entity already wears `persona` on disk (a persona minted in this same
 // batch is nobody's prompt yet, so it is not guarded).
 let wornPersona = (db: Sql, eid: string) =>

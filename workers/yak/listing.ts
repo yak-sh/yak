@@ -69,6 +69,52 @@ export let listed = (rows: Row[], asked: string): Row[] => {
   return out
 }
 
+// Outputs speak human (db.ts `human()`) at an app's store too: a column that
+// REFERENCES a person answers `{eid, name}` when this store knows the person,
+// and the bare eid when it does not. A view gets ONE query, and a byline it
+// would need a second question for is no byline: the inline leaderboard drew
+// "someone" on every row while `created.by` was a uuid (C-32730 item 5). So
+// the name rides on the row that names the eid. Writes are unmoved — the value
+// is the eid, and a read shape handed back is lowered to it (db.ts `admitted`).
+//
+// Which columns REFERENCE, and what the store calls the people among them, are
+// the caller's word: the rule is the same over a fetch and over a socket, and
+// only the caller holds a db to ask with (query.ts).
+export type Ref = (comp: string, col: string) => boolean
+export type Names = (eids: string[]) => Map<string, string>
+
+let cols = (comp: unknown): comp is Row =>
+  !!comp && typeof comp == 'object' && !Array.isArray(comp)
+
+export let named = (rows: Row[], ref: Ref, names: Names): Row[] => {
+  let mentioned = new Set<string>()
+  for (let row of rows) {
+    for (let [comp, held] of Object.entries(row)) {
+      if (!cols(held)) continue
+      for (let [col, v] of Object.entries(held)) {
+        if (typeof v == 'string' && ref(comp, col)) mentioned.add(v)
+      }
+    }
+  }
+  if (!mentioned.size) return rows
+  let known = names([...mentioned])
+  if (!known.size) return rows
+  let name = (held: Row, comp: string) =>
+    Object.fromEntries(
+      Object.entries(held).map(([col, v]) =>
+        typeof v == 'string' && known.has(v) && ref(comp, col)
+          ? [col, { eid: v, name: known.get(v) }]
+          : [col, v]
+      ),
+    )
+  return rows.map((row) =>
+    Object.fromEntries(
+      Object.entries(row)
+        .map(([comp, held]) => [comp, cols(held) ? name(held, comp) : held]),
+    )
+  )
+}
+
 // The same rule over a door's JSON body — what the kernel hands a page back
 // from the store's own answer.
 export let listing = (body: string, asked: string) => {

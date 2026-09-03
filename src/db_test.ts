@@ -1096,6 +1096,28 @@ Deno.test('an unknown column is answered with the component it named', () => {
   )
 })
 
+// Outputs speak human, and a read handed back is still an input: a store that
+// can name what a reference points at answers `{eid, name}`
+// (workers/yak/listing.ts `named`), so the row a page read and writes back
+// means the eid it named (T-32733).
+Deno.test('a reference takes back the read shape it answered with', () => {
+  let target = uid()
+  let c = uid()
+  apply(db, [{ eid: target, name: 'doc', comp: { title: 'Lemon cake' } }])
+  apply(db, [{
+    eid: c,
+    name: 'comment',
+    comp: { target: { eid: target, name: 'Ada' } },
+  }])
+  assertEquals(readComp(db, c, 'comment')?.target, target)
+  // Anything else is the grammar's own refusal, quoting what it was sent.
+  assertThrows(
+    () => apply(db, [{ eid: c, name: 'comment', comp: { target: { x: 1 } } }]),
+    Error,
+    'comment.target is a human id / alias / UUID — got \'{"x":1}\'',
+  )
+})
+
 // The renames table's write door: a change naming an old component/column is
 // rewritten to its current home before validation, so an old writer or stored
 // batch lands instead of being refused as unknown. Driven with a synthetic map

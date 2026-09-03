@@ -23,7 +23,10 @@ type Row = {
   kind: string
   entity: { eid: string }
   doc: { title: string; body?: string }
-  created: { by: string }
+  // A reference to somebody the store knows answers with their name beside
+  // the eid (listing.ts `named`), so one query draws a list with its writers.
+  created: { by: { eid: string; name: string } }
+  task: { assignee: { eid: string; name: string } }
 }
 
 slow('the served client: a page saves, lists and watches', async () => {
@@ -140,18 +143,45 @@ slow('the served client: a page saves, lists and watches', async () => {
       assertEquals(fig.kind, 'task')
       assertEquals('eid' in fig.doc, false)
       assertEquals(fig.entity.eid.length, 36)
+      // The live half carries the byline the same way, because it is the
+      // same projection: a page that watches a list draws its writers
+      // without a second question.
+      let bylined: Row[][] = []
+      let quiet = mod.store(`${wire.origin}/recipes/api/`)
+        .subscribe('.doc!&.created!', (rows: Row[]) => bylined.push(rows))
+      try {
+        await until(() => bylined.length == 1, { timeout: 15_000 })
+        assertEquals(
+          [...new Set(bylined[0].map((r) => r.created.by.name))],
+          [them.name],
+        )
+      } finally {
+        quiet()
+      }
     } finally {
       stop()
       await wire.stop()
     }
 
-    // A byline: `created.by` is an eid, and the person it names is a row in
-    // this store with a NAME — the one they gave at sign-in — so two people
-    // on a page can be told apart (C-32624 item 3). The guide's own two lines.
+    // A byline, on the row: `created.by` names the writer AND says what this
+    // store calls them — the name they gave at sign-in — so a view that gets
+    // one query still draws a name instead of "someone" (C-32730 item 5), and
+    // two people on a page are told apart (C-32624 item 3). The guide's one
+    // line.
     let [entry] = await store.query('.doc.title~=Fig&.created!')
+    assertEquals(entry.created.by.name, them.name)
+    assertEquals(entry.created.by.eid.length, 36)
+    // The eid is still the value a write takes: the row a page read, handed
+    // straight back — and the column it lands in answers with the name too,
+    // since the byline is a rule about references and not about one stamp.
+    await store.apply({
+      entity: { eid: entry.entity.eid },
+      task: { assignee: entry.created.by },
+    })
+    let [reread] = await store.query('.doc.title~=Fig&.created!')
+    assertEquals(reread.task.assignee, entry.created.by)
     let people = await store.query('.person!')
-    let by = new Map(people.map((p: Row) => [p.entity.eid, p.doc.title]))
-    assertEquals(by.get(entry.created.by), them.name)
+    assertEquals(people.map((p: Row) => p.doc.title), [them.name])
     // Their address stays in the directory: an app's store learns a name and
     // never an address book, so a `public` app answering `.person!` to a
     // stranger hands out no roster of addresses (T-32654). And a person is
