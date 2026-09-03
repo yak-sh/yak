@@ -85,6 +85,18 @@ Deno.test('the guide names the doors a worker is actually given', () => {
   }
 })
 
+// Every route the worker example names has to be one the worker can be
+// reached at. `/api/…` is the kernel's, always, so an example opening with
+// `endsWith('/api/mine')` is a route that can never run — which is what the
+// ninth user test copied and got the api door's own 404 for (C-32869 item 2).
+Deno.test("no route in the guide's worker example is under /api/", () => {
+  let section = guide.split('## Code of your own')[1]?.split('\n## ')[0] ?? ''
+  let routes = [...section.matchAll(/pathname[^\n]*?'(\/[^']*)'/g)]
+    .map((m) => m[1])
+  assert(routes.length, 'the example names no routes at all')
+  assertEquals(routes.filter((r) => r.split('/').includes('api')), [])
+})
+
 Deno.test('the guide prints the limits an app is really held to', async () => {
   let section = guide.split('## Code of your own')[1]?.split('\n## ')[0] ?? ''
   let meta: { limits: { cpu_ms: number; subrequests: number } } = {

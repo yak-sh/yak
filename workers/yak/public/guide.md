@@ -439,6 +439,10 @@ It is a plain ES module, and `env` holds three things:
 - `env.FILES` — the app's own files. `env.FILES.fetch('/index.html')`.
 - one entry per secret you set, under the name you set it (below).
 
+Name your routes anything that is not under `/api/`: that segment is the
+platform's own doors — apply, query, me, graph, ws, blob, files — and a request
+for one never reaches your worker. Your routes live beside it.
+
 Here is the whole of it — one route out of the store, one outside call the page
 must not be able to make itself:
 
@@ -446,7 +450,7 @@ must not be able to make itself:
       async fetch(req, env) {
         let url = new URL(req.url)
 
-        if (url.pathname.endsWith('/api/mine')) {
+        if (url.pathname.endsWith('/mine')) {
           let rows = await (await env.STORE.fetch('/query?.recipe!')).json()
           return Response.json(rows.map((r) => r.doc.title))
         }
