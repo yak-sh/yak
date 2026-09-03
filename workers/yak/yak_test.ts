@@ -106,6 +106,33 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
       (await k.at('jeff.yaks.app', '/recipes/missing.css')).status,
       404,
     )
+    // An app's platform manifest is not one of its pages (C-32869 item 3):
+    // the server code and the two declarations answer the same nothing an
+    // unknown path does, however the address spells them — while a member
+    // still reads them back through `app_files`.
+    let files = connector(k, cookie)
+    let inRecipes = (args: Record<string, unknown>) =>
+      files.tool('app_files', { space: 'jeff', app: 'recipes', ...args })
+    await inRecipes({
+      files: [
+        { path: 'worker.js', content: 'export default { fetch: () => 0 }' },
+        { path: 'vocab.json', content: '{}' },
+        { path: 'tools.json', content: '{}' },
+      ],
+    })
+    for (
+      let path of ['worker.js', 'vocab.json', 'tools.json', '%77orker.js']
+    ) {
+      assertEquals(
+        (await k.at('jeff.yaks.app', `/recipes/${path}`)).status,
+        404,
+        path,
+      )
+    }
+    assertStringIncludes(
+      await inRecipes({ op: 'read', path: 'worker.js' }),
+      'export default',
+    )
     // Another app in the space has its own files and its own store.
     assertEquals((await k.at('jeff.yaks.app', '/garden/')).status, 404)
 

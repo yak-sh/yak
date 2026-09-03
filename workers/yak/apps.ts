@@ -188,9 +188,24 @@ let reported = (app: App, page: Response) => {
 // there, and stays the soft 404 — a missing stylesheet must not answer HTML.
 let pretty = (path: string) => !path.split('/').pop()!.includes('.')
 
+// The files that ARE the app's platform manifest rather than its page: the
+// server code the dispatch namespace runs (dispatch.ts) and the two
+// declarations a deploy reads (tools.ts). Those are the app's INSIDE — the
+// platform reads them out of the blob store, and a member reads them back
+// through `app_files` — so the door that serves the app's pages does not
+// serve them to the web. Before this, `GET /weather/worker.js` answered the
+// whole server source to anyone with the link (C-32869 item 3).
+//
+// The test is on the decoded KEY, not the path, because `/%77orker.js` names
+// the same file.
+let MANIFEST = new Set(['/worker.js', '/vocab.json', '/tools.json'])
+
 let asset = async (env: Env, space: Space, app: App, path: string) => {
   let blobs = r2Blobs(env.BLOBS)
   let key = keyOf(space, app, path)
+  if (MANIFEST.has(key.slice(`${space.slug}/${app.slug}`.length))) {
+    return nothingHere()
+  }
   // The index the fallback serves is the app's own, so the reporter and the
   // reporting headers ride along exactly as they do at `/`.
   if (!(await blobs.has(key)) && pretty(path)) key = keyOf(space, app, '/')

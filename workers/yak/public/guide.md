@@ -427,6 +427,10 @@ answers 404 falls through to the files**. So a worker owns the routes it names
 and leaves every page, stylesheet and picture to the platform — you never have
 to serve your own `index.html`.
 
+The file itself is never served: `GET /<app>/worker.js` is a 404, and so are
+`vocab.json` and `tools.json` — those three are the app's inside, not its pages,
+and only a member reads them back (`app_files` read).
+
 It is a plain ES module, and `env` holds three things:
 
 - `env.STORE` — the app's own graph, at the same doors `client.js` uses, **as
