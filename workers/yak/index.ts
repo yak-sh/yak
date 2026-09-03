@@ -25,13 +25,19 @@
 //     /mcp, /api/*            mcp.ts (T-32329; a JSON 404 until then)
 //     anything else           ./public, else a soft 404
 //   <space>.yaks.app          apps.ts:
-//     /                       302 to the space's home app, else "nothing here"
-//     /<app>                  302 to /<app>/
+//     /                       the space's front page — its home app, SERVED
+//                             here; "nothing here" if it has none
+//     /<app>                  302 to /<app>/, or to / when <app> is the front
+//                             page, whose address is the bare hostname
 //     /<app>/api/graph        the store's identity, plus who is asking
 //     /<app>/api/query        the filter grammar over the app's store
 //     /<app>/api/apply        a batch into the app's store (a writer)
 //     /<app>/api/files/<p>    PUT one file into the app's blob store (a writer)
 //     /<app>/<path>           the app's file at that path, a directory's index
+//     anything else           the front page's own file, page or api door at
+//                             that path: the space's apps own the first path
+//                             segment, the front page answers what is left
+//                             (T-33040)
 import * as apps from './apps.ts'
 import * as dirPart from './directory.ts'
 import { directory, META_STORE, storeName } from './directory.ts'
@@ -39,7 +45,7 @@ import { bound, type Env } from './env.ts'
 import * as identity from './identity.ts'
 import * as mcp from './mcp.ts'
 import { lost, oops } from './pages.ts'
-import { foreign, hostOf, PLATFORM, type Route, route } from './route.ts'
+import { foreign, hostOf, MOUNT, PLATFORM, type Route, route } from './route.ts'
 import { storeOf } from './store.ts'
 import { noted, refusal } from './unseen.ts'
 import { metered } from './usage.ts'
@@ -85,10 +91,17 @@ let serve = async (req: Request, env: Env, r: Route) => {
 // `<space>.yaks.app/<app>/menu` — and every part below routes it from the
 // pure route table the way it routes everything else. Serving at the root
 // falls out of that: the app's `/` is the domain's `/`, with no redirect into
-// a path (T-33040 owns that question for a space's own hostname). The
+// a path — and a space's own hostname now works the same way, its home app
+// served at `/` rather than redirected to (T-33040, apps.ts `fetch`). The
 // browser stays on the person's domain; only the address the PLATFORM
 // derives from the request moves, which is what puts a sign-in return on our
 // own zone, where the session cookie is (route.ts `onZone`).
+//
+// The prefix rides along as `x-yak-mount: /`, because the app is at the
+// domain's root while the address routed on names its prefix, and the parts
+// below have no other way to tell: apps.ts gives the page a `<base href>` at
+// the mount, and never forwards the front page's `/<app>/` to `/` here, which
+// on a domain would be a loop back to the address that arrived (T-33040).
 let aimed = async (req: Request, env: Env, host: string) => {
   if (!foreign(host)) return null
   let at = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
@@ -98,7 +111,18 @@ let aimed = async (req: Request, env: Env, host: string) => {
   url.protocol = 'https:'
   url.host = `${at.space.slug}.${PLATFORM}`
   url.pathname = `/${at.app.slug}${url.pathname}`
-  return new Request(url, req)
+  let headers = new Headers(req.headers)
+  headers.set(MOUNT, '/')
+  return new Request(url, new Request(req, { headers }))
+}
+
+// A header only the router writes: whatever a client sent under that name is
+// gone before anything reads it.
+let unmounted = (req: Request) => {
+  if (!req.headers.has(MOUNT)) return req
+  let headers = new Headers(req.headers)
+  headers.delete(MOUNT)
+  return new Request(req, { headers })
 }
 
 // What a request threw, as an entity where the person's agent reads: the
@@ -135,6 +159,7 @@ export default {
     let host = hostOf(req)
     let r = route(host, new URL(req.url).pathname)
     try {
+      req = unmounted(req)
       let at = r.space == null ? await aimed(req, env, host) : null
       if (at) {
         req = at

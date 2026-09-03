@@ -728,8 +728,14 @@ let wrote = (body: string, where: string) => {
 let fileKey = (space: Space, app: App, path: string) =>
   `${space.slug}/${app.slug}/${path.replace(/^\/+/, '')}`
 
+// The address a person is handed for an app. A space's front page IS its
+// bare hostname (T-33040, apps.ts `fetch`) — its own `/<app>/` only forwards
+// there — so every answer that hands out a link hands out the one to hold.
+// `space.home` must be the value AFTER this call's own write, or a tool that
+// just moved the front page reports the address it had before.
 let url = (space: Space, app: App) =>
-  `https://${space.slug}.yaks.app/${app.slug}/`
+  `https://${space.slug}.yaks.app/` +
+  (app.eid == space.home ? '' : `${app.slug}/`)
 
 // What an app's access means where it is felt: what happens when the person
 // sends someone the link. Said on every tool that sets it, so the agent can
@@ -899,15 +905,19 @@ export let TOOLS: Tool[] = [
         },
         alias: { slug: bornAt(space, s) },
       }]
-      // The first app in a space answers its bare hostname.
-      if (!space.home) {
-        entities.push({ entity: { eid: space.eid }, space: { home: '$app' } })
-      }
+      // Being first claims nothing (T-33040). Until somebody says which app
+      // is the front page, the space's bare hostname lists the apps its
+      // visitor may open; which app opens there is a choice, and arrival
+      // order is not a choice anyone made. Said in the answer, because
+      // nothing else tells a person the front page is theirs to set.
+      let front = space.home ? await ctx.dir.home(space) : null
       await ctx.dir.apply({ entities }, vouched(who))
       let app = (await ctx.dir.app(space, s))!
       return {
         text: `app ${space.slug}/${s} (${app.eid}): ${url(space, app)}` +
-          ` — ${told(app.access)}`,
+          ` — ${told(app.access)}. https://${space.slug}.yaks.app/ ${
+            front ? `opens ${front.slug}` : "lists the space's apps"
+          } — app_set(app, home: true) makes this one the front page there`,
         space,
       }
     },
@@ -1192,8 +1202,10 @@ export let TOOLS: Tool[] = [
         home: {
           type: 'boolean',
           description:
-            'true to make this app what <space>.yaks.app/ opens, false to ' +
-            'leave the space with no front page',
+            'true to make this app what <space>.yaks.app/ opens — it is ' +
+            'served AT that address, and its own /<app>/ forwards there; ' +
+            'false to leave the space with no front page, where that ' +
+            'address lists the apps a visitor may open',
         },
       },
       required: ['app'],
@@ -1269,10 +1281,14 @@ export let TOOLS: Tool[] = [
       await ctx.dir.apply({ entities }, vouched(who))
       for (let key of keys) await blobs.delete(key)
       let now = (await ctx.dir.app(space, to ?? app.slug))!
+      let after = {
+        ...space,
+        home: home == null ? space.home : home ? now.eid : null,
+      }
       return {
         text: `app ${space.slug}/${now.slug}${
           title == null ? '' : ` "${title}"`
-        }: ${url(space, now)}${
+        }: ${url(after, now)}${
           moving ? ` (moved from /${app.slug}/, which now redirects here)` : ''
         }${open ? ` — ${told(open)}` : ''}${
           home == null
@@ -1281,7 +1297,7 @@ export let TOOLS: Tool[] = [
             ? ` — it is the front page now: https://${space.slug}.yaks.app/ ` +
               'opens it'
             : ` — no longer the front page: https://${space.slug}.yaks.app/ ` +
-              'opens nothing until another app is set home'
+              "lists the space's apps again until another one is set home"
         }`,
         space,
       }
@@ -2025,9 +2041,6 @@ export let TOOLS: Tool[] = [
         alias: { slug: bornAt(space, s) },
         installed: { of: offer.app.eid, version },
       }]
-      if (!space.home) {
-        entities.push({ entity: { eid: space.eid }, space: { home: '$app' } })
-      }
       await ctx.dir.apply({ entities }, vouched(who))
       let app = (await ctx.dir.app(space, s))!
       let onto = { space, app }
@@ -2181,8 +2194,9 @@ export let TOOLS: Tool[] = [
       // refused invitation mails nothing at all (T-32963).
       let note = args.note == null ? '' : noteOf(args.note)
       // What they were invited TO: the app, if one was named, else the
-      // space. A link to the space root is a link to nothing when the app
-      // does not answer the bare hostname (C-32624 item 4).
+      // space. Name the app: the space's own address is its front page or a
+      // list of what they may open (T-33040), and neither is the thing they
+      // were invited to look at (C-32624 item 4).
       let app = args.app == null
         ? null
         : await ctx.dir.app(space, text(args.app, 'app'))

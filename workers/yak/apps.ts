@@ -35,8 +35,8 @@ import { granted, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { sizeOf } from './image.ts'
 import { asking, listed, listing } from './listing.ts'
-import { nothingHere } from './pages.ts'
-import { hostOf, PLATFORM, route } from './route.ts'
+import { nothingHere, spaceIndex } from './pages.ts'
+import { hostOf, MOUNT, PLATFORM, route } from './route.ts'
 import {
   mayWrite,
   reads,
@@ -226,7 +226,16 @@ let pretty = (path: string) => !path.split('/').pop()!.includes('.')
 // the same file.
 let MANIFEST = new Set(['/worker.js', '/vocab.json', '/tools.json'])
 
-let asset = async (env: Env, space: Space, app: App, path: string) => {
+let asset = async (
+  env: Env,
+  space: Space,
+  app: App,
+  path: string,
+  // Where this app is mounted for the browser that asked, which is what its
+  // pages resolve their relative URLs against: `/<app>/`, or `/` when it is
+  // the space's front page (T-33040).
+  at: string,
+) => {
   let blobs = r2Blobs(env.BLOBS)
   let key = keyOf(space, app, path)
   if (MANIFEST.has(key.slice(`${space.slug}/${app.slug}`.length))) {
@@ -244,7 +253,7 @@ let asset = async (env: Env, space: Space, app: App, path: string) => {
   // and the reporter after it. The bytes are already whole here (the blob
   // seam answers a Uint8Array), so reading them to decide whether the page
   // has a `<base>` of its own costs nothing the serve did not already spend.
-  let page = based(`/${app.slug}/`, new TextDecoder().decode(bytes))
+  let page = based(at, new TextDecoder().decode(bytes))
   return reported(app, new Response(page, { headers }))
 }
 
@@ -785,6 +794,30 @@ let api = async (
 let kernels = (space: Space, app: string | null) =>
   space.slug == META.space && app == META.app
 
+// The space's own address, listed: every app this person may open, and how
+// many they may not. What a stranger must never learn is the NAME of a
+// private app, so the filter is per app and it is `reads` — the same question
+// the file door asks before it serves a page (T-33040).
+let index = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  space: Space,
+) => {
+  let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
+  let all = (await dir.apps(space)).filter((a) => !kernels(space, a.slug))
+  let mine = all.filter((a) => reads(who, a.access))
+  return spaceIndex({
+    space: space.slug,
+    title: space.title,
+    apps: mine.map((a) => ({ slug: a.slug, title: a.title })),
+    hidden: all.length - mine.length,
+    role: who.role,
+    person: !!who.person,
+    signIn: signInAt(req.url),
+  })
+}
+
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let r = route(hostOf(req), new URL(req.url).pathname)
   if (r.space == null) return nothingHere()
@@ -792,23 +825,68 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let space = await dir.space(r.space)
   if (!space) return nothingHere()
   if (kernels(space, r.app)) return nothingHere()
-  if (r.app == null) {
-    let home = r.path == '/' ? await dir.home(space) : null
-    return home && !kernels(space, home.slug)
-      ? redirect(`/${home.slug}/`)
-      : nothingHere()
-  }
   let url = new URL(req.url)
-  let app = await dir.app(space, r.app)
-  if (!app) {
+  let app = r.app ? await dir.app(space, r.app) : null
+  if (r.app && !app) {
     // Not an app here — but it may be where one USED to be (directory.ts
     // former): a rename moves the address and keeps the old one pointing at
     // it, files and `/api/…` alike.
     let was = await dir.former(space, r.app)
-    if (!was) return nothingHere()
-    return moved(req, `/${was.slug}${r.path || '/'}${url.search}`)
+    if (was) return moved(req, `/${was.slug}${r.path || '/'}${url.search}`)
   }
-  if (r.path == '') return redirect(`${url.pathname}/`)
+  // The space's front page is SERVED at its bare hostname (T-33040): the
+  // home app's `/` is `<space>.yaks.app/`, and every address no other app
+  // claims is that app's too — `/photo.png` is its file, `/about` its page.
+  // Before this the root answered a 302 into `/<app>/`, so the sub-path was
+  // in the address bar and in every link anyone copied. On a customer's own
+  // domain that is the whole point: her site has to BE at herbusiness.com
+  // (T-33035, index.ts `aimed`), and now one rule serves both hostnames.
+  //
+  // PRECEDENCE, and it is a rule rather than an accident: the space's apps
+  // own the first path segment, and the front page answers everything left.
+  // `<space>.yaks.app/garden` is the garden app whether or not the front page
+  // has a `garden` page of its own, so a front page that wants that address
+  // has to be in a space where no app is called garden.
+  //
+  // The other direction of the same idea: the front page's OWN `/<app>/`
+  // forwards here, so its address is the bare hostname and nothing else, and
+  // links anybody already holds still arrive. Temporary, not permanent —
+  // which app is the front page is a column on the space the owner moves
+  // (tools.ts `app_set`), and a 301 a browser cached would outlive the move.
+  //
+  // Which app is home is a DIRECTORY READ, so it happens here, where env is,
+  // and not in route.ts, which is pure (index.ts `aimed`, same reason).
+  //
+  // A custom domain arrives already mounted at its own root (index.ts
+  // `aimed` sets the header): the app is the domain's `/` however the
+  // platform's own address spells it, so it is not forwarded anywhere — the
+  // forward would land back on the address that arrived — and its pages
+  // resolve from that root.
+  let mount = req.headers.get(MOUNT)
+  let path = r.path
+  let front = !!app && app.eid == space.home
+  if (!app) {
+    let home = await dir.home(space)
+    // No front page — the ordinary state of a space, since being the first
+    // app claims nothing (tools.ts `app_new`). The space EXISTS, so its own
+    // address is a door and not a 404: it lists the apps this visitor may
+    // open, and says the rest in their terms (pages.ts `spaceIndex`). Only
+    // the bare address lists; a path under a space with no front page names
+    // nothing, and says so.
+    if (!home || kernels(space, home.slug)) {
+      if (url.pathname != '/') return nothingHere()
+      return await index(req, env, dir, space)
+    }
+    // `/<x>/api/…` named an app that is not here. That is a wrong address,
+    // not one of the front page's own paths: a page asking a store there has
+    // to hear a 404, never a page of HTML it cannot parse (C-32574 item 4).
+    if (r.app && r.path.startsWith('/api/')) return nothingHere()
+    app = home
+    front = true
+    path = url.pathname
+  } else if (!mount && front && (path == '' || path == '/')) {
+    return redirect(`/${url.search}`)
+  } else if (path == '') return redirect(`${url.pathname}/`)
   // The app's own worker, coming back through its service binding for its
   // store or its files (dispatch.ts): the grant says who it is acting as, so
   // there is no cookie to read — and a request holding one is never sent BACK
@@ -823,20 +901,33 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // the page (T-32593); someone signed in who is nobody here gets the same
   // nothing-here a wrong address gets — whether the app exists at all is its
   // owner's to tell. The `/api/` doors keep their own refusals, which speak.
-  if (!r.path.startsWith('/api/') && !reads(who, app.access)) {
+  if (!path.startsWith('/api/') && !reads(who, app.access)) {
     return who.person ? nothingHere() : redirect(signInAt(req.url), 303)
   }
   // The app's own code answers first, where it has any: `ran` is null when
   // the app deployed no worker.js and when the worker answered 404, which is
   // how a worker owns its routes and leaves its pages to the platform. The
   // `/api/` doors stay the kernel's, always.
-  if (r.path.startsWith('/api/')) {
+  if (path.startsWith('/api/')) {
     return reporting(
-      await api(req, env, space, app, r.path.slice(4), who),
+      await api(req, env, space, app, path.slice(4), who),
       req,
       app,
     )
   }
   let own = itself ? null : await ran(env, space, app, req, who)
-  return reporting(own ?? await asset(env, space, app, r.path), req, app)
+  // The front page's pages resolve their relative URLs against the root,
+  // where it is served; every other app's against its own prefix.
+  return reporting(
+    own ??
+      await asset(
+        env,
+        space,
+        app,
+        path,
+        mount ?? (front ? '/' : `/${app.slug}/`),
+      ),
+    req,
+    app,
+  )
 }

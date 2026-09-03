@@ -48,6 +48,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .Card li::marker { color: var(--meadow); font-weight: 700 }
 .Card form { margin: 1rem 0 0 }
 .Note { font-size: .9rem; margin: .75rem 0 0 }
+.Pills { display: flex; flex-wrap: wrap; justify-content: center; gap: .625rem; margin: 0 0 1.25rem }
+.Pill { display: inline-block; padding: .5rem 1rem; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--ink); font-weight: 700; text-decoration: none }
+.Pill:hover { border-color: var(--meadow) }
+.Button { display: inline-block; padding: .7rem 1.2rem; border-radius: 1.25rem; background: var(--meadow); color: var(--ground); font-weight: 700; text-decoration: none }
 .Pick { display: block; margin: .4rem 0; padding: .5rem .6rem; user-select: all }
 .At { display: flex; align-items: center; justify-content: center; gap: .3rem }
 .At input { flex: 0 1 13rem; text-align: right }
@@ -75,6 +79,80 @@ export let nothingHere = () =>
       'assistant to make something.',
     404,
   )
+
+// The space's own address when no app is its front page (T-33040). A space
+// that EXISTS is not a 404: this is a door, not a failure. One page, of
+// blocks that appear when they are true of whoever is looking —
+//
+//   the apps this person may open   whenever there are any
+//   asking for the rest             only when something is actually held back
+//   signing in                      signed out
+//   what this place is              signed out; a stranger, not a neighbour
+//   this page is a choice           the space's owner, and nobody else
+//
+// The filtering is the part to get right: an app someone may not read is not
+// NAMED here (apps.ts asks `reads` per app), and the line about asking for
+// access appears only when something is being held back — so the page never
+// implies a private app that is not there.
+//
+// `pitch` is one block on purpose: white-labelling (T-33069) turns our own
+// voice off on a paid space, and that has to be a condition around a block
+// rather than an edit to a page.
+export let spaceIndex = (at: {
+  space: string
+  title: string
+  apps: { slug: string; title: string }[]
+  hidden: number
+  role: string | null
+  person: boolean
+  signIn: string
+}) => {
+  let owner = at.role == 'owner'
+  let mine = at.apps.length
+    ? `<nav class="Pills" aria-label="Apps here">${
+      at.apps.map((a) =>
+        `<a class="Pill" href="/${esc(a.slug)}/">${esc(a.title || a.slug)}</a>`
+      ).join('')
+    }</nav>`
+    : ''
+  let ask = at.hidden && !owner
+    ? `<p class="Note">${
+      at.hidden == 1 ? 'One app here is' : `${at.hidden} apps here are`
+    } private. Ask whoever runs this space to let you in.</p>`
+    : ''
+  let inn = at.person
+    ? ''
+    : `<p><a class="Button" href="${esc(at.signIn)}">Sign in</a></p>`
+  let pitch = at.person ? '' : `<div class="Card">
+<h2>What is yaks.app?</h2>
+<p class="Note">Ask an assistant like Claude or ChatGPT for an app, and it
+builds one here — a page of your own you can send to anyone.</p>
+<p><a class="Away" href="https://yaks.app/">Make one of your own</a></p>
+</div>`
+  let yours = owner
+    ? `<div class="Card">
+<h2>This page is yours to set</h2>
+<p class="Note">${
+      at.apps.length
+        ? 'Ask your assistant to make one of these apps the front page, and ' +
+          'it opens here instead of this list.'
+        : 'Ask your assistant to build something here — a list, a site, a ' +
+          'game — and it lives at this address.'
+    }</p>
+</div>`
+    : ''
+  let lead = at.apps.length
+    ? 'Here is what you can open.'
+    : owner
+    ? 'Nothing has been built here yet.'
+    : 'Nothing here is open to visitors yet.'
+  return shell(
+    esc(at.title || at.space),
+    lead,
+    200,
+    `${mine}${ask}${yours}${inn}${pitch}${at.person ? home : ''}`,
+  )
+}
 
 export let oops = () =>
   shell(

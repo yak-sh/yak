@@ -14,9 +14,17 @@ feature there is. Where a subject has more to it than a passage, a `Deeper:`
 line names the page that goes further — offered beside this one as its own
 resource, and readable at that address by anybody.
 
-The space's own address, `<space>.yaks.app/`, opens its front page — the first
-app made there, until `app_set(app, home: true)` makes it another one;
-`app_list` says which app that is.
+The space's own address, `<space>.yaks.app/`, lists the apps a visitor may open
+— an app nobody may read is not named there — until one app is made its FRONT
+PAGE with `app_set(app, home: true)`; `app_list` says which app that is, if any.
+No app becomes the front page by being made first.
+
+A front page IS the bare address: it is served there rather than redirected to,
+and that address is the one to hand out, since its own `/<app>/` forwards there.
+It answers for every path in the space no other app claims, so `/photo.png` is
+its file and `/about` its page. The space's apps own the first path segment,
+though — `/garden` is the garden app — so a front page cannot have a page at an
+address another app in the space already has.
 
 A page with more than one screen routes itself. The simplest way is the hash —
 `location.hash`, and a `hashchange` listener redrawing — which needs nothing
@@ -41,11 +49,12 @@ The kernel serves a client beside every app, at `./api/client.js`:
 
 Write every address in your app RELATIVE, and never write the app's own name
 into its own files. The kernel gives each page it serves a `<base href>` at the
-app's own address, so `./api/client.js` and `./style.css` are right from any
-path the page is opened at, pretty paths included — and they stay right in
-somebody else's copy, which lives at whatever address they installed it under. A
-page that carries a `<base>` of its own keeps it, and answers for its own
-addresses.
+address the app is served at — `/<app>/`, or the bare hostname when it is the
+front page — so `./api/client.js` and `./style.css` are right from any path the
+page is opened at, pretty paths included, and right again when the app becomes
+the front page or stops being one. They stay right in somebody else's copy too,
+which lives at whatever address they installed it under. A page that carries a
+`<base>` of its own keeps it, and answers for its own addresses.
 
 Six functions, all same-origin, all talking to this app's own graph:
 

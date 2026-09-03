@@ -19,6 +19,16 @@ export let PLATFORM = 'yaks.app'
 // thing to forget; the namespace's own shape does not forget.
 export let ORIGIN = `origin.saas.${PLATFORM}`
 
+// Where the app serving this request is mounted for the browser that asked:
+// the prefix its pages resolve relative URLs against, and the address its own
+// `/<app>/` would forward to. `/<app>/` normally, and `/` when a custom
+// domain carried the request here — there the app IS the domain's root
+// (index.ts `aimed`), even though the address the platform routes on names
+// the app's prefix. The router sets this header on a request it rewrote
+// itself and strips it off anything a client sent, so it is never a way to
+// move an app's address from outside.
+export let MOUNT = 'x-yak-mount'
+
 export type Route = {
   // null at the apex
   space: string | null

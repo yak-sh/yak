@@ -53,8 +53,9 @@ but does not hand out keys.
 their role, and the answer says what it was.
 
 `app` decides where the letter points. Name it and the invitation carries that
-app's own link; leave it out and it carries the space's front page, which
-answers nothing if the space has no home app yet. Name the app.
+app's own link; leave it out and it carries the space's own address, which is
+its front page when it has one and a list of the apps they may open when it does
+not. Name the app.
 
 `name` is what to call them — their apps show it beside what they write, so
 nobody sees an address. Left out, their first sign-in asks them. It never
@@ -128,7 +129,8 @@ Read it before you build something somebody may already have made.
   free tier allows five).
 - The copy takes the published app's `access` with it: an app written to be
   voted on has to stay votable. `app_set` changes it after.
-- If the space has no front page yet, the copy becomes it.
+- The copy is not made the front page: `<space>.yaks.app/` lists what is here
+  until somebody says which app opens there (`app_set(app, home: true)`).
 - The install ends in a release of the copy: its `vocab.json` planted in ITS
   store, its `tools.json` listed under ITS slug, its `worker.js` uploaded as ITS
   own script. So the answer carries the deploy's own lines — components, tools,

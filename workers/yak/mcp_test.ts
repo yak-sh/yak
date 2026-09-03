@@ -447,8 +447,11 @@ slow(
       let html = await served.text()
       assertStringIncludes(html, '<h1>Our recipe box</h1>')
       assertStringIncludes(html, '<base href="/recipes/">')
+      // No app is the space's front page unless somebody says so, so the
+      // bare hostname lists what is here (T-33040, home_test.ts).
       let bare = await k.at('jeff.yaks.app', '/', { redirect: 'manual' })
-      assertEquals(bare.headers.get('location'), '/recipes/')
+      assertEquals(bare.status, 200)
+      assertStringIncludes(await bare.text(), 'href="/recipes/"')
 
       // The graph tier: a bundle in, the same shape out, the search beside
       // it. A write answers one line naming what it wrote, by id, with the
@@ -3116,21 +3119,29 @@ slow('the deploy that fixes a break closes it', async () => {
   }
 })
 
-// A space's front page is a choice (T-32947). The first app made in a space
-// claims its bare hostname and nothing used to move it, so a throwaway first
-// app was the space's face forever. app_set(home) moves it; home false leaves
-// the space with none, answering the soft 404 a space with no app answers.
-// Where the space's own address points is the owner's, like publishing and
-// membership — an editor is refused.
+// A space's front page is a choice (T-32947), and one nobody makes by
+// accident: no app claims the bare hostname by being made first (T-33040), so
+// until app_set(home) says which, that address lists the apps a visitor may
+// open. `home: false` puts it back to the list. Where the space's own address
+// points is the owner's, like publishing and membership — an editor is
+// refused.
 slow('the front page moves, and only the owner moves it', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'front', apps: ['first', 'second'] }])
     let agent = connector(k, them.cookie)
     let bare = () => k.at('front.yaks.app', '/', { redirect: 'manual' })
+    // Which app the bare hostname IS, read off the store answering there —
+    // the front page is served at that address, not redirected to. Nothing
+    // is, yet: the list is.
+    let front = async () => {
+      let r = await k.at('front.yaks.app', '/api/graph')
+      return r.status == 200 ? (await r.json()).db : r.status
+    }
     let was = await bare()
-    assertEquals(was.headers.get('location'), '/first/')
-    await was.body?.cancel()
+    assertEquals(was.status, 200)
+    assertStringIncludes(await was.text(), 'href="/first/"')
+    assertEquals(await front(), 404)
 
     let said = await agent.tool('app_set', {
       space: 'front',
@@ -3139,10 +3150,7 @@ slow('the front page moves, and only the owner moves it', async () => {
     })
     assertStringIncludes(said, 'the front page now')
     assertStringIncludes(said, 'https://front.yaks.app/')
-    let moved = await bare()
-    assertEquals(moved.status, 302)
-    assertEquals(moved.headers.get('location'), '/second/')
-    await moved.body?.cancel()
+    assertEquals(await front(), 'do:front/second')
 
     // Said where the person reads what they have: in the sentence, and in the
     // data the view beside it draws.
@@ -3150,7 +3158,11 @@ slow('the front page moves, and only the owner moves it', async () => {
       name: 'app_list',
       arguments: { space: 'front' },
     })
-    assertStringIncludes(listing.content[0].text, 'second/ — the front page')
+    // Its address in the listing is the bare hostname: that is where it is.
+    assertStringIncludes(
+      listing.content[0].text,
+      'second (second) v0: https://front.yaks.app/ — the front page',
+    )
     assertEquals(
       listing.structuredContent.spaces[0].apps
         .map((a: { slug: string; home: boolean }) => [a.slug, a.home]),
@@ -3168,8 +3180,9 @@ slow('the front page moves, and only the owner moves it', async () => {
       'no longer the front page',
     )
     let none = await bare()
-    assertEquals(none.status, 404)
-    assertMatch(await none.text(), /Nothing here yet/)
+    assertEquals(none.status, 200)
+    assertStringIncludes(await none.text(), 'href="/first/"')
+    assertEquals(await front(), 404)
     assertEquals(
       (await agent.tool('app_list', { space: 'front' })).includes('front page'),
       false,
@@ -3194,7 +3207,7 @@ slow('the front page moves, and only the owner moves it', async () => {
       'not the owner of front',
     )
     let still = await bare()
-    assertEquals(still.status, 404)
+    assertEquals(still.status, 200)
     await still.body?.cancel()
   } finally {
     await k.stop()

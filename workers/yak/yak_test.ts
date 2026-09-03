@@ -60,9 +60,11 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
       slug: 'jeff',
       apps: ['recipes', 'garden'],
     }])
+    // No app claims the bare hostname by being first (T-33040), so it lists
+    // what is here — a page, not a 404. home_test.ts holds that page.
     let bare = await k.at('jeff.yaks.app', '/', { redirect: 'manual' })
-    assertEquals(bare.status, 302)
-    assertEquals(bare.headers.get('location'), '/recipes/')
+    assertEquals(bare.status, 200)
+    assertStringIncludes(await bare.text(), 'href="/recipes/"')
     let slash = await k.at('jeff.yaks.app', '/recipes', { redirect: 'manual' })
     assertEquals(slash.status, 302)
     assertEquals(slash.headers.get('location'), '/recipes/')
