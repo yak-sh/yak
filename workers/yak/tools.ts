@@ -39,6 +39,7 @@ import {
 } from './directory.ts'
 import type { Env } from './env.ts'
 import { listing } from './listing.ts'
+import { mail } from './mail.ts'
 import { SLUG } from './route.ts'
 import { mayWrite, vouched, type Who } from './session.ts'
 import { canon, personOf } from './signin.ts'
@@ -250,7 +251,7 @@ let told = (access: Access | null) =>
   access == 'open'
     ? 'anyone with the link can use it, signed in or not'
     : access == 'private'
-    ? 'only its members can see it; member_add invites someone by email'
+    ? 'only its members can see it; member_add mails an invitation to one'
     : 'anyone with the link can see it; only its members can change it'
 
 // The views a tool's answer draws itself in — `ui://` resources the door
@@ -725,16 +726,22 @@ export let TOOLS: Tool[] = [
     description:
       'Invite someone into the space by email address, so they can change ' +
       'what its apps hold: an editor writes, a viewer only reads, an owner ' +
-      'may also invite. They sign in at https://yaks.app with that same ' +
-      'address — there is nothing to install and no account to make first. ' +
-      'Only the space owner may invite. For an app that everyone with the ' +
-      'link should be able to act on without signing in at all, give it ' +
-      "access 'open' instead (app_set).",
+      'may also invite. The invitation is MAILED to them — who invited them, ' +
+      'the link, and that signing in at it with that address is all it takes ' +
+      '— so name the app they are being invited to and the letter points at ' +
+      'it instead of the space. There is nothing for them to install and no ' +
+      'account to make first. Only the space owner may invite. For an app ' +
+      'that everyone with the link should be able to act on without signing ' +
+      "in at all, give it access 'open' instead (app_set).",
     input: {
       type: 'object',
       properties: {
         space: SPACE,
         email: str('their email address'),
+        app: str(
+          'the app they are being invited to — the letter and the answer ' +
+            'point at it; leave it out for the space itself',
+        ),
         role: {
           type: 'string',
           enum: [...ROLES],
@@ -749,6 +756,16 @@ export let TOOLS: Tool[] = [
       let { space, who } = await owns(ctx, args)
       let email = address(args.email)
       let want = args.role == null ? 'editor' : role(args.role)
+      // What they were invited TO: the app, if one was named, else the
+      // space. A link to the space root is a link to nothing when the app
+      // does not answer the bare hostname (C-32624 item 4).
+      let app = args.app == null
+        ? null
+        : await ctx.dir.app(space, text(args.app, 'app'))
+      if (args.app != null && !app) {
+        throw new Error(`no app ${args.app} in ${space.slug}`)
+      }
+      let link = app ? url(space, app) : `https://${space.slug}.yaks.app/`
       // The platform's row for that address, minted if it has never seen
       // one: the invitation is what makes the person, and their sign-in
       // later finds this same row by the same address (signin.ts personOf).
@@ -764,13 +781,31 @@ export let TOOLS: Tool[] = [
             : { member: { space: space.eid, person, role: want } },
         ],
       }, vouched(who))
+      // The letter, from the platform's own sender — the one the sign-in
+      // code rides (mail.ts). It goes AFTER the membership, which stands
+      // whatever the mail does: a letter that cannot be sent is a link to
+      // relay by hand, never a lost invitation.
+      let what = app ? `${app.title} (${space.slug}/${app.slug})` : space.title
+      let by = await ctx.dir.emailAt(ctx.person)
+      let sent = await mail(ctx.env)({
+        to: email,
+        subject: `${by ?? 'Someone'} invited you to ${what}`,
+        body: `${by ?? 'Someone'} invited you to ${what} on yaks.app:\n\n` +
+          `${link}\n\n` +
+          `Sign in there with this address (${email}) and it is yours to ` +
+          `${want == 'viewer' ? 'read' : 'use'}. There is nothing to ` +
+          'install and no account to make first.',
+      }).then(() => true).catch(() => false)
       return {
         text:
           `${email} is ${want == 'editor' || want == 'owner' ? 'an' : 'a'}` +
           ` ${want} of ` +
-          `${space.slug}${had ? ` (was ${had.role})` : ''} — tell them to ` +
-          `sign in at https://yaks.app with that address, and everything ` +
-          `at https://${space.slug}.yaks.app/ is theirs to ` +
+          `${space.slug}${had ? ` (was ${had.role})` : ''} — ` +
+          (sent
+            ? `the invitation is on its way to them, with the link: ${link}`
+            : `the invitation could not be mailed, so send them the link ` +
+              `yourself: ${link}`) +
+          `. They sign in there with that address, and it is theirs to ` +
           `${want == 'viewer' ? 'read' : 'use'}`,
         space,
       }

@@ -261,6 +261,11 @@ export let directory = (via: Fetcher) => {
     personAt: async (email: string) =>
       (await one(`.person!&.email.address=${encodeURIComponent(email)}`))
         ?.entity.eid ?? null,
+    // The same question the other way: where the platform writes to this
+    // person. An invitation says who sent it, and an address is the only
+    // name the platform has for anyone (T-32629).
+    emailAt: async (person: string) =>
+      (await one(`id=${person}`))?.email?.address ?? null,
     // Every space this person belongs to, the meta space left out: `yak` is
     // the platform's own, and a person who owns it (the first to sign in)
     // still means their own space when they name none.

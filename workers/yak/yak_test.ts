@@ -14,6 +14,7 @@ import {
   client,
   connector,
   kernel,
+  letter,
   meta,
   seed,
   signedIn,
@@ -341,9 +342,33 @@ slow('an app says who may read it and who may write it', async () => {
     let said = await agent.tool('member_add', {
       space: 'club',
       email: ' Maya@Example.COM ',
+      app: 'diary',
     })
     assertStringIncludes(said, 'maya@example.com is an editor of club')
-    assertStringIncludes(said, 'sign in at https://yaks.app')
+    // The answer says the letter went and repeats the link, so the person
+    // can relay it by hand as well — and it points at the app they were
+    // invited to, never the space root, which answers nothing here
+    // (C-32624 item 4).
+    assertStringIncludes(said, 'the invitation is on its way')
+    assertStringIncludes(said, 'https://club.yaks.app/diary/')
+    // And the letter itself carries the same link, from the platform's own
+    // sender, saying who invited them and what signing in takes.
+    let invite = await letter(k, 'maya@example.com', 'invited you')
+    assertStringIncludes(invite.subject, email)
+    assertStringIncludes(invite.body, 'https://club.yaks.app/diary/')
+    assertStringIncludes(invite.body, 'maya@example.com')
+    assertStringIncludes(invite.body, 'no account to make first')
+    // An app the space does not have is a refusal, not a link to nothing.
+    await assertRejects(
+      () =>
+        agent.tool('member_add', {
+          space: 'club',
+          email: 'maya@example.com',
+          app: 'nope',
+        }),
+      Error,
+      'no app nope in club',
+    )
     let [row] = await meta(k, cookie).query('.email.address=maya@example.com')
     let maya = row.entity.eid
     let mayaIn = await signedIn(k, maya)

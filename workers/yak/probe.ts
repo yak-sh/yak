@@ -240,19 +240,37 @@ export let connector = (k: Kernel, cookie?: string) => {
   return { call, tool }
 }
 
-// A letter the kernel just sent, read off its own log: MAIL_DEV prints one
-// line per letter (mail.ts `printed`), so no store anywhere holds a code a
-// read could spend.
-export let mailed = (k: Kernel, to: string) => {
-  let letters = () =>
-    [...Deno.readTextFileSync(k.log).matchAll(/yak-mail (\{.*\})/g)]
-      .map((m) => JSON.parse(m[1]) as { to: string; subject: string })
-      .filter((l) => l.to == to)
-  return until(
-    () => /\b(\d{6})\b/.exec(letters().at(-1)?.subject ?? '')?.[1] ?? '',
+// Every letter the kernel has sent to an address, oldest first, read off its
+// own log: MAIL_DEV prints one line per letter (mail.ts `printed`), so no
+// store anywhere holds a code a read could spend.
+export type Letter = { to: string; subject: string; body: string }
+
+export let letters = (k: Kernel, to: string): Letter[] =>
+  [...Deno.readTextFileSync(k.log).matchAll(/yak-mail (\{.*\})/g)]
+    .map((m) => JSON.parse(m[1]) as Letter)
+    .filter((l) => l.to == to)
+
+// The latest letter to an address that says a thing, waited for — an
+// invitation is sent while the tool is answering (T-32629).
+export let letter = async (k: Kernel, to: string, saying: string) =>
+  (await until(
+    () =>
+      letters(k, to).findLast((l) =>
+        `${l.subject}\n${l.body}`.includes(saying)
+      ),
+    {
+      timeout: 20_000,
+      poll: 100,
+      label: `a letter for ${to} saying ${saying}`,
+    },
+  ))!
+
+// The sign-in code out of the newest one.
+export let mailed = (k: Kernel, to: string) =>
+  until(
+    () => /\b(\d{6})\b/.exec(letters(k, to).at(-1)?.subject ?? '')?.[1] ?? '',
     { timeout: 20_000, poll: 100, label: `a letter for ${to}` },
   )
-}
 
 // A person signs in the way a browser does — an address, the code off the
 // log, the cookie back — and the kernel mints their person row and their own

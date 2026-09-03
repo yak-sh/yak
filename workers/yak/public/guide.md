@@ -35,8 +35,8 @@ may read and write is the app's `access`: `public` (the default) reads to anyone
 with the link and writes to a member, `open` writes to anyone with the link —
 the vote page, the shared list — and `private` answers members only. `app_new`
 and `app_set` set it; `member_add` invites someone into the space by email
-address, and they sign in at yaks.app with it and come back to the page they
-were on.
+address — name the app and the invitation is mailed to them, carrying its link —
+and they sign in there with that address and come back to the page they were on.
 
 ## What you save
 
