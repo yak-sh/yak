@@ -9,6 +9,11 @@
 // constant-time without a compare of our own. The role a person holds is
 // membership, read from the directory, never a claim: a token cannot promote.
 //
+// The seal under it — `seal`/`opened`, a signed JSON value — is the general
+// half, because the session token is not the only thing the kernel has to be
+// sure it wrote: the grant an app's own Worker carries back through its
+// service binding is another (workers/yak/dispatch.ts).
+//
 // WebCrypto only, so the same file runs in a Worker, in Deno, and in a browser.
 // Nothing here reads a cookie or an env: the kernel's session.ts reads the
 // cookie, the login page (T-32327) mints one with `sign` and sets it with
@@ -41,8 +46,13 @@ let key = (secret: string, use: KeyUsage) =>
     [use],
   )
 
-export let sign = async (claims: Claims, secret: string) => {
-  let body = b64u(enc.encode(JSON.stringify(claims)))
+// A value nobody but this secret can have written: `<body>.<mac>`, the body
+// base64url JSON and the mac HMAC-SHA256 over the body text. The session
+// token is one of these and the grant an app's worker carries is another
+// (workers/yak/dispatch.ts) — what is sealed is the caller's to shape, and
+// its expiry is the caller's to check.
+export let seal = async (value: unknown, secret: string) => {
+  let body = b64u(enc.encode(JSON.stringify(value)))
   let mac = await crypto.subtle.sign(
     'HMAC',
     await key(secret, 'sign'),
@@ -50,6 +60,31 @@ export let sign = async (claims: Claims, secret: string) => {
   )
   return `${body}.${b64u(new Uint8Array(mac))}`
 }
+
+// What was sealed, or null for anything but a well-formed value under this
+// secret. The check runs through WebCrypto's verify, so it is constant-time
+// without a compare of our own.
+export let opened = async <T>(
+  sealed: string,
+  secret: string,
+): Promise<T | null> => {
+  let dot = sealed.lastIndexOf('.')
+  if (dot < 0) return null
+  let body = sealed.slice(0, dot)
+  try {
+    let ok = await crypto.subtle.verify(
+      'HMAC',
+      await key(secret, 'verify'),
+      unb64u(sealed.slice(dot + 1)),
+      enc.encode(body),
+    )
+    return ok ? JSON.parse(dec.decode(unb64u(body))) as T : null
+  } catch {
+    return null
+  }
+}
+
+export let sign = (claims: Claims, secret: string) => seal(claims, secret)
 
 // The claims a token carries, or null for anything but a well-formed token
 // under this secret that has not expired. `now` is milliseconds, the clock a
@@ -59,24 +94,11 @@ export let verify = async (
   secret: string,
   now = Date.now(),
 ): Promise<Claims | null> => {
-  let dot = token.lastIndexOf('.')
-  if (dot < 0) return null
-  let body = token.slice(0, dot)
-  try {
-    let ok = await crypto.subtle.verify(
-      'HMAC',
-      await key(secret, 'verify'),
-      unb64u(token.slice(dot + 1)),
-      enc.encode(body),
-    )
-    if (!ok) return null
-    let c = JSON.parse(dec.decode(unb64u(body)))
-    if (typeof c.person != 'string' || typeof c.exp != 'number') return null
-    if (c.exp * 1000 <= now) return null
-    return { person: c.person, space: c.space ?? null, exp: c.exp }
-  } catch {
-    return null
-  }
+  let c = await opened<Claims>(token, secret)
+  if (!c) return null
+  if (typeof c.person != 'string' || typeof c.exp != 'number') return null
+  if (c.exp * 1000 <= now) return null
+  return { person: c.person, space: c.space ?? null, exp: c.exp }
 }
 
 // One cookie's value out of a Cookie header, or null.

@@ -9,10 +9,9 @@
 // write side, what a deploy is until app_deploy (T-32329) exists, and
 // `/api/blob` is the door for a page's own bytes — a photo a visitor picks —
 // content-addressed into the same bucket and named by a row in the app's
-// store (T-32677). Workers for Platforms dispatch — an app's own Worker
-// answering here — is the second implementation and waits on T-32345; it
-// slots in where `asset` is called, with the same `vouched` headers, and
-// nothing here pretends to.
+// store (T-32677). An app's OWN Worker answers before the files do, where it
+// deployed one (dispatch.ts `ran`, T-32778): the same `vouched` headers, a
+// 404 from it falling back to the files, and `/api/` never its.
 //
 // A page's own breaks come back here too (T-32486), without the page asking:
 // every HTML response is rewritten on its way out to carry the reporter
@@ -32,6 +31,7 @@ import {
   storeName,
 } from './directory.ts'
 import * as dirPart from './directory.ts'
+import { granted, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { sizeOf } from './image.ts'
 import { asking, listed, listing } from './listing.ts'
@@ -760,7 +760,14 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     return moved(req, `/${was.slug}${r.path || '/'}${url.search}`)
   }
   if (r.path == '') return redirect(`${url.pathname}/`)
-  let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
+  // The app's own worker, coming back through its service binding for its
+  // store or its files (dispatch.ts): the grant says who it is acting as, so
+  // there is no cookie to read — and a request holding one is never sent BACK
+  // to the worker, which is what keeps `env.FILES.fetch('/index.html')` from
+  // being a loop.
+  let itself = await granted(req, env.SESSION_SECRET, storeName(space, app))
+  let who = itself ??
+    await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
   // A private app hides its PAGE too, not only its data (C-32607 item 5):
   // `access: private` says only its members can see it, and its files are
   // part of what they see. A stranger is sent to sign in and handed back to
@@ -770,11 +777,17 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (!r.path.startsWith('/api/') && !reads(who, app.access)) {
     return who.person ? nothingHere() : redirect(signInAt(req.url), 303)
   }
-  return reporting(
-    await (r.path.startsWith('/api/')
-      ? api(req, env, space, app, r.path.slice(4), who)
-      : asset(env, space, app, r.path)),
-    req,
-    app,
-  )
+  // The app's own code answers first, where it has any: `ran` is null when
+  // the app deployed no worker.js and when the worker answered 404, which is
+  // how a worker owns its routes and leaves its pages to the platform. The
+  // `/api/` doors stay the kernel's, always.
+  if (r.path.startsWith('/api/')) {
+    return reporting(
+      await api(req, env, space, app, r.path.slice(4), who),
+      req,
+      app,
+    )
+  }
+  let own = itself ? null : await ran(env, space, app, req, who)
+  return reporting(own ?? await asset(env, space, app, r.path), req, app)
 }

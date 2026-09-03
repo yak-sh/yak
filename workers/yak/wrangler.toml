@@ -36,10 +36,22 @@ host = "127.0.0.1"
 [triggers]
 crons = ["0 * * * *"]
 
-# The account whose analytics the meter reads — the same tag as `account_id`
-# above, which the runtime is never handed. Not a secret: it is in this file.
+# The account whose analytics the meter reads, and whose dispatch namespace an
+# app's worker is uploaded into — the same tag as `account_id` above, which the
+# runtime is never handed. Not a secret: it is in this file.
 [vars]
 CF_ACCOUNT = "0f9613dfd3f0451df0bd0f12a1372ea3"
+
+# An app's OWN worker.js (dispatch.ts, T-32778): every app's script lives in
+# this one Workers for Platforms namespace, named by the app's store. There is
+# no local implementation — dispatch namespaces are remote-only
+# (developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/local-development/)
+# — so under `wrangler dev` the binding is undefined and an app serves its
+# files. `remote = true` here would point local dev at the deployed namespace;
+# it is left off, because a test must not need the account.
+[[dispatch_namespaces]]
+binding = "DISPATCH"
+namespace = "yak-apps"
 
 # The apex's static files: the home page, the store client an app's pages
 # import (served back to them at <space>.yaks.app/<app>/api/client.js), and
@@ -91,3 +103,6 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # store instead of going out. Never set it on a deploy.
 # CF_ANALYTICS_TOKEN is the meter's read-only Cloudflare API token (Account
 # Analytics Read, T-32759); unset, the hourly sweep meters nothing.
+# CF_WORKERS_TOKEN is the one an app's own worker.js is uploaded to the
+# dispatch namespace with (Workers Scripts Edit, T-32781); unset, an app's
+# files deploy and its worker does not.

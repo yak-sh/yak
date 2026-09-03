@@ -46,6 +46,7 @@ import {
   storeName,
 } from './directory.ts'
 import { toolsChanged, toolsOf } from './declared.ts'
+import { drop, NEEDS_TOKEN, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { mail } from './mail.ts'
 import { SLUG } from './route.ts'
@@ -714,6 +715,27 @@ export let TOOLS: Tool[] = [
       // A tool list that moved is news to every agent connected who can
       // reach this app (declared.ts, T-32686).
       if (tooled.changed) await toolsChanged(ctx, space)
+      // And the app's OWN code, if it wrote any (dispatch.ts, T-32778): the
+      // worker.js among its files becomes its script in the dispatch
+      // namespace, and an app that deleted its worker.js loses the script it
+      // had, so what serves is what the files say. Without the platform's
+      // Cloudflare token there is nothing to upload with — the files are
+      // already live, so the deploy stands and says what is missing rather
+      // than failing (T-32781).
+      let workerKey = fileKey(space, app, 'worker.js')
+      let ran = ''
+      if (!(await blobs.has(workerKey))) {
+        if (ctx.env.CF_WORKERS_TOKEN) await drop(ctx.env, storeName(space, app))
+      } else if (!ctx.env.CF_WORKERS_TOKEN) ran = `\n${NEEDS_TOKEN}`
+      else {
+        await upload(
+          ctx.env,
+          storeName(space, app),
+          new TextDecoder().decode(await blobs.get(workerKey)),
+        )
+        ran =
+          '\nworker: worker.js answers first; a 404 from it serves the files'
+      }
       let version = (app.version ?? 0) + 1
       await ctx.dir.apply(
         { entities: [{ entity: { eid: app.eid }, app: { version } }] },
@@ -722,6 +744,7 @@ export let TOOLS: Tool[] = [
       return {
         text:
           `deployed ${space.slug}/${app.slug} v${version}: ${url(space, app)}` +
+          ran +
           (declared.length
             ? `\ntools: ${declared.map((t) => `${app.slug}__${t}`).join(', ')}`
             : '') +
@@ -859,6 +882,10 @@ export let TOOLS: Tool[] = [
       let blobs = r2Blobs(ctx.env.BLOBS)
       let keys = await blobs.list(fileKey(space, app, ''))
       for (let key of keys) await blobs.delete(key)
+      // And the app's own code, which is not in the bucket: a script left in
+      // the dispatch namespace would still answer at an address nothing
+      // stands at (dispatch.ts).
+      if (ctx.env.CF_WORKERS_TOKEN) await drop(ctx.env, storeName(space, app))
       // The store is named for where the app was born (directory.ts
       // storeName), so emptying it is what keeps a later app at the same
       // address from waking up in this one's graph.

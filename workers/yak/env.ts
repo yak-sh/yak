@@ -11,6 +11,7 @@
 // with no other change. A part never reaches another except through its
 // handler, and none keeps state another reads.
 import type { R2 } from '../../src/blobs_r2.ts'
+import type { Dispatch } from './dispatch.ts'
 import type { Namespace } from './store.ts'
 
 export type Fetcher = { fetch(req: Request): Promise<Response> }
@@ -43,6 +44,15 @@ export type Env = {
   // a secret and rides wrangler.toml's `[vars]`.
   CF_ANALYTICS_TOKEN?: string
   CF_ACCOUNT?: string
+  // An app's OWN code (dispatch.ts): the Workers for Platforms namespace its
+  // worker.js is uploaded into, and the token the upload speaks to the
+  // Workers API with — the account tag above is the same one. The namespace
+  // has no local implementation — it is remote-only — so under `wrangler dev`
+  // the binding is undefined and every app serves its files. The token is the
+  // owner's (T-32781); without it an app with a worker deploys its files and
+  // is told so.
+  DISPATCH?: Dispatch
+  CF_WORKERS_TOKEN?: string
   // A part split into its own Worker, when it has been; absent, in-process.
   IDENTITY?: Fetcher
   MCP?: Fetcher
