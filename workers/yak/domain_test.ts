@@ -69,6 +69,53 @@ slow('a hostname finds its app, and only one app', async () => {
     let menu = await k.at('herbusiness.com', '/menu.html')
     assertEquals(menu.status, 200)
     assertStringIncludes(await menu.text(), 'The menu')
+    // TOP-LEVEL ROUTING WINS over anything in a space's apps (route.ts
+    // `platform`). Since T-33040 the front page answers every address no app
+    // claims, which handed it the paths a certificate is validated on: an app
+    // serving bytes at `/.well-known/acme-challenge/<token>` could pass
+    // HTTP-01 at a public CA and be issued a trusted certificate for a
+    // hostname on our own zone. The platform answers those itself, at the
+    // space's hostname and on a customer's domain alike — the domain being
+    // where it matters, since that is the address Cloudflare validates.
+    await owner.put('/.well-known/acme-challenge/token', "not the CA's")
+    await owner.put('/.well-known/pki-validation/ca3.txt', "not the CA's")
+    // ...and an app's OWN `.well-known` files, which the platform does not
+    // claim, still reach it. That is live behaviour people rely on.
+    await owner.put('/.well-known/security.txt', 'Contact: mailto:her@x.com')
+    await owner.put('/.well-known/assetlinks.json', '[]')
+    await owner.put('/.well-known/apple-app-site-association', '{}')
+    for (
+      let path of [
+        '/.well-known/acme-challenge/token',
+        '/.well-known/pki-validation/ca3.txt',
+      ]
+    ) {
+      let r = await k.at('herbusiness.com', path)
+      assertEquals(r.status, 404, `${path} reached the app`)
+      assertEquals((await r.text()).includes("not the CA's"), false)
+    }
+    for (
+      let [path, said] of [
+        ['/.well-known/security.txt', 'Contact: mailto:her@x.com'],
+        ['/.well-known/assetlinks.json', '[]'],
+        ['/.well-known/apple-app-site-association', '{}'],
+      ]
+    ) {
+      let r = await k.at('herbusiness.com', path)
+      assertEquals(r.status, 200, `${path} lost the app's file`)
+      assertEquals(await r.text(), said)
+    }
+    // The rule is about the address a CA asks at, which is the ROOT. The same
+    // name under an app's own prefix is the app's file, and stays it.
+    let deep = await k.at('jeff.yaks.app', '/recipes/.well-known/security.txt')
+    assertEquals(deep.status, 200)
+    assertEquals(await deep.text(), 'Contact: mailto:her@x.com')
+    let inner = await k.at(
+      'jeff.yaks.app',
+      '/recipes/.well-known/acme-challenge/token',
+    )
+    assertEquals(inner.status, 200)
+
     // Its store answers at the app's own door, under the domain.
     let rows = await k.at('herbusiness.com', '/api/graph')
     assertEquals(rows.status, 200)

@@ -6,6 +6,7 @@ import {
   hostOf,
   onZone,
   ORIGIN,
+  platform,
   route,
   sameOrigin,
 } from './route.ts'
@@ -96,6 +97,29 @@ Deno.test('onZone: our own https hostnames, and nothing else', () => {
     ['', null],
   ]
   for (let [href, want] of ours) assertEquals(onZone(href), want, href)
+})
+
+// What the platform owns at every hostname (route.ts `platform`), so no
+// space's app can answer it — apex, space and custom domain alike.
+Deno.test('platform: top-level routing wins over a space app', () => {
+  let owned: [string, boolean][] = [
+    ['/.well-known/acme-challenge/tok', true],
+    ['/.well-known/pki-validation/ca3-0052.txt', true],
+    ['/.well-known/openai-apps-challenge', true],
+    // A CA asks at the ROOT, so the same name under an app's own prefix is
+    // that app's file and stays it.
+    ['/site/.well-known/acme-challenge/tok', false],
+    // Not ours: an app's own `.well-known` files keep reaching it, which is
+    // live behaviour since T-33040.
+    ['/.well-known/security.txt', false],
+    ['/.well-known/assetlinks.json', false],
+    ['/.well-known/apple-app-site-association', false],
+    // identity.ts owns its own metadata; this list does not reach for it.
+    ['/.well-known/oauth-authorization-server', false],
+    ['/.well-known/', false],
+    ['/', false],
+  ]
+  for (let [path, want] of owned) assertEquals(platform(path), want, path)
 })
 
 // Which paths the origin check guards (route.ts `doorway`): everywhere the

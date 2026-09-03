@@ -106,6 +106,36 @@ export let route = (host: string, pathname: string): Route => {
   }
 }
 
+// The paths the PLATFORM owns, at every hostname it answers on — the apex, a
+// space, and a customer's own domain alike. Top-level routing wins over
+// anything in a space's apps, and since T-33040 that has to be said out loud:
+// the home app answers every address no other app claims, so on a space's
+// hostname these landed in the app.
+//
+// The certificate-validation paths are the reason it matters. An app that can
+// serve bytes at `/.well-known/acme-challenge/<token>` on `<space>.yaks.app`
+// can pass HTTP-01 at a public CA and be issued a trusted certificate for a
+// hostname on OUR zone — a tenant holding a cert for our name, in the
+// certificate transparency logs, usable wherever it can put itself in front
+// of that name. That is what this list is for, and it holds for every space.
+//
+// It is ALSO the path Cloudflare validates our customers' domains on, and
+// this zone has a `*/*` Worker route (wrangler.toml, T-33036), which
+// Cloudflare warns can intercept a CA's request
+// (developers.cloudflare.com/ssl/edge-certificates/changing-dcv-method/troubleshooting/).
+// MEASURED 2026-09-03: with that route live and the Worker answering these
+// paths itself, `dcv-probe.crayonbloom.com` was attached as a custom hostname
+// and ssl.com issued its certificate within a minute, while a request to
+// `/.well-known/acme-challenge/x` on that hostname reached the Worker and got
+// its soft 404. So Cloudflare's edge answers the CA before the route, and for
+// OUR issuance this list is defence in depth — which is why the platform can
+// answer these with its own 404 rather than trying to pass a request through
+// to a fallback origin that is deliberately originless (`AAAA 100::`).
+export let platform = (pathname: string) =>
+  pathname.startsWith('/.well-known/acme-challenge/') ||
+  pathname.startsWith('/.well-known/pki-validation/') ||
+  pathname == '/.well-known/openai-apps-challenge'
+
 // The doors the graph answers at, read from the path a browser asked for:
 // an app's `/<app>/api/…`, a front page's own `/api/…` (apps.ts `fetch`
 // serves the home app everything no other app claims), and the connector at

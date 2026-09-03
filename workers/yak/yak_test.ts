@@ -623,13 +623,15 @@ slow('the apex serves the OpenAI apps challenge token, exactly', async () => {
     let body = await res.text()
     assertEquals(body, token)
     assert(!body.endsWith('\n'), 'the token carries a trailing newline')
-    // A space host falls to that app's door, never the apex token.
+    // A space host never gets it. The path is the PLATFORM's at every
+    // hostname (route.ts `platform`), so no app can answer it — and the
+    // token is the apex's own, so it does not travel there either.
     let onSpace = await k.at(
       'nobody.yaks.app',
       '/.well-known/openai-apps-challenge',
     )
-    assert(onSpace.status != 200 || (await onSpace.text()) != token)
-    await onSpace.body?.cancel()
+    assertEquals(onSpace.status, 404)
+    assert((await onSpace.text()) != token)
   } finally {
     await k.stop()
   }

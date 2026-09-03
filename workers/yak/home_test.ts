@@ -160,6 +160,20 @@ slow('the front page is served at the space root', async () => {
     for (let path of ['/style.css', '/deep/note.txt']) {
       assertEquals((await k.at('jeff.yaks.app', path)).status, 200, path)
     }
+    // Every path no app claims — except the ones the PLATFORM owns (route.ts
+    // `platform`). Top-level routing wins, and here it has to: an app
+    // answering `/.well-known/acme-challenge/<token>` on a hostname of ours
+    // could pass HTTP-01 at a public CA and hold a trusted certificate for
+    // `jeff.yaks.app`. Its own `.well-known` files are not in that set and
+    // still reach it (domain_test.ts holds the same rule on a domain).
+    await owner.put('/.well-known/acme-challenge/token', "not the CA's")
+    await owner.put('/.well-known/security.txt', 'Contact: mailto:her@x.com')
+    let ours = await k.at('jeff.yaks.app', '/.well-known/acme-challenge/token')
+    assertEquals(ours.status, 404)
+    assertEquals((await ours.text()).includes("not the CA's"), false)
+    let theirs = await k.at('jeff.yaks.app', '/.well-known/security.txt')
+    assertEquals(theirs.status, 200)
+    assertEquals(await theirs.text(), 'Contact: mailto:her@x.com')
     // Its store's doors answer at the root too — named by the hostname and
     // nothing else, the way they are on a custom domain (domain_test.ts).
     let rows = await k.at('jeff.yaks.app', '/api/graph')
