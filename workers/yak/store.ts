@@ -45,7 +45,9 @@ import {
   mutate,
   plant,
   plantVocab,
+  regraft,
   type SchemaOp,
+  schemaStamp,
   vocabHash,
 } from '../../src/db.ts'
 import { fed } from '../../src/effects.ts'
@@ -111,6 +113,11 @@ let HELD = 2048
 
 let why = (e: unknown) => e instanceof Error ? e.message : String(e)
 
+// The schema this Worker carries, as one word (db.ts schemaStamp): what a
+// store stamps itself with when it is raised, and what a wake compares
+// against. Once per isolate, since the ops never move under it.
+let stamp = schemaStamp(ops as SchemaOp[])
+
 // The throw that unwinds a `?check=1` write, thrown and caught in one place
 // so nothing else can be mistaken for it.
 let UNDO = new Error('checked')
@@ -150,19 +157,22 @@ export class Store {
   }
 
   // Waking on this storage, whatever is in it. First touch plants the whole
-  // schema in one transaction. A store planted under an OLDER vocabulary
-  // grows into this one instead: every generated op is a guarded
+  // schema in one transaction. A store planted under an OLDER schema grows
+  // into this one instead (db.ts regraft): every generated op is a guarded
   // create-if-absent or add-column, so replaying them adds what a new
-  // component brought and leaves what is there alone. The vocabulary's own
-  // fingerprint says when that is worth doing, so a wake under the same words
-  // costs nothing. Nobody hand-migrates a Durable Object; this is the only
-  // door a column has. Emptying the object (`DELETE /`) is a second birth on
-  // the same handle, which is why this is not written inline above.
+  // component brought and leaves what is there alone — and every definition,
+  // which no replay can alter, is dropped and raised again at the current
+  // shape, because half of an older schema and half of this one compile into
+  // a broken statement (T-32826). The schema's own fingerprint says when that
+  // is worth doing, so a wake under the same schema costs nothing. Nobody
+  // hand-migrates a Durable Object; this is the only door a column has.
+  // Emptying the object (`DELETE /`) is a second birth on the same handle,
+  // which is why this is not written inline above.
   born() {
-    let held = String(this.db.kv.get('vocab_hash') ?? '')
+    let held = String(this.db.kv.get('schema') ?? '')
     if (!this.db.version) plant(this.db, ops as SchemaOp[])
-    else if (held != vocabHash) graft(this.db, ops as SchemaOp[])
-    if (held != vocabHash) this.db.kv.put('vocab_hash', vocabHash)
+    else if (held != stamp) regraft(this.db, ops as SchemaOp[])
+    if (held != stamp) this.db.kv.put('schema', stamp)
     // The app's own components (vocab.json, T-32502) are storage the object
     // wakes with: the manifest it last accepted is replayed into this handle
     // so apply(), the query grammar and the graph-out projection speak the

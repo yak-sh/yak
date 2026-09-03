@@ -4177,6 +4177,61 @@ export let graft = <D extends Sql>(db: D, ops: SchemaOp[]): D =>
     return db
   })
 
+// Every object in the ops that IS its definition — a view, a trigger, a
+// virtual table. `create … if not exists` is a no-op where an older one
+// stands, so a definition that CHANGED never lands on a store raised from an
+// older schema, and the halves that did land compile against the halves that
+// did not.
+let defined = (ops: SchemaOp[]) =>
+  ops.flatMap((op) => [
+    ...op.sql.matchAll(
+      /create\s+(trigger|view|virtual\s+table)\s+(?:if\s+not\s+exists\s+)?(\w+)([^;]*)/gi,
+    ),
+  ]).map(([, what, name, rest]) => ({
+    name,
+    drop: what.toLowerCase() == 'view' ? 'view' : 'table',
+    trigger: what.toLowerCase() == 'trigger',
+    // An fts5 mirror comes back empty and is refilled from its content table;
+    // every other definition holds nothing of its own to lose.
+    fts: /using\s+fts5/i.test(rest),
+  }))
+
+// The replay a store raised from an OLDER schema needs. Definitions cannot be
+// altered in place, so they are dropped and raised again at the current shape:
+// the mail triggers a plain graft added wrote doc_fts.addr into a doc_fts
+// planted before that column, and every DELETE in that store then failed to
+// prepare, because SQLite compiles a table's triggers with the statement that
+// fires them (T-32826). Everything dropped here is derived — the doc_value
+// projection and the FTS mirrors hold nothing `doc` does not — so the cost is
+// the rebuild below and nothing else.
+export let regraft = <D extends Sql>(db: D, ops: SchemaOp[]): D =>
+  shaped(db, () => {
+    let all = defined(ops)
+    // Triggers first: one names the tables around it, and a table dropped
+    // under a live trigger is a trigger nothing can drop.
+    for (let d of all) {
+      if (d.trigger) db.exec(`drop trigger if exists ${d.name}`)
+    }
+    for (let d of all) {
+      if (!d.trigger) db.exec(`drop ${d.drop} if exists ${d.name}`)
+    }
+    raise(db, ops)
+    for (let d of all) {
+      if (d.fts && tableExists(db, d.name)) {
+        db.exec(`insert into ${d.name} (${d.name}) values ('rebuild')`)
+      }
+    }
+    return db
+  })
+
+// The schema a store was raised from, as one word: the vocabulary's columns
+// and the statements that shape them. A store wakes into THIS schema or into
+// a mix of two, and the mix is what T-32826 was — so the stamp moves with the
+// DDL too, not with the component vocabulary alone.
+export let schemaStamp = (ops: SchemaOp[]) =>
+  createHash('sha1').update(vocabHash).update(JSON.stringify(ops))
+    .digest('hex').slice(0, 16)
+
 // The one live handle moved to live_db.ts: importing THIS module runs nothing
 // — it is library code (D-22388), safe in the CLI's read arm and in any test —
 // while importing live_db.ts is the deliberate act of opening the live graph.

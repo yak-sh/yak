@@ -87,6 +87,25 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assertMatch(second, new RegExp(email))
     assertEquals(/what should we call you/i.test(second), false)
 
+    // And they sign in on it. Asking while a code still stands buries that
+    // one (signin.ts mint), and spending the newest buries it too — the
+    // DELETE path both sign-in doors take, which a store raised from an older
+    // schema refused for everyone who had ever asked (T-32826). A name
+    // already chosen is not touched by the sign-in that follows.
+    let anew = await form(k, '/login', { email })
+    assertEquals(anew.status, 200)
+    await anew.body?.cancel()
+    let opened = await form(k, '/login/code', {
+      email,
+      code: await mailed(k, email),
+    })
+    assertEquals(opened.status, 303)
+    await opened.body?.cancel()
+    let [named] = await dir.query(
+      `.person!&.email.address=${encodeURIComponent(email)}&.doc?`,
+    )
+    assertEquals((named.doc as { title: string }).title, 'Dana')
+
     // Skipped, the front of the address stands in for a name — and an
     // address is never one.
     let quiet = `probe-${crypto.randomUUID().slice(0, 8)}@yaks.app`
