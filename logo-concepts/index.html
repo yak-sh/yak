@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>yaks.app — raster logo concepts</title>
+    <style>
+    :root {
+      color-scheme: light;
+      --ground: #fdf5ee;
+      --paper: #fffaf5;
+      --ink: #4a3a30;
+      --soft-ink: #6f5d50;
+      --line: #efdfd2;
+      --meadow: #5c8a4c;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--ground);
+      font: 16px/1.5 Nunito, system-ui, sans-serif;
+    }
+    header,
+    main,
+    footer {
+      width: min(1120px, calc(100% - 36px));
+      margin-inline: auto;
+    }
+    header {
+      padding: 64px 0 42px;
+    }
+    .Eyebrow {
+      color: var(--meadow);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 750px;
+      margin: 10px 0 14px;
+      font-size: clamp(40px, 7vw, 76px);
+      line-height: 1;
+      letter-spacing: -.04em;
+    }
+    header p {
+      max-width: 650px;
+      margin: 0;
+      color: var(--soft-ink);
+    }
+    .Grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+    .Card {
+      overflow: hidden;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+    }
+    .Card_Header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 21px 23px;
+      border-bottom: 1px solid var(--line);
+    }
+    .Card h2 {
+      margin: 0;
+      font-size: 20px;
+    }
+    .Card_Header span {
+      color: var(--soft-ink);
+      font-size: 12px;
+    }
+    .Hero {
+      display: grid;
+      min-height: 320px;
+      place-items: center;
+      padding: 35px;
+    }
+    .Hero img {
+      width: 190px;
+      height: 190px;
+      object-fit: contain;
+    }
+    .Uses {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    .Use {
+      display: grid;
+      min-height: 135px;
+      place-items: center;
+      padding: 18px;
+      border-top: 1px solid var(--line);
+    }
+    .Use-dark {
+      color: #f1e6d8;
+      background: #2a2320;
+      border-color: #4a3d37;
+    }
+    .Lockup {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 18px;
+      font-weight: 800;
+    }
+    .Lockup img {
+      width: 38px;
+      height: 38px;
+      object-fit: contain;
+    }
+    .Sizes {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .Sizes img {
+      object-fit: contain;
+    }
+    .Sizes img:nth-child(1) {
+      width: 64px;
+      height: 64px;
+    }
+    .Sizes img:nth-child(2) {
+      width: 32px;
+      height: 32px;
+    }
+    .Sizes img:nth-child(3) {
+      width: 16px;
+      height: 16px;
+    }
+    .Icon {
+      display: grid;
+      width: 92px;
+      height: 92px;
+      place-items: center;
+      overflow: hidden;
+      background: var(--ground);
+      border: 1px solid var(--line);
+      border-radius: 21px;
+      box-shadow: 0 8px 18px #4a3a3015;
+    }
+    .Icon img {
+      width: 80px;
+      height: 80px;
+      object-fit: contain;
+    }
+    footer {
+      padding: 34px 0 70px;
+      color: var(--soft-ink);
+      font-size: 13px;
+    }
+    @media (max-width: 720px) {
+      header {
+        padding-top: 40px;
+      }
+      .Grid {
+        grid-template-columns: 1fr;
+      }
+      .Uses {
+        grid-template-columns: 1fr;
+      }
+    }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="Eyebrow">yaks.app · logo study</div>
+      <h1>Same yak, different materials.</h1>
+      <p>Four raster directions based on the live mark. Each panel shows the transparent master at homepage scale, in the header, on a dark ground, and at small icon sizes.</p>
+    </header>
+    <main class="Grid">
+      <article class="Card">
+        <div
+          class="Card_Header"><h2>01 · Gouache</h2><span>closest translation</span></div>
+        <div
+          class="Hero"><img src="yak-gouache.png" alt="Gouache yak logo"></div>
+        <div class="Uses">
+          <div class="Use">
+            <div
+              class="Lockup"><img src="yak-gouache.png" alt=""> yaks.app</div>
+          </div>
+          <div class="Use Use-dark">
+            <div
+              class="Sizes"><img src="yak-gouache.png" alt=""><img src="yak-gouache.png" alt=""><img src="yak-gouache.png" alt=""></div>
+          </div>
+        </div>
+      </article>
+      <article class="Card">
+        <div
+          class="Card_Header"><h2>02 · Monoprint crop</h2><span>favicon first</span></div>
+        <div
+          class="Hero"><img src="yak-monoprint-head.png" alt="Monoprint yak head logo"></div>
+        <div class="Uses">
+          <div class="Use">
+            <div
+              class="Lockup"><img src="yak-monoprint-head.png" alt=""> yaks.app</div>
+          </div>
+          <div class="Use Use-dark">
+            <div class="Icon"><img src="yak-monoprint-head.png" alt=""></div>
+          </div>
+        </div>
+      </article>
+      <article class="Card">
+        <div
+          class="Card_Header"><h2>03 · Cut paper</h2><span>tactile + crisp</span></div>
+        <div
+          class="Hero"><img src="yak-cut-paper.png" alt="Cut-paper yak logo"></div>
+        <div class="Uses">
+          <div class="Use">
+            <div
+              class="Lockup"><img src="yak-cut-paper.png" alt=""> yaks.app</div>
+          </div>
+          <div class="Use Use-dark">
+            <div
+              class="Sizes"><img src="yak-cut-paper.png" alt=""><img src="yak-cut-paper.png" alt=""><img src="yak-cut-paper.png" alt=""></div>
+          </div>
+        </div>
+      </article>
+      <article class="Card">
+        <div
+          class="Card_Header"><h2>04 · Block print</h2><span>graphic + grown-up</span></div>
+        <div
+          class="Hero"><img src="yak-block-print.png" alt="Block-print yak logo"></div>
+        <div class="Uses">
+          <div class="Use">
+            <div
+              class="Lockup"><img src="yak-block-print.png" alt=""> yaks.app</div>
+          </div>
+          <div class="Use Use-dark">
+            <div
+              class="Sizes"><img src="yak-block-print.png" alt=""><img src="yak-block-print.png" alt=""><img src="yak-block-print.png" alt=""></div>
+          </div>
+        </div>
+      </article>
+    </main>
+    <footer>The existing SVG remains untouched. Choose a material direction first; then tune one coherent asset family for each final size.</footer>
+  </body>
+</html>
