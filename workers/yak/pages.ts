@@ -191,15 +191,15 @@ let MCP = 'https://yaks.app/mcp'
 // answer, which is what a person choosing a name expects.
 let mine = (y: Yours) =>
   y.fixed
-    ? `<section class="Card"><h2>Your address</h2>
+    ? `<section class="Card"><h2>Where your apps live</h2>
 <p>Your apps live at <b>${esc(y.slug)}.yaks.app</b>.</p>
 <p class="Note">You've built something here, so this one stays put for now.</p>
 </section>`
-    : `<section class="Card"><h2>Your address</h2>
+    : `<section class="Card"><h2>Where your apps live</h2>
 <p class="Now">Your apps live at <b>${esc(y.slug)}.yaks.app</b>. It's yours to
 change while nothing is built there.</p>
 <form class="Addr" method="post" action="/connect">
-<span class="At"><input name="space" maxlength="63" autocomplete="off" spellcheck="false" aria-label="Your address" value="${
+<span class="At"><input name="space" maxlength="63" autocomplete="off" spellcheck="false" aria-label="The name your apps live at" value="${
       esc(y.said ?? y.slug)
     }"><span>.yaks.app</span></span>
 <button type="submit">Save</button>
@@ -299,16 +299,15 @@ if (f) f.addEventListener('submit', async (e) => {
 export let connect = (yours: Yours | null, status = 200) =>
   shell(
     'Connect your assistant',
-    'One address, given once to the assistant you already talk to. Then just ' +
-      'ask it for what you want.',
+    'Give Claude or ChatGPT this link, once. Then ask it for what you want.',
     status,
     `<p class="Url"><code>${MCP}</code></p>
 ${yours ? mine(yours) : ''}${doors}
 <p class="Note">Menus move. If yours doesn't look like this, search its
-settings for "connector" or "MCP" — the address is the same wherever it
+settings for "connector" or "MCP" — the link is the same wherever it
 goes.</p>
-<p class="Note">Wondering what to ask it for, or where your things live?
-<a href="https://yaks.app/help">Help</a> answers the questions people arrive
-with.</p>
+<p class="Note">New here? <a href="https://yaks.app/help">Help</a> answers the
+questions people ask most: what you can make, where your apps live, and who
+can see them.</p>
 ${home}${yours ? inline : ''}`,
   )
