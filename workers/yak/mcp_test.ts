@@ -38,19 +38,22 @@ slow(
     try {
       let jeff = crypto.randomUUID()
       let agent = connector(k, await signedIn(k, jeff))
-      // Nobody is answered — and the refusal says so in a sentence, with
-      // where signing in happens, like every other door (C-32607 item 1).
+      // Nobody is answered anything of the person's — and the refusal says
+      // so in a sentence, with where signing in happens, like every other
+      // door (C-32607 item 1). What nobody IS answered is the pre-auth
+      // surface, held in its own test below (T-33030).
       let shut = await k.at('yaks.app', '/mcp', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: '{"jsonrpc":"2.0","id":1,"method":"initialize"}',
+        body: '{"jsonrpc":"2.0","id":1,"method":"tools/call",' +
+          '"params":{"name":"app_list"}}',
       })
       assertEquals(shut.status, 401)
       let refusal = (await shut.json()).error
       assertEquals(refusal.code, 'unauthorized')
       assertStringIncludes(refusal.message, 'sign in at https://yaks.app')
       assertEquals(refusal.signIn, 'https://yaks.app/login')
-      await assertRejects(() => connector(k).call('initialize'), Error, '401')
+      await assertRejects(() => connector(k).call('prompts/list'), Error, '401')
       let init = await agent.call('initialize', {
         protocolVersion: '2025-03-26',
         capabilities: {},
@@ -84,6 +87,8 @@ slow(
         'graph_query',
         'search',
         'feedback',
+        // The one anybody may call, signed in or not (preauth.ts, T-33030).
+        'about',
       ])
       assert(tools.every((t: { inputSchema: unknown }) => t.inputSchema))
 
@@ -995,6 +1000,210 @@ slow(
     }
   },
 )
+
+// Nobody has signed in, and the door still says what this place is (T-33030).
+// Owner, 2026-09-03, setting up the ChatGPT connector: "i selected 'mixed
+// auth', because i think we offer some tools if you haven't authed yet? or at
+// least we should."
+//
+// Two halves, and the second is the one that would hurt to get wrong. The
+// public surface answers — what this platform is, and the guide, which the
+// web already hands anybody at those very addresses. Everything else answers
+// exactly what it answered before: the 401 carrying the `WWW-Authenticate`
+// challenge, which is how an MCP client discovers our authorization server.
+// Break that header while making things public and no connector can sign in
+// at all.
+slow('the door before anyone signs in', async () => {
+  let k = await kernel()
+  try {
+    let anon = connector(k)
+    // Raw, so a refusal can be read as a refusal: `connector` throws on one.
+    let post = (method: string, params: unknown = {}) =>
+      k.at('yaks.app', '/mcp', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+      })
+
+    let init = await anon.call('initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'probe', version: '0' },
+    })
+    assertEquals(init.protocolVersion, '2025-03-26')
+    assertEquals(init.serverInfo.name, 'yaks.app')
+    assertEquals(init.capabilities.tools.listChanged, true)
+    assertEquals(init.capabilities.resources.listChanged, true)
+    // Not prompts, which are a person's own doors, and not logging, which is
+    // a break in somebody's app: a capability this door would refuse is worse
+    // than one it never claimed.
+    assertEquals(init.capabilities.prompts, undefined)
+    assertEquals(init.capabilities.logging, undefined)
+    // What it says is the orientation, not the recipe — nobody who cannot
+    // call app_new is told to call it — and it names where signing in is.
+    assertStringIncludes(init.instructions, 'yourname.yaks.app')
+    assertStringIncludes(init.instructions, 'https://yaks.app/guide.md')
+    assertEquals(init.instructions.includes('app_new'), false)
+    assertEquals(await anon.call('ping'), {})
+
+    // One tool, and it is the one that reads nothing.
+    let open = ((await anon.call('tools/list')).tools as { name: string }[])
+      .map((t) => t.name)
+    assertEquals(open, ['about'])
+    let said = await anon.tool('about')
+    for (
+      let word of [
+        'yourname.yaks.app/<app>/',
+        'index.html',
+        'https://yaks.app',
+        'https://yaks.app/guide.md',
+      ]
+    ) assertStringIncludes(said, word)
+    // And nothing here sells anything: yaks.app is declared to the plugin
+    // directories as an app that links to no subscription or purchase, and
+    // this text is the part of it a stranger reads.
+    assertEquals(/subscription|upgrade|pricing|billing|\$\d/i.test(said), false)
+
+    // The guide, and only the guide.
+    let pages = (await anon.call('resources/list')).resources as {
+      uri: string
+      mimeType: string
+    }[]
+    assertEquals(pages.map((r) => r.uri), [
+      GUIDE,
+      ...PAGES.map((p) => uriOf(p.slug)),
+    ])
+    let read = async (uri: string) =>
+      (await anon.call('resources/read', { uri })).contents[0]
+    let map = await read(GUIDE)
+    assertEquals(map.mimeType, 'text/markdown')
+    assertStringIncludes(map.text, '# ')
+    assertStringIncludes((await read(uriOf('querying'))).text, '# ')
+    // Which is the same bytes the web already hands anybody at that address:
+    // this door exposes nothing new, it saves an agent a browser.
+    let plain = await k.at('yaks.app', '/guide.md')
+    assertEquals(plain.status, 200)
+    assertEquals(await plain.text(), map.text)
+
+    // A notification is answered the transport's way, with no body to sign
+    // in for.
+    let noted = await k.at('yaks.app', '/mcp', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{"jsonrpc":"2.0","method":"notifications/initialized"}',
+    })
+    assertEquals(noted.status, 202)
+    await noted.body?.cancel()
+
+    // Now a person, an app, and a page of that app's own — so the refusals
+    // below are refusals of things that exist.
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
+      .exec(await agent.tool('app_new', { slug: 'runs', title: 'Run club' }))![
+        1
+      ]
+    await agent.tool('app_files', {
+      space,
+      app: 'runs',
+      files: [
+        { path: 'vocab.json', content: '{"jog":{"miles":"number"}}' },
+        {
+          path: 'tools.json',
+          content: JSON.stringify({
+            leaderboard: {
+              description: 'Every run so far',
+              input: {},
+              query: '.jog!',
+              view: 'leaderboard.html',
+            },
+          }),
+        },
+        { path: 'leaderboard.html', content: '<!doctype html><ol id=board>' },
+      ],
+    })
+    await agent.tool('app_deploy', { space, app: 'runs' })
+    let view = `ui://${space}/runs/leaderboard.html`
+    assertStringIncludes(
+      (await agent.call('resources/read', { uri: view })).contents[0].text,
+      '<base href=',
+    )
+
+    // THE thing that must not have moved: every protected method answers the
+    // 401 it always answered, carrying the challenge that names our
+    // authorization server. A client reads this header to find the OAuth
+    // door; without it, making anything public would have cost everybody the
+    // ability to sign in.
+    let challenge = ''
+    let shut = async (method: string, params: unknown = {}) => {
+      let r = await post(method, params)
+      let body = await r.json()
+      let said = r.headers.get('www-authenticate') ?? ''
+      assertEquals(r.status, 401, `${method} ${JSON.stringify(params)}`)
+      // The challenge names where the metadata that names the authorization
+      // server is — and every refusal says the same one, so no method has
+      // grown a different way of being shut.
+      assertMatch(
+        said,
+        /^Bearer realm="OAuth", resource_metadata="http.*\/\.well-known\/oauth-protected-resource\/mcp"$/,
+      )
+      challenge = challenge || said
+      assertEquals(said, challenge, method)
+      assertEquals(body.error.code, 'unauthorized')
+      assertEquals(body.error.signIn, 'https://yaks.app/login')
+    }
+    // A tool of the platform's, one of the app's own, and one nobody wrote:
+    // one answer for all three, so nothing here says which apps exist.
+    await shut('tools/call', { name: 'graph_query', arguments: { query: '' } })
+    await shut('tools/call', { name: 'app_list' })
+    await shut('tools/call', { name: 'runs__leaderboard' })
+    await shut('tools/call', { name: 'nope' })
+    await shut('prompts/list')
+    await shut('prompts/get', { name: PROMPTS[0].name })
+    await shut('logging/setLevel', { level: 'error' })
+    // The platform's own views, the app's own page, and an asset that is not
+    // the guide — the public read is a named list, not a way to fetch the
+    // site.
+    await shut('resources/read', { uri: APPS })
+    await shut('resources/read', { uri: ERRORS })
+    await shut('resources/read', { uri: view })
+    await shut('resources/read', { uri: 'https://yaks.app/index.html' })
+    await shut('resources/read', { uri: 'https://yaks.app/guide/nope.md' })
+    await shut('nonsense/method')
+    // A body nobody could read: a refusal every caller gets, and still the
+    // challenge for one who has not signed in.
+    let bad = await k.at('yaks.app', '/mcp', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: 'not json',
+    })
+    assertEquals(bad.status, 401)
+    await bad.body?.cancel()
+    // And the stream, which is a person's own: there is no public one.
+    let stream = await k.at('yaks.app', '/mcp', {
+      headers: { accept: 'text/event-stream' },
+    })
+    assertEquals(stream.status, 401)
+    assertEquals(stream.headers.get('www-authenticate'), challenge)
+    await stream.body?.cancel()
+
+    // Signing in adds; it never swaps one surface for another. Every public
+    // tool is in the full list, saying the same words, and every public
+    // resource is still listed.
+    let full = ((await agent.call('tools/list')).tools as { name: string }[])
+      .map((t) => t.name)
+    assert(open.every((n) => full.includes(n)), 'the public list is a subset')
+    assert(full.length > open.length, 'signing in has to be worth something')
+    assertEquals(await agent.tool('about'), said)
+    let mine = ((await agent.call('resources/list')).resources as {
+      uri: string
+    }[]).map((r) => r.uri)
+    assert(pages.every((p) => mine.includes(p.uri)), 'the guide is still hers')
+    assert(mine.includes(APPS) && mine.includes(view))
+  } finally {
+    await k.stop()
+  }
+})
 
 // An app's OWN tools (T-32685): a tools.json beside vocab.json, planted by
 // the same deploy, called at the same door as `<app>__<tool>` — and doing

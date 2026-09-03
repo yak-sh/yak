@@ -29,13 +29,19 @@
 // reading a request straight off the internet, where the header is only ever
 // a client's claim about itself. A 401 carries identity's `WWW-Authenticate`
 // challenge, the line an MCP client follows into the OAuth flow.
+//
+// Nobody at all is answered too, by preauth.ts (T-33030): what this platform
+// is, and the guide, which the web already serves to anybody who asks for it.
+// That surface is handed a method and its params and no binding but the
+// static assets — no person, no `Ctx`, nothing to read anybody's data with —
+// and everything it does not answer meets the same challenge as ever.
 import { VERSION } from '../../src/version.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { unauthorized, withAuth } from './identity.ts'
 import { callDeclared, listDeclared, listViews, readView } from './declared.ts'
-import { PAGES, uriOf, WHOLE } from './guide.ts'
+import { answer, asset, type Doc, DOCS, spoken } from './preauth.ts'
 import { missing, promptOf, PROMPTS } from './prompts.ts'
 import {
   APPS_VIEW,
@@ -47,15 +53,6 @@ import {
 } from './tools.ts'
 import { listen } from './stream.ts'
 import { ceiling, serve, unseenBlock } from './unseen.ts'
-
-// The versions this door speaks, newest first. A client asks for one in
-// initialize; we answer with the same when we know it, else with ours, and
-// the client decides whether it can live with that — echoing whatever was
-// asked would claim a protocol we have never seen.
-let PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
-
-let spoken = (asked: unknown) =>
-  typeof asked == 'string' && PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0]
 
 // What a model reads before it has read anything else here (T-32481). It is
 // the whole recipe on purpose — the address, the four steps, and the store in
@@ -157,47 +154,11 @@ refused for no reason you could find, a guide that taught the wrong thing,
 something missing you cannot work around — say so with feedback: their words
 and what you tried, once, and it reaches the people who run yaks.app by mail.`
 
-// What a resource of this door's own is: a listing entry, plus the address
-// its bytes come off the assets at (`page`), which for everything here is the
-// address in `uri` — a client may read it through this door or simply follow
-// the link.
-type Doc = {
-  uri: string
-  name: string
-  title: string
-  description: string
-  mimeType: string
-  page: string
-}
-
-// The resources this door offers. The guide is how an app is built here, and
-// how its pages save and list through the client the kernel serves them
-// (public/guide.md): the map, covering pretty much everything, briefly.
-let GUIDE: Doc = {
-  uri: WHOLE,
-  name: 'building-an-app',
-  title: 'Building an app on yaks.app',
-  description:
-    'The map: what an app is, how its pages read and write its store ' +
-    'through ./api/client.js, and a passage on every feature there is. ' +
-    'Read it first; read a page below for the depth on one of them.',
-  mimeType: 'text/markdown',
-  page: WHOLE,
-}
-
-// And the pages that go deep, one per subject (guide.ts, T-32982). They are
-// ordinary files under public/, so the address in the listing is the one the
-// assets answer, and a person can follow it out of a chat.
-let DEEP: Doc[] = PAGES.map((p) => ({
-  uri: uriOf(p.slug),
-  name: `guide-${p.slug}`,
-  title: p.title,
-  description: p.description,
-  mimeType: 'text/markdown',
-  page: uriOf(p.slug),
-}))
-
-// The other is an MCP App view (T-32492, spec 2026-01-26 §Resources): a
+// The views this door offers beside the guide, whose resources are
+// preauth.ts's — the guide is world-readable and served to anybody, and these
+// two are a signed-in person's own.
+//
+// The first is an MCP App view (T-32492, spec 2026-01-26 §Resources): a
 // `ui://` page the host renders in a sandboxed iframe and hands the tool's
 // answer to over postMessage. app_list links to it by `_meta.ui.resourceUri`
 // below; its bytes are public/apps.html, served from the same assets. The
@@ -211,7 +172,7 @@ let APPS: Doc = {
   page: 'https://yaks.app/apps.html',
 }
 
-// And the second view (T-32601): what is still broken, one card per break,
+// And the second (T-32601): what is still broken, one card per break,
 // each with the button that archives it — the view calls `app_errors` back
 // through the host to do it, which is why that tool says `app` in its
 // visibility below.
@@ -225,18 +186,10 @@ let ERRORS: Doc = {
   page: 'https://yaks.app/errors.html',
 }
 
-let RESOURCES: Doc[] = [GUIDE, ...DEEP, APPS, ERRORS]
-
-// One resource's bytes, from the assets the apex serves. A redirect is
-// followed once: in production the assets binding drops a page's `.html` and
-// answers 307, and a resource that came back as an empty redirect would be a
-// view that renders nothing.
-let asset = async (ctx: Ctx, url: string) => {
-  let page = await ctx.env.ASSETS.fetch(new Request(url))
-  let to = page.status > 299 && page.status < 400 &&
-    page.headers.get('location')
-  return to ? ctx.env.ASSETS.fetch(new Request(new URL(to, url).href)) : page
-}
+// A signed-in caller reads all of them, the public ones included: the whole
+// list opens with what anybody may read, so the public surface is a subset of
+// this one rather than a second surface beside it.
+let RESOURCES: Doc[] = [...DOCS, APPS, ERRORS]
 
 type Rpc = {
   jsonrpc: '2.0'
@@ -422,7 +375,7 @@ let handle = async (ctx: Ctx, rpc: Rpc) => {
   if (rpc.method == 'resources/read') {
     let want = RESOURCES.find((r) => r.uri == params.uri)
     if (want) {
-      let page = await asset(ctx, want.page)
+      let page = await asset(ctx.env, want.page)
       return result(rpc.id, {
         contents: [{
           uri: want.uri,
@@ -451,25 +404,51 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (req.method != 'POST' && req.method != 'GET') {
     return json(405, { error: { code: 'method_not_allowed' } })
   }
+  // Who is asking, if anybody. An anonymous request costs nothing to find
+  // out — no header to unwrap, no cookie to verify (identity.ts) — and what
+  // it gets is the pre-auth surface below rather than the door in its face.
   let auth = await withAuth(env, req)
-  if (!auth) return unauthorized(req)
   // The GET is the session's STREAM (stream.ts): a client holds it open to
   // hear what the server says between its own calls, which today is one
   // thing — that its tool list moved, because an app of theirs deployed new
   // tools (T-32686). It lives in a Durable Object of the person's own, so a
   // deploy in one request reaches the stream another request opened, and a
   // connection that dropped resumes from its `Last-Event-ID` (T-32734).
-  // Everything else is still one POST in, one JSON out.
-  if (req.method == 'GET') return listen(env, auth.person, req)
+  // Everything else is still one POST in, one JSON out. A stream is a
+  // person's own, so there is no public one.
+  if (req.method == 'GET') {
+    return auth ? listen(env, auth.person, req) : unauthorized(req)
+  }
+  // Before anyone has signed in this door answers exactly three ways: the
+  // public result, a 202 for a notification, and the challenge for everything
+  // else — a method it does not serve publicly, a tool or a page it will not
+  // hand over, and anything that was not a request at all. So a body that
+  // does not parse and a batch, which are refusals every caller gets, are
+  // still the 401 for an anonymous one.
   let body: unknown
   try {
     body = await req.json()
   } catch {
-    return rpcError(null, -32700, 'parse error')
+    return auth ? rpcError(null, -32700, 'parse error') : unauthorized(req)
   }
-  if (Array.isArray(body)) return json(400, { error: { code: 'no_batches' } })
+  if (Array.isArray(body)) {
+    return auth
+      ? json(400, { error: { code: 'no_batches' } })
+      : unauthorized(req)
+  }
   let rpc = body as Rpc
   if (rpc.id == null) return new Response(null, { status: 202 }) // a notification
+  // The pre-auth surface (preauth.ts): what this platform is, and the guide,
+  // which the web already serves to anybody. It is handed a method and its
+  // params — no person, no Ctx, and no binding but the static assets — so
+  // nothing it answers can have read anybody's data, and whatever it will not
+  // answer meets the challenge that names our authorization server.
+  if (!auth) {
+    let open = await answer(String(rpc.method), rpc.params ?? {}, {
+      ASSETS: env.ASSETS,
+    })
+    return open ? result(rpc.id, open) : unauthorized(req)
+  }
   let ctx: Ctx = {
     env,
     // Fresh, every read: a tool answers about what a tool just wrote, and the

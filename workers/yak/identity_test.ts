@@ -355,11 +355,17 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assertEquals(over.headers.get('location'), '/')
     await over.body?.cancel()
 
-    // Nobody gets the challenge that tells them where to sign in.
+    // Nobody gets the challenge that tells them where to sign in. The
+    // connector answers a stranger some things now (preauth.ts, T-33030), so
+    // this asks it for one of the person's own.
     for (
       let anon of [
         await k.at('yaks.app', '/oauth/me'),
-        await k.at('yaks.app', '/mcp', { method: 'POST', body: '{}' }),
+        await k.at('yaks.app', '/mcp', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: '{"jsonrpc":"2.0","id":1,"method":"prompts/list"}',
+        }),
       ]
     ) {
       assertEquals(anon.status, 401)

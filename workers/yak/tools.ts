@@ -72,6 +72,7 @@ import {
 } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { mail, REPLY_TO } from './mail.ts'
+import { NO_ARGS, PUBLIC } from './preauth.ts'
 import { SLUG } from './route.ts'
 import { type Reach, read, written } from './reach.ts'
 import { mayWrite, reads, titling, vouched, type Who } from './session.ts'
@@ -2292,4 +2293,15 @@ export let TOOLS: Tool[] = [
       }
     },
   },
+  // And the tools anybody may call, signed in or not (preauth.ts, T-33030):
+  // each says one fixed text and reads nothing, so the same words serve a
+  // stranger and a member. They are lifted here rather than listed only at
+  // the door, which is what makes the pre-auth list a SUBSET of this one
+  // instead of a second surface that could drift from it.
+  ...PUBLIC.map((t): Tool => ({
+    name: t.name,
+    description: t.description,
+    input: NO_ARGS,
+    run: () => Promise.resolve({ text: t.text }),
+  })),
 ]
