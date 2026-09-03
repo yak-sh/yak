@@ -276,9 +276,13 @@ export let mailed = (k: Kernel, to: string) =>
 // log, the cookie back — and the kernel mints their person row and their own
 // space. The FIRST sign-in on a fresh kernel owns the meta space, which is
 // how any directory row comes to be written at all (identity.ts).
+// A person, signed in: the code card asks what to call them the first time
+// (T-32654), so `name` is what a probe answers it — left out, the front of
+// their address is what the platform ends up calling them.
 export let signIn = async (
   k: Kernel,
   email = `probe-${crypto.randomUUID().slice(0, 8)}@yaks.app`,
+  name = 'Probe',
 ) => {
   let form = (path: string, fields: Record<string, string>) =>
     k.at('yaks.app', path, {
@@ -291,13 +295,13 @@ export let signIn = async (
   if (asked.status != 200) throw new Error(`login: ${await asked.text()}`)
   await asked.body?.cancel()
   let code = await mailed(k, email)
-  let inn = await form('/login/code', { email, code })
+  let inn = await form('/login/code', { email, code, name })
   if (inn.status != 303) throw new Error(`code: ${await inn.text()}`)
   await inn.body?.cancel()
   let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
   let claims = await verify(cookie.slice(COOKIE.length + 1), k.secret)
   if (!claims) throw new Error('the sign-in set no session')
-  return { person: claims.person, cookie, email, code }
+  return { person: claims.person, cookie, email, code, name }
 }
 
 // The directory, as an owner of `yak` reads and writes it: the MCP graph

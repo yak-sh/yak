@@ -309,12 +309,14 @@ let api = async (
   }
   let headers = vouched(who)
   // What to call this person, for the store to write beside their rows
-  // (store.ts `knows`): their address today, read from the directory at the
-  // WRITE doors only — a read never mints a person, and every page load
-  // would otherwise pay for a name nobody wrote down.
+  // (store.ts `knows`): the name they chose, else the front of their address
+  // (directory.ts `nameAt`), read at the WRITE doors only — a read never
+  // mints a person, and every page load would otherwise pay for a name
+  // nobody wrote down. Their address stays in the directory: an app's store
+  // learns a name and never an address book (T-32654).
   let named = async (): Promise<Record<string, string>> => {
     let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-    let title = who.person && await dir.emailAt(who.person)
+    let title = who.person && await dir.nameAt(who.person)
     return title ? { 'x-yak-title': title } : {}
   }
   // Signed out, the way through is to sign in (SAYS); signed in, it is the

@@ -34,6 +34,7 @@ h1 { font-size: 1.6rem; font-weight: 800; margin: 0 0 .5rem }
 p { color: var(--soft-ink); margin: 0 0 1rem }
 a { color: var(--meadow) }
 form { display: grid; gap: .75rem; margin: 1.5rem 0 1rem }
+form p { margin: 0; font-size: .95rem }
 input { font: inherit; text-align: center; padding: .7rem 1rem; border: 2px solid var(--line); border-radius: 1.25rem; background: var(--paper); color: var(--ink) }
 input:focus-visible { outline: 3px solid var(--meadow); outline-offset: 2px }
 button { font: inherit; font-weight: 700; padding: .7rem 1rem; border: 0; border-radius: 1.25rem; background: var(--meadow); color: var(--ground); cursor: pointer }
@@ -106,11 +107,20 @@ export let askEmail = (
 </form>${home}`,
   )
 
-// Ask for the code just mailed. `why` is the soft refusal, when there was one.
+// The one question the platform ever asks a person about themselves, and only
+// while nobody has answered it: what their apps should call them beside what
+// they write (T-32654). Optional — skipped, the front of their address does.
+let naming = `<p>And what should we call you? Skip it and we'll use the front
+of your address.</p>
+<input name="name" maxlength="60" autocomplete="name" placeholder="Dana" aria-label="What should we call you?">`
+
+// Ask for the code just mailed. `ask` adds the name question, for someone
+// nobody has named yet. `why` is the soft refusal, when there was one.
 export let askCode = (
   email: string,
   q: string | null,
   back: string | null,
+  ask = false,
   why?: string,
   status = 200,
 ) =>
@@ -121,6 +131,7 @@ export let askCode = (
     `<form method="post" action="/login/code">${carried(q, back)}
 <input type="hidden" name="email" value="${esc(email)}">
 <input class="Code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus autocomplete="one-time-code" aria-label="Your six-digit code">
+${ask ? naming : ''}
 <button type="submit">Sign in</button>
 </form>${home}`,
   )

@@ -41,11 +41,14 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assertEquals(card.status, 200)
     assertMatch(await card.text(), /Send me a code/)
 
-    // A code, asked for and mailed. The page says where it went.
+    // A code, asked for and mailed. The page says where it went — and, for
+    // an address nobody has ever named, asks what to call them (T-32654).
     let email = `probe-${crypto.randomUUID().slice(0, 8)}@yaks.app`
     let sent = await form(k, '/login', { email })
     assertEquals(sent.status, 200)
-    assertMatch(await sent.text(), new RegExp(email))
+    let asking = await sent.text()
+    assertMatch(asking, new RegExp(email))
+    assertMatch(asking, /what should we call you/i)
     let code = await mailed(k, email)
     assertMatch(code, /^\d{6}$/)
 
@@ -58,7 +61,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
 
     // The code itself: a session cookie for the whole platform. See Other,
     // because the form is not what to do next.
-    let inn = await form(k, '/login/code', { email, code })
+    let inn = await form(k, '/login/code', { email, code, name: 'Dana' })
     assertEquals(inn.status, 303)
     assertEquals(inn.headers.get('location'), '/')
     let set = inn.headers.get('set-cookie') ?? ''
@@ -76,6 +79,33 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     let [them] = await dir.query(
       `.person!&.email.address=${encodeURIComponent(email)}`,
     )
+    // And the name they gave is what they are called — asked once, so the
+    // next sign-in only wants the code (T-32654).
+    assertEquals((them.doc as { title: string }).title, 'Dana')
+    let again = await form(k, '/login', { email })
+    let second = await again.text()
+    assertMatch(second, new RegExp(email))
+    assertEquals(/what should we call you/i.test(second), false)
+
+    // Skipped, the front of the address stands in for a name — and an
+    // address is never one.
+    let quiet = `probe-${crypto.randomUUID().slice(0, 8)}@yaks.app`
+    await (await form(k, '/login', { email: quiet })).body?.cancel()
+    let quietly = await form(k, '/login/code', {
+      email: quiet,
+      code: await mailed(k, quiet),
+      name: '  ',
+    })
+    assertEquals(quietly.status, 303)
+    await quietly.body?.cancel()
+    let [nameless] = await dir.query(
+      `.person!&.email.address=${encodeURIComponent(quiet)}`,
+    )
+    assertEquals(
+      (nameless.doc as { title: string }).title,
+      quiet.split('@')[0],
+    )
+
     let [theirs] = await dir.query(`.space.slug=${email.split('@')[0]}`)
     assert(theirs, `a space named for ${email}`)
     let [seat] = await dir.query(

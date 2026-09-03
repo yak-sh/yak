@@ -79,7 +79,9 @@ deletes it.
 
 The store stamps every row with who saved it. Ask for the stamp with
 `.created!`, and read the names once — a person is a row here too, titled with
-what to call them:
+the name they chose when they signed in (or the front of their address, if they
+skipped the question). It is a name and never an address: an address stays with
+the platform, so a page can show a byline to anyone:
 
     let by = new Map((await query('.person!'))
       .map((p) => [p.entity.eid, p.doc.title]))

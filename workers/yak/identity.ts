@@ -5,7 +5,10 @@
 // A person proves who they are by receiving mail: `POST /login` mints a
 // six-digit code (signin.ts) and hands it to the mail seam (mail.ts);
 // `POST /login/code` spends it, finds or mints the person, and sets the
-// platform session cookie (src/token.ts). No password exists to lose. A person
+// platform session cookie (src/token.ts). No password exists to lose. The code
+// card asks one thing about them, once and only while nobody has answered it:
+// what their apps should call them (T-32654) — skipped, that is the front of
+// their address, and either way an address never leaves the directory. A person
 // sent here from a page they could not use arrives as `/login?return=<url>`:
 // both cards carry that address forward, and the spent code lands them back on
 // it when it is one of ours (T-32593).
@@ -44,7 +47,7 @@ import { bound, type Env } from './env.ts'
 import { mail } from './mail.ts'
 import { askAllow, askCode, askEmail, lost } from './pages.ts'
 import { hostOf, onZone, PLATFORM } from './route.ts'
-import { canon, mint, personOf, spend } from './signin.ts'
+import { canon, mint, nameAt, nameOf, personOf, spend } from './signin.ts'
 import { storeOf } from './store.ts'
 
 // A month of not signing in again. The cookie is the browser's; an agent's
@@ -242,8 +245,12 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     return askEmail(null, url.searchParams.get('return'))
   }
 
-  // An address, and a code on its way to it. The address is never checked
-  // against a person here: whether one exists is not a stranger's business.
+  // An address, and a code on its way to it. The one thing the platform reads
+  // about the address here is whether anyone has ever named it, because the
+  // card that follows asks what to call them while nobody has (T-32654); a
+  // stranger who wants that answer pays for it with a letter to the person
+  // they are guessing at. Nothing else — whether an address has apps, spaces
+  // or anything at all is still not a stranger's business.
   if (path == '/login' && req.method == 'POST') {
     let email = canon(field('email'))
     let back = field('return') || null
@@ -258,7 +265,12 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         'It lasts ten minutes. If you did not ask for it, nothing has ' +
         'happened and you can ignore this.',
     })
-    return askCode(email, field('q') || null, back)
+    return askCode(
+      email,
+      field('q') || null,
+      back,
+      !await nameAt(meta(env), email),
+    )
   }
 
   if (path == '/login/code' && req.method == 'POST') {
@@ -270,11 +282,20 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         email,
         q || null,
         back || null,
+        !await nameAt(meta(env), email),
         'That code has expired or was mistyped. Ask for a fresh one?',
         400,
       )
     }
-    return landed(req, env, await personOf(meta(env), email), q, back)
+    // What they said to call them, or the front of their address when they
+    // skipped the question (`nameOf`) — written once, so the next sign-in
+    // does not ask again. A name shaped like an address is no name.
+    let person = await personOf(
+      meta(env),
+      email,
+      nameOf(field('name').trim().slice(0, 60), email),
+    )
+    return landed(req, env, person, q, back)
   }
 
   // The consent page: the sign-in card wearing the client's name, or one

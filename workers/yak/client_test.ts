@@ -149,16 +149,19 @@ slow('the served client: a page saves, lists and watches', async () => {
     }
 
     // A byline: `created.by` is an eid, and the person it names is a row in
-    // this store with a NAME — their address today — so two people on a page
-    // can be told apart (C-32624 item 3). The guide's own two lines.
+    // this store with a NAME — the one they gave at sign-in — so two people
+    // on a page can be told apart (C-32624 item 3). The guide's own two lines.
     let [entry] = await store.query('.doc.title~=Fig&.created!')
     let people = await store.query('.person!')
     let by = new Map(people.map((p: Row) => [p.entity.eid, p.doc.title]))
-    assertEquals(by.get(entry.created.by), them.email)
-    // The email itself stays in the directory: an app's store learns a name,
-    // never an address book. And a person is not a row the page saved, so an
-    // ordinary listing leaves them out — `.person!` is how you ask.
+    assertEquals(by.get(entry.created.by), them.name)
+    // Their address stays in the directory: an app's store learns a name and
+    // never an address book, so a `public` app answering `.person!` to a
+    // stranger hands out no roster of addresses (T-32654). And a person is
+    // not a row the page saved, so an ordinary listing leaves them out —
+    // `.person!` is how you ask.
     assertEquals('email' in people[0], false)
+    assertEquals(JSON.stringify(people).includes('@'), false)
     assertEquals(
       (await store.query('.doc!')).some((r: Row) => r.doc.title == them.email),
       false,

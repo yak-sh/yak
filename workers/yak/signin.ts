@@ -127,23 +127,59 @@ export let spend = async (
   return false
 }
 
+type Person = { entity: { eid: string }; doc?: { title?: string } }
+
+let personAt = async (store: Door, email: string) =>
+  (await ask(
+    store,
+    `.person!&.email.address=${encodeURIComponent(canon(email))}`,
+  ))[0] as Person | undefined
+
+// An address is not a name. A person minted before anyone was asked wears
+// their address as `doc.title` (T-32627), so that title reads as no name at
+// all: the next sign-in asks for one, and an app's store never learns an
+// address (T-32654). Nothing has to be rewritten on deploy.
+export let chose = (title?: string | null) =>
+  title && !title.includes('@') ? title : null
+
+// What to call someone: the name they chose, else the front of their address
+// — `dana` from `dana@example.com`. This is the ONLY name that leaves the
+// directory.
+export let nameOf = (title: string | null | undefined, email: string) =>
+  chose(title) ?? canon(email).split('@')[0]
+
+// Whether anyone has ever named this address, which is what the code card
+// asks about when it asks (identity.ts).
+export let nameAt = async (store: Door, email: string) =>
+  chose((await personAt(store, email))?.doc?.title)
+
 // The person behind an address, minted on first sight. `email` is a facet any
 // entity may wear (the mail plugin's address book), so a person is `person` +
-// `email` + a `doc` titled by the address until they are given a name.
-export let personOf = async (store: Door, email: string) => {
+// `email` + a `doc` titled with what to call them, once someone says.
+//
+// `name` is that: what they typed at the sign-in card, or what an invitation
+// called them (tools.ts member_add). It is written only where there is no
+// name yet — an invitation never renames someone who has named themselves —
+// and a person nobody has named keeps no title at all, so the next sign-in
+// knows to ask.
+export let personOf = async (store: Door, email: string, name?: string) => {
   let at = canon(email)
-  let [row] = await ask(
-    store,
-    `.person!&.email.address=${encodeURIComponent(at)}`,
-  )
-  if (row) return (row.entity as { eid: string }).eid
+  let row = await personAt(store, at)
+  if (row) {
+    if (name && !chose(row.doc?.title)) {
+      await apply(store, {
+        entities: [{ entity: { eid: row.entity.eid }, doc: { title: name } }],
+      })
+    }
+    return row.entity.eid
+  }
   // An eid the batch mints is a `$alias`, and the reply says what it became:
   // a bundle names an EXISTING entity by eid, so a client cannot hand the
   // store a uuid it invented (D-23827).
   let out = await apply(store, {
     entities: [{
       entity: { eid: '$who' },
-      doc: { title: at },
+      ...(name ? { doc: { title: name } } : {}),
       person: {},
       email: { address: at },
     }],

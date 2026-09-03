@@ -5,7 +5,7 @@
 // age, a code dies of too many guesses, and a code minted for one address
 // never opens another.
 import { assert, assertEquals, assertFalse } from '@std/assert'
-import { mac, spend, TRIES } from './signin.ts'
+import { chose, mac, nameOf, personOf, spend, TRIES } from './signin.ts'
 import type { Door } from './store.ts'
 
 let row = (
@@ -20,7 +20,9 @@ let door = (rows: unknown[]) => {
   let at: Door = (path, init) => {
     if (path.startsWith('/query')) return Promise.resolve(Response.json(rows))
     wrote.push(JSON.parse(String(init?.body)))
-    return Promise.resolve(Response.json({ ok: true }))
+    // What a mint gets back: the eid the store gave the `$who` the bundle
+    // asked for (D-23827).
+    return Promise.resolve(Response.json({ ok: true, aliases: { $who: 'p1' } }))
   }
   return { at, wrote }
 }
@@ -80,4 +82,49 @@ Deno.test('no code at all is no sign-in', async () => {
   let d = door([])
   assertFalse(await spend(d.at, SECRET, ME, '123456'))
   assertEquals(d.wrote.length, 0)
+})
+
+// What a person is called. An address is never it: the platform's own older
+// rows are titled with one (T-32627), so such a title reads as no name — the
+// next sign-in asks, and an app's store is written the front of the address
+// meanwhile (T-32654).
+Deno.test('a name, never an address', () => {
+  assertEquals(nameOf('Dana', ME), 'Dana')
+  assertEquals(nameOf(null, ME), 'me')
+  assertEquals(nameOf('', 'Dana@Example.com'), 'dana')
+  assertEquals(nameOf(ME, ME), 'me')
+  assertEquals(chose(ME), null)
+  assertEquals(chose('Dana'), 'Dana')
+})
+
+let person = (title?: string) => ({
+  entity: { eid: 'p1' },
+  person: {},
+  ...(title ? { doc: { title } } : {}),
+})
+
+let titles = (wrote: Record<string, unknown>[]) =>
+  wrote.flatMap((b) =>
+    ((b as { entities?: { doc?: { title?: string } }[] }).entities ?? [])
+      .map((e) => e.doc?.title).filter(Boolean)
+  )
+
+Deno.test('a person nobody has named keeps no title', async () => {
+  let d = door([])
+  await personOf(d.at, ME)
+  assertEquals(titles(d.wrote), [])
+})
+
+Deno.test('an invitation names someone unnamed, and only them', async () => {
+  let fresh = door([])
+  await personOf(fresh.at, ME, 'Dana')
+  assertEquals(titles(fresh.wrote), ['Dana'])
+  // A row wearing the old address-as-title has no name yet, so it takes one.
+  let old = door([person(ME)])
+  await personOf(old.at, ME, 'Dana')
+  assertEquals(titles(old.wrote), ['Dana'])
+  // A name they chose is theirs; nobody else's invitation moves it.
+  let named = door([person('Dana')])
+  await personOf(named.at, ME, 'Someone else')
+  assertEquals(named.wrote.length, 0)
 })

@@ -42,7 +42,7 @@ import { listing } from './listing.ts'
 import { mail } from './mail.ts'
 import { SLUG } from './route.ts'
 import { mayWrite, vouched, type Who } from './session.ts'
-import { canon, personOf } from './signin.ts'
+import { canon, nameOf, personOf } from './signin.ts'
 import { storeOf } from './store.ts'
 import { archive, cards, line, openIn, serve } from './unseen.ts'
 
@@ -803,8 +803,11 @@ export let TOOLS: Tool[] = [
       'may also invite. The invitation is MAILED to them — who invited them, ' +
       'the link, and that signing in at it with that address is all it takes ' +
       '— so name the app they are being invited to and the letter points at ' +
-      'it instead of the space. There is nothing for them to install and no ' +
-      'account to make first. Only the space owner may invite. For an app ' +
+      'it instead of the space. Pass their name if you know it and their ' +
+      'apps will show it beside what they write, so nobody sees an address; ' +
+      'they can say for themselves at their first sign-in. There is nothing ' +
+      'for them to install and no account to make first. ' +
+      'Only the space owner may invite. For an app ' +
       'that everyone with the link should be able to act on without signing ' +
       "in at all, give it access 'open' instead (app_set).",
     input: {
@@ -815,6 +818,10 @@ export let TOOLS: Tool[] = [
         app: str(
           'the app they are being invited to — the letter and the answer ' +
             'point at it; leave it out for the space itself',
+        ),
+        name: str(
+          'what to call them — the name their apps show beside what they ' +
+            'write. Leave it out and the first sign-in asks them',
         ),
         role: {
           type: 'string',
@@ -843,7 +850,18 @@ export let TOOLS: Tool[] = [
       // The platform's row for that address, minted if it has never seen
       // one: the invitation is what makes the person, and their sign-in
       // later finds this same row by the same address (signin.ts personOf).
-      let person = await personOf(storeOf(ctx.env.STORE, META_STORE), email)
+      // What to call them, if the invitation said: it names them in the
+      // letter and stands as their name until they choose one themselves
+      // (signin.ts `personOf` never renames someone who has). Left out,
+      // their first sign-in asks (T-32654).
+      let name = args.name == null
+        ? undefined
+        : nameOf(text(args.name, 'name'), email)
+      let person = await personOf(
+        storeOf(ctx.env.STORE, META_STORE),
+        email,
+        name,
+      )
       let had = await ctx.dir.member(space, person)
       if (person == ctx.person && had) {
         throw new Error(`${email} is you, and you own ${space.slug}`)
@@ -860,11 +878,14 @@ export let TOOLS: Tool[] = [
       // whatever the mail does: a letter that cannot be sent is a link to
       // relay by hand, never a lost invitation.
       let what = app ? `${app.title} (${space.slug}/${app.slug})` : space.title
-      let by = await ctx.dir.emailAt(ctx.person)
+      // Who invited them, by name — an address is what the letter is sent
+      // to, never what a person is called (T-32654).
+      let by = await ctx.dir.nameAt(ctx.person)
       let sent = await mail(ctx.env)({
         to: email,
         subject: `${by ?? 'Someone'} invited you to ${what}`,
-        body: `${by ?? 'Someone'} invited you to ${what} on yaks.app:\n\n` +
+        body: (name ? `Hi ${name},\n\n` : '') +
+          `${by ?? 'Someone'} invited you to ${what} on yaks.app:\n\n` +
           `${link}\n\n` +
           `Sign in there with this address (${email}) and it is yours to ` +
           `${want == 'viewer' ? 'read' : 'use'}. There is nothing to ` +

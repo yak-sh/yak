@@ -260,7 +260,7 @@ slow('an app says who may read it and who may write it', async () => {
   try {
     // He signs in for real: the address is his, and the first sign-in on a
     // fresh kernel owns the meta space.
-    let { cookie, email } = await signIn(k)
+    let { cookie, email, name } = await signIn(k)
     let agent = connector(k, cookie)
     await agent.tool('space_new', { slug: 'club', title: 'Book club' })
     let born = (slug: string, access?: string) =>
@@ -343,6 +343,7 @@ slow('an app says who may read it and who may write it', async () => {
       space: 'club',
       email: ' Maya@Example.COM ',
       app: 'diary',
+      name: 'Maya',
     })
     assertStringIncludes(said, 'maya@example.com is an editor of club')
     // The answer says the letter went and repeats the link, so the person
@@ -354,10 +355,20 @@ slow('an app says who may read it and who may write it', async () => {
     // And the letter itself carries the same link, from the platform's own
     // sender, saying who invited them and what signing in takes.
     let invite = await letter(k, 'maya@example.com', 'invited you')
-    assertStringIncludes(invite.subject, email)
+    // Both people in it by NAME: the one who invited, and the one invited —
+    // the address is the envelope, never what anyone is called (T-32654).
+    assertStringIncludes(invite.subject, name)
+    assertEquals(invite.subject.includes(email), false)
+    assertStringIncludes(invite.body, 'Hi Maya,')
     assertStringIncludes(invite.body, 'https://club.yaks.app/diary/')
     assertStringIncludes(invite.body, 'maya@example.com')
     assertStringIncludes(invite.body, 'no account to make first')
+    // And the name the invitation gave is hers until she says otherwise, so
+    // an app she writes in names her (T-32654).
+    let [named] = await meta(k, cookie).query(
+      '.person!&.email.address=maya@example.com',
+    )
+    assertEquals((named.doc as { title: string }).title, 'Maya')
     // An app the space does not have is a refusal, not a link to nothing.
     await assertRejects(
       () =>
