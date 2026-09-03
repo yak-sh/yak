@@ -217,8 +217,8 @@ let sorry = () => {
         "font:600 1.05rem/1.6 'Nunito',system-ui,-apple-system,'Segoe UI'," +
         'Roboto,sans-serif;' +
         (dark()
-          ? 'background:#2a2320;color:#f1e6d8'
-          : 'background:#fdf5ee;color:#4a3a30')
+          ? 'background:#2b231f;color:#f1e6d8'
+          : 'background:#fdf7ee;color:#523828')
       ;(document.body || document.documentElement).append(box)
     } catch { /* a reporter that throws is worse than one that misses */ }
   })

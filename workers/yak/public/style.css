@@ -33,35 +33,22 @@
     color-scheme: light;
 
     /* The paints. Nothing below this block writes a colour down. */
-    --cream: #fffaf5; /* the lightest warm white */
-    --linen: #fdf5ee; /* warm ground, a peach lean */
+    --cream: #fffbf5; /* the lightest warm white */
+    --linen: #fdf7ee; /* warm ground, a gold lean */
     --oat: #f1e6d8; /* pale warm, for words on a dark ground */
-    --shell: #efdfd2; /* the hairline between things */
-    --taupe: #c2b2a3; /* oat, gone quiet */
-    --clay: #6f5d50; /* coffee, gone quiet */
-    --coffee: #4a3a30; /* warm brown, never black */
-    --bark: #4a3d37; /* the hairline, on a dark ground */
-    --cocoa: #352c28; /* cards and bubbles, on a dark ground */
-    --night: #2a2320; /* the dark ground itself */
+    --shell: #efe3d2; /* the hairline between things */
+    --taupe: #c9b19c; /* oat, gone quiet */
+    --clay: #785b47; /* coffee, gone quiet */
+    --coffee: #523828; /* warm brown, never black */
+    --bark: #4d3d34; /* the hairline, on a dark ground */
+    --cocoa: #372c26; /* cards and bubbles, on a dark ground */
+    --night: #2b231f; /* the dark ground itself */
     --meadow: #5c8a4c; /* the one accent */
     --moss: #a7c080; /* the accent, lit for the dark */
-    --blush: #f8dcc8; /* what you said */
-    --ember: #4d3a33; /* what you said, in the dark */
+    --blush: #f8e0c8; /* what you said */
+    --ember: #4e3b32; /* what you said, in the dark */
     --sky: #e5eef5; /* what it answered */
     --dusk: #34404a; /* what it answered, in the dark */
-
-    /* The yak's paints (yak.svg, and the home page's hero). */
-    --hide: #8b6a52;
-    --hide-lit: #a37f63;
-    --fringe: #5e4634;
-    --fringe-lit: #6b4f3c;
-    --muzzle: #a8846a;
-    --muzzle-lit: #b8957a;
-    --pupil: #3a2b22;
-    --pupil-deep: #2a1e17;
-    --horn: #e6d2b5; /* the same in both themes, so it needs no role */
-    --nose: #d99a8d;
-    --glint: #fff;
 
     /* The roles. Everything below uses these, never a paint. */
     --ground: var(--linen);
@@ -73,10 +60,6 @@
     --on-accent: var(--ground); /* words on an accent fill */
     --mine: var(--blush); /* the person's bubble */
     --theirs: var(--sky); /* the assistant's bubble */
-    --yak-fur: var(--hide);
-    --yak-fringe: var(--fringe);
-    --yak-face: var(--muzzle);
-    --yak-eye: var(--pupil);
 
     /* Type. */
     --font: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -109,10 +92,6 @@
       --accent: var(--moss);
       --mine: var(--ember);
       --theirs: var(--dusk);
-      --yak-fur: var(--hide-lit);
-      --yak-fringe: var(--fringe-lit);
-      --yak-face: var(--muzzle-lit);
-      --yak-eye: var(--pupil-deep);
     }
   }
 
@@ -126,10 +105,6 @@
     --accent: var(--moss);
     --mine: var(--ember);
     --theirs: var(--dusk);
-    --yak-fur: var(--hide-lit);
-    --yak-fringe: var(--fringe-lit);
-    --yak-face: var(--muzzle-lit);
-    --yak-eye: var(--pupil-deep);
   }
 }
 
