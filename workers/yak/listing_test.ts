@@ -2,7 +2,7 @@
 // tools' graph_query and the page's `/api/query` used to answer the same
 // filter line differently (C-32574 item 5).
 import { assertEquals } from '@std/assert'
-import { listing } from './listing.ts'
+import { asking, listing } from './listing.ts'
 
 let rows = (body: string) => JSON.parse(body) as Record<string, unknown>[]
 
@@ -47,6 +47,18 @@ Deno.test("the kernel's own rows are not the person's", () => {
     'doc',
     'entity',
   ])
+})
+
+// A page's own ask carries the screen, so a `.count!` counts what the list
+// beside it lists — a person the store minted wears a `doc` title now, and
+// would otherwise be one more recipe (T-32627).
+Deno.test("the platform's rows are left out of the question too", () => {
+  assertEquals(asking('?.doc!'), '?.doc!&.exception=&.error=&.person=')
+  // Naming one asks for it, and an address asks for its row whatever it is.
+  assertEquals(asking('?.person!'), '?.person!&.exception=&.error=')
+  assertEquals(asking('?id=abc'), '?id=abc')
+  // An empty ask selects nothing; a screen would not change that.
+  assertEquals(asking('?'), '?')
 })
 
 Deno.test('what is not a row listing passes through as it came', () => {

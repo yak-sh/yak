@@ -28,7 +28,7 @@ import {
 } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { listing } from './listing.ts'
+import { asking, listing } from './listing.ts'
 import { nothingHere } from './pages.ts'
 import { hostOf, PLATFORM, route } from './route.ts'
 import { mayWrite, reads, vouched, type Who, whoIs, writes } from './session.ts'
@@ -299,6 +299,15 @@ let api = async (
     return new Response(null, { status: 204 })
   }
   let headers = vouched(who)
+  // What to call this person, for the store to write beside their rows
+  // (store.ts `knows`): their address today, read from the directory at the
+  // WRITE doors only — a read never mints a person, and every page load
+  // would otherwise pay for a name nobody wrote down.
+  let named = async (): Promise<Record<string, string>> => {
+    let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+    let title = who.person && await dir.emailAt(who.person)
+    return title ? { 'x-yak-title': title } : {}
+  }
   // Signed out, the way through is to sign in (SAYS); signed in, it is the
   // owner's to grant, so the sentence says so.
   let refused = (what = 'not_a_writer') =>
@@ -316,7 +325,9 @@ let api = async (
   }
   if (path == '/query') {
     if (!mayRead) return refused('not_a_reader')
-    let asked = new URL(req.url).search
+    // The ask carries the listing's own screen (listing.ts `asking`), so what
+    // a count counts is what a list lists.
+    let asked = asking(new URL(req.url).search)
     let r = await store(`/query${asked}`, {}, headers)
     if (!r.ok) return r
     // The same rule the person's agent reads a listing by (listing.ts): one
@@ -337,13 +348,16 @@ let api = async (
     if (!mayRead) return refused('not_a_reader')
     return store('/ws', req, {
       ...headers,
-      ...(mayPost ? { 'x-yak-write': '1' } : {}),
+      ...(mayPost ? { 'x-yak-write': '1', ...(await named()) } : {}),
     })
   }
   if (path == '/apply') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!mayPost) return refused()
-    return store('/apply', { method: 'POST', body: await req.text() }, headers)
+    return store('/apply', { method: 'POST', body: await req.text() }, {
+      ...headers,
+      ...(await named()),
+    })
   }
   if (path.startsWith('/files/')) {
     if (req.method != 'PUT') return json(405, 'method_not_allowed')

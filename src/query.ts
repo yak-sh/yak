@@ -352,7 +352,19 @@ let sessionTwin = (owners: string[]) =>
 // point yields bare `.from` to mail's sender; acceptance criteria yield bare
 // `.body` to the shipped doc-body filter; an edge's endpoints (D-23820) yield
 // `.from` and `.to` the same way — `.edge.from=X` is the reverse-index read.
-let bareShy = new Set(['fork.from', 'accept.body', 'edge.from', 'edge.to'])
+// A membership's `person` yields bare `.person` to the person COMPONENT: a
+// presence test already routes there (`.person!` IS a person), so the column
+// owning the absent half made one bare word name two things — and an app's
+// page, which asks for people with `.person!` and for everything else with
+// `.person=`, could spell only half of that (T-32627). `.member.person=`
+// still reads the membership.
+let bareShy = new Set([
+  'fork.from',
+  'accept.body',
+  'edge.from',
+  'edge.to',
+  'member.person',
+])
 
 // These associations already had one bare filter across several suffixed
 // columns. Keep that reading after the columns take their canonical names;

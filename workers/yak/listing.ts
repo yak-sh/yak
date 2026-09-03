@@ -28,7 +28,28 @@ export let STAMPS = ['created', 'updated', 'notified', 'opened', 'quarantined']
 // list of their own rows (C-32607 item 4).
 export let KERNEL = ['exception', 'error']
 
+// A PERSON is the platform's row too — a store mints one for whoever writes to
+// it, so `created.by` has a name to resolve (store.ts `knows`) — but only in an
+// APP's store: the directory's own graph is made of people, and the agent tier
+// reads that through the same listing. So a person is screened out of the
+// QUESTION, which only a page's doors ask, and never out of an answer.
+export let PLATFORM = [...KERNEL, 'person']
+
 export type Row = Record<string, unknown>
+
+// The same rule, asked instead of answered: the platform's own rows left out
+// of the QUESTION. A listing can only screen an answer's rows, so a `.count!`
+// over one filter still counted what the list beside it did not show — a
+// person row wears a `doc` title now, so it matches `.doc!` (T-32627).
+// Screening the ask is what makes an aggregate, a search and a list agree, and
+// every door that serves a PAGE asks this way. Naming one asks for it back,
+// and an address asks for its row whatever kind of row it is.
+export let asking = (line: string) => {
+  if (!line.replace(/^[?&]+/, '') || line.includes('id=')) return line
+  let screen = PLATFORM.filter((k) => !line.includes(`.${k}`))
+    .map((k) => `.${k}=`)
+  return screen.length ? `${line}&${screen.join('&')}` : line
+}
 
 // The rule itself, over rows: what this filter line's answer carries.
 export let listed = (rows: Row[], asked: string): Row[] => {

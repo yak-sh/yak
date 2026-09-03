@@ -58,6 +58,7 @@ import {
 import ops from '../../src/store/schema.json' with { type: 'json' }
 import { type Frame, type Subserve, subserve } from '../../src/subserve.ts'
 import type { Change } from '../../src/types.ts'
+import { asking } from './listing.ts'
 import { answered, query } from './query.ts'
 
 // The slice of the Durable Object runtime this Worker touches, structurally,
@@ -91,6 +92,7 @@ export type Namespace = {
 type Held = {
   write: boolean
   via: string | null
+  title?: string | null
   join?: Record<string, unknown>
   subs: Record<string, Record<string, unknown>>
 }
@@ -104,6 +106,12 @@ let why = (e: unknown) => e instanceof Error ? e.message : String(e)
 // object except from the kernel, which builds its requests from scratch.
 let writerOf = (req: Request) =>
   req.headers.get('x-via') ?? req.headers.get('x-yak-person')
+
+// What to call that writer, in this store. It rides only beside the kernel's
+// word about a person: an instrument that named itself (`x-via`) is not a
+// person and never wears a person's name.
+let titleOf = (req: Request) =>
+  req.headers.get('x-via') ? null : req.headers.get('x-yak-title')
 
 let methodNotAllowed = (allow: string) =>
   Response.json({ error: { code: 'method_not_allowed' } }, {
@@ -259,17 +267,43 @@ export class Store {
   // they write, and every row they save after that says who saved it
   // (T-32534). Its own write is not cast: a person is not app data, and no
   // page subscribes to one.
-  knows(who: string | null) {
-    if (who && !locate(this.db, who)) {
-      mutate(this.db, [{ eid: who, name: 'person', comp: {} }], fed(), who)
+  //
+  // And they are minted with a NAME: an eid signs nothing a reader can tell
+  // apart, so two people on one page were one uuid and another (C-32624 item
+  // 3). The kernel sends what to call them — their address today, a display
+  // name when the platform learns one — and the row wears it as `doc.title`,
+  // which a page reads like any other title. Their `email` stays in the
+  // directory: an app's store learns a name, never an address book. The title
+  // is written on every write it rides with, so a row minted before the
+  // platform knew any name heals on the next one and a changed address
+  // follows; a write that changes nothing IS nothing (db.ts settled), so
+  // saying the same name again costs a read.
+  knows(who: string | null, title: string | null) {
+    if (!who) return who
+    let fresh = !locate(this.db, who)
+    if (fresh || title) {
+      mutate(
+        this.db,
+        [
+          ...(fresh ? [{ eid: who, name: 'person', comp: {} }] : []),
+          ...(title ? [{ eid: who, name: 'doc', comp: { title } }] : []),
+        ],
+        fed(),
+        who,
+      )
     }
     return who
   }
 
   // One write: applied, then broadcast. The doors differ, the commit does not.
-  commit(mutation: Mutation, via: string | null, kernel: boolean) {
+  commit(
+    mutation: Mutation,
+    via: string | null,
+    title: string | null,
+    kernel: boolean,
+  ) {
     let out = mutationResult(
-      mutate(this.db, mutation, fed(), this.knows(via), kernel),
+      mutate(this.db, mutation, fed(), this.knows(via, title), kernel),
     )
     this.cast(out.changes)
     return out
@@ -284,7 +318,7 @@ export class Store {
       return ws.send(JSON.stringify({ error: 'not_a_writer', id }))
     }
     try {
-      this.commit(changes, held.via, false)
+      this.commit(changes, held.via, held.title ?? null, false)
       if (id) ws.send(JSON.stringify({ ack: id }))
     } catch (e) {
       ws.send(JSON.stringify({
@@ -308,6 +342,10 @@ export class Store {
       if (Array.isArray(f.apply)) {
         return this.wrote(ws, f.apply, f.id != null ? String(f.id) : undefined)
       }
+      // A page's subscription is a page's question, so it carries the same
+      // screen the /query door asks with (listing.ts `asking`): one filter
+      // answers one way, over a socket or over a fetch.
+      if (typeof f.q == 'string') f.q = asking(f.q)
       this.declared(ws, f)
       this.serving(ws).frame(f)
     } catch (e) {
@@ -409,6 +447,7 @@ export class Store {
         {
           write: req.headers.get('x-yak-write') == '1',
           via: writerOf(req),
+          title: titleOf(req),
           subs: {},
         } satisfies Held,
       )
@@ -440,6 +479,7 @@ export class Store {
         let out = this.commit(
           mutation,
           writerOf(req),
+          titleOf(req),
           req.headers.get('x-yak-kernel') == '1',
         )
         return Response.json(

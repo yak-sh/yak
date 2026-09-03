@@ -25,6 +25,7 @@ type Row = {
   kind: string
   entity: { eid: string }
   doc: { title: string; body?: string }
+  created: { by: string }
 }
 
 // An origin that stands in for `<space>.yaks.app`: every request goes to the
@@ -49,7 +50,8 @@ let browser = (k: Kernel, host: string, cookie?: string) => {
 slow('the served client: a page saves, lists and watches', async () => {
   let k = await kernel()
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-client-' })
-  let { cookie } = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+  let them = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+  let cookie = them.cookie
   let mine = browser(k, 'jeff.yaks.app', cookie)
   let anyone = browser(k, 'jeff.yaks.app')
   try {
@@ -145,6 +147,22 @@ slow('the served client: a page saves, lists and watches', async () => {
       stop()
       await wire.stop()
     }
+
+    // A byline: `created.by` is an eid, and the person it names is a row in
+    // this store with a NAME — their address today — so two people on a page
+    // can be told apart (C-32624 item 3). The guide's own two lines.
+    let [entry] = await store.query('.doc.title~=Fig&.created!')
+    let people = await store.query('.person!')
+    let by = new Map(people.map((p: Row) => [p.entity.eid, p.doc.title]))
+    assertEquals(by.get(entry.created.by), them.email)
+    // The email itself stays in the directory: an app's store learns a name,
+    // never an address book. And a person is not a row the page saved, so an
+    // ordinary listing leaves them out — `.person!` is how you ask.
+    assertEquals('email' in people[0], false)
+    assertEquals(
+      (await store.query('.doc!')).some((r: Row) => r.doc.title == them.email),
+      false,
+    )
 
     // A refusal arrives as the server's own sentence, not a status code and
     // not a machine word (C-32574 item 2) — and, when signing in is the way

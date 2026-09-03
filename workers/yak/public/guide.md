@@ -75,6 +75,20 @@ To change one, send its eid with just the fields you are changing; omitted
 fields are left alone, and `null` clears one. `{entity: {eid}, tombstone: {}}`
 deletes it.
 
+## Who wrote it
+
+The store stamps every row with who saved it. Ask for the stamp with
+`.created!`, and read the names once — a person is a row here too, titled with
+what to call them:
+
+    let by = new Map((await query('.person!'))
+      .map((p) => [p.entity.eid, p.doc.title]))
+
+    for (let e of await query('.doc!&.created!')) draw(e, by.get(e.created.by))
+
+People stay out of an ordinary listing — `query('.doc!')` answers what the page
+saved — so `.person!` is how you ask for them.
+
 ## The components an app has today
 
 The platform's own vocabulary, shared by every app:

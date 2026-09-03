@@ -291,6 +291,17 @@ Deno.test('accept.body is qualified while bare body keeps meaning doc.body', () 
   ])
 })
 
+// One bare word, one meaning: `.person!` always named the person component,
+// while `.person=` reached a membership's column — so an app's page could ask
+// for people and not for everything-but-people (T-32627).
+Deno.test('bare .person names the person, .member.person the membership', () => {
+  assertEquals(route('person'), { comp: 'person', prop: '' })
+  let absent = pred('.person=')!
+  assertEquals([absent.comp, absent.prop, absent.op], ['person', '', ''])
+  let mine = pred('.member.person=u1')!
+  assertEquals([mine.comp, mine.prop, mine.value], ['member', 'person', 'u1'])
+})
+
 // A page address is the ordinary value that carries the separator, and
 // an unquoted one used to become a url pred plus a stray term matching
 // nothing — an empty badge that looked like a truthful "nothing here".
