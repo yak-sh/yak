@@ -2556,12 +2556,31 @@ slow('an app is published by name, and the name is one app', async () => {
     })
     assertEquals((await agent.tool('app_published')).split('\n').length, 2)
 
+    // A deploy does NOT move the offer: publishing is the owner's act and
+    // pins what strangers install. Silence about that is what left the
+    // guestbook offering v1 while v2 served (T-33146), so the deploy that
+    // leaves the offer trailing says so at the door.
+    let bumped = await agent.tool('app_deploy', { space: mine, app: 'recipes' })
+    assertStringIncludes(bumped, 'offered as recipes is still v1')
+    assertStringIncludes(bumped, 'app_publish again to offer this one')
+    assertStringIncludes(await agent.tool('app_published'), '- recipes v1')
+    // And app_versions marks which one is on offer beside which is live.
+    let marks = await agent.tool('app_versions', {
+      space: mine,
+      app: 'recipes',
+    })
+    assertStringIncludes(marks, '- v2 (live)')
+    assertStringIncludes(marks, '- v1 (offered)')
+
     // Publishing the same app again is not a second offer: it moves the
     // version on the one that stands, and keeps the line already said.
-    await agent.tool('app_deploy', { space: mine, app: 'recipes' })
     assertStringIncludes(
       await agent.tool('app_publish', { space: mine, app: 'recipes' }),
       'published recipes v2',
+    )
+    assertStringIncludes(
+      await agent.tool('app_versions', { space: mine, app: 'recipes' }),
+      '- v2 (live) (offered)',
     )
     let again = await agent.tool('app_published')
     assertStringIncludes(again, '- recipes v2')

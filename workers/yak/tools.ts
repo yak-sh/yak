@@ -584,9 +584,20 @@ let released = async (
   try {
     closed = await healed(ctx.env, space, app, who, version)
   } catch { /* the files are out; an open break is the softer wrong */ }
+  // A published app's OFFER does not move with a deploy: publishing is the
+  // owner's deliberate act and pins the version strangers install, so an
+  // editor's deploy must not change what the whole platform gets. Silence
+  // was the bug (T-33146) — installers kept taking v1 while v2 served and
+  // nothing said so — and the fix is that the deploy door says it.
+  let offer = app.published
+  let trailing = offer && offer.version < version
+    ? `\noffered as ${offer.name} is still v${offer.version}, so anyone ` +
+      'installing it gets that code — app_publish again to offer this one'
+    : ''
   return {
     version,
     said: ran +
+      trailing +
       (closed
         ? `\nclosed ${closed} ${
           closed == 1 ? 'break' : 'breaks'
@@ -1052,7 +1063,10 @@ export let TOOLS: Tool[] = [
       "its own words. And a worker.js beside index.html becomes the app's " +
       'own server code: it answers every request that is not /api/ before ' +
       'the files do, and whatever it answers 404 falls through to them. ' +
-      'Every deploy is kept, so app_rollback can put this one back later.',
+      'Every deploy is kept, so app_rollback can put this one back later. ' +
+      'If the app is published, the offer does NOT move with it — what ' +
+      'strangers install stays the version you published until you ' +
+      'app_publish again, and this says so when it starts trailing.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP },
@@ -1101,7 +1115,9 @@ export let TOOLS: Tool[] = [
             let back = restored(all, i)
             return `- v${v.version}${
               v.version == app.version ? ' (live)' : ''
-            }${v.at ? ` ${v.at}` : ''} — ${back ? `restored v${back}, ` : ''}${
+            }${v.version == app.published?.version ? ' (offered)' : ''}${
+              v.at ? ` ${v.at}` : ''
+            } — ${back ? `restored v${back}, ` : ''}${
               whatChanged(all[i + 1]?.files ?? null, v.files)
             }`
           }),
