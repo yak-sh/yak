@@ -63,7 +63,9 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     // because the form is not what to do next.
     let inn = await form(k, '/login/code', { email, code, name: 'Dana' })
     assertEquals(inn.status, 303)
-    assertEquals(inn.headers.get('location'), '/')
+    // Sent from nowhere, a fresh account lands where attaching an assistant
+    // is taught, since that is what is left to do (T-32972).
+    assertEquals(inn.headers.get('location'), '/connect')
     let set = inn.headers.get('set-cookie') ?? ''
     assertMatch(set, /^yak_session=/)
     assertMatch(set, /Domain=yaks\.app/)
@@ -161,7 +163,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     }
     let notes = 'https://someone.yaks.app/notes/'
     assertEquals(await comeback(notes), notes)
-    assertEquals(await comeback('https://elsewhere.example/notes/'), '/')
+    assertEquals(await comeback('https://elsewhere.example/notes/'), '/connect')
 
     // Spent: the same code opens nothing twice.
     assertEquals((await form(k, '/login/code', { email, code })).status, 400)
@@ -342,6 +344,17 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assertEquals(rpc.status, 200)
     assert((await rpc.json()).result, 'the connector answered the bearer')
 
+    // And with an assistant of theirs let in, signing in stops teaching how:
+    // the connector page is for someone who has none (T-32972).
+    await (await form(k, '/login', { email })).body?.cancel()
+    let over = await form(k, '/login/code', {
+      email,
+      code: await mailed(k, email),
+    })
+    assertEquals(over.status, 303)
+    assertEquals(over.headers.get('location'), '/')
+    await over.body?.cancel()
+
     // Nobody gets the challenge that tells them where to sign in.
     for (
       let anon of [
@@ -360,103 +373,128 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
   }
 })
 
-// The other half of the first sign-in card: the address a person's apps will
-// live at, offered filled in with the one the platform would have derived
-// (T-32967). Its own kernel, because the first sign-in on one is the meta
-// space's owner, which is the door every directory read below goes through.
-slow('a person chooses the address their apps live at', async () => {
+// The page a fresh sign-in lands on: how to hand this platform to the
+// assistant a person already talks to (T-32972), and beside it the address
+// their apps will live at, theirs to change inline while nothing is built
+// there (T-32967). Its own kernel, because the first sign-in on one owns the
+// meta space, which is the door every directory read below goes through.
+slow('the connector page, and the address chosen on it', async () => {
   let k = await kernel()
   let uniq = () => crypto.randomUUID().slice(0, 8)
+  let post = (fields: Record<string, string>, cookie?: string) =>
+    form(k, '/connect', fields, cookie)
+  let asJson = async (fields: Record<string, string>, cookie: string) => {
+    let r = await k.at('yaks.app', '/connect', {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        accept: 'application/json',
+        cookie,
+      },
+      body: new URLSearchParams(fields).toString(),
+    })
+    return [r.status, await r.json()] as [number, Record<string, string>]
+  }
   try {
-    // The card offers it, filled with what `own()` would have minted anyway.
-    let email = `probe-${uniq()}@yaks.app`
-    let card = await (await form(k, '/login', { email })).text()
-    assertMatch(card, /Your apps will live here/)
-    assertMatch(
-      card,
-      new RegExp(`name="space"[^>]*value="${email.split('@')[0]}"`),
-    )
+    // Signed out, the instructions read: connecting is nobody's secret, and
+    // it is never gated on choosing an address.
+    let open = await k.at('yaks.app', '/connect')
+    assertEquals(open.status, 200)
+    let page = await open.text()
+    for (
+      let said of [
+        /https:\/\/yaks\.app\/mcp/,
+        /Add custom connector/,
+        /claude mcp add --transport http yaks/,
+        /Developer mode/,
+        /speaks MCP/,
+      ]
+    ) assertMatch(page, said)
+    assertEquals(/name="space"/.test(page), false)
 
-    // What they choose is what they get: the space is theirs, at their name.
-    let want = `dana-${uniq()}`
+    // A first sign-in lands here, since an assistant is all there is left to
+    // attach.
+    let email = `probe-${uniq()}@yaks.app`
+    await (await form(k, '/login', { email })).body?.cancel()
     let inn = await form(k, '/login/code', {
       email,
       code: await mailed(k, email),
       name: 'Dana',
-      space: want,
     })
     assertEquals(inn.status, 303)
+    assertEquals(inn.headers.get('location'), '/connect')
     await inn.body?.cancel()
     let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
     let dir = meta(k, cookie)
-    let [chosen] = await dir.query(`.space.slug=${want}`)
-    assert(chosen, `a space at ${want}`)
-    let [them] = await dir.query(
-      `.person!&.email.address=${encodeURIComponent(email)}`,
-    )
-    let [seat] = await dir.query(
-      `.member.space=${chosen.entity.eid}&.member.person=${them.entity.eid}`,
-    )
-    assertEquals((seat.member as { role: string }).role, 'owner')
-    // And nothing was minted at the address they did not take.
-    assertEquals(await dir.query(`.space.slug=${email.split('@')[0]}`), [])
 
-    // Asked once: the next sign-in only wants the code.
-    let second = await (await form(k, '/login', { email })).text()
-    assertEquals(/name="space"/.test(second), false)
+    // And the card says where they are, filled with the address signing in
+    // derived for them — theirs to keep by doing nothing at all.
+    let derived = email.split('@')[0]
+    let card =
+      await (await k.at('yaks.app', '/connect', { headers: { cookie } }))
+        .text()
+    assertMatch(card, new RegExp(`${derived}.yaks.app`))
+    assertMatch(card, new RegExp(`name="space"[^>]*value="${derived}"`))
 
-    // A taken address is refused on the card, in a sentence, with their name,
-    // their address and the code they typed still in it — and the code they
-    // were mailed still stands, so the next try is the same round trip.
-    let other = `probe-${uniq()}@yaks.app`
-    await (await form(k, '/login', { email: other })).body?.cancel()
-    let code = await mailed(k, other)
-    let no = await form(k, '/login/code', {
-      email: other,
-      code,
+    // Choosing one answers in place — the address, for the page to show —
+    // and the space they own wears it.
+    let want = `dana-${uniq()}`
+    assertEquals(await asJson({ space: want }, cookie), [
+      200,
+      { address: `${want}.yaks.app`, slug: want },
+    ])
+    let [theirs] = await dir.query(`.space.slug=${want}&.doc?`)
+    assert(theirs, `a space at ${want}`)
+    assertEquals((theirs.doc as { title: string }).title, want)
+    assertEquals(await dir.query(`.space.slug=${derived}`), [])
+
+    // Badly shaped, and taken: a sentence a person can act on, and nothing
+    // moves. Neither answer says a word about anybody's account.
+    let [bad, why] = await asJson({ space: 'Not An Address' }, cookie)
+    assertEquals(bad, 400)
+    assertMatch(why.error, /lowercase letters, numbers and dashes/)
+
+    let them = `probe-${uniq()}@yaks.app`
+    await (await form(k, '/login', { email: them })).body?.cancel()
+    let two = await form(k, '/login/code', {
+      email: them,
+      code: await mailed(k, them),
       name: 'Rex',
-      space: want,
     })
-    assertEquals(no.status, 400)
-    let refused = await no.text()
-    assertMatch(refused, new RegExp(`${want}.yaks.app is taken`))
-    assertMatch(refused, /value="Rex"/)
-    assertMatch(refused, new RegExp(`name="space"[^>]*value="${want}"`))
-    assertMatch(refused, new RegExp(`name="code"[^>]*value="${code}"`))
+    let theirCookie = (two.headers.get('set-cookie') ?? '').split(';')[0]
+    await two.body?.cancel()
+    let [no, taken] = await asJson({ space: want }, theirCookie)
+    assertEquals(no, 400)
+    assertMatch(taken.error, new RegExp(`${want}.yaks.app is taken`))
 
-    // A badly shaped one is refused the same way, and says what one is.
-    let bad = await form(k, '/login/code', {
-      email: other,
-      code,
-      name: 'Rex',
-      space: 'Not An Address',
-    })
-    assertEquals(bad.status, 400)
-    assertMatch(await bad.text(), /lowercase letters, numbers and dashes/)
+    // With no script, the same post answers with the page around it.
+    let plain = await post({ space: want }, theirCookie)
+    assertEquals(plain.status, 400)
+    let again = await plain.text()
+    assertMatch(again, new RegExp(`${want}.yaks.app is taken`))
+    assertMatch(again, new RegExp(`name="space"[^>]*value="${want}"`))
 
-    // So they pick another, on the same code, and it is theirs.
-    let mine = `rex-${uniq()}`
-    let took = await form(k, '/login/code', {
-      email: other,
-      code,
-      name: 'Rex',
-      space: mine,
-    })
-    assertEquals(took.status, 303)
-    await took.body?.cancel()
-    assert((await dir.query(`.space.slug=${mine}`))[0], `a space at ${mine}`)
+    // Once something is built there, the address stays put: moving an app's
+    // URL is a bigger job than this page does (T-32576).
+    let [mine] = await dir.query(`.space.slug=${want}`)
+    await dir.apply([
+      { doc: { title: 'box' }, app: { slug: 'box', space: mine.entity.eid } },
+    ])
+    let [fixed, stays] = await asJson({ space: `dana-${uniq()}` }, cookie)
+    assertEquals(fixed, 400)
+    assertMatch(stays.error, /stays put/)
+    let built = await (await k.at('yaks.app', '/connect', {
+      headers: { cookie },
+    })).text()
+    assertEquals(/name="space"/.test(built), false)
 
-    // Skipping it is what signing in always did: the front of the address.
-    let quiet = `probe-${uniq()}@yaks.app`
-    await (await form(k, '/login', { email: quiet })).body?.cancel()
-    let plain = await form(k, '/login/code', {
-      email: quiet,
-      code: await mailed(k, quiet),
-    })
-    assertEquals(plain.status, 303)
-    await plain.body?.cancel()
-    let [derived] = await dir.query(`.space.slug=${quiet.split('@')[0]}`)
-    assert(derived, `a space named for ${quiet}`)
+    // A stranger who posts one is sent to sign in, and nothing is answered
+    // about the address they asked for.
+    let out = await post({ space: 'whoever' })
+    assertEquals(out.status, 302)
+    assertMatch(out.headers.get('location') ?? '', /^\/login\?return=/)
+    await out.body?.cancel()
   } finally {
     await k.stop()
   }

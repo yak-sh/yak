@@ -18,6 +18,8 @@
 //   yaks.app (and any dev host)
 //     /                       the home page, from ./public
 //     /login, /login/code     identity.ts: the email-code sign-in
+//     /connect                identity.ts: the connector page, and the
+//                             address a person's apps live at
 //     /oauth/*                identity.ts: the OAuth 2.1 door for agents
 //     /.well-known/oauth-*    identity.ts: the provider's metadata
 //     /mcp, /api/*            mcp.ts (T-32329; a JSON 404 until then)
@@ -49,7 +51,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
   if (r.space != null) return bound(env.APPS, apps.fetch, env).fetch(req)
   let path = r.path
   if (
-    path == '/login' || path.startsWith('/login/') ||
+    path == '/login' || path.startsWith('/login/') || path == '/connect' ||
     path.startsWith('/oauth/') || path.startsWith('/.well-known/oauth-')
   ) {
     return bound(env.IDENTITY, identity.fetch, env).fetch(req)

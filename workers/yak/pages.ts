@@ -26,8 +26,8 @@ let shell = (title: string, lead: string, status: number, inner = home) =>
 <meta name="color-scheme" content="light dark">
 <title>${title} · yaks.app</title>
 <style>
-:root { color-scheme: light; --ground: #fdf5ee; --paper: #fffaf5; --ink: #4a3a30; --soft-ink: #6f5d50; --line: #efdfd2; --meadow: #5c8a4c }
-@media (prefers-color-scheme: dark) { :root { color-scheme: dark; --ground: #2a2320; --paper: #352c28; --ink: #f1e6d8; --soft-ink: #c2b2a3; --line: #4a3d37; --meadow: #a7c080 } }
+:root { color-scheme: light; --ground: #fdf5ee; --paper: #fffaf5; --ink: #4a3a30; --soft-ink: #6f5d50; --line: #efdfd2; --meadow: #5c8a4c; --warn: #a8503f }
+@media (prefers-color-scheme: dark) { :root { color-scheme: dark; --ground: #2a2320; --paper: #352c28; --ink: #f1e6d8; --soft-ink: #c2b2a3; --line: #4a3d37; --meadow: #a7c080; --warn: #e67e80 } }
 body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--ground); color: var(--ink); font: 400 1.05rem/1.6 'Nunito', system-ui, sans-serif }
 main { max-width: 30rem; padding: 2rem; text-align: center }
 h1 { font-size: 1.6rem; font-weight: 800; margin: 0 0 .5rem }
@@ -39,10 +39,21 @@ input { font: inherit; text-align: center; padding: .7rem 1rem; border: 2px soli
 input:focus-visible { outline: 3px solid var(--meadow); outline-offset: 2px }
 button { font: inherit; font-weight: 700; padding: .7rem 1rem; border: 0; border-radius: 1.25rem; background: var(--meadow); color: var(--ground); cursor: pointer }
 .Code { letter-spacing: .5em; font-size: 1.4rem; font-weight: 700 }
+.Away { font-size: .95rem }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9rem; background: var(--ground); border-radius: .4rem; padding: .1rem .35rem; overflow-wrap: anywhere }
+.Url code { display: inline-block; padding: .5rem 1rem; border-radius: 999px; background: var(--paper); font-size: .95rem }
+.Card { margin: 0 0 1rem; padding: 1.1rem 1.25rem; border-radius: 1.25rem; background: var(--paper); text-align: left }
+.Card h2 { font-size: 1.05rem; font-weight: 800; margin: 0 0 .6rem }
+.Card ol { display: grid; gap: .4rem; margin: 0; padding-left: 1.2rem; color: var(--soft-ink); font-size: .95rem }
+.Card li::marker { color: var(--meadow); font-weight: 700 }
+.Card form { margin: 1rem 0 0 }
+.Note { font-size: .9rem; margin: .75rem 0 0 }
+.Pick { display: block; margin: .4rem 0; padding: .5rem .6rem; user-select: all }
 .At { display: flex; align-items: center; justify-content: center; gap: .3rem }
 .At input { flex: 0 1 13rem; text-align: right }
 .At span { color: var(--soft-ink) }
-.Away { font-size: .95rem }
+.Say { min-height: 1.3rem; margin: 0; font-size: .95rem }
+.Say-no { color: var(--warn) }
 </style>
 </head>
 <body><main><h1>${title}</h1><p>${lead}</p>${inner}</main></body>
@@ -110,35 +121,20 @@ export let askEmail = (
 </form>${home}`,
   )
 
-// What a first sign-in asks about a person, and whatever they have already
-// typed: the name their apps call them by (T-32654) and the address those
-// apps live at (T-32967), beside the code, so a refusal hands the card back
-// with every word of theirs still in it.
-export type Asked = { name?: string; slug: string; code?: string }
-
-// The two questions the platform ever asks a person about themselves, and
-// only while nobody has answered them. Both optional: skipped, the front of
-// their address is the name, and `slug` — pre-filled with the address the
-// platform would have derived anyway — is the address.
-let asking = (said: Asked) =>
-  `<p>And what should we call you? Skip it and we'll use the front
+// The one question the platform ever asks a person about themselves, and only
+// while nobody has answered it: what their apps should call them beside what
+// they write (T-32654). Optional — skipped, the front of their address does.
+let naming = `<p>And what should we call you? Skip it and we'll use the front
 of your address.</p>
-<input name="name" maxlength="60" autocomplete="name" placeholder="Dana" aria-label="What should we call you?" value="${
-    esc(said.name ?? '')
-  }">
-<p>Your apps will live here. Change it now if you like — moving later moves
-every app's address with it.</p>
-<span class="At"><input name="space" maxlength="63" autocomplete="off" spellcheck="false" aria-label="Your address" value="${
-    esc(said.slug)
-  }"><span>.yaks.app</span></span>`
+<input name="name" maxlength="60" autocomplete="name" placeholder="Dana" aria-label="What should we call you?">`
 
-// Ask for the code just mailed. `ask` adds the first-sign-in questions, for
-// someone nobody has named yet. `why` is the soft refusal, when there was one.
+// Ask for the code just mailed. `ask` adds the name question, for someone
+// nobody has named yet. `why` is the soft refusal, when there was one.
 export let askCode = (
   email: string,
   q: string | null,
   back: string | null,
-  ask: Asked | null = null,
+  ask = false,
   why?: string,
   status = 200,
 ) =>
@@ -148,10 +144,8 @@ export let askCode = (
     status,
     `<form method="post" action="/login/code">${carried(q, back)}
 <input type="hidden" name="email" value="${esc(email)}">
-<input class="Code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus autocomplete="one-time-code" aria-label="Your six-digit code" value="${
-      esc(ask?.code ?? '')
-    }">
-${ask ? asking(ask) : ''}
+<input class="Code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus autocomplete="one-time-code" aria-label="Your six-digit code">
+${ask ? naming : ''}
 <button type="submit">Sign in</button>
 </form>${home}`,
   )
@@ -166,4 +160,152 @@ export let askAllow = (email: string, q: string, who: string) =>
     `<form method="post" action="/oauth/allow">${carried(q)}
 <button type="submit">Allow</button>
 </form>${home}`,
+  )
+
+// Where a fresh sign-in lands (T-32972): the one page that gets a person from
+// an account to a working assistant. Two things live on it and neither waits
+// for the other — the address their apps will live at, theirs to change while
+// nothing is built there (T-32967), and how to hand this platform to the
+// assistant they already talk to. Connecting is never gated on choosing.
+//
+// The provider steps were read off each provider's own documentation on
+// 2026-09-03 (claude.com/docs/connectors/custom/remote-mcp,
+// code.claude.com/docs/en/mcp-quickstart,
+// developers.openai.com/api/docs/guides/developer-mode). Menus move: the last
+// line says so, and says what to search for instead, because a stale
+// instruction with no way past it is worse than none.
+export type Yours = {
+  slug: string
+  // A space with apps in it keeps its address: an app's URL is this slug,
+  // and moving one wants the redirect a rename already wants (T-32576).
+  fixed: boolean
+  said?: string
+  say?: string
+  no?: boolean
+}
+
+let MCP = 'https://yaks.app/mcp'
+
+// The address card, for a person who is signed in. The form posts, so it
+// works with no script at all; the script below turns that into an inline
+// answer, which is what a person choosing a name expects.
+let mine = (y: Yours) =>
+  y.fixed
+    ? `<section class="Card"><h2>Your address</h2>
+<p>Your apps live at <b>${esc(y.slug)}.yaks.app</b>.</p>
+<p class="Note">You've built something here, so this one stays put for now.</p>
+</section>`
+    : `<section class="Card"><h2>Your address</h2>
+<p class="Now">Your apps live at <b>${esc(y.slug)}.yaks.app</b>. It's yours to
+change while nothing is built there.</p>
+<form class="Addr" method="post" action="/connect">
+<span class="At"><input name="space" maxlength="63" autocomplete="off" spellcheck="false" aria-label="Your address" value="${
+      esc(y.said ?? y.slug)
+    }"><span>.yaks.app</span></span>
+<button type="submit">Save</button>
+<p class="Say${y.no ? ' Say-no' : ''}" role="status">${esc(y.say ?? '')}</p>
+</form>
+</section>`
+
+let steps = (name: string, items: string[], note?: string) =>
+  `<section class="Card"><h2>${name}</h2>
+<ol>${items.map((s) => `<li>${s}</li>`).join('')}</ol>
+${note ? `<p class="Note">${note}</p>` : ''}
+</section>`
+
+// Nothing interpolated below is anybody's input, so it is written as the
+// markup it is; everything that IS a person's is escaped where it enters.
+let doors = [
+  steps(
+    'Claude — web, desktop and mobile',
+    [
+      'Open <a href="https://claude.ai/customize/connectors">Connectors</a> ' +
+      'in your settings.',
+      'Click <b>Add custom connector</b>.',
+      `Paste <code>${MCP}</code> as the URL and click <b>Add</b>.`,
+      'Click <b>Connect</b>, and sign in with your email.',
+    ],
+    'A remote connector follows you to every Claude — the phone too. On a ' +
+      'Team or Enterprise plan an owner adds it once under Organization ' +
+      'settings, and everyone else clicks Connect.',
+  ),
+  steps(
+    'Claude Code',
+    [
+      `In your terminal: <code class="Pick">claude mcp add --transport http yaks ${MCP}</code>`,
+      'Start Claude Code, run <code>/mcp</code>, pick <b>yaks</b> and choose ' +
+      '<b>Authenticate</b>. It opens your browser to sign in.',
+    ],
+    'Add <code>--scope user</code> to that first line to have it in every ' +
+      'project, not just this one.',
+  ),
+  steps(
+    'ChatGPT — on the web',
+    [
+      'In <b>Settings</b> → <b>Security and login</b>, turn on ' +
+      '<b>Developer mode</b>.',
+      'Open <a href="https://chatgpt.com/plugins">chatgpt.com/plugins</a> and ' +
+      'press the <b>+</b> button.',
+      'Give it a name, then enter <code>' + MCP + '</code> as the MCP server ' +
+      'URL — keep the <code>/mcp</code> on the end.',
+      'Create it and sign in when it asks. It appears under <b>Developer ' +
+      'mode</b> below the message box.',
+    ],
+    'The web app, not the phone one. On a Business or Enterprise workspace ' +
+      'an admin may have to allow developer mode first.',
+  ),
+  steps('Anything else that speaks MCP', [
+    `Give it <code>${MCP}</code>, over streamable HTTP. It will walk you ` +
+    'through signing in.',
+  ]),
+].join('')
+
+// One listener, no framework: the form answers in place. Constant text, no
+// interpolation, and every write to the page is textContent — the page never
+// speaks HTML on a person's behalf.
+let inline = `<script>
+let f = document.querySelector('.Addr')
+if (f) f.addEventListener('submit', async (e) => {
+  e.preventDefault()
+  let say = f.querySelector('.Say')
+  let go = f.querySelector('button')
+  let now = document.querySelector('.Now b')
+  go.disabled = true
+  say.className = 'Say'
+  say.textContent = 'Saving…'
+  try {
+    let r = await fetch('/connect', {
+      method: 'POST',
+      headers: { accept: 'application/json' },
+      body: new FormData(f),
+    })
+    let out = await r.json()
+    if (out.address) {
+      now.textContent = out.address
+      f.querySelector('input').value = out.slug
+      say.textContent = 'Saved. Your apps live at ' + out.address + '.'
+    } else {
+      say.className = 'Say Say-no'
+      say.textContent = out.error
+    }
+  } catch (_) {
+    say.className = 'Say Say-no'
+    say.textContent = "That didn't go through. Try again?"
+  }
+  go.disabled = false
+})
+</script>`
+
+export let connect = (yours: Yours | null, status = 200) =>
+  shell(
+    'Connect your assistant',
+    'One address, given once to the assistant you already talk to. Then just ' +
+      'ask it for what you want.',
+    status,
+    `<p class="Url"><code>${MCP}</code></p>
+${yours ? mine(yours) : ''}${doors}
+<p class="Note">Menus move. If yours doesn't look like this, search its
+settings for "connector" or "MCP" — the address is the same wherever it
+goes.</p>
+${home}${yours ? inline : ''}`,
   )
