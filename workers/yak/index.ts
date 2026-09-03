@@ -11,6 +11,14 @@
 // failure goes unseen (D-32318 §Errors, V-32361). A door's deliberate no is
 // not a failure and files nothing (unseen.ts `refusal`).
 //
+// One thing beyond routing happens here, and it is here because nowhere else
+// still knows it: a request at a GRAPH DOOR whose `Origin` names another
+// address is refused before it is served (route.ts `sameOrigin`). Sibling
+// spaces are subdomains of one registrable domain, so they are same-site and
+// the session cookie rides along to a door another space's page aims at; the
+// browser's own `Origin` is what tells them apart, and after `aimed` rewrites
+// a custom domain's address the hostname the browser addressed is gone.
+//
 // `scheduled` is the second entry point, and the only one no request reaches:
 // the hourly meter (usage.ts).
 //
@@ -45,7 +53,16 @@ import { bound, type Env } from './env.ts'
 import * as identity from './identity.ts'
 import * as mcp from './mcp.ts'
 import { lost, oops } from './pages.ts'
-import { foreign, hostOf, MOUNT, PLATFORM, type Route, route } from './route.ts'
+import {
+  doorway,
+  foreign,
+  hostOf,
+  MOUNT,
+  PLATFORM,
+  type Route,
+  route,
+  sameOrigin,
+} from './route.ts'
 import { storeOf } from './store.ts'
 import { noted, refusal } from './unseen.ts'
 import { metered } from './usage.ts'
@@ -116,6 +133,18 @@ let aimed = async (req: Request, env: Env, host: string) => {
   return new Request(url, new Request(req, { headers }))
 }
 
+// A page on somebody else's address, at one of our graph doors (route.ts
+// `sameOrigin`, `doorway`). It is refused in the shape every other api
+// refusal has (apps.ts `json`) — a code the page's code reads, a sentence its
+// person reads — and it is a deliberate no, so nothing is filed about it.
+let stranger = () =>
+  Response.json({
+    error: {
+      code: 'foreign_origin',
+      message: 'that page is at another address and cannot use this door',
+    },
+  }, { status: 403 })
+
 // A header only the router writes: whatever a client sent under that name is
 // gone before anything reads it.
 let unmounted = (req: Request) => {
@@ -160,6 +189,15 @@ export default {
     let r = route(host, new URL(req.url).pathname)
     try {
       req = unmounted(req)
+      // Space isolation, and the one place it holds (route.ts `sameOrigin`).
+      // HERE, before `aimed` moves the address, because what must match is
+      // what the BROWSER addressed: a page at `herbusiness.com` asking its
+      // own `/api/…` is same-origin even though the router is about to carry
+      // the request to `<space>.yaks.app/<app>/api/…`.
+      if (
+        doorway(new URL(req.url).pathname) &&
+        !sameOrigin(host, req.headers.get('origin'))
+      ) return stranger()
       let at = r.space == null ? await aimed(req, env, host) : null
       if (at) {
         req = at

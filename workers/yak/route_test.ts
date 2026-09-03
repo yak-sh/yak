@@ -1,6 +1,14 @@
 // The route table as data: hostname + path in, (space, app, path) out.
 import { assertEquals } from '@std/assert'
-import { foreign, hostOf, onZone, ORIGIN, route } from './route.ts'
+import {
+  doorway,
+  foreign,
+  hostOf,
+  onZone,
+  ORIGIN,
+  route,
+  sameOrigin,
+} from './route.ts'
 
 let cases: [string, string, ReturnType<typeof route>][] = [
   ['yaks.app', '/', { space: null, app: null, path: '/' }],
@@ -88,4 +96,53 @@ Deno.test('onZone: our own https hostnames, and nothing else', () => {
     ['', null],
   ]
   for (let [href, want] of ours) assertEquals(onZone(href), want, href)
+})
+
+// Which paths the origin check guards (route.ts `doorway`): everywhere the
+// graph answers, and nowhere an app's own bytes do.
+Deno.test('doorway: the graph doors, not the pages', () => {
+  let doors: [string, boolean][] = [
+    ['/recipes/api/apply', true],
+    ['/recipes/api/ws', true],
+    ['/recipes/api/blob', true],
+    ['/recipes/api/files/index.html', true],
+    // A front page's own door, at a space's bare hostname (apps.ts `fetch`),
+    // and a custom domain's, which is that same address before the router
+    // rewrites it (index.ts `aimed`).
+    ['/api/apply', true],
+    ['/mcp', true],
+    ['/', false],
+    ['/recipes/', false],
+    ['/recipes/api', false],
+    ['/recipes/apiary/x', false],
+    ['/recipes/photo.png', false],
+    ['/mcpx', false],
+  ]
+  for (let [path, want] of doors) assertEquals(doorway(path), want, path)
+})
+
+// The line between spaces (route.ts `sameOrigin`). Sibling spaces are
+// same-site, so nothing but this tells them apart; an absent header is a
+// client with no page behind it and keeps its door.
+Deno.test('sameOrigin: the page that asked, at the host it asked', () => {
+  let asked: [string, string | null, boolean][] = [
+    ['jeff.yaks.app', null, true],
+    ['jeff.yaks.app', 'https://jeff.yaks.app', true],
+    ['jeff.yaks.app', 'https://JEFF.yaks.app', true],
+    // A dev host talks http on a port, and neither is what isolates a space.
+    ['jeff.yaks.app', 'http://jeff.yaks.app:8787', true],
+    ['jeff.yaks.app', 'https://evil.yaks.app', false],
+    ['jeff.yaks.app', 'https://yaks.app', false],
+    ['jeff.yaks.app', 'https://jeff.yaks.app.example.com', false],
+    ['jeff.yaks.app', 'https://example.com', false],
+    // A sandboxed frame's opaque origin is a stranger, not an absence.
+    ['jeff.yaks.app', 'null', false],
+    ['jeff.yaks.app', 'not an origin', false],
+    // A customer's own hostname, asking its own app's door (T-33037).
+    ['herbusiness.com', 'https://herbusiness.com', true],
+    ['herbusiness.com', 'https://evil.yaks.app', false],
+  ]
+  for (let [host, origin, want] of asked) {
+    assertEquals(sameOrigin(host, origin), want, `${host} <- ${origin}`)
+  }
 })

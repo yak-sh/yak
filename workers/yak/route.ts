@@ -105,3 +105,40 @@ export let route = (host: string, pathname: string): Route => {
     path: pathname.length > first.length + 1 ? `/${rest.join('/')}` : '',
   }
 }
+
+// The doors the graph answers at, read from the path a browser asked for:
+// an app's `/<app>/api/…`, a front page's own `/api/…` (apps.ts `fetch`
+// serves the home app everything no other app claims), and the connector at
+// `/mcp`. Pages, files and images are deliberately NOT here — an app's bytes
+// are the web's, and a cross-origin GET of one carries no `Origin` anyway.
+// The shape over-reaches a little: a static asset at `/x/api/y` on the apex
+// matches too, which costs nothing, since nothing a browser fetches
+// cross-origin without CORS can read the answer either way.
+export let doorway = (pathname: string) =>
+  pathname == '/mcp' || /^(?:\/[^/]+)?\/api\//.test(pathname)
+
+// The browser's own word for the page that asked, against the hostname it
+// asked AT. Every space is a subdomain of one registrable domain, so sibling
+// spaces are SAME-SITE: `SameSite=Lax` does not keep the session cookie off a
+// request one space's page aims at another's, and a websocket handshake is
+// outside the same-origin policy altogether. This is the line that separates
+// them, and it is the whole of it — we send no CORS headers, so nothing a
+// browser is allowed to read here was ever cross-origin.
+//
+// ABSENT is allowed on purpose. A browser sends `Origin` on every
+// cross-origin fetch and on every handshake, so refusing only a MISMATCH
+// closes the browser attack completely; curl, a server-to-server client and
+// the kernel's own internal requests send none and have no page to be tricked
+// through. Requiring the header would break them for no security at all.
+//
+// Hostname only: scheme and port differ between a dev host and the platform,
+// and neither is what a space is isolated by.
+export let sameOrigin = (host: string, origin: string | null) => {
+  if (!origin) return true
+  try {
+    return new URL(origin).hostname.toLowerCase() == host.toLowerCase()
+  } catch {
+    // `Origin: null` — a sandboxed frame, an opaque origin — is a stranger.
+    return false
+  }
+}

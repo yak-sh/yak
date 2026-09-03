@@ -155,7 +155,17 @@ export let browser = (k: Kernel, host: string, cookie?: string) => {
 // relay inserts it (and a cookie) into the handshake it forwards, then copies
 // bytes both ways, so the socket a test holds is the kernel's own, framing
 // and all. HTTP through it works too, for one request per connection.
-export let relay = (k: Kernel, host: string, cookie?: string) => {
+//
+// `origin` is the third thing only the wire can say: Deno's WebSocket sends
+// no `Origin` at all, and the page a handshake comes from is exactly what
+// separates one space from another (route.ts `sameOrigin`), so a test that
+// drives a cross-space socket puts it here.
+export let relay = (
+  k: Kernel,
+  host: string,
+  cookie?: string,
+  origin?: string,
+) => {
   let up = Number(new URL(k.base).port)
   let l = Deno.listen({ hostname: '127.0.0.1', port: 0 })
   let open = new Set<Deno.Conn>()
@@ -172,7 +182,8 @@ export let relay = (k: Kernel, host: string, cookie?: string) => {
       head += new TextDecoder().decode(buf.subarray(0, n))
     }
     let extra = `x-yak-host: ${host}\r\n` +
-      (cookie ? `cookie: ${cookie}\r\n` : '')
+      (cookie ? `cookie: ${cookie}\r\n` : '') +
+      (origin ? `origin: ${origin}\r\n` : '')
     await out.write(
       new TextEncoder().encode(head.replace('\r\n', `\r\n${extra}`)),
     )
