@@ -23,6 +23,9 @@
 // door refused ON PURPOSE never becomes one (unseen.ts `refusal`): a
 // signed-out visitor sent to sign in is the platform working.
 import { r2Blobs } from '../../src/blobs_r2.ts'
+import { at as cachedAt, purged } from './cache.ts'
+import * as files from './files.ts'
+import { keyed, PREFIX, prefixOf, SHA } from './files.ts'
 import {
   type App,
   directory,
@@ -69,38 +72,11 @@ type Rewriter = {
 }
 declare let HTMLRewriter: { new (): Rewriter }
 
-let MIME: Record<string, string> = {
-  html: 'text/html; charset=utf-8',
-  css: 'text/css; charset=utf-8',
-  js: 'text/javascript; charset=utf-8',
-  mjs: 'text/javascript; charset=utf-8',
-  json: 'application/json',
-  webmanifest: 'application/manifest+json',
-  svg: 'image/svg+xml',
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  ico: 'image/x-icon',
-  txt: 'text/plain; charset=utf-8',
-  md: 'text/markdown; charset=utf-8',
-  woff: 'font/woff',
-  woff2: 'font/woff2',
-  wasm: 'application/wasm',
-  pdf: 'application/pdf',
-}
-
-let mimeOf = (path: string) =>
-  MIME[path.slice(path.lastIndexOf('.') + 1)] ?? 'application/octet-stream'
-
 // A file's key in the blob store: the app's slugs then its path, a directory
-// answering with its index. Decoded, so the key is the name the file was
-// put under; a malformed escape throws, and the router reports it.
+// answering with its index. The vocabulary itself lives in files.ts, beside
+// the part that reads the bucket (T-33197).
 let keyOf = (space: Space, app: App, path: string) =>
-  `${space.slug}/${app.slug}${
-    decodeURIComponent(path.endsWith('/') ? `${path}index.html` : path)
-  }`
+  keyed(prefixOf(space, app), path)
 
 // A refusal is READ — by the page that catches it, and by the person's agent
 // after that — so it answers a SENTENCE beside its code (C-32574 item 2, where
@@ -213,13 +189,6 @@ export let based = (href: string, page: string) => {
   return doctype ? page.replace(doctype[0], `${doctype[0]}${tag}`) : tag + page
 }
 
-// A path behind no file whose last segment names no file TYPE is a route,
-// not a miss (T-32769): `/recipes/42` is the page asking to be opened at a
-// place, so the app's own index.html answers it with 200 and the page routes
-// on `location.pathname`. Anything with an extension is a file that is not
-// there, and stays the soft 404 — a missing stylesheet must not answer HTML.
-let pretty = (path: string) => !path.split('/').pop()!.includes('.')
-
 // The files that ARE the app's platform manifest rather than its page: the
 // server code the dispatch namespace runs (dispatch.ts) and the two
 // declarations a deploy reads (tools.ts). Those are the app's INSIDE — the
@@ -251,10 +220,12 @@ let keeping = (app: App) =>
 // The tag for these bytes at this mount. Weak, and the mount is part of it,
 // because an HTML page is served with a `<base href>` woven in: the same
 // bytes at `/` and at `/recipes/` are two different documents.
-let etagOf = async (bytes: Uint8Array<ArrayBuffer>, at: string) =>
-  `W/"${(await sha256(bytes)).slice(0, 24)}${
-    (await sha256(new TextEncoder().encode(at))).slice(0, 8)
-  }"`
+//
+// The bytes' half arrives already hashed from files.ts (`SHA`), so it is
+// computed on a cache miss and never again — a warm request hashes only the
+// mount, which is a handful of characters.
+let etagOf = async (sha: string, at: string) =>
+  `W/"${sha}${(await sha256(new TextEncoder().encode(at))).slice(0, 8)}"`
 
 let unchanged = (req: Request, etag: string) =>
   (req.headers.get('if-none-match') ?? '').split(',')
@@ -272,36 +243,48 @@ let asset = async (
   at: string,
   c: Clock,
 ) => {
-  let blobs = r2Blobs(env.BLOBS)
-  let key = keyOf(space, app, path)
-  if (MANIFEST.has(key.slice(`${space.slug}/${app.slug}`.length))) {
+  let prefix = prefixOf(space, app)
+  if (MANIFEST.has(keyed(prefix, path).slice(prefix.length))) {
     return nothingHere()
   }
-  // ONE read, not a stat and then a read (T-33176): the bucket is a round
-  // trip away — for most of the world an ocean away — and asking whether the
-  // file is there before asking for it paid that trip twice for every file
-  // the app serves. `read` answers the bytes or null, so a miss costs the
-  // same one trip a hit does.
+  // The bytes, through the cache (cache.ts): `Files` is a second entrypoint
+  // with Cloudflare's cache in front of it, addressed by the app's eid and
+  // this path, so a warm edge answers without the bucket being touched. It is
+  // the same call for a private app as for a public one — what is cached is
+  // the file, and whether this person may have it was decided by `served()`
+  // before we got here.
   //
-  // The index the fallback serves is the app's own, so the reporter and the
-  // reporting headers ride along exactly as they do at `/`.
-  let bytes = await c.time('bytes', () => blobs.read(key))
-  if (!bytes && pretty(path)) {
-    key = keyOf(space, app, '/')
-    bytes = await c.time('index', () => blobs.read(key))
+  // Absent the binding (under `wrangler dev` and the workerd probes) `bound`
+  // calls the module in-process: the same bytes, no cache.
+  let got = await c.time(
+    'bytes',
+    () =>
+      bound(env.FILES, files.fetch, env).fetch(
+        new Request(cachedAt(app.eid, path), { headers: { [PREFIX]: prefix } }),
+      ),
+    // Whether that trip stopped at the edge or went on to the bucket, in the
+    // same Server-Timing entry as the time it took: a slow `bytes` stage and a
+    // fast one are the same call, and this is the word for which happened.
+    (r) => r.headers.get('cf-cache-status'),
+  )
+  if (got.status != 200) {
+    await got.body?.cancel()
+    return nothingHere()
   }
-  if (!bytes) return nothingHere()
-  let type = mimeOf(key)
-  let etag = await etagOf(bytes, at)
+  let type = got.headers.get('content-type') ?? 'application/octet-stream'
+  let etag = await etagOf(got.headers.get(SHA) ?? '', at)
   let headers = { 'content-type': type, 'cache-control': keeping(app), etag }
   // The browser already has these bytes, so it is told so and sent none.
-  if (unchanged(req, etag)) return new Response(null, { status: 304, headers })
-  if (!type.startsWith('text/html')) return new Response(bytes, { headers })
+  if (unchanged(req, etag)) {
+    await got.body?.cancel()
+    return new Response(null, { status: 304, headers })
+  }
+  if (!type.startsWith('text/html')) return new Response(got.body, { headers })
   // A page, so it gets the app's address before its own first relative URL,
-  // and the reporter after it. The bytes are already whole here (the blob
-  // seam answers a Uint8Array), so reading them to decide whether the page
-  // has a `<base>` of its own costs nothing the serve did not already spend.
-  let page = based(at, new TextDecoder().decode(bytes))
+  // and the reporter after it. The weaving is done HERE rather than behind the
+  // cache because the same file is a different document at each mount, and one
+  // cached copy of the bytes serving every mount beats one copy per mount.
+  let page = based(at, await got.text())
   return reported(at, new Response(page, { headers }))
 }
 
@@ -828,6 +811,7 @@ let api = async (
     if (!mayWrite(who)) return refused()
     let key = keyOf(space, app, path.slice('/files'.length))
     await r2Blobs(env.BLOBS).put(key, new Uint8Array(await req.arrayBuffer()))
+    await purged(app)
     return Response.json({ ok: true, key })
   }
   return json(404, 'not_found')

@@ -92,6 +92,12 @@ export type Env = {
   BILLING?: Fetcher
   DIRECTORY?: Fetcher
   APPS?: Fetcher
+  // The one binding that is not a part waiting to be split out: `Files` is a
+  // SECOND entrypoint of this same Worker (index.ts), bound here so that
+  // Cloudflare's cache sits between the gateway and the bucket (cache.ts,
+  // T-33197). Absent under `wrangler dev` and the workerd probes, where
+  // `bound` calls the module in-process and nothing is cached.
+  FILES?: Fetcher
 }
 
 // One part's handler shape: a request and its env, nothing else.

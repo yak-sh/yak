@@ -15,16 +15,28 @@ export type Clock = ReturnType<typeof clock>
 export let clock = () => {
   let marks: string[] = []
   let born = Date.now()
-  let mark = (name: string, ms: number) => marks.push(`${name};dur=${ms}`)
+  let mark = (name: string, ms: number, desc?: string | null) =>
+    marks.push(`${name};dur=${ms}${desc ? `;desc=${desc}` : ''}`)
   return {
     // One stage: whatever it answers is answered on, and the time it took is
     // recorded either way — a stage that threw is the one worth seeing.
-    time: async <T>(name: string, work: () => Promise<T>): Promise<T> => {
+    //
+    // `said` is for a stage whose duration is only half the story: serving a
+    // file is fast or slow because Cloudflare's cache hit or missed (cache.ts),
+    // and `Cf-Cache-Status` is the word for which. It rides the same
+    // Server-Timing entry as `desc`, which is where the standard puts it, so
+    // reading a request still means reading one header.
+    time: async <T>(
+      name: string,
+      work: () => Promise<T>,
+      said?: (out: T) => string | null,
+    ): Promise<T> => {
       let at = Date.now()
+      let out
       try {
-        return await work()
+        return out = await work()
       } finally {
-        mark(name, Date.now() - at)
+        mark(name, Date.now() - at, out === undefined ? null : said?.(out))
       }
     },
     // A stage that is not one call: `since()` hands back the marker.

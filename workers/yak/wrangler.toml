@@ -126,6 +126,55 @@ new_sqlite_classes = ["Wire"]
 binding = "BLOBS"
 bucket_name = "yak-blobs"
 
+# Cloudflare's cache, in front of ONE of this Worker's two entrypoints
+# (cache.ts, T-33197). Enabled here so it can be turned on per entrypoint
+# below; on its own this line would cache everything, which is the thing that
+# must not happen.
+[cache]
+enabled = true
+
+# WHICH entrypoint, and why it is not the one the browser reaches.
+#
+# The cache key is the path, the query, the entrypoint and the Worker version.
+# It is NOT the hostname: Cloudflare treats a Worker as zoneless and gives one
+# Worker one cache across every hostname it answers on. Every space here IS a
+# hostname over a shared path namespace — `alice.yaks.app/recipes/app.js` and
+# `bob.yaks.app/recipes/app.js` are the same key — and a customer's own domain
+# serves its app at `/`, colliding with every other front page. Caching the
+# default entrypoint would serve one space's bytes to another space's visitors
+# on the second request.
+#
+# So the default entrypoint is the gateway and never cached: it runs on every
+# request, resolves the space and app, and decides who is asking. `Files` is
+# behind it, addressed by the app's EID (cache.ts `at`), and holds only bytes —
+# nobody's response — which is what makes it safe to share and what makes a
+# private app's files as cacheable as a public one's.
+#
+# Turning `enabled` on for `default` is the one edit in this file that would
+# leak one tenant's pages to another. cache.ts `sealed` is the second line of
+# defence if it ever happens.
+[exports.default]
+type = "worker"
+
+  [exports.default.cache]
+  enabled = false
+
+[exports.Files]
+type = "worker"
+
+  [exports.Files.cache]
+  enabled = true
+
+# The gateway's binding to the cached entrypoint — this same Worker, named. The
+# hop is what puts Cloudflare's cache between the gateway and the bucket, so a
+# warm edge answers an app's file without R2 being touched. Absent under
+# `wrangler dev` and the workerd probes, where env.ts `bound` calls files.ts
+# in-process and nothing is cached.
+[[services]]
+binding = "FILES"
+service = "yak"
+entrypoint = "Files"
+
 # The OAuth provider's own store (identity.ts): registered clients, grants,
 # and tokens. `wrangler dev` simulates it and ignores the id.
 [[kv_namespaces]]

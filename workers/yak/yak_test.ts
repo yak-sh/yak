@@ -461,7 +461,24 @@ slow('an app says who may read it and who may write it', async () => {
     assertEquals(await again.text(), '')
     let mine = await k.at('club.yaks.app', '/diary/', { headers: { cookie } })
     assertEquals(mine.headers.get('cache-control'), 'private, no-cache')
+    // And nothing of the INNER cache reaches the wire (T-33197). `Files` is a
+    // second entrypoint with Cloudflare's cache in front of it, and what it
+    // answers wears `Cache-Tag` and a long `s-maxage` — safe there, because it
+    // is addressed by the app's eid and holds bytes rather than anybody's
+    // response. If either header ever rode out to the browser on a PRIVATE
+    // app's page, a cache between here and its member would keep that page and
+    // hand it to a stranger. The gateway builds its own headers, so it cannot;
+    // this is the assertion that says so out loud.
+    assertEquals(mine.headers.get('cache-tag'), null)
+    assertEquals(mine.headers.get('x-yak-sha'), null)
     await mine.body?.cancel()
+    // The same holds for a public app: the browser is told `no-cache`, never
+    // the year the shared cache holds the bytes for.
+    let seen = await k.at('club.yaks.app', '/list/')
+    assertEquals(seen.headers.get('cache-tag'), null)
+    assertEquals(seen.headers.get('x-yak-sha'), null)
+    assertEquals(seen.headers.get('cache-control'), 'public, no-cache')
+    await seen.body?.cancel()
 
     let shut = await k.at('club.yaks.app', '/diary/api/query?.doc!')
     assertEquals(shut.status, 401)

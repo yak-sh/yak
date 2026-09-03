@@ -52,7 +52,10 @@
 //                             that path: the space's apps own the first path
 //                             segment, the front page answers what is left
 //                             (T-33040)
+import { WorkerEntrypoint } from 'cloudflare:workers'
 import * as apps from './apps.ts'
+import { sealed } from './cache.ts'
+import * as filePart from './files.ts'
 import * as billing from './billing.ts'
 import * as dirPart from './directory.ts'
 import { directory, META_STORE, storeName } from './directory.ts'
@@ -77,6 +80,28 @@ import { metered } from './usage.ts'
 
 export { Store } from './store.ts'
 export { Wire } from './stream.ts'
+
+// The kernel's SECOND entrypoint, and the only one with a cache in front of it
+// (cache.ts, wrangler.toml `[exports.Files]`). The default entrypoint below is
+// the gateway: it runs on every request, because the cache key does not
+// include the hostname and every space is a hostname — caching there would
+// serve one space's bytes to another's visitors. This one is addressed by the
+// app's eid and answers bytes, so it is safe to share and worth caching.
+//
+// It is reached only through the `FILES` service binding (env.ts). The routes
+// in wrangler.toml name the default entrypoint, so nothing from the internet
+// arrives here.
+export class Files extends WorkerEntrypoint {
+  // The runtime sets this; `declare` names its type without emitting a field
+  // that would shadow what the base class already put there. env.ts keeps the
+  // Cloudflare types out of this Worker, so the base's own generic is not
+  // resolved here.
+  declare env: Env
+
+  fetch(req: Request): Promise<Response> {
+    return filePart.fetch(req, this.env)
+  }
+}
 
 let serve = async (req: Request, env: Env, r: Route) => {
   if (r.space != null) return bound(env.APPS, apps.fetch, env).fetch(req)
@@ -219,9 +244,11 @@ export default {
       // address and has nothing to say at it — an app must not get it.
       let asked = new URL(req.url).pathname
       if (platform(host, asked)) {
-        return r.space != null
-          ? lost()
-          : await serve(req, env, { space: null, app: null, path: asked })
+        return sealed(
+          r.space != null
+            ? lost()
+            : await serve(req, env, { space: null, app: null, path: asked }),
+        )
       }
       // Space isolation, and the one place it holds (route.ts `sameOrigin`).
       // HERE, before `aimed` moves the address, because what must match is
@@ -237,7 +264,7 @@ export default {
         req = at
         r = route(hostOf(at), new URL(at.url).pathname)
       }
-      return await serve(req, env, r)
+      return sealed(await serve(req, env, r))
     } catch (e) {
       // A refusal is not a break (unseen.ts `refusal`, T-32655). A part that
       // relays a door's deliberate no by throwing what it was answered is
