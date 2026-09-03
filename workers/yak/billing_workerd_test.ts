@@ -10,7 +10,7 @@
 // STRIPE_KEY, which is also the shape a deploy has before the owner sets one.
 import { assert, assertEquals } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { kernel, meta, seed } from './probe.ts'
+import { connector, kernel, meta, seed } from './probe.ts'
 
 let SECRET = 'whsec_a_probe_secret'
 
@@ -153,7 +153,7 @@ slow(
 slow('an unsigned webhook is refused, and no Origin is not', async () => {
   let k = await kernel({ STRIPE_WEBHOOK_SECRET: SECRET })
   try {
-    let { eids } = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+    let { cookie, eids } = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
     let raw = event('customer.subscription.updated', eids['jeff'])
     let at = Math.floor(Date.now() / 1000)
 
@@ -197,6 +197,20 @@ slow('an unsigned webhook is refused, and no Origin is not', async () => {
     })
     assertEquals(page.status, 403)
     assertEquals((await page.json()).error.code, 'foreign_origin')
+
+    // And none of those refusals was quiet. A webhook we cannot verify means
+    // a secret has rolled or somebody is poking, and either is worth seeing:
+    // it lands as an exception in the meta store, where the platform's own
+    // breaks go, rather than on a log nobody opens.
+    // Read as TEXT, not parsed: the answer arrives with the unseen block
+    // appended, which is these very exceptions being delivered — the channel
+    // working is part of what is being asserted.
+    let broke = await connector(k, cookie).tool('graph_query', {
+      space: 'yak',
+      app: 'platform',
+      query: '.exception!',
+    })
+    assert(broke.includes('the signature does not match'), broke.slice(0, 400))
   } finally {
     await k.stop()
   }
