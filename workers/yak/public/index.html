@@ -47,12 +47,32 @@
 
       <section class="Make" aria-labelledby="make">
         <h2 id="make" class="Title">Things people ask for</h2>
+        <!-- Every one of these opens: they are apps in the `yourname` demo
+             space, public so a stranger reads them signed out and published
+             so anyone can install their own copy (T-33053). A list that only
+             asserts the range gets read as one thing — the drawn recipe box
+             below was mistaken for the whole product. -->
         <ul class="Pills">
-          <li class="Pill">a recipe box</li>
-          <li class="Pill">a garden diary</li>
-          <li class="Pill">a page for the book club</li>
-          <li class="Pill">a place to plan the trip</li>
-          <li class="Pill">a birthday guestbook</li>
+          <li>
+            <a class="Pill" href="https://yourname.yaks.app/recipes/">a recipe
+              box</a>
+          </li>
+          <li>
+            <a class="Pill" href="https://yourname.yaks.app/garden/">a garden
+              diary</a>
+          </li>
+          <li>
+            <a class="Pill" href="https://yourname.yaks.app/bookclub/">a page
+              for the book club</a>
+          </li>
+          <li>
+            <a class="Pill" href="https://yourname.yaks.app/trip/">a place to
+              plan the trip</a>
+          </li>
+          <li>
+            <a class="Pill" href="https://yourname.yaks.app/guestbook/">a
+              birthday guestbook</a>
+          </li>
           <li class="Pill">a chore chart that doesn't nag</li>
         </ul>
       </section>
@@ -90,7 +110,11 @@
           <div class="Window"
             aria-label="A finished recipe box on its own website">
             <div class="Window_Bar">
-              <span class="Pill Pill-quiet">yourname.yaks.app/recipes</span>
+              <!-- The address is the app it names: this box exists, and the
+                   three things listed under it are in it. -->
+              <a class="Pill Pill-quiet"
+                href="https://yourname.yaks.app/recipes/"
+              >yourname.yaks.app/recipes</a>
             </div>
             <div class="Window_Body">
               <p class="Window_Heading">Our recipe box</p>
