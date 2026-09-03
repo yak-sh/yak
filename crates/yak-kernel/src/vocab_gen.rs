@@ -424,6 +424,12 @@ pub(crate) fn baked() -> Vocab {
             ("files".into(), PropType::Text),
             ("worker".into(), PropType::Text),
         ]),
+        ("hostname".into(), vec![
+            ("name".into(), PropType::Text),
+            ("app".into(), PropType::Eid("app".into())),
+            ("stage".into(), PropType::Enum(vec!["pending".into(), "active".into(), "error".into()])),
+            ("at".into(), PropType::Time),
+        ]),
         ("plan".into(), vec![
             ("tier".into(), PropType::Enum(vec!["free".into(), "plus".into()])),
         ]),
@@ -699,7 +705,7 @@ pub(crate) fn baked() -> Vocab {
         ("email".into(), "A".into()),
         ("memory".into(), "M".into()),
     ]);
-    let kind_order = vec!["design".into(), "goal".into(), "task".into(), "project".into(), "layout".into(), "board".into(), "canvas".into(), "web".into(), "card".into(), "pane".into(), "client".into(), "camera".into(), "fold".into(), "cursor".into(), "role".into(), "session".into(), "entry".into(), "runner".into(), "claim".into(), "subscription".into(), "stop_request".into(), "knock".into(), "wake".into(), "dream".into(), "mail".into(), "hook".into(), "conflict".into(), "redaction".into(), "review".into(), "notice".into(), "commit".into(), "comment".into(), "memory".into(), "person".into(), "persona".into(), "model".into(), "edge".into(), "attachment".into(), "doc".into(), "email".into(), "alias".into(), "space".into(), "plan".into(), "app".into(), "deploy".into(), "member".into(), "signin".into(), "report".into()];
+    let kind_order = vec!["design".into(), "goal".into(), "task".into(), "project".into(), "layout".into(), "board".into(), "canvas".into(), "web".into(), "card".into(), "pane".into(), "client".into(), "camera".into(), "fold".into(), "cursor".into(), "role".into(), "session".into(), "entry".into(), "runner".into(), "claim".into(), "subscription".into(), "stop_request".into(), "knock".into(), "wake".into(), "dream".into(), "mail".into(), "hook".into(), "conflict".into(), "redaction".into(), "review".into(), "notice".into(), "commit".into(), "comment".into(), "memory".into(), "person".into(), "persona".into(), "model".into(), "edge".into(), "attachment".into(), "doc".into(), "email".into(), "alias".into(), "space".into(), "plan".into(), "hostname".into(), "app".into(), "deploy".into(), "member".into(), "signin".into(), "report".into()];
     let statuses = vec!["open".into(), "wip".into(), "done".into(), "cancelled".into()];
     let renames = vec![
         ("view:Debug.ListItem".into(), "Debug.Tile".into()),
@@ -772,6 +778,7 @@ pub(crate) fn baked() -> Vocab {
         ("app".into(), "space".into(), "cascade".into()),
         ("installed".into(), "of".into(), "detach".into()),
         ("deploy".into(), "app".into(), "cascade".into()),
+        ("hostname".into(), "app".into(), "cascade".into()),
         ("member".into(), "space".into(), "cascade".into()),
         ("member".into(), "person".into(), "cascade".into()),
         ("report".into(), "app".into(), "keep".into()),

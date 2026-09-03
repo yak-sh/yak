@@ -1052,6 +1052,10 @@ export let derived = [
   // number and two nullable texts, so it derives.
   'deploy',
   'member',
+  // A hostname someone else owns, aimed at one app (T-33037): a unique text
+  // key, one {eid} reference by death word, a word and a time — so it derives
+  // like the rest of the directory.
+  'hostname',
   // An app offered by name and an app that took one (T-32888, T-32889):
   // nullable text/real columns and one {eid} reference by death word, so both
   // derive like the three above.

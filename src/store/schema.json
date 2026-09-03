@@ -141,6 +141,10 @@
   },
   {
     "kind": "exec",
+    "sql": "create table if not exists \"hostname\" (\n    entity integer primary key references entity(id),\n    \"name\" text,\n    \"app\" integer references entity(id),\n    \"stage\" text,\n    \"at\" text\n  );"
+  },
+  {
+    "kind": "exec",
     "sql": "create table if not exists \"published\" (\n    entity integer primary key references entity(id),\n    \"name\" text,\n    \"version\" real,\n    \"at\" text,\n    \"about\" text\n  );"
   },
   {
@@ -640,6 +644,30 @@
     "table": "member",
     "col": "role",
     "sql": "alter table member add column \"role\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "hostname",
+    "col": "name",
+    "sql": "alter table hostname add column \"name\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "hostname",
+    "col": "app",
+    "sql": "alter table hostname add column \"app\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "hostname",
+    "col": "stage",
+    "sql": "alter table hostname add column \"stage\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "hostname",
+    "col": "at",
+    "sql": "alter table hostname add column \"at\" text"
   },
   {
     "kind": "addColumn",
@@ -1521,6 +1549,14 @@
   {
     "kind": "exec",
     "sql": "create index if not exists deploy_app on \"deploy\" (\"app\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists hostname_name on \"hostname\" (\"name\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists hostname_app on \"hostname\" (\"app\");"
   },
   {
     "kind": "exec",

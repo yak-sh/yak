@@ -17,10 +17,16 @@ compatibility_date = "2025-05-08"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
 # The apex and every first-level space hostname, both on the yaks.app zone;
-# the zone's Universal certificate covers the wildcard.
+# the zone's Universal certificate covers the wildcard. `*/*` is the third
+# because a customer's own hostname is not spelled `yaks.app` at all
+# (T-33035): traffic for a custom hostname enters this zone and only a
+# zone-wide pattern matches it, which is Cloudflare's own instruction for a
+# Worker as the fallback origin. The two above are the same Worker and are
+# kept for what they say.
 routes = [
   { pattern = "yaks.app/*", zone_name = "yaks.app" },
   { pattern = "*.yaks.app/*", zone_name = "yaks.app" },
+  { pattern = "*/*", zone_name = "yaks.app" },
 ]
 
 # Under `wrangler dev` a request's URL carries the first route's hostname

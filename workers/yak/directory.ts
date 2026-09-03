@@ -105,6 +105,18 @@ export type Offer = {
 // pin is what makes `app_update` a deliberate act.
 export type Pin = { of: string; version: number }
 
+// A hostname a person owns, aimed at one app (platform.rs `Hostname`,
+// T-33037). How far provisioning has come, and when that was last read from
+// Cloudflare.
+export type HostStage = 'pending' | 'active' | 'error'
+export type Host = {
+  eid: string
+  name: string
+  app: string
+  stage: HostStage | null
+  at: string
+}
+
 // A reference column, as a READ hands it back: the bare eid, or `{eid, name}`
 // where the store could name what it points at (listing.ts `named`, T-32733).
 // What the directory wants either way is the id — the same lowering client.ts
@@ -128,6 +140,12 @@ type Row = {
     about?: string | null
   }
   installed?: { of?: Id | null; version?: number | null }
+  hostname?: {
+    name: string
+    app: Id
+    stage?: HostStage | null
+    at?: string | null
+  }
   deploy?: { app: Id; version: number; files?: string; worker?: string }
   created?: { at?: string }
   member?: { space: Id; person: Id; role: Role }
@@ -300,6 +318,14 @@ export let appOf = (r: Row): App => ({
     : null,
 })
 
+let hostOf = (r: Row): Host => ({
+  eid: r.entity.eid,
+  name: r.hostname!.name,
+  app: idOf(r.hostname!.app),
+  stage: r.hostname!.stage ?? null,
+  at: r.hostname!.at ?? '',
+})
+
 // A deploy of an app, as versions.ts reads one: the manifest parsed, since
 // the store holds it as the text it is. A row whose manifest cannot be read
 // is a version nothing can restore, so it answers no files rather than
@@ -409,6 +435,20 @@ export let directory = (via: Fetcher, now = false) => {
       let app = appOf(row)
       let space = await self.at(app.space)
       return space ? { space, app } : null
+    },
+    // What a hostname someone else owns is aimed at (T-33037): the hostname
+    // row, the app it serves, and the space that app is in — one hostname,
+    // one place, which the unique index on `hostname.name` is what makes
+    // true. Null for a hostname the platform has never been given, which is
+    // every hostname until someone attaches one — and is what keeps an
+    // unknown host routing exactly as it always did. Cached like every other
+    // read here, and an empty answer is not cached, so a domain serves the
+    // moment it is attached rather than a TTL later.
+    serves: async (host: string) => {
+      let row = await one(`.hostname.name=${encodeURIComponent(host)}`)
+      if (!row?.hostname) return null
+      let at = await self.appAt(idOf(row.hostname.app))
+      return at ? { ...at, host: hostOf(row) } : null
     },
     // The app offered under a platform-wide name (T-32888), with the space it
     // came from — an offer is an app, so this is one row read two ways.

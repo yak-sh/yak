@@ -554,6 +554,8 @@ let contracts = [
   contract('member', 'person', 'person', (d) => ({
     space: tag(d, 'space', { slug: 'a-space' }),
   })),
+  // the app a person's own hostname serves (T-33037)
+  contract('hostname', 'app', 'app'),
   // and the app an installed one was taken from (T-32889)
   contract('installed', 'of', 'app'),
   // where someone was standing when they said what is wrong (T-32950)

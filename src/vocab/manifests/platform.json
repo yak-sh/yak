@@ -9,6 +9,14 @@
         "private"
       ]
     },
+    "hostnameStages": {
+      "rank": 162,
+      "values": [
+        "pending",
+        "active",
+        "error"
+      ]
+    },
     "planTiers": {
       "rank": 161,
       "values": [
@@ -59,6 +67,29 @@
           "cols": [
             "app",
             "version"
+          ],
+          "unique": true
+        }
+      ]
+    },
+    "hostname": {
+      "rank": 1034,
+      "kind_rank": 397,
+      "cols": {
+        "name": "text",
+        "app": {
+          "eid": "app",
+          "death": "cascade"
+        },
+        "stage": {
+          "enum": "hostnameStages"
+        },
+        "at": "time"
+      },
+      "indexes": [
+        {
+          "cols": [
+            "name"
           ],
           "unique": true
         }

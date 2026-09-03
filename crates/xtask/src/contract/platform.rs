@@ -66,6 +66,46 @@ struct Deploy {
     worker: Text,
 }
 
+// How far a custom domain has come (T-33037): `pending` while the customer's
+// DNS does not point here yet and Cloudflare has issued no certificate,
+// `active` once it serves, `error` when Cloudflare refused the hostname.
+venum!("platform", "hostnameStages", 162, ["pending", "active", "error"]);
+
+// A hostname someone else owns, serving ONE app of ours at its root
+// (T-33035): `herbusiness.com/` is that app's `/`, and everything under it is
+// that app's path. It is its own entity rather than a column on the space,
+// which is what makes several domains, each for a different app, fall out
+// instead of being bolted on.
+//
+// `hostname` and not `domain`, which the vocabulary already spends on
+// `task.domain` — a word is the whole vocabulary's, and shadowing that one
+// would change what `.domain!` means to every board already written. The
+// product word for the FEATURE is still a custom domain; the row is the
+// hostname it is keyed by.
+//
+// `name` is that hostname, and it is unique across the whole platform — a
+// hostname resolves to one place, and two spaces claiming one would be two
+// answers to the same question. It is the key on Cloudflare's side too (a
+// custom hostname is looked up by hostname), so Cloudflare's own id is not
+// kept here: one copy, and it cannot drift.
+//
+// `stage` follows provisioning — `state` is the word `role.state` already
+// owns, and a bare `.state` filter must keep meaning what it meant. `at` is
+// when the stage was last read from Cloudflare, never when the domain was
+// attached; `created` says that. Dies with its app: a hostname aimed at
+// nothing serves nothing, and the name comes free again.
+#[derive(Comp)]
+#[comp(plugin = "platform", rank = 1034, kind_rank = 397)]
+#[index(cols(name), unique)]
+struct Hostname {
+    name: Text,
+    #[col(eid = "app", death = "cascade")]
+    app: Ref,
+    #[col(sel = "hostnameStages")]
+    stage: Sel,
+    at: Time,
+}
+
 // A person's standing in a space — the one fact the kernel hands an app as
 // `x-yak-role`. Credentials are never here (D-32318 §Auth): identity is
 // platform-wide, membership is the space's. One row per (space, person).

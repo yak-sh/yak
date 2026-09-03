@@ -307,15 +307,15 @@ These are the names, all of them:
     conflict contains content created cursor decided delegates deliver
     delivered deploy design doc dream edge effect email entity entry error
     exception exit favorite feedback fetch finding fixer fold fork
-    generation goal graph_query headers hook image imported installed knock
-    layout lease mail member memory message meta meter model nofix notice
-    notified noverify opaque opened output pane patch person persona pin
-    plan project prompt proposed published quarantined reads reasoning
-    recall recalled redaction references repo report requires response
-    result resume review role run runner runtime satisfies session setting
-    settled shelf signin space spawn stderr stop_request subscription
-    supersedes supervises task task_context timeout tool updated usage
-    venture verifier wake wants web worked worktree yield
+    generation goal graph_query headers hook hostname image imported
+    installed knock layout lease mail member memory message meta meter model
+    nofix notice notified noverify opaque opened output pane patch person
+    persona pin plan project prompt proposed published quarantined reads
+    reasoning recall recalled redaction references repo report requires
+    response result resume review role run runner runtime satisfies session
+    setting settled shelf signin space spawn stderr stop_request
+    subscription supersedes supervises task task_context timeout tool
+    updated usage venture verifier wake wants web worked worktree yield
 
 When your first choice is taken, ask what the word is FOR and name that: the
 taken word is the general one, yours is the specific one. Not `card` but

@@ -54,6 +54,7 @@ export let noticeKinds = ['lapse', 'sweep', 'scene', 'wake'] as const
 export let effectStates = ['pending', 'leased', 'delivered', 'failed'] as const
 export let appAccess = ['public', 'open', 'private'] as const
 export let planTiers = ['free', 'plus'] as const
+export let hostnameStages = ['pending', 'active', 'error'] as const
 
 // The graph-native Session-log vocabulary (comps marked log = true).
 export let sessionComps: Record<string, Record<string, PropType>> = {
@@ -571,6 +572,12 @@ export let comps: Record<string, Record<string, PropType>> = {
     files: 'text',
     worker: 'text',
   },
+  hostname: {
+    name: 'text',
+    app: { eid: 'app', death: 'cascade' },
+    stage: { enum: hostnameStages },
+    at: 'time',
+  },
   plan: {
     tier: { enum: planTiers },
   },
@@ -642,6 +649,7 @@ export let indexes: Record<string, Idx[]> = {
   app: [{ cols: ['space', 'slug'], unique: true }],
   published: [{ cols: ['name'], unique: true }],
   deploy: [{ cols: ['app', 'version'], unique: true }],
+  hostname: [{ cols: ['name'], unique: true }],
   member: [{ cols: ['space', 'person'], unique: true }],
 }
 
@@ -908,6 +916,7 @@ export let kindOrder = [
   'alias',
   'space',
   'plan',
+  'hostname',
   'app',
   'deploy',
   'member',

@@ -1,6 +1,6 @@
 // The route table as data: hostname + path in, (space, app, path) out.
 import { assertEquals } from '@std/assert'
-import { hostOf, onZone, route } from './route.ts'
+import { foreign, hostOf, onZone, ORIGIN, route } from './route.ts'
 
 let cases: [string, string, ReturnType<typeof route>][] = [
   ['yaks.app', '/', { space: null, app: null, path: '/' }],
@@ -41,6 +41,33 @@ Deno.test('hostOf: x-yak-host stands in on a dev host only', () => {
   assertEquals(at('https://maya.yaks.app/', 'jeff.yaks.app'), 'maya.yaks.app')
 })
 
+// Which hostnames the directory is asked about at all (T-33037): only ones
+// the platform does not already answer on, so every address that exists today
+// is decided without a read.
+Deno.test("foreign: someone else's hostname, and nothing of ours", () => {
+  let cases: [string, boolean][] = [
+    ['herbusiness.com', true],
+    ['www.herbusiness.com', true],
+    ['yaks.app', false],
+    ['jeff.yaks.app', false],
+    // Two levels down was the apex before custom domains and still is — and
+    // it is where the fallback origin lives, so it is never a customer's.
+    ['a.b.yaks.app', false],
+    [ORIGIN, false],
+    ['127.0.0.1', false],
+    ['localhost', false],
+    ['yak.workers.dev', false],
+  ]
+  for (let [host, want] of cases) assertEquals(foreign(host), want, host)
+})
+
+// The fallback origin is out of the space namespace by its SHAPE: `route`
+// reads everything before `.yaks.app` as a slug, and no slug holds a dot, so
+// no space can ever be minted that shadows our own origin.
+Deno.test('the fallback origin is no space', () => {
+  assertEquals(route(ORIGIN, '/'), { space: null, app: null, path: '/' })
+})
+
 // What a sign-in is allowed to hand someone back to (T-32593). A stranger's
 // address is not one of ours however it is spelled.
 Deno.test('onZone: our own https hostnames, and nothing else', () => {
@@ -50,6 +77,10 @@ Deno.test('onZone: our own https hostnames, and nothing else', () => {
     ['https://JEFF.yaks.app/x?a=1', 'https://jeff.yaks.app/x?a=1'],
     ['http://jeff.yaks.app/notes/', null],
     ['https://yaks.app.example.com/', null],
+    // A custom domain is a place we SERVE and still not a place we send
+    // anyone back to (T-33037): the session cookie is this zone's, and the
+    // guard against an open redirect stays pure.
+    ['https://herbusiness.com/', null],
     ['https://example.com/?to=https://yaks.app/', null],
     ['//jeff.yaks.app/notes/', null],
     ['/notes/', null],

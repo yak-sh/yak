@@ -39,7 +39,7 @@ import { bound, type Env } from './env.ts'
 import * as identity from './identity.ts'
 import * as mcp from './mcp.ts'
 import { lost, oops } from './pages.ts'
-import { hostOf, type Route, route } from './route.ts'
+import { foreign, hostOf, PLATFORM, type Route, route } from './route.ts'
 import { storeOf } from './store.ts'
 import { noted, refusal } from './unseen.ts'
 import { metered } from './usage.ts'
@@ -73,6 +73,34 @@ let serve = async (req: Request, env: Env, r: Route) => {
   return page.status == 404 ? lost() : page
 }
 
+// A hostname someone else owns, aimed at one of our apps (T-33037). Routing
+// stays pure and synchronous; this is a DIRECTORY READ, so it happens here,
+// where the router already holds env — and only for a hostname that is
+// neither ours nor a dev host (route.ts `foreign`). A host the directory has
+// never been given answers null and keeps the route it already had, which is
+// the apex: every address that exists today is decided before this is asked.
+//
+// A domain serves ONE app at its ROOT, so the request is carried to that
+// app's own address — `herbusiness.com/menu` becomes
+// `<space>.yaks.app/<app>/menu` — and every part below routes it from the
+// pure route table the way it routes everything else. Serving at the root
+// falls out of that: the app's `/` is the domain's `/`, with no redirect into
+// a path (T-33040 owns that question for a space's own hostname). The
+// browser stays on the person's domain; only the address the PLATFORM
+// derives from the request moves, which is what puts a sign-in return on our
+// own zone, where the session cookie is (route.ts `onZone`).
+let aimed = async (req: Request, env: Env, host: string) => {
+  if (!foreign(host)) return null
+  let at = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
+    .serves(host)
+  if (!at) return null
+  let url = new URL(req.url)
+  url.protocol = 'https:'
+  url.host = `${at.space.slug}.${PLATFORM}`
+  url.pathname = `/${at.app.slug}${url.pathname}`
+  return new Request(url, req)
+}
+
 // What a request threw, as an entity where the person's agent reads: the
 // app's store when the route names an app that exists, the meta store
 // otherwise. Awaited, so the entity exists by the time the soft page lands.
@@ -104,8 +132,14 @@ let report = async (env: Env, r: Route, req: Request, e: unknown) => {
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
-    let r = route(hostOf(req), new URL(req.url).pathname)
+    let host = hostOf(req)
+    let r = route(host, new URL(req.url).pathname)
     try {
+      let at = r.space == null ? await aimed(req, env, host) : null
+      if (at) {
+        req = at
+        r = route(hostOf(at), new URL(at.url).pathname)
+      }
       return await serve(req, env, r)
     } catch (e) {
       // A refusal is not a break (unseen.ts `refusal`, T-32655). A part that
