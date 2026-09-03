@@ -15,6 +15,7 @@ let read = (name: string) =>
 let pages = [
   'index.html',
   'help.html',
+  'pricing.html',
   'terms.html',
   'privacy.html',
   'acceptable-use.html',

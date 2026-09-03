@@ -166,6 +166,15 @@ let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
     said,
     say,
     no: !!say,
+    // What they pay, and the two doors that change it (billing.ts, T-33125).
+    // `known` is whether Stripe has ever met this space: somebody who
+    // cancelled still reaches their own invoices.
+    plan: {
+      plus: space.tier == 'plus',
+      ends: space.plan?.ending ?? '',
+      known: !!space.plan?.customer,
+    },
+    paid: new URL(req.url).searchParams.get('paid') == '1',
   }, say ? 400 : 200)
 }
 

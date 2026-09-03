@@ -58,6 +58,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .At span { color: var(--soft-ink) }
 .Say { min-height: 1.3rem; margin: 0; font-size: .95rem }
 .Say-no { color: var(--warn) }
+.Bill_Doors { display: flex; flex-wrap: wrap; gap: .625rem; margin: 1rem 0 .5rem }
+.Bill_Go-quiet { background: transparent; color: var(--meadow); border: 1px solid var(--line) }
 </style>
 </head>
 <body><main><h1>${title}</h1><p>${lead}</p>${inner}</main></body>
@@ -260,6 +262,16 @@ export type Yours = {
   said?: string
   say?: string
   no?: boolean
+  // What this space pays (billing.ts, T-33125): whether it is on Plus, the
+  // day it lapses if it is leaving, and whether Stripe has ever known this
+  // space — which is what makes the manage door worth offering. THIS is the
+  // surface that starts a purchase, and it is signed-in web only: the agent
+  // surface may name the pricing page and nothing else (C-33033).
+  plan: { plus: boolean; ends: string; known: boolean }
+  // `?paid=1` on the way back from Stripe. The webhook is what actually moves
+  // the tier and it may not have landed yet, so the line says "in a moment"
+  // rather than claiming something this request cannot see.
+  paid?: boolean
 }
 
 let MCP = 'https://yaks.app/mcp'
@@ -284,6 +296,55 @@ change while nothing is built there.</p>
 <p class="Say${y.no ? ' Say-no' : ''}" role="status">${esc(y.say ?? '')}</p>
 </form>
 </section>`
+
+// The plan card, for a person who is signed in (T-33125). One card with one
+// button: Plus when they are free, manage-billing when they are paying. The
+// button POSTs to billing.ts and follows the URL Stripe answers, so no Stripe
+// address is written into this page and nothing here knows a key.
+//
+// A day, not a timestamp: "runs until 14 October 2026" is what somebody wants
+// to know, and the hour is noise on a monthly bill.
+let day = (iso: string) => {
+  let at = new Date(iso)
+  return Number.isNaN(at.getTime()) ? '' : at.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+}
+
+let plan = (y: Yours) => {
+  let ends = y.plan.ends ? day(y.plan.ends) : ''
+  let head = y.plan.plus
+    ? `<p>${y.slug}.yaks.app is on <b>Plus</b>.${
+      ends ? ` It runs until ${esc(ends)} and then stops renewing.` : ''
+    }</p>`
+    : `<p>${y.slug}.yaks.app is on the <b>free</b> plan — five apps, 50,000
+visits a month, 1 GB. <a href="https://yaks.app/pricing">What Plus holds</a>.</p>`
+  // Someone Stripe has met can always reach their own billing, whatever plan
+  // they are on today: an invoice from a month they paid for is theirs to
+  // read after they cancel.
+  let doors = [
+    y.plan.plus
+      ? ''
+      : '<button class="Bill_Go" data-door="checkout">Get Plus — $4 a month</button>',
+    y.plan.known
+      ? '<button class="Bill_Go Bill_Go-quiet" data-door="portal">Manage billing</button>'
+      : '',
+  ].filter(Boolean).join('')
+  return `<section class="Card Bill"><h2>Your plan</h2>
+${head}
+${
+    y.paid
+      ? '<p class="Note">Thanks — that went through. Your space moves to Plus ' +
+        'in a moment.</p>'
+      : ''
+  }
+<p class="Bill_Doors">${doors}</p>
+<p class="Say Bill_Say" role="status"></p>
+</section>`
+}
 
 let steps = (name: string, items: string[], note?: string) =>
   `<section class="Card"><h2>${name}</h2>
@@ -372,6 +433,28 @@ if (f) f.addEventListener('submit', async (e) => {
   }
   go.disabled = false
 })
+
+// The billing buttons: ask our own door for a Stripe URL and follow it. The
+// URL is minted per person and expires, so it is never written into the page.
+for (let b of document.querySelectorAll('.Bill_Go')) {
+  b.addEventListener('click', async () => {
+    let say = document.querySelector('.Bill_Say')
+    b.disabled = true
+    say.className = 'Say Bill_Say'
+    say.textContent = 'One moment…'
+    try {
+      let r = await fetch('/api/billing/' + b.dataset.door, { method: 'POST' })
+      let out = await r.json()
+      if (out.url) { location = out.url; return }
+      say.className = 'Say Bill_Say Say-no'
+      say.textContent = out.error ? out.error.message : 'That did not go through.'
+    } catch (_) {
+      say.className = 'Say Bill_Say Say-no'
+      say.textContent = "That didn't go through. Try again?"
+    }
+    b.disabled = false
+  })
+}
 </script>`
 
 export let connect = (yours: Yours | null, status = 200) =>
@@ -380,7 +463,7 @@ export let connect = (yours: Yours | null, status = 200) =>
     'Give Claude or ChatGPT this link, once. Then ask it for what you want.',
     status,
     `<p class="Url"><code>${MCP}</code></p>
-${yours ? mine(yours) : ''}${doors}
+${yours ? mine(yours) + plan(yours) : ''}${doors}
 <p class="Note">Menus move. If yours doesn't look like this, search its
 settings for "connector" or "MCP" — the link is the same wherever it
 goes.</p>

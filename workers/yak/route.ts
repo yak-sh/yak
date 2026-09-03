@@ -7,6 +7,19 @@
 // client routes itself into a space by header. Pure: no env, no store.
 export let PLATFORM = 'yaks.app'
 
+// What the plans cost, as a page (public/pricing.html, D-32751). It lives here
+// — beside the platform's own name, in the module with no dependencies —
+// because both halves of the paid tier need it and they must not import each
+// other: billing.ts writes the plan, usage.ts says where a space stands
+// against its ceilings, and unseen.ts already joins them.
+//
+// It is the ONE address the agent surface may give (C-33033 on D-32751):
+// OpenAI's app-directory policy forbids a plugin selling a subscription and
+// allows explaining that a feature needs a plan and linking to a page that
+// describes the plans. So a tool answer may name this and never a checkout
+// link — checkout is the signed-in web page's, and email's.
+export let PRICING = `https://${PLATFORM}/pricing`
+
 // The Cloudflare for SaaS fallback origin (T-33036): the name a customer's
 // own hostname is CNAME'd to, and the one place that name is written — the
 // attach flow and the guide both read it here.

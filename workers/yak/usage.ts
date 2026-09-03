@@ -39,6 +39,7 @@ import {
   type Tier,
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
+import { PRICING } from './route.ts'
 import { storeOf } from './store.ts'
 
 export let GRAPHQL = 'https://api.cloudflare.com/client/v4/graphql'
@@ -330,7 +331,7 @@ export let standing = (space: Space, apps: number, now = new Date()) => {
   let m = spent(space, now)
   let refused = `Requests are never refused; a sixth app, data past ${
     size(free.bytes)
-  }, or the ${free.emails + 1}st letter is, until the paid tier lands.`
+  }, or the ${free.emails + 1}st letter is. What the plans hold: ${PRICING}`
   let head = `${space.slug} (free tier, ${m.month}): ${apps} of ${free.apps} ` +
     'apps'
   let read = asOf(m.at)
@@ -346,8 +347,14 @@ export let standing = (space: Space, apps: number, now = new Date()) => {
     `${m.emails} of ${free.emails} emails${read}. ${refused}`
 }
 
-// The refusal, one sentence: what the ceiling is, and that paying for more is
-// coming. Every door that says no says it this way.
+// The refusal, one sentence: what the ceiling is, and where the plans are
+// written down. Every door that says no says it this way.
+//
+// It names the PRICING PAGE and never a checkout link, and that is a policy
+// line rather than a preference (C-33033 on D-32751): an agent surface may
+// explain that a feature needs a plan and may link to a page describing the
+// plans; it may not hand back anything that starts a purchase. Paying is the
+// signed-in web page's door (billing.ts).
 export let atCeiling = (space: Space, what: 'apps' | 'bytes' | 'emails') => {
   let free = ceilings(space.tier)!
   let said = {
@@ -359,7 +366,7 @@ export let atCeiling = (space: Space, what: 'apps' | 'bytes' | 'emails') => {
     emails: `${space.slug} is on the free tier, which is ${free.emails}` +
       ` emails a month — it can send again on the 1st`,
   }[what]
-  return `${said}. A paid tier is coming.`
+  return `${said}. Plus lifts it: ${PRICING}`
 }
 
 // The byte ceiling, at the two doors that add data (apps.ts): the space's

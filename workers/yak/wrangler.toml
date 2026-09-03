@@ -53,6 +53,12 @@ CF_ACCOUNT = "0f9613dfd3f0451df0bd0f12a1372ea3"
 # is on. Not a secret either: a zone id names a zone, it does not open one.
 CF_ZONE = "3b2518c3647029d687bb4f40bebf0f77"
 
+# The recurring price a Plus subscription is for (billing.ts, D-32751): $4 a
+# month, live mode. Not a secret — a price id names a price, it does not open
+# an account, and it belongs beside the account and zone above rather than in a
+# secret store where nobody can read what the site is selling.
+STRIPE_PRICE = "price_1UBe7mITlUS6lUlgJqKpCFiV"
+
 # The per-deploy version id (stream.ts, T-33013): Cloudflare mints a fresh id on
 # every `wrangler deploy`, so it is the marker a resumed MCP stream compares to
 # know the platform's tool/resource/prompt lists moved — automatic, with no file
@@ -128,6 +134,12 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # CF_HOSTNAMES_TOKEN attaches a person's own domain as a custom hostname on
 # the zone above (Zone → SSL and Certificates → Edit on yaks.app, T-33038);
 # unset, domain_attach refuses saying so and nothing is half-attached.
+# STRIPE_KEY is the restricted Stripe API key checkout, the customer portal and
+# one subscription read speak with (T-32760); STRIPE_WEBHOOK_SECRET is what the
+# events Stripe posts to /api/stripe/webhook are verified against
+# (billing.ts). Unset, those doors say the paid tier is not switched on here
+# rather than half-working, and a webhook that arrives unread is filed where
+# the owner sees it.
 # CIMD is not a secret but rides the same door, because that door needs no
 # code deploy: `printf off | wrangler secret put CIMD` stops the well-known
 # claiming Client ID Metadata Document support, `printf on | ...` restores it,

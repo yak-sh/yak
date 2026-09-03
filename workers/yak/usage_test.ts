@@ -160,11 +160,19 @@ Deno.test('before the first sweep the line says so, not zero', () => {
   assertStringIncludes(said, 'Requests are never refused')
 })
 
-Deno.test('a refusal names the ceiling and says a paid tier is coming', () => {
+// A refusal points at the page that DESCRIBES the plans and never at anything
+// that starts a purchase — the agent surface's policy line (C-33033 on
+// D-32751), which is why the assertion is on both halves.
+Deno.test('a refusal names the ceiling and where the plans are written', () => {
   for (let what of ['apps', 'bytes', 'emails'] as const) {
     let said = atCeiling(space(), what)
     assertStringIncludes(said, 'free tier')
-    assertStringIncludes(said, 'A paid tier is coming.')
+    assertStringIncludes(said, 'https://yaks.app/pricing')
+    assert(!/checkout|billing|subscribe|upgrade/i.test(said), said)
   }
   assertStringIncludes(atCeiling(space(), 'apps'), '5 apps')
+  assert(
+    !/checkout|billing/i.test(standing(space(), 3)),
+    'the standing line names no purchase either',
+  )
 })

@@ -1,0 +1,149 @@
+<!doctype html>
+<!--
+  What yaks.app costs (D-32751, T-33125). INFORMATIONAL, on purpose: it
+  describes the plans and it does not start a purchase. OpenAI's app-directory
+  policy forbids a plugin selling a subscription and allows it to explain that
+  a feature needs a plan and to link to a page describing the plans (C-33033),
+  so this is the page an assistant may point at — and the reason there is no
+  subscribe button on it. Paying happens on the connector page, signed in.
+
+  Every number here comes from D-32751. Tax is added on top rather than
+  included: the price carries no tax_behavior and the account's default is
+  exclusive, so a reader in a VAT country pays more than the headline and the
+  page has to say so.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pricing · yaks.app</title>
+    <meta
+      name="description"
+      content="yaks.app is free for five apps, and $4 a month for as many as you like."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="Top">
+      <a class="Top_Name" href="/" aria-label="yaks.app, home">
+        <img class="Yak Yak-small" src="yak.png" alt="" />
+        <span>yaks.app</span>
+      </a>
+    </header>
+
+    <main class="Page Pricing">
+      <section class="Hello" aria-labelledby="hello">
+        <h1 id="hello" class="Title Title-page">What it costs</h1>
+        <p class="Note Note-lead">
+          Start free and stay free if five apps is all you want. When you want
+          more, it's four dollars a month.
+        </p>
+      </section>
+
+      <section aria-labelledby="plans">
+        <h2 id="plans" class="Title">The two plans</h2>
+        <div class="Plans">
+          <div class="Card Plan">
+            <h3 class="Plan_Price">Free</h3>
+            <p class="Note Note-small">For a few apps of your own.</p>
+            <ul class="Plan_List">
+              <li>5 apps</li>
+              <li>50,000 visits a month</li>
+              <li>1 GB of app data</li>
+              <li>100 emails a month</li>
+              <li>Your own address at <b>yourname.yaks.app</b></li>
+            </ul>
+          </div>
+
+          <div class="Card Plan Plan-plus">
+            <h3 class="Plan_Price">$4<span class="Plan_Per"> a month</span></h3>
+            <p
+              class="Note Note-small">Called Plus. For when five isn't enough.</p>
+            <ul class="Plan_List">
+              <li>As many apps as you like</li>
+              <li>500,000 visits a month</li>
+              <li>5 GB of app data</li>
+              <li>25 GB of photos and files</li>
+              <li>1,000 emails a month</li>
+              <li>A domain of your own, like <b>ourbookclub.com</b></li>
+            </ul>
+          </div>
+        </div>
+        <p class="Note Note-small">
+          Prices are in US dollars. Where your country charges sales tax or VAT,
+          it's added at checkout, so what you pay may be a little more than the
+          number above.
+        </p>
+      </section>
+
+      <section class="Yours" aria-labelledby="fair">
+        <h2 id="fair" class="Title">How we treat the limits</h2>
+        <dl class="Yours_List">
+          <dt>Visitors are never turned away.</dt>
+          <dd>
+            If more people come than your plan counts, your apps keep working.
+            We'll tell your assistant you're near the line rather than closing
+            the door on your guests.
+          </dd>
+
+          <dt>You get told before you get stopped.</dt>
+          <dd>
+            At four fifths of any limit, your assistant hears about it on its
+            next reply — so it can say something before you run into anything.
+          </dd>
+
+          <dt>Nothing is deleted for going over.</dt>
+          <dd>
+            On the free plan a sixth app waits, and so does data past a
+            gigabyte and the hundred-and-first email. What you've already made
+            stays exactly where it is.
+          </dd>
+
+          <dt>Cancel whenever you like.</dt>
+          <dd>
+            Plus runs to the end of the month you've paid for, and then your
+            space is on the free plan again. Your apps and everything in them
+            stay yours.
+          </dd>
+        </dl>
+      </section>
+
+      <section class="Join Card" aria-labelledby="start">
+        <h2 id="start" class="Title">Where to start</h2>
+        <p class="Note">
+          Sign in with your email — we send a six-digit code, so there's no
+          password to keep track of — and your free space is waiting. You can
+          move to Plus from your own page later, whenever you want to.
+        </p>
+        <p class="Join_Doors">
+          <a class="Button" href="/login">Sign in</a>
+        </p>
+        <p class="Note">
+          <a href="/help">Questions people ask</a>
+        </p>
+      </section>
+    </main>
+
+    <footer class="Foot">
+      <p>Made with care by a small herd. It's early days here — thanks for
+        coming by.</p>
+      <ul class="Foot_Links">
+        <li><a href="/help">Help</a></li>
+        <li><a href="/pricing">Pricing</a></li>
+        <li><a href="/terms">Terms</a></li>
+        <li><a href="/privacy">Privacy</a></li>
+        <li><a href="/acceptable-use">Acceptable use</a></li>
+        <li><a href="/cookies">Cookies</a></li>
+      </ul>
+    </footer>
+  </body>
+</html>

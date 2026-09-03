@@ -46,17 +46,10 @@ import {
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { PLATFORM } from './route.ts'
+
 import { cookieValue, verify } from '../../src/token.ts'
 import { storeOf } from './store.ts'
 import { noted } from './unseen.ts'
-
-// Where the informational page lives (C-33033 on D-32751). The MCP surface may
-// point at THIS and never at a checkout link: OpenAI's app policy forbids a
-// plugin selling a subscription, and allows explaining that a feature needs a
-// plan and linking to a page that describes the plans. So the address is
-// written here once, and `checkout()` below is reachable only from a signed-in
-// web page — never from a tool answer.
-export let PRICING = `https://${PLATFORM}/pricing`
 
 let API = 'https://api.stripe.com'
 
