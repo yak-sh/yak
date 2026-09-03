@@ -107,6 +107,15 @@ answer maps it to its eid), and a filter line reads them back. The guide
 resource has the components and the filter grammar; graph_apply, graph_query
 and search are the same store from here, for seeding and fixing.
 
+An eid is the same thing in every app. Two apps can write about one entity —
+a reading list app saves the book, a lending app saves the loan — and each
+component lives with the app that declares it, so nothing is copied and
+nothing is synced. graph_query with no app named reads them all at once and
+answers one bundle per entity: '.book!&.loan?' is every book wearing its loan
+where it has one, and '.loan?' asks for a component without filtering on it.
+A page reads a sibling app the same way, with store('/lending/api/') from
+'./api/client.js'.
+
 An app can carry its OWN tools: a tools.json beside index.html declares them
 — a name, a sentence, an input, and an apply or query template over the app's
 store — and after app_deploy they are listed here as <app>__<tool>, for the

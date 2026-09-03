@@ -264,6 +264,49 @@ taken:
 Anything the columns don't cover still lives in `doc.body`: it is text, so
 markdown or JSON both keep there.
 
+## An entity spans apps
+
+An eid is the same thing everywhere. Two apps of the person's can write about
+one entity, each in its own words: a reading list app saves the `book`, a
+lending app saves who has it, and there is no copy and no sync between them —
+they are one entity wearing two components, one per store.
+
+A component lives with the app that DECLARES it, so nothing has to be agreed:
+`book` is the reading list's word wherever it is written, `loan` is the lending
+app's. Anything shared — `doc`, `comment`, `image` — goes to the app you name,
+else the app where that entity already lives.
+
+    graph_apply { app: 'reading', entities: [
+      { entity: { eid: '$b' }, doc: { title: 'Piranesi' },
+        book: { pages: 245 } } ] }
+
+    graph_apply { app: 'lending', entities: [
+      { entity: { eid: '<that eid>' }, loan: { to: 'Maya' } } ] }
+
+`graph_query` with NO app named reads every app the person has at once and
+answers one bundle per entity, composed out of whichever stores hold a piece:
+
+    graph_query { filter: '.book!&.loan?' }
+    → [ { kind: 'book', entity: { eid: '...', num: 3 },
+          book: { pages: 245 }, loan: { to: 'Maya' },
+          _stores: { book: 'jeff/reading', loan: 'jeff/lending' } } ]
+
+`.book!` says which entities the answer is about; `.loan?` asks for the loan
+beside them, where there is one. Name both with `!` (`.book!&.loan!`) and the
+answer is only the books that are lent out — a filter's `&` is an intersection,
+across apps as within one. `_stores` says which app holds which component, on a
+bundle that spans two.
+
+A PAGE reads a sibling app the same way, by naming its address:
+
+    import { store } from './api/client.js'
+
+    let lending = store('/lending/api/')
+    let loans = await lending.query('.loan!')
+
+It is the app's own door, so its `access` decides: a `private` app answers
+nobody but its members, whichever page is asking.
+
 ## Tools of your own
 
 An app can also carry its own **tools**, so the person's agent can act on it

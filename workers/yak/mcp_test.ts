@@ -79,6 +79,11 @@ slow(
           // Who an app is for is part of making it (T-32504).
           "access 'open'",
           'member_add',
+          // An entity spans apps, and the person's agent is told so before
+          // it builds the second one (T-32701).
+          'the same thing in every app',
+          "'.book!&.loan?'",
+          "store('/lending/api/')",
         ]
       ) assertStringIncludes(init.instructions, said)
       let says = (name: string) =>
@@ -98,6 +103,11 @@ slow(
       )
       let read = await agent.call('resources/read', { uri: GUIDE })
       assertMatch(read.contents[0].text, /api\/client\.js/)
+      // The guide teaches the composition, with the person's own example: a
+      // book from one app wearing a loan from another (T-32701).
+      assertStringIncludes(read.contents[0].text, '## An entity spans apps')
+      assertStringIncludes(read.contents[0].text, '.book!&.loan?')
+      assertStringIncludes(read.contents[0].text, "store('/lending/api/')")
 
       // The first MCP App view: a ui:// resource the host renders, named by
       // the tool whose answer it draws (T-32492).
