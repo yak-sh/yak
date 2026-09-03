@@ -1,0 +1,269 @@
+<!doctype html>
+<!--
+  Help (T-33050): the one page here written for a PERSON. The guide and its
+  nine pages teach an assistant how to build; /connect teaches someone how to
+  attach one. This answers the questions somebody arrives with, in the words
+  they arrive with them in — so every heading is a question, and nothing on
+  the page is explained twice. Anything technical points at the guide instead
+  (M-14370: one source per fact, a pointer never rots).
+
+  Nothing here promises a thing we do not have, and nothing here mentions
+  plans or prices, because there is no paid tier yet.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Help · yaks.app</title>
+    <meta
+      name="description"
+      content="Answers to the questions people arrive with: what you can make, how to start, where your things live, who can see them, and how to reach a person."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="yak.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="Top">
+      <a class="Top_Name" href="/" aria-label="yaks.app, home">
+        <img class="Yak Yak-small" src="yak.svg" alt="" />
+        <span>yaks.app</span>
+      </a>
+    </header>
+
+    <main class="Page Prose">
+      <div class="Prose_Head">
+        <h1 class="Prose_Title">Help</h1>
+        <p>
+          You ask, your assistant builds, and what it builds is a website of
+          your own. Here are the questions people arrive with. If yours isn't
+          one of them, write to <a href="mailto:hello@yaks.app">hello@yaks.app</a>
+          and a person will answer.
+        </p>
+        <ul class="Ask">
+          <li><a href="#make">What can I make?</a></li>
+          <li><a href="#start">How do I start?</a></li>
+          <li><a href="#ask">How do I ask for things?</a></li>
+          <li><a href="#where">Where do my things live?</a></li>
+          <li><a href="#who">Who can see them?</a></li>
+          <li><a href="#invite">Letting someone in</a></li>
+          <li><a href="#broken">Something's broken</a></li>
+          <li><a href="#out">Getting my things out</a></li>
+          <li><a href="#people">Reaching a person</a></li>
+        </ul>
+      </div>
+
+      <section id="make">
+        <h2>What can I make?</h2>
+        <p>
+          Small useful things, mostly, and they don't look alike. A recipe box
+          you share with your sister. A garden diary. A page for the book club
+          with the next three months on it. A signup sheet for the potluck. A
+          little shop for your pottery. A running board. A guestbook for a
+          birthday.
+        </p>
+        <p>
+          If you can say what you want in a sentence or two, that's enough to
+          start with. Ask for the plain version first — changing it later costs
+          you another sentence, and nothing else.
+        </p>
+        <p>
+          You can also ask "has somebody already made one of these?" People
+          here publish apps for anyone to take. A copy is entirely yours from
+          the first minute: your own link, your own things in it, nothing
+          shared back with whoever wrote it.
+        </p>
+      </section>
+
+      <section id="start">
+        <h2>How do I start?</h2>
+        <p>
+          Bring an assistant you already talk to — Claude or ChatGPT — and give
+          it <code>https://yaks.app/mcp</code>, once. It'll ask you to sign in
+          with your email, and we send a six-digit code, so there's no password
+          to keep track of.
+        </p>
+        <p>
+          <a href="/connect">The connect page</a> has the exact clicks for each
+          assistant. After that you just talk to it the way you already do.
+        </p>
+      </section>
+
+      <section id="ask">
+        <h2>How do I ask for things?</h2>
+        <p>
+          In your own words. "Could you make me a recipe box? Something I can
+          share with my sister." It gets built while you wait, and you get a
+          link to open.
+        </p>
+        <p>
+          Then keep going. "Put the newest ones first." "Let Ana leave a note on
+          each one." "Make the photos bigger." You never have to describe the
+          whole thing up front, and you're not choosing from a menu — if you can
+          say it, it can be tried.
+        </p>
+        <p>
+          Changed your mind about a change? "Put the recipe box back the way it
+          was yesterday." Every version is kept — the last twenty — and going
+          back swaps the pages, never the things you've saved.
+        </p>
+      </section>
+
+      <section id="where">
+        <h2>Where do my things live?</h2>
+        <p>
+          On the web, under a name you pick. Your apps live at
+          <code>yourname.yaks.app</code> — a recipe box at
+          <code>yourname.yaks.app/recipes</code> — and the first thing you make
+          also answers plain <code>yourname.yaks.app</code>. That's the link you
+          send people; there is nothing to install, at either end.
+        </p>
+        <p>
+          You choose that name on <a href="/connect">the connect page</a>, and
+          you can change it right up until you've built something — after that
+          it stays put, so that links people already have keep working.
+        </p>
+        <p>
+          Everything an app remembers — every recipe, every note, every photo —
+          stays with that app. It's the same on your phone as on your laptop:
+          write on one and the other catches up. Ask your assistant "what have
+          I got here?" any time and it'll list what you've made, with links.
+        </p>
+      </section>
+
+      <section id="who">
+        <h2>Who can see them?</h2>
+        <p>
+          You choose, one app at a time, and you can change your mind whenever
+          you like. There are three ways to have it:
+        </p>
+        <ul>
+          <li>
+            <b>Anyone with the link can read it.</b> This is how an app starts.
+            They can look; only you and the people you've invited can change
+            anything.
+          </li>
+          <li>
+            <b>Anyone with the link can write in it too.</b> For a vote, a
+            signup sheet, a guestbook — somebody adds their line without signing
+            in or making an account.
+          </li>
+          <li>
+            <b>Only you and the people you invite.</b> Nobody else can even open
+            the page.
+          </li>
+        </ul>
+        <p>
+          Saying it is enough: "make the potluck list one anyone can sign up
+          on", "keep the diary private".
+        </p>
+      </section>
+
+      <section id="invite">
+        <h2>How do I let someone in? And how do I stop?</h2>
+        <p>
+          Tell your assistant who, and why: "invite ana@example.com to the
+          recipe box, and say it's for Saturday." Ana gets an email with your
+          note and the link, and signing in there with that same email address
+          is all it takes — no account to make first, nothing to install.
+        </p>
+        <p>
+          You can say what she may do: write things, only read them, or invite
+          other people too. And an invitation is to your whole corner of
+          yaks.app rather than to one app — everything under
+          <code>yourname.yaks.app</code> — so invite the people you'd have let
+          look over your shoulder anyway.
+        </p>
+        <p>
+          Stopping is the same sentence backwards: "take Ana out." She keeps her
+          own sign-in and loses this. What she wrote while she was here stays
+          where it is.
+        </p>
+      </section>
+
+      <section id="broken">
+        <h2>Something's broken. What do I do?</h2>
+        <p>
+          Say so, in your own words: "the photo on the pancakes won't load." You
+          don't have to work out what went wrong, and you'll never be shown a
+          wall of computer text.
+        </p>
+        <p>
+          When something breaks, the app writes down what happened by itself,
+          and your assistant hears about it the next time you two talk. You can
+          also ask outright: "anything broken in the recipe box?" It'll show you
+          each one and fix them.
+        </p>
+        <p>
+          If a change is what broke it, ask for the old version back. Nothing
+          you've saved is lost in either direction.
+        </p>
+      </section>
+
+      <section id="out">
+        <h2>Can I get my things out?</h2>
+        <p>
+          Yes, and you don't need us to do it for you. Ask: "give me everything
+          in the recipe box as a file." Your assistant can read every last thing
+          an app holds and hand it back in whatever shape you want it — a list
+          to read, a spreadsheet, the pages themselves.
+        </p>
+        <p>
+          Want one gone instead? "Delete the recipe box." That's the app, what
+          it held and its link, for good — there's no undo, so it only happens
+          when you say so.
+        </p>
+        <p>
+          To ask for a copy of everything we hold about you, or for your account
+          to be closed, write to
+          <a href="mailto:hello@yaks.app">hello@yaks.app</a>. The
+          <a href="/privacy">privacy page</a> says what we keep and for how
+          long.
+        </p>
+      </section>
+
+      <section id="people">
+        <h2>How do I reach a person?</h2>
+        <p>
+          <a href="mailto:hello@yaks.app">hello@yaks.app</a>. It's a real inbox,
+          we read everything, and we write back.
+        </p>
+        <p>
+          You can also just say it where you are: tell your assistant that
+          something here is broken, confusing or missing — "this is baffling,
+          tell them" — and it sends us your words along with what it tried. That
+          reaches the same inbox, and we can answer it.
+        </p>
+      </section>
+
+      <section id="under">
+        <h2>What's actually going on under there?</h2>
+        <p>
+          If you're the curious sort, or your assistant is: everything it can do
+          here is written down in <a href="/guide.md">the guide</a> — how an app
+          keeps what you save, photos and files, sharing and inviting, and what
+          happens when something breaks. It's written for the assistant, but
+          it's plain enough to read over its shoulder.
+        </p>
+      </section>
+    </main>
+
+    <footer class="Foot">
+      <p>Made with care by a small herd. It's early days here — thanks for
+        coming by.</p>
+      <ul class="Foot_Links">
+        <li><a href="/help">Help</a></li>
+        <li><a href="/terms">Terms</a></li>
+        <li><a href="/privacy">Privacy</a></li>
+        <li><a href="/acceptable-use">Acceptable use</a></li>
+        <li><a href="/cookies">Cookies</a></li>
+      </ul>
+    </footer>
+  </body>
+</html>

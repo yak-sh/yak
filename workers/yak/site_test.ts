@@ -9,6 +9,7 @@ let read = (name: string) =>
 
 let pages = [
   'index.html',
+  'help.html',
   'terms.html',
   'privacy.html',
   'acceptable-use.html',
@@ -19,6 +20,18 @@ let pages = [
 // and redirects the other spelling, so the pages link the short one.
 let links = (html: string) =>
   [...html.matchAll(/<a href="\/([a-z-]+)">/g)].map((m) => m[1])
+
+// The help page jumps to its own questions. A renamed section leaves a pill
+// that scrolls nowhere and says nothing about it, the same silent rot.
+Deno.test('every help jump names a section on that page', () => {
+  let html = read('help.html')
+  let ids = new Set(
+    [...html.matchAll(/<section id="([a-z]+)">/g)].map((m) => m[1]),
+  )
+  let jumps = [...html.matchAll(/href="#([a-z]+)"/g)].map((m) => m[1])
+  assert(jumps.length, 'help.html has no jumps')
+  for (let j of jumps) assert(ids.has(j), `#${j} names no section`)
+})
 
 Deno.test('every footer link names a page that is there', () => {
   for (let page of pages) {

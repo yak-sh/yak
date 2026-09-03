@@ -307,5 +307,8 @@ ${yours ? mine(yours) : ''}${doors}
 <p class="Note">Menus move. If yours doesn't look like this, search its
 settings for "connector" or "MCP" — the address is the same wherever it
 goes.</p>
+<p class="Note">Wondering what to ask it for, or where your things live?
+<a href="https://yaks.app/help">Help</a> answers the questions people arrive
+with.</p>
 ${home}${yours ? inline : ''}`,
   )

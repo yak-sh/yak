@@ -329,23 +329,29 @@ ul {
   color: var(--meadow);
 }
 
-/* Things people ask for: soft pills that wrap like a handful of notes. */
+/* Things people ask for: soft pills that wrap like a handful of notes. The
+   help page jumps to its questions on the same pill, made of links (.Ask),
+   which is why the shape is written once here. */
 .Make {
   display: grid;
   gap: 1.25rem;
 }
 
-.Make_List {
+.Make_List,
+.Ask {
   display: flex;
   flex-wrap: wrap;
   gap: 0.625rem;
 }
 
-.Make_List li {
+.Make_List li,
+.Ask a {
   padding: 0.5rem 1rem;
   border-radius: 999px;
   background: var(--paper);
   border: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
 }
 
 /* And then it's yours: a plain description list, not a grid of feature
@@ -439,66 +445,67 @@ ul {
   color: var(--soft-ink);
 }
 
-/* The legal pages: the same column and voice, set as plain prose. They are
-   read on a phone more often than not, so nothing here is wider than the
-   column and a long address breaks rather than scrolls. */
-.Legal {
+/* A page of plain prose — help, and the legal pages: the same column and
+   voice, nothing boxed. They are read on a phone more often than not, so
+   nothing here is wider than the column and a long link breaks rather than
+   scrolls. */
+.Prose {
   display: grid;
   gap: 2rem;
   overflow-wrap: break-word;
 }
 
-.Legal_Head {
+.Prose_Head {
   display: grid;
   gap: 0.5rem;
 }
 
-.Legal_Title {
+.Prose_Title {
   font-size: clamp(1.75rem, 4vw + 1rem, 2.25rem);
   font-weight: 800;
   line-height: 1.2;
   text-wrap: balance;
 }
 
-.Legal_When {
+.Prose_When {
   color: var(--soft-ink);
   font-size: 0.9375rem;
 }
 
-.Legal section {
+.Prose section {
   display: grid;
   gap: 0.75rem;
 }
 
-.Legal h2 {
+.Prose h2 {
   font-size: 1.25rem;
   font-weight: 800;
   text-wrap: balance;
 }
 
-.Legal p,
-.Legal li {
+.Prose p,
+.Prose li {
   color: var(--soft-ink);
   text-wrap: pretty;
 }
 
-.Legal ul {
+.Prose ul {
   display: grid;
   gap: 0.5rem;
   padding-inline-start: 1.25rem;
   list-style: disc;
 }
 
-.Legal a {
+.Prose a {
   color: var(--meadow);
 }
 
-.Legal address {
+.Prose address {
   font-style: normal;
   color: var(--soft-ink);
 }
 
-.Legal code {
+.Prose code {
   padding: 0.1rem 0.4rem;
   border-radius: 0.4rem;
   background: var(--paper);
