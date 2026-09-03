@@ -1,10 +1,13 @@
-// The Wire object's release news (T-33005), held in memory: a platform
+// The Wire object's release news (T-33005, T-33013), held in memory: a platform
 // deploy restarts the object and every stream resumes transparently, so the
-// object remembers per session which VERSION it last spoke for and tells a
-// stream that crossed a release its three lists moved — once per session,
-// directly, off the log. The object is a plain class over a structural
-// storage slice, so the fast tier constructs it with a Map and reads the SSE
-// frames straight off the attach Response.
+// object remembers per session which deploy it last spoke for — Cloudflare's
+// per-deploy version id (CF_VERSION_METADATA.id), or the human VERSION when
+// that binding is absent — and tells a stream that crossed a release its three
+// lists moved, once per session, directly, off the log. The object is a plain
+// class over a structural storage slice, so the fast tier constructs it with a
+// Map and an injected env, and reads the SSE frames straight off the attach
+// Response. Passing env {} exercises the VERSION fallback the workerd probes
+// take, since they have no version-metadata binding either.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { VERSION } from '../../src/version.ts'
 import { Wire } from './stream.ts'
@@ -81,6 +84,44 @@ Deno.test('a session never spoken for is remembered silently', async () => {
       (storage.map.get('spoke') as Record<string, string>).fresh,
       VERSION,
     )
+  } finally {
+    drained(wire)
+  }
+})
+
+Deno.test('the deploy id drives the marker, not the human VERSION', async () => {
+  let storage = kv()
+  // Last spoke under an earlier deploy; VERSION never moved between them.
+  storage.map.set('spoke', { abc: 'deploy-1' })
+  let wire = new Wire({ storage }, { CF_VERSION_METADATA: { id: 'deploy-2' } })
+  try {
+    let ear = await attached(wire, 'abc')
+    assertStringIncludes(await ear.read(), ': open')
+    for (let list of ['tools', 'resources', 'prompts']) {
+      let frame = await ear.read()
+      assertStringIncludes(frame, `notifications/${list}/list_changed`)
+      assertEquals(frame.includes('id:'), false)
+    }
+    // The marker is the deploy id, not VERSION.
+    assertEquals(
+      (storage.map.get('spoke') as Record<string, string>).abc,
+      'deploy-2',
+    )
+  } finally {
+    drained(wire)
+  }
+})
+
+Deno.test('the same deploy id stays quiet', async () => {
+  let storage = kv()
+  storage.map.set('spoke', { abc: 'deploy-2' })
+  let wire = new Wire({ storage }, { CF_VERSION_METADATA: { id: 'deploy-2' } })
+  try {
+    let ear = await attached(wire, 'abc')
+    assertStringIncludes(await ear.read(), ': open')
+    // No release crossed: the probe line is the very next frame.
+    await wire.tell({ method: 'probe' })
+    assertStringIncludes(await ear.read(), 'probe')
   } finally {
     drained(wire)
   }

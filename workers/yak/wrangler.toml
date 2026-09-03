@@ -42,6 +42,14 @@ crons = ["0 * * * *"]
 [vars]
 CF_ACCOUNT = "0f9613dfd3f0451df0bd0f12a1372ea3"
 
+# The per-deploy version id (stream.ts, T-33013): Cloudflare mints a fresh id on
+# every `wrangler deploy`, so it is the marker a resumed MCP stream compares to
+# know the platform's tool/resource/prompt lists moved — automatic, with no file
+# edit. The binding is absent under `wrangler dev` and the workerd probes, so
+# stream.ts treats it as optional and falls back to the human VERSION there.
+[version_metadata]
+binding = "CF_VERSION_METADATA"
+
 # An app's OWN worker.js (dispatch.ts, T-32778): every app's script lives in
 # this one Workers for Platforms namespace, named by the app's store. There is
 # no local implementation — dispatch namespaces are remote-only

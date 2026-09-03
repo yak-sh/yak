@@ -87,6 +87,13 @@ let KEPT = 64
 
 export class Wire {
   state: State
+  // The release marker a resumed stream compares (T-33013): Cloudflare's
+  // per-deploy version id, which the runtime mints fresh on every `wrangler
+  // deploy` — so a deploy moves it with no file edit, which is the point. The
+  // binding is absent under `wrangler dev` and the workerd probes, so it falls
+  // back to the human VERSION there (which those never move either, so the
+  // fallback stays quiet across their restarts).
+  mark: string
   // The streams open RIGHT NOW, oldest first. This is the only thing here
   // that does not survive the object being evicted — which is what the log
   // in storage is for.
@@ -95,8 +102,9 @@ export class Wire {
   // The log, read from storage once and held while the object lives.
   news: News | undefined
 
-  constructor(state: State, _env: unknown) {
+  constructor(state: State, env: { CF_VERSION_METADATA?: { id?: string } }) {
     this.state = state
+    this.mark = env?.CF_VERSION_METADATA?.id ?? VERSION
   }
 
   async log(): Promise<News> {
@@ -129,10 +137,10 @@ export class Wire {
   // every open stream; the client resumes with `Last-Event-ID` and nothing
   // in that tells it the platform's OWN tools, resources, prompts and guide
   // pages moved with the release (T-33005). So the object remembers, per
-  // session, the VERSION it last spoke for: a stream attaching for a session
-  // last spoken to under another release hears that all three lists moved —
-  // said to this stream alone, without ids and off the log, so no cursor
-  // moves and no other session hears a copy, keeping the transport's
+  // session, the deploy `mark` it last spoke for: a stream attaching for a
+  // session last spoken to under another release hears that all three lists
+  // moved — said to this stream alone, without ids and off the log, so no
+  // cursor moves and no other session hears a copy, keeping the transport's
   // one-copy-per-session rule. A session never seen is a client that just
   // initialized and listed fresh, so it is remembered silently — and the
   // nameless session is one key like any other, the best that can be done
@@ -143,14 +151,14 @@ export class Wire {
       'spoke',
     ) ?? {}
     let was = spoke[held.session]
-    if (was == VERSION) return
+    if (was == this.mark) return
     if (was != null) {
       for (let list of LISTS) {
         held.send(bare({ method: `notifications/${list}/list_changed` }))
       }
     }
     delete spoke[held.session]
-    spoke[held.session] = VERSION
+    spoke[held.session] = this.mark
     for (let old of Object.keys(spoke).slice(0, -KEPT)) delete spoke[old]
     await this.state.storage.put('spoke', spoke)
   }

@@ -21,6 +21,11 @@ export type Env = {
   // The person's own MCP stream (stream.ts): one object per signed-in
   // person, holding what an open connector is listening to.
   WIRE: Namespace
+  // Cloudflare's per-deploy version id (wrangler.toml [version_metadata]):
+  // `id` changes on every `wrangler deploy`, so the stream compares it to know
+  // the platform moved (stream.ts, T-33013). Optional — the binding is absent
+  // under `wrangler dev` and the workerd probes, so nothing may depend on it.
+  CF_VERSION_METADATA?: { id: string; tag?: string; timestamp?: string }
   ASSETS: Fetcher
   BLOBS: R2
   // The session-signing secret; unset, no session verifies (token.ts). It
