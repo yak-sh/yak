@@ -23,6 +23,8 @@ import {
   signIn,
 } from './probe.ts'
 import { monthOf } from './usage.ts'
+import { PAGES, uriOf } from './guide.ts'
+import { PROMPTS } from './prompts.ts'
 import { VERSION } from '../../src/version.ts'
 
 let GUIDE = 'https://yaks.app/guide.md'
@@ -134,13 +136,24 @@ slow(
       assertStringIncludes(says('graph_apply'), './api/client.js')
 
       // The guide the tool descriptions point at, offered as a resource and
-      // read from the address that serves it.
+      // read from the address that serves it — and the pages that go deep on
+      // one subject each, beside it (T-32982).
       assert(init.capabilities.resources, 'resources are offered')
       let { resources } = await agent.call('resources/list')
       assertEquals(
         resources.map((r: { uri: string }) => r.uri),
-        [GUIDE, APPS, ERRORS],
+        [GUIDE, ...PAGES.map((p) => uriOf(p.slug)), APPS, ERRORS],
       )
+      // The description is the only thing an agent sees before choosing, so
+      // it is what the listing must carry.
+      for (let p of PAGES) {
+        let listed = resources.find(
+          (r: { uri: string }) => r.uri == uriOf(p.slug),
+        )
+        assertEquals(listed.title, p.title)
+        assertEquals(listed.description, p.description)
+        assertEquals(listed.mimeType, 'text/markdown')
+      }
       let read = await agent.call('resources/read', { uri: GUIDE })
       assertMatch(read.contents[0].text, /api\/client\.js/)
       // The guide teaches the composition, with the person's own example: a
@@ -148,6 +161,22 @@ slow(
       assertStringIncludes(read.contents[0].text, '## An entity spans apps')
       assertStringIncludes(read.contents[0].text, '.book!&.loan?')
       assertStringIncludes(read.contents[0].text, "store('/lending/api/')")
+      // The map still names each page, so a person reading only the guide
+      // knows the depth is there (T-32982).
+      for (let p of PAGES) {
+        assertStringIncludes(read.contents[0].text, uriOf(p.slug))
+      }
+
+      // A page is read through this door, and served at the same address to
+      // whoever follows the link — one file, two ways in.
+      let deep = await agent.call('resources/read', { uri: uriOf('querying') })
+      assertEquals(deep.contents[0].uri, uriOf('querying'))
+      assertEquals(deep.contents[0].mimeType, 'text/markdown')
+      assertStringIncludes(deep.contents[0].text, '# Querying')
+      assertStringIncludes(deep.contents[0].text, '.doc!')
+      let got = await k.at('yaks.app', '/guide/querying.md')
+      assertEquals(got.status, 200)
+      assertEquals(await got.text(), deep.contents[0].text)
 
       // The first MCP App view: a ui:// resource the host renders, named by
       // the tool whose answer it draws (T-32492).
@@ -180,6 +209,58 @@ slow(
       assertEquals(cards.mimeType, 'text/html;profile=mcp-app')
       assertStringIncludes(cards.text, 'ui/notifications/tool-result')
       assertStringIncludes(cards.text, "name: 'app_errors'")
+
+      // The doors a PERSON picks by name (T-32981): declared beside tools,
+      // listed with the arguments a client asks them to fill in, and got as
+      // one message written in their own voice.
+      assertEquals(init.capabilities.prompts, { listChanged: true })
+      let { prompts } = await agent.call('prompts/list')
+      assertEquals(
+        prompts.map((p: { name: string }) => p.name),
+        PROMPTS.map((p) => p.name),
+      )
+      assertEquals(prompts.map((p: { name: string }) => p.name), [
+        'make',
+        'fix',
+        'share',
+        'publish',
+      ])
+      let make = prompts.find((p: { name: string }) => p.name == 'make')
+      assertEquals(make.title, 'Make something new')
+      assertEquals(make.arguments, [{
+        name: 'what',
+        description: PROMPTS[0].arguments[0].description,
+        required: true,
+      }])
+      let picked = await agent.call('prompts/get', {
+        name: 'make',
+        arguments: { what: 'a chore board for the house' },
+      })
+      assertEquals(picked.messages.length, 1)
+      assertEquals(picked.messages[0].role, 'user')
+      assertEquals(picked.messages[0].content.type, 'text')
+      assertStringIncludes(
+        picked.messages[0].content.text,
+        'a chore board for the house',
+      )
+      // An optional argument left out still reads as a sentence.
+      assertStringIncludes(
+        (await agent.call('prompts/get', { name: 'fix' }))
+          .messages[0].content.text,
+        'my apps',
+      )
+      // The spec's two -32602s: a name nobody offers, and a required
+      // argument nobody filled in.
+      await assertRejects(
+        () => agent.call('prompts/get', { name: 'nope' }),
+        Error,
+        'no prompt',
+      )
+      await assertRejects(
+        () => agent.call('prompts/get', { name: 'make' }),
+        Error,
+        'needs what',
+      )
 
       // A space, then an app in it; the slugs are one per namespace.
       assertMatch(

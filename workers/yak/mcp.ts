@@ -4,11 +4,13 @@
 // restart strands nobody and a Worker isolate holds nothing between calls
 // except a stream a client is holding open: `GET /mcp` is that stream
 // (stream.ts), and what goes down it is `notifications/tools/list_changed`
-// when an app's own tools move (T-32686). The protocol surface is six
+// when an app's own tools move (T-32686). The protocol surface is eight
 // methods — initialize, ping, tools/list, tools/call over the tool table in
-// tools.ts, and resources/list, resources/read over the guide, the two views
-// below, and the pages an app of the person's own declares (declared.ts,
-// T-32687), which is what a connector that calls tools, reads a page and
+// tools.ts, resources/list, resources/read over the guide, its deep pages
+// (guide.ts, T-32982), the two views below, and the pages an app of the
+// person's own declares (declared.ts, T-32687), and prompts/list,
+// prompts/get over the four doors a PERSON picks by name (prompts.ts,
+// T-32981) — which is what a connector that calls tools, reads a page and
 // renders an answer asks for. The stream is the `agents` package's McpAgent
 // shape without the package: a Durable Object per signed-in person
 // (stream.ts's `Wire`), which is what it takes for the request that deployed
@@ -33,6 +35,8 @@ import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { unauthorized, withAuth } from './identity.ts'
 import { callDeclared, listDeclared, listViews, readView } from './declared.ts'
+import { PAGES, uriOf, WHOLE } from './guide.ts'
+import { missing, promptOf, PROMPTS } from './prompts.ts'
 import {
   APPS_VIEW,
   type Ctx,
@@ -106,9 +110,11 @@ answer maps it to its eid), and a filter line reads them back. A row carries
 only the components its filter NAMES — presence filters end at ! and join
 with &, and '?' asks for one without filtering on it — so query('.recipe!')
 answers recipes with no titles and query('.recipe!&.doc?') answers both. Ask
-for what the page will draw. The guide
-resource has the components and the filter grammar; graph_apply, graph_query
-and search are the same store from here, for seeding and fixing.
+for what the page will draw. The guide resource is the map of all of this,
+and beside it is a page per subject — querying, components, files, tools of
+your own, code of your own — so read the one the work calls for rather than
+guessing; graph_apply, graph_query and search are the same store from here,
+for seeding and fixing.
 
 An eid is the same thing in every app. Two apps can write about one entity —
 a reading list app saves the book, a lending app saves the loan — and each
@@ -151,27 +157,52 @@ refused for no reason you could find, a guide that taught the wrong thing,
 something missing you cannot work around — say so with feedback: their words
 and what you tried, once, and it reaches the people who run yaks.app by mail.`
 
+// What a resource of this door's own is: a listing entry, plus the address
+// its bytes come off the assets at (`page`), which for everything here is the
+// address in `uri` — a client may read it through this door or simply follow
+// the link.
+type Doc = {
+  uri: string
+  name: string
+  title: string
+  description: string
+  mimeType: string
+  page: string
+}
+
 // The resources this door offers. The guide is how an app is built here, and
 // how its pages save and list through the client the kernel serves them
-// (public/guide.md); its URI is the address that actually serves it, so a
-// client may read it through this door or simply follow the link.
-let GUIDE = {
-  uri: 'https://yaks.app/guide.md',
+// (public/guide.md): the map, covering pretty much everything, briefly.
+let GUIDE: Doc = {
+  uri: WHOLE,
   name: 'building-an-app',
   title: 'Building an app on yaks.app',
   description:
-    'What an app is, how its pages read and write its store through ' +
-    './api/client.js, and the components and filters they have.',
+    'The map: what an app is, how its pages read and write its store ' +
+    'through ./api/client.js, and a passage on every feature there is. ' +
+    'Read it first; read a page below for the depth on one of them.',
   mimeType: 'text/markdown',
-  page: 'https://yaks.app/guide.md',
+  page: WHOLE,
 }
+
+// And the pages that go deep, one per subject (guide.ts, T-32982). They are
+// ordinary files under public/, so the address in the listing is the one the
+// assets answer, and a person can follow it out of a chat.
+let DEEP: Doc[] = PAGES.map((p) => ({
+  uri: uriOf(p.slug),
+  name: `guide-${p.slug}`,
+  title: p.title,
+  description: p.description,
+  mimeType: 'text/markdown',
+  page: uriOf(p.slug),
+}))
 
 // The other is an MCP App view (T-32492, spec 2026-01-26 §Resources): a
 // `ui://` page the host renders in a sandboxed iframe and hands the tool's
 // answer to over postMessage. app_list links to it by `_meta.ui.resourceUri`
 // below; its bytes are public/apps.html, served from the same assets. The
 // mimeType is the profile the spec requires, not plain text/html.
-let APPS = {
+let APPS: Doc = {
   uri: APPS_VIEW,
   name: 'apps',
   title: 'Your apps',
@@ -184,7 +215,7 @@ let APPS = {
 // each with the button that archives it — the view calls `app_errors` back
 // through the host to do it, which is why that tool says `app` in its
 // visibility below.
-let ERRORS = {
+let ERRORS: Doc = {
   uri: ERRORS_VIEW,
   name: 'errors',
   title: 'What is broken',
@@ -194,7 +225,7 @@ let ERRORS = {
   page: 'https://yaks.app/errors.html',
 }
 
-let RESOURCES = [GUIDE, APPS, ERRORS]
+let RESOURCES: Doc[] = [GUIDE, ...DEEP, APPS, ERRORS]
 
 // One resource's bytes, from the assets the apex serves. A redirect is
 // followed once: in production the assets binding drops a page's `.html` and
@@ -273,8 +304,15 @@ let handle = async (ctx: Ctx, rpc: Rpc) => {
     let out = result(rpc.id, {
       protocolVersion: spoken(params.protocolVersion),
       // `listChanged` is a promise to say when the tool list moves, which is
-      // what an app deploying its own tools does (declared.ts).
-      capabilities: { tools: { listChanged: true }, resources: {} },
+      // what an app deploying its own tools does (declared.ts). Prompts
+      // promise the same for the same reason: an app that deploys prompts of
+      // its own moves this list too (T-32983), and the stream already knows
+      // how to say so (stream.ts `told`).
+      capabilities: {
+        tools: { listChanged: true },
+        prompts: { listChanged: true },
+        resources: {},
+      },
       serverInfo: { name: 'yaks.app', version: VERSION },
       instructions: INSTRUCTIONS,
     })
@@ -318,6 +356,41 @@ let handle = async (ctx: Ctx, rpc: Rpc) => {
     })
   }
   if (rpc.method == 'tools/call') return result(rpc.id, await call(ctx, params))
+  // The doors a PERSON picks by name (prompts.ts): the list is short and
+  // whole, so no cursor rides the answer.
+  if (rpc.method == 'prompts/list') {
+    return result(rpc.id, {
+      prompts: PROMPTS.map(({ name, title, description, arguments: args }) => ({
+        name,
+        title,
+        description,
+        arguments: args,
+      })),
+    })
+  }
+  if (rpc.method == 'prompts/get') {
+    let want = promptOf(params.name)
+    if (!want) return rpcError(rpc.id, -32602, `no prompt ${params.name}`)
+    let args = (params.arguments ?? {}) as Record<string, unknown>
+    let short = missing(want, args)
+    if (short.length) {
+      return rpcError(rpc.id, -32602, `${want.name} needs ${short.join(', ')}`)
+    }
+    return result(rpc.id, {
+      description: want.description,
+      messages: [{
+        role: 'user',
+        content: {
+          type: 'text',
+          text: want.say(
+            Object.fromEntries(
+              Object.entries(args).map(([k, v]) => [k, String(v ?? '')]),
+            ),
+          ),
+        },
+      }],
+    })
+  }
   if (rpc.method == 'resources/list') {
     return result(rpc.id, {
       resources: [

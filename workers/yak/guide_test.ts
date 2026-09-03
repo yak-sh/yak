@@ -1,5 +1,6 @@
-// The guide is the only page an agent building an app reads (mcp.ts serves it
-// as the connector's one resource), so a list printed there has to be true.
+// The guide is the map an agent building an app reads (mcp.ts serves it as a
+// resource, with a page per subject beside it), so a list printed there has to
+// be true.
 // What can rot is anything the guide PRINTS that the code also decides: the
 // reserved words a manifest is refused against (the code's list, never the
 // page's — C-32624 item 1), the components an app has, whose COLUMNS and
@@ -11,11 +12,102 @@ import { RESERVED } from '../../src/store/vocab.ts'
 import { comps, typeName } from '../../src/types.ts'
 import { SHIM, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
+import { PAGES, uriOf } from './guide.ts'
 import { TOOLS } from './tools.ts'
 
 let guide = Deno.readTextFileSync(
   new URL('./public/guide.md', import.meta.url),
 )
+
+let pageText = (slug: string) =>
+  Deno.readTextFileSync(new URL(`./public/guide/${slug}.md`, import.meta.url))
+
+// The map still names every page (T-32982). A page nobody is pointed at is a
+// page nobody reads: the guide is what a person and an agent read first, so
+// the `Deeper:` lines and the resource list have to be the same set — a page
+// added to guide.ts and never linked, or a link to a page that was renamed,
+// is the whole failure mode of splitting a document.
+Deno.test("the guide's Deeper links are exactly the pages offered", () => {
+  let linked = [...guide.matchAll(/<https:\/\/yaks\.app\/guide\/(\w+)\.md>/g)]
+    .map((m) => m[1])
+  assertEquals(
+    [...new Set(linked)].sort(),
+    PAGES.map((p) => p.slug).sort(),
+  )
+})
+
+Deno.test('every page offered is a file, and says what it is', () => {
+  for (let p of PAGES) {
+    let text = pageText(p.slug)
+    assert(text.startsWith('# '), `${p.slug} opens with no title`)
+    // A page is the DEEP treatment, not the guide's passage moved: the
+    // shortest of them still has to be worth choosing over the map.
+    assert(text.split('\n').length > 80, `${p.slug} is too thin to be a page`)
+    // And it points back, so nobody is stranded on one page of a guide.
+    assert(text.includes('yaks.app/guide.md'), `${p.slug} points nowhere back`)
+  }
+})
+
+// The description is the only thing an agent sees before deciding to read, so
+// two pages may never wear the same one, and none may be a label.
+Deno.test('every page description is its own, and says something', () => {
+  let said = PAGES.map((p) => p.description)
+  assertEquals(new Set(said).size, said.length, 'two pages read alike')
+  for (let p of PAGES) {
+    assert(p.description.length > 80, `${p.slug} says too little to choose by`)
+    assert(p.title.length > 3 && !p.title.endsWith('.'), p.slug)
+  }
+})
+
+// The two rules that cost a user test each hold on every page, not just the
+// map: an import that names the app 404s in somebody's installed copy
+// (C-32905 item 1), and a worker route under /api/ is the kernel's and can
+// never run (C-32869 item 2).
+Deno.test('a page teaches the same client import the guide does', () => {
+  for (let p of PAGES) {
+    assertEquals(
+      [...pageText(p.slug).matchAll(/from '([^']*client\.js)'/g)]
+        .map((m) => m[1])
+        .filter((from) => from != './api/client.js'),
+      [],
+      p.slug,
+    )
+  }
+})
+
+Deno.test('no worker route on a page is under /api/', () => {
+  for (let p of PAGES) {
+    let routes = [...pageText(p.slug).matchAll(/pathname[^\n]*?'(\/[^']*)'/g)]
+      .map((m) => m[1])
+    assertEquals(routes.filter((r) => r.split('/').includes('api')), [], p.slug)
+  }
+})
+
+// A page may print the reserved words too — it is the page an app's author
+// meets them on. Wherever it does, it is the CODE's list, the same rule the
+// map is held to (C-32624 item 1).
+Deno.test('a page printing the reserved words prints the code list', () => {
+  for (let p of PAGES) {
+    let block = pageText(p.slug).split('\n\n')
+      .find((b) => b.startsWith('    ') && b.includes('stop_request'))
+    if (block) assertEquals(block.trim().split(/\s+/), RESERVED, p.slug)
+  }
+})
+
+// A link from one page to another has to name a page there is.
+Deno.test('no page links a page that is not there', () => {
+  let slugs = new Set(PAGES.map((p) => p.slug))
+  for (let p of PAGES) {
+    for (
+      let m of pageText(p.slug).matchAll(
+        /https:\/\/yaks\.app\/guide\/([\w.-]+)\.md/g,
+      )
+    ) {
+      assert(slugs.has(m[1]), `${p.slug} links ${m[1]}, which is no page`)
+    }
+    assertEquals(uriOf(p.slug), `https://yaks.app/guide/${p.slug}.md`)
+  }
+})
 
 // The client is imported RELATIVELY, wherever the guide shows an import, and
 // no app's own files name the app: the copy someone installs lives at

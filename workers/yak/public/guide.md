@@ -9,6 +9,11 @@ Make one with `app_new`, write files with `app_files` — the whole set in one
 call, as `files: [{path, content}, ...]` — then `app_deploy`, and give the
 person the URL.
 
+This page is the map, and it is meant to be read whole: a passage on every
+feature there is. Where a subject has more to it than a passage, a `Deeper:`
+line names the page that goes further — offered beside this one as its own
+resource, and readable at that address by anybody.
+
 The space's own address, `<space>.yaks.app/`, opens its front page — the first
 app made there, until `app_set(app, home: true)` makes it another one;
 `app_list` says which app that is.
@@ -23,6 +28,9 @@ extension, like `/style.css` — is still a 404. A server answering routes with
 CODE of its own comes later.
 
 ## The store, from a page
+
+Deeper: <https://yaks.app/guide/store.md> — every function of the client, the
+doors underneath, and who may read and write.
 
 The kernel serves a client beside every app, at `./api/client.js`:
 
@@ -57,11 +65,12 @@ other device, and it hands back a function that stops it.
 
 A refusal throws with the server's own sentence, so `try/catch` and show it. Who
 may read and write is the app's `access`: `public` (the default) reads to anyone
-with the link and writes to a member, `open` writes to anyone with the link —
-the vote page, the shared list — and `private` answers members only. `app_new`
-and `app_set` set it; `member_add` invites someone into the space by email
-address — name the app and the invitation is mailed to them, carrying its link —
-and they sign in there with that address and come back to the page they were on.
+with the link and writes to an owner or editor, `open` writes to anyone with the
+link — the vote page, the shared list — and `private` answers members only.
+`app_new` and `app_set` set it; `member_add` invites someone into the space by
+email address — name the app and the invitation is mailed to them, carrying its
+link — and they sign in there with that address and come back to the page they
+were on.
 
 Ask on load, not on refusal. `me()` answers
 `{person, name, role, reads, writes, signIn}` — `person` null when they are
@@ -140,6 +149,9 @@ matters there, ask for a name on the page and save it in your own row.
 
 ## Files
 
+Deeper: <https://yaks.app/guide/files.md> — uploads, pictures, and a gallery
+that never shows one twice.
+
 `upload` takes a `File` off an `<input type=file>` — or any `Blob` — and answers
 `{eid, url, mime, bytes}`, plus `w` and `h` when the file is a picture that says
 so. The bytes are stored under their own SHA-256, so the same file twice is one
@@ -210,6 +222,9 @@ so the page's own downscale is the whole of it.
 
 ## The components an app has today
 
+Deeper: <https://yaks.app/guide/components.md> — every component with its
+columns, and vocab.json for words of your own.
+
 The platform's own vocabulary, shared by every app — each component with every
 column it carries, and what each column holds. A column is `text`, `number`,
 `bool`, `time`, `url`, an `eid` naming another entity, or a closed set of words.
@@ -238,7 +253,7 @@ shape is one question, never five.
   itself; `upload` reads it off the file's own header (png, jpeg, gif, webp).
 
 An edge is a sentence, not a column: `dependency` is `{type, child}`, where type
-is one of `contains`, `requires`, `about`, `references`, `supersedes`.
+is one of `contains`, `requires`, `about`, `referenced`, `supersedes`.
 
 ## Components of your own
 
@@ -290,6 +305,9 @@ markdown or JSON both keep there.
 
 ## An entity spans apps
 
+Deeper: <https://yaks.app/guide/entities.md> — where a word lives, and a two-app
+pair end to end.
+
 An eid is the same thing everywhere. Two apps of the person's can write about
 one entity, each in its own words: a reading list app saves the `book`, a
 lending app saves who has it, and there is no copy and no sync between them —
@@ -302,8 +320,10 @@ else the app where that entity already lives.
 
 One word, one home — the first app in the space to declare it. Name it in a
 second app's vocab.json and nothing is planted twice: the deploy answers
-`book lives in reading-list`, this app reads and writes it there, and a column
-you added grows that app's table.
+`book lives in reading-list`, this app reads and writes it there through
+`graph_apply` and its own tools, and a column you added grows that app's table.
+A PAGE reaches a borrowed word at the app that has it, with the sibling `store`
+below: its own `./api/` doors answer for its own store and nothing else.
 
 A shape conflict is the only refusal — the same column declared with two types,
 named with both types and with the app the word lives in.
@@ -344,6 +364,9 @@ nobody but its members, whichever page is asking.
 
 ## Tools of your own
 
+Deeper: <https://yaks.app/guide/tools.md> — the whole tools.json reference, and
+the view protocol.
+
 An app can also carry its own **tools**, so the person's agent can act on it
 without a page open. They go in a `tools.json` at the app's root, beside
 `vocab.json`, and the same `app_deploy` hands them over:
@@ -362,9 +385,9 @@ After the deploy those are `runs__log_run` and `runs__leaderboard` at the
 connector — `<app>__<tool>`, listed for the person and for everyone else in the
 space, with the app's title in the description.
 
-An entry is four things: a `description` (the sentence the model chooses by), an
-`input` of arguments typed like a component's columns (`text`, `number`, `bool`,
-`time`, `url` — all of them required), and exactly one act:
+An entry is three things: a `description` (the sentence the model chooses by),
+an `input` of arguments typed like a component's columns (`text`, `number`,
+`bool`, `time`, `url` — all of them required), and exactly one act:
 
 - `apply` — an entity bundle, or a list of them, exactly as `apply()` takes on
   the page.
@@ -427,6 +450,9 @@ a redraw is a plain MCP `tools/call` back through the host for the app's own
 tool, which does carry who is looking.
 
 ## Code of your own
+
+Deeper: <https://yaks.app/guide/code.md> — env, routes, secrets, limits, and
+whole workers to copy.
 
 An app is pages until you give it a `worker.js`, and then it has a server. Write
 one beside `index.html` and `app_deploy` puts it in front of the app: every
@@ -496,15 +522,19 @@ let it throw: a break you can see is worth more than a `catch` that hides it.
 
 ## Sharing an app
 
+Deeper: <https://yaks.app/guide/sharing.md> — access, members, publishing,
+installing, pinning.
+
 An app is a plugin. Once it is deployed you can offer it to every other space
-here, and anyone can take a copy into their own — four tools:
+here, and anyone can take a copy into their own — five tools:
 
 - `app_publish(app, name?, about?)` — offer the version that is serving, under a
-  name the whole platform shares. It is the app's own slug unless somebody else
-  has it, and a taken name is refused naming the app that has it. Publishing
-  again keeps the name it already has; pass a `name` to change it, and the old
-  one stops resolving for everybody holding it. `about` is the line someone
-  browsing reads. Only the space owner may publish.
+  name the whole platform shares; an app that has never been deployed is
+  refused. The name defaults to the app's own slug on a first publish, and a
+  taken one is refused naming the app that has it. Publishing again keeps the
+  name it already has; pass a `name` to change it, and the old one stops
+  resolving for everybody holding it. `about` is the line someone browsing
+  reads. Only the space owner may publish.
 - `app_unpublish(app)` — withdraw the offer. The app is untouched, every copy
   anyone took is untouched, and the name is free again.
 - `app_published()` — what is on offer, newest first, each with the address it
@@ -569,6 +599,9 @@ they must sign in is what it is for.
 
 ## The filter line
 
+Deeper: <https://yaks.app/guide/querying.md> — every operator, with worked
+examples.
+
 The same grammar the platform speaks everywhere:
 
 - `.doc.title~=cake` contains, `.task.status=open` equals, and an empty value
@@ -598,12 +631,15 @@ A row comes back as the components you named, plus its address and its kind —
 `query('.recipe!')` answers recipes and no titles, and `query('.recipe!&.doc?')`
 answers both. Ask for what you will draw.
 
-Ask for the component you want, not for the absence of one: a long `body` is
-kept as its own content-addressed entity beside the doc, so a filter that
-selects everything selects those too, and a page rendering `row.doc.title` would
-print `undefined`. `.doc!` never picks them up.
+Ask for the component you want, not for the absence of one: a `body` is kept as
+its own content-addressed entity beside the doc, so a filter that selects
+everything selects those too, and a page rendering `row.doc.title` would print
+`undefined`. `.doc!` never picks them up.
 
 ## When something breaks
+
+Deeper: <https://yaks.app/guide/errors.md> — every refusal, app_errors, and
+rolling back.
 
 A door that refuses answers a code for you and a sentence for the person —
 `{"error": {"code": "not_a_writer", "message": "sign in to change this app"}}`.
