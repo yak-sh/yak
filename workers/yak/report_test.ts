@@ -7,7 +7,12 @@
 // The browser is the part a probe cannot boot, so the test posts what a
 // browser would post; that the page carries the reporter at all is asserted
 // on the served bytes.
-import { assert, assertEquals, assertMatch } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertStringIncludes,
+} from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { client, connector, kernel, meta, seed } from './probe.ts'
 
@@ -236,6 +241,68 @@ slow('a break names the version the app is serving', async () => {
       await agent.tool('app_errors', { space: 'jeff', app: 'recipes' }),
       /recipes v9: page \/recipes\/ — boom is not a function/,
     )
+  } finally {
+    await k.stop()
+  }
+})
+
+// A page that dies on its first import (T-32909, C-32905 items 2 and 8): the
+// module 404'd, the app store held no open error, and the person was left
+// looking at a heading and empty space. The browser is the part a probe
+// cannot boot, so this holds the two halves where they live — the door files
+// the break the reporter posts for a file that never loaded, and the reporter
+// every page is served carries the soft state, and the capture-phase listener
+// that catches such a break at all.
+slow('a page that dies on its first import says so', async () => {
+  let k = await kernel()
+  try {
+    let { cookie } = await seed(k, [{ slug: 'jeff', apps: ['weather'] }])
+    let files = client(k, 'jeff.yaks.app', 'weather', cookie)
+    let agent = connector(k, cookie)
+    let app = { space: 'jeff', app: 'weather' }
+
+    // The installed copy's own shape: a shell, and a module beside it that is
+    // not there.
+    await files.put(
+      '/index.html',
+      '<!doctype html><html><head><title>W</title></head><body>' +
+        '<h1>Weather</h1><script type="module" src="app.js"></script>' +
+        '</body></html>',
+    )
+    let page = await k.at('jeff.yaks.app', '/weather/')
+    assertMatch(await page.text(), /<script src="\/weather\/api\/report\.js">/)
+    assertEquals((await k.at('jeff.yaks.app', '/weather/app.js')).status, 404)
+
+    // What the reporter posts for that, and the one break it becomes.
+    assertEquals(
+      (await k.at('jeff.yaks.app', '/weather/api/report', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          message: 'failed to load script https://jeff.yaks.app/weather/app.js',
+          url: 'https://jeff.yaks.app/weather/app.js',
+        }),
+      })).status,
+      204,
+    )
+    let told = await agent.tool('app_errors', app)
+    assertEquals(
+      told.split('\n').filter((l) => l.startsWith('- ')).length,
+      1,
+      'one break, not none',
+    )
+    assertMatch(told, /page \/weather\/app\.js — failed to load script/)
+    assertStringIncludes(told, 'https://jeff.yaks.app/weather/app.js')
+
+    // And the soft state the page shows instead of empty space, carried by
+    // the reporter the page is served.
+    let reporter = await (await k.at('jeff.yaks.app', '/weather/api/report.js'))
+      .text()
+    assertStringIncludes(
+      reporter,
+      'Something went wrong. Your assistant has been told.',
+    )
+    assertMatch(reporter, /addEventListener\('error'[\s\S]*\}, true\)/)
   } finally {
     await k.stop()
   }
