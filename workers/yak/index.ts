@@ -59,6 +59,16 @@ let serve = async (req: Request, env: Env, r: Route) => {
   if (path == '/mcp' || path.startsWith('/api/')) {
     return bound(env.MCP, mcp.fetch, env).fetch(req)
   }
+  // The one static token OpenAI's apps directory fetches to verify the domain.
+  // Not identity.ts's — the oauth well-known is that door's metadata; this is a
+  // separate single verification string, served from a secret so the repo
+  // carries no token, and 404 when unset.
+  if (path == '/.well-known/openai-apps-challenge') {
+    return env.OPENAI_APPS_CHALLENGE == null ? lost() : new Response(
+      env.OPENAI_APPS_CHALLENGE,
+      { headers: { 'content-type': 'text/plain; charset=utf-8' } },
+    )
+  }
   let page = await env.ASSETS.fetch(req)
   return page.status == 404 ? lost() : page
 }

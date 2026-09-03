@@ -58,6 +58,10 @@ export type Env = {
   // is told so.
   DISPATCH?: Dispatch
   CF_WORKERS_TOKEN?: string
+  // The single static token OpenAI's apps directory fetches to verify the
+  // domain (index.ts serves it at /.well-known/openai-apps-challenge). A
+  // secret so the open-source repo carries no token; unset, that path 404s.
+  OPENAI_APPS_CHALLENGE?: string
   // A part split into its own Worker, when it has been; absent, in-process.
   IDENTITY?: Fetcher
   MCP?: Fetcher

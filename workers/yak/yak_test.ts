@@ -34,6 +34,10 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     let lost = await k.at('yaks.app', '/no/such/page')
     assertEquals(lost.status, 404)
     assertMatch(await lost.text(), /wandered off/)
+    // The OpenAI apps challenge 404s until the token is set (set-case below).
+    let unset = await k.at('yaks.app', '/.well-known/openai-apps-challenge')
+    assertEquals(unset.status, 404)
+    await unset.body?.cancel()
     // A dev host is the apex too; the reserved doors answer, softly.
     assertEquals((await k.at('127.0.0.1', '/')).status, 200)
     let login = await k.at('yaks.app', '/login')
@@ -596,6 +600,31 @@ slow('an app says who may read it and who may write it', async () => {
       (await k.at('club.yaks.app', '/list/api/query?.doc!')).status,
       401,
     )
+  } finally {
+    await k.stop()
+  }
+})
+
+// The OpenAI apps directory verifies the domain by fetching one well-known URL
+// and reading the token as the whole body: the bytes have to be exact, no
+// trailing newline, and only at the apex — a space host never serves it.
+slow('the apex serves the OpenAI apps challenge token, exactly', async () => {
+  let token = 'tok-' + crypto.randomUUID()
+  let k = await kernel({ OPENAI_APPS_CHALLENGE: token })
+  try {
+    let res = await k.at('yaks.app', '/.well-known/openai-apps-challenge')
+    assertEquals(res.status, 200)
+    assertEquals(res.headers.get('content-type'), 'text/plain; charset=utf-8')
+    let body = await res.text()
+    assertEquals(body, token)
+    assert(!body.endsWith('\n'), 'the token carries a trailing newline')
+    // A space host falls to that app's door, never the apex token.
+    let onSpace = await k.at(
+      'nobody.yaks.app',
+      '/.well-known/openai-apps-challenge',
+    )
+    assert(onSpace.status != 200 || (await onSpace.text()) != token)
+    await onSpace.body?.cancel()
   } finally {
     await k.stop()
   }

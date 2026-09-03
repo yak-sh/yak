@@ -37,7 +37,7 @@ let listening = async (port: number) => {
 
 export type Kernel = Awaited<ReturnType<typeof kernel>>
 
-export let kernel = async () => {
+export let kernel = async (vars: Record<string, string> = {}) => {
   let port = freePort()
   let inspector = freePort()
   let secret = crypto.randomUUID()
@@ -72,6 +72,8 @@ export let kernel = async () => {
       // code in a store.
       '--var',
       'MAIL_DEV:1',
+      // Any extra vars a test asks for, e.g. a domain-verification token.
+      ...Object.entries(vars).flatMap(([k, v]) => ['--var', `${k}:${v}`]),
       '--show-interactive-dev-session=false',
     ],
     cwd: root,
