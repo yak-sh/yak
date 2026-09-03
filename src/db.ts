@@ -54,7 +54,6 @@ import {
   ftsQuery,
   ftsTerm,
   leafOf,
-  learn,
   matchQuery,
   parseQuery,
   type Pred,
@@ -2645,7 +2644,7 @@ export let migrateBoardsToProjects = (db: Sql) => {
       if (!query) continue
       let preds
       try {
-        preds = parseQuery(query)
+        preds = parseQuery(query, vocabOf(db))
       } catch {
         continue // an unparseable query is not a clean project mirror
       }
@@ -4275,8 +4274,9 @@ export let vocabOf = (db: Sql): Vocab => ownVocab.get(db) ?? {}
 export let ownsVocab = (db: Sql): boolean => ownVocab.has(db)
 
 // Plant an app's manifest: the tables and columns it names, additively, then
-// the word itself — into this handle, into the filter grammar so
-// `.recipe.serves=4` parses (query.ts learn()), and into the kinds so a row
+// the word itself — into this handle, which is where the filter grammar reads
+// it from so `.recipe.serves=4` parses for THIS store and no other (every
+// parseQuery below is handed vocabOf(db)), and into the kinds so a row
 // wearing the word says the word (types.ts learnKinds). A store with a
 // vocabulary door also teaches that grammar's refusals in its own terms: a
 // hosted app hears about vocab.json, never about the fleet CLI or another
@@ -4285,7 +4285,6 @@ export let plantVocab = (db: Sql, vocab: Vocab): void => {
   let ops = vocabOps(vocab)
   if (ops.length) graft(db, ops)
   ownVocab.set(db, vocab)
-  learn(vocab)
   learnKinds(Object.keys(vocab))
   teaches(FILTERS)
 }
@@ -6285,7 +6284,7 @@ export let apply = (
       // of whoever made it. Empty stays legal: it selects nothing.
       if (name == 'board' && comp?.query != null) {
         try {
-          parseQuery(String(comp.query))
+          parseQuery(String(comp.query), vocabOf(db))
         } catch (e) {
           throw new Error(
             `board query refused: ${e instanceof Error ? e.message : e}`,
@@ -8326,7 +8325,7 @@ export let textMatches = (
 
 export let search = (db: Sql, q: string, limit = 20): Hit[] => {
   needFts(db)
-  let preds = parseQuery(q)
+  let preds = parseQuery(q, vocabOf(db))
   let addressed = preds.length == 1 && preds[0].op == TEXT
     ? findEid(db, preds[0].value)
     : undefined

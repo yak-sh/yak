@@ -1506,7 +1506,16 @@ slow('a read with no app composes every app the caller can reach', async () => {
       entities: [{ entity: { eid: cake }, entryline: { note: 'he baked it' } }],
     })
     assertEquals('entryline' in (await rows(`id=${cake}`))[0], false)
-    assertEquals((await rows('.recipe!', hers)).length, 0)
+    // His word is not even a WORD in her reach: the one store she can read
+    // never planted `recipe`, and a line every store in reach refuses is the
+    // first store's sentence (reach.ts asked). It answered an empty set while
+    // the grammar's learned words were process-wide — her parse borrowed his
+    // store's vocabulary, in whichever order the isolate happened to plant
+    // them (T-32814).
+    assertStringIncludes(
+      await rows('.recipe!', hers).then(() => '', (e: Error) => e.message),
+      'unknown prop: .recipe',
+    )
     assertEquals((await rows(`id=${cake}`, hers))[0].entity.eid, cake)
   } finally {
     await k.stop()
@@ -1841,10 +1850,26 @@ slow('a word the space already has is used where it lives', async () => {
       (await rows('.book!', 'reading-list')).map((r) => r.entity.eid),
       [piranesi],
     )
-    // And there is no second copy: the fan-out answers one bundle, and the
-    // lending store holds no book row of its own.
+    // And there is no second copy: the fan-out answers one bundle, while each
+    // store REFUSES the word it never planted. Two stores live in one isolate,
+    // so this used to depend on which of them parsed first — the grammar's
+    // learned words were process-wide, and the answer was an empty row set
+    // where a refusal is owed (T-32814). The vocabulary now rides the parse,
+    // per store handle, so both refusals are the store's own, every run.
     assertEquals((await rows(`id=${piranesi}`))[0].book!.title, 'Piranesi')
-    assertEquals((await rows('.book!', 'lending')).length, 0)
+    let refused = (filter: string, app: string) =>
+      agent.tool('graph_query', { filter, app }).then(
+        () => '',
+        (e: Error) => e.message,
+      )
+    assertStringIncludes(
+      await refused('.book!', 'lending'),
+      'unknown prop: .book',
+    )
+    assertStringIncludes(
+      await refused('.loan!', 'reading-list'),
+      'unknown prop: .loan',
+    )
 
     // A column the lending app adds to the shared word grows the HOME's
     // table, additively — and is then writable from either app.

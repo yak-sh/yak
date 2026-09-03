@@ -41,7 +41,13 @@ import {
 } from './query.ts'
 import { instant, span } from './time.ts'
 import { stamped } from './types.ts'
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertStringIncludes,
+  assertThrows,
+} from '@std/assert'
+import type { Vocab } from './store/vocab.ts'
 
 // A task-shaped entity to filter against.
 let row = (
@@ -292,6 +298,40 @@ Deno.test('query: bad tokens are loud, bare words are terms', () => {
     () => parseQuery('.doc!.created!'),
     Error,
     'presence filters end at !: .doc! — join filters with &: .doc!&.created!',
+  )
+})
+
+// An app's own word belongs to its STORE, not to the process. Two stores live
+// in one Worker isolate, so a module-level registry let whichever planted
+// first teach the other: a store answered the other's word with [] where it
+// owes the unknown-prop refusal, and which store got the wrong answer depended
+// on parse order (T-32814). The vocabulary rides the parse now, so both
+// directions refuse, in either order, forever.
+Deno.test("query: a word is the store's, not the process's", () => {
+  let lending: Vocab = { book: { title: 'text', isbn: 'text' } }
+  let kitchen: Vocab = { recipe: { serves: 'number' } }
+  let refused = (q: string, vocab?: Vocab) =>
+    assertThrows(() => parseQuery(q, vocab), Error).message
+
+  assertEquals(parseQuery('.book!', lending), [
+    { comp: 'book', prop: '', op: EXISTS, value: '' },
+  ])
+  assertEquals(parseQuery('.recipe.serves=4', kitchen)[0].comp, 'recipe')
+  // Each store refuses the other's word — and the platform, told nothing,
+  // refuses both. Order is asserted by asking after both have parsed.
+  assertStringIncludes(refused('.recipe!', lending), 'unknown prop: .recipe')
+  assertStringIncludes(refused('.book!', kitchen), 'unknown prop: .book')
+  assertStringIncludes(refused('.book!'), 'unknown prop: .book')
+  assertEquals(parseQuery('.book!', lending)[0].comp, 'book')
+  // A word the store DOES know, asked wrong, still spells its own shape.
+  assertEquals(
+    refused('.book.pages=3', lending),
+    'no such prop: .book.pages — book has title (text), isbn (text)',
+  )
+  // The platform's word wins its spelling in every store.
+  assertEquals(
+    parseQuery('.doc.title~=x', { doc: { title: 'number' } })[0].op,
+    '~',
   )
 })
 

@@ -39,6 +39,7 @@ import {
   selectedDeps,
   sourceEntriesOf,
   textMatches,
+  vocabOf,
 } from './db.ts'
 import { record } from './telemetry.ts'
 import { evalAgg, evalSub, walker, workingSet } from './graph_query.ts'
@@ -586,7 +587,8 @@ export let subserve = (db: Sql, send: (frame: Frame) => void) => {
       // never-pred screened it (T-23811).
       let asked = route != null || !queryLine.trim()
         ? []
-        : resolveRefs(parseQuery(queryLine), (id) => locate(db, id))
+        : resolveRefs(parseQuery(queryLine, vocabOf(db)), (id) =>
+          locate(db, id))
       if (aggOf(asked)) {
         let counts = evalAgg(db, queryLine)?.values ?? new Map<string, number>()
         map.set(f.sub, {
@@ -645,7 +647,7 @@ export let subserve = (db: Sql, send: (frame: Frame) => void) => {
       // carry riders (`id=<eid>&.edges!`). `id=` is an ADDRESS, not a filter —
       // the same split localQuery makes — so strip it and parse whatever
       // remains, which is how a route sub declares it wants its edges too.
-      let rides = route == null ? preds : parseQuery(queryLine)
+      let rides = route == null ? preds : parseQuery(queryLine, vocabOf(db))
       let members = new Set(hits.map((r) => r.eid))
       let resultNames = resultsOf(rides)
       let results = resultNames.length

@@ -71,6 +71,7 @@ import {
   statusOf,
 } from './types.ts'
 import { type Span, span } from './time.ts'
+import type { Vocab } from './store/vocab.ts'
 
 // One rung of a path predicate: a component's column read on the entity this
 // hop lands on. Every hop but the last is an `{eid}` deref; the last is the
@@ -206,35 +207,39 @@ let routes: Record<string, readonly string[]> = Object.fromEntries(
   ]),
 )
 
-// An APP's own components (store/vocab.ts), learned when its store plants them
-// (db.ts plantVocab). They route QUALIFIED only — `.recipe.serves`, `.recipe!`
-// — never bare: a store's new word must not make `.title` ambiguous for every
-// reader of every graph. Parse-time only, so a word one store declares can at
-// worst let another store's filter parse and match nothing; no statement is
-// ever compiled against a table a store lacks (sql.ts `known` reads `comps`,
-// so these decline to the JS matcher, which reads the row's own components).
-// Kept WITH their types, because a refusal says the shape (typeAt below).
-let learned: Record<string, string[]> = {}
-let learnedTypes: Record<string, Record<string, PropType>> = {}
-
-export let learn = (vocab: Record<string, Record<string, PropType>>) => {
-  for (let [name, cols] of Object.entries(vocab)) {
-    if (name in routes) continue // the platform's word wins, always
-    learnedTypes[name] = { ...learnedTypes[name], ...cols }
-    learned[name] = Object.keys(learnedTypes[name])
-  }
-}
+// An APP's own components (store/vocab.ts), declared by its vocab.json and
+// planted in its own store. They route QUALIFIED only — `.recipe.serves`,
+// `.recipe!` — never bare: a store's new word must not make `.title`
+// ambiguous for every reader of every graph.
+//
+// GIVEN to the parse, never registered. One Worker isolate holds many stores,
+// so a module-level registry made one app's word parse in another app's query
+// — an `[]` where the unknown-prop refusal is owed, and which store got it
+// depended on which store parsed first (T-32814). So every entry point takes
+// the words it may use; db.ts keys them on the `Sql` handle (vocabOf), the
+// same WeakMap the write path reads. The default is the platform vocabulary
+// alone, which is every local graph.
+//
+// Parse-time only either way: no statement is ever compiled against a table a
+// store lacks (sql.ts `known` reads `comps`, so these decline to the JS
+// matcher, which reads the row's own components). Kept WITH their types,
+// because a refusal says the shape (typeAt below).
+let NONE: Vocab = {}
 
 // What one readable column IS, either vocabulary — the type an unknown-column
 // refusal spells beside its name.
-let typeAt = (comp: string, prop: string): PropType | undefined =>
+let typeAt = (
+  comp: string,
+  prop: string,
+  vocab: Vocab,
+): PropType | undefined =>
   comps[comp]?.[prop] ?? derivedProps[comp]?.[prop] ?? stamped[comp]?.[prop] ??
-    learnedTypes[comp]?.[prop]
+    vocab[comp]?.[prop]
 
 // The routing table as this reader sees it: the vocabulary, plus whatever
-// words the stores in this process have declared.
-let routed = (name: string): readonly string[] | undefined =>
-  routes[name] ?? learned[name]
+// words the store being asked has declared. The platform's word wins, always.
+let routed = (name: string, vocab: Vocab): readonly string[] | undefined =>
+  routes[name] ?? (vocab[name] && Object.keys(vocab[name]))
 
 // A name a column or component already routes — the real props pred() resolves
 // before any scope. A scope may not shadow one, so this is how the pred seam
@@ -403,7 +408,10 @@ let bareRenames = bareRenamesOf(propRenames)
 // Route a bare prop to its component; ambiguity is an error that names the
 // candidates rather than a guess. Same-named references are one read concept:
 // comp '' makes a filter scan every owner, while writes demand a component.
-export let route = (prop: string): { comp: string; prop: string } => {
+export let route = (
+  prop: string,
+  vocab: Vocab = NONE,
+): { comp: string; prop: string } => {
   prop = bareRenames[prop] ?? prop
   let hits = (p: string) =>
     Object.entries(routes)
@@ -457,7 +465,7 @@ export let route = (prop: string): { comp: string; prop: string } => {
   // A facet is itself filterable. Scalar and reference columns win above,
   // preserving `.project=P-3`; a component with no namesake column gets the
   // presence grammar (`=` absent, `~=` present) without a second vocabulary.
-  if (routed(prop)) return { comp: prop, prop: '' }
+  if (routed(prop, vocab)) return { comp: prop, prop: '' }
   // The rejection is the teaching moment: agents keep reaching for eid as a
   // filter prop — name what the asker meant. (.kind is a SCOPE handled before
   // route() and .id routes through session.id, so neither reaches here.)
@@ -869,12 +877,12 @@ let typedValue = (p: Prop, value: string): string =>
 // an `{eid}` column. So `.comment.target.doc.title` is [(comment,target)] then
 // (doc,title), and `.assignee.title` is [(task,assignee)] then (doc,title) —
 // one traversal, two spellings.
-let groupsOf = (segs: string[]): Hop[] => {
+let groupsOf = (segs: string[], vocab: Vocab): Hop[] => {
   let out: Hop[] = []
   for (let i = 0; i < segs.length;) {
     // A component consumes its next segment as the explicit `comp.prop`
     // spelling; a component with nothing behind it is a bare facet (route()).
-    let own = routed(segs[i])
+    let own = routed(segs[i], vocab)
     if (own && i + 1 < segs.length) {
       let [a, b] = [segs[i], segs[i + 1]]
       // The refusal names what IS there: one look, the whole shape (db.ts
@@ -882,7 +890,7 @@ let groupsOf = (segs: string[]): Hop[] => {
       if (!own.includes(b)) {
         throw new Error(
           `no such prop: .${a}.${b} — ${
-            shapeOf(a, own, (col) => typeAt(a, col))
+            shapeOf(a, own, (col) => typeAt(a, col, vocab))
           }`,
         )
       }
@@ -894,7 +902,7 @@ let groupsOf = (segs: string[]): Hop[] => {
       if (i + 1 < segs.length && edgeish.test(segs[i])) {
         throw new Error(EDGE_HOP(segs[i]))
       }
-      out.push(route(segs[i]))
+      out.push(route(segs[i], vocab))
       i += 1
     }
   }
@@ -971,7 +979,7 @@ let REACH = /^\.reaches\[([A-Za-z_]+)\s*,\s*<=\s*(\d+)\]=(.*)$/s
 let EDGE_SELECT =
   /^\.edges\[([A-Za-z_]+)(?:\s*,\s*([A-Za-z_-]+(?:\.[A-Za-z_-]+)*))?\]!$/s
 
-export let preds = (token: string): Pred[] | null => {
+export let preds = (token: string, vocab: Vocab = NONE): Pred[] | null => {
   // Any `.reaches[…` spelling answers HERE, right or wrong: a malformed one that
   // fell through would not match the dot-param pattern either and would end up a
   // bare TEXT term, silently searching for the traversal the caller thought they
@@ -1016,7 +1024,7 @@ export let preds = (token: string): Pred[] | null => {
     }
     let via: Hop | undefined
     if (raw) {
-      let groups = groupsOf(raw.split('.'))
+      let groups = groupsOf(raw.split('.'), vocab)
       via = groups[groups.length - 1]
       if (groups.length > 1 || !via.prop || !isRef(via.comp, via.prop)) {
         throw new Error(
@@ -1093,7 +1101,7 @@ export let preds = (token: string): Pred[] | null => {
     if (op != '=' || !value) {
       throw new Error(`.${path} names a column: .${path}=domain`)
     }
-    let groups = groupsOf(value.split('.'))
+    let groups = groupsOf(value.split('.'), vocab)
     let at = groups[groups.length - 1]
     if (groups.length > 1 || !at.prop) {
       throw new Error(
@@ -1125,7 +1133,7 @@ export let preds = (token: string): Pred[] | null => {
     }
     let fields = value.split(',').map((seg): Field => {
       let wake = !seg.endsWith('~')
-      let groups = groupsOf((wake ? seg : seg.slice(0, -1)).split('.'))
+      let groups = groupsOf((wake ? seg : seg.slice(0, -1)).split('.'), vocab)
       let at = groups[groups.length - 1]
       if (groups.length > 1 || !at.prop) {
         throw new Error(`.fields projects columns, not paths: .fields=${seg}`)
@@ -1163,7 +1171,7 @@ export let preds = (token: string): Pred[] | null => {
     }
     if (segs.length == 2 && segs[1] == 'peers' && op == '=' && value) {
       let peers = value.split(',').map((seg): Hop => {
-        let groups = groupsOf(seg.split('.'))
+        let groups = groupsOf(seg.split('.'), vocab)
         let at = groups[groups.length - 1]
         if (groups.length > 1 || !at.prop) {
           throw new Error(
@@ -1202,7 +1210,9 @@ export let preds = (token: string): Pred[] | null => {
   // What is still refused is a shape that is not a request: a path, a value,
   // or a COLUMN's name, where the person meant the component holding it.
   if (op == '?') {
-    if (segs.length != 1 || value || (owned(segs[0]) && !routed(segs[0]))) {
+    if (
+      segs.length != 1 || value || (owned(segs[0]) && !routed(segs[0], vocab))
+    ) {
       throw new Error(
         `.${segs.join('.')}? asks for a whole component beside the filter: ` +
           '.book!&.loan?',
@@ -1214,10 +1224,10 @@ export let preds = (token: string): Pred[] | null => {
   // A trailing bang completes a component sentence. This must win over a
   // same-named column (`persona` is both a facet and a session reference);
   // the column's explicit spelling remains `.session.persona!`.
-  if (segs.length == 1 && !value && op == '!' && routed(segs[0])) {
+  if (segs.length == 1 && !value && op == '!' && routed(segs[0], vocab)) {
     p = { comp: segs[0], prop: '', op: OPS[op], value }
   } else {
-    let groups = groupsOf(segs)
+    let groups = groupsOf(segs, vocab)
     let leaf = groups[groups.length - 1]
     let derefs = groups.slice(0, -1)
     for (let d of derefs) {
@@ -1261,8 +1271,8 @@ export let preds = (token: string): Pred[] | null => {
 // One scalar pred, or null — the door for writes' param check and unit
 // assertions, where a token names a single filter. A multi-pred SCOPE belongs
 // in a filter LIST (preds() is that door); this returns the scope's first pred.
-export let pred = (token: string): Pred | null => {
-  let out = preds(token)
+export let pred = (token: string, vocab: Vocab = NONE): Pred | null => {
+  let out = preds(token, vocab)
   return out ? out[0] : null
 }
 
@@ -1331,15 +1341,15 @@ let segments = (q: string) => q.match(/(?:"[^"]*"|[^&])+/g) ?? []
 // that means "all of a kind" states it: `.task!`, `.memory!`.
 export let NEVER = 'never'
 export let never = (): Pred => ({ comp: '', prop: '', op: NEVER, value: '' })
-export let parseQuery = (q: string): Pred[] => {
+export let parseQuery = (q: string, vocab: Vocab = NONE): Pred[] => {
   let out = segments(q).map((t) => t.trim()).filter(Boolean).flatMap((seg) => {
     if (seg.startsWith('.') && !/\s\./.test(seg)) {
-      let p = preds(seg) // null = an opless dot-word (.env) — a term
+      let p = preds(seg, vocab) // null = an opless dot-word (.env) — a term
       if (p) return p
     }
     return (seg.match(/[^\s"]+"[^"]*"|"[^"]*"|\S+/g) ?? []).flatMap((tok) => {
       if (tok.startsWith('.')) {
-        let p = preds(tok)
+        let p = preds(tok, vocab)
         if (p) return p
       }
       return [text(tok.replace(/^"(.*)"$/s, '$1'))]
@@ -1860,7 +1870,7 @@ let presenceOps = (base: string): Cand[] => [
 // when a non-leaf hop isn't a reference, so the value can't be completed.
 let aimPath = (path: string): Hop | null => {
   try {
-    let g = groupsOf(path.split('.'))
+    let g = groupsOf(path.split('.'), NONE)
     if (g.slice(0, -1).some((d) => !isRef(d.comp, d.prop))) return null
     return g[g.length - 1]
   } catch {

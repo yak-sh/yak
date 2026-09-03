@@ -55,6 +55,7 @@ import {
   search,
   textMatches,
   vocabHash,
+  vocabOf,
 } from './db.ts'
 import {
   aggregateSql,
@@ -294,6 +295,14 @@ export let merged = (a: Win, b?: Win): Win => {
   }
 }
 
+// A query line as THIS store hears it: parsed with the store's own words
+// (db.ts vocabOf), then its ids resolved against this graph. Both halves are
+// per handle, and the vocabulary half is why: one Worker isolate holds many
+// stores, so a word another app planted must not parse here — it earns the
+// unknown-prop refusal, not an empty answer (T-32814).
+let heard = (db: Sql, q: string): Pred[] =>
+  resolveRefs(parseQuery(q, vocabOf(db)), (id) => locate(db, id))
+
 // How many entities a filter selects, from the index. `undefined` when no
 // statement can say it: a declining predicate, or a registered SOURCE, whose
 // pass-through entities join the answer AFTER the statement (matching()) and so
@@ -317,7 +326,7 @@ export let evalFast = (
   forceEntries = false,
   w?: Win,
 ) => {
-  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let preds = heard(db, q)
   let inputs = inputsOf(preds)
   if (!narrows(inputs)) return null
   let entries = forceEntries || namesLazy(preds)
@@ -373,7 +382,7 @@ export let evalQuery = (
   limit = ENTRY_PAGE,
   doors: QueryUniverseDoors = universeDoors,
 ) => {
-  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let preds = heard(db, q)
   let inputs = inputsOf(preds)
   let entries = namesLazy(preds)
   let ent = (e: string) => eager(db, e)
@@ -423,7 +432,7 @@ export let evalCapped = (
   cap = SUB_CAP,
   after?: number,
 ) => {
-  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let preds = heard(db, q)
   let inputs = inputsOf(preds)
   let ent = (e: string) => eager(db, e)
   let kids = (eid: string, comp: string, prop: string) =>
@@ -485,7 +494,7 @@ export let evalSub = (
   details = false,
   cap = SUB_CAP,
 ): SubAnswer => {
-  let asked = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let asked = heard(db, q)
   // A sub that NEEDS the whole universe never windows: entries page by their
   // own seq, and a capped tally would undercount every badge.
   if (details || namesLazy(asked) || aggOf(asked)) {
@@ -546,7 +555,7 @@ export let evalAgg = (
 ):
   | { op: 'distinct' | 'tally' | 'count'; values: Map<string, number> }
   | null => {
-  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let preds = heard(db, q)
   let agg = aggOf(preds)
   if (!agg) return null
   let sql = aggregateSql(preds)
@@ -577,9 +586,7 @@ export let evalAgg = (
 // Readiness is screened before ORDER/LIMIT, making the returned prefix exactly
 // priority ASC, newest spine first rather than a re-ranked recent sample.
 let workInputs = (db: Sql, q: string) => {
-  let preds = workPredicates(
-    resolveRefs(parseQuery(q), (id) => locate(db, id)),
-  )
+  let preds = workPredicates(heard(db, q))
   if (
     preds.some((p) =>
       p.rev || p.refs || p.reach ||
@@ -1134,7 +1141,7 @@ export let evalGraph = (
   // The LINE's own window (`.limit=`/`.after=`) is the default; an explicit
   // opts bound — the /query door's paging — overrides it, so a caller that
   // always passed a limit keeps doing exactly what it did.
-  let asked = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let asked = heard(db, q)
   if (orderOf(asked) == 'similar') {
     throw new Error('similarity rank requires the embedding query evaluator')
   }
@@ -1360,9 +1367,7 @@ export let askRows = async (db: Sql, ask: Ask): Promise<Row[]> => {
     })
   }
   if (!ask.ids.length) {
-    let asked = q.trim()
-      ? resolveRefs(parseQuery(q), (id) => locate(db, id))
-      : []
+    let asked = q.trim() ? heard(db, q) : []
     if (orderOf(asked) != 'similar') {
       return evalGraph(db, q, { after: ask.after, limit: ask.limit }).hits
     }
@@ -1379,7 +1384,7 @@ export let askRows = async (db: Sql, ask: Ask): Promise<Row[]> => {
   // `id=` already SELECTED — the addresses are the selection, and a remaining
   // filter only SCREENS them. No remaining filter means no screen, so this
   // states that before parsing (an empty QUERY would select nothing).
-  let preds = q.trim() ? resolveRefs(parseQuery(q), (id) => locate(db, id)) : []
+  let preds = q.trim() ? heard(db, q) : []
   let read = (e: string) => eager(db, e)
   let kids = (eid: string, comp: string, prop: string) =>
     referrersOf(db, [eid], { comp, prop }).map(read)

@@ -99,7 +99,9 @@ export let query = async (db: Sql, search: string): Promise<unknown> => {
   // similarity order too (no ranker is registered here, since embed.ts's vector
   // backend cannot ride a worker bundle), but it says so in the app plane's
   // words. A store that cannot serve a capability names itself.
-  let asked = q.trim() ? resolveRefs(parseQuery(q), (id) => locate(db, id)) : []
+  let asked = q.trim()
+    ? resolveRefs(parseQuery(q, vocabOf(db)), (id) => locate(db, id))
+    : []
   if (orderOf(asked) == 'similar') {
     throw new Error('semantic ranking is not served by this store')
   }
@@ -134,7 +136,7 @@ let rowsAt = (db: Sql, eids: string[], asked: string): Row[] => {
   // the frame still ships, whole.
   let want: Set<string> | null = null
   try {
-    want = wanted(segs, q.trim() ? parseQuery(q) : [])
+    want = wanted(segs, q.trim() ? parseQuery(q, vocabOf(db)) : [])
   } catch { /* the whole bundle, then */ }
   let rows = listed(
     layered(db, rowsOf(db, eids).map(rowed), ask) as Row[],
