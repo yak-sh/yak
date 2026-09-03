@@ -16,6 +16,20 @@ compatibility_date = "2025-05-08"
 # same-zone routing would make that URL an SSRF into our own origin.
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
+# Workers logs (T-33178). Off until 2026-09-03, which is why "where did that
+# second go" could only be answered by guessing: the platform had no logs at
+# all, and every deploy was pushing observability_enabled: false. `logs` is
+# console output and thrown errors; `invocation_logs` is the one line per
+# request that carries the path, status and duration — the half that answers a
+# latency question. Included up to 20M events a month on Workers Paid.
+#
+# This is telemetry ABOUT the platform and is not where an app's failures go:
+# those are `exception` entities in the app's own store, where the person's
+# agent reads them (unseen.ts, V-32361). A log nobody opens is not a report.
+[observability.logs]
+enabled = true
+invocation_logs = true
+
 # The apex and every first-level space hostname, both on the yaks.app zone;
 # the zone's Universal certificate covers the wildcard. `*/*` is the third
 # because a customer's own hostname is not spelled `yaks.app` at all
