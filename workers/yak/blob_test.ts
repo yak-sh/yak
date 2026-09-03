@@ -88,6 +88,13 @@ slow('the file door: a page uploads bytes and gets an address', async () => {
     assertEquals(one[0].entity.eid, files[0].entity.eid)
     assertEquals(one[0].attachment?.name, 'the cake.png')
 
+    // …and a third that names nothing keeps the name it had: the same file is
+    // the same file, whatever a canvas had to call it.
+    await store.upload(new Blob([png], { type: 'image/png' }))
+    let still: Row[] = await store.query('.attachment!')
+    assertEquals(still.length, 1)
+    assertEquals(still[0].attachment?.name, 'the cake.png')
+
     // A row of the app's own that points at the bytes — the guide's photo.
     await store.apply({ comment: { target: file.eid } })
     let [aimed] = await store.query('.comment!')

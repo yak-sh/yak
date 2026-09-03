@@ -364,7 +364,10 @@ let took = async (
         { entity: { eid: sha }, blob: { bytes: bytes.byteLength } },
         {
           entity: { eid: await useOf(sha) },
-          attachment: { blob: sha, mime, name },
+          // A patch, so an upload that names nothing leaves the name the
+          // first one gave these bytes: the same file is the same file,
+          // whatever the page had to call it the second time.
+          attachment: { blob: sha, mime, ...(name ? { name } : {}) },
         },
       ],
     }),
