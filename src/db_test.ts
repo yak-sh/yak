@@ -3458,9 +3458,8 @@ Deno.test('backfill: stored rows become sentence entities, once per graph', () =
     { eid: m, name: 'memory', comp: {} },
   ])
   legacy(d, p, 'requires', c)
-  // A persona's tiers: linking one is the owner's move, so the dual-write's
-  // dependency echo would refuse the whole sweep — it is not written at all,
-  // because the row it would write already stands.
+  // A persona tier arriving through the legacy table: the dual-write's
+  // dependency echo says nothing, because the row it would write stands.
   legacy(d, voice, 'contains', m)
   // A row the dual-write already minted is skipped, not re-minted: this is
   // also how an interrupted sweep resumes where it stopped.
@@ -5757,7 +5756,11 @@ Deno.test('memory gate: an agent memory lands proposed; a person decides it', ()
 // The gate is what an edge would MATERIALIZE, not the edge. An agent files
 // its own proposal where it belongs — the tier renders nothing until a person
 // decides it — but anything that would reach a prompt NOW is the owner's.
-Deno.test('persona gate: a proposal may be filed, a prompt may not be moved', () => {
+// Composition is agents' work; ACCEPTANCE is the owner's. An agent files,
+// moves and unfiles any member of any persona, and writes a persona's own
+// words — none of that reaches a prompt on its own. The one thing it may not
+// do is decide its own memory, which is what would.
+Deno.test("persona composition is an agent's; acceptance is the owner's", () => {
   let d = fresh()
   let jeff = uid()
   apply(d, [{ eid: jeff, name: 'person', comp: {} }])
@@ -5775,21 +5778,28 @@ Deno.test('persona gate: a proposal may be filed, a prompt may not be moved', ()
     undefined,
     jeff,
   )
-  let ties = (child: string, gone = false) => ({
+  let ties = (child: string, gone = false, type = 'contains') => ({
     eid: p,
     name: 'dependency',
-    comp: { type: 'contains', child, ...(gone ? { gone: true } : {}) },
+    comp: { type, child, ...(gone ? { gone: true } : {}) },
   })
-  // jeff's memory is accepted as written, so tying it in moves every prompt
-  assertThrows(() => apply(d, [ties(m)]), Error, 'is accepted')
-  // a whole base bundle is the same move
-  assertThrows(() => apply(d, [ties(base)]), Error, 'is a persona')
-  assertThrows(
-    () => apply(d, [{ eid: p, name: 'doc', comp: { body: 'be long' } }]),
-    Error,
-    'body is the owner',
-  )
-  // an agent's own memory lands proposed and may be filed where it belongs
+  let tied = (child: string, type = 'contains') =>
+    !!readComp(d, edgeEid(p, type, child), 'edge')
+  // an accepted memory (jeff wrote it, so it is accepted as written)
+  apply(d, [ties(m)])
+  assertEquals(tied(m), true)
+  // a whole base bundle
+  apply(d, [ties(base)])
+  assertEquals(tied(base), true)
+  // the index tier, and cutting one back out
+  apply(d, [ties(m, false, 'reads'), ties(base, true)])
+  assertEquals(tied(m, 'reads'), true)
+  assertEquals(tied(base), false)
+  // a persona's own words: they name the file, they reach no prompt
+  apply(d, [{ eid: p, name: 'doc', comp: { body: 'be long' } }])
+  assertEquals(readComp(d, p, 'doc')?.body, 'be long')
+  // an agent's own memory lands proposed, files the same way, and stays a
+  // suggestion until a person decides it — which the agent may not do
   let mine = uid()
   apply(d, [
     { eid: mine, name: 'doc', comp: { title: 'agent idea' } },
@@ -5797,25 +5807,14 @@ Deno.test('persona gate: a proposal may be filed, a prompt may not be moved', ()
   ])
   assertEquals(!!readComp(d, mine, 'proposed'), true)
   apply(d, [ties(mine)])
-  assertEquals(!!readComp(d, edgeEid(p, 'contains', mine), 'edge'), true)
-  // and taken back out again — it was reaching nobody either way
-  apply(d, [ties(mine, true)])
-  assertEquals(!!readComp(d, edgeEid(p, 'contains', mine), 'edge'), false)
-  // once a person accepts it, moving it is the owner's move
-  apply(d, [ties(mine)])
-  apply(d, [{ eid: mine, name: 'decided', comp: {} }], undefined, jeff)
-  assertThrows(() => apply(d, [ties(mine, true)]), Error, 'is accepted')
-  // a person may do all of it
-  apply(d, [ties(m)], undefined, jeff)
-  apply(d, [ties(base)], undefined, jeff)
-  apply(d, [ties(mine, true)], undefined, jeff)
-  apply(
-    d,
-    [{ eid: p, name: 'doc', comp: { body: 'be brief.' } }],
-    undefined,
-    jeff,
+  assertEquals(tied(mine), true)
+  assertThrows(
+    () => apply(d, [{ eid: mine, name: 'decided', comp: {} }]),
+    Error,
+    'a person decides it',
   )
-  assertEquals(readComp(d, p, 'doc')?.body, 'be brief.')
+  apply(d, [{ eid: mine, name: 'decided', comp: {} }], undefined, jeff)
+  assertEquals(readComp(d, mine, 'decided')?.verdict ?? null, null)
 })
 
 // A write that changes nothing writes nothing (settled()): no journal row, no

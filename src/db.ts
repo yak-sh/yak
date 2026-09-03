@@ -4727,9 +4727,7 @@ let dualEdge = (db: Sql, changes: Change[], cast: Change[]): Change[] => {
         )
       }
       // An echo that would say nothing is not cast: the sentence already
-      // stands, so re-stating it only journals a write that did not happen
-      // — and the dependency rule reads a repeat as a fresh link (a
-      // persona's `contains` is the owner's move, refused for anyone else).
+      // stands, so re-stating it only journals a write that did not happen.
       // The backfill leans on this: it re-mints edge entities over sentences
       // that are already there.
       let said = storedSentence(db, eid)
@@ -5442,11 +5440,12 @@ export let writerActor = (
   writer?: string | null,
 ): string | null => actorFor(db, writer, true)
 
-// Whether a writer's actor is a human. What reaches the next agent's prompt
-// — a persona's composition and body, and whether a memory counts as
-// accepted — is the owner's to decide (M-31946): an agent proposes, never
-// programs. Nothing resolved is not a person: an anonymous write is
-// machinery until it says otherwise.
+// Whether a writer's actor is a human. One thing is the owner's to decide
+// (M-31946): whether a memory is ACCEPTED, which is what lets it reach the
+// next agent's prompt. An agent proposes, never programs — but it composes
+// freely, since an unaccepted memory says nothing wherever it is filed.
+// Nothing resolved is not a person: an anonymous write is machinery until it
+// says otherwise.
 export let isPerson = (db: Sql, actor: string | null) =>
   !!actor && !!prep(db, `select 1 from person where ${byEid}`).get(actor)
 
@@ -5460,31 +5459,11 @@ export let titleOf = (db: Sql, eid: string): string =>
       | undefined)?.title ?? '',
   )
 
-// The entity already wears `persona` on disk (a persona minted in this same
-// batch is nobody's prompt yet, so it is not guarded).
-let wornPersona = (db: Sql, eid: string) =>
-  !!prep(db, `select 1 from persona where ${byEid}`).get(eid)
-
 // A proposed memory: the memory row is on disk or in this batch, and the
 // proposed stamp is on disk. Only a person may decide one.
 let proposedMemory = (db: Sql, eid: string) =>
   !!prep(db, `select 1 from memory where ${byEid}`).get(eid) &&
   !!prep(db, `select 1 from proposed where ${byEid}`).get(eid)
-
-// Whether this child, tied into a persona, would reach a prompt as it stands.
-// persona.ts `tiers()` renders only an ACCEPTED member — no `proposed` stamp,
-// or a `decided` that did not decline it (client.ts `accepted`) — so an
-// unaccepted memory sits in the tier saying nothing until a person decides.
-// `pending` is a memory minted in THIS batch by an agent: its proposed stamp
-// lands at the end of this same apply, after the edge rule runs.
-let materializes = (db: Sql, eid: string, pending: boolean) =>
-  !pending &&
-  (!prep(db, `select 1 from proposed where ${byEid}`).get(eid) ||
-    !!prep(
-      db,
-      `select 1 from decided
-        where ${byEid} and coalesce(verdict, '') != 'declined'`,
-    ).get(eid))
 
 // Who may SIGN a letter: the same chain, minus the one inference provenance
 // is allowed to make. A tab at the owner's keyboard may be RECORDED as them;
@@ -6080,35 +6059,11 @@ export let apply = (
           console.warn(`sync: edge for ${eid} dropped — missing endpoint`)
           continue
         }
-        // A persona's tiers are what an agent boots into. What an agent may
-        // NOT do is change that boot (M-31946) — so the gate is what the edge
-        // would MATERIALIZE, not the edge itself. Tying an unaccepted memory
-        // in is filing it where it belongs: it renders for nobody until a
-        // person decides it, and refusing the link only leaves an agent
-        // unable to put its own suggestion in the right place. Tying in
-        // something that renders NOW — an accepted memory, another persona's
-        // whole bundle — is the owner's move, and so is cutting one out.
-        if (
-          (comp.type == 'contains' || comp.type == 'reads') &&
-          wornPersona(db, eid) && !createdComps.has(`persona ${eid}`) &&
-          !person() &&
-          materializes(
-            db,
-            String(comp.child),
-            createdComps.has(`memory ${String(comp.child)}`),
-          )
-        ) {
-          let kid = human(db, String(comp.child))
-          throw new Error(
-            `${kid} ${
-              wornPersona(db, String(comp.child))
-                ? 'is a persona'
-                : 'is accepted'
-            } — ${comp.gone ? 'cutting it out of' : 'preloading it into'} ` +
-              `${human(db, eid)} changes what every agent boots into, ` +
-              `which is the owner's move.`,
-          )
-        }
+        // Composition is agents' work: tying a memory into a persona, moving
+        // it between tiers, cutting it out, assigning a base bundle. The one
+        // owner gate is ACCEPTANCE (M-31946) — persona.ts `tiers()` renders
+        // only an accepted member, so an agent's own memory says nothing to
+        // anyone until a person decides it, wherever it has been filed.
         // Nothing left to write: dualEdge above already lowered this sentence
         // into its edge entity, which is the only edge store (T-32552). What
         // remains is the change itself — journalled and cast, so a catch-up
@@ -6370,16 +6325,6 @@ export let apply = (
       }
       if (name == 'blob' && comp && !CONTENT_EID.test(eid)) {
         throw new Error('blob eid must be its SHA-256')
-      }
-      // A persona's own words reach every agent that wears it, so only a
-      // person rewrites them (M-31946). Same rule, same door, as its edges.
-      if (
-        name == 'doc' && comp && wornPersona(db, eid) &&
-        !createdComps.has(`persona ${eid}`) && !person()
-      ) {
-        throw new Error(
-          `${human(db, eid)} is a persona — its body is the owner's to edit.`,
-        )
       }
       // Accepting a proposed memory is the decision an agent may not take
       // for itself: `decided` on one is a person's stamp only.
