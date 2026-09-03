@@ -23,9 +23,9 @@
 // door refused ON PURPOSE never becomes one (unseen.ts `refusal`): a
 // signed-out visitor sent to sign in is the platform working.
 import { r2Blobs } from '../../src/blobs_r2.ts'
-import { at as cachedAt, purged } from './cache.ts'
+import { at as cachedAt } from './cache.ts'
 import * as files from './files.ts'
-import { keyed, PREFIX, prefixOf, SHA } from './files.ts'
+import { keyed, PREFIX, prefixOf, purged, SHA } from './files.ts'
 import {
   type App,
   directory,
@@ -811,7 +811,7 @@ let api = async (
     if (!mayWrite(who)) return refused()
     let key = keyOf(space, app, path.slice('/files'.length))
     await r2Blobs(env.BLOBS).put(key, new Uint8Array(await req.arrayBuffer()))
-    await purged(app)
+    await purged(env, app)
     return Response.json({ ok: true, key })
   }
   return json(404, 'not_found')

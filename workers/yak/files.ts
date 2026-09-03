@@ -16,8 +16,9 @@
 // default entrypoint, so no request from the internet arrives here — a caller
 // has to be this Worker.
 import { r2Blobs } from '../../src/blobs_r2.ts'
-import { keepable, tagsOf } from './cache.ts'
-import type { Env } from './env.ts'
+import { keepable, purge, tagsOf } from './cache.ts'
+import type { App } from './directory.ts'
+import { bound, type Env } from './env.ts'
 import { sha256 } from './versions.ts'
 
 // What the gateway tells this part, in headers rather than the path, because
@@ -87,6 +88,32 @@ let missing = (keep: Record<string, string>) =>
     headers: { 'content-type': 'text/plain; charset=utf-8', ...keep },
   })
 
+// The address the purge door answers at. A POST, so it can never be confused
+// with a file: only GET and HEAD are cached, so this request runs the
+// entrypoint every time — which is exactly what a purge needs, since the purge
+// must be ISSUED from in here (cache.ts).
+let PURGE = '/purge'
+
+// The purge a door calls when it has changed an app's BYTES: one call empties
+// every address this app answers at, at every edge. A door that changed only
+// who may read does not call this and does not need to (cache.ts `tagsOf`).
+//
+// It goes through the binding rather than calling `purge()` directly because a
+// purge only reaches the cache of the entrypoint that issues it, and every
+// write door runs in the gateway. Without the binding — `wrangler dev`, the
+// workerd probes — `bound` calls this module in-process, where there is no
+// cache and the purge is a logged no-op.
+export let purged = async (env: Env, app: App) => {
+  let r = await bound(env.FILES, fetch, env).fetch(
+    new Request(`https://files.invalid${PURGE}`, {
+      method: 'POST',
+      body: JSON.stringify(tagsOf(app.eid)),
+    }),
+  )
+  await r.body?.cancel()
+  return r.ok
+}
+
 // The inner door. The gateway has already decided this request may be served;
 // everything here is about which bytes.
 //
@@ -95,6 +122,10 @@ let missing = (keep: Record<string, string>) =>
 // must reach and the thing it names come from one read of one string.
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let url = new URL(req.url)
+  if (req.method == 'POST' && url.pathname == PURGE) {
+    let ok = await purge(await req.json() as string[])
+    return new Response(null, { status: ok ? 204 : 500 })
+  }
   // `/<app eid>/<the app's own path>` (cache.ts `at`): the eid is the cache
   // key's tenant discriminator and is not part of the file's name.
   let eid = url.pathname.slice(1).split('/')[0] ?? ''

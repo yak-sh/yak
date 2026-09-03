@@ -41,7 +41,6 @@
 // makes something slow, not wrong. A private app pays one authorization
 // decision more than a public one instead of a round trip to a bucket an ocean
 // away.
-import type { App } from './directory.ts'
 
 // How long the cache holds a file, and how long it may answer from a stale
 // copy while it refreshes behind the request. A year, because the real answer
@@ -115,20 +114,26 @@ export let sealed = (res: Response) => {
   })
 }
 
-// Emptying it. `cache.purge` comes from `cloudflare:workers` rather than an
+// Emptying it, and the rule that makes this harder than it looks: a purge is
+// scoped to the ENTRYPOINT that calls it — "an entrypoint cannot reach into
+// another entrypoint's cache". So this is only ever called from inside
+// `Files`, the entrypoint that owns the entries. Called from the gateway,
+// where every write door actually runs, it empties the gateway's own cache —
+// which holds nothing — and reports success while the stale bytes go on being
+// served. That is not a theory: it is what shipped first, and what serving
+// VERSION ONE after writing VERSION TWO looked like. files.ts `purged` is the
+// door a write path uses, and the hop to `Files` is the whole reason it exists.
+//
+// `cache.purge` comes from `cloudflare:workers` rather than an
 // ExecutionContext because this Worker has none to thread: every part is a
 // plain `fetch(req, env)` (env.ts), and the `ctx` an MCP tool receives is the
-// kernel's own (tools.ts `Ctx`), not the runtime's. The module import is the
-// door Cloudflare provides for exactly that case.
-//
-// The runtime under `wrangler dev` and the workerd probes has no `purge` at
-// all, so it is looked up per call and skipped when absent: a test tier that
-// cannot purge must still be able to run every write path.
+// kernel's own (tools.ts `Ctx`), not the runtime's.
 //
 // A purge NEVER throws into the write that called it — failing `app_files`
 // because a cache was busy would be worse than the staleness. But a purge that
-// quietly fails is exactly the "my edit did not appear" report this design
-// exists to prevent, so it is logged loudly, and `s-maxage` is the backstop.
+// quietly fails is the "my edit did not appear" report this design exists to
+// prevent, so every way of failing says so on the log, the runtime simply not
+// having the API included. `s-maxage` is the backstop underneath.
 type Purger = {
   purge: (
     what: { tags?: string[]; pathPrefixes?: string[]; purgeEverything?: true },
@@ -139,10 +144,17 @@ export let purge = async (tags: string[]) => {
   let mod
   try {
     mod = await import('cloudflare:workers') as { cache?: Purger }
-  } catch {
+  } catch (e) {
+    console.error('yak: no cloudflare:workers to purge with', tags, e)
     return false
   }
-  if (typeof mod.cache?.purge != 'function') return false
+  if (typeof mod.cache?.purge != 'function') {
+    // `wrangler dev` and the workerd probes land here, where there is no cache
+    // to empty and nothing is wrong. A DEPLOYED Worker landing here means every
+    // write is silently stale, so it is worth the line either way.
+    console.error('yak: this runtime has no cache.purge', tags)
+    return false
+  }
   try {
     let out = await mod.cache.purge({ tags })
     if (!out.success) {
@@ -154,8 +166,3 @@ export let purge = async (tags: string[]) => {
     return false
   }
 }
-
-// The purge a door calls when it has changed an app's BYTES: one call empties
-// every address this app answers at, at every edge. A door that changed only
-// who may read does not call this, and does not need to.
-export let purged = (app: App) => purge(tagsOf(app.eid))

@@ -49,7 +49,7 @@ import {
 import type { EntityLiteral } from '../../src/mutation.ts'
 import { appAccess } from '../../src/types.ts'
 import { VERSION } from '../../src/version.ts'
-import { purged } from './cache.ts'
+import { purged } from './files.ts'
 import {
   type Access,
   type App,
@@ -460,7 +460,7 @@ let released = async (
   // emptied here, once, for all four (cache.ts `purged`). First, because a
   // release that dies on a manifest it refuses still leaves the bucket
   // changed, and the stale edge would outlive the failure.
-  await purged(app)
+  await purged(ctx.env, app)
   // The app's own components, if it declares any. A manifest the store
   // refuses fails the release: the words and the tables must agree, and a
   // half-planted vocabulary is what `unknown component` is made of.
@@ -1074,7 +1074,7 @@ export let TOOLS: Tool[] = [
           return { text: new TextDecoder().decode(await blobs.get(key)), space }
         }
         await blobs.delete(key)
-        await purged(app)
+        await purged(ctx.env, app)
         return { text: `deleted ${key.slice(prefix.length)}`, space }
       }
       let wrote = batch.length ? batch : [{
@@ -1090,7 +1090,7 @@ export let TOOLS: Tool[] = [
       // One purge for the whole batch, after the last byte lands: the tag is
       // the app, not the file, so writing ten files empties the edge once
       // (cache.ts `tagsOf`).
-      await purged(app)
+      await purged(ctx.env, app)
       let paths = wrote.map((f) => at(f.path))
       return {
         text: paths.length == 1
