@@ -227,9 +227,18 @@ export let slugFor = (email: string) => {
 let TTL = 30_000
 let cache = new Map<string, { at: number; body: string }>()
 
-// One seed per isolate, awaited by every query behind it. A second isolate
-// racing the first bounces on the unique slug and is ignored: its query
-// then finds the winner.
+// One seed per isolate, awaited by the WRITE door and by nothing else
+// (T-33176). It used to sit in front of every read, which cost a round trip
+// to the meta store on every cold isolate — and an isolate is cold for
+// almost every request a quiet platform serves, so that trip was ~100ms on
+// the front of every page load, forever, to re-confirm two rows that have
+// existed since the platform's first day. A read needs none of it: a meta
+// space that is not there answers empty, which is what an unseeded platform
+// should say. Every path that MINTS anything goes through /apply, so the
+// seed still happens before there is anything to describe.
+//
+// A second isolate racing the first bounces on the unique slug and is
+// ignored: its query then finds the winner.
 let seeded: Promise<void> | undefined
 
 let seed = async (env: Env) => {
@@ -277,8 +286,8 @@ let forwarded = (req: Request) =>
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let url = new URL(req.url)
-  await (seeded ??= seed(env))
   if (url.pathname == '/apply' && req.method == 'POST') {
+    await (seeded ??= seed(env))
     let r = await storeOf(env.STORE, META_STORE)('/apply', {
       method: 'POST',
       body: await req.text(),

@@ -435,6 +435,34 @@ slow('an app says who may read it and who may write it', async () => {
       })).status,
       200,
     )
+    // What a browser may KEEP of each of them (T-33176). A private app's
+    // bytes must never sit in a shared cache — access is decided per viewer,
+    // so a proxy holding one member's copy would hand it to a stranger — and
+    // `private` is the word that says so. A public app's may. Neither is held
+    // past a revalidation, because an app's files serve live: `no-cache` plus
+    // an ETag makes the return visit a 304 with no bytes rather than a copy
+    // nobody checked.
+    await agent.tool('app_files', {
+      space: 'club',
+      app: 'list',
+      op: 'write',
+      path: 'index.html',
+      content: '<!doctype html><h1>the list</h1>',
+    })
+    let open_ = await k.at('club.yaks.app', '/list/')
+    assertEquals(open_.headers.get('cache-control'), 'public, no-cache')
+    let tag = open_.headers.get('etag') ?? ''
+    assertMatch(tag, /^W\/"[0-9a-f]{32}"$/)
+    await open_.body?.cancel()
+    let again = await k.at('club.yaks.app', '/list/', {
+      headers: { 'if-none-match': tag },
+    })
+    assertEquals(again.status, 304)
+    assertEquals(await again.text(), '')
+    let mine = await k.at('club.yaks.app', '/diary/', { headers: { cookie } })
+    assertEquals(mine.headers.get('cache-control'), 'private, no-cache')
+    await mine.body?.cancel()
+
     let shut = await k.at('club.yaks.app', '/diary/api/query?.doc!')
     assertEquals(shut.status, 401)
     assertEquals((await shut.json()).error.code, 'not_a_reader')

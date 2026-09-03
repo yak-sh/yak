@@ -232,7 +232,36 @@ let pretty = (path: string) => !path.split('/').pop()!.includes('.')
 // the same file.
 let MANIFEST = new Set(['/worker.js', '/vocab.json', '/tools.json'])
 
+// What the browser may keep, and for how long. An app's files are LIVE — a
+// written file serves the moment app_files puts it, with no deploy in
+// between — so nothing here may be held past a revalidation: `no-cache` is
+// "ask every time", not "do not store", and with an ETag beside it that ask
+// is answered by a 304 carrying no bytes. `private` on an app that is not
+// public keeps its pages out of every shared cache between here and the
+// person reading them, which is the whole of the rule: a private app's bytes
+// belong to its members and to no proxy.
+//
+// The validator is the CONTENT, not the app's version: app_files writes
+// bytes without bumping `app.version` (tools.ts), so a version is no promise
+// about what the bytes are (T-33176).
+let keeping = (app: App) =>
+  `${app.access == null || app.access == 'public' ? 'public' : 'private'}, ` +
+  'no-cache'
+
+// The tag for these bytes at this mount. Weak, and the mount is part of it,
+// because an HTML page is served with a `<base href>` woven in: the same
+// bytes at `/` and at `/recipes/` are two different documents.
+let etagOf = async (bytes: Uint8Array<ArrayBuffer>, at: string) =>
+  `W/"${(await sha256(bytes)).slice(0, 24)}${
+    (await sha256(new TextEncoder().encode(at))).slice(0, 8)
+  }"`
+
+let unchanged = (req: Request, etag: string) =>
+  (req.headers.get('if-none-match') ?? '').split(',')
+    .some((t) => t.trim() == etag)
+
 let asset = async (
+  req: Request,
   env: Env,
   space: Space,
   app: App,
@@ -263,7 +292,10 @@ let asset = async (
   }
   if (!bytes) return nothingHere()
   let type = mimeOf(key)
-  let headers = { 'content-type': type }
+  let etag = await etagOf(bytes, at)
+  let headers = { 'content-type': type, 'cache-control': keeping(app), etag }
+  // The browser already has these bytes, so it is told so and sent none.
+  if (unchanged(req, etag)) return new Response(null, { status: 304, headers })
   if (!type.startsWith('text/html')) return new Response(bytes, { headers })
   // A page, so it gets the app's address before its own first relative URL,
   // and the reporter after it. The bytes are already whole here (the blob
@@ -951,12 +983,21 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       at,
     )
   }
+  // Both at once, because they are two halves of one answer and neither
+  // needs the other's result (T-33176). The app's own worker answers first
+  // where it has one and the file is what it falls back to, so asking the
+  // dispatch namespace and only then the bucket cost two round trips end to
+  // end — and almost every app has no worker at all, so almost every page
+  // paid the first one purely to be told so. Started together, a page costs
+  // the LONGER of the two rather than their sum.
+  //
+  // The wasted read is the rare case — an app whose worker answers — and it
+  // is one small GET. The `catch` is there because a promise nobody awaits
+  // must not surface as an unhandled rejection.
+  let file = asset(req, env, space, app, path, at, c)
+  file.catch(() => {})
   let own = itself
     ? null
     : await c.time('worker', () => ran(env, space!, app!, req, who))
-  return reporting(
-    own ?? await asset(env, space, app, path, at, c),
-    req,
-    at,
-  )
+  return reporting(own ?? await file, req, at)
 }
