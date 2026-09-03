@@ -1062,3 +1062,130 @@ slow("the door lists an app's tools, and says when they moved", async () => {
     await k.stop()
   }
 })
+
+// An entity spans apps (T-32699): a read that names no app asks every store
+// the caller can reach and answers one bundle per eid — and only the stores
+// they can reach.
+slow('a read with no app composes every app the caller can reach', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    // Two apps of his own, each with a word of its own.
+    let made = async (
+      who: ReturnType<typeof connector>,
+      slug: string,
+      comp: string,
+      cols: Record<string, string>,
+      access?: string,
+    ) => {
+      await who.tool('app_new', {
+        slug,
+        title: slug,
+        ...(access ? { access } : {}),
+      })
+      await who.tool('app_files', {
+        app: slug,
+        files: [{
+          path: 'vocab.json',
+          content: JSON.stringify({ [comp]: cols }),
+        }],
+      })
+      await who.tool('app_deploy', { app: slug })
+    }
+    await made(agent, 'recipes', 'recipe', { serves: 'number' })
+    await made(agent, 'lending', 'loan', { to: 'text' })
+
+    // ONE entity, its title and recipe in one app, its loan in the other:
+    // the eid is minted by the caller, so it names the same thing in both.
+    let cake = crypto.randomUUID()
+    await agent.tool('graph_apply', {
+      app: 'recipes',
+      entities: [{
+        entity: { eid: cake },
+        doc: { title: 'Lemon cake' },
+        recipe: { serves: 4 },
+      }],
+    })
+    await agent.tool('graph_apply', {
+      app: 'recipes',
+      entities: [{ doc: { title: 'Pancakes' }, recipe: { serves: 2 } }],
+    })
+    await agent.tool('graph_apply', {
+      app: 'lending',
+      entities: [
+        { entity: { eid: cake }, loan: { to: 'Maya' } },
+        { doc: { title: 'Lemon zester' }, loan: { to: 'Bo' } },
+      ],
+    })
+
+    // `id=` with no app answers everything known about it, in one bundle,
+    // saying which app holds which component.
+    let rows = async (filter: string, who = agent) =>
+      JSON.parse(await who.tool('graph_query', { filter })) as {
+        kind: string
+        entity: { eid: string }
+        doc?: { title: string }
+        recipe?: { serves: number }
+        loan?: { to: string }
+        _stores?: Record<string, string>
+      }[]
+    let [bundle] = await rows(`id=${cake}`)
+    assertEquals(bundle.doc!.title, 'Lemon cake')
+    assertEquals(bundle.recipe!.serves, 4)
+    assertEquals(bundle.loan!.to, 'Maya')
+    // An app's own word is what the entity IS, and the composition says where
+    // each component lives.
+    assertEquals(bundle.kind, 'recipe')
+    assertMatch(bundle._stores!.recipe, /\/recipes$/)
+    assertMatch(bundle._stores!.loan, /\/lending$/)
+
+    // A filter naming two apps' words is intersected at the door: the cake
+    // wears both, the pancakes and the zester wear one each.
+    assertEquals(
+      (await rows('.recipe!&.loan!')).map((r) => r.entity.eid),
+      [cake],
+    )
+    assertEquals(
+      (await rows('.recipe!')).map((r) => r.doc!.title),
+      ['Lemon cake', 'Pancakes'],
+    )
+    // `.doc!` is a platform word both stores speak, so the answer is both
+    // apps' rows — and the cake is one row, not two.
+    assertEquals(
+      (await rows('.doc!')).map((r) => r.doc!.title),
+      ['Lemon cake', 'Pancakes', 'Lemon zester'],
+    )
+    // A word nobody planted is nobody's, and the store's own sentence says so
+    // rather than an empty answer.
+    await assertRejects(
+      () => agent.tool('graph_query', { filter: '.sandwich!' }),
+      Error,
+      'unknown prop',
+    )
+    // Search with no app merges the ranked hits of every app.
+    let found = JSON.parse(
+      await agent.tool('search', { text: 'lemon' }),
+    ) as { doc: { title: string } }[]
+    assertEquals(
+      found.map((r) => r.doc.title).sort(),
+      ['Lemon cake', 'Lemon zester'],
+    )
+
+    // What another person keeps in their own space is not in reach: her app
+    // is private, he is nobody there, and her component never appears on the
+    // bundle he reads — even though it is written on the same eid.
+    let maya = await signIn(k)
+    let hers = connector(k, maya.cookie)
+    await made(hers, 'diary', 'entryline', { note: 'text' }, 'private')
+    await hers.tool('graph_apply', {
+      app: 'diary',
+      entities: [{ entity: { eid: cake }, entryline: { note: 'he baked it' } }],
+    })
+    assertEquals('entryline' in (await rows(`id=${cake}`))[0], false)
+    assertEquals((await rows('.recipe!', hers)).length, 0)
+    assertEquals((await rows(`id=${cake}`, hers))[0].entity.eid, cake)
+  } finally {
+    await k.stop()
+  }
+})

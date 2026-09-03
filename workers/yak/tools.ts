@@ -40,10 +40,10 @@ import {
 } from './directory.ts'
 import { toolsChanged } from './declared.ts'
 import type { Env } from './env.ts'
-import { listing } from './listing.ts'
 import { mail } from './mail.ts'
 import { SLUG } from './route.ts'
-import { mayWrite, vouched, type Who } from './session.ts'
+import { type Reach, read } from './reach.ts'
+import { mayWrite, reads, vouched, type Who } from './session.ts'
 import { canon, nameOf, personOf } from './signin.ts'
 import { storeOf } from './store.ts'
 import { archive, cards, line, openIn, serve } from './unseen.ts'
@@ -212,6 +212,41 @@ let inApp = async (ctx: Ctx, args: Args, write = false) => {
     store: storeOf(ctx.env.STORE, storeName(space, app)),
   }
 }
+
+// Every store this call reaches. An app named is that one store, as it always
+// was; no app is the FEDERATED read (T-32698) — every app in every space the
+// caller belongs to, or in the space they named, since an entity spans apps
+// and only the whole set can compose it. What "reach" means is membership
+// plus the app's own access: the door remembers nothing about which apps a
+// session has opened (declared.ts), so a public app in a space the caller is
+// not in is on the web and not here.
+let inReach = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
+  if (args.app != null) {
+    let { space, app, who } = await inApp(ctx, args)
+    return [{ space, app, who }]
+  }
+  let spaces = args.space == null
+    ? await ctx.dir.spaces(ctx.person)
+    : [(await inSpace(ctx, args)).space]
+  let out: Reach[] = []
+  for (let space of spaces) {
+    let who: Who = {
+      person: ctx.person,
+      role: await ctx.dir.role(space, ctx.person),
+    }
+    if (!who.role) continue
+    for (let app of await ctx.dir.apps(space)) {
+      if (reads(who, app.access)) out.push({ space, app, who })
+    }
+  }
+  return out
+}
+
+// The space a federated answer belongs to, for the unseen block the door
+// appends (mcp.ts): the one named, else the first store's — a fan-out has no
+// single space, and asking the caller to name one to read across all of them
+// would defeat the point.
+let whichSpace = (reach: Reach[]) => reach[0]?.space
 
 // A store door's answer as text, its refusal as the tool's error.
 let answer = async (r: Response) => {
@@ -1020,21 +1055,28 @@ export let TOOLS: Tool[] = [
       "leaves those out, and the platform's own error rows, unless named. " +
       'Answers entity JSON, {kind, entity: {eid, ' +
       'num}, ...components} — the same filter line the page passes to ' +
-      'query() from ./api/client.js.',
+      'query() from ./api/client.js. Name an app to read that one; LEAVE app ' +
+      'OUT to read every app at once — an entity spans apps, so each answer ' +
+      'is one bundle carrying every component any of their stores holds, and ' +
+      "a filter naming two apps' words ('.recipe!&.loan!') answers the " +
+      'entities wearing both. A bundle composed from two apps says which app ' +
+      'holds which component in `_stores`.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP, filter: str('the filter line') },
-      required: ['app', 'filter'],
+      required: ['filter'],
     },
     run: async (ctx, args) => {
-      let { space, who, store } = await inApp(ctx, args)
+      let reach = await inReach(ctx, args)
       // The parameter is what everything else here calls it — a filter line
       // (C-32607 item 2, where `query` was the odd word out and the person's
       // agent reached for `filter` first). `query` stays a spelling of it:
       // an old caller is answered, never corrected.
       let asked = text(args.filter ?? args.query, 'filter')
-      let r = await store(`/query?${asked}`, {}, vouched(who))
-      return { text: listing(await answer(r), asked), space }
+      return {
+        text: JSON.stringify(await read(ctx.env, reach, asked)),
+        space: whichSpace(reach),
+      }
     },
   },
   {
@@ -1042,7 +1084,8 @@ export let TOOLS: Tool[] = [
     description:
       "Find words in the app's data — every title and body, ranked, with " +
       'filters riding along if you want them. The page has the same door as ' +
-      'search() from ./api/client.js.',
+      'search() from ./api/client.js. Name an app to search that one; leave ' +
+      'app out to search every app the person has, best hits first.',
     input: {
       type: 'object',
       properties: {
@@ -1051,15 +1094,17 @@ export let TOOLS: Tool[] = [
         text: str('words to find'),
         limit: { type: 'number', description: 'at most this many (20)' },
       },
-      required: ['app', 'text'],
+      required: ['text'],
     },
     run: async (ctx, args) => {
-      let { space, who, store } = await inApp(ctx, args)
+      let reach = await inReach(ctx, args)
       let q = `${encodeURIComponent(text(args.text, 'text'))}&limit=${
         Number(args.limit) || 20
       }`
-      let r = await store(`/query?${q}`, {}, vouched(who))
-      return { text: listing(await answer(r), q), space }
+      return {
+        text: JSON.stringify(await read(ctx.env, reach, q)),
+        space: whichSpace(reach),
+      }
     },
   },
 ]
