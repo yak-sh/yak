@@ -150,6 +150,8 @@
       if (app.errors) {
         bits.push(app.errors + (app.errors == 1 ? ' break' : ' breaks'))
       }
+      // The one the space's own address opens (T-32947).
+      if (app.home) bits.push('the front page')
       return bits.join(' · ')
     }
 

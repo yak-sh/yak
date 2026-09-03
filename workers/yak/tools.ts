@@ -190,6 +190,16 @@ let access = (v: unknown): Access => {
   return s as Access
 }
 
+// A yes or a no. Models send a JSON boolean where the schema says one and
+// the word where they are typing prose, so both are read rather than
+// teaching an agent to guess again (`list` above takes the same line).
+let flag = (v: unknown, what: string) => {
+  if (typeof v == 'boolean') return v
+  if (v === 'true') return true
+  if (v === 'false') return false
+  throw new Error(`${what}: true or false`)
+}
+
 let role = (v: unknown): Role => {
   let s = text(v, 'role')
   if (!(ROLES as string[]).includes(s)) {
@@ -1059,7 +1069,12 @@ export let TOOLS: Tool[] = [
       'a link someone already has still works. Give the person the new link. ' +
       'access is the same choice app_new takes: set it ' +
       "to 'open' when they want everyone with the link to be able to act on " +
-      "the app, 'private' to shut it to everyone but its members.",
+      "the app, 'private' to shut it to everyone but its members. home makes " +
+      "this app the space's front page — what <space>.yaks.app/ opens, the " +
+      'app someone lands on when they are given the space itself. The first ' +
+      'app made in a space is it until someone says otherwise, so set it ' +
+      'when the app they care about was not the first one; home false leaves ' +
+      'the space with no front page. Only the space owner may move it.',
     input: {
       type: 'object',
       properties: {
@@ -1068,6 +1083,12 @@ export let TOOLS: Tool[] = [
         slug: str('the new path label, to move the app'),
         title: str('the new name'),
         access: ACCESS,
+        home: {
+          type: 'boolean',
+          description:
+            'true to make this app what <space>.yaks.app/ opens, false to ' +
+            'leave the space with no front page',
+        },
       },
       required: ['app'],
     },
@@ -1076,8 +1097,17 @@ export let TOOLS: Tool[] = [
       let title = args.title == null ? null : text(args.title, 'title')
       let to = args.slug == null ? null : slug(args.slug, 'slug')
       let open = args.access == null ? null : access(args.access)
-      if (title == null && to == null && open == null) {
-        throw new Error('nothing to change: pass title, slug, access, or all')
+      let home = args.home == null ? null : flag(args.home, 'home')
+      if (title == null && to == null && open == null && home == null) {
+        throw new Error(
+          'nothing to change: pass title, slug, access, home, or all',
+        )
+      }
+      // Which app the bare hostname opens is the SPACE's, not this app's:
+      // everyone who is given the space lands there, so it is the owner's
+      // to move, the way publishing and membership are (`ownsApp` above).
+      if (home != null && who.role != 'owner') {
+        throw new Error(`not the owner of ${space.slug}`)
       }
       let moving = to != null && to != app.slug
       if (moving && await ctx.dir.app(space, to!)) {
@@ -1104,8 +1134,9 @@ export let TOOLS: Tool[] = [
       for (let key of keys) {
         await blobs.put(onto + key.slice(from.length), await blobs.get(key))
       }
-      await ctx.dir.apply({
-        entities: [{
+      let entities: EntityLiteral[] = []
+      if (title != null || moving || open || keeping) {
+        entities.push({
           entity: { eid: app.eid },
           ...(title == null ? {} : { doc: { title } }),
           ...(moving || open
@@ -1117,8 +1148,19 @@ export let TOOLS: Tool[] = [
             }
             : {}),
           ...(keeping ? { alias: { slugs: keeping } } : {}),
-        }],
-      }, vouched(who))
+        })
+      }
+      // The front page is a column on the space, so clearing it is the null
+      // every other column clears with, and the write empties the
+      // directory's cache — the hostname answers the new front page on the
+      // next request, not a TTL later (directory.ts).
+      if (home != null) {
+        entities.push({
+          entity: { eid: space.eid },
+          space: { home: home ? app.eid : null },
+        })
+      }
+      await ctx.dir.apply({ entities }, vouched(who))
       for (let key of keys) await blobs.delete(key)
       let now = (await ctx.dir.app(space, to ?? app.slug))!
       return {
@@ -1126,7 +1168,15 @@ export let TOOLS: Tool[] = [
           title == null ? '' : ` "${title}"`
         }: ${url(space, now)}${
           moving ? ` (moved from /${app.slug}/, which now redirects here)` : ''
-        }${open ? ` — ${told(open)}` : ''}`,
+        }${open ? ` — ${told(open)}` : ''}${
+          home == null
+            ? ''
+            : home
+            ? ` — it is the front page now: https://${space.slug}.yaks.app/ ` +
+              'opens it'
+            : ` — no longer the front page: https://${space.slug}.yaks.app/ ` +
+              'opens nothing until another app is set home'
+        }`,
         space,
       }
     },
@@ -1337,9 +1387,9 @@ export let TOOLS: Tool[] = [
     description:
       'What the person already has here: every app in every space of theirs, ' +
       'with its address, the version it is at, how many breaks are still ' +
-      'open in it, and what the month has cost against what the space is ' +
-      'allowed. Read it before making a second app, and when they ask ' +
-      'what they have or where something lives.',
+      "open in it, which one is the space's front page, and what the month " +
+      'has cost against what the space is allowed. Read it before making a ' +
+      'second app, and when they ask what they have or where something lives.',
     view: APPS_VIEW,
     input: {
       type: 'object',
@@ -1369,6 +1419,9 @@ export let TOOLS: Tool[] = [
           // What this app spent this month, as the hourly sweep last read it
           // (usage.ts). Nothing metered yet says nothing.
           let its = app.meter?.month == monthOf(new Date()) ? app.meter : null
+          // The one the bare hostname opens, said where the person can see
+          // it — the space line above is that address (T-32947).
+          let front = app.eid == space.home
           listed.push({
             slug: app.slug,
             title: app.title,
@@ -1376,13 +1429,14 @@ export let TOOLS: Tool[] = [
             version: app.version ?? 0,
             errors,
             usage: its,
+            home: front,
           })
           lines.push(
             `- ${app.title} (${app.slug}) v${app.version ?? 0}${
               errors ? `, ${errors} open` : ''
             }${its ? `, ${its.requests} requests, ${size(its.bytes)}` : ''}: ${
               url(space, app)
-            }`,
+            }${front ? ' — the front page' : ''}`,
           )
         }
         if (!apps.length) lines.push('- no apps yet')

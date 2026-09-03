@@ -9,6 +9,10 @@ Make one with `app_new`, write files with `app_files` — the whole set in one
 call, as `files: [{path, content}, ...]` — then `app_deploy`, and give the
 person the URL.
 
+The space's own address, `<space>.yaks.app/`, opens its front page — the first
+app made there, until `app_set(app, home: true)` makes it another one;
+`app_list` says which app that is.
+
 A page with more than one screen routes itself. The simplest way is the hash —
 `location.hash`, and a `hashchange` listener redrawing — which needs nothing
 from the kernel. Pretty paths work too: under an app, an address that names no

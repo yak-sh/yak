@@ -2669,3 +2669,88 @@ slow('the deploy that fixes a break closes it', async () => {
     await k.stop()
   }
 })
+
+// A space's front page is a choice (T-32947). The first app made in a space
+// claims its bare hostname and nothing used to move it, so a throwaway first
+// app was the space's face forever. app_set(home) moves it; home false leaves
+// the space with none, answering the soft 404 a space with no app answers.
+// Where the space's own address points is the owner's, like publishing and
+// membership — an editor is refused.
+slow('the front page moves, and only the owner moves it', async () => {
+  let k = await kernel()
+  try {
+    let them = await seed(k, [{ slug: 'front', apps: ['first', 'second'] }])
+    let agent = connector(k, them.cookie)
+    let bare = () => k.at('front.yaks.app', '/', { redirect: 'manual' })
+    let was = await bare()
+    assertEquals(was.headers.get('location'), '/first/')
+    await was.body?.cancel()
+
+    let said = await agent.tool('app_set', {
+      space: 'front',
+      app: 'second',
+      home: true,
+    })
+    assertStringIncludes(said, 'the front page now')
+    assertStringIncludes(said, 'https://front.yaks.app/')
+    let moved = await bare()
+    assertEquals(moved.status, 302)
+    assertEquals(moved.headers.get('location'), '/second/')
+    await moved.body?.cancel()
+
+    // Said where the person reads what they have: in the sentence, and in the
+    // data the view beside it draws.
+    let listing = await agent.call('tools/call', {
+      name: 'app_list',
+      arguments: { space: 'front' },
+    })
+    assertStringIncludes(listing.content[0].text, 'second/ — the front page')
+    assertEquals(
+      listing.structuredContent.spaces[0].apps
+        .map((a: { slug: string; home: boolean }) => [a.slug, a.home]),
+      [['first', false], ['second', true]],
+    )
+
+    // Cleared: both apps stand at their own addresses, and the space's own
+    // address opens nothing.
+    assertStringIncludes(
+      await agent.tool('app_set', {
+        space: 'front',
+        app: 'second',
+        home: false,
+      }),
+      'no longer the front page',
+    )
+    let none = await bare()
+    assertEquals(none.status, 404)
+    assertMatch(await none.text(), /Nothing here yet/)
+    assertEquals(
+      (await agent.tool('app_list', { space: 'front' })).includes('front page'),
+      false,
+    )
+
+    let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
+    await agent.tool('member_add', {
+      space: 'front',
+      email: ann.email,
+      role: 'editor',
+    })
+    assertStringIncludes(
+      (await assertRejects(
+        () =>
+          connector(k, ann.cookie).tool('app_set', {
+            space: 'front',
+            app: 'first',
+            home: true,
+          }),
+        Error,
+      )).message,
+      'not the owner of front',
+    )
+    let still = await bare()
+    assertEquals(still.status, 404)
+    await still.body?.cancel()
+  } finally {
+    await k.stop()
+  }
+})
