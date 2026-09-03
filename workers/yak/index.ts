@@ -67,7 +67,10 @@ let serve = async (req: Request, env: Env, r: Route) => {
 let report = async (env: Env, r: Route, req: Request, e: unknown) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let space = r.space ? await dir.space(r.space) : null
-  let app = space && r.app ? await dir.app(space, r.app) : null
+  // Read past the directory's cache: a break right after a deploy is the
+  // common one, and it must name the version it broke on rather than the one
+  // this isolate is still holding (directory.ts `FRESH`, C-32869 item 4).
+  let app = space && r.app ? await dir.app(space, r.app, true) : null
   let store = storeOf(
     env.STORE,
     app ? storeName(space!, app) : META_STORE,

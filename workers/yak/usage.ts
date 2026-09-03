@@ -310,18 +310,40 @@ export let level = (space: Space, apps: number, now = new Date()) => {
 
 let count = (n: number) => n.toLocaleString('en-US')
 
+// When the metered figures were last read. Everything but the app count comes
+// from the hourly sweep above, not from a live counter, so a line that prints
+// those numbers bare reads as live and looks broken: the ninth user test made
+// ~25 requests to a new app and was told `0 of 50,000 requests` (C-32869
+// item 6). A reading says its hour; no reading says so instead of saying zero.
+let asOf = (at: string) => {
+  let read = new Date(at)
+  return Number.isNaN(read.getTime())
+    ? ''
+    : ` (as of ${read.toISOString().slice(11, 16)} UTC)`
+}
+
 // The line the agent reads: every number against its ceiling, and what
 // happens at each. One line, because the agent has work to get back to.
 export let standing = (space: Space, apps: number, now = new Date()) => {
   let free = ceilings(space.tier)
   if (!free) return `${space.slug}: no ceilings on this plan.`
   let m = spent(space, now)
-  return `${space.slug} (free tier, ${m.month}): ${apps} of ${free.apps} apps, ` +
-    `${count(m.requests)} of ${count(free.requests)} requests, ` +
+  let refused = `Requests are never refused; a sixth app, data past ${
+    size(free.bytes)
+  }, or the ${free.emails + 1}st letter is, until the paid tier lands.`
+  let head = `${space.slug} (free tier, ${m.month}): ${apps} of ${free.apps} ` +
+    'apps'
+  let read = asOf(m.at)
+  // The apps are counted here and now; the rest waits on the sweep. Before
+  // the first one this month there is no reading at all, and zero would be a
+  // claim rather than a number.
+  if (!read) {
+    return `${head}. The month's requests, data and letters have not been ` +
+      `read yet — the meter sweeps hourly. ${refused}`
+  }
+  return `${head}, ${count(m.requests)} of ${count(free.requests)} requests, ` +
     `${size(m.bytes)} of ${size(free.bytes)}, ` +
-    `${m.emails} of ${free.emails} emails. Requests are never refused; a ` +
-    `sixth app, data past ${size(free.bytes)}, or the ${free.emails + 1}st ` +
-    `letter is, until the paid tier lands.`
+    `${m.emails} of ${free.emails} emails${read}. ${refused}`
 }
 
 // The refusal, one sentence: what the ceiling is, and that paying for more is

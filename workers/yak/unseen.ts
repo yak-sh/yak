@@ -63,6 +63,23 @@ export let refusal = (answer: string, status?: number) =>
 // reads it (dispatch.ts `ran`); everything under it is the app working.
 export let failed = (status: number) => status >= 500
 
+// The version the app is SERVING, read past the directory's read cache
+// (directory.ts `FRESH`). A break names the deploy it happened on, and the
+// likeliest moment for one is right after a deploy — when the isolate serving
+// the app is still holding the version from before the bump, so the ninth
+// user test's first throw said `weather v1` while the deploy had answered v2
+// (C-32869 item 4). The App the request was routed with is the fallback: a
+// directory that cannot answer must not swallow the break.
+export let serving = async (env: Env, space: Space, app: App) => {
+  try {
+    let now = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
+      .app(space, app.slug, true)
+    return now?.version ?? app.version
+  } catch {
+    return app.version
+  }
+}
+
 // One break, written where the person's agent reads it: the `exception`
 // facet, and nothing else. It carries what was being served, the deploy it
 // happened on, the message and the stack. Every source of one goes through

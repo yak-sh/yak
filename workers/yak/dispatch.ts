@@ -35,7 +35,7 @@ import { storeName } from './directory.ts'
 import type { Env, Fetcher } from './env.ts'
 import type { Who } from './session.ts'
 import { storeOf } from './store.ts'
-import { failed, noted } from './unseen.ts'
+import { failed, noted, serving } from './unseen.ts'
 
 // The dispatch namespace binding, the slice we ask of it (env.ts): a name in,
 // a fetcher out. `get` throws for a script that is not there, and the docs
@@ -223,7 +223,7 @@ export let ran = async (
   if (failed(res.status)) {
     await noted(storeOf(env.STORE, store), {
       request: `worker ${req.method} ${new URL(req.url).pathname}`,
-      version: app.version,
+      version: await serving(env, space, app),
       message: `the app's worker answered ${res.status}`,
       stack: '',
     })
@@ -351,17 +351,38 @@ export let drop = async (env: Env, store: string) => {
 // A binding is a JavaScript name in the app's own code, so it must be one.
 export let SECRET_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/
 
+// A secret before any code, which is the natural order — a person hands over
+// their key and then asks for the thing that uses it. There is no script to
+// hold it yet, and the account API says so in its own words, `This Worker
+// does not exist on your account.`, which names nothing anyone can do about
+// it (C-32869 item 1). So the platform says what is missing and what fixes
+// it, and the raw sentence stays for every other Cloudflare refusal.
+export let NO_WORKER =
+  'this app has no worker yet, and a secret lives on the worker: write a ' +
+  'worker.js beside index.html (app_files) and app_deploy it, then set the ' +
+  'secret'
+
+let noScript = (e: unknown) =>
+  e instanceof Error && /does not exist on your account/i.test(e.message)
+
+let onScript = <T>(work: Promise<T>) =>
+  work.catch((e) => {
+    throw noScript(e) ? new Error(NO_WORKER) : e
+  })
+
 export let setSecret = (
   env: Env,
   store: string,
   name: string,
   value: string,
 ) =>
-  sent(env, `/${scriptName(store)}/secrets`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name, text: value, type: 'secret_text' }),
-  }).then(answered)
+  onScript(
+    sent(env, `/${scriptName(store)}/secrets`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, text: value, type: 'secret_text' }),
+    }).then(answered),
+  )
 
 // The names, and only the names: whatever the API hands back, this reads the
 // name off each row and drops the rest, so no value can leave here even if a
@@ -379,6 +400,8 @@ export let secrets = async (env: Env, store: string): Promise<string[]> => {
 }
 
 export let dropSecret = (env: Env, store: string, name: string) =>
-  sent(env, `/${scriptName(store)}/secrets/${encodeURIComponent(name)}`, {
-    method: 'DELETE',
-  }).then(answered)
+  onScript(
+    sent(env, `/${scriptName(store)}/secrets/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+    }).then(answered),
+  )

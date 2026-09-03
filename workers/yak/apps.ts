@@ -49,7 +49,7 @@ import {
 import { type Reach, split, written } from './reach.ts'
 import type { EntityLiteral } from '../../src/mutation.ts'
 import { type Door, storeOf } from './store.ts'
-import { noted, refusal } from './unseen.ts'
+import { noted, refusal, serving } from './unseen.ts'
 import { full } from './usage.ts'
 
 // The runtime's streaming HTML rewriter, the slice this file asks for, so
@@ -624,9 +624,12 @@ let api = async (
   if (path == '/report') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (flooding(space, app)) return json(429, 'too_many_reports')
-    for (let broke of broken(await req.text())) {
-      await noted(store, { ...broke, version: app.version })
-    }
+    let reports = broken(await req.text())
+    // The deploy the page broke on, read past the directory's cache: a break
+    // in the seconds after a deploy must not name the version before it
+    // (unseen.ts `serving`, C-32869 item 4).
+    let version = reports.length ? await serving(env, space, app) : null
+    for (let broke of reports) await noted(store, { ...broke, version })
     return new Response(null, { status: 204 })
   }
   let headers = vouched(who)

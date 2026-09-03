@@ -170,6 +170,15 @@ let seed = async (env: Env) => {
 
 let notFound = () => new Response('not found', { status: 404 })
 
+// A read that must not be a moment old, asked for by the caller. The cache
+// above is per-isolate and 30 seconds wide, which is exactly the window a
+// deploy opens: the isolate serving the app has not heard of the bump the
+// deploy just made, so the first break after one named the version BEFORE it
+// (C-32869 item 4). A break is rare and its read is fresh; everything else
+// keeps the cache. The header is the kernel's own — a client's copy never
+// reaches here, since this part is only ever called with `bound`.
+export let FRESH = 'x-yak-fresh'
+
 // The headers a caller's request carries through to the store: who is
 // asking, and nothing a client could have sent — `x-yak-kernel` is never
 // forwarded, so a directory write is an ordinary one.
@@ -193,7 +202,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     return r
   }
   if (url.pathname != '/query' || req.method != 'GET') return notFound()
-  let hit = cache.get(url.search)
+  let hit = req.headers.get(FRESH) ? null : cache.get(url.search)
   if (hit && hit.at > Date.now() - TTL) {
     return Response.json(JSON.parse(hit.body))
   }
@@ -264,12 +273,17 @@ export let bornAt = (space: Space, slug: string) => `${space.slug}/${slug}`
 export type Directory = ReturnType<typeof directory>
 
 export let directory = (via: Fetcher) => {
-  let query = async (q: string): Promise<Row[]> => {
-    let r = await via.fetch(new Request(`http://directory/query?${q}`))
+  let query = async (q: string, fresh = false): Promise<Row[]> => {
+    let r = await via.fetch(
+      new Request(
+        `http://directory/query?${q}`,
+        fresh ? { headers: { [FRESH]: '1' } } : {},
+      ),
+    )
     if (!r.ok) throw new Error(`directory: ${await r.text()}`)
     return r.json()
   }
-  let one = async (q: string) => (await query(q))[0]
+  let one = async (q: string, fresh = false) => (await query(q, fresh))[0]
   // Named, because two of the questions below are asked in terms of the
   // others: a person's own space is read, minted, and read back.
   let self = {
@@ -294,9 +308,13 @@ export let directory = (via: Fetcher) => {
       let row = await one(`.space.slug=${slug}&.doc?&.plan?&.meter?&.notified?`)
       return row ? spaceOf(row) : null
     },
-    app: async (space: Space, slug: string) => {
+    // `fresh` skips the read cache: what a break names has to be the deploy
+    // it happened on, not one the cache is still holding (unseen.ts
+    // `serving`).
+    app: async (space: Space, slug: string, fresh = false) => {
       let row = await one(
         `.app.space=${space.eid}&.app.slug=${slug}&.doc?&.alias?&.meter?`,
+        fresh,
       )
       return row ? appOf(row) : null
     },

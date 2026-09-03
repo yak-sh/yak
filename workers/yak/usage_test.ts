@@ -6,7 +6,12 @@
 // Object datasets documented at
 // https://developers.cloudflare.com/durable-objects/observability/metrics-and-analytics/
 // and the field names this account's own schema introspects to.
-import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertStringIncludes,
+  assertThrows,
+} from '@std/assert'
 import type { Meter, Space, Tier } from './directory.ts'
 import { atCeiling, FREE, level, read, size, standing } from './usage.ts'
 
@@ -140,6 +145,17 @@ Deno.test('the line says every number against its ceiling', () => {
   assertStringIncludes(said, '41,000 of 50,000 requests')
   assertStringIncludes(said, '900 MB of 1 GB')
   assertStringIncludes(said, '0 of 100 emails')
+  // The hour those figures were read: the meter is an hourly rollup, and a
+  // bare number reads as live (C-32869 item 6).
+  assertStringIncludes(said, '(as of 12:00 UTC)')
+  assertStringIncludes(said, 'Requests are never refused')
+})
+
+Deno.test('before the first sweep the line says so, not zero', () => {
+  let said = standing(space({ at: '' }), 1, NOW)
+  assertStringIncludes(said, '1 of 5 apps')
+  assertStringIncludes(said, 'have not been read yet')
+  assert(!said.includes('of 50,000 requests'), 'it claimed a request count')
   assertStringIncludes(said, 'Requests are never refused')
 })
 

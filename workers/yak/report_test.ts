@@ -9,7 +9,7 @@
 // on the served bytes.
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { client, connector, kernel, seed } from './probe.ts'
+import { client, connector, kernel, meta, seed } from './probe.ts'
 
 slow('a page reports its own breaks, and the agent hears', async () => {
   let k = await kernel()
@@ -197,6 +197,44 @@ slow('a refusal the door meant is not a break', async () => {
       told.split('\n').filter((l) => l.startsWith('- ')).length,
       2,
       'two lines, and both are breaks',
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
+// A break names the deploy it happened ON. The directory's read cache is 30
+// seconds wide and private to an isolate, so a version bump made anywhere
+// else is invisible to an ordinary read — which is how the ninth user test's
+// first throw after a deploy filed as `weather v1` while the deploy had just
+// answered v2 (C-32869 item 4). The report path reads past the cache.
+slow('a break names the version the app is serving', async () => {
+  let k = await kernel()
+  try {
+    let { cookie, eids } = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+    let agent = connector(k, cookie)
+
+    // Serving the app puts its row in the read cache.
+    await (await k.at('jeff.yaks.app', '/recipes/')).body?.cancel()
+    // A bump through the graph tier, which is NOT the door that empties that
+    // cache — so the kernel is now holding a version the app has moved past,
+    // exactly as it is in the seconds after somebody else's deploy.
+    await meta(k, cookie).apply([
+      { entity: { eid: eids['jeff/recipes'] }, app: { version: 9 } },
+    ])
+
+    await (await k.at('jeff.yaks.app', '/recipes/api/report', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        message: 'boom is not a function',
+        url: 'https://jeff.yaks.app/recipes/',
+      }),
+    })).body?.cancel()
+
+    assertMatch(
+      await agent.tool('app_errors', { space: 'jeff', app: 'recipes' }),
+      /recipes v9: page \/recipes\/ — boom is not a function/,
     )
   } finally {
     await k.stop()

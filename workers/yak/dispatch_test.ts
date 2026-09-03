@@ -22,6 +22,7 @@ import {
   dropSecret,
   granted,
   granting,
+  NO_WORKER,
   ran,
   scriptName,
   secrets,
@@ -391,6 +392,30 @@ Deno.test('no script yet is no secrets, and a removal names one', async () => {
   )
   assertEquals(calls[0].method, 'DELETE')
   assertEquals(calls[0].url, `${AT}/jeff_recipes/secrets/WEATHER_KEY`)
+})
+
+// A secret before the worker that would read it is the natural order, and
+// Cloudflare's own words for it name nothing anyone can do (C-32869 item 1).
+Deno.test('a secret before any worker says to deploy one', async () => {
+  for (
+    let call of [
+      () => setSecret(api, 'jeff/recipes', 'WEATHER_KEY', 'k'),
+      () => dropSecret(api, 'jeff/recipes', 'WEATHER_KEY'),
+    ]
+  ) {
+    await recorded(
+      () =>
+        Response.json({
+          success: false,
+          errors: [{
+            code: 10007,
+            message: 'This Worker does not exist on your account.',
+          }],
+          result: null,
+        }, { status: 404 }),
+      () => assertRejects(call, Error, NO_WORKER),
+    )
+  }
 })
 
 Deno.test("cloudflare's refusal is what the agent is told", async () => {
