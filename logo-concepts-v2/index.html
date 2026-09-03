@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>yaks.app — blank-canvas logo concepts</title>
+    <style>
+    :root {
+      color-scheme: light;
+      --ground: #f7f0e5;
+      --paper: #fffaf1;
+      --ink: #392f28;
+      --soft-ink: #75675d;
+      --line: #e7d8c8;
+      --meadow: #52724a;
+      --night: #211e1c;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 50% -10%, #fffdf7 0, transparent 38rem),
+        var(--ground);
+      font: 16px/1.5 ui-rounded, "Avenir Next", system-ui, sans-serif;
+    }
+    header,
+    main,
+    footer {
+      width: min(1180px, calc(100% - 36px));
+      margin-inline: auto;
+    }
+    header {
+      padding: 66px 0 40px;
+    }
+    .Eyebrow {
+      color: var(--meadow);
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 850px;
+      margin: 10px 0 16px;
+      font-size: clamp(42px, 7vw, 78px);
+      font-weight: 750;
+      line-height: .98;
+      letter-spacing: -.045em;
+    }
+    header p {
+      max-width: 720px;
+      margin: 0;
+      color: var(--soft-ink);
+      font-size: 17px;
+    }
+    .Note {
+      display: inline-block;
+      margin-top: 18px;
+      padding: 8px 12px;
+      color: var(--meadow);
+      background: #eaf0e4;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .Grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+    .Card {
+      overflow: hidden;
+      background: color-mix(in srgb, var(--paper) 94%, transparent);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: 0 18px 48px #4938240c;
+    }
+    .Card_Header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 20px 22px;
+      border-bottom: 1px solid var(--line);
+    }
+    .Card h2 {
+      margin: 0;
+      font-size: 19px;
+    }
+    .Card_Header span {
+      color: var(--soft-ink);
+      font-size: 12px;
+      text-align: right;
+    }
+    .Hero {
+      display: grid;
+      min-height: 390px;
+      place-items: center;
+      padding: 28px;
+      background-image:
+        linear-gradient(45deg, #ede3d5 25%, transparent 25%),
+        linear-gradient(-45deg, #ede3d5 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #ede3d5 75%),
+        linear-gradient(-45deg, transparent 75%, #ede3d5 75%);
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+      background-size: 16px 16px;
+    }
+    .Hero img {
+      width: min(330px, 88%);
+      height: 330px;
+      object-fit: contain;
+      filter: drop-shadow(0 16px 14px #3527191f);
+    }
+    .Uses {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    .Use {
+      display: grid;
+      min-height: 136px;
+      place-items: center;
+      padding: 18px;
+      border-top: 1px solid var(--line);
+    }
+    .Use-dark {
+      color: #f5eadc;
+      background: var(--night);
+      border-color: #493f38;
+    }
+    .Lockup {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 19px;
+      font-weight: 750;
+      letter-spacing: -.02em;
+    }
+    .Lockup img {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+    }
+    .Sizes {
+      display: flex;
+      align-items: center;
+      gap: 17px;
+    }
+    .Sizes img {
+      object-fit: contain;
+    }
+    .Sizes img:nth-child(1) {
+      width: 64px;
+      height: 64px;
+    }
+    .Sizes img:nth-child(2) {
+      width: 32px;
+      height: 32px;
+    }
+    .Sizes img:nth-child(3) {
+      width: 16px;
+      height: 16px;
+    }
+    footer {
+      padding: 38px 0 72px;
+      color: var(--soft-ink);
+      font-size: 13px;
+    }
+    @media (max-width: 760px) {
+      header {
+        padding-top: 42px;
+      }
+      .Grid,
+      .Uses {
+        grid-template-columns: 1fr;
+      }
+      .Hero {
+        min-height: 320px;
+      }
+      .Hero img {
+        height: 270px;
+      }
+    }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="Eyebrow">yaks.app · logo study · round two</div>
+      <h1>Seven yaks, built from a blank canvas.</h1>
+      <p>Four richly modeled, skeuomorphic directions plus cut paper, gouache, and watercolor. These use the visual grammar of tactile desktop icons—material, light, depth, and a strong little object—not an existing yaks.app drawing.</p>
+      <div class="Note">No image references used in generation</div>
+    </header>
+    <main class="Grid">
+      <article class="Card">
+        <div
+          class="Card_Header"><h2>01 · Alpine standing</h2><span>3D · detailed figure</span></div>
+        <div
+          class="Hero"><img src="01-skeuo-standing.png" alt="A modeled standing yak"></div>
+        <div class="Uses">
+          <div class="Use">
+            <div
+              class="Lockup"><img src="01-skeuo-standing.png" alt=""> yaks.app</div>
+          </div>
+          <div class="Use Use-dark">
+            <div
+              class="Sizes"><img src="01-skeuo-standing.png" alt=""><img src="01-skeuo-standing.png" alt=""><img src="01-skeuo-standing.png" alt=""></div>
+          </div>
+        </div>
+      </article>
+      <article class="Card">
+        <div
+          class="Card_Header"><h2>02 · Bell bust</h2><span>3D · strongest icon crop</span></div>
+        <div
+          class="Hero"><img src="02-skeuo-bell-bust.png" alt="A modeled yak bust with a brass bell"></div>
+        <div class="Uses">
+          <div class="Use">
+            <div
+              class="Lockup"><img src="02-skeuo-bell-bust.png" alt=""> yaks.app</div>
+          </div>
+          <div class="Use Use-dark">
+            <div
+              class="Sizes"><img src="02-skeuo-bell-bust.png" alt=""><img src="02-skeuo-bell-bust.png" alt=""><img src="02-skeuo-bell-bust.png" alt=""></div>
+          </div>
+        </div>
+      </article>
+      <article class="Card">
+        <div
+          class="Card_Header"><h2>03 · Resting yak</h2><span>3D · quiet and sculptural</span></div>
+        <div
+          class="Hero"><img src="03-skeuo-resting.png" alt="A modeled resting yak"></div>
+        <div class="Uses">
+          <div class="Use">
+            <div
+              class="Lockup"><img src="03-skeuo-resting.png" alt=""> yaks.app</div>
+          </div>
+          <div class="Use Use-dark">
+            <div
+              class="Sizes"><img src="03-skeuo-resting.png" alt=""><img src="03-skeuo-resting.png" alt=""><img src="03-skeuo-resting.png" alt=""></div>
+          </div>
+        </div>
+      </article>
+      <article class="Card">
+        <div
+          class="Card_Header"><h2>04 · Blue-scarf stride</h2><span>3D · lively and tactile</span></div>
+        <div
+          class="Hero"><img src="04-skeuo-stride.png" alt="A modeled walking yak with a blue scarf"></div>
+        <div class="Uses">
+          <div class="Use">
+            <div
+              class="Lockup"><img src="04-skeuo-stride.png" alt=""> yaks.app</div>
+          </div>
+          <div class="Use Use-dark">
+            <div
+              class="Sizes"><img src="04-skeuo-stride.png" alt=""><img src="04-skeuo-stride.png" alt=""><img src="04-skeuo-stride.png" alt=""></div>
+          </div>
+        </div>
+      </article>
+      <article class="Card">
+        <div
+          class="Card_Header"><h2>05 · Paper trail</h2><span>cut paper · alpine scene</span></div>
+        <div
+          class="Hero"><img src="05-cut-paper-stride.png" alt="A layered cut-paper yak"></div>
+        <div class="Uses">
+          <div class="Use">
+            <div
+              class="Lockup"><img src="05-cut-paper-stride.png" alt=""> yaks.app</div>
+          </div>
+          <div class="Use Use-dark">
+            <div
+              class="Sizes"><img src="05-cut-paper-stride.png" alt=""><img src="05-cut-paper-stride.png" alt=""><img src="05-cut-paper-stride.png" alt=""></div>
+          </div>
+        </div>
+      </article>
+      <article class="Card">
+        <div
+          class="Card_Header"><h2>06 · Windward</h2><span>gouache · assured profile</span></div>
+        <div
+          class="Hero"><img src="06-gouache-profile.png" alt="A gouache yak in profile"></div>
+        <div class="Uses">
+          <div class="Use">
+            <div
+              class="Lockup"><img src="06-gouache-profile.png" alt=""> yaks.app</div>
+          </div>
+          <div class="Use Use-dark">
+            <div
+              class="Sizes"><img src="06-gouache-profile.png" alt=""><img src="06-gouache-profile.png" alt=""><img src="06-gouache-profile.png" alt=""></div>
+          </div>
+        </div>
+      </article>
+      <article class="Card">
+        <div
+          class="Card_Header"><h2>07 · Highland wash</h2><span>watercolor · soft and editorial</span></div>
+        <div
+          class="Hero"><img src="07-watercolor-portrait.png" alt="A watercolor yak portrait"></div>
+        <div class="Uses">
+          <div class="Use">
+            <div
+              class="Lockup"><img src="07-watercolor-portrait.png" alt=""> yaks.app</div>
+          </div>
+          <div class="Use Use-dark">
+            <div
+              class="Sizes"><img src="07-watercolor-portrait.png" alt=""><img src="07-watercolor-portrait.png" alt=""><img src="07-watercolor-portrait.png" alt=""></div>
+          </div>
+        </div>
+      </article>
+    </main>
+    <footer>The small views are scaling stress tests, not production favicons. Once a direction is chosen, its detail and silhouette should be deliberately redrawn at each size tier.</footer>
+  </body>
+</html>
