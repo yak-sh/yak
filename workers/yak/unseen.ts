@@ -16,6 +16,27 @@ import { bound, type Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { type Door, storeOf } from './store.ts'
 
+// A refusal is NOT a break (C-32652 item 3, T-32655). Every door here answers
+// a deliberate no in one shape — a 4xx carrying `{"error":{"code":…}}`: the
+// app doors' `not_a_writer`/`not_a_reader` (apps.ts SAYS), identity's
+// `unauthorized`, the store's own `method_not_allowed` — and the page that
+// catches one is meant to ACT on it, since the guide teaches
+// `e.signIn ? location = e.signIn`. A signed-out visitor clicking a button is
+// the platform working, so it files nothing; the owner's only two open errors
+// on the sixth user test were both that.
+//
+// The shape is the whole test: what fell over never wears it, and no 5xx here
+// is written in it (a break answers `oops()`, which is a page).
+export let refusal = (answer: string) => {
+  try {
+    let said = JSON.parse(answer) as { error?: { code?: unknown } }
+    return typeof said?.error?.code == 'string'
+  } catch {
+    // Not JSON at all — a door that fell over, or an app's own 400.
+    return false
+  }
+}
+
 // One break, written where the person's agent reads it: the `exception`
 // facet, and nothing else. It carries what was being served, the deploy it
 // happened on, the message and the stack. Every source of one goes through

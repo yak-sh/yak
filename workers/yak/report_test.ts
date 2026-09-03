@@ -117,3 +117,61 @@ slow('a page reports its own breaks, and the agent hears', async () => {
     await k.stop()
   }
 })
+
+// A refusal the door answered on purpose is the platform working, so it files
+// nothing; a page that threw still lands (C-32652 item 3, T-32655).
+slow('a refusal the door meant is not a break', async () => {
+  let k = await kernel()
+  try {
+    let { cookie } = await seed(k, [{ slug: 'club', apps: ['runs'] }])
+    let agent = connector(k, cookie)
+    let app = { space: 'club', app: 'runs' }
+    let report = (body: unknown) =>
+      k.at('club.yaks.app', '/runs/api/report', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+    // A signed-out visitor clicks the app's own button: the door says no on
+    // purpose, and the guide's flow follows `signIn` to the sign-in page.
+    let no = await k.at('club.yaks.app', '/runs/api/apply', {
+      method: 'POST',
+      body: JSON.stringify([]),
+    })
+    assertEquals(no.status, 401)
+    let said = await no.text()
+    assertEquals(JSON.parse(said).error.code, 'not_a_writer')
+
+    // What the reporter posts about that — and what it posts about a page
+    // that threw, which is a break at the same door.
+    assertEquals(
+      (await report({
+        message: `401 /runs/api/apply: ${said}`,
+        url: 'https://club.yaks.app/runs/',
+        status: 401,
+        answer: said,
+      })).status,
+      204,
+    )
+    assertEquals(
+      (await report({
+        message: 'boom is not a function',
+        stack: 'at /runs/:1',
+        url: 'https://club.yaks.app/runs/',
+      })).status,
+      204,
+    )
+
+    let told = await agent.tool('app_errors', app)
+    assert(!told.includes('not_a_writer'), 'the refusal filed nothing')
+    assertMatch(told, /boom is not a function/)
+    assertEquals(
+      told.split('\n').filter((l) => l.startsWith('- ')).length,
+      1,
+      'one line, and it is the break',
+    )
+  } finally {
+    await k.stop()
+  }
+})

@@ -7,7 +7,8 @@
 // live in a different Worker from the one that binds it. Every route runs
 // inside one catch: a throw becomes an exception entity in the (space, app)
 // store — or the meta store, when no app answers — and a soft page, so no
-// failure goes unseen (D-32318 §Errors, V-32361).
+// failure goes unseen (D-32318 §Errors, V-32361). A door's deliberate no is
+// not a failure and files nothing (unseen.ts `refusal`).
 //
 // The route table:
 //   yaks.app (and any dev host)
@@ -34,7 +35,7 @@ import * as mcp from './mcp.ts'
 import { lost, oops } from './pages.ts'
 import { hostOf, type Route, route } from './route.ts'
 import { storeOf } from './store.ts'
-import { noted } from './unseen.ts'
+import { noted, refusal } from './unseen.ts'
 
 export { Store } from './store.ts'
 
@@ -83,6 +84,12 @@ export default {
     try {
       return await serve(req, env, r)
     } catch (e) {
+      // A refusal is not a break (unseen.ts `refusal`, T-32655). A part that
+      // relays a door's deliberate no by throwing what it was answered is
+      // carrying an ANSWER out, not a failure, and the same rule holds here
+      // as at the report door: it files nothing.
+      let said = e instanceof Error ? e.message : String(e)
+      if (refusal(said)) return oops()
       // A failure to report is telemetry, never a second failure to serve.
       await report(env, r, req, e).catch((why) =>
         console.error('yak: could not report', why, 'after', e)

@@ -6,9 +6,11 @@
 //
 // Three things break in a browser and none of them throw where anyone sees
 // it: a script error, a promise nobody caught, and a call to the app's own
-// doors that came back a refusal. The first two are events; the third is a
-// thin wrapper around `fetch` that watches same-origin /api/ answers and
-// passes everything through untouched.
+// doors that came back a no. The first two are events; the third is a thin
+// wrapper around `fetch` that watches same-origin /api/ answers and passes
+// everything through untouched. A no the door MEANT — sign in to change this
+// app — is not a break, and the door drops those (apps.ts, unseen.ts
+// `refusal`); this script reports what it saw and judges none of it.
 //
 // The door is beside this file (./report next to ./report.js), read from
 // this script's own src so a page at any depth reports to its own app. A
@@ -60,6 +62,12 @@ globalThis.fetch = async (input, init) => {
       send({
         message: `${r.status} ${where.pathname}: ${why}`.slice(0, 2000),
         url: location.href,
+        // The answer as it came, so the door can tell a no it MEANT — a
+        // signed-out visitor sent to sign in — from one it did not
+        // (unseen.ts `refusal`). This script decides nothing: it is cached
+        // in browsers we cannot reach, and the rule lives where we can.
+        status: r.status,
+        answer: why.slice(0, 2000),
       })
     }
     return r

@@ -17,7 +17,9 @@
 // and `NEL` so the browser itself reports CSP violations, crashes,
 // deprecations and network errors, and both land on `POST /api/report`, which
 // writes the same `exception` entity a route that threw does. Rate-limited
-// per app: a page in a loop is a bug to see once, not a write flood.
+// per app: a page in a loop is a bug to see once, not a write flood. What the
+// door refused ON PURPOSE never becomes one (unseen.ts `refusal`): a
+// signed-out visitor sent to sign in is the platform working.
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import {
   type App,
@@ -33,7 +35,7 @@ import { nothingHere } from './pages.ts'
 import { hostOf, PLATFORM, route } from './route.ts'
 import { mayWrite, reads, vouched, type Who, whoIs, writes } from './session.ts'
 import { storeOf } from './store.ts'
-import { noted } from './unseen.ts'
+import { noted, refusal } from './unseen.ts'
 
 // The runtime's streaming HTML rewriter, the slice this file asks for, so
 // `deno check` reads the Worker without @cloudflare/workers-types (env.ts).
@@ -251,6 +253,13 @@ let broken = (body: string) => {
   return reports.flatMap((r) => {
     if (!r || typeof r != 'object') return []
     let b = (r.body ?? r) as Record<string, unknown>
+    // A no the door answered on purpose is not a break: the reporter sends
+    // the answer's own bytes beside its status (public/report.js), and this
+    // is the seam that can read them (unseen.ts `refusal`).
+    let status = Number(b.status)
+    if (status >= 400 && status < 500 && refusal(String(b.answer ?? ''))) {
+      return []
+    }
     let message = said(b)
     if (!message) return []
     let at = pathOf(r.url ?? b.url ?? b.documentURL)
