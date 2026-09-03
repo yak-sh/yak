@@ -411,6 +411,66 @@ origin with no session on it. The answer arrives in the notification above, and
 a redraw is a plain MCP `tools/call` back through the host for the app's own
 tool, which does carry who is looking.
 
+## Code of your own
+
+An app is pages until you give it a `worker.js`, and then it has a server. Write
+one beside `index.html` and `app_deploy` puts it in front of the app: every
+request for the app that is not `/api/…` reaches it first, and **anything it
+answers 404 falls through to the files**. So a worker owns the routes it names
+and leaves every page, stylesheet and picture to the platform — you never have
+to serve your own `index.html`.
+
+It is a plain ES module, and `env` holds three things:
+
+- `env.STORE` — the app's own graph, at the same doors `client.js` uses, **as
+  the person looking at the page**. `env.STORE.fetch('/query?.doc!')`,
+  `env.STORE.fetch('/apply', {method: 'POST', body})`. A path, not a URL.
+- `env.FILES` — the app's own files. `env.FILES.fetch('/index.html')`.
+- one entry per secret you set, under the name you set it (below).
+
+Here is the whole of it — one route out of the store, one outside call the page
+must not be able to make itself:
+
+    export default {
+      async fetch(req, env) {
+        let url = new URL(req.url)
+
+        if (url.pathname.endsWith('/api/mine')) {
+          let rows = await (await env.STORE.fetch('/query?.recipe!')).json()
+          return Response.json(rows.map((r) => r.doc.title))
+        }
+
+        if (url.pathname.endsWith('/weather')) {
+          let at = 'https://api.example.com/now?city=' + url.searchParams.get('city')
+          let got = await fetch(at, {
+            headers: { authorization: 'Bearer ' + env.WEATHER_KEY },
+          })
+          return Response.json(await got.json())
+        }
+
+        return new Response('not found', { status: 404 })   // → the files
+      },
+    }
+
+The request carries `x-yak-person` (their eid, absent for a visitor who has not
+signed in) and `x-yak-role`, so the worker knows who is asking without reading
+anything. It never sees their platform session cookie: the app is owed this
+visit and no more, and `env.STORE` already acts as them, so what the app's
+`access` lets that person do is exactly what the worker can do.
+
+**Secrets** are the reason to write a worker at all: an API key belongs on the
+server, never in a page anyone can read. `app_secret_set` puts one on the app's
+script, the worker reads it as `env.NAME`, and nothing — no tool, no query, no
+history — can read it back. `app_secret_list` names them; `app_secret_remove`
+takes one away. Ask the person for the value.
+
+**Limits**: 50ms of CPU and 50 subrequests per request. That is a store read and
+an outside call with room to spare; it is not a place to loop.
+
+A throw, or a 5xx, becomes the same `exception` the pages file — the person's
+agent hears about it on its next reply, and `app_errors` lists what is open. So
+let it throw: a break you can see is worth more than a `catch` that hides it.
+
 ## The doors underneath
 
 `client.js` is a wrapper over ordinary HTTP doors, same-origin, in case you want

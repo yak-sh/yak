@@ -645,7 +645,9 @@ export let TOOLS: Tool[] = [
       'it gives the app its own MCP tools — ' +
       `${TOOLS_EXAMPLE} — listed here as <app>__<tool> for everyone who can ` +
       'reach the app, so the person and their agent act on the app through ' +
-      'its own words.',
+      "its own words. And a worker.js beside index.html becomes the app's " +
+      'own server code: it answers every request that is not /api/ before ' +
+      'the files do, and whatever it answers 404 falls through to them.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP },

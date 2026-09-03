@@ -120,6 +120,14 @@ An app can carry its OWN tools: a tools.json beside index.html declares them
 store — and after app_deploy they are listed here as <app>__<tool>, for the
 person and for anyone else in the space. The guide has the shape.
 
+An app can carry its own CODE too: a worker.js beside index.html answers
+every request that is not /api/ before the files do, and whatever it answers
+404 falls through to them, so it owns the routes it names and nothing else.
+It reads the app's store as the person looking (env.STORE), its files
+(env.FILES), and any key you set with app_secret_set as env.NAME — which is
+what a page must not hold and nothing can read back. The guide has a whole
+one.
+
 Whatever breaks — a page's own error, a refused write, a request that failed
 — arrives at the end of a later reply, once. Fix what you see.`
 
