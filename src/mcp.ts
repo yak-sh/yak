@@ -95,6 +95,7 @@ import {
   taskTreePlan,
   taskTreeText,
   taskTreeWarning,
+  tierNote,
   uniq,
   verificationLine,
   type VerificationResult,
@@ -429,6 +430,34 @@ export let mcpServer = (io: IO) => {
   // find() over the wire: the row an address names, or undefined — the same
   // four forms (T-3, num, slug, uuid), resolved by the server's locate().
   let got = async (id: string) => find(await io.get([id]), id)
+  // A persona tier tied in through the generic door earns the same note
+  // `task link` prints: an unaccepted memory sits in the tier saying nothing
+  // until a person decides it (client.ts tierNote). Reads the EFFECTIVE batch,
+  // where dualEdge has already lowered every spelling into edge{from,to} — one
+  // shape to scan, and real eids rather than whatever the caller typed.
+  let tierHint = async (changes: Change[]) => {
+    let tiers = new Set(
+      changes.filter((c) =>
+        c.comp && (c.name == 'contains' || c.name == 'reads')
+      )
+        .map((c) => c.eid),
+    )
+    let pairs = changes
+      .filter((c) => c.name == 'edge' && c.comp && tiers.has(c.eid))
+      .map((c) => [String(c.comp!.from), String(c.comp!.to)] as const)
+    if (!pairs.length) return ''
+    let ends = [...new Set(pairs.flatMap(([a, b]) => [a, b]))]
+    let by = new Map((await io.get(ends)).map((r) => [r.eid, r]))
+    let notes = [
+      ...new Set(
+        pairs.map(([from, to]) => {
+          let p = by.get(from), c = by.get(to)
+          return p && c ? tierNote(p, c) : ''
+        }).filter(Boolean),
+      ),
+    ]
+    return notes.length ? `\n${notes.join('\n')}` : ''
+  }
   // Server instructions ride the initialize handshake and land in the
   // agent's standing context — the strongest ambient steering the
   // protocol offers. Keep it to what every writer must know.
@@ -2092,6 +2121,7 @@ ${GRAMMAR}`,
       // literal earns the nudge. The effective batch has already expanded any
       // op into a literal, which would fire falsely.
       let hint = changes ? patchHint(changes) : ''
+      hint += await tierHint(result.changes)
       return text(
         JSON.stringify(
           {

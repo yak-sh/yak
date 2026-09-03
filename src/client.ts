@@ -4659,6 +4659,19 @@ export let accepted = (r: Row) =>
 export let memoryHead = (r: Row) =>
   `${accepted(r) ? '' : '? '}${r.comps.feedback ? 'feedback: ' : ''}`
 
+// An agent MAY tie an unaccepted memory into a persona — that is filing a
+// suggestion where it belongs, and apply() admits it (db.ts). But persona.ts
+// renders only ACCEPTED members, so the tier stays silent until a person
+// decides. Say that at the door that did the tying, or the writer walks away
+// believing it changed what the fleet boots into.
+export let tierNote = (parent: Row, child: Row) =>
+  parent.comps.persona && !accepted(child)
+    ? `${idOf(child)} is not accepted — it sits in ${idOf(parent)} and ` +
+      `reaches no prompt until a person decides it: task set ${
+        idOf(child)
+      } .decided.verdict=approved`
+    : ''
+
 // The `decided` stamp as a change: WHEN the decision was taken. The value
 // speaks the same time grammar as every other door — '2026-06-01',
 // 'yesterday', '3 months ago' — and apply()'s normalizeChanges resolves it

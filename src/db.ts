@@ -5471,6 +5471,21 @@ let proposedMemory = (db: Sql, eid: string) =>
   !!prep(db, `select 1 from memory where ${byEid}`).get(eid) &&
   !!prep(db, `select 1 from proposed where ${byEid}`).get(eid)
 
+// Whether this child, tied into a persona, would reach a prompt as it stands.
+// persona.ts `tiers()` renders only an ACCEPTED member — no `proposed` stamp,
+// or a `decided` that did not decline it (client.ts `accepted`) — so an
+// unaccepted memory sits in the tier saying nothing until a person decides.
+// `pending` is a memory minted in THIS batch by an agent: its proposed stamp
+// lands at the end of this same apply, after the edge rule runs.
+let materializes = (db: Sql, eid: string, pending: boolean) =>
+  !pending &&
+  (!prep(db, `select 1 from proposed where ${byEid}`).get(eid) ||
+    !!prep(
+      db,
+      `select 1 from decided
+        where ${byEid} and coalesce(verdict, '') != 'declined'`,
+    ).get(eid))
+
 // Who may SIGN a letter: the same chain, minus the one inference provenance
 // is allowed to make. A tab at the owner's keyboard may be RECORDED as them;
 // it may not SPEAK as them, because that is the fleet's highest-trust byline
@@ -6065,18 +6080,33 @@ export let apply = (
           console.warn(`sync: edge for ${eid} dropped — missing endpoint`)
           continue
         }
-        // A persona's tiers are what an agent boots into. Linking or
-        // unlinking them is the owner's move (M-31946); an agent that wants
-        // a memory preloaded saves it and says so, and a person decides.
+        // A persona's tiers are what an agent boots into. What an agent may
+        // NOT do is change that boot (M-31946) — so the gate is what the edge
+        // would MATERIALIZE, not the edge itself. Tying an unaccepted memory
+        // in is filing it where it belongs: it renders for nobody until a
+        // person decides it, and refusing the link only leaves an agent
+        // unable to put its own suggestion in the right place. Tying in
+        // something that renders NOW — an accepted memory, another persona's
+        // whole bundle — is the owner's move, and so is cutting one out.
         if (
           (comp.type == 'contains' || comp.type == 'reads') &&
           wornPersona(db, eid) && !createdComps.has(`persona ${eid}`) &&
-          !person()
+          !person() &&
+          materializes(
+            db,
+            String(comp.child),
+            createdComps.has(`memory ${String(comp.child)}`),
+          )
         ) {
+          let kid = human(db, String(comp.child))
           throw new Error(
-            `${human(db, eid)} is a persona — its composition is the ` +
-              `owner's. Save the memory (it lands proposed) and a person ` +
-              `links it.`,
+            `${kid} ${
+              wornPersona(db, String(comp.child))
+                ? 'is a persona'
+                : 'is accepted'
+            } — ${comp.gone ? 'cutting it out of' : 'preloading it into'} ` +
+              `${human(db, eid)} changes what every agent boots into, ` +
+              `which is the owner's move.`,
           )
         }
         // Nothing left to write: dualEdge above already lowered this sentence

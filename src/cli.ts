@@ -96,6 +96,7 @@ import {
   taskTreePlan,
   taskTreeText,
   taskTreeWarning,
+  tierNote,
   undo,
   verificationLine,
   verifyTask,
@@ -2021,6 +2022,11 @@ let dep = async (got: Got) => {
     comp: { type, child: child.eid, ...(gone ? { gone: true } : {}) },
   }])
   print(`${idOf(row)} ${type} ${idOf(child)}${gone ? ' — unlinked' : ''}`)
+  // A tier that renders nothing yet says so, so nobody assumes the prompt moved.
+  if (!gone) {
+    let note = tierNote(row, child)
+    if (note) print(note)
+  }
 }
 
 let requireEdge = (got: Got) =>

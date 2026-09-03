@@ -5754,34 +5754,61 @@ Deno.test('memory gate: an agent memory lands proposed; a person decides it', ()
   assertEquals(!!readComp(d, mine, 'proposed'), false)
 })
 
-Deno.test("persona gate: composition and body are a person's writes", () => {
+// The gate is what an edge would MATERIALIZE, not the edge. An agent files
+// its own proposal where it belongs — the tier renders nothing until a person
+// decides it — but anything that would reach a prompt NOW is the owner's.
+Deno.test('persona gate: a proposal may be filed, a prompt may not be moved', () => {
   let d = fresh()
   let jeff = uid()
   apply(d, [{ eid: jeff, name: 'person', comp: {} }])
-  let p = uid(), m = uid()
+  let p = uid(), m = uid(), base = uid()
   apply(
     d,
     [
       { eid: p, name: 'doc', comp: { title: 'operator', body: 'be brief' } },
       { eid: p, name: 'persona', comp: {} },
+      { eid: base, name: 'doc', comp: { title: 'fleet base' } },
+      { eid: base, name: 'persona', comp: {} },
       { eid: m, name: 'doc', comp: { title: 'lesson' } },
       { eid: m, name: 'memory', comp: {} },
     ],
     undefined,
     jeff,
   )
-  let link = {
+  let ties = (child: string, gone = false) => ({
     eid: p,
     name: 'dependency',
-    comp: { type: 'contains', child: m },
-  }
-  assertThrows(() => apply(d, [link]), Error, 'composition is the owner')
+    comp: { type: 'contains', child, ...(gone ? { gone: true } : {}) },
+  })
+  // jeff's memory is accepted as written, so tying it in moves every prompt
+  assertThrows(() => apply(d, [ties(m)]), Error, 'is accepted')
+  // a whole base bundle is the same move
+  assertThrows(() => apply(d, [ties(base)]), Error, 'is a persona')
   assertThrows(
     () => apply(d, [{ eid: p, name: 'doc', comp: { body: 'be long' } }]),
     Error,
     'body is the owner',
   )
-  apply(d, [link], undefined, jeff)
+  // an agent's own memory lands proposed and may be filed where it belongs
+  let mine = uid()
+  apply(d, [
+    { eid: mine, name: 'doc', comp: { title: 'agent idea' } },
+    { eid: mine, name: 'memory', comp: {} },
+  ])
+  assertEquals(!!readComp(d, mine, 'proposed'), true)
+  apply(d, [ties(mine)])
+  assertEquals(!!readComp(d, edgeEid(p, 'contains', mine), 'edge'), true)
+  // and taken back out again — it was reaching nobody either way
+  apply(d, [ties(mine, true)])
+  assertEquals(!!readComp(d, edgeEid(p, 'contains', mine), 'edge'), false)
+  // once a person accepts it, moving it is the owner's move
+  apply(d, [ties(mine)])
+  apply(d, [{ eid: mine, name: 'decided', comp: {} }], undefined, jeff)
+  assertThrows(() => apply(d, [ties(mine, true)]), Error, 'is accepted')
+  // a person may do all of it
+  apply(d, [ties(m)], undefined, jeff)
+  apply(d, [ties(base)], undefined, jeff)
+  apply(d, [ties(mine, true)], undefined, jeff)
   apply(
     d,
     [{ eid: p, name: 'doc', comp: { body: 'be brief.' } }],
@@ -5789,10 +5816,6 @@ Deno.test("persona gate: composition and body are a person's writes", () => {
     jeff,
   )
   assertEquals(readComp(d, p, 'doc')?.body, 'be brief.')
-  // unlinking is the same move
-  assertThrows(() =>
-    apply(d, [{ ...link, comp: { ...link.comp, gone: true } }])
-  )
 })
 
 // A write that changes nothing writes nothing (settled()): no journal row, no
