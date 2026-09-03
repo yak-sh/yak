@@ -245,6 +245,20 @@ let callDdl = `create table if not exists tool_call (
     detail     text
   )`
 
+// A letter's ENVELOPE as one indexable string: the two addresses that say who
+// wrote it and who received it (T-32657). An address is what an operator has
+// in hand when they go looking for a letter — `task search yaktest6` — and it
+// appears nowhere in the subject or the prose, so doc_value carries it beside
+// title and body and the FTS mirror indexes it. `mail."from"` needs its quotes
+// (a keyword) and both columns are nullable, so the empty envelope is '' both
+// here and in every trigger below.
+let addrOf = (at: string) =>
+  `trim(coalesce(${at}"from", '') || ' ' || coalesce(${at}to_addr, ''))`
+// The same envelope read through an entity id, for a trigger on `doc` that has
+// no mail row in hand: an entity that is not a letter has no address.
+let addrAt = (entity: string) =>
+  `coalesce((select ${addrOf('')} from mail where entity = ${entity}), '')`
+
 // The star: an entity spine plus one component table per kind, plus the edge
 // table. `if not exists` makes this idempotent — safe to run every boot.
 // A canvas is an entity with no component (yet) — its geometry lives in `pin`.
@@ -271,9 +285,13 @@ let schema = `
     entity integer primary key references blob(entity),
     value text not null
   );
+  -- The doc projection the FTS mirrors index and search reads back: title,
+  -- body and envelope, resolved through the blob backend.
   create view if not exists doc_value as
-    select d.entity as rowid, d.entity, d.title, b.value as body
-    from doc d join blob_text b on b.entity = d.body;
+    select d.entity as rowid, d.entity, d.title, b.value as body,
+      ${addrOf('m.')} as addr
+    from doc d join blob_text b on b.entity = d.body
+    left join mail m on m.entity = d.entity;
   create table if not exists task (
     entity    integer primary key references entity(id),
     priority real not null default 0
@@ -886,32 +904,69 @@ let schema = `
   ${embeddingTriggers}
 `
 
+// A letter's envelope arrives AFTER its doc — the batch writes doc, then mail —
+// and is stamped again when delivery resolves the address, so the doc triggers
+// alone would index an empty envelope forever. These re-index the doc row on
+// every move of its mail row. The 'delete' half names the PREVIOUS addr
+// explicitly ('' before the row existed, old's after): doc_value already reads
+// the new one, and an fts5 delete whose values miss what is indexed corrupts
+// the index. Same reason for the `when`: no doc row, no indexed row to correct.
+let mailFts = `create trigger if not exists mail_fts_ai after insert on mail
+  when exists (select 1 from doc where entity = new.entity) begin
+    insert into doc_fts (doc_fts, rowid, title, body, addr)
+      select 'delete', rowid, title, body, '' from doc_value
+       where rowid = new.entity;
+    insert into doc_fts (rowid, title, body, addr)
+      select rowid, title, body, addr from doc_value where rowid = new.entity;
+  end;
+  create trigger if not exists mail_fts_au after update on mail
+  when exists (select 1 from doc where entity = new.entity) begin
+    insert into doc_fts (doc_fts, rowid, title, body, addr)
+      select 'delete', rowid, title, body, ${addrOf('old.')} from doc_value
+       where rowid = new.entity;
+    insert into doc_fts (rowid, title, body, addr)
+      select rowid, title, body, addr from doc_value where rowid = new.entity;
+  end;
+  create trigger if not exists mail_fts_ad after delete on mail
+  when exists (select 1 from doc where entity = old.entity) begin
+    insert into doc_fts (doc_fts, rowid, title, body, addr)
+      select 'delete', rowid, title, body, ${addrOf('old.')} from doc_value
+       where rowid = old.entity;
+    insert into doc_fts (rowid, title, body, addr)
+      select rowid, title, body, '' from doc_value where rowid = old.entity;
+  end;`
+
 // The FTS5 mirrors, apart from `schema` because they are the one part of it a
 // backend may lack (Can.fts): both derive from doc and the integrity pass in
 // migrate() rebuilds them, so a store without FTS5 skips them whole and its
 // search() refuses instead of failing on a missing table.
 let ftsSchema = `
   create virtual table if not exists doc_fts using fts5(
-    title, body, content='doc_value', content_rowid='rowid'
+    title, body, addr, content='doc_value', content_rowid='rowid'
   );
   create trigger if not exists doc_fts_ai after insert on doc begin
-    insert into doc_fts (rowid, title, body)
+    insert into doc_fts (rowid, title, body, addr)
     values (new.rowid, new.title,
-      (select value from blob_text where entity = new.body));
+      (select value from blob_text where entity = new.body),
+      ${addrAt('new.entity')});
   end;
   create trigger if not exists doc_fts_ad after delete on doc begin
-    insert into doc_fts (doc_fts, rowid, title, body)
+    insert into doc_fts (doc_fts, rowid, title, body, addr)
     values ('delete', old.rowid, old.title,
-      (select value from blob_text where entity = old.body));
+      (select value from blob_text where entity = old.body),
+      ${addrAt('old.entity')});
   end;
   create trigger if not exists doc_fts_au after update on doc begin
-    insert into doc_fts (doc_fts, rowid, title, body)
+    insert into doc_fts (doc_fts, rowid, title, body, addr)
     values ('delete', old.rowid, old.title,
-      (select value from blob_text where entity = old.body));
-    insert into doc_fts (rowid, title, body)
+      (select value from blob_text where entity = old.body),
+      ${addrAt('old.entity')});
+    insert into doc_fts (rowid, title, body, addr)
     values (new.rowid, new.title,
-      (select value from blob_text where entity = new.body));
+      (select value from blob_text where entity = new.body),
+      ${addrAt('new.entity')});
   end;
+  ${mailFts}
   -- The SUBSTRING index, and the reason it cannot be doc_fts: doc_fts indexes
   -- TOKENS, so a search for idget finds none of the rows holding widget — a
   -- prefix search is a strict subset of a substring one and loses rows
@@ -3212,11 +3267,33 @@ let migrateDocBodies = (db: Sql) => {
     for (let row of rows) put.run(row.entity, row.title, textBlob(db, row.body))
     db.exec(`
       drop table __legacy_doc;
+      -- The pre-envelope projection ON PURPOSE: mail is created by schema,
+      -- below, and a view over a table that does not exist yet breaks every
+      -- reader between here and there (migrateRefs reads this one). The last
+      -- migration, migrateDocAddr, is what grows it the envelope.
       create view doc_value as
         select d.entity as rowid, d.entity, d.title, b.value as body
         from doc d join blob_text b on b.entity = d.body;
     `)
   })
+}
+
+// The envelope joined the projection (T-32657): a doc_value without `addr`,
+// and the two-column doc_fts built from it, predate the change. Both are
+// DERIVED from doc and mail, so the migration is to drop them and let schema
+// and ftsSchema recreate the current shape; migrate() refills the emptied
+// index in the same transaction. A view that already carries addr, or a graph
+// too fresh to have one, is left alone.
+let migrateDocAddr = (db: Sql) => {
+  if (!hasCol(db, 'doc_value', 'entity')) return
+  if (hasCol(db, 'doc_value', 'addr')) return
+  db.exec(`
+    drop trigger if exists doc_fts_ai;
+    drop trigger if exists doc_fts_ad;
+    drop trigger if exists doc_fts_au;
+    drop table if exists doc_fts;
+    drop view if exists doc_value;
+  `)
 }
 
 // The app-plane-only boot switch (TASKS_PLANE=app, D-22804 §8 strangler). When
@@ -3300,8 +3377,22 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       // columns named by a newly added index in the current DDL.
       migrateRefs(db)
       migratePrompt(db)
+      // Retire a doc_value/doc_fts pair that predates the mail envelope; the
+      // schema below recreates both carrying it. LAST of the migrations, since
+      // the ones above (migrateRefs) still read the view.
+      migrateDocAddr(db)
+      // A mirror about to be CREATED is born empty, and the boot integrity
+      // check below cannot see that: count(*) over an external-content table
+      // reads the content table, not the index. So whoever just dropped one —
+      // the body migration, the envelope migration, or a graph that never had
+      // it — has its rows put back here, once, in this transaction.
+      let unbuilt = !db.can.fts ? [] : ['doc_fts', 'doc_gram']
+        .filter((t) => !tableExists(db, t))
       db.exec(schema)
       if (db.can.fts) db.exec(ftsSchema)
+      for (let t of unbuilt) {
+        db.exec(`insert into ${t} (${t}) values ('rebuild')`)
+      }
       let addCol = (table: string, col: string, ddl: string) => {
         if (!hasCol(db, table, col)) {
           // Quoted: a component may be named after a keyword (`commit`).
@@ -8188,6 +8279,8 @@ export let search = (db: Sql, q: string, limit = 20): Hit[] => {
   let match = ftsQuery(preds)
   if (!match && !filters.length) return []
   // Filters screen AFTER the rank, so cast a wider net before the cap.
+  // The bm25 weights read title 8, body 1, envelope 8: an address is
+  // identity, so a letter to it outranks prose that merely mentions it.
   let rows = match
     ? prep(
       db,
@@ -8195,7 +8288,7 @@ export let search = (db: Sql, q: string, limit = 20): Hit[] => {
       select e.eid, d.title,
         highlight(doc_fts, 0, char(1), char(2)) as title_hit,
         snippet(doc_fts, 1, char(1), char(2), '…', 10) as snip,
-        -(bm25(doc_fts, 8.0, 1.0)
+        -(bm25(doc_fts, 8.0, 1.0, 8.0)
           - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at))))
           as score,
         e.num

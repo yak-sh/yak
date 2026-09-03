@@ -25,9 +25,13 @@ pub static SCHEMA: &[SchemaOp] = &[
     entity integer primary key references blob(entity),
     value text not null
   );
+  -- The doc projection the FTS mirrors index and search reads back: title,
+  -- body and envelope, resolved through the blob backend.
   create view if not exists doc_value as
-    select d.entity as rowid, d.entity, d.title, b.value as body
-    from doc d join blob_text b on b.entity = d.body;
+    select d.entity as rowid, d.entity, d.title, b.value as body,
+      trim(coalesce(m."from", '') || ' ' || coalesce(m.to_addr, '')) as addr
+    from doc d join blob_text b on b.entity = d.body
+    left join mail m on m.entity = d.entity;
   create table if not exists task (
     entity    integer primary key references entity(id),
     priority real not null default 0
@@ -690,25 +694,53 @@ pub static SCHEMA: &[SchemaOp] = &[
 "#),
     SchemaOp::Exec(r#"
   create virtual table if not exists doc_fts using fts5(
-    title, body, content='doc_value', content_rowid='rowid'
+    title, body, addr, content='doc_value', content_rowid='rowid'
   );
   create trigger if not exists doc_fts_ai after insert on doc begin
-    insert into doc_fts (rowid, title, body)
+    insert into doc_fts (rowid, title, body, addr)
     values (new.rowid, new.title,
-      (select value from blob_text where entity = new.body));
+      (select value from blob_text where entity = new.body),
+      coalesce((select trim(coalesce("from", '') || ' ' || coalesce(to_addr, '')) from mail where entity = new.entity), ''));
   end;
   create trigger if not exists doc_fts_ad after delete on doc begin
-    insert into doc_fts (doc_fts, rowid, title, body)
+    insert into doc_fts (doc_fts, rowid, title, body, addr)
     values ('delete', old.rowid, old.title,
-      (select value from blob_text where entity = old.body));
+      (select value from blob_text where entity = old.body),
+      coalesce((select trim(coalesce("from", '') || ' ' || coalesce(to_addr, '')) from mail where entity = old.entity), ''));
   end;
   create trigger if not exists doc_fts_au after update on doc begin
-    insert into doc_fts (doc_fts, rowid, title, body)
+    insert into doc_fts (doc_fts, rowid, title, body, addr)
     values ('delete', old.rowid, old.title,
-      (select value from blob_text where entity = old.body));
-    insert into doc_fts (rowid, title, body)
+      (select value from blob_text where entity = old.body),
+      coalesce((select trim(coalesce("from", '') || ' ' || coalesce(to_addr, '')) from mail where entity = old.entity), ''));
+    insert into doc_fts (rowid, title, body, addr)
     values (new.rowid, new.title,
-      (select value from blob_text where entity = new.body));
+      (select value from blob_text where entity = new.body),
+      coalesce((select trim(coalesce("from", '') || ' ' || coalesce(to_addr, '')) from mail where entity = new.entity), ''));
+  end;
+  create trigger if not exists mail_fts_ai after insert on mail
+  when exists (select 1 from doc where entity = new.entity) begin
+    insert into doc_fts (doc_fts, rowid, title, body, addr)
+      select 'delete', rowid, title, body, '' from doc_value
+       where rowid = new.entity;
+    insert into doc_fts (rowid, title, body, addr)
+      select rowid, title, body, addr from doc_value where rowid = new.entity;
+  end;
+  create trigger if not exists mail_fts_au after update on mail
+  when exists (select 1 from doc where entity = new.entity) begin
+    insert into doc_fts (doc_fts, rowid, title, body, addr)
+      select 'delete', rowid, title, body, trim(coalesce(old."from", '') || ' ' || coalesce(old.to_addr, '')) from doc_value
+       where rowid = new.entity;
+    insert into doc_fts (rowid, title, body, addr)
+      select rowid, title, body, addr from doc_value where rowid = new.entity;
+  end;
+  create trigger if not exists mail_fts_ad after delete on mail
+  when exists (select 1 from doc where entity = old.entity) begin
+    insert into doc_fts (doc_fts, rowid, title, body, addr)
+      select 'delete', rowid, title, body, trim(coalesce(old."from", '') || ' ' || coalesce(old.to_addr, '')) from doc_value
+       where rowid = old.entity;
+    insert into doc_fts (rowid, title, body, addr)
+      select rowid, title, body, '' from doc_value where rowid = old.entity;
   end;
   -- The SUBSTRING index, and the reason it cannot be doc_fts: doc_fts indexes
   -- TOKENS, so a search for idget finds none of the rows holding widget — a

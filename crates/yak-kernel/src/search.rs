@@ -199,7 +199,7 @@ pub fn search(store: &Store, q: &str, limit: usize) -> Result<Vec<Hit>, String> 
       select e.eid, d.title,
         highlight(doc_fts, 0, char(1), char(2)) as title_hit,
         snippet(doc_fts, 1, char(1), char(2), '…', 10) as snip,
-        -(bm25(doc_fts, 8.0, 1.0)
+        -(bm25(doc_fts, 8.0, 1.0, 8.0)
           - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at)))) as score,
         e.num
       from doc_fts

@@ -2696,6 +2696,71 @@ Deno.test('fts: search finds, follows edits, forgets the dead', () => {
   assertEquals(search(db, '"broken (syntax'), []) // user words, not operators
 })
 
+Deno.test('fts: a letter is found by the address it was sent to', () => {
+  let m = uid()
+  apply(db, [
+    {
+      eid: m,
+      name: 'doc',
+      comp: { title: 'Your sign-in code', body: '441030' },
+    },
+    { eid: m, name: 'mail', comp: {} },
+  ])
+  // The envelope is server-stamped, so it lands the way delivery lands it:
+  // an update on the mail row after the wire wrote the doc (mail.ts settle).
+  let envelope = (from: string, to: string) =>
+    db.prepare(`update mail set "from" = ?, to_addr = ? where ${OWNED}`)
+      .run(from, to, m)
+  envelope('yaks@bot.yak.sh', 'yaktest6@bot.yak.sh')
+  assertEquals(search(db, 'yaktest6@bot.yak.sh')[0]?.eid, m)
+  assertEquals(search(db, 'yaktest6')[0]?.eid, m) // the local part alone
+  assertEquals(search(db, 'yaks@bot.yak.sh')[0]?.eid, m) // and the sender
+  // The letter itself never changed: the address is index, not content.
+  assertEquals(search(db, 'yaktest6')[0]?.title, 'Your sign-in code')
+  // A re-stamp moves the index, and the index still says what it holds.
+  envelope('yaks@bot.yak.sh', 'yaktest7@bot.yak.sh')
+  assertEquals(search(db, 'yaktest6').length, 0)
+  assertEquals(search(db, 'yaktest7')[0]?.eid, m)
+  db.exec(`insert into doc_fts (doc_fts, rank) values ('integrity-check', 1)`)
+  apply(db, [{ eid: m, name: 'entity', comp: null }])
+  assertEquals(search(db, 'yaktest7').length, 0)
+  db.exec(`insert into doc_fts (doc_fts, rank) values ('integrity-check', 1)`)
+})
+
+slow('boot grows the envelope into a text index that predates it', () => {
+  let d = open(':memory:'), m = uid()
+  apply(d, [
+    {
+      eid: m,
+      name: 'doc',
+      comp: { title: 'Your sign-in code', body: '441030' },
+    },
+    { eid: m, name: 'mail', comp: {} },
+  ])
+  d.prepare(`update mail set to_addr = ? where ${OWNED}`)
+    .run('yaktest6@bot.yak.sh', m)
+  // Regress to the shape before T-32657: a two-column mirror over a view that
+  // carried no address, filled the way that boot filled it.
+  d.exec(`
+    drop trigger doc_fts_ai; drop trigger doc_fts_ad; drop trigger doc_fts_au;
+    drop trigger mail_fts_ai; drop trigger mail_fts_au; drop trigger mail_fts_ad;
+    drop table doc_fts;
+    drop view doc_value;
+    create view doc_value as
+      select d.entity as rowid, d.entity, d.title, b.value as body
+      from doc d join blob_text b on b.entity = d.body;
+    create virtual table doc_fts using fts5(
+      title, body, content='doc_value', content_rowid='rowid'
+    );
+    insert into doc_fts (doc_fts) values ('rebuild');
+  `)
+  assertEquals(search(d, 'yaktest6').length, 0)
+  migrate(d)
+  assertEquals(search(d, 'yaktest6')[0]?.eid, m) // reindexed on this one boot
+  assertEquals(search(d, '441030')[0]?.eid, m) // and nothing it held was lost
+  d.close()
+})
+
 Deno.test('search leads with an entity named by its human id', () => {
   let memory = uid(), mention = uid()
   apply(db, [

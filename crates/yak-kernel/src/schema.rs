@@ -446,11 +446,44 @@ fn migrate_doc_bodies(conn: &Connection) -> rusqlite::Result<()> {
     }
 }
 
+// A doc_value that predates the mail envelope (T-32657), and the two-column
+// doc_fts built from it, are DERIVED from doc and mail: drop them and let the
+// generated schema below recreate the current shape. Mirrors db.ts
+// migrateDocAddr. True = the mirror was emptied and owes a rebuild.
+fn migrate_doc_addr(conn: &Connection) -> rusqlite::Result<bool> {
+    // pragma_table_info answers for a view too; write.rs has_col asks
+    // has_table first, and a view is never a table.
+    let col = |c: &str| {
+        conn.query_row("select 1 from pragma_table_info('doc_value') where name = ?1", [c], |r| {
+            r.get::<_, i64>(0)
+        })
+        .optional()
+        .ok()
+        .flatten()
+        .is_some()
+    };
+    if !col("entity") || col("addr") {
+        return Ok(false);
+    }
+    conn.execute_batch(
+        "drop trigger if exists doc_fts_ai;
+         drop trigger if exists doc_fts_ad;
+         drop trigger if exists doc_fts_au;
+         drop table if exists doc_fts;
+         drop view if exists doc_value;",
+    )?;
+    Ok(true)
+}
+
 // Replay the emitted DDL against a connection, applying each statement's guard.
 // Idempotent: a re-run over an already-current graph writes nothing.
 pub fn apply_schema(conn: &Connection) -> rusqlite::Result<()> {
     migrate_prompt(conn)?;
     migrate_doc_bodies(conn)?;
+    // A mirror this migration drops is recreated EMPTY by the replay below, and
+    // count(*) over an external-content table reads the content table, so
+    // nothing downstream can see the emptiness. Refill it here.
+    let refill = migrate_doc_addr(conn)?;
     for op in crate::schema_gen::SCHEMA {
         match op {
             SchemaOp::Exec(sql) => conn.execute_batch(sql)?,
@@ -465,6 +498,9 @@ pub fn apply_schema(conn: &Connection) -> rusqlite::Result<()> {
                 }
             }
         }
+    }
+    if refill {
+        conn.execute_batch("insert into doc_fts (doc_fts) values ('rebuild');")?;
     }
     retire_json_journal(conn)?;
     migrate_journal_keys(conn)?;
