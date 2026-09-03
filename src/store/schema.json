@@ -137,6 +137,14 @@
   },
   {
     "kind": "exec",
+    "sql": "create table if not exists \"plan\" (\n    entity integer primary key references entity(id),\n    \"tier\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"meter\" (\n    entity integer primary key references entity(id),\n    \"month\" text,\n    \"requests\" real,\n    \"rows_read\" real,\n    \"rows_written\" real,\n    \"bytes\" real,\n    \"emails\" real,\n    \"at\" text\n  );"
+  },
+  {
+    "kind": "exec",
     "sql": "create table if not exists \"signin\" (\n    entity integer primary key references entity(id),\n    \"email\" text,\n    \"code\" text,\n    \"expires\" text,\n    \"tries\" real\n  );"
   },
   {
@@ -592,6 +600,54 @@
     "table": "member",
     "col": "role",
     "sql": "alter table member add column \"role\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "plan",
+    "col": "tier",
+    "sql": "alter table plan add column \"tier\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "meter",
+    "col": "month",
+    "sql": "alter table meter add column \"month\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "meter",
+    "col": "requests",
+    "sql": "alter table meter add column \"requests\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "meter",
+    "col": "rows_read",
+    "sql": "alter table meter add column \"rows_read\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "meter",
+    "col": "rows_written",
+    "sql": "alter table meter add column \"rows_written\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "meter",
+    "col": "bytes",
+    "sql": "alter table meter add column \"bytes\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "meter",
+    "col": "emails",
+    "sql": "alter table meter add column \"emails\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "meter",
+    "col": "at",
+    "sql": "alter table meter add column \"at\" text"
   },
   {
     "kind": "addColumn",

@@ -37,6 +37,12 @@ export type Env = {
   MAIL_TOKEN?: string
   MAIL_ACCOUNT?: string
   MAIL_API?: string
+  // The meter (usage.ts): a Cloudflare API token that may read the account's
+  // analytics, and the account it reads. The token is a secret the owner sets
+  // (T-32759) and unset the hourly sweep does nothing; the account tag is not
+  // a secret and rides wrangler.toml's `[vars]`.
+  CF_ANALYTICS_TOKEN?: string
+  CF_ACCOUNT?: string
   // A part split into its own Worker, when it has been; absent, in-process.
   IDENTITY?: Fetcher
   MCP?: Fetcher

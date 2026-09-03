@@ -262,13 +262,13 @@ taken:
     doc dream edge effect email entity entry error exception exit favorite
     feedback fetch finding fixer fold fork generation goal graph_query headers
     hook image imported knock layout lease mail member memory message meta
-    model nofix notice notified noverify opaque opened output pane patch person
-    persona pin project prompt proposed quarantined reads reasoning recall
-    recalled redaction references repo requires response result resume review
-    role run runner runtime satisfies session setting settled shelf signin
-    space spawn stderr stop_request subscription supersedes supervises task
-    task_context timeout tool updated usage venture verifier wake wants web
-    worked worktree yield
+    meter model nofix notice notified noverify opaque opened output pane patch
+    person persona pin plan project prompt proposed quarantined reads reasoning
+    recall recalled redaction references repo requires response result resume
+    review role run runner runtime satisfies session setting settled shelf
+    signin space spawn stderr stop_request subscription supersedes supervises
+    task task_context timeout tool updated usage venture verifier wake wants
+    web worked worktree yield
 
 Anything the columns don't cover still lives in `doc.body`: it is text, so
 markdown or JSON both keep there.

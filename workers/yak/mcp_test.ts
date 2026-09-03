@@ -12,7 +12,8 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { slow, until } from '../../src/testing.ts'
-import { connector, kernel, signedIn, signIn } from './probe.ts'
+import { connector, kernel, meta, seed, signedIn, signIn } from './probe.ts'
+import { monthOf } from './usage.ts'
 
 let GUIDE = 'https://yaks.app/guide.md'
 let APPS = 'ui://yaks/apps'
@@ -1578,6 +1579,60 @@ slow('a write with no app routes each component to its own app', async () => {
     assertEquals((await rows(`id=${cake}`)).length, 0)
     assertEquals((await rows(`id=${cake}`, 'recipes')).length, 0)
     assertEquals((await rows(`id=${cake}`, 'lending')).length, 0)
+  } finally {
+    await k.stop()
+  }
+})
+
+// The meter as the agent reads it (T-32757): the hourly sweep's rows, seeded
+// here through the one door into the meta store, come back in app_list beside
+// the version. The sweep's own parse is usage_test.ts's; what this holds is
+// that the word landed in the directory's store and that the answer says it.
+slow('app_list answers what the month cost', async () => {
+  let k = await kernel()
+  try {
+    let { cookie, eids } = await seed(k, [
+      { slug: 'metered', apps: ['recipes'] },
+    ])
+    let agent = connector(k, cookie)
+    let month = monthOf(new Date())
+    let at = new Date().toISOString()
+    let spent = {
+      month,
+      requests: 1200,
+      rows_read: 48358,
+      rows_written: 1632,
+      bytes: 252_706_816,
+      at,
+    }
+    await meta(k, cookie).apply([
+      {
+        entity: { eid: eids['metered/recipes'] },
+        meter: { ...spent, emails: 0 },
+      },
+      {
+        entity: { eid: eids.metered },
+        plan: { tier: 'free' },
+        meter: { ...spent, emails: 4 },
+      },
+    ])
+    // A directory write empties the kernel's 30-second read cache
+    // (directory.ts), and the seeding above went in through the graph tier,
+    // which is not that door. The sweep itself writes through `stamp`, which
+    // clears it; a test standing in for the sweep says so here instead of
+    // waiting out a TTL.
+    await agent.tool('space_new', { slug: 'metered-too', title: 'Too' })
+    let said = await agent.tool('app_list', { space: 'metered' })
+    assertStringIncludes(said, '1200 requests')
+    assertStringIncludes(said, '241 MB')
+
+    // The one number analytics cannot answer: what a store weighs. It comes
+    // off the store itself (store.ts `/graph`), which is where the sweep
+    // reads it, so a planted store already weighs something.
+    let graph = await k.at('metered.yaks.app', '/recipes/api/graph', {
+      headers: { cookie },
+    })
+    assert((await graph.json()).bytes > 0, 'the store says what it weighs')
   } finally {
     await k.stop()
   }

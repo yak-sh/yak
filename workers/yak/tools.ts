@@ -47,6 +47,7 @@ import { mayWrite, reads, vouched, type Who } from './session.ts'
 import { canon, nameOf, personOf } from './signin.ts'
 import { storeOf } from './store.ts'
 import { archive, cards, line, openIn, serve } from './unseen.ts'
+import { monthOf, size } from './usage.ts'
 
 export type Ctx = { env: Env; dir: Directory; person: string }
 type Args = Record<string, unknown>
@@ -877,16 +878,22 @@ export let TOOLS: Tool[] = [
         let listed = []
         for (let app of apps) {
           let errors = (await openIn(ctx.env, space, app, who, true)).length
+          // What this app spent this month, as the hourly sweep last read it
+          // (usage.ts). Nothing metered yet says nothing.
+          let spent = app.meter?.month == monthOf(new Date()) ? app.meter : null
           listed.push({
             slug: app.slug,
             title: app.title,
             url: url(space, app),
             version: app.version ?? 0,
             errors,
+            usage: spent,
           })
           lines.push(
             `- ${app.title} (${app.slug}) v${app.version ?? 0}${
               errors ? `, ${errors} open` : ''
+            }${
+              spent ? `, ${spent.requests} requests, ${size(spent.bytes)}` : ''
             }: ${url(space, app)}`,
           )
         }

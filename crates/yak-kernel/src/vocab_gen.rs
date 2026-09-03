@@ -408,6 +408,18 @@ pub(crate) fn baked() -> Vocab {
             ("version".into(), PropType::Number),
             ("access".into(), PropType::Enum(vec!["public".into(), "open".into(), "private".into()])),
         ]),
+        ("plan".into(), vec![
+            ("tier".into(), PropType::Enum(vec!["free".into(), "plus".into()])),
+        ]),
+        ("meter".into(), vec![
+            ("month".into(), PropType::Text),
+            ("requests".into(), PropType::Number),
+            ("rows_read".into(), PropType::Number),
+            ("rows_written".into(), PropType::Number),
+            ("bytes".into(), PropType::Number),
+            ("emails".into(), PropType::Number),
+            ("at".into(), PropType::Time),
+        ]),
         ("member".into(), vec![
             ("space".into(), PropType::Eid("space".into())),
             ("person".into(), PropType::Eid("person".into())),
@@ -664,7 +676,7 @@ pub(crate) fn baked() -> Vocab {
         ("email".into(), "A".into()),
         ("memory".into(), "M".into()),
     ]);
-    let kind_order = vec!["design".into(), "goal".into(), "task".into(), "project".into(), "layout".into(), "board".into(), "canvas".into(), "web".into(), "card".into(), "pane".into(), "client".into(), "camera".into(), "fold".into(), "cursor".into(), "role".into(), "session".into(), "entry".into(), "runner".into(), "claim".into(), "subscription".into(), "stop_request".into(), "knock".into(), "wake".into(), "dream".into(), "mail".into(), "hook".into(), "conflict".into(), "redaction".into(), "review".into(), "notice".into(), "commit".into(), "comment".into(), "memory".into(), "person".into(), "persona".into(), "model".into(), "edge".into(), "attachment".into(), "doc".into(), "email".into(), "alias".into(), "space".into(), "app".into(), "member".into(), "signin".into()];
+    let kind_order = vec!["design".into(), "goal".into(), "task".into(), "project".into(), "layout".into(), "board".into(), "canvas".into(), "web".into(), "card".into(), "pane".into(), "client".into(), "camera".into(), "fold".into(), "cursor".into(), "role".into(), "session".into(), "entry".into(), "runner".into(), "claim".into(), "subscription".into(), "stop_request".into(), "knock".into(), "wake".into(), "dream".into(), "mail".into(), "hook".into(), "conflict".into(), "redaction".into(), "review".into(), "notice".into(), "commit".into(), "comment".into(), "memory".into(), "person".into(), "persona".into(), "model".into(), "edge".into(), "attachment".into(), "doc".into(), "email".into(), "alias".into(), "space".into(), "plan".into(), "app".into(), "member".into(), "signin".into()];
     let statuses = vec!["open".into(), "wip".into(), "done".into(), "cancelled".into()];
     let renames = vec![
         ("view:Debug.ListItem".into(), "Debug.Tile".into()),

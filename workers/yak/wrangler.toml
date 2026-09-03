@@ -29,6 +29,18 @@ routes = [
 [dev]
 host = "127.0.0.1"
 
+# The meter (usage.ts, T-32757): every hour, on the hour, the Worker reads the
+# month so far out of Cloudflare's analytics and writes what each app and each
+# space spent. A sweep with no CF_ANALYTICS_TOKEN logs one line and does
+# nothing, so this trigger is safe to deploy before the secret exists.
+[triggers]
+crons = ["0 * * * *"]
+
+# The account whose analytics the meter reads — the same tag as `account_id`
+# above, which the runtime is never handed. Not a secret: it is in this file.
+[vars]
+CF_ACCOUNT = "0f9613dfd3f0451df0bd0f12a1372ea3"
+
 # The apex's static files: the home page, the store client an app's pages
 # import (served back to them at <space>.yaks.app/<app>/api/client.js), and
 # the guide the MCP door offers as its one resource. run_worker_first: the
@@ -77,3 +89,5 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # the tests pass them. Unset, no session verifies and no letter sends.
 # MAIL_DEV=1 is the local override: a letter becomes an entity in the meta
 # store instead of going out. Never set it on a deploy.
+# CF_ANALYTICS_TOKEN is the meter's read-only Cloudflare API token (Account
+# Analytics Read, T-32759); unset, the hourly sweep meters nothing.

@@ -11,6 +11,9 @@
 // failure goes unseen (D-32318 §Errors, V-32361). A door's deliberate no is
 // not a failure and files nothing (unseen.ts `refusal`).
 //
+// `scheduled` is the second entry point, and the only one no request reaches:
+// the hourly meter (usage.ts).
+//
 // The route table:
 //   yaks.app (and any dev host)
 //     /                       the home page, from ./public
@@ -37,6 +40,7 @@ import { lost, oops } from './pages.ts'
 import { hostOf, type Route, route } from './route.ts'
 import { storeOf } from './store.ts'
 import { noted, refusal } from './unseen.ts'
+import { metered } from './usage.ts'
 
 export { Store } from './store.ts'
 export { Wire } from './stream.ts'
@@ -97,6 +101,22 @@ export default {
         console.error('yak: could not report', why, 'after', e)
       )
       return oops()
+    }
+  },
+
+  // The hour striking (wrangler.toml `[triggers] crons`): the meter reads
+  // what every app and space spent this month (usage.ts). A sweep that falls
+  // over is written where every other break is — the meta store — rather than
+  // lost on a log nobody opens.
+  async scheduled(_event: unknown, env: Env): Promise<void> {
+    try {
+      await metered(env)
+    } catch (e) {
+      await noted(storeOf(env.STORE, META_STORE), {
+        request: 'cron meter',
+        message: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack ?? '' : '',
+      }).catch((why) => console.error('yak: could not report', why, 'after', e))
     }
   },
 }

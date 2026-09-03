@@ -8,6 +8,13 @@
         "open",
         "private"
       ]
+    },
+    "planTiers": {
+      "rank": 161,
+      "values": [
+        "free",
+        "plus"
+      ]
     }
   },
   "comps": {
@@ -64,6 +71,27 @@
           "unique": true
         }
       ]
+    },
+    "meter": {
+      "rank": 1036,
+      "cols": {
+        "month": "text",
+        "requests": "number",
+        "rows_read": "number",
+        "rows_written": "number",
+        "bytes": "number",
+        "emails": "number",
+        "at": "time"
+      }
+    },
+    "plan": {
+      "rank": 1035,
+      "kind_rank": 395,
+      "cols": {
+        "tier": {
+          "enum": "planTiers"
+        }
+      }
     },
     "signin": {
       "rank": 1050,

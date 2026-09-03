@@ -76,7 +76,13 @@ type Sock = WebSocket & {
 type Ctx = {
   // `deleteAll` is the ONE way to empty an object: dropping the tables leaves
   // metadata behind, and an object whose storage is empty ceases to exist.
-  storage: DoStorage & { deleteAll(): Promise<void> }
+  // `databaseSize` is how many bytes this object holds — the only per-app
+  // storage figure that exists, since Cloudflare's storage dataset has no
+  // per-object dimension, so the usage sweep reads it through /graph.
+  storage: DoStorage & {
+    deleteAll(): Promise<void>
+    sql: { databaseSize: number }
+  }
   acceptWebSocket(ws: WebSocket): void
   getWebSockets(): Sock[]
 }
@@ -451,6 +457,10 @@ export class Store {
         db: `do:${this.name}`,
         epoch: epochOf(db),
         pid: 0,
+        // What this store weighs, right now. The hourly sweep reads it for
+        // the app's meter, and the byte ceiling reads it again when a space
+        // is close enough that an hour of writes could matter (usage.ts).
+        bytes: this.ctx.storage.sql.databaseSize,
       })
     }
     // The app's own vocabulary: the manifest app_deploy read out of the app's

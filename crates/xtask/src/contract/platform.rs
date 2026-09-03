@@ -79,3 +79,45 @@ struct Signin {
     #[stamped]
     tries: Number,
 }
+
+// What a space pays (D-32751): `free` is every space today — 5 apps, 50,000
+// app requests a month, 1 GB of data, 100 emails — and `plus` is the $5 tier
+// waiting on Stripe. Absent means free, so a space born before the word is on
+// the terms it always had.
+venum!("platform", "planTiers", 161, ["free", "plus"]);
+
+// What a space pays, and nothing else: one row on the space, so the tier is a
+// fact about the tenant rather than a column on every app in it. The platform
+// writes it — the usage sweep today, Stripe later — never the person whose
+// bill it is.
+#[derive(Comp)]
+#[comp(plugin = "platform", rank = 1035, kind_rank = 395)]
+struct Plan {
+    #[col(sel = "planTiers")]
+    tier: Sel,
+}
+
+// A calendar month's consumption, as Cloudflare measured it (D-32751 §Billing
+// and metering, T-32757) — the meter reading the hourly sweep takes. It rides
+// TWO entities and says the same thing on both: on an app, what that app's
+// store did; on its space, the whole tenant's — every app summed, plus the
+// letters the space sent, which are counted at the send door and appear in no
+// app's store at all. `meter` and not `usage`, which a session's token count
+// already spells (sessions.rs).
+//
+// `month` is `YYYY-MM` and is the row's own reset: a sweep that finds a month
+// behind starts the counters over rather than keeping a running total nobody
+// asked for. `bytes` is what the store itself reports (its SQLite size), not
+// an analytics figure — Cloudflare's storage dataset has no per-object
+// dimension. `at` is when the sweep last read.
+#[derive(Comp)]
+#[comp(plugin = "platform", rank = 1036)]
+struct Meter {
+    month: Text,
+    requests: Number,
+    rows_read: Number,
+    rows_written: Number,
+    bytes: Number,
+    emails: Number,
+    at: Time,
+}

@@ -928,6 +928,20 @@ pub static SCHEMA: &[SchemaOp] = &[
     "person" integer references entity(id),
     "role" text
   );"#),
+    SchemaOp::Exec(r#"create table if not exists "plan" (
+    entity integer primary key references entity(id),
+    "tier" text
+  );"#),
+    SchemaOp::Exec(r#"create table if not exists "meter" (
+    entity integer primary key references entity(id),
+    "month" text,
+    "requests" real,
+    "rows_read" real,
+    "rows_written" real,
+    "bytes" real,
+    "emails" real,
+    "at" text
+  );"#),
     SchemaOp::Exec(r#"create table if not exists "signin" (
     entity integer primary key references entity(id),
     "email" text,
@@ -1082,6 +1096,14 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "member", col: "space", sql: r#"alter table member add column "space" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "member", col: "person", sql: r#"alter table member add column "person" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "member", col: "role", sql: r#"alter table member add column "role" text"# },
+    SchemaOp::AddColumn { table: "plan", col: "tier", sql: r#"alter table plan add column "tier" text"# },
+    SchemaOp::AddColumn { table: "meter", col: "month", sql: r#"alter table meter add column "month" text"# },
+    SchemaOp::AddColumn { table: "meter", col: "requests", sql: r#"alter table meter add column "requests" real"# },
+    SchemaOp::AddColumn { table: "meter", col: "rows_read", sql: r#"alter table meter add column "rows_read" real"# },
+    SchemaOp::AddColumn { table: "meter", col: "rows_written", sql: r#"alter table meter add column "rows_written" real"# },
+    SchemaOp::AddColumn { table: "meter", col: "bytes", sql: r#"alter table meter add column "bytes" real"# },
+    SchemaOp::AddColumn { table: "meter", col: "emails", sql: r#"alter table meter add column "emails" real"# },
+    SchemaOp::AddColumn { table: "meter", col: "at", sql: r#"alter table meter add column "at" text"# },
     SchemaOp::AddColumn { table: "signin", col: "email", sql: r#"alter table signin add column "email" text"# },
     SchemaOp::AddColumn { table: "signin", col: "code", sql: r#"alter table signin add column "code" text"# },
     SchemaOp::AddColumn { table: "signin", col: "expires", sql: r#"alter table signin add column "expires" text"# },

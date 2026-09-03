@@ -34,11 +34,29 @@ export let META = { space: 'yak', app: 'platform' }
 // the platform's own and never move, so the name is a constant.
 export let META_STORE = `${META.space}/${META.app}`
 
+// What a space or an app spent this calendar month (platform.rs `Meter`,
+// usage.ts writes it): on an app its own store's, on a space every app of it
+// summed plus the letters it sent. Null where nothing has been metered yet.
+export type Meter = {
+  month: string
+  requests: number
+  rows_read: number
+  rows_written: number
+  bytes: number
+  emails: number
+  at: string
+}
+export type Tier = 'free' | 'plus'
+
 export type Space = {
   eid: string
   slug: string
   home: string | null
   title: string
+  // What this space pays (D-32751). Null for a space the sweep has not
+  // reached yet, which means free — the terms every space is on today.
+  tier: Tier | null
+  meter: Meter | null
 }
 export type App = {
   eid: string
@@ -58,6 +76,9 @@ export type App = {
   // then each one a rename left behind. They resolve like ids (types.ts
   // slugsOf), which is how an old link still finds the app it was made for.
   slugs: string[]
+  // What this app's own store spent this month, as the hourly sweep last read
+  // it (usage.ts). Null until it has been metered once.
+  meter: Meter | null
 }
 export type Role = 'owner' | 'editor' | 'viewer'
 export type Access = 'public' | 'open' | 'private'
@@ -82,7 +103,24 @@ type Row = {
   email?: { address: string }
   alias?: { slug: string; slugs?: string | null }
   doc?: { title?: string }
+  plan?: { tier?: Tier | null }
+  meter?: Partial<Meter>
 }
+
+// The meter as a whole number, however little of the row is written: a column
+// nobody has filled reads zero, so nothing downstream tests for null twice.
+let meterOf = (r: Row): Meter | null =>
+  r.meter
+    ? {
+      month: r.meter.month ?? '',
+      requests: r.meter.requests ?? 0,
+      rows_read: r.meter.rows_read ?? 0,
+      rows_written: r.meter.rows_written ?? 0,
+      bytes: r.meter.bytes ?? 0,
+      emails: r.meter.emails ?? 0,
+      at: r.meter.at ?? '',
+    }
+    : null
 
 // A person's address as a hostname label: the local part, lowercased, with
 // anything that is not a slug character folded to a dash. `jeff@yak.sh`
@@ -162,15 +200,34 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   })
 }
 
+// A write the kernel makes ABOUT the directory rather than for a person: the
+// hourly meter and the plan a space is on (usage.ts), which are the
+// platform's word and never a person's. It goes straight at the meta store
+// carrying the kernel flag — `fetch` above forwards only what vouches for a
+// person, so that flag can never arrive from outside — and empties the cache,
+// because what it just changed is what the next read answers.
+export let stamp = async (env: Env, mutation: Mutation) => {
+  let r = await storeOf(env.STORE, META_STORE)('/apply', {
+    method: 'POST',
+    body: JSON.stringify(mutation),
+  }, { 'x-yak-kernel': '1' })
+  if (!r.ok) throw new Error(`directory: ${await r.text()}`)
+  await r.body?.cancel()
+  cache.clear()
+}
+
 // A listing carries the components the filter NAMES (workers/yak/query.ts),
-// so every read here asks for what it reads: a space and its title, an app
-// with its title and the alias its store is named by. `id=` names no
-// component and answers the whole bundle, which is why those are bare.
+// so every read here asks for what it reads: a space with its title, plan and
+// meter, an app with its title, the alias its store is named by, and its
+// meter. `id=` names no component and answers the whole bundle, which is why
+// those are bare.
 let spaceOf = (r: Row): Space => ({
   eid: r.entity.eid,
   slug: r.space!.slug,
   home: r.space!.home == null ? null : idOf(r.space!.home),
   title: r.doc?.title || r.space!.slug,
+  tier: r.plan?.tier ?? null,
+  meter: meterOf(r),
 })
 
 export let appOf = (r: Row): App => ({
@@ -182,6 +239,7 @@ export let appOf = (r: Row): App => ({
   title: r.doc?.title || r.app!.slug,
   store: r.alias?.slug ?? null,
   slugs: slugsOf(r.alias),
+  meter: meterOf(r),
 })
 
 // A Durable Object cannot be renamed, so an app's store must not be named by
@@ -226,12 +284,12 @@ export let directory = (via: Fetcher) => {
       return r.json()
     },
     space: async (slug: string) => {
-      let row = await one(`.space.slug=${slug}&.doc?`)
+      let row = await one(`.space.slug=${slug}&.doc?&.plan?&.meter?`)
       return row ? spaceOf(row) : null
     },
     app: async (space: Space, slug: string) => {
       let row = await one(
-        `.app.space=${space.eid}&.app.slug=${slug}&.doc?&.alias?`,
+        `.app.space=${space.eid}&.app.slug=${slug}&.doc?&.alias?&.meter?`,
       )
       return row ? appOf(row) : null
     },
@@ -247,7 +305,11 @@ export let directory = (via: Fetcher) => {
     },
     // Every app in a space, oldest first — the order they were made.
     apps: async (space: Space): Promise<App[]> =>
-      (await query(`.app.space=${space.eid}&.doc?&.alias?`)).map(appOf),
+      (await query(`.app.space=${space.eid}&.doc?&.alias?&.meter?`)).map(appOf),
+    // Every space there is. Only the meter asks this (usage.ts): a tool
+    // always works in one space, and a person only ever sees their own.
+    all: async (): Promise<Space[]> =>
+      (await query('.space!&.doc?&.plan?&.meter?')).map(spaceOf),
     // The app that answers the space's bare hostname, if it has one.
     home: async (space: Space) => {
       let row = space.home ? await one(`id=${space.home}`) : undefined

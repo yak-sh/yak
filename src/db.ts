@@ -1050,6 +1050,10 @@ export let derived = [
   'space',
   'app',
   'member',
+  // What a space pays and what it spent (D-32751): a tier word, and the
+  // meter's month of nullable counts — no FK, no NOT NULL, so both derive.
+  'plan',
+  'meter',
   // A sign-in in flight: four stamped nullable columns, no FK, so it derives.
   'signin',
   'deliver',

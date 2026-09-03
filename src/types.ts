@@ -53,6 +53,7 @@ export let grades = ['frontier', 'mid', 'small'] as const
 export let noticeKinds = ['lapse', 'sweep', 'scene', 'wake'] as const
 export let effectStates = ['pending', 'leased', 'delivered', 'failed'] as const
 export let appAccess = ['public', 'open', 'private'] as const
+export let planTiers = ['free', 'plus'] as const
 
 // The graph-native Session-log vocabulary (comps marked log = true).
 export let sessionComps: Record<string, Record<string, PropType>> = {
@@ -554,6 +555,18 @@ export let comps: Record<string, Record<string, PropType>> = {
     version: 'number',
     access: { enum: appAccess },
   },
+  plan: {
+    tier: { enum: planTiers },
+  },
+  meter: {
+    month: 'text',
+    requests: 'number',
+    rows_read: 'number',
+    rows_written: 'number',
+    bytes: 'number',
+    emails: 'number',
+    at: 'time',
+  },
   member: {
     space: { eid: 'space', death: 'cascade' },
     person: { eid: 'person', death: 'cascade' },
@@ -869,6 +882,7 @@ export let kindOrder = [
   'email',
   'alias',
   'space',
+  'plan',
   'app',
   'member',
   'signin',
