@@ -77,7 +77,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     // Signing in IS having a space (T-32482): one named for their address,
     // with them as its owner, so nothing ever asks them for a name.
     let [them] = await dir.query(
-      `.person!&.email.address=${encodeURIComponent(email)}`,
+      `.person!&.email.address=${encodeURIComponent(email)}&.doc?`,
     )
     // And the name they gave is what they are called — asked once, so the
     // next sign-in only wants the code (T-32654).
@@ -99,7 +99,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assertEquals(quietly.status, 303)
     await quietly.body?.cancel()
     let [nameless] = await dir.query(
-      `.person!&.email.address=${encodeURIComponent(quiet)}`,
+      `.person!&.email.address=${encodeURIComponent(quiet)}&.doc?`,
     )
     assertEquals(
       (nameless.doc as { title: string }).title,
@@ -158,9 +158,11 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     let [owner] = await dir.query(
       `.member.person=${me}&.member.space=${yak.entity.eid}`,
     )
+    // The person a member row names answers with their name beside the eid
+    // (T-32733); the space it names is not a person, so it stays an eid.
     assertEquals(owner.member, {
       space: yak.entity.eid,
-      person: me,
+      person: { eid: me, name: 'Dana' },
       role: 'owner',
     })
 

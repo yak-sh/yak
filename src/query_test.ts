@@ -36,6 +36,7 @@ import {
   sunk,
   tally,
   type Walk,
+  WANT,
   warm as rank, // the test file's own `warm` fixture predates the export
 } from './query.ts'
 import { instant, span } from './time.ts'
@@ -1670,4 +1671,27 @@ Deno.test('a blob row answers only a filter that names one — `image` names one
     screened(parseQuery('.doc!'), false).some((p) => p.comp == 'blob'),
     true,
   )
+})
+
+// `.comp?` — a component ASKED FOR beside the filter, never filtered on: it
+// selects nothing, screens nothing, and names the component a door projects
+// (workers/yak/query.ts).
+Deno.test('query: a trailing question asks for a component, never about it', () => {
+  let fix = row({})
+  let idea = row({}, { proposed: { at: '2026-08-01T00:00:00.000Z' } })
+  assertEquals(parseQuery('.proposed?'), [
+    { comp: 'proposed', prop: '', op: WANT, value: '' },
+  ])
+  // Every row a filter selects still matches when a request rides along.
+  for (let r of [fix, idea]) {
+    assertEquals(matchQuery(r, parseQuery('.doc!&.proposed?')), true)
+  }
+  // And it is the component that is asked for, whole — not a column, and
+  // never a value.
+  assertThrows(
+    () => parseQuery('.doc.title?'),
+    Error,
+    'asks for a whole component',
+  )
+  assertThrows(() => parseQuery('.nope?'), Error, 'asks for a whole component')
 })

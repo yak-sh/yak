@@ -86,6 +86,7 @@ import {
   tally,
   TEXT,
   type Walk,
+  WANT,
   warm,
   type Win,
   WINDOW,
@@ -119,7 +120,7 @@ export { personaGraph, projectionGraph } from './persona_graph.ts'
 // DELIVERY beside the answer, it never narrows one, so a query wearing only
 // riders has said nothing about membership and the index has nothing to offer.
 let narrows = (preds: Pred[]) =>
-  preds.some((p) => p.op != ORDER && p.op != EDGES)
+  preds.some((p) => p.op != ORDER && p.op != EDGES && p.op != WANT)
 
 // A traversal accessor bound to a db, memoised for ONE evaluation pass: the
 // closure `.reaches[requires,<=3]=T-42` names is the same for every candidate
@@ -582,7 +583,7 @@ let workInputs = (db: Sql, q: string) => {
   if (
     preds.some((p) =>
       p.rev || p.refs || p.reach ||
-      [AGG, EDGES, ORDER, PROJECT, REACHES, TEXT, WINDOW].includes(p.op)
+      [AGG, EDGES, ORDER, PROJECT, REACHES, TEXT, WANT, WINDOW].includes(p.op)
     )
   ) {
     throw new Error(

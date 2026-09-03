@@ -116,8 +116,10 @@ slow('the served client: a page saves, lists and watches', async () => {
     // probe can only put there at the wire (probe.ts relay).
     let wire = relay(k, 'jeff.yaks.app', cookie)
     let seen: Row[][] = []
+    // The subscription asks for the title beside the status: a listing
+    // carries the components its filter names, live door included.
     let stop = mod.store(`${wire.origin}/recipes/api/`)
-      .subscribe('.task.status=open', (rows: Row[]) => seen.push(rows))
+      .subscribe('.task.status=open&.doc?', (rows: Row[]) => seen.push(rows))
     try {
       await until(() => seen.length == 1, { timeout: 15_000 })
       assertEquals(titles(seen[0]), ['Lemon cake'])
@@ -137,7 +139,7 @@ slow('the served client: a page saves, lists and watches', async () => {
         task: { status: 'open' },
       })
       await until(() => seen.length == 3, { timeout: 15_000 })
-      assertEquals(seen[2], await store.query('.task.status=open'))
+      assertEquals(seen[2], await store.query('.task.status=open&.doc?'))
       let fig = seen[2].find((r) => r.doc.title == 'Fig tart')!
       assertEquals(fig.doc.body, 'six figs, honey')
       assertEquals(fig.kind, 'task')
@@ -178,9 +180,9 @@ slow('the served client: a page saves, lists and watches', async () => {
       entity: { eid: entry.entity.eid },
       task: { assignee: entry.created.by },
     })
-    let [reread] = await store.query('.doc.title~=Fig&.created!')
+    let [reread] = await store.query('.doc.title~=Fig&.created!&.task?')
     assertEquals(reread.task.assignee, entry.created.by)
-    let people = await store.query('.person!')
+    let people = await store.query('.person!&.doc?')
     assertEquals(people.map((p: Row) => p.doc.title), [them.name])
     // Their address stays in the directory: an app's store learns a name and
     // never an address book, so a `public` app answering `.person!` to a

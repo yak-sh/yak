@@ -132,7 +132,7 @@ type Person = { entity: { eid: string }; doc?: { title?: string } }
 let personAt = async (store: Door, email: string) =>
   (await ask(
     store,
-    `.person!&.email.address=${encodeURIComponent(canon(email))}`,
+    `.person!&.email.address=${encodeURIComponent(canon(email))}&.doc?`,
   ))[0] as Person | undefined
 
 // An address is not a name. A person minted before anyone was asked wears

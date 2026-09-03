@@ -249,7 +249,9 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     // carries the rows a person saved and no bookkeeping, at this door and at
     // the tools' alike (listing.ts, C-32574 item 5).
     let [mine] = await owner.get('.doc!&.created!')
-    assertEquals((mine.created as { by: string }).by, jeff)
+    // A reference to a person answers `{eid, name}` (T-32733), so the byline
+    // is on the row and the eid is still what a write takes.
+    assertEquals((mine.created as { by: { eid: string } }).by.eid, jeff)
     assertEquals((await owner.get('.doc!'))[0].created, undefined)
     assertEquals(
       ((await owner.get('.person!'))[0].entity as { eid: string }).eid,
@@ -397,7 +399,7 @@ slow('an app says who may read it and who may write it', async () => {
     // And the name the invitation gave is hers until she says otherwise, so
     // an app she writes in names her (T-32654).
     let [named] = await meta(k, cookie).query(
-      '.person!&.email.address=maya@example.com',
+      '.person!&.email.address=maya@example.com&.doc?',
     )
     assertEquals((named.doc as { title: string }).title, 'Maya')
     // An app the space does not have is a refusal, not a link to nothing.

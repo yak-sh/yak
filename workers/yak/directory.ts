@@ -155,6 +155,10 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   })
 }
 
+// A listing carries the components the filter NAMES (workers/yak/query.ts),
+// so every read here asks for what it reads: a space and its title, an app
+// with its title and the alias its store is named by. `id=` names no
+// component and answers the whole bundle, which is why those are bare.
 let spaceOf = (r: Row): Space => ({
   eid: r.entity.eid,
   slug: r.space!.slug,
@@ -215,11 +219,13 @@ export let directory = (via: Fetcher) => {
       return r.json()
     },
     space: async (slug: string) => {
-      let row = await one(`.space.slug=${slug}`)
+      let row = await one(`.space.slug=${slug}&.doc?`)
       return row ? spaceOf(row) : null
     },
     app: async (space: Space, slug: string) => {
-      let row = await one(`.app.space=${space.eid}&.app.slug=${slug}`)
+      let row = await one(
+        `.app.space=${space.eid}&.app.slug=${slug}&.doc?&.alias?`,
+      )
       return row ? appOf(row) : null
     },
     // An address the app has LEFT, still pointing at it. A rename moves
@@ -234,7 +240,7 @@ export let directory = (via: Fetcher) => {
     },
     // Every app in a space, oldest first — the order they were made.
     apps: async (space: Space): Promise<App[]> =>
-      (await query(`.app.space=${space.eid}`)).map(appOf),
+      (await query(`.app.space=${space.eid}&.doc?&.alias?`)).map(appOf),
     // The app that answers the space's bare hostname, if it has one.
     home: async (space: Space) => {
       let row = space.home ? await one(`id=${space.home}`) : undefined

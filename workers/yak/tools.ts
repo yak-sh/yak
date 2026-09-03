@@ -1102,19 +1102,22 @@ export let TOOLS: Tool[] = [
       "component it wears: '.doc!' is every entity with a title (an empty " +
       "query selects nothing, so a bare 'limit=50' answers []). Then " +
       "'.doc.title~=cake' contains, '.task.status=open' equals, '.archived=' " +
-      "is absent, 'id=<eid>' fetches one, 'limit=20' and 'after=<num>' page " +
+      "is absent, '.loan?' asks for a component without filtering on it, " +
+      "'id=<eid>' fetches one, 'limit=20' and 'after=<num>' page " +
       "(a windowed read answers the newest), '.count!' counts, and a bare " +
       "word is a full-text term. '&' joins filters, so '.doc!&.created!' is " +
       'your rows with the stamps saying who saved each and when — a listing ' +
       "leaves those out, and the platform's own error rows, unless named. " +
-      'Answers entity JSON, {kind, entity: {eid, ' +
-      'num}, ...components} — the same filter line the page passes to ' +
-      'query() from ./api/client.js. Name an app to read that one; LEAVE app ' +
-      'OUT to read every app at once — an entity spans apps, so each answer ' +
-      'is one bundle carrying every component any of their stores holds, and ' +
-      "a filter naming two apps' words ('.recipe!&.loan!') answers the " +
-      'entities wearing both. A bundle composed from two apps says which app ' +
-      'holds which component in `_stores`.',
+      'Answers entity JSON, {kind, entity: {eid, num}, ...components} — and ' +
+      'only the components the filter NAMES, so ask for what you want; ' +
+      "'*' answers every component, for looking rather than reading. The " +
+      'same filter line the page passes to query() from ./api/client.js. ' +
+      'Name an app to read that one; LEAVE app OUT to read every app at ' +
+      'once — an entity spans apps, so one bundle can carry components from ' +
+      "several: '.recipe!&.loan!' answers the entities wearing both, " +
+      "'.recipe!&.loan?' answers every recipe with its loan where it has " +
+      'one, and a bundle composed from two apps says which app holds which ' +
+      'component in `_stores`.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP, filter: str('the filter line') },

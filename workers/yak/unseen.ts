@@ -197,7 +197,11 @@ export let openIn = async (
   let seen = all ? '' : '&.notified='
   let hits: Hit[] = []
   for (let facet of ['exception', 'error']) {
-    let r = await store(`/query?.${facet}!&.archived=${seen}`, {}, vouched(who))
+    let r = await store(
+      `/query?.${facet}!&.doc?&.archived=${seen}`,
+      {},
+      vouched(who),
+    )
     if (!r.ok) throw new Error(`${app.slug}: ${await r.text()}`)
     hits.push(...await r.json() as Hit[])
   }

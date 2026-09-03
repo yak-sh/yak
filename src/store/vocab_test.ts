@@ -189,8 +189,10 @@ Deno.test('a store lists its own word in creation order', async () => {
   let listed = async (q: string) =>
     ((await query(db, q)) as { doc: { title: string } }[])
       .map((r) => r.doc.title)
-  assertEquals(await listed('?.recipe!'), titles)
+  // A listing carries the components its filter NAMES, so a recipe listing
+  // that wants the title asks for it (workers/yak/query.ts).
+  assertEquals(await listed('?.recipe!&.doc?'), titles)
   assertEquals(await listed('?.doc!'), titles)
   // A window is the NEWEST page of that same order.
-  assertEquals(await listed('?.recipe!&limit=2'), titles.slice(-2))
+  assertEquals(await listed('?.recipe!&.doc?&limit=2'), titles.slice(-2))
 })

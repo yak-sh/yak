@@ -1263,9 +1263,21 @@ slow('a read with no app composes every app the caller can reach', async () => {
       (await rows('.recipe!&.loan!')).map((r) => r.entity.eid),
       [cake],
     )
+    // An answer carries the components the filter NAMES and no more, so the
+    // title is asked for beside the recipe.
     assertEquals(
-      (await rows('.recipe!')).map((r) => r.doc!.title),
+      (await rows('.recipe!&.doc?')).map((r) => r.doc!.title),
       ['Lemon cake', 'Pancakes'],
+    )
+    assertEquals((await rows('.recipe!')).map((r) => r.doc), [
+      undefined,
+      undefined,
+    ])
+    // `.recipe!&.loan?` is the composition asked for by name: every recipe,
+    // wearing the lending app's loan where it has one.
+    assertEquals(
+      (await rows('.recipe!&.loan?')).map((r) => r.loan?.to),
+      ['Maya', undefined],
     )
     // `.doc!` is a platform word both stores speak, so the answer is both
     // apps' rows — and the cake is one row, not two.
@@ -1273,6 +1285,10 @@ slow('a read with no app composes every app the caller can reach', async () => {
       (await rows('.doc!')).map((r) => r.doc!.title),
       ['Lemon cake', 'Pancakes', 'Lemon zester'],
     )
+    // `*` is the debugging form: every component, wherever it lives.
+    let [whole] = await rows(`.doc.title~=Lemon cake&*`)
+    assertEquals(whole.recipe!.serves, 4)
+    assertEquals(whole.loan!.to, 'Maya')
     // A word nobody planted is nobody's, and the store's own sentence says so
     // rather than an empty answer.
     await assertRejects(

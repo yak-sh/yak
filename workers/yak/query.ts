@@ -13,7 +13,7 @@
 // now, and a fix to any arm is a fix to every store.
 import type { Sql } from '../../src/store/sql.ts'
 import { isPerson, locate, rowsOf, titleOf, vocabOf } from '../../src/db.ts'
-import { orderOf, parseQuery, resolveRefs } from '../../src/query.ts'
+import { orderOf, parseQuery, type Pred, resolveRefs } from '../../src/query.ts'
 import {
   askOf,
   askRows,
@@ -51,9 +51,48 @@ let people = (db: Sql) => (eids: string[]) => {
 let speaking = (db: Sql, rows: Row[]): Row[] =>
   named(rows, refs(db), people(db))
 
+// What a listing CARRIES, beside what it selects (Jeff, 2026-09-03): "we
+// should query for the exact components we want: `.book!&.recipe?` = must be
+// book, recipe is optional but requested. asking for all comps is i imagine
+// most useful for debugging". So an answer carries the components the filter
+// NAMES — by presence (`.book!`), by request (`.loan?`, query.ts WANT), or by
+// a predicate of its own — and nothing else; `*` is the debugging form that
+// asks for every component, and a filter that names none (an `id=` fetch)
+// left nothing out, so it answers the whole bundle. A component asserted
+// ABSENT (`.archived=`) names no component the answer could carry, which is
+// also what keeps the door's own platform screens (listing.ts `asking`) from
+// counting as a request.
+export let EVERY = '*'
+
+let wanted = (segs: string[], preds: Pred[]): Set<string> | null => {
+  if (segs.includes(EVERY)) return null
+  let want = new Set(
+    preds.filter((p) =>
+      p.comp && !(p.prop == '' && p.op == '' && p.value == '')
+    ).map((p) => p.comp),
+  )
+  return want.size ? want : null
+}
+
+// The rows, cut to what was asked for. The spine and the kind NAME a row, and
+// a text query's `rank` is the answer's own metadata about it, so those three
+// ride whatever the filter said.
+let only = (rows: unknown, want: Set<string> | null) =>
+  !want || !Array.isArray(rows)
+    ? rows
+    : (rows as Row[]).map((r) =>
+      Object.fromEntries(
+        Object.entries(r).filter(([k]) =>
+          k == 'entity' || k == 'kind' || k == 'rank' || want.has(k)
+        ),
+      )
+    )
+
 export let query = async (db: Sql, search: string): Promise<unknown> => {
   let segs = search.slice(1).split('&').filter(Boolean).map(decodeURIComponent)
-  let ask = askOf(segs)
+  // `*` is the listing's word, not the grammar's — a bare word would be an
+  // FTS term — so it never reaches the parser.
+  let ask = askOf(segs.filter((seg) => seg != EVERY))
   if (ask.work) throw new Error('work lanes are not served by this store')
   let q = ask.filters.join('&')
   // The refusal is this store's, not the door's: askRows would decline a
@@ -73,27 +112,36 @@ export let query = async (db: Sql, search: string): Promise<unknown> => {
       tally: Object.fromEntries(keys.map((k) => [k, agg.values.get(k)])),
     }
   }
-  return speaking(db, layered(db, await askRows(db, ask), ask) as Row[])
+  return speaking(
+    db,
+    only(
+      layered(db, await askRows(db, ask), ask),
+      wanted(segs, asked),
+    ) as Row[],
+  )
 }
 
 // The rows a filter line answers for a KNOWN set of eids — the `id=` arm of
 // askRows without the re-screen, since a subscription's membership already
 // answered the filter. One statement per component table (rowsOf), then the
 // door's own projection.
-let rowsAt = (db: Sql, eids: string[], asked: string): Row[] =>
-  eids.length
-    ? speaking(
-      db,
-      listed(
-        layered(
-          db,
-          rowsOf(db, eids).map(rowed),
-          askOf(asked.split('&').filter(Boolean)),
-        ) as Row[],
-        asked,
-      ),
-    )
-    : []
+let rowsAt = (db: Sql, eids: string[], asked: string): Row[] => {
+  if (!eids.length) return []
+  let segs = asked.split('&').filter(Boolean)
+  let ask = askOf(segs.filter((seg) => seg != EVERY))
+  let q = ask.filters.join('&')
+  // A subscription's line was already accepted once; if it no longer parses,
+  // the frame still ships, whole.
+  let want: Set<string> | null = null
+  try {
+    want = wanted(segs, q.trim() ? parseQuery(q) : [])
+  } catch { /* the whole bundle, then */ }
+  let rows = listed(
+    layered(db, rowsOf(db, eids).map(rowed), ask) as Row[],
+    asked,
+  )
+  return speaking(db, only(rows, want) as Row[])
+}
 
 // The live door's frames, answered by the SAME projection: a subscription is
 // "query that keeps answering" (public/client.js), so what it delivers must be

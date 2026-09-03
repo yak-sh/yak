@@ -107,8 +107,9 @@ question), never an address: an address stays with the platform, so a page can
 show a byline to anyone. Anything else stays the bare eid it always was, and a
 write still takes that eid — a row read and handed back means the eid it named.
 
-A person is a row here too, so `query('.person!')` lists everyone the store has
-met; they stay out of an ordinary listing, which answers what the page saved.
+A person is a row here too, so `query('.person!&.doc?')` lists everyone the
+store has met, by name; they stay out of an ordinary listing, which answers what
+the page saved.
 
 An `open` app takes writes from anyone with the link, and a guest who never
 signed in is nobody yet: their rows have no `created.by` to name. If a byline
@@ -386,7 +387,12 @@ The same grammar the platform speaks everywhere:
 - `.doc.title~=cake` contains, `.task.status=open` equals, and an empty value
   asks for absent: `.archived=` is everything not archived.
 - `.doc!` has the component at all.
-- `id=<eid>` fetches one by address.
+- `.loan?` ASKS for a component without filtering on it — an answer carries the
+  components its filter names, so `.book!&.loan?` is every book, wearing its
+  loan where it has one. `*` asks for every component, which is what you want
+  when you are looking rather than reading.
+- `id=<eid>` fetches one by address, whole — an address names no component to
+  leave out.
 - `limit=50`, `after=<num>` page — a windowed read answers the NEWEST that many,
   where a plain list is oldest first; `.count!` counts instead of listing.
 - Bare words are a full-text term, which is all `search` is.
@@ -396,6 +402,10 @@ The same grammar the platform speaks everywhere:
 - `.created!` asks for the platform's stamps — who saved a row and when. A
   listing leaves them out unless you name them, so what comes back is what you
   saved; `.recipe!&.created!` is your rows with their timestamps.
+
+A row comes back as the components you named, plus its address and its kind —
+`query('.recipe!')` answers recipes and no titles, and `query('.recipe!&.doc?')`
+answers both. Ask for what you will draw.
 
 Ask for the component you want, not for the absence of one: a long `body` is
 kept as its own content-addressed entity beside the doc, so a filter that

@@ -32,6 +32,7 @@ import {
   REACHES,
   refCols,
   TEXT,
+  WANT,
   type Win,
   WINDOW,
 } from './query.ts'
@@ -556,6 +557,7 @@ let one = (p: Pred, now: number): Sql | null => {
   if (p.op == PROJECT) return { sql: '1', params: [] } // fields; see select()
   if (p.op == WINDOW) return { sql: '1', params: [] } // a bound; see windowed()
   if (p.op == EDGES) return { sql: '1', params: [] } // a rider; see edgeRider()
+  if (p.op == WANT) return { sql: '1', params: [] } // a request; see the door
   if (p.op == REACHES) return reachSql(p)
   if (p.op == TEXT) return text(p.value)
   if (p.refs) return refsSql(p) // multi-column reverse-union: an eid IN union

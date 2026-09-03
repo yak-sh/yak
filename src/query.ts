@@ -471,6 +471,12 @@ export let route = (prop: string): { comp: string; prop: string } => {
 // One token — '.priority<=1', '.domain=Ops,Eng' — to a Pred; null if the
 // string isn't a dot-param at all.
 export let EXISTS = 'exists'
+// `.loan?` asks for a component WITHOUT filtering on it: an optional
+// presence, requested. It selects nothing and screens nothing — `.book!` says
+// which entities the answer is about, `.book!&.loan?` says the answer should
+// carry their loans too, where they have one. A door that projects reads it
+// (workers/yak/query.ts); every evaluator lets it through like a ranking.
+export let WANT = 'want'
 let OPS: Record<string, string> = {
   '=': '',
   '!': EXISTS,
@@ -793,7 +799,7 @@ let facet = (comp: string) => comp == 'doc' || !kindOrder.includes(comp)
 // is what makes it safe to add: a legitimate "none" is unchanged.
 export let resolution = (preds: Pred[], kind?: string) => {
   let crossed = preds.filter((p) =>
-    p.op != ORDER && p.op != NEAR && p.op != AGG && !p.refs &&
+    p.op != ORDER && p.op != NEAR && p.op != AGG && p.op != WANT && !p.refs &&
     p.comp && p.comp != kind && !facet(p.comp)
   )
   // The suggestion is composed through the routing table, so it can only
@@ -1030,7 +1036,7 @@ export let preds = (token: string): Pred[] | null => {
   let r = revHop(token)
   if (r) return [r]
   let m = token.match(
-    /^\.([A-Za-z_-]+(?:\.[A-Za-z_-]+)*)(!=|~=|<=|>=|<|>|=|!)(.*)$/s,
+    /^\.([A-Za-z_-]+(?:\.[A-Za-z_-]+)*)(!=|~=|<=|>=|<|>|=|!|\?)(.*)$/s,
   )
   if (!m) return null
   let [, path, op, value] = m
@@ -1182,6 +1188,17 @@ export let preds = (token: string): Pred[] | null => {
     let out = scopes[segs[0]](value)
     if (!out) throw new Error(`no such ${segs[0]}: ${value || '(empty)'}`)
     return out
+  }
+  // A trailing QUESTION asks for a component beside the filter, never about
+  // it: one component name, no value, and nothing narrows.
+  if (op == '?') {
+    if (segs.length != 1 || value || !routed(segs[0])) {
+      throw new Error(
+        `.${segs.join('.')}? asks for a whole component beside the filter: ` +
+          '.book!&.loan?',
+      )
+    }
+    return [{ comp: segs[0], prop: '', op: WANT, value: '' }]
   }
   let p: Pred
   // A trailing bang completes a component sentence. This must win over a
@@ -1564,7 +1581,7 @@ export let matchQuery = (
     if (p.op == NEVER) return false // the empty query: selects nothing
     if (
       p.op == ORDER || p.op == NEAR || p.op == AGG || p.op == PROJECT ||
-      p.op == EDGES
+      p.op == EDGES || p.op == WANT
     ) {
       return true
     }
@@ -1824,6 +1841,7 @@ let opsFor = (base: string): Cand[] => [
 let presenceOps = (base: string): Cand[] => [
   { text: base + '=', kind: 'absent' },
   { text: base + '!', kind: 'present' },
+  { text: base + '?', kind: 'wanted' },
   { text: base + '~=', kind: 'present' },
 ]
 

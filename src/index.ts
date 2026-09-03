@@ -14,7 +14,7 @@
 // moves to IDB, `anchor` swaps its lookup; the derivation and callers stay put.
 import { type Dep, type Idx, indexes } from './types.ts'
 import { isRef } from './props.ts'
-import { EXISTS, ORDER, type Pred, refCols, TEXT } from './query.ts'
+import { EXISTS, ORDER, type Pred, refCols, TEXT, WANT } from './query.ts'
 
 // A row as the index reads it — the merged-components shape both the live cache
 // and a client Row speak. Kept structural so index.ts carries no cycle back to
@@ -183,7 +183,7 @@ export let anchor = (ix: Index, preds: Pred[]): Set<string> | undefined => {
     if (s && (!best || s.size < best.size)) best = s
   }
   for (let p of preds) {
-    if (p.op == TEXT || p.op == ORDER) continue
+    if (p.op == TEXT || p.op == ORDER || p.op == WANT) continue
     if (p.rev) {
       // A reverse hop needing ≥1 child anchors on the parents that HAVE one —
       // the KEYS of the reverse map (a superset of the matching-child parents).

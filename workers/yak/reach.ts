@@ -13,12 +13,13 @@
 // are the answer. The grammar itself is untouched: every part is an ordinary
 // filter line, and a store that cannot speak one is simply silent about it.
 import { listed, type Row } from './listing.ts'
+import { EVERY } from './query.ts'
 import { type App, type Space, storeName } from './directory.ts'
 import type { Env } from './env.ts'
 import { vouched, type Who, writes } from './session.ts'
 import { storeOf } from './store.ts'
 import type { EntityLiteral } from '../../src/mutation.ts'
-import { kindOrder } from '../../src/types.ts'
+import { comps, kindOrder } from '../../src/types.ts'
 import type { Change } from '../../src/types.ts'
 
 // One store in reach: the app, the space it is in, and who the caller is
@@ -72,14 +73,21 @@ let limitOf = (line: string) =>
   undefined
 
 // A filter line cut into parts: the segments that name each component, and
-// the ones that ride with every part.
+// the ones that ride with every part. A part whose every segment is a REQUEST
+// (`.loan?`) narrows nothing — it asks for the component, so it is fetched
+// and never intersected.
 export let split = (line: string) => {
-  let parts = new Map<string, string[]>()
+  let parts = new Map<string, { segs: string[]; asks: boolean }>()
   let global: string[] = []
   for (let seg of segsOf(line)) {
     let key = partOf(seg)
     if (!key) global.push(seg)
-    else parts.set(key, [...(parts.get(key) ?? []), seg])
+    else {
+      let one = parts.get(key) ?? { segs: [], asks: true }
+      one.segs.push(seg)
+      one.asks &&= seg.endsWith('?')
+      parts.set(key, one)
+    }
   }
   return { parts, global }
 }
@@ -114,6 +122,20 @@ let asked = async (env: Env, reach: Reach[], line: string) => {
 // each store's best, then each store's second, which is the only ordering
 // both stores agree with. Everything else is store by store, each in its own
 // creation order.
+// The ranking a text query painted on its hits (graph_query's query-only
+// `rank`), kept off the CANDIDATE rows: the composing read addresses eids and
+// carries no text pred, so the snippet and the score would be lost between
+// the two halves of one search.
+let ranksIn = (heard: { at: string; rows: unknown }[]) => {
+  let ranks = new Map<string, unknown>()
+  for (let h of heard) {
+    for (let row of Array.isArray(h.rows) ? h.rows as Row[] : []) {
+      if (row.rank && !ranks.has(eidOf(row))) ranks.set(eidOf(row), row.rank)
+    }
+  }
+  return ranks
+}
+
 let ordered = (heard: { at: string; rows: unknown }[]) => {
   let lists = heard.map((h) => (Array.isArray(h.rows) ? h.rows as Row[] : []))
   let ranked = lists.some((rows) => rows.some((r) => 'rank' in r))
@@ -171,15 +193,26 @@ let gathered = async (env: Env, reach: Reach[], eids: string[]) => {
 // `_stores` says which app holds which component, and rides only on a bundle
 // that actually spans two — where the composition is the news, and where a
 // caller who wants to write one component back needs to know whose it is.
-export let composed = async (env: Env, reach: Reach[], eids: string[]) => {
+export let composed = async (
+  env: Env,
+  reach: Reach[],
+  eids: string[],
+  want: Set<string> | null = null,
+) => {
   let held = await gathered(env, reach, eids)
+  let keeps = (name: string) => !want || want.has(name)
   return eids.filter((e) => held.has(e)).map((eid) => {
     let one = held.get(eid)!
-    let homes = new Set(Object.values(one.home))
+    let comps = Object.fromEntries(
+      Object.entries(one.comps).filter(([n]) => n == 'entity' || keeps(n)),
+    )
+    let home = Object.fromEntries(
+      Object.entries(one.home).filter(([n]) => keeps(n)),
+    )
     return {
-      kind: kindFrom(one.kinds, one.comps),
-      ...one.comps,
-      ...(homes.size > 1 ? { _stores: one.home } : {}),
+      kind: kindFrom(one.kinds, comps),
+      ...comps,
+      ...(new Set(Object.values(home)).size > 1 ? { _stores: home } : {}),
     }
   })
 }
@@ -207,11 +240,25 @@ export let read = async (
   }
   let { parts, global } = split(line)
   let plain = global.filter((s) => !AGGS.includes(firstWord(s)))
-  let lines = parts.size
-    ? [...parts.values()].map((segs) => [...segs, ...plain].join('&'))
-    : [plain.join('&')]
+  // Which stores a word is asked of: the ones whose vocabulary DECLARES it
+  // (T-32728 — a word has one home, and a second app declaring it uses that
+  // home), and every store for a word nobody declares, which is the
+  // platform's and spoken everywhere.
+  let words = parts.size ? await spoken(env, reach) : new Map<string, Reach[]>()
+  let speak = (name: string) => words.get(name) ?? reach
+  let need = [...parts].filter(([, part]) => !part.asks)
+  let lines: [Reach[], string][] = need.length
+    ? need.map((
+      [name, part],
+    ) => [speak(name), [...part.segs, ...plain].join('&')])
+    : [[reach, plain.join('&')]]
+  let ranks = new Map<string, unknown>()
   let sets = await Promise.all(
-    lines.map(async (one) => ordered(await asked(env, reach, one))),
+    lines.map(async ([who, one]) => {
+      let heard = await asked(env, who, one)
+      for (let [eid, rank] of ranksIn(heard)) ranks.set(eid, rank)
+      return ordered(heard)
+    }),
   )
   let [first, ...rest] = sets
   let eids = rest.reduce(
@@ -223,9 +270,23 @@ export let read = async (
   // `.count!` over a fan-out is how many ENTITIES the filter selects, which
   // is the size of the composed set — summing each store's own count would
   // count an entity that lives in two of them twice.
-  return agg == 'count'
-    ? { count: eids.length }
-    : await composed(env, reach, eids)
+  if (agg == 'count') return { count: eids.length }
+  // The bundle is read from the stores that speak a word the line named, and
+  // carries those components — the store's own rule (query.ts `wanted`),
+  // applied here because the composing read addresses the eids and names no
+  // component. A part this door cannot confirm IS a component (an unqualified
+  // prop, a reference path) asks for the whole bundle rather than guess.
+  let named = [...parts.keys()]
+  let want = named.length && !segsOf(line).includes(EVERY) &&
+      named.every((n) => words.has(n) || n in comps)
+    ? new Set(named)
+    : null
+  let from = named.length ? [...new Set(named.flatMap(speak))] : reach
+  let bundles = await composed(env, from, eids, want) as Row[]
+  return bundles.map((b) => {
+    let rank = ranks.get(eidOf(b))
+    return rank ? { ...b, rank } : b
+  })
 }
 
 // A write is routed the same way a read is composed (T-32700): a bundle is
@@ -245,6 +306,18 @@ let wordsOf = async (env: Env, r: Reach) => {
     return [] as string[]
   }
   return Object.keys(await res.json() as Record<string, unknown>)
+}
+
+// Which stores declare which word — the routing table a write follows and the
+// reach set a read narrows by, in app order (oldest first), so the first
+// declarer is the word's home.
+let spoken = async (env: Env, reach: Reach[]) => {
+  let own = await Promise.all(reach.map((r) => wordsOf(env, r)))
+  let words = new Map<string, Reach[]>()
+  own.forEach((names, i) => {
+    for (let w of names) words.set(w, [...(words.get(w) ?? []), reach[i]])
+  })
+  return words
 }
 
 // The keys of a bundle that name no component: its address, its
@@ -324,11 +397,7 @@ let routed = async (
   batch: EntityLiteral[],
 ) => {
   let { entities, eids, aliases } = minted(batch)
-  let own = await Promise.all(reach.map((r) => wordsOf(env, r)))
-  let words = new Map<string, Reach[]>()
-  own.forEach((names, i) => {
-    for (let w of names) words.set(w, [...(words.get(w) ?? []), reach[i]])
-  })
+  let words = await spoken(env, reach)
   // Where the entity already lives, read only when the answer depends on it:
   // a death fans out to whoever holds the eid, and a shared word with no app
   // named goes to the app that already wears it.
