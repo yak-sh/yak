@@ -9,7 +9,8 @@
       content="Every token and every component in the yaks.app stylesheet, drawn from the file the site itself loads."
     />
     <meta name="color-scheme" content="light dark" />
-    <link rel="icon" href="yak.svg" type="image/svg+xml" />
+    <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -21,7 +22,7 @@
   <body>
     <header class="Top">
       <a class="Top_Name" href="/" aria-label="yaks.app, home">
-        <img class="Yak Yak-small" src="yak.svg" alt="" />
+        <img class="Yak Yak-small" src="yak.png" alt="" />
         <span>yaks.app</span>
       </a>
     </header>
@@ -531,23 +532,18 @@
         <div class="Guide_Demo">
           <p class="Guide_Name">.Yak · .Yak-small · .Yak-big</p>
           <p>
-            <img class="Yak Yak-small" src="yak.svg" alt="" />
+            <img class="Yak Yak-small" src="yak.png" alt="" />
           </p>
-          <svg
+          <img
             class="Yak Yak-big"
-            viewBox="0 0 200 170"
-            role="img"
-            aria-labelledby="guide-yak"
-          >
-            <title id="guide-yak">The yak, drawn big</title>
-            <use href="yak.svg#yak" />
-          </svg>
+            src="yak.png"
+            alt="The yak, drawn big"
+          />
           <p class="Note Note-small">
-            One drawing, in yak.svg. An <code class="Pill Pill-code">img</code>
-            wears the drawing's own colours; a
-            <code class="Pill Pill-code">use</code> lets the page's theme paint
-            it, because a use shadow tree inherits this page's custom
-            properties.
+            One transparent drawing, in
+            <code class="Pill Pill-code">yak.png</code>, serves both sizes.
+            Square exports provide the favicon, home-screen icon, and future
+            app-icon sizes.
           </p>
         </div>
 

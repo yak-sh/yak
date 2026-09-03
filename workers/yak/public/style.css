@@ -173,11 +173,8 @@
 }
 
 @layer components {
-  /* The yak: how big it is drawn. WHAT is drawn lives in yak.svg — one copy,
-     serving as the favicon, as every page's small mark through <img>, and as
-     the home page's hero through <use href="yak.svg#yak">. That file paints
-     its own shapes from the --yak-* roles above, which a <use> shadow tree
-     inherits from the page; on its own it falls back to the same colours. */
+  /* The yak: one transparent raster drawing, sized for the small page mark or
+     the home page hero. */
   .Yak {
     display: block;
     height: auto;

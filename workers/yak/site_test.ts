@@ -21,6 +21,43 @@ let pages = [
   'cookies.html',
 ]
 
+let branded = [...pages, 'style-guide.html']
+
+Deno.test('every page wears the raster yak', () => {
+  for (let page of branded) {
+    let html = read(page)
+    assert(
+      html.includes(
+        '<link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32" />',
+      ),
+      `${page} has no PNG favicon`,
+    )
+    assert(
+      html.includes(
+        '<link rel="apple-touch-icon" href="apple-touch-icon.png" />',
+      ),
+      `${page} has no home-screen icon`,
+    )
+    assert(!html.includes('yak.svg'), `${page} still uses the old drawing`)
+  }
+})
+
+let png = (name: string, width: number, height: number) => {
+  let bytes = Deno.readFileSync(new URL(`./public/${name}`, import.meta.url))
+  assertEquals([...bytes.slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10])
+  let view = new DataView(bytes.buffer, bytes.byteOffset)
+  assertEquals([view.getUint32(16), view.getUint32(20)], [width, height], name)
+  assertEquals(bytes[25], 6, `${name} is not RGBA`)
+}
+
+Deno.test('the yak exports have their intended transparent sizes', () => {
+  png('yak.png', 768, 743)
+  png('favicon-32.png', 32, 32)
+  png('apple-touch-icon.png', 180, 180)
+  png('icon-192.png', 192, 192)
+  png('icon-512.png', 512, 512)
+})
+
 // An extensionless link: the assets door serves `terms.html` for `/terms`
 // and redirects the other spelling, so the pages link the short one.
 let links = (html: string) =>
