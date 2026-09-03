@@ -53,7 +53,7 @@ import {
 import { fed } from '../../src/effects.ts'
 import { type Mutation, mutationResult } from '../../src/mutation.ts'
 import { DoSql, type DoStorage } from '../../src/store/do.ts'
-import { parseTools, type Tools } from '../../src/store/tools.ts'
+import { parseTools, type Tools, viewsOf } from '../../src/store/tools.ts'
 import {
   borrowed,
   countSql,
@@ -561,23 +561,40 @@ export class Store {
     // a tool writing a component nobody declared is refused here, where the
     // words are. It is replaced whole, since a declaration holds no rows: an
     // app that deletes its tools.json deploys an empty manifest and its tools
-    // are gone. The answer says whether the words MOVED, which is what tells
-    // the door to say `tools/list_changed` (T-32686). The kernel is the only
-    // caller; a GET reads back what this store last accepted.
+    // are gone. The answer says whether the words MOVED — the tools and the
+    // views each for themselves — which is what tells the door to say
+    // `tools/list_changed` and `resources/list_changed` (T-32686, T-33004).
+    // The kernel is the only caller; a GET reads back what this store last
+    // accepted.
     if (path == '/tools') {
       if (req.method == 'GET') return Response.json(this.tools())
       if (req.method != 'POST') return methodNotAllowed('GET, POST')
       try {
-        let now = JSON.stringify(parseTools(await req.text(), {
+        let sent = parseTools(await req.text(), {
           ...this.vocab(),
           ...borrowed(this.uses()),
-        }))
-        let changed = now != String(db.kv.get('tools') ?? '{}')
-        if (changed) db.kv.put('tools', now)
+        })
+        let now = JSON.stringify(sent)
+        let was = String(db.kv.get('tools') ?? '{}')
+        // The manifest's two halves, compared apart (T-33004): the TOOL half
+        // is the manifest views aside — what tools/list is made of — and the
+        // VIEW half is the set of pages the tools name — what resources/list
+        // is made of. A release that only repointed or grew a view moves
+        // resources and not tools, and the door says each with its own
+        // list_changed.
+        let bare = (t: Tools) =>
+          JSON.stringify(
+            Object.entries(t).map(([n, d]) => [n, { ...d, view: undefined }]),
+          )
+        let changed = bare(sent) != bare(JSON.parse(was) as Tools)
+        let views = viewsOf(now).sort().join('\n') !=
+          viewsOf(was).sort().join('\n')
+        if (changed || views) db.kv.put('tools', now)
         return Response.json({
           ok: true,
-          tools: Object.keys(JSON.parse(now)),
+          tools: Object.keys(sent),
           changed,
+          views,
         })
       } catch (e) {
         return new Response(why(e), { status: 400 })

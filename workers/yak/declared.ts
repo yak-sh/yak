@@ -187,16 +187,41 @@ export let listDeclared = async (ctx: Ctx) => {
   return out
 }
 
-// An app whose tools moved is news to everyone who can reach it: their tool
-// list is stale, and MCP's word for that is `notifications/tools/list_changed`
-// on the session's stream (stream.ts). Reaching the app is being in the
-// space, so the space's members are who to tell — each on their own object,
-// which holds the line whether or not they are listening this second. One
-// directory read per moved list, and nothing at all otherwise.
-export let toolsChanged = async (ctx: Ctx, space: Space) => {
+// An app whose tools or views moved is news to everyone who can reach it:
+// their list is stale, and MCP's word for that is `notifications/<list>/
+// list_changed` on the session's stream (stream.ts) — tools when the tool
+// set moved, resources when the view set did (T-33004), since a release can
+// move either without the other. Reaching the app is being in the space, so
+// the space's members are who to tell — each on their own object, which
+// holds the line whether or not they are listening this second. One
+// directory read per event however many lists moved, and nothing at all
+// otherwise.
+export let moved = async (
+  ctx: Ctx,
+  space: Space,
+  lists: ('tools' | 'resources')[],
+) => {
+  if (!lists.length) return
   for (let person of await ctx.dir.members(space)) {
-    await told(ctx.env, person, 'notifications/tools/list_changed')
+    for (let list of lists) {
+      await told(ctx.env, person, `notifications/${list}/list_changed`)
+    }
   }
+}
+
+export let toolsChanged = (ctx: Ctx, space: Space) =>
+  moved(ctx, space, ['tools'])
+
+export let resourcesChanged = (ctx: Ctx, space: Space) =>
+  moved(ctx, space, ['resources'])
+
+// One person's reach moved without any deploy (T-33004): added to or removed
+// from a space, every tool and view its apps declare appeared or went for
+// THEM, and `moved` above walks members — which they only just are, or no
+// longer are. Told directly, both lists.
+export let reachChanged = async (env: Env, person: string) => {
+  await told(env, person, 'notifications/tools/list_changed')
+  await told(env, person, 'notifications/resources/list_changed')
 }
 
 // A view a tool declares (T-32687): a page in the app's OWN files, offered

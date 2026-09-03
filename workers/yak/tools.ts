@@ -60,7 +60,7 @@ import {
   type Space,
   storeName,
 } from './directory.ts'
-import { toolsChanged, toolsOf } from './declared.ts'
+import { moved, reachChanged, toolsOf } from './declared.ts'
 import {
   drop,
   dropSecret,
@@ -489,9 +489,14 @@ let released = async (
     ),
   )
   let declared: string[] = tooled.tools ?? []
-  // A tool list that moved is news to every agent connected who can reach this
-  // app (declared.ts, T-32686).
-  if (tooled.changed) await toolsChanged(ctx, space)
+  // A tool list that moved is news to every agent connected who can reach
+  // this app, and so is a view list that did — each said with its own
+  // list_changed, since a release can move one without the other
+  // (declared.ts, T-32686, T-33004).
+  await moved(ctx, space, [
+    ...(tooled.changed ? ['tools' as const] : []),
+    ...(tooled.views ? ['resources' as const] : []),
+  ])
   // And the app's OWN code, if it wrote any (dispatch.ts, T-32778): the
   // worker.js among its files becomes its script in the dispatch namespace,
   // and an app that deleted its worker.js loses the script it had, so what
@@ -1340,8 +1345,11 @@ export let TOOLS: Tool[] = [
       }
       // What this app declared, asked before its store is emptied because
       // after that there is nothing to ask: an app that carried tools takes
-      // them with it, and that moves the tool list of everyone in the space.
-      let declared = Object.keys(await toolsOf(ctx.env, space, app)).length
+      // them with it, and that moves the tool list of everyone in the space
+      // — and its views the resource list (T-33004).
+      let had = await toolsOf(ctx.env, space, app)
+      let declared = Object.keys(had).length
+      let viewed = Object.values(had).some((t) => t.view)
       // The bytes, then the data, then the row that says the app exists —
       // that order, because the row is the app. A delete that dies halfway
       // leaves an app still named but emptied, which asking again finishes;
@@ -1371,7 +1379,10 @@ export let TOOLS: Tool[] = [
       await ctx.dir.apply({
         entities: [{ entity: { eid: app.eid }, tombstone: {} }],
       }, vouched(who))
-      if (declared) await toolsChanged(ctx, space)
+      await moved(ctx, space, [
+        ...(declared ? ['tools' as const] : []),
+        ...(viewed ? ['resources' as const] : []),
+      ])
       return {
         text: `deleted ${space.slug}/${app.slug}: ${wrote} ${
           wrote == 1 ? 'file' : 'files'
@@ -1930,6 +1941,14 @@ export let TOOLS: Tool[] = [
             : { member: { space: space.eid, person, role: want } },
         ],
       }, vouched(who))
+      // Being added is a deploy from where the added person stands: every
+      // tool and view the space's apps declare just appeared for them, and
+      // the deploy-time walk tells members — which they were not until now
+      // (declared.ts, T-33004). A re-role moves nothing they can reach, and
+      // neither does a space with no apps.
+      if (!had && (await ctx.dir.apps(space)).length) {
+        await reachChanged(ctx.env, person)
+      }
       // The letter, from the platform's own sender — the one the sign-in
       // code rides (mail.ts). It goes AFTER the membership, which stands
       // whatever the mail does: a letter that cannot be sent is a link to
@@ -2001,6 +2020,12 @@ export let TOOLS: Tool[] = [
       await ctx.dir.apply({
         entities: [{ entity: { eid: had.eid }, tombstone: {} }],
       }, vouched(who))
+      // The removed person's lists moved the other way: every tool and view
+      // the space's apps declared is out of their reach, and the member walk
+      // no longer finds them (declared.ts, T-33004).
+      if ((await ctx.dir.apps(space)).length) {
+        await reachChanged(ctx.env, person)
+      }
       return {
         text: `${email} is no longer a member of ${space.slug}`,
         space,
