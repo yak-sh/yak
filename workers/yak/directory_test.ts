@@ -130,3 +130,106 @@ Deno.test('a comped space reads as plus, everyone else as what they pay', () => 
   assertEquals(dirPart.tierOf('jeff', 'free'), 'free')
   assertEquals(dirPart.tierOf('jeff', 'plus'), 'plus')
 })
+
+// A meta store that keeps what it is written, so the questions `own()` asks
+// — who this person is, what they own, whether a slug is taken — answer
+// differently after it writes. Only the filters `own()` and `spaces()` use
+// are understood; anything else answers nothing.
+type Held = { entity: { eid: string; num: number }; [comp: string]: unknown }
+
+let held = () => {
+  let rows: Held[] = []
+  let num = 0
+  let put = (eid: string, comps: Record<string, unknown>) => {
+    let row = rows.find((r) => r.entity.eid == eid)
+    if (!row) rows.push(row = { entity: { eid, num: ++num } })
+    for (let [name, comp] of Object.entries(comps)) {
+      row[name] = { ...(row[name] as object ?? {}), ...(comp as object) }
+    }
+    return row
+  }
+  // A filter is ANDed terms; a `?` term only asks for a component to ride
+  // along, so it screens nothing.
+  let answer = (search: string) => {
+    let terms = decodeURIComponent(search.slice(1)).split('&')
+      .filter((t) => t && !t.endsWith('?'))
+    return rows.filter((row) =>
+      terms.every((t) => {
+        let [key, want] = t.split('=')
+        if (key == 'id') return row.entity.eid == want
+        let [, name, col] = key.split('.')
+        let comp = row[name] as Record<string, unknown> | undefined
+        return col ? comp?.[col] == want : !!comp
+      })
+    )
+  }
+  let apply = (body: string) => {
+    let { entities } = JSON.parse(body) as {
+      entities: Record<string, unknown>[]
+    }
+    let alias: Record<string, string> = {}
+    let named = (v: unknown) =>
+      typeof v == 'string' && v.startsWith('$') ? alias[v] : v
+    for (let e of entities) {
+      let { entity, ...comps } = e as {
+        entity?: { eid: string }
+        [k: string]: unknown
+      }
+      let want = entity?.eid
+      let eid = want?.startsWith('$')
+        ? (alias[want] ??= crypto.randomUUID())
+        : want ?? crypto.randomUUID()
+      let slug = (comps.space as { slug?: string } | undefined)?.slug
+      // The unique slug, which is what a losing race bounces on.
+      if (
+        slug && rows.some((r) => (r.space as { slug?: string })?.slug == slug)
+      ) {
+        return new Response('slug taken', { status: 409 })
+      }
+      for (let comp of Object.values(comps)) {
+        let cols = comp as Record<string, unknown>
+        for (let [k, v] of Object.entries(cols)) cols[k] = named(v)
+      }
+      put(eid, comps)
+    }
+    return Response.json({ changes: [], aliases: alias })
+  }
+  let env = {
+    STORE: {
+      idFromName: (n: string) => n,
+      get: () => ({
+        fetch: async (r: Request) => {
+          let url = new URL(r.url)
+          if (url.pathname == '/apply') return apply(await r.text())
+          return Response.json(answer(url.search))
+        },
+      }),
+    },
+  } as unknown as Env
+  return {
+    put,
+    dir: directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true),
+  }
+}
+
+Deno.test("a person's own space is one they own, not one they were invited to", async () => {
+  let m = held()
+  let inviter = crypto.randomUUID()
+  let guest = crypto.randomUUID()
+  m.put(inviter, { person: {}, email: { address: 'dana@yaks.app' } })
+  m.put(guest, { person: {}, email: { address: 'ana@yaks.app' } })
+  let theirs = await m.dir.own(inviter)
+  assertEquals(theirs.slug, 'dana')
+  // Invited into it as an editor before ever signing in.
+  m.put(crypto.randomUUID(), {
+    member: { space: theirs.eid, person: guest, role: 'editor' },
+  })
+  assertEquals((await m.dir.spaces(guest)).map((s) => s.slug), ['dana'])
+  assertEquals(await m.dir.spaces(guest, 'owner'), [])
+  // Their own is minted, and it is not the inviter's.
+  let mine = await m.dir.own(guest)
+  assertEquals(mine.slug, 'ana')
+  assertEquals(await m.dir.role(mine, guest), 'owner')
+  // Asking again is that same space, not a second one.
+  assertEquals((await m.dir.own(guest)).eid, mine.eid)
+})

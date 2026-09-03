@@ -611,13 +611,17 @@ export let directory = (via: Fetcher, now = false) => {
     },
     // Every space this person belongs to, the meta space left out: `yak` is
     // the platform's own, and a person who owns it (the first to sign in)
-    // still means their own space when they name none.
-    spaces: async (person: string): Promise<Space[]> => {
+    // still means their own space when they name none. Name a role and the
+    // answer is the spaces they hold it in — `owner` is the set that means
+    // "spaces of theirs", which is not the set they can see (T-33142).
+    spaces: async (person: string, role?: Role): Promise<Space[]> => {
       // A filter resolves an eid to an entity, so a person the meta store has
       // never seen — someone who signed in before it kept a row — makes the
       // question itself unanswerable. No row, no memberships.
       if (!(await one(`id=${person}`))) return []
-      let members = await query(`.member.person=${person}`)
+      let members = await query(
+        `.member.person=${person}${role ? `&.member.role=${role}` : ''}`,
+      )
       let spaces: Space[] = []
       for (let m of members) {
         let row = m.member && await one(`id=${idOf(m.member.space)}`)
@@ -629,12 +633,14 @@ export let directory = (via: Fetcher, now = false) => {
     },
     // The person's own space, minted the moment they first need one — at
     // sign-in, or at the first tool call by someone who signed in before this
-    // existed (T-32482). Nobody is ever asked to name a space. Theirs is the
-    // one their address spells, if they are in it, else the first they
-    // belong to; a race that loses on the unique slug re-reads and finds the
-    // winner.
+    // existed (T-32482). Nobody is ever asked to name a space. Theirs is a
+    // space they OWN — the one their address spells, if they own it, else the
+    // first they own — and being a member of somebody else's is not having
+    // one, so an invited person is minted theirs here rather than handed the
+    // inviter's (T-33142). A race that loses on the unique slug re-reads and
+    // finds the winner.
     own: async (person: string): Promise<Space> => {
-      let mine = await self.spaces(person)
+      let mine = await self.spaces(person, 'owner')
       let row = await one(`id=${person}`)
       let wanted = slugFor(row?.email?.address ?? 'space')
       if (mine.length) return mine.find((s) => s.slug == wanted) ?? mine[0]
@@ -657,7 +663,7 @@ export let directory = (via: Fetcher, now = false) => {
           ],
         }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
       } catch (e) {
-        let [theirs] = await self.spaces(person)
+        let [theirs] = await self.spaces(person, 'owner')
         if (!theirs) throw e
         return theirs
       }

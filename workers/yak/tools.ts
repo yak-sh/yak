@@ -300,21 +300,23 @@ let needsToken = (ctx: Ctx) => {
   }
 }
 
-// The space the caller means when they name none: their own. Signing in
-// mints it, so this is one lookup and never a question; a person who signed
-// in before that existed gets theirs on this very call (T-32482).
+// The space the caller means when they name none: the one that is THEIRS.
+// Signing in mints it, so this is one lookup and never a question; a person
+// who signed in before that existed, or who was invited into somebody else's
+// space before they ever had one, gets theirs on this very call (T-32482,
+// T-33142). Belonging to a space is not having one — defaulting to a space
+// the caller is only a member of aimed app_install at the INVITER's space.
 //
-// With several, naming the APP is naming the space — the one of theirs that
-// holds that slug. An app's own tool (declared.ts) knows its store and asks
+// Naming the APP is naming the space — the one they can reach that holds
+// that slug. An app's own tool (declared.ts) knows its store and asks
 // nothing, so the generic tier asking a member of two spaces to also name
 // one read as the platform forgetting what it had just been told (C-32730
 // item 6). Two spaces holding the same slug is the one genuine question, and
 // only then are the names said.
 let ownSpace = async (ctx: Ctx, app?: unknown) => {
-  let spaces = await ctx.dir.spaces(ctx.person)
-  if (spaces.length > 1 && typeof app == 'string' && app) {
+  if (typeof app == 'string' && app) {
     let holding: Space[] = []
-    for (let space of spaces) {
+    for (let space of await ctx.dir.spaces(ctx.person)) {
       if (await ctx.dir.app(space, app)) holding.push(space)
     }
     if (holding.length == 1) return holding[0]
@@ -326,12 +328,13 @@ let ownSpace = async (ctx: Ctx, app?: unknown) => {
       )
     }
   }
-  if (spaces.length > 1) {
+  let owned = await ctx.dir.spaces(ctx.person, 'owner')
+  if (owned.length > 1) {
     throw new Error(
-      `space: name one of ${spaces.map((s) => s.slug).join(', ')}`,
+      `space: name one of ${owned.map((s) => s.slug).join(', ')}`,
     )
   }
-  return spaces[0] ?? await ctx.dir.own(ctx.person)
+  return owned[0] ?? await ctx.dir.own(ctx.person)
 }
 
 // The caller in the space: a member reads, an owner or editor writes.

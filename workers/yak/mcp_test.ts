@@ -3304,3 +3304,56 @@ slow('feedback reaches the platform, in the words it was said in', async () => {
     await k.stop()
   }
 })
+
+// The funnel (T-33142): somebody invited into a space before they have ever
+// signed in still gets a space of their OWN, and every tool that defaults to
+// "theirs" aims at it. Belonging to the inviter's space is not having one —
+// while it was, an invited person's first app_install aimed at the
+// PUBLISHER's space and was refused there by the publisher's own app ceiling.
+slow('an invited person gets a space of their own', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let his = connector(k, jeff.cookie)
+    let mine = jeff.email.split('@')[0]
+    await his.tool('app_new', { slug: 'recipes', title: 'Recipes' })
+    await his.tool('app_files', {
+      app: 'recipes',
+      op: 'write',
+      path: 'index.html',
+      content: '<h1>Recipes</h1>',
+    })
+    await his.tool('app_deploy', { app: 'recipes' })
+    await his.tool('app_publish', { app: 'recipes', name: 'recipe-box' })
+
+    // Invited FIRST, signed in after: the order a new person arrives in.
+    let ana = `ana-${crypto.randomUUID().slice(0, 8)}@yaks.app`
+    let hers = ana.split('@')[0]
+    await his.tool('member_add', { email: ana, role: 'editor' })
+    let agent = connector(k, (await signIn(k, ana)).cookie)
+
+    // She belongs to his and owns hers.
+    let listed = await agent.tool('app_list')
+    assertStringIncludes(listed, `${hers}.yaks.app`)
+    assertStringIncludes(listed, `${mine}.yaks.app`)
+
+    // Naming the app is still naming the space, so the app she was invited
+    // to needs no address.
+    assertStringIncludes(
+      await agent.tool('app_files', { app: 'recipes', op: 'list' }),
+      'index.html',
+    )
+
+    // And what she makes lands in HERS.
+    assertStringIncludes(
+      await agent.tool('app_install', { name: 'recipe-box', as: 'cooking' }),
+      `as ${hers}/cooking`,
+    )
+    assertStringIncludes(
+      await agent.tool('app_new', { slug: 'notes', title: 'Notes' }),
+      `${hers}.yaks.app/notes/`,
+    )
+  } finally {
+    await k.stop()
+  }
+})
