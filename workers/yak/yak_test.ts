@@ -253,6 +253,9 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     // the graph tier instead.
     for (
       let path of [
+        // Its bare hostname is not a space's door either (T-33040): a space
+        // with no front page lists its apps, and this is nobody's space.
+        '/',
         '/platform/',
         '/platform/api/query?.signin!',
         '/platform/api/apply',

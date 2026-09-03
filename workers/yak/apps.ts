@@ -874,7 +874,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     // the bare address lists; a path under a space with no front page names
     // nothing, and says so.
     if (!home || kernels(space, home.slug)) {
-      if (url.pathname != '/') return nothingHere()
+      // The directory's own space is nobody's space: nothing answers at its
+      // address, to anyone (T-32585), so it does not get a door either.
+      if (url.pathname != '/' || space.slug == META.space) return nothingHere()
       return await index(req, env, dir, space)
     }
     // `/<x>/api/…` named an app that is not here. That is a wrong address,
