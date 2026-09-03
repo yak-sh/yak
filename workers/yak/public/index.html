@@ -19,17 +19,19 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <!-- The name alone: the hero yak is one line below, and one yak above the
+         fold is enough (T-33063). Every other page wears the small mark. -->
     <header class="Top">
       <a class="Top_Name" href="/" aria-label="yaks.app, home">
-        <svg class="Yak Yak-small" viewBox="0 0 200 170" aria-hidden="true">
-          <use href="#yak" />
-        </svg>
         <span>yaks.app</span>
       </a>
     </header>
 
-    <main class="Page">
+    <main class="Page Home">
       <section class="Hello" aria-labelledby="hello">
+        <!-- The drawing itself lives in yak.svg (T-33063): one copy, the
+             favicon and every page's mark, painted by the theme through the
+             --yak-* roles a <use> shadow tree inherits from this page. -->
         <svg
           class="Yak Yak-big"
           viewBox="0 0 200 170"
@@ -39,86 +41,62 @@
           <title id="yak-title">
             A friendly yak with a shaggy fringe and a small smile
           </title>
-          <defs>
-            <g id="yak">
-              <ellipse class="Yak_Fur" cx="100" cy="112" rx="72" ry="44" />
-              <rect class="Yak_Fur" x="46" y="132" width="22" height="34"
-                rx="11" />
-              <rect class="Yak_Fur" x="76" y="136" width="22" height="34"
-                rx="11" />
-              <rect class="Yak_Fur" x="102" y="136" width="22" height="34"
-                rx="11" />
-              <rect class="Yak_Fur" x="132" y="132" width="22" height="34"
-                rx="11" />
-              <path class="Yak_Horn" d="M66 54c-16-4-28-20-22-40" />
-              <path class="Yak_Horn" d="M134 54c16-4 28-20 22-40" />
-              <ellipse class="Yak_Fur" cx="54" cy="78" rx="13" ry="9" />
-              <ellipse class="Yak_Fur" cx="146" cy="78" rx="13" ry="9" />
-              <circle class="Yak_Face" cx="100" cy="78" r="44" />
-              <path
-                class="Yak_Fringe"
-                d="M58 68c4-16 10-28 17-28 5 0 6 10 10 10 4 0 6-13 15-13s11 13 15 13c4 0 5-10 10-10 7 0 13 12 17 28-5-6-10-9-14-7-4 2-6 9-11 9s-7-9-13-9-9 9-13 9-7-7-11-9c-4-2-9 1-14 7z"
-              />
-              <circle class="Yak_Eye" cx="84" cy="82" r="4.5" />
-              <circle class="Yak_Eye" cx="116" cy="82" r="4.5" />
-              <circle class="Yak_Glint" cx="85.6" cy="80.4" r="1.5" />
-              <circle class="Yak_Glint" cx="117.6" cy="80.4" r="1.5" />
-              <ellipse class="Yak_Nose" cx="100" cy="100" rx="10" ry="7" />
-              <path class="Yak_Smile" d="M90 110c4 5 16 5 20 0" />
-            </g>
-          </defs>
-          <use href="#yak" />
+          <use href="yak.svg#yak" />
         </svg>
-        <h1 id="hello"
-          class="Hello_Title">Your ideas, made into real apps.</h1>
-        <p class="Hello_Lead">
+        <h1 id="hello" class="Title Title-hero">Your ideas, made into real
+          apps.</h1>
+        <p class="Note Note-lead">
           Ask your assistant, like Claude or ChatGPT, to make an app and get
           your own shareable website seconds later.
         </p>
       </section>
 
       <section class="Make" aria-labelledby="make">
-        <h2 id="make" class="Make_Title">Things people ask for</h2>
-        <ul class="Make_List">
-          <li>a recipe box</li>
-          <li>a garden diary</li>
-          <li>a page for the book club</li>
-          <li>a place to plan the trip</li>
-          <li>a birthday guestbook</li>
-          <li>a chore chart that doesn't nag</li>
+        <h2 id="make" class="Title">Things people ask for</h2>
+        <ul class="Pills">
+          <li class="Pill">a recipe box</li>
+          <li class="Pill">a garden diary</li>
+          <li class="Pill">a page for the book club</li>
+          <li class="Pill">a place to plan the trip</li>
+          <li class="Pill">a birthday guestbook</li>
+          <li class="Pill">a chore chart that doesn't nag</li>
         </ul>
       </section>
 
       <section class="How" aria-labelledby="how">
-        <h2 id="how" class="How_Title">How it goes — say you wanted a recipe
+        <h2 id="how" class="Title">How it goes — say you wanted a recipe
           box</h2>
 
-        <div class="Step">
-          <h3 class="Step_Name">You ask.</h3>
-          <p class="Bubble Bubble-you">
+        <!-- The exchange sits in a conversation frame so a stranger skimming
+             the page can see these words were said, by two people, as an
+             example — the recipe box is not what we sell. -->
+        <div class="Chat">
+          <h3 class="Chat_Who Chat_Who-you">You ask.</h3>
+          <p class="Chat_Bubble Chat_Bubble-you">
             Could you make me a recipe box? Something I can share with my
             sister.
           </p>
-        </div>
 
-        <div class="Step">
-          <h3 class="Step_Name">It gets built.</h3>
-          <p class="Bubble Bubble-them">
+          <h3 class="Chat_Who">It gets built.</h3>
+          <p class="Chat_Bubble Chat_Bubble-them">
             Sure, give me a minute. Would you like a place for her to leave
             notes on each recipe?
           </p>
-          <p class="Step_Note">
+
+          <p class="Note Note-small">
             Your assistant does the making. You watch it take shape and change
             your mind as often as you like.
           </p>
         </div>
 
+        <!-- What the conversation left behind, outside the frame: nobody said
+             it, it is the thing itself. -->
         <div class="Step">
           <h3 class="Step_Name">It's yours.</h3>
           <div class="Window"
             aria-label="A finished recipe box on its own website">
             <div class="Window_Bar">
-              <span class="Window_Address">yourname.yaks.app/recipes</span>
+              <span class="Pill Pill-quiet">yourname.yaks.app/recipes</span>
             </div>
             <div class="Window_Body">
               <p class="Window_Heading">Our recipe box</p>
@@ -127,19 +105,19 @@
                 <li>Tuesday soup</li>
                 <li>The good pancakes</li>
               </ul>
-              <p class="Window_Note">
+              <p class="Note Note-small">
                 <span class="Window_Who">Ana</span> left a note on the pancakes.
               </p>
             </div>
           </div>
-          <p class="Step_Note">
+          <p class="Note">
             A website of your own, to keep or share.
           </p>
         </div>
       </section>
 
       <section class="Yours" aria-labelledby="yours">
-        <h2 id="yours" class="Yours_Title">And then it's yours</h2>
+        <h2 id="yours" class="Title">And then it's yours</h2>
         <dl class="Yours_List">
           <dt>It opens on your phone.</dt>
           <dd>
@@ -181,23 +159,23 @@
         </dl>
       </section>
 
-      <section class="Join" aria-labelledby="join">
-        <h2 id="join" class="Join_Title">How to connect</h2>
-        <p class="Join_Lead">
+      <section class="Join Card" aria-labelledby="join">
+        <h2 id="join" class="Title">How to connect</h2>
+        <p class="Note">
           Your assistant needs this link, once. Give it to Claude as a
           connector, or to ChatGPT as a custom connector.
         </p>
-        <p class="Join_Url"><code>https://yaks.app/mcp</code></p>
-        <p class="Join_Note">
+        <p class="Join_Url"><code class="Pill Pill-code">https://yaks.app/mcp</code></p>
+        <p class="Note">
           It will ask you to sign in with your email — we send a six-digit code,
           so there's no password to keep track of. After that, just talk to it
           the way you already do.
         </p>
-        <p class="Join_Note">
+        <p class="Note">
           <a href="/connect">Step by step, for each assistant</a>
         </p>
         <p class="Join_Doors">
-          <a class="Join_Go" href="/login">Sign in</a>
+          <a class="Button" href="/login">Sign in</a>
         </p>
       </section>
     </main>

@@ -1,526 +1,695 @@
-/* yaks.app homepage. Hand-written, no build step, the repo's CSS DNA:
-   Block / Block_Element / Block-modifier names, custom properties as the
-   variant and theme mechanism. Warm and soft on purpose: the owner asked
-   for a page a friend could read over tea, not a product sheet. Dark is
-   cocoa, never black. */
+/* yaks.app's one stylesheet. Hand-written, no build step: the browser loads
+   this file and nothing else, which is why it is ONE file organised into
+   declared layers rather than a file per component — with nothing bundling,
+   an @import per component is a loading waterfall.
 
-:root {
-  color-scheme: light;
-  --font: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --measure: 34rem;
-  --radius: 1.25rem;
-  --gap: 1rem;
+   Read it in layer order, because that is the system:
 
-  --ground: #fdf5ee; /* warm linen, a peach lean */
-  --paper: #fffaf5; /* cards and bubbles */
-  --ink: #4a3a30; /* warm brown, never black */
-  --soft-ink: #6f5d50;
-  --line: #efdfd2;
+     tokens      the vocabulary. Paints first — every colour in the site is
+                 written down exactly once, here — then the ROLES that point
+                 at them. A theme re-points roles; it never touches a paint.
+     base        the handful of element defaults.
+     components  the reusable pieces: Block, Block_Element, Block-modifier.
+                 A variant re-points a custom property; it does not
+                 re-declare rules.
+     sections    the page-specific layout blocks. Used once, named for the
+                 place they are, NOT components. Keeping them apart is the
+                 whole point: a component is something you can pick up.
 
-  --meadow: #5c8a4c; /* the one accent: links, focus, the "soon" pill */
-  --blush: #f8dcc8; /* your bubble */
-  --sky: #e5eef5; /* the assistant's bubble */
+   Layers also settle who wins: a section beats a component beats an element
+   default, whatever the specificity.
 
-  --yak: #8b6a52;
-  --yak-dark: #5e4634;
-  --yak-face: #a8846a;
-  --horn: #e6d2b5;
-  --nose: #d99a8d;
-  --eye: #3a2b22;
-}
+   /style-guide draws every token and every component from this file, and
+   site_test.ts holds the two in step — a component added here without a
+   demonstration there fails the suite.
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    color-scheme: dark;
-    --ground: #2a2320;
-    --paper: #352c28;
-    --ink: #f1e6d8;
-    --soft-ink: #c2b2a3;
-    --line: #4a3d37;
-    --meadow: #a7c080;
-    --blush: #4d3a33;
-    --sky: #34404a;
-    --yak: #a37f63;
-    --yak-dark: #6b4f3c;
-    --yak-face: #b8957a;
-    --horn: #e6d2b5;
+   Warm and soft on purpose: a page a friend could read over tea, not a
+   product sheet. Dark is cocoa, never black. */
+
+@layer tokens, base, components, sections;
+
+@layer tokens {
+  :root {
+    color-scheme: light;
+
+    /* The paints. Nothing below this block writes a colour down. */
+    --cream: #fffaf5; /* the lightest warm white */
+    --linen: #fdf5ee; /* warm ground, a peach lean */
+    --oat: #f1e6d8; /* pale warm, for words on a dark ground */
+    --shell: #efdfd2; /* the hairline between things */
+    --taupe: #c2b2a3; /* oat, gone quiet */
+    --clay: #6f5d50; /* coffee, gone quiet */
+    --coffee: #4a3a30; /* warm brown, never black */
+    --bark: #4a3d37; /* the hairline, on a dark ground */
+    --cocoa: #352c28; /* cards and bubbles, on a dark ground */
+    --night: #2a2320; /* the dark ground itself */
+    --meadow: #5c8a4c; /* the one accent */
+    --moss: #a7c080; /* the accent, lit for the dark */
+    --blush: #f8dcc8; /* what you said */
+    --ember: #4d3a33; /* what you said, in the dark */
+    --sky: #e5eef5; /* what it answered */
+    --dusk: #34404a; /* what it answered, in the dark */
+
+    /* The yak's paints (yak.svg, and the home page's hero). */
+    --hide: #8b6a52;
+    --hide-lit: #a37f63;
+    --fringe: #5e4634;
+    --fringe-lit: #6b4f3c;
+    --muzzle: #a8846a;
+    --muzzle-lit: #b8957a;
+    --pupil: #3a2b22;
+    --pupil-deep: #2a1e17;
+    --horn: #e6d2b5; /* the same in both themes, so it needs no role */
     --nose: #d99a8d;
-    --eye: #2a1e17;
+    --glint: #fff;
+
+    /* The roles. Everything below uses these, never a paint. */
+    --ground: var(--linen);
+    --paper: var(--cream);
+    --ink: var(--coffee);
+    --soft-ink: var(--clay);
+    --line: var(--shell);
+    --accent: var(--meadow);
+    --on-accent: var(--ground); /* words on an accent fill */
+    --mine: var(--blush); /* the person's bubble */
+    --theirs: var(--sky); /* the assistant's bubble */
+    --yak-fur: var(--hide);
+    --yak-fringe: var(--fringe);
+    --yak-face: var(--muzzle);
+    --yak-eye: var(--pupil);
+
+    /* Type. */
+    --font: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --body: 1.0625rem;
+    --lead: 1.125rem;
+    --small: 0.9375rem;
+
+    /* Space and shape. The gaps derive from one number. */
+    --measure: 34rem; /* a letter's width */
+    --gap: 1rem;
+    --quarter-gap: calc(var(--gap) / 4);
+    --half-gap: calc(var(--gap) / 2);
+    --wide-gap: calc(var(--gap) * 1.5);
+    --radius: 1.25rem;
+    --small-radius: calc(var(--radius) * 0.6);
+    --big-radius: calc(var(--radius) * 1.4);
+    --pill: 999px;
+  }
+
+  /* A theme re-points roles. The paints above stay exactly where they are. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      color-scheme: dark;
+      --ground: var(--night);
+      --paper: var(--cocoa);
+      --ink: var(--oat);
+      --soft-ink: var(--taupe);
+      --line: var(--bark);
+      --accent: var(--moss);
+      --mine: var(--ember);
+      --theirs: var(--dusk);
+      --yak-fur: var(--hide-lit);
+      --yak-fringe: var(--fringe-lit);
+      --yak-face: var(--muzzle-lit);
+      --yak-eye: var(--pupil-deep);
+    }
+  }
+
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+    --ground: var(--night);
+    --paper: var(--cocoa);
+    --ink: var(--oat);
+    --soft-ink: var(--taupe);
+    --line: var(--bark);
+    --accent: var(--moss);
+    --mine: var(--ember);
+    --theirs: var(--dusk);
+    --yak-fur: var(--hide-lit);
+    --yak-fringe: var(--fringe-lit);
+    --yak-face: var(--muzzle-lit);
+    --yak-eye: var(--pupil-deep);
   }
 }
 
-:root[data-theme='dark'] {
-  color-scheme: dark;
-  --ground: #2a2320;
-  --paper: #352c28;
-  --ink: #f1e6d8;
-  --soft-ink: #c2b2a3;
-  --line: #4a3d37;
-  --meadow: #a7c080;
-  --blush: #4d3a33;
-  --sky: #34404a;
-  --yak: #a37f63;
-  --yak-dark: #6b4f3c;
-  --yak-face: #b8957a;
-  --horn: #e6d2b5;
-  --nose: #d99a8d;
-  --eye: #2a1e17;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: var(--ground);
-  color: var(--ink);
-  font-family: var(--font);
-  font-size: 1.0625rem;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-}
-
-h1,
-h2,
-h3,
-p,
-ul {
-  margin: 0;
-}
-
-ul {
-  padding: 0;
-  list-style: none;
-}
-
-:focus-visible {
-  outline: 3px solid var(--meadow);
-  outline-offset: 3px;
-  border-radius: 0.5rem;
-}
-
-/* The yak. One drawing, defined once in the hero and reused by the header
-   via <use>, colored through the theme so it stays warm in the dark. */
-.Yak {
-  display: block;
-  height: auto;
-}
-
-.Yak-big {
-  width: min(11rem, 55vw);
-  margin-inline: auto;
-}
-
-.Yak-small {
-  width: 2.25rem;
-}
-
-.Yak_Fur {
-  fill: var(--yak);
-}
-
-.Yak_Face {
-  fill: var(--yak-face);
-}
-
-.Yak_Fringe {
-  fill: var(--yak-dark);
-}
-
-.Yak_Horn {
-  fill: none;
-  stroke: var(--horn);
-  stroke-width: 10;
-  stroke-linecap: round;
-}
-
-.Yak_Eye {
-  fill: var(--eye);
-}
-
-.Yak_Glint {
-  fill: #fff;
-}
-
-.Yak_Nose {
-  fill: var(--nose);
-}
-
-.Yak_Smile {
-  fill: none;
-  stroke: var(--eye);
-  stroke-width: 3;
-  stroke-linecap: round;
-}
-
-/* Header: just the name, so the page opens on the yak and the sentence. */
-.Top {
-  display: flex;
-  justify-content: center;
-  padding: 1.25rem var(--gap);
-}
-
-.Top_Name {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--ink);
-  font-weight: 800;
-  font-size: 1.125rem;
-  text-decoration: none;
-}
-
-/* One column, a letter's width. */
-.Page {
-  display: grid;
-  gap: 4rem;
-  width: min(100% - 2 * var(--gap), var(--measure));
-  margin-inline: auto;
-  padding-block: 1.5rem 3rem;
-}
-
-.Hello {
-  display: grid;
-  gap: 1.25rem;
-  text-align: center;
-}
-
-.Hello_Title {
-  font-size: clamp(2rem, 5vw + 1rem, 2.75rem);
-  font-weight: 800;
-  line-height: 1.15;
-  text-wrap: balance;
-}
-
-.Hello_Lead {
-  font-size: 1.125rem;
-  color: var(--soft-ink);
-  text-wrap: pretty;
-}
-
-/* How it goes: three steps, told as a short conversation. */
-.How {
-  display: grid;
-  gap: 2.5rem;
-}
-
-.How_Title,
-.Make_Title,
-.Yours_Title,
-.Join_Title {
-  font-size: 1.5rem;
-  font-weight: 800;
-  text-wrap: balance;
-}
-
-.Step {
-  display: grid;
-  gap: 0.875rem;
-}
-
-.Step_Name {
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: var(--meadow);
-}
-
-.Step_Note {
-  color: var(--soft-ink);
-  text-wrap: pretty;
-}
-
-/* Bubbles: yours leans right in blush, the assistant's leans left in sky.
-   The tail is a rotated corner, one square, no extra markup. */
-.Bubble {
-  --fill: var(--paper);
-  position: relative;
-  width: fit-content;
-  max-width: 88%;
-  padding: 0.875rem 1.125rem;
-  background: var(--fill);
-  border-radius: var(--radius);
-  text-wrap: pretty;
-}
-
-.Bubble::after {
-  content: '';
-  position: absolute;
-  bottom: -0.25rem;
-  width: 1rem;
-  height: 1rem;
-  background: var(--fill);
-  border-radius: 0.2rem;
-  transform: rotate(45deg);
-}
-
-.Bubble-you {
-  --fill: var(--blush);
-  margin-inline-start: auto;
-  border-end-end-radius: 0.4rem;
-}
-
-.Bubble-you::after {
-  right: 0.6rem;
-}
-
-.Bubble-them {
-  --fill: var(--sky);
-  border-end-start-radius: 0.4rem;
-}
-
-.Bubble-them::after {
-  left: 0.6rem;
-}
-
-/* A little window: the finished thing at its own address. */
-.Window {
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-}
-
-.Window_Bar {
-  display: flex;
-  justify-content: center;
-  padding: 0.625rem 1rem;
-  border-bottom: 1px solid var(--line);
-}
-
-.Window_Address {
-  padding: 0.2rem 0.9rem;
-  border-radius: 999px;
-  background: var(--ground);
-  color: var(--soft-ink);
-  font-size: 0.9375rem;
-  font-weight: 600;
-}
-
-.Window_Body {
-  display: grid;
-  gap: 0.625rem;
-  padding: 1.125rem 1.25rem 1.25rem;
-}
-
-.Window_Heading {
-  font-size: 1.25rem;
-  font-weight: 800;
-}
-
-.Window_List {
-  display: grid;
-  gap: 0.375rem;
-}
-
-.Window_List li {
-  padding: 0.5rem 0.875rem;
-  border-radius: 0.75rem;
-  background: var(--ground);
-}
-
-.Window_Note {
-  color: var(--soft-ink);
-  font-size: 0.9375rem;
-}
-
-.Window_Who {
-  font-weight: 700;
-  color: var(--meadow);
-}
-
-/* Things people ask for: soft pills that wrap like a handful of notes. The
-   help page jumps to its questions on the same pill, made of links (.Ask),
-   which is why the shape is written once here. */
-.Make {
-  display: grid;
-  gap: 1.25rem;
-}
-
-.Make_List,
-.Ask {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.625rem;
-}
-
-.Make_List li,
-.Ask a {
-  padding: 0.5rem 1rem;
-  border-radius: 999px;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  color: var(--ink);
-  text-decoration: none;
-}
-
-/* And then it's yours: a plain description list, not a grid of feature
-   cards. A term is a short sentence in the accent, its answer sits under it,
-   and nothing is boxed — it reads like a note, which is the point. */
-.Yours {
-  display: grid;
-  gap: 1.25rem;
-}
-
-.Yours_List {
-  display: grid;
-  gap: 1.5rem;
-  margin: 0;
-}
-
-.Yours_List dt {
-  font-weight: 700;
-  color: var(--meadow);
-}
-
-.Yours_List dd {
-  margin: 0.25rem 0 0;
-  color: var(--soft-ink);
-  text-wrap: pretty;
-}
-
-/* How to connect: one address a person hands their assistant, and the door
-   they sign in at. The address wraps rather than pushing the page sideways —
-   a phone is the first screen this is read on. */
-.Join {
-  display: grid;
-  gap: 1rem;
-  padding: 1.75rem;
-  border-radius: calc(var(--radius) * 1.4);
-  background: var(--paper);
-  text-align: center;
-}
-
-.Join_Lead,
-.Join_Note {
-  color: var(--soft-ink);
-  text-wrap: pretty;
-}
-
-.Join_Url {
-  overflow-wrap: anywhere;
-}
-
-.Join_Url code {
-  display: inline-block;
-  padding: 0.5rem 1rem;
-  border-radius: 999px;
-  background: var(--ground);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.9375rem;
-}
-
-.Join_Doors {
-  margin-top: 0.25rem;
-}
-
-.Join_Go {
-  display: inline-block;
-  padding: 0.75rem 1.75rem;
-  border-radius: 999px;
-  background: var(--meadow);
-  color: var(--ground);
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.Foot {
-  display: grid;
-  gap: 0.75rem;
-  padding: 1.5rem var(--gap) 3rem;
-  color: var(--soft-ink);
-  font-size: 0.9375rem;
-  text-align: center;
-  text-wrap: pretty;
-}
-
-.Foot_Links {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.5rem 1.25rem;
-}
-
-.Foot_Links a {
-  color: var(--soft-ink);
-}
-
-/* A page of plain prose — help, and the legal pages: the same column and
-   voice, nothing boxed. They are read on a phone more often than not, so
-   nothing here is wider than the column and a long link breaks rather than
-   scrolls. */
-.Prose {
-  display: grid;
-  gap: 2rem;
-  overflow-wrap: break-word;
-}
-
-.Prose_Head {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.Prose_Title {
-  font-size: clamp(1.75rem, 4vw + 1rem, 2.25rem);
-  font-weight: 800;
-  line-height: 1.2;
-  text-wrap: balance;
-}
-
-.Prose_When {
-  color: var(--soft-ink);
-  font-size: 0.9375rem;
-}
-
-.Prose section {
-  display: grid;
-  gap: 0.75rem;
-}
-
-.Prose h2 {
-  font-size: 1.25rem;
-  font-weight: 800;
-  text-wrap: balance;
-}
-
-.Prose p,
-.Prose li {
-  color: var(--soft-ink);
-  text-wrap: pretty;
-}
-
-.Prose ul {
-  display: grid;
-  gap: 0.5rem;
-  padding-inline-start: 1.25rem;
-  list-style: disc;
-}
-
-.Prose a {
-  color: var(--meadow);
-}
-
-.Prose address {
-  font-style: normal;
-  color: var(--soft-ink);
-}
-
-.Prose code {
-  padding: 0.1rem 0.4rem;
-  border-radius: 0.4rem;
-  background: var(--paper);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.9375rem;
-}
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font);
+    font-size: var(--body);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  p,
+  ul {
+    margin: 0;
+  }
+
+  ul {
+    padding: 0;
+    list-style: none;
+  }
+
+  a {
+    color: var(--accent);
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 0.5rem;
+  }
+}
+
+@layer components {
+  /* The yak: how big it is drawn. WHAT is drawn lives in yak.svg — one copy,
+     serving as the favicon, as every page's small mark through <img>, and as
+     the home page's hero through <use href="yak.svg#yak">. That file paints
+     its own shapes from the --yak-* roles above, which a <use> shadow tree
+     inherits from the page; on its own it falls back to the same colours. */
+  .Yak {
+    display: block;
+    height: auto;
+  }
+
+  .Yak-small {
+    width: 2.25rem;
+  }
 
-@media (prefers-reduced-motion: no-preference) {
   .Yak-big {
-    animation: breathe 6s ease-in-out infinite;
+    width: min(11rem, 55vw);
+    margin-inline: auto;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .Yak-big {
+      animation: breathe 6s ease-in-out infinite;
+    }
   }
 
   @keyframes breathe {
     50% {
       transform: translateY(-3px);
     }
+  }
+
+  /* Headings. One vocabulary, sized by variant: a section's heading is the
+     plain one, a page's title is -page, the home page's opening line is
+     -hero. */
+  .Title {
+    font-size: var(--title-size, 1.5rem);
+    font-weight: 800;
+    line-height: var(--title-leading, 1.6);
+    text-wrap: balance;
+  }
+
+  .Title-hero {
+    --title-size: clamp(2rem, 5vw + 1rem, 2.75rem);
+    --title-leading: 1.15;
+  }
+
+  .Title-page {
+    --title-size: clamp(1.75rem, 4vw + 1rem, 2.25rem);
+    --title-leading: 1.2;
+  }
+
+  /* The quiet line next to the loud one: a lead, an aside, a caption. */
+  .Note {
+    color: var(--soft-ink);
+    font-size: var(--note-size, inherit);
+    text-wrap: pretty;
+  }
+
+  .Note-lead {
+    --note-size: var(--lead);
+  }
+
+  .Note-small {
+    --note-size: var(--small);
+  }
+
+  /* Pills: a soft chip, and a row of them that wraps like a handful of
+     notes. The list is the same shape whether the chips are words (the home
+     page) or links (the help page's questions). */
+  .Pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.625rem;
+  }
+
+  .Pill {
+    display: inline-block;
+    padding: var(--pill-pad, 0.5rem 1rem);
+    border: var(--pill-edge, 1px solid var(--line));
+    border-radius: var(--pill);
+    background: var(--pill-fill, var(--paper));
+    color: var(--pill-ink, var(--ink));
+    font-family: var(--pill-font, inherit);
+    font-size: var(--pill-size, inherit);
+    font-weight: var(--pill-weight, inherit);
+    text-decoration: none;
+  }
+
+  /* The address in a window bar: sunken rather than raised. */
+  .Pill-quiet {
+    --pill-fill: var(--ground);
+    --pill-ink: var(--soft-ink);
+    --pill-edge: 0;
+    --pill-pad: 0.2rem 0.9rem;
+    --pill-size: var(--small);
+    --pill-weight: 600;
+  }
+
+  /* A URL somebody has to copy. */
+  .Pill-code {
+    --pill-fill: var(--ground);
+    --pill-edge: 0;
+    --pill-font: var(--mono);
+    --pill-size: var(--small);
+  }
+
+  /* The button you press. An <a> and a <button> wear it the same. */
+  .Button {
+    display: inline-block;
+    padding: var(--button-pad, 0.75rem 1.75rem);
+    border: 0;
+    border-radius: var(--pill);
+    background: var(--button-fill, var(--accent));
+    color: var(--button-ink, var(--on-accent));
+    font: inherit;
+    font-weight: 800;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  /* One text field. The sign-in pages (pages.ts) carry their own copy of
+     this, because they are served on a space's hostname where an asset of
+     the apex cannot be loaded — keep the two in step by hand. */
+  .Field {
+    font: inherit;
+    padding: 0.7rem 1rem;
+    border: 2px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  /* A conversation. The frame is the point: it says at a glance that these
+     words were spoken, by two people, as an example — not that the thing
+     being described is what this page is selling. Who says what is a
+     modifier: -you leans right in blush, -them leans left in sky. The tail
+     is a rotated corner, one square, no extra markup. */
+  .Chat {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1.125rem;
+    border: 1px solid var(--line);
+    border-radius: var(--big-radius);
+    background: var(--paper);
+  }
+
+  .Chat_Who {
+    color: var(--soft-ink);
+    font-size: var(--small);
+    font-weight: 700;
+    text-align: var(--who-side, start);
+  }
+
+  .Chat_Who-you {
+    --who-side: end;
+  }
+
+  .Chat_Bubble {
+    --fill: var(--ground);
+    position: relative;
+    width: fit-content;
+    max-width: 88%;
+    padding: 0.875rem 1.125rem;
+    background: var(--fill);
+    border-radius: var(--radius);
+    text-wrap: pretty;
+  }
+
+  .Chat_Bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -0.25rem;
+    width: 1rem;
+    height: 1rem;
+    background: var(--fill);
+    border-radius: 0.2rem;
+    transform: rotate(45deg);
+  }
+
+  .Chat_Bubble-you {
+    --fill: var(--mine);
+    margin-inline-start: auto;
+    border-end-end-radius: 0.4rem;
+  }
+
+  .Chat_Bubble-you::after {
+    right: 0.6rem;
+  }
+
+  .Chat_Bubble-them {
+    --fill: var(--theirs);
+    border-end-start-radius: 0.4rem;
+  }
+
+  .Chat_Bubble-them::after {
+    left: 0.6rem;
+  }
+
+  /* A little window: something finished, at its own address. */
+  .Window {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--paper);
+  }
+
+  .Window_Bar {
+    display: flex;
+    justify-content: center;
+    padding: 0.625rem 1rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .Window_Body {
+    display: grid;
+    gap: 0.625rem;
+    padding: 1.125rem 1.25rem 1.25rem;
+  }
+
+  .Window_Heading {
+    font-size: 1.25rem;
+    font-weight: 800;
+  }
+
+  .Window_List {
+    display: grid;
+    gap: 0.375rem;
+  }
+
+  .Window_List li {
+    padding: 0.5rem 0.875rem;
+    border-radius: var(--small-radius);
+    background: var(--ground);
+  }
+
+  .Window_Who {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* Paper under a block of the page. */
+  .Card {
+    padding: var(--card-pad, 1.75rem);
+    border-radius: var(--big-radius);
+    background: var(--card-fill, var(--paper));
+  }
+
+  /* A page of plain prose — help, and the legal pages: the same column and
+     voice, nothing boxed. Prose dresses the elements you did NOT name; a
+     list that carries a component class keeps its component. They are read
+     on a phone more often than not, so nothing is wider than the column and
+     a long link breaks rather than scrolls. */
+  .Prose {
+    display: grid;
+    gap: 2rem;
+    overflow-wrap: break-word;
+  }
+
+  .Prose_Head {
+    display: grid;
+    gap: var(--half-gap);
+  }
+
+  .Prose_When {
+    color: var(--soft-ink);
+    font-size: var(--small);
+  }
+
+  .Prose section {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .Prose h2 {
+    font-size: 1.25rem;
+    font-weight: 800;
+    text-wrap: balance;
+  }
+
+  .Prose p,
+  .Prose li {
+    color: var(--soft-ink);
+    text-wrap: pretty;
+  }
+
+  .Prose ul:not([class]) {
+    display: grid;
+    gap: var(--half-gap);
+    padding-inline-start: 1.25rem;
+    list-style: disc;
+  }
+
+  .Prose a {
+    color: var(--accent);
+  }
+
+  .Prose address {
+    font-style: normal;
+    color: var(--soft-ink);
+  }
+
+  .Prose code {
+    padding: 0.1rem 0.4rem;
+    border-radius: 0.4rem;
+    background: var(--paper);
+    font-family: var(--mono);
+    font-size: var(--small);
+  }
+}
+
+@layer sections {
+  /* The header: the mark and the name. The home page wears the name alone —
+     its hero yak is one line below (T-33063). */
+  .Top {
+    display: flex;
+    justify-content: center;
+    padding: 1.25rem var(--gap);
+  }
+
+  .Top_Name {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--half-gap);
+    color: var(--ink);
+    font-weight: 800;
+    font-size: var(--lead);
+    text-decoration: none;
+  }
+
+  /* One column, a letter's width. The column says how WIDE, never how far
+     apart: what fills it — .Home, .Prose, .Guide — owns its own rhythm. A
+     page that needs more room re-points --measure on itself. */
+  .Page {
+    display: grid;
+    width: min(100% - 2 * var(--gap), var(--measure));
+    margin-inline: auto;
+    padding-block: var(--wide-gap) 3rem;
+  }
+
+  /* The home page: bands, a good breath apart. */
+  .Home {
+    gap: 4rem;
+  }
+
+  .Hello {
+    display: grid;
+    gap: 1.25rem;
+    text-align: center;
+  }
+
+  /* How it goes: one conversation, then what it left behind. */
+  .How {
+    display: grid;
+    gap: 2.5rem;
+  }
+
+  .Step {
+    display: grid;
+    gap: 0.875rem;
+  }
+
+  .Step_Name {
+    color: var(--accent);
+    font-size: var(--lead);
+    font-weight: 700;
+  }
+
+  .Make {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  /* And then it's yours: a plain description list, not a grid of feature
+     cards. A term is a short sentence in the accent, its answer sits under
+     it, and nothing is boxed — it reads like a note, which is the point. */
+  .Yours {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .Yours_List {
+    display: grid;
+    gap: var(--wide-gap);
+    margin: 0;
+  }
+
+  .Yours_List dt {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .Yours_List dd {
+    margin: var(--quarter-gap) 0 0;
+    color: var(--soft-ink);
+    text-wrap: pretty;
+  }
+
+  /* How to connect: one address a person hands their assistant, and the door
+     they sign in at. The address wraps rather than pushing the page sideways
+     — a phone is the first screen this is read on. */
+  .Join {
+    display: grid;
+    gap: var(--gap);
+    text-align: center;
+  }
+
+  .Join_Url {
+    overflow-wrap: anywhere;
+  }
+
+  .Join_Doors {
+    margin-top: var(--quarter-gap);
+  }
+
+  .Foot {
+    display: grid;
+    gap: 0.75rem;
+    padding: var(--wide-gap) var(--gap) 3rem;
+    color: var(--soft-ink);
+    font-size: var(--small);
+    text-align: center;
+    text-wrap: pretty;
+  }
+
+  .Foot_Links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--half-gap) 1.25rem;
+  }
+
+  .Foot_Links a {
+    color: var(--soft-ink);
+  }
+
+  /* The style guide itself (style-guide.html): a wider column, because a
+     row of swatches is the one thing here that is not a letter. */
+  .Guide {
+    --measure: 52rem;
+    gap: 3rem;
+  }
+
+  .Guide_Part {
+    display: grid;
+    gap: var(--gap);
+  }
+
+  .Guide_Rules {
+    display: grid;
+    gap: 0.75rem;
+    padding-inline-start: 1.25rem;
+    color: var(--soft-ink);
+    list-style: disc;
+    text-wrap: pretty;
+  }
+
+  .Guide_Demo {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1.25rem;
+    border: 1px dashed var(--line);
+    border-radius: var(--radius);
+  }
+
+  .Guide_Name {
+    color: var(--soft-ink);
+    font-family: var(--mono);
+    font-size: var(--small);
+    font-weight: 400;
+  }
+
+  .Guide_Swatches {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    gap: 0.75rem;
+  }
+
+  .Guide_Swatch {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 0 0.75rem;
+  }
+
+  .Guide_Chip {
+    grid-row: span 2;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 1px solid var(--line);
+    border-radius: var(--small-radius);
+    background: var(--swatch);
+  }
+
+  .Guide_Value {
+    color: var(--soft-ink);
+    font-family: var(--mono);
+    font-size: 0.8125rem;
+  }
+
+  .Guide_Sizes {
+    display: grid;
+    gap: 0.5rem;
+    overflow-x: auto; /* --measure is wider than a phone, on purpose */
+  }
+
+  .Guide_Size {
+    display: grid;
+    grid-template-columns: 12rem auto;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .Guide_Bar {
+    height: 0.75rem;
+    width: var(--size);
+    border-radius: var(--pill);
+    background: var(--accent);
   }
 }

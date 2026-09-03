@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Style guide · yaks.app</title>
+    <meta
+      name="description"
+      content="Every token and every component in the yaks.app stylesheet, drawn from the file the site itself loads."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="yak.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="Top">
+      <a class="Top_Name" href="/" aria-label="yaks.app, home">
+        <img class="Yak Yak-small" src="yak.svg" alt="" />
+        <span>yaks.app</span>
+      </a>
+    </header>
+
+    <main class="Page Guide">
+      <div class="Prose_Head">
+        <h1 class="Title Title-page">Style guide</h1>
+        <p class="Note Note-lead">
+          Everything <code class="Pill Pill-code">style.css</code> defines,
+          drawn from that same file. If a swatch is the wrong colour or a
+          component looks wrong here, the site is wrong too.
+        </p>
+      </div>
+
+      <section class="Guide_Part" aria-labelledby="how-to">
+        <h2 id="how-to" class="Title">Making something that belongs here</h2>
+        <p class="Note">
+          One stylesheet, no build step, four declared layers — tokens, base,
+          components, sections — and the later layer wins whatever the
+          specificity says. Four habits keep a new page looking like this one:
+        </p>
+        <ul class="Guide_Rules">
+          <li>
+            <b>Reach for a component before you write CSS.</b> Everything below
+            is already in the sheet: titles, notes, pills, buttons, fields,
+            bubbles, windows, cards, prose.
+          </li>
+          <li>
+            <b>Spend roles, not paints.</b> Write
+            <code class="Pill Pill-code">var(--ink)</code>, never
+            <code class="Pill Pill-code">var(--coffee)</code>. The dark theme
+            re-points roles and leaves paints alone, so a paint used directly
+            is a colour that will not follow the theme.
+          </li>
+          <li>
+            <b>A variant re-points a custom property.</b>
+            <code class="Pill Pill-code">.Pill-quiet</code> sets
+            <code class="Pill Pill-code">--pill-fill</code>; it does not
+            re-declare the padding, the radius and the border.
+          </li>
+          <li>
+            <b>Page layout is a section, not a component.</b> If it is used
+            once and named for where it sits, it belongs in the sections layer
+            and stays out of everyone's way.
+          </li>
+        </ul>
+        <p class="Note Note-small">
+          Adding a component means adding it to the components layer AND
+          demonstrating it here — <code class="Pill Pill-code">site_test.ts</code>
+          fails otherwise, which is what stops this page becoming fiction.
+        </p>
+      </section>
+
+      <section class="Guide_Part" aria-labelledby="paints">
+        <h2 id="paints" class="Title">Paints</h2>
+        <p class="Note">
+          Every colour on the site, written down once. Nothing outside the
+          tokens layer names one of these. Values shown are for the theme you
+          are reading in.
+        </p>
+        <ul class="Guide_Swatches">
+          <li class="Guide_Swatch" data-token="--cream">
+            <span class="Guide_Chip" style="--swatch: var(--cream)"></span>
+            <code class="Guide_Name">--cream</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--linen">
+            <span class="Guide_Chip" style="--swatch: var(--linen)"></span>
+            <code class="Guide_Name">--linen</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--oat">
+            <span class="Guide_Chip" style="--swatch: var(--oat)"></span>
+            <code class="Guide_Name">--oat</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--shell">
+            <span class="Guide_Chip" style="--swatch: var(--shell)"></span>
+            <code class="Guide_Name">--shell</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--taupe">
+            <span class="Guide_Chip" style="--swatch: var(--taupe)"></span>
+            <code class="Guide_Name">--taupe</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--clay">
+            <span class="Guide_Chip" style="--swatch: var(--clay)"></span>
+            <code class="Guide_Name">--clay</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--coffee">
+            <span class="Guide_Chip" style="--swatch: var(--coffee)"></span>
+            <code class="Guide_Name">--coffee</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--bark">
+            <span class="Guide_Chip" style="--swatch: var(--bark)"></span>
+            <code class="Guide_Name">--bark</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--cocoa">
+            <span class="Guide_Chip" style="--swatch: var(--cocoa)"></span>
+            <code class="Guide_Name">--cocoa</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--night">
+            <span class="Guide_Chip" style="--swatch: var(--night)"></span>
+            <code class="Guide_Name">--night</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--meadow">
+            <span class="Guide_Chip" style="--swatch: var(--meadow)"></span>
+            <code class="Guide_Name">--meadow</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--moss">
+            <span class="Guide_Chip" style="--swatch: var(--moss)"></span>
+            <code class="Guide_Name">--moss</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--blush">
+            <span class="Guide_Chip" style="--swatch: var(--blush)"></span>
+            <code class="Guide_Name">--blush</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--ember">
+            <span class="Guide_Chip" style="--swatch: var(--ember)"></span>
+            <code class="Guide_Name">--ember</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--sky">
+            <span class="Guide_Chip" style="--swatch: var(--sky)"></span>
+            <code class="Guide_Name">--sky</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--dusk">
+            <span class="Guide_Chip" style="--swatch: var(--dusk)"></span>
+            <code class="Guide_Name">--dusk</code>
+            <span class="Guide_Value"></span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="Guide_Part" aria-labelledby="yak-paints">
+        <h2 id="yak-paints" class="Title">The yak's paints</h2>
+        <p class="Note">
+          The drawing's own colours. The lit ones are what the dark theme
+          points the fur, fringe, face and eye at;
+          <code class="Pill Pill-code">--horn</code>,
+          <code class="Pill Pill-code">--nose</code> and
+          <code class="Pill Pill-code">--glint</code> are the same in both
+          themes, so they need no role and are used directly.
+        </p>
+        <ul class="Guide_Swatches">
+          <li class="Guide_Swatch" data-token="--hide">
+            <span class="Guide_Chip" style="--swatch: var(--hide)"></span>
+            <code class="Guide_Name">--hide</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--hide-lit">
+            <span class="Guide_Chip" style="--swatch: var(--hide-lit)"></span>
+            <code class="Guide_Name">--hide-lit</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--fringe">
+            <span class="Guide_Chip" style="--swatch: var(--fringe)"></span>
+            <code class="Guide_Name">--fringe</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--fringe-lit">
+            <span class="Guide_Chip" style="--swatch: var(--fringe-lit)"></span>
+            <code class="Guide_Name">--fringe-lit</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--muzzle">
+            <span class="Guide_Chip" style="--swatch: var(--muzzle)"></span>
+            <code class="Guide_Name">--muzzle</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--muzzle-lit">
+            <span class="Guide_Chip" style="--swatch: var(--muzzle-lit)"></span>
+            <code class="Guide_Name">--muzzle-lit</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--pupil">
+            <span class="Guide_Chip" style="--swatch: var(--pupil)"></span>
+            <code class="Guide_Name">--pupil</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--pupil-deep">
+            <span class="Guide_Chip" style="--swatch: var(--pupil-deep)"></span>
+            <code class="Guide_Name">--pupil-deep</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--horn">
+            <span class="Guide_Chip" style="--swatch: var(--horn)"></span>
+            <code class="Guide_Name">--horn</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--nose">
+            <span class="Guide_Chip" style="--swatch: var(--nose)"></span>
+            <code class="Guide_Name">--nose</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--glint">
+            <span class="Guide_Chip" style="--swatch: var(--glint)"></span>
+            <code class="Guide_Name">--glint</code>
+            <span class="Guide_Value"></span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="Guide_Part" aria-labelledby="roles">
+        <h2 id="roles" class="Title">Roles</h2>
+        <p class="Note">
+          What a paint is FOR. These are the only colour names anything below
+          the tokens layer may write, and they are what the dark theme
+          re-points — switch to a dark system theme and every value here
+          changes while the paints above stay put.
+        </p>
+        <ul class="Guide_Swatches">
+          <li class="Guide_Swatch" data-token="--ground">
+            <span class="Guide_Chip" style="--swatch: var(--ground)"></span>
+            <code class="Guide_Name">--ground</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--paper">
+            <span class="Guide_Chip" style="--swatch: var(--paper)"></span>
+            <code class="Guide_Name">--paper</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--ink">
+            <span class="Guide_Chip" style="--swatch: var(--ink)"></span>
+            <code class="Guide_Name">--ink</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--soft-ink">
+            <span class="Guide_Chip" style="--swatch: var(--soft-ink)"></span>
+            <code class="Guide_Name">--soft-ink</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--line">
+            <span class="Guide_Chip" style="--swatch: var(--line)"></span>
+            <code class="Guide_Name">--line</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--accent">
+            <span class="Guide_Chip" style="--swatch: var(--accent)"></span>
+            <code class="Guide_Name">--accent</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--on-accent">
+            <span class="Guide_Chip" style="--swatch: var(--on-accent)"></span>
+            <code class="Guide_Name">--on-accent</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--mine">
+            <span class="Guide_Chip" style="--swatch: var(--mine)"></span>
+            <code class="Guide_Name">--mine</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--theirs">
+            <span class="Guide_Chip" style="--swatch: var(--theirs)"></span>
+            <code class="Guide_Name">--theirs</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--yak-fur">
+            <span class="Guide_Chip" style="--swatch: var(--yak-fur)"></span>
+            <code class="Guide_Name">--yak-fur</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--yak-fringe">
+            <span class="Guide_Chip" style="--swatch: var(--yak-fringe)"></span>
+            <code class="Guide_Name">--yak-fringe</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--yak-face">
+            <span class="Guide_Chip" style="--swatch: var(--yak-face)"></span>
+            <code class="Guide_Name">--yak-face</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--yak-eye">
+            <span class="Guide_Chip" style="--swatch: var(--yak-eye)"></span>
+            <code class="Guide_Name">--yak-eye</code>
+            <span class="Guide_Value"></span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="Guide_Part" aria-labelledby="type">
+        <h2 id="type" class="Title">Type</h2>
+        <div class="Guide_Demo">
+          <p data-token="--font">
+            <span class="Guide_Name">--font</span>
+            <span class="Guide_Value"></span>
+          </p>
+          <p data-token="--mono" style="font-family: var(--mono)">
+            <span class="Guide_Name">--mono</span>
+            <span class="Guide_Value"></span>
+          </p>
+          <p data-token="--body" style="font-size: var(--body)">
+            <span class="Guide_Name">--body</span>
+            <span class="Guide_Value"></span> — what a page is set in.
+          </p>
+          <p data-token="--lead" style="font-size: var(--lead)">
+            <span class="Guide_Name">--lead</span>
+            <span class="Guide_Value"></span> — the line under a title.
+          </p>
+          <p data-token="--small" style="font-size: var(--small)">
+            <span class="Guide_Name">--small</span>
+            <span class="Guide_Value"></span> — a caption, a footer, a date.
+          </p>
+        </div>
+      </section>
+
+      <section class="Guide_Part" aria-labelledby="space">
+        <h2 id="space" class="Title">Space and shape</h2>
+        <p class="Note">
+          The gaps all derive from <code class="Pill Pill-code">--gap</code>,
+          so the page's rhythm has one number behind it.
+        </p>
+        <ul class="Guide_Sizes">
+          <li class="Guide_Size" data-token="--quarter-gap">
+            <span><code class="Guide_Name">--quarter-gap</code>
+              <span class="Guide_Value"></span></span>
+            <span class="Guide_Bar" style="--size: var(--quarter-gap)"></span>
+          </li>
+          <li class="Guide_Size" data-token="--half-gap">
+            <span><code class="Guide_Name">--half-gap</code>
+              <span class="Guide_Value"></span></span>
+            <span class="Guide_Bar" style="--size: var(--half-gap)"></span>
+          </li>
+          <li class="Guide_Size" data-token="--gap">
+            <span><code class="Guide_Name">--gap</code>
+              <span class="Guide_Value"></span></span>
+            <span class="Guide_Bar" style="--size: var(--gap)"></span>
+          </li>
+          <li class="Guide_Size" data-token="--wide-gap">
+            <span><code class="Guide_Name">--wide-gap</code>
+              <span class="Guide_Value"></span></span>
+            <span class="Guide_Bar" style="--size: var(--wide-gap)"></span>
+          </li>
+        </ul>
+        <p class="Note Note-small" data-token="--measure">
+          <code class="Guide_Name">--measure</code> — a letter's width, and the
+          width of the column every page sits in. This one re-points it to
+          <span class="Guide_Value"></span> on itself to fit the swatches,
+          which is how a page asks for more room.
+        </p>
+        <ul class="Guide_Swatches">
+          <li class="Guide_Swatch" data-token="--small-radius">
+            <span class="Guide_Chip"
+              style="--swatch: var(--paper); border-radius: var(--small-radius)"></span>
+            <code class="Guide_Name">--small-radius</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--radius">
+            <span class="Guide_Chip"
+              style="--swatch: var(--paper); border-radius: var(--radius)"></span>
+            <code class="Guide_Name">--radius</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--big-radius">
+            <span class="Guide_Chip"
+              style="--swatch: var(--paper); border-radius: var(--big-radius)"></span>
+            <code class="Guide_Name">--big-radius</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--pill">
+            <span class="Guide_Chip"
+              style="--swatch: var(--paper); border-radius: var(--pill)"></span>
+            <code class="Guide_Name">--pill</code>
+            <span class="Guide_Value"></span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="Guide_Part" aria-labelledby="components">
+        <h2 id="components" class="Title">Components</h2>
+        <p class="Note">
+          Every reusable piece in the sheet, live, beside the class that draws
+          it. A dashed border marks the demonstration; it is not part of the
+          component.
+        </p>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">.Title · .Title-hero · .Title-page</p>
+          <p class="Title Title-hero">A page that opens with a sentence</p>
+          <p class="Title Title-page">The title of a page</p>
+          <p class="Title">The heading of one section</p>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">.Note · .Note-lead · .Note-small</p>
+          <p class="Note Note-lead">
+            The lead: one line under the title, quieter than the words above.
+          </p>
+          <p class="Note">A plain aside, set at the page's own size.</p>
+          <p class="Note Note-small">A caption, a footnote, a date.</p>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">.Pills · .Pill · .Pill-quiet · .Pill-code</p>
+          <ul class="Pills">
+            <li class="Pill">a recipe box</li>
+            <li class="Pill">a garden diary</li>
+            <li class="Pill">a chore chart that doesn't nag</li>
+          </ul>
+          <p><a class="Pill" href="#components">A pill that is a link</a></p>
+          <p><span class="Pill Pill-quiet">yourname.yaks.app/recipes</span></p>
+          <p><code class="Pill Pill-code">https://yaks.app/mcp</code></p>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">.Button · .Field</p>
+          <p><a class="Button" href="#components">Sign in</a></p>
+          <form onsubmit="return false">
+            <label for="demo-field" class="Note Note-small">Your email</label>
+            <p>
+              <input
+                class="Field"
+                id="demo-field"
+                type="email"
+                placeholder="you@example.com"
+              />
+              <button class="Button" type="submit">Send me a code</button>
+            </p>
+          </form>
+          <p class="Note Note-small">
+            The sign-in pages carry their own copy of these two rules
+            (<code class="Pill Pill-code">pages.ts</code>): they are served on a
+            space's hostname, where an asset of the apex cannot be loaded.
+            Change one, change the other.
+          </p>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">
+            .Chat · .Chat_Who · .Chat_Who-you · .Chat_Bubble ·
+            .Chat_Bubble-you · .Chat_Bubble-them
+          </p>
+          <div class="Chat">
+            <h3 class="Chat_Who Chat_Who-you">You ask.</h3>
+            <p class="Chat_Bubble Chat_Bubble-you">
+              Could you make me a recipe box?
+            </p>
+            <h3 class="Chat_Who">It gets built.</h3>
+            <p class="Chat_Bubble Chat_Bubble-them">
+              Sure, give me a minute.
+            </p>
+            <p class="Note Note-small">
+              A caption at the foot of the exchange.
+            </p>
+          </div>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">
+            .Window · .Window_Bar · .Window_Body · .Window_Heading ·
+            .Window_List · .Window_Who
+          </p>
+          <div class="Window">
+            <div class="Window_Bar">
+              <span class="Pill Pill-quiet">yourname.yaks.app/recipes</span>
+            </div>
+            <div class="Window_Body">
+              <p class="Window_Heading">Our recipe box</p>
+              <ul class="Window_List">
+                <li>Grandma's lemon cake</li>
+                <li>Tuesday soup</li>
+              </ul>
+              <p class="Note Note-small">
+                <span class="Window_Who">Ana</span> left a note on the pancakes.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">.Card</p>
+          <div class="Card">
+            <p class="Title">How to connect</p>
+            <p class="Note">Paper under a block of the page.</p>
+          </div>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">.Yak · .Yak-small · .Yak-big</p>
+          <p>
+            <img class="Yak Yak-small" src="yak.svg" alt="" />
+          </p>
+          <svg
+            class="Yak Yak-big"
+            viewBox="0 0 200 170"
+            role="img"
+            aria-labelledby="guide-yak"
+          >
+            <title id="guide-yak">The yak, drawn big</title>
+            <use href="yak.svg#yak" />
+          </svg>
+          <p class="Note Note-small">
+            One drawing, in yak.svg. An <code class="Pill Pill-code">img</code>
+            wears the drawing's own colours; a
+            <code class="Pill Pill-code">use</code> lets the page's theme paint
+            it, because a use shadow tree inherits this page's custom
+            properties.
+          </p>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">.Prose · .Prose_Head · .Prose_When</p>
+          <div class="Prose">
+            <div class="Prose_Head">
+              <h3 class="Title Title-page">Cookies</h3>
+              <p class="Prose_When">Last updated 3 September 2026</p>
+            </div>
+            <section>
+              <h2>What Prose dresses</h2>
+              <p>
+                The elements you did not name: a paragraph, a list, a link, a
+                bit of <code>code</code>, an address. A list that carries a
+                component class — a row of
+                <code>Pills</code>, say — keeps its component.
+              </p>
+              <ul>
+                <li>Plain paragraphs go quiet, in --soft-ink.</li>
+                <li>A <a href="#components">link</a> takes the accent.</li>
+              </ul>
+              <address>Yak Shaving LLC</address>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section class="Guide_Part" aria-labelledby="sections">
+        <h2 id="sections" class="Title">Sections, which are not components</h2>
+        <p class="Note">
+          The rest of the sheet is layout for one place on one page. It is kept
+          in its own layer so nobody mistakes it for something to reuse: copy a
+          section and you have inherited a decision about the home page.
+        </p>
+        <ul class="Guide_Rules">
+          <li>
+            <b>.Top</b>, <b>.Top_Name</b> — the header every page wears. The
+            home page drops the mark and keeps the name; its hero yak is one
+            line below.
+          </li>
+          <li>
+            <b>.Page</b> — the one column, a letter's width. It says how wide,
+            never how far apart: what fills it owns its own rhythm. A page that
+            needs more room re-points
+            <code class="Pill Pill-code">--measure</code> on itself, which is
+            what this page does.
+          </li>
+          <li>
+            <b>.Home</b> — the home page's band rhythm, the one thing that
+            makes its column different from a page of prose.
+          </li>
+          <li>
+            <b>.Hello</b>, <b>.Make</b>, <b>.How</b>, <b>.Step</b>,
+            <b>.Step_Name</b>, <b>.Yours</b>, <b>.Yours_List</b>, <b>.Join</b>,
+            <b>.Join_Url</b>, <b>.Join_Doors</b> — the home page's bands, in the
+            order it reads.
+          </li>
+          <li><b>.Foot</b>, <b>.Foot_Links</b> — the footer every page wears.</li>
+          <li>
+            <b>.Guide</b> and its elements — this page, which is a section like
+            any other.
+          </li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="Foot">
+      <p>Made with care by a small herd. It's early days here — thanks for
+        coming by.</p>
+      <ul class="Foot_Links">
+        <li><a href="/help">Help</a></li>
+        <li><a href="/terms">Terms</a></li>
+        <li><a href="/privacy">Privacy</a></li>
+        <li><a href="/acceptable-use">Acceptable use</a></li>
+        <li><a href="/cookies">Cookies</a></li>
+      </ul>
+    </footer>
+
+    <script>
+      // Each token says what it actually resolves to, in the theme you are
+      // reading in — read off the live stylesheet, so it cannot drift. A
+      // length is measured off the bar it drew, since a custom property
+      // computes to its own tokens and calc(1rem / 4) tells nobody anything.
+      let root = getComputedStyle(document.documentElement)
+      for (let el of document.querySelectorAll('[data-token]')) {
+        let slot = el.querySelector('.Guide_Value')
+        let bar = el.querySelector('.Guide_Bar')
+        if (!slot) continue
+        slot.textContent = bar
+          ? Math.round(bar.getBoundingClientRect().width) + 'px'
+          : root.getPropertyValue(el.dataset.token).trim()
+      }
+    </script>
+  </body>
+</html>
