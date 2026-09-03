@@ -4,10 +4,8 @@
 //
 // The page here is a module, and it runs where the test runs: Deno loads the
 // bytes the kernel served and calls them. What a browser gives a page and a
-// test cannot is its origin — the hostname a probe can only spell in
-// `x-yak-host`, and the cookie that says who is asking — so `browser()` below
-// is a loopback origin that adds both and passes everything through. The
-// client reaches its own doors through it exactly as a page's would.
+// test cannot is its origin — the hostname and the cookie that says who is
+// asking — which probe.ts's `browser()` stands in for.
 import {
   assert,
   assertEquals,
@@ -16,7 +14,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { slow, until } from '../../src/testing.ts'
-import { client, type Kernel, kernel, relay, seed } from './probe.ts'
+import { browser, client, kernel, relay, seed } from './probe.ts'
 
 // A row as a page reads one: the kind that names it, the spine, and a
 // component per name — what `query()` answers with, and what `subscribe()`
@@ -26,25 +24,6 @@ type Row = {
   entity: { eid: string }
   doc: { title: string; body?: string }
   created: { by: string }
-}
-
-// An origin that stands in for `<space>.yaks.app`: every request goes to the
-// kernel wearing that hostname, and the person's cookie if they have one.
-let browser = (k: Kernel, host: string, cookie?: string) => {
-  let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
-    let url = new URL(req.url)
-    let type = req.headers.get('content-type')
-    return k.at(host, url.pathname + url.search, {
-      method: req.method,
-      headers: {
-        ...(cookie ? { cookie } : {}),
-        ...(type ? { 'content-type': type } : {}),
-      },
-      body: req.method == 'GET' ? undefined : await req.text(),
-    })
-  })
-  let { port } = server.addr as Deno.NetAddr
-  return { origin: `http://127.0.0.1:${port}`, stop: () => server.shutdown() }
 }
 
 slow('the served client: a page saves, lists and watches', async () => {
@@ -60,7 +39,10 @@ slow('the served client: a page saves, lists and watches', async () => {
     assertEquals(served.status, 200)
     assertMatch(served.headers.get('content-type') ?? '', /javascript/)
     let source = await served.text()
-    assertMatch(source, /export let \{ apply, query, search, subscribe \}/)
+    assertMatch(
+      source,
+      /export let \{ apply, query, search, subscribe, upload \}/,
+    )
 
     // The page a person would be given, and its script, run here.
     let page = '<!doctype html><h1>Recipes</h1>' +

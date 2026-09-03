@@ -118,6 +118,34 @@ export let kernel = async () => {
   return { base, secret, at, stop, log }
 }
 
+// An origin that stands in for `<space>.yaks.app` over HTTP: every request
+// goes to the kernel wearing that hostname, and the person's cookie if they
+// have one. What a browser gives a page and a test cannot is exactly this —
+// the hostname a probe can only spell in `x-yak-host` (route.ts), and the
+// cookie that says who is asking — so a client module running under Deno
+// reaches an app's doors through here exactly as a page's would. The request
+// passes through whole, BYTES included: an upload is a body that is not text
+// (apps.ts `/api/blob`).
+export let browser = (k: Kernel, host: string, cookie?: string) => {
+  let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
+    let url = new URL(req.url)
+    let sent: Record<string, string> = {}
+    for (let h of ['content-type', 'x-yak-name']) {
+      let v = req.headers.get(h)
+      if (v) sent[h] = v
+    }
+    return k.at(host, url.pathname + url.search, {
+      method: req.method,
+      headers: { ...(cookie ? { cookie } : {}), ...sent },
+      body: req.method == 'GET' || req.method == 'HEAD'
+        ? undefined
+        : new Uint8Array(await req.arrayBuffer()),
+    })
+  })
+  let { port } = server.addr as Deno.NetAddr
+  return { origin: `http://127.0.0.1:${port}`, stop: () => server.shutdown() }
+}
+
 // An origin that stands for `<space>.yaks.app` on a socket. `new WebSocket`
 // sends the URL's own Host and takes no headers, so `x-yak-host` — the header
 // a fetch-driven probe spells (route.ts) — has to go on the wire itself: this

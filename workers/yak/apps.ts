@@ -6,10 +6,13 @@
 // with the graph API for its (space, app) store beside them —
 // `/api/{apply,query,graph}` mapped onto the Store object's doors, the store
 // named from the route, never by the client. `PUT /api/files/<path>` is the
-// write side, what a deploy is until app_deploy (T-32329) exists. Workers for
-// Platforms dispatch — an app's own Worker answering here — is the second
-// implementation and waits on T-32345; it slots in where `asset` is called,
-// with the same `vouched` headers, and nothing here pretends to.
+// write side, what a deploy is until app_deploy (T-32329) exists, and
+// `/api/blob` is the door for a page's own bytes — a photo a visitor picks —
+// content-addressed into the same bucket and named by a row in the app's
+// store (T-32677). Workers for Platforms dispatch — an app's own Worker
+// answering here — is the second implementation and waits on T-32345; it
+// slots in where `asset` is called, with the same `vouched` headers, and
+// nothing here pretends to.
 //
 // A page's own breaks come back here too (T-32486), without the page asking:
 // every HTML response is rewritten on its way out to carry the reporter
@@ -34,7 +37,7 @@ import { asking, listing } from './listing.ts'
 import { nothingHere } from './pages.ts'
 import { hostOf, PLATFORM, route } from './route.ts'
 import { mayWrite, reads, vouched, type Who, whoIs, writes } from './session.ts'
-import { storeOf } from './store.ts'
+import { type Door, storeOf } from './store.ts'
 import { noted, refusal } from './unseen.ts'
 
 // The runtime's streaming HTML rewriter, the slice this file asks for, so
@@ -96,9 +99,13 @@ let SAYS: Record<string, string> = {
   too_many_reports: 'this app has reported too many breaks this minute',
   expected_websocket: 'the live door takes a websocket upgrade',
   not_found: "no such door: this app's api is apply, query, graph, ws, " +
-    'and files/<path>',
+    'blob, and files/<path>',
   not_a_writer: 'sign in to change this app',
   not_a_reader: 'sign in to see this app',
+  no_bytes: 'an upload needs a body: post the file itself',
+  too_large: 'that file is over the 20 MB limit — downscale it on the page ' +
+    'before you send it',
+  no_such_file: 'no file at that address in this app',
 }
 
 // The same refusals to someone who IS signed in: signing in is no longer the
@@ -274,6 +281,145 @@ let broken = (body: string) => {
   })
 }
 
+// The ceiling on one upload. A store is not a drive: a page downscales a
+// photo before it sends it (the guide's four lines), and 20 MB of anything
+// else is not what someone meant to put in an app's graph.
+let MAX = 20 * 1024 * 1024
+
+// The bytes' own name: their SHA-256 in hex, the content address the fleet's
+// attachments already use (src/blob.ts). It is the object's key AND the
+// entity's eid, so the same photo sent twice is one object and one row.
+let sha256 = async (bytes: Uint8Array<ArrayBuffer>) =>
+  [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+
+// The app's one use of those bytes, addressed off them: derived, so an upload
+// finds its own attachment row without reading for it, and the same file sent
+// again is that row renamed.
+let useOf = (sha: string) =>
+  sha256(new TextEncoder().encode(`attachment:${sha}`))
+
+// Where an app's uploaded bytes live: under the app's own prefix, beside its
+// files, so throwing the app away takes them with it (tools.ts app_delete)
+// and a rename carries them along.
+let blobKey = (space: Space, app: App, sha: string) =>
+  `${space.slug}/${app.slug}/blobs/${sha}`
+
+// What the upload says these bytes are, and what to call them. The mime is
+// the request's own content-type, minus its parameters; the name rides
+// `x-yak-name` percent-encoded, since a header is ASCII and a file's name is
+// not (public/client.js encodes it).
+let mimeSent = (req: Request) =>
+  (req.headers.get('content-type') ?? '').split(';')[0].trim().slice(0, 120) ||
+  'application/octet-stream'
+
+let nameSent = (req: Request) => {
+  let sent = req.headers.get('x-yak-name')
+  if (!sent) return ''
+  try {
+    return decodeURIComponent(sent).slice(0, 200)
+  } catch {
+    return sent.slice(0, 200)
+  }
+}
+
+// A page hands the app bytes and gets back an address (T-32677). The object
+// lands in the bucket first and the row second, because a row pointing at
+// nothing is the failure a reader sees, while bytes nobody has named yet are
+// invisible until the next upload of the same file names them. The row is
+// the uploader's, written through the app's own /apply with them vouched for,
+// so `.created!` says who put it there.
+let took = async (
+  req: Request,
+  env: Env,
+  space: Space,
+  app: App,
+  store: Door,
+  headers: Record<string, string>,
+) => {
+  let sent = Number(req.headers.get('content-length') ?? 0)
+  if (sent > MAX) return json(413, 'too_large')
+  let bytes = new Uint8Array(await req.arrayBuffer())
+  if (!bytes.byteLength) return json(400, 'no_bytes')
+  if (bytes.byteLength > MAX) return json(413, 'too_large')
+  let sha = await sha256(bytes)
+  let blobs = r2Blobs(env.BLOBS)
+  let key = blobKey(space, app, sha)
+  if (!(await blobs.has(key))) await blobs.put(key, bytes)
+  let mime = mimeSent(req)
+  let name = nameSent(req)
+  // Two rows, the way the fleet shapes a file (src/blob.ts): the CONTENT,
+  // addressed by its sha and carrying only its length, and the USE of it,
+  // carrying what it is called and what it is. They stay apart because they
+  // are two things — and because a component may not point at its own entity.
+  // The use is addressed too, off the content's address, so the same bytes
+  // sent twice are one attachment renamed rather than a second row saying the
+  // same thing. A listing shows the use and not the content, which is right:
+  // a doc's body is a blob row as well, and nobody saved that.
+  let saved = await store('/apply', {
+    method: 'POST',
+    body: JSON.stringify({
+      entities: [
+        { entity: { eid: sha }, blob: { bytes: bytes.byteLength } },
+        {
+          entity: { eid: await useOf(sha) },
+          attachment: { blob: sha, mime, name },
+        },
+      ],
+    }),
+  }, headers)
+  if (!saved.ok) return saved
+  await saved.body?.cancel()
+  return Response.json({
+    eid: sha,
+    url: `/${app.slug}/api/blob/${sha}`,
+    mime,
+    bytes: bytes.byteLength,
+  })
+}
+
+// The bytes back, at the address the upload answered. Content-addressed, so
+// they can never change: they cache forever. The mime and the name come off
+// the attachment row the upload wrote; a sandbox CSP plus nosniff keeps an
+// uploaded page or SVG inert when someone opens it in a tab, the way the
+// fleet's own blob door does (src/blob.ts serveBlob).
+let gave = async (
+  env: Env,
+  space: Space,
+  app: App,
+  store: Door,
+  headers: Record<string, string>,
+  sha: string,
+) => {
+  if (!/^[0-9a-f]{64}$/.test(sha)) return json(404, 'no_such_file')
+  let bytes
+  try {
+    bytes = await r2Blobs(env.BLOBS).get(blobKey(space, app, sha))
+  } catch {
+    return json(404, 'no_such_file')
+  }
+  let rows = await (await store(`/query?id=${await useOf(sha)}`, {}, headers))
+    .json()
+  let file = (rows as { attachment?: { mime?: string; name?: string } }[])
+    .find((r) => r.attachment)?.attachment
+  return new Response(bytes, {
+    headers: {
+      'content-type': file?.mime || 'application/octet-stream',
+      'cache-control': 'public, max-age=31536000, immutable',
+      'content-security-policy': "sandbox; script-src 'none'",
+      'x-content-type-options': 'nosniff',
+      ...(file?.name
+        ? {
+          'content-disposition': `inline; filename="${
+            file.name.replace(/["\\\r\n]/g, '')
+          }"`,
+        }
+        : {}),
+    },
+  })
+}
+
 // The graph API, and the file door beside it. Who may do what to the store is
 // the app's own `access` (T-32504): `public` reads to anyone and writes to a
 // member, `open` writes to anyone with the link, `private` neither without a
@@ -369,6 +515,23 @@ let api = async (
       ...headers,
       ...(await named()),
     })
+  }
+  // The file door: bytes in, one content-addressed address out. Uploaded
+  // bytes are app DATA, not the app's own files — a vote page's photo is the
+  // visitor's, not the deploy's — so the app's `access` governs both halves:
+  // its write rule the upload, its read rule the download.
+  if (path == '/blob') {
+    if (req.method != 'POST') return json(405, 'method_not_allowed')
+    if (!mayPost) return refused()
+    return took(req, env, space, app, store, {
+      ...headers,
+      ...(await named()),
+    })
+  }
+  if (path.startsWith('/blob/')) {
+    if (req.method != 'GET') return json(405, 'method_not_allowed')
+    if (!mayRead) return refused('not_a_reader')
+    return gave(env, space, app, store, headers, path.slice('/blob/'.length))
   }
   if (path.startsWith('/files/')) {
     if (req.method != 'PUT') return json(405, 'method_not_allowed')

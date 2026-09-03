@@ -14,16 +14,17 @@ person the URL.
 The kernel serves a client beside every app, at `./api/client.js`:
 
     <script type="module">
-      import { apply, query, search, subscribe } from './api/client.js'
+      import { apply, query, search, subscribe, upload } from './api/client.js'
     </script>
 
-Four functions, all same-origin, all talking to this app's own graph:
+Five functions, all same-origin, all talking to this app's own graph:
 
 - `apply(bundles)` saves. One bundle or an array; it answers
   `{ok, changes, aliases}`.
 - `query(filter)` lists. The filter line below.
 - `search(text)` finds words across the app's docs, ranked.
 - `subscribe(filter, cb)` is `query` that keeps answering.
+- `upload(file)` saves bytes and answers where they live. Files, below.
 
 `subscribe` is how a page stays true while it is open: it calls back with the
 rows now and again on every change to them, including one made on the person's
@@ -91,6 +92,49 @@ the platform, so a page can show a byline to anyone:
 People stay out of an ordinary listing — `query('.doc!')` answers what the page
 saved — so `.person!` is how you ask for them.
 
+## Files
+
+`upload` takes a `File` off an `<input type=file>` — or any `Blob` — and answers
+`{eid, url, mime, bytes}`. The bytes are stored under their own SHA-256, so the
+same file twice is one upload: `eid` is that address, and `url` is where the app
+serves the bytes back, cached forever because they can never change.
+
+    let input = document.querySelector('input[type=file]')
+    let file = await upload(input.files[0])
+
+    img.src = file.url                 // straight into the page
+
+    await apply({                      // and a row that remembers it
+      photo: { caption: 'the cake', blob: file.eid },
+    })
+
+    for (let p of await query('.photo!')) {
+      draw(p.photo.caption, `./api/blob/${p.photo.blob}`)
+    }
+
+(`photo` is the app's own component —
+`{"photo": {"caption": "text", "blob":
+"text"}}` in its `vocab.json`; see
+below.) A row points at bytes by their eid, and `./api/blob/<eid>` is where they
+are, which is what `url` already holds. Uploaded files are rows in their own
+right too, so `query('.attachment!')` lists them with their `mime` and `name`.
+
+Who may upload is the app's `access`, the same as any other write; who may read
+the bytes is the same as any other read. Deleting the app deletes its files with
+it.
+
+**One upload is 20 MB at most**, and a phone's photo is often more than that.
+Downscale it on the page — four lines, no library, and the app is faster for
+everyone:
+
+    let bmp = await createImageBitmap(file, { resizeWidth: 1600 })
+    let cv = new OffscreenCanvas(bmp.width, bmp.height)
+    cv.getContext('2d').drawImage(bmp, 0, 0)
+    let small = await cv.convertToBlob({ type: 'image/jpeg', quality: 0.85 })
+
+Then `upload(small, { name: file.name })`. There is no server-side resizing yet,
+so the page's own downscale is the whole of it.
+
 ## The components an app has today
 
 The platform's own vocabulary, shared by every app:
@@ -100,7 +144,8 @@ The platform's own vocabulary, shared by every app:
   Anything with a state.
 - `project` — a thing others belong to, by `task.project`.
 - `comment` — `target`. A note aimed at another entity.
-- `web` — `url`. `image`, `attachment`, `blob` — files that belong to one.
+- `web` — `url`. `attachment` (`mime`, `name`, `blob`), `blob` (`bytes`) and
+  `image` (`w`, `h`) — what `upload` writes about a file, above.
 - `archived` — the stamp that takes something out of the open list (`.archived=`
   selects the ones without it).
 - `dependency` — how two entities relate: `{type, child}`, where type is one of
@@ -157,6 +202,15 @@ markdown or JSON both keep there.
 
 `client.js` is a wrapper over two ordinary HTTP doors, same-origin, in case you
 want them directly (or from `curl`, or from another page):
+
+    POST ./api/blob
+    content-type: image/jpeg          ← the file's own type
+    x-yak-name: cake.jpg              ← optional, percent-encoded
+    <the bytes>
+    → {"eid": "9f2a...", "url": "/photos/api/blob/9f2a...",
+       "mime": "image/jpeg", "bytes": 51234}
+
+    GET ./api/blob/<eid>             → the bytes, with that mime
 
     POST ./api/apply
     content-type: application/json

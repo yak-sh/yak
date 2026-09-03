@@ -14,8 +14,13 @@
 // re-renders the page without a poll. It hands back the same rows `query`
 // does; the returned function ends it.
 //
-// `store(base)` is those four doors at an address you name, and what the
-// bound set is made of. Every app in a space shares one hostname, so
+// `upload(file, {name})` is the bytes half: the app's own file door
+// (`POST ./api/blob`), which stores what a page hands it — a File off an
+// input, a Blob a canvas made — under its own SHA-256 and answers the address
+// to put in an `<img src>` and the eid for a row to point at.
+//
+// `store(base)` is those doors at an address you name, and what the bound
+// set is made of. Every app in a space shares one hostname, so
 // `store('/other/api/')` reads a sibling app's graph the same way.
 //
 // Errors need no wiring here: the kernel injects a reporter into every page
@@ -81,6 +86,26 @@ export let store = (base) => {
   let search = (text, filter = '') =>
     query(`${encodeURIComponent(text)}${filter ? `&${filter}` : ''}`)
 
+  // Bytes, in: a File off an `<input type=file>`, a Blob a canvas made. The
+  // door answers `{eid, url, mime, bytes}` — the eid to point a row at
+  // (`{photo: {caption, blob: eid}}`) and the url to put in an `<img src>`.
+  // Content-addressed, so the same file twice is one upload and one row, and
+  // a page may re-send rather than remember. 20 MB is the ceiling; downscale
+  // a photo on the page before you send it.
+  let upload = (file, opts = {}) => {
+    let name = opts.name ?? file.name ?? ''
+    return ask('blob', {
+      method: 'POST',
+      headers: {
+        'content-type': file.type || 'application/octet-stream',
+        // A header is ASCII and a file's name is not, so the name is
+        // percent-encoded here and decoded by the door.
+        ...(name ? { 'x-yak-name': encodeURIComponent(name) } : {}),
+      },
+      body: file,
+    })
+  }
+
   // The live half: one socket onto this store, opened on the first
   // subscription and shared by all of them, reconnecting on its own.
   let subs = new Map()
@@ -140,7 +165,7 @@ export let store = (base) => {
       tell({ unsub: name })
     }
   }
-  return { apply, query, search, subscribe }
+  return { apply, query, search, subscribe, upload }
 }
 
 // One subscription frame folded into its rows. A frame carries ROWS — the
@@ -158,6 +183,6 @@ let fold = (rows, f) => {
 let rows = (held) =>
   [...held.values()].sort((a, b) => (a.entity.num ?? 0) - (b.entity.num ?? 0))
 
-export let { apply, query, search, subscribe } = store(
+export let { apply, query, search, subscribe, upload } = store(
   new URL('.', import.meta.url),
 )
