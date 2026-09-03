@@ -102,10 +102,15 @@ and this is the right one:
 
 Anything a predicate mentions counts as naming it, whichever operator it wears:
 `.doc.title~=cake` carries the doc, `.task.status=open` carries the task,
-`.created.at=today` carries the stamp. A bare word (full text) names the doc, so
-a search answers titles. Two things that do NOT name a component: an absence
-(`.archived=` asks for rows without one — there is nothing to carry), and the
-`*` form, which asks for all of them.
+`.created.at=today` carries the stamp. Three things do NOT name one: an absence
+(`.archived=` asks for rows without one — there is nothing to carry), the `*`
+form, which asks for all of them, and a bare WORD, which searches the docs
+without naming anything to leave out — so a line that is only words answers
+whole entities, like `id=`.
+
+A column of yours that nothing has written is on the row with the value `null`,
+not missing from it, so test the value and not `in`. The platform's `doc.title`
+has a default and answers `''` instead.
 
 `entity` and `kind` ride every row: `entity.eid` is the address to write back
 to, `entity.num` is the number the store minted in order, and `kind` is what the

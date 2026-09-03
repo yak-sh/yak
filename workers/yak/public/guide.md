@@ -246,11 +246,17 @@ column it carries, and what each column holds. A column is `text`, `number`,
 Name a column that isn't there and the refusal lists the ones that are, so the
 shape is one question, never five.
 
+A `time` goes over the wire as an ISO 8601 string with a zone —
+`new Date().toISOString()`, `'2026-04-11T12:00:00Z'` — and comes back exactly as
+it was sent. For a plain DATE with no time of day, write **noon** UTC: midnight
+renders as the day before for anyone west of Greenwich.
+
 - `doc` — `title` (text), `body` (text). The words a person reads; what `search`
   searches.
 - `task` — `priority` (number), `project` (eid), `assignee` (eid), `domain`
   (text). Anything with a state. Its `status` is READ, not written — `open`,
-  `wip`, `done` or `cancelled`, derived from the two marks below.
+  `wip`, `done` or `cancelled`, derived from the two marks below. Before either
+  mark it is **`open`**, so `task: {}` is a thing to do.
 - `completed` — `at` (time), `by` (eid). The mark that makes a task `done`; the
   store fills both, so `completed: {}` is the whole write.
 - `cancelled` — `at` (time), `by` (eid), `reason` (text). Called off rather than
@@ -660,6 +666,9 @@ The same grammar the platform speaks everywhere:
 
 - `.doc.title~=cake` contains, `.task.status=open` equals, and an empty value
   asks for absent: `.archived=` is everything not archived.
+- A column holding an eid is filtered by that eid, like any other value:
+  `.comment.target=<eid>` is every comment aimed at one entity. That is a
+  different question from `id=<eid>`, which addresses the row itself.
 - `.doc!` has the component at all.
 - `.loan?` ASKS for a component without filtering on it — an answer carries the
   components its filter names, so `.book!&.loan?` is every book, wearing its

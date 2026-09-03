@@ -170,16 +170,35 @@ A column is one of these:
 - `text` — one line, or many. The catch-all.
 - `number` — stored as a SQLite real, so integers and decimals both fit.
 - `bool` — true or false.
-- `time` — an ISO timestamp, as text: `new Date().toISOString()`.
+- `time` — an ISO 8601 timestamp with a zone, as text:
+  `new Date().toISOString()`, or `'2026-04-11T12:00:00Z'` written by hand. It
+  comes back exactly as it was sent, so it is a string on the way in and a
+  string on the way out; `new Date(row.entry.written)` when you need to do
+  arithmetic with it, and the ordinary comparisons filter it
+  (`.entry.written>=2026-04-01`).
 - `url` — an address out on the web; text with a link's face.
 - `eid` — a reference to another entity. The platform's own words have these; a
   `vocab.json` cannot declare one (below).
 - a closed set of words — the platform's alone; a refusal spells the set,
   `open|wip|done|cancelled`.
 
+**Noon for a date.** When a `time` column really holds a DAY — the plants went
+in, the meeting is on the 4th — write noon UTC, `2026-04-11T12:00:00Z`. Midnight
+is the day before for everyone west of Greenwich, so a diary written at
+`T00:00:00Z` renders a day early in California, and the page has to correct for
+a zone it should never have had to think about.
+
 The first five are the ones a `vocab.json` may spell. References, closed sets
 and content-addressed bodies each carry machinery a store cannot plant from one
 word — a foreign key, a set to enforce, a hash.
+
+**No eid column of your own**, then: a component of yours cannot point at
+another entity by declaring one. Where a row of yours needs to be ABOUT another
+row, the platform already has the word for it — `comment.target` is an eid aimed
+at any entity, and a `dependency` edge is the other way to say it. A history
+component (a chore's ticks, a diary's plantings) is the case that wants this;
+until it can be declared, hang the ticks off `comment.target` or make each tick
+its own entity carrying the parent's eid in `comment.target`.
 
 ## What a refusal tells you
 
@@ -203,6 +222,22 @@ from, never what some other graph has:
 A column that exists but is the server's (`created.at`, `completed.via`) is
 neither refused nor written. It is dropped in silence, so a row you read and
 patch straight back is never punished for carrying its own stamps.
+
+## What an unwritten column reads back as
+
+**Null, and present.** A column of yours that nothing has ever written is on the
+row with the value `null` — not missing from it. So `'mood' in row.entry` is
+true either way and is the wrong test; the value is the right one.
+
+    { "entry": { "written": "2026-04-11T12:00:00Z",
+                 "mood": null, "pages": null, "aloud": null } }
+
+    if (row.entry.mood) …          // right
+    if ('mood' in row.entry) …     // always true
+
+The platform's own `doc.title` is the exception worth knowing: it has a default,
+so a doc nobody titled answers `''` rather than null. `doc.body` is kept as a
+content-addressed blob and answers null when there is none.
 
 ## Components of your own
 

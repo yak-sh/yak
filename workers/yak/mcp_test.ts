@@ -3443,3 +3443,104 @@ slow('an invited person gets a space of their own', async () => {
     await k.stop()
   }
 })
+
+// The five things four separate builders each had to guess at (T-33145), each
+// held here as well as written in the guide, so a guide sentence that stops
+// being true fails rather than misleads: what a `time` column takes, filtering
+// a column that holds an eid, what an unwritten column reads back as, and
+// `task.status` before either mark.
+slow('the answers four builders had to guess at', async () => {
+  let k = await kernel()
+  try {
+    let them = await signIn(k)
+    let agent = connector(k, them.cookie)
+    await agent.tool('app_new', { slug: 'diary', title: 'Diary' })
+    await agent.tool('app_files', {
+      app: 'diary',
+      op: 'write',
+      path: 'vocab.json',
+      content: '{"dayline":{"written":"time","mood":"text",' +
+        '"pages":"number","aloud":"bool"}}',
+    })
+    await agent.tool('app_deploy', { app: 'diary' })
+    let rows = async (filter: string) =>
+      JSON.parse(
+        await agent.tool('graph_query', { app: 'diary', filter }),
+      ) as {
+        entity: { eid: string }
+        doc?: { title: string; body: string | null }
+        dayline?: {
+          written: string
+          mood: string
+          pages: number
+          aloud: boolean
+        }
+        task?: { status: string; priority: number }
+      }[]
+
+    // A `time` column takes an ISO 8601 string with a zone, and gives it back
+    // byte for byte. Noon UTC for a plain DATE is the trap: midnight renders
+    // as the day before for anyone west of Greenwich.
+    let written = await agent.tool('graph_apply', {
+      app: 'diary',
+      entities: [{
+        entity: { eid: '$e' },
+        doc: { title: 'Beans in' },
+        dayline: { written: '2026-04-11T12:00:00Z' },
+      }],
+    })
+    let entry = JSON.parse(written.split('\n')[1]).aliases.$e as string
+    let [one] = await rows('.dayline!')
+    assertEquals(one.dayline!.written, '2026-04-11T12:00:00Z')
+    assertEquals(
+      new Date(one.dayline!.written).toISOString().slice(0, 10),
+      '2026-04-11',
+    )
+    // Filtering on it is the ordinary comparison.
+    assertEquals((await rows('.dayline.written>=2026-04-01')).length, 1)
+    assertEquals((await rows('.dayline.written>=2026-05-01')).length, 0)
+
+    // A column nobody wrote is PRESENT and null, not absent, so `in` is the
+    // wrong test for "was this written" and the value is the right one.
+    assertEquals(
+      [one.dayline!.mood, one.dayline!.pages, one.dayline!.aloud],
+      [null, null, null],
+    )
+    assert('mood' in one.dayline!, 'an unwritten column is present, and null')
+    assertEquals(one.doc, undefined) // not named by the filter
+    // `doc.title` is the one that reads EMPTY instead: the platform's own
+    // column has a default, so a doc nobody titled answers '' and not null.
+    await agent.tool('graph_apply', {
+      app: 'diary',
+      entities: [{ dayline: { mood: 'grey' }, doc: { body: 'Rain again.' } }],
+    })
+    let [untitled] = await rows('.dayline.mood=grey&.doc?')
+    assertEquals(untitled.doc!.title, '')
+    assertEquals(untitled.dayline!.written, null)
+
+    // A column that holds an eid is filtered by the eid, like any value —
+    // `id=` addresses the row itself, which is a different question.
+    await agent.tool('graph_apply', {
+      app: 'diary',
+      entities: [{
+        comment: { target: entry },
+        doc: { body: 'It rained.' },
+      }],
+    })
+    let [said] = await rows(`.comment.target=${entry}`)
+    assertEquals(said.entity.eid != entry, true)
+    assertEquals((await rows(`.comment.target=${said.entity.eid}`)).length, 0)
+
+    // `task.status` before either mark is `open` — the default, which the
+    // two-marks sentence never named.
+    await agent.tool('graph_apply', {
+      app: 'diary',
+      entities: [{ entity: { eid: entry }, task: { priority: 2 } }],
+    })
+    let [chore] = await rows('.task!')
+    assertEquals(chore.task!.status, 'open')
+    assertEquals((await rows('.task.status=open')).length, 1)
+  } finally {
+    await k.stop()
+  }
+})

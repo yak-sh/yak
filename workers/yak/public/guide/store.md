@@ -184,6 +184,12 @@ of its own (`.recipe.minutes<=30`). A component asserted ABSENT (`.archived=`)
 filters without asking for anything back. `*` asks for every component, which is
 what you want when you are looking rather than drawing.
 
+A column of yours that nothing has ever written is on the row with the value
+`null`, not missing from it — so `row.entry.mood` is the test for "was this
+written", never `'mood' in row.entry`. The platform's `doc.title` has a default
+and answers `''` instead; `doc.body` is a content-addressed blob and answers
+null when there is none.
+
 Three things a listing leaves out unless you name them: the platform's STAMPS
 (`created`, `updated`, `notified`, `opened`, `quarantined` — `.created!` asks
 for them back); the platform's own rows about the app (`exception` and `error`,
@@ -223,6 +229,15 @@ never append to what you drew last time.
 - A filter the store cannot serve fails on the socket, not in your code: it
   throws where the page's error reporter picks it up, rather than rejecting a
   promise you can catch. Try the line through `query()` first.
+- **A socket that will not open says nothing at all.** `subscribe` does not
+  throw and has no promise to reject, so a page that only subscribes shows an
+  empty screen for as long as the socket is down — no error, no callback. It
+  retries on its own, backing off to every 15 seconds, and the first frame that
+  arrives fills the page. So `query` FIRST for what you can draw now, then
+  `subscribe` to keep it true; the first callback replaces the rows you drew.
+
+      draw(await query('.task.status=open&.doc?'))
+      let stop = subscribe('.task.status=open&.doc?', draw)
 
 ## Who may read, who may write
 
