@@ -257,6 +257,13 @@ export let directory = (via: Fetcher) => {
     },
     role: async (space: Space, person: string) =>
       (await self.member(space, person))?.role ?? null,
+    // Everyone in a space, by person eid — who to tell when an app's tools
+    // move (declared.ts `toolsChanged`), since reaching the app is exactly
+    // being in the space.
+    members: async (space: Space): Promise<string[]> =>
+      (await query(`.member.space=${space.eid}`))
+        .map((r) => r.member?.person)
+        .filter((p): p is string => !!p),
     // How many owners a space has, so removing a member can refuse to leave
     // it with none.
     owners: async (space: Space) =>

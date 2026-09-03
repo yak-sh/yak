@@ -9,13 +9,12 @@
 // tools.ts, and resources/list, resources/read over the guide, the two views
 // below, and the pages an app of the person's own declares (declared.ts,
 // T-32687), which is what a connector that calls tools, reads a page and
-// renders an answer asks for. The
-// `agents` package's McpAgent — a hibernating Durable
-// Object per client session — is the shape to grow into the day a tool
-// streams progress or the server pushes; it would cost a second DO class, a
-// migration, and the MCP SDK bundled into a Worker that today has no
-// package.json, to hold state nothing yet reads. Its handler composes with
-// this router, so that day is a swap inside this file.
+// renders an answer asks for. The stream is the `agents` package's McpAgent
+// shape without the package: a Durable Object per signed-in person
+// (stream.ts's `Wire`), which is what it takes for the request that deployed
+// an app to write to the stream a DIFFERENT request opened. `initialize`
+// answers an `Mcp-Session-Id` so a client can name its stream and resume it
+// after a drop; nothing else reads that id, and every POST stays stateless.
 //
 // Every tool reply for a space ends with what is unseen there (unseen.ts):
 // each open exception or error not yet served, one line, then marked, so no
@@ -242,7 +241,7 @@ let call = async (ctx: Ctx, params: Record<string, unknown>) => {
 let handle = async (ctx: Ctx, rpc: Rpc) => {
   let params = rpc.params ?? {}
   if (rpc.method == 'initialize') {
-    return result(rpc.id, {
+    let out = result(rpc.id, {
       protocolVersion: spoken(params.protocolVersion),
       // `listChanged` is a promise to say when the tool list moves, which is
       // what an app deploying its own tools does (declared.ts).
@@ -250,6 +249,13 @@ let handle = async (ctx: Ctx, rpc: Rpc) => {
       serverInfo: { name: 'yaks.app', version: VERSION },
       instructions: INSTRUCTIONS,
     })
+    // The session id, per the transport: the client sends it back on every
+    // later request, and the one place it means anything is the GET below,
+    // where it names which of this person's streams is which. It is not
+    // required and never checked — a POST carries its own answer to who is
+    // asking, and a client that has never seen this header still works.
+    out.headers.set('mcp-session-id', crypto.randomUUID())
+    return out
   }
   if (rpc.method == 'ping') return result(rpc.id, {})
   if (rpc.method == 'tools/list') {
@@ -339,8 +345,11 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // The GET is the session's STREAM (stream.ts): a client holds it open to
   // hear what the server says between its own calls, which today is one
   // thing — that its tool list moved, because an app of theirs deployed new
-  // tools (T-32686). Everything else is still one POST in, one JSON out.
-  if (req.method == 'GET') return listen(auth.person)
+  // tools (T-32686). It lives in a Durable Object of the person's own, so a
+  // deploy in one request reaches the stream another request opened, and a
+  // connection that dropped resumes from its `Last-Event-ID` (T-32734).
+  // Everything else is still one POST in, one JSON out.
+  if (req.method == 'GET') return listen(env, auth.person, req)
   let body: unknown
   try {
     body = await req.json()

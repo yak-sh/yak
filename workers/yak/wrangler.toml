@@ -43,9 +43,20 @@ run_worker_first = true
 name = "STORE"
 class_name = "Store"
 
+# One object per signed-in person, holding the MCP stream their connector is
+# listening on (stream.ts, T-32734): a deploy in one request writes to the
+# stream another request opened, which no Worker isolate can do.
+[[durable_objects.bindings]]
+name = "WIRE"
+class_name = "Wire"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Store"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Wire"]
 
 # An app's files. `wrangler dev` simulates the bucket.
 [[r2_buckets]]

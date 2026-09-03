@@ -38,7 +38,7 @@ import {
   type Space,
   storeName,
 } from './directory.ts'
-import { toolsChanged } from './declared.ts'
+import { toolsChanged, toolsOf } from './declared.ts'
 import type { Env } from './env.ts'
 import { mail } from './mail.ts'
 import { SLUG } from './route.ts'
@@ -756,6 +756,10 @@ export let TOOLS: Tool[] = [
       if (space.slug == META.space && app.slug == META.app) {
         throw new Error(`${META.space}/${META.app} is the platform itself`)
       }
+      // What this app declared, asked before its store is emptied because
+      // after that there is nothing to ask: an app that carried tools takes
+      // them with it, and that moves the tool list of everyone in the space.
+      let declared = Object.keys(await toolsOf(ctx.env, space, app)).length
       // The bytes, then the data, then the row that says the app exists —
       // that order, because the row is the app. A delete that dies halfway
       // leaves an app still named but emptied, which asking again finishes;
@@ -776,6 +780,7 @@ export let TOOLS: Tool[] = [
       await ctx.dir.apply({
         entities: [{ entity: { eid: app.eid }, tombstone: {} }],
       }, vouched(who))
+      if (declared) await toolsChanged(ctx, space)
       return {
         text: `deleted ${space.slug}/${app.slug}: ${keys.length} ${
           keys.length == 1 ? 'file' : 'files'

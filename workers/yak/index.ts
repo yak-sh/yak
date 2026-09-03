@@ -4,7 +4,8 @@
 // router composes them by calling those handlers; a part split into its own
 // Worker later is a service binding in env.ts and no change here. The Store
 // Durable Object (store.ts) is its own module for the same reason: a DO may
-// live in a different Worker from the one that binds it. Every route runs
+// live in a different Worker from the one that binds it, and so is the Wire
+// object (stream.ts), which holds a person's open agent stream. Every route runs
 // inside one catch: a throw becomes an exception entity in the (space, app)
 // store — or the meta store, when no app answers — and a soft page, so no
 // failure goes unseen (D-32318 §Errors, V-32361). A door's deliberate no is
@@ -38,6 +39,7 @@ import { storeOf } from './store.ts'
 import { noted, refusal } from './unseen.ts'
 
 export { Store } from './store.ts'
+export { Wire } from './stream.ts'
 
 let serve = async (req: Request, env: Env, r: Route) => {
   if (r.space != null) return bound(env.APPS, apps.fetch, env).fetch(req)

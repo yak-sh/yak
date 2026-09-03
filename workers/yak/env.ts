@@ -17,6 +17,9 @@ export type Fetcher = { fetch(req: Request): Promise<Response> }
 
 export type Env = {
   STORE: Namespace
+  // The person's own MCP stream (stream.ts): one object per signed-in
+  // person, holding what an open connector is listening to.
+  WIRE: Namespace
   ASSETS: Fetcher
   BLOBS: R2
   // The session-signing secret; unset, no session verifies (token.ts). It

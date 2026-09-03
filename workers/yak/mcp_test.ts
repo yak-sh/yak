@@ -1054,13 +1054,37 @@ slow('an app declares its own tools, and the door calls them', async () => {
   }
 })
 
+// An SSE stream held open, as the text heard so far: a test asserts on what
+// has arrived, forgets it, and cancels when it is done.
+let hearing = (res: Response) => {
+  let heard = ''
+  let bytes = new TextDecoder()
+  let reader = res.body!.getReader()
+  let reading = (async () => {
+    try {
+      for (;;) {
+        let { done, value } = await reader.read()
+        if (done) return
+        heard += bytes.decode(value, { stream: true })
+      }
+    } catch { /* cancelled with the test */ }
+  })()
+  return {
+    said: () => heard,
+    forget: () => heard = '',
+    stop: async () => {
+      await reader.cancel().catch(() => {})
+      await reading
+    },
+  }
+}
+
 // The door LISTS what an app declared (T-32686): every app in every space the
 // caller belongs to, and nobody else's — then says on the session's stream
 // when a deploy moved that list.
 slow("the door lists an app's tools, and says when they moved", async () => {
   let k = await kernel()
-  let reading: Promise<void> | undefined
-  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+  let ear: ReturnType<typeof hearing> | undefined
   try {
     let tools = (comp: string, name: string) =>
       JSON.stringify({
@@ -1141,19 +1165,8 @@ slow("the door lists an app's tools, and says when they moved", async () => {
       headers: { cookie: jeff.cookie, accept: 'text/event-stream' },
     })
     assertEquals(stream.headers.get('content-type'), 'text/event-stream')
-    let heard = ''
-    reader = stream.body!.getReader()
-    let bytes = new TextDecoder()
-    reading = (async () => {
-      try {
-        while (true) {
-          let { done, value } = await reader!.read()
-          if (done) return
-          heard += bytes.decode(value, { stream: true })
-        }
-      } catch { /* cancelled with the test */ }
-    })()
-    await until(() => heard.includes(': open'), {
+    ear = hearing(stream)
+    await until(() => ear!.said().includes(': open'), {
       timeout: 10_000,
       poll: 50,
       label: 'the stream to open',
@@ -1173,19 +1186,139 @@ slow("the door lists an app's tools, and says when they moved", async () => {
       }),
     })
     await club.agent.tool('app_deploy', { space: club.space, app: 'runs' })
-    await until(() => heard.includes('notifications/tools/list_changed'), {
-      timeout: 10_000,
-      poll: 50,
-      label: 'the tool list to be called stale',
-    })
+    await until(
+      () => ear!.said().includes('notifications/tools/list_changed'),
+      {
+        timeout: 10_000,
+        poll: 50,
+        label: 'the tool list to be called stale',
+      },
+    )
     assert((await named(club.agent)).includes('runs__jogs'))
     // A deploy that moved nothing says nothing.
-    heard = ''
+    ear.forget()
     await club.agent.tool('app_deploy', { space: club.space, app: 'runs' })
-    assertEquals(heard.includes('list_changed'), false)
+    assertEquals(ear.said().includes('list_changed'), false)
   } finally {
-    await reader?.cancel().catch(() => {})
-    await reading
+    await ear?.stop()
+    await k.stop()
+  }
+})
+
+// The stream is DURABLE and resumable (T-32734): it lives in a Durable Object
+// of the person's own, so the request that deploys reaches the stream a
+// DIFFERENT request opened — which is what makes the notification arrive at
+// all outside one isolate — and a client whose connection dropped picks up
+// what it missed from its `Last-Event-ID`.
+slow('the stream names its session and replays a missed line', async () => {
+  let k = await kernel()
+  let ear: ReturnType<typeof hearing> | undefined
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    // initialize answers the transport's session id.
+    let init = await k.at('yaks.app', '/mcp', {
+      method: 'POST',
+      headers: { cookie: jeff.cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {},
+      }),
+    })
+    let session = init.headers.get('mcp-session-id') ?? ''
+    await init.json()
+    assertMatch(session, /^[0-9a-f-]{36}$/)
+
+    // An app of his own, whose tools.json is what moves.
+    let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
+      .exec(await agent.tool('app_new', { slug: 'walks', title: 'Walks' }))![1]
+    let tools = (...names: string[]) =>
+      JSON.stringify(
+        Object.fromEntries(names.map((n) => [n, {
+          description: `Write a ${n}`,
+          input: { text: 'text' },
+          apply: { walk: { text: '{{text}}' } },
+        }])),
+      )
+    await agent.tool('app_files', {
+      space,
+      app: 'walks',
+      files: [
+        {
+          path: 'vocab.json',
+          content: JSON.stringify({ walk: { text: 'text' } }),
+        },
+        { path: 'tools.json', content: tools('log_walk') },
+      ],
+    })
+    await agent.tool('app_deploy', { space, app: 'walks' })
+
+    let attach = (headers: Record<string, string>) =>
+      k.at('yaks.app', '/mcp', {
+        headers: {
+          cookie: jeff.cookie,
+          accept: 'text/event-stream',
+          ...headers,
+        },
+      })
+    let moved = async (...names: string[]) => {
+      await agent.tool('app_files', {
+        space,
+        app: 'walks',
+        op: 'write',
+        path: 'tools.json',
+        content: tools(...names),
+      })
+      await agent.tool('app_deploy', { space, app: 'walks' })
+    }
+    // Every line heard, with the event id it carries — the cursor a
+    // reconnect resumes from.
+    let lines = (said: string) =>
+      [...said.matchAll(/id: (\d+)\ndata: (.+)/g)]
+        .map((m) => ({ id: Number(m[1]), data: m[2] }))
+
+    ear = hearing(await attach({ 'mcp-session-id': session }))
+    await until(() => ear!.said().includes(': open'), {
+      timeout: 10_000,
+      poll: 50,
+      label: 'the stream to open',
+    })
+    await moved('log_walk', 'walks')
+    await until(() => lines(ear!.said()).length == 1, {
+      timeout: 10_000,
+      poll: 50,
+      label: 'the deploy to reach the stream',
+    })
+    let first = lines(ear.said())[0]
+    assertStringIncludes(first.data, 'notifications/tools/list_changed')
+
+    // The connection drops, and the next deploy has nobody to write to. The
+    // object keeps the line anyway.
+    await ear.stop()
+    ear = undefined
+    await moved('log_walk', 'walks', 'far')
+
+    // Reconnecting from the last id it saw: what it missed, and not the line
+    // it already had.
+    ear = hearing(
+      await attach({
+        'mcp-session-id': session,
+        'last-event-id': String(first.id),
+      }),
+    )
+    await until(() => lines(ear!.said()).length == 1, {
+      timeout: 10_000,
+      poll: 50,
+      label: 'the missed line, replayed',
+    })
+    let back = lines(ear.said())
+    assertEquals(back.length, 1)
+    assertEquals(back[0].id, first.id + 1)
+    assertStringIncludes(back[0].data, 'notifications/tools/list_changed')
+  } finally {
+    await ear?.stop()
     await k.stop()
   }
 })

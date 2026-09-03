@@ -28,7 +28,7 @@ import { type Ctx, type Out, VIEW_MIME } from './tools.ts'
 import type { Who } from './session.ts'
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { storeOf } from './store.ts'
-import { listening, told } from './stream.ts'
+import { told } from './stream.ts'
 
 // The two halves of a namespaced name. An app slug is `[a-z0-9-]` and a tool
 // name `[a-z0-9_]`, so the first `__` is the seam and nothing else can be.
@@ -187,16 +187,15 @@ export let listDeclared = async (ctx: Ctx) => {
   return out
 }
 
-// A deploy that moved an app's tools is news to every agent connected who can
-// reach that app: their tool list is stale, and MCP's word for that is
-// `notifications/tools/list_changed` on the session's stream (stream.ts).
-// Only the people actually listening are asked about, so this costs a
-// directory read per open stream and nothing at all when none is open.
+// An app whose tools moved is news to everyone who can reach it: their tool
+// list is stale, and MCP's word for that is `notifications/tools/list_changed`
+// on the session's stream (stream.ts). Reaching the app is being in the
+// space, so the space's members are who to tell — each on their own object,
+// which holds the line whether or not they are listening this second. One
+// directory read per moved list, and nothing at all otherwise.
 export let toolsChanged = async (ctx: Ctx, space: Space) => {
-  for (let person of listening()) {
-    if (await ctx.dir.role(space, person)) {
-      told(person, 'notifications/tools/list_changed')
-    }
+  for (let person of await ctx.dir.members(space)) {
+    await told(ctx.env, person, 'notifications/tools/list_changed')
   }
 }
 
