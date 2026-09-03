@@ -1417,9 +1417,11 @@ export let TOOLS: Tool[] = [
       'address, their own data from the first byte — pinned to the version ' +
       'you published; nothing is shared but the code. The name is the whole ' +
       "platform's, so it is the app's slug unless that is taken, and a taken " +
-      'name is refused. Publishing again offers whatever is deployed now; ' +
-      'nobody who installed it moves until they app_update. Only the space ' +
-      'owner may publish, and only what the person asked to share.',
+      'name is refused. Publishing again offers whatever is deployed now ' +
+      'under the name it already has — a name is claimed once, and only an ' +
+      'explicit name moves it, which leaves the old one resolving to ' +
+      'nothing; nobody who installed it moves until they app_update. Only ' +
+      'the space owner may publish, and only what the person asked to share.',
     input: {
       type: 'object',
       properties: {
@@ -1427,7 +1429,8 @@ export let TOOLS: Tool[] = [
         app: APP,
         name: str(
           'the name others install it by, across the whole platform — the ' +
-            "app's own slug unless you say otherwise",
+            "app's own slug the first time, and after that whatever it is " +
+            'already offered as, unless you say otherwise',
         ),
         about: str('one line saying what it is, for someone browsing'),
       },
@@ -1435,7 +1438,14 @@ export let TOOLS: Tool[] = [
     },
     run: async (ctx, args) => {
       let { space, app, who } = await ownsApp(ctx, args)
-      let name = args.name == null ? app.slug : slug(args.name, 'name')
+      // A name is claimed ONCE. Publishing again with none said keeps the
+      // name the offer already has: a republish that quietly renamed
+      // `chore-chart` to the app's slug left everyone who had been told to
+      // install `chore-chart` finding nothing (C-32905 item 4). Only a first
+      // publish falls back to the app's own slug, and only an explicit name
+      // moves one.
+      let was = app.published?.name ?? null
+      let name = args.name == null ? was ?? app.slug : slug(args.name, 'name')
       // A published name means one app on the whole platform, so a second
       // claim on it is refused rather than moved: the person who installed
       // `recipes` last week and the one installing it today get one app.
@@ -1465,11 +1475,20 @@ export let TOOLS: Tool[] = [
           published: { name, version, at: new Date().toISOString(), about },
         }],
       }, vouched(who))
+      // What the answer has to carry is whether the NAME moved, because that
+      // is the half nobody can see: a rename strands every link and every
+      // instruction holding the old one.
+      let said = was == null
+        ? `\nanyone can app_install(name: '${name}') and get their own copy ` +
+          'at their own address, with their own data'
+        : was == name
+        ? `\nstill offered as ${name} — the name it was published under, ` +
+          'so everyone already told to install it still finds it'
+        : `\nit was offered as ${was}, and that name no longer resolves: ` +
+          `anyone holding it finds nothing, so tell them ${name}`
       return {
         text: `published ${name} v${version} from ${space.slug}/${app.slug}` +
-          (about ? ` — ${about}` : '') +
-          `\nanyone can app_install(name: '${name}') and get their own copy ` +
-          'at their own address, with their own data',
+          (about ? ` — ${about}` : '') + said,
         space,
       }
     },

@@ -2119,6 +2119,41 @@ slow('an app is published by name, and the name is one app', async () => {
     assertStringIncludes(again, 'Somewhere to keep recipes')
     assertEquals(again.split('\n').length, 2)
 
+    // A name is claimed ONCE (T-32908, C-32905 item 4). The kitchen app is
+    // offered as `recipe-box`, which is not its slug: republishing it with no
+    // name keeps that name and says so. Before this it silently renamed the
+    // offer to the app's slug, and everyone told to install `recipe-box`
+    // found nothing.
+    await agent.tool('app_deploy', { space: 'kitchen', app: 'recipes' })
+    assertStringIncludes(
+      await agent.tool('app_publish', { space: 'kitchen', app: 'recipes' }),
+      'published recipe-box v2',
+    )
+    let kept = await agent.tool('app_published')
+    assertStringIncludes(kept, '- recipe-box v2')
+    assertEquals(kept.split('\n').length, 2)
+
+    // Moving it takes an explicit name, and the answer says what the old one
+    // is worth now.
+    let renamed = await agent.tool('app_publish', {
+      space: 'kitchen',
+      app: 'recipes',
+      name: 'recipe-cards',
+    })
+    assertStringIncludes(renamed, 'published recipe-cards v2')
+    assertStringIncludes(renamed, 'it was offered as recipe-box')
+    assertStringIncludes(renamed, 'no longer resolves')
+    let moved = await agent.tool('app_published')
+    assertStringIncludes(moved, '- recipe-cards v2')
+    assertEquals(moved.includes('recipe-box'), false)
+    assertStringIncludes(
+      (await assertRejects(
+        () => agent.tool('app_install', { space: mine, name: 'recipe-box' }),
+        Error,
+      )).message,
+      'nothing is published as recipe-box',
+    )
+
     // Only an owner may: an editor writes the app's files and does not hand
     // its code to strangers.
     let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
@@ -2146,7 +2181,7 @@ slow('an app is published by name, and the name is one app', async () => {
     )
     let left = await agent.tool('app_published')
     assertEquals(left.split('\n').length, 1)
-    assertStringIncludes(left, 'recipe-box')
+    assertStringIncludes(left, 'recipe-cards')
     assertStringIncludes(
       (await assertRejects(
         () => agent.tool('app_unpublish', { space: mine, app: 'recipes' }),

@@ -494,8 +494,10 @@ here, and anyone can take a copy into their own — four tools:
 
 - `app_publish(app, name?, about?)` — offer the version that is serving, under a
   name the whole platform shares. It is the app's own slug unless somebody else
-  has it, and a taken name is refused naming the app that has it. `about` is the
-  line someone browsing reads. Only the space owner may publish.
+  has it, and a taken name is refused naming the app that has it. Publishing
+  again keeps the name it already has; pass a `name` to change it, and the old
+  one stops resolving for everybody holding it. `about` is the line someone
+  browsing reads. Only the space owner may publish.
 - `app_unpublish(app)` — withdraw the offer. The app is untouched, every copy
   anyone took is untouched, and the name is free again.
 - `app_published()` — what is on offer, newest first, each with the address it
