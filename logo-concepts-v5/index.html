@@ -1,0 +1,939 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>yaks.app — complete yak gallery</title>
+    <style>
+    :root {
+      --ground: #f7eee4;
+      --paper: #fffaf4;
+      --ink: #3b3028;
+      --soft: #76665a;
+      --line: #e4d2c1;
+      --green: #52724a;
+      --red: #a54439;
+      --amber: #91651b;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--ground);
+      font: 16px/1.5 ui-rounded, "Avenir Next", system-ui, sans-serif;
+    }
+    header,
+    main,
+    footer {
+      width: min(1320px, calc(100% - 36px));
+      margin-inline: auto;
+    }
+    header {
+      padding: 64px 0 28px;
+    }
+    .Eyebrow {
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 900px;
+      margin: 10px 0 16px;
+      font-size: clamp(42px, 7vw, 76px);
+      line-height: .98;
+      letter-spacing: -.045em;
+    }
+    header p {
+      max-width: 780px;
+      margin: 0;
+      color: var(--soft);
+    }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 22px;
+    }
+    nav a,
+    .Badge {
+      padding: 5px 9px;
+      color: var(--soft);
+      background: #eee1d5;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    nav a:hover {
+      color: var(--ink);
+      background: #e4d2c1;
+    }
+    section {
+      padding: 28px 0 20px;
+      scroll-margin-top: 20px;
+    }
+    .SectionHead {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(220px, 520px);
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 18px;
+    }
+    h2 {
+      margin: 0;
+      font-size: clamp(25px, 4vw, 38px);
+      letter-spacing: -.025em;
+    }
+    .SectionHead p {
+      margin: 0;
+      color: var(--soft);
+    }
+    .Grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .Card {
+      overflow: hidden;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: 0 14px 36px #4938240a;
+    }
+    .Card-official {
+      grid-column: span 2;
+      border-color: #9cb593;
+    }
+    .Art {
+      display: grid;
+      min-height: 290px;
+      place-items: center;
+      padding: 22px;
+      background-color: #f3e9dd;
+      background-image:
+        linear-gradient(45deg, #e9daca 25%, transparent 25%),
+        linear-gradient(-45deg, #e9daca 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #e9daca 75%),
+        linear-gradient(-45deg, transparent 75%, #e9daca 75%);
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+      background-size: 16px 16px;
+    }
+    .Art img {
+      width: 100%;
+      height: 300px;
+      object-fit: contain;
+      filter: drop-shadow(0 12px 13px #35271918);
+    }
+    .Card-official .Art img {
+      height: 390px;
+    }
+    .Copy {
+      padding: 16px 17px 18px;
+      border-top: 1px solid var(--line);
+    }
+    .Copy h3 {
+      margin: 0 0 7px;
+      font-size: 17px;
+    }
+    .Copy p {
+      min-height: 3em;
+      margin: 0;
+      color: var(--soft);
+      font-size: 13px;
+    }
+    .Badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 12px;
+    }
+    .Badge-good {
+      color: #3d6338;
+      background: #e4efdf;
+    }
+    .Badge-warn {
+      color: var(--amber);
+      background: #f4e7c8;
+    }
+    .Badge-bad {
+      color: var(--red);
+      background: #f6ded8;
+    }
+    .Open {
+      color: inherit;
+      text-decoration: none;
+    }
+    .Open:hover h3 {
+      text-decoration: underline;
+    }
+    footer {
+      padding: 38px 0 72px;
+      color: var(--soft);
+      font-size: 13px;
+    }
+    @media (max-width: 900px) {
+      .Grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 620px) {
+      header {
+        padding-top: 42px;
+      }
+      .Grid,
+      .SectionHead {
+        grid-template-columns: 1fr;
+      }
+      .Card-official {
+        grid-column: auto;
+      }
+      .Art img,
+      .Card-official .Art img {
+        height: 280px;
+      }
+    }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="Eyebrow">yaks.app · complete logo and character gallery</div>
+      <h1>Every yak, warts and all.</h1>
+      <p>
+        The selected watercolor yak, all four earlier rounds, every retained
+        experiment, every failed transparency pass, and the isolated-context
+        corrections. Rejected work remains visible and labelled.
+      </p>
+      <nav id="nav" aria-label="Gallery sections"></nav>
+    </header>
+    <main id="gallery"></main>
+    <footer>
+      Checkerboard behind a card is the page's transparency preview. A
+      checkerboard inside the artwork is labelled as baked into the PNG.
+    </footer>
+    <script>
+    let groups = [
+      {
+        id: 'official',
+        title: 'Official icon',
+        note:
+          'Round four, number four. This exact character is now on the live homepage and supplies the favicon and app-icon exports.',
+        items: [[
+          '../logo-concepts-v4/04-simple-watercolor.png',
+          'Simple watercolor yak',
+          'The approved pose, colors, expression, and level of cuteness.',
+          ['official', 'live', 'transparent'],
+          'official',
+        ]],
+      },
+      {
+        id: 'round-one',
+        title: 'Round one · simple media',
+        note: 'The first cut-paper, gouache, print, and portrait studies.',
+        items: [
+          [
+            '../logo-concepts/yak-block-print.png',
+            'Block print',
+            'Early print-texture study.',
+            ['earlier round'],
+          ],
+          [
+            '../logo-concepts/yak-cut-paper.png',
+            'Cut paper',
+            'Early layered-paper study.',
+            ['earlier round'],
+          ],
+          ['../logo-concepts/yak-gouache.png', 'Gouache', 'Early painted study.', [
+            'earlier round',
+          ]],
+          [
+            '../logo-concepts/yak-monoprint-head.png',
+            'Monoprint head',
+            'Early close-cropped portrait.',
+            ['earlier round'],
+          ],
+        ],
+      },
+      {
+        id: 'previously-omitted',
+        title: 'Previously omitted outputs',
+        note:
+          'Two early cut-paper attempts were still in the generation archive but absent from the earlier review pages. They are restored here.',
+        items: [
+          [
+            'archive-01-cut-paper-head-checker.png',
+            'Cut-paper head',
+            'Early flat portrait with an opaque depicted checkerboard.',
+            ['restored', 'baked checkerboard'],
+            'bad',
+          ],
+          [
+            'archive-02-cut-paper-body-checker.png',
+            'Cut-paper body',
+            'Early full-body paper study with an opaque depicted checkerboard.',
+            ['restored', 'baked checkerboard'],
+            'bad',
+          ],
+        ],
+      },
+      {
+        id: 'round-two',
+        title: 'Round two · skeuomorphic expansion',
+        note:
+          'Detailed modeled icons plus paper, gouache, and watercolor explorations.',
+        items: [
+          [
+            '../logo-concepts-v2/01-skeuo-standing.png',
+            'Skeuomorphic standing',
+            'Full-body modeled icon.',
+            ['earlier round'],
+          ],
+          [
+            '../logo-concepts-v2/02-skeuo-bell-bust.png',
+            'Skeuomorphic bell bust',
+            'Close crop with brass bell.',
+            ['earlier round'],
+          ],
+          [
+            '../logo-concepts-v2/03-skeuo-resting.png',
+            'Skeuomorphic resting',
+            'Rejected resting pose.',
+            ['earlier round', 'rejected pose'],
+            'bad',
+          ],
+          [
+            '../logo-concepts-v2/04-skeuo-stride.png',
+            'Skeuomorphic stride',
+            'Rejected action-oriented pose.',
+            ['earlier round', 'too much action'],
+            'bad',
+          ],
+          [
+            '../logo-concepts-v2/05-cut-paper-stride.png',
+            'Cut-paper stride',
+            'Detailed paper scene.',
+            ['earlier round', 'too busy'],
+            'warn',
+          ],
+          [
+            '../logo-concepts-v2/06-gouache-profile.png',
+            'Gouache profile',
+            'Profile illustration.',
+            ['earlier round'],
+          ],
+          [
+            '../logo-concepts-v2/07-watercolor-portrait.png',
+            'Watercolor portrait',
+            'Painted portrait direction.',
+            ['earlier round'],
+          ],
+        ],
+      },
+      {
+        id: 'round-three',
+        title: 'Round three · younger character',
+        note:
+          'A younger yak, but the expressions and poses drifted toward kawaii and action.',
+        items: [
+          [
+            '../logo-concepts-v3/01-skeuo-young-standing.png',
+            'Young skeuomorphic standing',
+            'Rejected as creepy and kawaii.',
+            ['earlier round', 'rejected'],
+            'bad',
+          ],
+          [
+            '../logo-concepts-v3/02-skeuo-young-bust.png',
+            'Young skeuomorphic bust',
+            'Rejected as creepy and kawaii.',
+            ['earlier round', 'rejected'],
+            'bad',
+          ],
+          [
+            '../logo-concepts-v3/03-gouache-young.png',
+            'Young gouache',
+            'Over-detailed for this medium.',
+            ['earlier round', 'too detailed'],
+            'warn',
+          ],
+          [
+            '../logo-concepts-v3/04-watercolor-young.png',
+            'Young watercolor',
+            'Style liked; pose too sad and passive.',
+            ['earlier round', 'rejected pose'],
+            'bad',
+          ],
+          [
+            '../logo-concepts-v3/05-cut-paper-young.png',
+            'Young cut paper',
+            'Rejected as creepy and overactive.',
+            ['earlier round', 'rejected'],
+            'bad',
+          ],
+        ],
+      },
+      {
+        id: 'round-four',
+        title: 'Round four · corrected stillness',
+        note:
+          'Level heads, static logo poses, restrained eyes, and much simpler non-skeuomorphic media.',
+        items: [
+          [
+            '../logo-concepts-v4/01-skeuo-standing.png',
+            'Still modeled yak',
+            'Panic-era full-body icon.',
+            ['earlier round', 'transparent'],
+          ],
+          [
+            '../logo-concepts-v4/02-skeuo-bell-bust.png',
+            'Modeled bell bust',
+            'Panic-era close crop and bell.',
+            ['earlier round', 'transparent'],
+          ],
+          [
+            '../logo-concepts-v4/03-simple-gouache.png',
+            'Simple gouache',
+            'Deliberately broad and quiet.',
+            ['earlier round', 'transparent'],
+          ],
+          [
+            '../logo-concepts-v4/04-simple-watercolor.png',
+            'Simple watercolor',
+            'Selected as the official character.',
+            ['selected', 'transparent'],
+            'good',
+          ],
+          [
+            '../logo-concepts-v4/05-simple-cut-paper.png',
+            'Simple cut paper',
+            'Deliberately broad paper layers.',
+            ['earlier round', 'transparent'],
+          ],
+        ],
+      },
+      {
+        id: 'reference-pass',
+        title: 'First #4-reference pass',
+        note:
+          'Generated from the approved yak. This pass produced both useful modeled variants and the recurring cheek-hair drift.',
+        items: [
+          [
+            'reference-01-watercolor-bell-checker.png',
+            'Watercolor bell',
+            'Good bell idea; checkerboard was baked into an RGB image.',
+            ['baked checkerboard', 'sideburn drift'],
+            'bad',
+          ],
+          [
+            'reference-02-skeuo-shallow.png',
+            'Shallow modeled yak',
+            'Transparent, but older and hairier than the source.',
+            ['transparent', 'sideburn drift'],
+            'warn',
+          ],
+          [
+            'reference-03-skeuo-felt.png',
+            'Felt modeled yak',
+            'Transparent felt/material variation.',
+            ['transparent', 'sideburn drift'],
+            'warn',
+          ],
+          [
+            'reference-04-skeuo-polished.png',
+            'Polished modeled yak',
+            'Transparent glossy variation.',
+            ['transparent', 'sideburn drift'],
+            'warn',
+          ],
+          [
+            'reference-05-typing-checker.png',
+            'Typing character',
+            'Computer pose with baked checkerboard.',
+            ['baked checkerboard', 'sideburn drift'],
+            'bad',
+          ],
+          [
+            'reference-06-faq-five-legs-checker.png',
+            'FAQ · five legs',
+            'The rejected five-legged FAQ rendering.',
+            ['5 legs — rejected', 'baked checkerboard'],
+            'bad',
+          ],
+          [
+            'reference-07-pricing.png',
+            'Pricing visor',
+            'Transparent pricing pose; busier than the target.',
+            ['transparent', 'sideburn drift'],
+            'warn',
+          ],
+          [
+            'reference-08-faq-four-limbs-checker.png',
+            'FAQ · corrected limbs',
+            'Four limbs, but the checkerboard remained baked in.',
+            ['4 limbs', 'baked checkerboard'],
+            'warn',
+          ],
+        ],
+      },
+      {
+        id: 'extractions',
+        title: 'Transparency repair attempts',
+        note:
+          'Edits intended to remove the generated checkerboard. Two succeeded; the typing repair did not.',
+        items: [
+          [
+            'extracted-01-watercolor-bell.png',
+            'Bell · extracted',
+            'Checkerboard removed to alpha.',
+            ['transparent', 'sideburn drift'],
+            'good',
+          ],
+          [
+            'extracted-02-typing.png',
+            'Typing · extraction failed',
+            'Still an opaque RGB checkerboard.',
+            ['baked checkerboard', 'failed repair'],
+            'bad',
+          ],
+          [
+            'extracted-03-faq-four-limbs.png',
+            'FAQ · extracted',
+            'Four-limb corrected version with alpha.',
+            ['transparent', '4 limbs'],
+            'good',
+          ],
+        ],
+      },
+      {
+        id: 'clean-conversation',
+        title: 'No-image-input pass · same conversation',
+        note:
+          'No images were supplied, but the conversation still carried visual motifs forward. The warm vignettes and cheek hair show the drift.',
+        items: [
+          [
+            'clean-01-watercolor-bell-vignette.png',
+            'Watercolor bell',
+            'RGBA file with an opaque warm vignette inside it.',
+            ['baked vignette', 'sideburn drift'],
+            'bad',
+          ],
+          [
+            'clean-02-skeuo-shallow.png',
+            'Shallow modeled',
+            'Transparent modeled variation.',
+            ['transparent', 'sideburn drift'],
+            'warn',
+          ],
+          [
+            'clean-03-skeuo-felt.png',
+            'Felt modeled',
+            'Transparent modeled variation.',
+            ['transparent', 'sideburn drift'],
+            'warn',
+          ],
+          [
+            'clean-04-skeuo-polished.png',
+            'Polished modeled',
+            'Transparent modeled variation.',
+            ['transparent', 'sideburn drift'],
+            'warn',
+          ],
+          [
+            'clean-05-typing-vignette.png',
+            'Typing character',
+            'RGBA file with an opaque warm vignette.',
+            ['baked vignette', 'sideburn drift'],
+            'bad',
+          ],
+          [
+            'clean-06-faq.png',
+            'FAQ character',
+            'Transparent and four-limbed, but still carries drift.',
+            ['transparent', '4 limbs', 'sideburn drift'],
+            'warn',
+          ],
+          [
+            'clean-07-pricing-vignette.png',
+            'Pricing character',
+            'RGBA file with an opaque warm vignette.',
+            ['baked vignette', 'sideburn drift'],
+            'bad',
+          ],
+        ],
+      },
+      {
+        id: 'isolated-text',
+        title: 'Fresh isolated context · text only',
+        note:
+          'Generated in isolated contexts with no image reference. This removed cross-image input, but recreating the character from words still produced strong face-framing hair.',
+        items: [
+          [
+            'isolated-text-01-watercolor-bell.png',
+            'Watercolor bell',
+            'Transparent text-only reconstruction.',
+            ['transparent', 'sideburn drift'],
+            'warn',
+          ],
+          [
+            'isolated-text-02-skeuo-shallow.png',
+            'Shallow modeled',
+            'Transparent text-only reconstruction.',
+            ['transparent', 'sideburn drift'],
+            'warn',
+          ],
+          [
+            'isolated-text-03-skeuo-felt.png',
+            'Felt modeled',
+            'Transparent text-only reconstruction.',
+            ['transparent', 'sideburn drift'],
+            'warn',
+          ],
+          [
+            'isolated-text-04-skeuo-polished.png',
+            'Polished modeled',
+            'Transparent text-only reconstruction.',
+            ['transparent', 'sideburn drift'],
+            'warn',
+          ],
+          [
+            'isolated-text-05-typing-draft.png',
+            'Typing · draft',
+            'First isolated typing pose.',
+            ['transparent', 'draft', 'sideburn drift'],
+            'warn',
+          ],
+          [
+            'isolated-text-06-faq-draft.png',
+            'FAQ · draft',
+            'First isolated FAQ pose.',
+            ['transparent', 'draft', '4 limbs', 'sideburn drift'],
+            'warn',
+          ],
+          [
+            'isolated-text-07-typing-revised.png',
+            'Typing · revised',
+            'Clearer hoof placement, still text-only.',
+            ['transparent', '4 limbs', 'sideburn drift'],
+            'warn',
+          ],
+          [
+            'isolated-text-08-faq-revised.png',
+            'FAQ · revised',
+            'Clearer four-limb pose, still text-only.',
+            ['transparent', '4 limbs', 'sideburn drift'],
+            'warn',
+          ],
+          [
+            'isolated-text-09-pricing.png',
+            'Pricing visor',
+            'Transparent text-only pricing pose.',
+            ['transparent', '4 limbs', 'sideburn drift'],
+            'warn',
+          ],
+        ],
+      },
+      {
+        id: 'isolated-reference',
+        title: 'Fresh isolated context · only #4 supplied',
+        note:
+          'The next pass: each generation receives the approved number four as its single image reference, with no derived renderings carried forward.',
+        items: [
+          [
+            'isolated-reference-logo-01-watercolor-white-eyes.png',
+            'Watercolor bell · first attempt',
+            'Opaque white background and eyes larger than the source.',
+            ['only #4 supplied', 'opaque white', 'eye drift'],
+            'bad',
+          ],
+          [
+            'isolated-reference-logo-02-watercolor-selected-checker.png',
+            'Watercolor bell · selected visual',
+            'Source-like character and bell, but the checkerboard is baked in.',
+            ['only #4 supplied', 'baked checkerboard', '4 limbs'],
+            'warn',
+          ],
+          [
+            'isolated-reference-logo-03-shallow-checker-eyes.png',
+            'Shallow model · first attempt',
+            'Opaque checkerboard and eyes larger than the source.',
+            ['only #4 supplied', 'baked checkerboard', 'eye drift'],
+            'bad',
+          ],
+          [
+            'isolated-reference-logo-04-shallow-checker-mane.png',
+            'Shallow model · second attempt',
+            'Opaque checkerboard with prominent face-side mane.',
+            ['only #4 supplied', 'baked checkerboard', 'sideburn drift'],
+            'bad',
+          ],
+          [
+            'isolated-reference-logo-05-shallow-selected-checker.png',
+            'Shallow model · selected visual',
+            'Restrained 2.5D finish; checkerboard still baked in.',
+            ['only #4 supplied', 'baked checkerboard', '4 limbs'],
+            'warn',
+          ],
+          [
+            'isolated-reference-logo-06-felt-selected-checker.png',
+            'Felt model · selected visual',
+            'Soft material finish; checkerboard still baked in.',
+            ['only #4 supplied', 'baked checkerboard', '4 limbs'],
+            'warn',
+          ],
+          [
+            'isolated-reference-logo-07-polished-checker-eyes.png',
+            'Polished model · first attempt',
+            'Opaque checkerboard and glossy oversized eyes.',
+            ['only #4 supplied', 'baked checkerboard', 'eye drift'],
+            'bad',
+          ],
+          [
+            'isolated-reference-logo-08-polished-checker-eyes.png',
+            'Polished model · second attempt',
+            'Opaque checkerboard; eyes remain too large.',
+            ['only #4 supplied', 'baked checkerboard', 'eye drift'],
+            'bad',
+          ],
+          [
+            'isolated-reference-logo-09-polished-selected-checker.png',
+            'Polished model · selected visual',
+            'Best polished character; checkerboard still baked in.',
+            ['only #4 supplied', 'baked checkerboard', '4 limbs'],
+            'warn',
+          ],
+          [
+            'isolated-reference-logo-10-watercolor-alpha-clean.png',
+            'Watercolor bell · alpha extraction A',
+            'Selected watercolor visual with the neutral checker removed.',
+            ['transparent', 'alpha A', '4 limbs', 'no sideburns'],
+            'good',
+          ],
+          [
+            'isolated-reference-logo-11-shallow-alpha-clean.png',
+            'Shallow model · alpha extraction A',
+            'Selected restrained 2.5D visual with alpha.',
+            ['transparent', 'alpha A', '4 limbs', 'no sideburns'],
+            'good',
+          ],
+          [
+            'isolated-reference-logo-12-felt-alpha-clean.png',
+            'Felt model · alpha extraction A',
+            'Selected felt/material visual with alpha.',
+            ['transparent', 'alpha A', '4 limbs', 'no sideburns'],
+            'good',
+          ],
+          [
+            'isolated-reference-logo-13-polished-alpha-clean.png',
+            'Polished model · alpha extraction A',
+            'Selected polished skeuomorphic visual with alpha.',
+            ['transparent', 'alpha A', '4 limbs', 'no sideburns'],
+            'good',
+          ],
+          [
+            'isolated-reference-logo-14-watercolor-alpha-final.png',
+            'Watercolor bell · alpha extraction B',
+            'Alternate verified cutout; source RGB pixels are unchanged.',
+            ['transparent', 'alpha B', '4 limbs', 'no sideburns'],
+            'good',
+          ],
+          [
+            'isolated-reference-logo-15-shallow-alpha-final.png',
+            'Shallow model · alpha extraction B',
+            'Alternate verified cutout; source RGB pixels are unchanged.',
+            ['transparent', 'alpha B', '4 limbs', 'no sideburns'],
+            'good',
+          ],
+          [
+            'isolated-reference-logo-16-felt-alpha-final.png',
+            'Felt model · alpha extraction B',
+            'Alternate verified cutout; source RGB pixels are unchanged.',
+            ['transparent', 'alpha B', '4 limbs', 'no sideburns'],
+            'good',
+          ],
+          [
+            'isolated-reference-logo-17-polished-alpha-final.png',
+            'Polished model · alpha extraction B',
+            'Alternate verified cutout; source RGB pixels are unchanged.',
+            ['transparent', 'alpha B', '4 limbs', 'no sideburns'],
+            'good',
+          ],
+          [
+            'isolated-reference-typing-01-checker-tufts.png',
+            'Typing · first attempt',
+            'Opaque checkerboard and unwanted cheek tufts.',
+            ['only #4 supplied', 'baked checkerboard', 'sideburn drift'],
+            'bad',
+          ],
+          [
+            'isolated-reference-typing-02-checker-spikes.png',
+            'Typing · second attempt',
+            'Opaque checkerboard and face-side mane spikes.',
+            ['only #4 supplied', 'baked checkerboard', 'sideburn drift'],
+            'bad',
+          ],
+          [
+            'isolated-reference-typing-03-selected-checker.png',
+            'Typing · selected visual',
+            'Selected composition before alpha extraction.',
+            ['only #4 supplied', 'baked checkerboard', '4 limbs'],
+            'warn',
+          ],
+          [
+            'isolated-reference-typing-04-alpha-final.png',
+            'Typing · first alpha extraction',
+            'Transparent, but extraction removed most of the pale horns.',
+            ['transparent', 'horn loss', '4 limbs'],
+            'bad',
+          ],
+          [
+            'isolated-reference-typing-05-alpha-clean.png',
+            'Typing · transparent final',
+            'Four readable limbs, preserved horns, and smooth cheeks.',
+            ['transparent', 'final', '4 limbs', 'no sideburns'],
+            'good',
+          ],
+          [
+            'isolated-reference-faq-01-checker-three-limbs.png',
+            'FAQ · first attempt',
+            'Only three readable limbs, cheek tufts, and opaque checkerboard.',
+            ['only #4 supplied', '3 limbs', 'baked checkerboard'],
+            'bad',
+          ],
+          [
+            'isolated-reference-faq-02-checker-eyes.png',
+            'FAQ · second attempt',
+            'Opaque checkerboard and highlighted eyes.',
+            ['only #4 supplied', 'baked checkerboard', 'eye drift'],
+            'bad',
+          ],
+          [
+            'isolated-reference-faq-03-checker-spikes.png',
+            'FAQ · third attempt',
+            'Opaque checkerboard and jagged face-side mane.',
+            ['only #4 supplied', 'baked checkerboard', 'sideburn drift'],
+            'bad',
+          ],
+          [
+            'isolated-reference-faq-04-selected-checker.png',
+            'FAQ · selected visual',
+            'Selected composition before alpha and eye cleanup.',
+            ['only #4 supplied', 'baked checkerboard', '4 limbs'],
+            'warn',
+          ],
+          [
+            'isolated-reference-faq-05-alpha-final.png',
+            'FAQ · first alpha extraction',
+            'Transparent, but extraction removed most of the pale horns.',
+            ['transparent', 'horn loss', '4 limbs'],
+            'bad',
+          ],
+          [
+            'isolated-reference-faq-06-alpha-clean.png',
+            'FAQ · transparent final',
+            'Four limbs, one question mark, preserved horns, and smooth cheeks.',
+            ['transparent', 'final', '4 limbs', 'no sideburns'],
+            'good',
+          ],
+          [
+            'isolated-reference-pricing-01-checker-eyes.png',
+            'Pricing · first attempt',
+            'Baked checkerboard and oversized highlighted eyes.',
+            ['only #4 supplied', 'baked checkerboard', 'eye drift'],
+            'bad',
+          ],
+          [
+            'isolated-reference-pricing-02-checker.png',
+            'Pricing · second attempt',
+            'Character corrected; checkerboard still baked into RGB.',
+            ['only #4 supplied', 'baked checkerboard'],
+            'bad',
+          ],
+          [
+            'isolated-reference-pricing-03-checker.png',
+            'Pricing · third attempt',
+            'Another opaque checkerboard result.',
+            ['only #4 supplied', 'baked checkerboard'],
+            'bad',
+          ],
+          [
+            'isolated-reference-pricing-04-selected-checker.png',
+            'Pricing · selected visual',
+            'Selected visual rendering before alpha extraction.',
+            ['only #4 supplied', 'baked checkerboard', '4 limbs'],
+            'warn',
+          ],
+          [
+            'isolated-reference-pricing-05-alpha-draft.png',
+            'Pricing · alpha draft',
+            'First extracted cutout; slight pale fringe.',
+            ['transparent', 'alpha draft', '4 limbs'],
+            'warn',
+          ],
+          [
+            'isolated-reference-pricing-06-alpha-v2.png',
+            'Pricing · alpha v2',
+            'Reduced extraction fringe.',
+            ['transparent', 'alpha revision', '4 limbs'],
+            'warn',
+          ],
+          [
+            'isolated-reference-pricing-07-alpha-final.png',
+            'Pricing · alpha final v1',
+            'Clean selected cutout after two extraction refinements.',
+            ['transparent', 'alpha revision', '4 limbs'],
+            'good',
+          ],
+          [
+            'isolated-reference-pricing-08-alpha-clean.png',
+            'Pricing · transparent final',
+            'Selected visor visual with the neutral checker removed.',
+            ['transparent', 'final', '4 limbs', 'no sideburns'],
+            'good',
+          ],
+        ],
+      },
+    ]
+
+    let nav = document.querySelector('#nav')
+    let gallery = document.querySelector('#gallery')
+    for (let group of groups) {
+      let link = document.createElement('a')
+      link.href = `#${group.id}`
+      link.textContent = group.title
+      nav.append(link)
+
+      let section = document.createElement('section')
+      section.id = group.id
+      let head = document.createElement('div')
+      head.className = 'SectionHead'
+      head.innerHTML = `<h2>${group.title}</h2><p>${group.note}</p>`
+      section.append(head)
+      let grid = document.createElement('div')
+      grid.className = 'Grid'
+      for (let [file, title, note, badges, tone, layout] of group.items) {
+        let card = document.createElement('article')
+        card.className = `Card${layout === 'official' ? ' Card-official' : ''}`
+        let tags = badges.map((badge) => {
+          let kind = tone ? ` Badge-${tone}` : ''
+          return `<span class="Badge${kind}">${badge}</span>`
+        }).join('')
+        card.innerHTML = `
+          <a class="Open" href="${file}">
+            <div class="Art"><img loading="lazy" src="${file}" alt="${title}"></div>
+            <div class="Copy">
+              <h3>${title}</h3>
+              <p>${note}</p>
+              <div class="Badges">${tags}</div>
+            </div>
+          </a>`
+        grid.append(card)
+      }
+      section.append(grid)
+      gallery.append(section)
+    }
+    </script>
+  </body>
+</html>
