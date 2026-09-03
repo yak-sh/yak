@@ -2,7 +2,7 @@
 // requests the platform makes, and the reading it gives an agent back.
 //
 // The three payloads below are not invented. They were recorded from the live
-// account on 2026-09-03 by attaching `probe.crayonbloom.com` to the yaks.app
+// account on 2026-09-03 by attaching `probe.example.com` to the yaks.app
 // zone, adding the CNAME, and reading the custom hostname back as it came up
 // — creation, the minute the record had not propagated, and active. The whole
 // point of `steps()` is to tell those three apart specifically enough for an
@@ -30,12 +30,12 @@ let AT = 'https://api.cloudflare.com/client/v4/zones/zone/custom_hostnames'
 // Just made: Cloudflare has not looked for the record yet.
 let MADE: Custom = {
   id: '32b2c24d-e60a-4f29-bc24-5dc32ad8ecfe',
-  hostname: 'probe.crayonbloom.com',
+  hostname: 'probe.example.com',
   status: 'pending',
   ssl: { status: 'initializing' },
   ownership_verification: {
     type: 'txt',
-    name: '_cf-custom-hostname.probe.crayonbloom.com',
+    name: '_cf-custom-hostname.probe.example.com',
     value: '955d9acb-87bd-428f-a52f-f8e15a61d841',
   },
 }
@@ -204,7 +204,7 @@ let ok = (result: unknown) =>
 Deno.test('provisioning asks for the hostname and nothing else', async () => {
   let { out, calls } = await recorded(
     () => ok(MADE),
-    () => provision(env, 'probe.crayonbloom.com'),
+    () => provision(env, 'probe.example.com'),
   )
   assertEquals(calls.length, 1)
   assertEquals(calls[0].method, 'POST')
@@ -213,7 +213,7 @@ Deno.test('provisioning asks for the hostname and nothing else', async () => {
   // HTTP validation: once the CNAME points here Cloudflare answers the
   // challenge itself, so there is no second record for the person to add.
   assertEquals(JSON.parse(calls[0].body), {
-    hostname: 'probe.crayonbloom.com',
+    hostname: 'probe.example.com',
     ssl: { method: 'http', type: 'dv', settings: { min_tls_version: '1.2' } },
   })
   assertEquals((out as Custom).id, MADE.id)
@@ -222,13 +222,13 @@ Deno.test('provisioning asks for the hostname and nothing else', async () => {
 Deno.test('a hostname is looked up by name, never by a stored id', async () => {
   let { out, calls } = await recorded(
     () => ok([LIVE]),
-    () => customOf(env, 'probe.crayonbloom.com'),
+    () => customOf(env, 'probe.example.com'),
   )
   assertEquals(calls[0].method, 'GET')
-  assertEquals(calls[0].url, `${AT}?hostname=probe.crayonbloom.com`)
+  assertEquals(calls[0].url, `${AT}?hostname=probe.example.com`)
   assertEquals((out as Custom).status, 'active')
   // Cloudflare's filter is a prefix match, so the name has to agree exactly:
-  // asking about `bloom.com` may not answer about `crayonbloom.com`.
+  // asking about `ample.com` may not answer about `example.com`.
   let { out: none } = await recorded(
     () => ok([LIVE]),
     () => customOf(env, 'bloom.com'),
@@ -239,7 +239,7 @@ Deno.test('a hostname is looked up by name, never by a stored id', async () => {
 Deno.test('detaching gives the hostname back, and says if there was none', async () => {
   let { out, calls } = await recorded(
     (r) => r.method == 'DELETE' ? ok({ id: MADE.id }) : ok([LIVE]),
-    () => release(env, 'probe.crayonbloom.com'),
+    () => release(env, 'probe.example.com'),
   )
   assertEquals(out, true)
   assertEquals(calls.map((c) => c.method), ['GET', 'DELETE'])
@@ -248,7 +248,7 @@ Deno.test('detaching gives the hostname back, and says if there was none', async
   // is what lets a half-finished detach be finished by asking again.
   let { out: gone, calls: asked } = await recorded(
     () => ok([]),
-    () => release(env, 'probe.crayonbloom.com'),
+    () => release(env, 'probe.example.com'),
   )
   assertEquals(gone, false)
   assertEquals(asked.map((c) => c.method), ['GET'])
@@ -264,7 +264,7 @@ Deno.test('a refusal from Cloudflare is answered in its own words', async () => 
           errors: [{ code: 1406, message: 'duplicate custom hostname found.' }],
           result: null,
         }, { status: 409 }),
-      () => provision(env, 'probe.crayonbloom.com'),
+      () => provision(env, 'probe.example.com'),
     )
   } catch (e) {
     said = (e as Error).message

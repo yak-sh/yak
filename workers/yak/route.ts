@@ -149,8 +149,8 @@ export let route = (host: string, pathname: string): Route => {
 // Cloudflare warns it can intercept a CA's request
 // (developers.cloudflare.com/ssl/edge-certificates/changing-dcv-method/troubleshooting/).
 // MEASURED 2026-09-03: with that route live and the Worker answering these
-// paths itself, `dcv-probe.crayonbloom.com` was attached as a custom hostname
-// and ssl.com issued its certificate within a minute, while a request to
+// paths itself, a probe hostname was attached as a custom hostname and
+// ssl.com issued its certificate within a minute, while a request to
 // `/.well-known/acme-challenge/x` on that hostname reached the Worker and got
 // its soft 404. Cloudflare's edge answers the CA before the route ever runs.
 // That measurement is also why the platform can answer its own 404 on our
