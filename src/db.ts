@@ -1049,6 +1049,11 @@ export let derived = [
   'space',
   'app',
   'member',
+  // An app offered by name and an app that took one (T-32888, T-32889):
+  // nullable text/real columns and one {eid} reference by death word, so both
+  // derive like the three above.
+  'published',
+  'installed',
   // What a space pays and what it spent (D-32751): a tier word, and the
   // meter's month of nullable counts — no FK, no NOT NULL, so both derive.
   'plan',

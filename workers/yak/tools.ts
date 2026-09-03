@@ -6,7 +6,10 @@
 // app_files, app_deploy, app_set, app_delete, app_errors, app_list, the three
 // that give an app's own worker a key it alone can read — app_secret_set,
 // app_secret_list, app_secret_remove, whose values never enter this graph
-// (T-32779) — and the two that say who an app is for: member_add and
+// (T-32779) — the three that make an app a plugin: app_publish offers it to
+// every space by a platform-wide name, app_unpublish withdraws the offer
+// without touching anyone who took it, and app_published is what is on offer
+// (T-32888) — and the two that say who an app is for: member_add and
 // member_remove, the space
 // owner's guest list, beside `app.access`, which is what an app lets a
 // stranger with the link do (T-32504). A tool is one row here — name, what it
@@ -287,6 +290,17 @@ let inApp = async (ctx: Ctx, args: Args, write = false) => {
     who,
     store: storeOf(ctx.env.STORE, storeName(space, app)),
   }
+}
+
+// The caller as the space's OWNER, on one of its apps. Offering an app to the
+// whole platform is the space's act, not one its editors make: an editor
+// writes the app's files, and publishing hands the code to strangers.
+let ownsApp = async (ctx: Ctx, args: Args) => {
+  let it = await inApp(ctx, args, true)
+  if (it.who.role != 'owner') {
+    throw new Error(`not the owner of ${it.space.slug}`)
+  }
+  return it
 }
 
 // What every app in the space declares as its OWN, in app order, oldest
@@ -1162,6 +1176,125 @@ export let TOOLS: Tool[] = [
         data: { spaces: out },
         // Only one space in hand has an unseen channel to append to.
         space: spaces.length == 1 ? spaces[0]! : undefined,
+      }
+    },
+  },
+  {
+    name: 'app_publish',
+    description:
+      'Offer this app to every other space, by name. Someone else then ' +
+      'app_installs it and gets their OWN copy — their own store, their own ' +
+      'address, their own data from the first byte — pinned to the version ' +
+      'you published; nothing is shared but the code. The name is the whole ' +
+      "platform's, so it is the app's slug unless that is taken, and a taken " +
+      'name is refused. Publishing again offers whatever is deployed now; ' +
+      'nobody who installed it moves until they app_update. Only the space ' +
+      'owner may publish, and only what the person asked to share.',
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        name: str(
+          'the name others install it by, across the whole platform — the ' +
+            "app's own slug unless you say otherwise",
+        ),
+        about: str('one line saying what it is, for someone browsing'),
+      },
+      required: ['app'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, who } = await ownsApp(ctx, args)
+      let name = args.name == null ? app.slug : slug(args.name, 'name')
+      // A published name means one app on the whole platform, so a second
+      // claim on it is refused rather than moved: the person who installed
+      // `recipes` last week and the one installing it today get one app.
+      let taken = await ctx.dir.offered(name)
+      if (taken && taken.app.eid != app.eid) {
+        throw new Error(
+          `${name} is published by ${taken.space.slug}/${taken.app.slug} — ` +
+            'a published name is one app on the whole platform, so offer ' +
+            'this one under another (app_publish name: …)',
+        )
+      }
+      // What is on offer is what is SERVING, and an app that never deployed
+      // serves nothing an installer could copy.
+      let version = app.version ?? 0
+      if (!version) {
+        throw new Error(
+          `${space.slug}/${app.slug} has never been deployed — app_deploy ` +
+            'it, then publish what is serving',
+        )
+      }
+      let about = args.about == null
+        ? (app.published?.about ?? '')
+        : text(args.about, 'about')
+      await ctx.dir.apply({
+        entities: [{
+          entity: { eid: app.eid },
+          published: { name, version, at: new Date().toISOString(), about },
+        }],
+      }, vouched(who))
+      return {
+        text: `published ${name} v${version} from ${space.slug}/${app.slug}` +
+          (about ? ` — ${about}` : '') +
+          `\nanyone can app_install(name: '${name}') and get their own copy ` +
+          'at their own address, with their own data',
+        space,
+      }
+    },
+  },
+  {
+    name: 'app_unpublish',
+    description:
+      'Stop offering the app. It stays exactly as it is and so does every ' +
+      'copy anyone installed — their data is theirs — but nobody new can ' +
+      'install it, and the name is free again. Only the space owner may.',
+    input: {
+      type: 'object',
+      properties: { space: SPACE, app: APP },
+      required: ['app'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, who } = await ownsApp(ctx, args)
+      if (!app.published) {
+        throw new Error(`${space.slug}/${app.slug} is not published`)
+      }
+      // A component off an entity, which is the flat wire's own null — the
+      // app itself is untouched, and so is everyone who installed it.
+      await ctx.dir.apply(
+        [{ eid: app.eid, name: 'published', comp: null }],
+        vouched(who),
+      )
+      return {
+        text: `${app.published.name} is no longer offered — whoever ` +
+          'installed it keeps their copy, data and all',
+        space,
+      }
+    },
+  },
+  {
+    name: 'app_published',
+    description:
+      'What other people have published here, newest first: the name to ' +
+      'install by, what it is, and which space it came from. Read it when ' +
+      'the person asks for something somebody may already have made — ' +
+      'installing one is app_install, and gives them their own copy with ' +
+      'their own data.',
+    input: { type: 'object', properties: {} },
+    run: async (ctx) => {
+      let offers = await ctx.dir.offers()
+      return {
+        text: offers.length
+          ? offers.map(({ space, app }) =>
+            `- ${app.published!.name} v${app.published!.version} — ` +
+            `${app.title}${
+              app.published!.about ? `: ${app.published!.about}` : ''
+            } (from ${space.slug}/${app.slug}, published ${
+              app.published!.at.slice(0, 10)
+            })`
+          ).join('\n')
+          : 'nothing is published yet',
       }
     },
   },

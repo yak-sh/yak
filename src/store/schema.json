@@ -137,6 +137,14 @@
   },
   {
     "kind": "exec",
+    "sql": "create table if not exists \"published\" (\n    entity integer primary key references entity(id),\n    \"name\" text,\n    \"version\" real,\n    \"at\" text,\n    \"about\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"installed\" (\n    entity integer primary key references entity(id),\n    \"of\" integer references entity(id),\n    \"version\" real\n  );"
+  },
+  {
+    "kind": "exec",
     "sql": "create table if not exists \"plan\" (\n    entity integer primary key references entity(id),\n    \"tier\" text\n  );"
   },
   {
@@ -600,6 +608,42 @@
     "table": "member",
     "col": "role",
     "sql": "alter table member add column \"role\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "published",
+    "col": "name",
+    "sql": "alter table published add column \"name\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "published",
+    "col": "version",
+    "sql": "alter table published add column \"version\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "published",
+    "col": "at",
+    "sql": "alter table published add column \"at\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "published",
+    "col": "about",
+    "sql": "alter table published add column \"about\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "installed",
+    "col": "of",
+    "sql": "alter table installed add column \"of\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "installed",
+    "col": "version",
+    "sql": "alter table installed add column \"version\" real"
   },
   {
     "kind": "addColumn",
@@ -1399,6 +1443,14 @@
   {
     "kind": "exec",
     "sql": "create index if not exists app_space on \"app\" (\"space\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists published_name on \"published\" (\"name\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists installed_of on \"installed\" (\"of\");"
   },
   {
     "kind": "exec",

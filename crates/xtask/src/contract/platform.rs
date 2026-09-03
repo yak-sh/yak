@@ -121,3 +121,36 @@ struct Meter {
     emails: Number,
     at: Time,
 }
+
+// An app OFFERED to every other space, by name (T-32888). A plugin is the
+// same thing as an app (D-32318 §Nouns), so publishing is not a second kind
+// of thing: it is a component the app wears while the offer stands, and
+// `app_unpublish` takes it off without touching anyone who installed it.
+// `name` is the platform-wide word an installer asks for — unique, so a name
+// is taken once — `version` is the deploy on offer, `at` is when it was
+// offered, and `about` is the line a browsing agent reads. No kind_rank: a
+// published app is still an app.
+#[derive(Comp)]
+#[comp(plugin = "platform", rank = 1031)]
+#[index(cols(name), unique)]
+struct Published {
+    name: Text,
+    version: Number,
+    at: Time,
+    about: Text,
+}
+
+// An app that came from someone else's (T-32889): its own store, its own R2
+// prefix, its own worker script — nothing shared but the code — PINNED to the
+// version it took, so `app_update` is a deliberate act and a publisher's next
+// version never arrives behind the installer's back. `of` is the app it was
+// installed from, detached rather than cascaded: the copy is whole and
+// outlives its source, and an update with nowhere to look is refused in
+// words.
+#[derive(Comp)]
+#[comp(plugin = "platform", rank = 1032)]
+struct Installed {
+    #[col(eid = "app", death = "detach")]
+    of: Ref,
+    version: Number,
+}

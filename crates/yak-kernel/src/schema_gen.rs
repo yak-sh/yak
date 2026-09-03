@@ -928,6 +928,18 @@ pub static SCHEMA: &[SchemaOp] = &[
     "person" integer references entity(id),
     "role" text
   );"#),
+    SchemaOp::Exec(r#"create table if not exists "published" (
+    entity integer primary key references entity(id),
+    "name" text,
+    "version" real,
+    "at" text,
+    "about" text
+  );"#),
+    SchemaOp::Exec(r#"create table if not exists "installed" (
+    entity integer primary key references entity(id),
+    "of" integer references entity(id),
+    "version" real
+  );"#),
     SchemaOp::Exec(r#"create table if not exists "plan" (
     entity integer primary key references entity(id),
     "tier" text
@@ -1096,6 +1108,12 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "member", col: "space", sql: r#"alter table member add column "space" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "member", col: "person", sql: r#"alter table member add column "person" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "member", col: "role", sql: r#"alter table member add column "role" text"# },
+    SchemaOp::AddColumn { table: "published", col: "name", sql: r#"alter table published add column "name" text"# },
+    SchemaOp::AddColumn { table: "published", col: "version", sql: r#"alter table published add column "version" real"# },
+    SchemaOp::AddColumn { table: "published", col: "at", sql: r#"alter table published add column "at" text"# },
+    SchemaOp::AddColumn { table: "published", col: "about", sql: r#"alter table published add column "about" text"# },
+    SchemaOp::AddColumn { table: "installed", col: "of", sql: r#"alter table installed add column "of" integer references entity(id)"# },
+    SchemaOp::AddColumn { table: "installed", col: "version", sql: r#"alter table installed add column "version" real"# },
     SchemaOp::AddColumn { table: "plan", col: "tier", sql: r#"alter table plan add column "tier" text"# },
     SchemaOp::AddColumn { table: "meter", col: "month", sql: r#"alter table meter add column "month" text"# },
     SchemaOp::AddColumn { table: "meter", col: "requests", sql: r#"alter table meter add column "requests" real"# },
@@ -1260,6 +1278,8 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::Exec(r#"create index if not exists space_home on "space" ("home");"#),
     SchemaOp::Exec(r#"create unique index if not exists app_space_slug on "app" ("space", "slug");"#),
     SchemaOp::Exec(r#"create index if not exists app_space on "app" ("space");"#),
+    SchemaOp::Exec(r#"create unique index if not exists published_name on "published" ("name");"#),
+    SchemaOp::Exec(r#"create index if not exists installed_of on "installed" ("of");"#),
     SchemaOp::Exec(r#"create unique index if not exists member_space_person on "member" ("space", "person");"#),
     SchemaOp::Exec(r#"create index if not exists member_space on "member" ("space");"#),
     SchemaOp::Exec(r#"create index if not exists member_person on "member" ("person");"#),

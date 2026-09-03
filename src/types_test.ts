@@ -141,6 +141,9 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'layout.root',
       // a space outlives the app that answered its bare hostname
       'space.home',
+      // an installed app is a whole copy and outlives the app it came from
+      // (T-32889); an update with nowhere to look is refused in words
+      'installed.of',
     ]),
   )
   assertEquals(

@@ -42,6 +42,16 @@
         }
       ]
     },
+    "installed": {
+      "rank": 1032,
+      "cols": {
+        "of": {
+          "eid": "app",
+          "death": "detach"
+        },
+        "version": "number"
+      }
+    },
     "member": {
       "rank": 1040,
       "kind_rank": 410,
@@ -92,6 +102,23 @@
           "enum": "planTiers"
         }
       }
+    },
+    "published": {
+      "rank": 1031,
+      "cols": {
+        "name": "text",
+        "version": "number",
+        "at": "time",
+        "about": "text"
+      },
+      "indexes": [
+        {
+          "cols": [
+            "name"
+          ],
+          "unique": true
+        }
+      ]
     },
     "signin": {
       "rank": 1050,

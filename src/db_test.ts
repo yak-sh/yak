@@ -553,6 +553,8 @@ let contracts = [
   contract('member', 'person', 'person', (d) => ({
     space: tag(d, 'space', { slug: 'a-space' }),
   })),
+  // and the app an installed one was taken from (T-32889)
+  contract('installed', 'of', 'app'),
 ]
 
 Deno.test('create + patch + column clear', () => {

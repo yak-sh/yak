@@ -408,6 +408,16 @@ pub(crate) fn baked() -> Vocab {
             ("version".into(), PropType::Number),
             ("access".into(), PropType::Enum(vec!["public".into(), "open".into(), "private".into()])),
         ]),
+        ("published".into(), vec![
+            ("name".into(), PropType::Text),
+            ("version".into(), PropType::Number),
+            ("at".into(), PropType::Time),
+            ("about".into(), PropType::Text),
+        ]),
+        ("installed".into(), vec![
+            ("of".into(), PropType::Eid("app".into())),
+            ("version".into(), PropType::Number),
+        ]),
         ("plan".into(), vec![
             ("tier".into(), PropType::Enum(vec!["free".into(), "plus".into()])),
         ]),
@@ -747,6 +757,7 @@ pub(crate) fn baked() -> Vocab {
         ("proposed".into(), "by".into(), "keep".into()),
         ("space".into(), "home".into(), "detach".into()),
         ("app".into(), "space".into(), "cascade".into()),
+        ("installed".into(), "of".into(), "detach".into()),
         ("member".into(), "space".into(), "cascade".into()),
         ("member".into(), "person".into(), "cascade".into()),
         ("edge".into(), "from".into(), "cascade".into()),

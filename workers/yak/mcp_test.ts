@@ -67,6 +67,9 @@ slow(
         'app_delete',
         'app_errors',
         'app_list',
+        'app_publish',
+        'app_unpublish',
+        'app_published',
         'member_add',
         'member_remove',
         'graph_apply',
@@ -2017,6 +2020,133 @@ slow('a word two spaces spell differently stays two words', async () => {
     assertEquals(
       apart.map((r) => r.note!.body).sort(),
       ['lovely', 3].sort(),
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
+// An app is a plugin (D-32318 §Nouns, T-32888): a deployed app is OFFERED to
+// every other space under a platform-wide name, that name is one app's — a
+// second claim on it is refused in a sentence — and withdrawing the offer
+// leaves the app, and everyone who took it, exactly as they were.
+slow('an app is published by name, and the name is one app', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let mine = jeff.email.split('@')[0]
+    let agent = connector(k, jeff.cookie)
+    let made = async (space: string, slug: string) => {
+      await agent.tool('app_new', { space, slug, title: slug })
+      await agent.tool('app_files', {
+        space,
+        app: slug,
+        op: 'write',
+        path: 'index.html',
+        content: `<h1>${slug}</h1>`,
+      })
+    }
+    assertEquals(await agent.tool('app_published'), 'nothing is published yet')
+
+    // An app that has never deployed serves nothing an installer could copy.
+    await made(mine, 'recipes')
+    assertStringIncludes(
+      (await assertRejects(
+        () => agent.tool('app_publish', { space: mine, app: 'recipes' }),
+        Error,
+      )).message,
+      'has never been deployed',
+    )
+    await agent.tool('app_deploy', { space: mine, app: 'recipes' })
+
+    // Published under its own slug, at the version that is serving.
+    let said = await agent.tool('app_publish', {
+      space: mine,
+      app: 'recipes',
+      about: 'Somewhere to keep recipes',
+    })
+    assertStringIncludes(said, 'published recipes v1')
+    assertStringIncludes(said, 'Somewhere to keep recipes')
+    assertStringIncludes(said, "app_install(name: 'recipes')")
+    let listed = await agent.tool('app_published')
+    assertStringIncludes(listed, '- recipes v1')
+    assertStringIncludes(listed, 'Somewhere to keep recipes')
+
+    // A SECOND space claiming the same name is refused, named with the app
+    // that has it — and its own slug is free, so it offers under another.
+    await agent.tool('space_new', { slug: 'kitchen', title: 'kitchen' })
+    await made('kitchen', 'recipes')
+    await agent.tool('app_deploy', { space: 'kitchen', app: 'recipes' })
+    assertStringIncludes(
+      (await assertRejects(
+        () => agent.tool('app_publish', { space: 'kitchen', app: 'recipes' }),
+        Error,
+      )).message,
+      'recipes is published by',
+    )
+    await agent.tool('app_publish', {
+      space: 'kitchen',
+      app: 'recipes',
+      name: 'recipe-box',
+    })
+    assertEquals((await agent.tool('app_published')).split('\n').length, 2)
+
+    // Publishing the same app again is not a second offer: it moves the
+    // version on the one that stands, and keeps the line already said.
+    await agent.tool('app_deploy', { space: mine, app: 'recipes' })
+    assertStringIncludes(
+      await agent.tool('app_publish', { space: mine, app: 'recipes' }),
+      'published recipes v2',
+    )
+    let again = await agent.tool('app_published')
+    assertStringIncludes(again, '- recipes v2')
+    assertStringIncludes(again, 'Somewhere to keep recipes')
+    assertEquals(again.split('\n').length, 2)
+
+    // Only an owner may: an editor writes the app's files and does not hand
+    // its code to strangers.
+    let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
+    await agent.tool('member_add', {
+      space: mine,
+      email: ann.email,
+      role: 'editor',
+    })
+    assertStringIncludes(
+      (await assertRejects(
+        () =>
+          connector(k, ann.cookie).tool('app_publish', {
+            space: mine,
+            app: 'recipes',
+          }),
+        Error,
+      )).message,
+      'not the owner of',
+    )
+
+    // Withdrawn: the app stands, the name is free again, the offer is gone.
+    assertStringIncludes(
+      await agent.tool('app_unpublish', { space: mine, app: 'recipes' }),
+      'no longer offered',
+    )
+    let left = await agent.tool('app_published')
+    assertEquals(left.split('\n').length, 1)
+    assertStringIncludes(left, 'recipe-box')
+    assertStringIncludes(
+      (await assertRejects(
+        () => agent.tool('app_unpublish', { space: mine, app: 'recipes' }),
+        Error,
+      )).message,
+      'is not published',
+    )
+    // And the app itself is untouched: it serves what it always did.
+    assertStringIncludes(
+      await agent.tool('app_files', {
+        space: mine,
+        app: 'recipes',
+        op: 'read',
+        path: 'index.html',
+      }),
+      '<h1>recipes</h1>',
     )
   } finally {
     await k.stop()

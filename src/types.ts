@@ -555,6 +555,16 @@ export let comps: Record<string, Record<string, PropType>> = {
     version: 'number',
     access: { enum: appAccess },
   },
+  published: {
+    name: 'text',
+    version: 'number',
+    at: 'time',
+    about: 'text',
+  },
+  installed: {
+    of: { eid: 'app', death: 'detach' },
+    version: 'number',
+  },
   plan: {
     tier: { enum: planTiers },
   },
@@ -617,6 +627,7 @@ export let indexes: Record<string, Idx[]> = {
   effect: [{ cols: ['jrow', 'handler'], unique: true }],
   space: [{ cols: ['slug'], unique: true }],
   app: [{ cols: ['space', 'slug'], unique: true }],
+  published: [{ cols: ['name'], unique: true }],
   member: [{ cols: ['space', 'person'], unique: true }],
 }
 

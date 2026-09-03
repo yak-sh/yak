@@ -84,9 +84,26 @@ export type App = {
   // What this app's own store spent this month, as the hourly sweep last read
   // it (usage.ts). Null until it has been metered once.
   meter: Meter | null
+  // The offer it stands as right now, null unless it is published, and where
+  // it was installed from, null unless it was.
+  published: Offer | null
+  installed: Pin | null
 }
 export type Role = 'owner' | 'editor' | 'viewer'
 export type Access = 'public' | 'open' | 'private'
+
+// The offer an app stands as while it is published (T-32888): the
+// platform-wide name another space installs it by, the deploy on offer, when
+// it was offered, and the line a browsing agent reads.
+export type Offer = {
+  name: string
+  version: number
+  at: string
+  about: string
+}
+// Where an installed app came from, and the version it took (T-32889). The
+// pin is what makes `app_update` a deliberate act.
+export type Pin = { of: string; version: number }
 
 // A reference column, as a READ hands it back: the bare eid, or `{eid, name}`
 // where the store could name what it points at (listing.ts `named`, T-32733).
@@ -104,6 +121,13 @@ type Row = {
     version: number | null
     access?: Access | null
   }
+  published?: {
+    name?: string | null
+    version?: number | null
+    at?: string | null
+    about?: string | null
+  }
+  installed?: { of?: Id | null; version?: number | null }
   member?: { space: Id; person: Id; role: Role }
   email?: { address: string }
   alias?: { slug: string; slugs?: string | null }
@@ -236,6 +260,11 @@ export let stamp = async (env: Env, mutation: Mutation) => {
 // meter, an app with its title, the alias its store is named by, and its
 // meter. `id=` names no component and answers the whole bundle, which is why
 // those are bare.
+// What every read of an APP asks for beside the app row itself, in one place
+// because `appOf` reads all of it and a filter that forgets one answers null
+// where there is a value.
+let ABOUT = '.doc?&.alias?&.meter?&.published?&.installed?'
+
 let spaceOf = (r: Row): Space => ({
   eid: r.entity.eid,
   slug: r.space!.slug,
@@ -256,6 +285,17 @@ export let appOf = (r: Row): App => ({
   store: r.alias?.slug ?? null,
   slugs: slugsOf(r.alias),
   meter: meterOf(r),
+  published: r.published?.name
+    ? {
+      name: r.published.name,
+      version: r.published.version ?? 0,
+      at: r.published.at ?? '',
+      about: r.published.about ?? '',
+    }
+    : null,
+  installed: r.installed?.of
+    ? { of: idOf(r.installed.of), version: r.installed.version ?? 0 }
+    : null,
 })
 
 // A Durable Object cannot be renamed, so an app's store must not be named by
@@ -313,7 +353,7 @@ export let directory = (via: Fetcher) => {
     // `serving`).
     app: async (space: Space, slug: string, fresh = false) => {
       let row = await one(
-        `.app.space=${space.eid}&.app.slug=${slug}&.doc?&.alias?&.meter?`,
+        `.app.space=${space.eid}&.app.slug=${slug}&${ABOUT}`,
         fresh,
       )
       return row ? appOf(row) : null
@@ -330,7 +370,35 @@ export let directory = (via: Fetcher) => {
     },
     // Every app in a space, oldest first — the order they were made.
     apps: async (space: Space): Promise<App[]> =>
-      (await query(`.app.space=${space.eid}&.doc?&.alias?&.meter?`)).map(appOf),
+      (await query(`.app.space=${space.eid}&${ABOUT}`)).map(appOf),
+    // A space by eid, which is how an app names the space it belongs to.
+    at: async (eid: string) => {
+      let row = await one(`id=${eid}`)
+      return row?.space ? spaceOf(row) : null
+    },
+    // The app offered under a platform-wide name (T-32888), with the space it
+    // came from — an offer is an app, so this is one row read two ways.
+    offered: async (name: string) => {
+      let row = await one(
+        `.published.name=${encodeURIComponent(name)}&.app!&${ABOUT}`,
+      )
+      if (!row?.app) return null
+      let app = appOf(row)
+      let space = await self.at(app.space)
+      return space ? { space, app } : null
+    },
+    // Every offer standing, newest first — what a person's agent browses.
+    offers: async (): Promise<{ space: Space; app: App }[]> => {
+      let rows = (await query(`.published!&.app!&${ABOUT}`)).map(appOf)
+        .filter((a) => a.published)
+        .sort((a, b) => b.published!.at.localeCompare(a.published!.at))
+      let out: { space: Space; app: App }[] = []
+      for (let app of rows) {
+        let space = await self.at(app.space)
+        if (space) out.push({ space, app })
+      }
+      return out
+    },
     // Every space there is. Only the meter asks this (usage.ts): a tool
     // always works in one space, and a person only ever sees their own.
     all: async (): Promise<Space[]> =>

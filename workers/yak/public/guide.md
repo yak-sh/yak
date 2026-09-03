@@ -264,18 +264,19 @@ taken:
 
     about accept alias anchor app apply architecture archived attachment
     attention bash blob blocked board brief bug call camera cancel cancelled
-    canvas card chat checkpoint claim client comment commit completed conflict
-    contains content created cursor decided delegates deliver delivered design
-    doc dream edge effect email entity entry error exception exit favorite
-    feedback fetch finding fixer fold fork generation goal graph_query headers
-    hook image imported knock layout lease mail member memory message meta
-    meter model nofix notice notified noverify opaque opened output pane patch
-    person persona pin plan project prompt proposed quarantined reads reasoning
-    recall recalled redaction references repo requires response result resume
-    review role run runner runtime satisfies session setting settled shelf
-    signin space spawn stderr stop_request subscription supersedes supervises
-    task task_context timeout tool updated usage venture verifier wake wants
-    web worked worktree yield
+    canvas card chat checkpoint claim client comment commit completed
+    conflict contains content created cursor decided delegates deliver
+    delivered design doc dream edge effect email entity entry error
+    exception exit favorite feedback fetch finding fixer fold fork
+    generation goal graph_query headers hook image imported installed knock
+    layout lease mail member memory message meta meter model nofix notice
+    notified noverify opaque opened output pane patch person persona pin
+    plan project prompt proposed published quarantined reads reasoning
+    recall recalled redaction references repo requires response result
+    resume review role run runner runtime satisfies session setting settled
+    shelf signin space spawn stderr stop_request subscription supersedes
+    supervises task task_context timeout tool updated usage venture verifier
+    wake wants web worked worktree yield
 
 Anything the columns don't cover still lives in `doc.body`: it is text, so
 markdown or JSON both keep there.

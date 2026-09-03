@@ -54,6 +54,8 @@ let app: App = {
   store: 'jeff/recipes',
   slugs: ['jeff/recipes'],
   meter: null,
+  published: null,
+  installed: null,
 }
 
 // Every entity the kernel wrote while a test ran, so a break can be read
