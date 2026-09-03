@@ -42,7 +42,7 @@ import { toolsChanged } from './declared.ts'
 import type { Env } from './env.ts'
 import { mail } from './mail.ts'
 import { SLUG } from './route.ts'
-import { type Reach, read } from './reach.ts'
+import { type Reach, read, written } from './reach.ts'
 import { mayWrite, reads, vouched, type Who } from './session.ts'
 import { canon, nameOf, personOf } from './signin.ts'
 import { storeOf } from './store.ts'
@@ -1030,8 +1030,11 @@ export let TOOLS: Tool[] = [
       "comment, web, image, attachment, archived; components of the app's " +
       'own naming ride here too, once its vocab.json declares them and ' +
       'app_deploy has planted them. The answer is one line naming what was ' +
-      'written, by id; graph_query reads the data back. The guide ' +
-      '(https://yaks.app/guide.md) has all of it.',
+      'written, by id; graph_query reads the data back. One bundle may wear ' +
+      "two apps' components at once — an entity spans apps — and each " +
+      'component is written to the app that declares it; a shared one goes to ' +
+      'the app you name, else the app where that entity already lives. The ' +
+      'guide (https://yaks.app/guide.md) has all of it.',
     input: {
       type: 'object',
       properties: {
@@ -1043,20 +1046,26 @@ export let TOOLS: Tool[] = [
           description: 'the bundles',
         },
       },
-      required: ['app', 'entities'],
+      required: ['entities'],
     },
     run: async (ctx, args) => {
-      let { space, who, store } = await inApp(ctx, args, true)
       if (!Array.isArray(args.entities)) {
         throw new Error('entities: a list of bundles')
       }
-      let r = await store('/apply', {
-        method: 'POST',
-        body: JSON.stringify({ entities: args.entities }),
-      }, vouched(who))
+      // The app NAMED, if one is — the write still routes a declared
+      // component to the app that owns the word, so the reach set is every
+      // app either way (reach.ts `written`).
+      let named = args.app == null ? undefined : await inApp(ctx, args, true)
+      let reach = await inReach(ctx, { space: args.space })
+      let out = await written(
+        ctx.env,
+        reach,
+        named && (reach.find((r) => r.app.eid == named.app.eid) ?? named),
+        args.entities as EntityLiteral[],
+      )
       return {
-        text: wrote(await answer(r), `${space.slug}/${text(args.app, 'app')}`),
-        space,
+        text: wrote(out.body, out.where),
+        space: named?.space ?? whichSpace(reach),
       }
     },
   },

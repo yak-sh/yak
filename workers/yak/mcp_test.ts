@@ -1248,3 +1248,120 @@ slow('a read with no app composes every app the caller can reach', async () => {
     await k.stop()
   }
 })
+
+// A write is routed by component (T-32700): each one goes to the app that
+// declares it, a shared one to the app named or the app the entity already
+// lives in, and the parts are admitted everywhere before any of them commits.
+slow('a write with no app routes each component to its own app', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    let made = async (
+      slug: string,
+      comp: string,
+      cols: Record<string, string>,
+    ) => {
+      await agent.tool('app_new', { slug, title: slug })
+      await agent.tool('app_files', {
+        app: slug,
+        files: [{
+          path: 'vocab.json',
+          content: JSON.stringify({ [comp]: cols }),
+        }],
+      })
+      await agent.tool('app_deploy', { app: slug })
+    }
+    await made('recipes', 'recipe', { serves: 'number' })
+    await made('lending', 'loan', { to: 'text' })
+    let rows = async (filter: string, app?: string) =>
+      JSON.parse(
+        await agent.tool('graph_query', { filter, ...(app ? { app } : {}) }),
+      ) as {
+        entity: { eid: string }
+        doc?: { title: string }
+        recipe?: { serves: number }
+        loan?: { to: string }
+        _stores?: Record<string, string>
+      }[]
+
+    // A new entity with one app's word: the title rides with it, because a
+    // shared word with nowhere else to go belongs to the app whose own words
+    // are in the same bundle.
+    let said = await agent.tool('graph_apply', {
+      entities: [{
+        entity: { eid: '$cake' },
+        doc: { title: 'Lemon cake' },
+        recipe: { serves: 4 },
+      }],
+    })
+    assertMatch(said, /in \S+\/recipes:/)
+    let cake = /\$cake=([0-9a-f-]{36})/.exec(said)![1]
+    assertEquals((await rows('.doc!', 'lending')).length, 0)
+
+    // ONE bundle wearing two apps' words: the loan is the lending app's row,
+    // the retitle lands where the title already lives, and the call is one.
+    let both = await agent.tool('graph_apply', {
+      entities: [{
+        entity: { eid: cake },
+        doc: { title: 'Lemon drizzle' },
+        loan: { to: 'Maya' },
+      }],
+    })
+    assertMatch(both, /recipes/)
+    assertMatch(both, /lending/)
+    assertEquals(
+      (await rows(`id=${cake}`, 'recipes'))[0].doc!.title,
+      'Lemon drizzle',
+    )
+    assertEquals((await rows(`id=${cake}`, 'lending'))[0].loan!.to, 'Maya')
+    let [bundle] = await rows(`id=${cake}`)
+    assertEquals(bundle.recipe!.serves, 4)
+    assertEquals(bundle.loan!.to, 'Maya')
+    assertMatch(bundle._stores!.doc, /\/recipes$/)
+    assertMatch(bundle._stores!.loan, /\/lending$/)
+
+    // A refusal in one store leaves the other unwritten: every part is
+    // admitted before any of them commits.
+    await assertRejects(
+      () =>
+        agent.tool('graph_apply', {
+          entities: [{
+            entity: { eid: cake },
+            recipe: { serves: 12 },
+            loan: { to: 'Bo' },
+            was: { loan: { to: 'f'.repeat(64) } },
+          }],
+        }),
+      Error,
+      'lending',
+    )
+    assertEquals((await rows(`id=${cake}`))[0].recipe!.serves, 4)
+    assertEquals((await rows(`id=${cake}`))[0].loan!.to, 'Maya')
+
+    // A shared word on a new entity that two apps could equally claim is a
+    // question, not a guess.
+    await assertRejects(
+      () =>
+        agent.tool('graph_apply', {
+          entities: [{
+            doc: { title: 'Zester' },
+            recipe: { serves: 1 },
+            loan: { to: 'Bo' },
+          }],
+        }),
+      Error,
+      'which app should doc go in?',
+    )
+
+    // Death is the whole entity's: it clears every store holding a piece.
+    await agent.tool('graph_apply', {
+      entities: [{ entity: { eid: cake }, tombstone: {} }],
+    })
+    assertEquals((await rows(`id=${cake}`)).length, 0)
+    assertEquals((await rows(`id=${cake}`, 'recipes')).length, 0)
+    assertEquals((await rows(`id=${cake}`, 'lending')).length, 0)
+  } finally {
+    await k.stop()
+  }
+})

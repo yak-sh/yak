@@ -2,8 +2,10 @@
 // apply() and query grammar over the DO adapter (src/store/do.ts), planted
 // from the generated schema ops on first touch and never migrated. It serves
 // the two HTTP doors src/server_runtime.ts serves for headless clients, with
-// the same request and response bodies: POST /apply and GET /query, plus GET
-// /graph, the identity a joining peer reads, and POST /vocab, the app's own
+// the same request and response bodies: POST /apply — which also answers
+// `?check=1`, admission without a commit, the gate a write that spans two
+// stores passes first (reach.ts) — and GET /query, plus GET
+// /graph, the identity a joining peer reads, and /vocab, the app's own
 // components (store/vocab.ts) that app_deploy plants here and the object wakes
 // with, /tools, the app's own MCP tools (store/tools.ts) that the same deploy
 // hands over and the agent door lists, and DELETE /, which empties the object
@@ -101,6 +103,10 @@ type Held = {
 let HELD = 2048
 
 let why = (e: unknown) => e instanceof Error ? e.message : String(e)
+
+// The throw that unwinds a `?check=1` write, thrown and caught in one place
+// so nothing else can be mistaken for it.
+let UNDO = new Error('checked')
 
 // Who the kernel says is writing. Attribution is an honesty header, not auth:
 // `x-via` names an instrument that named itself, while `x-yak-person` is the
@@ -313,6 +319,30 @@ export class Store {
     return who
   }
 
+  // The same write, ADMITTED and then undone: every refusal a commit would
+  // make — an unknown column, a dead entity, a `was` that moved — raised
+  // here, with nothing left behind. It is the first half of a write that
+  // SPANS stores (reach.ts): a bundle split between two apps is admitted in
+  // both before either commits, so a refusal in one leaves the other
+  // unwritten. Rolling back is the seam's own door (store/sql.ts): the
+  // callback throws, the transaction unwinds, and the throw is ours to
+  // recognize. Nothing is cast — nothing happened.
+  check(
+    mutation: Mutation,
+    via: string | null,
+    title: string | null,
+    kernel: boolean,
+  ) {
+    try {
+      this.db.transaction(() => {
+        mutate(this.db, mutation, fed(), this.knows(via, title), kernel)
+        throw UNDO
+      })
+    } catch (e) {
+      if (e != UNDO) throw e
+    }
+  }
+
   // One write: applied, then broadcast. The doors differ, the commit does not.
   commit(
     mutation: Mutation,
@@ -438,7 +468,11 @@ export class Store {
     // The answer says what moved — `added` and `kept` beside `dropped` — so a
     // renamed column is visible to whoever deployed it (C-32652 item 4).
     if (path == '/vocab') {
-      if (req.method != 'POST') return methodNotAllowed('POST')
+      // A GET reads back what this store last accepted — the words that are
+      // this app's own, which is how the door knows whose a component is when
+      // it routes a write across apps (reach.ts, T-32700).
+      if (req.method == 'GET') return Response.json(this.vocab())
+      if (req.method != 'POST') return methodNotAllowed('GET, POST')
       try {
         let { vocab, dropped, added, kept } = grow(
           this.vocab(),
@@ -521,6 +555,20 @@ export class Store {
       if (req.method != 'POST') return methodNotAllowed('POST')
       try {
         let mutation = await req.json() as Mutation
+        // `?check=1` asks only whether this batch would be ADMITTED, and
+        // commits nothing (`check` above). It is the kernel's by
+        // construction: a client never spells a store's path, and the door
+        // that serves a page builds this request itself, without a query
+        // string.
+        if (url.searchParams.get('check') == '1') {
+          this.check(
+            mutation,
+            writerOf(req),
+            titleOf(req),
+            req.headers.get('x-yak-kernel') == '1',
+          )
+          return Response.json({ ok: true, checked: true })
+        }
         // Attribution is an honesty header, not auth: x-via names the
         // instrument, apply resolves it to the actor it acts for. The trace
         // is fed so the journal row is the one a server writes; the feed

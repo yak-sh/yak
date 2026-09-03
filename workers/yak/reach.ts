@@ -15,9 +15,11 @@
 import { listed, type Row } from './listing.ts'
 import { type App, type Space, storeName } from './directory.ts'
 import type { Env } from './env.ts'
-import { vouched, type Who } from './session.ts'
+import { vouched, type Who, writes } from './session.ts'
 import { storeOf } from './store.ts'
+import type { EntityLiteral } from '../../src/mutation.ts'
 import { kindOrder } from '../../src/types.ts'
+import type { Change } from '../../src/types.ts'
 
 // One store in reach: the app, the space it is in, and who the caller is
 // there. `at` is what a bundle names as the component's home.
@@ -131,21 +133,18 @@ let kindFrom = (kinds: string[], comps: Record<string, unknown>) =>
   kinds.find((k) => k && !kindOrder.includes(k)) ??
     kindOrder.find((k) => k in comps) ?? 'entity'
 
-// One bundle per eid, out of every store that holds a piece of it. One home
-// per component, so the first store that answers a component owns it here
-// too; `entity` keeps the first store's num, since a num is a store's own
-// counter and the eid is what the entity is called everywhere.
-//
-// `_stores` says which app holds which component, and rides only on a bundle
-// that actually spans two — where the composition is the news, and where a
-// caller who wants to write one component back needs to know whose it is.
-export let composed = async (env: Env, reach: Reach[], eids: string[]) => {
-  if (!eids.length) return []
-  let held = new Map<string, {
-    comps: Record<string, unknown>
-    kinds: string[]
-    home: Record<string, string>
-  }>()
+type Held = {
+  comps: Record<string, unknown>
+  kinds: string[]
+  home: Record<string, string>
+}
+
+// What every store holds about these eids, gathered in one fan-out: the
+// components, the kind each store called the row, and WHERE each component
+// lives. The read composes bundles out of it; the write routes by it.
+let gathered = async (env: Env, reach: Reach[], eids: string[]) => {
+  let held = new Map<string, Held>()
+  if (!eids.length) return held
   for (let { at, rows } of await asked(env, reach, `id=${eids.join(',')}`)) {
     for (let row of Array.isArray(rows) ? rows as Row[] : []) {
       let eid = eidOf(row)
@@ -161,6 +160,19 @@ export let composed = async (env: Env, reach: Reach[], eids: string[]) => {
       one.kinds.push(String(row.kind ?? ''))
     }
   }
+  return held
+}
+
+// One bundle per eid, out of every store that holds a piece of it. One home
+// per component, so the first store that answers a component owns it here
+// too; `entity` keeps the first store's num, since a num is a store's own
+// counter and the eid is what the entity is called everywhere.
+//
+// `_stores` says which app holds which component, and rides only on a bundle
+// that actually spans two — where the composition is the news, and where a
+// caller who wants to write one component back needs to know whose it is.
+export let composed = async (env: Env, reach: Reach[], eids: string[]) => {
+  let held = await gathered(env, reach, eids)
   return eids.filter((e) => held.has(e)).map((eid) => {
     let one = held.get(eid)!
     let homes = new Set(Object.values(one.home))
@@ -214,4 +226,238 @@ export let read = async (
   return agg == 'count'
     ? { count: eids.length }
     : await composed(env, reach, eids)
+}
+
+// A write is routed the same way a read is composed (T-32700): a bundle is
+// split by component and each part goes to the app that word belongs to. One
+// home per component — a word an app DECLARED is that app's row wherever the
+// call was aimed, and a word the platform shares (doc, comment, dependency)
+// goes where the call, the entity's own history, or the rest of its bundle
+// says.
+
+// The words one store declares as its own (its vocab.json, T-32502, as the
+// store last accepted it). A component nobody declares is the platform's, and
+// every store speaks it.
+let wordsOf = async (env: Env, r: Reach) => {
+  let res = await storeOf(env.STORE, storeName(r.space, r.app))('/vocab')
+  if (!res.ok) {
+    await res.body?.cancel()
+    return [] as string[]
+  }
+  return Object.keys(await res.json() as Record<string, unknown>)
+}
+
+// The keys of a bundle that name no component: its address, its
+// preconditions, and its death.
+let NOT_A_COMP = ['entity', 'was', 'tombstone']
+
+// A bundle addressed by anything but an eid — a spine num, the older key/id
+// literal — cannot be split, because the halves would have to find each other
+// by an address only one store can resolve.
+let elsewhere = (e: EntityLiteral) =>
+  e.entity?.num != null || e.key != null || e.id != null
+
+// Every `$alias` in the batch, minted HERE. A bundle that lands in two stores
+// must land under ONE eid, and two stores minting their own would make two
+// entities out of one — so the door mints, the answer maps the alias to what
+// it minted, and each store is handed an eid it has only to accept. A bundle
+// with no address at all is minted the same way, for the same reason.
+let minted = (batch: EntityLiteral[]) => {
+  let aliases: Record<string, string> = {}
+  let eids = batch.map((e) => {
+    let eid = e.entity?.eid
+    if (typeof eid == 'string') {
+      return eid.startsWith('$') ? (aliases[eid] ??= crypto.randomUUID()) : eid
+    }
+    return elsewhere(e) ? null : crypto.randomUUID()
+  })
+  // An alias stands wherever an eid goes — a ref column, a dependency child,
+  // a nested bundle's address — so the swap is the whole batch's, by value.
+  let swap = (v: unknown): unknown =>
+    typeof v == 'string'
+      ? aliases[v] ?? v
+      : Array.isArray(v)
+      ? v.map(swap)
+      : v && typeof v == 'object'
+      ? Object.fromEntries(
+        Object.entries(v as Record<string, unknown>).map((
+          [k, x],
+        ) => [k, swap(x)]),
+      )
+      : v
+  let entities = batch.map((e, i) => {
+    let one = swap(e) as EntityLiteral
+    return eids[i] ? { ...one, entity: { ...one.entity, eid: eids[i]! } } : one
+  })
+  return { entities, eids, aliases }
+}
+
+type Part = { r: Reach; entities: EntityLiteral[] }
+
+// One store's /apply door, vouched. `check` asks only whether the batch would
+// be admitted (store.ts) — nothing is written and nothing is cast. The access
+// rule is the page's: an owner or editor writes, and so does anyone at all
+// when the app is open.
+let sent = async (env: Env, part: Part, check: boolean) => {
+  let r = part.r
+  if (!writes(r.who, r.app.access)) {
+    throw new Error(`not a writer of ${at(r)}`)
+  }
+  let door = storeOf(env.STORE, storeName(r.space, r.app))
+  let res = await door(`/apply${check ? '?check=1' : ''}`, {
+    method: 'POST',
+    body: JSON.stringify({ entities: part.entities }),
+  }, vouched(r.who))
+  let body = await res.text()
+  if (!res.ok) throw new Error(`${at(r)}: ${body}`)
+  return JSON.parse(body) as {
+    changes?: Change[]
+    aliases?: Record<string, string>
+  }
+}
+
+// The batch, split by component into one part per store.
+let routed = async (
+  env: Env,
+  reach: Reach[],
+  named: Reach | undefined,
+  batch: EntityLiteral[],
+) => {
+  let { entities, eids, aliases } = minted(batch)
+  let own = await Promise.all(reach.map((r) => wordsOf(env, r)))
+  let words = new Map<string, Reach[]>()
+  own.forEach((names, i) => {
+    for (let w of names) words.set(w, [...(words.get(w) ?? []), reach[i]])
+  })
+  // Where the entity already lives, read only when the answer depends on it:
+  // a death fans out to whoever holds the eid, and a shared word with no app
+  // named goes to the app that already wears it.
+  let asking = entities.flatMap((e, i) =>
+    eids[i] && (e.tombstone != null ||
+        (!named &&
+          Object.keys(e).some((k) => !NOT_A_COMP.includes(k) && !words.has(k))))
+      ? [eids[i]!]
+      : []
+  )
+  let held = await gathered(env, reach, asking)
+  let by = (label: string) => reach.find((r) => at(r) == label)
+  // The one store a bundle that cannot be split goes to.
+  let only = () => {
+    if (named) return named
+    if (reach.length == 1) return reach[0]
+    throw new Error(
+      `name the app this goes in — ${reach.map((r) => r.app.slug).join(', ')}`,
+    )
+  }
+  let home = (name: string, eid: string | null, mates: Reach[]): Reach => {
+    let declared = words.get(name) ?? []
+    let mine = eid ? held.get(eid)?.home ?? {} : {}
+    if (declared.length) {
+      // A word has ONE home: the first app to declare it (T-32728). A second
+      // app declaring the same word is a USE of it, and its writes land in
+      // the home store — which is what lets a lending app write a `book` the
+      // reading list owns. Where the entity already wears the word wins over
+      // birth order, and a named app wins over both when it is one of the
+      // declarers, since across spaces two apps may mean two things by one
+      // name (T-32728 again, still open).
+      let where = mine[name] && by(mine[name])
+      if (where && declared.includes(where)) return where
+      if (named && declared.includes(named)) return named
+      return declared[0]
+    }
+    if (named) return named
+    let where = mine[name] && by(mine[name])
+    if (where) return where
+    let holders = [...new Set(Object.values(mine))].map(by).filter(Boolean)
+    if (holders.length == 1) return holders[0]!
+    // A title beside a recipe is the recipe's title: a shared word with
+    // nowhere else to go rides with the app whose own words are in the same
+    // bundle, which is what makes writing a NEW entity one call.
+    if (mates.length == 1) return mates[0]
+    if (reach.length == 1) return reach[0]
+    throw new Error(
+      `which app should ${name} go in? name one with app — ${
+        reach.map((r) => r.app.slug).join(', ')
+      }`,
+    )
+  }
+  let parts = new Map<Reach, EntityLiteral[]>()
+  let add = (r: Reach, e: EntityLiteral) =>
+    parts.set(r, [...(parts.get(r) ?? []), e])
+  for (let [i, e] of entities.entries()) {
+    let eid = eids[i]
+    if (!eid) {
+      add(only(), e)
+      continue
+    }
+    // Death is the whole entity's, so it goes wherever the entity is: every
+    // store holding a piece of it, and the app named when none does yet.
+    if (e.tombstone) {
+      let holders = [...new Set(Object.values(held.get(eid)?.home ?? {}))]
+        .map(by).filter(Boolean) as Reach[]
+      for (let r of holders.length ? holders : [only()]) {
+        add(r, { entity: { eid }, tombstone: {} })
+      }
+      continue
+    }
+    // A `was` guard rides with the component it guards, whether or not this
+    // batch also writes that component — a precondition that lost its part
+    // would silently stop guarding.
+    let names = [
+      ...new Set([
+        ...Object.keys(e).filter((k) => !NOT_A_COMP.includes(k)),
+        ...Object.keys(e.was ?? {}),
+      ]),
+    ]
+    let mine = new Map<Reach, string[]>()
+    let take = (r: Reach, name: string) =>
+      mine.set(r, [...(mine.get(r) ?? []), name])
+    // The app's own words first: they are what a shared word rides with.
+    for (let name of names.filter((n) => words.has(n))) {
+      take(home(name, eid, []), name)
+    }
+    let mates = [...mine.keys()]
+    for (let name of names.filter((n) => !words.has(n))) {
+      take(home(name, eid, mates), name)
+    }
+    for (let [r, keys] of mine) {
+      let was = Object.fromEntries(
+        Object.entries(e.was ?? {}).filter(([n]) => keys.includes(n)),
+      )
+      add(r, {
+        entity: { ...e.entity, eid },
+        ...Object.fromEntries(
+          keys.filter((n) => n in e).map((n) => [n, e[n]]),
+        ),
+        ...(Object.keys(was).length ? { was } : {}),
+      })
+    }
+  }
+  return {
+    parts: [...parts].map(([r, entities]) => ({ r, entities })),
+    aliases,
+  }
+}
+
+// The write, whole: routed, admitted everywhere, then committed. A refusal in
+// any store is the caller's error and leaves every other store unwritten,
+// because admission ran first (store.ts `check`) — a single part needs no
+// second round trip, since its commit IS its admission.
+export let written = async (
+  env: Env,
+  reach: Reach[],
+  named: Reach | undefined,
+  batch: EntityLiteral[],
+) => {
+  let { parts, aliases } = await routed(env, reach, named, batch)
+  if (!parts.length) throw new Error('entities: nothing to write')
+  if (parts.length > 1) await Promise.all(parts.map((p) => sent(env, p, true)))
+  let outs = await Promise.all(parts.map((p) => sent(env, p, false)))
+  return {
+    body: JSON.stringify({
+      changes: outs.flatMap((o) => o.changes ?? []),
+      aliases: outs.reduce((all, o) => ({ ...all, ...o.aliases }), aliases),
+    }),
+    where: parts.map((p) => at(p.r)).join(' and '),
+  }
 }
