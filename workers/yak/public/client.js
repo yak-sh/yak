@@ -143,21 +143,14 @@ export let store = (base) => {
   return { apply, query, search, subscribe }
 }
 
-// One subscription frame folded into its rows: `replace` reseeds the set,
-// a change patches one component (null clears it), a dead entity and a
-// `drop` (it left the filter) both leave.
+// One subscription frame folded into its rows. A frame carries ROWS — the
+// same answer `query()` gives, because the store answers both through one
+// projection — so folding is just keeping them: `replace` reseeds the set,
+// a row replaces the one it names, and a `drop` (it died, or it left the
+// filter) leaves.
 let fold = (rows, f) => {
   if (f.replace) rows.clear()
-  for (let c of f.changes ?? []) {
-    if (c.name == 'entity' && c.comp == null) {
-      rows.delete(c.eid)
-      continue
-    }
-    let row = rows.get(c.eid)
-    if (!row) rows.set(c.eid, row = { entity: { eid: c.eid } })
-    if (c.comp == null) delete row[c.name]
-    else row[c.name] = { ...row[c.name], ...c.comp }
-  }
+  for (let row of f.rows ?? []) rows.set(row.entity.eid, row)
   for (let eid of f.drop ?? []) rows.delete(eid)
 }
 

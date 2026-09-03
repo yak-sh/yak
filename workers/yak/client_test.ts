@@ -18,6 +18,15 @@ import {
 import { slow, until } from '../../src/testing.ts'
 import { client, type Kernel, kernel, relay, seed } from './probe.ts'
 
+// A row as a page reads one: the kind that names it, the spine, and a
+// component per name — what `query()` answers with, and what `subscribe()`
+// keeps answering with.
+type Row = {
+  kind: string
+  entity: { eid: string }
+  doc: { title: string; body?: string }
+}
+
 // An origin that stands in for `<space>.yaks.app`: every request goes to the
 // kernel wearing that hostname, and the person's cookie if they have one.
 let browser = (k: Kernel, host: string, cookie?: string) => {
@@ -104,12 +113,9 @@ slow('the served client: a page saves, lists and watches', async () => {
     // make. A socket carries the app's hostname on its handshake, which a
     // probe can only put there at the wire (probe.ts relay).
     let wire = relay(k, 'jeff.yaks.app', cookie)
-    let seen: { doc: { title: string } }[][] = []
+    let seen: Row[][] = []
     let stop = mod.store(`${wire.origin}/recipes/api/`)
-      .subscribe(
-        '.task.status=open',
-        (rows: typeof seen[number]) => seen.push(rows),
-      )
+      .subscribe('.task.status=open', (rows: Row[]) => seen.push(rows))
     try {
       await until(() => seen.length == 1, { timeout: 15_000 })
       assertEquals(titles(seen[0]), ['Lemon cake'])
@@ -118,6 +124,23 @@ slow('the served client: a page saves, lists and watches', async () => {
       await store.apply({ entity: { eid: cake }, doc: { title: 'Lime cake' } })
       await until(() => seen.length == 2, { timeout: 15_000 })
       assertEquals(titles(seen[1]), ['Lime cake'])
+      // A subscription is that query STILL ANSWERING, so it answers with the
+      // same rows: a doc written after subscribing arrives deep-equal to what
+      // `query()` hands back for the same filter — its kind, its body, and no
+      // eid inside a component. The live door used to stream the wire's raw
+      // changes, so the first push wiped the words the first paint drew
+      // (C-32624 item 2).
+      await store.apply({
+        doc: { title: 'Fig tart', body: 'six figs, honey' },
+        task: { status: 'open' },
+      })
+      await until(() => seen.length == 3, { timeout: 15_000 })
+      assertEquals(seen[2], await store.query('.task.status=open'))
+      let fig = seen[2].find((r) => r.doc.title == 'Fig tart')!
+      assertEquals(fig.doc.body, 'six figs, honey')
+      assertEquals(fig.kind, 'task')
+      assertEquals('eid' in fig.doc, false)
+      assertEquals(fig.entity.eid.length, 36)
     } finally {
       stop()
       await wire.stop()

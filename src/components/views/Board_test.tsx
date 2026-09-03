@@ -68,7 +68,10 @@ Deno.test('a server refusal reaches a mounted Board with its retry identity', as
   }
   resetSignals()
   let sent: Record<string, unknown>[] = []
-  let server = subserve(db, (json) => landSub(JSON.parse(json)))
+  let server = subserve(
+    db,
+    (frame) => landSub(frame as Parameters<typeof landSub>[0]),
+  )
   let prior = useRoute((frame) => {
     sent.push(frame as Record<string, unknown>)
     server.frame(frame as Record<string, unknown>)

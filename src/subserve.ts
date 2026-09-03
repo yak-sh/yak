@@ -527,9 +527,15 @@ let rowsFor = (
   return out
 }
 
+// What this half hands its socket: a frame, as a VALUE. Serializing it is the
+// socket's business, not the subscription machinery's — which is what lets a
+// door project a frame before it goes out (workers/yak/store.ts answers an
+// app's page with the listing rows its /query door answers with).
+export type Frame = Record<string, unknown> | Change[]
+
 export type Subserve = ReturnType<typeof subserve>
 
-export let subserve = (db: Sql, send: (json: string) => void) => {
+export let subserve = (db: Sql, send: (frame: Frame) => void) => {
   let map = new Map<string, Sub>()
   // `joined` = the {since} handshake ran, so the live stream may reach this
   // socket; `filtered` = a non-shadow sub owns the socket's cache, so the
@@ -592,13 +598,13 @@ export let subserve = (db: Sql, send: (json: string) => void) => {
           details: false,
           agg: { line: queryLine, watch: predComps(inputsOf(asked)), counts },
         })
-        send(JSON.stringify({
+        send({
           sub: f.sub,
           agg: Object.fromEntries(counts),
           replace: true,
           cursor: cursorOf(db),
           shadow: !!f.shadow,
-        }))
+        })
         return
       }
       // An empty query SELECTS NOTHING (query.ts parseQuery mints the
@@ -685,7 +691,7 @@ export let subserve = (db: Sql, send: (json: string) => void) => {
       let sub = map.get(f.sub)!
       let changes = hits.flatMap((r) => payload(sub, r.eid, r.comps))
       send(
-        JSON.stringify({
+        {
           sub: f.sub,
           changes,
           drop: [],
@@ -701,7 +707,7 @@ export let subserve = (db: Sql, send: (json: string) => void) => {
           // into the cache's column-level loaded/unloaded mark.
           ...(fields ? { fields } : {}),
           ...(ride ? ride.frame : {}),
-        }),
+        },
       )
     } catch (e) {
       // A subscription is a read request with an addressed caller waiting for
@@ -724,7 +730,7 @@ export let subserve = (db: Sql, send: (json: string) => void) => {
         error: message,
         detail: reference,
       })
-      send(JSON.stringify({
+      send({
         sub: f.sub,
         changes: [],
         replace: true,
@@ -732,7 +738,7 @@ export let subserve = (db: Sql, send: (json: string) => void) => {
         reference,
         cursor: cursorOf(db),
         shadow: !!f.shadow,
-      }))
+      })
     }
   }
 
@@ -754,10 +760,10 @@ export let subserve = (db: Sql, send: (json: string) => void) => {
     if (f.since == null || cursorStale(db, f.epoch, f.vocab, f.since)) {
       // A cold or stale client seeds the WORKING SET — never the whole graph
       // (M-21143); its subscriptions stream the rest on demand.
-      send(JSON.stringify({ reset: true, snapshot: workingSet(db) }))
+      send({ reset: true, snapshot: workingSet(db) })
     } else {
       let d = delta(db, f.since)
-      send(JSON.stringify({ catchup: d.changes, cursor: d.cursor }))
+      send({ catchup: d.changes, cursor: d.cursor })
     }
     joined = true
   }
@@ -774,7 +780,7 @@ export let subserve = (db: Sql, send: (json: string) => void) => {
     if (!joined || filtered) return
     let rooted = rootChanges(db, changes)
     if (!rooted.length) return
-    send(JSON.stringify(liveFrame(rooted, cursor, envelope)))
+    send(liveFrame(rooted, cursor, envelope))
   }
 
   // Fold a committed batch into every subscription, synchronously — no await
@@ -821,12 +827,12 @@ export let subserve = (db: Sql, send: (json: string) => void) => {
         for (let v of counts.keys()) if (!next.has(v)) delta.set(v, 0)
         sub.agg.counts = next
         if (delta.size) {
-          send(JSON.stringify({
+          send({
             sub: id,
             agg: Object.fromEntries(delta),
             cursor: cur,
             shadow: sub.shadow,
-          }))
+          })
         }
         continue
       }
@@ -897,7 +903,7 @@ export let subserve = (db: Sql, send: (json: string) => void) => {
         if (
           changes.length || drop.length || moved || rode
         ) {
-          send(JSON.stringify({
+          send({
             sub: id,
             changes,
             drop,
@@ -905,7 +911,7 @@ export let subserve = (db: Sql, send: (json: string) => void) => {
             shadow: sub.shadow,
             window: win,
             ...(rode ? ride : {}),
-          }))
+          })
         }
         continue
       }
@@ -966,14 +972,14 @@ export let subserve = (db: Sql, send: (json: string) => void) => {
       )
       if (resultChanges?.length) changes.push(...resultChanges)
       if (changes.length || drop.length || rode) {
-        send(JSON.stringify({
+        send({
           sub: id,
           changes,
           drop,
           cursor: cur,
           shadow: sub.shadow,
           ...(rode ? ride : {}),
-        }))
+        })
       }
     }
   }
@@ -1038,20 +1044,20 @@ export let subserve = (db: Sql, send: (json: string) => void) => {
       )
       if (resultChanges?.length) changes.push(...resultChanges)
       if (changes.length || drop.length) {
-        send(JSON.stringify({
+        send({
           sub: id,
           changes,
           drop,
           cursor: cur,
           shadow: sub.shadow,
-        }))
+        })
       }
     }
   }
 
   // A session observation reaches only the sockets holding that session's
   // entries partition open. Returns whether this one sent.
-  let observe = (frame: string, session: string) => {
+  let observe = (frame: Frame, session: string) => {
     if (!map.has(`entries:${session}`)) return false
     send(frame)
     return true

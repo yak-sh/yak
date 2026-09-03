@@ -12,9 +12,18 @@
 // still paid a statement per component per entity. There is one implementation
 // now, and a fix to any arm is a fix to every store.
 import type { Sql } from '../../src/store/sql.ts'
-import { locate } from '../../src/db.ts'
+import { locate, rowsOf } from '../../src/db.ts'
 import { orderOf, parseQuery, resolveRefs } from '../../src/query.ts'
-import { askOf, askRows, evalAgg, layered } from '../../src/graph_query.ts'
+import {
+  askOf,
+  askRows,
+  evalAgg,
+  layered,
+  rowed,
+} from '../../src/graph_query.ts'
+import type { Frame } from '../../src/subserve.ts'
+import type { Change } from '../../src/types.ts'
+import { listed, type Row } from './listing.ts'
 
 export let query = async (db: Sql, search: string): Promise<unknown> => {
   let segs = search.slice(1).split('&').filter(Boolean).map(decodeURIComponent)
@@ -39,4 +48,54 @@ export let query = async (db: Sql, search: string): Promise<unknown> => {
     }
   }
   return layered(db, await askRows(db, ask), ask)
+}
+
+// The rows a filter line answers for a KNOWN set of eids — the `id=` arm of
+// askRows without the re-screen, since a subscription's membership already
+// answered the filter. One statement per component table (rowsOf), then the
+// door's own projection.
+let rowsAt = (db: Sql, eids: string[], asked: string): Row[] =>
+  eids.length
+    ? listed(
+      layered(
+        db,
+        rowsOf(db, eids).map(rowed),
+        askOf(asked.split('&').filter(Boolean)),
+      ) as Row[],
+      asked,
+    )
+    : []
+
+// The live door's frames, answered by the SAME projection: a subscription is
+// "query that keeps answering" (public/client.js), so what it delivers must be
+// what /query delivers — `kind`, the doc body, no eid inside a component, and
+// the listing's own rule about the platform's stamps. Streaming the wire's raw
+// changes made it something else, and a journal's first push wiped the words it
+// had painted from `query()` (C-32624 item 2).
+//
+// So a row frame is re-read as ROWS: the eids the frame mentions, through
+// rowsOf → layered → listed, exactly as an `id=` ask would answer them. A death
+// and a row the listing leaves out both become drops, since neither is in the
+// answer. Every other frame (an aggregate, an error, the join handshake) is not
+// a row listing and passes through as it came.
+export let answered = (db: Sql, f: Frame, asked: string): Frame => {
+  if (Array.isArray(f) || !Array.isArray(f.changes)) return f
+  let changes = f.changes as Change[]
+  let gone = new Set(
+    changes.filter((c) => c.name == 'entity' && c.comp == null)
+      .map((c) => c.eid),
+  )
+  let eids = [...new Set(changes.map((c) => c.eid))].filter((e) => !gone.has(e))
+  let rows = rowsAt(db, eids, asked)
+  let kept = new Set(rows.map((r) => (r.entity as { eid: string }).eid))
+  let { changes: _, drop, ...rest } = f
+  return {
+    ...rest,
+    rows,
+    drop: [
+      ...(drop as string[] ?? []),
+      ...gone,
+      ...eids.filter((e) => !kept.has(e)),
+    ],
+  }
 }

@@ -15,14 +15,14 @@ import { DatabaseSync } from './store/sqlite.ts'
 import { registerCodexSource } from './source_codex.ts'
 import { registerManagedSource } from './source_managed.ts'
 import { registerSessionSource } from './source_session.ts'
-import { type Subserve, subserve } from './subserve.ts'
+import { type Frame, type Subserve, subserve } from './subserve.ts'
 
 type In =
   | { init: string }
   | { raw: string }
   | { cast: unknown[]; cursor: number }
   | { aged: number }
-  | { observe: string; session: string }
+  | { observe: Frame; session: string }
   | { close: true }
 
 let post = (m: unknown) =>
@@ -60,7 +60,7 @@ self.onmessage = (m: MessageEvent<In>) => {
       // extension (write-capable extensions live only in the owning process).
       db = new DatabaseSync(d.init, { readOnly: true })
       db.exec('pragma busy_timeout = 5000')
-      sub = subserve(db, (json) => post({ frame: json }))
+      sub = subserve(db, (frame) => post({ frame: JSON.stringify(frame) }))
       return
     }
     if ('close' in d) {

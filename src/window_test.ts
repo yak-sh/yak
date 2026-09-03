@@ -196,7 +196,7 @@ let dial = (q: string, name = 'w') => {
     replace?: boolean
     window?: { limit: number; total?: number }
   }[] = []
-  let s = subserve(db, (json) => seen.push(JSON.parse(json)))
+  let s = subserve(db, (frame) => seen.push(frame as typeof seen[number]))
   s.frame({ sub: name, q })
   return { s, seen, last: () => seen[seen.length - 1] }
 }

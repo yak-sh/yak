@@ -136,7 +136,7 @@ type Frame = {
 // tests without either.
 let dial = (db: ReturnType<typeof open>) => {
   let frames: Frame[] = []
-  let sv = subserve(db, (json) => frames.push(JSON.parse(json) as Frame))
+  let sv = subserve(db, (frame) => frames.push(frame as Frame))
   return { sv, frames }
 }
 

@@ -25,6 +25,12 @@
 // idle tab costs nothing, and what a socket declared lives ON the socket
 // (its attachment) because this object's memory does not survive that.
 //
+// What a socket HEARS is the /query door's own answer, though: a subscription
+// is that query still answering, so each frame's changes are re-read as the
+// rows /query would hand back (query.ts `answered`) rather than shipped as the
+// wire's raw patches. One projection, two doors — a page that swaps `query()`
+// for `subscribe()` changes nothing else (C-32624 item 2).
+//
 // Not here yet, deliberately: the journal feed that fires effects, `work=`
 // lanes and `.order=similar` (both reach outside the store) — see query.ts.
 import {
@@ -50,9 +56,9 @@ import {
   type Vocab,
 } from '../../src/store/vocab.ts'
 import ops from '../../src/store/schema.json' with { type: 'json' }
-import { type Subserve, subserve } from '../../src/subserve.ts'
+import { type Frame, type Subserve, subserve } from '../../src/subserve.ts'
 import type { Change } from '../../src/types.ts'
-import { query } from './query.ts'
+import { answered, query } from './query.ts'
 
 // The slice of the Durable Object runtime this Worker touches, structurally,
 // so `deno check` reads it without @cloudflare/workers-types. A hibernatable
@@ -166,6 +172,14 @@ export class Store {
     }
   }
 
+  // The filter line one frame answers — the query that subscription declared,
+  // read back off the socket, since the answer's shape is the filter's own
+  // (a stamp named in the line is a stamp the answer carries).
+  asked(ws: Sock, f: Frame): string {
+    let name = !Array.isArray(f) && typeof f.sub == 'string' ? f.sub : ''
+    return String(this.held(ws).subs[name]?.q ?? '')
+  }
+
   // What one socket declared, read back off it.
   held(ws: Sock): Held {
     return (ws.deserializeAttachment() as Held | null) ??
@@ -180,8 +194,14 @@ export class Store {
     let live = this.socks.get(ws)
     if (live) return live
     let quiet = true
-    let sub = subserve(this.db, (json) => {
-      if (!quiet) ws.send(json)
+    // Every frame leaves through the /query door's own projection (query.ts
+    // `answered`), so "query that keeps answering" is one answer and not two
+    // shapes of one (C-32624 item 2). The filter line it is answered against is
+    // the one the socket declared, held on the socket.
+    let sub = subserve(this.db, (frame) => {
+      if (!quiet) {
+        ws.send(JSON.stringify(answered(this.db, frame, this.asked(ws, frame))))
+      }
     })
     let held = this.held(ws)
     // Rejoining the live stream at the CURRENT cursor: the catch-up a held

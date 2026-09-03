@@ -254,7 +254,7 @@ let WORKER_CLOSE_MS = 5_000
 export let broadcastObservation = (value: Observation) => {
   let observation = safeObservation(value)
   if (!observation) return 0
-  let frame = JSON.stringify({ observe: observation })
+  let frame = { observe: observation }
   let sent = 0
   for (let s of served) {
     if (s.sock.readyState != WebSocket.OPEN) continue
@@ -551,8 +551,10 @@ let ws = (req: Request) => {
     }
   }
   if (!s.worker) {
-    s.inline = subserve(db, (json) => {
-      if (socket.readyState == WebSocket.OPEN) socket.send(json)
+    s.inline = subserve(db, (frame) => {
+      if (socket.readyState == WebSocket.OPEN) {
+        socket.send(JSON.stringify(frame))
+      }
     })
   }
   served.add(s)
