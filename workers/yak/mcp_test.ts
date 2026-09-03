@@ -170,6 +170,35 @@ slow(
         Error,
         'name one of jeff, jeff-work',
       )
+      // But naming the APP is naming the space: someone in two spaces is not
+      // asked which of them their own app sits in, the way the app's own
+      // namespaced tool never asks (C-32730 item 6). app_new keeps asking —
+      // it names an app nobody has yet.
+      assertEquals(
+        await agent.tool('app_files', { app: 'garden', op: 'list' }),
+        '(no files)',
+      )
+      assertEquals(
+        await agent.tool('graph_query', { app: 'garden', filter: '.doc!' }),
+        '[]',
+      )
+      // Two spaces holding the slug is the one question worth asking, and
+      // the refusal says which two and why.
+      await agent.tool('app_new', {
+        space: 'jeff-work',
+        slug: 'garden',
+        title: 'Work garden',
+      })
+      await assertRejects(
+        () => agent.tool('app_files', { app: 'garden', op: 'list' }),
+        Error,
+        'name one of jeff, jeff-work — each has an app garden',
+      )
+      await agent.tool('app_delete', { space: 'jeff-work', app: 'garden' })
+      assertEquals(
+        await agent.tool('app_files', { app: 'garden', op: 'list' }),
+        '(no files)',
+      )
 
       // Files written through the tool serve at the app's address, and the
       // first app answers the space's bare hostname.
@@ -192,10 +221,13 @@ slow(
         'css/site.css\nindex.html',
       )
       // A whole app in one call, and one answer naming every file it wrote
-      // (C-32624 item 5). The op rides along with the batch.
+      // (C-32624 item 5). Spelled out rather than spread, because the point
+      // is what is ABSENT: no `op` at all, the way `initialize` step 2
+      // teaches it, since a `files` batch IS the write (C-32730 item 1).
       assertEquals(
         await agent.tool('app_files', {
-          ...app,
+          space: 'jeff',
+          app: 'recipes',
           files: [
             { path: 'app.js', content: 'export let go = () => {}' },
             { path: '/img/logo.svg', content: '<svg/>' },
@@ -306,6 +338,15 @@ slow(
         await agent.tool('graph_query', { ...app, filter: `id=${cake}` }),
         await agent.tool('graph_query', { ...app, query: `id=${cake}` }),
       )
+      // A near miss is answered with the word and a line to copy, not with
+      // "filter is required", which says nothing to whoever sent `filters`
+      // (C-32730 item 3).
+      let missed = await assertRejects(
+        () => agent.tool('graph_query', { ...app, filters: ['.doc!'] }),
+        Error,
+      )
+      assertStringIncludes(missed.message, 'filter: one LINE, not a list')
+      assertStringIncludes(missed.message, "filter: '.doc!'")
       let found = JSON.parse(
         await agent.tool('search', { ...app, text: 'lemon' }),
       )
@@ -457,6 +498,10 @@ slow(
         renamed,
         'kept, not in vocab.json (the rows are there): note.text',
       )
+      // And says what to DO about it, since the two spellings are a rename
+      // half done and nobody else will finish it (C-32730 item 4).
+      assertStringIncludes(renamed, 'name it in vocab.json again')
+      assertStringIncludes(renamed, 'Nothing is migrated behind you.')
       await agent.tool('graph_apply', {
         ...app,
         entities: [{ entity: { eid: '$n2' }, note: { body: 'said it' } }],

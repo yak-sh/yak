@@ -76,8 +76,9 @@ export type Tool = {
 let str = (description: string) => ({ type: 'string', description })
 
 let SPACE = str(
-  "the space slug — <space>.yaks.app. Leave it out and the person's own " +
-    'space is used; only name one when they have more than one',
+  "the space slug — <space>.yaks.app. Leave it out: the person's own space " +
+    'is used, and where you name an app, the space is whichever of theirs ' +
+    'holds it. Name one only when a refusal asks you to',
 )
 let APP = str('the app slug within the space')
 
@@ -165,10 +166,30 @@ let slug = (v: unknown, what: string) => {
 
 // The space the caller means when they name none: their own. Signing in
 // mints it, so this is one lookup and never a question; a person who signed
-// in before that existed gets theirs on this very call (T-32482). Several,
-// and the tools say which names there are rather than guess between them.
-let ownSpace = async (ctx: Ctx) => {
+// in before that existed gets theirs on this very call (T-32482).
+//
+// With several, naming the APP is naming the space — the one of theirs that
+// holds that slug. An app's own tool (declared.ts) knows its store and asks
+// nothing, so the generic tier asking a member of two spaces to also name
+// one read as the platform forgetting what it had just been told (C-32730
+// item 6). Two spaces holding the same slug is the one genuine question, and
+// only then are the names said.
+let ownSpace = async (ctx: Ctx, app?: unknown) => {
   let spaces = await ctx.dir.spaces(ctx.person)
+  if (spaces.length > 1 && typeof app == 'string' && app) {
+    let holding: Space[] = []
+    for (let space of spaces) {
+      if (await ctx.dir.app(space, app)) holding.push(space)
+    }
+    if (holding.length == 1) return holding[0]
+    if (holding.length > 1) {
+      throw new Error(
+        `space: name one of ${
+          holding.map((s) => s.slug).join(', ')
+        } — each has an app ${app}`,
+      )
+    }
+  }
   if (spaces.length > 1) {
     throw new Error(
       `space: name one of ${spaces.map((s) => s.slug).join(', ')}`,
@@ -180,7 +201,7 @@ let ownSpace = async (ctx: Ctx) => {
 // The caller in the space: a member reads, an owner or editor writes.
 let inSpace = async (ctx: Ctx, args: Args, write = false) => {
   let space = args.space == null
-    ? await ownSpace(ctx)
+    ? await ownSpace(ctx, args.app)
     : await ctx.dir.space(text(args.space, 'space'))
   if (!space) throw new Error(`no space ${args.space}`)
   let who: Who = {
@@ -618,10 +639,15 @@ export let TOOLS: Tool[] = [
             : '') +
           (planted.length ? `\ncomponents: ${planted.join(', ')}` : '') +
           (added.length ? `\nadded: ${added.join(', ')}` : '') +
+          // What to DO about a column the manifest stopped naming, which
+          // the bare list never said: the board that read "5.2 mi in null
+          // min" was a rename nobody was told to finish (C-32730 item 4).
           (kept.length
             ? `\nkept, not in vocab.json (the rows are there): ${
               kept.join(', ')
-            }`
+            } — name it in vocab.json again to keep writing it, or move its ` +
+              'rows to the new word yourself, a row at a time with ' +
+              'graph_query then graph_apply. Nothing is migrated behind you.'
             : '') +
           (dropped.length ? `\ndropped (no rows): ${dropped.join(', ')}` : ''),
         space,
@@ -1100,7 +1126,18 @@ export let TOOLS: Tool[] = [
       // (C-32607 item 2, where `query` was the odd word out and the person's
       // agent reached for `filter` first). `query` stays a spelling of it:
       // an old caller is answered, never corrected.
-      let asked = text(args.filter ?? args.query, 'filter')
+      //
+      // The refusal spells the argument and shows one, since the agent that
+      // gets it guessed at the name: "filter is required" told someone who
+      // had sent `filters: [...]` nothing about the word or its shape
+      // (C-32730 item 3).
+      let asked = args.filter ?? args.query
+      if (typeof asked != 'string' || !asked) {
+        throw new Error(
+          "filter: one LINE, not a list — filter: '.doc!' is everything " +
+            "saved here, and '&' joins several: '.doc!&.task.status=open'",
+        )
+      }
       return {
         text: JSON.stringify(await read(ctx.env, reach, asked)),
         space: whichSpace(reach),
