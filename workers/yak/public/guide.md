@@ -61,7 +61,8 @@ Six functions, all same-origin, all talking to this app's own graph:
 - `apply(bundles)` saves. One bundle or an array; it answers
   `{ok, changes, aliases}`.
 - `query(filter)` lists. The filter line below.
-- `search(text)` finds words across the app's docs, ranked.
+- `search(text, filter?)` finds words across the app's docs, ranked. With no
+  filter a hit carries the WHOLE entity, every component it has.
 - `subscribe(filter, cb)` is `query` that keeps answering.
 - `upload(file)` saves bytes and answers where they live. Files, below.
 - `me()` says who is looking, before you ask them for anything.
@@ -660,7 +661,9 @@ The same grammar the platform speaks everywhere:
   leave out.
 - `limit=50`, `after=<num>` page — a windowed read answers the NEWEST that many,
   where a plain list is oldest first; `.count!` counts instead of listing.
-- Bare words are a full-text term, which is all `search` is.
+- Bare words are a full-text term, which is all `search` is. Like `id=`, a word
+  names no component to leave out, so a search with no filter beside it answers
+  whole entities; add `&.recipe!` and the ordinary rule is back.
 - `&` joins them: `.recipe.minutes<=30&.doc.title~=cake` asks both at once. Each
   filter ends where the next `&` begins, so `.recipe!.created!` is not a filter
   — it is two of them run together.

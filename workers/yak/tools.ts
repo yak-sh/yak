@@ -2458,25 +2458,33 @@ export let TOOLS: Tool[] = [
   {
     name: 'search',
     description:
-      "Find words in the app's data — every title and body, ranked, with " +
-      'filters riding along if you want them. The page has the same door as ' +
-      'search() from ./api/client.js. Name an app to search that one; leave ' +
-      'app out to search every app the person has, best hits first.',
+      "Find words in the app's data — every title and body, ranked. A hit " +
+      'carries the whole entity, every component it has, so you can tell a ' +
+      'recipe from a comment on one. The page has the same door as search() ' +
+      'from ./api/client.js. Name an app to search that one; leave app out ' +
+      'to search every app the person has, best hits first. Pass a filter to ' +
+      'narrow it, in the same grammar graph_query takes — and note that a ' +
+      'filter naming components cuts the answer to those, the ordinary rule.',
     input: {
       type: 'object',
       properties: {
         space: SPACE,
         app: APP,
         text: str('words to find'),
+        filter: str(
+          'a filter line to narrow the hits, e.g. .recipe!&.doc? — the same ' +
+            'grammar graph_query takes',
+        ),
         limit: { type: 'number', description: 'at most this many (20)' },
       },
       required: ['text'],
     },
     run: async (ctx, args) => {
       let reach = await inReach(ctx, args)
-      let q = `${encodeURIComponent(text(args.text, 'text'))}&limit=${
-        Number(args.limit) || 20
-      }`
+      let narrow = args.filter == null ? '' : text(args.filter, 'filter')
+      let q = `${encodeURIComponent(text(args.text, 'text'))}${
+        narrow ? `&${narrow}` : ''
+      }&limit=${Number(args.limit) || 20}`
       return {
         text: JSON.stringify(await read(ctx.env, reach, q)),
         space: whichSpace(reach),

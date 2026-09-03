@@ -116,7 +116,11 @@ export let store = (base) => {
   // component's own column ('.recipe.minutes<=30'), never a second
   // component; '&.doc?' is the way to ask for one of those.
   let query = (filter = '') => ask(`query?${filter}`)
-  // Full-text over the docs, ranked; a filter may ride along.
+  // Full-text over the docs, ranked. A word names no component to leave out,
+  // the way `id=` does not, so a search with no filter answers whole entities
+  // — the app's own components included, which is what a page drawing cards
+  // from a search needs. Pass a filter and the ordinary rule is back:
+  // `search('lemon', '.recipe!&.doc?')` is recipes with their titles.
   let search = (text, filter = '') =>
     query(`${encodeURIComponent(text)}${filter ? `&${filter}` : ''}`)
 

@@ -1957,11 +1957,24 @@ slow('a read with no app composes every app the caller can reach', async () => {
     // Search with no app merges the ranked hits of every app.
     let found = JSON.parse(
       await agent.tool('search', { text: 'lemon' }),
-    ) as { doc: { title: string } }[]
+    ) as { doc: { title: string }; recipe?: { serves: number } }[]
     assertEquals(
       found.map((r) => r.doc.title).sort(),
       ['Lemon cake', 'Lemon zester'],
     )
+    // And a hit carries the app's OWN components, not a doc and a rank
+    // alone: a word names nothing to leave out, so a page drawing cards from
+    // a search has what to draw (T-33144).
+    assertEquals(
+      found.find((r) => r.doc.title == 'Lemon cake')?.recipe?.serves,
+      4,
+    )
+    // A filter narrows it, and puts the ordinary rule back.
+    let narrowed = JSON.parse(
+      await agent.tool('search', { text: 'lemon', filter: '.recipe!' }),
+    ) as { doc?: { title: string }; recipe: { serves: number } }[]
+    assertEquals(narrowed.map((r) => r.recipe.serves), [4])
+    assertEquals(narrowed.map((r) => r.doc), [undefined])
 
     // What another person keeps in their own space is not in reach: her app
     // is private, he is nobody there, and her component never appears on the

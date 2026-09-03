@@ -13,7 +13,13 @@
 // now, and a fix to any arm is a fix to every store.
 import type { Sql } from '../../src/store/sql.ts'
 import { isPerson, locate, rowsOf, titleOf, vocabOf } from '../../src/db.ts'
-import { orderOf, parseQuery, type Pred, resolveRefs } from '../../src/query.ts'
+import {
+  orderOf,
+  parseQuery,
+  type Pred,
+  resolveRefs,
+  TEXT,
+} from '../../src/query.ts'
 import {
   askOf,
   askRows,
@@ -62,13 +68,21 @@ let speaking = (db: Sql, rows: Row[]): Row[] =>
 // ABSENT (`.archived=`) names no component the answer could carry, which is
 // also what keeps the door's own platform screens (listing.ts `asking`) from
 // counting as a request.
+//
+// Nor does a bare WORD name one. A text term's `comp: 'doc'` is decorative —
+// src/query.ts says so at the pred, since matchQuery matches title and body as
+// one — and reading it as a request made `search('lemon')` answer a doc, a
+// rank, and none of the app's own components, so a page drawing cards from a
+// search drew blanks (T-33144). A search that names no component is the `id=`
+// case: it left nothing out, so it answers the whole bundle, which is also
+// the only useful answer when the caller does not yet know what they found.
 export let EVERY = '*'
 
 let wanted = (segs: string[], preds: Pred[]): Set<string> | null => {
   if (segs.includes(EVERY)) return null
   let want = new Set(
     preds.filter((p) =>
-      p.comp && !(p.prop == '' && p.op == '' && p.value == '')
+      p.comp && p.op != TEXT && !(p.prop == '' && p.op == '' && p.value == '')
     ).map((p) => p.comp),
   )
   return want.size ? want : null

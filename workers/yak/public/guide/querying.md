@@ -383,8 +383,15 @@ comes back ranked, best first:
 
     → [{ kind: 'recipe', entity: {…},
          doc: {title: 'Lemon drizzle', body: '3 lemons, 200g butter'},
+         recipe: {minutes: 50, serves: 8},
          rank: {title: 'Lemon drizzle', snip: '3 \x01lemons\x02, 200g butter',
                 score: 2.0000017} }]
+
+A word names no component to leave out, so — like `id=` above — a line that is
+only words answers the WHOLE entity, the app's own components included. That is
+what lets a page draw cards straight from a search. Name a component beside the
+word and you are back to the ordinary rule: `lemon&.recipe!` answers recipes
+with no titles, `lemon&.recipe!&.doc?` answers both.
 
 `rank` rides the row for a text query and is never stored. Its `snip` marks the
 hit with `\x01` and `\x02` so a page can wrap them in whatever it likes — never

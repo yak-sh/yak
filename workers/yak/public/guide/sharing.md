@@ -106,8 +106,8 @@ serving now.
   the version you published, so installers keep getting that code until you
   `app_publish` again. That is deliberate — an editor's deploy must not change
   what the whole platform installs — and the deploy that leaves the offer
-  trailing says so in its answer. `app_versions` marks which version is
-  `(live)` and which is `(offered)`.
+  trailing says so in its answer. `app_versions` marks which version is `(live)`
+  and which is `(offered)`.
 
 **`app_unpublish(app, space?)`** — withdraw the offer. The app is untouched,
 every copy anyone took is untouched and keeps working, and the name is free

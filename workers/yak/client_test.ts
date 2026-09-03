@@ -103,6 +103,19 @@ slow('the served client: a page saves, lists and watches', async () => {
     })
     assertEquals((await store.query('.task.status=open'))[0].task.priority, 1)
 
+    // A search that names no component answers the WHOLE bundle, the way an
+    // `id=` fetch does: a bare word names nothing to leave out, and a page
+    // drawing cards from a search needs the app's own components (T-33144).
+    // Name one and the ordinary rule is back.
+    let [hit] = await store.search('lemon')
+    assertEquals(hit.doc.title, 'Lemon cake')
+    assertEquals(hit.task.priority, 1)
+    assert(hit.rank.score > 0)
+    let [narrow] = await store.search('lemon', '.task!')
+    assertEquals(narrow.task.priority, 1)
+    assertEquals(narrow.doc, undefined)
+    assert(narrow.rank.score > 0)
+
     // A second recipe: the list is oldest first, a windowed read newest.
     await store.apply([{ doc: { title: 'Plum tart' } }])
     let titles = (rows: { doc: { title: string } }[]) =>

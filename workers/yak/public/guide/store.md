@@ -63,17 +63,29 @@ wrote it, so a VALUE carrying `&` or `#` needs `encodeURIComponent` around it;
 ### search(text, filter?)
 
     let lemony = await search('lemon')
-    let quick = await search('lemon', '.recipe.minutes<=30')
+    let quick = await search('lemon', '.recipe!&.doc?')
 
 Full text over the app's `doc` rows — title and body, title weighted heavier —
 in relevance order rather than creation order. The text is percent-encoded for
 you and sent as a quoted phrase, so punctuation is safe to pass straight
 through; a trailing `*` prefix-matches the last word (`search('lem*')`).
 
-A hit carries `doc` (the text predicate names it) plus a `rank` component the
-store adds for the answer only — never stored, never writable. `rank.snip` is a
-body snippet with each hit wrapped between `\x01` and `\x02`, and
-`rank.title_hit` is the title marked the same way.
+**What a hit carries.** A word names no component to leave out, the way `id=`
+does not, so a search with no filter answers the WHOLE entity — every component
+the row has. That is what lets a page draw cards from a search: the recipe's
+`minutes` and `serves` are there, and a comment on a recipe is telling apart
+from the recipe by the components it has.
+
+Pass a filter and the ordinary rule is back — the answer is cut to the
+components the filter names, so name the ones you will draw:
+
+    await search('lemon', '.recipe!')        // recipes, no titles
+    await search('lemon', '.recipe!&.doc?')  // recipes with their titles
+
+Either way a `rank` component rides along, which the store adds for the answer
+only — never stored, never writable. `rank.snip` is a body snippet with each hit
+wrapped between `\x01` and `\x02`, and `rank.title_hit` is the title marked the
+same way.
 
 ### subscribe(filter, cb)
 
