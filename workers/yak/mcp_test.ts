@@ -108,6 +108,10 @@ slow(
           'app_install',
           'nothing shared but',
           'pinned to the version it took',
+          // A row carries the components its filter names (T-32699), which is
+          // what a page draws from — the one thing that silently emptied a
+          // working page's titles (T-32953).
+          "query('.recipe!&.doc?')",
         ]
       ) assertStringIncludes(init.instructions, said)
       let says = (name: string) =>
@@ -115,6 +119,15 @@ slow(
       assertStringIncludes(says('app_files'), './api/client.js')
       assertStringIncludes(says('app_files'), 'never localStorage')
       assertStringIncludes(says('graph_query'), '.doc!')
+      // What it ANSWERS, said before anything else: only the components the
+      // filter names, and the one way to ask for another (T-32953). A
+      // description that still promised every component is what taught a page
+      // to read `doc.title` off a `.recipe!` row and print "(untitled)".
+      assertStringIncludes(says('graph_query'), "'.recipe!&.doc?'")
+      assertStringIncludes(
+        says('graph_query'),
+        'ONLY the components the filter names',
+      )
       assertStringIncludes(says('graph_apply'), './api/client.js')
 
       // The guide the tool descriptions point at, offered as a resource and

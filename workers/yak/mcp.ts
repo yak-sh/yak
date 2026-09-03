@@ -102,7 +102,11 @@ The page gets it in one line, from the app's own address:
                                        // including on their other device
 
 An entity is {entity: {eid}, ...components}: '$name' mints a new one (the
-answer maps it to its eid), and a filter line reads them back. The guide
+answer maps it to its eid), and a filter line reads them back. A row carries
+only the components its filter NAMES — presence filters end at ! and join
+with &, and '?' asks for one without filtering on it — so query('.recipe!')
+answers recipes with no titles and query('.recipe!&.doc?') answers both. Ask
+for what the page will draw. The guide
 resource has the components and the filter grammar; graph_apply, graph_query
 and search are the same store from here, for seeding and fixing.
 

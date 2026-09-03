@@ -108,6 +108,13 @@ export let store = (base) => {
   // '.opaque.format=recipe', 'id=<eid>', 'limit=', 'after='. Oldest first,
   // by the number the store minted; a windowed read is the newest page of
   // that same order.
+  //
+  // A row carries ONLY the components the filter names, so name the ones the
+  // page will draw: '.recipe!' answers recipes with no titles, and
+  // '.recipe!&.doc?' answers both — '&' joins filters and '?' asks for a
+  // component without filtering on it. A dotted word addresses that
+  // component's own column ('.recipe.minutes<=30'), never a second
+  // component; '&.doc?' is the way to ask for one of those.
   let query = (filter = '') => ask(`query?${filter}`)
   // Full-text over the docs, ranked; a filter may ride along.
   let search = (text, filter = '') =>
@@ -183,8 +190,10 @@ export let store = (base) => {
   }
   // The filter's matches now, and again on every change — a write from
   // another device, another tab, or an agent. `cb` is handed the same rows
-  // `query()` answers with, so a page swaps one for the other and nothing
-  // else changes; the returned function ends the subscription.
+  // `query()` answers with — the components the filter NAMES and no others,
+  // so '.recipe!&.doc?' where the page draws titles — and a page swaps one
+  // for the other and nothing else changes; the returned function ends the
+  // subscription.
   let subscribe = (filter, cb) => {
     let name = `${++n}:${filter}`
     subs.set(name, { q: filter, rows: new Map(), cb })

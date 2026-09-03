@@ -1997,18 +1997,24 @@ export let TOOLS: Tool[] = [
   {
     name: 'graph_query',
     description:
-      "Read the app's store. To list EVERYTHING you saved, ask for the " +
+      "Read the app's store. An answer carries ONLY the components the " +
+      'filter names: {kind, entity: {eid, num}, ...those components}. So ' +
+      "'.recipe!' answers recipes without their titles, and " +
+      "'.recipe!&.doc?' answers both — presence filters end at ! and join " +
+      "with &, and '?' asks for a component without filtering on it. A " +
+      "dotted word addresses that component's COLUMN ('.recipe.minutes<=30'), " +
+      "so '&.doc?' is the way to ask for another component and '.recipe.doc' " +
+      'is a column recipe does not have. Ask for what you will draw. ' +
+      'To list EVERYTHING you saved, ask for the ' +
       "component it wears: '.doc!' is every entity with a title (an empty " +
       "query selects nothing, so a bare 'limit=50' answers []). Then " +
       "'.doc.title~=cake' contains, '.task.status=open' equals, '.archived=' " +
-      "is absent, '.loan?' asks for a component without filtering on it, " +
-      "'id=<eid>' fetches one, 'limit=20' and 'after=<num>' page " +
+      'is absent, ' +
+      "'id=<eid>' fetches one whole, 'limit=20' and 'after=<num>' page " +
       "(a windowed read answers the newest), '.count!' counts, and a bare " +
-      "word is a full-text term. '&' joins filters, so '.doc!&.created!' is " +
+      "word is a full-text term. '.doc!&.created!' is " +
       'your rows with the stamps saying who saved each and when — a listing ' +
-      "leaves those out, and the platform's own error rows, unless named. " +
-      'Answers entity JSON, {kind, entity: {eid, num}, ...components} — and ' +
-      'only the components the filter NAMES, so ask for what you want; ' +
+      "leaves those out, and the platform's own error rows, unless named; " +
       "'*' answers every component, for looking rather than reading. The " +
       'same filter line the page passes to query() from ./api/client.js. ' +
       'Name an app to read that one; LEAVE app OUT to read every app at ' +

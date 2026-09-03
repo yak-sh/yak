@@ -102,9 +102,11 @@ to make again:
       task: { priority: 1 },
     })
 
-    let toMake = await query('.task.status=open')
+    let toMake = await query('.task.status=open&.doc?')
 
-Each row comes back the way it went in, plus its address:
+Each row comes back as the components its filter NAMED, plus its address — so
+name the ones the page will draw. `.task.status=open` alone answers no titles;
+`&.doc?` asks for the title beside it, and `?` is the only way to say it:
 
     { kind: 'task', entity: { eid: '4f3c...', num: 12 },
       doc: { title: 'Lemon cake', body: '3 lemons, 200g butter...' },
@@ -575,6 +577,10 @@ The same grammar the platform speaks everywhere:
   components its filter names, so `.book!&.loan?` is every book, wearing its
   loan where it has one. `*` asks for every component, which is what you want
   when you are looking rather than reading.
+- A dotted word after a component addresses that component's COLUMN:
+  `.recipe.minutes` is a column of `recipe`, and `.recipe.doc` is a column
+  `recipe` does not have. Asking for a second COMPONENT is `&.doc?` — the two
+  are different questions, and `&.doc?` is the only way to say the second one.
 - `id=<eid>` fetches one by address, whole — an address names no component to
   leave out.
 - `limit=50`, `after=<num>` page — a windowed read answers the NEWEST that many,
