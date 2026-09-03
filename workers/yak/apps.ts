@@ -33,6 +33,7 @@ import {
 } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
+import { sizeOf } from './image.ts'
 import { asking, listed, listing } from './listing.ts'
 import { nothingHere } from './pages.ts'
 import { hostOf, PLATFORM, route } from './route.ts'
@@ -103,8 +104,7 @@ let SAYS: Record<string, string> = {
   not_a_writer: 'sign in to change this app',
   not_a_reader: 'sign in to see this app',
   no_bytes: 'an upload needs a body: post the file itself',
-  too_large: 'that file is over the 20 MB limit — downscale it on the page ' +
-    'before you send it',
+  too_large: 'that file is too big to send — try a smaller one',
   no_such_file: 'no file at that address in this app',
 }
 
@@ -282,7 +282,7 @@ let broken = (body: string) => {
 }
 
 // The ceiling on one upload. A store is not a drive: a page downscales a
-// photo before it sends it (the guide's four lines), and 20 MB of anything
+// photo before it sends it (the guide's five lines), and 20 MB of anything
 // else is not what someone meant to put in an app's graph.
 let MAX = 20 * 1024 * 1024
 
@@ -349,9 +349,17 @@ let took = async (
   if (!(await blobs.has(key))) await blobs.put(key, bytes)
   let mime = mimeSent(req)
   let name = nameSent(req)
+  // What the file says it measures, off its header (image.ts). A wall wants
+  // to reserve a photo's space before its bytes arrive, and only the door
+  // ever holds the bytes; a file that states no size gets no `image`. It
+  // rides the CONTENT row, where a dimension belongs — the bytes are that
+  // wide however many attachments name them — and where a page already has
+  // the eid, since the sha is what its own row points at.
+  let size = sizeOf(bytes)
   // Two rows, the way the fleet shapes a file (src/blob.ts): the CONTENT,
-  // addressed by its sha and carrying only its length, and the USE of it,
-  // carrying what it is called and what it is. They stay apart because they
+  // addressed by its sha and carrying what is true of the bytes — how many
+  // they are, and what they measure — and the USE of it, carrying what it is
+  // called and what it is. They stay apart because they
   // are two things — and because a component may not point at its own entity.
   // The use is addressed too, off the content's address, so the same bytes
   // sent twice are one attachment renamed rather than a second row saying the
@@ -361,7 +369,11 @@ let took = async (
     method: 'POST',
     body: JSON.stringify({
       entities: [
-        { entity: { eid: sha }, blob: { bytes: bytes.byteLength } },
+        {
+          entity: { eid: sha },
+          blob: { bytes: bytes.byteLength },
+          ...(size ? { image: size } : {}),
+        },
         {
           entity: { eid: await useOf(sha) },
           // A patch, so an upload that names nothing leaves the name the
@@ -379,6 +391,7 @@ let took = async (
     url: `/${app.slug}/api/blob/${sha}`,
     mime,
     bytes: bytes.byteLength,
+    ...size,
   })
 }
 

@@ -30,6 +30,8 @@ import {
   reverseAssocs,
   route,
   scopes,
+  screened,
+  selected,
   SUNK,
   sunk,
   tally,
@@ -1650,4 +1652,22 @@ Deno.test('.decided.at filters like any stamped time', () => {
   // The byline filters like created's, and bare `at` stays ambiguous.
   assertEquals(hits('.decided.by=jeff', settled), true)
   assertThrows(() => parseQuery('.at>=2026-01-01'), Error, 'ambiguous')
+})
+
+Deno.test('a blob row answers only a filter that names one — `image` names one', () => {
+  let photo = { blob: { bytes: 9 }, image: { w: 1600, h: 900 } }
+  assertEquals(selected(photo, parseQuery('.image!')), true)
+  assertEquals(selected(photo, parseQuery('.blob!')), true)
+  // Anything else still leaves the store's own rows out of a person's list.
+  assertEquals(selected(photo, parseQuery('.image.w>0&.doc!')), true)
+  assertEquals(selected(photo, parseQuery('.doc!')), false)
+  // …and the screen a compiled membership carries says the same thing.
+  assertEquals(
+    screened(parseQuery('.image!'), false).some((p) => p.comp == 'blob'),
+    false,
+  )
+  assertEquals(
+    screened(parseQuery('.doc!'), false).some((p) => p.comp == 'blob'),
+    true,
+  )
 })

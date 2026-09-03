@@ -692,8 +692,17 @@ export let listed = (comps: Comps, preds: Pred[]) =>
 // doc and no kind, so a listing that catches one renders nothing for it — which
 // is what a person saw (C-32498 item 4). Naming the component is the deliberate
 // opt-in, the same step `quarantined` asks for.
+//
+// `image` names them too: dimensions belong to the content (its row keys on
+// blob), so a filter that asks for one can be asking for nothing else, and a
+// photo wall reading what its pictures measure should not have to say `.blob!`
+// to be allowed the answer (C-32706 item 1).
+let ON_BLOB = ['blob', 'image']
+
 export let namesBlobs = (preds: Pred[]) =>
-  preds.some((p) => p.comp == 'blob' || leafOf(p).comp == 'blob')
+  preds.some((p) =>
+    ON_BLOB.includes(p.comp) || ON_BLOB.includes(leafOf(p).comp)
+  )
 
 // Does this row belong in the answer a FILTER selects? The caller's own preds
 // decided that; these are the two screens every listing carries beside them.

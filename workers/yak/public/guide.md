@@ -109,12 +109,18 @@ the platform, so a page can show a byline to anyone:
 People stay out of an ordinary listing — `query('.doc!')` answers what the page
 saved — so `.person!` is how you ask for them.
 
+An `open` app takes writes from anyone with the link, and a guest who never
+signed in is nobody yet: their rows have no `created.by` and no `.person!` row
+to look up. If a byline matters there, ask for a name on the page and save it in
+your own row.
+
 ## Files
 
 `upload` takes a `File` off an `<input type=file>` — or any `Blob` — and answers
-`{eid, url, mime, bytes}`. The bytes are stored under their own SHA-256, so the
-same file twice is one upload: `eid` is that address, and `url` is where the app
-serves the bytes back, cached forever because they can never change.
+`{eid, url, mime, bytes}`, plus `w` and `h` when the file is a picture that says
+so. The bytes are stored under their own SHA-256, so the same file twice is one
+upload: `eid` is that address, and `url` is where the app serves the bytes back,
+cached forever because they can never change.
 
     let input = document.querySelector('input[type=file]')
     let file = await upload(input.files[0])
@@ -133,20 +139,46 @@ serves the bytes back, cached forever because they can never change.
 `{"photo": {"caption": "text", "blob":
 "text"}}` in its `vocab.json`; see
 below.) A row points at bytes by their eid, and `./api/blob/<eid>` is where they
-are, which is what `url` already holds. Uploaded files are rows in their own
-right too, so `query('.attachment!')` lists them with their `mime` and `name`.
+are, which is what `url` already holds.
+
+The upload writes a row of its own as well, so `query('.attachment!')` lists
+every file in the app. That row's eid is the row's, not the bytes' — the bytes
+are `.attachment.blob`, and that is what an address is built from:
+
+    for (let f of await query('.attachment!')) {
+      draw(`./api/blob/${f.attachment.blob}`, f.attachment.name)
+    }
+
+What a picture measures is a fact about the bytes, so `image` sits on the blob
+itself — at the very eid a row points at, which is `file.eid` for the one you
+just sent. Read them the way you read names, and a wall can hold each photo's
+space open before its bytes arrive:
+
+    let size = new Map((await query('.image!'))
+      .map((i) => [i.entity.eid, i.image]))
+
+    for (let p of await query('.photo!')) reserve(size.get(p.photo.blob))
+
+The same bytes twice are one blob and one `attachment` row — but a `photo` row
+of your own is still a second row, and the wall shows the picture twice. Look
+before you write one:
+
+    let [seen] = await query(`.photo.blob=${file.eid}`)
+    if (!seen) await apply({ photo: { caption, blob: file.eid } })
 
 Who may upload is the app's `access`, the same as any other write; who may read
 the bytes is the same as any other read. Deleting the app deletes its files with
 it.
 
 **One upload is 20 MB at most**, and a phone's photo is often more than that.
-Downscale it on the page — four lines, no library, and the app is faster for
-everyone:
+The refusal a page catches says so in a guest's words, so the sending is yours
+to get right: downscale on the page — five lines, no library, and the app is
+faster for everyone:
 
-    let bmp = await createImageBitmap(file, { resizeWidth: 1600 })
-    let cv = new OffscreenCanvas(bmp.width, bmp.height)
-    cv.getContext('2d').drawImage(bmp, 0, 0)
+    let bmp = await createImageBitmap(file)
+    let scale = Math.min(1, 1600 / bmp.width)   // never blow a small one up
+    let cv = new OffscreenCanvas(bmp.width * scale, bmp.height * scale)
+    cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height)
     let small = await cv.convertToBlob({ type: 'image/jpeg', quality: 0.85 })
 
 Then `upload(small, { name: file.name })`. There is no server-side resizing yet,
@@ -178,7 +210,8 @@ shape is one question, never five.
 - `blob` — `bytes` (number). A byte COUNT, not the bytes themselves.
 - `attachment` — `blob` (eid), `mime` (text), `name` (text). A file, as `upload`
   writes it above.
-- `image` — `w` (number), `h` (number). The size of one.
+- `image` — `w` (number), `h` (number). What a picture measures, on the blob
+  itself; `upload` reads it off the file's own header (png, jpeg, gif, webp).
 
 An edge is a sentence, not a column: `dependency` is `{type, child}`, where type
 is one of `contains`, `requires`, `about`, `references`, `supersedes`.
@@ -279,7 +312,7 @@ them directly (or from `curl`, or from another page):
     x-yak-name: cake.jpg              ← optional, percent-encoded
     <the bytes>
     → {"eid": "9f2a...", "url": "/photos/api/blob/9f2a...",
-       "mime": "image/jpeg", "bytes": 51234}
+       "mime": "image/jpeg", "bytes": 51234, "w": 1600, "h": 1200}
 
     GET ./api/blob/<eid>             → the bytes, with that mime
 
