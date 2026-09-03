@@ -487,6 +487,43 @@ A throw, or a 5xx, becomes the same `exception` the pages file — the person's
 agent hears about it on its next reply, and `app_errors` lists what is open. So
 let it throw: a break you can see is worth more than a `catch` that hides it.
 
+## Sharing an app
+
+An app is a plugin. Once it is deployed you can offer it to every other space
+here, and anyone can take a copy into their own — four tools:
+
+- `app_publish(app, name?, about?)` — offer the version that is serving, under a
+  name the whole platform shares. It is the app's own slug unless somebody else
+  has it, and a taken name is refused naming the app that has it. `about` is the
+  line someone browsing reads. Only the space owner may publish.
+- `app_unpublish(app)` — withdraw the offer. The app is untouched, every copy
+  anyone took is untouched, and the name is free again.
+- `app_published()` — what is on offer, newest first.
+- `app_install(name, as?)` — take one. `as` puts it at another address in their
+  space; leave it out and it lands at the published name.
+- `app_update(app)` — move an installed copy to whatever its publisher offers
+  now.
+
+**An installed app shares nothing but the code.** It is an ordinary app of the
+installer's: its own address, its own store, its own R2 prefix, its own worker
+script. Their first row is written into a graph nobody else has ever touched,
+and the publisher never sees any of it. Nothing is synced, nothing is shared,
+nothing phones home. The photos a visitor uploaded to the publisher's copy stay
+there too — those are data, not code.
+
+**A copy is PINNED to the version it took.** Publishing again does not move
+anybody: the installer's copy keeps serving exactly what it served yesterday
+until someone calls `app_update`. That is the whole point of the pin — a
+publisher cannot change an app out from under the people using it.
+
+An update replaces the code and keeps the data. Every row they saved is still
+there afterwards, and so is anything the store learned along the way; what goes
+is whatever the publisher's new version does not have, code-side — including
+anything you wrote into the copy yourself. The vocabulary follows the same rule
+it always does: a `vocab.json` that only GREW is applied to their store
+additively, and one that would retype a column their rows were written under is
+refused with the same sentence a deploy gives — and nothing moves at all.
+
 ## The doors underneath
 
 `client.js` is a wrapper over ordinary HTTP doors, same-origin, in case you want

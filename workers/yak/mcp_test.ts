@@ -101,6 +101,11 @@ slow(
           'the same thing in every app',
           "'.book!&.loan?'",
           "store('/lending/api/')",
+          // An app is a plugin: publishable, installable, pinned (T-32890).
+          'app_publish',
+          'app_install',
+          'nothing shared but',
+          'pinned to the version it took',
         ]
       ) assertStringIncludes(init.instructions, said)
       let says = (name: string) =>

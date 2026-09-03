@@ -11,6 +11,7 @@ import { RESERVED } from '../../src/store/vocab.ts'
 import { comps, typeName } from '../../src/types.ts'
 import { SHIM, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
+import { TOOLS } from './tools.ts'
 
 let guide = Deno.readTextFileSync(
   new URL('./public/guide.md', import.meta.url),
@@ -124,6 +125,28 @@ Deno.test('the guide prints the limits an app is really held to', async () => {
     section.includes(`${meta.limits.subrequests} subrequests`),
     `the guide does not say ${meta.limits.subrequests} subrequests`,
   )
+})
+
+// The fifth list that can rot, and the one a person's data rides on: what
+// sharing an app costs them. An app is a plugin (T-32890), so the guide has to
+// name every tool that makes one — a missing verb is a door nobody finds — and
+// say the two things that are not obvious from the names: an installed copy
+// shares nothing but the code, and it is pinned until someone moves it.
+Deno.test('the guide teaches every tool that shares an app', () => {
+  let section = guide.split('## Sharing an app')[1]?.split('\n## ')[0] ?? ''
+  assert(section, 'the guide never teaches publishing')
+  for (
+    let tool of TOOLS.map((t) => t.name).filter((n) =>
+      /^app_(publish|unpublish|published|install|update)$/.test(n)
+    )
+  ) {
+    assert(section.includes(tool), `the guide never names ${tool}`)
+  }
+  assert(
+    /nothing but the code/.test(section),
+    'the guide never says what an installed app shares',
+  )
+  assert(/PINNED|pinned/.test(section), 'the guide never says what pinning is')
 })
 
 Deno.test('the guide prints every column of every component it lists', () => {

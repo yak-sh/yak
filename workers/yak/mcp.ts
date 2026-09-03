@@ -129,6 +129,14 @@ It reads the app's store as the person looking (env.STORE), its files
 what a page must not hold and nothing can read back. The guide has a whole
 one.
 
+An app is a plugin. app_publish offers one to every other space here by
+name, and app_published lists what is on offer; app_install takes one into
+the person's own space, where it is an ordinary app of theirs — its own
+address, its own store, their data from the first byte, nothing shared but
+the code — pinned to the version it took until app_update moves it, which
+keeps everything they saved. Look before you build something somebody has
+already made.
+
 Whatever breaks — a page's own error, a refused write, a request that failed
 — arrives at the end of a later reply, once. Fix what you see.`
 
