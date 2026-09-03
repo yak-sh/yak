@@ -58,7 +58,8 @@ An app is an index.html and whatever files sit beside it, served live at
 
 1. app_new — the app. Leave the space argument out: signing in gave them
    one, and every tool uses it unless they have several.
-2. app_files — write index.html, and any css, js or images beside it.
+2. app_files — write index.html, and any css, js or images beside it; the
+   whole set in one call, as files: [{path, content}, ...].
 3. app_deploy — mark the release. The files are already live; this is the
    version an error will name. It also plants any components the app declares
    in a vocab.json beside index.html — {"recipe": {"serves": "number"}} and

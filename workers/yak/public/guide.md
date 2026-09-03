@@ -5,8 +5,9 @@ An app is an `index.html` and whatever files sit beside it, served live at
 write is what the browser gets. Every app comes with its own store — a graph of
 entities — and a small client for reading and writing it from the page.
 
-Make one with `app_new`, write files with `app_files`, then `app_deploy`, and
-give the person the URL.
+Make one with `app_new`, write files with `app_files` — the whole set in one
+call, as `files: [{path, content}, ...]` — then `app_deploy`, and give the
+person the URL.
 
 ## The store, from a page
 

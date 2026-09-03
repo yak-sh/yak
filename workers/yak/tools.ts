@@ -95,6 +95,9 @@ let ACCESS = {
 
 let ROLES: Role[] = ['owner', 'editor', 'viewer']
 
+// What app_files does to a file, in the order an app is built.
+let OPS = ['list', 'read', 'write', 'delete']
+
 let text = (v: unknown, what: string) => {
   if (typeof v != 'string' || !v) throw new Error(`${what} is required`)
   return v
@@ -105,6 +108,26 @@ let text = (v: unknown, what: string) => {
 // teach the agent to guess again.
 let list = (v: unknown, what: string) =>
   v == null ? [] : (Array.isArray(v) ? v : [v]).map((one) => text(one, what))
+
+// The many-file form of a write: `files: [{path, content}]`, so an app is one
+// call and not one call per file (C-32624 item 5). Each refusal says which
+// entry was wrong, since the model sent them all at once.
+let files = (v: unknown): { path: string; content: string }[] => {
+  if (v == null) return []
+  if (!Array.isArray(v)) {
+    throw new Error('files: a list of {path, content}')
+  }
+  return v.map((one, i) => {
+    if (!one || typeof one != 'object') {
+      throw new Error(`files[${i}]: {path, content}`)
+    }
+    let f = one as Record<string, unknown>
+    return {
+      path: text(f.path, `files[${i}].path`),
+      content: text(f.content, `files[${i}].content`),
+    }
+  })
+}
 
 let access = (v: unknown): Access => {
   let s = text(v, 'access')
@@ -364,7 +387,9 @@ export let TOOLS: Tool[] = [
     name: 'app_files',
     description:
       "Write the app's files — index.html and any css, js or images beside " +
-      'it — or list them, read one back, or delete one. They serve live at ' +
+      'it — or list them, read one back, or delete one. Write a whole app in ' +
+      'ONE call with files: [{path, content}, …]; path and content write a ' +
+      'single file. They serve live at ' +
       '<space>.yaks.app/<app>/<path>; index.html answers the directory. Keep ' +
       'what the app remembers in its own store, never localStorage: the page ' +
       'reads and writes it with `import { apply, query, search } from ' +
@@ -375,14 +400,37 @@ export let TOOLS: Tool[] = [
       properties: {
         space: SPACE,
         app: APP,
-        op: { type: 'string', enum: ['list', 'read', 'write', 'delete'] },
+        op: { type: 'string', enum: [...OPS] },
         path: str('the file path, e.g. index.html'),
         content: str('the file text, for write'),
+        files: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              path: str('the file path'),
+              content: str('the file text'),
+            },
+            required: ['path', 'content'],
+          },
+          description: 'several files to write at once, instead of ' +
+            'path and content — the whole app in one call',
+        },
       },
-      required: ['app', 'op'],
+      required: ['app'],
     },
     run: async (ctx, args) => {
-      let op = text(args.op, 'op')
+      let batch = files(args.files)
+      // A batch says what it is: `files` is a write, whether or not `op`
+      // came along. The refusal names the ops AND the batch, because a bare
+      // "op is required" leaves an agent guessing at both (C-32624 item 5).
+      let op = String(args.op ?? (batch.length ? 'write' : ''))
+      if (!OPS.includes(op)) {
+        throw new Error(
+          `op: one of ${OPS.join(', ')} — write takes path and content, or ` +
+            'files: [{path, content}] for several at once',
+        )
+      }
       let { space, app } = await inApp(
         ctx,
         args,
@@ -390,6 +438,8 @@ export let TOOLS: Tool[] = [
       )
       let blobs = r2Blobs(ctx.env.BLOBS)
       let prefix = fileKey(space, app, '')
+      // A path as the app serves it: from the slash, no leading slashes.
+      let at = (path: string) => fileKey(space, app, path).slice(prefix.length)
       if (op == 'list') {
         let keys = await blobs.list(prefix)
         return {
@@ -398,30 +448,32 @@ export let TOOLS: Tool[] = [
           space,
         }
       }
-      let key = fileKey(space, app, text(args.path, 'path'))
-      if (op == 'read') {
+      if (op == 'read' || op == 'delete') {
+        let key = fileKey(space, app, text(args.path, 'path'))
         if (!(await blobs.has(key))) throw new Error(`no file ${args.path}`)
-        return {
-          text: new TextDecoder().decode(await blobs.get(key)),
-          space,
+        if (op == 'read') {
+          return { text: new TextDecoder().decode(await blobs.get(key)), space }
         }
-      }
-      if (op == 'delete') {
-        if (!(await blobs.has(key))) throw new Error(`no file ${args.path}`)
         await blobs.delete(key)
         return { text: `deleted ${key.slice(prefix.length)}`, space }
       }
-      if (op != 'write') {
-        throw new Error(`op: one of list, read, write, delete`)
+      let wrote = batch.length ? batch : [{
+        path: text(args.path, 'path'),
+        content: text(args.content, 'content'),
+      }]
+      for (let f of wrote) {
+        await blobs.put(
+          fileKey(space, app, f.path),
+          new TextEncoder().encode(f.content),
+        )
       }
-      await blobs.put(
-        key,
-        new TextEncoder().encode(text(args.content, 'content')),
-      )
+      let paths = wrote.map((f) => at(f.path))
       return {
-        text: `wrote ${key.slice(prefix.length)} → ${url(space, app)}${
-          key.slice(prefix.length)
-        }`,
+        text: paths.length == 1
+          ? `wrote ${paths[0]} → ${url(space, app)}${paths[0]}`
+          : `wrote ${paths.length} files → ${url(space, app)}: ${
+            paths.join(', ')
+          }`,
         space,
       }
     },

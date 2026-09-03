@@ -271,6 +271,13 @@ Deno.test('query: bad tokens are loud, bare words are terms', () => {
   assertThrows(() => parseQuery('.hovercraft=eels'), Error, 'unknown prop')
   assertThrows(() => parseQuery('.task.eels=9'), Error, 'no such prop')
   assertEquals(parseQuery('sandwich')[0].op, 'text') // a term, not an error
+  // Two presence filters run together: the refusal spells the fix, since
+  // echoing the good half taught nobody about `&` (C-32624 item 6).
+  assertThrows(
+    () => parseQuery('.doc!.created!'),
+    Error,
+    'presence filters end at !: .doc! — join filters with &: .doc!&.created!',
+  )
 })
 
 Deno.test('accept.body is qualified while bare body keeps meaning doc.body', () => {

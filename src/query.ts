@@ -998,7 +998,15 @@ export let preds = (token: string): Pred[] | null => {
   let [, path, op, value] = m
   let segs = path.split('.')
   if (op == '!' && value) {
-    throw new Error(`presence filters end at !: .${path}!`)
+    // Two presence filters run together is the way to ask for both said
+    // wrong, so the refusal spells the way to say it: `&` joins filters, and
+    // echoing only the good half taught nothing (C-32624 item 6).
+    throw new Error(
+      `presence filters end at !: .${path}!` +
+        (value.startsWith('.')
+          ? ` — join filters with &: .${path}!&${value}`
+          : ''),
+    )
   }
   // a quoted value is the escape hatch for spaces where whitespace splits
   value = value.replace(/^"(.*)"$/s, '$1')

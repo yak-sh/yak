@@ -191,6 +191,48 @@ slow(
         await agent.tool('app_files', { ...app, op: 'list' }),
         'css/site.css\nindex.html',
       )
+      // A whole app in one call, and one answer naming every file it wrote
+      // (C-32624 item 5). The op rides along with the batch.
+      assertEquals(
+        await agent.tool('app_files', {
+          ...app,
+          files: [
+            { path: 'app.js', content: 'export let go = () => {}' },
+            { path: '/img/logo.svg', content: '<svg/>' },
+          ],
+        }),
+        'wrote 2 files → https://jeff.yaks.app/recipes/: app.js, img/logo.svg',
+      )
+      assertEquals(
+        await agent.tool('app_files', { ...app, op: 'list' }),
+        'app.js\ncss/site.css\nimg/logo.svg\nindex.html',
+      )
+      assertEquals(
+        await agent.tool('app_files', {
+          ...app,
+          op: 'read',
+          path: 'img/logo.svg',
+        }),
+        '<svg/>',
+      )
+      // What is missing is named: the ops, and the batch that writes several.
+      let lost = await assertRejects(
+        () => agent.tool('app_files', { ...app }),
+        Error,
+      )
+      assertStringIncludes(lost.message, 'op: one of list, read, write, delete')
+      assertStringIncludes(lost.message, 'files: [{path, content}]')
+      await assertRejects(
+        () => agent.tool('app_files', { ...app, files: [{ path: 'x.js' }] }),
+        Error,
+        'files[0].content is required',
+      )
+      await agent.tool('app_files', { ...app, op: 'delete', path: 'app.js' })
+      await agent.tool('app_files', {
+        ...app,
+        op: 'delete',
+        path: 'img/logo.svg',
+      })
       assertEquals(
         await agent.tool('app_files', {
           ...app,
