@@ -88,7 +88,7 @@ Deno.test('bytes read as a person says them', () => {
   assertEquals(size(999), '999 B')
   assertEquals(size(1536), '1.5 KB')
   assertEquals(size(252_706_816), '241 MB')
-  assertEquals(size(1024 ** 3), '1.0 GB')
+  assertEquals(size(1024 ** 3), '1 GB')
 })
 
 // The ceilings, at the seam every door reads (T-32758).
@@ -138,7 +138,7 @@ Deno.test('the line says every number against its ceiling', () => {
   )
   assertStringIncludes(said, '3 of 5 apps')
   assertStringIncludes(said, '41,000 of 50,000 requests')
-  assertStringIncludes(said, '900 MB of 1.0 GB')
+  assertStringIncludes(said, '900 MB of 1 GB')
   assertStringIncludes(said, '0 of 100 emails')
   assertStringIncludes(said, 'Requests are never refused')
 })

@@ -102,7 +102,10 @@ export let size = (bytes: number) => {
     bytes /= 1024
     n++
   }
-  return `${n && bytes < 10 ? bytes.toFixed(1) : Math.round(bytes)} ${units[n]}`
+  // A tenth where it says something — 1.5 KB — and never where it does not:
+  // the ceiling is 1 GB, and `1.0 GB` reads like a measurement of it.
+  let round = !n || bytes >= 10 || Number.isInteger(bytes)
+  return `${round ? Math.round(bytes) : bytes.toFixed(1)} ${units[n]}`
 }
 
 let none = (): Counts => ({ requests: 0, rows_read: 0, rows_written: 0 })
