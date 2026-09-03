@@ -304,14 +304,19 @@ let handle = async (ctx: Ctx, rpc: Rpc) => {
     let out = result(rpc.id, {
       protocolVersion: spoken(params.protocolVersion),
       // `listChanged` is a promise to say when the tool list moves, which is
-      // what an app deploying its own tools does (declared.ts). Prompts
-      // promise the same for the same reason: an app that deploys prompts of
-      // its own moves this list too (T-32983), and the stream already knows
-      // how to say so (stream.ts `told`).
+      // what an app deploying its own tools does (declared.ts). Resources
+      // promise the same, since a release moves an app's views without
+      // necessarily touching its tools (T-33004), and prompts for the same
+      // reason: an app that deploys prompts of its own moves this list too
+      // (T-32983), and the stream already knows how to say so (stream.ts
+      // `told`). `logging` is the door for a break PUSHED as it is written
+      // (unseen.ts `noted`, T-33006), not held for the next reply's unseen
+      // block — which still carries it, for whoever was not listening.
       capabilities: {
         tools: { listChanged: true },
         prompts: { listChanged: true },
-        resources: {},
+        resources: { listChanged: true },
+        logging: {},
       },
       serverInfo: { name: 'yaks.app', version: VERSION },
       instructions: INSTRUCTIONS,
@@ -325,6 +330,10 @@ let handle = async (ctx: Ctx, rpc: Rpc) => {
     return out
   }
   if (rpc.method == 'ping') return result(rpc.id, {})
+  // Declaring `logging` invites this ask, so it is answered rather than
+  // refused. There is nothing to set: the one thing this door ever logs is a
+  // break, at `error`, and nothing quieter is ever sent (unseen.ts `noted`).
+  if (rpc.method == 'logging/setLevel') return result(rpc.id, {})
   if (rpc.method == 'tools/list') {
     return result(rpc.id, {
       tools: [

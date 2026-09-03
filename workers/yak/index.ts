@@ -81,12 +81,15 @@ let report = async (env: Env, r: Route, req: Request, e: unknown) => {
   // trigger (kernel.rs; `error` is a known failure state, kept for what the
   // platform reports deliberately). unseen.ts owns the entity's shape,
   // because a page reporting its own break writes the same one.
+  // A break in a space's app is also pushed to its members as it lands
+  // (unseen.ts, T-33006); one in the platform's own meta store has no space
+  // to tell.
   await noted(store, {
     request: `${req.method} ${new URL(req.url).pathname}`,
     version: app?.version,
     message: e instanceof Error ? e.message : String(e),
     stack: e instanceof Error ? e.stack ?? '' : '',
-  })
+  }, space && app ? { env, space, app } : undefined)
 }
 
 export default {

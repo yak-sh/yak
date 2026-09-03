@@ -226,7 +226,7 @@ export let ran = async (
       version: await serving(env, space, app),
       message: `the app's worker answered ${res.status}`,
       stack: '',
-    })
+    }, { env, space, app })
   }
   return res
 }

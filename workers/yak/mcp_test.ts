@@ -1451,6 +1451,143 @@ slow('the stream names its session and replays a missed line', async () => {
   }
 })
 
+// A release can move the view set without the tool set (T-33004): the tool
+// half of tools.json is what tools/list is made of, the views are what
+// resources/list is made of, and each stales its own list on the stream.
+slow(
+  'a release whose views moved and not its tools says resources',
+  async () => {
+    let k = await kernel()
+    let ear: ReturnType<typeof hearing> | undefined
+    try {
+      let jeff = await signIn(k)
+      let agent = connector(k, jeff.cookie)
+      // The door promises to say so, and owns the logging door too (T-33006).
+      let init = await agent.call('initialize', {})
+      assertEquals(init.capabilities.resources.listChanged, true)
+      assertEquals(init.capabilities.logging, {})
+      let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
+        .exec(
+          await agent.tool('app_new', { slug: 'walks', title: 'Walks' }),
+        )![1]
+      let manifest = (view?: string) =>
+        JSON.stringify({
+          log_walk: {
+            description: 'Write a walk',
+            input: { text: 'text' },
+            apply: { walk: { text: '{{text}}' } },
+            ...(view ? { view } : {}),
+          },
+        })
+      await agent.tool('app_files', {
+        space,
+        app: 'walks',
+        files: [
+          {
+            path: 'vocab.json',
+            content: JSON.stringify({ walk: { text: 'text' } }),
+          },
+          { path: 'walk.html', content: '<!doctype html><h1>walks</h1>' },
+          { path: 'tools.json', content: manifest() },
+        ],
+      })
+      await agent.tool('app_deploy', { space, app: 'walks' })
+      let stream = await k.at('yaks.app', '/mcp', {
+        headers: { cookie: jeff.cookie, accept: 'text/event-stream' },
+      })
+      ear = hearing(stream)
+      await until(() => ear!.said().includes(': open'), {
+        timeout: 10_000,
+        poll: 50,
+        label: 'the stream to open',
+      })
+      // The view appears; the tool half stands still.
+      await agent.tool('app_files', {
+        space,
+        app: 'walks',
+        op: 'write',
+        path: 'tools.json',
+        content: manifest('walk.html'),
+      })
+      await agent.tool('app_deploy', { space, app: 'walks' })
+      await until(
+        () => ear!.said().includes('notifications/resources/list_changed'),
+        {
+          timeout: 10_000,
+          poll: 50,
+          label: 'the resource list to be called stale',
+        },
+      )
+      assertEquals(
+        ear.said().includes('notifications/tools/list_changed'),
+        false,
+        'the tool list did not move',
+      )
+    } finally {
+      await ear?.stop()
+      await k.stop()
+    }
+  },
+)
+
+// A break is pushed to whoever is listening as it lands (T-33006, V-32361):
+// `notifications/message` on the members' streams — and the push marks
+// nothing, so the unseen block still carries it on the next tool reply.
+slow(
+  'a break is pushed as notifications/message and still rides the reply',
+  async () => {
+    let k = await kernel()
+    let ear: ReturnType<typeof hearing> | undefined
+    try {
+      let { cookie } = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+      let agent = connector(k, cookie)
+      let stream = await k.at('yaks.app', '/mcp', {
+        headers: { cookie, accept: 'text/event-stream' },
+      })
+      ear = hearing(stream)
+      await until(() => ear!.said().includes(': open'), {
+        timeout: 10_000,
+        poll: 50,
+        label: 'the stream to open',
+      })
+      // What a page's injected reporter posts (report_test.ts).
+      assertEquals(
+        (await k.at('jeff.yaks.app', '/recipes/api/report', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            message: 'boom is not a function',
+            stack: 'at /recipes/:1',
+            url: 'https://jeff.yaks.app/recipes/',
+          }),
+        })).status,
+        204,
+      )
+      await until(() => ear!.said().includes('notifications/message'), {
+        timeout: 10_000,
+        poll: 50,
+        label: 'the break to reach the stream',
+      })
+      assertStringIncludes(ear.said(), '"level":"error"')
+      assertStringIncludes(ear.said(), '"logger":"jeff/recipes"')
+      assertStringIncludes(ear.said(), 'boom is not a function')
+      // Unmarked by the push: served-in-a-reply stays the only mark.
+      let told = await agent.tool('graph_query', {
+        space: 'jeff',
+        app: 'recipes',
+        query: '.doc!',
+      })
+      assertMatch(
+        told,
+        /## unseen errors\n- .*exception recipes.*boom is not a function/,
+      )
+    } finally {
+      await ear?.stop()
+      await k.stop()
+    }
+  },
+)
+
 // An entity spans apps (T-32699): a read that names no app asks every store
 // the caller can reach and answers one bundle per eid — and only the stores
 // they can reach.

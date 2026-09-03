@@ -656,7 +656,9 @@ let api = async (
     // in the seconds after a deploy must not name the version before it
     // (unseen.ts `serving`, C-32869 item 4).
     let version = reports.length ? await serving(env, space, app) : null
-    for (let broke of reports) await noted(store, { ...broke, version })
+    for (let broke of reports) {
+      await noted(store, { ...broke, version }, { env, space, app })
+    }
     return new Response(null, { status: 204 })
   }
   let headers = vouched(who)

@@ -21,6 +21,7 @@ import {
 import { bound, type Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { type Door, storeOf } from './store.ts'
+import { told } from './stream.ts'
 import { level, standing } from './usage.ts'
 
 // A refusal is NOT a break (C-32652 item 3, T-32655; C-32869 item 5) — one
@@ -80,12 +81,40 @@ export let serving = async (env: Env, space: Space, app: App) => {
   }
 }
 
+// The ceiling on what one app may PUSH down its members' streams in a
+// minute (T-33006): a crash-looping page writes a break per frame, and every
+// break past the first few says the same thing. Per-isolate memory, like the
+// report door's own write ceiling (apps.ts `flooding`) — approximate on
+// purpose.
+let PUSHES = 10
+let pushed = new Map<string, { minute: number; n: number }>()
+
+let hushed = (space: Space, app: App) => {
+  let key = `${space.slug}/${app.slug}`
+  let minute = Math.floor(Date.now() / 60_000)
+  let hit = pushed.get(key)
+  if (!hit || hit.minute != minute) {
+    pushed.set(key, { minute, n: 1 })
+    return false
+  }
+  return ++hit.n > PUSHES
+}
+
 // One break, written where the person's agent reads it: the `exception`
 // facet, and nothing else. It carries what was being served, the deploy it
 // happened on, the message and the stack. Every source of one goes through
-// here: a route that threw (index.ts) and a page that reported its own
-// (apps.ts). Server-owned, so it rides the kernel flag into apply()'s
-// server-writer mode; the shape is the wire's own entity literal.
+// here: a route that threw (index.ts), a page that reported its own
+// (apps.ts), and a worker that answered a 5xx (dispatch.ts). Server-owned,
+// so it rides the kernel flag into apply()'s server-writer mode; the shape
+// is the wire's own entity literal.
+//
+// A break in a space's app is also PUSHED as it lands (T-33006, V-32361):
+// `notifications/message` to each member's stream, for whoever is connected
+// and idle — MCP's logging door, declared in initialize (mcp.ts). The push
+// marks nothing: served-in-a-reply stays the only `notified`, so the unseen
+// block still carries the break for whoever was not listening, and a
+// notification nobody read buries nothing. A push that fails, or one over
+// the app's minute ceiling, is telemetry — the entity is already written.
 //
 // It wore a `doc` until T-32533, and that put the platform's own crashes in
 // `.doc!` — the query a person's agent is taught as "everything you saved" —
@@ -95,7 +124,7 @@ export let noted = async (store: Door, broke: {
   version?: number | null
   message: string
   stack?: string
-}) => {
+}, at?: { env: Env; space: Space; app: App }) => {
   let sent = await store('/apply', {
     method: 'POST',
     body: JSON.stringify({
@@ -111,6 +140,24 @@ export let noted = async (store: Door, broke: {
     }),
   }, { 'x-yak-kernel': '1' })
   if (!sent.ok) throw new Error(`report refused: ${await sent.text()}`)
+  if (!at || hushed(at.space, at.app)) return
+  try {
+    let dir = directory(bound(at.env.DIRECTORY, dirPart.fetch, at.env))
+    // The same line the unseen block will carry, minus the id — this seam
+    // never reads its own write back, and the block has it.
+    let data = `exception ${at.app.slug}${
+      broke.version ? ` v${broke.version}` : ''
+    }: ${broke.request} — ${broke.message}`
+    for (let person of await dir.members(at.space)) {
+      await told(at.env, person, 'notifications/message', {
+        level: 'error',
+        logger: `${at.space.slug}/${at.app.slug}`,
+        data,
+      })
+    }
+  } catch (why) {
+    console.error('yak: could not push the break', why)
+  }
 }
 
 type Broke = {
