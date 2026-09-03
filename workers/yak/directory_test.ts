@@ -118,3 +118,15 @@ Deno.test('a fresh read goes past the 30-second cache, and refills it', async ()
   assertEquals((await dir.app(space, 'recipes'))?.version, 2)
   assertEquals(at.reads, 2)
 })
+
+// A comp is the platform holding one of its own spaces to no ceiling. It is a
+// constant read here and a column nowhere: what makes that safe is that
+// nothing on the wire can reach it, which is the same reason `plan` is
+// stamped (billing.ts).
+Deno.test('a comped space reads as plus, everyone else as what they pay', () => {
+  assertEquals(dirPart.tierOf('yourname', null), 'plus')
+  assertEquals(dirPart.tierOf('yourname', 'free'), 'plus')
+  assertEquals(dirPart.tierOf('jeff', null), null)
+  assertEquals(dirPart.tierOf('jeff', 'free'), 'free')
+  assertEquals(dirPart.tierOf('jeff', 'plus'), 'plus')
+})

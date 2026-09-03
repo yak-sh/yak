@@ -48,6 +48,22 @@ export type Meter = {
 }
 export type Tier = 'free' | 'plus'
 
+// Spaces the platform comps. `yourname` is its own shopfront — the six apps
+// every home page example links to (T-33053), one over the free five — and it
+// pays nobody, so it answers to no ceiling.
+//
+// A comp is a CONSTANT, read here and written nowhere. `plan` is stamped
+// precisely so that a person cannot lift their own ceilings (billing.ts), and
+// that has to hold for a comp too: comping is a deploy, reviewable in the
+// diff, rather than a request anybody can make. T-33164 asks for the operator
+// door that would make this a decision instead of a list — a comp, a support
+// credit and a demo all want one, and Stripe owns only the paying case.
+export let COMPED = ['yourname']
+
+// The tier a space is HELD to: what it pays for, or `plus` where we comp it.
+export let tierOf = (slug: string, tier: Tier | null): Tier | null =>
+  COMPED.includes(slug) ? 'plus' : tier
+
 // What a space pays and what Stripe knows about it (platform.rs `Plan`,
 // billing.ts derives and writes it). The whole row, because the webhook reads
 // every column of it to decide whether an event is news: `at` is the moment of
@@ -332,7 +348,7 @@ let spaceOf = (r: Row): Space => ({
   slug: r.space!.slug,
   home: r.space!.home == null ? null : idOf(r.space!.home),
   title: r.doc?.title || r.space!.slug,
-  tier: r.plan?.tier ?? null,
+  tier: tierOf(r.space!.slug, r.plan?.tier ?? null),
   plan: planOf(r),
   meter: meterOf(r),
   told: r.notified != null,
