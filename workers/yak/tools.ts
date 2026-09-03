@@ -3,8 +3,11 @@
 // (space, app) the caller names and belongs to, each an IO over the Store
 // object's /apply and /query doors with the caller vouched server-side; and
 // the platform sugar, the least that makes an app: space_new, app_new,
-// app_files, app_deploy, app_set, app_delete, app_errors, app_list, and the
-// two that say who an app is for — member_add and member_remove, the space
+// app_files, app_deploy, app_set, app_delete, app_errors, app_list, the three
+// that give an app's own worker a key it alone can read — app_secret_set,
+// app_secret_list, app_secret_remove, whose values never enter this graph
+// (T-32779) — and the two that say who an app is for: member_add and
+// member_remove, the space
 // owner's guest list, beside `app.access`, which is what an app lets a
 // stranger with the link do (T-32504). A tool is one row here — name, what it
 // does, its input as JSON Schema, and `run` — and the door (mcp.ts) reads the
@@ -46,7 +49,15 @@ import {
   storeName,
 } from './directory.ts'
 import { toolsChanged, toolsOf } from './declared.ts'
-import { drop, NEEDS_TOKEN, upload } from './dispatch.ts'
+import {
+  drop,
+  dropSecret,
+  NEEDS_TOKEN,
+  SECRET_NAME,
+  secrets,
+  setSecret,
+  upload,
+} from './dispatch.ts'
 import type { Env } from './env.ts'
 import { mail } from './mail.ts'
 import { SLUG } from './route.ts'
@@ -179,6 +190,33 @@ let slug = (v: unknown, what: string) => {
   let s = text(v, what)
   if (!SLUG.test(s)) throw new Error(`${what}: not a slug (a-z, 0-9, -)`)
   return s
+}
+
+// A secret's name is a binding, which the app's own code spells as
+// `env.NAME` — so it must be a JavaScript name (dispatch.ts).
+let secretName = (v: unknown) => {
+  let s = text(v, 'name')
+  if (!SECRET_NAME.test(s)) {
+    throw new Error(
+      'name: the app reads it as env.NAME, so letters, digits and ' +
+        'underscores, not starting with a digit — WEATHER_KEY',
+    )
+  }
+  return s
+}
+
+// Every secret door needs the platform's Cloudflare token, because a secret
+// lives on the app's script and nowhere the platform itself keeps anything.
+// Without it there is no half-measure to take, so this is a refusal and not
+// a warning the way a deploy's is (dispatch.ts NEEDS_TOKEN).
+let needsToken = (ctx: Ctx) => {
+  if (!ctx.env.CF_WORKERS_TOKEN) {
+    throw new Error(
+      'the platform has no Cloudflare token to reach app workers with ' +
+        "(CF_WORKERS_TOKEN) — secrets live on the app's own script, so " +
+        'there is nowhere to put one until it is set',
+    )
+  }
 }
 
 // The space the caller means when they name none: their own. Signing in
@@ -848,6 +886,90 @@ export let TOOLS: Tool[] = [
         }${open ? ` — ${told(open)}` : ''}`,
         space,
       }
+    },
+  },
+  {
+    name: 'app_secret_set',
+    description:
+      "Give the app's worker a key for an outside service — an API key, a " +
+      'token — without the page ever holding it. The value goes onto the ' +
+      "app's own script and NOWHERE else: it is not saved in the app's data, " +
+      'not in its history, and no tool, this one included, can ever read it ' +
+      'back. Only the worker can, as env.NAME, so name it the way its code ' +
+      "will spell it: app_secret_set(app, name: 'WEATHER_KEY', value) and " +
+      'then `fetch(url, {headers: {authorization: env.WEATHER_KEY}})` in ' +
+      'worker.js. Ask the person for the value; never invent one. Setting a ' +
+      'name that is already there replaces it. The app needs a worker.js ' +
+      '(app_deploy uploads it) for the secret to reach any code.',
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        name: str('the name the worker reads it as, e.g. WEATHER_KEY'),
+        value: str('the secret itself — it is never answered back'),
+      },
+      required: ['app', 'name', 'value'],
+    },
+    run: async (ctx, args) => {
+      let { space, app } = await inApp(ctx, args, true)
+      let name = secretName(args.name)
+      // The value is read and never held anywhere else: no `text(...)` echo
+      // in a refusal, and nothing about it in the answer.
+      if (typeof args.value != 'string' || !args.value) {
+        throw new Error('value is required')
+      }
+      needsToken(ctx)
+      await setSecret(ctx.env, storeName(space, app), name, args.value)
+      return {
+        text: `${space.slug}/${app.slug}: ${name} is set — worker.js reads ` +
+          `it as env.${name}, and nothing can read it back`,
+        space,
+      }
+    },
+  },
+  {
+    name: 'app_secret_list',
+    description:
+      "The names of the keys the app's worker can read. Values are never " +
+      'answered — by this tool or any other. Use it to see what a worker.js ' +
+      'may spell as env.NAME.',
+    input: {
+      type: 'object',
+      properties: { space: SPACE, app: APP },
+      required: ['app'],
+    },
+    run: async (ctx, args) => {
+      let { space, app } = await inApp(ctx, args)
+      needsToken(ctx)
+      let names = await secrets(ctx.env, storeName(space, app))
+      return {
+        text: names.length
+          ? `${space.slug}/${app.slug}: ${
+            names.join(', ')
+          } — worker.js reads ` +
+            'each as env.NAME; no value is ever answered'
+          : `${space.slug}/${app.slug} has no secrets`,
+        space,
+      }
+    },
+  },
+  {
+    name: 'app_secret_remove',
+    description:
+      "Take a key away from the app's worker. Its code stops seeing " +
+      'env.NAME at the next request; nothing else about the app changes.',
+    input: {
+      type: 'object',
+      properties: { space: SPACE, app: APP, name: str('the secret to remove') },
+      required: ['app', 'name'],
+    },
+    run: async (ctx, args) => {
+      let { space, app } = await inApp(ctx, args, true)
+      let name = secretName(args.name)
+      needsToken(ctx)
+      await dropSecret(ctx.env, storeName(space, app), name)
+      return { text: `${space.slug}/${app.slug}: ${name} removed`, space }
     },
   },
   {

@@ -15,10 +15,20 @@
 //     platform-wide session cookie
 //   - a 404 from the worker, and no worker at all, both mean the files
 //   - a 5xx is written where the person's agent reads it
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { COOKIE, seal, sign } from '../../src/token.ts'
 import type { App, Space } from './directory.ts'
-import { granted, granting, ran, scriptName, SHIM } from './dispatch.ts'
+import {
+  dropSecret,
+  granted,
+  granting,
+  ran,
+  scriptName,
+  secrets,
+  setSecret,
+  SHIM,
+  upload,
+} from './dispatch.ts'
 import type { Env } from './env.ts'
 import { nobody } from './session.ts'
 
@@ -253,4 +263,142 @@ Deno.test('the shim gives the app its doors and keeps the grant', async () => {
   } finally {
     Deno.removeSync(dir, { recursive: true })
   }
+})
+
+// ── The Workers API side, against the exchange the docs record ─────────────
+//
+// The upload and the three secret doors are HTTP against api.cloudflare.com,
+// so `fetch` is the seam: each test stands in for the API and asserts the
+// request the platform makes — the endpoint, the multipart shape, and, for a
+// secret, that the value goes out once and comes back never. Answers are the
+// documented envelope
+// (https://developers.cloudflare.com/api/resources/workers_for_platforms/subresources/dispatch/subresources/namespaces/subresources/scripts/methods/update/).
+
+let api = { CF_ACCOUNT: 'acct', CF_WORKERS_TOKEN: 'a-token' } as Env
+
+type Call = { method: string; url: string; auth: string; body: unknown }
+
+// Cloudflare's own reply, and the calls the platform made to get it.
+let recorded = async (
+  reply: (r: Request) => Response,
+  run: () => Promise<unknown>,
+) => {
+  let calls: Call[] = []
+  let was = globalThis.fetch
+  globalThis.fetch = (async (input: string | Request, init?: RequestInit) => {
+    let r = new Request(input as string, init)
+    let type = r.headers.get('content-type') ?? ''
+    calls.push({
+      method: r.method,
+      url: r.url,
+      auth: r.headers.get('authorization') ?? '',
+      body: type.startsWith('multipart/') ? await r.formData() : await r.text(),
+    })
+    return reply(r)
+  }) as typeof fetch
+  try {
+    return { out: await run(), calls }
+  } finally {
+    globalThis.fetch = was
+  }
+}
+
+let ok = (result: unknown) =>
+  Response.json({ success: true, errors: [], messages: [], result })
+
+let AT = 'https://api.cloudflare.com/client/v4/accounts/acct/workers/dispatch' +
+  '/namespaces/yak-apps/scripts'
+
+Deno.test('an upload sends the shim, the app, and one way home', async () => {
+  let { calls } = await recorded(
+    () => ok({ startup_time_ms: 3, id: 'jeff_recipes' }),
+    () => upload(api, 'jeff/recipes', 'export default { fetch: () => {} }'),
+  )
+  assertEquals(calls.length, 1)
+  assertEquals(calls[0].method, 'PUT')
+  assertEquals(calls[0].url, `${AT}/jeff_recipes`)
+  assertEquals(calls[0].auth, 'Bearer a-token')
+  let form = calls[0].body as FormData
+  let meta = JSON.parse(await (form.get('metadata') as File).text())
+  // The entry is OURS, and the app's own module rides beside it.
+  assertEquals(meta.main_module, 'entry.js')
+  assertEquals(await (form.get('entry.js') as File).text(), SHIM)
+  assertEquals(
+    await (form.get('worker.js') as File).text(),
+    'export default { fetch: () => {} }',
+  )
+  // One binding, and it is the way back to the kernel — there is nothing
+  // else for an app's code to hold.
+  assertEquals(meta.bindings, [{
+    type: 'service',
+    name: 'KERNEL',
+    service: 'yak',
+  }])
+  // A deploy replaces the binding list whole, so this is what carries the
+  // app's secrets across one.
+  assertEquals(meta.keep_bindings, ['secret_text'])
+  assertEquals(meta.limits, { cpu_ms: 50, subrequests: 50 })
+})
+
+Deno.test('a secret goes out once and is never answered back', async () => {
+  let { out, calls } = await recorded(
+    () => ok({ name: 'WEATHER_KEY', type: 'secret_text' }),
+    () => setSecret(api, 'jeff/recipes', 'WEATHER_KEY', 'the-key-itself'),
+  )
+  assertEquals(calls[0].url, `${AT}/jeff_recipes/secrets`)
+  assertEquals(calls[0].method, 'PUT')
+  assertEquals(JSON.parse(calls[0].body as string), {
+    name: 'WEATHER_KEY',
+    text: 'the-key-itself',
+    type: 'secret_text',
+  })
+  // What the platform hands its caller carries no value, which is the shape
+  // a tool answers from.
+  assert(!JSON.stringify(out).includes('the-key-itself'))
+})
+
+Deno.test('a list is names, whatever the API sends', async () => {
+  // Cloudflare's list is documented as name and type; its schema would allow
+  // a value, so the platform reads the name off and drops the rest.
+  let { out } = await recorded(
+    () =>
+      ok([
+        { name: 'WEATHER_KEY', type: 'secret_text', text: 'leaked?' },
+        { name: 'STRIPE', type: 'secret_text' },
+      ]),
+    () => secrets(api, 'jeff/recipes'),
+  )
+  assertEquals(out, ['WEATHER_KEY', 'STRIPE'])
+  assert(!JSON.stringify(out).includes('leaked?'))
+})
+
+Deno.test('no script yet is no secrets, and a removal names one', async () => {
+  let { out } = await recorded(
+    () => new Response('nope', { status: 404 }),
+    () => secrets(api, 'jeff/recipes'),
+  )
+  assertEquals(out, [])
+  let { calls } = await recorded(
+    () => ok(null),
+    () => dropSecret(api, 'jeff/recipes', 'WEATHER_KEY'),
+  )
+  assertEquals(calls[0].method, 'DELETE')
+  assertEquals(calls[0].url, `${AT}/jeff_recipes/secrets/WEATHER_KEY`)
+})
+
+Deno.test("cloudflare's refusal is what the agent is told", async () => {
+  await recorded(
+    () =>
+      Response.json({
+        success: false,
+        errors: [{ code: 10021, message: 'Uncaught SyntaxError' }],
+        result: null,
+      }, { status: 400 }),
+    () =>
+      assertRejects(
+        () => upload(api, 'jeff/recipes', 'export default {'),
+        Error,
+        'Uncaught SyntaxError',
+      ),
+  )
 })

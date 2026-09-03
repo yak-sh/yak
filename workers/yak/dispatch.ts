@@ -329,3 +329,53 @@ export let drop = async (env: Env, store: string) => {
   }
   await answered(r)
 }
+
+// ── Secrets (T-32779) ──────────────────────────────────────────────────────
+//
+// The first thing an app's own code is for: calling an outside service
+// without the page holding the key. A secret lives on the SCRIPT and nowhere
+// else — never in the app's store, never in the journal, never in a tool's
+// answer — and the app's worker reads it as `env.NAME`, since the shim hands
+// its own env through. Cloudflare's own list answers names and types without
+// values, and the get door says the value is omitted
+// (https://developers.cloudflare.com/api/resources/workers_for_platforms/subresources/dispatch/subresources/namespaces/subresources/scripts/subresources/secrets/methods/list/).
+//
+// A later deploy re-uploads the script with its binding list, which would
+// otherwise replace the secrets whole; `keep_bindings: ['secret_text']` in
+// `upload` above is what carries them across
+// (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/bindings/).
+
+// A binding is a JavaScript name in the app's own code, so it must be one.
+export let SECRET_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/
+
+export let setSecret = (
+  env: Env,
+  store: string,
+  name: string,
+  value: string,
+) =>
+  sent(env, `/${scriptName(store)}/secrets`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name, text: value, type: 'secret_text' }),
+  }).then(answered)
+
+// The names, and only the names: whatever the API hands back, this reads the
+// name off each row and drops the rest, so no value can leave here even if a
+// later API decides to echo one.
+export let secrets = async (env: Env, store: string): Promise<string[]> => {
+  let r = await sent(env, `/${scriptName(store)}/secrets`, {})
+  // No script yet is no secrets, not a failure: an app may be given its key
+  // before it is given its code.
+  if (r.status == 404) {
+    await r.body?.cancel()
+    return []
+  }
+  let got = await answered(r) as { name?: unknown }[] | null
+  return (got ?? []).map((s) => String(s.name ?? '')).filter(Boolean)
+}
+
+export let dropSecret = (env: Env, store: string, name: string) =>
+  sent(env, `/${scriptName(store)}/secrets/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+  }).then(answered)
