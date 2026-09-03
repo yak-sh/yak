@@ -12,14 +12,36 @@
     always did. The roles themselves live in style.css.
   -->
   <style>
-    .Yak_Fur { fill: var(--yak-fur, #8b6a52) }
-    .Yak_Face { fill: var(--yak-face, #a8846a) }
-    .Yak_Fringe { fill: var(--yak-fringe, #5e4634) }
-    .Yak_Horn { fill: none; stroke: var(--horn, #e6d2b5); stroke-width: 10; stroke-linecap: round }
-    .Yak_Eye { fill: var(--yak-eye, #3a2b22) }
-    .Yak_Glint { fill: var(--glint, #fff) }
-    .Yak_Nose { fill: var(--nose, #d99a8d) }
-    .Yak_Smile { fill: none; stroke: var(--yak-eye, #3a2b22); stroke-width: 3; stroke-linecap: round }
+  .Yak_Fur {
+    fill: var(--yak-fur, #8b6a52);
+  }
+  .Yak_Face {
+    fill: var(--yak-face, #a8846a);
+  }
+  .Yak_Fringe {
+    fill: var(--yak-fringe, #5e4634);
+  }
+  .Yak_Horn {
+    fill: none;
+    stroke: var(--horn, #e6d2b5);
+    stroke-width: 10;
+    stroke-linecap: round;
+  }
+  .Yak_Eye {
+    fill: var(--yak-eye, #3a2b22);
+  }
+  .Yak_Glint {
+    fill: var(--glint, #fff);
+  }
+  .Yak_Nose {
+    fill: var(--nose, #d99a8d);
+  }
+  .Yak_Smile {
+    fill: none;
+    stroke: var(--yak-eye, #3a2b22);
+    stroke-width: 3;
+    stroke-linecap: round;
+  }
   </style>
   <g id="yak">
     <ellipse class="Yak_Fur" fill="#8b6a52" cx="100" cy="112" rx="72" ry="44" />

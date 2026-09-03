@@ -372,6 +372,27 @@
     left: 0.6rem;
   }
 
+  /* The same voice, inside a running sentence: something a person says out
+     loud to their assistant, mid-paragraph. It takes the fill of your own
+     bubble and keeps it on every fragment when the line wraps
+     (box-decoration-break), which is the whole difficulty of an inline box.
+     It drops the quotation marks a <q> would otherwise draw, because the fill
+     already says these are your words — with the stylesheet gone, the marks
+     come back and the sentence still reads. */
+  .Said {
+    padding: 0.1rem 0.4rem;
+    border-radius: var(--small-radius);
+    background: var(--mine);
+    color: var(--ink);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  .Said::before,
+  .Said::after {
+    content: none;
+  }
+
   /* A little window: something finished, at its own address. */
   .Window {
     overflow: hidden;

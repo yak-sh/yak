@@ -480,6 +480,25 @@
         </div>
 
         <div class="Guide_Demo">
+          <p class="Guide_Name">.Said</p>
+          <p class="Note">
+            The same voice as a bubble, inside a running sentence: what a
+            person says out loud to their assistant. Written as a
+            <code class="Pill Pill-code">&lt;q&gt;</code>, so it stays a
+            quotation when the stylesheet is gone. It has to survive a line
+            break, which is the only hard part —
+            <q class="Said">invite ana@example.com to the recipe box, and say
+            it's for Saturday, and put the newest recipes at the top while
+            you're in there</q> — and it does, because every fragment keeps
+            the fill and the rounding.
+          </p>
+          <p class="Note">
+            Short ones sit in the line the same way:
+            <q class="Said">take Ana out.</q>
+          </p>
+        </div>
+
+        <div class="Guide_Demo">
           <p class="Guide_Name">
             .Window · .Window_Bar · .Window_Body · .Window_Heading ·
             .Window_List · .Window_Who
@@ -609,19 +628,19 @@
     </footer>
 
     <script>
-      // Each token says what it actually resolves to, in the theme you are
-      // reading in — read off the live stylesheet, so it cannot drift. A
-      // length is measured off the bar it drew, since a custom property
-      // computes to its own tokens and calc(1rem / 4) tells nobody anything.
-      let root = getComputedStyle(document.documentElement)
-      for (let el of document.querySelectorAll('[data-token]')) {
-        let slot = el.querySelector('.Guide_Value')
-        let bar = el.querySelector('.Guide_Bar')
-        if (!slot) continue
-        slot.textContent = bar
-          ? Math.round(bar.getBoundingClientRect().width) + 'px'
-          : root.getPropertyValue(el.dataset.token).trim()
-      }
+    // Each token says what it actually resolves to, in the theme you are
+    // reading in — read off the live stylesheet, so it cannot drift. A
+    // length is measured off the bar it drew, since a custom property
+    // computes to its own tokens and calc(1rem / 4) tells nobody anything.
+    let root = getComputedStyle(document.documentElement)
+    for (let el of document.querySelectorAll('[data-token]')) {
+      let slot = el.querySelector('.Guide_Value')
+      let bar = el.querySelector('.Guide_Bar')
+      if (!slot) continue
+      slot.textContent = bar
+        ? Math.round(bar.getBoundingClientRect().width) + 'px'
+        : root.getPropertyValue(el.dataset.token).trim()
+    }
     </script>
   </body>
 </html>
