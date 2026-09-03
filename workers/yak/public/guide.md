@@ -14,10 +14,11 @@ person the URL.
 The kernel serves a client beside every app, at `./api/client.js`:
 
     <script type="module">
-      import { apply, query, search, subscribe, upload } from './api/client.js'
+      import { apply, me, query, search, subscribe, upload }
+        from './api/client.js'
     </script>
 
-Five functions, all same-origin, all talking to this app's own graph:
+Six functions, all same-origin, all talking to this app's own graph:
 
 - `apply(bundles)` saves. One bundle or an array; it answers
   `{ok, changes, aliases}`.
@@ -25,6 +26,7 @@ Five functions, all same-origin, all talking to this app's own graph:
 - `search(text)` finds words across the app's docs, ranked.
 - `subscribe(filter, cb)` is `query` that keeps answering.
 - `upload(file)` saves bytes and answers where they live. Files, below.
+- `me()` says who is looking, before you ask them for anything.
 
 `subscribe` is how a page stays true while it is open: it calls back with the
 rows now and again on every change to them, including one made on the person's
@@ -39,6 +41,21 @@ the vote page, the shared list — and `private` answers members only. `app_new`
 and `app_set` set it; `member_add` invites someone into the space by email
 address — name the app and the invitation is mailed to them, carrying its link —
 and they sign in there with that address and come back to the page they were on.
+
+Ask on load, not on refusal. `me()` answers
+`{person, name, role, reads, writes, signIn}` — `person` null when they are
+signed out — so the page shapes itself before anyone types:
+
+    let who = await me()
+    if (!who.writes) show(`<a href="${who.signIn}">Sign in to post</a>`)
+    else if (!who.person) show('<input name="who" placeholder="Your name">')
+
+Both halves matter. On a `public` app a guest who types first is bounced to sign
+in and comes back to an empty form; on an `open` one their write has no
+`created.by` at all, so if the page wants a byline it has to ask for the name
+itself. `who.name` is what to call someone signed in — a name, never an address
+— and `who.signIn` is where a signed-out visitor signs in, null once they are
+in.
 
 ## What you save
 
@@ -215,8 +232,8 @@ markdown or JSON both keep there.
 
 ## The doors underneath
 
-`client.js` is a wrapper over two ordinary HTTP doors, same-origin, in case you
-want them directly (or from `curl`, or from another page):
+`client.js` is a wrapper over ordinary HTTP doors, same-origin, in case you want
+them directly (or from `curl`, or from another page):
 
     POST ./api/blob
     content-type: image/jpeg          ← the file's own type
@@ -236,9 +253,14 @@ want them directly (or from `curl`, or from another page):
     GET ./api/query?.doc.title~=cake → the ones whose title contains "cake"
     → [ {"kind": "doc", "entity": {"eid": "4f3c...", "num": 12}, ... } ]
 
-`apply` posts to the first, `query` and `search` read the second, and both
-answer by the app's `access` above: a refused write is 401 to a stranger and 403
-to a member who may not.
+    GET ./api/me
+    → {"person": null, "name": null, "role": null, "reads": true,
+       "writes": false, "signIn": "https://yaks.app/login?return=..."}
+
+`apply` posts to the apply door, `query` and `search` read the query one, and
+both answer by the app's `access` above: a refused write is 401 to a stranger
+and 403 to a member who may not. `me` answers everyone — a stranger learning
+they must sign in is what it is for.
 
 ## The filter line
 

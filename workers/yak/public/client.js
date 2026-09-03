@@ -14,6 +14,10 @@
 // re-renders the page without a poll. It hands back the same rows `query`
 // does; the returned function ends it.
 //
+// `me()` is who is looking: the page asks before it asks the person for
+// anything, so it can show a sign-in link or a name field on load rather than
+// after a refusal.
+//
 // `upload(file, {name})` is the bytes half: the app's own file door
 // (`POST ./api/blob`), which stores what a page hands it — a File off an
 // input, a Blob a canvas made — under its own SHA-256 and answers the address
@@ -85,6 +89,15 @@ export let store = (base) => {
   // Full-text over the docs, ranked; a filter may ride along.
   let search = (text, filter = '') =>
     query(`${encodeURIComponent(text)}${filter ? `&${filter}` : ''}`)
+
+  // Who is looking, before anything is asked of them: `{person, name, role,
+  // reads, writes, signIn}` — `person` null when they are signed out, `name`
+  // what to call them, `writes` whether this app takes a write from them, and
+  // `signIn` where a signed-out visitor signs in. Call it on load and the page
+  // knows
+  // whether to show a sign-in link or a name field, instead of finding out
+  // from a refusal after someone has typed (C-32675 items 5 and 6).
+  let me = () => ask('me')
 
   // Bytes, in: a File off an `<input type=file>`, a Blob a canvas made. The
   // door answers `{eid, url, mime, bytes}` — the eid to point a row at
@@ -165,7 +178,7 @@ export let store = (base) => {
       tell({ unsub: name })
     }
   }
-  return { apply, query, search, subscribe, upload }
+  return { apply, me, query, search, subscribe, upload }
 }
 
 // One subscription frame folded into its rows. A frame carries ROWS — the
@@ -183,6 +196,6 @@ let fold = (rows, f) => {
 let rows = (held) =>
   [...held.values()].sort((a, b) => (a.entity.num ?? 0) - (b.entity.num ?? 0))
 
-export let { apply, query, search, subscribe, upload } = store(
+export let { apply, me, query, search, subscribe, upload } = store(
   new URL('.', import.meta.url),
 )

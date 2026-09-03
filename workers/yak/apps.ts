@@ -4,7 +4,7 @@
 // the directory part (directory.ts, in-process or across a binding), verifies
 // the session (session.ts), and serves the app's files out of its blob store
 // with the graph API for its (space, app) store beside them —
-// `/api/{apply,query,graph}` mapped onto the Store object's doors, the store
+// `/api/{apply,query,me,graph}` mapped onto the Store object's doors, the store
 // named from the route, never by the client. `PUT /api/files/<path>` is the
 // write side, what a deploy is until app_deploy (T-32329) exists, and
 // `/api/blob` is the door for a page's own bytes — a photo a visitor picks —
@@ -98,7 +98,7 @@ let SAYS: Record<string, string> = {
   method_not_allowed: 'that door does not answer this method',
   too_many_reports: 'this app has reported too many breaks this minute',
   expected_websocket: 'the live door takes a websocket upgrade',
-  not_found: "no such door: this app's api is apply, query, graph, ws, " +
+  not_found: "no such door: this app's api is apply, query, me, graph, ws, " +
     'blob, and files/<path>',
   not_a_writer: 'sign in to change this app',
   not_a_reader: 'sign in to see this app',
@@ -520,6 +520,29 @@ let api = async (
     )
   let mayRead = reads(who, app.access)
   let mayPost = writes(who, app.access)
+  // Who is looking, BEFORE the first write (T-32679). A page could only learn
+  // this from a refusal, which is too late twice over: on an `open` app a
+  // signed-out write has no `created.by`, so the page must ask a guest their
+  // name and nothing said so; on a `public` one the sign-in bounce arrives
+  // after the guest typed, and their work goes with them (C-32675 items 5 and
+  // 6). `person` is null signed out, `name` is what to call them (never an
+  // address — T-32654), `reads`/`writes` are this app's own access answered
+  // for this caller, and `signIn` is where a signed-out visitor signs in,
+  // holding this page as its return address — null once they are in.
+  // Answered to anyone: a stranger learning they must sign in is the point.
+  if (path == '/me') {
+    let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+    return Response.json({
+      person: who.person,
+      name: who.person ? await dir.nameAt(who.person) : null,
+      role: who.role,
+      reads: mayRead,
+      writes: mayPost,
+      signIn: who.person
+        ? null
+        : signInAt(req.headers.get('referer') || req.url),
+    })
+  }
   if (path == '/graph') {
     let r = await (await store('/graph', {}, headers)).json()
     return Response.json({ ...r, person: who.person, role: who.role })

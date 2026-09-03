@@ -48,7 +48,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     let nowhere = await k.at('nowhere.yaks.app', '/')
     assertEquals(nowhere.status, 404)
     assertMatch(await nowhere.text(), /Nothing here yet/)
-    let { person: jeff, cookie, eids } = await seed(k, [{
+    let { person: jeff, cookie, eids, name: called } = await seed(k, [{
       slug: 'jeff',
       apps: ['recipes', 'garden'],
     }])
@@ -102,6 +102,25 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     assertEquals(who.role, 'owner')
     let anon = await (await k.at('jeff.yaks.app', '/recipes/api/graph')).json()
     assertEquals([anon.person, anon.role], [null, null])
+    // And the door a PAGE asks before it asks a person for anything
+    // (T-32679): who they are, what this app lets them do, and where signing
+    // in happens if it lets them do nothing. It answers everyone.
+    let asMe = (cookie?: string) =>
+      k.at('jeff.yaks.app', '/recipes/api/me', {
+        headers: cookie ? { cookie } : {},
+      }).then((r) => r.json())
+    assertEquals(await asMe(cookie), {
+      person: jeff,
+      name: called,
+      role: 'owner',
+      reads: true,
+      writes: true,
+      signIn: null,
+    })
+    let guest = await asMe()
+    assertEquals([guest.person, guest.name, guest.role], [null, null, null])
+    assertEquals([guest.reads, guest.writes], [true, false])
+    assertMatch(guest.signIn, /^https:\/\/yaks\.app\/login\?return=/)
     let cake = crypto.randomUUID()
     // A refusal answers a SENTENCE beside its code: the page catches it and
     // shows it, and the person's agent reads it after that (C-32574 item 2,
@@ -308,6 +327,14 @@ slow('an app says who may read it and who may write it', async () => {
     // open: the vote page. Anyone with the link writes, without signing in.
     await anyone('vote').applied(line('my vote'))
     assertEquals((await anyone('vote').get('.doc!')).length, 2)
+    // Which the page can KNOW on load (T-32679): `/api/me` says a stranger
+    // writes here, and that their write will carry no `created.by` — so a
+    // page wanting a byline asks them their name itself (C-32675 item 5).
+    let voter = await (await k.at('club.yaks.app', '/vote/api/me')).json()
+    assertEquals([voter.person, voter.writes], [null, true])
+    // Signing in is still OFFERED — an open app may want named guests — it is
+    // simply not the way through here.
+    assertMatch(voter.signIn, /^https:\/\/yaks\.app\/login\?return=/)
 
     // private: members only, and the PAGE is part of what only they see
     // (C-32607 item 5). A stranger is sent to sign in, holding the page as

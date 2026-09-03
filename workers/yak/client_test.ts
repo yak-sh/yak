@@ -41,7 +41,7 @@ slow('the served client: a page saves, lists and watches', async () => {
     let source = await served.text()
     assertMatch(
       source,
-      /export let \{ apply, query, search, subscribe, upload \}/,
+      /export let \{ apply, me, query, search, subscribe, upload \}/,
     )
 
     // The page a person would be given, and its script, run here.
@@ -60,6 +60,21 @@ slow('the served client: a page saves, lists and watches', async () => {
     Deno.writeTextFileSync(`${dir}/client.js`, source)
     let mod = await import(`file://${dir}/client.js`)
     let store = mod.store(`${mine.origin}/recipes/api/`)
+
+    // Who is looking, asked BEFORE anything is asked of them (T-32679): the
+    // page shapes itself on load instead of learning from a refusal after
+    // someone has typed (C-32675 items 5 and 6).
+    let owner = await store.me()
+    assertEquals(owner.person, them.person)
+    assertEquals(owner.name, them.name) // a name, never an address
+    assertEquals([owner.role, owner.reads, owner.writes], ['owner', true, true])
+    assertEquals(owner.signIn, null) // already in; nowhere to send them
+    let guest = await mod.store(`${anyone.origin}/recipes/api/`).me()
+    assertEquals([guest.person, guest.name, guest.role], [null, null, null])
+    // A `public` app: a stranger reads and does not write, and is told where
+    // signing in happens, holding this page as its return address (T-32593).
+    assertEquals([guest.reads, guest.writes], [true, false])
+    assertMatch(guest.signIn, /^https:\/\/yaks\.app\/login\?return=/)
 
     // The guide's own example: a recipe saved, an alias for the eid it mints.
     let saved = await store.apply({
