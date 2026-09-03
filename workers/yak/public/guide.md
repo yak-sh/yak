@@ -20,12 +20,18 @@ CODE of its own comes later.
 
 ## The store, from a page
 
-The kernel serves a client beside every app, at `./api/client.js`:
+The kernel serves a client beside every app, at `/<app>/api/client.js` — the
+app's own slug, absolute:
 
     <script type="module">
       import { apply, me, query, search, subscribe, upload }
-        from './api/client.js'
+        from '/recipes/api/client.js'
     </script>
+
+Import it absolutely, always. A relative `./api/client.js` breaks the moment a
+page is opened at a pretty path: at `/recipes/42` it resolves to
+`/recipes/42/api/client.js`, which is not there. The app knows its own slug; a
+page does not know its own depth.
 
 Six functions, all same-origin, all talking to this app's own graph:
 
@@ -142,21 +148,22 @@ cached forever because they can never change.
     })
 
     for (let p of await query('.photo!')) {
-      draw(p.photo.caption, `./api/blob/${p.photo.blob}`)
+      draw(p.photo.caption, `/recipes/api/blob/${p.photo.blob}`)
     }
 
 (`photo` is the app's own component —
 `{"photo": {"caption": "text", "blob":
 "text"}}` in its `vocab.json`; see
-below.) A row points at bytes by their eid, and `./api/blob/<eid>` is where they
-are, which is what `url` already holds.
+below.) A row points at bytes by their eid, and `/<app>/api/blob/<eid>` is where
+they are, which is what `url` already holds — absolute, like the import, so it
+is right from a page at any path.
 
 The upload writes a row of its own as well, so `query('.attachment!')` lists
 every file in the app. That row's eid is the row's, not the bytes' — the bytes
 are `.attachment.blob`, and that is what an address is built from:
 
     for (let f of await query('.attachment!')) {
-      draw(`./api/blob/${f.attachment.blob}`, f.attachment.name)
+      draw(`/recipes/api/blob/${f.attachment.blob}`, f.attachment.name)
     }
 
 What a picture measures is a fact about the bytes, so `image` sits on the blob
@@ -319,7 +326,7 @@ bundle that spans two.
 
 A PAGE reads a sibling app the same way, by naming its address:
 
-    import { store } from './api/client.js'
+    import { store } from '/reading/api/client.js'
 
     let lending = store('/lending/api/')
     let loans = await lending.query('.loan!')

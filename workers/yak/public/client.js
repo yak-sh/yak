@@ -1,12 +1,18 @@
 // The store an app's own pages talk to: one ES module, no build, served by
 // the kernel at `<space>.yaks.app/<app>/api/client.js` beside the doors it
 // wraps. A page writes
-// `import { apply, query, subscribe } from './api/client.js'` and has the
-// app's graph — the same bundle shape the MCP tools speak
+// `import { apply, query, subscribe } from '/<app>/api/client.js'` and has
+// the app's graph — the same bundle shape the MCP tools speak
 // (`{entity: {eid}, ...components}`, a `$alias` wherever an eid goes), entity
 // JSON back. Nothing to install and nothing to configure: the module's own
 // address IS the app's api directory, so a page at any depth reaches its own
 // store, and the browser's cookie says who is asking.
+//
+// The import is ABSOLUTE, with the app's own slug, because an app's pretty
+// paths and a relative import collide: at `/lending/loans/1` — an address
+// that names no file, so the app's index.html answers it — `./api/client.js`
+// resolves to `/lending/loans/api/client.js` and 404s (C-32800 item 7). The
+// app knows its own slug; a page does not know its own depth.
 //
 // `subscribe(filter, cb)` is `query(filter)` that keeps answering: one socket
 // onto the app's store (the Store object's /ws, hibernating while nothing
@@ -69,7 +75,22 @@ let door = (base) => async (path, init) => {
   return body ? JSON.parse(body) : null
 }
 
+// The address a store's doors hang off. Every app in a space shares one
+// hostname, so the address a page names is a PATH — `store('/lending/api/')`,
+// which the guide's own line — and a path is no `new URL` base by itself:
+// the documented call threw `Invalid base URL` (C-32800 item 6). It is
+// resolved against this origin, and a path that names the api directory
+// without saying so keeps its meaning: the doors are under it, so the base
+// ends in a slash or `query` would replace the last segment.
+let based = (base) => {
+  if (base instanceof URL) return base
+  let at = new URL(base, globalThis.location?.origin)
+  if (!at.pathname.endsWith('/')) at.pathname += '/'
+  return at
+}
+
 export let store = (base) => {
+  base = based(base)
   let ask = door(base)
   // One bundle or many, in; `{ok, changes, aliases}` back, where `aliases`
   // maps each `$alias` to the eid it minted.

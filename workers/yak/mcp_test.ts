@@ -84,7 +84,7 @@ slow(
           'app_new',
           'app_files',
           'app_deploy',
-          "import { apply, query, search, subscribe } from './api/client.js'",
+          "import { apply, query, search, subscribe } from '/recipes/api/client.js'",
           'vocab.json',
           "subscribe('.doc!', draw)",
           'not localStorage',
@@ -100,10 +100,10 @@ slow(
       ) assertStringIncludes(init.instructions, said)
       let says = (name: string) =>
         tools.find((t: { name: string }) => t.name == name).description
-      assertStringIncludes(says('app_files'), './api/client.js')
+      assertStringIncludes(says('app_files'), '/<app>/api/client.js')
       assertStringIncludes(says('app_files'), 'never localStorage')
       assertStringIncludes(says('graph_query'), '.doc!')
-      assertStringIncludes(says('graph_apply'), './api/client.js')
+      assertStringIncludes(says('graph_apply'), '/<app>/api/client.js')
 
       // The guide the tool descriptions point at, offered as a resource and
       // read from the address that serves it.

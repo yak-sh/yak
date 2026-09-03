@@ -538,7 +538,9 @@ export let TOOLS: Tool[] = [
       '<space>.yaks.app/<app>/<path>; index.html answers the directory. Keep ' +
       'what the app remembers in its own store, never localStorage: the page ' +
       'reads and writes it with `import { apply, query, search } from ' +
-      "'./api/client.js'`, which is served beside the app. The guide resource " +
+      "'/<app>/api/client.js'`, absolute with the app's own slug, which is " +
+      'served beside the app and right from a page at any path. The guide ' +
+      'resource ' +
       '(https://yaks.app/guide.md) has the whole of it, in a page.',
     input: {
       type: 'object',
@@ -1321,7 +1323,7 @@ export let TOOLS: Tool[] = [
       "'$alias' eid mints a new one (the answer maps it to its eid), as does a " +
       'uuid of your own that names nothing yet, a nested bundle stands in ' +
       'wherever an eid goes, and edges are the `dependency` component. The ' +
-      "app's pages write this same shape through ./api/client.js. The " +
+      "app's pages write this same shape through /<app>/api/client.js. The " +
       'components every app shares are ' +
       '— doc (title, body), task (status, priority, project), project, ' +
       "comment, web, image, attachment, archived; components of the app's " +
@@ -1386,7 +1388,7 @@ export let TOOLS: Tool[] = [
       'Answers entity JSON, {kind, entity: {eid, num}, ...components} — and ' +
       'only the components the filter NAMES, so ask for what you want; ' +
       "'*' answers every component, for looking rather than reading. The " +
-      'same filter line the page passes to query() from ./api/client.js. ' +
+      'same filter line the page passes to query() from /<app>/api/client.js. ' +
       'Name an app to read that one; LEAVE app OUT to read every app at ' +
       'once — an entity spans apps, so one bundle can carry components from ' +
       "several: '.recipe!&.loan!' answers the entities wearing both, " +
@@ -1427,7 +1429,7 @@ export let TOOLS: Tool[] = [
     description:
       "Find words in the app's data — every title and body, ranked, with " +
       'filters riding along if you want them. The page has the same door as ' +
-      'search() from ./api/client.js. Name an app to search that one; leave ' +
+      'search() from /<app>/api/client.js. Name an app to search that one; leave ' +
       'app out to search every app the person has, best hits first.',
     input: {
       type: 'object',

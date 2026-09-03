@@ -16,6 +16,24 @@ let guide = Deno.readTextFileSync(
   new URL('./public/guide.md', import.meta.url),
 )
 
+// The client is imported ABSOLUTELY, by the app's own slug, wherever the
+// guide shows an import: a relative `./api/client.js` resolves against the
+// PAGE's address, and an app's pretty paths make that address anything at all
+// — at `/recipes/42` the import asks for `/recipes/42/api/client.js` and 404s.
+// The guide taught pretty paths and the relative import on one page and
+// warned about neither (C-32800 item 7).
+Deno.test('the guide imports the client absolutely, every time it shows one', () => {
+  assertEquals(
+    [...guide.matchAll(/from '([^']*client\.js)'/g)].map((m) => m[1])
+      .filter((from) => !from.startsWith('/')),
+    [],
+  )
+  assert(
+    /from '\/[a-z0-9-]+\/api\/client\.js'/.test(guide),
+    'the guide shows no import at all',
+  )
+})
+
 Deno.test('the guide prints every word vocab.json may not use', () => {
   // The indented block after the sentence that introduces it — the guide's
   // one code block of bare words.

@@ -49,7 +49,8 @@ slow('the served client: a page saves, lists and watches', async () => {
 
     // The page a person would be given, and its script, run here.
     let page = '<!doctype html><h1>Recipes</h1>' +
-      '<script type="module">import { apply, query } from "./api/client.js"' +
+      '<script type="module">import { apply, query } from ' +
+      '"/recipes/api/client.js"' +
       '</script>'
     await client(k, 'jeff.yaks.app', 'recipes', cookie).put(
       '/index.html',
@@ -226,6 +227,71 @@ slow('the served client: a page saves, lists and watches', async () => {
   } finally {
     await mine.stop()
     await anyone.stop()
+    Deno.removeSync(dir, { recursive: true })
+    await k.stop()
+  }
+})
+
+// Two things a page needs told once, both of them a path (C-32800 items 6
+// and 7): an app's pretty paths make a RELATIVE import wrong, and `store()`
+// takes an address that IS a path, since every app in a space shares one
+// hostname.
+slow('the client at a pretty path, and a sibling app by path', async () => {
+  let k = await kernel()
+  let dir = Deno.makeTempDirSync({ prefix: 'tasks-client-' })
+  let them = await seed(k, [{ slug: 'nora', apps: ['reading', 'lending'] }])
+  let mine = browser(k, 'nora.yaks.app', them.cookie)
+  try {
+    // The page imports the client ABSOLUTELY, by the app's own slug, and is
+    // opened at an address that names no file — served the app's index.html
+    // (T-32769). A relative import would have resolved against THAT address.
+    let page = '<!doctype html><h1>Books</h1><script type="module">' +
+      "import { query, store } from '/reading/api/client.js'</script>"
+    await client(k, 'nora.yaks.app', 'reading', them.cookie)
+      .put('/index.html', page)
+    let deep = await k.at('nora.yaks.app', '/reading/loans/1')
+    assertEquals(deep.status, 200)
+    assertStringIncludes(await deep.text(), '/reading/api/client.js')
+    // What the page asks for is there; what a relative path would have asked
+    // for from that address is not.
+    assertEquals(
+      (await k.at('nora.yaks.app', '/reading/api/client.js')).status,
+      200,
+    )
+    let missed = await k.at('nora.yaks.app', '/reading/loans/api/client.js')
+    assertEquals(missed.status, 404)
+    await missed.body?.cancel()
+
+    // The module as that page holds it: a page has an ORIGIN, which is what
+    // an address that is a path resolves against.
+    let source = await (await k.at('nora.yaks.app', '/reading/api/client.js'))
+      .text()
+    Deno.writeTextFileSync(`${dir}/client.js`, source)
+    let mod = await import(`file://${dir}/client.js`)
+    Object.defineProperty(globalThis, 'location', {
+      value: { origin: mine.origin, href: `${mine.origin}/reading/loans/1` },
+      configurable: true,
+    })
+    try {
+      await mod.store(`${mine.origin}/lending/api/`)
+        .apply({ doc: { title: 'Piranesi, lent' } })
+      // The guide's exact line: a path, not a URL. `new URL` takes no bare
+      // path as a base, so the documented call threw `Invalid base URL`.
+      let lending = mod.store('/lending/api/')
+      assertEquals(
+        (await lending.query('.doc!')).map((r: Row) => r.doc.title),
+        ['Piranesi, lent'],
+      )
+      // The doors hang UNDER that address, so a path that names the api
+      // directory without the slash still means the directory.
+      assertEquals((await mod.store('/lending/api').query('.doc!')).length, 1)
+      // And the page's own app is a path like any other.
+      assertEquals(await mod.store('/reading/api/').query('.doc!'), [])
+    } finally {
+      Reflect.deleteProperty(globalThis, 'location')
+    }
+  } finally {
+    await mine.stop()
     Deno.removeSync(dir, { recursive: true })
     await k.stop()
   }
