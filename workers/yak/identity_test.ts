@@ -359,3 +359,105 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     await k.stop()
   }
 })
+
+// The other half of the first sign-in card: the address a person's apps will
+// live at, offered filled in with the one the platform would have derived
+// (T-32967). Its own kernel, because the first sign-in on one is the meta
+// space's owner, which is the door every directory read below goes through.
+slow('a person chooses the address their apps live at', async () => {
+  let k = await kernel()
+  let uniq = () => crypto.randomUUID().slice(0, 8)
+  try {
+    // The card offers it, filled with what `own()` would have minted anyway.
+    let email = `probe-${uniq()}@yaks.app`
+    let card = await (await form(k, '/login', { email })).text()
+    assertMatch(card, /Your apps will live here/)
+    assertMatch(
+      card,
+      new RegExp(`name="space"[^>]*value="${email.split('@')[0]}"`),
+    )
+
+    // What they choose is what they get: the space is theirs, at their name.
+    let want = `dana-${uniq()}`
+    let inn = await form(k, '/login/code', {
+      email,
+      code: await mailed(k, email),
+      name: 'Dana',
+      space: want,
+    })
+    assertEquals(inn.status, 303)
+    await inn.body?.cancel()
+    let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
+    let dir = meta(k, cookie)
+    let [chosen] = await dir.query(`.space.slug=${want}`)
+    assert(chosen, `a space at ${want}`)
+    let [them] = await dir.query(
+      `.person!&.email.address=${encodeURIComponent(email)}`,
+    )
+    let [seat] = await dir.query(
+      `.member.space=${chosen.entity.eid}&.member.person=${them.entity.eid}`,
+    )
+    assertEquals((seat.member as { role: string }).role, 'owner')
+    // And nothing was minted at the address they did not take.
+    assertEquals(await dir.query(`.space.slug=${email.split('@')[0]}`), [])
+
+    // Asked once: the next sign-in only wants the code.
+    let second = await (await form(k, '/login', { email })).text()
+    assertEquals(/name="space"/.test(second), false)
+
+    // A taken address is refused on the card, in a sentence, with their name,
+    // their address and the code they typed still in it — and the code they
+    // were mailed still stands, so the next try is the same round trip.
+    let other = `probe-${uniq()}@yaks.app`
+    await (await form(k, '/login', { email: other })).body?.cancel()
+    let code = await mailed(k, other)
+    let no = await form(k, '/login/code', {
+      email: other,
+      code,
+      name: 'Rex',
+      space: want,
+    })
+    assertEquals(no.status, 400)
+    let refused = await no.text()
+    assertMatch(refused, new RegExp(`${want}.yaks.app is taken`))
+    assertMatch(refused, /value="Rex"/)
+    assertMatch(refused, new RegExp(`name="space"[^>]*value="${want}"`))
+    assertMatch(refused, new RegExp(`name="code"[^>]*value="${code}"`))
+
+    // A badly shaped one is refused the same way, and says what one is.
+    let bad = await form(k, '/login/code', {
+      email: other,
+      code,
+      name: 'Rex',
+      space: 'Not An Address',
+    })
+    assertEquals(bad.status, 400)
+    assertMatch(await bad.text(), /lowercase letters, numbers and dashes/)
+
+    // So they pick another, on the same code, and it is theirs.
+    let mine = `rex-${uniq()}`
+    let took = await form(k, '/login/code', {
+      email: other,
+      code,
+      name: 'Rex',
+      space: mine,
+    })
+    assertEquals(took.status, 303)
+    await took.body?.cancel()
+    assert((await dir.query(`.space.slug=${mine}`))[0], `a space at ${mine}`)
+
+    // Skipping it is what signing in always did: the front of the address.
+    let quiet = `probe-${uniq()}@yaks.app`
+    await (await form(k, '/login', { email: quiet })).body?.cancel()
+    let plain = await form(k, '/login/code', {
+      email: quiet,
+      code: await mailed(k, quiet),
+    })
+    assertEquals(plain.status, 303)
+    await plain.body?.cancel()
+    let [derived] = await dir.query(`.space.slug=${quiet.split('@')[0]}`)
+    assert(derived, `a space named for ${quiet}`)
+  } finally {
+    await k.stop()
+  }
+})
