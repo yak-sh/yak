@@ -20,6 +20,15 @@
 // handler sees both a script that threw and a script, link or image — or a
 // module graph — that never arrived.
 //
+// Not everything in the page is the app's, though. Cloudflare's assets layer
+// injects its analytics beacon into every page we serve and cannot be told
+// not to from here (T-32487); an ad blocker in the visitor's browser blocks
+// that beacon, and six of those filed as a person's app being broken. What
+// an app IS, is its own origin — every file the installer copied is served
+// from it — so a resource that failed anywhere else was never the app's file
+// and is not the app's break, which is the rule the door-answer half below
+// already keeps.
+//
 // And when a break leaves the person looking at nothing, the page says so:
 // the soft state of D-32318 §Errors, in the home page's voice, once, and
 // never over a page that painted.
@@ -55,6 +64,25 @@ let broke = (body) => {
 // The element a resource error happened on, if that is what this was: a
 // script, link, img, or the module graph one of them pulled. A script that
 // THREW targets the window instead, and has an `error` of its own.
+// On the app's own origin, and not this script's door: what happened there
+// is the app's, and what happened on somebody else's server is not ours to
+// file — a script on another origin may have 404'd, or been blocked by the
+// visitor, or been put in the page by the edge, and from here those are one
+// event. The test is the origin and not a list of hostnames, which would rot
+// the first time the platform injected something new. The reporter itself
+// needs no line of its own: a script that never loaded never listens.
+let mine = (url) => url.origin == location.origin && url.href != door
+
+// Where a src points, or nothing if the browser handed us something that is
+// not an address: a reporter that throws is worse than one that misses.
+let at = (url) => {
+  try {
+    return new URL(url, document.baseURI)
+  } catch {
+    return null
+  }
+}
+
 let missed = (e) =>
   e.target && e.target != globalThis && e.target.tagName && !e.error
     ? e.target
@@ -66,6 +94,11 @@ addEventListener('error', (e) => {
     // The address that 404'd is the news — the page is dead for the want of
     // it — so it is both what this says and where it says it happened.
     let src = el.src || el.href || ''
+    let where = at(src)
+    // Off the app's origin is not the app's file: the analytics beacon the
+    // edge injects, blocked in the visitor's browser, is the platform's news
+    // and not this app's (T-32487).
+    if (where && !mine(where)) return
     return broke({
       message: `failed to load ${el.tagName.toLowerCase()}${
         src ? ` ${src}` : ''
@@ -88,8 +121,6 @@ addEventListener('unhandledrejection', (e) => {
     url: location.href,
   })
 })
-
-let mine = (url) => url.origin == location.origin && url.href != door
 
 let plain = globalThis.fetch
 globalThis.fetch = async (input, init) => {

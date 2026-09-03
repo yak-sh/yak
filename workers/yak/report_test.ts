@@ -13,7 +13,7 @@ import {
   assertMatch,
   assertStringIncludes,
 } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow, tick } from '../../src/testing.ts'
 import { client, connector, kernel, meta, seed } from './probe.ts'
 
 slow('a page reports its own breaks, and the agent hears', async () => {
@@ -303,6 +303,122 @@ slow('a page that dies on its first import says so', async () => {
       'Something went wrong. Your assistant has been told.',
     )
     assertMatch(reporter, /addEventListener\('error'[\s\S]*\}, true\)/)
+  } finally {
+    await k.stop()
+  }
+})
+
+// Not everything in a page is the app's. Cloudflare's assets layer injects
+// its analytics beacon into every page we serve and cannot be told not to
+// from here (T-32487); an ad blocker in the visitor's browser blocks it, and
+// six of those filed as a person's app being broken (T-32953). The browser is
+// the part a probe cannot boot, so the reporter the kernel serves is RUN
+// here, over a page that is only what this script touches: where it was
+// injected, what it beacons, and the body it draws the soft state on.
+let browser = (code: string, page: string) => {
+  let beacons: Blob[] = []
+  let drawn: unknown[] = []
+  let ears: Record<string, ((e: unknown) => void)[]> = {}
+  let body = {
+    innerText: '',
+    querySelector: () => null,
+    append: (el: unknown) => drawn.push(el),
+  }
+  let doc = {
+    currentScript: { src: new URL('api/report.js', page).href },
+    baseURI: page,
+    readyState: 'complete',
+    body,
+    documentElement: body,
+    createElement: () => ({ style: {}, setAttribute: () => {} }),
+  }
+  let win = {
+    fetch: () => Promise.reject(new Error('this page fetches nothing')),
+    matchMedia: () => ({ matches: false }),
+  }
+  new Function(
+    'document',
+    'navigator',
+    'location',
+    'addEventListener',
+    'removeEventListener',
+    'matchMedia',
+    'globalThis',
+    'fetch',
+    code,
+  )(
+    doc,
+    { sendBeacon: (_: string, b: Blob) => (beacons.push(b), true) },
+    { origin: new URL(page).origin, href: page },
+    (name: string, fn: (e: unknown) => void) => (ears[name] ??= []).push(fn),
+    () => {},
+    win.matchMedia,
+    win,
+    win.fetch,
+  )
+  return {
+    // A file that never loaded, on the element it never loaded into: that
+    // event fires ON the element and does not bubble, which is why the
+    // reporter listens in the capture phase (T-32909).
+    blocked: (tagName: string, src: string) =>
+      ears.error?.forEach((fn) => fn({ target: { tagName, src } })),
+    filed: () =>
+      Promise.all(beacons.map(async (b) => JSON.parse(await b.text()))),
+    drawn,
+  }
+}
+
+slow("the platform's own scripts are never the app's break", async () => {
+  let k = await kernel()
+  try {
+    let { cookie } = await seed(k, [{ slug: 'jeff', apps: ['weather'] }])
+    let agent = connector(k, cookie)
+    let app = { space: 'jeff', app: 'weather' }
+    let page = 'https://jeff.yaks.app/weather/'
+    let code = await (await k.at('jeff.yaks.app', '/weather/api/report.js'))
+      .text()
+
+    // The beacon the edge injected, blocked in the visitor's browser. It is
+    // on nobody's origin but Cloudflare's, so it is not the app's file: the
+    // reporter says nothing, and draws nothing over a page that is fine.
+    let noise = browser(code, page)
+    noise.blocked(
+      'SCRIPT',
+      'https://static.cloudflareinsights.com/beacon.min.js/v1',
+    )
+    await tick()
+    assertEquals(await noise.filed(), [], 'the platform filed nothing')
+    assertEquals(noise.drawn.length, 0, 'and drew no sorry over the page')
+
+    // The app's own module, on the app's own origin: filed exactly as it was,
+    // and the page that died for the want of it says so (T-32909).
+    let own = browser(code, page)
+    own.blocked('SCRIPT', `${page}app.js`)
+    await tick()
+    let filed = await own.filed()
+    assertEquals(filed.length, 1, "the app's own break, filed")
+    assertStringIncludes(
+      filed[0].message,
+      'failed to load script https://jeff.yaks.app/weather/app.js',
+    )
+    assertEquals(own.drawn.length, 1, 'and the soft state over the shell')
+
+    // And what the door makes of everything the two pages sent: one break.
+    for (let body of [...await noise.filed(), ...filed]) {
+      await (await k.at('jeff.yaks.app', '/weather/api/report', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      })).body?.cancel()
+    }
+    let told = await agent.tool('app_errors', app)
+    assertEquals(
+      told.split('\n').filter((l) => l.startsWith('- ')).length,
+      1,
+      "one break, and it is the app's",
+    )
+    assertStringIncludes(told, '/weather/app.js')
+    assert(!told.includes('cloudflareinsights'), 'the beacon filed nothing')
   } finally {
     await k.stop()
   }
