@@ -499,3 +499,39 @@ slow('the connector page, and the address chosen on it', async () => {
     await k.stop()
   }
 })
+
+// The CIMD claim is a lever, not a constant. The suite above rides the ON
+// default — the metadata claims support, and a URL client_id is a document we
+// go and fetch — so this holds the other side: a kernel wearing `CIMD=off`
+// says it does not support CIMD, still offers dynamic registration, and reads
+// a URL client_id out of the store like any other name, where it is simply
+// not registered (T-33027).
+slow(
+  'CIMD is a flag, and dropped it leaves registration standing',
+  async () => {
+    let k = await kernel({ CIMD: 'off' })
+    try {
+      let as = await (await k.at(
+        'yaks.app',
+        '/.well-known/oauth-authorization-server',
+      )).json()
+      assertEquals(as.client_id_metadata_document_supported, false)
+      assertMatch(as.registration_endpoint, /\/oauth\/register$/)
+      assertMatch(as.authorization_endpoint, /\/oauth\/authorize$/)
+
+      // No document is fetched: the id is looked up, found nowhere, and the
+      // client is refused as the stranger it is — not as an outage of ours.
+      let doc = 'https://probe.invalid/client_metadata.json'
+      let bare = await k.at(
+        'yaks.app',
+        `/oauth/authorize?response_type=code&client_id=${
+          encodeURIComponent(doc)
+        }&redirect_uri=https%3A%2F%2Fprobe.invalid%2Fcb`,
+      )
+      assertEquals(bare.status, 400)
+      assertEquals(/client metadata document/.test(await bare.text()), false)
+    } finally {
+      await k.stop()
+    }
+  },
+)

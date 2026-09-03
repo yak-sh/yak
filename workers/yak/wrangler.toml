@@ -114,3 +114,7 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # CF_WORKERS_TOKEN is the one an app's own worker.js is uploaded to the
 # dispatch namespace with (Workers Scripts Edit, T-32781); unset, an app's
 # files deploy and its worker does not.
+# CIMD is not a secret but rides the same door, because that door needs no
+# code deploy: `printf off | wrangler secret put CIMD` stops the well-known
+# claiming Client ID Metadata Document support, `printf on | ...` restores it,
+# and unset means on (identity.ts `cimd`, T-33027).

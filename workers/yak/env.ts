@@ -35,6 +35,10 @@ export type Env = {
   // the library's (identity.ts); nothing in the kernel reads it, so `unknown`
   // keeps a Cloudflare type name out of here.
   OAUTH_KV: unknown
+  // Whether we claim Client ID Metadata Documents (identity.ts `cimd`). On
+  // unless it says `off`; read per request, so dropping the claim is one
+  // `wrangler secret put` and no deploy of new code.
+  CIMD?: string
   // The mail seam (mail.ts). MAIL_DEV=1 files a letter in the meta store
   // instead of sending it — local runs only. The other three are Cloudflare
   // Email Sending: the API token, the account, and a base URL a probe aims

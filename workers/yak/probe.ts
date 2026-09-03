@@ -72,7 +72,8 @@ export let kernel = async (vars: Record<string, string> = {}) => {
       // code in a store.
       '--var',
       'MAIL_DEV:1',
-      // Any extra vars a test asks for, e.g. a domain-verification token.
+      // Any extra vars a test asks for: a domain-verification token
+      // (index.ts), or a kernel wearing CIMD=off (identity.ts).
       ...Object.entries(vars).flatMap(([k, v]) => ['--var', `${k}:${v}`]),
       '--show-interactive-dev-session=false',
     ],

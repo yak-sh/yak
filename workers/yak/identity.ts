@@ -27,6 +27,15 @@
 // browser gets one Allow button. The grant carries `{person}` as its props,
 // so a token resolves to the same eid a cookie does.
 //
+// Whether we CLAIM CIMD at all is the `CIMD` env var (`cimd` below), on
+// unless it says `off`. CIMD works — Claude's hosted document signs a person
+// in through it (T-32465) — but ChatGPT prefers CIMD wherever it is offered
+// and names itself with a document that is a 404, so its flow dies before it
+// starts. The lever is the advertisement, not the code path: dropped, the
+// well-known stops claiming support and a URL client_id is looked for in the
+// store like any other, which is what leaves a client dynamic registration to
+// fall back to (T-33027).
+//
 // The first person ever to sign in owns the meta space: while `yak` has no
 // members at all, this writes `member(yak, person, owner)` (directory.ts
 // `memberless`). After that the ordinary membership rule holds. It is the
@@ -61,9 +70,9 @@ type Props = { person: string }
 export type Caller = { person: string; via: 'session' | 'oauth' }
 
 // The provider's helpers over this env: parsing an authorize request,
-// naming a client, writing a grant, unwrapping a token. `OPTS` is the same
+// naming a client, writing a grant, unwrapping a token. `opts` is the same
 // configuration `fetch` runs, so the two never disagree.
-let api = (env: Env) => getOAuthApi<Env>(OPTS, env)
+let api = (env: Env) => getOAuthApi<Env>(opts(env), env)
 
 // THE contract every other part reads (mcp.ts swaps its stub for this import):
 // who is asking, by session cookie or by bearer token, or nobody. It answers
@@ -422,13 +431,19 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   return lost()
 }
 
-// The provider's configuration, one value: `withAuth` reads it to unwrap a
-// bearer, and `fetch` runs it. `/oauth/me` is the one protected resource the
-// identity part serves itself — the door an agent calls to learn which
-// person its token stands for, and the proof that `withAuth` and the
+// Do we claim Client ID Metadata Documents? On unless the env says `off`.
+// Read here, per request, rather than baked into a module constant, so the
+// claim can be dropped and restored with one `wrangler secret put CIMD` —
+// the header explains why a working feature has a lever at all.
+let cimd = (env: Env) => env.CIMD != 'off'
+
+// The provider's configuration over this env, one value: `withAuth` reads it
+// to unwrap a bearer, and `fetch` runs it. `/oauth/me` is the one protected
+// resource the identity part serves itself — the door an agent calls to learn
+// which person its token stands for, and the proof that `withAuth` and the
 // provider agree. The MCP door at /mcp is protected the same way, through
 // `withAuth` and `unauthorized`, in its own part.
-let OPTS: OAuthProviderOptions<Env> = {
+let opts = (env: Env): OAuthProviderOptions<Env> => ({
   defaultHandler: { fetch: ours },
   apiRoute: '/oauth/me',
   apiHandler: {
@@ -440,15 +455,13 @@ let OPTS: OAuthProviderOptions<Env> = {
   authorizeEndpoint: '/oauth/authorize',
   tokenEndpoint: '/oauth/token',
   clientRegistrationEndpoint: '/oauth/register',
-  clientIdMetadataDocumentEnabled: true,
+  clientIdMetadataDocumentEnabled: cimd(env),
   scopesSupported: ['graph'],
   resourceMetadata: {
     scopes_supported: ['graph'],
     resource_name: 'yaks.app',
   },
-}
-
-let provider = new OAuthProvider<Env>(OPTS)
+})
 
 // The Worker runtime hands a fetch handler an ExecutionContext; a kernel part
 // is given only its request and its env (env.ts). The provider wants one to
@@ -460,5 +473,8 @@ let context = () => ({
   passThroughOnException: () => {},
 })
 
+// A provider per request, since its configuration is read from the env: the
+// library builds its own implementation per call anyway (`getOAuthApi`), so
+// this costs an object, not a connection.
 export let fetch = (req: Request, env: Env): Promise<Response> =>
-  provider.fetch(req, env, context() as never)
+  new OAuthProvider<Env>(opts(env)).fetch(req, env, context() as never)
