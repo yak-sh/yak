@@ -7,6 +7,12 @@
 export interface Blobs {
   has(key: string): Promise<boolean>
   put(key: string, bytes: Uint8Array): Promise<void>
+  // The bytes, or null where there are none. `read` is the primitive: a
+  // caller that serves a file wants the bytes and wants a miss to cost the
+  // same one round trip a hit does, which `has` then `get` cannot give it.
+  read(key: string): Promise<Uint8Array<ArrayBuffer> | null>
+  // The same read, for a caller that knows the key is there — a miss is a
+  // bug, so it throws rather than making every call site test for null.
   get(key: string): Promise<Uint8Array<ArrayBuffer>>
   // Gone, whether or not it was there: deleting twice is not an error.
   delete(key: string): Promise<void>
@@ -29,6 +35,13 @@ export let dirBlobs = (root: string): Blobs => ({
     let at = `${root}/${key}`
     await Deno.mkdir(at.slice(0, at.lastIndexOf('/')), { recursive: true })
     await Deno.writeFile(at, bytes)
+  },
+  read: async (key) => {
+    try {
+      return await Deno.readFile(`${root}/${key}`)
+    } catch {
+      return null
+    }
   },
   get: (key) => Deno.readFile(`${root}/${key}`),
   delete: async (key) => {

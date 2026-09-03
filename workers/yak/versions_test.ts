@@ -36,6 +36,8 @@ let memory = () => {
       m.set(k, bytes)
       return Promise.resolve()
     },
+    read: (k) =>
+      Promise.resolve((m.get(k) ?? null) as Uint8Array<ArrayBuffer> | null),
     get: (k) => {
       let v = m.get(k)
       if (!v) throw new Error(`no blob at ${k}`)

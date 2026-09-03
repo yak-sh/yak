@@ -24,6 +24,10 @@ export let r2Blobs = (bucket: R2): Blobs => ({
   put: async (key, bytes) => {
     await bucket.put(key, bytes)
   },
+  read: async (key) => {
+    let object = await bucket.get(key)
+    return object ? new Uint8Array(await object.arrayBuffer()) : null
+  },
   get: async (key) => {
     let object = await bucket.get(key)
     if (!object) throw new Error(`no blob at ${key}`)

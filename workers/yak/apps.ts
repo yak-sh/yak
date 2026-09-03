@@ -49,6 +49,7 @@ import {
 import { type Reach, split, written } from './reach.ts'
 import type { EntityLiteral } from '../../src/mutation.ts'
 import { type Door, storeOf } from './store.ts'
+import { type Clock, clock, timed } from './timing.ts'
 import { noted, refusal, serving } from './unseen.ts'
 import { full } from './usage.ts'
 import { sha256 } from './versions.ts'
@@ -240,18 +241,28 @@ let asset = async (
   // pages resolve their relative URLs against: `/<app>/`, or `/` when it is
   // the space's front page (T-33040).
   at: string,
+  c: Clock,
 ) => {
   let blobs = r2Blobs(env.BLOBS)
   let key = keyOf(space, app, path)
   if (MANIFEST.has(key.slice(`${space.slug}/${app.slug}`.length))) {
     return nothingHere()
   }
+  // ONE read, not a stat and then a read (T-33176): the bucket is a round
+  // trip away — for most of the world an ocean away — and asking whether the
+  // file is there before asking for it paid that trip twice for every file
+  // the app serves. `read` answers the bytes or null, so a miss costs the
+  // same one trip a hit does.
+  //
   // The index the fallback serves is the app's own, so the reporter and the
   // reporting headers ride along exactly as they do at `/`.
-  if (!(await blobs.has(key)) && pretty(path)) key = keyOf(space, app, '/')
-  if (!(await blobs.has(key))) return nothingHere()
+  let bytes = await c.time('bytes', () => blobs.read(key))
+  if (!bytes && pretty(path)) {
+    key = keyOf(space, app, '/')
+    bytes = await c.time('index', () => blobs.read(key))
+  }
+  if (!bytes) return nothingHere()
   let type = mimeOf(key)
-  let bytes = await blobs.get(key)
   let headers = { 'content-type': type }
   if (!type.startsWith('text/html')) return new Response(bytes, { headers })
   // A page, so it gets the app's address before its own first relative URL,
@@ -824,14 +835,23 @@ let index = async (
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
+  let c = clock()
+  return timed(await served(req, env, c), c)
+}
+
+// Serving an app, with the stopwatch running (timing.ts): every stage below
+// that WAITS is named, so `Server-Timing` on the answer says where the time
+// went — the directory, the app's own worker, the bytes — instead of leaving
+// a second to guess at (T-33176).
+let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   let r = route(hostOf(req), new URL(req.url).pathname)
   if (r.space == null) return nothingHere()
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  let space = await dir.space(r.space)
+  let space = await c.time('space', () => dir.space(r.space!))
   if (!space) return nothingHere()
   if (kernels(space, r.app)) return nothingHere()
   let url = new URL(req.url)
-  let app = r.app ? await dir.app(space, r.app) : null
+  let app = r.app ? await c.time('app', () => dir.app(space!, r.app!)) : null
   if (r.app && !app) {
     // Not an app here — but it may be where one USED to be (directory.ts
     // former): a rename moves the address and keeps the old one pointing at
@@ -871,7 +891,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let path = r.path
   let front = !!app && app.eid == space.home
   if (!app) {
-    let home = await dir.home(space)
+    let home = await c.time('home', () => dir.home(space!))
     // No front page — the ordinary state of a space, since being the first
     // app claims nothing (tools.ts `app_new`). The space EXISTS, so its own
     // address is a door and not a 404: it lists the apps this visitor may
@@ -904,7 +924,10 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let at = mount ?? (front ? '/' : `/${app.slug}/`)
   let itself = await granted(req, env.SESSION_SECRET, storeName(space, app))
   let who = itself ??
-    await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
+    await c.time(
+      'who',
+      () => whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p)),
+    )
   // A private app hides its PAGE too, not only its data (C-32607 item 5):
   // `access: private` says only its members can see it, and its files are
   // part of what they see. A stranger is sent to sign in and handed back to
@@ -920,11 +943,20 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // `/api/` doors stay the kernel's, always.
   if (path.startsWith('/api/')) {
     return reporting(
-      await api(req, env, space, app, path.slice(4), who),
+      await c.time(
+        'api',
+        () => api(req, env, space!, app!, path.slice(4), who),
+      ),
       req,
       at,
     )
   }
-  let own = itself ? null : await ran(env, space, app, req, who)
-  return reporting(own ?? await asset(env, space, app, path, at), req, at)
+  let own = itself
+    ? null
+    : await c.time('worker', () => ran(env, space!, app!, req, who))
+  return reporting(
+    own ?? await asset(env, space, app, path, at, c),
+    req,
+    at,
+  )
 }
