@@ -6,8 +6,9 @@
 // (stream.ts), and what goes down it is `notifications/tools/list_changed`
 // when an app's own tools move (T-32686). The protocol surface is six
 // methods — initialize, ping, tools/list, tools/call over the tool table in
-// tools.ts, and resources/list, resources/read over the guide and the two
-// views below, which is what a connector that calls tools, reads a page and
+// tools.ts, and resources/list, resources/read over the guide, the two views
+// below, and the pages an app of the person's own declares (declared.ts,
+// T-32687), which is what a connector that calls tools, reads a page and
 // renders an answer asks for. The
 // `agents` package's McpAgent — a hibernating Durable
 // Object per client session — is the shape to grow into the day a tool
@@ -32,8 +33,15 @@ import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { unauthorized, withAuth } from './identity.ts'
-import { callDeclared, listDeclared } from './declared.ts'
-import { APPS_VIEW, type Ctx, ERRORS_VIEW, type Out, TOOLS } from './tools.ts'
+import { callDeclared, listDeclared, listViews, readView } from './declared.ts'
+import {
+  APPS_VIEW,
+  type Ctx,
+  ERRORS_VIEW,
+  type Out,
+  TOOLS,
+  VIEW_MIME,
+} from './tools.ts'
 import { listen } from './stream.ts'
 import { serve, unseenBlock } from './unseen.ts'
 
@@ -132,7 +140,7 @@ let APPS = {
   name: 'apps',
   title: 'Your apps',
   description: 'Every app the person has here, as a page they can look at.',
-  mimeType: 'text/html;profile=mcp-app',
+  mimeType: VIEW_MIME,
   page: 'https://yaks.app/apps.html',
 }
 
@@ -146,7 +154,7 @@ let ERRORS = {
   title: 'What is broken',
   description: 'Every break still open in an app, as cards with a fixed ' +
     'button.',
-  mimeType: 'text/html;profile=mcp-app',
+  mimeType: VIEW_MIME,
   page: 'https://yaks.app/errors.html',
 }
 
@@ -268,27 +276,43 @@ let handle = async (ctx: Ctx, rpc: Rpc) => {
   if (rpc.method == 'tools/call') return result(rpc.id, await call(ctx, params))
   if (rpc.method == 'resources/list') {
     return result(rpc.id, {
-      resources: RESOURCES.map((
-        { uri, name, title, description, mimeType },
-      ) => ({
-        uri,
-        name,
-        title,
-        description,
-        mimeType,
-      })),
+      resources: [
+        ...RESOURCES.map((
+          { uri, name, title, description, mimeType },
+        ) => ({
+          uri,
+          name,
+          title,
+          description,
+          mimeType,
+        })),
+        // And the pages the person's own apps draw their tools' answers in
+        // (declared.ts, T-32687): the app wrote them, the app's files hold
+        // them, and only someone who can reach the app is told they exist.
+        ...await listViews(ctx),
+      ],
     })
   }
   if (rpc.method == 'resources/read') {
     let want = RESOURCES.find((r) => r.uri == params.uri)
-    if (!want) return rpcError(rpc.id, -32602, `no resource ${params.uri}`)
-    let page = await asset(ctx, want.page)
+    if (want) {
+      let page = await asset(ctx, want.page)
+      return result(rpc.id, {
+        contents: [{
+          uri: want.uri,
+          mimeType: want.mimeType,
+          text: await page.text(),
+        }],
+      })
+    }
+    // A view out of an app's own files, if the caller can reach the app that
+    // declared it. Anything else is a resource this door does not have —
+    // including a page of an app they cannot reach, which is the same answer
+    // as a page nobody wrote.
+    let view = await readView(ctx, String(params.uri))
+    if (!view) return rpcError(rpc.id, -32602, `no resource ${params.uri}`)
     return result(rpc.id, {
-      contents: [{
-        uri: want.uri,
-        mimeType: want.mimeType,
-        text: await page.text(),
-      }],
+      contents: [{ ...view, mimeType: VIEW_MIME }],
     })
   }
   return rpcError(rpc.id, -32601, `no method ${rpc.method}`)

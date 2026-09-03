@@ -848,14 +848,60 @@ slow('an app declares its own tools, and the door calls them', async () => {
               description: 'Every run so far',
               input: {},
               query: '.jog!',
+              // The page the answer draws itself in (T-32687).
+              view: 'leaderboard.html',
             },
           }),
         },
+        {
+          path: 'leaderboard.html',
+          content: '<!doctype html><html><head>' +
+            '<link rel="stylesheet" href="./style.css" /></head>' +
+            '<body><ol id=board></ol></body></html>',
+        },
+        // A page in the same app that no tool names: this door is not a way
+        // to read an app's files.
+        { path: 'secret.html', content: '<!doctype html><p>not a view' },
       ],
     })
     let deployed = await agent.tool('app_deploy', app)
     assertStringIncludes(deployed, 'tools: runs__log_run, runs__leaderboard')
     assertStringIncludes(deployed, 'components: jog')
+
+    // The app's own MCP App view (T-32687): the tool links the page, the door
+    // serves it out of the app's own files under the profile, and a `<base>`
+    // at the app's address keeps the stylesheet beside it working.
+    let view = `ui://${space}/runs/leaderboard.html`
+    let drawn = (await agent.call('tools/list')).tools
+      .find((t: { name: string }) => t.name == 'runs__leaderboard')
+    assertEquals(drawn._meta.ui.resourceUri, view)
+    assertEquals(drawn._meta.ui.visibility, ['model', 'app'])
+    let listed = (await agent.call('resources/list')).resources
+      .find((r: { uri: string }) => r.uri == view)
+    assertEquals(listed.mimeType, 'text/html;profile=mcp-app')
+    assertEquals(listed._meta.ui.csp.baseUriDomains, [
+      `https://${space}.yaks.app`,
+    ])
+    let page = (await agent.call('resources/read', { uri: view })).contents[0]
+    assertEquals(page.mimeType, 'text/html;profile=mcp-app')
+    assertStringIncludes(
+      page.text,
+      `<head><base href="https://${space}.yaks.app/runs/">`,
+    )
+    assertStringIncludes(page.text, './style.css')
+    assertEquals(page._meta.ui.csp.resourceDomains, [
+      `https://${space}.yaks.app`,
+    ])
+    // A page nobody declared, and an app nobody has: the same answer.
+    for (
+      let missing of [`ui://${space}/runs/secret.html`, 'ui://no/runs/x.html']
+    ) {
+      await assertRejects(
+        () => agent.call('resources/read', { uri: missing }),
+        Error,
+        'no resource',
+      )
+    }
 
     // The call is a page's gesture: the row lands in the app's own store,
     // typed by the declared input, and says who wrote it.
@@ -918,6 +964,19 @@ slow('an app declares its own tools, and the door calls them', async () => {
       .message
     assertStringIncludes(why, 'bad: screen — a tool says')
     assertStringIncludes(why, 'bad: {{who}} names no input')
+    // And a view naming a page nobody deployed: the store holds the words,
+    // the app's files hold the pages, so the deploy is where that is caught.
+    await agent.tool('app_files', {
+      ...app,
+      op: 'write',
+      path: 'tools.json',
+      content: '{"board":{"description":"x","input":{},"query":".jog!",' +
+        '"view":"gone.html"}}',
+    })
+    assertStringIncludes(
+      (await assertRejects(() => agent.tool('app_deploy', app), Error)).message,
+      "gone.html — a view names a page in this app's own files",
+    )
     assertStringIncludes(
       await agent.tool('runs__log_run', { who: 'Bo', miles: 2 }),
       'wrote 1 entity',

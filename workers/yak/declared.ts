@@ -24,8 +24,9 @@ import {
   type ToolDef,
   type Tools,
 } from '../../src/store/tools.ts'
-import type { Ctx, Out } from './tools.ts'
+import { type Ctx, type Out, VIEW_MIME } from './tools.ts'
 import type { Who } from './session.ts'
+import { r2Blobs } from '../../src/blobs_r2.ts'
 import { storeOf } from './store.ts'
 import { listening, told } from './stream.ts'
 
@@ -148,6 +149,7 @@ export let listDeclared = async (ctx: Ctx) => {
     title: string
     description: string
     inputSchema: unknown
+    _meta?: { ui: { resourceUri: string; visibility: string[] } }
   }[] = []
   let taken = new Set<string>()
   for (let { space, app } of await reachable(ctx)) {
@@ -163,6 +165,22 @@ export let listDeclared = async (ctx: Ctx) => {
         description: `${tool.description} — ${app.title || app.slug}, an app ` +
           `at ${space.slug}.yaks.app/${app.slug}/`,
         inputSchema: schemaOf(tool),
+        // The page this tool's answer draws itself in, where it named one
+        // (T-32687). `app` beside `model` in the visibility is what lets the
+        // view call the tool BACK — the redraw a button or a date picker
+        // needs — and it grants nothing the app's own page does not already
+        // have, since the call goes through the app's ordinary doors as the
+        // person looking at it.
+        ...(tool.view
+          ? {
+            _meta: {
+              ui: {
+                resourceUri: viewUri(space, app, tool.view),
+                visibility: ['model', 'app'],
+              },
+            },
+          }
+          : {}),
       })
     }
   }
@@ -180,4 +198,103 @@ export let toolsChanged = async (ctx: Ctx, space: Space) => {
       told(person, 'notifications/tools/list_changed')
     }
   }
+}
+
+// A view a tool declares (T-32687): a page in the app's OWN files, offered
+// at this door as a `ui://` resource the host renders the answer in. The
+// address is the app's own, with the scheme swapped — `ui://<space>/<app>/
+// <file>` — so a host that read the resource and a host that read the tool
+// name the same thing without either knowing the other.
+export let viewUri = (space: Space, app: App, file: string) =>
+  `ui://${space.slug}/${app.slug}/${file}`
+
+let AT = /^ui:\/\/([a-z0-9-]+)\/([a-z0-9-]+)\/(.+)$/
+
+// Where the app's own pages live, which is what a relative URL inside a view
+// has to mean.
+let siteOf = (space: Space) => `https://${space.slug}.yaks.app`
+
+// The host renders a view with no same-origin server behind it (spec
+// §Content Requirements: an HTML document handed over as a resource), so a
+// page lifted out of an app's files would lose every relative URL it has.
+// The door prepends a `<base href>` naming the app's address and declares
+// that address in the resource's `_meta.ui.csp` — `baseUriDomains` for the
+// tag to be honored at all, `resourceDomains` for the stylesheet and the
+// image it then reaches for. What a view still cannot do this way is
+// `./api/…`: that is a cross-site request carrying no session cookie. Its
+// data arrives in the tool's answer, and a redraw is a `tools/call` back
+// through the host, which does carry who is asking.
+export let cspFor = (space: Space) => ({
+  ui: {
+    csp: {
+      baseUriDomains: [siteOf(space)],
+      resourceDomains: [siteOf(space)],
+    },
+  },
+})
+
+// The `<base>` tag, where the parser will read it: inside the head if the
+// page has one, else after the doctype, which must stay the document's first
+// thing or the browser reads the whole page in quirks mode.
+let based = (space: Space, app: App, page: string) => {
+  let tag = `<base href="${siteOf(space)}/${app.slug}/">`
+  let head = /<head[^>]*>/i.exec(page)
+  if (head) return page.replace(head[0], `${head[0]}${tag}`)
+  let doctype = /^\s*<!doctype[^>]*>/i.exec(page)
+  return doctype ? page.replace(doctype[0], `${doctype[0]}${tag}`) : tag + page
+}
+
+// The pages the caller can reach, one entry each however many tools draw in
+// them. What is listed is what a tool NAMED: an app's other files are the
+// web's business, not this door's, and a private app's are nobody's.
+export let listViews = async (ctx: Ctx) => {
+  let out: {
+    uri: string
+    name: string
+    title: string
+    description: string
+    mimeType: string
+    _meta: ReturnType<typeof cspFor>
+  }[] = []
+  let seen = new Set<string>()
+  for (let { space, app } of await reachable(ctx)) {
+    for (let tool of Object.values(await toolsOf(ctx.env, space, app))) {
+      if (!tool.view) continue
+      let uri = viewUri(space, app, tool.view)
+      if (seen.has(uri)) continue
+      seen.add(uri)
+      out.push({
+        uri,
+        name: `${space.slug}/${app.slug}/${tool.view}`,
+        title: `${app.title || app.slug}: ${tool.view}`,
+        description: `A page ${app.title || app.slug} draws its own tools' ` +
+          `answers in, from ${space.slug}.yaks.app/${app.slug}/.`,
+        mimeType: VIEW_MIME,
+        _meta: cspFor(space),
+      })
+    }
+  }
+  return out
+}
+
+// One view's bytes, or null when no app the caller can reach declares that
+// page. A file is readable here only because a TOOL named it: this is not a
+// door onto an app's files, and a private app's pages stay private.
+export let readView = async (ctx: Ctx, uri: string) => {
+  let at = AT.exec(uri)
+  if (!at) return null
+  let [, slug, name, file] = at
+  let mine = (await reachable(ctx)).find((r) =>
+    r.space.slug == slug && r.app.slug == name
+  )
+  if (!mine) return null
+  let { space, app } = mine
+  let declared = Object.values(await toolsOf(ctx.env, space, app))
+    .some((t) => t.view == file)
+  if (!declared) return null
+  let blobs = r2Blobs(ctx.env.BLOBS)
+  let key = `${space.slug}/${app.slug}/${file}`
+  if (!(await blobs.has(key))) return null
+  let page = new TextDecoder().decode(await blobs.get(key))
+  return { uri, text: based(space, app, page), _meta: cspFor(space) }
 }

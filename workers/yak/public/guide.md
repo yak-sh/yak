@@ -302,6 +302,51 @@ the person calling it, so the app's `access` decides it, `created.by` names
 them, and a refusal is the same sentence the page would show. Nobody gets more
 through a tool than they have on the page.
 
+### A page the answer draws itself in
+
+An entry may also name a `view`: a page in the app's own files that the person's
+agent RENDERS the answer in, instead of reading it out. Add it beside the act
+and deploy the page with everything else:
+
+    "leaderboard": { "description": "Every run since a date",
+                     "input": { "since": "time" },
+                     "query": ".jog!&.created.at>={{since}}",
+                     "view": "leaderboard.html" }
+
+The page gets the tool's answer over the host's own postMessage protocol: say
+hello with `ui/initialize`, then draw whatever arrives in
+`ui/notifications/tool-result` — `structuredContent` is what `query` answered,
+`{ rows: [...] }` — and report your height back so the frame fits.
+
+    <!doctype html>
+    <meta charset="utf-8" />
+    <ol id="board"></ol>
+    <script>
+      let n = 0
+      let post = (method, params, id) =>
+        parent.postMessage({ jsonrpc: '2.0', method, params, id }, '*')
+      addEventListener('message', (e) => {
+        if (e.data.method != 'ui/notifications/tool-result') return
+        let rows = (e.data.params.structuredContent || {}).rows || []
+        board.replaceChildren(...rows.map((r) => {
+          let li = document.createElement('li')
+          li.textContent = `${r.jog.who} — ${r.jog.miles} miles`
+          return li
+        }))
+        post('ui/notifications/size-changed',
+          { width: document.body.scrollWidth,
+            height: document.body.scrollHeight })
+      })
+      post('ui/initialize', { protocolVersion: '2026-01-26' }, ++n)
+    </script>
+
+Relative URLs still work: the door hands the host the page with a `<base>` at
+the app's own address, so a stylesheet or an image beside `index.html` loads.
+Its DATA does not come that way — `./api/query` from inside the frame is another
+origin with no session on it. The answer arrives in the notification above, and
+a redraw is a plain MCP `tools/call` back through the host for the app's own
+tool, which does carry who is looking.
+
 ## The doors underneath
 
 `client.js` is a wrapper over ordinary HTTP doors, same-origin, in case you want

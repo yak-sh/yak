@@ -3,7 +3,7 @@
 // to a template. The workerd half — the same file through app_deploy and a
 // call at the MCP door — is in workers/yak/mcp_test.ts.
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
-import { filled, parseTools, schemaOf } from './tools.ts'
+import { filled, parseTools, schemaOf, viewsOf } from './tools.ts'
 
 let runs = { jog: { who: 'text', miles: 'number' } } as const
 
@@ -48,11 +48,11 @@ Deno.test('tools.json: one refusal names every problem', () => {
       description: 'Log a run',
       input: { miles: 'number' },
       apply: { jog: { who: '{{who}}', miles: '{{miles}}' } },
-      view: 'index.html',
+      screen: 'index.html',
     },
     nothing: { description: 'Neither act' },
   })
-  assertStringIncludes(all, 'log_run: view — a tool says')
+  assertStringIncludes(all, 'log_run: screen — a tool says')
   assertStringIncludes(all, 'log_run: {{who}} names no input')
   assertStringIncludes(all, 'log_run.apply: jog is not a component')
   assertStringIncludes(all, 'nothing does one thing')
@@ -61,6 +61,29 @@ Deno.test('tools.json: one refusal names every problem', () => {
     Object.keys(parseTools({ log_run: club.log_run }, runs)),
     ['log_run'],
   )
+  // A view is a page in the app's own files, and a path that climbs out of
+  // them is not one (T-32687).
+  for (
+    let bad of ['/leaderboard.html', '../other/index.html', 'board', 5]
+  ) {
+    assertStringIncludes(
+      why({ x: { description: 'x', input: {}, query: '.doc!', view: bad } }),
+      "x.view is a page in this app's files",
+    )
+  }
+  assertEquals(
+    parseTools({
+      x: { description: 'x', input: {}, query: '.doc!', view: 'board.html' },
+    }).x.view,
+    'board.html',
+  )
+  // The pages a deploy checks against the app's files, each named once; a
+  // manifest that will not parse names none and the store says why.
+  assertEquals(
+    viewsOf('{"a":{"view":"board.html"},"b":{"view":"board.html"}}'),
+    ['board.html'],
+  )
+  assertEquals(viewsOf('not json'), [])
   assertStringIncludes(
     why({ x: { description: 'x', input: { n: 'int' }, query: '.doc!' } }),
     'x.input.n is "int" — one of text',

@@ -20,6 +20,12 @@
 // input. A hole naming an input nobody declared is refused at deploy, because
 // a tool that cannot be filled is one an agent calls once and gives up on.
 //
+// An entry may also name a `view`: a page in the app's own files that the
+// person's agent renders the answer in (T-32687), served at the MCP door as
+// `ui://<space>/<app>/<file>` and linked from the tool by
+// `_meta.ui.resourceUri`. The app writes that page the way it writes any
+// other, and the host hands it the same answer the model reads.
+//
 // Nothing here reaches the store: filling a template makes the same body a
 // page's own `apply` and `query` send, and the call goes through the app's
 // ordinary doors with the caller's identity and the app's access rule
@@ -35,6 +41,7 @@ export type ToolDef = {
   input: Record<string, PropType>
   apply?: unknown
   query?: string
+  view?: string
 }
 
 export type Tools = Record<string, ToolDef>
@@ -45,9 +52,16 @@ export let TOOLS_EXAMPLE =
 
 // The keys an entry may carry. Unknown ones are refused rather than ignored,
 // so a misspelling is a sentence at deploy and not a tool that quietly does
-// half of what was meant. The list grows: `view` (T-32687) names the page an
-// answer draws itself in.
-let KEYS = ['description', 'input', 'apply', 'query']
+// half of what was meant.
+let KEYS = ['description', 'input', 'apply', 'query', 'view']
+
+// A `view` names a page in the app's OWN files (T-32687) — a relative path
+// under the app's root, which the MCP door serves as `ui://<space>/<app>/
+// <file>` for the host to render the answer in. HTML because that is the one
+// type the MCP Apps spec renders; relative because the app's files are the
+// only place a view may come from, and a path that climbs out of them would
+// be a door onto somebody else's app.
+let VIEW = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w./-]+\.html$/
 
 // A tool's name and an input's name: what a host can spell. The MCP door
 // namespaces a tool as `<app>__<tool>`, and an app slug carries no
@@ -151,6 +165,14 @@ export let parseTools = (source: unknown, vocab: Vocab = {}): Tools => {
           'filter line to read)',
       )
     }
+    if (entry.view != null) {
+      if (typeof entry.view != 'string' || !VIEW.test(entry.view)) {
+        wrong.push(
+          `${name}.view is a page in this app's files, like ` +
+            '"leaderboard.html"',
+        )
+      }
+    }
     if (entry.query != null && typeof entry.query != 'string') {
       wrong.push(`${name}.query is a filter line, like ".run!"`)
     }
@@ -184,10 +206,30 @@ export let parseTools = (source: unknown, vocab: Vocab = {}): Tools => {
       input,
       ...(entry.apply != null ? { apply: entry.apply } : {}),
       ...(typeof entry.query == 'string' ? { query: entry.query } : {}),
+      ...(typeof entry.view == 'string' && VIEW.test(entry.view)
+        ? { view: entry.view }
+        : {}),
     }
   }
   if (wrong.length) throw new Error(`tools.json: ${wrong.join('; ')}`)
   return out
+}
+
+// The pages a manifest's views name, read straight off the source so a deploy
+// can check them against the app's own files before anything is planted. A
+// manifest that will not parse yields none: the store refuses it a moment
+// later, with every problem in the one sentence.
+export let viewsOf = (source: string): string[] => {
+  let seen = new Set<string>()
+  try {
+    let read = JSON.parse(source)
+    if (object(read)) {
+      for (let entry of Object.values(read)) {
+        if (object(entry) && typeof entry.view == 'string') seen.add(entry.view)
+      }
+    }
+  } catch { /* the store says why */ }
+  return [...seen]
 }
 
 // The tool's arguments as JSON Schema, which is what a host shows the model.

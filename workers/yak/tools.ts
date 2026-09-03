@@ -23,7 +23,7 @@
 // bundle, or a flat Change batch. A deploy in v1 is a version bump, since an
 // app's files serve live from its blob store.
 import { r2Blobs } from '../../src/blobs_r2.ts'
-import { TOOLS_EXAMPLE } from '../../src/store/tools.ts'
+import { TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
 import { EXAMPLE } from '../../src/store/vocab.ts'
 import type { EntityLiteral } from '../../src/mutation.ts'
 import { appAccess } from '../../src/types.ts'
@@ -320,6 +320,11 @@ let told = (access: Access | null) =>
 export let APPS_VIEW = 'ui://yaks/apps'
 export let ERRORS_VIEW = 'ui://yaks/errors'
 
+// The type a view is served under: text/html with the profile the MCP Apps
+// spec requires, which is how a host tells a page it renders from a page it
+// merely reads. An app's own view (declared.ts, T-32687) wears the same one.
+export let VIEW_MIME = 'text/html;profile=mcp-app'
+
 export let TOOLS: Tool[] = [
   {
     name: 'space_new',
@@ -577,6 +582,20 @@ export let TOOLS: Tool[] = [
       let sent = await blobs.has(toolsKey)
         ? new TextDecoder().decode(await blobs.get(toolsKey))
         : '{}'
+      // A `view` names a page in the app's OWN files (T-32687), so this is
+      // the one thing about the manifest the store cannot check: it holds the
+      // words, the blobs hold the pages. A view nobody deployed would be a
+      // tool whose answer renders nothing, which is worse than a refusal.
+      let missing: string[] = []
+      for (let file of viewsOf(sent)) {
+        if (!await blobs.has(fileKey(space, app, file))) missing.push(file)
+      }
+      if (missing.length) {
+        throw new Error(
+          `tools.json: ${missing.join(', ')} — a view names a page in this ` +
+            "app's own files; deploy the page beside index.html",
+        )
+      }
       let tooled = JSON.parse(
         await answer(
           await store('/tools', { method: 'POST', body: sent }, vouched(who)),
