@@ -2,9 +2,12 @@
 // the server between its own calls (T-32686, T-32734). Streamable HTTP gives
 // a session two channels — the POST that carries a call and its reply, and a
 // GET the client holds open as Server-Sent Events — and what goes down the
-// GET today is one thing: `notifications/tools/list_changed`, when an app of
-// the person's own grows or loses a tool. The person's agent listed the tools
-// once at connect; this is how it learns to list them again.
+// GET is news the server has between calls: `notifications/<list>/
+// list_changed` when an app of the person's own moves what they can reach
+// (declared.ts), `notifications/message` when something of theirs broke
+// (unseen.ts), and the release news below (`crossed`) when the platform
+// itself moved. The person's agent listed the tools once at connect; this is
+// how it learns to list them again.
 //
 // The stream lives in a DURABLE OBJECT, one per signed-in person — the
 // McpAgent shape mcp.ts's header names, arrived at. The first cut queued the
@@ -30,6 +33,7 @@
 // needs its own copy. A stream that names no session is a client that was
 // never told an id, and every one of those hears — they cannot be told apart,
 // and silence is the worse failure.
+import { VERSION } from '../../src/version.ts'
 import type { Env } from './env.ts'
 import type { Namespace, Stub } from './store.ts'
 
@@ -58,16 +62,28 @@ type Held = {
   end: () => void
 }
 
+let body = (told: Told) =>
+  JSON.stringify({
+    jsonrpc: '2.0',
+    method: told.method,
+    ...(told.params ? { params: told.params } : {}),
+  })
+
 // One SSE frame, with its id: the id is the cursor a reconnect resumes from,
 // so it rides on every line the log keeps.
-let framed = (id: number, told: Told) =>
-  `id: ${id}\ndata: ${
-    JSON.stringify({
-      jsonrpc: '2.0',
-      method: told.method,
-      ...(told.params ? { params: told.params } : {}),
-    })
-  }\n\n`
+let framed = (id: number, told: Told) => `id: ${id}\ndata: ${body(told)}\n\n`
+
+// And one with none, for what is said to a single stream and never logged
+// (`crossed` below): a frame without an id leaves the cursor where it was.
+let bare = (told: Told) => `data: ${body(told)}\n\n`
+
+// The lists a platform release moves, in the release news `crossed` says.
+let LISTS = ['tools', 'resources', 'prompts']
+
+// How many sessions' last-spoken-for version the object keeps: a person's
+// clients are few, and a session evicted early only hears one release's news
+// a second time.
+let KEPT = 64
 
 export class Wire {
   state: State
@@ -109,6 +125,36 @@ export class Wire {
     if (!this.open.size) this.cool()
   }
 
+  // A platform release replaces the Worker, restarts this object and drops
+  // every open stream; the client resumes with `Last-Event-ID` and nothing
+  // in that tells it the platform's OWN tools, resources, prompts and guide
+  // pages moved with the release (T-33005). So the object remembers, per
+  // session, the VERSION it last spoke for: a stream attaching for a session
+  // last spoken to under another release hears that all three lists moved —
+  // said to this stream alone, without ids and off the log, so no cursor
+  // moves and no other session hears a copy, keeping the transport's
+  // one-copy-per-session rule. A session never seen is a client that just
+  // initialized and listed fresh, so it is remembered silently — and the
+  // nameless session is one key like any other, the best that can be done
+  // for clients that cannot be told apart. The newest KEPT sessions are
+  // what the map holds.
+  async crossed(held: Held) {
+    let spoke = await this.state.storage.get<Record<string, string>>(
+      'spoke',
+    ) ?? {}
+    let was = spoke[held.session]
+    if (was == VERSION) return
+    if (was != null) {
+      for (let list of LISTS) {
+        held.send(bare({ method: `notifications/${list}/list_changed` }))
+      }
+    }
+    delete spoke[held.session]
+    spoke[held.session] = VERSION
+    for (let old of Object.keys(spoke).slice(0, -KEPT)) delete spoke[old]
+    await this.state.storage.put('spoke', spoke)
+  }
+
   // A client attaching its stream: what it missed, then the line stays open.
   // `Last-Event-ID` is the last id it saw; absent, it has seen nothing and is
   // handed nothing, because a client that never listened lists its tools at
@@ -145,6 +191,7 @@ export class Wire {
         if (line.id > since) held.send(line.frame)
       }
     }
+    await this.crossed(held)
     return new Response(readable, {
       headers: {
         'content-type': 'text/event-stream',
