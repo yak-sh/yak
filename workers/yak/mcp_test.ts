@@ -25,7 +25,18 @@ slow(
     try {
       let jeff = crypto.randomUUID()
       let agent = connector(k, await signedIn(k, jeff))
-      // Nobody is answered; a session is.
+      // Nobody is answered — and the refusal says so in a sentence, with
+      // where signing in happens, like every other door (C-32607 item 1).
+      let shut = await k.at('yaks.app', '/mcp', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{"jsonrpc":"2.0","id":1,"method":"initialize"}',
+      })
+      assertEquals(shut.status, 401)
+      let refusal = (await shut.json()).error
+      assertEquals(refusal.code, 'unauthorized')
+      assertStringIncludes(refusal.message, 'sign in at https://yaks.app')
+      assertEquals(refusal.signIn, 'https://yaks.app/login')
       await assertRejects(() => connector(k).call('initialize'), Error, '401')
       let init = await agent.call('initialize', {
         protocolVersion: '2025-03-26',
@@ -243,10 +254,16 @@ slow(
       // it are not in the answer unless the filter names one.
       assert(!('created' in hit), 'no stamp rides an unasked-for listing')
       let stamped = JSON.parse(
-        await agent.tool('graph_query', { ...app, query: '.doc!&.created!' }),
+        await agent.tool('graph_query', { ...app, filter: '.doc!&.created!' }),
       )
       assertEquals(stamped.length, 1)
       assert(stamped[0].created, 'naming a stamp asks for it back')
+      // The parameter is `filter` — the word every other door uses for the
+      // same line — and `query` stays a spelling of it (C-32607 item 2).
+      assertEquals(
+        await agent.tool('graph_query', { ...app, filter: `id=${cake}` }),
+        await agent.tool('graph_query', { ...app, query: `id=${cake}` }),
+      )
       let found = JSON.parse(
         await agent.tool('search', { ...app, text: 'lemon' }),
       )
@@ -353,6 +370,20 @@ slow(
       assert(
         !listed.includes('unseen'),
         'app_errors is the listing, not a second section',
+      )
+      // A break is the platform's row about the app, not a row the person
+      // saved: asking for the stamps does not drag it in, and naming the
+      // component is how it is asked for (C-32607 item 4).
+      let stamps = JSON.parse(
+        await agent.tool('graph_query', { ...app, filter: '.created!' }),
+      ) as { exception?: unknown }[]
+      assert(stamps.length > 0, 'the person has rows')
+      assert(stamps.every((r) => !r.exception), 'no break rides a stamps list')
+      assertEquals(
+        JSON.parse(
+          await agent.tool('graph_query', { ...app, filter: '.exception!' }),
+        ).length,
+        2,
       )
       assert(
         !(await agent.tool('graph_query', { ...app, query: `id=${cake}` }))

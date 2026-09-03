@@ -852,17 +852,24 @@ export let TOOLS: Tool[] = [
       "'.doc.title~=cake' contains, '.task.status=open' equals, '.archived=' " +
       "is absent, 'id=<eid>' fetches one, 'limit=20' and 'after=<num>' page " +
       "(a windowed read answers the newest), '.count!' counts, and a bare " +
-      'word is a full-text term. Answers entity JSON, {kind, entity: {eid, ' +
+      "word is a full-text term. '&' joins filters, so '.doc!&.created!' is " +
+      'your rows with the stamps saying who saved each and when — a listing ' +
+      "leaves those out, and the platform's own error rows, unless named. " +
+      'Answers entity JSON, {kind, entity: {eid, ' +
       'num}, ...components} — the same filter line the page passes to ' +
       'query() from ./api/client.js.',
     input: {
       type: 'object',
-      properties: { space: SPACE, app: APP, query: str('the filter line') },
-      required: ['app', 'query'],
+      properties: { space: SPACE, app: APP, filter: str('the filter line') },
+      required: ['app', 'filter'],
     },
     run: async (ctx, args) => {
       let { space, who, store } = await inApp(ctx, args)
-      let asked = text(args.query, 'query')
+      // The parameter is what everything else here calls it — a filter line
+      // (C-32607 item 2, where `query` was the odd word out and the person's
+      // agent reached for `filter` first). `query` stays a spelling of it:
+      // an old caller is answered, never corrected.
+      let asked = text(args.filter ?? args.query, 'filter')
       let r = await store(`/query?${asked}`, {}, vouched(who))
       return { text: listing(await answer(r), asked), space }
     },

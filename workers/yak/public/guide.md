@@ -144,9 +144,12 @@ The same grammar the platform speaks everywhere:
 - `limit=50`, `after=<num>` page — a windowed read answers the NEWEST that many,
   where a plain list is oldest first; `.count!` counts instead of listing.
 - Bare words are a full-text term, which is all `search` is.
+- `&` joins them: `.recipe.minutes<=30&.doc.title~=cake` asks both at once. Each
+  filter ends where the next `&` begins, so `.recipe!.created!` is not a filter
+  — it is two of them run together.
 - `.created!` asks for the platform's stamps — who saved a row and when. A
   listing leaves them out unless you name them, so what comes back is what you
-  saved.
+  saved; `.recipe!&.created!` is your rows with their timestamps.
 
 Ask for the component you want, not for the absence of one: a long `body` is
 kept as its own content-addressed entity beside the doc, so a filter that
@@ -165,7 +168,9 @@ through — the login page already holding this page as its return address:
 
 A request to the app that fails becomes an entity in the app's own store, and
 the person's agent hears about it on its next reply — once, then `app_errors`
-lists what is still open.
+lists what is still open. That row is the platform's, not yours: a listing
+leaves it out the way it leaves out the stamps, unless a filter names it
+(`.exception!`).
 
 Pages report themselves, with nothing to add: the kernel puts a reporter in
 every page it serves, so a script error, a promise nobody caught, a refusal from

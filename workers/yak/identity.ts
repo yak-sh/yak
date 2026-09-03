@@ -86,9 +86,18 @@ export let withAuth = async (
 // with: where to find the metadata that names this platform's authorization
 // server. It is how an MCP client discovers the door at all, so it lives
 // here beside the door rather than in each resource.
+// A refusal is read by a person's agent, so it says a SENTENCE beside its
+// code and names where signing in happens — the treatment every other door
+// already had, and the one this one missed (C-32607 item 1, apps.ts SAYS).
 export let unauthorized = (req: Request) => {
   let url = new URL(req.url)
-  return Response.json({ error: { code: 'unauthorized' } }, {
+  return Response.json({
+    error: {
+      code: 'unauthorized',
+      message: `sign in at https://${PLATFORM} to reach your apps from here`,
+      signIn: `https://${PLATFORM}/login`,
+    },
+  }, {
     status: 401,
     headers: {
       'www-authenticate': 'Bearer realm="OAuth", resource_metadata=' +

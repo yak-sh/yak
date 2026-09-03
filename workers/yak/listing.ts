@@ -21,6 +21,15 @@
 // (it is how an error is marked fixed), so it is the person's business too.
 export let STAMPS = ['created', 'updated', 'notified', 'opened', 'quarantined']
 
+// The kernel's own rows ABOUT the app, which nobody saved: a break the
+// platform wrote down (unseen.ts `noted`) and a failure it expected. They are
+// read through `app_errors`, not through a listing, so a listing leaves them
+// out unless the filter names one — the deliberate opt-in src/query.ts
+// `selected()` asks for the store's blob rows. Asking for the stamps is not
+// asking for these: `.created!` alone dragged every exception into a person's
+// list of their own rows (C-32607 item 4).
+export let KERNEL = ['exception', 'error']
+
 export let listing = (body: string, asked: string) => {
   let rows: unknown
   try {
@@ -32,6 +41,8 @@ export let listing = (body: string, asked: string) => {
   let hidden = STAMPS.filter((s) => !asked.includes(`.${s}`))
   let out = []
   for (let row of rows as Record<string, unknown>[]) {
+    let kernel = KERNEL.filter((k) => k in row)
+    if (kernel.length && !kernel.some((k) => asked.includes(`.${k}`))) continue
     let kept = Object.fromEntries(
       Object.entries(row).filter(([k]) => !hidden.includes(k)),
     )

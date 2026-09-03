@@ -29,6 +29,26 @@ Deno.test('a listing carries what a person saved, not the stamps', () => {
   })
 })
 
+Deno.test("the kernel's own rows are not the person's", () => {
+  let body = JSON.stringify([
+    { kind: 'doc', entity: { eid: 'a', num: 1 }, doc: { title: 'Pancakes' } },
+    {
+      kind: 'entity',
+      entity: { eid: 'b', num: 2 },
+      exception: { message: 'boom' },
+      created: { by: null },
+    },
+  ])
+  // Asking for the stamps is not asking for the platform's bookkeeping
+  // (C-32607 item 4): a break stays out until the filter names it.
+  assertEquals(rows(listing(body, '.created!')).map((r) => r.kind), ['doc'])
+  assertEquals(rows(listing(body, '.doc!')).map((r) => r.kind), ['doc'])
+  assertEquals(rows(listing(body, '.exception!')).map((r) => r.kind), [
+    'doc',
+    'entity',
+  ])
+})
+
 Deno.test('what is not a row listing passes through as it came', () => {
   assertEquals(listing('{"count":3}', '.count!'), '{"count":3}')
   assertEquals(listing('not json at all', '.doc!'), 'not json at all')
