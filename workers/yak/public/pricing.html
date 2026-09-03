@@ -7,10 +7,12 @@
   so this is the page an assistant may point at — and the reason there is no
   subscribe button on it. Paying happens on the connector page, signed in.
 
-  Every number here comes from D-32751. Tax is added on top rather than
-  included: the price carries no tax_behavior and the account's default is
-  exclusive, so a reader in a VAT country pays more than the headline and the
-  page has to say so.
+  Every number here comes from D-32751. The price is tax-INCLUSIVE
+  (tax_behavior set on the price 2026-09-03, owner's decision): $4 is what a
+  customer pays anywhere, and VAT or sales tax comes out of our side rather
+  than being added at the till. So the headline number is the whole number and
+  the page says so plainly. tax_behavior can be set once and never changed —
+  altering this means minting a new price id.
 -->
 <html lang="en">
   <head>
@@ -79,9 +81,8 @@
           </div>
         </div>
         <p class="Note Note-small">
-          Prices are in US dollars. Where your country charges sales tax or VAT,
-          it's added at checkout, so what you pay may be a little more than the
-          number above.
+          $4 a month is what you pay, wherever you are. Any sales tax or VAT
+          is already included, so nothing is added at checkout.
         </p>
       </section>
 
