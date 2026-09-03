@@ -455,7 +455,9 @@ slow(
 
       // The graph tier: a bundle in, the same shape out, the search beside
       // it. A write answers one line naming what it wrote, by id, with the
-      // alias it minted (T-32506) — never the wire's change rows.
+      // alias it minted (T-32506) — never the wire's change rows — and under
+      // it a JSON line, so a second batch can use the eids the first minted
+      // without a regex over the sentence (T-33148).
       let applied = await agent.tool('graph_apply', {
         ...app,
         entities: [{
@@ -463,8 +465,19 @@ slow(
           doc: { title: "Grandma's lemon cake" },
         }],
       })
-      assertMatch(applied, /^wrote 1 entity in jeff\/recipes: \$cake=\S+$/)
-      let cake = applied.match(/\$cake=(\S+)/)![1]
+      let [sentence, line] = applied.split('\n')
+      assertMatch(sentence, /^wrote 1 entity in jeff\/recipes: \$cake=\S+$/)
+      let written = JSON.parse(line) as {
+        in: string
+        entities: string[]
+        aliases: Record<string, string>
+        deleted: string[]
+      }
+      let cake = written.aliases.$cake
+      assertEquals(written.in, 'jeff/recipes')
+      assertEquals(written.entities, [cake])
+      assertEquals(written.deleted, [])
+      assertStringIncludes(sentence, cake)
       let [hit] = JSON.parse(
         await agent.tool('graph_query', { ...app, query: `id=${cake}` }),
       )

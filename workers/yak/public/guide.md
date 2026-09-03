@@ -348,6 +348,13 @@ the shapes agree, and otherwise stay apart with the space named beside `kind`.
     graph_apply { app: 'lending', entities: [
       { entity: { eid: '<that eid>' }, loan: { to: 'Maya' } } ] }
 
+`<that eid>` comes out of the first call's own answer: a sentence, and under it
+the same thing as JSON, so a second batch never has to be read out of prose.
+
+    wrote 1 entity in jeff/reading: $b=4f3c…
+    {"in":"jeff/reading","entities":["4f3c…"],
+     "aliases":{"$b":"4f3c…"},"deleted":[]}
+
 `graph_query` with NO app named reads every app the person has at once and
 answers one bundle per entity, composed out of whichever stores hold a piece:
 

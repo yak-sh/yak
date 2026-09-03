@@ -703,12 +703,22 @@ type Change = { eid: string; name: string; comp: unknown }
 // address them. The store's own answer is the wire's — a row per component
 // written, stamps included — which reads as noise beside the sentences the
 // app tools give (C-32531 item 5). `graph_query` reads the data back.
-let wrote = (body: string, where: string) => {
+//
+// And the same thing as DATA, because seeding anything relational means using
+// the eids this call just minted, and scraping them out of prose with a regex
+// is not a thing to ask of a caller (T-33148). The sentence is a summary — it
+// stops at ten ids — and the data is the whole of it: every eid touched, the
+// alias map, and what was deleted. It rides twice on purpose: as
+// structuredContent, the shape a declared tool's write already answers
+// (declared.ts), and as a JSON line under the sentence, since that is the
+// channel an agent reading the text actually has. `graph_query` answers JSON
+// in its text already, so this is the write door catching up to the read one.
+let wrote = (body: string, where: string): Out => {
   let out: { changes?: Change[]; aliases?: Record<string, string> }
   try {
     out = JSON.parse(body)
   } catch {
-    return body
+    return { text: body }
   }
   let changes = out.changes ?? []
   // A doc's body is stored as a content-addressed blob entity (db.ts
@@ -733,9 +743,18 @@ let wrote = (body: string, where: string) => {
     }`
   )
   if (ids.length > said.length) said.push(`…and ${ids.length - said.length}`)
-  return `wrote ${ids.length} ${
-    ids.length == 1 ? 'entity' : 'entities'
-  } in ${where}: ${said.join(', ')}`
+  let data = {
+    in: where,
+    entities: ids,
+    aliases: out.aliases ?? {},
+    deleted: [...gone],
+  }
+  return {
+    text: `wrote ${ids.length} ${
+      ids.length == 1 ? 'entity' : 'entities'
+    } in ${where}: ${said.join(', ')}\n${JSON.stringify(data)}`,
+    data,
+  }
 }
 
 // A file's key: the app's slugs, then its path from the slash (apps.ts keyOf).
@@ -2354,7 +2373,10 @@ export let TOOLS: Tool[] = [
       "comment, web, image, attachment, archived; components of the app's " +
       'own naming ride here too, once its vocab.json declares them and ' +
       'app_deploy has planted them. The answer is one line naming what was ' +
-      'written, by id; graph_query reads the data back. One bundle may wear ' +
+      'written, by id, and under it a JSON line — {in, entities, aliases, ' +
+      'deleted} — so the eids this call minted can be used in the next one ' +
+      'without reading the sentence. graph_query reads the data back. One ' +
+      'bundle may wear ' +
       "two apps' components at once — an entity spans apps — and each " +
       'component is written to the app that declares it; a shared one goes to ' +
       'the app you name, else the app where that entity already lives. The ' +
@@ -2392,7 +2414,7 @@ export let TOOLS: Tool[] = [
         await titling(ctx.dir, ctx.person),
       )
       return {
-        text: wrote(out.body, out.where),
+        ...wrote(out.body, out.where),
         space: named?.space ?? whichSpace(reach),
       }
     },
