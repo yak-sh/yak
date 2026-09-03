@@ -998,6 +998,40 @@ export type PropType =
   | { eid: string; death: Death }
   | { text: string }
 
+// One column's type in a word an app author already knows — the five a
+// vocab.json may spell (store/vocab.ts TYPES), plus `eid` for a reference and
+// the values themselves for a closed set. The internal spellings collapse:
+// a body and a saved query are text, a priority is a number.
+export let typeName = (t: PropType): string =>
+  typeof t == 'string'
+    ? t == 'body' || t == 'query' ? 'text' : t == 'priority' ? 'number' : t
+    : 'enum' in t
+    ? t.enum.join('|')
+    : 'eid' in t
+    ? 'eid'
+    : 'text'
+
+// A component's whole shape, said in one line: `attachment has blob (eid),
+// mime (text), name (text)`. Every unknown-column refusal carries it, at the
+// write door and the filter door alike, because a refusal that names only what
+// it did not understand teaches nothing — the seventh user test learned
+// `blob` by guessing five times and still read `bytes` as the bytes
+// (C-32675 items 2 and 3). `type` is how the caller's vocabulary answers what
+// a column is; a column it cannot type says its name alone.
+export let shapeOf = (
+  name: string,
+  cols: readonly string[],
+  type: (col: string) => PropType | undefined = () => undefined,
+): string => {
+  let said = cols.map((col) => {
+    let t = type(col)
+    return t ? `${col} (${typeName(t)})` : col
+  })
+  return said.length
+    ? `${name} has ${said.join(', ')}`
+    : `${name} has no columns`
+}
+
 export let verdictName = (verdict?: string | null) =>
   String(verdict ?? '').replaceAll('_', ' ')
 

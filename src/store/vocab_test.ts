@@ -147,6 +147,23 @@ Deno.test('a store speaks its own word: write it, filter it, lose it', async () 
   // A row wearing the store's own word says that word: `recipe` is the most
   // specific thing about it, where `doc` is the title it also carries.
   assertEquals(rows[0].kind, 'recipe')
+  // A word the store DOES know, asked wrong: the refusal names the columns
+  // this store declared, with their types, at both doors — the app's own
+  // vocabulary teaches its shape the way the platform's does (C-32675 item 3).
+  assertEquals(
+    assertThrows(
+      () => mutate(db, [{ eid, name: 'recipe', comp: { minutes: 20 } }]),
+      Error,
+    ).message,
+    'unknown column: recipe.minutes — recipe has title (text), ' +
+      'serves (number)',
+  )
+  assertEquals(
+    await query(db, '?.recipe.minutes=20').then(() => '').catch((e) =>
+      (e as Error).message
+    ),
+    'no such prop: .recipe.minutes — recipe has title (text), serves (number)',
+  )
   // And the row dies with its entity, like every other component's.
   mutate(db, [{ eid, name: 'entity', comp: null }])
   assertEquals(eager(db, eid).recipe, undefined)

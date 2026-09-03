@@ -20,6 +20,7 @@ import {
   sessionFacetNames,
   sessionOf,
   settled,
+  shapeOf,
   type Snapshot,
   stamped,
   statuses,
@@ -910,7 +911,15 @@ export let param = (arg: string): Param | null => {
   let p: Param
   if (b) {
     if (!(b in (comps[a] ?? {}))) {
-      throw new Error(`no such prop: .${a}.${b}`)
+      // The same teaching the graph doors give (db.ts admitted, query.ts
+      // groupsOf): a refusal names the component's columns and their types.
+      throw new Error(
+        `no such prop: .${a}.${b}${
+          comps[a]
+            ? ` — ${shapeOf(a, Object.keys(comps[a]), (col) => comps[a][col])}`
+            : ''
+        }`,
+      )
     }
     p = { comp: a, prop: b, value: raw }
   } else {

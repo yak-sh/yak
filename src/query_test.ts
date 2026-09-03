@@ -269,7 +269,19 @@ Deno.test('query: a trailing bang names a facet before its namesake prop', () =>
 
 Deno.test('query: bad tokens are loud, bare words are terms', () => {
   assertThrows(() => parseQuery('.hovercraft=eels'), Error, 'unknown prop')
-  assertThrows(() => parseQuery('.task.eels=9'), Error, 'no such prop')
+  // The refusal names what the component DOES have, with types, so a shape
+  // is learned once instead of guessed at (C-32675 item 3).
+  assertThrows(
+    () => parseQuery('.task.eels=9'),
+    Error,
+    'no such prop: .task.eels — task has priority (number), project (eid), ' +
+      'assignee (eid), domain (text), status (open|wip|done|cancelled)',
+  )
+  assertThrows(
+    () => parseQuery('.blob.data=x'),
+    Error,
+    'no such prop: .blob.data — blob has bytes (number)',
+  )
   assertEquals(parseQuery('sandwich')[0].op, 'text') // a term, not an error
   // Two presence filters run together: the refusal spells the fix, since
   // echoing the good half taught nobody about `&` (C-32624 item 6).

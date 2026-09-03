@@ -63,8 +63,10 @@ import {
   kindOrder,
   kindWord,
   propRenames,
+  type PropType,
   sessionComps,
   sessionFacetNames,
+  shapeOf,
   stamped,
   statusOf,
 } from './types.ts'
@@ -211,16 +213,23 @@ let routes: Record<string, readonly string[]> = Object.fromEntries(
 // worst let another store's filter parse and match nothing; no statement is
 // ever compiled against a table a store lacks (sql.ts `known` reads `comps`,
 // so these decline to the JS matcher, which reads the row's own components).
+// Kept WITH their types, because a refusal says the shape (typeAt below).
 let learned: Record<string, string[]> = {}
+let learnedTypes: Record<string, Record<string, PropType>> = {}
 
-export let learn = (vocab: Record<string, Record<string, unknown>>) => {
+export let learn = (vocab: Record<string, Record<string, PropType>>) => {
   for (let [name, cols] of Object.entries(vocab)) {
     if (name in routes) continue // the platform's word wins, always
-    learned[name] = [
-      ...new Set([...(learned[name] ?? []), ...Object.keys(cols)]),
-    ]
+    learnedTypes[name] = { ...learnedTypes[name], ...cols }
+    learned[name] = Object.keys(learnedTypes[name])
   }
 }
+
+// What one readable column IS, either vocabulary — the type an unknown-column
+// refusal spells beside its name.
+let typeAt = (comp: string, prop: string): PropType | undefined =>
+  comps[comp]?.[prop] ?? derivedProps[comp]?.[prop] ?? stamped[comp]?.[prop] ??
+    learnedTypes[comp]?.[prop]
 
 // The routing table as this reader sees it: the vocabulary, plus whatever
 // words the stores in this process have declared.
@@ -853,7 +862,15 @@ let groupsOf = (segs: string[]): Hop[] => {
     let own = routed(segs[i])
     if (own && i + 1 < segs.length) {
       let [a, b] = [segs[i], segs[i + 1]]
-      if (!own.includes(b)) throw new Error(`no such prop: .${a}.${b}`)
+      // The refusal names what IS there: one look, the whole shape (db.ts
+      // admitted() says the same thing at the write door).
+      if (!own.includes(b)) {
+        throw new Error(
+          `no such prop: .${a}.${b} — ${
+            shapeOf(a, own, (col) => typeAt(a, col))
+          }`,
+        )
+      }
       out.push({ comp: a, prop: b })
       i += 2
     } else {

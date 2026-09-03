@@ -61,7 +61,7 @@ to make again:
 
     await apply({
       entity: { eid: saved.aliases.$cake },
-      task: { status: 'open', priority: 1 },
+      task: { priority: 1 },
     })
 
     let toMake = await query('.task.status=open')
@@ -137,19 +137,34 @@ so the page's own downscale is the whole of it.
 
 ## The components an app has today
 
-The platform's own vocabulary, shared by every app:
+The platform's own vocabulary, shared by every app — each component with every
+column it carries, and what each column holds. A column is `text`, `number`,
+`bool`, `time`, `url`, an `eid` naming another entity, or a closed set of words.
+Name a column that isn't there and the refusal lists the ones that are, so the
+shape is one question, never five.
 
-- `doc` — `title`, `body`. The words a person reads; what `search` searches.
-- `task` — `status` (`open`, `wip`, `done`, `cancelled`), `priority`, `project`.
-  Anything with a state.
-- `project` — a thing others belong to, by `task.project`.
-- `comment` — `target`. A note aimed at another entity.
-- `web` — `url`. `attachment` (`mime`, `name`, `blob`), `blob` (`bytes`) and
-  `image` (`w`, `h`) — what `upload` writes about a file, above.
-- `archived` — the stamp that takes something out of the open list (`.archived=`
-  selects the ones without it).
-- `dependency` — how two entities relate: `{type, child}`, where type is one of
-  `contains`, `requires`, `about`, `references`, `supersedes`.
+- `doc` — `title` (text), `body` (text). The words a person reads; what `search`
+  searches.
+- `task` — `priority` (number), `project` (eid), `assignee` (eid), `domain`
+  (text). Anything with a state. Its `status` is READ, not written — `open`,
+  `wip`, `done` or `cancelled`, derived from the two marks below.
+- `completed` — `at` (time), `by` (eid). The mark that makes a task `done`; the
+  store fills both, so `completed: {}` is the whole write.
+- `cancelled` — `at` (time), `by` (eid), `reason` (text). Called off rather than
+  finished.
+- `project` — `color` (text). A thing others belong to, by `task.project`.
+- `comment` — `target` (eid). A note aimed at another entity.
+- `person` — no columns. Whoever wrote a row; their name is their `doc.title`.
+- `archived` — no columns. The stamp that takes something out of the open list
+  (`.archived=` selects the ones without it).
+- `web` — `url` (url). An address out on the web.
+- `blob` — `bytes` (number). A byte COUNT, not the bytes themselves.
+- `attachment` — `blob` (eid), `mime` (text), `name` (text). A file, as `upload`
+  writes it above.
+- `image` — `w` (number), `h` (number). The size of one.
+
+An edge is a sentence, not a column: `dependency` is `{type, child}`, where type
+is one of `contains`, `requires`, `about`, `references`, `supersedes`.
 
 ## Components of your own
 

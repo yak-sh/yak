@@ -1059,6 +1059,43 @@ Deno.test('a column naming nothing is refused, not silently defaulted', () => {
   assertEquals(comp(t, 'doc'), undefined)
 })
 
+// And the refusal says what IS there, with types: a shape learned in one
+// refusal instead of five probes, and `blob.bytes` readable as the COUNT it
+// is rather than the bytes (C-32675 items 2 and 3).
+Deno.test('an unknown column is answered with the component it named', () => {
+  let t = uid()
+  let why = (comp: Record<string, unknown>) => {
+    try {
+      apply(db, [{ eid: t, name: 'attachment', comp }])
+      return ''
+    } catch (e) {
+      return (e as Error).message
+    }
+  }
+  assertEquals(
+    why({ data: 'x' }),
+    'unknown column: attachment.data — attachment has blob (eid), ' +
+      'mime (text), name (text)',
+  )
+  // Every unknown word at once, and the shape once.
+  assertEquals(
+    why({ data: 'x', type: 'png' }),
+    'unknown columns: attachment.data, attachment.type — attachment has ' +
+      'blob (eid), mime (text), name (text)',
+  )
+  // A closed set spells its values; a component with nothing says so.
+  assertThrows(
+    () => apply(db, [{ eid: t, name: 'member', comp: { rank: 'owner' } }]),
+    Error,
+    'member has space (eid), person (eid), role (owner|editor|viewer)',
+  )
+  assertThrows(
+    () => apply(db, [{ eid: t, name: 'person', comp: { name: 'Marisol' } }]),
+    Error,
+    'unknown column: person.name — person has no columns',
+  )
+})
+
 // The renames table's write door: a change naming an old component/column is
 // rewritten to its current home before validation, so an old writer or stored
 // batch lands instead of being refused as unknown. Driven with a synthetic map

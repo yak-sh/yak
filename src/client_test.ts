@@ -300,8 +300,8 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
     ['.priority=2', { comp: 'task', prop: 'priority', value: 2 }],
     ['.priority=P0', { comp: 'task', prop: 'priority', value: 0 }],
     ['.task.priority=P1', { comp: 'task', prop: 'priority', value: 1 }],
-    ['.priority=banana', /priority is a number/],
-    ['.priority=P', /priority is a number/],
+    ['.priority=banana', /priority is a finite number/],
+    ['.priority=P', /priority is a finite number/],
     ['.pin.x=12', { comp: 'pin', prop: 'x', value: 12 }],
     ['.assignee=jeff', { comp: 'task', prop: 'assignee', value: 'jeff' }],
     // a shared ref name filters as any-of, but a WRITE must aim
@@ -319,7 +319,12 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
     // `.blocked-by=T-1` became part of the task's TITLE, no edge and no
     // error. No column is hyphenated, so nothing new resolves.
     ['.blocked-by=T-1', /unknown prop/],
-    ['.doc.nope=1', /no such prop/],
+    // The refusal names the component's columns and their types, the same
+    // sentence the graph doors answer with (C-32675 item 3).
+    [
+      '.doc.nope=1',
+      /^no such prop: \.doc\.nope — doc has title \(text\), body \(text\)$/,
+    ],
     // An optional enum clears on empty like any other scalar (T-16491).
     ['.venture.paused_from=', {
       comp: 'venture',
@@ -330,7 +335,15 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
 Deno.test('dot-param routing', () => {
   for (let [arg, want] of CASES) {
     if (want instanceof RegExp) {
-      assertThrows(() => param(arg), Error, undefined, arg)
+      // The WORDS, not just the throw: a refusal is read by whoever asked.
+      assertMatch(
+        String(
+          (assertThrows(() => param(arg), Error, undefined, arg) as Error)
+            .message,
+        ),
+        want,
+        arg,
+      )
     } else assertEquals(param(arg), want, arg)
   }
   assertEquals(param('bare word'), null)

@@ -31,6 +31,7 @@ import {
   type PropType,
   sessionActive,
   sessionComps,
+  shapeOf,
   SHORT,
   shortId,
   slugsOf,
@@ -4284,6 +4285,10 @@ let columnsOf = (db: Sql, table: string): Set<string> => {
 //   stored nowhere       → THROWS. `task.statuss` has no compatibility
 //     story: the wire used to take it, write the DEFAULT status, and
 //     answer 200, so a caller asking for `done` got `open` and success.
+// The throw names what IS known — the component's columns and their types
+// (types.ts shapeOf) — so one refusal teaches the shape. Naming only the
+// unknown word cost the seventh user test five probes per component and still
+// left `blob.bytes` read as the bytes (C-32675 items 2 and 3).
 // Components the wire may not create, patch, or DELETE, whoever the caller —
 // their whole data lives in `stamped` and is written ONLY by trusted server
 // code that writes the row by direct SQL and BROADCASTS the change, never
@@ -4382,6 +4387,12 @@ let admitted = (
     throw new Error(
       `unknown column${alien.length > 1 ? 's' : ''}: ${
         alien.map(([n]) => `${table}.${n}`).join(', ')
+      } — ${
+        shapeOf(
+          table,
+          cols,
+          (col) => typeAt(db, table, col) ?? stamped[table]?.[col],
+        )
       }`,
     )
   }
