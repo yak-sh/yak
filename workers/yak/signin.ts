@@ -11,12 +11,32 @@
 // A code is looked up by its ADDRESS and compared, so a wrong guess still
 // finds the row it is guessing at and spends one of its `tries`; a lookup by
 // digest would leave brute force uncounted.
+//
+// Asking is unauthenticated, so the ceiling is here rather than at the door
+// (T-33020): `mint` is the only way a `signin` row is ever written — the
+// component is wholly server-stamped and only the kernel flag opens the store
+// to it — so a limit here holds for every way in, and it is this platform's
+// auth policy, not something the shared graph kernel should carry. What the
+// door does with a refusal is the door's: it answers exactly what an accepted
+// ask answers and mails nothing, because a visible refusal would say whether
+// an address had been asked for.
 import type { Door } from './store.ts'
 
 // Ten minutes, five guesses: long enough to switch to the mail app, short
 // enough that a six-digit code is never worth grinding.
 export let LIFE = 10 * 60_000
 export let TRIES = 5
+
+// Three letters an hour to any one address. Signing in clears every row for
+// the address, so the count only ever reaches three for someone who asked and
+// never arrived — whose mail is broken, which a fourth code does not fix —
+// while a loop pointed at a stranger gets three letters an hour instead of as
+// many as it can ask for. A per-SOURCE ceiling is deliberately not here: the
+// address is what an email bomb is aimed at, and an IP is both meaningless
+// behind a shared egress and the zone's rate-limiting rules to bound, not this
+// worker's.
+export let SENDS = 3
+export let WINDOW = 60 * 60_000
 
 export type Signin = {
   entity: { eid: string }
@@ -64,7 +84,7 @@ let ask = async (store: Door, q: string) => {
   return r.json() as Promise<Record<string, unknown>[]>
 }
 
-// The whole entity goes, not just the component: a spent code leaves nothing
+// The whole entity goes, not just the component: a sign-in leaves nothing
 // behind. `tombstone` is the bundle's spelling of death (T-32429), so this
 // is one more bundle like every other write here.
 let forget = (store: Door, eids: string[]) =>
@@ -74,20 +94,37 @@ let forget = (store: Door, eids: string[]) =>
     })
     : Promise.resolve(null)
 
-// Every code standing for an address, newest first: `mint` clears the old
-// ones, so this is normally one row, and two racing asks still put the code
-// that was mailed last at the front.
-let pending = async (store: Door, email: string) =>
+// Every row ever written for an address, newest first. A row outlives the code
+// it carried: dead, it is the record that the letter went out, and that record
+// is what the ceiling counts.
+let sent = async (store: Door, email: string) =>
   ((await ask(store, `.signin.email=${encodeURIComponent(canon(email))}`))
     .filter((r) => r.signin) as unknown as Signin[])
     .sort((a, b) => b.signin.expires.localeCompare(a.signin.expires))
 
-// Mint a code for an address and return it for the mail seam to carry. Any
-// code already standing for that address dies here, so a person always has
-// exactly one live code and the newest mail is the one that works.
+// When the letter went out. `expires` is the code's death and LIFE is fixed,
+// so a row carries its own send time without a second column.
+let at = (r: Signin) => Date.parse(r.signin.expires) - LIFE
+
+// A code still worth typing: not expired, and not already out of guesses.
+let open = (r: Signin) =>
+  Date.parse(r.signin.expires) > Date.now() && (r.signin.tries ?? 0) < TRIES
+
+// Mint a code for an address and return it for the mail seam to carry, or null
+// when this address has had its letters for the hour — nothing minted, nothing
+// to mail. Codes already standing are left standing: the store keeps a mac and
+// not the digits, so a second ask cannot re-send the first letter's code, and
+// letting the first one live is what a slow letter needs. Rows that have
+// fallen out of the window are swept here; nothing else sweeps them.
 export let mint = async (store: Door, secret: string, email: string) => {
+  let rows = await sent(store, email)
+  let floor = Date.now() - WINDOW
+  await forget(
+    store,
+    rows.filter((r) => at(r) <= floor).map((r) => r.entity.eid),
+  )
+  if (rows.filter((r) => at(r) > floor).length >= SENDS) return null
   let code = digits()
-  await forget(store, (await pending(store, email)).map((r) => r.entity.eid))
   await apply(store, {
     entities: [{
       signin: {
@@ -101,28 +138,34 @@ export let mint = async (store: Door, secret: string, email: string) => {
   return code
 }
 
-// Spend a code. True only for the live code that belongs to this address,
-// and it is gone either way it ends: spent on success, spent on the last
-// guess. A wrong guess costs a try and leaves the rest.
+// Spend a code. True for any code still open on this address — several can
+// stand at once — and signing in ends the address's whole story: the codes and
+// the records that counted them go together, so a person who gets in starts
+// over with a full three.
+//
+// A wrong guess costs a try on EVERY open code, so five guesses is five
+// however many letters are in the inbox. A row out of tries opens nothing and
+// stays only as the record; burning one is what an attacker would do to buy
+// another letter, and it buys nothing.
 export let spend = async (
   store: Door,
   secret: string,
   email: string,
   code: string,
 ) => {
-  let [row] = await pending(store, email)
-  if (!row) return false
-  let dead = Date.parse(row.signin.expires) <= Date.now()
-  let right = row.signin.code == await mac(email, code, secret)
-  if (dead || right || (row.signin.tries ?? 0) + 1 >= TRIES) {
-    await forget(store, [row.entity.eid])
-    return right && !dead
+  let rows = await sent(store, email)
+  let live = rows.filter(open)
+  if (!live.length) return false
+  let want = await mac(email, code, secret)
+  if (live.some((r) => r.signin.code == want)) {
+    await forget(store, rows.map((r) => r.entity.eid))
+    return true
   }
   await apply(store, {
-    entities: [{
-      entity: { eid: row.entity.eid },
-      signin: { tries: (row.signin.tries ?? 0) + 1 },
-    }],
+    entities: live.map((r) => ({
+      entity: { eid: r.entity.eid },
+      signin: { tries: (r.signin.tries ?? 0) + 1 },
+    })),
   })
   return false
 }

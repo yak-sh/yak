@@ -10,8 +10,9 @@
 // directory itself is read back through the MCP graph tier as the owner of
 // `yak` — the one door into the meta store (probe.ts `meta`, T-32585).
 import { assert, assertEquals, assertMatch } from '@std/assert'
-import { slow } from '../../src/testing.ts'
-import { type Kernel, kernel, mailed, meta } from './probe.ts'
+import { slow, until } from '../../src/testing.ts'
+import { type Kernel, kernel, letters, mailed, meta } from './probe.ts'
+import { SENDS } from './signin.ts'
 
 let form = (
   k: Kernel,
@@ -89,11 +90,12 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assertMatch(second, new RegExp(email))
     assertEquals(/what should we call you/i.test(second), false)
 
-    // And they sign in on it. Asking while a code still stands buries that
-    // one (signin.ts mint), and spending the newest buries it too — the
-    // DELETE path both sign-in doors take, which a store raised from an older
-    // schema refused for everyone who had ever asked (T-32826). A name
-    // already chosen is not touched by the sign-in that follows.
+    // And they sign in on it. Asking while a code still stands leaves that one
+    // standing (signin.ts mint), and spending any of them buries every row the
+    // address has — the DELETE path the sign-in door takes, which a store
+    // raised from an older schema refused for everyone who had ever asked
+    // (T-32826). A name already chosen is not touched by the sign-in that
+    // follows.
     let anew = await form(k, '/login', { email })
     assertEquals(anew.status, 200)
     await anew.body?.cancel()
@@ -200,6 +202,41 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assertMatch(held, /^[0-9a-f]{64}$/)
     assert(!held.includes(live), 'the digits are nowhere in the row')
     assertEquals(await dir.query(`.mail.to_addr=${waiting}`), [])
+
+    // The ceiling on letters (T-33020). Asking is unauthenticated, so an
+    // address gets SENDS letters an hour and no more — and the ask over the
+    // ceiling answers what an accepted one answers, to the byte, mailing
+    // nothing. A refusal that showed would say somebody had been asking about
+    // this address, which is more than this door ever tells.
+    let bombed = `probe-${crypto.randomUUID().slice(0, 8)}@yaks.app`
+    let cards: string[] = []
+    for (let i = 0; i <= SENDS; i++) {
+      let r = await form(k, '/login', { email: bombed })
+      cards.push(`${r.status}\n${await r.text()}`)
+    }
+    assertEquals(new Set(cards).size, 1, 'the refusal is the acceptance')
+    // The log is the only witness that a letter went out, and it lags the
+    // response that sent it, so a letter to a FRESH address is the barrier:
+    // one line per letter in the order they were sent, so once this one shows,
+    // a fourth to `bombed` would have shown before it.
+    let barrier = `probe-${crypto.randomUUID().slice(0, 8)}@yaks.app`
+    await (await form(k, '/login', { email: barrier })).body?.cancel()
+    await mailed(k, barrier)
+    let posted = letters(k, bombed)
+    assertEquals(posted.length, SENDS)
+
+    // And nobody is locked out by their own retrying: every code that went out
+    // still opens the door, so a letter that arrived late is still worth
+    // typing. Signing in ends the address's story, count and all — the next
+    // ask mails again.
+    let firstCode = /\b(\d{6})\b/.exec(posted[0].subject)?.[1] ?? ''
+    let late = await form(k, '/login/code', { email: bombed, code: firstCode })
+    assertEquals(late.status, 303)
+    await late.body?.cancel()
+    await (await form(k, '/login', { email: bombed })).body?.cancel()
+    await until(() => letters(k, bombed).length > SENDS, {
+      label: 'a letter after signing in cleared the count',
+    })
 
     // The cookie is that person everywhere: an app route vouches for them.
     await dir.apply([

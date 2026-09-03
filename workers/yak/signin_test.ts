@@ -2,18 +2,31 @@
 // store through one Door, so a stub Door holds the rows and records the
 // bundles. What is proved here is what a workerd test cannot reach without
 // waiting ten minutes or forging a server-stamped column: a code dies of old
-// age, a code dies of too many guesses, and a code minted for one address
-// never opens another.
+// age, a code dies of too many guesses, a code minted for one address never
+// opens another, and an address gets three letters an hour — a window no test
+// can sit through, and a count nobody buys back by burning a code.
 import { assert, assertEquals, assertFalse } from '@std/assert'
-import { chose, mac, nameOf, personOf, spend, TRIES } from './signin.ts'
+import {
+  chose,
+  LIFE,
+  mac,
+  mint,
+  nameOf,
+  personOf,
+  SENDS,
+  spend,
+  TRIES,
+  WINDOW,
+} from './signin.ts'
 import type { Door } from './store.ts'
 
+let n = 0
 let row = (
   email: string,
   code: string,
   expires: string,
   tries = 0,
-) => ({ entity: { eid: 'e1' }, signin: { email, code, expires, tries } })
+) => ({ entity: { eid: `e${++n}` }, signin: { email, code, expires, tries } })
 
 let door = (rows: unknown[]) => {
   let wrote: Record<string, unknown>[] = []
@@ -40,6 +53,13 @@ let forgotten = (wrote: Record<string, unknown>[]) =>
       .some((e) => e.tombstone)
   )
 
+// The guess count each patched row was left holding.
+let tries = (wrote: Record<string, unknown>[]) =>
+  wrote.flatMap((b) =>
+    ((b as { entities?: { signin?: { tries?: number } }[] }).entities ?? [])
+      .map((e) => e.signin?.tries).filter((t) => t != null)
+  )
+
 Deno.test('the live code opens, and is spent', async () => {
   let d = door([row(ME, await mac(ME, '123456', SECRET), soon())])
   assert(await spend(d.at, SECRET, ME, '123456'))
@@ -50,25 +70,96 @@ Deno.test('a wrong guess costs a try, not the code', async () => {
   let d = door([row(ME, await mac(ME, '123456', SECRET), soon())])
   assertFalse(await spend(d.at, SECRET, ME, '654321'))
   assertFalse(forgotten(d.wrote))
-  assertEquals(
-    (d.wrote[0] as { entities: { signin: { tries: number } }[] })
-      .entities[0].signin.tries,
-    1,
-  )
+  assertEquals(tries(d.wrote), [1])
 })
 
-Deno.test('the last guess burns the code', async () => {
-  let d = door([
-    row(ME, await mac(ME, '123456', SECRET), soon(), TRIES - 1),
-  ])
+Deno.test('the last guess burns the code, and leaves its record', async () => {
+  let burnt = row(ME, await mac(ME, '123456', SECRET), soon(), TRIES - 1)
+  let d = door([burnt])
   assertFalse(await spend(d.at, SECRET, ME, '654321'))
-  assert(forgotten(d.wrote))
+  assertEquals(tries(d.wrote), [TRIES])
+  // The row stays: it is one of the three letters this hour, and burning a
+  // code is not how anyone buys a fourth.
+  assertFalse(forgotten(d.wrote))
+  // And it opens nothing now, right digits or not.
+  let after = door([{ ...burnt, signin: { ...burnt.signin, tries: TRIES } }])
+  assertFalse(await spend(after.at, SECRET, ME, '123456'))
+  assertEquals(after.wrote.length, 0)
 })
 
 Deno.test('an expired code opens nothing, right digits or not', async () => {
   let d = door([row(ME, await mac(ME, '123456', SECRET), past())])
   assertFalse(await spend(d.at, SECRET, ME, '123456'))
+  assertEquals(d.wrote.length, 0)
+})
+
+// Several codes can stand for one address at once, because the store keeps a
+// mac and never the digits: a second ask cannot re-send the first letter's
+// code, so the first letter is left working for whoever it reaches late.
+Deno.test('every standing code opens, and one guess costs them all', async () => {
+  let both = async () => [
+    row(ME, await mac(ME, '111111', SECRET), soon()),
+    row(ME, await mac(ME, '222222', SECRET), soon()),
+  ]
+  for (let code of ['111111', '222222']) {
+    let d = door(await both())
+    assert(await spend(d.at, SECRET, ME, code), code)
+    assert(forgotten(d.wrote))
+  }
+  let d = door(await both())
+  assertFalse(await spend(d.at, SECRET, ME, '333333'))
+  assertEquals(tries(d.wrote), [1, 1])
+})
+
+// The ceiling. A row outlives its code as the record that a letter went out,
+// and `expires` minus LIFE is when that was.
+let record = (ago: number) => ({
+  entity: { eid: `e${++n}` },
+  signin: {
+    email: ME,
+    code: 'x'.repeat(64),
+    expires: new Date(Date.now() - ago + LIFE).toISOString(),
+    tries: TRIES,
+  },
+})
+
+let minted = (wrote: Record<string, unknown>[]) =>
+  wrote.flatMap((b) =>
+    ((b as { entities?: { signin?: { code?: string } }[] }).entities ?? [])
+      .filter((e) => e.signin?.code)
+  )
+
+Deno.test('three letters an hour to one address, and no more', async () => {
+  let under = door([record(0), record(60_000)])
+  assert(await mint(under.at, SECRET, ME))
+  assertEquals(minted(under.wrote).length, 1)
+
+  let full = door(Array.from({ length: SENDS }, () => record(60_000)))
+  assertEquals(await mint(full.at, SECRET, ME), null)
+  assertEquals(minted(full.wrote).length, 0)
+  assertFalse(forgotten(full.wrote))
+})
+
+Deno.test('the window passes and the address may ask again', async () => {
+  let old = Array.from({ length: SENDS }, () => record(WINDOW + 60_000))
+  let d = door(old)
+  assert(await mint(d.at, SECRET, ME))
+  // Swept, since nothing else ever sweeps them.
   assert(forgotten(d.wrote))
+  assertEquals(minted(d.wrote).length, 1)
+})
+
+Deno.test('signing in clears the count', async () => {
+  let full = [
+    ...Array.from({ length: SENDS - 1 }, () => record(60_000)),
+    row(ME, await mac(ME, '123456', SECRET), soon()),
+  ]
+  let d = door(full)
+  assert(await spend(d.at, SECRET, ME, '123456'))
+  assertEquals(
+    (d.wrote[0] as { entities: unknown[] }).entities.length,
+    full.length,
+  )
 })
 
 Deno.test('a code belongs to its address', async () => {

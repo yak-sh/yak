@@ -3,7 +3,10 @@
 // answer — a person's eid — which every other part reads through `withAuth`.
 //
 // A person proves who they are by receiving mail: `POST /login` mints a
-// six-digit code (signin.ts) and hands it to the mail seam (mail.ts);
+// six-digit code (signin.ts) — up to three an hour for any one address, and
+// over that it mints nothing and mails nothing while answering the same card,
+// so the ceiling says nothing about the address (T-33020) — and hands it to
+// the mail seam (mail.ts);
 // `POST /login/code` spends it, finds or mints the person, and sets the
 // platform session cookie (src/token.ts). No password exists to lose. The code
 // card asks one thing about them, once and only while nobody has answered it:
@@ -365,6 +368,11 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   // stranger who wants that answer pays for it with a letter to the person
   // they are guessing at. Nothing else — whether an address has apps, spaces
   // or anything at all is still not a stranger's business.
+  //
+  // An address that has had its letters for the hour mints nothing (signin.ts
+  // SENDS) and this answers the card it always answers: same status, same
+  // bytes. A refusal that showed would say that somebody had been asking about
+  // this address, which is more than the door was ever willing to tell.
   if (path == '/login' && req.method == 'POST') {
     let email = canon(field('email'))
     let back = field('return') || null
@@ -372,13 +380,15 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       return askEmail(field('q') || null, back, undefined, 400)
     }
     let code = await mint(meta(env), secret(env), email)
-    await mail(env)({
-      to: email,
-      subject: `${code} is your yaks.app code`,
-      body: `Your yaks.app sign-in code is ${code}.\n\n` +
-        'It lasts ten minutes. If you did not ask for it, nothing has ' +
-        'happened and you can ignore this.',
-    })
+    if (code) {
+      await mail(env)({
+        to: email,
+        subject: `${code} is your yaks.app code`,
+        body: `Your yaks.app sign-in code is ${code}.\n\n` +
+          'It lasts ten minutes. If you did not ask for it, nothing has ' +
+          'happened and you can ignore this.',
+      })
+    }
     return askCode(
       email,
       field('q') || null,
