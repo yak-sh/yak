@@ -149,11 +149,18 @@
     },
     "plan": {
       "rank": 1035,
+      "stamped_rank": 380,
       "kind_rank": 395,
-      "cols": {
+      "stamped": {
         "tier": {
           "enum": "planTiers"
-        }
+        },
+        "customer": "text",
+        "subscription": "text",
+        "status": "text",
+        "until": "time",
+        "ending": "time",
+        "at": "time"
       }
     },
     "published": {

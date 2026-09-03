@@ -70,6 +70,18 @@ export type Env = {
   // half-attached.
   CF_ZONE?: string
   CF_HOSTNAMES_TOKEN?: string
+  // The paid tier (billing.ts, T-33125). STRIPE_KEY is the restricted API key
+  // checkout, the portal and one subscription read speak to Stripe with;
+  // STRIPE_WEBHOOK_SECRET is what the events Stripe posts are verified
+  // against. Both are secrets and both are the owner's to set (T-32760);
+  // unset, the doors say the paid tier is not switched on here rather than
+  // half-working. STRIPE_PRICE is the recurring price a subscription is for —
+  // not a secret, it rides wrangler.toml's `[vars]` beside the account tag —
+  // and STRIPE_API is the base URL a probe aims somewhere other than Stripe.
+  STRIPE_KEY?: string
+  STRIPE_WEBHOOK_SECRET?: string
+  STRIPE_PRICE?: string
+  STRIPE_API?: string
   // The single static token OpenAI's apps directory fetches to verify the
   // domain (index.ts serves it at /.well-known/openai-apps-challenge). A
   // secret so the open-source repo carries no token; unset, that path 404s.
@@ -77,6 +89,7 @@ export type Env = {
   // A part split into its own Worker, when it has been; absent, in-process.
   IDENTITY?: Fetcher
   MCP?: Fetcher
+  BILLING?: Fetcher
   DIRECTORY?: Fetcher
   APPS?: Fetcher
 }

@@ -430,9 +430,7 @@ pub(crate) fn baked() -> Vocab {
             ("stage".into(), PropType::Enum(vec!["pending".into(), "active".into(), "error".into()])),
             ("at".into(), PropType::Time),
         ]),
-        ("plan".into(), vec![
-            ("tier".into(), PropType::Enum(vec!["free".into(), "plus".into()])),
-        ]),
+        ("plan".into(), vec![]),
         ("meter".into(), vec![
             ("month".into(), PropType::Text),
             ("requests".into(), PropType::Number),
@@ -682,6 +680,15 @@ pub(crate) fn baked() -> Vocab {
             ("code".into(), PropType::Text),
             ("expires".into(), PropType::Time),
             ("tries".into(), PropType::Number),
+        ]),
+        ("plan".into(), vec![
+            ("tier".into(), PropType::Enum(vec!["free".into(), "plus".into()])),
+            ("customer".into(), PropType::Text),
+            ("subscription".into(), PropType::Text),
+            ("status".into(), PropType::Text),
+            ("until".into(), PropType::Time),
+            ("ending".into(), PropType::Time),
+            ("at".into(), PropType::Time),
         ]),
     ]);
     let prefix = HashMap::from([

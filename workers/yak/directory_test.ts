@@ -16,6 +16,7 @@ let space: Space = {
   home: null,
   title: 'jeff',
   tier: null,
+  plan: null,
   meter: null,
   told: false,
 }

@@ -34,6 +34,8 @@
 //                             address a person's apps live at
 //     /oauth/*                identity.ts: the OAuth 2.1 door for agents
 //     /.well-known/oauth-*    identity.ts: the provider's metadata
+//     /api/stripe/webhook     billing.ts: what Stripe says happened
+//     /api/billing/*          billing.ts: checkout and the customer portal
 //     /mcp, /api/*            mcp.ts (T-32329; a JSON 404 until then)
 //     anything else           ./public, else a soft 404
 //   <space>.yaks.app          apps.ts:
@@ -51,6 +53,7 @@
 //                             segment, the front page answers what is left
 //                             (T-33040)
 import * as apps from './apps.ts'
+import * as billing from './billing.ts'
 import * as dirPart from './directory.ts'
 import { directory, META_STORE, storeName } from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -83,6 +86,15 @@ let serve = async (req: Request, env: Env, r: Route) => {
     path.startsWith('/oauth/') || path.startsWith('/.well-known/oauth-')
   ) {
     return bound(env.IDENTITY, identity.fetch, env).fetch(req)
+  }
+  // Money, before the connector: `/api/*` at the apex is otherwise all
+  // mcp.ts's, and Stripe's webhook posts to `/api/stripe/webhook`, which
+  // would have reached a door that answers a JSON 404 to everything but
+  // `/mcp`. The checkout and portal doors sit under the same prefix because
+  // they are the same part (billing.ts) and are reachable only from a
+  // signed-in page — never from a tool answer (C-33033).
+  if (path.startsWith('/api/stripe/') || path.startsWith('/api/billing/')) {
+    return bound(env.BILLING, billing.fetch, env).fetch(req)
   }
   if (path == '/mcp' || path.startsWith('/api/')) {
     return bound(env.MCP, mcp.fetch, env).fetch(req)

@@ -142,20 +142,54 @@ struct Signin {
 }
 
 // What a space pays (D-32751): `free` is every space today — 5 apps, 50,000
-// app requests a month, 1 GB of data, 100 emails — and `plus` is the $5 tier
-// waiting on Stripe. Absent means free, so a space born before the word is on
-// the terms it always had.
+// app requests a month, 1 GB of data, 100 emails — and `plus` is the $4 tier
+// Stripe bills. Absent means free, so a space born before the word is on the
+// terms it always had.
 venum!("platform", "planTiers", 161, ["free", "plus"]);
 
-// What a space pays, and nothing else: one row on the space, so the tier is a
-// fact about the tenant rather than a column on every app in it. The platform
-// writes it — the usage sweep today, Stripe later — never the person whose
-// bill it is.
+// What a space pays, and what Stripe knows about it (D-32751, T-33125): one
+// row on the space, so the tier is a fact about the tenant rather than a
+// column on every app in it.
+//
+// WHOLLY STAMPED, and that is the point. `tier` is what usage.ts `ceilings()`
+// reads, so a column a client can write is a client that can give itself
+// `plus`. The platform writes this row — the usage sweep, and the Stripe
+// webhook (workers/yak/billing.ts) — and `admitted()` drops these columns off
+// any write that does not carry the kernel flag.
+//
+// The row is a FUNCTION of one Stripe subscription object, never a running
+// total of the events that arrived: `status` is Stripe's own word for that
+// subscription, `until` is the moment the current period is paid through, and
+// `ending` is set only when the subscription will not renew — so "cancelled,
+// but paid through the 14th" is one row to read rather than an inference.
+//
+// `at` is the moment of the Stripe event the row was derived from, and it is
+// what makes an at-least-once, out-of-order delivery safe: an event older
+// than `at` is dropped, and a subscription this row has already seen end is
+// never revived.
+//
+// `status` is Text and not a `Sel` on purpose. The set is Stripe's to change
+// — `paused` arrived after the others — and a status we could not spell would
+// be a refused write in the middle of somebody's billing, which is the one
+// place nothing may fail quietly.
 #[derive(Comp)]
-#[comp(plugin = "platform", rank = 1035, kind_rank = 395)]
+#[comp(plugin = "platform", rank = 1035, kind_rank = 395, stamped_rank = 380)]
 struct Plan {
+    #[stamped]
     #[col(sel = "planTiers")]
     tier: Sel,
+    #[stamped]
+    customer: Text,
+    #[stamped]
+    subscription: Text,
+    #[stamped]
+    status: Text,
+    #[stamped]
+    until: Time,
+    #[stamped]
+    ending: Time,
+    #[stamped]
+    at: Time,
 }
 
 // A calendar month's consumption, as Cloudflare measured it (D-32751 §Billing

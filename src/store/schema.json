@@ -157,7 +157,7 @@
   },
   {
     "kind": "exec",
-    "sql": "create table if not exists \"plan\" (\n    entity integer primary key references entity(id),\n    \"tier\" text\n  );"
+    "sql": "create table if not exists \"plan\" (\n    entity integer primary key references entity(id),\n    \"tier\" text,\n    \"customer\" text,\n    \"subscription\" text,\n    \"status\" text,\n    \"until\" text,\n    \"ending\" text,\n    \"at\" text\n  );"
   },
   {
     "kind": "exec",
@@ -740,6 +740,42 @@
     "table": "plan",
     "col": "tier",
     "sql": "alter table plan add column \"tier\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "plan",
+    "col": "customer",
+    "sql": "alter table plan add column \"customer\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "plan",
+    "col": "subscription",
+    "sql": "alter table plan add column \"subscription\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "plan",
+    "col": "status",
+    "sql": "alter table plan add column \"status\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "plan",
+    "col": "until",
+    "sql": "alter table plan add column \"until\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "plan",
+    "col": "ending",
+    "sql": "alter table plan add column \"ending\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "plan",
+    "col": "at",
+    "sql": "alter table plan add column \"at\" text"
   },
   {
     "kind": "addColumn",

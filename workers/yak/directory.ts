@@ -48,6 +48,21 @@ export type Meter = {
 }
 export type Tier = 'free' | 'plus'
 
+// What a space pays and what Stripe knows about it (platform.rs `Plan`,
+// billing.ts derives and writes it). The whole row, because the webhook reads
+// every column of it to decide whether an event is news: `at` is the moment of
+// the Stripe event that last wrote this, `status` is Stripe's own word, and
+// `ending` is set only when the subscription will not renew.
+export type Plan = {
+  tier: Tier
+  customer: string
+  subscription: string
+  status: string
+  until: string | null
+  ending: string | null
+  at: string
+}
+
 export type Space = {
   eid: string
   slug: string
@@ -56,6 +71,9 @@ export type Space = {
   // What this space pays (D-32751). Null for a space the sweep has not
   // reached yet, which means free — the terms every space is on today.
   tier: Tier | null
+  // The same row whole, for the one caller that needs every column of it
+  // (billing.ts). Null where no `plan` row has ever been written.
+  plan: Plan | null
   meter: Meter | null
   // Whether the agent has already been told where this space stands against
   // its ceilings (unseen.ts `ceiling`). The mark is `notified`, the same one
@@ -152,7 +170,15 @@ type Row = {
   email?: { address: string }
   alias?: { slug: string; slugs?: string | null }
   doc?: { title?: string }
-  plan?: { tier?: Tier | null }
+  plan?: {
+    tier?: Tier | null
+    customer?: string | null
+    subscription?: string | null
+    status?: string | null
+    until?: string | null
+    ending?: string | null
+    at?: string | null
+  }
   meter?: Partial<Meter>
   notified?: unknown
 }
@@ -285,12 +311,29 @@ export let stamp = async (env: Env, mutation: Mutation) => {
 // where there is a value.
 let ABOUT = '.doc?&.alias?&.meter?&.published?&.installed?'
 
+// The plan as a whole row, however little of it is written: a column nobody
+// has filled reads empty, the way `meterOf` does, so nothing downstream tests
+// for null twice.
+let planOf = (r: Row): Plan | null =>
+  r.plan
+    ? {
+      tier: r.plan.tier ?? 'free',
+      customer: r.plan.customer ?? '',
+      subscription: r.plan.subscription ?? '',
+      status: r.plan.status ?? '',
+      until: r.plan.until ?? null,
+      ending: r.plan.ending ?? null,
+      at: r.plan.at ?? '',
+    }
+    : null
+
 let spaceOf = (r: Row): Space => ({
   eid: r.entity.eid,
   slug: r.space!.slug,
   home: r.space!.home == null ? null : idOf(r.space!.home),
   title: r.doc?.title || r.space!.slug,
   tier: r.plan?.tier ?? null,
+  plan: planOf(r),
   meter: meterOf(r),
   told: r.notified != null,
 })
@@ -422,6 +465,18 @@ export let directory = (via: Fetcher, now = false) => {
     // Every app in a space, oldest first — the order they were made.
     apps: async (space: Space): Promise<App[]> =>
       (await query(`.app.space=${space.eid}&${ABOUT}`)).map(appOf),
+    // The space that pays as this Stripe customer (billing.ts). It is how a
+    // subscription event is attributed when its metadata does not say — a
+    // space keeps ONE customer for its whole life, so the answer is one space
+    // or nobody.
+    payer: async (customer: string) => {
+      let row = await one(
+        `.plan.customer=${
+          encodeURIComponent(customer)
+        }&.space!&.doc?&.meter?&.notified?`,
+      )
+      return row?.space ? spaceOf(row) : null
+    },
     // A space by eid, which is how an app names the space it belongs to.
     at: async (eid: string) => {
       let row = await one(`id=${eid}`)

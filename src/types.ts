@@ -578,9 +578,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     stage: { enum: hostnameStages },
     at: 'time',
   },
-  plan: {
-    tier: { enum: planTiers },
-  },
+  plan: {},
   meter: {
     month: 'text',
     requests: 'number',
@@ -867,6 +865,15 @@ export let stamped: Record<string, Record<string, PropType>> = {
     code: 'text',
     expires: 'time',
     tries: 'number',
+  },
+  plan: {
+    tier: { enum: planTiers },
+    customer: 'text',
+    subscription: 'text',
+    status: 'text',
+    until: 'time',
+    ending: 'time',
+    at: 'time',
   },
 }
 

@@ -964,7 +964,13 @@ pub static SCHEMA: &[SchemaOp] = &[
   );"#),
     SchemaOp::Exec(r#"create table if not exists "plan" (
     entity integer primary key references entity(id),
-    "tier" text
+    "tier" text,
+    "customer" text,
+    "subscription" text,
+    "status" text,
+    "until" text,
+    "ending" text,
+    "at" text
   );"#),
     SchemaOp::Exec(r#"create table if not exists "meter" (
     entity integer primary key references entity(id),
@@ -1150,6 +1156,12 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "report", col: "release", sql: r#"alter table report add column "release" text"# },
     SchemaOp::AddColumn { table: "report", col: "at", sql: r#"alter table report add column "at" text"# },
     SchemaOp::AddColumn { table: "plan", col: "tier", sql: r#"alter table plan add column "tier" text"# },
+    SchemaOp::AddColumn { table: "plan", col: "customer", sql: r#"alter table plan add column "customer" text"# },
+    SchemaOp::AddColumn { table: "plan", col: "subscription", sql: r#"alter table plan add column "subscription" text"# },
+    SchemaOp::AddColumn { table: "plan", col: "status", sql: r#"alter table plan add column "status" text"# },
+    SchemaOp::AddColumn { table: "plan", col: "until", sql: r#"alter table plan add column "until" text"# },
+    SchemaOp::AddColumn { table: "plan", col: "ending", sql: r#"alter table plan add column "ending" text"# },
+    SchemaOp::AddColumn { table: "plan", col: "at", sql: r#"alter table plan add column "at" text"# },
     SchemaOp::AddColumn { table: "meter", col: "month", sql: r#"alter table meter add column "month" text"# },
     SchemaOp::AddColumn { table: "meter", col: "requests", sql: r#"alter table meter add column "requests" real"# },
     SchemaOp::AddColumn { table: "meter", col: "rows_read", sql: r#"alter table meter add column "rows_read" real"# },
