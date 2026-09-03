@@ -264,19 +264,18 @@ taken:
 
     about accept alias anchor app apply architecture archived attachment
     attention bash blob blocked board brief bug call camera cancel cancelled
-    canvas card chat checkpoint claim client comment commit completed
-    conflict contains content created cursor decided delegates deliver
-    delivered design doc dream edge effect email entity entry error
-    exception exit favorite feedback fetch finding fixer fold fork
-    generation goal graph_query headers hook image imported installed knock
-    layout lease mail member memory message meta meter model nofix notice
-    notified noverify opaque opened output pane patch person persona pin
-    plan project prompt proposed published quarantined reads reasoning
-    recall recalled redaction references repo requires response result
-    resume review role run runner runtime satisfies session setting settled
-    shelf signin space spawn stderr stop_request subscription supersedes
-    supervises task task_context timeout tool updated usage venture verifier
-    wake wants web worked worktree yield
+    canvas card chat checkpoint claim client comment commit completed conflict
+    contains content created cursor decided delegates deliver delivered deploy
+    design doc dream edge effect email entity entry error exception exit
+    favorite feedback fetch finding fixer fold fork generation goal
+    graph_query headers hook image imported installed knock layout lease mail
+    member memory message meta meter model nofix notice notified noverify
+    opaque opened output pane patch person persona pin plan project prompt
+    proposed published quarantined reads reasoning recall recalled redaction
+    references repo requires response result resume review role run runner
+    runtime satisfies session setting settled shelf signin space spawn stderr
+    stop_request subscription supersedes supervises task task_context timeout
+    tool updated usage venture verifier wake wants web worked worktree yield
 
 Anything the columns don't cover still lives in `doc.body`: it is text, so
 markdown or JSON both keep there.
@@ -611,3 +610,9 @@ every page it serves, so a script error, a promise nobody caught, a refusal from
 `{message, stack?, url?, line?}` — but it rarely needs to.)
 
 Nothing is swallowed, so build for the person and fix what comes back.
+
+When the fix is the last version, take it: `app_versions` lists an app's last
+twenty deploys, newest first, with what changed in each, and `app_rollback` puts
+one back — every file of it, its components, its tools and its worker — as a NEW
+version, so a rollback can itself be rolled back. Only the files move; what the
+app has saved is never touched.

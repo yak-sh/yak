@@ -45,6 +45,27 @@ struct App {
     access: Sel,
 }
 
+// A deploy that happened, kept so one word puts a working app back (T-32886,
+// V-32361: error-correction over initial correctness). `files` is the
+// manifest — a JSON object of path to the SHA-256 of that file's bytes, never
+// the bytes, since the bytes are pinned content-addressed beside the app's
+// files and a version only names them; the vocabulary and the tools a version
+// pins are files too (`vocab.json`, `tools.json`), so they come back with it.
+// `worker` is Cloudflare's own name for the script this deploy uploaded, empty
+// where the app has no code of its own. An app keeps its last 20; older rows
+// are buried, which is why a deploy never removes bytes a kept version names.
+// Dies with its app; one row per (app, version).
+#[derive(Comp)]
+#[comp(plugin = "platform", rank = 1033, kind_rank = 405)]
+#[index(cols(app, version), unique)]
+struct Deploy {
+    #[col(eid = "app", death = "cascade")]
+    app: Ref,
+    version: Number,
+    files: Text,
+    worker: Text,
+}
+
 // A person's standing in a space — the one fact the kernel hands an app as
 // `x-yak-role`. Credentials are never here (D-32318 §Auth): identity is
 // platform-wide, membership is the space's. One row per (space, person).

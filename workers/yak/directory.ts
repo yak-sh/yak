@@ -128,6 +128,8 @@ type Row = {
     about?: string | null
   }
   installed?: { of?: Id | null; version?: number | null }
+  deploy?: { app: Id; version: number; files?: string; worker?: string }
+  created?: { at?: string }
   member?: { space: Id; person: Id; role: Role }
   email?: { address: string }
   alias?: { slug: string; slugs?: string | null }
@@ -298,6 +300,24 @@ export let appOf = (r: Row): App => ({
     : null,
 })
 
+// A deploy of an app, as versions.ts reads one: the manifest parsed, since
+// the store holds it as the text it is. A row whose manifest cannot be read
+// is a version nothing can restore, so it answers no files rather than
+// throwing — the list still shows that the deploy happened.
+export let deployOf = (r: Row) => ({
+  eid: r.entity.eid,
+  version: r.deploy!.version ?? 0,
+  at: r.created?.at ?? '',
+  files: (() => {
+    try {
+      return JSON.parse(r.deploy!.files || '{}') as Record<string, string>
+    } catch {
+      return {}
+    }
+  })(),
+  worker: r.deploy!.worker ?? '',
+})
+
 // A Durable Object cannot be renamed, so an app's store must not be named by
 // anything a person may change: renaming `recipes` to `cookbook` would strand
 // every recipe in it. So the name is pinned at birth as the app's alias — the
@@ -405,6 +425,14 @@ export let directory = (via: Fetcher) => {
       }
       return out
     },
+    // Every deploy of an app, newest first — the versions app_versions lists
+    // and app_rollback picks from (versions.ts). Twenty at most, so the list
+    // is read whole and ordered here. Never cached: a deploy reads its own
+    // versions back the moment it writes one.
+    deploys: async (app: App) =>
+      (await query(`.deploy.app=${app.eid}&.created?`, true))
+        .map(deployOf)
+        .sort((a, b) => b.version - a.version),
     // Every space there is. Only the meter asks this (usage.ts): a tool
     // always works in one space, and a person only ever sees their own.
     all: async (): Promise<Space[]> =>

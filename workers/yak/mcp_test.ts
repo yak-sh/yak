@@ -60,6 +60,8 @@ slow(
         'app_new',
         'app_files',
         'app_deploy',
+        'app_versions',
+        'app_rollback',
         'app_set',
         'app_secret_set',
         'app_secret_list',
@@ -2312,6 +2314,94 @@ slow('an installed app is the installer own copy, data and all', async () => {
         Error,
       )).message,
       'was not installed from anywhere',
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
+// Putting an app back (T-32886, V-32361: error-correction over initial
+// correctness). The person's own repair when their assistant breaks a working
+// page is "put it back", so every deploy is a version and one word restores
+// one — as a NEW version, since history is never rewritten.
+slow('a deploy is a version, and one word puts it back', async () => {
+  let k = await kernel()
+  try {
+    let { cookie } = await seed(k, [{ slug: 'undo', apps: ['recipes'] }])
+    let agent = connector(k, cookie)
+    let app = { space: 'undo', app: 'recipes' }
+    let served = async (path: string) => {
+      let r = await k.at('undo.yaks.app', `/recipes/${path}`)
+      return { status: r.status, text: await r.text() }
+    }
+
+    // v1: a page that works.
+    await agent.tool('app_files', {
+      ...app,
+      files: [{ path: 'index.html', content: '<h1>lemon cake</h1>' }],
+    })
+    assertMatch(await agent.tool('app_deploy', app), /v1/)
+
+    // v2: the change that broke it, with a file that did not exist before.
+    await agent.tool('app_files', {
+      ...app,
+      files: [
+        { path: 'index.html', content: '<h1>OOPS</h1>' },
+        { path: 'broken.js', content: 'throw new Error("no")' },
+      ],
+    })
+    assertMatch(await agent.tool('app_deploy', app), /v2/)
+    assertStringIncludes((await served('')).text, 'OOPS')
+
+    // What it has to pick from: newest first, with what each deploy changed.
+    let list = await agent.tool('app_versions', app)
+    assertStringIncludes(list, 'undo/recipes: 2 versions')
+    // When it went out, off the row's own created stamp.
+    assertMatch(list, /- v2 \(live\) 20\d\d-\d\d-\d\dT/)
+    assertStringIncludes(list, 'added broken.js, changed index.html')
+
+    // One word. It names what came back and where, and goes out as v3.
+    let back = await agent.tool('app_rollback', app)
+    assertStringIncludes(back, 'put undo/recipes back to v1, live now as v3')
+    assertStringIncludes(back, 'https://undo.yaks.app/recipes/')
+    assertStringIncludes(back, 'changed index.html, removed broken.js')
+
+    // The page is v1's own bytes again — the kernel adds its reporter to
+    // every page it serves (apps.ts), so the bytes are read back as the file
+    // and seen in what it serves — and the file v2 added is gone.
+    assertEquals(
+      await agent.tool('app_files', { ...app, op: 'read', path: 'index.html' }),
+      '<h1>lemon cake</h1>',
+    )
+    assertStringIncludes((await served('')).text, '<h1>lemon cake</h1>')
+    assertEquals((await served('broken.js')).status, 404)
+
+    // History is not rewritten: three versions, and v2 is still there to go
+    // forward to by name.
+    let after = await agent.tool('app_versions', app)
+    assertStringIncludes(after, 'undo/recipes: 3 versions')
+    assertStringIncludes(after, 'v3 (live)')
+    assertMatch(
+      await agent.tool('app_rollback', { ...app, version: 2 }),
+      /put undo\/recipes back to v2, live now as v4/,
+    )
+    assertStringIncludes((await served('')).text, 'OOPS')
+    assertEquals((await served('broken.js')).status, 200)
+
+    // A version it never had is a refusal that says which it keeps, and the
+    // bytes a version pins are the platform's business, never a file the
+    // person wrote.
+    assertStringIncludes(
+      (await assertRejects(
+        () => agent.tool('app_rollback', { ...app, version: 9 }),
+        Error,
+      )).message,
+      'no v9 of undo/recipes — it keeps v4, v3, v2, v1',
+    )
+    assertEquals(
+      (await agent.tool('app_files', { ...app, op: 'list' })).split('\n')
+        .sort(),
+      ['broken.js', 'index.html'],
     )
   } finally {
     await k.stop()

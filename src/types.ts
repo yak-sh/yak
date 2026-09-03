@@ -565,6 +565,12 @@ export let comps: Record<string, Record<string, PropType>> = {
     of: { eid: 'app', death: 'detach' },
     version: 'number',
   },
+  deploy: {
+    app: { eid: 'app', death: 'cascade' },
+    version: 'number',
+    files: 'text',
+    worker: 'text',
+  },
   plan: {
     tier: { enum: planTiers },
   },
@@ -628,6 +634,7 @@ export let indexes: Record<string, Idx[]> = {
   space: [{ cols: ['slug'], unique: true }],
   app: [{ cols: ['space', 'slug'], unique: true }],
   published: [{ cols: ['name'], unique: true }],
+  deploy: [{ cols: ['app', 'version'], unique: true }],
   member: [{ cols: ['space', 'person'], unique: true }],
 }
 
@@ -895,6 +902,7 @@ export let kindOrder = [
   'space',
   'plan',
   'app',
+  'deploy',
   'member',
   'signin',
 ]

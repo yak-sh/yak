@@ -42,6 +42,28 @@
         }
       ]
     },
+    "deploy": {
+      "rank": 1033,
+      "kind_rank": 405,
+      "cols": {
+        "app": {
+          "eid": "app",
+          "death": "cascade"
+        },
+        "version": "number",
+        "files": "text",
+        "worker": "text"
+      },
+      "indexes": [
+        {
+          "cols": [
+            "app",
+            "version"
+          ],
+          "unique": true
+        }
+      ]
+    },
     "installed": {
       "rank": 1032,
       "cols": {

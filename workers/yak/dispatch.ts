@@ -295,6 +295,14 @@ let sent = (env: Env, path: string, init: RequestInit) =>
 // and an outside call and small enough that a loop is stopped rather than
 // billed
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/custom-limits/).
+//
+// What it ANSWERS is Cloudflare's own name for this release of the script,
+// which a deploy keeps beside its file manifest (versions.ts). The account
+// API has spelled that several ways — a version id on the versioned upload
+// door, a deployment id and an etag on this one — so whichever it hands back
+// is read, and none of them is what a rollback restores FROM: putting an app
+// back re-uploads the worker.js its version pinned, so it never depends on
+// Cloudflare having kept anything.
 export let upload = async (env: Env, store: string, source: string) => {
   let body = new FormData()
   body.append(
@@ -317,9 +325,23 @@ export let upload = async (env: Env, store: string, source: string) => {
     )
   module_('entry.js', SHIM)
   module_('worker.js', source)
-  return answered(
-    await sent(env, `/${scriptName(store)}`, { method: 'PUT', body }),
+  return named(
+    await answered(
+      await sent(env, `/${scriptName(store)}`, {
+        method: 'PUT',
+        body,
+      }),
+    ),
   )
+}
+
+// The release id out of whatever the API answered, and '' when it named none.
+let named = (result: unknown) => {
+  let r = (result ?? {}) as Record<string, unknown>
+  for (let k of ['version_id', 'deployment_id', 'etag']) {
+    if (typeof r[k] == 'string' && r[k]) return r[k]
+  }
+  return ''
 }
 
 // The app's worker gone, when its worker.js is (or when the app is). A

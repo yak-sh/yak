@@ -1048,6 +1048,9 @@ export let derived = [
   // references by death word, so all three derive.
   'space',
   'app',
+  // A deploy of an app (T-32886): one {eid} reference by death word, a
+  // number and two nullable texts, so it derives.
+  'deploy',
   'member',
   // An app offered by name and an app that took one (T-32888, T-32889):
   // nullable text/real columns and one {eid} reference by death word, so both

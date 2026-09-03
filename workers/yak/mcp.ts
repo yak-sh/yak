@@ -138,7 +138,10 @@ keeps everything they saved. Look before you build something somebody has
 already made.
 
 Whatever breaks — a page's own error, a refused write, a request that failed
-— arrives at the end of a later reply, once. Fix what you see.`
+— arrives at the end of a later reply, once. Fix what you see. And when a
+change of yours is what broke it, or they simply want it back: app_rollback
+puts every file of an earlier deploy back and releases it as a new version,
+and app_versions is the list to pick from.`
 
 // The resources this door offers. The guide is how an app is built here, and
 // how its pages save and list through the client the kernel serves them

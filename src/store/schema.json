@@ -133,6 +133,10 @@
   },
   {
     "kind": "exec",
+    "sql": "create table if not exists \"deploy\" (\n    entity integer primary key references entity(id),\n    \"app\" integer references entity(id),\n    \"version\" real,\n    \"files\" text,\n    \"worker\" text\n  );"
+  },
+  {
+    "kind": "exec",
     "sql": "create table if not exists \"member\" (\n    entity integer primary key references entity(id),\n    \"space\" integer references entity(id),\n    \"person\" integer references entity(id),\n    \"role\" text\n  );"
   },
   {
@@ -590,6 +594,30 @@
     "table": "app",
     "col": "access",
     "sql": "alter table app add column \"access\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "deploy",
+    "col": "app",
+    "sql": "alter table deploy add column \"app\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "deploy",
+    "col": "version",
+    "sql": "alter table deploy add column \"version\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "deploy",
+    "col": "files",
+    "sql": "alter table deploy add column \"files\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "deploy",
+    "col": "worker",
+    "sql": "alter table deploy add column \"worker\" text"
   },
   {
     "kind": "addColumn",
@@ -1451,6 +1479,14 @@
   {
     "kind": "exec",
     "sql": "create index if not exists installed_of on \"installed\" (\"of\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists deploy_app_version on \"deploy\" (\"app\", \"version\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists deploy_app on \"deploy\" (\"app\");"
   },
   {
     "kind": "exec",

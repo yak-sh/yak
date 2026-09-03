@@ -51,6 +51,7 @@ import type { EntityLiteral } from '../../src/mutation.ts'
 import { type Door, storeOf } from './store.ts'
 import { noted, refusal, serving } from './unseen.ts'
 import { full } from './usage.ts'
+import { sha256 } from './versions.ts'
 
 // The runtime's streaming HTML rewriter, the slice this file asks for, so
 // `deno check` reads the Worker without @cloudflare/workers-types (env.ts).
@@ -322,14 +323,10 @@ let broken = (body: string) => {
 // else is not what someone meant to put in an app's graph.
 let MAX = 20 * 1024 * 1024
 
-// The bytes' own name: their SHA-256 in hex, the content address the fleet's
-// attachments already use (src/blob.ts). It is the object's key AND the
-// entity's eid, so the same photo sent twice is one object and one row.
-let sha256 = async (bytes: Uint8Array<ArrayBuffer>) =>
-  [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-
+// The bytes' own name (versions.ts `sha256`, the content address a version's
+// manifest is made of) is the object's key AND the entity's eid here, so the
+// same photo sent twice is one object and one row.
+//
 // The app's one use of those bytes, addressed off them: derived, so an upload
 // finds its own attachment row without reading for it, and the same file sent
 // again is that row renamed.

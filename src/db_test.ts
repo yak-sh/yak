@@ -547,6 +547,7 @@ let contracts = [
   // the platform directory (D-32318)
   contract('space', 'home', 'app'),
   contract('app', 'space', 'space'),
+  contract('deploy', 'app', 'app'),
   contract('member', 'space', 'space', (d) => ({
     person: tag(d, 'person'),
   })),

@@ -109,6 +109,8 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'app.space',
       'member.space',
       'member.person',
+      // a deploy is a version OF an app, so it dies with it (T-32886)
+      'deploy.app',
       // an edge dies with either endpoint (D-23820): the reverse-index reap
       'edge.from',
       'edge.to',

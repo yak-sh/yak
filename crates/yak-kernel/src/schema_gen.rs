@@ -922,6 +922,13 @@ pub static SCHEMA: &[SchemaOp] = &[
     "version" real,
     "access" text
   );"#),
+    SchemaOp::Exec(r#"create table if not exists "deploy" (
+    entity integer primary key references entity(id),
+    "app" integer references entity(id),
+    "version" real,
+    "files" text,
+    "worker" text
+  );"#),
     SchemaOp::Exec(r#"create table if not exists "member" (
     entity integer primary key references entity(id),
     "space" integer references entity(id),
@@ -1105,6 +1112,10 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "app", col: "space", sql: r#"alter table app add column "space" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "app", col: "version", sql: r#"alter table app add column "version" real"# },
     SchemaOp::AddColumn { table: "app", col: "access", sql: r#"alter table app add column "access" text"# },
+    SchemaOp::AddColumn { table: "deploy", col: "app", sql: r#"alter table deploy add column "app" integer references entity(id)"# },
+    SchemaOp::AddColumn { table: "deploy", col: "version", sql: r#"alter table deploy add column "version" real"# },
+    SchemaOp::AddColumn { table: "deploy", col: "files", sql: r#"alter table deploy add column "files" text"# },
+    SchemaOp::AddColumn { table: "deploy", col: "worker", sql: r#"alter table deploy add column "worker" text"# },
     SchemaOp::AddColumn { table: "member", col: "space", sql: r#"alter table member add column "space" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "member", col: "person", sql: r#"alter table member add column "person" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "member", col: "role", sql: r#"alter table member add column "role" text"# },
@@ -1280,6 +1291,8 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::Exec(r#"create index if not exists app_space on "app" ("space");"#),
     SchemaOp::Exec(r#"create unique index if not exists published_name on "published" ("name");"#),
     SchemaOp::Exec(r#"create index if not exists installed_of on "installed" ("of");"#),
+    SchemaOp::Exec(r#"create unique index if not exists deploy_app_version on "deploy" ("app", "version");"#),
+    SchemaOp::Exec(r#"create index if not exists deploy_app on "deploy" ("app");"#),
     SchemaOp::Exec(r#"create unique index if not exists member_space_person on "member" ("space", "person");"#),
     SchemaOp::Exec(r#"create index if not exists member_space on "member" ("space");"#),
     SchemaOp::Exec(r#"create index if not exists member_person on "member" ("person");"#),

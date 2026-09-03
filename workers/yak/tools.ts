@@ -3,7 +3,9 @@
 // (space, app) the caller names and belongs to, each an IO over the Store
 // object's /apply and /query doors with the caller vouched server-side; and
 // the platform sugar, the least that makes an app: space_new, app_new,
-// app_files, app_deploy, app_set, app_delete, app_errors, app_list, the three
+// app_files, app_deploy, app_versions and app_rollback — the deploys an app
+// keeps and the word that puts one back (versions.ts, T-32886) — app_set,
+// app_delete, app_errors, app_list, the three
 // that give an app's own worker a key it alone can read — app_secret_set,
 // app_secret_list, app_secret_remove, whose values never enter this graph
 // (T-32779) — the three that make an app a plugin: app_publish offers it to
@@ -14,8 +16,7 @@
 // store, its own R2 prefix, its own worker script, nothing shared but the
 // code — pinned to the version it took, and app_update moves that pin,
 // keeping the installer's data (T-32889) — and the two that say who an app
-// is for: member_add and
-// member_remove, the space
+// is for: member_add and member_remove, the space
 // owner's guest list, beside `app.access`, which is what an app lets a
 // stranger with the link do (T-32504). A tool is one row here — name, what it
 // does, its input as JSON Schema, and `run` — and the door (mcp.ts) reads the
@@ -32,7 +33,8 @@
 // an owner or editor of the space writes, a member reads, nobody else is
 // answered at all. A write speaks the wire and nothing else — the entity
 // bundle, or a flat Change batch. A deploy in v1 is a version bump, since an
-// app's files serve live from its blob store.
+// app's files serve live from its blob store — and the version it bumps to is
+// kept, files and all, so app_rollback can put it back.
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
 import {
@@ -84,6 +86,16 @@ import {
   spent,
   standing,
 } from './usage.ts'
+import {
+  manifest,
+  own,
+  record,
+  restore,
+  snapshot,
+  type Version,
+  versions,
+  whatChanged,
+} from './versions.ts'
 
 export type Ctx = { env: Env; dir: Directory; person: string }
 type Args = Record<string, unknown>
@@ -369,7 +381,9 @@ let fits = async (
 // version means: the components its vocab.json declares planted where the
 // space says each word lives, the tools its tools.json declares handed to the
 // store, its worker.js uploaded to the dispatch namespace, and the version
-// moved on. The answer is every line said BENEATH the door's own sentence.
+// moved on — recorded as a version of its own (versions.ts), so app_rollback
+// can put this release back later. The answer is every line said BENEATH the
+// door's own sentence.
 let released = async (
   ctx: Ctx,
   space: Space,
@@ -474,22 +488,26 @@ let released = async (
   // release stands and says what is missing rather than failing (T-32781).
   let workerKey = fileKey(space, app, 'worker.js')
   let ran = ''
+  let worker = ''
   if (!(await blobs.has(workerKey))) {
     if (ctx.env.CF_WORKERS_TOKEN) await drop(ctx.env, storeName(space, app))
   } else if (!ctx.env.CF_WORKERS_TOKEN) ran = `\n${NEEDS_TOKEN}`
   else {
-    await upload(
+    worker = await upload(
       ctx.env,
       storeName(space, app),
       new TextDecoder().decode(await blobs.get(workerKey)),
     )
     ran = '\nworker: worker.js answers first; a 404 from it serves the files'
   }
+  // What this release IS, kept so one word puts it back (T-32886): the files
+  // as a manifest of path to the name of their bytes, those bytes pinned
+  // beside them, and Cloudflare's name for the script this uploaded. The
+  // app's version counter and the row that records the version move together.
+  let prefix = fileKey(space, app, '')
+  let pinned = await snapshot(blobs, prefix)
   let version = (app.version ?? 0) + 1
-  await ctx.dir.apply(
-    { entities: [{ entity: { eid: app.eid }, app: { version } }] },
-    vouched(who),
-  )
+  await record(ctx.dir, blobs, prefix, who, app, version, pinned, worker)
   return {
     version,
     said: ran +
@@ -515,17 +533,15 @@ let released = async (
   }
 }
 
-// The bytes an app's OWN pages are made of: its files, minus the ones its
-// visitors uploaded. `blobs/` is where a page's own bytes land (apps.ts
-// `blobKey`) — a photo somebody picked, which is the app's DATA and never
-// travels with its code.
-let CODE = 'blobs/'
-
 // One app's code copied ONTO another's, which is what an install is and what
 // an update is again: every file of the source written under the target's own
 // prefix, and every file the target has that the source does not, gone — so
 // what serves after is what the publisher wrote, and nothing of a version
-// before it lingers. The target's `blobs/` are untouched: they are its own.
+// before it lingers. What the platform keeps beside an app's files travels
+// with neither (versions.ts `own`): `blobs/` is where a page's own bytes land
+// (apps.ts `blobKey`) — a photo somebody picked, the app's DATA — and
+// `versions/` is one app's own deploy history, which the copy earns for
+// itself on the release that follows.
 let copied = async (
   ctx: Ctx,
   from: { space: Space; app: App },
@@ -535,7 +551,7 @@ let copied = async (
   let there = fileKey(from.space, from.app, '')
   let here = fileKey(onto.space, onto.app, '')
   let paths = (keys: string[], prefix: string) =>
-    keys.map((k) => k.slice(prefix.length)).filter((p) => !p.startsWith(CODE))
+    own(keys.map((k) => k.slice(prefix.length)))
   let code = paths(await blobs.list(there), there)
   let had = paths(await blobs.list(here), here)
   for (let path of code) {
@@ -833,8 +849,11 @@ export let TOOLS: Tool[] = [
       let at = (path: string) => fileKey(space, app, path).slice(prefix.length)
       if (op == 'list') {
         let keys = await blobs.list(prefix)
+        // The app's OWN files: what the platform keeps beside them — the
+        // bytes a page uploaded, the bytes a version pins — is addressed by
+        // its content and was never a file anyone wrote (versions.ts `own`).
         return {
-          text: keys.map((k) => k.slice(prefix.length)).join('\n') ||
+          text: own(keys.map((k) => k.slice(prefix.length))).join('\n') ||
             '(no files)',
           space,
         }
@@ -888,7 +907,8 @@ export let TOOLS: Tool[] = [
       'reach the app, so the person and their agent act on the app through ' +
       "its own words. And a worker.js beside index.html becomes the app's " +
       'own server code: it answers every request that is not /api/ before ' +
-      'the files do, and whatever it answers 404 falls through to them.',
+      'the files do, and whatever it answers 404 falls through to them. ' +
+      'Every deploy is kept, so app_rollback can put this one back later.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP },
@@ -901,6 +921,110 @@ export let TOOLS: Tool[] = [
         text:
           `deployed ${space.slug}/${app.slug} v${version}: ${url(space, app)}` +
           said,
+        space,
+      }
+    },
+  },
+  {
+    name: 'app_versions',
+    description:
+      'Every deploy of the app, newest first, with when it went out and what ' +
+      'changed in it. Read it when the person says the app used to work, or ' +
+      'before putting it back, so you name the version they mean. The app ' +
+      'keeps its last 20.',
+    input: {
+      type: 'object',
+      properties: { space: SPACE, app: APP },
+      required: ['app'],
+    },
+    run: async (ctx, args) => {
+      let { space, app } = await inApp(ctx, args)
+      let all = await versions(ctx.dir, app)
+      if (!all.length) {
+        return {
+          text: `${space.slug}/${app.slug} has not been deployed`,
+          space,
+        }
+      }
+      return {
+        text: [
+          `${space.slug}/${app.slug}: ${all.length} ${
+            all.length == 1 ? 'version' : 'versions'
+          }`,
+          ...all.map((v, i) =>
+            `- v${v.version}${v.version == app.version ? ' (live)' : ''}${
+              v.at ? ` ${v.at}` : ''
+            } — ${whatChanged(all[i + 1]?.files ?? null, v.files)}`
+          ),
+        ].join('\n'),
+        space,
+      }
+    },
+  },
+  {
+    name: 'app_rollback',
+    description:
+      'Put the app back the way it was — every file of an earlier deploy, ' +
+      'its components, its tools and its own code with them. This is the ' +
+      'answer when the person says a change broke something or asks for it ' +
+      'back; you do not need to remember what you wrote. It goes out as a ' +
+      'NEW version, so nothing is lost and a rollback can itself be rolled ' +
+      'back. Leave version out for the deploy before the live one, or name ' +
+      'one off app_versions. Give the person the URL and tell them what came ' +
+      'back. Their data is never touched — only the files.',
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        version: {
+          type: 'number',
+          description:
+            'the version to go back to, off app_versions; left out, the one ' +
+            'before the live one',
+        },
+      },
+      required: ['app'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, who, store } = await inApp(ctx, args, true)
+      let all = await versions(ctx.dir, app)
+      let want: Version | undefined
+      if (args.version == null) {
+        // The one BEFORE the live one: the deploy that broke the page is the
+        // newest, so "put it back" means the one under it.
+        want = all[1]
+        if (!want) {
+          throw new Error(
+            `${space.slug}/${app.slug} has ${
+              all.length ? 'only one deploy' : 'no deploys'
+            } — there is nothing earlier to go back to`,
+          )
+        }
+      } else {
+        let n = Number(args.version)
+        want = all.find((v) => v.version == n)
+        if (!want) {
+          throw new Error(
+            `no v${args.version} of ${space.slug}/${app.slug} — it keeps ${
+              all.map((v) => `v${v.version}`).join(', ') || 'none'
+            }`,
+          )
+        }
+      }
+      let blobs = r2Blobs(ctx.env.BLOBS)
+      let prefix = fileKey(space, app, '')
+      let now = await manifest(blobs, prefix)
+      await restore(blobs, prefix, want.files)
+      // A rollback IS a release — of files that were live once — so the same
+      // door plants the vocabulary, the tools and the worker this version
+      // pinned, and records it as a NEW version. History is never rewritten.
+      let { version, said } = await released(ctx, space, app, who, store)
+      return {
+        text: `put ${space.slug}/${app.slug} back to v${want.version}, live ` +
+          `now as v${version}: ${url(space, app)} — ${
+            whatChanged(now, want.files)
+          }` + said,
         space,
       }
     },
@@ -1101,8 +1225,13 @@ export let TOOLS: Tool[] = [
       // the other order would leave an unnamed app's files and rows behind
       // for whatever is made at this address next to inherit.
       let blobs = r2Blobs(ctx.env.BLOBS)
-      let keys = await blobs.list(fileKey(space, app, ''))
+      let prefix = fileKey(space, app, '')
+      let keys = await blobs.list(prefix)
       for (let key of keys) await blobs.delete(key)
+      // Everything under the prefix goes; what the person is TOLD went is
+      // their own files, not the bytes a version pinned or a page uploaded
+      // (versions.ts `own`).
+      let wrote = own(keys.map((k) => k.slice(prefix.length))).length
       // And the app's own code, which is not in the bucket: a script left in
       // the dispatch namespace would still answer at an address nothing
       // stands at (dispatch.ts).
@@ -1121,8 +1250,8 @@ export let TOOLS: Tool[] = [
       }, vouched(who))
       if (declared) await toolsChanged(ctx, space)
       return {
-        text: `deleted ${space.slug}/${app.slug}: ${keys.length} ${
-          keys.length == 1 ? 'file' : 'files'
+        text: `deleted ${space.slug}/${app.slug}: ${wrote} ${
+          wrote == 1 ? 'file' : 'files'
         }, everything it saved, and ${url(space, app)} — all gone`,
         space,
       }
