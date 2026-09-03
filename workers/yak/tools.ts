@@ -9,7 +9,12 @@
 // (T-32779) — the three that make an app a plugin: app_publish offers it to
 // every space by a platform-wide name, app_unpublish withdraws the offer
 // without touching anyone who took it, and app_published is what is on offer
-// (T-32888) — and the two that say who an app is for: member_add and
+// (T-32888), and the two that take one: app_install copies a published
+// version into the caller's space as an ordinary app of theirs — its own
+// store, its own R2 prefix, its own worker script, nothing shared but the
+// code — pinned to the version it took, and app_update moves that pin,
+// keeping the installer's data (T-32889) — and the two that say who an app
+// is for: member_add and
 // member_remove, the space
 // owner's guest list, beside `app.access`, which is what an app lets a
 // stranger with the link do (T-32504). A tool is one row here — name, what it
@@ -32,6 +37,7 @@ import { r2Blobs } from '../../src/blobs_r2.ts'
 import { TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
 import {
   EXAMPLE,
+  grow,
   homed,
   type Homes,
   livesIn,
@@ -67,7 +73,7 @@ import { SLUG } from './route.ts'
 import { type Reach, read, written } from './reach.ts'
 import { mayWrite, reads, titling, vouched, type Who } from './session.ts'
 import { canon, nameOf, personOf } from './signin.ts'
-import { storeOf } from './store.ts'
+import { type Door, storeOf } from './store.ts'
 import { archive, cards, line, openIn, serve } from './unseen.ts'
 import {
   atCeiling,
@@ -319,6 +325,225 @@ let vocabs = async (ctx: Ctx, space: Space, app: App) => {
     return [one.slug, await r.json() as Vocab] as const
   }))
   return new Map(read)
+}
+
+// Where each word of the space LIVES, oldest app first — the first app to
+// declare a word is its home (T-32728), and a word THIS app already declares
+// stays its own, because a store's vocabulary is additive forever. `said` is
+// every app's manifest beside it, since growing a home means writing the
+// home's whole manifest back.
+let homesIn = async (ctx: Ctx, space: Space, app: App) => {
+  let said = await vocabs(ctx, space, app)
+  let homes: Homes = {}
+  for (let [slug, cols] of said) {
+    if (slug == app.slug) continue
+    for (let [name, one] of Object.entries(cols)) {
+      if (name in homes || name in (said.get(app.slug) ?? {})) continue
+      homes[name] = { at: slug, cols: one }
+    }
+  }
+  return { said, homes }
+}
+
+// Whether a manifest can land on this app AT ALL, asked before anything moves
+// (app_update). The same two rules a deploy holds it to, both of which throw
+// rather than answer: a word another app in the space homes keeps that home's
+// column types (store/vocab.ts `homed`), and this app's own columns keep the
+// types their rows were written under (`grow`). Neither writes, so a refusal
+// leaves the app exactly as it was — code included.
+let fits = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  store: Door,
+  source: string,
+) => {
+  let split = homed(parseVocab(source), (await homesIn(ctx, space, app)).homes)
+  let r = await store('/vocab')
+  let mine = r.ok ? await r.json() as Vocab : {}
+  grow(mine, split.mine)
+}
+
+// A RELEASE, whichever door asked for it — app_deploy, app_install,
+// app_update. The app's files are already live; this is everything else a
+// version means: the components its vocab.json declares planted where the
+// space says each word lives, the tools its tools.json declares handed to the
+// store, its worker.js uploaded to the dispatch namespace, and the version
+// moved on. The answer is every line said BENEATH the door's own sentence.
+let released = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  who: Who,
+  store: Door,
+) => {
+  // The app's own components, if it declares any. A manifest the store
+  // refuses fails the release: the words and the tables must agree, and a
+  // half-planted vocabulary is what `unknown component` is made of.
+  let key = fileKey(space, app, 'vocab.json')
+  let blobs = r2Blobs(ctx.env.BLOBS)
+  let planted: string[] = []
+  let dropped: string[] = []
+  // What this manifest MOVED, which naming the components does not say: a
+  // renamed column arrives beside the old one, and the old one keeps every
+  // row already written under it (C-32652 item 4).
+  let added: string[] = []
+  let kept: string[] = []
+  // And the words this app USES rather than homes (T-32728).
+  let uses: Record<string, string> = {}
+  if (await blobs.has(key)) {
+    let next = parseVocab(new TextDecoder().decode(await blobs.get(key)))
+    // One word, one home: a word another app in the space already declares is
+    // that app's, so this release records a USE of it instead of planting a
+    // second table, and any column it adds grows the HOME's.
+    let { said, homes } = await homesIn(ctx, space, app)
+    let split = homed(next, homes)
+    uses = split.uses
+    // The home's table grows first: a use whose column the home does not have
+    // yet is not a use anyone can write until it does.
+    for (let [slug, grown] of Object.entries(split.grows)) {
+      let home = await ctx.dir.app(space, slug)
+      if (!home) continue
+      let whole: Vocab = { ...said.get(slug) }
+      for (let [name, cols] of Object.entries(grown)) {
+        whole[name] = { ...whole[name], ...cols }
+        for (let col of Object.keys(cols)) added.push(`${name}.${col}`)
+      }
+      await answer(
+        await storeOf(ctx.env.STORE, storeName(space, home))('/vocab', {
+          method: 'POST',
+          body: JSON.stringify(whole),
+        }, vouched(who)),
+      )
+    }
+    let mine = JSON.parse(
+      await answer(
+        await store('/vocab', {
+          method: 'POST',
+          body: JSON.stringify(split.mine),
+        }, vouched(who)),
+      ),
+    )
+    planted = mine.comps ?? []
+    dropped = mine.dropped ?? []
+    added = [...added, ...(mine.added ?? [])]
+    kept = mine.kept ?? []
+    await answer(
+      await store('/uses', {
+        method: 'POST',
+        body: JSON.stringify(uses),
+      }, vouched(who)),
+    )
+  }
+  // And the app's own MCP tools (tools.json, T-32685), read the same way and
+  // after the components, since a tool may write a word this very release
+  // planted. The manifest is replaced whole — a declaration holds no rows —
+  // so an app that deleted its tools.json releases none.
+  let toolsKey = fileKey(space, app, 'tools.json')
+  let sent = await blobs.has(toolsKey)
+    ? new TextDecoder().decode(await blobs.get(toolsKey))
+    : '{}'
+  // A `view` names a page in the app's OWN files (T-32687), so this is the one
+  // thing about the manifest the store cannot check: it holds the words, the
+  // blobs hold the pages. A view nobody deployed would be a tool whose answer
+  // renders nothing, which is worse than a refusal.
+  let missing: string[] = []
+  for (let file of viewsOf(sent)) {
+    if (!await blobs.has(fileKey(space, app, file))) missing.push(file)
+  }
+  if (missing.length) {
+    throw new Error(
+      `tools.json: ${missing.join(', ')} — a view names a page in this ` +
+        "app's own files; deploy the page beside index.html",
+    )
+  }
+  let tooled = JSON.parse(
+    await answer(
+      await store('/tools', { method: 'POST', body: sent }, vouched(who)),
+    ),
+  )
+  let declared: string[] = tooled.tools ?? []
+  // A tool list that moved is news to every agent connected who can reach this
+  // app (declared.ts, T-32686).
+  if (tooled.changed) await toolsChanged(ctx, space)
+  // And the app's OWN code, if it wrote any (dispatch.ts, T-32778): the
+  // worker.js among its files becomes its script in the dispatch namespace,
+  // and an app that deleted its worker.js loses the script it had, so what
+  // serves is what the files say. Without the platform's Cloudflare token
+  // there is nothing to upload with — the files are already live, so the
+  // release stands and says what is missing rather than failing (T-32781).
+  let workerKey = fileKey(space, app, 'worker.js')
+  let ran = ''
+  if (!(await blobs.has(workerKey))) {
+    if (ctx.env.CF_WORKERS_TOKEN) await drop(ctx.env, storeName(space, app))
+  } else if (!ctx.env.CF_WORKERS_TOKEN) ran = `\n${NEEDS_TOKEN}`
+  else {
+    await upload(
+      ctx.env,
+      storeName(space, app),
+      new TextDecoder().decode(await blobs.get(workerKey)),
+    )
+    ran = '\nworker: worker.js answers first; a 404 from it serves the files'
+  }
+  let version = (app.version ?? 0) + 1
+  await ctx.dir.apply(
+    { entities: [{ entity: { eid: app.eid }, app: { version } }] },
+    vouched(who),
+  )
+  return {
+    version,
+    said: ran +
+      (declared.length
+        ? `\ntools: ${declared.map((t) => `${app.slug}__${t}`).join(', ')}`
+        : '') +
+      (planted.length ? `\ncomponents: ${planted.join(', ')}` : '') +
+      // A word another app in the space already homes: this app writes it,
+      // and the answer says where its rows land (T-32728).
+      livesIn(uses).map((one) => `\n${one}`).join('') +
+      (added.length ? `\nadded: ${added.join(', ')}` : '') +
+      // What to DO about a column the manifest stopped naming, which the bare
+      // list never said: the board that read "5.2 mi in null min" was a
+      // rename nobody was told to finish (C-32730 item 4).
+      (kept.length
+        ? `\nkept, not in vocab.json (the rows are there): ${
+          kept.join(', ')
+        } — name it in vocab.json again to keep writing it, or move its ` +
+          'rows to the new word yourself, a row at a time with graph_query ' +
+          'then graph_apply. Nothing is migrated behind you.'
+        : '') +
+      (dropped.length ? `\ndropped (no rows): ${dropped.join(', ')}` : ''),
+  }
+}
+
+// The bytes an app's OWN pages are made of: its files, minus the ones its
+// visitors uploaded. `blobs/` is where a page's own bytes land (apps.ts
+// `blobKey`) — a photo somebody picked, which is the app's DATA and never
+// travels with its code.
+let CODE = 'blobs/'
+
+// One app's code copied ONTO another's, which is what an install is and what
+// an update is again: every file of the source written under the target's own
+// prefix, and every file the target has that the source does not, gone — so
+// what serves after is what the publisher wrote, and nothing of a version
+// before it lingers. The target's `blobs/` are untouched: they are its own.
+let copied = async (
+  ctx: Ctx,
+  from: { space: Space; app: App },
+  onto: { space: Space; app: App },
+) => {
+  let blobs = r2Blobs(ctx.env.BLOBS)
+  let there = fileKey(from.space, from.app, '')
+  let here = fileKey(onto.space, onto.app, '')
+  let paths = (keys: string[], prefix: string) =>
+    keys.map((k) => k.slice(prefix.length)).filter((p) => !p.startsWith(CODE))
+  let code = paths(await blobs.list(there), there)
+  let had = paths(await blobs.list(here), here)
+  for (let path of code) {
+    await blobs.put(here + path, await blobs.get(there + path))
+  }
+  let gone = had.filter((p) => !code.includes(p))
+  for (let path of gone) await blobs.delete(here + path)
+  return { wrote: code, gone }
 }
 
 // Every store this call reaches. An app named is that one store, as it always
@@ -671,155 +896,11 @@ export let TOOLS: Tool[] = [
     },
     run: async (ctx, args) => {
       let { space, app, who, store } = await inApp(ctx, args, true)
-      // The app's own components, if it declares any. A manifest the store
-      // refuses fails the deploy: the words and the tables must agree, and a
-      // half-planted vocabulary is what `unknown component` is made of.
-      let key = fileKey(space, app, 'vocab.json')
-      let blobs = r2Blobs(ctx.env.BLOBS)
-      let planted: string[] = []
-      let dropped: string[] = []
-      // What this manifest MOVED, which naming the components does not say: a
-      // renamed column arrives beside the old one, and the old one keeps
-      // every row already written under it (C-32652 item 4).
-      let added: string[] = []
-      let kept: string[] = []
-      // And the words this app USES rather than homes (T-32728).
-      let uses: Record<string, string> = {}
-      if (await blobs.has(key)) {
-        let next = parseVocab(new TextDecoder().decode(await blobs.get(key)))
-        // One word, one home: a word another app in the space already
-        // declares is that app's, so this deploy records a USE of it instead
-        // of planting a second table, and any column it adds grows the
-        // HOME's. The homes are read in app order, oldest first — the first
-        // declarer is the home — and a word this app already declares stays
-        // its own, because a store's vocabulary is additive forever.
-        let said = await vocabs(ctx, space, app)
-        let homes: Homes = {}
-        for (let [slug, cols] of said) {
-          if (slug == app.slug) continue
-          for (let [name, one] of Object.entries(cols)) {
-            if (name in homes || name in (said.get(app.slug) ?? {})) continue
-            homes[name] = { at: slug, cols: one }
-          }
-        }
-        let split = homed(next, homes)
-        uses = split.uses
-        // The home's table grows first: a use whose column the home does not
-        // have yet is not a use anyone can write until it does.
-        for (let [slug, grown] of Object.entries(split.grows)) {
-          let home = await ctx.dir.app(space, slug)
-          if (!home) continue
-          let whole: Vocab = { ...said.get(slug) }
-          for (let [name, cols] of Object.entries(grown)) {
-            whole[name] = { ...whole[name], ...cols }
-            for (let col of Object.keys(cols)) added.push(`${name}.${col}`)
-          }
-          await answer(
-            await storeOf(ctx.env.STORE, storeName(space, home))('/vocab', {
-              method: 'POST',
-              body: JSON.stringify(whole),
-            }, vouched(who)),
-          )
-        }
-        let mine = JSON.parse(
-          await answer(
-            await store('/vocab', {
-              method: 'POST',
-              body: JSON.stringify(split.mine),
-            }, vouched(who)),
-          ),
-        )
-        planted = mine.comps ?? []
-        dropped = mine.dropped ?? []
-        added = [...added, ...(mine.added ?? [])]
-        kept = mine.kept ?? []
-        await answer(
-          await store('/uses', {
-            method: 'POST',
-            body: JSON.stringify(uses),
-          }, vouched(who)),
-        )
-      }
-      // And the app's own MCP tools (tools.json, T-32685), read the same way
-      // and after the components, since a tool may write a word this very
-      // deploy planted. The manifest is replaced whole — a declaration holds
-      // no rows — so an app that deleted its tools.json deploys none.
-      let toolsKey = fileKey(space, app, 'tools.json')
-      let sent = await blobs.has(toolsKey)
-        ? new TextDecoder().decode(await blobs.get(toolsKey))
-        : '{}'
-      // A `view` names a page in the app's OWN files (T-32687), so this is
-      // the one thing about the manifest the store cannot check: it holds the
-      // words, the blobs hold the pages. A view nobody deployed would be a
-      // tool whose answer renders nothing, which is worse than a refusal.
-      let missing: string[] = []
-      for (let file of viewsOf(sent)) {
-        if (!await blobs.has(fileKey(space, app, file))) missing.push(file)
-      }
-      if (missing.length) {
-        throw new Error(
-          `tools.json: ${missing.join(', ')} — a view names a page in this ` +
-            "app's own files; deploy the page beside index.html",
-        )
-      }
-      let tooled = JSON.parse(
-        await answer(
-          await store('/tools', { method: 'POST', body: sent }, vouched(who)),
-        ),
-      )
-      let declared: string[] = tooled.tools ?? []
-      // A tool list that moved is news to every agent connected who can
-      // reach this app (declared.ts, T-32686).
-      if (tooled.changed) await toolsChanged(ctx, space)
-      // And the app's OWN code, if it wrote any (dispatch.ts, T-32778): the
-      // worker.js among its files becomes its script in the dispatch
-      // namespace, and an app that deleted its worker.js loses the script it
-      // had, so what serves is what the files say. Without the platform's
-      // Cloudflare token there is nothing to upload with — the files are
-      // already live, so the deploy stands and says what is missing rather
-      // than failing (T-32781).
-      let workerKey = fileKey(space, app, 'worker.js')
-      let ran = ''
-      if (!(await blobs.has(workerKey))) {
-        if (ctx.env.CF_WORKERS_TOKEN) await drop(ctx.env, storeName(space, app))
-      } else if (!ctx.env.CF_WORKERS_TOKEN) ran = `\n${NEEDS_TOKEN}`
-      else {
-        await upload(
-          ctx.env,
-          storeName(space, app),
-          new TextDecoder().decode(await blobs.get(workerKey)),
-        )
-        ran =
-          '\nworker: worker.js answers first; a 404 from it serves the files'
-      }
-      let version = (app.version ?? 0) + 1
-      await ctx.dir.apply(
-        { entities: [{ entity: { eid: app.eid }, app: { version } }] },
-        vouched(who),
-      )
+      let { version, said } = await released(ctx, space, app, who, store)
       return {
         text:
           `deployed ${space.slug}/${app.slug} v${version}: ${url(space, app)}` +
-          ran +
-          (declared.length
-            ? `\ntools: ${declared.map((t) => `${app.slug}__${t}`).join(', ')}`
-            : '') +
-          (planted.length ? `\ncomponents: ${planted.join(', ')}` : '') +
-          // A word another app in the space already homes: this app writes
-          // it, and the answer says where its rows land (T-32728).
-          livesIn(uses).map((said) => `\n${said}`).join('') +
-          (added.length ? `\nadded: ${added.join(', ')}` : '') +
-          // What to DO about a column the manifest stopped naming, which
-          // the bare list never said: the board that read "5.2 mi in null
-          // min" was a rename nobody was told to finish (C-32730 item 4).
-          (kept.length
-            ? `\nkept, not in vocab.json (the rows are there): ${
-              kept.join(', ')
-            } — name it in vocab.json again to keep writing it, or move its ` +
-              'rows to the new word yourself, a row at a time with ' +
-              'graph_query then graph_apply. Nothing is migrated behind you.'
-            : '') +
-          (dropped.length ? `\ndropped (no rows): ${dropped.join(', ')}` : ''),
+          said,
         space,
       }
     },
@@ -1295,6 +1376,178 @@ export let TOOLS: Tool[] = [
             })`
           ).join('\n')
           : 'nothing is published yet',
+      }
+    },
+  },
+  {
+    name: 'app_install',
+    description:
+      'Take an app somebody published (app_published lists them) and give ' +
+      'the person their OWN copy of it: their own address, their own data ' +
+      'store, their own everything from the first byte. Nothing is shared ' +
+      'but the code, so what they save is theirs alone and the publisher ' +
+      'never sees it. The copy is PINNED to the version it took — the ' +
+      "publisher's next version does not arrive behind them; app_update " +
+      'moves it, keeping their data. Then give them the link.',
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        name: str('the published name, from app_published'),
+        as: str(
+          'the address to put it at in their space — the published name ' +
+            'unless you say otherwise',
+        ),
+      },
+      required: ['name'],
+    },
+    run: async (ctx, args) => {
+      let name = slug(args.name, 'name')
+      let offer = await ctx.dir.offered(name)
+      if (!offer?.app.published) {
+        throw new Error(
+          `nothing is published as ${name} — app_published lists what is on ` +
+            'offer',
+        )
+      }
+      let { space, who } = await inSpace(ctx, args, true)
+      // An installed app costs what any other does, so it is counted like any
+      // other (T-32758) — the same refusal app_new gives.
+      let free = ceilings(space.tier)
+      let apps = await ctx.dir.apps(space)
+      if (free && apps.length >= free.apps) {
+        throw new Error(atCeiling(space, 'apps'))
+      }
+      let s = args.as == null ? name : slug(args.as, 'as')
+      if (await ctx.dir.app(space, s)) {
+        throw new Error(
+          `app ${s} exists in ${space.slug} — app_install(name, as: '…') ` +
+            'puts the copy at another address',
+        )
+      }
+      let moved = await ctx.dir.former(space, s)
+      if (moved) {
+        throw new Error(
+          `${s} is where ${space.slug}/${moved.slug} used to be, and still ` +
+            'points there — install it at another address (as:)',
+        )
+      }
+      let version = offer.app.published.version
+      // The app row, born the way app_new writes one — its own alias, so its
+      // own store, pinned to the address it was born at — plus the pin that
+      // says where the code came from and which version it took. Its access
+      // is the published app's: an app written to be voted on has to stay
+      // votable, and the person can app_set it after.
+      let entities: EntityLiteral[] = [{
+        entity: { eid: '$app' },
+        doc: { title: offer.app.title },
+        app: {
+          slug: s,
+          space: space.eid,
+          version: 0,
+          access: offer.app.access ?? 'public',
+        },
+        alias: { slug: bornAt(space, s) },
+        installed: { of: offer.app.eid, version },
+      }]
+      if (!space.home) {
+        entities.push({ entity: { eid: space.eid }, space: { home: '$app' } })
+      }
+      await ctx.dir.apply({ entities }, vouched(who))
+      let app = (await ctx.dir.app(space, s))!
+      let onto = { space, app }
+      let { wrote } = await copied(ctx, offer, onto)
+      // A release of the copy, in the installer's own space: the components
+      // its vocab.json declares planted in ITS store, its tools listed under
+      // ITS slug, its worker.js uploaded as ITS own script.
+      let out = await released(
+        ctx,
+        space,
+        app,
+        who,
+        storeOf(ctx.env.STORE, storeName(space, app)),
+      )
+      return {
+        text:
+          `installed ${name} v${version} as ${space.slug}/${s}: ${
+            url(space, app)
+          } — ${wrote.length} ${
+            wrote.length == 1 ? 'file' : 'files'
+          }, its own ` +
+          'store and its own data, pinned to that version (app_update moves ' +
+          'it)' + out.said,
+        space,
+      }
+    },
+  },
+  {
+    name: 'app_update',
+    description:
+      'Move an installed app to whatever version its publisher offers now. ' +
+      "The person's data stays — every row they saved is theirs and is not " +
+      'touched — and only the code is replaced, so anything you wrote into ' +
+      'the copy yourself is replaced too. A vocabulary that only grew is ' +
+      'applied to their store; one that would retype a column their rows ' +
+      'were written under is refused, and nothing moves. It answers what ' +
+      'changed.',
+    input: {
+      type: 'object',
+      properties: { space: SPACE, app: APP },
+      required: ['app'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, who, store } = await inApp(ctx, args, true)
+      if (!app.installed) {
+        throw new Error(
+          `${space.slug}/${app.slug} was not installed from anywhere — it is ` +
+            'their own app, and app_deploy releases what you write in it',
+        )
+      }
+      let from = await ctx.dir.appAt(app.installed.of)
+      if (!from?.app.published) {
+        throw new Error(
+          `the app ${space.slug}/${app.slug} came from is no longer ` +
+            'published — this copy keeps working, data and all, and there is ' +
+            'nothing to update it to',
+        )
+      }
+      let was = app.installed.version
+      let to = from.app.published.version
+      if (to == was) {
+        return {
+          text:
+            `${space.slug}/${app.slug} is already at v${to} of ${from.app.published.name} — nothing to update`,
+          space,
+        }
+      }
+      // The publisher's words against this store's own, BEFORE a byte of code
+      // moves: a vocabulary that only grew lands through the store's own
+      // additive graft, and one that conflicts is refused here with the
+      // sentence a deploy gives (T-32728), leaving the copy as it was.
+      let key = fileKey(from.space, from.app, 'vocab.json')
+      let blobs = r2Blobs(ctx.env.BLOBS)
+      if (await blobs.has(key)) {
+        await fits(
+          ctx,
+          space,
+          app,
+          store,
+          new TextDecoder().decode(await blobs.get(key)),
+        )
+      }
+      let { wrote, gone } = await copied(ctx, from, { space, app })
+      let out = await released(ctx, space, app, who, store)
+      await ctx.dir.apply({
+        entities: [{ entity: { eid: app.eid }, installed: { version: to } }],
+      }, vouched(who))
+      return {
+        text:
+          `updated ${space.slug}/${app.slug} from v${was} to v${to} of ${from.app.published.name}: ${wrote.length} ${
+            wrote.length == 1 ? 'file' : 'files'
+          }${
+            gone.length ? `, ${gone.length} removed` : ''
+          } — everything it had saved is still there` + out.said,
+        space,
       }
     },
   },

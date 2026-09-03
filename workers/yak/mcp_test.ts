@@ -70,6 +70,8 @@ slow(
         'app_publish',
         'app_unpublish',
         'app_published',
+        'app_install',
+        'app_update',
         'member_add',
         'member_remove',
         'graph_apply',
@@ -2147,6 +2149,164 @@ slow('an app is published by name, and the name is one app', async () => {
         path: 'index.html',
       }),
       '<h1>recipes</h1>',
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
+// The whole of T-32889: an installed app is an ORDINARY app in the
+// installer's space — its own store, its own address, its own data from the
+// first byte — pinned to the version it took, so the publisher's next version
+// arrives only when the installer asks for it. An update keeps their data: a
+// vocabulary that only grew is grafted, one that conflicts is refused with
+// the deploy's own sentence (T-32728) and nothing moves.
+slow('an installed app is the installer own copy, data and all', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let his = connector(k, jeff.cookie)
+    let write =
+      (agent: ReturnType<typeof connector>, app: string) =>
+      (path: string, content: string) =>
+        agent.tool('app_files', { app, op: 'write', path, content })
+    let mine = write(his, 'tally')
+    await his.tool('app_new', { slug: 'tally', title: 'Tally' })
+    await mine('index.html', '<h1>Tally v1</h1>')
+    await mine('vocab.json', '{"vote": {"who": "text", "pick": "text"}}')
+    await his.tool('app_deploy', { app: 'tally' })
+    await his.tool('app_publish', { app: 'tally', about: 'Count the votes' })
+    let votes = (agent: ReturnType<typeof connector>) => async () =>
+      (JSON.parse(
+        await agent.tool('graph_query', { app: 'tally', filter: '.vote!' }),
+      ) as { vote: { who: string; pick?: string } }[])
+        .map((r) => r.vote.who).sort()
+    let cast = (agent: ReturnType<typeof connector>, who: string) =>
+      agent.tool('graph_apply', {
+        app: 'tally',
+        entities: [{ entity: { eid: '$v' }, vote: { who, pick: 'blue' } }],
+      })
+    await cast(his, 'jeff')
+
+    // A SECOND person, in their own space, takes it.
+    let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
+    let hers = connector(k, ann.cookie)
+    let space = ann.email.split('@')[0]
+    assertStringIncludes(await hers.tool('app_published'), '- tally v1')
+    let took = await hers.tool('app_install', { name: 'tally' })
+    assertStringIncludes(took, 'installed tally v1 as ' + space + '/tally')
+    assertStringIncludes(took, `https://${space}.yaks.app/tally/`)
+    assertStringIncludes(took, '2 files')
+    assertStringIncludes(took, 'components: vote')
+
+    // The code came; the data did not. Her store is empty and her page is
+    // the one that was published.
+    assertEquals(await votes(hers)(), [])
+    assertStringIncludes(
+      await hers.tool('app_files', {
+        app: 'tally',
+        op: 'read',
+        path: 'index.html',
+      }),
+      '<h1>Tally v1</h1>',
+    )
+    // And it serves at HER address, out of her own app.
+    let page = await k.at(`${space}.yaks.app`, '/tally/')
+    assertEquals(page.status, 200)
+    assertStringIncludes(await page.text(), '<h1>Tally v1</h1>')
+
+    // Both write, and neither sees the other: two stores, one code.
+    await cast(hers, 'ann')
+    assertEquals(await votes(his)(), ['jeff'])
+    assertEquals(await votes(hers)(), ['ann'])
+
+    // A SECOND version, published. Nothing of hers moves until she asks.
+    await mine('index.html', '<h1>Tally v2</h1>')
+    await mine(
+      'vocab.json',
+      '{"vote": {"who": "text", "pick": "text", "at": "text"}}',
+    )
+    await his.tool('app_deploy', { app: 'tally' })
+    await his.tool('app_publish', { app: 'tally' })
+    assertStringIncludes(
+      await hers.tool('app_files', {
+        app: 'tally',
+        op: 'read',
+        path: 'index.html',
+      }),
+      '<h1>Tally v1</h1>',
+    )
+
+    // Asked for: the code moves, the data stays, the word grows.
+    let moved = await hers.tool('app_update', { app: 'tally' })
+    assertStringIncludes(moved, 'updated ' + space + '/tally from v1 to v2')
+    assertStringIncludes(moved, 'everything it had saved is still there')
+    assertStringIncludes(moved, 'added: vote.at')
+    assertEquals(await votes(hers)(), ['ann'])
+    assertStringIncludes(
+      await hers.tool('app_files', {
+        app: 'tally',
+        op: 'read',
+        path: 'index.html',
+      }),
+      '<h1>Tally v2</h1>',
+    )
+    // The grown column is writable in HER store, on the row she already had.
+    await hers.tool('graph_apply', {
+      app: 'tally',
+      entities: [{
+        entity: { eid: '$v' },
+        vote: { who: 'ann2', pick: 'red', at: 'today' },
+      }],
+    })
+    assertEquals(await votes(hers)(), ['ann', 'ann2'])
+    // Twice is not twice: the pin is already there.
+    assertStringIncludes(
+      await hers.tool('app_update', { app: 'tally' }),
+      'is already at v2',
+    )
+
+    // A CONFLICT: her copy declared a column of its own, and the publisher's
+    // next version spells the same one differently. The update is refused
+    // with the deploy's own sentence, and not a byte of her app moves.
+    await write(hers, 'tally')(
+      'vocab.json',
+      '{"vote": {"who": "text", "pick": "text", "at": "text", ' +
+        '"count": "number"}}',
+    )
+    await hers.tool('app_deploy', { app: 'tally' })
+    await mine(
+      'vocab.json',
+      '{"vote": {"who": "text", "pick": "text", "at": "text", ' +
+        '"count": "text"}}',
+    )
+    await mine('index.html', '<h1>Tally v3</h1>')
+    await his.tool('app_deploy', { app: 'tally' })
+    await his.tool('app_publish', { app: 'tally' })
+    assertStringIncludes(
+      (await assertRejects(
+        () => hers.tool('app_update', { app: 'tally' }),
+        Error,
+      )).message,
+      'vote.count is already number',
+    )
+    assertStringIncludes(
+      await hers.tool('app_files', {
+        app: 'tally',
+        op: 'read',
+        path: 'index.html',
+      }),
+      '<h1>Tally v2</h1>',
+    )
+    assertEquals(await votes(hers)(), ['ann', 'ann2'])
+
+    // An app that was never installed has nothing to update to.
+    assertStringIncludes(
+      (await assertRejects(
+        () => his.tool('app_update', { app: 'tally' }),
+        Error,
+      )).message,
+      'was not installed from anywhere',
     )
   } finally {
     await k.stop()

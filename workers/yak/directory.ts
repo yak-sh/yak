@@ -376,16 +376,22 @@ export let directory = (via: Fetcher) => {
       let row = await one(`id=${eid}`)
       return row?.space ? spaceOf(row) : null
     },
-    // The app offered under a platform-wide name (T-32888), with the space it
-    // came from — an offer is an app, so this is one row read two ways.
-    offered: async (name: string) => {
-      let row = await one(
-        `.published.name=${encodeURIComponent(name)}&.app!&${ABOUT}`,
-      )
+    // One app by eid, with the space it belongs to — what an installed app's
+    // pin names (`installed.of`), and how an offer is read back.
+    appAt: async (eid: string) => {
+      let row = await one(`id=${eid}`)
       if (!row?.app) return null
       let app = appOf(row)
       let space = await self.at(app.space)
       return space ? { space, app } : null
+    },
+    // The app offered under a platform-wide name (T-32888), with the space it
+    // came from — an offer is an app, so this is one row read two ways.
+    offered: async (name: string) => {
+      let row = await one(
+        `.published.name=${encodeURIComponent(name)}&.app!`,
+      )
+      return row?.app ? await self.appAt(row.entity.eid) : null
     },
     // Every offer standing, newest first — what a person's agent browses.
     offers: async (): Promise<{ space: Space; app: App }[]> => {
