@@ -30,7 +30,8 @@ import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { unauthorized, withAuth } from './identity.ts'
-import { APPS_VIEW, type Ctx, ERRORS_VIEW, TOOLS } from './tools.ts'
+import { callDeclared } from './declared.ts'
+import { APPS_VIEW, type Ctx, ERRORS_VIEW, type Out, TOOLS } from './tools.ts'
 import { serve, unseenBlock } from './unseen.ts'
 
 // The versions this door speaks, newest first. A client asks for one in
@@ -173,19 +174,25 @@ let result = (id: unknown, result: unknown) =>
 // a bad argument or a refused write is for the agent to read, never a 500.
 // Either way the unseen section rides when a space was in hand.
 let call = async (ctx: Ctx, params: Record<string, unknown>) => {
-  let tool = TOOLS.find((t) => t.name == params.name)
-  if (!tool) {
-    return {
-      content: [{ type: 'text', text: `no tool ${params.name}` }],
-      isError: true,
-    }
-  }
+  let name = String(params.name)
+  let tool = TOOLS.find((t) => t.name == name)
   let args = (params.arguments ?? {}) as Record<string, unknown>
   let text: string
   let isError = false
-  let out: Awaited<ReturnType<typeof tool.run>> | undefined
+  let out: Out | undefined
   try {
-    out = await tool.run(ctx, args)
+    // The platform's own tool, or — when nothing here spells that name — one
+    // of the person's own apps' (declared.ts, T-32685), which is a template
+    // over that app's store and refuses exactly as its page would.
+    out = tool
+      ? await tool.run(ctx, args)
+      : (await callDeclared(ctx, name, args)) ?? undefined
+    if (!out) {
+      return {
+        content: [{ type: 'text', text: `no tool ${name}` }],
+        isError: true,
+      }
+    }
     text = out.text
   } catch (e) {
     text = e instanceof Error ? e.message : String(e)

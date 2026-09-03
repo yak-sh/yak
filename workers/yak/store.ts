@@ -5,8 +5,9 @@
 // the same request and response bodies: POST /apply and GET /query, plus GET
 // /graph, the identity a joining peer reads, and POST /vocab, the app's own
 // components (store/vocab.ts) that app_deploy plants here and the object wakes
-// with, and DELETE /, which empties the object when app_delete throws its app
-// away. One flag beyond the wire:
+// with, /tools, the app's own MCP tools (store/tools.ts) that the same deploy
+// hands over and the agent door lists, and DELETE /, which empties the object
+// when app_delete throws its app away. One flag beyond the wire:
 // `x-yak-kernel`, set by the kernel on its own requests and never forwarded
 // from a client, opens apply()'s server-writer mode, so what a route threw
 // lands as a server-owned exception entity through the same door (D-32318
@@ -48,6 +49,7 @@ import {
 import { fed } from '../../src/effects.ts'
 import { type Mutation, mutationResult } from '../../src/mutation.ts'
 import { DoSql, type DoStorage } from '../../src/store/do.ts'
+import { parseTools, type Tools } from '../../src/store/tools.ts'
 import {
   countSql,
   dropOps,
@@ -162,6 +164,22 @@ export class Store {
   vocab(): Vocab {
     try {
       return parseVocab(JSON.parse(String(this.db.kv.get('vocab') ?? '{}')))
+    } catch {
+      return {}
+    }
+  }
+
+  // The tools this app declares (tools.json, T-32685), kept beside the
+  // vocabulary because they are the same kind of thing: words this store
+  // says that no other store does. Nothing is planted for them — a tool is a
+  // template over the doors this store already has — so this slot is read at
+  // the MCP door and written by a deploy, and junk in it is nothing.
+  tools(): Tools {
+    try {
+      return parseTools(
+        JSON.parse(String(this.db.kv.get('tools') ?? '{}')),
+        this.vocab(),
+      )
     } catch {
       return {}
     }
@@ -440,6 +458,30 @@ export class Store {
       } catch (e) {
         let why = e instanceof Error ? e.message : String(e)
         return new Response(why, { status: 400 })
+      }
+    }
+    // The app's own MCP tools (tools.json, T-32685): the manifest app_deploy
+    // read out of the app's files, checked against THIS store's vocabulary —
+    // a tool writing a component nobody declared is refused here, where the
+    // words are. It is replaced whole, since a declaration holds no rows: an
+    // app that deletes its tools.json deploys an empty manifest and its tools
+    // are gone. The answer says whether the words MOVED, which is what tells
+    // the door to say `tools/list_changed` (T-32686). The kernel is the only
+    // caller; a GET reads back what this store last accepted.
+    if (path == '/tools') {
+      if (req.method == 'GET') return Response.json(this.tools())
+      if (req.method != 'POST') return methodNotAllowed('GET, POST')
+      try {
+        let now = JSON.stringify(parseTools(await req.text(), this.vocab()))
+        let changed = now != String(db.kv.get('tools') ?? '{}')
+        if (changed) db.kv.put('tools', now)
+        return Response.json({
+          ok: true,
+          tools: Object.keys(JSON.parse(now)),
+          changed,
+        })
+      } catch (e) {
+        return new Response(why(e), { status: 400 })
       }
     }
     if (path == '/ws') {

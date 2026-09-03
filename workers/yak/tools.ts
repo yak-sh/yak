@@ -23,6 +23,7 @@
 // bundle, or a flat Change batch. A deploy in v1 is a version bump, since an
 // app's files serve live from its blob store.
 import { r2Blobs } from '../../src/blobs_r2.ts'
+import { TOOLS_EXAMPLE } from '../../src/store/tools.ts'
 import { EXAMPLE } from '../../src/store/vocab.ts'
 import type { EntityLiteral } from '../../src/mutation.ts'
 import { appAccess } from '../../src/types.ts'
@@ -497,7 +498,11 @@ export let TOOLS: Tool[] = [
       'holds no rows, goes. It answers the columns it ADDED and the ones the ' +
       'store still has that this manifest did not name — a column is never ' +
       'renamed or retyped, so a new spelling arrives beside the old one, ' +
-      'which keeps every row already written under it.',
+      'which keeps every row already written under it. A tools.json beside ' +
+      'it gives the app its own MCP tools — ' +
+      `${TOOLS_EXAMPLE} — listed here as <app>__<tool> for everyone who can ` +
+      'reach the app, so the person and their agent act on the app through ' +
+      'its own words.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP },
@@ -528,6 +533,20 @@ export let TOOLS: Tool[] = [
         added = said.added ?? []
         kept = said.kept ?? []
       }
+      // And the app's own MCP tools (tools.json, T-32685), read the same way
+      // and after the components, since a tool may write a word this very
+      // deploy planted. The manifest is replaced whole — a declaration holds
+      // no rows — so an app that deleted its tools.json deploys none.
+      let toolsKey = fileKey(space, app, 'tools.json')
+      let sent = await blobs.has(toolsKey)
+        ? new TextDecoder().decode(await blobs.get(toolsKey))
+        : '{}'
+      let tooled = JSON.parse(
+        await answer(
+          await store('/tools', { method: 'POST', body: sent }, vouched(who)),
+        ),
+      )
+      let declared: string[] = tooled.tools ?? []
       let version = (app.version ?? 0) + 1
       await ctx.dir.apply(
         { entities: [{ entity: { eid: app.eid }, app: { version } }] },
@@ -536,6 +555,9 @@ export let TOOLS: Tool[] = [
       return {
         text:
           `deployed ${space.slug}/${app.slug} v${version}: ${url(space, app)}` +
+          (declared.length
+            ? `\ntools: ${declared.map((t) => `${app.slug}__${t}`).join(', ')}`
+            : '') +
           (planted.length ? `\ncomponents: ${planted.join(', ')}` : '') +
           (added.length ? `\nadded: ${added.join(', ')}` : '') +
           (kept.length

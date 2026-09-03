@@ -12,7 +12,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { connector, kernel, signedIn } from './probe.ts'
+import { connector, kernel, signedIn, signIn } from './probe.ts'
 
 let GUIDE = 'https://yaks.app/guide.md'
 let APPS = 'ui://yaks/apps'
@@ -812,3 +812,117 @@ slow(
     }
   },
 )
+
+// An app's OWN tools (T-32685): a tools.json beside vocab.json, planted by
+// the same deploy, called at the same door as `<app>__<tool>` — and doing
+// through it exactly what the caller could do on the app's own page.
+slow('an app declares its own tools, and the door calls them', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
+      .exec(await agent.tool('app_new', { slug: 'runs', title: 'Run club' }))![
+        1
+      ]
+    let app = { space, app: 'runs' }
+    await agent.tool('app_files', {
+      ...app,
+      files: [
+        {
+          path: 'vocab.json',
+          content: '{"jog":{"who":"text","miles":"number"}}',
+        },
+        {
+          path: 'tools.json',
+          content: JSON.stringify({
+            log_run: {
+              description: 'Log a run for the club leaderboard',
+              input: { who: 'text', miles: 'number' },
+              apply: {
+                entity: { eid: '$run' },
+                jog: { who: '{{who}}', miles: '{{miles}}' },
+              },
+            },
+            leaderboard: {
+              description: 'Every run so far',
+              input: {},
+              query: '.jog!',
+            },
+          }),
+        },
+      ],
+    })
+    let deployed = await agent.tool('app_deploy', app)
+    assertStringIncludes(deployed, 'tools: runs__log_run, runs__leaderboard')
+    assertStringIncludes(deployed, 'components: jog')
+
+    // The call is a page's gesture: the row lands in the app's own store,
+    // typed by the declared input, and says who wrote it.
+    let wrote = await agent.tool('runs__log_run', { who: 'Ada', miles: '5' })
+    assertStringIncludes(wrote, 'runs__log_run: wrote 1 entity')
+    let rows = JSON.parse(
+      await agent.tool('graph_query', { ...app, query: '.jog!&.created!' }),
+    ) as { jog: { who: string; miles: number }; created: { by: string } }[]
+    assertEquals(rows.length, 1)
+    assertEquals(rows[0].jog, { who: 'Ada', miles: 5 })
+    assertEquals(rows[0].created.by, jeff.person)
+    // And the read half answers the listing a page gets.
+    assertStringIncludes(
+      await agent.tool('runs__leaderboard', {}),
+      'runs__leaderboard: 1 row',
+    )
+    // An argument the input declared and the call left out is the tool's own
+    // refusal, not a half-written row.
+    await assertRejects(
+      () => agent.tool('runs__log_run', { who: 'Ada' }),
+      Error,
+      'miles is required',
+    )
+    // A tool nobody declared is a tool nobody has.
+    await assertRejects(
+      () => agent.tool('runs__nope', {}),
+      Error,
+      'no tool runs__nope',
+    )
+
+    // Someone who may read this app and not write it: the write tool refuses
+    // with the sentence a page would show them, and the read tool answers.
+    let maya = await signIn(k)
+    await agent.tool('member_add', {
+      space,
+      email: maya.email,
+      role: 'viewer',
+    })
+    let hers = connector(k, maya.cookie)
+    assertStringIncludes(
+      await hers.tool('runs__leaderboard', {}),
+      'runs__leaderboard: 1 row',
+    )
+    await assertRejects(
+      () => hers.tool('runs__log_run', { who: 'Maya', miles: 3 }),
+      Error,
+      'you can read this app but not change it',
+    )
+
+    // A manifest that cannot work is refused at DEPLOY, whole, and the tools
+    // the app already had keep answering.
+    await agent.tool('app_files', {
+      ...app,
+      op: 'write',
+      path: 'tools.json',
+      content: '{"bad":{"description":"x","input":{},"apply":' +
+        '{"jog":{"who":"{{who}}"}},"screen":"index.html"}}',
+    })
+    let why = (await assertRejects(() => agent.tool('app_deploy', app), Error))
+      .message
+    assertStringIncludes(why, 'bad: screen — a tool says')
+    assertStringIncludes(why, 'bad: {{who}} names no input')
+    assertStringIncludes(
+      await agent.tool('runs__log_run', { who: 'Bo', miles: 2 }),
+      'wrote 1 entity',
+    )
+  } finally {
+    await k.stop()
+  }
+})

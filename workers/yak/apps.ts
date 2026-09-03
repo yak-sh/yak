@@ -33,7 +33,7 @@ import {
 } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { asking, listing } from './listing.ts'
+import { asking, listed, listing } from './listing.ts'
 import { nothingHere } from './pages.ts'
 import { hostOf, PLATFORM, route } from './route.ts'
 import { mayWrite, reads, vouched, type Who, whoIs, writes } from './session.ts'
@@ -423,6 +423,58 @@ let gave = async (
   })
 }
 
+// What to call this person, for the store to write beside their rows
+// (store.ts `knows`): the name they chose, else the front of their address
+// (directory.ts `nameAt`), read at the WRITE doors only — a read never mints
+// a person, and every page load would otherwise pay for a name nobody wrote
+// down. Their address stays in the directory: an app's store learns a name
+// and never an address book (T-32654).
+let named = async (env: Env, who: Who): Promise<Record<string, string>> => {
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let title = who.person && await dir.nameAt(who.person)
+  return title ? { 'x-yak-title': title } : {}
+}
+
+// The app's two acts, as one person: what a page does through the doors
+// below, without a page. An app's own MCP tools are templates over exactly
+// these (store/tools.ts, T-32685), so a tool call goes the page's way — the
+// app's `access` decides it, the vouched headers name the writer, the listing
+// rule shapes the answer — and a refusal is the sentence a page would read.
+// Anything a tool can do here, the person calling it could do on the page.
+export let acting = (env: Env, space: Space, app: App, who: Who) => {
+  let store = storeOf(env.STORE, storeName(space, app))
+  // Signed in and refused, it is the owner's to grant, so the sentence says
+  // so; nobody reaches this door signed out, since the agent door has an
+  // identity before it has a call (mcp.ts).
+  let no = (what: string): never => {
+    throw new Error(who.person ? MEMBER[what] : SAYS[what])
+  }
+  return {
+    apply: async (mutation: unknown) => {
+      if (!writes(who, app.access)) no('not_a_writer')
+      let r = await store('/apply', {
+        method: 'POST',
+        body: JSON.stringify(mutation),
+      }, { ...vouched(who), ...await named(env, who) })
+      let body = await r.text()
+      if (!r.ok) throw new Error(body)
+      return JSON.parse(body) as {
+        changes?: { eid: string; name: string; comp: unknown }[]
+        aliases?: Record<string, string>
+      }
+    },
+    query: async (line: string) => {
+      if (!reads(who, app.access)) no('not_a_reader')
+      let asked = asking(`?${line.replace(/^[?&]+/, '')}`)
+      let r = await store(`/query${asked}`, {}, vouched(who))
+      let body = await r.text()
+      if (!r.ok) throw new Error(body)
+      let rows = JSON.parse(body)
+      return Array.isArray(rows) ? listed(rows, asked) : rows
+    },
+  }
+}
+
 // The graph API, and the file door beside it. Who may do what to the store is
 // the app's own `access` (T-32504): `public` reads to anyone and writes to a
 // member, `open` writes to anyone with the link, `private` neither without a
@@ -457,17 +509,6 @@ let api = async (
     return new Response(null, { status: 204 })
   }
   let headers = vouched(who)
-  // What to call this person, for the store to write beside their rows
-  // (store.ts `knows`): the name they chose, else the front of their address
-  // (directory.ts `nameAt`), read at the WRITE doors only — a read never
-  // mints a person, and every page load would otherwise pay for a name
-  // nobody wrote down. Their address stays in the directory: an app's store
-  // learns a name and never an address book (T-32654).
-  let named = async (): Promise<Record<string, string>> => {
-    let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-    let title = who.person && await dir.nameAt(who.person)
-    return title ? { 'x-yak-title': title } : {}
-  }
   // Signed out, the way through is to sign in (SAYS); signed in, it is the
   // owner's to grant, so the sentence says so.
   let refused = (what = 'not_a_writer') =>
@@ -508,7 +549,7 @@ let api = async (
     if (!mayRead) return refused('not_a_reader')
     return store('/ws', req, {
       ...headers,
-      ...(mayPost ? { 'x-yak-write': '1', ...(await named()) } : {}),
+      ...(mayPost ? { 'x-yak-write': '1', ...(await named(env, who)) } : {}),
     })
   }
   if (path == '/apply') {
@@ -516,7 +557,7 @@ let api = async (
     if (!mayPost) return refused()
     return store('/apply', { method: 'POST', body: await req.text() }, {
       ...headers,
-      ...(await named()),
+      ...(await named(env, who)),
     })
   }
   // The file door: bytes in, one content-addressed address out. Uploaded
@@ -528,7 +569,7 @@ let api = async (
     if (!mayPost) return refused()
     return took(req, env, space, app, store, {
       ...headers,
-      ...(await named()),
+      ...(await named(env, who)),
     })
   }
   if (path.startsWith('/blob/')) {
