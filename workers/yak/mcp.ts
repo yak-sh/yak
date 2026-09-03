@@ -90,10 +90,9 @@ the page they were on.
 
 Its data belongs in the app's own store, not localStorage — so it is the same
 on their phone and their laptop, and so you can read and repair it yourself.
-The page gets it in one line, from the app's own address — absolute, with the
-app's slug, so it is right from a page at any path:
+The page gets it in one line, from the app's own address:
 
-  import { apply, query, search, subscribe } from '/recipes/api/client.js'
+  import { apply, query, search, subscribe } from './api/client.js'
 
   await apply({ entity: { eid: '$r' },
                 doc: { title: 'Lemon cake', body: '3 lemons...' } })
@@ -114,7 +113,7 @@ nothing is synced. graph_query with no app named reads them all at once and
 answers one bundle per entity: '.book!&.loan?' is every book wearing its loan
 where it has one, and '.loan?' asks for a component without filtering on it.
 A page reads a sibling app the same way, with store('/lending/api/') from
-'/recipes/api/client.js'.
+'./api/client.js'.
 
 An app can carry its OWN tools: a tools.json beside index.html declares them
 — a name, a sentence, an input, and an apply or query template over the app's
@@ -153,7 +152,7 @@ let GUIDE = {
   title: 'Building an app on yaks.app',
   description:
     'What an app is, how its pages read and write its store through ' +
-    '/<app>/api/client.js, and the components and filters they have.',
+    './api/client.js, and the components and filters they have.',
   mimeType: 'text/markdown',
   page: 'https://yaks.app/guide.md',
 }

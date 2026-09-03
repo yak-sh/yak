@@ -1,18 +1,20 @@
 // The store an app's own pages talk to: one ES module, no build, served by
 // the kernel at `<space>.yaks.app/<app>/api/client.js` beside the doors it
 // wraps. A page writes
-// `import { apply, query, subscribe } from '/<app>/api/client.js'` and has
+// `import { apply, query, subscribe } from './api/client.js'` and has
 // the app's graph — the same bundle shape the MCP tools speak
 // (`{entity: {eid}, ...components}`, a `$alias` wherever an eid goes), entity
 // JSON back. Nothing to install and nothing to configure: the module's own
 // address IS the app's api directory, so a page at any depth reaches its own
 // store, and the browser's cookie says who is asking.
 //
-// The import is ABSOLUTE, with the app's own slug, because an app's pretty
-// paths and a relative import collide: at `/lending/loans/1` — an address
-// that names no file, so the app's index.html answers it — `./api/client.js`
-// resolves to `/lending/loans/api/client.js` and 404s (C-32800 item 7). The
-// app knows its own slug; a page does not know its own depth.
+// The import is RELATIVE, and nothing in an app names the app: the kernel
+// gives every page it serves a `<base href>` at the app's own address
+// (apps.ts `based`), so `./api/client.js` is this app's client from a page at
+// any depth — a pretty path like `/lending/loans/1` included — and stays this
+// app's client in a copy someone installed at another address (C-32905 item
+// 1). An absolute `/<app>/api/client.js` still works; it just stops working
+// the moment the app is copied.
 //
 // `subscribe(filter, cb)` is `query(filter)` that keeps answering: one socket
 // onto the app's store (the Store object's /ws, hibernating while nothing

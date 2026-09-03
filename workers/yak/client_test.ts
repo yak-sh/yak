@@ -47,19 +47,20 @@ slow('the served client: a page saves, lists and watches', async () => {
       /export let \{ apply, me, query, search, subscribe, upload \}/,
     )
 
-    // The page a person would be given, and its script, run here.
+    // The page a person would be given, and its script, run here. The import
+    // is the guide's own: relative, naming no app, resolved through the base
+    // the kernel gives the page (T-32907).
     let page = '<!doctype html><h1>Recipes</h1>' +
       '<script type="module">import { apply, query } from ' +
-      '"/recipes/api/client.js"' +
+      '"./api/client.js"' +
       '</script>'
     await client(k, 'jeff.yaks.app', 'recipes', cookie).put(
       '/index.html',
       page,
     )
-    assertStringIncludes(
-      await (await k.at('jeff.yaks.app', '/recipes/')).text(),
-      page,
-    )
+    let html = await (await k.at('jeff.yaks.app', '/recipes/')).text()
+    assertStringIncludes(html, '"./api/client.js"')
+    assertStringIncludes(html, '<base href="/recipes/">')
 
     Deno.writeTextFileSync(`${dir}/client.js`, source)
     let mod = await import(`file://${dir}/client.js`)

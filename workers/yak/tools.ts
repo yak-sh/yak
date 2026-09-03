@@ -807,9 +807,10 @@ export let TOOLS: Tool[] = [
       '<space>.yaks.app/<app>/<path>; index.html answers the directory. Keep ' +
       'what the app remembers in its own store, never localStorage: the page ' +
       'reads and writes it with `import { apply, query, search } from ' +
-      "'/<app>/api/client.js'`, absolute with the app's own slug, which is " +
-      'served beside the app and right from a page at any path. The guide ' +
-      'resource ' +
+      "'./api/client.js'`, which is served beside the app. Write every " +
+      "address relative: the kernel gives each page a `<base>` at the app's " +
+      'own address, so nothing in an app names the app, and a copy someone ' +
+      'installs at another address still works. The guide resource ' +
       '(https://yaks.app/guide.md) has the whole of it, in a page.',
     input: {
       type: 'object',
@@ -1519,9 +1520,8 @@ export let TOOLS: Tool[] = [
             `- ${app.published!.name} v${app.published!.version} — ` +
             `${app.title}${
               app.published!.about ? `: ${app.published!.about}` : ''
-            } (from ${space.slug}/${app.slug}, published ${
-              app.published!.at.slice(0, 10)
-            })`
+            } (from ${space.slug}/${app.slug}, installs as ${app.slug}, ` +
+            `published ${app.published!.at.slice(0, 10)})`
           ).join('\n')
           : 'nothing is published yet',
       }
@@ -1543,8 +1543,8 @@ export let TOOLS: Tool[] = [
         space: SPACE,
         name: str('the published name, from app_published'),
         as: str(
-          'the address to put it at in their space — the published name ' +
-            'unless you say otherwise',
+          "the address to put it at in their space — the app's own slug, " +
+            'the one app_published prints, unless you say otherwise',
         ),
       },
       required: ['name'],
@@ -1566,7 +1566,22 @@ export let TOOLS: Tool[] = [
       if (free && apps.length >= free.apps) {
         throw new Error(atCeiling(space, 'apps'))
       }
-      let s = args.as == null ? name : slug(args.as, 'as')
+      // The address the copy takes: the SOURCE app's own slug, not the
+      // published name. An app is written at its own address — a page that
+      // names `/chores/api/client.js`, an app that reaches a sibling by name
+      // — so a copy landing at `chore-chart` is renamed out from under its
+      // own files (C-32905 items 1 and 3). The kernel's `<base>` (apps.ts)
+      // is what makes a page written relatively survive either way; this is
+      // so the address reads like the app, and so an app written the old
+      // absolute way still works. The published name is the fallback when
+      // that address is spoken for here, and `as` is still the last word.
+      let vacant = async (at: string) =>
+        !(await ctx.dir.app(space, at)) && !(await ctx.dir.former(space, at))
+      let s = args.as != null
+        ? slug(args.as, 'as')
+        : (await vacant(offer.app.slug))
+        ? offer.app.slug
+        : name
       if (await ctx.dir.app(space, s)) {
         throw new Error(
           `app ${s} exists in ${space.slug} — app_install(name, as: '…') ` +
@@ -1857,7 +1872,7 @@ export let TOOLS: Tool[] = [
       "'$alias' eid mints a new one (the answer maps it to its eid), as does a " +
       'uuid of your own that names nothing yet, a nested bundle stands in ' +
       'wherever an eid goes, and edges are the `dependency` component. The ' +
-      "app's pages write this same shape through /<app>/api/client.js. The " +
+      "app's pages write this same shape through ./api/client.js. The " +
       'components every app shares are ' +
       '— doc (title, body), task (status, priority, project), project, ' +
       "comment, web, image, attachment, archived; components of the app's " +
@@ -1922,7 +1937,7 @@ export let TOOLS: Tool[] = [
       'Answers entity JSON, {kind, entity: {eid, num}, ...components} — and ' +
       'only the components the filter NAMES, so ask for what you want; ' +
       "'*' answers every component, for looking rather than reading. The " +
-      'same filter line the page passes to query() from /<app>/api/client.js. ' +
+      'same filter line the page passes to query() from ./api/client.js. ' +
       'Name an app to read that one; LEAVE app OUT to read every app at ' +
       'once — an entity spans apps, so one bundle can carry components from ' +
       "several: '.recipe!&.loan!' answers the entities wearing both, " +
@@ -1963,7 +1978,7 @@ export let TOOLS: Tool[] = [
     description:
       "Find words in the app's data — every title and body, ranked, with " +
       'filters riding along if you want them. The page has the same door as ' +
-      'search() from /<app>/api/client.js. Name an app to search that one; leave ' +
+      'search() from ./api/client.js. Name an app to search that one; leave ' +
       'app out to search every app the person has, best hits first.',
     input: {
       type: 'object',

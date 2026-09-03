@@ -17,20 +17,21 @@ let guide = Deno.readTextFileSync(
   new URL('./public/guide.md', import.meta.url),
 )
 
-// The client is imported ABSOLUTELY, by the app's own slug, wherever the
-// guide shows an import: a relative `./api/client.js` resolves against the
-// PAGE's address, and an app's pretty paths make that address anything at all
-// — at `/recipes/42` the import asks for `/recipes/42/api/client.js` and 404s.
-// The guide taught pretty paths and the relative import on one page and
-// warned about neither (C-32800 item 7).
-Deno.test('the guide imports the client absolutely, every time it shows one', () => {
+// The client is imported RELATIVELY, wherever the guide shows an import, and
+// no app's own files name the app: the copy someone installs lives at
+// whatever address they took it at, so `/chores/api/client.js` written into a
+// page 404s there and the page renders as bare HTML (C-32905 item 1). The
+// kernel gives every page a `<base href>` at the app's own address (apps.ts
+// `based`), which is what makes `./api/client.js` right from a pretty path
+// too — the reason the guide taught the absolute form (C-32800 item 7).
+Deno.test('the guide imports the client relatively, every time it shows one', () => {
   assertEquals(
     [...guide.matchAll(/from '([^']*client\.js)'/g)].map((m) => m[1])
-      .filter((from) => !from.startsWith('/')),
+      .filter((from) => from != './api/client.js'),
     [],
   )
   assert(
-    /from '\/[a-z0-9-]+\/api\/client\.js'/.test(guide),
+    /from '\.\/api\/client\.js'/.test(guide),
     'the guide shows no import at all',
   )
 })

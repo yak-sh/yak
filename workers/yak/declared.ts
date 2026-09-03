@@ -17,7 +17,7 @@
 // apps this session has opened, and it remembers nothing (mcp.ts).
 import { type App, type Space, storeName } from './directory.ts'
 import type { Env } from './env.ts'
-import { acting } from './apps.ts'
+import { acting, based } from './apps.ts'
 import {
   filled,
   schemaOf,
@@ -232,17 +232,6 @@ export let cspFor = (space: Space) => ({
   },
 })
 
-// The `<base>` tag, where the parser will read it: inside the head if the
-// page has one, else after the doctype, which must stay the document's first
-// thing or the browser reads the whole page in quirks mode.
-let based = (space: Space, app: App, page: string) => {
-  let tag = `<base href="${siteOf(space)}/${app.slug}/">`
-  let head = /<head[^>]*>/i.exec(page)
-  if (head) return page.replace(head[0], `${head[0]}${tag}`)
-  let doctype = /^\s*<!doctype[^>]*>/i.exec(page)
-  return doctype ? page.replace(doctype[0], `${doctype[0]}${tag}`) : tag + page
-}
-
 // The pages the caller can reach, one entry each however many tools draw in
 // them. What is listed is what a tool NAMED: an app's other files are the
 // web's business, not this door's, and a private app's are nobody's.
@@ -295,5 +284,8 @@ export let readView = async (ctx: Ctx, uri: string) => {
   let key = `${space.slug}/${app.slug}/${file}`
   if (!(await blobs.has(key))) return null
   let page = new TextDecoder().decode(await blobs.get(key))
-  return { uri, text: based(space, app, page), _meta: cspFor(space) }
+  // The same tag the app door gives every page it serves (apps.ts
+  // `based`), at the absolute address a page rendered off-origin needs.
+  let home = `${siteOf(space)}/${app.slug}/`
+  return { uri, text: based(home, page), _meta: cspFor(space) }
 }

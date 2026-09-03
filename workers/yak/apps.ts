@@ -182,6 +182,31 @@ let reported = (app: App, page: Response) => {
     .transform(page)
 }
 
+// An app's own files must not name the app. The code is COPIED under
+// whatever address the installer took it at (`app_install`), so a page
+// written with `/chores/api/client.js` in it is a 404 the moment the copy
+// lands at `/chore-chart/` — which is how a shared app rendered as bare HTML,
+// no stylesheet and no script, and nothing said so (C-32905 item 1). Every
+// page the kernel serves is given a `<base href>` at the app's own address
+// instead, so `./api/client.js` and `./style.css` resolve from wherever the
+// page is opened, pretty paths included. An absolute `/<app>/…` a page
+// already carries is untouched — a base moves relative URLs only.
+//
+// Where the parser will read it: inside the head if the page has one, else
+// after the doctype, which must stay the document's first thing or the
+// browser reads the whole page in quirks mode. A page carrying its own
+// `<base>` keeps it, and is given none: the first in tree order is the
+// document's, and an author who wrote one meant it. declared.ts hands a view
+// to an MCP host by the same rule, at that app's absolute address.
+export let based = (href: string, page: string) => {
+  if (/<base[\s>][^>]*\bhref\b/i.test(page)) return page
+  let tag = `<base href="${href}">`
+  let head = /<head[^>]*>/i.exec(page)
+  if (head) return page.replace(head[0], `${head[0]}${tag}`)
+  let doctype = /^\s*<!doctype[^>]*>/i.exec(page)
+  return doctype ? page.replace(doctype[0], `${doctype[0]}${tag}`) : tag + page
+}
+
 // A path behind no file whose last segment names no file TYPE is a route,
 // not a miss (T-32769): `/recipes/42` is the page asking to be opened at a
 // place, so the app's own index.html answers it with 200 and the page routes
@@ -212,10 +237,15 @@ let asset = async (env: Env, space: Space, app: App, path: string) => {
   if (!(await blobs.has(key)) && pretty(path)) key = keyOf(space, app, '/')
   if (!(await blobs.has(key))) return nothingHere()
   let type = mimeOf(key)
-  let file = new Response(await blobs.get(key), {
-    headers: { 'content-type': type },
-  })
-  return type.startsWith('text/html') ? reported(app, file) : file
+  let bytes = await blobs.get(key)
+  let headers = { 'content-type': type }
+  if (!type.startsWith('text/html')) return new Response(bytes, { headers })
+  // A page, so it gets the app's address before its own first relative URL,
+  // and the reporter after it. The bytes are already whole here (the blob
+  // seam answers a Uint8Array), so reading them to decide whether the page
+  // has a `<base>` of its own costs nothing the serve did not already spend.
+  let page = based(`/${app.slug}/`, new TextDecoder().decode(bytes))
+  return reported(app, new Response(page, { headers }))
 }
 
 // Where the browser sends what it notices on its own: the app's own report

@@ -20,18 +20,20 @@ CODE of its own comes later.
 
 ## The store, from a page
 
-The kernel serves a client beside every app, at `/<app>/api/client.js` — the
-app's own slug, absolute:
+The kernel serves a client beside every app, at `./api/client.js`:
 
     <script type="module">
       import { apply, me, query, search, subscribe, upload }
-        from '/recipes/api/client.js'
+        from './api/client.js'
     </script>
 
-Import it absolutely, always. A relative `./api/client.js` breaks the moment a
-page is opened at a pretty path: at `/recipes/42` it resolves to
-`/recipes/42/api/client.js`, which is not there. The app knows its own slug; a
-page does not know its own depth.
+Write every address in your app RELATIVE, and never write the app's own name
+into its own files. The kernel gives each page it serves a `<base href>` at the
+app's own address, so `./api/client.js` and `./style.css` are right from any
+path the page is opened at, pretty paths included — and they stay right in
+somebody else's copy, which lives at whatever address they installed it under. A
+page that carries a `<base>` of its own keeps it, and answers for its own
+addresses.
 
 Six functions, all same-origin, all talking to this app's own graph:
 
@@ -148,22 +150,21 @@ cached forever because they can never change.
     })
 
     for (let p of await query('.photo!')) {
-      draw(p.photo.caption, `/recipes/api/blob/${p.photo.blob}`)
+      draw(p.photo.caption, `./api/blob/${p.photo.blob}`)
     }
 
 (`photo` is the app's own component —
 `{"photo": {"caption": "text", "blob":
 "text"}}` in its `vocab.json`; see
-below.) A row points at bytes by their eid, and `/<app>/api/blob/<eid>` is where
-they are, which is what `url` already holds — absolute, like the import, so it
-is right from a page at any path.
+below.) A row points at bytes by their eid, and `./api/blob/<eid>` is where they
+are, which is what `url` already holds.
 
 The upload writes a row of its own as well, so `query('.attachment!')` lists
 every file in the app. That row's eid is the row's, not the bytes' — the bytes
 are `.attachment.blob`, and that is what an address is built from:
 
     for (let f of await query('.attachment!')) {
-      draw(`/recipes/api/blob/${f.attachment.blob}`, f.attachment.name)
+      draw(`./api/blob/${f.attachment.blob}`, f.attachment.name)
     }
 
 What a picture measures is a fact about the bytes, so `image` sits on the blob
@@ -326,7 +327,7 @@ bundle that spans two.
 
 A PAGE reads a sibling app the same way, by naming its address:
 
-    import { store } from '/reading/api/client.js'
+    import { store } from './api/client.js'
 
     let lending = store('/lending/api/')
     let loans = await lending.query('.loan!')
@@ -497,9 +498,11 @@ here, and anyone can take a copy into their own — four tools:
   line someone browsing reads. Only the space owner may publish.
 - `app_unpublish(app)` — withdraw the offer. The app is untouched, every copy
   anyone took is untouched, and the name is free again.
-- `app_published()` — what is on offer, newest first.
-- `app_install(name, as?)` — take one. `as` puts it at another address in their
-  space; leave it out and it lands at the published name.
+- `app_published()` — what is on offer, newest first, each with the address it
+  installs at.
+- `app_install(name, as?)` — take one. Leave `as` out and it lands at the app's
+  own slug — the address its author wrote it at — or at the published name when
+  that one is taken here; `as` puts it anywhere you say.
 - `app_update(app)` — move an installed copy to whatever its publisher offers
   now.
 

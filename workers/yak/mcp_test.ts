@@ -91,7 +91,7 @@ slow(
           'app_new',
           'app_files',
           'app_deploy',
-          "import { apply, query, search, subscribe } from '/recipes/api/client.js'",
+          "import { apply, query, search, subscribe } from './api/client.js'",
           'vocab.json',
           "subscribe('.doc!', draw)",
           'not localStorage',
@@ -112,10 +112,10 @@ slow(
       ) assertStringIncludes(init.instructions, said)
       let says = (name: string) =>
         tools.find((t: { name: string }) => t.name == name).description
-      assertStringIncludes(says('app_files'), '/<app>/api/client.js')
+      assertStringIncludes(says('app_files'), './api/client.js')
       assertStringIncludes(says('app_files'), 'never localStorage')
       assertStringIncludes(says('graph_query'), '.doc!')
-      assertStringIncludes(says('graph_apply'), '/<app>/api/client.js')
+      assertStringIncludes(says('graph_apply'), './api/client.js')
 
       // The guide the tool descriptions point at, offered as a resource and
       // read from the address that serves it.
@@ -337,7 +337,11 @@ slow(
       assertMatch(await agent.tool('app_deploy', app), /v2/)
       let served = await k.at('jeff.yaks.app', '/recipes/')
       assertEquals(served.status, 200)
-      assertStringIncludes(await served.text(), page)
+      // The page as written, given the app's own address to resolve its
+      // relative URLs against (apps.ts `based`, T-32907).
+      let html = await served.text()
+      assertStringIncludes(html, '<h1>Our recipe box</h1>')
+      assertStringIncludes(html, '<base href="/recipes/">')
       let bare = await k.at('jeff.yaks.app', '/', { redirect: 'manual' })
       assertEquals(bare.headers.get('location'), '/recipes/')
 
@@ -706,7 +710,10 @@ slow(
       let moved = { space: 'jeff', app: 'cookbook' }
       let atNew = await k.at('jeff.yaks.app', '/cookbook/')
       assertEquals(atNew.status, 200)
-      assertStringIncludes(await atNew.text(), page)
+      // Renamed, so the base a page is given moves with it.
+      let atNewHtml = await atNew.text()
+      assertStringIncludes(atNewHtml, '<h1>Our recipe box</h1>')
+      assertStringIncludes(atNewHtml, '<base href="/cookbook/">')
       // The address it left keeps answering, permanently, as the move it
       // was: a link someone already has still finds the app, and a page still
       // open on the old address still writes to it (C-32574 item 4, where a
@@ -2314,6 +2321,97 @@ slow('an installed app is the installer own copy, data and all', async () => {
         Error,
       )).message,
       'was not installed from anywhere',
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
+// The whole of T-32907 (C-32905 items 1 and 3): an app's own files never name
+// the app. Its pages say `./api/client.js` and `./style.css`, the kernel gives
+// every page it serves a `<base href>` at the app's OWN address, and the copy
+// someone installs works at whatever address it took — including from a pretty
+// path, where a relative URL would otherwise resolve against the page's depth.
+// Before this, an install under another name served bare HTML: no stylesheet,
+// no script, and nothing said so.
+slow('an app names no app, and the copy works at its own address', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let his = connector(k, jeff.cookie)
+    let write = (path: string, content: string) =>
+      his.tool('app_files', { app: 'chores', op: 'write', path, content })
+    await his.tool('app_new', { slug: 'chores', title: 'Chores' })
+    await write(
+      'index.html',
+      '<!doctype html><html><head>' +
+        '<link rel="stylesheet" href="./style.css">' +
+        '<script type="module" src="./api/client.js"></script>' +
+        '</head><body><h1>Chores</h1></body></html>',
+    )
+    await write('style.css', 'h1 { color: rebeccapurple }')
+    // A page that answers for its own addresses keeps its own base, and is
+    // given no second one — the first in tree order is the document's.
+    await write(
+      'own.html',
+      '<!doctype html><html><head><base href="/elsewhere/">' +
+        '</head><body>mine</body></html>',
+    )
+    await his.tool('app_deploy', { app: 'chores' })
+    // Published under a name that is not its slug, which is what renamed the
+    // copy out from under its own code.
+    await his.tool('app_publish', { app: 'chores', name: 'chore-chart' })
+    // The offer says what it will be called.
+    assertStringIncludes(await his.tool('app_published'), 'installs as chores')
+
+    let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
+    let hers = connector(k, ann.cookie)
+    let space = ann.email.split('@')[0]
+    let host = `${space}.yaks.app`
+    assertStringIncludes(
+      await hers.tool('app_install', { name: 'chore-chart', as: 'sisters' }),
+      `as ${space}/sisters`,
+    )
+
+    // Her page, at the app's root and at a pretty path under it: what a
+    // browser would resolve every relative address to, fetched.
+    for (let at of ['/sisters/', '/sisters/week/2']) {
+      let r = await k.at(host, at)
+      assertEquals(r.status, 200)
+      let html = await r.text()
+      assertStringIncludes(html, '<h1>Chores</h1>')
+      // The reporter still rides along, at her address.
+      assertStringIncludes(html, '/sisters/api/report.js')
+      let base = /<base href="([^"]+)">/.exec(html)?.[1]
+      assertEquals(base, '/sisters/', at)
+      for (
+        let [href, type] of [
+          ['./api/client.js', /javascript/],
+          ['./style.css', /css/],
+        ] as [string, RegExp][]
+      ) {
+        let to = new URL(href, new URL(base!, `https://${host}${at}`))
+        let got = await k.at(host, to.pathname)
+        assertEquals(got.status, 200, `${at} -> ${to.pathname}`)
+        assertMatch(got.headers.get('content-type') ?? '', type)
+      }
+    }
+
+    // The page that brought its own base keeps it, alone.
+    let own = await (await k.at(host, '/sisters/own.html')).text()
+    assertEquals(own.split('<base').length - 1, 1)
+    assertStringIncludes(own, '<base href="/elsewhere/">')
+
+    // With no address asked for, a copy lands at the app's OWN slug — the one
+    // its code was written at — and falls back to the published name when
+    // that address is already spoken for here.
+    assertStringIncludes(
+      await hers.tool('app_install', { name: 'chore-chart' }),
+      `as ${space}/chores`,
+    )
+    assertStringIncludes(
+      await hers.tool('app_install', { name: 'chore-chart' }),
+      `as ${space}/chore-chart`,
     )
   } finally {
     await k.stop()

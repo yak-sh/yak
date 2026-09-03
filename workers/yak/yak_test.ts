@@ -88,8 +88,11 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     let served = await k.at('jeff.yaks.app', '/recipes/')
     assertEquals(served.status, 200)
     assertMatch(served.headers.get('content-type') ?? '', /text\/html/)
-    // The page as written, plus the reporter the kernel injects (apps.ts).
-    assertStringIncludes(await served.text(), page)
+    // The page as written, plus the reporter and the app's own address the
+    // kernel injects (apps.ts `reported`, `based`).
+    let html = await served.text()
+    assertStringIncludes(html, '<h1>Our recipe box</h1>')
+    assertStringIncludes(html, '<base href="/recipes/">')
     let style = await k.at('jeff.yaks.app', '/recipes/style.css')
     assertMatch(style.headers.get('content-type') ?? '', /text\/css/)
     assertEquals(await style.text(), 'h1 { color: peru }')
@@ -100,8 +103,11 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     assertEquals(deep.status, 200)
     assertMatch(deep.headers.get('content-type') ?? '', /text\/html/)
     let inside = await deep.text()
-    assertStringIncludes(inside, page)
+    assertStringIncludes(inside, '<h1>Our recipe box</h1>')
     assertStringIncludes(inside, '/recipes/api/report.js')
+    // And the base, which is what keeps a relative `./api/client.js` on this
+    // page pointing at the app rather than at its depth (T-32907).
+    assertStringIncludes(inside, '<base href="/recipes/">')
     assertEquals(
       (await k.at('jeff.yaks.app', '/recipes/missing.css')).status,
       404,
