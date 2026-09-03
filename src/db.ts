@@ -4640,8 +4640,7 @@ let storedSentence = (db: Sql, eid: string) =>
 // CASTS the `dependency` change a live cache indexes by (live.ts). That cast
 // rides `extra`, beside the claim's `worked` echo and every other server-
 // derived change — a projection the server computed is not a second saying by
-// the writer, so it answers to no rule (a persona's tiers are the owner's, and
-// the backfill re-minting one must not be refused as if an agent had asked).
+// the writer, so it answers to no rule.
 // Only the batch's own changes translate, never this pass's output, so the two
 // directions cannot feed each other. The mint mirrors the dependency rule's
 // tolerance — an endpoint that neither exists nor arrives in this batch drops
