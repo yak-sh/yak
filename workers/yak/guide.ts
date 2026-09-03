@@ -100,6 +100,15 @@ export let PAGES: Page[] = [
       'what people saved.',
   },
   {
+    slug: 'domains',
+    title: 'A domain of their own',
+    description:
+      'Pointing a domain the person already owns at their app: the CNAME to ' +
+      'add and where to type it at GoDaddy, Namecheap, Squarespace and the ' +
+      'rest, the apex problem and the three ways through it, what each ' +
+      'pending state means, and why a domain stays stuck.',
+  },
+  {
     slug: 'errors',
     title: 'When something breaks',
     description:

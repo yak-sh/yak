@@ -13,6 +13,7 @@ import { comps, typeName } from '../../src/types.ts'
 import { SHIM, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { PAGES, uriOf } from './guide.ts'
+import { ORIGIN } from './route.ts'
 import { TOOLS } from './tools.ts'
 
 let guide = Deno.readTextFileSync(
@@ -256,5 +257,31 @@ Deno.test('the guide prints every column of every component it lists', () => {
         name,
       )
     }
+  }
+})
+
+// The sixth list that can rot, and the one a person's own domain rides on
+// (T-33038): the name they are told to point a CNAME at. It is route.ts's
+// `ORIGIN` and nowhere else, because a guide teaching a target that is not
+// ours teaches a domain that never comes up — and the person has no way to
+// tell the difference between that and waiting. The three tools have to be
+// named too: a verb nobody is pointed at is a verb nobody finds.
+Deno.test('the guide and its page point a domain where the code does', () => {
+  let section = guide.split('## A domain of their own')[1]
+    ?.split('\n## ')[0] ?? ''
+  assert(section, 'the guide never teaches a custom domain')
+  for (let tool of TOOLS.map((t) => t.name).filter((n) => /^domain_/.test(n))) {
+    assert(section.includes(tool), `the guide never names ${tool}`)
+  }
+  for (
+    let [where, text] of [['guide', section], ['page', pageText('domains')]]
+  ) {
+    assert(text.includes(ORIGIN), `the ${where} never says ${ORIGIN}`)
+    assertEquals(
+      [...text.matchAll(/\borigin[a-z0-9.-]*\.yaks\.app/g)].map((m) => m[0])
+        .filter((host) => host != ORIGIN),
+      [],
+      `the ${where} names an origin that is not ours`,
+    )
   }
 })

@@ -62,6 +62,14 @@ export type Env = {
   // is told so.
   DISPATCH?: Dispatch
   CF_WORKERS_TOKEN?: string
+  // A person's own domain (domains.ts, T-33038): the yaks.app zone the
+  // Cloudflare for SaaS custom hostnames are created on — not a secret, it
+  // rides wrangler.toml's `[vars]` beside the account tag — and a token that
+  // may edit that zone's SSL and certificates, which is the owner's to set.
+  // Unset, the domain tools refuse saying which is missing; nothing is ever
+  // half-attached.
+  CF_ZONE?: string
+  CF_HOSTNAMES_TOKEN?: string
   // The single static token OpenAI's apps directory fetches to verify the
   // domain (index.ts serves it at /.well-known/openai-apps-challenge). A
   // secret so the open-source repo carries no token; unset, that path 404s.

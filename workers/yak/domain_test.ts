@@ -2,9 +2,14 @@
 // has never been given routes exactly as it always has — the apex — and one
 // it HAS been given serves that app at its root, paths below it the app's own.
 // The hostname is the key, so two spaces cannot both claim it.
-import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { client, kernel, meta, seed } from './probe.ts'
+import { client, connector, kernel, meta, seed } from './probe.ts'
 
 slow('a hostname finds its app, and only one app', async () => {
   let k = await kernel()
@@ -81,6 +86,98 @@ slow('a hostname finds its app, and only one app', async () => {
     )
     let still = await k.at('herbusiness.com', '/')
     assertStringIncludes(await still.text(), 'Our recipe box')
+  } finally {
+    await k.stop()
+  }
+})
+
+// And attaching one (T-33038), as far as it goes without the platform's
+// Cloudflare token: every refusal a person can hit before Cloudflare is ever
+// asked, said in its own sentence, and nothing half-written when the token is
+// the thing that is missing. The Cloudflare exchange itself is held in
+// domains_test.ts against the bytes the live zone answered.
+slow('attaching a domain: what it refuses, and what it says', async () => {
+  let k = await kernel()
+  try {
+    let { cookie } = await seed(k, [{
+      slug: 'jeff',
+      apps: ['recipes', 'garden'],
+    }])
+    let agent = connector(k, cookie)
+    let said = (p: Promise<string>) => p.then((t) => t, (e: Error) => e.message)
+
+    // A space with none is told where it does answer, not just "none".
+    let empty = await agent.tool('domain_status', { space: 'jeff' })
+    assertStringIncludes(empty, 'https://jeff.yaks.app/')
+
+    // Our own zone is not a domain anybody brought.
+    assertStringIncludes(
+      await said(agent.tool('domain_attach', {
+        app: 'recipes',
+        hostname: 'jeff.yaks.app',
+      })),
+      'is on yaks.app, which is ours',
+    )
+
+    // A URL means the hostname in it — a model that pastes one is not made
+    // to guess again — and a name that is no domain says what one looks like.
+    assertStringIncludes(
+      await said(agent.tool('domain_attach', {
+        app: 'recipes',
+        hostname: 'https://JEFF.yaks.app/recipes',
+      })),
+      'jeff.yaks.app is on yaks.app',
+    )
+    assertStringIncludes(
+      await said(agent.tool('domain_attach', {
+        app: 'recipes',
+        hostname: 'not a domain',
+      })),
+      'a domain like herbusiness.com',
+    )
+
+    // The token is the platform's, and its absence is a sentence naming it —
+    // never a 400 and never a domain half-attached.
+    assertStringIncludes(
+      await said(agent.tool('domain_attach', {
+        app: 'recipes',
+        hostname: 'herbusiness.com',
+      })),
+      'CF_HOSTNAMES_TOKEN',
+    )
+    // And nothing was written: the row would have been the claim on the name.
+    assertStringIncludes(
+      await agent.tool('domain_status', { space: 'jeff' }),
+      'has no custom domain',
+    )
+    assertStringIncludes(
+      await said(agent.tool('domain_status', {
+        space: 'jeff',
+        hostname: 'herbusiness.com',
+      })),
+      'has no domain herbusiness.com',
+    )
+    assertStringIncludes(
+      await said(agent.tool('domain_detach', {
+        space: 'jeff',
+        hostname: 'herbusiness.com',
+      })),
+      'has no domain herbusiness.com',
+    )
+
+    // A hostname another space holds is refused without naming that space's
+    // apps: one hostname is one place, and whose place is not this caller's
+    // to learn.
+    let other = await seed(k, [{ slug: 'ann', apps: ['shop'] }])
+    await meta(k, cookie).apply([{
+      hostname: { name: 'herbusiness.com', app: other.eids['ann/shop'] },
+    }])
+    let bounced = await said(agent.tool('domain_attach', {
+      app: 'recipes',
+      hostname: 'herbusiness.com',
+    }))
+    assertStringIncludes(bounced, 'attached to another space')
+    assert(!bounced.includes('shop'), bounced)
   } finally {
     await k.stop()
   }

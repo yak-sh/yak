@@ -249,8 +249,9 @@ let api = (env: Env, path: string) =>
 
 // What the API answered, or the sentence it refused with. Cloudflare wraps
 // every reply in `{success, errors, result}`, so a failure is read out of
-// the body and not only off the status.
-let answered = async (r: Response) => {
+// the body and not only off the status. Exported because that envelope is
+// the whole account API's, not this door's: domains.ts speaks the same one.
+export let answered = async (r: Response) => {
   let body = await r.text()
   let said = (() => {
     try {

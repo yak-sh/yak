@@ -58,6 +58,7 @@ import {
   META_STORE,
   type Role,
   type Space,
+  stamp,
   storeName,
 } from './directory.ts'
 import { moved, reachChanged, toolsOf } from './declared.ts'
@@ -70,10 +71,22 @@ import {
   setSecret,
   upload,
 } from './dispatch.ts'
+import {
+  apex,
+  customOf,
+  HOST,
+  provision,
+  reachable,
+  reading,
+  records,
+  release,
+  stageOf,
+  steps,
+} from './domains.ts'
 import type { Env } from './env.ts'
 import { mail, REPLY_TO } from './mail.ts'
 import { NO_ARGS, PUBLIC } from './preauth.ts'
-import { SLUG } from './route.ts'
+import { foreign, SLUG } from './route.ts'
 import { type Reach, read, written } from './reach.ts'
 import { mayWrite, reads, titling, vouched, type Who } from './session.ts'
 import { canon, nameOf, personOf } from './signin.ts'
@@ -133,6 +146,23 @@ let SPACE = str(
     'holds it. Name one only when a refusal asks you to',
 )
 let APP = str('the app slug within the space')
+
+let HOSTNAME = str(
+  'the domain, whole and as it will be typed into a browser — ' +
+    'herbusiness.com, or www.herbusiness.com. No scheme and no path',
+)
+
+// What to say when the hostname is a domain's apex, where DNS forbids a
+// CNAME. This is the step a non-technical person gives up at, so the answer
+// they need is in the answer they already have, not a page away.
+let APEX =
+  'This is the apex — the bare domain, with nothing in front of it — and ' +
+  'DNS does not allow a CNAME there. Three ways through, best first: move ' +
+  "the domain's DNS to Cloudflare (free, and its CNAME flattening makes the " +
+  "apex work), or use the registrar's own ALIAS/ANAME record type with the " +
+  'same value (Porkbun has one; GoDaddy, Namecheap, Squarespace and Hover ' +
+  'do not), or attach www.<domain> instead and redirect the apex to it. ' +
+  'https://yaks.app/guide/domains.md walks through each.\n\n'
 
 // What an app lets someone who is not a member do with its data (T-32504).
 // The person's agent picks it from their ask, which is why the words are the
@@ -218,6 +248,23 @@ let address = (v: unknown) => {
     throw new Error('email: an address like name@example.com')
   }
   return at
+}
+
+// A domain, as forgivingly as the rest of this file reads an argument: a
+// model that pastes `https://herbusiness.com/` means the hostname in it, and
+// refusing that would only teach it to guess again. A trailing dot is the
+// same name, and the store keeps one spelling.
+let hostname = (v: unknown) => {
+  let s = text(v, 'hostname').trim().toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+    .replace(/[/?#].*$/, '')
+    .replace(/\.$/, '')
+  if (!HOST.test(s)) {
+    throw new Error(
+      'hostname: a domain like herbusiness.com or www.herbusiness.com',
+    )
+  }
+  return s
 }
 
 let slug = (v: unknown, what: string) => {
@@ -1525,6 +1572,233 @@ export let TOOLS: Tool[] = [
         data: { spaces: out },
         // Only one space in hand has an unseen channel to append to.
         space: spaces.length == 1 ? spaces[0]! : undefined,
+      }
+    },
+  },
+  {
+    name: 'domain_attach',
+    description:
+      "Serve one of the person's apps at a domain they already own — " +
+      'herbusiness.com instead of jeff.yaks.app/recipes. It provisions the ' +
+      'hostname here and answers with the DNS record they have to add where ' +
+      'their domain is managed, as data: type, name, value. Add it for them ' +
+      'if you can reach their registrar; otherwise walk them through their ' +
+      "own panel — you know what GoDaddy's and Namecheap's look like. " +
+      'Nothing serves until that record is in place, so tell them the ' +
+      'record and then domain_status to watch it come up. Only the space ' +
+      'owner may attach one.',
+    input: {
+      type: 'object',
+      properties: { space: SPACE, app: APP, hostname: HOSTNAME },
+      required: ['app', 'hostname'],
+    },
+    run: async (ctx, args) => {
+      let host = hostname(args.hostname)
+      let { space, app, who } = await ownsApp(ctx, args)
+      // A hostname on our own zone is not a domain anybody brought: every
+      // space already answers at one, and route.ts decides which without
+      // reading anything.
+      if (!foreign(host)) {
+        throw new Error(
+          `${host} is on yaks.app, which is ours — a custom domain is one ` +
+            `the person owns somewhere else. ${space.slug} already answers ` +
+            `at https://${space.slug}.yaks.app/`,
+        )
+      }
+      // One hostname is one place. Whose it is stays out of the refusal
+      // unless it is this space's: another space's app names are not this
+      // caller's to learn.
+      let taken = await ctx.dir.serves(host)
+      if (taken) {
+        throw new Error(
+          taken.space.eid == space.eid
+            ? `${host} already serves ${space.slug}/${taken.app.slug} — ` +
+              'domain_detach it first to move it'
+            : `${host} is attached to another space on this platform. If it ` +
+              "is the person's domain, whoever attached it has to " +
+              'domain_detach it first',
+        )
+      }
+      reachable(ctx.env)
+      // The ROW first, then Cloudflare. The unique index on the name is what
+      // decides who gets a hostname, so it decides before we spend a billable
+      // custom hostname on it; an attach that Cloudflare then refuses takes
+      // its own row back out.
+      let eid = crypto.randomUUID()
+      let at = new Date().toISOString()
+      await ctx.dir.apply({
+        entities: [{
+          entity: { eid },
+          hostname: { name: host, app: app.eid, stage: 'pending', at },
+        }],
+      }, vouched(who))
+      let custom
+      try {
+        custom = await provision(ctx.env, host)
+      } catch (e) {
+        await ctx.dir.apply({
+          entities: [{ entity: { eid }, tombstone: {} }],
+        }, vouched(who)).catch(() => {})
+        throw e
+      }
+      let how = steps(custom)
+      let stage = stageOf(how)
+      // What Cloudflare says is the PLATFORM's word, not the person's, so it
+      // is stamped rather than written as them (directory.ts `stamp`) — which
+      // is also what lets a viewer's domain_status refresh a stage below.
+      if (stage != 'pending') {
+        await stamp(ctx.env, {
+          entities: [{ entity: { eid }, hostname: { stage, at } }],
+        })
+      }
+      let recs = records(host)
+      return {
+        text: `${host} is attached to ${space.slug}/${app.slug}.\n\n` +
+          `Add this record where ${host}'s DNS is managed:\n\n` +
+          recs.map((r) => `  ${r.type}  ${r.name}  →  ${r.value}`).join('\n') +
+          '\n\n' + (apex(host) ? APEX : '') +
+          `${reading(how)}\n\nDNS usually takes minutes and can take a day; ` +
+          'the certificate is issued within minutes of the record ' +
+          `resolving. domain_status(hostname: '${host}') says where it is.`,
+        data: {
+          hostname: host,
+          app: `${space.slug}/${app.slug}`,
+          url: `https://${host}/`,
+          stage,
+          apex: apex(host),
+          records: recs,
+          steps: how,
+        },
+        space,
+      }
+    },
+  },
+  {
+    name: 'domain_status',
+    description:
+      'How far a domain has come: whether the DNS record has arrived, ' +
+      'whether Cloudflare has accepted the hostname, and whether the ' +
+      'certificate is issued — each said specifically enough to tell the ' +
+      'person what is still waiting on them. Read from Cloudflare, not ' +
+      'from what we last wrote down. Leave hostname out for every domain in ' +
+      'the space. Call it after domain_attach, and again a few minutes ' +
+      'later; nothing needs doing between.',
+    input: {
+      type: 'object',
+      properties: { space: SPACE, hostname: HOSTNAME },
+    },
+    run: async (ctx, args) => {
+      let { space } = await inSpace(ctx, args)
+      let want = args.hostname == null ? null : hostname(args.hostname)
+      let rows = (await ctx.dir.hosts(space))
+        .filter((h) => !want || h.name == want)
+      if (want && !rows.length) {
+        throw new Error(
+          `${space.slug} has no domain ${want} — domain_attach it, or ` +
+            'domain_status with no hostname for the ones it has',
+        )
+      }
+      if (!rows.length) {
+        return {
+          text: `${space.slug} has no custom domain. It answers at ` +
+            `https://${space.slug}.yaks.app/; domain_attach puts one of its ` +
+            'apps on a domain the person owns.',
+          space,
+        }
+      }
+      reachable(ctx.env)
+      let apps = await ctx.dir.apps(space)
+      let out = []
+      let lines = []
+      for (let row of rows) {
+        let app = apps.find((a) => a.eid == row.app)
+        let where = `${space.slug}/${app?.slug ?? '?'}`
+        let custom = await customOf(ctx.env, row.name)
+        // A row whose hostname Cloudflare no longer has is the one state
+        // nothing else can explain, and it is not something a person can
+        // wait out: say the verb that fixes it.
+        let how = custom ? steps(custom) : null
+        let stage = how ? stageOf(how) : 'error' as const
+        if (stage != row.stage) {
+          await stamp(ctx.env, {
+            entities: [{
+              entity: { eid: row.eid },
+              hostname: { stage, at: new Date().toISOString() },
+            }],
+          })
+        }
+        lines.push(
+          `${row.name} → ${where}` +
+            (stage == 'active' ? ` — live at https://${row.name}/` : '') +
+            '\n' +
+            (how
+              ? reading(how)
+              : '✗ Cloudflare no longer has this hostname — domain_detach ' +
+                'it and domain_attach it again') +
+            (stage == 'active' ? '' : '\n' +
+              records(row.name).map((r) =>
+                `  ${r.type}  ${r.name}  →  ${r.value}`
+              ).join('\n')),
+        )
+        out.push({
+          hostname: row.name,
+          app: where,
+          url: `https://${row.name}/`,
+          stage,
+          apex: apex(row.name),
+          records: records(row.name),
+          steps: how ?? [],
+        })
+      }
+      return {
+        text: lines.join('\n\n'),
+        data: { domains: out },
+        space,
+      }
+    },
+  },
+  {
+    name: 'domain_detach',
+    description:
+      'Stop serving an app at a domain. The hostname is given back to ' +
+      'Cloudflare and the app is untouched — it still answers at its ' +
+      '<space>.yaks.app address, and its data and files are not involved. ' +
+      "The person's DNS record is theirs to remove wherever their domain is " +
+      'managed; until they do it points at nothing. Only the space owner may.',
+    input: {
+      type: 'object',
+      properties: { space: SPACE, hostname: HOSTNAME },
+      required: ['hostname'],
+    },
+    run: async (ctx, args) => {
+      let host = hostname(args.hostname)
+      let { space, who } = await owns(ctx, args)
+      let row = (await ctx.dir.hosts(space)).find((h) => h.name == host)
+      if (!row) {
+        throw new Error(
+          `${space.slug} has no domain ${host} — domain_status says which ` +
+            'domains it has',
+        )
+      }
+      reachable(ctx.env)
+      // Cloudflare FIRST, the row last. The row is the only record we keep
+      // that the hostname exists, so a detach that dies between the two
+      // leaves a row pointing at a hostname already given back — which the
+      // next call finds and finishes. The other order leaves a billable
+      // custom hostname nothing here remembers.
+      let had = await release(ctx.env, host)
+      await ctx.dir.apply({
+        entities: [{ entity: { eid: row.eid }, tombstone: {} }],
+      }, vouched(who))
+      let app = (await ctx.dir.apps(space)).find((a) => a.eid == row.app)
+      return {
+        text:
+          `${host} is detached${app ? ` from ${space.slug}/${app.slug}` : ''}` +
+          (had ? '' : ' (Cloudflare had already given it back)') + '.' +
+          (app ? ` It still answers at ${url(space, app)}.` : '') +
+          `\n\nRemove the CNAME for ${host} wherever its DNS is managed; it ` +
+          'points at nothing now.',
+        space,
       }
     },
   },

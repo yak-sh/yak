@@ -565,6 +565,38 @@ it always does: a `vocab.json` that only GREW is applied to their store
 additively, and one that would retype a column their rows were written under is
 refused with the same sentence a deploy gives — and nothing moves at all.
 
+## A domain of their own
+
+Deeper: <https://yaks.app/guide/domains.md> — the record to add and where to
+type it at each registrar, the apex, moving DNS to Cloudflare, and what each
+pending state means.
+
+An app can also answer at a domain the person already owns — `herbusiness.com`
+instead of `jeff.yaks.app/recipes` — serving at the root of it, with the
+`.yaks.app` address still working. Three tools, all the space owner's:
+
+- `domain_attach(app, hostname)` — provisions the hostname and answers with the
+  DNS record to add, as data: `records: [{type, name, value}]`.
+- `domain_status(hostname?)` — where it has got to. Leave the hostname out for
+  every domain in the space.
+- `domain_detach(hostname)` — hands the hostname back. The app is untouched.
+
+The record is always the same shape: a CNAME at the hostname, pointing at
+`origin.saas.yaks.app`. Add it wherever the person's DNS is managed. You know
+their registrar's panel better than they do, so walk them through it in their
+own words — or do it for them, if you can reach it.
+
+**The apex is where people give up.** DNS does not allow a CNAME at a bare
+domain (`herbusiness.com`, with no `www.` in front). Moving their DNS to
+Cloudflare is the answer to lead with: it is free, its CNAME flattening makes
+the apex work, and it leaves the domain registered where it is. Failing that,
+attach `www.herbusiness.com` and forward the apex to it.
+
+Nothing serves until the record resolves — usually minutes, sometimes a day.
+`domain_status` splits the wait into the record arriving, Cloudflare accepting
+the hostname, and the certificate being issued, so you can say which one is
+outstanding instead of guessing.
+
 ## The doors underneath
 
 `client.js` is a wrapper over ordinary HTTP doors, same-origin, in case you want

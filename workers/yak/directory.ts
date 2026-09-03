@@ -450,6 +450,16 @@ export let directory = (via: Fetcher, now = false) => {
       let at = await self.appAt(idOf(row.hostname.app))
       return at ? { ...at, host: hostOf(row) } : null
     },
+    // Every domain attached to an app of this space (T-33038), oldest first.
+    // A hostname belongs to a space through its app, so this reads the
+    // hostnames and keeps the ones aimed into the space — one query, where
+    // one per app would be several, and the whole table is exactly the
+    // platform's custom hostname count.
+    hosts: async (space: Space): Promise<Host[]> => {
+      let apps = new Set((await self.apps(space)).map((a) => a.eid))
+      return (await query('.hostname!')).map(hostOf)
+        .filter((h) => apps.has(h.app))
+    },
     // The app offered under a platform-wide name (T-32888), with the space it
     // came from — an offer is an app, so this is one row read two ways.
     offered: async (name: string) => {
