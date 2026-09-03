@@ -16,12 +16,14 @@ import {
   client,
   connector,
   kernel,
+  letter,
   meta,
   seed,
   signedIn,
   signIn,
 } from './probe.ts'
 import { monthOf } from './usage.ts'
+import { VERSION } from '../../src/version.ts'
 
 let GUIDE = 'https://yaks.app/guide.md'
 let APPS = 'ui://yaks/apps'
@@ -79,6 +81,7 @@ slow(
         'graph_apply',
         'graph_query',
         'search',
+        'feedback',
       ])
       assert(tools.every((t: { inputSchema: unknown }) => t.inputSchema))
 
@@ -2763,6 +2766,97 @@ slow('the front page moves, and only the owner moves it', async () => {
     let still = await bare()
     assertEquals(still.status, 404)
     await still.body?.cancel()
+  } finally {
+    await k.stop()
+  }
+})
+
+// The other direction (T-32950): an app's breaks reach the person's agent,
+// and this is how the person reaches US. The tool writes a `report` row in
+// the meta store, attributed to whoever's agent called it, and mails the same
+// words to the platform's own address — the letter leading with what was
+// said, since a person reads it at a glance.
+slow('feedback reaches the platform, in the words it was said in', async () => {
+  let k = await kernel()
+  try {
+    let them = await seed(k, [{ slug: 'kitchen', apps: ['recipes'] }])
+    let agent = connector(k, them.cookie)
+    let app = { space: 'kitchen', app: 'recipes' }
+    await agent.tool('app_files', {
+      ...app,
+      files: [{ path: 'index.html', content: '<h1>Recipes</h1>' }],
+    })
+    await agent.tool('app_deploy', app)
+
+    let words = 'She said renaming an app is impossible to find. I looked ' +
+      'for app_rename and there is no such tool.'
+    let said = await agent.tool('feedback', { app: 'recipes', text: words })
+    // One sentence the agent can repeat: it arrived, and they can answer.
+    assertStringIncludes(said, 'people who run yaks.app')
+    assertStringIncludes(said, 'kitchen/recipes v1')
+    assertStringIncludes(said, them.email)
+
+    // The letter: the words first, the context under a rule beneath them.
+    let sent = await letter(k, 'hello@yaks.app', 'app_rename')
+    assertStringIncludes(sent.subject, 'feedback: She said renaming')
+    assert(sent.body.startsWith(words), sent.body)
+    assertStringIncludes(sent.body, `${them.name} <${them.email}>`)
+    assertStringIncludes(sent.body, 'kitchen/recipes v1')
+    assertStringIncludes(sent.body, 'https://kitchen.yaks.app/recipes/')
+    assertStringIncludes(sent.body, `yaks.app ${VERSION}`)
+
+    // The row, in the meta store: the words, who said them, and where they
+    // were standing — the app, the deploy it was serving, and the platform's
+    // own release, none of which anyone was asked for.
+    let rows = await meta(k, them.cookie).query('.report!&.doc?&.created?')
+    assertEquals(rows.length, 1)
+    let one = rows[0] as unknown as {
+      doc: { title: string; body: string }
+      report: {
+        app: unknown
+        space: unknown
+        version: number
+        release: string
+        at: string
+      }
+      created: { by: { name: string } }
+    }
+    assertEquals(one.doc.body, words)
+    assertStringIncludes(one.doc.title, 'She said renaming')
+    assertEquals(one.created.by.name, them.name)
+    assertEquals(one.report.version, 1)
+    assertEquals(one.report.release, VERSION)
+    assertStringIncludes(
+      JSON.stringify(one.report.app),
+      them.eids['kitchen/recipes'],
+    )
+    assertStringIncludes(JSON.stringify(one.report.space), them.eids.kitchen)
+
+    // And with no app: the space still rides along, and the letter carries no
+    // link to a page nobody named.
+    let plain = await agent.tool('feedback', {
+      text: 'The sign-in code took four minutes to arrive.',
+    })
+    assertStringIncludes(plain, 'people who run yaks.app')
+    let second = await letter(k, 'hello@yaks.app', 'four minutes')
+    assertEquals(second.body.includes('/recipes/'), false)
+    let [, noApp] = await meta(k, them.cookie).query(
+      '.report!&.doc?',
+    ) as unknown as { report: { app: unknown; version: unknown } }[]
+    assertEquals(noApp.report.app, null)
+    assertEquals(noApp.report.version, null)
+
+    // A few an hour is plenty. The fourth is a pause, not a no: it says the
+    // ones already sent are kept, and where to write if it cannot wait.
+    await agent.tool('feedback', { text: 'The board scrolls sideways.' })
+    let stopped = await assertRejects(
+      () => agent.tool('feedback', { text: 'And again.' }),
+      Error,
+    )
+    assertStringIncludes(stopped.message, 'kept and will be read')
+    assertStringIncludes(stopped.message, 'hello@yaks.app')
+    // Nothing was written for the one that was held.
+    assertEquals((await meta(k, them.cookie).query('.report!')).length, 3)
   } finally {
     await k.stop()
   }

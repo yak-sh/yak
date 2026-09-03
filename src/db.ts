@@ -1057,6 +1057,10 @@ export let derived = [
   // derive like the three above.
   'published',
   'installed',
+  // What a person's agent said about the platform (T-32950): two {eid}
+  // references by death word beside nullable text and number columns, so it
+  // derives like the rest of the directory.
+  'report',
   // What a space pays and what it spent (D-32751): a tier word, and the
   // meter's month of nullable counts — no FK, no NOT NULL, so both derive.
   'plan',

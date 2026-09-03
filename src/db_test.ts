@@ -556,6 +556,9 @@ let contracts = [
   })),
   // and the app an installed one was taken from (T-32889)
   contract('installed', 'of', 'app'),
+  // where someone was standing when they said what is wrong (T-32950)
+  contract('report', 'app', 'app'),
+  contract('report', 'space', 'space'),
 ]
 
 Deno.test('create + patch + column clear', () => {

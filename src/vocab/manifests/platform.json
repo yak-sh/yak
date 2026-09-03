@@ -142,6 +142,23 @@
         }
       ]
     },
+    "report": {
+      "rank": 1060,
+      "kind_rank": 430,
+      "cols": {
+        "app": {
+          "eid": "app",
+          "death": "keep"
+        },
+        "space": {
+          "eid": "space",
+          "death": "keep"
+        },
+        "version": "number",
+        "release": "text",
+        "at": "time"
+      }
+    },
     "signin": {
       "rank": 1050,
       "stamped_rank": 370,

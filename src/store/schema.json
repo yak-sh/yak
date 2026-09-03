@@ -149,6 +149,10 @@
   },
   {
     "kind": "exec",
+    "sql": "create table if not exists \"report\" (\n    entity integer primary key references entity(id),\n    \"app\" integer,\n    \"space\" integer,\n    \"version\" real,\n    \"release\" text,\n    \"at\" text\n  );"
+  },
+  {
+    "kind": "exec",
     "sql": "create table if not exists \"plan\" (\n    entity integer primary key references entity(id),\n    \"tier\" text\n  );"
   },
   {
@@ -672,6 +676,36 @@
     "table": "installed",
     "col": "version",
     "sql": "alter table installed add column \"version\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "report",
+    "col": "app",
+    "sql": "alter table report add column \"app\" integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "report",
+    "col": "space",
+    "sql": "alter table report add column \"space\" integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "report",
+    "col": "version",
+    "sql": "alter table report add column \"version\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "report",
+    "col": "release",
+    "sql": "alter table report add column \"release\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "report",
+    "col": "at",
+    "sql": "alter table report add column \"at\" text"
   },
   {
     "kind": "addColumn",
@@ -1499,6 +1533,14 @@
   {
     "kind": "exec",
     "sql": "create index if not exists member_person on \"member\" (\"person\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists report_app on \"report\" (\"app\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists report_space on \"report\" (\"space\");"
   },
   {
     "kind": "exec",

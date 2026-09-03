@@ -158,6 +158,10 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'memory.scope',
       // a goal outlives the project it guided — guidance is not the venture
       'goal.scope',
+      // what someone said about the platform outlives what they said it
+      // about: deleting an app never empties a report (T-32950)
+      'report.app',
+      'report.space',
       'session.role',
       'mail.target',
       'mail.reply_to',

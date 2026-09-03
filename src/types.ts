@@ -589,6 +589,13 @@ export let comps: Record<string, Record<string, PropType>> = {
     role: { enum: ['owner', 'editor', 'viewer'] },
   },
   signin: {},
+  report: {
+    app: { eid: 'app', death: 'keep' },
+    space: { eid: 'space', death: 'keep' },
+    version: 'number',
+    release: 'text',
+    at: 'time',
+  },
   edge: {
     from: { eid: 'entity', death: 'cascade' },
     to: { eid: 'entity', death: 'cascade' },
@@ -905,6 +912,7 @@ export let kindOrder = [
   'deploy',
   'member',
   'signin',
+  'report',
 ]
 
 // Kinds whose doc title is a NAME a caller can type (near.ts).

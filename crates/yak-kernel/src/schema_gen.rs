@@ -947,6 +947,14 @@ pub static SCHEMA: &[SchemaOp] = &[
     "of" integer references entity(id),
     "version" real
   );"#),
+    SchemaOp::Exec(r#"create table if not exists "report" (
+    entity integer primary key references entity(id),
+    "app" integer,
+    "space" integer,
+    "version" real,
+    "release" text,
+    "at" text
+  );"#),
     SchemaOp::Exec(r#"create table if not exists "plan" (
     entity integer primary key references entity(id),
     "tier" text
@@ -1125,6 +1133,11 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::AddColumn { table: "published", col: "about", sql: r#"alter table published add column "about" text"# },
     SchemaOp::AddColumn { table: "installed", col: "of", sql: r#"alter table installed add column "of" integer references entity(id)"# },
     SchemaOp::AddColumn { table: "installed", col: "version", sql: r#"alter table installed add column "version" real"# },
+    SchemaOp::AddColumn { table: "report", col: "app", sql: r#"alter table report add column "app" integer"# },
+    SchemaOp::AddColumn { table: "report", col: "space", sql: r#"alter table report add column "space" integer"# },
+    SchemaOp::AddColumn { table: "report", col: "version", sql: r#"alter table report add column "version" real"# },
+    SchemaOp::AddColumn { table: "report", col: "release", sql: r#"alter table report add column "release" text"# },
+    SchemaOp::AddColumn { table: "report", col: "at", sql: r#"alter table report add column "at" text"# },
     SchemaOp::AddColumn { table: "plan", col: "tier", sql: r#"alter table plan add column "tier" text"# },
     SchemaOp::AddColumn { table: "meter", col: "month", sql: r#"alter table meter add column "month" text"# },
     SchemaOp::AddColumn { table: "meter", col: "requests", sql: r#"alter table meter add column "requests" real"# },
@@ -1296,6 +1309,8 @@ pub static SCHEMA: &[SchemaOp] = &[
     SchemaOp::Exec(r#"create unique index if not exists member_space_person on "member" ("space", "person");"#),
     SchemaOp::Exec(r#"create index if not exists member_space on "member" ("space");"#),
     SchemaOp::Exec(r#"create index if not exists member_person on "member" ("person");"#),
+    SchemaOp::Exec(r#"create index if not exists report_app on "report" ("app");"#),
+    SchemaOp::Exec(r#"create index if not exists report_space on "report" ("space");"#),
     SchemaOp::Exec(r#"create index if not exists edge_from on "edge" ("from");"#),
     SchemaOp::Exec(r#"create index if not exists edge_to on "edge" ("to");"#),
     SchemaOp::Exec(r#"drop index if exists subscription_one"#),

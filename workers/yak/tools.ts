@@ -48,6 +48,7 @@ import {
 } from '../../src/store/vocab.ts'
 import type { EntityLiteral } from '../../src/mutation.ts'
 import { appAccess } from '../../src/types.ts'
+import { VERSION } from '../../src/version.ts'
 import {
   type Access,
   type App,
@@ -70,7 +71,7 @@ import {
   upload,
 } from './dispatch.ts'
 import type { Env } from './env.ts'
-import { mail } from './mail.ts'
+import { mail, REPLY_TO } from './mail.ts'
 import { SLUG } from './route.ts'
 import { type Reach, read, written } from './reach.ts'
 import { mayWrite, reads, titling, vouched, type Who } from './session.ts'
@@ -686,6 +687,30 @@ let told = (access: Access | null) =>
     : access == 'private'
     ? 'only its members can see it; member_add mails an invitation to one'
     : 'anyone with the link can see it; only its members can change it'
+
+// How many of these one person gets in an hour. A few is plenty: feedback is
+// a person noticing something, not a stream, and the fourth in an hour is
+// far likelier to be an agent in a loop than a fourth thing wrong.
+let HOURLY = 3
+
+// What this person has already said this hour, out of the meta store itself
+// rather than a counter in some isolate — three per hour only means anything
+// if it holds across the isolate a call lands in. A store that cannot answer
+// counts nothing: a rate limit is never the reason feedback is lost.
+let recently = async (ctx: Ctx) => {
+  try {
+    let r = await storeOf(ctx.env.STORE, META_STORE)(
+      `/query?.report!&.created.by=${ctx.person}&.report.at>=1-hour-ago`,
+    )
+    if (!r.ok) {
+      await r.body?.cancel()
+      return 0
+    }
+    return ((await r.json()) as unknown[]).length
+  } catch {
+    return 0
+  }
+}
 
 // The views a tool's answer draws itself in — `ui://` resources the door
 // serves from public/apps.html and public/errors.html (mcp.ts) and the host
@@ -2077,6 +2102,123 @@ export let TOOLS: Tool[] = [
       return {
         text: JSON.stringify(await read(ctx.env, reach, q)),
         space: whichSpace(reach),
+      }
+    },
+  },
+  {
+    name: 'feedback',
+    description:
+      'Tell the people who run yaks.app that something is wrong with THE ' +
+      'PLATFORM — this connector, its tools, its guide, the way an app is ' +
+      'built or served here. Not the app you are building for the person: ' +
+      'a break inside their own app is theirs and yours to fix (app_errors ' +
+      'lists those). Reach for this the moment something here is broken, ' +
+      'confusing or missing and you cannot fix it from where you are — a ' +
+      'tool that refused for no reason you could find, a door that does not ' +
+      'exist, an answer that disagreed with what was documented, a step the ' +
+      'person found baffling. Then go on and work around it: nobody sees ' +
+      'the workaround, and this is what they see instead. Say what the ' +
+      'PERSON said, in their own words, and what YOU tried and what ' +
+      'happened — those two are the whole report. Who they are, their ' +
+      'space, the app if you name one, and the versions ride along on their ' +
+      'own; do not repeat them. It reaches a person by mail, and they can ' +
+      'write back.',
+    input: {
+      type: 'object',
+      properties: {
+        text: str(
+          'what is wrong, confusing or missing: the words the person used, ' +
+            'and what you tried',
+        ),
+        app: str(
+          'the app they were looking at when it came up, if there was one',
+        ),
+        space: SPACE,
+      },
+      required: ['text'],
+    },
+    run: async (ctx, args) => {
+      let said = text(args.text, 'text')
+      // Where they were, as far as it can be worked out — and never a
+      // question. A person in two spaces who named no app still gets to say
+      // what is wrong: the report simply names no space, which is a smaller
+      // loss than a refusal on plumbing at the moment someone is already
+      // annoyed. No membership check either: this is attribution, not
+      // authorization, and being signed in is the whole of it.
+      let space = args.space == null
+        ? await ownSpace(ctx, args.app).catch(() => null)
+        : await ctx.dir.space(text(args.space, 'space'))
+      let app = space && args.app != null
+        ? await ctx.dir.app(space, text(args.app, 'app'))
+        : null
+      let held = await recently(ctx)
+      if (held >= HOURLY) {
+        throw new Error(
+          `That is ${held} already this hour, and every one of them is kept ` +
+            'and will be read — so this is a pause, not a no. Save the rest ' +
+            `for later, or write to ${REPLY_TO} directly if it cannot wait.`,
+        )
+      }
+      let at = new Date().toISOString()
+      // The whole thing is the body; the title is its opening, so a listing
+      // of reports reads.
+      let opening = said.trim().split('\n')[0].slice(0, 80)
+      let meta = storeOf(ctx.env.STORE, META_STORE)
+      let wrote = await meta('/apply', {
+        method: 'POST',
+        body: JSON.stringify({
+          entities: [{
+            doc: { title: opening, body: said },
+            report: {
+              app: app?.eid ?? null,
+              space: space?.eid ?? null,
+              version: app?.version ?? null,
+              release: VERSION,
+              at,
+            },
+          }],
+        }),
+      }, {
+        ...vouched({ person: ctx.person, role: null }),
+        ...await titling(ctx.dir, ctx.person),
+      })
+      if (!wrote.ok) throw new Error(await wrote.text())
+      let { changes } = await wrote.json() as { changes: Change[] }
+      let eid = changes[0]?.eid ?? ''
+      // The letter, to the platform's own address — the one a person reading
+      // it would reply to (mail.ts REPLY_TO). It leads with the WORDS: what
+      // was said is the report, and everything else is a line of context
+      // under a rule, so a person takes it in at a glance.
+      let by = await ctx.dir.nameAt(ctx.person)
+      let email = await ctx.dir.emailAt(ctx.person)
+      let where = app && space
+        ? `${space.slug}/${app.slug}${app.version ? ` v${app.version}` : ''}`
+        : space?.slug ?? ''
+      // Feedback is the platform's own letter, so it is not counted against
+      // the space's monthly hundred (usage.ts) the way an invitation is: a
+      // space at its ceiling is exactly a space with something to say.
+      let sent = await mail(ctx.env)({
+        to: REPLY_TO,
+        subject: `feedback: ${opening}`,
+        body: `${said.trim()}\n\n—\n` +
+          `${by ?? 'someone'}${email ? ` <${email}>` : ''}\n` +
+          (where ? `${where}\n` : '') +
+          (app && space ? `${url(space, app)}\n` : '') +
+          `yaks.app ${VERSION} · ${at}\n${eid}`,
+      }).then(() => true).catch(() => false)
+      // Never loud: a mail seam that refused loses the letter, never the
+      // words. The row stands, and the answer says so, because an agent told
+      // "that failed" says it again and the person says it twice.
+      return {
+        text: sent
+          ? 'That went to the people who run yaks.app' +
+            (where ? `, with ${where} and the versions` : '') +
+            `. They read these, and can write back${
+              email ? ` to ${email}` : ''
+            }.`
+          : 'The words are kept for the people who run yaks.app — the mail ' +
+            'could not go out just now, so it waits with them rather than ' +
+            'being lost. No need to say it again.',
       }
     },
   },

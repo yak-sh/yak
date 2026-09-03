@@ -144,7 +144,12 @@ Whatever breaks — a page's own error, a refused write, a request that failed
 — arrives at the end of a later reply, once. Fix what you see. And when a
 change of yours is what broke it, or they simply want it back: app_rollback
 puts every file of an earlier deploy back and releases it as a new version,
-and app_versions is the list to pick from.`
+and app_versions is the list to pick from.
+
+When what is wrong is THIS PLATFORM rather than their app — a tool that
+refused for no reason you could find, a guide that taught the wrong thing,
+something missing you cannot work around — say so with feedback: their words
+and what you tried, once, and it reaches the people who run yaks.app by mail.`
 
 // The resources this door offers. The guide is how an app is built here, and
 // how its pages save and list through the client the kernel serves them

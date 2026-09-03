@@ -175,3 +175,28 @@ struct Installed {
     of: Ref,
     version: Number,
 }
+
+// What a person's agent told us about the PLATFORM itself (T-32950). The words
+// are the doc; this is where they were said — the space they were in, the app
+// they were looking at and the deploy it was serving, the platform's own
+// release, and when. It lives in the meta store beside the directory,
+// attributed to whoever's agent wrote it, and the same words go out as a
+// letter at that moment, because a row nobody opens is not a report.
+//
+// Not `feedback`: that word is the identity plugin's, where it names who GAVE
+// a memory, and a component name is the whole vocabulary's. The TOOL is
+// `feedback`, which is the word a person's agent reaches for.
+//
+// Both references are `keep`: a report outlives what it was about, and
+// deleting an app must not quietly empty what someone said about it.
+#[derive(Comp)]
+#[comp(plugin = "platform", rank = 1060, kind_rank = 430)]
+struct Report {
+    #[col(eid = "app", death = "keep")]
+    app: Ref,
+    #[col(eid = "space", death = "keep")]
+    space: Ref,
+    version: Number,
+    release: Text,
+    at: Time,
+}
