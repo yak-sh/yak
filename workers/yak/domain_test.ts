@@ -57,6 +57,11 @@ slow('a hostname finds its app, and only one app', async () => {
     // `herbusiness.com/recipes/photo.png` — carried on to `/recipes/recipes/`
     // and lost.
     assertStringIncludes(html, '<base href="/">')
+    // The reporter is at the root too, so a page's breaks on the domain
+    // reach the app's store: at the app's platform prefix its script was a
+    // 404 on this hostname, and nothing reported (T-33040).
+    assertStringIncludes(html, '<script src="/api/report.js">')
+    assertEquals((await k.at('herbusiness.com', '/api/report.js')).status, 200)
     let shot = await k.at('herbusiness.com', '/photo.png')
     assertEquals(shot.status, 200)
     assertEquals(await shot.text(), 'not really a png')

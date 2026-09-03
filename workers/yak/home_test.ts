@@ -128,7 +128,12 @@ slow('the front page is served at the space root', async () => {
     // The root IS the app: 200 with its page, not a 302 into `/site/`.
     let root = await k.at('jeff.yaks.app', '/', { redirect: 'manual' })
     assertEquals(root.status, 200)
-    assertStringIncludes(await root.text(), '<h1>Her business</h1>')
+    let served = await root.text()
+    assertStringIncludes(served, '<h1>Her business</h1>')
+    // Its reporter is at the root as well — report.js reads its own door out
+    // of its src, so the tag has to name the address the page was served at.
+    assertStringIncludes(served, '<script src="/api/report.js">')
+    assertEquals((await k.at('jeff.yaks.app', '/api/report.js')).status, 200)
 
     // The page's own relative URLs, resolved as a browser would and then
     // fetched — from the root, and from a pretty path under it, where a

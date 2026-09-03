@@ -167,8 +167,13 @@ let moved = (req: Request, to: string) =>
 // place to put it: first inside `<head>`, else first inside `<body>`, else
 // at the end of a document with neither. Streaming — the bytes are never
 // held — and once, whichever came first.
-let reported = (app: App, page: Response) => {
-  let tag = `<script src="/${app.slug}/api/report.js"></script>`
+//
+// Its src is the app's address AS SERVED (`at`), because report.js reads the
+// door out of its own src: at the app's prefix normally, at the root for a
+// front page or a custom domain, where the prefix is an address the browser
+// asking cannot reach (T-33040).
+let reported = (at: string, page: Response) => {
+  let tag = `<script src="${at}api/report.js"></script>`
   let done = false
   let once = (put: (s: string, o: { html: boolean }) => void) => {
     if (done) return
@@ -254,20 +259,20 @@ let asset = async (
   // seam answers a Uint8Array), so reading them to decide whether the page
   // has a `<base>` of its own costs nothing the serve did not already spend.
   let page = based(at, new TextDecoder().decode(bytes))
-  return reported(app, new Response(page, { headers }))
+  return reported(at, new Response(page, { headers }))
 }
 
 // Where the browser sends what it notices on its own: the app's own report
 // door, named as an endpoint group, with NEL asking for the failures that
 // never reached us at all.
-let reporting = (res: Response, req: Request, app: App) => {
+let reporting = (res: Response, req: Request, at: string) => {
   // A socket is not a page: the 101 carries the runtime's own `webSocket`,
   // which no Response constructor here can copy, and nothing about it reports.
   if (res.status == 101) return res
   let headers = new Headers(res.headers)
   headers.set(
     'reporting-endpoints',
-    `yak="${new URL(`/${app.slug}/api/report`, req.url).href}"`,
+    `yak="${new URL(`${at}api/report`, req.url).href}"`,
   )
   headers.set(
     'nel',
@@ -894,6 +899,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // there is no cookie to read — and a request holding one is never sent BACK
   // to the worker, which is what keeps `env.FILES.fetch('/index.html')` from
   // being a loop.
+  // Where this app is mounted for the browser that asked: the prefix its
+  // pages resolve relative URLs against, and where its reporter lives.
+  let at = mount ?? (front ? '/' : `/${app.slug}/`)
   let itself = await granted(req, env.SESSION_SECRET, storeName(space, app))
   let who = itself ??
     await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
@@ -914,22 +922,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     return reporting(
       await api(req, env, space, app, path.slice(4), who),
       req,
-      app,
+      at,
     )
   }
   let own = itself ? null : await ran(env, space, app, req, who)
-  // The front page's pages resolve their relative URLs against the root,
-  // where it is served; every other app's against its own prefix.
-  return reporting(
-    own ??
-      await asset(
-        env,
-        space,
-        app,
-        path,
-        mount ?? (front ? '/' : `/${app.slug}/`),
-      ),
-    req,
-    app,
-  )
+  return reporting(own ?? await asset(env, space, app, path, at), req, at)
 }
