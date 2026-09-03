@@ -37,7 +37,15 @@ import { sizeOf } from './image.ts'
 import { asking, listed, listing } from './listing.ts'
 import { nothingHere } from './pages.ts'
 import { hostOf, PLATFORM, route } from './route.ts'
-import { mayWrite, reads, vouched, type Who, whoIs, writes } from './session.ts'
+import {
+  mayWrite,
+  reads,
+  titling,
+  vouched,
+  type Who,
+  whoIs,
+  writes,
+} from './session.ts'
 import { type Reach, split, written } from './reach.ts'
 import type { EntityLiteral } from '../../src/mutation.ts'
 import { type Door, storeOf } from './store.ts'
@@ -449,17 +457,11 @@ let gave = async (
   })
 }
 
-// What to call this person, for the store to write beside their rows
-// (store.ts `knows`): the name they chose, else the front of their address
-// (directory.ts `nameAt`), read at the WRITE doors only — a read never mints
-// a person, and every page load would otherwise pay for a name nobody wrote
-// down. Their address stays in the directory: an app's store learns a name
-// and never an address book (T-32654).
-let named = async (env: Env, who: Who): Promise<Record<string, string>> => {
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  let title = who.person && await dir.nameAt(who.person)
-  return title ? { 'x-yak-title': title } : {}
-}
+// What to call this person, for the store to write beside their rows: the
+// write door's half of the vouch (session.ts `titling`), over this door's own
+// directory.
+let named = (env: Env, who: Who) =>
+  titling(directory(bound(env.DIRECTORY, dirPart.fetch, env)), who.person)
 
 // What a write answers, either way it was routed.
 type Wrote = {

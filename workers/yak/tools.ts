@@ -62,7 +62,7 @@ import type { Env } from './env.ts'
 import { mail } from './mail.ts'
 import { SLUG } from './route.ts'
 import { type Reach, read, written } from './reach.ts'
-import { mayWrite, reads, vouched, type Who } from './session.ts'
+import { mayWrite, reads, titling, vouched, type Who } from './session.ts'
 import { canon, nameOf, personOf } from './signin.ts'
 import { storeOf } from './store.ts'
 import { archive, cards, line, openIn, serve } from './unseen.ts'
@@ -1359,6 +1359,10 @@ export let TOOLS: Tool[] = [
         reach,
         named && (reach.find((r) => r.app.eid == named.app.eid) ?? named),
         args.entities as EntityLiteral[],
+        // The same vouch a page's write carries (apps.ts `acting`), so a
+        // store this write routes into knows the writer by name and not by
+        // uuid alone (session.ts `titling`, C-32800 item 5).
+        await titling(ctx.dir, ctx.person),
       )
       return {
         text: wrote(out.body, out.where),

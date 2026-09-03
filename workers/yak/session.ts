@@ -44,3 +44,23 @@ export let vouched = (who: Who): Record<string, string> => ({
   ...(who.person ? { 'x-yak-person': who.person } : {}),
   ...(who.role ? { 'x-yak-role': who.role } : {}),
 })
+
+// The header a WRITE adds to that vouch: what to call this person, so the
+// store titles the person row it mints beside their rows (store.ts `knows`)
+// and a byline resolves to `{eid, name}` (listing.ts `named`). The name is
+// the one they chose, else the front of their address (directory.ts
+// `nameAt`); their address stays in the directory, since an app's store
+// learns a name and never an address book (T-32654).
+//
+// Read at the WRITE doors only — a read never mints a person, and every page
+// load would otherwise pay for a name nobody wrote down — and by EVERY write
+// door: the page's (apps.ts `acting`) had it while the agent's routed write
+// did not, so a loan written through graph_apply left the lending store
+// calling the borrower a bare uuid (C-32800 item 5).
+export let titling = async (
+  dir: { nameAt: (person: string) => Promise<string | null> },
+  person: string | null,
+): Promise<Record<string, string>> => {
+  let title = person && await dir.nameAt(person)
+  return title ? { 'x-yak-title': title } : {}
+}

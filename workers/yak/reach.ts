@@ -12,9 +12,9 @@
 // component named — each part asked of every store, and the eids in common
 // are the answer. The grammar itself is untouched: every part is an ordinary
 // filter line, and a store that cannot speak one is simply silent about it.
-import { listed, type Row } from './listing.ts'
+import { asking, listed, type Row } from './listing.ts'
 import { EVERY } from './query.ts'
-import { type App, type Space, storeName } from './directory.ts'
+import { type App, META_STORE, type Space, storeName } from './directory.ts'
 import type { Env } from './env.ts'
 import { vouched, type Who, writes } from './session.ts'
 import { storeOf } from './store.ts'
@@ -41,10 +41,18 @@ export let at = (r: Reach) => `${r.space.slug}/${r.app.slug}`
 // with no `created` at all, while the same filter naming one app kept it
 // (C-32800 item 4). The words a listing is cut by are the caller's, wherever
 // the rows were fetched from.
+//
+// The QUESTION carries the same door's screen an app's page asks with
+// (listing.ts `asking`), because an APP's store keeps person rows as its own
+// bookkeeping — one per writer, so a byline has a name (store.ts `knows`) —
+// and a person titled with what to call them matches `.doc!` like any row.
+// The directory's own store is the exception: there people ARE the data, and
+// its reads are its own (identity.ts).
 let doorOf = (env: Env, r: Reach, said?: string) => async (line: string) => {
   let asked = line.replace(/^[?&]+/, '')
+  let mine = at(r) == META_STORE ? asked : asking(asked)
   let door = storeOf(env.STORE, storeName(r.space, r.app))
-  let res = await door(`/query?${asked}`, {}, vouched(r.who))
+  let res = await door(`/query?${mine}`, {}, vouched(r.who))
   let body = await res.text()
   if (!res.ok) throw new Error(body)
   let rows = JSON.parse(body)

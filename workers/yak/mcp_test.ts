@@ -1468,7 +1468,9 @@ slow('a read with no app composes every app the caller can reach', async () => {
       [true, true],
     )
     // `.doc!` is a platform word both stores speak, so the answer is both
-    // apps' rows — and the cake is one row, not two.
+    // apps' rows — and the cake is one row, not two. The person row each
+    // store mints for its writer wears a title too (store.ts `knows`), and
+    // is the platform's bookkeeping, never a row in the person's own list.
     assertEquals(
       (await rows('.doc!')).map((r) => r.doc!.title),
       ['Lemon cake', 'Pancakes', 'Lemon zester'],
@@ -1544,6 +1546,7 @@ slow('a write with no app routes each component to its own app', async () => {
         doc?: { title: string }
         recipe?: { serves: number }
         loan?: { to: string }
+        created?: { by: string | { eid: string; name: string } }
         _stores?: Record<string, string>
       }[]
 
@@ -1582,6 +1585,19 @@ slow('a write with no app routes each component to its own app', async () => {
     assertEquals(bundle.loan!.to, 'Maya')
     assertMatch(bundle._stores!.doc, /\/recipes$/)
     assertMatch(bundle._stores!.loan, /\/lending$/)
+
+    // A routed write carries the same vouch a page's write does, so a store
+    // it lands in — one that had never met this person — mints them with a
+    // NAME and the byline reads as one: `created.by` is {eid, name} in the
+    // lending store, and the fan-out says the same (C-32800 item 5).
+    for (
+      let by of [
+        (await rows('.loan!&.created!', 'lending'))[0].created!.by,
+        (await rows('.loan!&.created!'))[0].created!.by,
+      ]
+    ) {
+      assertEquals(typeof by == 'string' ? by : by.name, jeff.name)
+    }
 
     // A refusal in one store leaves the other unwritten: every part is
     // admitted before any of them commits.
