@@ -757,6 +757,34 @@ let wrote = (body: string, where: string): Out => {
   }
 }
 
+// A write that tried to date itself. `created.at` is the store's own record of
+// when it first saw a row, so it is dropped in silence on the way in — right
+// for a row read and patched straight back, and no help at all to the import
+// that meant it, which then reads as written today (T-33147). The bundle is
+// still in hand here, so the door can say it once instead of leaving six
+// guestbook messages from a fortnight all saying this morning.
+let dated = (entities: EntityLiteral[]) =>
+  entities.some((e) => {
+    // Only a row being BORN. A read patched straight back carries its own
+    // stamps, and the whole reason they are dropped in silence is that it
+    // must not be punished for that (guide/components.md) — so an eid that
+    // names an existing row says nothing, and a `$alias` or no entity key at
+    // all is the seed that meant it.
+    let at = e.entity?.eid ?? e.id
+    if (typeof at == 'string' && at && !at.startsWith('$')) return false
+    return ['created', 'updated'].some((name) => {
+      let comp = e[name]
+      return !!comp && typeof comp == 'object' &&
+        (comp as Record<string, unknown>).at != null
+    })
+  })
+
+let SAY_DATED = "\ncreated.at was not written: it is the store's own record " +
+  'of when it first saw a row, and nothing can give it a past moment. A date ' +
+  'the row itself has — when the entry was written, when the message was ' +
+  'left — is a time column of the app\'s own ({"entry": {"written": "time"}} ' +
+  'in vocab.json), and the page draws that.'
+
 // A file's key: the app's slugs, then its path from the slash (apps.ts keyOf).
 let fileKey = (space: Space, app: App, path: string) =>
   `${space.slug}/${app.slug}/${path.replace(/^\/+/, '')}`
@@ -2375,7 +2403,10 @@ export let TOOLS: Tool[] = [
       'app_deploy has planted them. The answer is one line naming what was ' +
       'written, by id, and under it a JSON line — {in, entities, aliases, ' +
       'deleted} — so the eids this call minted can be used in the next one ' +
-      'without reading the sentence. graph_query reads the data back. One ' +
+      'without reading the sentence. graph_query reads the data back. ' +
+      "created.at is the store's own record of when it first saw a row and " +
+      'cannot be given a past moment, so anything imported or seeded carries ' +
+      "its own date in a time column of the app's own. One " +
       'bundle may wear ' +
       "two apps' components at once — an entity spans apps — and each " +
       'component is written to the app that declares it; a shared one goes to ' +
@@ -2413,8 +2444,11 @@ export let TOOLS: Tool[] = [
         // uuid alone (session.ts `titling`, C-32800 item 5).
         await titling(ctx.dir, ctx.person),
       )
+      let answer = wrote(out.body, out.where)
       return {
-        ...wrote(out.body, out.where),
+        ...answer,
+        text: answer.text +
+          (dated(args.entities as EntityLiteral[]) ? SAY_DATED : ''),
         space: named?.space ?? whichSpace(reach),
       }
     },

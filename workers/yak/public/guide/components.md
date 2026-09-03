@@ -139,6 +139,22 @@ leaves them out unless the filter asks for them.
 
     for (let e of await query('.doc!&.created!')) draw(e, e.created.by?.name)
 
+`created.at` is **when this store first saw the row**, and it cannot be given a
+past moment — not by a page, not by `graph_apply`. So a row with a date of its
+own carries that date in a `time` column of its own: when the diary entry was
+written, when the message was left, when the seedling went in. That is not a
+second copy of the stamp; they are two different facts, and they disagree
+exactly when it matters — an import.
+
+    { "entry": { "written": "time" } }
+
+    graph_apply { app: 'diary', entities: [
+      { doc: { body: 'Beans in, back bed.' },
+        entry: { written: '2026-04-11T12:00:00Z' } } ] }
+
+Seed a fortnight of a guestbook and every `created.at` says today, truthfully:
+today is when you wrote them here. Draw `entry.written`.
+
 **`exception`** — `at`, `message`, `stack`, `request`, `version`, all
 server-set. **`error`** — `at`, `message`, server-set. The kernel's own rows
 about your app: what a route threw, what a page reported. Nothing you write.
@@ -340,9 +356,15 @@ which is the right answer for a shape you have not settled — but the moment yo
 want to filter on a key inside it, that key wants to be a column.
 
 Do not put in a column what the graph already holds. Who wrote it is
-`created.by`; when is `created.at`; whether it is done is `completed`; whether
-it is hidden is `archived`; what it belongs to is `task.project` or a `contains`
-edge. A second copy in a column of your own only drifts.
+`created.by`; whether it is done is `completed`; whether it is hidden is
+`archived`; what it belongs to is `task.project` or a `contains` edge. A second
+copy in a column of your own only drifts.
+
+The exception is a DATE the row itself has. `created.at` is when the store saw
+the row, which is the right answer for a page someone is typing into and the
+wrong one for anything imported or seeded, where it says today about something
+that happened in April. When the date is part of what the row IS, it is a `time`
+column of yours.
 
 ## One component, or a wider one?
 

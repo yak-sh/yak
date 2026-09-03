@@ -157,6 +157,11 @@ An `open` app takes writes from anyone with the link, and a guest who never
 signed in is nobody yet: their rows have no `created.by` to name. If a byline
 matters there, ask for a name on the page and save it in your own row.
 
+`created.at` is when this store first saw the row and cannot be given a past
+moment, so anything IMPORTED or seeded carries its own date in a `time` column
+of its own — `{ "entry": { "written": "time" } }` — and the page draws that. The
+stamp is the store's record; the date is the row's.
+
 ## Files
 
 Deeper: <https://yaks.app/guide/files.md> — uploads, pictures, and a gallery

@@ -491,6 +491,47 @@ slow(
       )
       assertEquals(stamped.length, 1)
       assert(stamped[0].created, 'naming a stamp asks for it back')
+
+      // A seed that tried to date itself: `created.at` is the store's own
+      // record and cannot be given a past moment, so it is dropped — and the
+      // door says so, once, rather than leaving every seeded row reading as
+      // written today (T-33147).
+      let backdated = await agent.tool('graph_apply', {
+        ...app,
+        entities: [{
+          entity: { eid: '$old' },
+          doc: { title: 'Written in April' },
+          created: { at: '2026-04-11T12:00:00Z' },
+        }],
+      })
+      assertStringIncludes(backdated, 'created.at was not written')
+      assertStringIncludes(backdated, "a time column of the app's own")
+      let old = JSON.parse(backdated.split('\n')[1]).aliases.$old as string
+      let [aged] = JSON.parse(
+        await agent.tool('graph_query', {
+          ...app,
+          filter: `id=${old}&.created!`,
+        }),
+      ) as { created: { at: string } }[]
+      assertEquals(
+        aged.created.at.slice(0, 4),
+        String(new Date().getFullYear()),
+      )
+      // And a row read then patched straight back carries its own stamps —
+      // the case the silent drop exists for — so nothing is said about it.
+      let again = await agent.tool('graph_apply', {
+        ...app,
+        entities: [{
+          entity: { eid: cake },
+          doc: { title: "Grandma's lemon cake" },
+          created: { at: aged.created.at },
+        }],
+      })
+      assertEquals(again.includes('created.at was not written'), false)
+      await agent.tool('graph_apply', {
+        ...app,
+        entities: [{ entity: { eid: old }, tombstone: {} }],
+      })
       // The parameter is `filter` — the word every other door uses for the
       // same line — and `query` stays a spelling of it (C-32607 item 2).
       assertEquals(
