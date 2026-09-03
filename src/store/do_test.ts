@@ -129,21 +129,22 @@ slow('the store on Durable Object SQLite serves the live wire', async () => {
     sockets.push(a, b)
 
     // The second socket subscribes to a filter; the empty app answers empty.
+    // A subscription is the /query door that keeps answering (query.ts
+    // `answered`), so its frames carry ROWS, never the wire's raw changes.
     b.told({ sub: 'notes', q: '.doc!' })
     let first = await b.hears((f) => f.sub == 'notes')
     assertEquals(first.replace, true)
-    assertEquals(first.changes, [])
+    assertEquals(first.rows, [])
 
-    // A write on the FIRST socket arrives on the second, unasked.
+    // A write on the FIRST socket arrives on the second, unasked — as the row
+    // that write made, in the shape the filter would have answered with.
     let note = crypto.randomUUID()
     a.told([{ eid: note, name: 'doc', comp: { title: 'from the kitchen' } }])
     let live = await b.hears((f) =>
-      f.sub == 'notes' && f.changes?.some((c: Frame) => c.eid == note)
+      f.sub == 'notes' && f.rows?.some((r: Frame) => r.entity.eid == note)
     )
     assert(
-      live.changes.some((c: Frame) =>
-        c.name == 'doc' && c.comp.title == 'from the kitchen'
-      ),
+      live.rows.some((r: Frame) => r.doc?.title == 'from the kitchen'),
     )
 
     // A batch wearing a delivery id is acked; a socket the kernel never
@@ -167,7 +168,7 @@ slow('the store on Durable Object SQLite serves the live wire', async () => {
     let missed = crypto.randomUUID()
     await applied([{ eid: missed, name: 'doc', comp: { title: 'while away' } }])
     await b.hears((f) =>
-      f.sub == 'notes' && f.changes?.some((c: Frame) => c.eid == missed)
+      f.sub == 'notes' && f.rows?.some((r: Frame) => r.entity.eid == missed)
     )
     let d = await socket(onlooker.origin, '/graph/api/ws')
     sockets.push(d)
