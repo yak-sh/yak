@@ -432,7 +432,10 @@ export let TOOLS: Tool[] = [
       'the mark that they are one version — the one an error will name. Do ' +
       'it when the app is ready to show, then give the person the URL. It ' +
       "also plants the components the app's vocab.json declares — " +
-      `${EXAMPLE} — so the app gets typed components of its own.`,
+      `${EXAMPLE} — so the app gets typed components of its own. A word the ` +
+      'platform already says is refused, the whole manifest at once and ' +
+      'before anything is planted; one this manifest stops naming, and that ' +
+      'holds no rows, goes.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP },
@@ -446,12 +449,15 @@ export let TOOLS: Tool[] = [
       let key = fileKey(space, app, 'vocab.json')
       let blobs = r2Blobs(ctx.env.BLOBS)
       let planted: string[] = []
+      let dropped: string[] = []
       if (await blobs.has(key)) {
         let r = await store('/vocab', {
           method: 'POST',
           body: new TextDecoder().decode(await blobs.get(key)),
         }, vouched(who))
-        planted = JSON.parse(await answer(r)).comps ?? []
+        let said = JSON.parse(await answer(r))
+        planted = said.comps ?? []
+        dropped = said.dropped ?? []
       }
       let version = (app.version ?? 0) + 1
       await ctx.dir.apply(
@@ -461,7 +467,8 @@ export let TOOLS: Tool[] = [
       return {
         text:
           `deployed ${space.slug}/${app.slug} v${version}: ${url(space, app)}` +
-          (planted.length ? `\ncomponents: ${planted.join(', ')}` : ''),
+          (planted.length ? `\ncomponents: ${planted.join(', ')}` : '') +
+          (dropped.length ? `\ndropped (no rows): ${dropped.join(', ')}` : ''),
         space,
       }
     },

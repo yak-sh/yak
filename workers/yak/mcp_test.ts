@@ -324,6 +324,73 @@ slow(
         'unknown column: recipe.calories',
       )
 
+      // A manifest that reaches for one of the platform's words is refused
+      // WHOLE and before anything is planted, naming every collision at once
+      // — so probing for a free name is one deploy, and the names tried on
+      // the way do not stay in the app (C-32624 item 1).
+      let manifest = (json: string) =>
+        agent.tool('app_files', {
+          ...app,
+          op: 'write',
+          path: 'vocab.json',
+          content: json,
+        })
+      await manifest(
+        '{"recipe":{"title":"text","serves":"number"},' +
+          '"dayline":{"on":"time"},"card":{},"entry":{"at":"time"}}',
+      )
+      let taken = (await assertRejects(() =>
+        agent.tool('app_deploy', app), Error))
+        .message
+      assertStringIncludes(
+        taken,
+        'card, entry are words the platform already says',
+      )
+      assertStringIncludes(taken, GUIDE)
+      await assertRejects(
+        () =>
+          agent.tool('graph_apply', {
+            ...app,
+            entities: [{ entity: { eid: '$d' }, dayline: { on: 'today' } }],
+          }),
+        Error,
+        'unknown component: dayline',
+      )
+
+      // And a word the next manifest stops naming goes, table and all, so
+      // long as nothing was written under it.
+      await manifest(
+        '{"recipe":{"title":"text","serves":"number"},"jot":{"text":"text"}}',
+      )
+      assertStringIncludes(
+        await agent.tool('app_deploy', app),
+        'components: recipe, jot',
+      )
+      await manifest('{"note":{"text":"text"}}')
+      let shed = await agent.tool('app_deploy', app)
+      assertStringIncludes(shed, 'dropped (no rows): jot')
+      await assertRejects(
+        () =>
+          agent.tool('graph_apply', {
+            ...app,
+            entities: [{ entity: { eid: '$j' }, jot: { text: 'hi' } }],
+          }),
+        Error,
+        'unknown component: jot',
+      )
+      // `recipe` the same manifest stopped naming stays: it has rows, and
+      // the rows are the record of what its columns are.
+      assertStringIncludes(shed, 'components: recipe, note')
+      assertEquals(
+        JSON.parse(
+          await agent.tool('graph_query', {
+            ...app,
+            query: '.recipe.serves=4',
+          }),
+        ).length,
+        1,
+      )
+
       // A refused store answer is the tool's error, not a 500.
       await assertRejects(
         () => agent.tool('graph_query', { ...app, query: 'work=build' }),
@@ -437,7 +504,9 @@ slow(
           'whisk is not a function @ /recipes/index.html:42 x1',
         ],
       )
-      assert(breaks.every((b) => b.version == 3), 'the deploy it happened on')
+      // v5: two files, a vocabulary, the word it dropped — every deploy
+      // above bumped it, and a break wears the version it happened on.
+      assert(breaks.every((b) => b.version == 5), 'the deploy it happened on')
 
       // The fixed button: the view calls this same tool back through the
       // host with the card's eids, and what it gets is the listing that is

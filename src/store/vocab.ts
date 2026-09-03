@@ -63,6 +63,14 @@ let column = (col: string, type: PropType) =>
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
 
+// Every word the platform already says, in one sorted list: the writable
+// vocabulary, the server-stamped half, and the spine. No store may redeclare
+// one — `doc` means `doc` everywhere — so this is also what the guide prints
+// under vocab.json (guide_test.ts holds the two in step).
+export let RESERVED: string[] = [
+  ...new Set([...Object.keys(comps), ...Object.keys(stamped), 'entity']),
+].sort()
+
 // The manifest as written, checked. Every refusal names the file and the
 // spelling that works, because the agent reading it has no other source.
 export let parseVocab = (source: unknown): Vocab => {
@@ -74,6 +82,18 @@ export let parseVocab = (source: unknown): Vocab => {
     }
   }
   if (!object(source)) throw new Error(`vocab.json is an object — ${EXAMPLE}`)
+  // The platform's words, all of them, before anything is planted: a manifest
+  // refused one name at a time is probed one deploy at a time, and every
+  // probe that got through left a component behind for good (C-32624 item 1).
+  let taken = Object.keys(source).filter((name) => RESERVED.includes(name))
+  if (taken.length) {
+    throw new Error(
+      `vocab.json: ${taken.join(', ')} ${
+        taken.length == 1 ? 'is a word' : 'are words'
+      } the platform already says — pick another name; the whole list is in ` +
+        `the guide under "Components of your own" (${GUIDE})`,
+    )
+  }
   let out: Vocab = {}
   for (let [name, cols] of Object.entries(source)) {
     if (!NAME.test(name)) {
@@ -81,9 +101,6 @@ export let parseVocab = (source: unknown): Vocab => {
         `vocab.json: ${JSON.stringify(name)} is not a component name ` +
           '(a-z, 0-9, _)',
       )
-    }
-    if (name in comps || name in stamped || name == 'entity') {
-      throw new Error(`vocab.json: ${name} is the platform's component`)
     }
     if (!object(cols)) {
       throw new Error(
@@ -111,12 +128,27 @@ export let parseVocab = (source: unknown): Vocab => {
   return out
 }
 
-// The manifest a store keeps after a deploy: columns only ever ARRIVE. One the
-// new manifest stopped naming stays declared — its rows are still there — and
-// one whose type changed is refused, because the values already stored were
-// written under the old word. This is the whole of "additive only".
-export let grow = (was: Vocab, next: Vocab): Vocab => {
+// The manifest a store keeps after a deploy: columns only ever ARRIVE. A
+// column the new manifest stopped naming stays declared — its rows are still
+// there — and one whose type changed is refused, because the values already
+// stored were written under the old word.
+//
+// A whole COMPONENT the manifest stopped naming is the one thing that may
+// leave, and only when it holds nothing: a name tried once and abandoned is a
+// probe's leftover, not data, and it used to be declared forever (C-32624
+// item 1). `rows` counts what a component holds — the store's question, since
+// only it has the tables — and a caller that cannot count says so by leaving
+// it out: nothing is dropped unless something says it is empty.
+export let grow = (
+  was: Vocab,
+  next: Vocab,
+  rows: (name: string) => number = () => 1,
+): { vocab: Vocab; dropped: string[] } => {
+  let dropped = Object.keys(was).filter((name) =>
+    !(name in next) && !rows(name)
+  )
   let out: Vocab = { ...was }
+  for (let name of dropped) delete out[name]
   for (let [name, cols] of Object.entries(next)) {
     let had = was[name] ?? {}
     for (let [col, type] of Object.entries(cols)) {
@@ -129,8 +161,21 @@ export let grow = (was: Vocab, next: Vocab): Vocab => {
     }
     out[name] = { ...had, ...cols }
   }
-  return out
+  return { vocab: out, dropped }
 }
+
+// How a store counts one component's rows, in this module because this module
+// owns how a component's name is spelled as a table.
+export let countSql = (name: string) =>
+  `select count(*) as n from ${quote(name)}`
+
+// And what an empty component's departure costs: the table, nothing else. A
+// dropped word's rows are none by construction — that is what let it go.
+export let dropOps = (names: string[]): SchemaOp[] =>
+  names.map((name) => ({
+    kind: 'exec',
+    sql: `drop table if exists ${quote(name)}`,
+  } as SchemaOp))
 
 // The DDL that makes the manifest true, additive both ways: the table when the
 // store has never seen the word, one guarded `add column` per column so a

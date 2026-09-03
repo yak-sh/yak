@@ -107,10 +107,31 @@ read it back in the row, filter on it:
 
     let quick = await query('.recipe.minutes<=30')
 
-A column is one of `text`, `number`, `bool`, `time`, `url`. The manifest only
-ever grows: a later deploy may add a column, but one that already has rows is
-never dropped or retyped, and a name the platform already uses (`doc`, `task`,
-…) is refused. Your words are yours — no other app's store has heard of them.
+A column is one of `text`, `number`, `bool`, `time`, `url`. A later deploy may
+add a column, but one that already has rows is never dropped or retyped. A whole
+component the manifest stops naming is dropped if it holds no rows and kept if
+it holds any — so a name you tried once and thought better of does not stay in
+the app forever. Your words are yours: no other app's store has heard of them.
+
+The platform's own words are refused, so that `doc` means `doc` in every store.
+The manifest is read whole before anything is planted, so a refusal names every
+collision at once and leaves the store as it was. These are the words already
+taken:
+
+    about accept alias anchor app apply architecture archived attachment
+    attention bash blob blocked board brief bug call camera cancel cancelled
+    canvas card chat checkpoint claim client comment commit completed conflict
+    contains content created cursor decided delegates deliver delivered design
+    doc dream edge effect email entity entry error exception exit favorite
+    feedback fetch finding fixer fold fork generation goal graph_query headers
+    hook image imported knock layout lease mail member memory message meta
+    model nofix notice notified noverify opaque opened output pane patch person
+    persona pin project prompt proposed quarantined reads reasoning recall
+    recalled redaction references repo requires response result resume review
+    role run runner runtime satisfies session setting settled shelf signin
+    space spawn stderr stop_request subscription supersedes supervises task
+    task_context timeout tool updated usage venture verifier wake wants web
+    worked worktree yield
 
 Anything the columns don't cover still lives in `doc.body`: it is text, so
 markdown or JSON both keep there.

@@ -42,7 +42,13 @@ import {
 import { fed } from '../../src/effects.ts'
 import { type Mutation, mutationResult } from '../../src/mutation.ts'
 import { DoSql, type DoStorage } from '../../src/store/do.ts'
-import { grow, parseVocab, type Vocab } from '../../src/store/vocab.ts'
+import {
+  countSql,
+  dropOps,
+  grow,
+  parseVocab,
+  type Vocab,
+} from '../../src/store/vocab.ts'
 import ops from '../../src/store/schema.json' with { type: 'json' }
 import { type Subserve, subserve } from '../../src/subserve.ts'
 import type { Change } from '../../src/types.ts'
@@ -144,6 +150,19 @@ export class Store {
       return parseVocab(JSON.parse(String(this.db.kv.get('vocab') ?? '{}')))
     } catch {
       return {}
+    }
+  }
+
+  // What one of this store's own components holds, for the drop rule above.
+  // A word that was declared but whose table never landed holds nothing —
+  // which is exactly the case that lets it go.
+  rows(name: string): number {
+    try {
+      return Number(
+        (this.db.prepare(countSql(name)).get() as { n: number }).n,
+      )
+    } catch {
+      return 0
     }
   }
 
@@ -333,13 +352,24 @@ export class Store {
     // nothing re-plants nothing, a deploy that added a column adds it, and a
     // column this store already has is never dropped or retyped, because its
     // rows are already written. The kernel is the only caller.
+    //
+    // The one thing that leaves: a component this manifest stopped naming and
+    // that holds no rows — the table goes with the word, so a name tried once
+    // and abandoned is not declared forever (C-32624 item 1). The whole
+    // manifest is read and refused before any of it is planted, so a refusal
+    // leaves the store exactly as it was.
     if (path == '/vocab') {
       if (req.method != 'POST') return methodNotAllowed('POST')
       try {
-        let grown = grow(this.vocab(), parseVocab(await req.text()))
-        plantVocab(db, grown)
-        db.kv.put('vocab', JSON.stringify(grown))
-        return Response.json({ ok: true, comps: Object.keys(grown) })
+        let { vocab, dropped } = grow(
+          this.vocab(),
+          parseVocab(await req.text()),
+          (name) => this.rows(name),
+        )
+        if (dropped.length) graft(db, dropOps(dropped))
+        plantVocab(db, vocab)
+        db.kv.put('vocab', JSON.stringify(vocab))
+        return Response.json({ ok: true, comps: Object.keys(vocab), dropped })
       } catch (e) {
         let why = e instanceof Error ? e.message : String(e)
         return new Response(why, { status: 400 })

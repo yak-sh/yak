@@ -3,9 +3,11 @@
 // speaking a word no other store knows. The workerd half — the same word
 // through app_deploy and the Store object — is in do_test.ts.
 Deno.env.set('DB_PATH', ':memory:')
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 
-let { GUIDE, grow, parseVocab, vocabOps } = await import('./vocab.ts')
+let { GUIDE, dropOps, grow, parseVocab, vocabOps } = await import(
+  './vocab.ts'
+)
 let { eager, mutate, plantVocab } = await import('../db.ts')
 let { bareDb } = await import('../testdb.ts')
 let { query } = await import('../../workers/yak/query.ts')
@@ -29,11 +31,16 @@ Deno.test('vocab.json: every refusal names the file', () => {
     assertThrows(() => parseVocab(source), Error).message
   assertEquals(why('not json').includes('vocab.json is not JSON'), true)
   assertEquals(why([1]).includes('vocab.json is an object'), true)
-  // The platform's words are the platform's, in every store.
-  assertEquals(
+  // The platform's words are the platform's, in every store — and the WHOLE
+  // manifest is checked, so probing for a free name is one deploy, not one
+  // per collision (C-32624 item 1).
+  assertStringIncludes(
     why({ doc: { x: 'text' } }),
-    "vocab.json: doc is the platform's component",
+    'vocab.json: doc is a word the platform already says',
   )
+  let both = why({ doc: {}, recipe: {}, entry: {} })
+  assertStringIncludes(both, 'doc, entry are words the platform already says')
+  assertStringIncludes(both, GUIDE)
   assertEquals(why({ Recipe: {} }).includes('is not a component name'), true)
   assertEquals(why({ recipe: { serves: 'int' } }).includes('one of text'), true)
   assertEquals(
@@ -45,16 +52,32 @@ Deno.test('vocab.json: every refusal names the file', () => {
 Deno.test('vocab.json grows: a column arrives, none leaves or retypes', () => {
   let was = parseVocab(recipes)
   // A later manifest that adds a column keeps the ones already written.
-  assertEquals(grow(was, { recipe: { notes: 'text' } }), {
+  assertEquals(grow(was, { recipe: { notes: 'text' } }).vocab, {
     recipe: { title: 'text', serves: 'number', notes: 'text' },
   })
   // And one that drops a column keeps it declared: its rows are still there.
-  assertEquals(grow(was, { recipe: { title: 'text' } }), was)
+  assertEquals(grow(was, { recipe: { title: 'text' } }).vocab, was)
   assertThrows(
     () => grow(was, { recipe: { serves: 'text' } }),
     Error,
     'a column keeps the type',
   )
+})
+
+Deno.test('vocab.json: an empty component the manifest drops goes', () => {
+  let was = parseVocab({ ...recipes, jot: { text: 'text' } })
+  // The word a manifest stopped saying, with nothing written under it: gone,
+  // table and all. The store answers how many rows a word holds.
+  let next = parseVocab(recipes)
+  let out = grow(was, next, (name) => name == 'jot' ? 0 : 1)
+  assertEquals(out.dropped, ['jot'])
+  assertEquals(out.vocab, next)
+  assertEquals(dropOps(out.dropped).map((o) => o.sql), [
+    'drop table if exists "jot"',
+  ])
+  // One that holds rows stays declared: the data is the record of its shape.
+  assertEquals(grow(was, next, () => 1).dropped, [])
+  assertEquals(grow(was, next).vocab, was)
 })
 
 Deno.test('vocab.json: the DDL is a create plus one guarded add per column', () => {
