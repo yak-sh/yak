@@ -113,6 +113,13 @@ export let cookieValue = (header: string | null, name = COOKIE) => {
 // The Set-Cookie value that carries a token: platform-wide by domain, never
 // readable by a page's script, sent on top-level navigations from elsewhere
 // (Lax) so a link into an app arrives signed in.
+//
+// An EMPTY domain omits the Domain attribute entirely, which is host-only —
+// the cookie sticks to the exact hostname that set it and travels to no other.
+// A literal `Domain=` is malformed and a browser's handling of it is its own
+// to decide, so the two real cases are named outright: a shared apex, or this
+// one host. Custom-domain sign-in (identity.ts `handoff`) needs the host-only
+// form, since a `yaks.app` cookie never rides to a customer's own hostname.
 export let cookie = (token: string, domain: string, maxAge: number) =>
-  `${COOKIE}=${token}; Domain=${domain}; Path=/; Max-Age=${maxAge}; ` +
-  'Secure; HttpOnly; SameSite=Lax'
+  `${COOKIE}=${token}; ${domain ? `Domain=${domain}; ` : ''}` +
+  `Path=/; Max-Age=${maxAge}; Secure; HttpOnly; SameSite=Lax`

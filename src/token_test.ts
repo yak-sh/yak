@@ -36,6 +36,13 @@ Deno.test('the cookie carries the token platform-wide and reads back', () => {
     'yak_session=tok.en; Domain=yaks.app; Path=/; Max-Age=60; ' +
       'Secure; HttpOnly; SameSite=Lax',
   )
+  // An empty domain is host-only: the Domain attribute is omitted entirely
+  // (a literal `Domain=` is malformed), so the cookie sticks to the one host
+  // that set it — what a custom domain's own session needs (identity.ts).
+  assertEquals(
+    cookie('tok.en', '', 60),
+    'yak_session=tok.en; Path=/; Max-Age=60; Secure; HttpOnly; SameSite=Lax',
+  )
   assertEquals(cookieValue('a=1; yak_session=tok.en; b=2'), 'tok.en')
   assertEquals(cookieValue('a=1'), null)
   assertEquals(cookieValue(null), null)

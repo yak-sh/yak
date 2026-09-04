@@ -310,6 +310,15 @@ export default {
             : await serve(req, env, { space: null, app: null, path: asked }),
         )
       }
+      // Custom-domain sign-in lands here (identity.ts `handoff`): the one
+      // identity door a customer's OWN hostname answers, caught BEFORE `aimed`
+      // carries the request off to the app, so this hostname sets its own
+      // host-only session cookie rather than the app store answering a sign-in
+      // path. It is a foreign host by construction — a space's `.yaks.app`
+      // hostname already carries the platform cookie and never needs it.
+      if (foreign(host) && asked == identity.HANDOFF) {
+        return sealed(await bound(env.IDENTITY, identity.fetch, env).fetch(req))
+      }
       // Space isolation, and the one place it holds (route.ts `sameOrigin`).
       // HERE, before `aimed` moves the address, because what must match is
       // what the BROWSER addressed: a page at `herbusiness.com` asking its

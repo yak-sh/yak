@@ -53,6 +53,8 @@ import {
   type OAuthProviderOptions,
 } from '@cloudflare/workers-oauth-provider'
 import { cookie, cookieValue, sign, verify } from '../../src/token.ts'
+import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
+export { HANDOFF } from './handoff.ts'
 import { directory, META, META_STORE } from './directory.ts'
 import { doomed, erase, naming, refused, ticketed, went } from './erase.ts'
 import * as dirPart from './directory.ts'
@@ -339,6 +341,45 @@ let secret = (env: Env) => {
   return env.SESSION_SECRET
 }
 
+// The custom-domain end of the handoff (index.ts routes HANDOFF here on a
+// foreign host, BEFORE `aimed` would carry it to the app): the person
+// authenticated on the platform and arrived with a one-time token bound to THIS
+// host. `opener` (handoff.ts) verifies and spends it; on success we mint this
+// hostname's own host-only cookie — `domainOf` answers '' for a foreign host,
+// so the cookie sticks to it and no other — and send them on with the token
+// stripped from the address and no referrer to carry it off the page. A token
+// that fails any check becomes a fresh sign-in on the platform, aimed back at
+// where they were, which mints another honestly.
+export let handoff = async (req: Request, env: Env): Promise<Response> => {
+  let url = new URL(req.url)
+  let to = safeNext(url.searchParams.get('next') ?? '/')
+  let person = await opener(
+    url.searchParams.get('t') ?? '',
+    secret(env),
+    hostOf(req),
+    spender(env.OAUTH_KV),
+  )
+  if (!person) {
+    return redirect(
+      `https://${PLATFORM}/login?return=${
+        encodeURIComponent(`https://${hostOf(req)}${to}`)
+      }`,
+    )
+  }
+  let token = await sign(
+    { person, space: null, exp: Math.floor(Date.now() / 1000) + SESSION },
+    secret(env),
+  )
+  return new Response(null, {
+    status: 303,
+    headers: {
+      location: to,
+      'set-cookie': cookie(token, domainOf(req), SESSION),
+      'referrer-policy': 'no-referrer',
+    },
+  })
+}
+
 // The person is known: the cookie, the space that is theirs, the first-owner
 // bootstrap, and wherever they were going.
 let landed = async (
@@ -369,10 +410,12 @@ let landed = async (
   )
   let set = cookie(token, domainOf(req), SESSION)
   // See Other: the code was POSTed, and where it sends them is a page to GET,
-  // never that form again.
-  return q
-    ? allow(req, env, q, person, set)
-    : redirect(await backTo(env, person, back), set, 303)
+  // never that form again. A return on a customer's own hostname becomes a
+  // HANDOFF (the platform cookie just set never rides there); anything else is
+  // our own zone or the fallback, decided by `backTo`.
+  if (q) return allow(req, env, q, person, set)
+  let hand = back ? await handoffTo(secret(env), dir, person, back) : null
+  return redirect(hand ?? await backTo(env, person, back), set, 303)
 }
 
 // The authorize request as the provider reads it, re-parsed from the query
@@ -443,6 +486,11 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     ? await req.formData().catch(() => new FormData())
     : new FormData()
   let field = (name: string) => String(form.get(name) ?? '')
+
+  // The custom-domain end of cross-domain sign-in (`handoff`). index.ts sends
+  // it here on a foreign host before `aimed` moves the address, so it is the
+  // one door this handler answers for a hostname that is not ours.
+  if (path == HANDOFF && req.method == 'GET') return handoff(req, env)
 
   // The connector page, and the one thing a person may change on it. It is
   // readable signed out — the home page links here, and the instructions are
