@@ -122,25 +122,30 @@
           <div class="Window"
             aria-label="A finished recipe box on its own website">
             <div class="Window_Bar">
-              <!-- The address is the app it names: this box exists, and the
-                   three things listed under it are in it. That was a comment
-                   once and went stale the first time the box was reseeded, so
-                   site_test.ts now reads this markup and asks the live box —
-                   which is why the list and the note's subject are marked up
-                   for a machine as well as a reader. -->
+              <!-- The address is the app, and so is what is under it: the box
+                   at that address fills this in itself (the script at the
+                   foot of the page). It used to be three names typed here and
+                   a comment swearing they were in the box, which went false
+                   the first time the box was reseeded. -->
               <a class="Pill Pill-quiet"
                 href="https://yourname.yaks.app/recipes/"
               >yourname.yaks.app/recipes</a>
             </div>
             <div class="Window_Body">
               <p class="Window_Heading">Our recipe box</p>
-              <ul class="Window_List">
+              <!-- What is written here is the DRAWING: what a visitor sees
+                   before the box answers, and instead of it if the box never
+                   does — offline, the app down, scripting off. It is the
+                   site's own illustration of a recipe box, not a claim about
+                   what is in that one, and nothing holds the two in step. -->
+              <ul class="Window_List" id="box">
                 <li>Grandma's lemon cake</li>
                 <li>Tuesday soup</li>
                 <li>The good pancakes</li>
               </ul>
-              <p class="Note Note-small" data-note-on="The good pancakes">
-                <span class="Window_Who">Ana</span> left a note on the pancakes.
+              <p class="Note Note-small" id="box-note">
+                A note on <span class="Window_On">Tuesday soup</span>: “Taste
+                for salt twice.”
               </p>
             </div>
           </div>
@@ -228,5 +233,75 @@
         <li><a href="/cookies">Cookies</a></li>
       </ul>
     </footer>
+
+    <!-- The recipe box on this page IS the recipe box at that address
+         (T-33408). A public app answers its read door to any page in the
+         world, as nobody — the platform drops the request's credentials and
+         marks the answer readable by any origin (route.ts `shared`) — so this
+         is an ordinary client of an ordinary app, written the way anyone
+         else's page would write it, and it can carry nothing this site is
+         privileged to see.
+
+         Nothing here costs first paint: the script is at the foot, it fetches
+         nothing until the box is near the viewport, and the box is drawn in
+         the HTML already, so a slow answer moves no layout and a missing one
+         leaves the page exactly as it arrived. -->
+    <script>
+    let box = document.getElementById('box')
+    let note = document.getElementById('box-note')
+
+    let el = (tag, cls, text) => {
+      let node = document.createElement(tag)
+      if (cls) node.className = cls
+      if (text != null) node.textContent = text
+      return node
+    }
+
+    // A note is a paragraph somebody wrote for themselves; the window has
+    // room for a line. The first sentence is that line, and a long one is
+    // cut at a word.
+    let line = (words) => {
+      let stop = words.indexOf('. ')
+      let one = (stop < 0 ? words : words.slice(0, stop + 1)).trim()
+      return one.length > 88 ? one.slice(0, 87).replace(/\s+\S*$/, '') + '…' : one
+    }
+
+    // Three, because three is what the window is drawn for. The box's own
+    // order, which is the order they were put in it.
+    let draw = (rows) => {
+      let held = rows.map((r) => r.recipe).filter((r) => r && r.title)
+      if (held.length < 3) return
+      let some = held.slice(0, 3)
+      box.replaceChildren(...some.map((r) => el('li', '', r.title)))
+      let noted = some.find((r) => r.notes)
+      if (!noted) return note.remove()
+      note.replaceChildren(
+        document.createTextNode('A note on '),
+        el('span', 'Window_On', noted.title),
+        document.createTextNode(': “' + line(noted.notes) + '”'),
+      )
+    }
+
+    // `omit` says out loud what the browser would do anyway: this page
+    // sends no cookie there and could not read one back if it did.
+    let ask = () =>
+      fetch('https://yourname.yaks.app/recipes/api/query?.recipe!', {
+        credentials: 'omit',
+      })
+        .then((r) => (r.ok ? r.json() : []))
+        .then(draw)
+        // A box that does not answer is not news to a visitor: they keep
+        // the drawing, and nobody is shown an error about our own demo.
+        .catch(() => {})
+
+    if (box && note && window.IntersectionObserver) {
+      let eye = new IntersectionObserver((seen, self) => {
+        if (!seen.some((s) => s.isIntersecting)) return
+        self.disconnect()
+        ask()
+      }, { rootMargin: '300px' })
+      eye.observe(box)
+    }
+    </script>
   </body>
 </html>
