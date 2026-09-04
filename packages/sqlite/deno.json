@@ -9,7 +9,8 @@
   },
   "publish": {
     "exclude": [
-      "**/*_test.ts"
+      "**/*_test.ts",
+      "harness.ts"
     ]
   }
 }

@@ -74,9 +74,11 @@ let tableDdl = (v: Vocab, comp: string): string => {
 // The `doc` view and its full-text index, emitted only when the vocabulary
 // declares a `doc` component. The view republishes `doc`'s columns plus a
 // `rowid` alias (the owner id) so `doc_fts` — which matches by rowid — lines up
-// with it. The index covers the text-shaped columns (plain text and body); a
-// `doc` with none gets a view but no index, and a text query over it declines
-// upstream rather than hitting a missing table.
+// with it. The index is EXTERNAL-CONTENT over `doc` itself (it stores no second
+// copy, just the inverted index) and is kept current by triggers. It covers the
+// text-shaped columns (plain text and body); a `doc` with none gets a view but
+// no index, and a text query over it declines upstream rather than hit a
+// missing table.
 let textCols = (v: Vocab, comp: string): string[] =>
   stored(v, comp)
     .filter((c) =>
@@ -93,23 +95,27 @@ let docDdl = (v: Vocab): string[] => {
   let texts = textCols(v, 'doc')
   if (!texts.length) return out
   let cols = texts.map(q).join(', ')
-  // The stored value read for a trigger: a text value inserts as itself, a null
-  // as the empty string so the index never sees a null term.
-  let read = (side: string) =>
-    texts.map((t) => `coalesce(${side}.${q(t)}, '')`).join(', ')
+  // The value each trigger writes to the index. An external-content index must
+  // be handed, on delete, exactly what it was handed on insert, so both sides
+  // read the same way: the stored text, or '' for a null (the index never holds
+  // a null term).
+  let side = (s: string) =>
+    texts.map((t) => `coalesce(${s}.${q(t)}, '')`).join(', ')
   out.push(
-    `create virtual table if not exists doc_fts using fts5(${cols})`,
+    `create virtual table if not exists doc_fts using fts5(
+      ${cols}, content='doc', content_rowid='entity'
+    )`,
     `create trigger if not exists doc_fts_insert after insert on doc begin
-      insert into doc_fts(rowid, ${cols}) values (new.entity, ${read('new')});
+      insert into doc_fts(rowid, ${cols}) values (new.entity, ${side('new')});
     end`,
     `create trigger if not exists doc_fts_delete after delete on doc begin
       insert into doc_fts(doc_fts, rowid, ${cols})
-        values ('delete', old.entity, ${read('old')});
+        values ('delete', old.entity, ${side('old')});
     end`,
     `create trigger if not exists doc_fts_update after update on doc begin
       insert into doc_fts(doc_fts, rowid, ${cols})
-        values ('delete', old.entity, ${read('old')});
-      insert into doc_fts(rowid, ${cols}) values (new.entity, ${read('new')});
+        values ('delete', old.entity, ${side('old')});
+      insert into doc_fts(rowid, ${cols}) values (new.entity, ${side('new')});
     end`,
   )
   return out

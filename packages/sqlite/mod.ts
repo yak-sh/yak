@@ -12,8 +12,9 @@
 // The model is the yaks entity graph: everything is an ENTITY (a string id)
 // wearing COMPONENTS (a row per component table). An entity is what its
 // components make it — a blog post is a `doc` plus a `post`; a product is a
-// `doc` plus a `price`. There is no type column. A read hands back a BUNDLE
-// (an entity with its components gathered); a write takes a batch of bundles
+// `doc` plus a `price`. A component adds a facet; the set of components an
+// entity carries is its identity. A read hands back a BUNDLE (an entity with
+// its components gathered); a write takes a batch of bundles
 // and PATCHES them in — omitted columns untouched, a null column cleared, a
 // null component dropped, a null `entity` deleted (and death cascades).
 //
