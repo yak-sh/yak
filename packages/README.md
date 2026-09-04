@@ -35,3 +35,20 @@ on its own:
 - `@yaks/sqlite` is the batteries-included path: point it at a SQLite database
   and it handles reading and writing entities for you, built entirely from the
   three packages above.
+
+## Publishing requirements
+
+Every package here publishes to [JSR](https://jsr.io) (and npm), so each one
+must meet JSR's bar before it ships. When you add or change a package:
+
+- **Every exported symbol has a doc comment.** Functions, types, constants —
+  anything in the public API is documented where it is declared.
+- **The entrypoint has a module doc.** `mod.ts` opens with a module-level doc
+  comment (`/** … */` at the top) describing what the package is.
+- **`deno.json` has a `description`.** One clear sentence naming what the
+  package does.
+- **At least two runtimes are marked compatible.** Declare the runtimes the
+  package supports so JSR shows its compatibility.
+
+Run `deno publish --dry-run` in a package to check it before landing — it
+reports missing docs, slow types, and metadata gaps.
