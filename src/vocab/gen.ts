@@ -3,9 +3,16 @@
 // manifests and emits src/types.ts — the generated data section followed by
 // the hand-written code half (code.ts.part) — plus fixture.json and the
 // classified schema ops (store/schema.json). Composition is order-independent
-// by construction: every ordered thing carries an explicit rank, ties refuse,
-// and a comp name owned by two manifests refuses loudly with both claimants
-// named.
+// by construction: component and stamped-column order is derived ALPHABETICALLY
+// (no consumer depends on a specific order — they iterate comps as a set), and
+// kind precedence is DERIVED — an alphabetical base refined by local `before`
+// constraints, topologically sorted into one total order — so independently
+// authored plugins never collide over a hand-picked global integer. A comp name
+// owned by two manifests still refuses loudly with both claimants named.
+//
+// Where a genuine FK/reference order is ever needed (none today), the mechanism
+// is the same shape: a topological sort over the ref edges with alphabetical as
+// the stable tiebreak — not a hand-assigned rank.
 //
 //   deno task codegen             regenerate types.ts + fixture.json +
 //                                 store/schema.json from the manifests
@@ -23,10 +30,9 @@ type ColSpec =
   | { well: string }
 
 type CompSpec = {
-  rank?: number
   wire?: boolean
-  stamped_rank?: number
-  kind_rank?: number
+  kind?: boolean
+  before?: string[]
   prefix?: string
   by_name?: boolean
   lazy?: boolean
@@ -108,36 +114,45 @@ export let assemble = (manifests: Manifest[]) => {
     sessionFacets = one(sessionFacets, m.session_facets, 'session_facets')
   }
 
-  // Ranks: explicit, unique — the global key order can never depend on
-  // which file was read first.
-  let byRank = (
-    pairs: [string, number | undefined][],
-    what: string,
-  ): string[] => {
-    let seen: Record<number, string> = {}
-    for (let [name, rank] of pairs) {
-      if (rank == null) return refuse(`${what} '${name}' has no rank`)
-      if (seen[rank]) {
-        refuse(`${what} rank ${rank}: '${seen[rank]}' vs '${name}'`)
-      }
-      seen[rank] = name
-    }
-    return pairs.sort((a, b) => a[1]! - b[1]!).map(([n]) => n)
-  }
-
+  // Component and stamped-column order are ALPHABETICAL: nothing outside this
+  // file depends on a specific order (every consumer iterates comps as a set —
+  // table creation, readable columns, death worklists), so the order only needs
+  // to be deterministic and file-read-order independent.
   let wire = Object.entries(comps).filter(([, s]) => s.wire != false)
-  let compOrder = byRank(wire.map(([n, s]) => [n, s.rank]), 'comp')
+  let compOrder = wire.map(([n]) => n).sort()
   let logOrder = compOrder.filter((n) => comps[n].log)
-  let stampedEntries = Object.entries(comps).filter(([, s]) => s.stamped)
-  let stampedOrder = byRank(
-    stampedEntries.map(([n, s]) => [n, s.stamped_rank]),
-    'stamped comp',
-  )
-  let kindEntries = Object.entries(comps).filter(([, s]) => s.kind_rank != null)
-  let kindOrder = byRank(
-    kindEntries.map(([n, s]) => [n, s.kind_rank]),
-    'kind',
-  )
+  let stampedOrder = Object.entries(comps).filter(([, s]) => s.stamped)
+    .map(([n]) => n).sort()
+
+  // kind precedence is DERIVED, not hand-ranked: an alphabetical base refined by
+  // local `before` constraints (a comp declares the kinds it beats), topo-sorted
+  // into one total order — the most specific kind an entity carries names it
+  // (kindOf). A priority topological sort emits the alphabetically-smallest kind
+  // whose `before`-predecessors are all placed, so alphabetical is both the base
+  // order and the tiebreak. A cycle in `before` refuses loudly.
+  let kinds = Object.entries(comps).filter(([, s]) => s.kind).map(([n]) => n)
+    .sort()
+  let kindSet = new Set(kinds)
+  let preds: Record<string, Set<string>> = {}
+  for (let k of kinds) preds[k] = new Set()
+  for (let k of kinds) {
+    for (let x of comps[k].before ?? []) {
+      if (!kindSet.has(x)) {
+        refuse(`kind '${k}' declares before '${x}', which is not a kind`)
+      }
+      preds[x].add(k) // k before x ⇒ k is a predecessor of x
+    }
+  }
+  let kindOrder: string[] = []
+  let placed = new Set<string>()
+  while (kindOrder.length < kinds.length) {
+    let ready = kinds.find((k) =>
+      !placed.has(k) && [...preds[k]].every((p) => placed.has(p))
+    )
+    if (!ready) return refuse('cycle in kind `before` constraints')
+    kindOrder.push(ready)
+    placed.add(ready)
+  }
 
   // Named enum references must resolve.
   for (let [name, spec] of Object.entries(comps)) {
@@ -308,7 +323,7 @@ export let emit = (a: ReturnType<typeof assemble>): string => {
   // kindOrder / byName / prefix / plural irregulars.
   out.push(
     '// kind is DERIVED: the most specific component an entity carries',
-    '// names it. Rank order across the manifests.',
+    '// names it. Order derived alphabetically, refined by `before`.',
     'export let kindOrder = [',
     ...a.kindOrder.map((n) => `  ${q(n)},`),
     ']',

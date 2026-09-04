@@ -31,7 +31,6 @@
   },
   "comps": {
     "bug": {
-      "rank": 930,
       "cols": {
         "fault": "text",
         "hits": "number",
@@ -39,8 +38,7 @@
       }
     },
     "dream": {
-      "rank": 660,
-      "kind_rank": 230,
+      "kind": true,
       "prefix": "Z",
       "cols": {
         "scope": {
@@ -51,26 +49,23 @@
       }
     },
     "finding": {
-      "rank": 940,
       "cols": {
         "key": "text",
         "hits": "number",
         "last": "time"
       }
     },
-    "fixer": {
-      "rank": 950
-    },
-    "nofix": {
-      "rank": 960
-    },
-    "noverify": {
-      "rank": 961
-    },
+    "fixer": {},
+    "nofix": {},
+    "noverify": {},
     "role": {
-      "rank": 60,
-      "stamped_rank": 250,
-      "kind_rank": 140,
+      "kind": true,
+      "before": [
+        "alias",
+        "claim",
+        "doc",
+        "persona"
+      ],
       "prefix": "R",
       "by_name": true,
       "cols": {
@@ -114,8 +109,6 @@
         "decided_at": "time"
       }
     },
-    "verifier": {
-      "rank": 951
-    }
+    "verifier": {}
   }
 }

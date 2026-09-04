@@ -11,8 +11,7 @@
   },
   "comps": {
     "camera": {
-      "rank": 180,
-      "kind_rank": 110,
+      "kind": true,
       "cols": {
         "client": {
           "eid": "client",
@@ -39,13 +38,11 @@
       ]
     },
     "canvas": {
-      "rank": 120,
-      "kind_rank": 60,
+      "kind": true,
       "by_name": true
     },
     "card": {
-      "rank": 150,
-      "kind_rank": 80,
+      "kind": true,
       "cols": {
         "target": {
           "eid": "entity",
@@ -55,9 +52,7 @@
       }
     },
     "client": {
-      "rank": 170,
-      "stamped_rank": 120,
-      "kind_rank": 100,
+      "kind": true,
       "cols": {
         "user_agent": "text",
         "actor": {
@@ -70,8 +65,7 @@
       }
     },
     "cursor": {
-      "rank": 210,
-      "kind_rank": 130,
+      "kind": true,
       "cols": {
         "client": {
           "eid": "client",
@@ -93,8 +87,7 @@
       ]
     },
     "fold": {
-      "rank": 190,
-      "kind_rank": 120,
+      "kind": true,
       "cols": {
         "client": {
           "eid": "client",
@@ -117,8 +110,10 @@
       ]
     },
     "layout": {
-      "rank": 80,
-      "kind_rank": 40,
+      "kind": true,
+      "before": [
+        "doc"
+      ],
       "prefix": "L",
       "by_name": true,
       "cols": {
@@ -129,8 +124,7 @@
       }
     },
     "pane": {
-      "rank": 90,
-      "kind_rank": 90,
+      "kind": true,
       "cols": {
         "layout": {
           "eid": "layout",
@@ -153,7 +147,6 @@
       }
     },
     "pin": {
-      "rank": 160,
       "cols": {
         "canvas": {
           "eid": "entity",
@@ -167,7 +160,6 @@
       }
     },
     "shelf": {
-      "rank": 200,
       "cols": {
         "client": {
           "eid": "client",

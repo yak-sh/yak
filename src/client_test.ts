@@ -981,16 +981,18 @@ Deno.test('normalizeLiterals: the read shape writes — $alias, nesting, human i
   assertEquals(plan.aliases, { $goal: goal, $gate: gate, $space: space, $m: m })
   assertEquals(plan.changes[2].was === was, true, 'was rides unchanged')
   assertEquals(plan.changes, [
+    // Comps within an entity emit in alphabetical vocabulary order (compOrder
+    // is derived alphabetically): created before task, comment before recalled.
     { eid: space, name: 'doc', comp: { title: 'Space' } },
     { eid: space, name: 'project', comp: {} },
     { eid: goal, name: 'doc', comp: { title: 'Goal' }, was },
     { eid: goal, name: 'task', comp: { project: space } },
     { eid: gate, name: 'doc', comp: { title: 'Gate' } },
-    { eid: T, name: 'task', comp: { priority: 1 } },
     { eid: T, name: 'created', comp: { at: '2026-09-02T00:00:00Z', by: P } },
+    { eid: T, name: 'task', comp: { priority: 1 } },
     { eid: m, name: 'memory', comp: {} },
-    { eid: note, name: 'recalled', comp: { source: m } },
     { eid: note, name: 'comment', comp: { target: P, body: 'note' } },
+    { eid: note, name: 'recalled', comp: { source: m } },
     { eid: goal, name: 'dependency', comp: { type: 'requires', child: T } },
     { eid: goal, name: 'dependency', comp: { type: 'requires', child: gate } },
   ])

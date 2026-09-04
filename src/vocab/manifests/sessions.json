@@ -29,18 +29,15 @@
   },
   "comps": {
     "apply": {
-      "rank": 420,
       "log": true,
       "cols": {
         "changes": "body"
       }
     },
     "attention": {
-      "rank": 320,
       "log": true
     },
     "bash": {
-      "rank": 360,
       "log": true,
       "cols": {
         "command": "body",
@@ -48,20 +45,17 @@
       }
     },
     "brief": {
-      "rank": 250,
       "cols": {
         "text": "body"
       }
     },
     "call": {
-      "rank": 350,
       "log": true,
       "cols": {
         "key": "text"
       }
     },
     "cancel": {
-      "rank": 500,
       "log": true,
       "cols": {
         "target": {
@@ -71,7 +65,6 @@
       }
     },
     "chat": {
-      "rank": 620,
       "cols": {
         "actor": {
           "eid": "entity",
@@ -93,7 +86,6 @@
       ]
     },
     "checkpoint": {
-      "rank": 490,
       "log": true,
       "cols": {
         "through": {
@@ -103,9 +95,7 @@
       }
     },
     "claim": {
-      "rank": 590,
-      "stamped_rank": 130,
-      "kind_rank": 180,
+      "kind": true,
       "cols": {
         "session": {
           "eid": "session",
@@ -117,16 +107,13 @@
       }
     },
     "content": {
-      "rank": 290,
       "log": true,
       "cols": {
         "body": "body"
       }
     },
     "entry": {
-      "rank": 280,
-      "stamped_rank": 290,
-      "kind_rank": 160,
+      "kind": true,
       "lazy": true,
       "log": true,
       "cols": {
@@ -149,14 +136,12 @@
       ]
     },
     "exit": {
-      "rank": 440,
       "log": true,
       "cols": {
         "code": "number"
       }
     },
     "fetch": {
-      "rank": 370,
       "log": true,
       "cols": {
         "url": "url",
@@ -166,7 +151,6 @@
       }
     },
     "fork": {
-      "rank": 631,
       "cols": {
         "from": {
           "eid": "entry",
@@ -175,8 +159,6 @@
       }
     },
     "generation": {
-      "rank": 330,
-      "stamped_rank": 300,
       "log": true,
       "cols": {
         "through": {
@@ -200,22 +182,18 @@
       ]
     },
     "graph_query": {
-      "rank": 410,
       "log": true,
       "cols": {
         "query": "query"
       }
     },
     "headers": {
-      "rank": 460,
       "log": true,
       "cols": {
         "data": "body"
       }
     },
     "imported": {
-      "rank": 570,
-      "stamped_rank": 310,
       "log": true,
       "stamped": {
         "source": "text",
@@ -223,8 +201,6 @@
       }
     },
     "lease": {
-      "rank": 550,
-      "stamped_rank": 320,
       "log": true,
       "stamped": {
         "holder": {
@@ -236,7 +212,6 @@
       }
     },
     "message": {
-      "rank": 300,
       "log": true,
       "cols": {
         "role": {
@@ -245,7 +220,6 @@
       }
     },
     "opaque": {
-      "rank": 530,
       "log": true,
       "cols": {
         "format": "text",
@@ -253,7 +227,6 @@
       }
     },
     "output": {
-      "rank": 340,
       "log": true,
       "cols": {
         "source": {
@@ -275,7 +248,6 @@
       ]
     },
     "patch": {
-      "rank": 380,
       "log": true,
       "cols": {
         "path": "text",
@@ -283,15 +255,12 @@
       }
     },
     "prompt": {
-      "rank": 310,
       "log": true
     },
     "reasoning": {
-      "rank": 510,
       "log": true
     },
     "recalled": {
-      "rank": 520,
       "log": true,
       "cols": {
         "source": {
@@ -302,14 +271,12 @@
       }
     },
     "response": {
-      "rank": 450,
       "log": true,
       "cols": {
         "status": "number"
       }
     },
     "result": {
-      "rank": 430,
       "log": true,
       "cols": {
         "call": {
@@ -327,8 +294,6 @@
       ]
     },
     "resume": {
-      "rank": 600,
-      "stamped_rank": 140,
       "stamped": {
         "actor": {
           "eid": "entity",
@@ -339,8 +304,6 @@
       }
     },
     "run": {
-      "rank": 271,
-      "stamped_rank": 281,
       "stamped": {
         "status": {
           "enum": [
@@ -355,16 +318,13 @@
       }
     },
     "runner": {
-      "rank": 540,
-      "kind_rank": 170,
+      "kind": true,
       "log": true,
       "cols": {
         "name": "text"
       }
     },
     "runtime": {
-      "rank": 270,
-      "stamped_rank": 280,
       "cols": {
         "pid": "number",
         "pane": "text",
@@ -376,9 +336,10 @@
       }
     },
     "session": {
-      "rank": 240,
-      "stamped_rank": 260,
-      "kind_rank": 150,
+      "kind": true,
+      "before": [
+        "doc"
+      ],
       "prefix": "S",
       "cols": {
         "id": "text",
@@ -445,8 +406,6 @@
       }
     },
     "settled": {
-      "rank": 272,
-      "stamped_rank": 282,
       "stamped": {
         "at": "time",
         "status": {
@@ -462,7 +421,6 @@
       }
     },
     "spawn": {
-      "rank": 580,
       "cols": {
         "provider": "text",
         "model": "text",
@@ -474,15 +432,16 @@
       }
     },
     "stderr": {
-      "rank": 470,
       "log": true,
       "cols": {
         "text": "body"
       }
     },
     "stop_request": {
-      "rank": 630,
-      "kind_rank": 200,
+      "kind": true,
+      "before": [
+        "doc"
+      ],
       "cols": {
         "target": {
           "eid": "session",
@@ -491,18 +450,15 @@
       }
     },
     "task_context": {
-      "rank": 400,
       "log": true
     },
     "timeout": {
-      "rank": 480,
       "log": true,
       "cols": {
         "ms": "number"
       }
     },
     "tool": {
-      "rank": 390,
       "log": true,
       "cols": {
         "name": "text",
@@ -510,8 +466,6 @@
       }
     },
     "usage": {
-      "rank": 560,
-      "stamped_rank": 330,
       "log": true,
       "stamped": {
         "input": "number",
@@ -521,8 +475,6 @@
       }
     },
     "worktree": {
-      "rank": 260,
-      "stamped_rank": 270,
       "cols": {
         "cwd": "text"
       },
@@ -532,8 +484,6 @@
       }
     },
     "yield": {
-      "rank": 273,
-      "stamped_rank": 283,
       "stamped": {
         "final_text": "body",
         "usage_json": "text",

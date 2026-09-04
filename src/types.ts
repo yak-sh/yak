@@ -58,114 +58,416 @@ export let hostnameStages = ['pending', 'active', 'error'] as const
 
 // The graph-native Session-log vocabulary (comps marked log = true).
 export let sessionComps: Record<string, Record<string, PropType>> = {
-  entry: {
-    session: { eid: 'session', death: 'cascade' },
+  apply: {
+    changes: 'body',
+  },
+  attention: {},
+  bash: {
+    command: 'body',
+    cwd: 'text',
+  },
+  call: {
+    key: 'text',
+  },
+  cancel: {
+    target: { eid: 'entity', death: 'keep' },
+  },
+  checkpoint: {
+    through: { eid: 'entry', death: 'keep' },
   },
   content: {
     body: 'body',
   },
-  message: {
-    role: { enum: messageRoles },
+  entry: {
+    session: { eid: 'session', death: 'cascade' },
   },
-  prompt: {},
-  attention: {},
+  exit: {
+    code: 'number',
+  },
+  fetch: {
+    url: 'url',
+    method: { enum: httpMethods },
+  },
   generation: {
     through: { eid: 'entry', death: 'keep' },
     provider: 'text',
     model: 'text',
     effort: 'text',
   },
-  output: {
-    source: { eid: 'generation', death: 'keep' },
-    key: 'text',
-    phase: 'text',
-  },
-  call: {
-    key: 'text',
-  },
-  bash: {
-    command: 'body',
-    cwd: 'text',
-  },
-  fetch: {
-    url: 'url',
-    method: { enum: httpMethods },
-  },
-  patch: {
-    path: 'text',
-    diff: 'body',
-  },
-  tool: {
-    name: 'text',
-    detail: 'text',
-  },
-  task_context: {},
   graph_query: {
     query: 'query',
-  },
-  apply: {
-    changes: 'body',
-  },
-  result: {
-    call: { eid: 'call', death: 'keep' },
-  },
-  exit: {
-    code: 'number',
-  },
-  response: {
-    status: 'number',
   },
   headers: {
     data: 'body',
   },
-  stderr: {
-    text: 'body',
-  },
-  timeout: {
-    ms: 'number',
-  },
-  checkpoint: {
-    through: { eid: 'entry', death: 'keep' },
-  },
-  cancel: {
-    target: { eid: 'entity', death: 'keep' },
-  },
-  reasoning: {},
-  recalled: {
-    source: { eid: 'entry', death: 'keep' },
-    at: 'time',
+  imported: {},
+  lease: {},
+  message: {
+    role: { enum: messageRoles },
   },
   opaque: {
     format: 'text',
     data: 'body',
   },
+  output: {
+    source: { eid: 'generation', death: 'keep' },
+    key: 'text',
+    phase: 'text',
+  },
+  patch: {
+    path: 'text',
+    diff: 'body',
+  },
+  prompt: {},
+  reasoning: {},
+  recalled: {
+    source: { eid: 'entry', death: 'keep' },
+    at: 'time',
+  },
+  response: {
+    status: 'number',
+  },
+  result: {
+    call: { eid: 'call', death: 'keep' },
+  },
   runner: {
     name: 'text',
   },
-  lease: {},
+  stderr: {
+    text: 'body',
+  },
+  task_context: {},
+  timeout: {
+    ms: 'number',
+  },
+  tool: {
+    name: 'text',
+    detail: 'text',
+  },
   usage: {},
-  imported: {},
 }
 
 // The component tables, their wire-writable columns AND what each
 // column is — THE one list, assembled from the manifests.
 export let comps: Record<string, Record<string, PropType>> = {
+  about: {},
+  accept: {
+    body: 'body',
+  },
+  alias: {
+    slug: 'text',
+    slugs: 'text',
+  },
+  anchor: {
+    paths: 'text',
+    sha: 'text',
+    symbol: 'text',
+    hunk: 'body',
+    start: 'number',
+    end: 'number',
+  },
+  app: {
+    slug: 'text',
+    space: { eid: 'space', death: 'cascade' },
+    version: 'number',
+    access: { enum: appAccess },
+  },
+  apply: {
+    changes: 'body',
+  },
+  architecture: {},
+  archived: {},
+  attachment: {
+    blob: { eid: 'blob', death: 'cascade' },
+    mime: 'text',
+    name: 'text',
+  },
+  attention: {},
+  bash: {
+    command: 'body',
+    cwd: 'text',
+  },
+  blob: {
+    bytes: 'number',
+  },
+  blocked: {
+    on: 'text',
+  },
+  board: {
+    query: 'query',
+  },
+  brief: {
+    text: 'body',
+  },
+  bug: {
+    fault: 'text',
+    hits: 'number',
+    last: 'time',
+  },
+  call: {
+    key: 'text',
+  },
+  camera: {
+    client: { eid: 'client', death: 'cascade' },
+    canvas: { eid: 'entity', death: 'cascade' },
+    x: 'number',
+    y: 'number',
+    zoom: 'number',
+    w: 'number',
+    h: 'number',
+  },
+  cancel: {
+    target: { eid: 'entity', death: 'keep' },
+  },
+  cancelled: {
+    at: 'time',
+    by: { eid: 'entity', death: 'keep' },
+    reason: 'text',
+  },
+  canvas: {},
+  card: {
+    target: { eid: 'entity', death: 'cascade' },
+    view: 'text',
+  },
+  chat: {
+    actor: { eid: 'entity', death: 'detach' },
+    target: { eid: 'entity', death: 'detach' },
+  },
+  checkpoint: {
+    through: { eid: 'entry', death: 'keep' },
+  },
+  claim: {
+    session: { eid: 'session', death: 'release' },
+  },
+  client: {
+    user_agent: 'text',
+    actor: { eid: 'entity', death: 'detach' },
+  },
+  comment: {
+    target: { eid: 'entity', death: 'cascade' },
+  },
+  commit: {
+    target: { eid: 'entity', death: 'cascade' },
+    sha: 'text',
+    repo: 'text',
+    message: 'text',
+  },
+  completed: {
+    at: 'time',
+    by: { eid: 'entity', death: 'keep' },
+  },
+  conflict: {},
+  contains: {},
+  content: {
+    body: 'body',
+  },
+  created: {
+    by: { eid: 'entity', death: 'keep' },
+  },
+  cursor: {
+    client: { eid: 'client', death: 'cascade' },
+    target: { eid: 'entity', death: 'keep' },
+    view: 'text',
+  },
+  decided: {
+    at: 'time',
+    by: { eid: 'entity', death: 'keep' },
+    verdict: { enum: ['approved', 'declined'] },
+  },
+  delegates: {},
+  deliver: {
+    to: { eid: 'entity', death: 'keep' },
+  },
+  delivered: {},
+  deploy: {
+    app: { eid: 'app', death: 'cascade' },
+    version: 'number',
+    files: 'text',
+    worker: 'text',
+  },
+  design: {},
   doc: {
     title: 'text',
     body: 'body',
   },
-  task: {
-    priority: 'priority',
-    project: { eid: 'project', death: 'detach' },
-    assignee: { eid: 'entity', death: 'detach' },
-    domain: { text: 'domains' },
+  dream: {
+    scope: { eid: 'project', death: 'cascade' },
+    floor: 'time',
   },
-  accept: {
-    body: 'body',
+  edge: {
+    from: { eid: 'entity', death: 'cascade' },
+    to: { eid: 'entity', death: 'cascade' },
+    ord: 'number',
   },
+  effect: {},
+  email: {
+    address: 'text',
+  },
+  entry: {
+    session: { eid: 'session', death: 'cascade' },
+  },
+  error: {},
+  exception: {},
+  exit: {
+    code: 'number',
+  },
+  favorite: {},
+  feedback: {
+    by: { eid: 'entity', death: 'keep' },
+  },
+  fetch: {
+    url: 'url',
+    method: { enum: httpMethods },
+  },
+  finding: {
+    key: 'text',
+    hits: 'number',
+    last: 'time',
+  },
+  fixer: {},
+  fold: {
+    client: { eid: 'client', death: 'cascade' },
+    board: { eid: 'board', death: 'cascade' },
+    statuses: 'text',
+  },
+  fork: {
+    from: { eid: 'entry', death: 'detach' },
+  },
+  generation: {
+    through: { eid: 'entry', death: 'keep' },
+    provider: 'text',
+    model: 'text',
+    effort: 'text',
+  },
+  goal: {
+    scope: { eid: 'project', death: 'keep' },
+  },
+  graph_query: {
+    query: 'query',
+  },
+  headers: {
+    data: 'body',
+  },
+  hook: {},
+  hostname: {
+    name: 'text',
+    app: { eid: 'app', death: 'cascade' },
+    stage: { enum: hostnameStages },
+    at: 'time',
+  },
+  image: {
+    w: 'number',
+    h: 'number',
+  },
+  imported: {},
+  installed: {
+    of: { eid: 'app', death: 'detach' },
+    version: 'number',
+  },
+  knock: {
+    target: { eid: 'entity', death: 'cascade' },
+  },
+  layout: {
+    root: { eid: 'pane', death: 'detach' },
+  },
+  lease: {},
+  mail: {
+    target: { eid: 'entity', death: 'keep' },
+    reply_to: { eid: 'mail', death: 'keep' },
+  },
+  member: {
+    space: { eid: 'space', death: 'cascade' },
+    person: { eid: 'person', death: 'cascade' },
+    role: { enum: ['owner', 'editor', 'viewer'] },
+  },
+  memory: {
+    scope: { eid: 'project', death: 'keep' },
+  },
+  message: {
+    role: { enum: messageRoles },
+  },
+  meta: {},
+  meter: {
+    month: 'text',
+    requests: 'number',
+    rows_read: 'number',
+    rows_written: 'number',
+    bytes: 'number',
+    emails: 'number',
+    at: 'time',
+  },
+  model: {
+    name: 'text',
+    vendor: 'text',
+    grade: { enum: grades },
+  },
+  nofix: {},
+  notice: {
+    target: { eid: 'entity', death: 'cascade' },
+    event: { enum: noticeKinds },
+  },
+  notified: {},
+  noverify: {},
+  opaque: {
+    format: 'text',
+    data: 'body',
+  },
+  opened: {},
+  output: {
+    source: { eid: 'generation', death: 'keep' },
+    key: 'text',
+    phase: 'text',
+  },
+  pane: {
+    layout: { eid: 'layout', death: 'cascade' },
+    parent: { eid: 'pane', death: 'cascade' },
+    size: 'number',
+    order: 'number',
+    dir: { enum: dirs },
+    content: { eid: 'entity', death: 'detach' },
+    view: 'text',
+  },
+  patch: {
+    path: 'text',
+    diff: 'body',
+  },
+  person: {},
+  persona: {
+    home: { eid: 'project', death: 'detach' },
+  },
+  pin: {
+    canvas: { eid: 'entity', death: 'cascade' },
+    x: 'number',
+    y: 'number',
+    w: 'number',
+    h: 'number',
+    z: 'number',
+  },
+  plan: {},
   project: {
     color: 'text',
   },
+  prompt: {},
+  proposed: {
+    at: 'time',
+    by: { eid: 'entity', death: 'keep' },
+  },
+  published: {
+    name: 'text',
+    version: 'number',
+    at: 'time',
+    about: 'text',
+  },
+  quarantined: {},
+  reads: {},
+  reasoning: {},
+  recall: {},
+  recalled: {
+    source: { eid: 'entry', death: 'keep' },
+    at: 'time',
+  },
+  redaction: {},
+  references: {},
   repo: {
     path: 'text',
     url: 'url',
@@ -173,15 +475,30 @@ export let comps: Record<string, Record<string, PropType>> = {
     gate: 'text',
     push: 'bool',
   },
-  venture: {
-    phase: { enum: ventureStates },
-    paused_from: { enum: ventureStates },
-    hold_from: { enum: ventureStates },
-    run_mode: { enum: ventureModes },
-    agent_model: 'text',
-    operated_by: 'text',
-    tagline: 'text',
-    site: 'url',
+  report: {
+    app: { eid: 'app', death: 'keep' },
+    space: { eid: 'space', death: 'keep' },
+    version: 'number',
+    release: 'text',
+    at: 'time',
+  },
+  requires: {},
+  response: {
+    status: 'number',
+  },
+  result: {
+    call: { eid: 'call', death: 'keep' },
+  },
+  resume: {},
+  review: {
+    verdict: {
+      enum: verdicts,
+      aliases: {
+        approve: 'approved',
+        reject: 'rejected',
+        changes: 'changes_requested',
+      },
+    },
   },
   role: {
     state: { enum: roleStates },
@@ -196,85 +513,16 @@ export let comps: Record<string, Record<string, PropType>> = {
     cooldown: 'number',
     cap: 'number',
   },
-  board: {
-    query: 'query',
-  },
-  layout: {
-    root: { eid: 'pane', death: 'detach' },
-  },
-  pane: {
-    layout: { eid: 'layout', death: 'cascade' },
-    parent: { eid: 'pane', death: 'cascade' },
-    size: 'number',
-    order: 'number',
-    dir: { enum: dirs },
-    content: { eid: 'entity', death: 'detach' },
-    view: 'text',
-  },
-  design: {},
-  goal: {
-    scope: { eid: 'project', death: 'keep' },
-  },
-  architecture: {},
-  canvas: {},
-  web: {
-    url: 'url',
-  },
-  blob: {
-    bytes: 'number',
-  },
-  attachment: {
-    blob: { eid: 'blob', death: 'cascade' },
-    mime: 'text',
+  run: {},
+  runner: {
     name: 'text',
   },
-  image: {
-    w: 'number',
-    h: 'number',
+  runtime: {
+    pid: 'number',
+    pane: 'text',
+    transcript: 'text',
   },
-  card: {
-    target: { eid: 'entity', death: 'cascade' },
-    view: 'text',
-  },
-  pin: {
-    canvas: { eid: 'entity', death: 'cascade' },
-    x: 'number',
-    y: 'number',
-    w: 'number',
-    h: 'number',
-    z: 'number',
-  },
-  client: {
-    user_agent: 'text',
-    actor: { eid: 'entity', death: 'detach' },
-  },
-  camera: {
-    client: { eid: 'client', death: 'cascade' },
-    canvas: { eid: 'entity', death: 'cascade' },
-    x: 'number',
-    y: 'number',
-    zoom: 'number',
-    w: 'number',
-    h: 'number',
-  },
-  fold: {
-    client: { eid: 'client', death: 'cascade' },
-    board: { eid: 'board', death: 'cascade' },
-    statuses: 'text',
-  },
-  shelf: {
-    client: { eid: 'client', death: 'release' },
-  },
-  cursor: {
-    client: { eid: 'client', death: 'cascade' },
-    target: { eid: 'entity', death: 'keep' },
-    view: 'text',
-  },
-  favorite: {},
-  setting: {
-    key: 'text',
-    value: 'text',
-  },
+  satisfies: {},
   session: {
     id: 'text',
     cwd: 'text',
@@ -294,329 +542,81 @@ export let comps: Record<string, Record<string, PropType>> = {
     actor: { eid: 'entity', death: 'detach' },
     parent: { eid: 'session', death: 'detach' },
   },
-  brief: {
-    text: 'body',
+  setting: {
+    key: 'text',
+    value: 'text',
   },
-  worktree: {
-    cwd: 'text',
-  },
-  runtime: {
-    pid: 'number',
-    pane: 'text',
-    transcript: 'text',
-  },
-  run: {},
   settled: {},
-  yield: {},
-  entry: {
-    session: { eid: 'session', death: 'cascade' },
+  shelf: {
+    client: { eid: 'client', death: 'release' },
   },
-  content: {
-    body: 'body',
+  signin: {},
+  space: {
+    slug: 'text',
+    home: { eid: 'app', death: 'detach' },
   },
-  message: {
-    role: { enum: messageRoles },
-  },
-  prompt: {},
-  attention: {},
-  generation: {
-    through: { eid: 'entry', death: 'keep' },
-    provider: 'text',
-    model: 'text',
-    effort: 'text',
-  },
-  output: {
-    source: { eid: 'generation', death: 'keep' },
-    key: 'text',
-    phase: 'text',
-  },
-  call: {
-    key: 'text',
-  },
-  bash: {
-    command: 'body',
-    cwd: 'text',
-  },
-  fetch: {
-    url: 'url',
-    method: { enum: httpMethods },
-  },
-  patch: {
-    path: 'text',
-    diff: 'body',
-  },
-  tool: {
-    name: 'text',
-    detail: 'text',
-  },
-  task_context: {},
-  graph_query: {
-    query: 'query',
-  },
-  apply: {
-    changes: 'body',
-  },
-  result: {
-    call: { eid: 'call', death: 'keep' },
-  },
-  exit: {
-    code: 'number',
-  },
-  response: {
-    status: 'number',
-  },
-  headers: {
-    data: 'body',
-  },
-  stderr: {
-    text: 'body',
-  },
-  timeout: {
-    ms: 'number',
-  },
-  checkpoint: {
-    through: { eid: 'entry', death: 'keep' },
-  },
-  cancel: {
-    target: { eid: 'entity', death: 'keep' },
-  },
-  reasoning: {},
-  recalled: {
-    source: { eid: 'entry', death: 'keep' },
-    at: 'time',
-  },
-  opaque: {
-    format: 'text',
-    data: 'body',
-  },
-  runner: {
-    name: 'text',
-  },
-  lease: {},
-  usage: {},
-  imported: {},
   spawn: {
     provider: 'text',
     model: 'text',
     effort: 'text',
     persona: { eid: 'entity', death: 'detach' },
   },
-  claim: {
-    session: { eid: 'session', death: 'release' },
+  stderr: {
+    text: 'body',
   },
-  resume: {},
+  stop_request: {
+    target: { eid: 'session', death: 'cascade' },
+  },
   subscription: {
     actor: { eid: 'entity', death: 'cascade' },
     target: { eid: 'entity', death: 'cascade' },
     mode: { enum: subModes },
   },
-  chat: {
-    actor: { eid: 'entity', death: 'detach' },
-    target: { eid: 'entity', death: 'detach' },
+  supersedes: {},
+  supervises: {},
+  task: {
+    priority: 'priority',
+    project: { eid: 'project', death: 'detach' },
+    assignee: { eid: 'entity', death: 'detach' },
+    domain: { text: 'domains' },
   },
-  stop_request: {
-    target: { eid: 'session', death: 'cascade' },
+  task_context: {},
+  timeout: {
+    ms: 'number',
   },
-  fork: {
-    from: { eid: 'entry', death: 'detach' },
+  tool: {
+    name: 'text',
+    detail: 'text',
   },
-  knock: {
-    target: { eid: 'entity', death: 'cascade' },
+  updated: {
+    by: { eid: 'entity', death: 'keep' },
   },
+  usage: {},
+  venture: {
+    phase: { enum: ventureStates },
+    paused_from: { enum: ventureStates },
+    hold_from: { enum: ventureStates },
+    run_mode: { enum: ventureModes },
+    agent_model: 'text',
+    operated_by: 'text',
+    tagline: 'text',
+    site: 'url',
+  },
+  verifier: {},
   wake: {
     at: 'time',
     target: { eid: 'entity', death: 'cascade' },
     note: 'text',
   },
-  dream: {
-    scope: { eid: 'project', death: 'cascade' },
-    floor: 'time',
-  },
-  mail: {
-    target: { eid: 'entity', death: 'keep' },
-    reply_to: { eid: 'mail', death: 'keep' },
-  },
-  conflict: {},
-  redaction: {},
-  hook: {},
-  comment: {
-    target: { eid: 'entity', death: 'cascade' },
-  },
-  commit: {
-    target: { eid: 'entity', death: 'cascade' },
-    sha: 'text',
-    repo: 'text',
-    message: 'text',
-  },
-  notice: {
-    target: { eid: 'entity', death: 'cascade' },
-    event: { enum: noticeKinds },
-  },
-  meta: {},
-  review: {
-    verdict: {
-      enum: verdicts,
-      aliases: {
-        approve: 'approved',
-        reject: 'rejected',
-        changes: 'changes_requested',
-      },
-    },
-  },
-  alias: {
-    slug: 'text',
-    slugs: 'text',
-  },
-  person: {},
-  persona: {
-    home: { eid: 'project', death: 'detach' },
-  },
-  model: {
-    name: 'text',
-    vendor: 'text',
-    grade: { enum: grades },
-  },
-  email: {
-    address: 'text',
-  },
-  memory: {
-    scope: { eid: 'project', death: 'keep' },
-  },
-  feedback: {
-    by: { eid: 'entity', death: 'keep' },
-  },
-  recall: {},
-  created: {
-    by: { eid: 'entity', death: 'keep' },
-  },
-  updated: {
-    by: { eid: 'entity', death: 'keep' },
-  },
-  notified: {},
-  opened: {},
-  archived: {},
-  quarantined: {},
-  deliver: {
-    to: { eid: 'entity', death: 'keep' },
-  },
-  delivered: {},
-  error: {},
-  exception: {},
-  bug: {
-    fault: 'text',
-    hits: 'number',
-    last: 'time',
-  },
-  finding: {
-    key: 'text',
-    hits: 'number',
-    last: 'time',
-  },
-  fixer: {},
-  verifier: {},
-  nofix: {},
-  noverify: {},
-  blocked: {
-    on: 'text',
-  },
-  completed: {
-    at: 'time',
-    by: { eid: 'entity', death: 'keep' },
-  },
-  cancelled: {
-    at: 'time',
-    by: { eid: 'entity', death: 'keep' },
-    reason: 'text',
-  },
-  anchor: {
-    paths: 'text',
-    sha: 'text',
-    symbol: 'text',
-    hunk: 'body',
-    start: 'number',
-    end: 'number',
-  },
-  decided: {
-    at: 'time',
-    by: { eid: 'entity', death: 'keep' },
-    verdict: { enum: ['approved', 'declined'] },
-  },
-  proposed: {
-    at: 'time',
-    by: { eid: 'entity', death: 'keep' },
-  },
-  effect: {},
-  space: {
-    slug: 'text',
-    home: { eid: 'app', death: 'detach' },
-  },
-  app: {
-    slug: 'text',
-    space: { eid: 'space', death: 'cascade' },
-    version: 'number',
-    access: { enum: appAccess },
-  },
-  published: {
-    name: 'text',
-    version: 'number',
-    at: 'time',
-    about: 'text',
-  },
-  installed: {
-    of: { eid: 'app', death: 'detach' },
-    version: 'number',
-  },
-  deploy: {
-    app: { eid: 'app', death: 'cascade' },
-    version: 'number',
-    files: 'text',
-    worker: 'text',
-  },
-  hostname: {
-    name: 'text',
-    app: { eid: 'app', death: 'cascade' },
-    stage: { enum: hostnameStages },
-    at: 'time',
-  },
-  plan: {},
-  meter: {
-    month: 'text',
-    requests: 'number',
-    rows_read: 'number',
-    rows_written: 'number',
-    bytes: 'number',
-    emails: 'number',
-    at: 'time',
-  },
-  member: {
-    space: { eid: 'space', death: 'cascade' },
-    person: { eid: 'person', death: 'cascade' },
-    role: { enum: ['owner', 'editor', 'viewer'] },
-  },
-  signin: {},
-  report: {
-    app: { eid: 'app', death: 'keep' },
-    space: { eid: 'space', death: 'keep' },
-    version: 'number',
-    release: 'text',
-    at: 'time',
-  },
-  edge: {
-    from: { eid: 'entity', death: 'cascade' },
-    to: { eid: 'entity', death: 'cascade' },
-    ord: 'number',
-  },
-  requires: {},
-  contains: {},
-  reads: {},
-  about: {},
-  supervises: {},
-  delegates: {},
-  supersedes: {},
-  worked: {},
-  references: {},
   wants: {},
-  satisfies: {},
+  web: {
+    url: 'url',
+  },
+  worked: {},
+  worktree: {
+    cwd: 'text',
+  },
+  yield: {},
 }
 
 // Old spellings that still resolve — the compatibility promise in
@@ -631,24 +631,24 @@ export let renames: Record<string, string> = {
 
 // Composite indexes and single-column overrides (see index.ts).
 export let indexes: Record<string, Idx[]> = {
+  app: [{ cols: ['space', 'slug'], unique: true }],
   camera: [{ cols: ['client', 'canvas'], unique: true }],
-  fold: [{ cols: ['client', 'board'], unique: true }],
-  shelf: [{ cols: ['client'], unique: true }],
-  cursor: [{ cols: ['client'], unique: true }],
-  entry: [{ cols: ['session', 'seq'], unique: true }],
-  generation: [{ cols: ['through'], unique: true }],
-  output: [{ cols: ['source', 'key'], unique: true, where: 'key is not null' }],
-  result: [{ cols: ['call'], unique: true }],
-  subscription: [{ cols: ['actor', 'target'], unique: true }],
   chat: [{ cols: ['actor', 'target'], unique: true }],
   completed: [{ cols: ['at'] }],
-  effect: [{ cols: ['jrow', 'handler'], unique: true }],
-  space: [{ cols: ['slug'], unique: true }],
-  app: [{ cols: ['space', 'slug'], unique: true }],
-  published: [{ cols: ['name'], unique: true }],
+  cursor: [{ cols: ['client'], unique: true }],
   deploy: [{ cols: ['app', 'version'], unique: true }],
+  effect: [{ cols: ['jrow', 'handler'], unique: true }],
+  entry: [{ cols: ['session', 'seq'], unique: true }],
+  fold: [{ cols: ['client', 'board'], unique: true }],
+  generation: [{ cols: ['through'], unique: true }],
   hostname: [{ cols: ['name'], unique: true }],
   member: [{ cols: ['space', 'person'], unique: true }],
+  output: [{ cols: ['source', 'key'], unique: true, where: 'key is not null' }],
+  published: [{ cols: ['name'], unique: true }],
+  result: [{ cols: ['call'], unique: true }],
+  shelf: [{ cols: ['client'], unique: true }],
+  space: [{ cols: ['slug'], unique: true }],
+  subscription: [{ cols: ['actor', 'target'], unique: true }],
 }
 
 // Snapshot partition: lazy comps never ride the boot snapshot.
@@ -656,63 +656,57 @@ export let partition: Record<string, 'eager' | 'lazy'> = { entry: 'lazy' }
 
 // Server-stamped columns — never wire-writable, still schema.
 export let stamped: Record<string, Record<string, PropType>> = {
-  entity: {
-    num: 'number',
-  },
-  created: {
-    at: 'time',
-    via: { eid: 'entity', death: 'keep' },
-  },
-  updated: {
-    at: 'time',
-    via: { eid: 'entity', death: 'keep' },
-  },
-  notified: {
-    at: 'time',
-    by: { eid: 'entity', death: 'keep' },
-    via: { eid: 'entity', death: 'keep' },
-  },
-  opened: {
-    at: 'time',
-    by: { eid: 'entity', death: 'keep' },
-    via: { eid: 'entity', death: 'keep' },
-  },
   archived: {
     at: 'time',
     by: { eid: 'entity', death: 'keep' },
     via: { eid: 'entity', death: 'keep' },
   },
-  quarantined: {
-    at: 'time',
-    by: { eid: 'entity', death: 'keep' },
+  blocked: {
+    since: 'time',
+  },
+  cancelled: {
     via: { eid: 'entity', death: 'keep' },
-  },
-  favorite: {
-    at: 'time',
-  },
-  decided: {
-    via: { eid: 'entity', death: 'keep' },
-  },
-  proposed: {
-    via: { eid: 'entity', death: 'keep' },
-  },
-  web: {
-    frozen_at: 'time',
-  },
-  client: {
-    ip: 'text',
   },
   claim: {
     claimed_at: 'time',
   },
-  resume: {
-    actor: { eid: 'entity', death: 'keep' },
+  client: {
+    ip: 'text',
+  },
+  completed: {
+    via: { eid: 'entity', death: 'keep' },
+  },
+  conflict: {
+    target: { eid: 'entity', death: 'keep' },
+    loser: { eid: 'session', death: 'keep' },
+    holder: { eid: 'session', death: 'keep' },
     at: 'time',
-    rank: 'number',
+  },
+  created: {
+    at: 'time',
+    via: { eid: 'entity', death: 'keep' },
+  },
+  decided: {
+    via: { eid: 'entity', death: 'keep' },
   },
   delivered: {
     at: 'time',
     via: 'text',
+  },
+  effect: {
+    jrow: 'number',
+    handler: 'text',
+    state: { enum: effectStates },
+    attempts: 'number',
+    lease_owner: 'text',
+    lease_token: 'text',
+    lease_expiry: 'time',
+  },
+  entity: {
+    num: 'number',
+  },
+  entry: {
+    seq: 'number',
   },
   error: {
     at: 'time',
@@ -725,18 +719,11 @@ export let stamped: Record<string, Record<string, PropType>> = {
     request: 'text',
     version: 'number',
   },
-  blocked: {
-    since: 'time',
+  favorite: {
+    at: 'time',
   },
-  mail: {
-    from: 'text',
-    to_addr: 'text',
-    message_id: 'text',
-    received_at: 'time',
-    verified: 'bool',
-    sent_id: 'text',
-    in_reply_to: 'text',
-    headers: 'text',
+  generation: {
+    serving_model: 'text',
   },
   hook: {
     source: 'text',
@@ -749,24 +736,69 @@ export let stamped: Record<string, Record<string, PropType>> = {
     headers: 'body',
     sig_ok: 'bool',
   },
+  imported: {
+    source: 'text',
+    line: 'number',
+  },
+  lease: {
+    holder: { eid: 'runner', death: 'keep' },
+    at: 'time',
+    until: 'time',
+  },
+  mail: {
+    from: 'text',
+    to_addr: 'text',
+    message_id: 'text',
+    received_at: 'time',
+    verified: 'bool',
+    sent_id: 'text',
+    in_reply_to: 'text',
+    headers: 'text',
+  },
   memory: {
     last_confirmed_at: 'time',
+  },
+  notified: {
+    at: 'time',
+    by: { eid: 'entity', death: 'keep' },
+    via: { eid: 'entity', death: 'keep' },
+  },
+  opened: {
+    at: 'time',
+    by: { eid: 'entity', death: 'keep' },
+    via: { eid: 'entity', death: 'keep' },
+  },
+  plan: {
+    tier: { enum: planTiers },
+    customer: 'text',
+    subscription: 'text',
+    status: 'text',
+    until: 'time',
+    ending: 'time',
+    at: 'time',
+  },
+  proposed: {
+    via: { eid: 'entity', death: 'keep' },
+  },
+  quarantined: {
+    at: 'time',
+    by: { eid: 'entity', death: 'keep' },
+    via: { eid: 'entity', death: 'keep' },
   },
   recall: {
     count: 'number',
     first_at: 'time',
     last_at: 'time',
   },
-  conflict: {
-    target: { eid: 'entity', death: 'keep' },
-    loser: { eid: 'session', death: 'keep' },
-    holder: { eid: 'session', death: 'keep' },
-    at: 'time',
-  },
   redaction: {
     target: { eid: 'entity', death: 'keep' },
     column: { enum: ['title', 'body'] },
     hash: 'text',
+  },
+  resume: {
+    actor: { eid: 'entity', death: 'keep' },
+    at: 'time',
+    rank: 'number',
   },
   role: {
     applied_hash: 'text',
@@ -776,6 +808,16 @@ export let stamped: Record<string, Record<string, PropType>> = {
     reason: 'text',
     observed: { eid: 'entity', death: 'keep' },
     decided_at: 'time',
+  },
+  run: {
+    status: { enum: ['starting', 'running', 'stopping'] },
+    started_at: 'time',
+    stop_requested_at: 'time',
+    input_at: 'time',
+  },
+  runtime: {
+    provider_session_id: 'text',
+    serving_model: 'text',
   },
   session: {
     notice_at: 'time',
@@ -799,66 +841,11 @@ export let stamped: Record<string, Record<string, PropType>> = {
     usage_json: 'text',
     stderr: 'body',
   },
-  worktree: {
-    branch: 'text',
-    base_revision: 'text',
-  },
-  runtime: {
-    provider_session_id: 'text',
-    serving_model: 'text',
-  },
-  run: {
-    status: { enum: ['starting', 'running', 'stopping'] },
-    started_at: 'time',
-    stop_requested_at: 'time',
-    input_at: 'time',
-  },
   settled: {
     at: 'time',
     status: { enum: ['completed', 'failed', 'interrupted', 'lost'] },
     exit_code: 'number',
     stop_reason: 'text',
-  },
-  yield: {
-    final_text: 'body',
-    usage_json: 'text',
-    stderr: 'body',
-  },
-  entry: {
-    seq: 'number',
-  },
-  generation: {
-    serving_model: 'text',
-  },
-  imported: {
-    source: 'text',
-    line: 'number',
-  },
-  lease: {
-    holder: { eid: 'runner', death: 'keep' },
-    at: 'time',
-    until: 'time',
-  },
-  usage: {
-    input: 'number',
-    cached: 'number',
-    output: 'number',
-    reasoning: 'number',
-  },
-  effect: {
-    jrow: 'number',
-    handler: 'text',
-    state: { enum: effectStates },
-    attempts: 'number',
-    lease_owner: 'text',
-    lease_token: 'text',
-    lease_expiry: 'time',
-  },
-  completed: {
-    via: { eid: 'entity', death: 'keep' },
-  },
-  cancelled: {
-    via: { eid: 'entity', death: 'keep' },
   },
   signin: {
     email: 'text',
@@ -866,104 +853,117 @@ export let stamped: Record<string, Record<string, PropType>> = {
     expires: 'time',
     tries: 'number',
   },
-  plan: {
-    tier: { enum: planTiers },
-    customer: 'text',
-    subscription: 'text',
-    status: 'text',
-    until: 'time',
-    ending: 'time',
+  updated: {
     at: 'time',
+    via: { eid: 'entity', death: 'keep' },
+  },
+  usage: {
+    input: 'number',
+    cached: 'number',
+    output: 'number',
+    reasoning: 'number',
+  },
+  web: {
+    frozen_at: 'time',
+  },
+  worktree: {
+    branch: 'text',
+    base_revision: 'text',
+  },
+  yield: {
+    final_text: 'body',
+    usage_json: 'text',
+    stderr: 'body',
   },
 }
 
 // kind is DERIVED: the most specific component an entity carries
-// names it. Rank order across the manifests.
+// names it. Order derived alphabetically, refined by `before`.
 export let kindOrder = [
-  'design',
-  'goal',
-  'task',
-  'project',
-  'layout',
-  'board',
-  'canvas',
-  'web',
-  'card',
-  'pane',
-  'client',
-  'camera',
-  'fold',
-  'cursor',
-  'role',
-  'session',
-  'entry',
-  'runner',
-  'claim',
-  'subscription',
-  'stop_request',
-  'knock',
-  'wake',
-  'dream',
-  'mail',
-  'hook',
-  'conflict',
-  'redaction',
-  'review',
-  'notice',
-  'commit',
-  'comment',
-  'memory',
-  'person',
-  'persona',
-  'model',
-  'edge',
-  'attachment',
-  'doc',
-  'email',
-  'alias',
-  'space',
-  'plan',
-  'hostname',
   'app',
+  'attachment',
+  'camera',
+  'canvas',
+  'card',
+  'client',
+  'commit',
+  'conflict',
+  'cursor',
   'deploy',
+  'design',
+  'dream',
+  'edge',
+  'entry',
+  'fold',
+  'goal',
+  'hook',
+  'hostname',
+  'layout',
+  'mail',
   'member',
-  'signin',
+  'model',
+  'pane',
+  'person',
+  'plan',
+  'project',
+  'board',
+  'email',
+  'redaction',
   'report',
+  'review',
+  'comment',
+  'runner',
+  'session',
+  'signin',
+  'space',
+  'stop_request',
+  'subscription',
+  'task',
+  'knock',
+  'memory',
+  'notice',
+  'role',
+  'claim',
+  'persona',
+  'wake',
+  'web',
+  'doc',
+  'alias',
 ]
 
 // Kinds whose doc title is a NAME a caller can type (near.ts).
 export let byName = new Set([
-  'project',
-  'layout',
-  'board',
   'canvas',
-  'role',
-  'person',
-  'persona',
+  'layout',
   'model',
+  'person',
+  'project',
+  'board',
+  'role',
+  'persona',
 ])
 
 // The human id prefixes: curated for the kinds people type daily.
 export let prefix: Record<string, string> = {
-  task: 'T',
-  project: 'P',
-  role: 'R',
   board: 'B',
-  layout: 'L',
-  goal: 'V',
-  session: 'S',
-  knock: 'K',
-  wake: 'W',
-  dream: 'Z',
-  mail: 'E',
-  redaction: 'X',
-  hook: 'H',
   commit: 'G',
+  dream: 'Z',
+  email: 'A',
+  goal: 'V',
+  hook: 'H',
+  knock: 'K',
+  layout: 'L',
+  mail: 'E',
+  memory: 'M',
+  model: 'O',
   person: 'U',
   persona: 'N',
-  model: 'O',
-  email: 'A',
-  memory: 'M',
+  project: 'P',
+  redaction: 'X',
+  role: 'R',
+  session: 'S',
+  task: 'T',
+  wake: 'W',
 }
 
 let irregular: Record<string, string> = {

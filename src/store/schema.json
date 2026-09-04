@@ -1208,11 +1208,331 @@
   },
   {
     "kind": "exec",
-    "sql": "create index if not exists task_project on \"task\" (\"project\");"
+    "sql": "create unique index if not exists app_space_slug on \"app\" (\"space\", \"slug\");"
   },
   {
     "kind": "exec",
-    "sql": "create index if not exists task_assignee on \"task\" (\"assignee\");"
+    "sql": "create index if not exists app_space on \"app\" (\"space\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists archived_by on \"archived\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists archived_via on \"archived\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists camera_client_canvas on \"camera\" (\"client\", \"canvas\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists camera_client on \"camera\" (\"client\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists camera_canvas on \"camera\" (\"canvas\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists cancel_target on \"cancel\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists cancelled_by on \"cancelled\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists cancelled_via on \"cancelled\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists card_target on \"card\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists chat_actor_target on \"chat\" (\"actor\", \"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists chat_actor on \"chat\" (\"actor\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists chat_target on \"chat\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists checkpoint_through on \"checkpoint\" (\"through\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists claim_session on \"claim\" (\"session\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists client_actor on \"client\" (\"actor\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists comment_target on \"comment\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists commit_target on \"commit\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists completed_at on \"completed\" (\"at\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists completed_by on \"completed\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists completed_via on \"completed\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists conflict_target on \"conflict\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists conflict_loser on \"conflict\" (\"loser\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists conflict_holder on \"conflict\" (\"holder\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists created_by on \"created\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists created_via on \"created\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists cursor_client on \"cursor\" (\"client\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists cursor_target on \"cursor\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists decided_by on \"decided\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists decided_via on \"decided\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists deliver_to on \"deliver\" (\"to\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists deploy_app_version on \"deploy\" (\"app\", \"version\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists deploy_app on \"deploy\" (\"app\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists dream_scope on \"dream\" (\"scope\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists edge_from on \"edge\" (\"from\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists edge_to on \"edge\" (\"to\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists effect_jrow_handler on \"effect\" (\"jrow\", \"handler\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists entry_session_seq on \"entry\" (\"session\", \"seq\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists entry_session on \"entry\" (\"session\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists feedback_by on \"feedback\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists fold_client_board on \"fold\" (\"client\", \"board\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists fold_client on \"fold\" (\"client\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists fold_board on \"fold\" (\"board\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists fork_from on \"fork\" (\"from\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists generation_through on \"generation\" (\"through\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists goal_scope on \"goal\" (\"scope\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists hostname_name on \"hostname\" (\"name\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists hostname_app on \"hostname\" (\"app\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists installed_of on \"installed\" (\"of\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists knock_target on \"knock\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists layout_root on \"layout\" (\"root\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists lease_holder on \"lease\" (\"holder\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists mail_target on \"mail\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists mail_reply_to on \"mail\" (\"reply_to\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists member_space_person on \"member\" (\"space\", \"person\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists member_space on \"member\" (\"space\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists member_person on \"member\" (\"person\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists memory_scope on \"memory\" (\"scope\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists notice_target on \"notice\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists notified_by on \"notified\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists notified_via on \"notified\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists opened_by on \"opened\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists opened_via on \"opened\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists output_source_key on \"output\" (\"source\", \"key\") where key is not null;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists output_source on \"output\" (\"source\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists pane_layout on \"pane\" (\"layout\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists pane_parent on \"pane\" (\"parent\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists pane_content on \"pane\" (\"content\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists persona_home on \"persona\" (\"home\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists pin_canvas on \"pin\" (\"canvas\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists proposed_by on \"proposed\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists proposed_via on \"proposed\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists published_name on \"published\" (\"name\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists quarantined_by on \"quarantined\" (\"by\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists quarantined_via on \"quarantined\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists recalled_source on \"recalled\" (\"source\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists redaction_target on \"redaction\" (\"target\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists report_app on \"report\" (\"app\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists report_space on \"report\" (\"space\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create unique index if not exists result_call on \"result\" (\"call\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists resume_actor on \"resume\" (\"actor\");"
   },
   {
     "kind": "exec",
@@ -1229,74 +1549,6 @@
   {
     "kind": "exec",
     "sql": "create index if not exists role_observed on \"role\" (\"observed\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists layout_root on \"layout\" (\"root\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists pane_layout on \"pane\" (\"layout\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists pane_parent on \"pane\" (\"parent\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists pane_content on \"pane\" (\"content\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists goal_scope on \"goal\" (\"scope\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists card_target on \"card\" (\"target\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists pin_canvas on \"pin\" (\"canvas\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists client_actor on \"client\" (\"actor\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create unique index if not exists camera_client_canvas on \"camera\" (\"client\", \"canvas\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists camera_client on \"camera\" (\"client\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists camera_canvas on \"camera\" (\"canvas\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create unique index if not exists fold_client_board on \"fold\" (\"client\", \"board\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists fold_client on \"fold\" (\"client\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists fold_board on \"fold\" (\"board\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create unique index if not exists shelf_client on \"shelf\" (\"client\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create unique index if not exists cursor_client on \"cursor\" (\"client\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists cursor_target on \"cursor\" (\"target\");"
   },
   {
     "kind": "exec",
@@ -1320,43 +1572,15 @@
   },
   {
     "kind": "exec",
-    "sql": "create unique index if not exists entry_session_seq on \"entry\" (\"session\", \"seq\");"
+    "sql": "create unique index if not exists shelf_client on \"shelf\" (\"client\");"
   },
   {
     "kind": "exec",
-    "sql": "create index if not exists entry_session on \"entry\" (\"session\");"
+    "sql": "create unique index if not exists space_slug on \"space\" (\"slug\");"
   },
   {
     "kind": "exec",
-    "sql": "create unique index if not exists generation_through on \"generation\" (\"through\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create unique index if not exists output_source_key on \"output\" (\"source\", \"key\") where key is not null;"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists output_source on \"output\" (\"source\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create unique index if not exists result_call on \"result\" (\"call\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists checkpoint_through on \"checkpoint\" (\"through\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists cancel_target on \"cancel\" (\"target\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists recalled_source on \"recalled\" (\"source\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists lease_holder on \"lease\" (\"holder\");"
+    "sql": "create index if not exists space_home on \"space\" (\"home\");"
   },
   {
     "kind": "exec",
@@ -1364,11 +1588,7 @@
   },
   {
     "kind": "exec",
-    "sql": "create index if not exists claim_session on \"claim\" (\"session\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists resume_actor on \"resume\" (\"actor\");"
+    "sql": "create index if not exists stop_request_target on \"stop_request\" (\"target\");"
   },
   {
     "kind": "exec",
@@ -1384,91 +1604,11 @@
   },
   {
     "kind": "exec",
-    "sql": "create unique index if not exists chat_actor_target on \"chat\" (\"actor\", \"target\");"
+    "sql": "create index if not exists task_project on \"task\" (\"project\");"
   },
   {
     "kind": "exec",
-    "sql": "create index if not exists chat_actor on \"chat\" (\"actor\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists chat_target on \"chat\" (\"target\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists stop_request_target on \"stop_request\" (\"target\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists fork_from on \"fork\" (\"from\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists knock_target on \"knock\" (\"target\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists wake_target on \"wake\" (\"target\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists dream_scope on \"dream\" (\"scope\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists mail_target on \"mail\" (\"target\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists mail_reply_to on \"mail\" (\"reply_to\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists conflict_target on \"conflict\" (\"target\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists conflict_loser on \"conflict\" (\"loser\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists conflict_holder on \"conflict\" (\"holder\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists redaction_target on \"redaction\" (\"target\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists comment_target on \"comment\" (\"target\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists commit_target on \"commit\" (\"target\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists notice_target on \"notice\" (\"target\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists persona_home on \"persona\" (\"home\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists memory_scope on \"memory\" (\"scope\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists feedback_by on \"feedback\" (\"by\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists created_by on \"created\" (\"by\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists created_via on \"created\" (\"via\");"
+    "sql": "create index if not exists task_assignee on \"task\" (\"assignee\");"
   },
   {
     "kind": "exec",
@@ -1480,147 +1620,7 @@
   },
   {
     "kind": "exec",
-    "sql": "create index if not exists notified_by on \"notified\" (\"by\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists notified_via on \"notified\" (\"via\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists opened_by on \"opened\" (\"by\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists opened_via on \"opened\" (\"via\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists archived_by on \"archived\" (\"by\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists archived_via on \"archived\" (\"via\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists quarantined_by on \"quarantined\" (\"by\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists quarantined_via on \"quarantined\" (\"via\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists deliver_to on \"deliver\" (\"to\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists completed_at on \"completed\" (\"at\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists completed_by on \"completed\" (\"by\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists completed_via on \"completed\" (\"via\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists cancelled_by on \"cancelled\" (\"by\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists cancelled_via on \"cancelled\" (\"via\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists decided_by on \"decided\" (\"by\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists decided_via on \"decided\" (\"via\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists proposed_by on \"proposed\" (\"by\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists proposed_via on \"proposed\" (\"via\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create unique index if not exists effect_jrow_handler on \"effect\" (\"jrow\", \"handler\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create unique index if not exists space_slug on \"space\" (\"slug\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists space_home on \"space\" (\"home\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create unique index if not exists app_space_slug on \"app\" (\"space\", \"slug\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists app_space on \"app\" (\"space\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create unique index if not exists published_name on \"published\" (\"name\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists installed_of on \"installed\" (\"of\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create unique index if not exists deploy_app_version on \"deploy\" (\"app\", \"version\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists deploy_app on \"deploy\" (\"app\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create unique index if not exists hostname_name on \"hostname\" (\"name\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists hostname_app on \"hostname\" (\"app\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create unique index if not exists member_space_person on \"member\" (\"space\", \"person\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists member_space on \"member\" (\"space\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists member_person on \"member\" (\"person\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists report_app on \"report\" (\"app\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists report_space on \"report\" (\"space\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists edge_from on \"edge\" (\"from\");"
-  },
-  {
-    "kind": "exec",
-    "sql": "create index if not exists edge_to on \"edge\" (\"to\");"
+    "sql": "create index if not exists wake_target on \"wake\" (\"target\");"
   },
   {
     "kind": "exec",

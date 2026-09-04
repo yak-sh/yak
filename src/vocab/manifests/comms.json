@@ -11,7 +11,6 @@
   },
   "comps": {
     "deliver": {
-      "rank": 890,
       "cols": {
         "to": {
           "eid": "entity",
@@ -20,24 +19,19 @@
       }
     },
     "delivered": {
-      "rank": 900,
-      "stamped_rank": 150,
       "stamped": {
         "at": "time",
         "via": "text"
       }
     },
     "error": {
-      "rank": 910,
-      "stamped_rank": 160,
       "stamped": {
         "at": "time",
         "message": "text"
       }
     },
     "knock": {
-      "rank": 640,
-      "kind_rank": 210,
+      "kind": true,
       "prefix": "K",
       "cols": {
         "target": {
@@ -47,8 +41,7 @@
       }
     },
     "subscription": {
-      "rank": 610,
-      "kind_rank": 190,
+      "kind": true,
       "cols": {
         "actor": {
           "eid": "entity",
@@ -73,8 +66,7 @@
       ]
     },
     "wake": {
-      "rank": 650,
-      "kind_rank": 220,
+      "kind": true,
       "prefix": "W",
       "cols": {
         "at": "time",

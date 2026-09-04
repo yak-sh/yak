@@ -21,19 +21,15 @@
     }
   },
   "comps": {
-    "about": {
-      "rank": 1104
-    },
+    "about": {},
     "alias": {
-      "rank": 750,
-      "kind_rank": 380,
+      "kind": true,
       "cols": {
         "slug": "text",
         "slugs": "text"
       }
     },
     "anchor": {
-      "rank": 980,
       "cols": {
         "paths": "text",
         "sha": "text",
@@ -44,8 +40,6 @@
       }
     },
     "archived": {
-      "rank": 870,
-      "stamped_rank": 60,
       "stamped": {
         "at": "time",
         "by": {
@@ -59,8 +53,7 @@
       }
     },
     "attachment": {
-      "rank": 141,
-      "kind_rank": 350,
+      "kind": true,
       "cols": {
         "blob": {
           "eid": "blob",
@@ -71,14 +64,12 @@
       }
     },
     "blob": {
-      "rank": 140,
       "cols": {
         "bytes": "number"
       }
     },
     "comment": {
-      "rank": 710,
-      "kind_rank": 300,
+      "kind": true,
       "cols": {
         "target": {
           "eid": "entity",
@@ -87,8 +78,7 @@
       }
     },
     "commit": {
-      "rank": 715,
-      "kind_rank": 295,
+      "kind": true,
       "prefix": "G",
       "cols": {
         "target": {
@@ -101,9 +91,7 @@
       }
     },
     "conflict": {
-      "rank": 680,
-      "stamped_rank": 230,
-      "kind_rank": 260,
+      "kind": true,
       "stamped": {
         "target": {
           "eid": "entity",
@@ -120,12 +108,8 @@
         "at": "time"
       }
     },
-    "contains": {
-      "rank": 1102
-    },
+    "contains": {},
     "created": {
-      "rank": 830,
-      "stamped_rank": 20,
       "cols": {
         "by": {
           "eid": "entity",
@@ -141,8 +125,6 @@
       }
     },
     "decided": {
-      "rank": 990,
-      "stamped_rank": 90,
       "cols": {
         "at": "time",
         "by": {
@@ -163,20 +145,19 @@
         }
       }
     },
-    "delegates": {
-      "rank": 1106
-    },
+    "delegates": {},
     "doc": {
-      "rank": 10,
-      "kind_rank": 360,
+      "kind": true,
+      "before": [
+        "alias"
+      ],
       "cols": {
         "title": "text",
         "body": "body"
       }
     },
     "edge": {
-      "rank": 1100,
-      "kind_rank": 345,
+      "kind": true,
       "cols": {
         "from": {
           "eid": "entity",
@@ -190,8 +171,6 @@
       }
     },
     "effect": {
-      "rank": 1010,
-      "stamped_rank": 340,
       "stamped": {
         "jrow": "number",
         "handler": "text",
@@ -215,14 +194,11 @@
     },
     "entity": {
       "wire": false,
-      "stamped_rank": 10,
       "stamped": {
         "num": "number"
       }
     },
     "exception": {
-      "rank": 920,
-      "stamped_rank": 170,
       "stamped": {
         "at": "time",
         "message": "text",
@@ -232,25 +208,22 @@
       }
     },
     "favorite": {
-      "rank": 220,
-      "stamped_rank": 80,
       "stamped": {
         "at": "time"
       }
     },
     "image": {
-      "rank": 142,
       "cols": {
         "w": "number",
         "h": "number"
       }
     },
-    "meta": {
-      "rank": 730
-    },
+    "meta": {},
     "notice": {
-      "rank": 720,
-      "kind_rank": 290,
+      "kind": true,
+      "before": [
+        "doc"
+      ],
       "cols": {
         "target": {
           "eid": "entity",
@@ -262,8 +235,6 @@
       }
     },
     "notified": {
-      "rank": 850,
-      "stamped_rank": 40,
       "stamped": {
         "at": "time",
         "by": {
@@ -277,8 +248,6 @@
       }
     },
     "opened": {
-      "rank": 860,
-      "stamped_rank": 50,
       "stamped": {
         "at": "time",
         "by": {
@@ -292,8 +261,6 @@
       }
     },
     "proposed": {
-      "rank": 1000,
-      "stamped_rank": 100,
       "cols": {
         "at": "time",
         "by": {
@@ -309,8 +276,6 @@
       }
     },
     "quarantined": {
-      "rank": 880,
-      "stamped_rank": 70,
       "stamped": {
         "at": "time",
         "by": {
@@ -323,12 +288,8 @@
         }
       }
     },
-    "reads": {
-      "rank": 1103
-    },
+    "reads": {},
     "recall": {
-      "rank": 820,
-      "stamped_rank": 220,
       "stamped": {
         "count": "number",
         "first_at": "time",
@@ -336,9 +297,7 @@
       }
     },
     "redaction": {
-      "rank": 690,
-      "stamped_rank": 240,
-      "kind_rank": 270,
+      "kind": true,
       "prefix": "X",
       "stamped": {
         "target": {
@@ -354,31 +313,18 @@
         "hash": "text"
       }
     },
-    "references": {
-      "rank": 1109
-    },
-    "requires": {
-      "rank": 1101
-    },
-    "satisfies": {
-      "rank": 1111
-    },
+    "references": {},
+    "requires": {},
+    "satisfies": {},
     "setting": {
-      "rank": 230,
       "cols": {
         "key": "text",
         "value": "text"
       }
     },
-    "supersedes": {
-      "rank": 1107
-    },
-    "supervises": {
-      "rank": 1105
-    },
+    "supersedes": {},
+    "supervises": {},
     "updated": {
-      "rank": 840,
-      "stamped_rank": 30,
       "cols": {
         "by": {
           "eid": "entity",
@@ -393,12 +339,8 @@
         }
       }
     },
-    "wants": {
-      "rank": 1110
-    },
-    "worked": {
-      "rank": 1108
-    }
+    "wants": {},
+    "worked": {}
   },
   "renames": {
     "view:Debug.ListItem": "Debug.Tile",

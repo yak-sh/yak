@@ -12,7 +12,6 @@
   },
   "comps": {
     "feedback": {
-      "rank": 810,
       "cols": {
         "by": {
           "eid": "entity",
@@ -21,9 +20,10 @@
       }
     },
     "memory": {
-      "rank": 800,
-      "stamped_rank": 210,
-      "kind_rank": 310,
+      "kind": true,
+      "before": [
+        "doc"
+      ],
       "prefix": "M",
       "cols": {
         "scope": {
@@ -36,8 +36,10 @@
       }
     },
     "model": {
-      "rank": 780,
-      "kind_rank": 340,
+      "kind": true,
+      "before": [
+        "doc"
+      ],
       "prefix": "O",
       "by_name": true,
       "cols": {
@@ -49,15 +51,22 @@
       }
     },
     "person": {
-      "rank": 760,
-      "kind_rank": 320,
+      "kind": true,
+      "before": [
+        "alias",
+        "doc",
+        "email"
+      ],
       "prefix": "U",
       "by_name": true,
       "plural": "people"
     },
     "persona": {
-      "rank": 770,
-      "kind_rank": 330,
+      "kind": true,
+      "before": [
+        "alias",
+        "doc"
+      ],
       "prefix": "N",
       "by_name": true,
       "cols": {

@@ -43,17 +43,12 @@
   },
   "comps": {
     "accept": {
-      "rank": 21,
       "cols": {
         "body": "body"
       }
     },
-    "architecture": {
-      "rank": 110
-    },
+    "architecture": {},
     "blocked": {
-      "rank": 970,
-      "stamped_rank": 180,
       "cols": {
         "on": "text"
       },
@@ -62,8 +57,10 @@
       }
     },
     "board": {
-      "rank": 70,
-      "kind_rank": 50,
+      "kind": true,
+      "before": [
+        "alias"
+      ],
       "prefix": "B",
       "by_name": true,
       "cols": {
@@ -71,8 +68,6 @@
       }
     },
     "cancelled": {
-      "rank": 972,
-      "stamped_rank": 360,
       "cols": {
         "at": "time",
         "by": {
@@ -89,8 +84,6 @@
       }
     },
     "completed": {
-      "rank": 971,
-      "stamped_rank": 350,
       "cols": {
         "at": "time",
         "by": {
@@ -113,12 +106,16 @@
       ]
     },
     "design": {
-      "rank": 100,
-      "kind_rank": 10
+      "kind": true,
+      "before": [
+        "alias"
+      ]
     },
     "goal": {
-      "rank": 105,
-      "kind_rank": 15,
+      "kind": true,
+      "before": [
+        "doc"
+      ],
       "prefix": "V",
       "cols": {
         "scope": {
@@ -128,8 +125,14 @@
       }
     },
     "project": {
-      "rank": 30,
-      "kind_rank": 30,
+      "kind": true,
+      "before": [
+        "alias",
+        "board",
+        "claim",
+        "doc",
+        "email"
+      ],
       "prefix": "P",
       "by_name": true,
       "cols": {
@@ -137,7 +140,6 @@
       }
     },
     "repo": {
-      "rank": 40,
       "cols": {
         "path": "text",
         "url": "url",
@@ -147,8 +149,11 @@
       }
     },
     "review": {
-      "rank": 740,
-      "kind_rank": 280,
+      "kind": true,
+      "before": [
+        "comment",
+        "doc"
+      ],
       "cols": {
         "verdict": {
           "enum": "verdicts",
@@ -161,8 +166,15 @@
       }
     },
     "task": {
-      "rank": 20,
-      "kind_rank": 20,
+      "kind": true,
+      "before": [
+        "alias",
+        "doc",
+        "knock",
+        "memory",
+        "notice",
+        "role"
+      ],
       "prefix": "T",
       "cols": {
         "priority": "priority",
@@ -180,7 +192,6 @@
       }
     },
     "venture": {
-      "rank": 50,
       "cols": {
         "phase": {
           "enum": "ventureStates"

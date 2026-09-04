@@ -27,8 +27,7 @@
   },
   "comps": {
     "app": {
-      "rank": 1030,
-      "kind_rank": 400,
+      "kind": true,
       "cols": {
         "slug": "text",
         "space": {
@@ -51,8 +50,7 @@
       ]
     },
     "deploy": {
-      "rank": 1033,
-      "kind_rank": 405,
+      "kind": true,
       "cols": {
         "app": {
           "eid": "app",
@@ -73,8 +71,7 @@
       ]
     },
     "hostname": {
-      "rank": 1034,
-      "kind_rank": 397,
+      "kind": true,
       "cols": {
         "name": "text",
         "app": {
@@ -96,7 +93,6 @@
       ]
     },
     "installed": {
-      "rank": 1032,
       "cols": {
         "of": {
           "eid": "app",
@@ -106,8 +102,7 @@
       }
     },
     "member": {
-      "rank": 1040,
-      "kind_rank": 410,
+      "kind": true,
       "cols": {
         "space": {
           "eid": "space",
@@ -136,7 +131,6 @@
       ]
     },
     "meter": {
-      "rank": 1036,
       "cols": {
         "month": "text",
         "requests": "number",
@@ -148,9 +142,7 @@
       }
     },
     "plan": {
-      "rank": 1035,
-      "stamped_rank": 380,
-      "kind_rank": 395,
+      "kind": true,
       "stamped": {
         "tier": {
           "enum": "planTiers"
@@ -164,7 +156,6 @@
       }
     },
     "published": {
-      "rank": 1031,
       "cols": {
         "name": "text",
         "version": "number",
@@ -181,8 +172,7 @@
       ]
     },
     "report": {
-      "rank": 1060,
-      "kind_rank": 430,
+      "kind": true,
       "cols": {
         "app": {
           "eid": "app",
@@ -198,9 +188,7 @@
       }
     },
     "signin": {
-      "rank": 1050,
-      "stamped_rank": 370,
-      "kind_rank": 420,
+      "kind": true,
       "stamped": {
         "email": "text",
         "code": "text",
@@ -209,8 +197,7 @@
       }
     },
     "space": {
-      "rank": 1020,
-      "kind_rank": 390,
+      "kind": true,
       "cols": {
         "slug": "text",
         "home": {
