@@ -33,9 +33,10 @@ import { COOKIE, opened, seal } from '../../src/token.ts'
 import type { App, Role, Space } from './directory.ts'
 import { storeName } from './directory.ts'
 import type { Env, Fetcher } from './env.ts'
+import { oops } from './pages.ts'
 import type { Who } from './session.ts'
 import { storeOf } from './store.ts'
-import { failed, noted, serving } from './unseen.ts'
+import { failed, noted, refusal, serving } from './unseen.ts'
 
 // The dispatch namespace binding, the slice we ask of it (env.ts): a name in,
 // a fetcher out. `get` throws for a script that is not there, and the docs
@@ -181,13 +182,41 @@ let handed = async (
 let missing = (e: unknown) =>
   e instanceof Error && e.message.startsWith('Worker not found')
 
+// One break of the app's own making, where its agent reads it — the app's
+// store, its serving version, and the members told. Both ways the app's code
+// can fall over come through here, because they are one event: a worker that
+// answers 500 and a worker that throws are the same app not working.
+let broke = (
+  env: Env,
+  space: Space,
+  app: App,
+  req: Request,
+  said: { message: string; stack?: string },
+) =>
+  serving(env, space, app).then((version) =>
+    noted(storeOf(env.STORE, storeName(space, app)), {
+      request: `worker ${req.method} ${new URL(req.url).pathname}`,
+      version,
+      ...said,
+    }, { env, space, app })
+  )
+
 // The app's own worker, or null to serve the files instead — which is what
 // no worker means, and what a worker's own 404 means, so an app can answer
 // its routes and leave its pages to the platform.
 //
-// A worker that throws is left to throw: index.ts's catch-all writes the
-// exception with this app's version, which is the same entity a page's break
-// becomes.
+// THE SEAM (T-33234). `worker.fetch` below is the one line in the whole
+// kernel where the code running is the app's and not ours, so it is the one
+// place a throw may be filed as the APP's break. Everything on either side of
+// it — routing, the directory, a store object, the bucket, the dispatch
+// binding itself — is the platform's own code, and what falls over there is
+// the platform's however loudly the URL names an app.
+//
+// It used to be left to throw, and index.ts's catch-all filed it by ROUTE:
+// whatever app the URL named wore every failure that escaped, so evicting a
+// Store object on a platform deploy wrote "your app broke" into a customer's
+// store, on their version, against their metered writes, to every member of
+// their space. The catch-all cannot tell whose code it was; here we know.
 export let ran = async (
   env: Env,
   space: Space,
@@ -201,6 +230,7 @@ export let ran = async (
   try {
     worker = env.DISPATCH.get(scriptName(store))
   } catch (e) {
+    // Not the app's code — the namespace refusing to hand it over is ours.
     if (missing(e)) return null
     throw e
   }
@@ -211,7 +241,19 @@ export let ran = async (
     )
   } catch (e) {
     if (missing(e)) return null
-    throw e
+    // The app's code fell over. A no it relayed by THROWING what a door
+    // answered it is not a break, the same rule the answered status reads
+    // below (unseen.ts `refusal`); anything else is written here and the
+    // visitor gets the soft page, which is what the catch-all gave them
+    // before and all it ever gave them.
+    let said = e instanceof Error ? e.message : String(e)
+    if (!refusal(said)) {
+      await broke(env, space, app, req, {
+        message: said,
+        stack: e instanceof Error ? e.stack ?? '' : '',
+      })
+    }
+    return oops()
   }
   if (res.status == 404) {
     await res.body?.cancel()
@@ -221,12 +263,10 @@ export let ran = async (
   // the same rule the report door reads (unseen.ts `refusal`). A 5xx is not
   // a throw and would otherwise go unseen, so it is written here.
   if (failed(res.status)) {
-    await noted(storeOf(env.STORE, store), {
-      request: `worker ${req.method} ${new URL(req.url).pathname}`,
-      version: await serving(env, space, app),
+    await broke(env, space, app, req, {
       message: `the app's worker answered ${res.status}`,
       stack: '',
-    }, { env, space, app })
+    })
   }
   return res
 }

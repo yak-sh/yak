@@ -353,8 +353,15 @@ export let meta = (k: Kernel, cookie: string) => {
   let agent = connector(k, cookie)
   let where = { space: 'yak', app: 'platform' }
   return {
+    // The rows, and only the rows: a tool reply carries the unseen block and
+    // the ceiling line after them (unseen.ts), and the meta space has breaks
+    // of its own to be told about like anybody else.
     query: async (query: string) =>
-      JSON.parse(await agent.tool('graph_query', { ...where, query })) as Row[],
+      JSON.parse(
+        (await agent.tool('graph_query', { ...where, query })).split('\n\n## ')[
+          0
+        ],
+      ) as Row[],
     apply: (entities: unknown[]) =>
       agent.tool('graph_apply', { ...where, entities }),
   }

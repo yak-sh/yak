@@ -423,3 +423,55 @@ slow("the platform's own scripts are never the app's break", async () => {
     await k.stop()
   }
 })
+
+// Whose break it is (T-33234). Jeff, 2026-09-03: "That's not just noise;
+// it's a bug".
+//
+// The catch-all used to file by ROUTE: whatever app the URL named wore every
+// failure that escaped it. So one of OUR platform deploys evicting a Store
+// object threw into whatever `GET /<app>/api/ws` was open, and that was
+// written into a CUSTOMER's store as a regression that never happened —
+// stamped with their version, charged against their metered writes, and
+// pushed to every member of their space, at our deploy rate rather than their
+// usage.
+//
+// A DO eviction is not something a probe can stage, and a list of transient
+// error messages is the narrow fix that leaked last time (unseen.ts
+// `shaped`). The line is structural instead: the app's code runs at exactly
+// one seam (dispatch.ts `ran`), which files its own breaks, so nothing that
+// escapes to the catch-all was ever the app's. The break staged here is one
+// the kernel documents — a malformed percent-escape in the path, which our own
+// decoder throws on while serving an app's file (files.ts `keyed`) — and it
+// proves what an eviction would: our code fell over, on the app's address,
+// with no app code anywhere near it.
+slow("the platform's own break is ours, not the app's", async () => {
+  let k = await kernel()
+  try {
+    let { cookie } = await seed(k, [{ slug: 'acme', apps: ['shop'] }])
+    let agent = connector(k, cookie)
+    let app = { space: 'acme', app: 'shop' }
+
+    let broke = await k.at('acme.yaks.app', '/shop/%E0%A4%A')
+    await broke.body?.cancel()
+    assertEquals(broke.status, 500, 'the visitor got the soft page')
+
+    // Nothing in the customer's store: no entity asserting their app broke,
+    // no version stamped, no metered write, nothing pushed to their space.
+    assertEquals(
+      await agent.tool('app_errors', app),
+      'no open errors',
+      "the platform's own break was filed as the app's",
+    )
+
+    // And it is ours, in the meta store, where we read it and they cannot.
+    let ours = await meta(k, cookie).query('.exception!')
+    let said = ours.map((r) => JSON.stringify(r.exception)).join('\n')
+    assertEquals(ours.length, 1, `one break of ours: ${said}`)
+    assertStringIncludes(said, 'GET acme.yaks.app/shop/%E0%A4%A')
+    // No version: the code that broke is the platform's, and the meta store
+    // has no deploy of its own to name.
+    assertEquals((ours[0].exception as { version: unknown }).version, null)
+  } finally {
+    await k.stop()
+  }
+})

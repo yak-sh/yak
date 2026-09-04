@@ -721,19 +721,28 @@ slow(
         'work lanes',
       )
 
-      // A route that throws reaches the agent on its next reply, once; after
-      // that only app_errors lists it, and a fresh break rides again.
-      assertEquals(
-        (await k.at('jeff.yaks.app', '/recipes/%E0%A4%A')).status,
-        500,
-      )
+      // A break in the app reaches the agent on its next reply, once; after
+      // that only app_errors lists it, and a fresh break rides again. It is a
+      // PAGE's break because that is what an app's break is: the platform's
+      // own failures are the platform's, whatever app the URL named
+      // (T-33234, report_test.ts).
+      let dies = (said: string) =>
+        k.at('jeff.yaks.app', '/recipes/api/report', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            message: said,
+            url: 'https://jeff.yaks.app/recipes/',
+          }),
+        })
+      assertEquals((await dies('sift is not a function')).status, 204)
       let told = await agent.tool('graph_query', {
         ...app,
         query: `id=${cake}`,
       })
       assertMatch(
         told,
-        /## unseen errors\n- \S+ \S+ exception recipes v\d+: GET \/recipes\/%E0%A4%A — .*URI/,
+        /## unseen errors\n- \S+ \S+ exception recipes v\d+: page \/recipes\/ — sift is not a function/,
       )
       // A crash is the platform's row, not the person's: `.doc!` — the query
       // the instructions teach as everything they saved — has only the cake
@@ -748,10 +757,7 @@ slow(
         query: `id=${cake}`,
       })
       assert(!quiet.includes('unseen'), 'served once')
-      assertEquals(
-        (await k.at('jeff.yaks.app', '/recipes/%E0%A4%B')).status,
-        500,
-      )
+      assertEquals((await dies('knead is not a function')).status, 204)
       let listed = await agent.tool('app_errors', app)
       assertEquals(
         listed.split('\n').filter((l) => l.startsWith('- ')).length,
@@ -805,8 +811,8 @@ slow(
 
       // The errors view (T-32601): the same answer as cards — one per break,
       // the message, the file and line, the version it happened on, how many
-      // times. A break on the way in has no address to open, so it wears its
-      // request instead.
+      // times. A break whose report carried no stack has no address to open,
+      // so it wears its request instead.
       let asOf = async (args: unknown = app) =>
         await agent.call('tools/call', { name: 'app_errors', arguments: args })
       let seen = await asOf()
@@ -821,9 +827,9 @@ slow(
       assertEquals(
         breaks.map((b) => `${b.message} @ ${b.where} x${b.count}`).sort(),
         [
-          'URI malformed @ GET /recipes/%E0%A4%A x1',
-          'URI malformed @ GET /recipes/%E0%A4%B x1',
           'fold is not a function @ /recipes/cook.js:7 x1',
+          'knead is not a function @ page /recipes/ x1',
+          'sift is not a function @ page /recipes/ x1',
           'whisk is not a function @ /recipes/index.html:42 x1',
         ],
       )

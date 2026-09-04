@@ -277,12 +277,28 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     }
 
     // A route that throws — a malformed escape in a file path — answers with
-    // the soft page and leaves an exception entity in the app's store, naming
-    // the request and carrying the message and stack; nothing wears `error`,
-    // the facet for a failure the platform expected.
+    // the soft page. Our own decoder fell over, not the app's code, so
+    // nothing about it is written into the app's store (T-33234; where it IS
+    // written is report_test.ts).
     let broke = await k.at('jeff.yaks.app', '/recipes/%E0%A4%A')
     assertEquals(broke.status, 500)
     assertMatch(await broke.text(), /Something went wrong/)
+    assertEquals(await owner.get('.exception!'), [])
+
+    // What the app's own PAGE threw, at the app's own door: an exception
+    // entity naming the request and carrying the message and stack; nothing
+    // wears `error`, the facet for a failure the platform expected.
+    let filed = await k.at('jeff.yaks.app', '/recipes/api/report', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        message: 'whisk is not a function',
+        stack: 'TypeError: whisk is not a function\n' +
+          '    at https://jeff.yaks.app/recipes/index.html:42:9',
+        url: 'https://jeff.yaks.app/recipes/',
+      }),
+    })
+    assertEquals(filed.status, 204)
     let [broken] = await owner.get('.exception!&.created!')
     assert(broken, 'an exception entity')
     let ex = broken.exception as {
@@ -290,12 +306,12 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
       stack: string
       request: string
     }
-    assertEquals(ex.request, 'GET /recipes/%E0%A4%A')
+    assertEquals(ex.request, 'page /recipes/')
     // The platform's own row wears no doc, so a person's `.doc!` is theirs
     // alone (T-32533).
     assertEquals(broken.doc, undefined)
-    assertMatch(ex.message, /URI/)
-    assertMatch(ex.stack, /URIError|decodeURIComponent/)
+    assertEquals(ex.message, 'whisk is not a function')
+    assertMatch(ex.stack, /index\.html:42/)
     assertEquals(await owner.get('.error!'), [])
     // A signed-in page's write says who saved it: the kernel vouches for the
     // person, the store learns them as a row of its own, and `created.by` is

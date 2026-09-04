@@ -59,12 +59,20 @@ let app: App = {
   installed: null,
 }
 
-// Every entity the kernel wrote while a test ran, so a break can be read
-// back the way `app_errors` reads one.
-let wrote: unknown[] = []
+// Every entity the kernel wrote while a test ran, and WHICH store it went
+// into (store.ts `storeOf` names it on every request) — so a break can be read
+// back the way `app_errors` reads one, and whose store it landed in is part of
+// what a test can say.
+type Wrote = {
+  store: string
+  entities: { exception: Record<string, unknown> }[]
+}
+let wrote: Wrote[] = []
 
 // The env `ran` asks for: the namespace under test, the secret it seals a
-// grant with, and a store that keeps what it was told.
+// grant with, and a store that keeps what it was told. Only a JSON body is
+// kept: `serving` reads the directory through this same stub, and its empty
+// query answer throws out of the parse before anything is recorded.
 let envOf = (get: (name: string) => { fetch(r: Request): Promise<Response> }) =>
   ({
     SESSION_SECRET: SECRET,
@@ -73,7 +81,8 @@ let envOf = (get: (name: string) => { fetch(r: Request): Promise<Response> }) =>
       idFromName: (n: string) => n,
       get: () => ({
         fetch: async (r: Request) => {
-          wrote.push(JSON.parse(await r.text()))
+          let body = JSON.parse(await r.text())
+          wrote.push({ store: r.headers.get('x-store') ?? '', ...body })
           return Response.json({ ok: true })
         },
       }),
@@ -203,12 +212,51 @@ Deno.test("a worker's own no is not a break; its 5xx is", async () => {
   assertEquals(wrote.length, 0, 'a refusal filed something')
   let out = await ran(envOf(mirror(503).get), space, app, visit(), who)
   assertEquals(out!.status, 503)
-  let broke =
-    (wrote[0] as { entities: { exception: Record<string, unknown> }[] })
-      .entities[0].exception
+  assertEquals(wrote[0].store, 'jeff/recipes')
+  let broke = wrote[0].entities[0].exception
   assertEquals(broke.version, 7)
   assertEquals(broke.request, 'worker GET /recipes/hello')
   assertEquals(broke.message, "the app's worker answered 503")
+})
+
+// THE SEAM (T-33234). `worker.fetch` is the one line in the kernel where the
+// code running belongs to the app, so it is the one place a throw may be filed
+// as the APP's break — and it is filed HERE, rather than left to index.ts's
+// catch-all, which files by ROUTE and so wore the same entity for anything the
+// PLATFORM broke on a URL that happened to name an app.
+//
+// A throw and an answered 5xx are one event, so they are one entity: the app's
+// own store, its serving version, and the soft page the visitor already got.
+Deno.test("a worker that throws is the app's break, and is filed here", async () => {
+  wrote = []
+  let boom = () => ({
+    fetch: () => Promise.reject(new Error('undefined is not an object')),
+  })
+  let out = await ran(envOf(boom), space, app, visit(), who)
+  assertEquals(out!.status, 500, 'the visitor gets the soft page')
+  assertEquals(wrote.length, 1, 'one break, and only one')
+  assertEquals(wrote[0].store, 'jeff/recipes', "the app's own store")
+  let broke = wrote[0].entities[0].exception
+  assertEquals(broke.version, 7)
+  assertEquals(broke.request, 'worker GET /recipes/hello')
+  assertEquals(broke.message, 'undefined is not an object')
+  assert(String(broke.stack).includes('undefined is not an object'))
+})
+
+// And the same rule the answered status reads: a no the app's worker relayed
+// by THROWING what one of our doors told it is an answer carried out, not
+// something that fell over.
+Deno.test('a no the worker threw is not the app breaking', async () => {
+  wrote = []
+  let relayed = () => ({
+    fetch: () =>
+      Promise.reject(
+        new Error(JSON.stringify({ error: { code: 'not_a_writer' } })),
+      ),
+  })
+  let out = await ran(envOf(relayed), space, app, visit(), who)
+  assertEquals(out!.status, 500)
+  assertEquals(wrote.length, 0, 'a relayed no filed something')
 })
 
 // The shim is the only thing standing between the app's code and the grant,

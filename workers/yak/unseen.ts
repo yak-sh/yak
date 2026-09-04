@@ -102,11 +102,18 @@ let hushed = (space: Space, app: App) => {
 
 // One break, written where the person's agent reads it: the `exception`
 // facet, and nothing else. It carries what was being served, the deploy it
-// happened on, the message and the stack. Every source of one goes through
-// here: a route that threw (index.ts), a page that reported its own
-// (apps.ts), and a worker that answered a 5xx (dispatch.ts). Server-owned,
-// so it rides the kernel flag into apply()'s server-writer mode; the shape
-// is the wire's own entity literal.
+// happened on, the message and the stack. Server-owned, so it rides the
+// kernel flag into apply()'s server-writer mode; the shape is the wire's own
+// entity literal.
+//
+// WHOSE break it is, is the caller's to know, and only three callers can
+// (T-33234). An APP's store takes one from the two places the app's own code
+// was running — its worker, which threw or answered a 5xx (dispatch.ts `ran`),
+// and its page, which reported its own (apps.ts `/report`). The META store
+// takes everything the platform hit in its own code (index.ts `report`),
+// including on a route that names an app: a DO eviction, our storage, our
+// routing, our dispatch. Nothing here decides that, and nothing should try:
+// the message never says whose code it was.
 //
 // A break in a space's app is also PUSHED as it lands (T-33006, V-32361):
 // `notifications/message` to each member's stream, for whoever is connected

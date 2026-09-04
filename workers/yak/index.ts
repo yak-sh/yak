@@ -5,11 +5,12 @@
 // Worker later is a service binding in env.ts and no change here. The Store
 // Durable Object (store.ts) is its own module for the same reason: a DO may
 // live in a different Worker from the one that binds it, and so is the Wire
-// object (stream.ts), which holds a person's open agent stream. Every route runs
-// inside one catch: a throw becomes an exception entity in the (space, app)
-// store — or the meta store, when no app answers — and a soft page, so no
-// failure goes unseen (D-32318 §Errors, V-32361). A door's deliberate no is
-// not a failure and files nothing (unseen.ts `refusal`).
+// object (stream.ts), which holds a person's open agent stream. Every route
+// runs inside one catch: a throw becomes an exception entity in the META
+// store — OUR code fell over, whatever app the URL named (T-33234, `report`
+// below) — and a soft page, so no failure goes unseen (D-32318 §Errors,
+// V-32361). A door's deliberate no is not a failure and files nothing
+// (unseen.ts `refusal`).
 //
 // One thing beyond routing happens here, and it is here because nowhere else
 // still knows it: a request at a GRAPH DOOR whose `Origin` names another
@@ -58,7 +59,7 @@ import { sealed } from './cache.ts'
 import * as filePart from './files.ts'
 import * as billing from './billing.ts'
 import * as dirPart from './directory.ts'
-import { directory, META_STORE, storeName } from './directory.ts'
+import { directory, META_STORE } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import * as identity from './identity.ts'
 import * as mcp from './mcp.ts'
@@ -196,33 +197,39 @@ let unmounted = (req: Request) => {
   return new Request(req, { headers })
 }
 
-// What a request threw, as an entity where the person's agent reads: the
-// app's store when the route names an app that exists, the meta store
-// otherwise. Awaited, so the entity exists by the time the soft page lands.
-let report = async (env: Env, r: Route, req: Request, e: unknown) => {
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  let space = r.space ? await dir.space(r.space) : null
-  // Read past the directory's cache: a break right after a deploy is the
-  // common one, and it must name the version it broke on rather than the one
-  // this isolate is still holding (directory.ts `FRESH`, C-32869 item 4).
-  let app = space && r.app ? await dir.app(space, r.app, true) : null
-  let store = storeOf(
-    env.STORE,
-    app ? storeName(space!, app) : META_STORE,
-  )
+// What OUR code threw, as an entity where WE read it: the meta store, always
+// (T-33234). Awaited, so the entity exists by the time the soft page lands.
+//
+// Nothing that reaches this catch was the app's code running. An app's code
+// runs at exactly one seam — `worker.fetch` in dispatch.ts `ran` — and files
+// its own breaks there; a page's break comes in through its own door (apps.ts
+// `/report`). Everything left is routing, the directory, a store object, the
+// bucket: ours. The route may name an app, and that is all the app has to do
+// with it.
+//
+// It used to file by ROUTE, which made a platform failure the named app's:
+// evicting a Store object on one of OUR deploys throws into whatever socket
+// was open, and `GET /<app>/api/ws` then wrote a regression that never
+// happened into a customer's store, stamped with their version, charged to
+// their metered writes, and pushed to every member of their space — at our
+// deploy rate rather than their usage. Jeff, 2026-09-03: "That's not just
+// noise; it's a bug".
+//
+// So the line carries the HOST, which is what names the space and the app the
+// request was on its way to, and no version: the code that broke is ours, and
+// the meta store has no version to name.
+let report = async (env: Env, what: string, e: unknown) => {
   // The BREAK, something our code hit unexpectedly — the self-healing
   // trigger (kernel.rs; `error` is a known failure state, kept for what the
   // platform reports deliberately). unseen.ts owns the entity's shape,
-  // because a page reporting its own break writes the same one.
-  // A break in a space's app is also pushed to its members as it lands
-  // (unseen.ts, T-33006); one in the platform's own meta store has no space
-  // to tell.
-  await noted(store, {
-    request: `${req.method} ${new URL(req.url).pathname}`,
-    version: app?.version,
+  // because a page reporting its own break writes the same one. No space is
+  // told: the meta store is the platform's own, and this is nobody's news but
+  // ours.
+  await noted(storeOf(env.STORE, META_STORE), {
+    request: what,
     message: e instanceof Error ? e.message : String(e),
     stack: e instanceof Error ? e.stack ?? '' : '',
-  }, space && app ? { env, space, app } : undefined)
+  })
 }
 
 export default {
@@ -272,8 +279,13 @@ export default {
       // as at the report door: it files nothing.
       let said = e instanceof Error ? e.message : String(e)
       if (refusal(said)) return oops()
+      // The host the router ROUTED by, not the one the socket arrived on: it
+      // is what names the space and the app this was on its way to, and after
+      // `aimed` it is the address the platform derived rather than the
+      // customer's own domain.
+      let where = `${hostOf(req)}${new URL(req.url).pathname}`
       // A failure to report is telemetry, never a second failure to serve.
-      await report(env, r, req, e).catch((why) =>
+      await report(env, `${req.method} ${where}`, e).catch((why) =>
         console.error('yak: could not report', why, 'after', e)
       )
       return oops()
@@ -288,11 +300,9 @@ export default {
     try {
       await metered(env)
     } catch (e) {
-      await noted(storeOf(env.STORE, META_STORE), {
-        request: 'cron meter',
-        message: e instanceof Error ? e.message : String(e),
-        stack: e instanceof Error ? e.stack ?? '' : '',
-      }).catch((why) => console.error('yak: could not report', why, 'after', e))
+      await report(env, 'cron meter', e).catch((why) =>
+        console.error('yak: could not report', why, 'after', e)
+      )
     }
   },
 }
