@@ -214,12 +214,14 @@ export let parseFindings = (reply: string): Finding[] => {
   return out
 }
 
-// A drift finding as a 'consider' task, built like heal.ts fileBug: doc + task
-// + an `about` edge to the source session (provenance — the run it was dreamed
-// from). NEVER edits the drift away.
+// A drift finding as a graph-only artifact: doc + an `about` edge to the source
+// session (provenance — the run it was dreamed from). The `finding` comp is
+// added by its caller's mark(); NO task, so a fresh finding lives in the graph
+// (findable via `.finding`) but stays OFF the board until it recurs past the
+// promotion threshold (fileFinding). NEVER edits the drift away.
 export let considerChanges = (
   f: Finding,
-  project: string | null,
+  _project: string | null,
   source: string,
 ): Change[] => {
   let eid = uuid()
@@ -228,11 +230,6 @@ export let considerChanges = (
       eid,
       name: 'doc',
       comp: { title: `consider: ${f.title}`.slice(0, 100), body: f.body },
-    },
-    {
-      eid,
-      name: 'task',
-      comp: { priority: f.priority, project },
     },
     { eid, name: 'dependency', comp: { type: 'about', child: source } },
   ]
@@ -328,20 +325,23 @@ export let nearestMemory = (
 
 // Route by kind (T-17407 gate 3): a decision or a reflex/lesson becomes a
 // MEMORY (a decision dated when taken; a reflex a venture-scoped lesson), not a
-// vague open "consider" task. Only actionable, unaddressed drift — a missing
-// warm path, ticket entropy, super-linear complexity — becomes a task.
+// "consider" artifact. Actionable, unaddressed drift — a missing warm path,
+// ticket entropy, super-linear complexity — becomes a graph-only `finding`,
+// OFF the board, promoted to a task only once it recurs past the threshold.
 let MEMORY_KINDS = new Set(['decision', 'reflex'])
 
 type Fate = 'filed' | 'recur' | 'reinforce' | 'skip'
 
 // File ONE finding, or don't — the four gates in one place. Dedup against what
-// this dream already filed (an OPEN artifact recurs and is hit-counted, a
+// this dream already filed (a live artifact recurs and is hit-counted, a
 // resolved or already-captured one is skipped), skip a finding that points at
 // closed work, reinforce (never re-file) a finding whose MEANING already lives
 // in a memory, then route by kind and mark the artifact with its key. Returns
 // what happened, for the run tally. Called in session order so two sessions'
 // same-shape findings in one run also collapse (each land re-reads). Async for
 // the one embed the semantic gate needs; embedFn is injected so tests drive it.
+// `writer` is the dream persona (locate(db,'dream')): the AUTHOR of every write,
+// so `created.by` names the dream and not the session it combed.
 let fileFinding = async (
   f: Finding,
   project: string | null,
@@ -349,26 +349,45 @@ let fileFinding = async (
   ceil: string,
   cast: Cast,
   embedFn: typeof embed,
+  writer: string | null,
 ): Promise<Fate> => {
   let key = findingKey(f)
   let seen = filed(key)
   if (seen) {
-    // Already filed this shape. An OPEN/wip task recurs — count it, a stronger
-    // signal it is worth doing. Anything else (a resolved task, a captured
-    // memory) is handled — skip without re-filing.
-    if (seen.status == 'open' || seen.status == 'wip') {
-      land([{
-        eid: seen.eid,
-        name: 'finding',
-        comp: { hits: (seen.hits ?? 1) + 1, last: iso(Date.now()) },
-      }], cast)
-      let after = filed(key)
-      if (after?.eid != seen.eid || after.hits != (seen.hits ?? 1) + 1) {
-        throw new Error(`dream readback failed: ${human(db, seen.eid)}`)
-      }
-      return 'recur'
+    // Already filed this shape. Resolved work (done/cancelled) is handled —
+    // skip without re-filing. Otherwise count the hit: a task-less finding
+    // (status null, off the board) and an open/wip task both grow a stronger
+    // signal. A task-less finding whose count crosses 5 earns PROMOTION to the
+    // board — the recurrence threshold that keeps one-off drift off the queue.
+    if (seen.status == 'done' || seen.status == 'cancelled') return 'skip'
+    let hits = (seen.hits ?? 1) + 1
+    let promote = hits > 5 && seen.status == null
+    land(
+      [
+        {
+          eid: seen.eid,
+          name: 'finding',
+          comp: { hits, last: iso(Date.now()) },
+        },
+        ...(promote
+          ? [{
+            eid: seen.eid,
+            name: 'task',
+            comp: { priority: f.priority, project },
+          } as Change]
+          : []),
+      ],
+      cast,
+      writer,
+    )
+    let after = filed(key)
+    if (
+      after?.eid != seen.eid || after.hits != hits ||
+      (promote && after.status == null)
+    ) {
+      throw new Error(`dream readback failed: ${human(db, seen.eid)}`)
     }
-    return 'skip'
+    return 'recur'
   }
   if (namesResolved(f)) return 'skip'
   // Semantic gate: a finding near an existing memory restates a documented
@@ -402,9 +421,10 @@ let fileFinding = async (
     comp: { key, hits: 1, last: iso(Date.now()) },
   })
   if (MEMORY_KINDS.has(f.kind)) {
-    // A decision/reflex is a memory, attributed to the session it rose from —
+    // A decision/reflex is a memory that REFERENCES the session it rose from —
     // its `id` (not eid: sessionFor keys on session.id, so an eid would mint a
-    // spurious session). No id, no attribution to make — skip.
+    // spurious session), carried as memory.session. No id, no provenance to
+    // record — skip. The AUTHOR is the dream (writer), not that session.
     if (!s.id) return 'skip'
     // memoryChanges resolves just the session (find-or-mint by s.id) and the
     // scope project — read those, never the whole graph (M-21143).
@@ -416,13 +436,13 @@ let fileFinding = async (
         ? { decided: f.decided ?? ceil.slice(0, 10) }
         : { scope: project ?? undefined }),
     })
-    land([...made.changes, mark(made.eid)], cast, s.id)
+    land([...made.changes, mark(made.eid)], cast, writer)
     if (filed(key)?.eid != made.eid) {
       throw new Error(`dream readback failed: ${human(db, made.eid)}`)
     }
   } else {
-    let cs = considerChanges(f, project, s.eid) // all three share one eid
-    land([...cs, mark(cs[0].eid)], cast)
+    let cs = considerChanges(f, project, s.eid) // doc + about edge share one eid
+    land([...cs, mark(cs[0].eid)], cast, writer)
     if (filed(key)?.eid != cs[0].eid) {
       throw new Error(`dream readback failed: ${human(db, cs[0].eid)}`)
     }
@@ -481,6 +501,11 @@ let comb = async (
     return { ...empty, pass: passRecord(to, empty, cast) }
   }
   let repo = pathOf(project)
+  // The dream persona (aliased `dream`) is the AUTHOR of every finding this run
+  // writes — resolved once, threaded to fileFinding so `created.by` names the
+  // dream, not the session it combed. Absent alias → null (an unattributed
+  // write, the pre-attribution behavior).
+  let writer = locate(db, 'dream') ?? null
   let now = Date.now()
   let ceil = iso(now)
   let floor = d.floor ?? iso(now - 7 * DAY)
@@ -511,7 +536,7 @@ let comb = async (
     if (combed) tally.combed++
     if (!reply) continue // nothing found, or no model — never an error
     for (let f of parseFindings(reply)) {
-      let fate = await fileFinding(f, project, s, ceil, cast, embedFn)
+      let fate = await fileFinding(f, project, s, ceil, cast, embedFn, writer)
       if (fate == 'filed') tally.filed++
       else if (fate == 'recur') tally.recurred++
       else if (fate == 'reinforce') tally.reinforced++

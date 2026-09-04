@@ -5426,12 +5426,16 @@ let actorFor = (
   )
     .get(writer) as { actor: string | null } | undefined
   if (c) return c.actor ?? (human ? ownerActor(db) : null)
-  // A writer naming an actor entity (person or project) directly stands
-  // for itself — the CLI's own operator eid, or a hand-set x-via.
+  // A writer naming an actor entity (person, project, or persona) directly
+  // stands for itself — the CLI's own operator eid, a hand-set x-via, or a
+  // sessionless system voice like the dream (persona, aliased `dream`) that
+  // authors graph writes without a run of its own.
   let a = prep(
     db,
-    `select 1 from person where ${byEid} union select 1 from project where ${byEid}`,
-  ).get(writer, writer) as { 1: number } | undefined
+    `select 1 from person where ${byEid}
+       union select 1 from project where ${byEid}
+       union select 1 from persona where ${byEid}`,
+  ).get(writer, writer, writer) as { 1: number } | undefined
   return a ? writer : null
 }
 

@@ -1,5 +1,6 @@
 // dream.ts's seams: the JSONL→changes parse, the floor advance/clamp math, the
-// consider-task shape, and the dreamComb effect driven with an INJECTED
+// task-less finding shape and its recur-past-5 promotion, and the dreamComb
+// effect driven with an INJECTED
 // complete so no provider ever spawns (the recall_test recallFn pattern). The
 // shared :memory: db carries other tests' rows, so every db assertion screens
 // to the eids this test made.
@@ -28,7 +29,6 @@ ownVector()
 let { axes } = await import('./testvec.ts')
 let { slow } = await import('./testing.ts')
 let { assertEquals } = await import('@std/assert')
-let { statusOf } = await import('./types.ts')
 
 let uid = () => crypto.randomUUID()
 let DAY = 86_400_000
@@ -223,7 +223,7 @@ slow(
   },
 )
 
-Deno.test('considerChanges: a drift finding becomes a consider task about its source', () => {
+Deno.test('considerChanges: a drift finding is a doc about its source, NOT a task', () => {
   let cs = considerChanges(
     {
       kind: 'gap',
@@ -238,10 +238,9 @@ Deno.test('considerChanges: a drift finding becomes a consider task about its so
     String(cs.find((c) => c.name == 'doc')!.comp!.title),
     'consider: add a delete verb',
   )
-  let task = cs.find((c) => c.name == 'task')!.comp!
-  assertEquals(statusOf(task), 'open')
-  assertEquals(task.priority, 2)
-  assertEquals(task.project, 'p-eid')
+  // Off the board: a fresh finding carries no task (it earns one only on
+  // recurrence, in fileFinding).
+  assertEquals(cs.some((c) => c.name == 'task'), false)
   let edge = cs.find((c) => c.name == 'dependency')!.comp!
   assertEquals(edge.type, 'about')
   assertEquals(edge.child, 's-eid')
@@ -261,7 +260,7 @@ Deno.test('unwoken/seedWake: a dream with no pending wake is seeded once, then l
 })
 
 slow(
-  'dreamComb: a dream knock combs the venture, files a consider task, advances the floor, re-arms',
+  'dreamComb: a dream knock combs the venture, files a task-LESS finding, advances the floor, re-arms',
   async () => {
     let p = proj('Dream test venture')
     let d = dreamEnt(p, ago(30))
@@ -285,24 +284,18 @@ slow(
       ).get(k),
       true,
     )
-    // A consider task, about the combed session, in the venture.
-    let task = db.prepare(
-      `select case
-          when exists(select 1 from cancelled x where x.entity = t.entity) then 'cancelled'
-          when exists(select 1 from completed x where x.entity = t.entity) then 'done'
-          when exists(select 1 from claim x where x.entity = t.entity) then 'wip'
-          else 'open' end as status,
-              (select eid from entity where id = t.project) as project,
-              doc.title from task t
-       join doc_value doc on doc.entity = t.entity
-       join (${sentences('about')}) dep on dep.parent = t.entity
-      where dep.child = (select id from entity where eid = ?)`,
-    ).get(s.eid) as
-      | { status: string; project: string; title: string }
-      | undefined
-    assertEquals(task?.status, 'open')
-    assertEquals(task?.project, p)
-    assertEquals(task?.title.startsWith('consider:'), true)
+    // A finding about the combed session — a "consider:" doc, OFF the board:
+    // no task until it recurs past the threshold.
+    let found = db.prepare(
+      `select doc.title,
+              (select count(*) from task t where t.entity = fd.entity) as tasks
+         from finding fd
+         join doc_value doc on doc.entity = fd.entity
+         join (${sentences('about')}) dep on dep.parent = fd.entity
+        where dep.child = (select id from entity where eid = ?)`,
+    ).get(s.eid) as { title: string; tasks: number } | undefined
+    assertEquals(found?.title.startsWith('consider:'), true)
+    assertEquals(found?.tasks, 0)
     // The floor advanced past its start.
     let floor = (db.prepare(
       'select floor from dream where entity = (select id from entity where eid = ?)',
@@ -434,6 +427,113 @@ slow(
   },
 )
 
+// A task-LESS finding (off the board) still hit-counts on recurrence — the
+// derived status is null, and the recur path must NOT mistake that for a
+// resolved artifact and skip it. Below the promotion threshold it stays a doc.
+slow(
+  'dreamComb: a task-less finding recurs (hit-counts) and stays off the board',
+  async () => {
+    let p = proj('Recur venture')
+    let d = dreamEnt(p, ago(30))
+    let s = sess(p, ago(2))
+    msg(s.eid, 'reached for a recount verb again')
+    let f = { kind: 'gap', title: 'add a recount verb', body: 'x', priority: 3 }
+    let key = findingKey(f)
+    // Seed a task-less finding already at 2 hits (below the > 5 threshold).
+    let fe = uid()
+    apply(db, [
+      {
+        eid: fe,
+        name: 'doc',
+        comp: { title: `consider: ${f.title}`, body: '' },
+      },
+      { eid: fe, name: 'finding', comp: { key, hits: 2, last: ago(1) } },
+    ])
+    await dreamComb(noop, says(JSON.stringify(f)) as never)(knock(d))
+    let row = db.prepare(
+      `select fd.hits as hits,
+              (select count(*) from task t where t.entity = fd.entity) as tasks
+         from finding fd where fd.key = ?`,
+    ).get(key) as { hits: number; tasks: number }
+    assertEquals(row.hits, 3) // hit-counted, not skipped
+    assertEquals(row.tasks, 0) // still off the board (≤ 5)
+  },
+)
+
+// Past the threshold the same recurrence PROMOTES the task-less finding onto
+// the board: the recur path adds a task in the same batch, and status flips to
+// open.
+slow(
+  'dreamComb: a task-less finding recurring past 5 hits gains a board task',
+  async () => {
+    let p = proj('Promote venture')
+    let d = dreamEnt(p, ago(30))
+    let s = sess(p, ago(2))
+    msg(s.eid, 'reached for a promote-me verb again')
+    let f = {
+      kind: 'gap',
+      title: 'add a promote-me verb',
+      body: 'y',
+      priority: 2,
+    }
+    let key = findingKey(f)
+    // Seed a task-less finding at 5 hits; the sixth crosses the threshold.
+    let fe = uid()
+    apply(db, [
+      {
+        eid: fe,
+        name: 'doc',
+        comp: { title: `consider: ${f.title}`, body: '' },
+      },
+      { eid: fe, name: 'finding', comp: { key, hits: 5, last: ago(1) } },
+    ])
+    await dreamComb(noop, says(JSON.stringify(f)) as never)(knock(d))
+    let row = db.prepare(
+      `select fd.hits as hits,
+              case when t.entity is null then null else t.priority end as prio
+         from finding fd left join task t on t.entity = fd.entity
+        where fd.key = ?`,
+    ).get(key) as { hits: number; prio: number | null }
+    assertEquals(row.hits, 6) // crossed the threshold
+    assertEquals(row.prio, 2) // now a task on the board, at the finding's priority
+  },
+)
+
+// Every finding write is authored by the dream persona (aliased `dream`), so
+// created.by names the dream and not the session it combed.
+slow(
+  'dreamComb: a filed finding is authored by the dream persona',
+  async () => {
+    let dp = uid()
+    apply(db, [
+      { eid: dp, name: 'doc', comp: { title: 'dream', body: '' } },
+      { eid: dp, name: 'alias', comp: { slug: 'dream' } },
+      { eid: dp, name: 'persona', comp: {} },
+    ])
+    try {
+      let p = proj('Attribution venture')
+      let d = dreamEnt(p, ago(30))
+      let s = sess(p, ago(2))
+      msg(s.eid, 'reached for an attribute verb')
+      let f = {
+        kind: 'gap',
+        title: 'add an attribute verb',
+        body: 'z',
+        priority: 3,
+      }
+      await dreamComb(noop, says(JSON.stringify(f)) as never)(knock(d))
+      let row = db.prepare(
+        `select (select eid from entity where id = c.by) as by
+           from finding fd join created c on c.entity = fd.entity
+          where fd.key = ?`,
+      ).get(findingKey(f)) as { by: string | null } | undefined
+      assertEquals(row?.by, dp)
+    } finally {
+      apply(db, [{ eid: dp, name: 'entity', comp: null }])
+    }
+  },
+)
+
 slow(
   'dreamComb: skip — a finding naming a resolved task is not filed',
   async () => {
@@ -449,11 +549,12 @@ slow(
       priority: 3,
     }))
     await dreamComb(noop, reply as never)(knock(d))
-    // No consider task filed about this session — the finding named closed work.
+    // No finding filed at all about this session — it named closed work, so it
+    // was skipped (not merely filed task-less).
     let n = db.prepare(
       `select count(*) as n from (${sentences('about')}) dep
       where dep.child = (select id from entity where eid = ?)
-        and exists (select 1 from task t where t.entity = dep.parent)`,
+        and exists (select 1 from finding fd where fd.entity = dep.parent)`,
     ).get(s.eid) as { n: number }
     assertEquals(n.n, 0)
   },
