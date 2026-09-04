@@ -66,10 +66,11 @@ import * as filePart from './files.ts'
 import * as billing from './billing.ts'
 import * as dirPart from './directory.ts'
 import { directory, META_STORE } from './directory.ts'
+import { customOf, reading, stageOf, type Step, steps } from './domains.ts'
 import { bound, type Env } from './env.ts'
 import * as identity from './identity.ts'
 import * as mcp from './mcp.ts'
-import { lost, oops } from './pages.ts'
+import { lost, oops, provisioning } from './pages.ts'
 import {
   doorway,
   foreign,
@@ -148,6 +149,50 @@ let serve = async (req: Request, env: Env, r: Route) => {
   }
   let page = await env.ASSETS.fetch(req)
   return page.status == 404 ? lost() : page
+}
+
+// A foreign host that has reached the Worker (route.ts ORIGIN, T-33036) but
+// has nothing ready to answer with: a domain mid-provisioning, or one
+// Cloudflare has stopped serving. `aimed` below is what routes an ACTIVE
+// host to its app; this is what stands in front of it, because `aimed`
+// cannot tell a host that is not there YET apart from one it has simply
+// never heard of — both answer null, and both used to fall through to the
+// apex home page, which is the wrong thing on a stranger's domain.
+//
+// The directory's cached `stage` (stamped by domain_attach and domain_status,
+// directory.ts `Host`) answers `active` for free, so a live domain pays no
+// Cloudflare call on every request. Anything else asks Cloudflare directly
+// for the three steps a person waits through (domains.ts `steps`), because
+// the cached `stage` is one word and the page wants to say WHICH of DNS,
+// validation or certificate is still pending — the same reading
+// `domain_status` gives an agent, handed to the visitor instead. A platform
+// not configured to ask Cloudflare (`reachable`, domains.ts) falls back to a
+// plain "still connecting" line rather than a 500 for every visitor of every
+// domain being set up; that is the one case this catches rather than lets
+// through, and it is a config gap, not a domain's own state.
+let settling = async (env: Env, host: string): Promise<Response | null> => {
+  if (!foreign(host)) return null
+  let served = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
+    .serves(host)
+  if (served?.host.stage == 'active') return null
+  let how: Step[] | null = null
+  let stage: 'pending' | 'active' | 'error' = served?.host.stage == 'error'
+    ? 'error'
+    : 'pending'
+  try {
+    let custom = await customOf(env, host)
+    how = custom ? steps(custom) : null
+    if (how) stage = stageOf(how)
+  } catch {
+    // No CF_ZONE/CF_HOSTNAMES_TOKEN, or Cloudflare itself unreachable: the
+    // cached stage above (or `pending`, where there is none at all) still
+    // says something true, just without the per-step detail.
+  }
+  return stage == 'active' ? null : provisioning(
+    host,
+    how ? reading(how) : 'Still being connected — check back shortly.',
+    stage,
+  )
 }
 
 // A hostname someone else owns, aimed at one of our apps (T-33037). Routing
@@ -319,6 +364,12 @@ export default {
       if (foreign(host) && asked == identity.HANDOFF) {
         return sealed(await bound(env.IDENTITY, identity.fetch, env).fetch(req))
       }
+      // A domain mid-provisioning, or one Cloudflare has stopped serving
+      // (`settling` above): answered before space isolation and `aimed`,
+      // because there is nothing yet to isolate or route to — every path on
+      // a host like this gets the same branded page, not just `/`.
+      let hold = await settling(env, host)
+      if (hold) return sealed(hold)
       // Space isolation, and the one place it holds (route.ts `sameOrigin`).
       // HERE, before `aimed` moves the address, because what must match is
       // what the BROWSER addressed: a page at `herbusiness.com` asking its

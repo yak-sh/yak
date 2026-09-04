@@ -30,6 +30,13 @@ export let PRICING = `https://${PLATFORM}/pricing`
 // that would shadow our own origin. A one-label name (`origin.yaks.app`)
 // would have needed a reserved-word list to hold that line, and a list is a
 // thing to forget; the namespace's own shape does not forget.
+//
+// This is also the reason a domain mid-provisioning reaches the Worker at
+// all instead of timing out (T-33036): the CNAME above and the `*/*` route
+// mean traffic for ANY custom hostname on this zone arrives here, active or
+// not — a visitor of a domain whose DNS, validation or certificate step has
+// not finished yet used to get a raw 522 with nothing between them and it.
+// index.ts `settling` is the branded page that answers there now.
 export let ORIGIN = `origin.saas.${PLATFORM}`
 
 // Where the app serving this request is mounted for the browser that asked:

@@ -16,7 +16,15 @@ export let esc = (s: string) =>
 
 let home = '<a class="Away" href="https://yaks.app/">yaks.app</a>'
 
-let shell = (title: string, lead: string, status: number, inner = home) =>
+let shell = (
+  title: string,
+  lead: string,
+  status: number,
+  inner = home,
+  // Extra response headers, beside content-type — `Retry-After` on the
+  // provisioning page below, nothing else needs one today.
+  headers: Record<string, string> = {},
+) =>
   new Response(
     `<!doctype html>
 <html lang="en">
@@ -46,6 +54,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .Card h2 { font-size: 1.05rem; font-weight: 800; margin: 0 0 .6rem }
 .Card ol { display: grid; gap: .4rem; margin: 0; padding-left: 1.2rem; color: var(--soft-ink); font-size: .95rem }
 .Card li::marker { color: var(--meadow); font-weight: 700 }
+.Card pre { margin: 0; white-space: pre-wrap; font: inherit; color: var(--soft-ink); text-align: left }
 .Card form { margin: 1rem 0 0 }
 .Note { font-size: .9rem; margin: .75rem 0 0 }
 .Pills { display: flex; flex-wrap: wrap; justify-content: center; gap: .625rem; margin: 0 0 1.25rem }
@@ -64,7 +73,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 </head>
 <body><main><h1>${title}</h1><p>${lead}</p>${inner}</main></body>
 </html>`,
-    { status, headers: { 'content-type': 'text/html; charset=utf-8' } },
+    {
+      status,
+      headers: { 'content-type': 'text/html; charset=utf-8', ...headers },
+    },
   )
 
 export let lost = () =>
@@ -162,6 +174,34 @@ export let oops = () =>
     'Your assistant has been told and will take a look. Try again in a ' +
       'little while.',
     500,
+  )
+
+// A custom domain that reached the Worker before there was anything to
+// answer with (index.ts `settling`, T-33036): mid-provisioning, or one
+// Cloudflare has stopped serving. `said` is Cloudflare's own three-line
+// reading (domains.ts `reading`) — DNS, validation, certificate — handed on
+// whole rather than summarized, because it already says which step is
+// pending more specifically than a page here could invent. 503, not 404 or
+// 500: the address is right and nothing is broken, it is just not done —
+// and a short Retry-After is the whole point of choosing that code, for the
+// rare visitor whose client honors it.
+export let provisioning = (
+  host: string,
+  said: string,
+  stage: 'pending' | 'error',
+) =>
+  shell(
+    stage == 'error' ? 'This domain needs a fix' : 'Setting up this domain',
+    stage == 'error'
+      ? `${esc(host)} needs attention before it can serve — here is what ` +
+        'Cloudflare says.'
+      : `${esc(host)} is being connected to yaks.app. This is usually a ` +
+        'matter of minutes, not hours.',
+    503,
+    `<section class="Card"><h2>${esc(host)}</h2><pre>${
+      esc(said)
+    }</pre></section>${home}`,
+    { 'retry-after': '30' },
   )
 
 // A door a later leaf fills (the connector): plain, not a mystery.
