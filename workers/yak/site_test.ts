@@ -7,7 +7,11 @@
 // says what style.css actually does, so the two are held in step here in both
 // directions — the guide may only draw classes the sheet defines, and the
 // sheet may not grow a component or a token the guide does not draw.
+// And the same rot takes the drawn recipe box on the front page, which names
+// three recipes and a note by name. Those are claims about a live app, so only
+// the live app can check them: see `box()` at the foot of this file.
 import { assert, assertEquals } from '@std/assert'
+import { slow } from '../../src/testing.ts'
 
 let read = (name: string) =>
   Deno.readTextFileSync(new URL(`./public/${name}`, import.meta.url))
@@ -158,5 +162,75 @@ Deno.test('nothing outside the tokens layer spends a paint', () => {
   assertEquals(
     paints.filter((p) => rest.includes(`var(${p})`)),
     [],
+  )
+})
+
+// --- the drawn recipe box, and the box it is drawn of ------------------------
+
+// The widget on the front page names three recipes and says who left a note.
+// Every one of those is a claim about `yourname/recipes`, a live app nobody
+// on this repo's gate owns — it was reseeded on 2026-09-04 and every claim
+// went false at once, while the HTML comment asserting they were true stayed
+// exactly as true-looking as before.
+//
+// So the check hits the network, and therefore runs in the slow tier. A
+// fixture in the fast tier was the other option and is the worse one: the
+// fixture would be a COPY of the live titles, so a reseed leaves it stale and
+// the test green — green while wrong, the failure this is meant to catch. The
+// refresher that would keep it honest is this same network call, plus a second
+// copy to rot. One source of truth, checked less often, beats two that agree
+// with each other and not with the world.
+let widget = () => {
+  // Window_Body holds only a heading, the list and the note — no nested div —
+  // so the first close ends it, and the rest of the page cannot leak in.
+  let body =
+    (read('index.html').split('<div class="Window_Body">')[1] ?? '').split(
+      '</div>',
+    )[0]
+  return {
+    titles: [...body.matchAll(/<li>([^<]+)<\/li>/g)].map((m) => m[1].trim()),
+    who: body.match(/class="Window_Who">([^<]+)</)?.[1]?.trim() ?? '',
+    on: body.match(/data-note-on="([^"]+)"/)?.[1] ?? '',
+  }
+}
+
+// A scrape that finds nothing passes every "each of these is present" test
+// vacuously, so the shape is pinned here in the fast tier, off the page in
+// this repo. This is not a copy of the live data — it is the parser held
+// against the only page it ever parses.
+Deno.test('the drawn recipe box makes three named claims and one note claim', () => {
+  let { titles, who, on } = widget()
+  assertEquals(titles.length, 3, 'the box should list three recipes')
+  assert(titles.every(Boolean), 'a listed recipe has no name')
+  assert(who, 'the note claim names nobody')
+  assert(
+    titles.includes(on),
+    `the note is on ${on}, which the box does not list`,
+  )
+})
+
+let box = async () => {
+  let url = 'https://yourname.yaks.app/recipes/api/query?.recipe!'
+  let res = await fetch(url)
+  assert(res.ok, `${url} answered ${res.status}`)
+  return await res.json() as { recipe: { title: string; notes?: string } }[]
+}
+
+slow('the drawn recipe box names what the live box holds', async () => {
+  let { titles, who, on } = widget()
+  let held = await box()
+  assertEquals(
+    titles.filter((t) => !held.some((r) => r.recipe.title === t)),
+    [],
+    'the front page names recipes yourname/recipes does not hold',
+  )
+  // The app renders `notes` as bare text with no author (its own index.html),
+  // so "Ana left a note" is only true while the note itself says so.
+  let noted = held.find((r) => r.recipe.title === on)
+  assert(noted, `${on} is not in the box`)
+  assert(
+    noted.recipe.notes?.includes(who),
+    `the front page says ${who} left a note on ${on}, ` +
+      `but its note does not name ${who}: ${noted.recipe.notes ?? '(none)'}`,
   )
 })

@@ -123,7 +123,11 @@
             aria-label="A finished recipe box on its own website">
             <div class="Window_Bar">
               <!-- The address is the app it names: this box exists, and the
-                   three things listed under it are in it. -->
+                   three things listed under it are in it. That was a comment
+                   once and went stale the first time the box was reseeded, so
+                   site_test.ts now reads this markup and asks the live box —
+                   which is why the list and the note's subject are marked up
+                   for a machine as well as a reader. -->
               <a class="Pill Pill-quiet"
                 href="https://yourname.yaks.app/recipes/"
               >yourname.yaks.app/recipes</a>
@@ -135,7 +139,7 @@
                 <li>Tuesday soup</li>
                 <li>The good pancakes</li>
               </ul>
-              <p class="Note Note-small">
+              <p class="Note Note-small" data-note-on="The good pancakes">
                 <span class="Window_Who">Ana</span> left a note on the pancakes.
               </p>
             </div>
