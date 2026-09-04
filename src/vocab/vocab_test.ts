@@ -19,6 +19,5 @@ Deno.test('types.ts matches the vocabulary fixture', () => {
 
 Deno.test('types.ts stale diagnostic names the current authority', () => {
   assertStringIncludes(typesStaleDiagnostic, 'src/vocab/manifests/*.json')
-  assertStringIncludes(typesStaleDiagnostic, 'annotated Rust contract')
   assertFalse(typesStaleDiagnostic.includes('.toml'))
 })

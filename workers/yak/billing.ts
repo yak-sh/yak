@@ -31,8 +31,8 @@
 // The webhook door is public, so filing is capped per isolate (`FILED`): a
 // stranger posting garbage must not be able to write rows without end.
 //
-// The kernel writes `plan` and no client ever can: every column is `#[stamped]`
-// (crates/xtask/src/contract/platform.rs), so `admitted()` drops them off any
+// The kernel writes `plan` and no client ever can: every column is stamped in
+// the vocabulary, so `admitted()` drops them off any
 // write that does not carry the kernel flag. `tier` is what usage.ts
 // `ceilings()` reads, and a tier a person could write is a person who can lift
 // their own ceilings.

@@ -14,10 +14,9 @@ Deno.test('edgeEid: one sentence, one uuid; direction and nature distinguish', (
   assertNotEquals(a, edgeEid('a', 'contains', 'b'))
 })
 
-// The cross-language vector: the kernel derives the same eid in Rust
-// (crates/yak-kernel/src/edge.rs, edge_eid_matches_ts_byte_for_byte pins this
-// exact table), so a sentence names ONE entity whichever door writes it.
-Deno.test('edgeEid: the derivation both languages pin', () => {
+// The derivation is pinned to this exact table, so a sentence names ONE
+// entity whichever door writes it.
+Deno.test('edgeEid: the pinned derivation', () => {
   let cases: [string, string, string, string][] = [
     ['a', 'requires', 'b', '07c39ec4-e16c-8322-ad59-44178f02e45a'],
     ['b', 'requires', 'a', 'd5e0b374-7e61-80dc-97e3-9975c5353a45'],

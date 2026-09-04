@@ -1,8 +1,6 @@
 {
   "tasks": {
-    "check": "deno fmt --check && deno lint && deno check && deno task codegen --check && deno task check:rust",
-    "check:rust": "deno run --allow-run --allow-env --allow-read bin/rust-gate.ts",
-    "fmt:rust": "deno run --allow-run --allow-env --allow-read bin/rust-gate.ts --fix",
+    "check": "deno fmt --check && deno lint && deno check && deno task codegen --check",
     "codegen": "deno run --allow-read --allow-write --allow-run=deno src/vocab/gen.ts",
     "gate": "deno task check && deno task test && deno task bench:gate && deno task bench:gate:web && deno run -A src/cli.ts sync --check",
     "dev": "sh -c 'while :; do deno run -A --unstable-net --unstable-worker-options src/dev.ts && break; [ $? -eq 42 ] || break; done'",

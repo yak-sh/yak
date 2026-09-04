@@ -1,7 +1,7 @@
 // GENERATED — do not edit. The vocabulary source of truth is the
-// annotated Rust contract in crates/xtask/src/contract; a cargo xtask
-// emits src/vocab/manifests/*.json and `deno task codegen` emits this
-// file from them. Hand edits here are refused by the gate's stale check
+// data manifests in src/vocab/manifests/*.json; `deno task codegen`
+// emits this file from them. Hand edits here are refused by the
+// gate's stale check
 // (`deno task codegen --check`). The code half is src/vocab/code.ts.part.
 //
 // Shared FE/BE vocabulary: entity components, edges, and the sync

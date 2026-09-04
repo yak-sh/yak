@@ -817,7 +817,7 @@ let schema = `
   -- below): the record OF the wire, never part of it, written inside apply()'s
   -- transaction. Three append-only tables with no eid of their own, never in
   -- snapshot() or a client cache, not vocabulary components (so no
-  -- xtask/codegen); read per-entity via journalOf(), per-batch via
+  -- codegen); read per-entity via journalOf(), per-batch via
   -- journalSince(). The symmetry: telemetry records READS, the journal records
   -- WRITES.
   --
@@ -4059,9 +4059,10 @@ export type SchemaOp =
   | { kind: 'index'; name: string; sql: string }
 
 // The ordered schema-shaping DDL a fresh migrate() runs, classified — the ONE
-// source the codegen emits crates/yak-kernel/src/schema_gen.rs from, so the
-// Rust kernel owns schema CREATE + ADDITIVE migration off db.ts's own schema
-// (D-22804 §8), never a hand-kept copy. Captured by RECORDING db.exec over a
+// source the codegen emits src/store/schema.json from, so a backend that plants
+// at runtime (workers/yak/store.ts) owns schema CREATE + ADDITIVE migration off
+// db.ts's own schema (D-22804 §8), never a hand-kept copy. Captured by RECORDING
+// db.exec over a
 // migrate() of the EMPTY handle the caller passes (the file adapter's :memory:,
 // the SAME driver the live server writes with, so the emitted DDL is
 // byte-for-byte what this process would run; closed here when done); then
