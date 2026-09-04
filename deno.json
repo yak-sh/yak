@@ -1,7 +1,8 @@
 {
   "tasks": {
-    "check": "deno fmt --check && deno lint && deno check && deno task codegen --check",
+    "check": "deno fmt --check && deno lint && deno check && deno task codegen --check && deno task test:packages",
     "codegen": "deno run --allow-read --allow-write --allow-run=deno src/vocab/gen.ts",
+    "test:packages": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno test -A packages/",
     "gate": "deno task check && deno task test && deno task bench:gate && deno task bench:gate:web && deno run -A src/cli.ts sync --check",
     "dev": "sh -c 'while :; do deno run -A --unstable-net --unstable-worker-options src/dev.ts && break; [ $? -eq 42 ] || break; done'",
     "tui": "sh -c 'while :; do deno run -A src/tui/main.tsx && break; [ $? -eq 42 ] || break; done'",
@@ -21,7 +22,8 @@
   "workspace": [
     "./workers/yak",
     "./packages/query",
-    "./packages/vocab"
+    "./packages/vocab",
+    "./packages/sql"
   ],
   "exclude": [
     "src/vendor",
