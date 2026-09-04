@@ -35,6 +35,25 @@ Deno.test('task acceptance is a distinct Markdown section', () => {
   }
 })
 
+Deno.test('a doc without accept renders no Acceptance section, not JSON', () => {
+  // The stack asks <Entity view='Acceptance'> for every doc. With no catch-all
+  // the absent-accept case fell through resolve() to the JSON dump, printing
+  // the whole entity between Body and Dependencies.
+  cache.value = {
+    doc: {
+      entity: { eid: 'doc', num: 1 },
+      doc: { eid: 'doc', title: 'No criteria', body: 'Body only' },
+    },
+  }
+  let e = ent('doc')
+  assertEquals(resolve(e, 'Acceptance').view, 'Acceptance')
+  let { root, free } = mount(h(resolve(e, 'Acceptance').Render, { e }))
+  assertEquals(root.querySelector('.Json'), null)
+  assertEquals(root.querySelector('.Show_Acceptance'), null)
+  free()
+  cache.value = {}
+})
+
 Deno.test('document meta paints no tally when it has no comments', () => {
   cache.value = {
     doc: {

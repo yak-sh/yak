@@ -199,7 +199,7 @@ define([
   // absent, and a specialized look for an entity shape is a higher-
   // scoring entry above these, never an edit to Full.
   { view: 'Body', match: () => true, Render: Body },
-  { view: 'Acceptance', match: has('accept'), Render: Acceptance },
+  { view: 'Acceptance', match: () => true, Render: Acceptance },
   { view: 'Meta', match: has('board'), Render: BoardMeta },
   { view: 'Meta', match: () => true, Render: Meta },
   { view: 'Mail', match: () => true, Render: Mail },
