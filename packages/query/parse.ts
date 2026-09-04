@@ -139,7 +139,7 @@ export let parseDot = (token: string): Clause[] | null => {
   }
 
   // Two presence filters run together is a forgotten `&`; the mid-bang reverse
-  // reading (`.comments!.author=jeff`) is a schema concern (see README), so at
+  // reading (`.comments!.author=alice`) is a schema concern (see README), so at
   // this generic layer a bang before more path is that same mistake.
   if (op == '!' && val) {
     throw new Error(
