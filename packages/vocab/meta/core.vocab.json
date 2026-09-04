@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yaks.sh/vocab/core",
+  "title": "yaks core keyword vocabulary",
+  "description": "The keywords the yaks meta-model adds to JSON Schema 2020-12 to describe a component vocabulary. Native JSON Schema still carries type, format, enum, const, default, description, examples, $ref/$defs; these keywords add what a component table needs on top. `examples` is native and subsumes the old `well` concept: a text field's completion draws from its examples union the column's own live distinct values.",
+  "$comment": "A vocabulary declaration in the JSON Schema sense: a URI that names this keyword set, plus the schema of each keyword. A vocab file declares it under $vocabulary.",
+  "$defs": {
+    "ref": {
+      "description": "The entity kind a string column references, e.g. \"project\" or \"entity\" (any entity). Makes the column a reference that stores the target's internal id.",
+      "type": "string"
+    },
+    "death": {
+      "description": "What the reaper does to this reference when its target entity dies.",
+      "enum": ["cascade", "detach", "release", "keep"]
+    },
+    "persist": {
+      "description": "Whether the column is stored. Default true; false marks a computed / never-stored column (a query-only rank, an aggregate).",
+      "type": "boolean",
+      "default": true
+    },
+    "stamped": {
+      "description": "true = server-owned: readable but never wire-writable.",
+      "type": "boolean"
+    },
+    "store": {
+      "description": "Backing store for a string column. \"blob\" = a content-addressed markdown body.",
+      "enum": ["blob"]
+    },
+    "kind": {
+      "description": "true = this component names a display kind (feeds kindOf / kindOrder).",
+      "type": "boolean"
+    },
+    "before": {
+      "description": "Kind names this kind sorts before. kindOrder is alphabetical, topologically refined by these constraints.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "wire": {
+      "description": "false = a readable-not-writable component (the spine, `entity`). Default true.",
+      "type": "boolean",
+      "default": true
+    },
+    "bare": {
+      "description": "false = this column (or every column of this component) never claims its bare filter spelling; it is reached qualified only (.comp.prop). The declarative form of a lazy log partition, or of yielding a bare word an older concept already owns.",
+      "type": "boolean",
+      "default": true
+    },
+    "aliases": {
+      "description": "Input spellings that resolve to an enum member; output always speaks the canonical member.",
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    }
+  }
+}

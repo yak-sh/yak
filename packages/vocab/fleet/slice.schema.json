@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yaks.sh/vocab/fleet/slice",
+  "$vocabulary": {
+    "https://json-schema.org/draft/2020-12/vocab/core": true,
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/fleet": true
+  },
+  "title": "fleet slice",
+  "description": "A hand-authored, query-able slice of the fleet's component vocabulary, expressed in the @yaks/vocab format: the spine, doc, blob, task, project, comment, board, and every kind their `before` constraints name. The full vocabulary is the same format at ~90 components (the parity test converts it mechanically from the fleet manifests).",
+  "$defs": {
+    "entity": {
+      "type": "object",
+      "wire": false,
+      "description": "The spine: every entity is a row here. num is server-minted.",
+      "properties": {
+        "num": { "type": "number", "stamped": true }
+      }
+    },
+    "doc": {
+      "type": "object",
+      "kind": true,
+      "before": ["alias"],
+      "description": "The written face of an entity: a title and a markdown body.",
+      "properties": {
+        "title": { "type": "string" },
+        "body": { "type": "string", "store": "blob" }
+      }
+    },
+    "blob": {
+      "type": "object",
+      "description": "Immutable content-addressed bytes; the eid is the SHA-256.",
+      "properties": {
+        "bytes": { "type": "number" }
+      }
+    },
+    "alias": {
+      "type": "object",
+      "kind": true,
+      "properties": {
+        "slug": { "type": "string" },
+        "slugs": { "type": "string" }
+      }
+    },
+    "comment": {
+      "type": "object",
+      "kind": true,
+      "description": "Words aimed at ANY entity.",
+      "properties": {
+        "target": { "type": "string", "ref": "entity", "death": "cascade" }
+      }
+    },
+    "task": {
+      "type": "object",
+      "kind": true,
+      "before": ["alias", "doc", "knock", "memory", "notice", "role"],
+      "prefix": "T",
+      "properties": {
+        "priority": { "type": "number", "format": "priority" },
+        "project": { "type": "string", "ref": "project", "death": "detach" },
+        "assignee": { "type": "string", "ref": "entity", "death": "detach" },
+        "domain": {
+          "type": "string",
+          "examples": ["Eng", "Legal", "Ops"]
+        }
+      }
+    },
+    "project": {
+      "type": "object",
+      "kind": true,
+      "before": ["alias", "board", "claim", "doc", "email"],
+      "prefix": "P",
+      "by_name": true,
+      "properties": {
+        "color": { "type": "string" }
+      }
+    },
+    "board": {
+      "type": "object",
+      "kind": true,
+      "before": ["alias"],
+      "prefix": "B",
+      "by_name": true,
+      "description": "A saved query over tasks; membership is never stored.",
+      "properties": {
+        "query": { "type": "string", "format": "query" }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "kind": true,
+      "description": "A session's lease on any entity.",
+      "properties": {
+        "session": { "type": "string", "ref": "session", "death": "release" },
+        "claimed_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      }
+    },
+    "email": {
+      "type": "object",
+      "kind": true,
+      "prefix": "A",
+      "properties": {
+        "address": { "type": "string" }
+      }
+    },
+    "knock": {
+      "type": "object",
+      "kind": true,
+      "prefix": "K",
+      "properties": {
+        "target": { "type": "string", "ref": "entity", "death": "cascade" }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "kind": true,
+      "prefix": "M",
+      "properties": {
+        "scope": { "type": "string", "ref": "project", "death": "keep" },
+        "last_confirmed_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      }
+    },
+    "notice": {
+      "type": "object",
+      "kind": true,
+      "before": ["doc"],
+      "properties": {
+        "target": { "type": "string", "ref": "entity", "death": "cascade" },
+        "event": { "enum": ["lapse", "sweep", "scene", "wake"] }
+      }
+    },
+    "role": {
+      "type": "object",
+      "kind": true,
+      "prefix": "R",
+      "by_name": true,
+      "properties": {
+        "state": {
+          "enum": [
+            "running",
+            "stopped",
+            "paused",
+            "disabled",
+            "retired",
+            "held"
+          ]
+        },
+        "surface": { "enum": ["native", "managed"] },
+        "scope": { "type": "string", "ref": "entity", "death": "detach" },
+        "checkout": { "type": "string", "ref": "entity", "death": "detach" },
+        "schedule": { "type": "string" },
+        "wake_policy": {
+          "enum": ["always", "attention", "scheduled", "manual"]
+        },
+        "wake_target": { "type": "string", "ref": "entity", "death": "detach" },
+        "retry_at": { "type": "string", "format": "date-time" },
+        "quiet": { "type": "number" },
+        "cooldown": { "type": "number" },
+        "cap": { "type": "number" },
+        "applied_hash": { "type": "string", "stamped": true },
+        "applied_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "stopped_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "decision": { "type": "string", "stamped": true },
+        "reason": { "type": "string", "stamped": true },
+        "observed": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "decided_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      }
+    }
+  }
+}

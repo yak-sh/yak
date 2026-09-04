@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yaks.sh/vocab/meta",
+  "title": "yaks vocab file",
+  "description": "The meta-schema a vocab document validates against: a JSON Schema 2020-12 document whose $defs are components — each an object schema whose properties are storable columns (scalar, reference, or closed set; no nesting, no arrays). The keyword shapes are inlined from the core and fleet keyword vocabularies so this file validates standalone.",
+  "$vocabulary": {
+    "https://json-schema.org/draft/2020-12/vocab/core": true,
+    "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+    "https://json-schema.org/draft/2020-12/vocab/validation": true,
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/fleet": false
+  },
+  "type": "object",
+  "required": ["$defs"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "$id": { "type": "string" },
+    "$vocabulary": {
+      "type": "object",
+      "additionalProperties": { "type": "boolean" }
+    },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "$defs": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+      "additionalProperties": { "$ref": "#/$defs/component" }
+    }
+  },
+  "$defs": {
+    "component": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "object" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "properties": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,39}$",
+            "not": { "enum": ["entity", "eid"] }
+          },
+          "additionalProperties": { "$ref": "#/$defs/column" }
+        },
+        "kind": { "type": "boolean" },
+        "before": { "type": "array", "items": { "type": "string" } },
+        "wire": { "type": "boolean" },
+        "bare": { "type": "boolean" },
+        "prefix": { "type": "string", "pattern": "^[A-Z]$" },
+        "by_name": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "column": {
+      "type": "object",
+      "properties": {
+        "type": { "enum": ["string", "number", "integer", "boolean"] },
+        "format": { "type": "string" },
+        "enum": { "type": "array", "items": { "type": "string" } },
+        "const": true,
+        "default": true,
+        "description": { "type": "string" },
+        "examples": { "type": "array" },
+        "ref": { "type": "string" },
+        "death": { "enum": ["cascade", "detach", "release", "keep"] },
+        "persist": { "type": "boolean" },
+        "stamped": { "type": "boolean" },
+        "store": { "enum": ["blob"] },
+        "bare": { "type": "boolean" },
+        "aliases": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "additionalProperties": false,
+      "dependentRequired": { "ref": ["death"] }
+    }
+  }
+}

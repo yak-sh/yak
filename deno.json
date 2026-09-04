@@ -20,7 +20,8 @@
   },
   "workspace": [
     "./workers/yak",
-    "./packages/query"
+    "./packages/query",
+    "./packages/vocab"
   ],
   "exclude": [
     "src/vendor",
