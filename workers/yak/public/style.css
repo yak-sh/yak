@@ -407,6 +407,23 @@
     font-weight: 700;
   }
 
+  /* When the body holds the live app, it is a browser's viewport: the frame
+     fills it edge to edge, no inset. The ground is the app's own dark green
+     (its `--bg`), painted here so a lazy-loaded frame shows the app coming up
+     instead of a blank flash; the width is capped so the homepage never
+     scrolls sideways, and the app scrolls inside its fixed-height box. */
+  .Window_Body:has(iframe) {
+    padding: 0;
+  }
+
+  .Window iframe {
+    display: block;
+    width: 100%;
+    height: 26rem;
+    border: 0;
+    background: #33493c;
+  }
+
   /* Paper under a block of the page. */
   .Card {
     padding: var(--card-pad, 1.75rem);
