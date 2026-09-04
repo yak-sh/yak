@@ -188,8 +188,8 @@ export let doorway = (pathname: string) =>
 // spaces are SAME-SITE: `SameSite=Lax` does not keep the session cookie off a
 // request one space's page aims at another's, and a websocket handshake is
 // outside the same-origin policy altogether. This is the line that separates
-// them, and it is the whole of it — we send no CORS headers, so nothing a
-// browser is allowed to read here was ever cross-origin.
+// them, and it is the whole of it everywhere except the one door below, where
+// the answer carries CORS headers precisely because no cookie was read.
 //
 // ABSENT is allowed on purpose. A browser sends `Origin` on every
 // cross-origin fetch and on every handshake, so refusing only a MISMATCH
@@ -208,3 +208,32 @@ export let sameOrigin = (host: string, origin: string | null) => {
     return false
   }
 }
+
+// The one door above that a stranger's page may reach anyway (T-33408), and
+// the shape of the whole permission: the app's READ door, asked with GET, and
+// answered as NOBODY — the router drops the request's credentials before it is
+// served and sends `Access-Control-Allow-Origin: *` with no
+// `Access-Control-Allow-Credentials` beside it, which is the browser's own
+// guarantee that no cookie was used and none can be read (index.ts `cors`).
+//
+// It is safe because what `sameOrigin` closes is AMBIENT CREDENTIALS, not
+// secrecy: a public app's rows already answer to anyone with curl, and the
+// attack was the session cookie riding along on a request one space's page
+// aimed at another's. Take the cookie away and the request is curl with a
+// referrer. What the caller may then read is the app's own `access`, unchanged
+// and decided downstream: `public` and `open` answer a stranger, `private`
+// refuses one.
+//
+// WRITES are not here and must not be. An `open` app lets a stranger write —
+// with the link, from its own page — and a cross-origin write is the forgery
+// origin_test.ts fires. Nor is `/ws`, which is a read but carries the write
+// grant on the same socket, nor `/graph`, `/me` or `/blob`: this is the door
+// the answer is DATA at, and nothing else has asked to be shared.
+//
+// No preflight door is needed and none is built: a GET with no author-set
+// headers is a CORS simple request, so the browser sends it and reads the
+// answer with no `OPTIONS` in between. A client that adds a header would need
+// one, and can ask for it when it exists.
+export let shared = (method: string, pathname: string) =>
+  (method == 'GET' || method == 'HEAD') &&
+  /^(?:\/[^/]+)?\/api\/query$/.test(pathname)

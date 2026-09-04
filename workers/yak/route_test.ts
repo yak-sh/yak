@@ -9,6 +9,7 @@ import {
   platform,
   route,
   sameOrigin,
+  shared,
 } from './route.ts'
 
 let cases: [string, string, ReturnType<typeof route>][] = [
@@ -189,5 +190,32 @@ Deno.test('sameOrigin: the page that asked, at the host it asked', () => {
   ]
   for (let [host, origin, want] of asked) {
     assertEquals(sameOrigin(host, origin), want, `${host} <- ${origin}`)
+  }
+})
+
+// The one exception to it (route.ts `shared`): the read door, asked with GET.
+// Everything a write could ride on is outside — including `/ws`, which reads
+// but carries the write grant on the same socket.
+Deno.test('shared: the read door, and nothing a write could ride on', () => {
+  let doors: [string, string, boolean][] = [
+    ['GET', '/recipes/api/query', true],
+    ['HEAD', '/recipes/api/query', true],
+    // A front page's own door, and a custom domain's before the rewrite.
+    ['GET', '/api/query', true],
+    ['POST', '/recipes/api/query', false],
+    ['GET', '/recipes/api/apply', false],
+    ['GET', '/recipes/api/ws', false],
+    ['GET', '/recipes/api/graph', false],
+    ['GET', '/recipes/api/me', false],
+    ['GET', '/recipes/api/blob', false],
+    ['GET', '/recipes/api/files/index.html', false],
+    ['GET', '/mcp', false],
+    // Not a door at all, and not this one's to open.
+    ['GET', '/recipes/api/query/deeper', false],
+    ['GET', '/a/b/api/query', false],
+    ['GET', '/recipes/', false],
+  ]
+  for (let [method, path, want] of doors) {
+    assertEquals(shared(method, path), want, `${method} ${path}`)
   }
 })

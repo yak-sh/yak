@@ -20,6 +20,12 @@
 // browser's own `Origin` is what tells them apart, and after `aimed` rewrites
 // a custom domain's address the hostname the browser addressed is gone.
 //
+// One door answers a stranger's page anyway (route.ts `shared`, T-33408): an
+// app's READ door, asked with GET. The cookie is taken off the request before
+// it is served and the answer is marked readable by any origin, so anybody's
+// page may read a public app the way anybody's curl already can — the apex's
+// own front page is a client of exactly that door and gets nothing extra.
+//
 // `scheduled` is the second entry point, and the only one no request reaches:
 // the hourly meter (usage.ts).
 //
@@ -74,6 +80,7 @@ import {
   type Route,
   route,
   sameOrigin,
+  shared,
 } from './route.ts'
 import { storeOf } from './store.ts'
 import { noted, refusal } from './unseen.ts'
@@ -192,6 +199,48 @@ let stranger = () =>
     },
   }, { status: 403 })
 
+// The same door, opened to any page in the world by taking the credentials
+// off it first (route.ts `shared`, T-33408). Both halves are here because
+// neither is safe alone: an answer marked readable by any origin must be an
+// answer no session was used to compute.
+//
+// The cookie is the whole of the ambient credential an app's door reads
+// (session.ts `whoIs`) — `x-yak-person` and `x-yak-role` are written by the
+// kernel on internal requests and never trusted from outside — so dropping it
+// makes the request anonymous rather than merely expected-anonymous.
+// `authorization` goes with it: the app doors do not read one today, and the
+// day something does, it must not arrive through this one.
+let uncredentialed = (req: Request) => {
+  let headers = new Headers(req.headers)
+  headers.delete('cookie')
+  headers.delete('authorization')
+  return new Request(req, { headers })
+}
+
+// The mark on the answer. The WILDCARD, never the asking origin, and no
+// `Access-Control-Allow-Credentials`: a browser refuses to send a credentialed
+// request to `*`, so the pair is a promise the browser itself enforces, and
+// echoing the origin back would let a future mistake add credentials to it.
+//
+// `Vary: Origin` because the same URL answers differently to the page that
+// owns it — same-origin, this is not called, and the answer is that person's.
+// The Workers cache is not in front of this entrypoint and must not be
+// (wrangler.toml, cache.ts): its key holds the path and not the hostname, so
+// `alice.yaks.app/recipes/api/query?x` and bob's are one entry. The answer is
+// public but it is not shareable BY US, which is why `sealed` still marks it
+// `private, no-store` and nothing here asks for more.
+let cors = (res: Response) => {
+  if (res.status == 101) return res
+  let headers = new Headers(res.headers)
+  headers.set('access-control-allow-origin', '*')
+  headers.append('vary', 'origin')
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+  })
+}
+
 // A header only the router writes: whatever a client sent under that name is
 // gone before anything reads it.
 let unmounted = (req: Request) => {
@@ -266,16 +315,26 @@ export default {
       // what the BROWSER addressed: a page at `herbusiness.com` asking its
       // own `/api/…` is same-origin even though the router is about to carry
       // the request to `<space>.yaks.app/<app>/api/…`.
+      //
+      // One door is open to every page anyway, and this is where it opens:
+      // the app's read door, asked with GET, served with the credentials
+      // stripped off and marked readable by any origin (route.ts `shared`).
+      let anyone = false
       if (
         doorway(asked) &&
         !sameOrigin(host, req.headers.get('origin'))
-      ) return stranger()
+      ) {
+        if (!shared(req.method, asked)) return stranger()
+        req = uncredentialed(req)
+        anyone = true
+      }
       let at = r.space == null ? await aimed(req, env, host) : null
       if (at) {
         req = at
         r = route(hostOf(at), new URL(at.url).pathname)
       }
-      return sealed(await serve(req, env, r))
+      let answer = await serve(req, env, r)
+      return sealed(anyone ? cors(answer) : answer)
     } catch (e) {
       // A refusal is not a break (unseen.ts `refusal`, T-32655). A part that
       // relays a door's deliberate no by throwing what it was answered is
