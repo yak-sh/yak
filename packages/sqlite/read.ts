@@ -1,0 +1,87 @@
+// Reads: a query in, whole entities out. This is the SELECT half of the
+// adapter. The heavy lifting — turning a query into SQL — belongs to the
+// sibling packages: @yaks/query parses the query text into an AST, @yaks/vocab
+// describes the vocabulary, and @yaks/sql compiles the two into a statement
+// that selects the matching entities' ids. This file runs that statement, then
+// gathers each matched entity's components into a bundle.
+//
+// `rows()` is the raw seam: it returns the compiled statement's rows verbatim,
+// which is what aggregate and projection queries (a count, a tally, a field
+// list) want. `read()` is the whole-entity seam built on it: it takes the ids
+// `rows()` yields and reads back every component each entity wears.
+
+import { type And, parse } from '@yaks/query'
+import type { Column, Vocab } from '@yaks/vocab'
+import { type BindOpts, compile } from '@yaks/sql'
+import type { Driver, Row } from './driver.ts'
+import type { Bundle, Comp } from './bundle.ts'
+
+// A query, as text or as an already-built AST. Text is parsed; an AST passes
+// through, so a caller may hand-build one with @yaks/query's builders.
+export type Query = string | And
+
+let ast = (q: Query): And => typeof q == 'string' ? parse(q) : q
+
+// The raw compiled rows for a query — a membership answers `{ eid }` per match,
+// an aggregate answers its value/count shape. The values ride as bound params.
+export let rows = (
+  driver: Driver,
+  vocab: Vocab,
+  query: Query,
+  opts: BindOpts = {},
+): Row[] => {
+  let { sql, params } = compile(ast(query), vocab, opts)
+  return driver.query(sql, params as (string | number)[])
+}
+
+// A component's stored columns (the computed ones have no row to read).
+let stored = (v: Vocab, comp: string): Column[] =>
+  v.columns(comp).map((p) => v.column(comp, p)!).filter((c) => c.persist)
+
+// The projected read for one component: each scalar straight off the row, each
+// reference joined back to its target's eid, keyed by the owner eid. A
+// component with no columns reads a bare presence flag.
+let readSql = (v: Vocab, comp: string): string => {
+  let cols = stored(v, comp)
+  let sel: string[] = []
+  let joins: string[] = []
+  for (let c of cols) {
+    if (c.category == 'ref') {
+      let a = `r_${c.prop.replaceAll(/[^A-Za-z0-9]/g, '_')}`
+      joins.push(`left join entity "${a}" on "${a}".id = t."${c.prop}"`)
+      sel.push(`"${a}".eid as "${c.prop}"`)
+    } else {
+      sel.push(`t."${c.prop}" as "${c.prop}"`)
+    }
+  }
+  return `select ${sel.length ? sel.join(', ') : '1 as present'} ` +
+    `from "${comp}" t join entity o on o.id = t.entity ` +
+    `${joins.join(' ')} where o.eid = ?`
+}
+
+// Every component an entity wears, gathered into a bundle. Iterates the
+// vocabulary's components (the spine `entity` is identity, not a component to
+// surface) and keeps only those with a row for this eid.
+let bundleOf = (driver: Driver, vocab: Vocab, eid: string): Bundle => {
+  let out: Bundle = { eid }
+  for (let comp of vocab.all) {
+    if (comp == 'entity') continue
+    let row = driver.query(readSql(vocab, comp), [eid])[0]
+    if (!row) continue
+    delete (row as Record<string, unknown>).present
+    out[comp] = row as Comp
+  }
+  return out
+}
+
+// The matched entities as whole bundles. Built for a membership query — one
+// that answers a set of entities; an aggregate query wants `rows()` instead.
+export let read = (
+  driver: Driver,
+  vocab: Vocab,
+  query: Query,
+  opts: BindOpts = {},
+): Bundle[] =>
+  rows(driver, vocab, query, opts)
+    .filter((r) => r.eid != null)
+    .map((r) => bundleOf(driver, vocab, r.eid as string))

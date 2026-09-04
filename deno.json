@@ -23,7 +23,8 @@
     "./workers/yak",
     "./packages/query",
     "./packages/vocab",
-    "./packages/sql"
+    "./packages/sql",
+    "./packages/sqlite"
   ],
   "exclude": [
     "src/vendor",
