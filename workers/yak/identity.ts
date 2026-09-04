@@ -521,7 +521,16 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   }
 
   if (path == '/login' && req.method == 'GET') {
-    return askEmail(null, url.searchParams.get('return'))
+    let back = url.searchParams.get('return')
+    // Already signed in with a return to go to? Then the platform has nothing
+    // to ask: honor the session and send them on — a return on a customer's
+    // own hostname becomes a handoff (`landed`), never the code form again.
+    // This is what carries the platform session across to a custom domain
+    // without a second sign-in, and it matches the consent page, which hands
+    // an already-signed-in browser one Allow rather than a fresh sign-in.
+    let who = back ? await withAuth(env, req) : null
+    if (who) return landed(req, env, who.person, '', back!)
+    return askEmail(null, back)
   }
 
   // An address, and a code on its way to it. The one thing the platform reads
