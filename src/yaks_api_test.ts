@@ -9,7 +9,10 @@ import {
   claimsOf,
   codeIn,
   cookieOf,
+  listedOn,
+  plain,
   saidBy,
+  saidOn,
   storeUrl,
 } from './yaks_api.ts'
 
@@ -103,4 +106,21 @@ Deno.test('a tool argument keeps its type when it has one', () => {
   assertEquals(argOf('q=a=b'), ['q', 'a=b'])
   assertThrows(() => argOf('bare'))
   assertEquals(argsOf(['a=1', 'b=x']), { a: 1, b: 'x' })
+})
+
+Deno.test('a kernel page is read back as the words it says', () => {
+  // The shape workers/yak/pages.ts `shell` renders, with everything it
+  // interpolated escaped on the way out (T-33166).
+  let page =
+    '<body><main><h1>That&#39;s done.</h1><p>shoplab.yaks.app is gone: 1 ' +
+    'app, 2 files, everything they saved.</p>' +
+    '<ol><li>The Shop (https://shoplab.yaks.app/shop/)</li>' +
+    '<li>dana &amp; sam lose their way in</li></ol></main></body>'
+  assertStringIncludes(plain(saidOn(page).title), "That's done.")
+  assertStringIncludes(plain(saidOn(page).lead), 'shoplab.yaks.app is gone')
+  assertEquals(listedOn(page).map(plain), [
+    'The Shop (https://shoplab.yaks.app/shop/)',
+    'dana & sam lose their way in',
+  ])
+  assertEquals(saidOn('not a page'), { title: '', lead: '' })
 })

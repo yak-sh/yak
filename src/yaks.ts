@@ -42,7 +42,9 @@ import {
   argsOf,
   askCode,
   claimsOf,
+  close,
   codeFor,
+  doomedIn,
   meAt,
   rpc,
   saidBy,
@@ -355,6 +357,25 @@ let verbs: Record<string, Verb> = {
         arguments: argsOf(rest),
       })
       print(said.flags.has('--json') ? json(out) : saidBy(out))
+    },
+  },
+
+  delete: {
+    name: 'delete',
+    about:
+      'close a space for good \u2014 its apps, their data and files, its ' +
+      'domains, and the address',
+    args: [arg('space')],
+    door: ['cli'],
+    examples: ['yaks delete probe-1a2b', 'yaks delete shoplab --owner'],
+    run: async (said) => {
+      let at = acting(said)
+      let slug = said.words[0]
+      // The naming first, and it is the page\u2019s own (workers/yak/erase.ts):
+      // whoever runs this reads what would go before it goes, the same list
+      // the letter carries to a person whose agent asked.
+      for (let line of await doomedIn(at.session, slug)) print(`  - ${line}`)
+      print(await close(at.session, slug))
     },
   },
 

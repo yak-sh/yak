@@ -260,3 +260,64 @@ export let meAt = async (session: string, at: string): Promise<Me | null> => {
   let body = await bodyOf(r)
   return typeof body == 'object' ? body as Me : null
 }
+
+// ── Closing a space (workers/yak/erase.ts, T-33166) ────────────────────────
+//
+// The delete door is the signed-in WEB surface — it reads the session cookie
+// and never a bearer, so an agent's connector token cannot reach it — and
+// what it takes is a page and a form. This client holds a cookie because a
+// person signed this box in, so it walks that same page: read what would go,
+// then type the name back.
+
+// The h1 and the paragraph under it, off one of the kernel's own pages
+// (workers/yak/pages.ts `shell`): what the page SAYS, without a parser.
+export let saidOn = (html: string) => {
+  let m = /<h1>([^<]*)<\/h1><p>([^<]*)<\/p>/.exec(html)
+  return m ? { title: m[1], lead: m[2] } : { title: '', lead: '' }
+}
+
+// And the list of what a delete would destroy, which the page draws as one
+// item per line.
+export let listedOn = (html: string) =>
+  [...html.matchAll(/<li>([^<]*)<\/li>/g)].map((m) => m[1])
+
+// The page escapes everything it interpolates (pages.ts `esc`), so reading it
+// back means undoing exactly that — `&` last, the mirror of escaping it first.
+export let plain = (s: string) =>
+  s.replaceAll('&#39;', "'").replaceAll('&quot;', '"')
+    .replaceAll('&gt;', '>').replaceAll('&lt;', '<').replaceAll('&amp;', '&')
+
+// What a page answered, or the reason it would not: a refusal is a sentence
+// on the page itself, and 302 and 404 are the two answers that carry none.
+let read = (status: number, html: string) => {
+  if (status == 302) throw new Error('this account is not signed in')
+  if (status == 404) {
+    throw new Error('no such space, or not this account\u2019s')
+  }
+  let { lead } = saidOn(html)
+  if (status != 200) throw new Error(plain(lead) || `the door said ${status}`)
+  return plain(lead)
+}
+
+// What deleting this space would destroy, as the page names it. A GET only
+// ever draws (identity.ts `closing`), so asking changes nothing.
+export let doomedIn = async (session: string, slug: string) => {
+  let r = await fetch(apex(`/space/${slug}/delete`), {
+    headers: head(session),
+    redirect: 'manual',
+  })
+  let html = await r.text()
+  read(r.status, html)
+  return listedOn(html).map(plain)
+}
+
+// The act, with the slug typed back into the form — which is what this
+// client\u2019s argument is. Answers the sentence the page says afterwards.
+export let close = async (session: string, slug: string) => {
+  let r = await posted(
+    apex(`/space/${slug}/delete`),
+    { confirm: slug },
+    session,
+  )
+  return read(r.status, await r.text())
+}
