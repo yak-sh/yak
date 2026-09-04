@@ -1327,6 +1327,11 @@
       "npm:zod@^3.24.0"
     ],
     "members": {
+      "packages/query": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "workers/yak": {
         "packageJson": {
           "dependencies": [
