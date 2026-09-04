@@ -1,7 +1,9 @@
 // A person's own domain, held in workerd (T-33037): a hostname the directory
-// has never been given routes exactly as it always has — the apex — and one
-// it HAS been given serves that app at its root, paths below it the app's own.
-// The hostname is the key, so two spaces cannot both claim it.
+// has never been given gets the branded provisioning page (index.ts
+// `settling`, T-33036 — provisioning_test.ts is where that page itself is
+// held), and one it HAS been given, marked active, serves that app at its
+// root, paths below it the app's own. The hostname is the key, so two spaces
+// cannot both claim it.
 import {
   assert,
   assertEquals,
@@ -14,14 +16,15 @@ import { client, connector, kernel, meta, seed } from './probe.ts'
 slow('a hostname finds its app, and only one app', async () => {
   let k = await kernel()
   try {
-    // Before anything is attached, someone else's hostname answers exactly
-    // what the apex answers — byte for byte, so a later copy edit cannot make
-    // this pass by accident. That is the whole compatibility promise: custom
-    // domains are additive.
+    // Before anything is attached, someone else's hostname is a foreign host
+    // the directory has never heard of (index.ts `settling`, T-33036): it
+    // gets the branded "still connecting" page, never the apex's own home
+    // page and never a blank — provisioning_test.ts holds that page to its
+    // own bytes; this only has to know it is not the apex's.
     let apex = await (await k.at('yaks.app', '/')).text()
     let before = await k.at('herbusiness.com', '/')
-    assertEquals(before.status, 200)
-    assertEquals(await before.text(), apex)
+    assertEquals(before.status, 503)
+    assert((await before.text()) != apex)
 
     let { cookie, eids } = await seed(k, [{
       slug: 'jeff',
@@ -118,9 +121,13 @@ slow('a hostname finds its app, and only one app', async () => {
     })).json()
     assertEquals(back.length, 1)
 
-    // A hostname nobody attached is still the apex, and so is every address
-    // the platform already answers on.
-    assertEquals(await (await k.at('elsewhere.com', '/')).text(), apex)
+    // A hostname nobody attached gets the same branded page as one that is
+    // still on its way (`settling` cannot tell them apart, and does not need
+    // to); every address the platform already answers on — the apex, a
+    // space's own hostname — is untouched, since `foreign()` excludes them.
+    let stray = await k.at('elsewhere.com', '/')
+    assertEquals(stray.status, 503)
+    assert((await stray.text()) != apex)
     // The space's own hostname is untouched by the domain: no app is its
     // front page, so it lists its apps (T-33040, home_test.ts). The app is at
     // the ROOT of the domain and at `/recipes/` here — the domain is the one
