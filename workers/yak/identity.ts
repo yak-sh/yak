@@ -54,10 +54,19 @@ import {
 } from '@cloudflare/workers-oauth-provider'
 import { cookie, cookieValue, sign, verify } from '../../src/token.ts'
 import { directory, META, META_STORE } from './directory.ts'
+import { doomed, erase, naming, refused, ticketed, went } from './erase.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { mail } from './mail.ts'
-import { askAllow, askCode, askEmail, connect, lost } from './pages.ts'
+import {
+  askAllow,
+  askCode,
+  askDelete,
+  askEmail,
+  connect,
+  deleted,
+  lost,
+} from './pages.ts'
 import { hostOf, onZone, PLATFORM, SLUG } from './route.ts'
 import { canon, mint, nameAt, nameOf, personOf, spend } from './signin.ts'
 import { storeOf } from './store.ts'
@@ -153,6 +162,101 @@ let domainOf = (req: Request) => {
 let meta = (env: Env) => storeOf(env.STORE, META_STORE)
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
+
+// Who is asking, out of the platform session COOKIE and nothing else. It is
+// deliberately not `withAuth` above, which also answers an agent's bearer:
+// the door below belongs to the signed-in web surface, and an agent that
+// cannot reach it cannot be talked into it (billing.ts `buyer` takes the same
+// line for a purchase, C-33033).
+let browser = async (env: Env, req: Request) => {
+  let token = cookieValue(req.headers.get('cookie'))
+  if (!token || !env.SESSION_SECRET) return null
+  return (await verify(token, env.SESSION_SECRET))?.person ?? null
+}
+
+// Closing a space (erase.ts, T-33166): `/space/<slug>/delete`, the one door
+// on this platform behind which something cannot be brought back — so a
+// person, signed in, is the only caller who ever reaches it.
+//
+// The GET only ever DRAWS. A mail client that fetches every link in a letter
+// before anyone reads it must not be able to delete a space by doing its job,
+// so the act is the POST and the page is what asks for it.
+//
+// A space that is not this person's answers exactly what a space that does
+// not exist answers: a stranger learns nothing about anybody's address here.
+//
+// The POST needs no origin check of its own: the session cookie is
+// `SameSite=Lax` (token.ts `cookie`), so a form posted from somebody else's
+// page arrives without it and is sent to sign in like any stranger.
+let closing = async (
+  req: Request,
+  env: Env,
+  slug: string,
+  form: { confirm: string; token: string },
+) => {
+  let url = new URL(req.url)
+  let person = await browser(env, req)
+  // Signed out — which is what an agent is here, having no cookie — they are
+  // sent to sign in and handed back to this very page (T-32593). The return
+  // address is on our own zone by construction.
+  if (!person) {
+    return redirect(
+      `/login?return=${encodeURIComponent(url.pathname + url.search)}`,
+    )
+  }
+  // Fresh reads, every one: this is the one act that cannot be taken back, so
+  // an app made a moment ago must not be missed because a 30-second read cache
+  // had not heard of it — its store and its bytes would outlive the space and
+  // be inherited by whoever takes the address next (directory.ts FRESH,
+  // billing.ts reads the same way).
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+  let space = await dir.space(slug)
+  if (!space || (await dir.role(space, person)) != 'owner') return lost()
+  let stop = refused(space)
+  let d = await doomed(dir, space)
+  let lines = naming(d)
+  if (stop) return askDelete({ slug, lines, stop, status: 409 })
+  // The letter's ticket, if this visit carries one: minted for THIS space and
+  // THIS person, and dead after an hour (erase.ts). It stands in for typing
+  // the name, because following a link out of a letter that named everything
+  // about to go is the deliberate act the typing is there to be.
+  let held = req.method == 'POST' ? form.token : url.searchParams.get('t') ?? ''
+  let ok = held ? await ticketed(held, secret(env)) : null
+  let mine = !!ok && ok.space == space.eid && ok.person == person
+  if (req.method != 'POST') {
+    return askDelete({
+      slug,
+      lines,
+      token: mine ? held : null,
+      why: held && !mine
+        ? 'That link has expired or was for something else. You can still ' +
+          'delete this space by typing its name.'
+        : undefined,
+    })
+  }
+  if (!mine && form.confirm.trim() != slug) {
+    return askDelete({
+      slug,
+      lines,
+      why: `Type ${slug} exactly, and it goes.`,
+      status: 400,
+    })
+  }
+  try {
+    return deleted(went(d, await erase(env, dir, d, { person, role: 'owner' })))
+  } catch (e) {
+    // What could not be finished is said on the page rather than swallowed
+    // behind the soft error page: a domain Cloudflare would not give back is
+    // the one failure here that costs money, and asking again finishes what
+    // did not go (erase.ts holds the order that makes that safe).
+    return askDelete({
+      slug,
+      lines,
+      why: `That did not finish: ${e instanceof Error ? e.message : String(e)}`,
+      status: 502,
+    })
+  }
+}
 
 // The connector page as this person sees it: their own address beside the
 // instructions, or the instructions alone for a stranger reading them from
@@ -356,6 +460,16 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     return (req.headers.get('accept') ?? '').includes('application/json')
       ? Response.json(out, { status: out.error ? 400 : 200 })
       : theirs(env, req, out.slug ?? field('space'), out.error)
+  }
+
+  // Closing a space: a page and a form like the rest of this file, and the
+  // only door that destroys anything (index.ts routes `/space/` here).
+  let close = /^\/space\/([a-z0-9-]+)\/delete$/.exec(path)
+  if (close && (req.method == 'GET' || req.method == 'POST')) {
+    return closing(req, env, close[1], {
+      confirm: field('confirm'),
+      token: field('t'),
+    })
   }
 
   if (path == '/login' && req.method == 'GET') {

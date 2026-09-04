@@ -423,6 +423,18 @@ export let storeName = (space: Space, app: App) =>
 // What app_new pins, and what a rename must therefore leave alone.
 export let bornAt = (space: Space, slug: string) => `${space.slug}/${slug}`
 
+// The address a person is handed for an app. A space's front page IS its
+// bare hostname (T-33040, apps.ts `fetch`) — its own `/<app>/` only forwards
+// there — so every answer that hands out a link hands out the one to hold.
+// `space.home` must be the value AFTER the caller's own write, or a tool that
+// just moved the front page reports the address it had before. It lives here
+// beside the store's name because it is the other name a (space, app) has,
+// and everything that says one out loud reads it from one place: the tools,
+// and the letter that names what deleting a space would destroy (erase.ts).
+export let url = (space: Space, app: App) =>
+  `https://${space.slug}.yaks.app/` +
+  (app.eid == space.home ? '' : `${app.slug}/`)
+
 // The typed client over the handler, in-process or across a binding.
 export type Directory = ReturnType<typeof directory>
 

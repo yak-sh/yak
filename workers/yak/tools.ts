@@ -61,8 +61,18 @@ import {
   type Space,
   stamp,
   storeName,
+  url,
 } from './directory.ts'
 import { moved, reachChanged, toolsOf } from './declared.ts'
+import {
+  doomed,
+  door,
+  emptied,
+  letter,
+  naming,
+  refused,
+  ticket,
+} from './erase.ts'
 import {
   drop,
   dropSecret,
@@ -796,15 +806,6 @@ let SAY_DATED = "\ncreated.at was not written: it is the store's own record " +
 let fileKey = (space: Space, app: App, path: string) =>
   `${space.slug}/${app.slug}/${path.replace(/^\/+/, '')}`
 
-// The address a person is handed for an app. A space's front page IS its
-// bare hostname (T-33040, apps.ts `fetch`) — its own `/<app>/` only forwards
-// there — so every answer that hands out a link hands out the one to hold.
-// `space.home` must be the value AFTER this call's own write, or a tool that
-// just moved the front page reports the address it had before.
-let url = (space: Space, app: App) =>
-  `https://${space.slug}.yaks.app/` +
-  (app.eid == space.home ? '' : `${app.slug}/`)
-
 // What an app's access means where it is felt: what happens when the person
 // sends someone the link. Said on every tool that sets it, so the agent can
 // repeat it and the person is never surprised by who can act on their app.
@@ -912,6 +913,71 @@ export let TOOLS: Tool[] = [
       let space = (await ctx.dir.space(s))!
       return {
         text: `space ${s} (${space.eid}): https://${s}.yaks.app/`,
+        space,
+      }
+    },
+  },
+  {
+    name: 'space_delete',
+    description:
+      'Close a space for good: every app in it, everything those apps have ' +
+      'saved, their files, any domain aimed at them, and the address itself ' +
+      '— which goes back into circulation, so someone else may take it ' +
+      'later. There is no undo and nothing is kept. YOU CANNOT DO THIS: it ' +
+      "mails the space's owner a link that does it, lasting an hour, and " +
+      'answers with what that link would destroy. Read that back to them and ' +
+      'tell them to check their email — it is theirs to confirm, not yours. ' +
+      'Only the owner of the space may ask, and app_delete is the smaller ' +
+      'thing when they mean one app.',
+    input: {
+      type: 'object',
+      properties: { space: SPACE },
+      required: ['space'],
+    },
+    run: async (ctx, args) => {
+      // Naming the space is required here and optional everywhere else: a
+      // tool that guesses which space to destroy from context is a tool that
+      // one day guesses wrong (`ownSpace`), and it costs the agent one word
+      // it already knows.
+      let { space } = await owns(ctx, {
+        ...args,
+        space: slug(args.space, 'space'),
+      })
+      let no = refused(space)
+      if (no) throw new Error(no)
+      if (!ctx.env.SESSION_SECRET) {
+        throw new Error('the platform cannot sign a confirmation link here')
+      }
+      // Where the letter goes: the address this caller signs in with, which
+      // is an owner's — never one the agent named, so nothing an agent says
+      // can point this letter at somebody else.
+      let to = await ctx.dir.emailAt(ctx.person)
+      if (!to) throw new Error('we have no address to write to you at')
+      let d = await doomed(ctx.dir, space)
+      let said = naming(d).map((l) => `  - ${l}`).join('\n')
+      let link = door(
+        space.slug,
+        await ticket(space, ctx.person, ctx.env.SESSION_SECRET),
+      )
+      // A letter that will not send is not a link to hand over (member_add
+      // does that for an invitation, which is not an irreversible act): the
+      // web door is said instead, and it still wants their cookie, their
+      // ownership and the name typed back.
+      try {
+        await mail(ctx.env)({ to, ...letter(d, link) })
+      } catch {
+        throw new Error(
+          `the confirmation letter could not be sent. They can still do it ` +
+            `themselves, signed in, at ${door(space.slug)} — which asks ` +
+            `them to type ${space.slug} back. It would destroy:\n${said}`,
+        )
+      }
+      return {
+        text: `nothing is deleted. ${space.slug} is still there, and an ` +
+          'assistant cannot delete a space: a letter is on its way to the ' +
+          'address they sign in with, carrying a link that does it. It ' +
+          'lasts an hour, and opening it asks them once more. Tell them to ' +
+          `check their email. What it would destroy:\n${said}`,
         space,
       }
     },
@@ -1478,7 +1544,7 @@ export let TOOLS: Tool[] = [
       required: ['app'],
     },
     run: async (ctx, args) => {
-      let { space, app, who, store } = await inApp(ctx, args, true)
+      let { space, app, who } = await inApp(ctx, args, true)
       // The directory lives in the meta space's own app: deleting it would
       // take every space, app and membership with it, so it is not an app to
       // throw away, whoever owns `yak`.
@@ -1492,32 +1558,19 @@ export let TOOLS: Tool[] = [
       let had = await toolsOf(ctx.env, space, app)
       let declared = Object.keys(had).length
       let viewed = Object.values(had).some((t) => t.view)
-      // The bytes, then the data, then the row that says the app exists —
-      // that order, because the row is the app. A delete that dies halfway
-      // leaves an app still named but emptied, which asking again finishes;
-      // the other order would leave an unnamed app's files and rows behind
-      // for whatever is made at this address next to inherit.
-      let blobs = r2Blobs(ctx.env.BLOBS)
+      // The storage, then the row that says the app exists — that order,
+      // because the row is the app. A delete that dies halfway leaves an app
+      // still named but emptied, which asking again finishes; the other order
+      // would leave an unnamed app's files and rows behind for whatever is
+      // made at this address next to inherit. The emptying itself is
+      // erase.ts's, because deleting a SPACE empties every app in it the same
+      // way (T-33166).
       let prefix = fileKey(space, app, '')
-      let keys = await blobs.list(prefix)
-      for (let key of keys) await blobs.delete(key)
+      let keys = await emptied(ctx.env, space, app, who)
       // Everything under the prefix goes; what the person is TOLD went is
       // their own files, not the bytes a version pinned or a page uploaded
       // (versions.ts `own`).
       let wrote = own(keys.map((k) => k.slice(prefix.length))).length
-      // And the app's own code, which is not in the bucket: a script left in
-      // the dispatch namespace would still answer at an address nothing
-      // stands at (dispatch.ts).
-      if (ctx.env.CF_WORKERS_TOKEN) await drop(ctx.env, storeName(space, app))
-      // The store is named for where the app was born (directory.ts
-      // storeName), so emptying it is what keeps a later app at the same
-      // address from waking up in this one's graph.
-      await answer(
-        await store('/', { method: 'DELETE' }, {
-          ...vouched(who),
-          'x-yak-kernel': '1',
-        }),
-      )
       await ctx.dir.apply({
         entities: [{ entity: { eid: app.eid }, tombstone: {} }],
       }, vouched(who))

@@ -109,6 +109,10 @@ let serve = async (req: Request, env: Env, r: Route) => {
   let path = r.path
   if (
     path == '/login' || path.startsWith('/login/') || path == '/connect' ||
+    // Closing a space (identity.ts `closing`, T-33166): a signed-in page and
+    // its form, so it belongs with the rest of the cookie's surface rather
+    // than at the connector door an agent speaks to.
+    path.startsWith('/space/') ||
     path.startsWith('/oauth/') || path.startsWith('/.well-known/oauth-')
   ) {
     return bound(env.IDENTITY, identity.fetch, env).fetch(req)

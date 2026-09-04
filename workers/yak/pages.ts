@@ -230,6 +230,73 @@ ${ask ? naming : ''}
 </form>${home}`,
   )
 
+// Closing a space (T-33166, erase.ts): the page that stands in front of the
+// one act on this platform that cannot be undone. It NAMES what dies —
+// every app, every domain, everyone who loses their way in, and the address
+// going back into circulation — because a person about to lose all of it
+// should read the list rather than remember it.
+//
+// Two ways to say yes, and the page shows whichever the visitor arrived with.
+// Off the letter, with its ticket in hand, one button: opening the letter and
+// following the link is the deliberate act, and the ticket is what carries it
+// (it expires, and the act it opens can only happen once). Straight off the
+// web, with no ticket, they type the name back — the guard that makes this
+// hard to do by accident when nothing was mailed at all.
+//
+// The form POSTs to its own address and needs no script, like every other
+// card here. Whoever may not delete this space never sees this page: the door
+// answers them exactly what it answers for a space that does not exist.
+export let askDelete = (at: {
+  slug: string
+  lines: string[]
+  token?: string | null
+  // Why this cannot happen at all — a space that is still paying (erase.ts
+  // `refused`). The page then names the reason and offers no form.
+  stop?: string
+  why?: string
+  status?: number
+}) =>
+  shell(
+    `Delete ${esc(at.slug)}.yaks.app?`,
+    esc(
+      at.stop ?? at.why ?? 'This cannot be undone, and nothing is kept.',
+    ),
+    at.status ?? 200,
+    `${
+      at.lines.length
+        ? `<section class="Card"><h2>What goes, for good</h2>
+<ol>${at.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ol>
+</section>`
+        : ''
+    }
+${
+      at.stop
+        ? ''
+        : `<form method="post" action="/space/${esc(at.slug)}/delete">
+${held('t', at.token)}
+${
+          at.token ? '' : `<p>Type <b>${esc(at.slug)}</b> to confirm.</p>
+<input name="confirm" autocomplete="off" spellcheck="false" autofocus aria-label="The name of the space">`
+        }
+<button type="submit">Delete ${esc(at.slug)}.yaks.app forever</button>
+</form>
+<p class="Note">Changed your mind? Close this page — nothing has happened.</p>`
+    }
+${home}`,
+  )
+
+// And after: what went, and the one thing worth knowing next — the address
+// belongs to nobody now, theirs to take again or somebody else's to take
+// later.
+export let deleted = (said: string) =>
+  shell(
+    "That's done.",
+    esc(said),
+    200,
+    `<p class="Note">The address is free again. Ask your assistant for a new
+space whenever you want one.</p>${home}`,
+  )
+
 // An app asking, for a browser that is already signed in: one click is the
 // whole consent.
 export let askAllow = (email: string, q: string, who: string) =>

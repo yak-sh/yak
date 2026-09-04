@@ -64,6 +64,7 @@ slow(
       let { tools } = await agent.call('tools/list')
       assertEquals(tools.map((t: { name: string }) => t.name), [
         'space_new',
+        'space_delete',
         'app_new',
         'app_files',
         'app_deploy',
