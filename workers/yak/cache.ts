@@ -102,11 +102,32 @@ export let tagsOf = (eid: string) => [`a:${eid}`]
 // `private, no-store`. A 101 carries the runtime's own socket, which no
 // Response constructor here can copy, so a socket passes untouched — the same
 // rule apps.ts `reporting` and timing.ts `timed` read.
+//
+// Framing policy (T-33409): an app is a FRAMED resource, and only its own
+// space (its own origin, `'self'` — a space's apps share `space.yaks.app`, so
+// they frame each other) and the platform homepage (`https://yaks.app`, the
+// T-33424 iframe) may embed it. Any OTHER space's page is refused by the
+// browser, which is the whole clickjacking defense: a same-site frame would
+// otherwise carry the viewer's session cookie and load authenticated, and the
+// browser — not a spoofable request header — is the one thing that knows the
+// full ancestor chain. This rides on EVERY sealed response: apps are the
+// resource it protects, and on the apex's own pages it only governs who may
+// frame THEM (never what they may frame), so the apex still frames apps.
+// Appended, not set, so it stacks with a response's own CSP (the blob sandbox
+// at apps.ts `gave`) instead of clobbering it, and no app can widen past this
+// baseline by declaring its own frame-ancestors. Deferred, not here: opt-in
+// cross-space authenticated embeds need cookie-stripping plus a consented,
+// audience-bound token — a real project, out of scope.
 export let sealed = (res: Response) => {
   if (res.status == 101) return res
-  if (res.headers.has('cache-control')) return res
   let headers = new Headers(res.headers)
-  headers.set('cache-control', 'private, no-store')
+  headers.append(
+    'content-security-policy',
+    "frame-ancestors 'self' https://yaks.app",
+  )
+  if (!headers.has('cache-control')) {
+    headers.set('cache-control', 'private, no-store')
+  }
   return new Response(res.body, {
     status: res.status,
     statusText: res.statusText,

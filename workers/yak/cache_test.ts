@@ -67,3 +67,51 @@ Deno.test('a socket is left alone', () => {
   let up = new Response(null, { status: 101 })
   assertEquals(sealed(up), up)
 })
+
+// The framing policy (T-33409): an app is the FRAMED resource, and the browser
+// refuses to render it inside any space but its own — the clickjacking defense,
+// since a same-site frame would otherwise load with the viewer's cookie.
+Deno.test('every sealed response refuses framing by a foreign space', () => {
+  let res = sealed(new Response('a page'))
+  assertEquals(
+    res.headers.get('content-security-policy'),
+    "frame-ancestors 'self' https://yaks.app",
+  )
+})
+
+Deno.test('the platform homepage stays an allowed ancestor', () => {
+  // `https://yaks.app` in the list is what sanctions the T-33424 homepage
+  // iframe; a space's own apps are the `'self'` half (they share one origin).
+  let csp = sealed(new Response('a page')).headers.get(
+    'content-security-policy',
+  )
+  assertStringIncludes(csp!, "'self'")
+  assertStringIncludes(csp!, 'https://yaks.app')
+})
+
+Deno.test('the frame policy rides even on a door with its own cache policy', () => {
+  // A door that states its own `cache-control` (a cached app file, the blob)
+  // used to pass through sealed untouched, so the header must be applied before
+  // that early return or the very responses that get framed would lack it.
+  let res = sealed(
+    new Response('x', { headers: { 'cache-control': 'public, max-age=60' } }),
+  )
+  assertEquals(res.headers.get('cache-control'), 'public, max-age=60')
+  assertStringIncludes(
+    res.headers.get('content-security-policy')!,
+    "frame-ancestors 'self' https://yaks.app",
+  )
+})
+
+Deno.test('the frame policy stacks with a response CSP, never clobbers it', () => {
+  // The blob door (apps.ts `gave`) serves user bytes under a sandbox CSP.
+  // Appending keeps that inert-content protection AND adds our framing rule;
+  // setting would have wiped the sandbox.
+  let csp = sealed(
+    new Response('bytes', {
+      headers: { 'content-security-policy': "sandbox; script-src 'none'" },
+    }),
+  ).headers.get('content-security-policy')!
+  assertStringIncludes(csp, "sandbox; script-src 'none'")
+  assertStringIncludes(csp, "frame-ancestors 'self' https://yaks.app")
+})
