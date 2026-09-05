@@ -43,11 +43,17 @@
  * `tools` the same way it contributes components and hooks; they are listed
  * beside the generic tier, with the same signing and the same reply shape.
  *
+ * ## When a host serves more than tools
+ * {@link Options.extend} is handed the SDK's own server once the tools are on
+ * it, so resources, prompts and a capability of the host's own go on the SAME
+ * server rather than beside it. A tool whose words and value differ returns a
+ * {@link Say}, and a tool may carry `meta` the client is handed verbatim.
+ *
  * @module
  */
 
 export { mcp, type MountOptions } from './mount.ts'
-export { type Options, server } from './server.ts'
+export { type Options, Say, server } from './server.ts'
 export { core, type CoreOpts, type Search } from './tools.ts'
 export { type Edge, edges } from './edges.ts'
 export {

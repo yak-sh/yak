@@ -27,6 +27,22 @@ import { PAGES, uriOf } from './guide.ts'
 import { PROMPTS } from './prompts.ts'
 import { VERSION } from '../../src/version.ts'
 
+// The eid a batch minted under an alias, read off the batch AS APPLIED
+// (T-33812): graph_apply answers every entity the write touched, each carrying
+// the `$alias` the batch called it by.
+let minted = (applied: string, alias: string) =>
+  (JSON.parse(applied) as { entity: { eid: string }; $alias?: string }[])
+    .find((b) => b.$alias == alias)!.entity.eid
+
+// What a client says when it opens the connection. The protocol machine is the
+// SDK's now (T-33812) and it holds a client to the spec's own shape, which
+// every client sends and only a test would leave out.
+let HELLO = {
+  protocolVersion: '2025-03-26',
+  capabilities: {},
+  clientInfo: { name: 'probe', version: '0' },
+}
+
 let GUIDE = 'https://yaks.app/guide.md'
 let APPS = 'ui://yaks/apps'
 let ERRORS = 'ui://yaks/errors'
@@ -63,6 +79,15 @@ slow(
       assertEquals(init.serverInfo.name, 'yaks.app')
       let { tools } = await agent.call('tools/list')
       assertEquals(tools.map((t: { name: string }) => t.name), [
+        // The generic tier, whole, from @yaks/mcp (T-33812) — bundles in and
+        // out over the caller's reach, each with an output schema derived from
+        // the vocabulary those apps declare.
+        'graph_apply',
+        'graph_query',
+        'graph_show',
+        'vocab',
+        'search',
+        // And the platform's own verbs beside them, one plugin's tools.
         'space_new',
         'space_delete',
         'app_new',
@@ -87,14 +112,17 @@ slow(
         'app_update',
         'member_add',
         'member_remove',
-        'graph_apply',
-        'graph_query',
-        'search',
         'feedback',
         // The one anybody may call, signed in or not (preauth.ts, T-33030).
         'about',
       ])
       assert(tools.every((t: { inputSchema: unknown }) => t.inputSchema))
+      // The generic tier promises the shape of its answer, so a caller reads a
+      // described value instead of parsing prose (@yaks/mcp `outputSchema`).
+      for (let name of ['graph_apply', 'graph_query', 'graph_show', 'search']) {
+        let one = tools.find((t: { name: string }) => t.name == name)
+        assert(one.outputSchema, `${name} says what it answers`)
+      }
 
       // What a model reads before anything else: the address, the four
       // steps, and the store a page writes to — enough to build the first
@@ -132,17 +160,10 @@ slow(
         tools.find((t: { name: string }) => t.name == name).description
       assertStringIncludes(says('app_files'), './api/client.js')
       assertStringIncludes(says('app_files'), 'never localStorage')
-      assertStringIncludes(says('graph_query'), '.doc!')
-      // What it ANSWERS, said before anything else: only the components the
-      // filter names, and the one way to ask for another (T-32953). A
-      // description that still promised every component is what taught a page
-      // to read `doc.title` off a `.recipe!` row and print "(untitled)".
-      assertStringIncludes(says('graph_query'), "'.recipe!&.doc?'")
-      assertStringIncludes(
-        says('graph_query'),
-        'ONLY the components the filter names',
-      )
-      assertStringIncludes(says('graph_apply'), './api/client.js')
+      // The generic tier says its own grammar (@yaks/mcp): a query LINE in,
+      // whole bundles out, and a batch of bundles to write.
+      assertStringIncludes(says('graph_query'), 'query LINE')
+      assertStringIncludes(says('graph_apply'), 'BUNDLES')
 
       // The guide the tool descriptions point at, offered as a resource and
       // read from the address that serves it — and the pages that go deep on
@@ -204,7 +225,7 @@ slow(
       await assertRejects(
         () => agent.call('resources/read', { uri: 'https://yaks.app/nope' }),
         Error,
-        'no resource',
+        'not found',
       )
 
       // The second view (T-32601), and the one thing its cards need that a
@@ -263,12 +284,12 @@ slow(
       await assertRejects(
         () => agent.call('prompts/get', { name: 'nope' }),
         Error,
-        'no prompt',
+        'not found',
       )
       await assertRejects(
         () => agent.call('prompts/get', { name: 'make' }),
         Error,
-        'needs what',
+        'Invalid arguments for prompt make',
       )
 
       // A space, then an app in it; the slugs are one per namespace.
@@ -318,9 +339,11 @@ slow(
         await agent.tool('app_files', { app: 'garden', op: 'list' }),
         '(no files)',
       )
+      // The generic tier reads the caller's whole reach and names no app, so
+      // a person with nothing saved anywhere reads nothing (T-33812).
       assertEquals(
-        await agent.tool('graph_query', { app: 'garden', filter: '.doc!' }),
-        '[]',
+        JSON.parse(await agent.tool('graph_query', { q: '.doc!' })),
+        [],
       )
       // Two spaces holding the slug is the one question worth asking, and
       // the refusal says which two and why.
@@ -454,33 +477,26 @@ slow(
       assertEquals(bare.status, 200)
       assertStringIncludes(await bare.text(), 'href="/recipes/"')
 
-      // The graph tier: a bundle in, the same shape out, the search beside
-      // it. A write answers one line naming what it wrote, by id, with the
-      // alias it minted (T-32506) — never the wire's change rows — and under
-      // it a JSON line, so a second batch can use the eids the first minted
-      // without a regex over the sentence (T-33148).
-      let applied = await agent.tool('graph_apply', {
-        ...app,
-        entities: [{
-          entity: { eid: '$cake' },
-          doc: { title: "Grandma's lemon cake" },
-        }],
-      })
-      let [sentence, line] = applied.split('\n')
-      assertMatch(sentence, /^wrote 1 entity in jeff\/recipes: \$cake=\S+$/)
-      let written = JSON.parse(line) as {
-        in: string
-        entities: string[]
-        aliases: Record<string, string>
-        deleted: string[]
-      }
-      let cake = written.aliases.$cake
-      assertEquals(written.in, 'jeff/recipes')
-      assertEquals(written.entities, [cake])
-      assertEquals(written.deleted, [])
-      assertStringIncludes(sentence, cake)
+      // The graph tier, which is @yaks/mcp's (T-33812): bundles in, the batch
+      // AS APPLIED out — every entity it touched, wearing what moved, and the
+      // `$alias` the batch called a minted one by, so a second batch can use
+      // the eids the first minted without reading a sentence.
+      let cake = minted(
+        await agent.tool('graph_apply', {
+          change: [{
+            entity: { eid: '$cake' },
+            // A brand-new entity wearing nothing but shared words has no home
+            // to go to, and this person has two apps: `$app` says which
+            // (T-33812), where the tool's own argument used to.
+            $app: 'recipes',
+            doc: { title: "Grandma's lemon cake" },
+          }],
+        }),
+        '$cake',
+      )
+      assert(cake, 'the batch says what it named its new entity')
       let [hit] = JSON.parse(
-        await agent.tool('graph_query', { ...app, query: `id=${cake}` }),
+        await agent.tool('graph_query', { q: `id=${cake}` }),
       )
       assertEquals(hit.entity.eid, cake)
       assertEquals(hit.doc.title, "Grandma's lemon cake")
@@ -488,69 +504,36 @@ slow(
       // it are not in the answer unless the filter names one.
       assert(!('created' in hit), 'no stamp rides an unasked-for listing')
       let stamped = JSON.parse(
-        await agent.tool('graph_query', { ...app, filter: '.doc!&.created!' }),
+        await agent.tool('graph_query', { q: '.doc!&.created!' }),
       )
       assertEquals(stamped.length, 1)
       assert(stamped[0].created, 'naming a stamp asks for it back')
 
       // A seed that tried to date itself: `created.at` is the store's own
-      // record and cannot be given a past moment, so it is dropped — and the
-      // door says so, once, rather than leaving every seeded row reading as
-      // written today (T-33147).
-      let backdated = await agent.tool('graph_apply', {
-        ...app,
-        entities: [{
-          entity: { eid: '$old' },
-          doc: { title: 'Written in April' },
-          created: { at: '2026-04-11T12:00:00Z' },
-        }],
-      })
-      assertStringIncludes(backdated, 'created.at was not written')
-      assertStringIncludes(backdated, "a time column of the app's own")
-      let old = JSON.parse(backdated.split('\n')[1]).aliases.$old as string
-      let [aged] = JSON.parse(
-        await agent.tool('graph_query', {
-          ...app,
-          filter: `id=${old}&.created!`,
+      // record of when it first saw a row and cannot be given a past moment,
+      // so it is dropped and the row reads as written now (T-33147).
+      let old = minted(
+        await agent.tool('graph_apply', {
+          change: [{
+            entity: { eid: '$old' },
+            $app: 'recipes',
+            doc: { title: 'Written in April' },
+            created: { at: '2026-04-11T12:00:00Z' },
+          }],
         }),
+        '$old',
+      )
+      let [aged] = JSON.parse(
+        await agent.tool('graph_query', { q: `id=${old}&.created!` }),
       ) as { created: { at: string } }[]
       assertEquals(
         aged.created.at.slice(0, 4),
         String(new Date().getFullYear()),
       )
-      // And a row read then patched straight back carries its own stamps —
-      // the case the silent drop exists for — so nothing is said about it.
-      let again = await agent.tool('graph_apply', {
-        ...app,
-        entities: [{
-          entity: { eid: cake },
-          doc: { title: "Grandma's lemon cake" },
-          created: { at: aged.created.at },
-        }],
-      })
-      assertEquals(again.includes('created.at was not written'), false)
       await agent.tool('graph_apply', {
-        ...app,
-        entities: [{ entity: { eid: old }, tombstone: {} }],
+        change: [{ entity: { eid: old }, tombstone: {} }],
       })
-      // The parameter is `filter` — the word every other door uses for the
-      // same line — and `query` stays a spelling of it (C-32607 item 2).
-      assertEquals(
-        await agent.tool('graph_query', { ...app, filter: `id=${cake}` }),
-        await agent.tool('graph_query', { ...app, query: `id=${cake}` }),
-      )
-      // A near miss is answered with the word and a line to copy, not with
-      // "filter is required", which says nothing to whoever sent `filters`
-      // (C-32730 item 3).
-      let missed = await assertRejects(
-        () => agent.tool('graph_query', { ...app, filters: ['.doc!'] }),
-        Error,
-      )
-      assertStringIncludes(missed.message, 'filter: one LINE, not a list')
-      assertStringIncludes(missed.message, "filter: '.doc!'")
-      let found = JSON.parse(
-        await agent.tool('search', { ...app, text: 'lemon' }),
-      )
+      let found = JSON.parse(await agent.tool('search', { words: 'lemon' }))
       assertEquals(
         found.map((r: { entity: { eid: string } }) => r.entity.eid),
         [cake],
@@ -563,10 +546,13 @@ slow(
         let ask of [
           () =>
             agent.tool('graph_apply', {
-              ...app,
-              entities: [{ entity: { eid: '$r' }, recipe: { serves: 4 } }],
+              change: [{
+                entity: { eid: '$r' },
+                $app: 'recipes',
+                recipe: { serves: 4 },
+              }],
             }),
-          () => agent.tool('graph_query', { ...app, query: '.recipe!' }),
+          () => agent.tool('graph_query', { q: '.recipe!' }),
         ]
       ) {
         let why = (await assertRejects(ask, Error)).message
@@ -584,16 +570,18 @@ slow(
         await agent.tool('app_deploy', app),
         'components: recipe',
       )
-      let box = (await agent.tool('graph_apply', {
-        ...app,
-        entities: [{
-          entity: { eid: '$pancakes' },
-          doc: { title: 'Pancakes' },
-          recipe: { title: 'Pancakes', serves: 4 },
-        }],
-      })).match(/\$pancakes=(\S+)/)![1]
+      let box = minted(
+        await agent.tool('graph_apply', {
+          change: [{
+            entity: { eid: '$pancakes' },
+            doc: { title: 'Pancakes' },
+            recipe: { title: 'Pancakes', serves: 4 },
+          }],
+        }),
+        '$pancakes',
+      )
       let [own] = JSON.parse(
-        await agent.tool('graph_query', { ...app, query: '.recipe.serves=4' }),
+        await agent.tool('graph_query', { q: '.recipe.serves=4' }),
       )
       assertEquals(own.entity.eid, box)
       assertEquals(own.recipe, { title: 'Pancakes', serves: 4 })
@@ -601,8 +589,7 @@ slow(
       await assertRejects(
         () =>
           agent.tool('graph_apply', {
-            ...app,
-            entities: [{ entity: { eid: box }, recipe: { calories: 500 } }],
+            change: [{ entity: { eid: box }, recipe: { calories: 500 } }],
           }),
         Error,
         'unknown column: recipe.calories',
@@ -634,8 +621,11 @@ slow(
       await assertRejects(
         () =>
           agent.tool('graph_apply', {
-            ...app,
-            entities: [{ entity: { eid: '$d' }, dayline: { on: 'today' } }],
+            change: [{
+              entity: { eid: '$d' },
+              $app: 'recipes',
+              dayline: { on: 'today' },
+            }],
           }),
         Error,
         'unknown component: dayline',
@@ -664,8 +654,11 @@ slow(
       await assertRejects(
         () =>
           agent.tool('graph_apply', {
-            ...app,
-            entities: [{ entity: { eid: '$j' }, jot: { text: 'hi' } }],
+            change: [{
+              entity: { eid: '$j' },
+              $app: 'recipes',
+              jot: { text: 'hi' },
+            }],
           }),
         Error,
         'unknown component: jot',
@@ -676,8 +669,7 @@ slow(
       assertEquals(
         JSON.parse(
           await agent.tool('graph_query', {
-            ...app,
-            query: '.recipe.serves=4',
+            q: '.recipe.serves=4',
           }),
         ).length,
         1,
@@ -687,8 +679,7 @@ slow(
       // one keeps every row already written under it, and the deploy says
       // both — the manifest reads as one word and the store answers two.
       await agent.tool('graph_apply', {
-        ...app,
-        entities: [{ entity: { eid: '$n' }, note: { text: 'wrote it' } }],
+        change: [{ entity: { eid: '$n' }, note: { text: 'wrote it' } }],
       })
       await manifest(
         '{"recipe":{"title":"text","serves":"number"},"note":{"body":"text"}}',
@@ -704,11 +695,10 @@ slow(
       assertStringIncludes(renamed, 'name it in vocab.json again')
       assertStringIncludes(renamed, 'Nothing is migrated behind you.')
       await agent.tool('graph_apply', {
-        ...app,
-        entities: [{ entity: { eid: '$n2' }, note: { body: 'said it' } }],
+        change: [{ entity: { eid: '$n2' }, note: { body: 'said it' } }],
       })
       let notes = JSON.parse(
-        await agent.tool('graph_query', { ...app, query: '.note!' }),
+        await agent.tool('graph_query', { q: '.note!' }),
       ) as { note: { text: string | null; body: string | null } }[]
       assertEquals(notes.map((n) => n.note), [
         { text: 'wrote it', body: null },
@@ -717,7 +707,7 @@ slow(
 
       // A refused store answer is the tool's error, not a 500.
       await assertRejects(
-        () => agent.tool('graph_query', { ...app, query: 'work=build' }),
+        () => agent.tool('graph_query', { q: 'work=build' }),
         Error,
         'work lanes',
       )
@@ -737,10 +727,10 @@ slow(
           }),
         })
       assertEquals((await dies('sift is not a function')).status, 204)
-      let told = await agent.tool('graph_query', {
-        ...app,
-        query: `id=${cake}`,
-      })
+      // It rides on a PLATFORM tool's answer, which is prose a person's agent
+      // reads; the generic tier answers a described value, and a section of
+      // words appended to it would be something else (T-33812).
+      let told = await agent.tool('app_files', { ...app, op: 'list' })
       assertMatch(
         told,
         /## unseen errors\n- \S+ \S+ exception recipes v\d+: page \/recipes\/ — sift is not a function/,
@@ -749,14 +739,11 @@ slow(
       // the instructions teach as everything they saved — has only the cake
       // (T-32533, C-32531 item 1).
       assertEquals(
-        JSON.parse(await agent.tool('graph_query', { ...app, query: '.doc!' }))
+        JSON.parse(await agent.tool('graph_query', { q: '.doc!' }))
           .map((r: { doc: { title: string } }) => r.doc.title),
         ["Grandma's lemon cake", 'Pancakes'],
       )
-      let quiet = await agent.tool('graph_query', {
-        ...app,
-        query: `id=${cake}`,
-      })
+      let quiet = await agent.tool('app_files', { ...app, op: 'list' })
       assert(!quiet.includes('unseen'), 'served once')
       assertEquals((await dies('knead is not a function')).status, 204)
       let listed = await agent.tool('app_errors', app)
@@ -772,18 +759,18 @@ slow(
       // saved: asking for the stamps does not drag it in, and naming the
       // component is how it is asked for (C-32607 item 4).
       let stamps = JSON.parse(
-        await agent.tool('graph_query', { ...app, filter: '.created!' }),
+        await agent.tool('graph_query', { q: '.created!' }),
       ) as { exception?: unknown }[]
       assert(stamps.length > 0, 'the person has rows')
       assert(stamps.every((r) => !r.exception), 'no break rides a stamps list')
       assertEquals(
         JSON.parse(
-          await agent.tool('graph_query', { ...app, filter: '.exception!' }),
+          await agent.tool('graph_query', { q: '.exception!' }),
         ).length,
         2,
       )
       assert(
-        !(await agent.tool('graph_query', { ...app, query: `id=${cake}` }))
+        !(await agent.tool('app_files', { ...app, op: 'list' }))
           .includes('unseen'),
       )
 
@@ -1033,9 +1020,13 @@ slow(
         await agent.tool('app_files', { ...scratch, op: 'list' }),
         '(no files)',
       )
+      // The generic tier reads every app at once, so what proves the store
+      // was emptied is that what it held is gone — not that the reach is.
       assertEquals(
-        await agent.tool('graph_query', { ...scratch, query: '.doc!' }),
-        '[]',
+        JSON.parse(
+          await agent.tool('graph_query', { q: '.doc.title~=secret' }),
+        ),
+        [],
       )
       await agent.tool('app_delete', scratch)
 
@@ -1053,10 +1044,11 @@ slow(
         Error,
         'not a member of jeff',
       )
-      await assertRejects(
-        () => stranger.tool('graph_query', { ...app, query: 'id=1' }),
-        Error,
-        'not a member of jeff',
+      // And the generic tier is HIS reach and nobody else's: jeff's rows are
+      // not in it, whatever he asks for.
+      assertEquals(
+        JSON.parse(await stranger.tool('graph_query', { q: '.doc!' })),
+        [],
       )
       assertMatch(
         await stranger.tool('space_new', { slug: 'maya', title: 'Maya' }),
@@ -1358,20 +1350,20 @@ slow('an app declares its own tools, and the door calls them', async () => {
       await assertRejects(
         () => agent.call('resources/read', { uri: missing }),
         Error,
-        'no resource',
+        'not found',
       )
     }
 
     // The call is a page's gesture: the row lands in the app's own store,
     // typed by the declared input, and says who wrote it.
-    let wrote = await agent.tool('runs__log_run', { who: 'Ada', miles: '5' })
+    let wrote = await agent.tool('runs__log_run', { who: 'Ada', miles: 5 })
     assertStringIncludes(wrote, 'runs__log_run: wrote 1 entity')
     type Run = {
       jog: { who: string; miles: number }
       created: { by: { eid: string; name: string } }
     }
     let rows = JSON.parse(
-      await agent.tool('graph_query', { ...app, query: '.jog!&.created!' }),
+      await agent.tool('graph_query', { q: '.jog!&.created!' }),
     ) as Run[]
     assertEquals(rows.length, 1)
     assertEquals(rows[0].jog, { who: 'Ada', miles: 5 })
@@ -1390,18 +1382,20 @@ slow('an app declares its own tools, and the door calls them', async () => {
       (board.structuredContent.rows as Run[])[0].created.by,
       { eid: jeff.person, name: jeff.name },
     )
-    // An argument the input declared and the call left out is the tool's own
-    // refusal, not a half-written row.
-    await assertRejects(
+    // An argument the input declared and the call left out is refused by the
+    // input itself, naming the argument, and no half-written row lands: the
+    // declared schema is the door's now (T-33812).
+    let short = await assertRejects(
       () => agent.tool('runs__log_run', { who: 'Ada' }),
       Error,
-      'miles is required',
     )
+    assertStringIncludes(short.message, 'runs__log_run')
+    assertStringIncludes(short.message, 'miles')
     // A tool nobody declared is a tool nobody has.
     await assertRejects(
       () => agent.tool('runs__nope', {}),
       Error,
-      'no tool runs__nope',
+      'runs__nope not found',
     )
 
     // Someone who may read this app and not write it: the write tool refuses
@@ -1559,7 +1553,7 @@ slow("the door lists an app's tools, and says when they moved", async () => {
 
     // The door says it will announce a moved list, and the instructions say
     // an app can carry tools at all.
-    let init = await club.agent.call('initialize', { capabilities: {} })
+    let init = await club.agent.call('initialize', HELLO)
     assertEquals(init.capabilities.tools.listChanged, true)
     assertStringIncludes(init.instructions, 'tools.json')
     assertStringIncludes(init.instructions, '<app>__<tool>')
@@ -1739,7 +1733,7 @@ slow(
       let jeff = await signIn(k)
       let agent = connector(k, jeff.cookie)
       // The door promises to say so, and owns the logging door too (T-33006).
-      let init = await agent.call('initialize', {})
+      let init = await agent.call('initialize', HELLO)
       assertEquals(init.capabilities.resources.listChanged, true)
       assertEquals(init.capabilities.logging, {})
       let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
@@ -1848,10 +1842,10 @@ slow(
       assertStringIncludes(ear.said(), '"logger":"jeff/recipes"')
       assertStringIncludes(ear.said(), 'boom is not a function')
       // Unmarked by the push: served-in-a-reply stays the only mark.
-      let told = await agent.tool('graph_query', {
+      let told = await agent.tool('app_files', {
         space: 'jeff',
         app: 'recipes',
-        query: '.doc!',
+        op: 'list',
       })
       assertMatch(
         told,
@@ -1910,13 +1904,21 @@ slow('a read with no app composes every app the caller can reach', async () => {
     })
     await agent.tool('graph_apply', {
       app: 'recipes',
-      entities: [{ doc: { title: 'Pancakes' }, recipe: { serves: 2 } }],
+      entities: [{
+        entity: { eid: '$pancakes' },
+        doc: { title: 'Pancakes' },
+        recipe: { serves: 2 },
+      }],
     })
     await agent.tool('graph_apply', {
       app: 'lending',
       entities: [
         { entity: { eid: cake }, loan: { to: 'Maya' } },
-        { doc: { title: 'Lemon zester' }, loan: { to: 'Bo' } },
+        {
+          entity: { eid: '$zester' },
+          doc: { title: 'Lemon zester' },
+          loan: { to: 'Bo' },
+        },
       ],
     })
 
@@ -2030,9 +2032,11 @@ slow('a read with no app composes every app the caller can reach', async () => {
       found.find((r) => r.doc.title == 'Lemon cake')?.recipe?.serves,
       4,
     )
-    // A filter narrows it, and puts the ordinary rule back.
+    // A bare word is a text pred in the query grammar, so narrowing a search
+    // is graph_query with the words in the line — and the ordinary rule about
+    // which components an answer carries is back with it.
     let narrowed = JSON.parse(
-      await agent.tool('search', { text: 'lemon', filter: '.recipe!' }),
+      await agent.tool('graph_query', { q: 'lemon&.recipe!' }),
     ) as { doc?: { title: string }; recipe: { serves: number } }[]
     assertEquals(narrowed.map((r) => r.recipe.serves), [4])
     assertEquals(narrowed.map((r) => r.doc), [undefined])
@@ -2111,21 +2115,22 @@ slow('a write with no app routes each component to its own app', async () => {
         recipe: { serves: 4 },
       }],
     })
-    assertMatch(said, /in \S+\/recipes:/)
-    let cake = /\$cake=([0-9a-f-]{36})/.exec(said)![1]
+    let cake = minted(said, '$cake')
+    assertEquals((await rows('.doc!', 'recipes')).map((r) => r.entity.eid), [
+      cake,
+    ])
     assertEquals((await rows('.doc!', 'lending')).length, 0)
 
     // ONE bundle wearing two apps' words: the loan is the lending app's row,
     // the retitle lands where the title already lives, and the call is one.
-    let both = await agent.tool('graph_apply', {
+    await agent.tool('graph_apply', {
       entities: [{
         entity: { eid: cake },
         doc: { title: 'Lemon drizzle' },
         loan: { to: 'Maya' },
       }],
     })
-    assertMatch(both, /recipes/)
-    assertMatch(both, /lending/)
+    // Where each half landed is what the stores themselves say.
     assertEquals(
       (await rows(`id=${cake}`, 'recipes'))[0].doc!.title,
       'Lemon drizzle',
@@ -2174,6 +2179,7 @@ slow('a write with no app routes each component to its own app', async () => {
       () =>
         agent.tool('graph_apply', {
           entities: [{
+            entity: { eid: '$zester' },
             doc: { title: 'Zester' },
             recipe: { serves: 1 },
             loan: { to: 'Bo' },
@@ -2379,8 +2385,7 @@ slow('a word the space already has is used where it lives', async () => {
       app: 'lending',
       entities: [{ entity: { eid: '$b' }, book: { title: 'Piranesi' } }],
     })
-    assertMatch(said, /reading-list/)
-    let piranesi = /\$b=([0-9a-f-]{36})/.exec(said)![1]
+    let piranesi = minted(said, '$b')
     let rows = async (filter: string, app?: string) =>
       JSON.parse(
         await agent.tool('graph_query', { filter, ...(app ? { app } : {}) }),
@@ -3132,6 +3137,7 @@ slow(
       await meta(k, cookie).apply([
         { entity: { eid: eids['back/recipes'] }, app: { version: 4 } },
         {
+          entity: { eid: '$deploy' },
           deploy: {
             app: eids['back/recipes'],
             version: 4,
@@ -3496,7 +3502,7 @@ slow('the answers four builders had to guess at', async () => {
         dayline: { written: '2026-04-11T12:00:00Z' },
       }],
     })
-    let entry = JSON.parse(written.split('\n')[1]).aliases.$e as string
+    let entry = minted(written, '$e')
     let [one] = await rows('.dayline!')
     assertEquals(one.dayline!.written, '2026-04-11T12:00:00Z')
     assertEquals(
@@ -3519,7 +3525,11 @@ slow('the answers four builders had to guess at', async () => {
     // column has a default, so a doc nobody titled answers '' and not null.
     await agent.tool('graph_apply', {
       app: 'diary',
-      entities: [{ dayline: { mood: 'grey' }, doc: { body: 'Rain again.' } }],
+      entities: [{
+        entity: { eid: '$grey' },
+        dayline: { mood: 'grey' },
+        doc: { body: 'Rain again.' },
+      }],
     })
     let [untitled] = await rows('.dayline.mood=grey&.doc?')
     assertEquals(untitled.doc!.title, '')
@@ -3530,6 +3540,7 @@ slow('the answers four builders had to guess at', async () => {
     await agent.tool('graph_apply', {
       app: 'diary',
       entities: [{
+        entity: { eid: '$said' },
         comment: { target: entry },
         doc: { body: 'It rained.' },
       }],

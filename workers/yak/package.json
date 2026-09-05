@@ -3,6 +3,8 @@
   "private": true,
   "description": "The kernel Worker's npm dependencies, bundled by wrangler; node_modules is gitignored, so `npm ci` here before `wrangler deploy` or a probe boot. Exact pins only. This directory is a Deno workspace member (root deno.json `workspace`), which is what keeps deno's config discovery walking past this file to the repo's one deno.json instead of stopping here.",
   "dependencies": {
-    "@cloudflare/workers-oauth-provider": "0.10.3"
+    "@cloudflare/workers-oauth-provider": "0.10.3",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "zod": "3.25.76"
   }
 }

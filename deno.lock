@@ -1502,7 +1502,9 @@
       "workers/yak": {
         "packageJson": {
           "dependencies": [
-            "npm:@cloudflare/workers-oauth-provider@0.10.3"
+            "npm:@cloudflare/workers-oauth-provider@0.10.3",
+            "npm:@modelcontextprotocol/sdk@1.29.0",
+            "npm:zod@3.25.76"
           ]
         }
       }

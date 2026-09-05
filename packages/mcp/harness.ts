@@ -78,6 +78,7 @@ export let connect = async (
   opts: Omit<Options, 'graph'> & { graph?: Graph } = {},
 ): Promise<Client> => {
   let mcp = server({ ...opts, graph: opts.graph ?? shopGraph() })
+  await opts.extend?.(mcp)
   let [here, there] = InMemoryTransport.createLinkedPair()
   let client = new Client({ name: 'shop-test', version: '0.0.0' })
   await Promise.all([client.connect(here), mcp.connect(there)])

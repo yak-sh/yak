@@ -162,6 +162,39 @@ against its `input`) and a `ToolCtx`: the graph, who is asking, a signed
 `apply`, and a `read`. Schemas are [Zod](https://zod.dev), because the MCP SDK
 takes Zod.
 
+A tool whose words and value differ answers with a `Say`, and one that carries
+`meta` has it handed to the client verbatim as `_meta`:
+
+```ts
+import { Say } from '@yaks/mcp'
+
+{
+  name: 'shelf',
+  description: 'what is on the shelf',
+  meta: { ui: { resourceUri: 'ui://shop/shelf' } },
+  run: () => new Say('two books here', { books: 2 }),
+}
+```
+
+The text is what a client without schemas reads; the data goes to one that
+renders the answer, unwrapped — a plain value rides under `result` instead.
+
+## When a host serves more than tools
+
+`extend` is handed the SDK's own server once the tools are on it, so resources,
+prompts and a capability of your own go on the **same** server rather than
+beside it:
+
+```ts
+mcp({
+  graph,
+  extend: (server) =>
+    server.registerResource('guide', 'shop://guide', {
+      mimeType: 'text/markdown',
+    }, () => ({ contents: [{ uri: 'shop://guide', text: guide }] })),
+})
+```
+
 ## Refusals
 
 A bad argument or a rejected write comes back as the tool's own error text with

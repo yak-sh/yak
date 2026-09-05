@@ -1,8 +1,9 @@
-// The connector's tools (D-32318 §Code, build, deploy), two tiers: the
-// generic graph tier — graph_apply, graph_query, search — scoped to a
-// (space, app) the caller names and belongs to, each an IO over the Store
-// object's /apply and /query doors with the caller vouched server-side; and
-// the platform sugar, the least that makes an app: space_new, app_new,
+// The connector's PLATFORM tools (D-32318 §Code, build, deploy): the least
+// that makes an app. The generic graph tier is no longer here — @yaks/mcp
+// brings graph_apply, graph_query, graph_show, vocab and search over the
+// caller's reach as one graph (agent.ts, T-33812), and a second copy of them
+// scoped to a (space, app) would be a dimmer one. What is here is the sugar:
+// space_new, app_new,
 // app_files, app_deploy, app_versions and app_rollback — the deploys an app
 // keeps and the word that puts one back (versions.ts, T-32886) — app_set,
 // app_delete, app_errors, app_list, the three
@@ -19,20 +20,17 @@
 // is for: member_add and member_remove, the space
 // owner's guest list, beside `app.access`, which is what an app lets a
 // stranger with the link do (T-32504). A tool is one row here — name, what it
-// does, its input as JSON Schema, and `run` — and the door (mcp.ts) reads the
-// table for tools/list and tools/call.
+// does, its input as JSON Schema, and `run` — and agent.ts wears the table as
+// a plugin's tools, which is how one server lists these beside the generic
+// tier.
 //
 // src/mcp.ts's registry is the shape mirrored, not imported. Its `IO` seam
 // wants fifteen methods — the whole eager graph, work lanes, the provider
 // table, verification, the frozen-page upload — and its tools are this
 // fleet's own: sessions, claims, memory, spawn. None of that exists in a
-// hosted space, and reaching it would drag the MCP SDK, zod, and node's
-// SQLite into a Worker that has no node_modules. What does carry over is the
-// three graph tools, and each is a dozen lines over the store's own /apply
-// and /query. The rule for every write is session.ts's:
+// hosted space. The rule for every write is session.ts's:
 // an owner or editor of the space writes, a member reads, nobody else is
-// answered at all. A write speaks the wire and nothing else — the entity
-// bundle, or a flat Change batch. A deploy in v1 is a version bump, since an
+// answered at all. A deploy in v1 is a version bump, since an
 // app's files serve live from its blob store — and the version it bumps to is
 // kept, files and all, so app_rollback can put it back.
 import { r2Blobs } from '../../src/blobs_r2.ts'
@@ -99,8 +97,7 @@ import type { Env } from './env.ts'
 import { mail, REPLY_TO } from './mail.ts'
 import { NO_ARGS, PUBLIC } from './preauth.ts'
 import { foreign, SLUG } from './route.ts'
-import { type Reach, read, written } from './reach.ts'
-import { type Bundle, dead } from '@yaks/graph'
+import type { Reach } from './reach.ts'
 import { mayWrite, reads, titling, vouched, type Who } from './session.ts'
 import { canon, nameOf, personOf } from './signin.ts'
 import { type Door, storeOf } from './store.ts'
@@ -365,7 +362,7 @@ let owns = async (ctx: Ctx, args: Args) => {
   return { space, who }
 }
 
-let inApp = async (ctx: Ctx, args: Args, write = false) => {
+export let inApp = async (ctx: Ctx, args: Args, write = false) => {
   let { space, who } = await inSpace(ctx, args, write)
   let slug = text(args.app, 'app')
   let app = await ctx.dir.app(space, slug)
@@ -672,7 +669,7 @@ let copied = async (
 // plus the app's own access: the door remembers nothing about which apps a
 // session has opened (declared.ts), so a public app in a space the caller is
 // not in is on the web and not here.
-let inReach = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
+export let inReach = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
   if (args.app != null) {
     let { space, app, who } = await inApp(ctx, args)
     return [{ space, app, who }]
@@ -694,13 +691,6 @@ let inReach = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
   return out
 }
 
-// The space a federated answer belongs to, for the unseen block the door
-// appends (mcp.ts): the one named, else the first store's — a fan-out has no
-// single space, and asking the caller to name one to read across all of them
-// would defeat the point.
-let whichSpace = (reach: Reach[]) => reach[0]?.space
-
-// A store door's answer as text, its refusal as the tool's error.
 let answer = async (r: Response) => {
   let body = await r.text()
   if (!r.ok) throw new Error(body)
@@ -708,82 +698,6 @@ let answer = async (r: Response) => {
 }
 
 type Change = { eid: string; name: string; comp: unknown }
-
-// What a write answers: one line a person's agent can repeat, naming every
-// entity it touched by id and every alias it minted, so the next call can
-// address them. The store's own answer is the wire's — a row per component
-// written, stamps included — which reads as noise beside the sentences the
-// app tools give (C-32531 item 5). `graph_query` reads the data back.
-//
-// And the same thing as DATA, because seeding anything relational means using
-// the eids this call just minted, and scraping them out of prose with a regex
-// is not a thing to ask of a caller (T-33148). The sentence is a summary — it
-// stops at ten ids — and the data is the whole of it: every eid touched, the
-// alias map, and what was deleted. It rides twice on purpose: as
-// structuredContent, the shape a declared tool's write already answers
-// (declared.ts), and as a JSON line under the sentence, since that is the
-// channel an agent reading the text actually has. `graph_query` answers JSON
-// in its text already, so this is the write door catching up to the read one.
-let wrote = (
-  out: { bundles: Bundle[]; aliases: Record<string, string>; where: string },
-): Out => {
-  let where = out.where
-  // A doc's body is stored as a content-addressed blob entity (@yaks/blob), so
-  // a batch of one recipe writes two rows. The person wrote the recipe; the
-  // blob is the store's own business, the way it is in a listing.
-  let mine = out.bundles.filter((b) => b.blob == null)
-  let named = new Map(
-    Object.entries(out.aliases).map(([alias, eid]) => [eid, alias]),
-  )
-  let gone = new Set(mine.filter(dead).map((b) => b.entity.eid))
-  let ids = [...new Set(mine.map((b) => b.entity.eid))]
-  let said = ids.slice(0, 10).map((id) =>
-    `${named.has(id) ? `${named.get(id)}=` : ''}${id}${
-      gone.has(id) ? ' (deleted)' : ''
-    }`
-  )
-  if (ids.length > said.length) said.push(`…and ${ids.length - said.length}`)
-  let data = {
-    in: where,
-    entities: ids,
-    aliases: out.aliases,
-    deleted: [...gone],
-  }
-  return {
-    text: `wrote ${ids.length} ${
-      ids.length == 1 ? 'entity' : 'entities'
-    } in ${where}: ${said.join(', ')}\n${JSON.stringify(data)}`,
-    data,
-  }
-}
-
-// A write that tried to date itself. `created.at` is the store's own record of
-// when it first saw a row, so it is dropped in silence on the way in — right
-// for a row read and patched straight back, and no help at all to the import
-// that meant it, which then reads as written today (T-33147). The bundle is
-// still in hand here, so the door can say it once instead of leaving six
-// guestbook messages from a fortnight all saying this morning.
-let dated = (entities: EntityLiteral[]) =>
-  entities.some((e) => {
-    // Only a row being BORN. A read patched straight back carries its own
-    // stamps, and the whole reason they are dropped in silence is that it
-    // must not be punished for that (guide/components.md) — so an eid that
-    // names an existing row says nothing, and a `$alias` or no entity key at
-    // all is the seed that meant it.
-    let at = e.entity?.eid ?? e.id
-    if (typeof at == 'string' && at && !at.startsWith('$')) return false
-    return ['created', 'updated'].some((name) => {
-      let comp = e[name]
-      return !!comp && typeof comp == 'object' &&
-        (comp as Record<string, unknown>).at != null
-    })
-  })
-
-let SAY_DATED = "\ncreated.at was not written: it is the store's own record " +
-  'of when it first saw a row, and nothing can give it a past moment. A date ' +
-  'the row itself has — when the entry was written, when the message was ' +
-  'left — is a time column of the app\'s own ({"entry": {"written": "time"}} ' +
-  'in vocab.json), and the page draws that.'
 
 // A file's key: the app's slugs, then its path from the slash (apps.ts keyOf).
 let fileKey = (space: Space, app: App, path: string) =>
@@ -2418,166 +2332,6 @@ export let TOOLS: Tool[] = [
       return {
         text: `${email} is no longer a member of ${space.slug}`,
         space,
-      }
-    },
-  },
-  {
-    name: 'graph_apply',
-    description:
-      "Put data in the app's store yourself — seeding it, or repairing what a " +
-      'page wrote. An entity is {entity: {eid}, ...components}, where a ' +
-      "'$alias' eid mints a new one (the answer maps it to its eid), as does a " +
-      'uuid of your own that names nothing yet, a nested bundle stands in ' +
-      "wherever an eid goes, and edges ride the bundle's edges field. The " +
-      "app's pages write this same shape through ./api/client.js. The " +
-      'components every app shares are ' +
-      '— doc (title, body), task (status, priority, project), project, ' +
-      "comment, web, image, attachment, archived; components of the app's " +
-      'own naming ride here too, once its vocab.json declares them and ' +
-      'app_deploy has planted them. The answer is one line naming what was ' +
-      'written, by id, and under it a JSON line — {in, entities, aliases, ' +
-      'deleted} — so the eids this call minted can be used in the next one ' +
-      'without reading the sentence. graph_query reads the data back. ' +
-      "created.at is the store's own record of when it first saw a row and " +
-      'cannot be given a past moment, so anything imported or seeded carries ' +
-      "its own date in a time column of the app's own. One " +
-      'bundle may wear ' +
-      "two apps' components at once — an entity spans apps — and each " +
-      'component is written to the app that declares it; a shared one goes to ' +
-      'the app you name, else the app where that entity already lives. The ' +
-      'guide (https://yaks.app/guide.md) has all of it.',
-    input: {
-      type: 'object',
-      properties: {
-        space: SPACE,
-        app: APP,
-        entities: {
-          type: 'array',
-          items: { type: 'object' },
-          description: 'the bundles',
-        },
-      },
-      required: ['entities'],
-    },
-    run: async (ctx, args) => {
-      if (!Array.isArray(args.entities)) {
-        throw new Error('entities: a list of bundles')
-      }
-      // The app NAMED, if one is — the write still routes a declared
-      // component to the app that owns the word, so the reach set is every
-      // app either way (reach.ts `written`).
-      let named = args.app == null ? undefined : await inApp(ctx, args, true)
-      let reach = await inReach(ctx, { space: args.space })
-      let out = await written(
-        ctx.env,
-        reach,
-        named && (reach.find((r) => r.app.eid == named.app.eid) ?? named),
-        args.entities as Bundle[],
-        // The same vouch a page's write carries (apps.ts `acting`), so a
-        // store this write routes into knows the writer by name and not by
-        // uuid alone (session.ts `titling`, C-32800 item 5).
-        await titling(ctx.dir, ctx.person),
-      )
-      let answer = wrote(out)
-      return {
-        ...answer,
-        text: answer.text +
-          (dated(args.entities as EntityLiteral[]) ? SAY_DATED : ''),
-        space: named?.space ?? whichSpace(reach),
-      }
-    },
-  },
-  {
-    name: 'graph_query',
-    description:
-      "Read the app's store. An answer carries ONLY the components the " +
-      'filter names: {kind, entity: {eid, num}, ...those components}. So ' +
-      "'.recipe!' answers recipes without their titles, and " +
-      "'.recipe!&.doc?' answers both — presence filters end at ! and join " +
-      "with &, and '?' asks for a component without filtering on it. A " +
-      "dotted word addresses that component's COLUMN ('.recipe.minutes<=30'), " +
-      "so '&.doc?' is the way to ask for another component and '.recipe.doc' " +
-      'is a column recipe does not have. Ask for what you will draw. ' +
-      'To list EVERYTHING you saved, ask for the ' +
-      "component it wears: '.doc!' is every entity with a title (an empty " +
-      "query selects nothing, so a bare 'limit=50' answers []). Then " +
-      "'.doc.title~=cake' contains, '.task.status=open' equals, '.archived=' " +
-      'is absent, ' +
-      "'id=<eid>' fetches one whole, 'limit=20' and 'after=<num>' page " +
-      "(a windowed read answers the newest), '.count!' counts, and a bare " +
-      "word is a full-text term. '.doc!&.created!' is " +
-      'your rows with the stamps saying who saved each and when — a listing ' +
-      "leaves those out, and the platform's own error rows, unless named; " +
-      "'*' answers every component, for looking rather than reading. The " +
-      'same filter line the page passes to query() from ./api/client.js. ' +
-      'Name an app to read that one; LEAVE app OUT to read every app at ' +
-      'once — an entity spans apps, so one bundle can carry components from ' +
-      "several: '.recipe!&.loan!' answers the entities wearing both, " +
-      "'.recipe!&.loan?' answers every recipe with its loan where it has " +
-      'one, and a bundle composed from two apps says which app holds which ' +
-      'component in `_stores`.',
-    input: {
-      type: 'object',
-      properties: { space: SPACE, app: APP, filter: str('the filter line') },
-      required: ['filter'],
-    },
-    run: async (ctx, args) => {
-      let reach = await inReach(ctx, args)
-      // The parameter is what everything else here calls it — a filter line
-      // (C-32607 item 2, where `query` was the odd word out and the person's
-      // agent reached for `filter` first). `query` stays a spelling of it:
-      // an old caller is answered, never corrected.
-      //
-      // The refusal spells the argument and shows one, since the agent that
-      // gets it guessed at the name: "filter is required" told someone who
-      // had sent `filters: [...]` nothing about the word or its shape
-      // (C-32730 item 3).
-      let asked = args.filter ?? args.query
-      if (typeof asked != 'string' || !asked) {
-        throw new Error(
-          "filter: one LINE, not a list — filter: '.doc!' is everything " +
-            "saved here, and '&' joins several: '.doc!&.task.status=open'",
-        )
-      }
-      return {
-        text: JSON.stringify(await read(ctx.env, reach, asked)),
-        space: whichSpace(reach),
-      }
-    },
-  },
-  {
-    name: 'search',
-    description:
-      "Find words in the app's data — every title and body, ranked. A hit " +
-      'carries the whole entity, every component it has, so you can tell a ' +
-      'recipe from a comment on one. The page has the same door as search() ' +
-      'from ./api/client.js. Name an app to search that one; leave app out ' +
-      'to search every app the person has, best hits first. Pass a filter to ' +
-      'narrow it, in the same grammar graph_query takes — and note that a ' +
-      'filter naming components cuts the answer to those, the ordinary rule.',
-    input: {
-      type: 'object',
-      properties: {
-        space: SPACE,
-        app: APP,
-        text: str('words to find'),
-        filter: str(
-          'a filter line to narrow the hits, e.g. .recipe!&.doc? — the same ' +
-            'grammar graph_query takes',
-        ),
-        limit: { type: 'number', description: 'at most this many (20)' },
-      },
-      required: ['text'],
-    },
-    run: async (ctx, args) => {
-      let reach = await inReach(ctx, args)
-      let narrow = args.filter == null ? '' : text(args.filter, 'filter')
-      let q = `${encodeURIComponent(text(args.text, 'text'))}${
-        narrow ? `&${narrow}` : ''
-      }&limit=${Number(args.limit) || 20}`
-      return {
-        text: JSON.stringify(await read(ctx.env, reach, q)),
-        space: whichSpace(reach),
       }
     },
   },

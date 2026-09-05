@@ -136,6 +136,10 @@ export type Tool = {
   output?: Schema
   /** this tool only reads — a client may call it without asking first */
   readOnly?: boolean
+  /** what the TRANSPORT should say about this tool beside its schemas, handed
+   * to the client verbatim — an MCP `_meta`, say, naming the page a host
+   * renders the answer in. Opaque here, like {@link Schema}. */
+  meta?: Record<string, unknown>
   /** do it: the arguments in, the structured result out */
   run: (
     args: Record<string, unknown>,

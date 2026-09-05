@@ -89,7 +89,10 @@ slow('a page reports its own breaks, and the agent hears', async () => {
     assertEquals((await report('not a report')).status, 204)
 
     // Both reach the agent, once, on its next reply.
-    let told = await agent.tool('graph_query', { ...app, query: '.doc!' })
+    // …on a PLATFORM tool's answer, which is prose (T-33812): the generic
+    // tier answers a described value, and words appended to it would be
+    // something else.
+    let told = await agent.tool('app_files', { ...app, op: 'list' })
     assertMatch(told, /exception recipes: page \/recipes\/ — boom is not a/)
     assertMatch(
       told,
@@ -101,7 +104,7 @@ slow('a page reports its own breaks, and the agent hears', async () => {
       'two, and only two',
     )
     assert(
-      !(await agent.tool('graph_query', { ...app, query: '.doc!' })).includes(
+      !(await agent.tool('app_files', { ...app, op: 'list' })).includes(
         'unseen',
       ),
       'served once',

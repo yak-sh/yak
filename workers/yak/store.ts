@@ -718,8 +718,12 @@ let VOUCH = [
 export type Served = { eid: string; access: string | null }
 
 export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
-  let stub = ns.get(ns.idFromName(name))
   return (path, init = {}, headers = {}) => {
+    // The stub is taken PER CALL. It is an I/O object, and the runtime binds
+    // one to the request that created it: a door memoized for the isolate
+    // (meta.ts `doors`) and reused on the next request throws "cannot perform
+    // I/O on behalf of a different request". Getting one costs nothing.
+    let stub = ns.get(ns.idFromName(name))
     let req = new Request(`http://store${path}`, init)
     for (let h of VOUCH) req.headers.delete(h)
     for (let [k, v] of Object.entries(headers)) req.headers.set(k, v)

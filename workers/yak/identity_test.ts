@@ -376,7 +376,16 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
         'content-type': 'application/json',
         authorization: `Bearer ${bearer}`,
       },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize' }),
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'probe', version: '0' },
+        },
+      }),
     })
     assertEquals(rpc.status, 200)
     assert((await rpc.json()).result, 'the connector answered the bearer')

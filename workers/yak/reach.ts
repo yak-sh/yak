@@ -479,8 +479,8 @@ export let read = async (
   let agg = aggOf(line)
   if (agg && agg != 'count') {
     throw new Error(
-      `a ${agg} reads one app at a time — name one with app, or ask for the ` +
-        'rows and reduce them',
+      `a ${agg} reads one app at a time and this reads them all — ask for ` +
+        'the rows and reduce them',
     )
   }
   let { parts, global } = split(line)
@@ -719,7 +719,9 @@ let routed = async (
     if (named) return named
     if (reach.length == 1) return reach[0]
     throw new Error(
-      `name the app this goes in — ${reach.map((r) => r.app.slug).join(', ')}`,
+      `name the app this goes in with $app — ${
+        reach.map((r) => r.app.slug).join(', ')
+      }`,
     )
   }
   let home = (name: string, eid: string | null, mates: Reach[]): Reach => {
@@ -742,7 +744,7 @@ let routed = async (
       if (apart.has(name) && spaces.length > 1) {
         throw new Error(
           `${name} means two things — ${spaces.join(' and ')} declare it ` +
-            'differently; name the app this goes in',
+            'differently; say which with $app on the bundle',
         )
       }
       return declared[0]
@@ -758,7 +760,7 @@ let routed = async (
     if (mates.length == 1) return mates[0]
     if (reach.length == 1) return reach[0]
     throw new Error(
-      `which app should ${name} go in? name one with app — ${
+      `which app should ${name} go in? say $app on the bundle — ${
         reach.map((r) => r.app.slug).join(', ')
       }`,
     )

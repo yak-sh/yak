@@ -1,26 +1,37 @@
 // The connector part (D-32318 §The agent door): `POST /mcp` at the apex, an
 // MCP server over Streamable HTTP — one JSON-RPC request in, one JSON reply
-// out, no session id — the same way the dev server mounts src/mcp.ts, so a
-// restart strands nobody and a Worker isolate holds nothing between calls
-// except a stream a client is holding open: `GET /mcp` is that stream
-// (stream.ts), and what goes down it is `notifications/tools/list_changed`
-// when an app's own tools move (T-32686). The protocol surface is eight
-// methods — initialize, ping, tools/list, tools/call over the tool table in
-// tools.ts, resources/list, resources/read over the guide, its deep pages
-// (guide.ts, T-32982), the two views below, and the pages an app of the
-// person's own declares (declared.ts, T-32687), and prompts/list,
-// prompts/get over the four doors a PERSON picks by name (prompts.ts,
-// T-32981) — which is what a connector that calls tools, reads a page and
-// renders an answer asks for. The stream is the `agents` package's McpAgent
-// shape without the package: a Durable Object per signed-in person
-// (stream.ts's `Wire`), which is what it takes for the request that deployed
-// an app to write to the stream a DIFFERENT request opened. `initialize`
-// answers an `Mcp-Session-Id` so a client can name its stream and resume it
-// after a drop; nothing else reads that id, and every POST stays stateless.
+// out, no session held — so a restart strands nobody and a Worker isolate
+// holds nothing between calls except a stream a client is holding open:
+// `GET /mcp` is that stream (stream.ts), and what goes down it is
+// `notifications/tools/list_changed` when an app's own tools move (T-32686).
+//
+// THE PROTOCOL IS THE PACKAGE'S (T-33812). @yaks/mcp serves the whole of it —
+// initialize, ping, tools, resources, prompts — over the graph and the
+// `Authenticate` it is handed, exactly as the Store's own agent door does
+// (graph.ts `door`). Two tiers list on that one server:
+//
+//   the generic tier   graph_apply, graph_query, graph_show, vocab and search
+//                      over the caller's whole reach, bundles in and out, with
+//                      an output schema derived from the loaded vocabulary
+//   the platform tier  space_new, the app_* family, domain_*, member_*,
+//                      feedback and about, contributed as a plugin's tools
+//                      (agent.ts `platform`) rather than a table this door
+//                      reads
+//
+// and beside them the tools an app of the person's own declares (declared.ts),
+// which are a plugin nobody wrote a plugin for: they arrive per caller, so
+// they ride as the mount's own `tools`.
+//
+// What this file still owns is everything that is NOT the protocol: the
+// resources and prompts it registers on the same server through `extend`, the
+// stream, and who is asking. `initialize` answers an `Mcp-Session-Id` so a
+// client can name its stream and resume it after a drop; nothing else reads
+// that id, and every POST stays stateless.
 //
 // Every tool reply for a space ends with what is unseen there (unseen.ts):
 // each open exception or error not yet served, one line, then marked, so no
-// break in an app goes unseen by the agent that builds it (T-32362).
+// break in an app goes unseen by the agent that builds it (T-32362). That
+// rides on the tool now (agent.ts), not on this door.
 //
 // Who is asking is identity.ts's `withAuth`: the platform session cookie a
 // browser carries, or the OAuth bearer an agent carries, one answer either
@@ -35,24 +46,27 @@
 // That surface is handed a method and its params and no binding but the
 // static assets — no person, no `Ctx`, nothing to read anybody's data with —
 // and everything it does not answer meets the same challenge as ever.
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { SetLevelRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { z } from 'zod'
+import { mcp } from '@yaks/mcp'
 import { VERSION } from '../../src/version.ts'
+import { answered, inputOf, reaching, searching } from './agent.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { unauthorized, withAuth } from './identity.ts'
 import { callDeclared, listDeclared, listViews, readView } from './declared.ts'
-import { answer, asset, type Doc, DOCS, spoken } from './preauth.ts'
-import { missing, promptOf, PROMPTS } from './prompts.ts'
+import { answer, asset, type Doc, DOCS } from './preauth.ts'
+import { PROMPTS } from './prompts.ts'
 import {
   APPS_VIEW,
   type Ctx,
   ERRORS_VIEW,
-  type Out,
-  TOOLS,
+  inReach,
   VIEW_MIME,
 } from './tools.ts'
 import { listen } from './stream.ts'
-import { ceiling, serve, unseenBlock } from './unseen.ts'
 
 // What a model reads before it has read anything else here (T-32481). It is
 // the whole recipe on purpose — the address, the four steps, and the store in
@@ -116,9 +130,14 @@ for seeding and fixing.
 An eid is the same thing in every app. Two apps can write about one entity —
 a reading list app saves the book, a lending app saves the loan — and each
 component lives with the app that declares it, so nothing is copied and
-nothing is synced. graph_query with no app named reads them all at once and
+nothing is synced. graph_query reads every app you can reach at once and
 answers one bundle per entity: '.book!&.loan?' is every book wearing its loan
 where it has one, and '.loan?' asks for a component without filtering on it.
+graph_apply writes each component to the app that declares it, and where a
+brand-new entity wears only shared words — a doc and nothing else — say which
+app on the bundle: {"entity": {"eid": "$r"}, "$app": "recipes", "doc": {...}}.
+To read ONE app rather than all of them, ride '.in=recipes' on the query line
+('.in=<space>/<app>' where a slug means two things).
 A page reads a sibling app the same way, with store('/lending/api/') from
 './api/client.js'.
 
@@ -208,201 +227,156 @@ type Rpc = {
 
 let json = (status: number, body: unknown) => Response.json(body, { status })
 
-let rpcError = (id: unknown, code: number, message: string) =>
-  json(200, { jsonrpc: '2.0', id, error: { code, message } })
-
 let result = (id: unknown, result: unknown) =>
   json(200, { jsonrpc: '2.0', id, result })
 
-// One tool call: the answer, or the failure as the tool's own error text —
-// a bad argument or a refused write is for the agent to read, never a 500.
-// Either way the unseen section rides when a space was in hand.
-let call = async (ctx: Ctx, params: Record<string, unknown>) => {
-  let name = String(params.name)
-  let tool = TOOLS.find((t) => t.name == name)
-  let args = (params.arguments ?? {}) as Record<string, unknown>
-  let text: string
-  let isError = false
-  let out: Out | undefined
-  try {
-    // The platform's own tool, or — when nothing here spells that name — one
-    // of the person's own apps' (declared.ts, T-32685), which is a template
-    // over that app's store and refuses exactly as its page would.
-    out = tool
-      ? await tool.run(ctx, args)
-      : (await callDeclared(ctx, name, args)) ?? undefined
-    if (!out) {
-      return {
-        content: [{ type: 'text', text: `no tool ${name}` }],
-        isError: true,
-      }
-    }
-    text = out.text
-  } catch (e) {
-    text = e instanceof Error ? e.message : String(e)
-    isError = true
-  }
-  if (out?.space) {
-    let who = {
-      person: ctx.person,
-      role: await ctx.dir.role(out.space, ctx.person),
-    }
-    text += unseenBlock(await serve(ctx.env, out.space, who)) +
-      await ceiling(ctx.env, out.space)
-  }
-  return {
-    content: [{ type: 'text', text }],
-    // What the tool's view draws, if it has one: the host hands this to the
-    // iframe as `ui/notifications/tool-result`.
-    ...(out?.data ? { structuredContent: out.data } : {}),
-    ...(isError ? { isError } : {}),
-  }
-}
+// The tools an app of the person's OWN declares (declared.ts, T-32686), for
+// every app in every space they belong to. They are not a plugin — nobody
+// wrote a plugin for somebody's recipe box — so they ride as the mount's own
+// tools, listed beside the two tiers and called the same way.
+let declared = async (ctx: Ctx) =>
+  (await listDeclared(ctx)).map((t) => ({
+    name: t.name,
+    title: t.title,
+    description: t.description,
+    input: inputOf(t.inputSchema),
+    ...(t._meta ? { meta: t._meta } : {}),
+    run: async (args: Record<string, unknown>) => {
+      let out = await callDeclared(ctx, t.name, args)
+      if (!out) throw new Error(`no tool ${t.name}`)
+      return answered(ctx, out)
+    },
+  }))
 
-let handle = async (ctx: Ctx, rpc: Rpc) => {
-  let params = rpc.params ?? {}
-  if (rpc.method == 'initialize') {
-    let out = result(rpc.id, {
-      protocolVersion: spoken(params.protocolVersion),
-      // `listChanged` is a promise to say when the tool list moves, which is
-      // what an app deploying its own tools does (declared.ts). Resources
-      // promise the same, since a release moves an app's views without
-      // necessarily touching its tools (T-33004), and prompts for the same
-      // reason: an app that deploys prompts of its own moves this list too
-      // (T-32983), and the stream already knows how to say so (stream.ts
-      // `told`). `logging` is the door for a break PUSHED as it is written
-      // (unseen.ts `noted`, T-33006), not held for the next reply's unseen
-      // block — which still carries it, for whoever was not listening.
-      capabilities: {
-        tools: { listChanged: true },
-        prompts: { listChanged: true },
-        resources: { listChanged: true },
-        logging: {},
-      },
-      serverInfo: { name: 'yaks.app', version: VERSION },
-      instructions: INSTRUCTIONS,
-    })
-    // The session id, per the transport: the client sends it back on every
-    // later request, and the one place it means anything is the GET below,
-    // where it names which of this person's streams is which. It is not
-    // required and never checked — a POST carries its own answer to who is
-    // asking, and a client that has never seen this header still works.
-    out.headers.set('mcp-session-id', crypto.randomUUID())
-    return out
+// Everything this door serves that is not a tool, registered on the same
+// server the package built (@yaks/mcp `extend`).
+//
+// The resources are the guide and its deep pages, which anybody may read, plus
+// the two views a signed-in person's own answers draw in — and the pages an
+// app of theirs declares (declared.ts, T-32687), which only someone who can
+// reach that app is told about. The prompts are the doors a PERSON picks by
+// name (prompts.ts, T-32981).
+let extend = (ctx: Ctx) => async (server: McpServer) => {
+  for (let doc of RESOURCES) {
+    server.registerResource(doc.name, doc.uri, {
+      title: doc.title,
+      description: doc.description,
+      mimeType: doc.mimeType,
+    }, async () => ({
+      contents: [{
+        uri: doc.uri,
+        mimeType: doc.mimeType,
+        text: await (await asset(ctx.env, doc.page)).text(),
+      }],
+    }))
   }
-  if (rpc.method == 'ping') return result(rpc.id, {})
-  // Declaring `logging` invites this ask, so it is answered rather than
-  // refused. There is nothing to set: the one thing this door ever logs is a
-  // break, at `error`, and nothing quieter is ever sent (unseen.ts `noted`).
-  if (rpc.method == 'logging/setLevel') return result(rpc.id, {})
-  if (rpc.method == 'tools/list') {
-    return result(rpc.id, {
-      tools: [
-        ...TOOLS.map((t) => ({
-          name: t.name,
-          description: t.description,
-          inputSchema: t.input,
-          // A tool with a view names it; a host without MCP Apps ignores the
-          // field and reads the same answer as text. Visibility is who may
-          // call it: the model, and 'app' where the view's own button does.
-          ...(t.view
-            ? {
-              _meta: {
-                ui: {
-                  resourceUri: t.view,
-                  visibility: t.visibility ?? ['model'],
-                },
-              },
-            }
-            : {}),
-        })),
-        // And the tools the person's own apps declare (declared.ts, T-32686),
-        // for every app in every space they belong to: an app that grew a tool
-        // is one more thing their agent can do, without anything here knowing
-        // what it is. A deploy that moves that list says so on the stream
-        // below, so a client that listed once lists again.
-        ...await listDeclared(ctx),
-      ],
+  for (let view of await listViews(ctx)) {
+    server.registerResource(view.name, view.uri, {
+      title: view.title,
+      description: view.description,
+      mimeType: view.mimeType,
+      _meta: view._meta,
+    }, async () => {
+      let page = await readView(ctx, view.uri)
+      if (!page) throw new Error(`no resource ${view.uri}`)
+      return { contents: [{ ...page, mimeType: VIEW_MIME }] }
     })
   }
-  if (rpc.method == 'tools/call') return result(rpc.id, await call(ctx, params))
-  // The doors a PERSON picks by name (prompts.ts): the list is short and
-  // whole, so no cursor rides the answer.
-  if (rpc.method == 'prompts/list') {
-    return result(rpc.id, {
-      prompts: PROMPTS.map(({ name, title, description, arguments: args }) => ({
-        name,
-        title,
-        description,
-        arguments: args,
-      })),
-    })
-  }
-  if (rpc.method == 'prompts/get') {
-    let want = promptOf(params.name)
-    if (!want) return rpcError(rpc.id, -32602, `no prompt ${params.name}`)
-    let args = (params.arguments ?? {}) as Record<string, unknown>
-    let short = missing(want, args)
-    if (short.length) {
-      return rpcError(rpc.id, -32602, `${want.name} needs ${short.join(', ')}`)
-    }
-    return result(rpc.id, {
-      description: want.description,
+  for (let p of PROMPTS) {
+    server.registerPrompt(p.name, {
+      title: p.title,
+      description: p.description,
+      argsSchema: Object.fromEntries(p.arguments.map((a) => [
+        a.name,
+        a.required
+          ? z.string().describe(a.description)
+          : z.string().describe(a.description).optional(),
+      ])),
+    }, (args: Record<string, string | undefined>) => ({
+      description: p.description,
       messages: [{
-        role: 'user',
+        role: 'user' as const,
         content: {
-          type: 'text',
-          text: want.say(
+          type: 'text' as const,
+          text: p.say(
             Object.fromEntries(
-              Object.entries(args).map(([k, v]) => [k, String(v ?? '')]),
+              Object.entries(args ?? {}).map(([k, v]) => [k, String(v ?? '')]),
             ),
           ),
         },
       }],
-    })
+    }))
   }
-  if (rpc.method == 'resources/list') {
-    return result(rpc.id, {
-      resources: [
-        ...RESOURCES.map((
-          { uri, name, title, description, mimeType },
-        ) => ({
-          uri,
-          name,
-          title,
-          description,
-          mimeType,
-        })),
-        // And the pages the person's own apps draw their tools' answers in
-        // (declared.ts, T-32687): the app wrote them, the app's files hold
-        // them, and only someone who can reach the app is told they exist.
-        ...await listViews(ctx),
-      ],
-    })
+  // Declaring `logging` invites `logging/setLevel`, so it is answered rather
+  // than refused. There is nothing to set: the one thing this door ever logs
+  // is a break, at `error`, and nothing quieter is ever sent (unseen.ts
+  // `noted`).
+  server.server.registerCapabilities({ logging: {} })
+  server.server.setRequestHandler(SetLevelRequestSchema, () => ({}))
+}
+
+// An old caller is answered, never corrected (C-32607 item 2). The generic
+// tier's arguments moved when it became @yaks/mcp's (T-33812) — `entities` is
+// `change`, `filter` and `query` are `q`, `text` is `words` — and a connector
+// configured against the old spelling is somebody's, already installed. So the
+// words are translated HERE, at the door, and the tool sees one shape.
+//
+// The pair that named ONE app moves too: on a write it becomes `$app` on each
+// bundle, on a read the `.in=` rider on the query line — both the platform's
+// own words, each said where the thing it is about is (agent.ts).
+let SAID: Record<string, Record<string, string>> = {
+  graph_apply: { entities: 'change' },
+  graph_query: { filter: 'q', query: 'q' },
+  search: { text: 'words' },
+}
+
+let heard = (name: string, args: Record<string, unknown>) => {
+  let moved = SAID[name]
+  if (!moved) return args
+  let out: Record<string, unknown> = {}
+  for (let [k, v] of Object.entries(args)) out[moved[k] ?? k] = v
+  let { app, space, ...rest } = out
+  // The old wire let a bundle name no entity at all and had the store mint
+  // one; the bundle wire wants the alias said out loud. An old caller keeps
+  // its silence, and the alias it never asked for is one this door invents.
+  if (
+    name == 'graph_apply' && 'entities' in args && Array.isArray(rest.change)
+  ) {
+    rest.change = rest.change.map((b, i) =>
+      b && typeof b == 'object' && !('entity' in b) && !('id' in b)
+        ? { entity: { eid: `$b${i}` }, ...b }
+        : b
+    )
   }
-  if (rpc.method == 'resources/read') {
-    let want = RESOURCES.find((r) => r.uri == params.uri)
-    if (want) {
-      let page = await asset(ctx.env, want.page)
-      return result(rpc.id, {
-        contents: [{
-          uri: want.uri,
-          mimeType: want.mimeType,
-          text: await page.text(),
-        }],
-      })
-    }
-    // A view out of an app's own files, if the caller can reach the app that
-    // declared it. Anything else is a resource this door does not have —
-    // including a page of an app they cannot reach, which is the same answer
-    // as a page nobody wrote.
-    let view = await readView(ctx, String(params.uri))
-    if (!view) return rpcError(rpc.id, -32602, `no resource ${params.uri}`)
-    return result(rpc.id, {
-      contents: [{ ...view, mimeType: VIEW_MIME }],
-    })
+  if (typeof app != 'string') return rest
+  let at = typeof space == 'string' ? `${space}/${app}` : app
+  if (name == 'graph_apply' && Array.isArray(rest.change)) {
+    rest.change = rest.change.map((b) =>
+      b && typeof b == 'object' && !('$app' in b) ? { ...b, $app: at } : b
+    )
   }
-  return rpcError(rpc.id, -32601, `no method ${rpc.method}`)
+  if (name == 'graph_query' && typeof rest.q == 'string') {
+    rest.q = `.in=${at}&${rest.q}`
+  }
+  return rest
+}
+
+// The door itself, built per request around the person the edge verified: the
+// caller's whole reach as one graph, the platform's verbs on it as a plugin,
+// and the same `Authenticate` seam every other door onto this data takes —
+// here it has already run, so it hands back what the edge decided.
+let door = async (ctx: Ctx) => {
+  let reach = await inReach(ctx, {})
+  return mcp({
+    graph: await reaching(ctx, reach),
+    authenticate: () => ({ eid: ctx.person }),
+    name: 'yaks.app',
+    version: VERSION,
+    instructions: INSTRUCTIONS,
+    search: searching(ctx, reach),
+    tools: await declared(ctx),
+    extend: extend(ctx),
+  })
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
@@ -433,11 +407,21 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // hand over, and anything that was not a request at all. So a body that
   // does not parse and a batch, which are refusals every caller gets, are
   // still the 401 for an anonymous one.
+  // The body is read HERE and passed on as text: this door decides who is
+  // answered before the protocol machine sees anything, and a request body is
+  // read once.
+  let said = await req.text()
   let body: unknown
   try {
-    body = await req.json()
+    body = JSON.parse(said)
   } catch {
-    return auth ? rpcError(null, -32700, 'parse error') : unauthorized(req)
+    return auth
+      ? json(200, {
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32700, message: 'parse error' },
+      })
+      : unauthorized(req)
   }
   if (Array.isArray(body)) {
     return auth
@@ -446,6 +430,23 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   let rpc = body as Rpc
   if (rpc.id == null) return new Response(null, { status: 202 }) // a notification
+  // A prompt picked BARE is a prompt with no arguments, not a malformed call:
+  // every one of them reads as a sentence with nothing filled in (prompts.ts
+  // `or`), while the schema behind it wants the object said out loud.
+  if (rpc.method == 'prompts/get' && rpc.params?.arguments == null) {
+    rpc.params = { ...rpc.params, arguments: {} }
+    said = JSON.stringify(rpc)
+  }
+  if (rpc.method == 'tools/call' && rpc.params) {
+    rpc.params = {
+      ...rpc.params,
+      arguments: heard(
+        String(rpc.params.name),
+        (rpc.params.arguments ?? {}) as Record<string, unknown>,
+      ),
+    }
+    said = JSON.stringify(rpc)
+  }
   // The pre-auth surface (preauth.ts): what this platform is, and the guide,
   // which the web already serves to anybody. It is handed a method and its
   // params — no person, no Ctx, and no binding but the static assets — so
@@ -466,5 +467,20 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     dir: directory(bound(env.DIRECTORY, dirPart.fetch, env), true),
     person: auth.person,
   }
-  return handle(ctx, rpc)
+  let out = await (await door(ctx))(
+    new Request(req.url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: said,
+    }),
+  )
+  // The session id, per the transport: the client sends it back on every later
+  // request, and the one place it means anything is the GET above, where it
+  // names which of this person's streams is which. It is not required and
+  // never checked — a POST carries its own answer to who is asking, and a
+  // client that has never seen this header still works.
+  if (rpc.method != 'initialize') return out
+  let named = new Response(out.body, out)
+  named.headers.set('mcp-session-id', crypto.randomUUID())
+  return named
 }

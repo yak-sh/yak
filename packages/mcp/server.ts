@@ -46,6 +46,24 @@ export type Options = {
   search?: Search
   /** tools beside the generic tier and the graph's plugins' */
   tools?: Tool[]
+  /** a host with more than tools to serve — resources, prompts, a capability
+   * of its own — registers them on the same server here, after its tools are
+   * on it. It is handed the SDK's own server, and it is awaited. */
+  extend?: (server: McpServer) => void | Promise<void>
+}
+
+/**
+ * A tool's own reply, when the words and the value differ: `text` is what a
+ * client without schemas reads, and `data` is handed to one that renders the
+ * answer (MCP Apps) exactly as given — not wrapped under `result`, which is
+ * what a tool answering a plain value gets.
+ *
+ * ```ts
+ * run: () => new Say('two apps here', { apps: [] })
+ * ```
+ */
+export class Say {
+  constructor(readonly text: string, readonly data?: unknown) {}
 }
 
 // The reply, said both ways from one value: the JSON as text for a client that
@@ -59,6 +77,16 @@ let said = (value: unknown): CallToolResult => ({
 
 let bare = (value: unknown): CallToolResult => ({
   content: [{ type: 'text', text: JSON.stringify(value, null, 2) }],
+})
+
+// A tool that says its own words (`Say`). The data rides UNWRAPPED, because a
+// host that renders it was told which page to render it in and the page reads
+// the answer's own shape.
+let spoke = (s: Say): CallToolResult => ({
+  content: [{ type: 'text', text: s.text }],
+  ...(s.data == undefined
+    ? {}
+    : { structuredContent: s.data as Record<string, unknown> }),
 })
 
 // A refusal IS an error: `isError` rides the reply so a harness counts it as
@@ -138,11 +166,16 @@ export let server = (opts: Options): McpServer => {
         destructiveHint: !t.readOnly,
         openWorldHint: false,
       },
+      ...(t.meta ? { _meta: t.meta } : {}),
     }
     let run = async (args: Record<string, unknown>) => {
       try {
         let value = await t.run(args, ctx)
-        return output ? said(value) : bare(value)
+        return value instanceof Say
+          ? spoke(value)
+          : output
+          ? said(value)
+          : bare(value)
       } catch (err) {
         return failed(err)
       }

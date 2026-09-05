@@ -18,5 +18,7 @@ import { type Options, server } from './server.ts'
  * ```
  */
 export let stdio = async (opts: Options): Promise<void> => {
-  await server(opts).connect(new StdioServerTransport())
+  let built = server(opts)
+  await opts.extend?.(built)
+  await built.connect(new StdioServerTransport())
 }

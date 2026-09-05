@@ -224,3 +224,46 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # code deploy: `printf off | wrangler secret put CIMD` stops the well-known
 # claiming Client ID Metadata Document support, `printf on | ...` restores it,
 # and unset means on (identity.ts `cimd`, T-33027).
+
+# Where a bare specifier goes. The kernel is Deno source that imports the
+# packages by NAME (`@yaks/graph`), which deno resolves through the workspace
+# in the repo's one deno.json — wrangler's esbuild has no idea about that, and
+# a package resolves for `deno check` and then fails to bundle. So the same
+# names are spelled once here, as paths.
+#
+# The npm ones are aliased too, and only because of WHERE they are imported
+# from: esbuild walks up from the importing file, and a `packages/mcp/*.ts`
+# has no `node_modules` above it. Each points into this directory's own, which
+# is what `npm ci` here fills (package.json), so an SDK subpath is spelled at
+# the file it actually is.
+[alias]
+"@yaks/api" = "../../packages/api/mod.ts"
+"@yaks/blob" = "../../packages/blob/mod.ts"
+"@yaks/canvas" = "../../packages/canvas/mod.ts"
+"@yaks/doc" = "../../packages/doc/mod.ts"
+"@yaks/durable-object" = "../../packages/durable-object/mod.ts"
+"@yaks/edge" = "../../packages/edge/mod.ts"
+"@yaks/effects" = "../../packages/effects/mod.ts"
+"@yaks/embedding" = "../../packages/embedding/mod.ts"
+"@yaks/fts" = "../../packages/fts/mod.ts"
+"@yaks/graph" = "../../packages/graph/mod.ts"
+"@yaks/id" = "../../packages/id/mod.ts"
+"@yaks/journal" = "../../packages/journal/mod.ts"
+"@yaks/mail" = "../../packages/mail/mod.ts"
+"@yaks/match" = "../../packages/match/mod.ts"
+"@yaks/mcp" = "../../packages/mcp/mod.ts"
+"@yaks/member" = "../../packages/member/mod.ts"
+"@yaks/memory" = "../../packages/memory/mod.ts"
+"@yaks/names" = "../../packages/names/mod.ts"
+"@yaks/query" = "../../packages/query/mod.ts"
+"@yaks/session" = "../../packages/session/mod.ts"
+"@yaks/sql" = "../../packages/sql/mod.ts"
+"@yaks/sqlite" = "../../packages/sqlite/mod.ts"
+"@yaks/task" = "../../packages/task/mod.ts"
+"@yaks/vocab" = "../../packages/vocab/mod.ts"
+"@yaks/wake" = "../../packages/wake/mod.ts"
+"@yaks/workers" = "../../packages/workers/mod.ts"
+"zod" = "./node_modules/zod/index.js"
+"@modelcontextprotocol/sdk/server/mcp.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js"
+"@modelcontextprotocol/sdk/types.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/types.js"
+"@modelcontextprotocol/sdk/inMemory.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/inMemory.js"

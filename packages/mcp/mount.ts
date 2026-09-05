@@ -98,7 +98,12 @@ export let mcp = (opts: MountOptions): Handler => {
           ? new Response(null, { status: 202 })
           : refused('not a JSON-RPC request', 400)
       }
-      return json(await ask(server({ ...opts, actor }), rpc.data, ms))
+      let built = server({ ...opts, actor })
+      // Whatever else this host serves — resources, prompts — goes on before
+      // the request is answered, so `resources/list` sees them on the very
+      // first call rather than the second.
+      await opts.extend?.(built)
+      return json(await ask(built, rpc.data, ms))
     } catch (err) {
       return refuse(err)
     }

@@ -7,6 +7,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { comp, connect, result, shopGraph } from './harness.ts'
+import { Say } from './server.ts'
 
 let ada = { eid: 'm1' }
 let spring: Bundle = {
@@ -190,4 +191,54 @@ Deno.test('a plugin contributes tools the way it contributes components', async 
   ))
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
   assertEquals(comp(found[0], 'created').by, 'm1')
+})
+
+Deno.test('a tool that says its own words says them, and its data beside', async () => {
+  let graph = shopGraph()
+  graph.use({
+    name: 'shelf',
+    tools: [{
+      name: 'stocktake',
+      description: 'count the shelf',
+      meta: { ui: { resourceUri: 'ui://shop/shelf' } },
+      run: () => new Say('two books here', { books: 2 }),
+    }],
+  })
+  let client = await connect({ graph })
+  let [tool] = (await client.listTools()).tools
+    .filter((t: { name: string }) => t.name == 'stocktake')
+  // The metadata rides to the client verbatim: it is the transport's to carry
+  // and nobody else's to read.
+  assertEquals(
+    (tool as { _meta?: unknown })._meta,
+    { ui: { resourceUri: 'ui://shop/shelf' } },
+  )
+
+  let out = await called(client, 'stocktake') as {
+    content: { text: string }[]
+    structuredContent?: unknown
+  }
+  assertEquals(out.content[0].text, 'two books here')
+  // Unwrapped — a host that renders this was told which page to render it in.
+  assertEquals(out.structuredContent, { books: 2 })
+  await client.close()
+})
+
+Deno.test('a host with more than tools registers them on the same server', async () => {
+  let client = await connect({
+    extend: (server) =>
+      void server.registerResource('shelf', 'shop://shelf', {
+        title: 'The shelf',
+        mimeType: 'text/plain',
+      }, () => ({
+        contents: [{ uri: 'shop://shelf', text: 'one book' }],
+      })),
+  })
+  let { resources } = await client.listResources()
+  assertEquals(resources.map((r: { uri: string }) => r.uri), ['shop://shelf'])
+  let read = await client.readResource({ uri: 'shop://shelf' })
+  assertEquals((read.contents[0] as { text: string }).text, 'one book')
+  // And the tools are still there beside them.
+  assert((await listed(client)).includes('graph_query'))
+  await client.close()
 })
