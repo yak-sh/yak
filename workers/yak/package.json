@@ -1,7 +1,7 @@
 {
   "name": "yak",
   "private": true,
-  "description": "The kernel Worker's npm dependencies, bundled by wrangler; node_modules is gitignored, so `npm ci` here before `wrangler deploy` or a probe boot. Exact pins only. This directory is a Deno workspace member (root deno.json `workspace`), which is what keeps deno's config discovery walking past this file to the repo's one deno.json instead of stopping here.",
+  "description": "The kernel Worker's npm dependencies, bundled by wrangler; node_modules is gitignored, so nothing here runs by hand — `deno task deploy:yak` and `deno task dev:yak` (and the probe) install through wrangler.ts before wrangler reads it. Exact pins only. This directory is a Deno workspace member (root deno.json `workspace`), which is what keeps deno's config discovery walking past this file to the repo's one deno.json instead of stopping here. NO `version` field: deno's `Linked package ignored because package.json was missing version field` is deno saying it will NOT link this package, which is what we want — the kernel's own imports resolve through the root import map. Give it a version and deno links it for real, then refuses every check with `Linking npm packages requires using a node_modules directory`. wrangler warns about none of this.",
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "0.10.3",
     "@modelcontextprotocol/sdk": "1.29.0",

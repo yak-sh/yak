@@ -5,8 +5,10 @@
 .env.production.local
 .env.local
 
-# npm droppings — this project has no node_modules
+# npm droppings — the kernel Worker's are the only ones, and they are installed
+# on demand (workers/yak/wrangler.ts); the .lock is that install's mutex.
 node_modules/
+node_modules.lock/
 
 # wrangler dev's bundle scratch beside a Worker's config (workers/*)
 .wrangler/

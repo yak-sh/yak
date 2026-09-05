@@ -3,9 +3,11 @@
 // drives it over HTTP the way a browser or a headless client would — a
 // hostname rides `x-yak-host`, since fetch refuses a Host header and the
 // kernel honors ours on a dev host (route.ts). Slow tier only: a real
-// runtime boots. The pinned wrangler runs through npx (WRANGLER overrides the
-// command); the process is its own session so `stop` takes workerd down with
-// it, and proves the port closed before it returns.
+// runtime boots. The pinned wrangler runs through npx (wrangler.ts owns the
+// pin, WRANGLER overrides the command) and boots with node_modules current,
+// since esbuild bundles the npm deps out of it and a fresh worktree has none;
+// the process is its own session so `stop` takes workerd down with it, and
+// proves the port closed before it returns.
 //
 // TWO ports, both free ones: the server's, and the devtools inspector's.
 // Wrangler binds the inspector on a FIXED 9229 unless told otherwise, so a
@@ -14,10 +16,10 @@
 // every kernel here would be a second one for somebody.
 import { until } from '../../src/testing.ts'
 import { COOKIE, sign, verify } from '../../src/token.ts'
+import { ready, WRANGLER } from './wrangler.ts'
 
 let root = new URL('./', import.meta.url).pathname
-let wrangler = (Deno.env.get('WRANGLER') ?? 'npx --yes wrangler@4.42.2')
-  .split(' ')
+let wrangler = (Deno.env.get('WRANGLER') ?? WRANGLER.join(' ')).split(' ')
 
 let freePort = () => {
   let l = Deno.listen({ hostname: '127.0.0.1', port: 0 })
@@ -38,6 +40,7 @@ let listening = async (port: number) => {
 export type Kernel = Awaited<ReturnType<typeof kernel>>
 
 export let kernel = async (vars: Record<string, string> = {}) => {
+  await ready()
   let port = freePort()
   let inspector = freePort()
   let secret = crypto.randomUUID()
