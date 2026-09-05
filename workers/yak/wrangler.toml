@@ -143,6 +143,16 @@ name = "MAIL"
 binding = "BLOBS"
 bucket_name = "yak-blobs"
 
+# Where a Store writes its whole old graph before it migrates to the packages'
+# schema (migrate.ts, T-33809): one `rows.jsonl` and one `report.json` per
+# object per pass, under `store/<space>/<app>/<when>/`, kept afterwards. It is
+# the restore path, so an object with no bucket bound moves nothing and serves
+# its old rows read-only. The bucket must EXIST on the account before the
+# cutover deploy — `wrangler r2 bucket create yak-store-exports` (T-33808).
+[[r2_buckets]]
+binding = "EXPORTS"
+bucket_name = "yak-store-exports"
+
 # Cloudflare's cache, in front of ONE of this Worker's two entrypoints
 # (cache.ts, T-33197). Enabled here so it can be turned on per entrypoint
 # below; on its own this line would cache everything, which is the thing that

@@ -65,10 +65,21 @@ export let durable = (): DurableStorage & {
       b instanceof ArrayBuffer ? new Uint8Array(b) : b
     )
     try {
-      return db.prepare(query).all(...binds) as Record<string, unknown>[]
+      let stmt = db.prepare(query)
+      // The runtime's `exec` runs EVERY statement in the string it is handed; a
+      // prepared statement is only the FIRST, and the rest would be dropped in
+      // silence — which is how a whole DDL script reads as "the second table is
+      // missing". `sql` is what this statement consumed, so a remainder means
+      // the string belongs to `exec`, which runs all of it and has no rows.
+      if (!bindings.length && stmt.sql.trim().length < query.trim().length) {
+        db.exec(query)
+        return []
+      }
+      return stmt.all(...binds) as Record<string, unknown>[]
     } catch (e) {
-      // A statement SQLite will not prepare (a whole DDL script) still runs;
-      // it just has no rows. With bindings there is nothing to fall back to.
+      // A statement SQLite will not prepare (a pragma script, a trigger body)
+      // still runs; it just has no rows. With bindings there is nothing to fall
+      // back to.
       if (bindings.length) throw e
       db.exec(query)
       return []

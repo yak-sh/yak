@@ -51,6 +51,12 @@ export type Env = {
   CF_VERSION_METADATA?: { id: string; tag?: string; timestamp?: string }
   ASSETS: Fetcher
   BLOBS: R2
+  // Where a Store writes its whole old graph before it migrates (migrate.ts,
+  // T-33809): one object per pass, kept, and the only restore path there is.
+  // Optional in the type and NOT optional in effect — a store with no bucket
+  // bound refuses to move a row and serves its old rows read-only — because the
+  // bucket has to exist on the account before the cutover deploy (T-33808).
+  EXPORTS?: R2
   // The session-signing secret; unset, no session verifies (token.ts). It
   // also keys the sign-in code digests (signin.ts).
   SESSION_SECRET?: string

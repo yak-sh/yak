@@ -119,6 +119,20 @@ import { parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { named, type Row } from './listing.ts'
 import {
+  type Bucket,
+  carry,
+  keyOf,
+  lines,
+  MARK,
+  rebuild,
+  recut,
+  Refused as Unreconciled,
+  type Report,
+  type Slots,
+  stale,
+  taken,
+} from './migrate.ts'
+import {
   appDerived,
   appDoc,
   appVocab,
@@ -145,14 +159,36 @@ export type State = Hibernation & {
   storage: DurableStorage & {
     sql: DurableSql & { databaseSize: number }
     deleteAll(): Promise<void>
+    // The object's key-value slots beside its SQL. Nothing in this class writes
+    // one — its own memory is the `yak_kv` table below — but the store this one
+    // replaces kept everything it remembered there (its name, the app's
+    // `vocab.json`, its tools), so the migration reads them across (migrate.ts).
+    kv?: Slots
   }
+  // The runtime's own gate: work started here finishes before any request is
+  // delivered, which is what makes a one-pass migration safe to start from the
+  // first request that reaches the object. Absent in the workerd stand-in, where
+  // an object is driven one call at a time anyway.
+  blockConcurrencyWhile?<T>(body: () => Promise<T>): Promise<T>
 }
+
+/** The bindings this object is handed. One: the bucket a migration writes the
+ * object's whole old graph to before it moves a row (migrate.ts). */
+export type Bindings = { EXPORTS?: Bucket }
 
 // What the object remembers about itself, and the table it remembers it in.
 // One row per word — the object's SQLite is the only memory that survives an
 // eviction, and this is smaller than asking @yaks/graph to hold configuration
 // as data.
-type Word = 'name' | 'vocab' | 'uses' | 'tools' | 'app' | 'access' | 'schema'
+type Word =
+  | 'name'
+  | 'vocab'
+  | 'uses'
+  | 'tools'
+  | 'app'
+  | 'access'
+  | 'schema'
+  | 'migrated'
 let KV = `create table if not exists yak_kv (
     k text primary key,
     v text not null
@@ -286,11 +322,22 @@ export class Store {
   #live!: Sockets
   #route!: Handler
   #auth!: Authenticate
+  #bind: Bindings
+  // An object still holding the FLEET-shaped store this class replaces
+  // (T-33809). Nothing above the storage is built while this is true — planting
+  // the new schema over the old tables is exactly what must not happen — so the
+  // first request runs the pass and everything is raised after it.
+  #pending: boolean
+  #passing: Promise<void> | null = null
+  // Why the pass refused, when it did. The rows are the old ones, untouched.
+  #refused: string | null = null
 
-  constructor(ctx: State) {
+  constructor(ctx: State, bind: Bindings = {}) {
     this.#ctx = ctx
+    this.#bind = bind
     ctx.storage.sql.exec(KV)
-    this.#boot()
+    this.#pending = !this.#get('migrated') && stale(ctx.storage)
+    if (!this.#pending) this.#boot()
   }
 
   // Waking on whatever this object holds. Everything above the storage is
@@ -334,7 +381,18 @@ export class Store {
     // door runs after it.
     let named = !!this.#get('name') || !!this.#get('schema')
     let stamp = sha256(ddl.join('\n'))
-    if (named && this.#get('schema') != stamp) {
+    let held = this.#get('schema')
+    if (named && held != stamp) {
+      // A DEFINITION cannot be altered by replaying it. `create ... if not
+      // exists` says nothing about a trigger or a full-text index that is
+      // already standing, so one raised under an older schema keeps its old
+      // shape while the tables under it move — which is how a search index came
+      // to hold blob ADDRESSES after the triggers learned to resolve them
+      // (T-33978). A definition holds no rows of its own, so it is dropped and
+      // raised again at the current shape whenever the stamp moves, and the
+      // index is then rebuilt off the content it mirrors. Nothing to do the
+      // first time: there is no older shape to be wearing.
+      if (held) recut(drive)
       for (let stmt of ddl) drive.exec(stmt)
       // A word that GREW a column: `create table if not exists` says nothing
       // about a table that is already there, so the new column has to be added
@@ -342,6 +400,7 @@ export class Store {
       // (@yaks/sqlite `grown`). After the creates, so a table raised a moment
       // ago is there to interrogate.
       for (let stmt of store.grown()) drive.exec(stmt)
+      if (held) rebuild(drive)
       this.#put('schema', stamp)
     }
     let app = this.#get('app')
@@ -632,6 +691,131 @@ export class Store {
     this.#graph.storage.tx((tx) => tx.patch(bundles))
   }
 
+  // ---- the one pass (T-33809) ----------------------------------------------
+
+  /** The migration, at most once per object however many requests arrive at
+   * once: the runtime's gate holds every other request while it runs, and the
+   * promise is kept so a second caller inside this incarnation waits on the
+   * first rather than starting a second pass. */
+  #pass(request: Request): Promise<void> {
+    // A throw here can only come from BEFORE the transaction — reading the
+    // object out, or writing it to the bucket — because the transaction takes
+    // itself back and hands over a report instead. So nothing moved, and the
+    // object says why rather than answering 500 to everything that arrives.
+    let go = () =>
+      this.#carrying(request).catch((e) => {
+        this.#pending = false
+        this.#refused = `the migration could not start: ${
+          e instanceof Error ? e.message : String(e)
+        }`
+      })
+    return this.#passing ??= this.#ctx.blockConcurrencyWhile
+      ? this.#ctx.blockConcurrencyWhile(go)
+      : go()
+  }
+
+  /**
+   * Export, carry, reconcile — in that order, because the order is the safety.
+   * The export reaches R2 before a row moves, the carry is one transaction that
+   * either lands whole or leaves the object exactly as it was, and the report
+   * is written either way, beside the rows it is about.
+   */
+  async #carrying(request: Request) {
+    let ctx = this.#ctx
+    let slots = ctx.storage.kv
+    // What the object is: the kernel says so on every request, and the store it
+    // replaces wrote the same word into its own slots. Both are read, because
+    // the vocabulary this schema is raised from depends on it.
+    let name = request.headers.get('x-store') ??
+      String(slots?.get('name') ?? '')
+    let app = request.headers.get('x-yak-app')
+    for (let w of ['name', 'vocab', 'uses', 'tools'] as Word[]) {
+      let held = w == 'name' ? name : slots?.get(w)
+      if (held != null && String(held)) this.#put(w, String(held))
+    }
+    let bucket = this.#bind.EXPORTS
+    if (!bucket) {
+      this.#pending = false
+      this.#refused = 'no export bucket is bound (EXPORTS): this store will ' +
+        'not move a row without a restore path'
+      return
+    }
+    let dump = taken(ctx.storage, slots)
+    dump.store = name
+    let key = keyOf(name, dump.at)
+    let wrote = `${key}/rows.jsonl`
+    await bucket.put(wrote, lines(dump))
+    let report: Report
+    try {
+      report = ctx.storage.transactionSync(() =>
+        carry(ctx.storage, {
+          store: name,
+          app,
+          vocab: name == PLATFORM_STORE
+            ? platformVocab()
+            : appVocab(this.#get('vocab') ?? {}),
+          plant: () => this.#boot(),
+          grantEid,
+          export: wrote,
+        })
+      )
+    } catch (e) {
+      report = e instanceof Unreconciled ? e.report : {
+        store: name,
+        app,
+        at: dump.at,
+        ok: false,
+        message: e instanceof Error ? e.message : String(e),
+        mark: MARK,
+        moved: [],
+        dropped: [],
+        export: wrote,
+      }
+    }
+    // The report is beside the rows it is about, and a bucket that would not
+    // take it does not undo a pass that already landed — the rows are the thing.
+    try {
+      await bucket.put(`${key}/report.json`, JSON.stringify(report, null, 2))
+    } catch (e) {
+      console.warn('store: migration report', e)
+    }
+    this.#pending = false
+    if (report.ok) return void this.#put('migrated', MARK)
+    this.#refused = `${report.message ?? 'the migration refused'} — the rows ` +
+      `are unchanged and exported to ${wrote}`
+  }
+
+  /**
+   * The object after a refusal. The rows are the OLD ones, exactly as they were
+   * — the pass ran in one transaction and it unwound — and this object cannot
+   * read them: they are in the fleet's shape, and everything above the storage
+   * here is raised from a vocabulary that has no tables for it. So it says so,
+   * with the export key, and answers nothing else.
+   *
+   * There is no half-open door to hold here. What a page asks a store is
+   * `/query?q=`, which the fleet's own door does not parse at all (it reads the
+   * whole query string as the filter line), so an app that could still be read
+   * "in the old grammar" is an app no client of it could read. A refusal that
+   * says what happened and where the rows are is the whole of what is useful,
+   * and every byte is in R2. `/graph` is the exception, and only because it
+   * answers off the storage rather than off the graph: the meter reads an
+   * object's size, and an object in this state still has one.
+   */
+  #stalled(request: Request): Response {
+    let why = this.#refused ?? 'this store has not migrated'
+    if (new URL(request.url).pathname == '/graph') {
+      return Response.json({
+        db: `do:${this.#get('name') ?? ''}`,
+        bytes: this.#ctx.storage.sql.databaseSize,
+        migration: 'refused',
+      })
+    }
+    return Response.json({ error: 'Refused', message: why }, {
+      status: 503,
+      headers: { 'x-yak-migration': 'refused' },
+    })
+  }
+
   /**
    * The object's door. What the kernel says about this object is read FIRST —
    * it may rebuild everything above the storage — and `wake()` comes next, so
@@ -639,6 +823,12 @@ export class Store {
    * sockets it inherited.
    */
   async fetch(request: Request): Promise<Response> {
+    // The one pass, before this object answers anything (T-33809). It runs
+    // inside the runtime's own gate, so every other request waits on it rather
+    // than racing it, and it runs from a REQUEST rather than the constructor
+    // because the kernel's vouch is what names this object and the app it holds.
+    if (this.#pending) await this.#pass(request)
+    if (this.#refused) return this.#stalled(request)
     this.#learn(request)
     this.#live.wake()
     let path = new URL(request.url).pathname
@@ -1093,11 +1283,28 @@ export class Store {
 
   /** A frame from a client: a subscription opened or closed. */
   webSocketMessage(ws: Wire, data: string | ArrayBuffer): void {
+    // A hibernated socket outlives a deploy, so one opened against the store
+    // this class replaces can wake THIS object — before its first request, and
+    // therefore before anything above the storage exists. There is nothing to
+    // serve it: hang up, and the page opens a socket onto whatever answers next.
+    if (this.#unbuilt) return void this.#hangUp(ws)
     this.#live.message(ws, data)
   }
 
   /** That client went away. */
   webSocketClose(ws: Wire): void {
-    this.#live.close(ws)
+    if (!this.#unbuilt) this.#live.close(ws)
+  }
+
+  /** Whether `#boot()` has yet to run: the migration is still ahead of this
+   * object, or it refused and nothing above the storage was ever raised. */
+  get #unbuilt(): boolean {
+    return this.#pending || this.#refused != null
+  }
+
+  #hangUp(ws: Wire) {
+    try {
+      ;(ws as Closable).close?.(1012, 'migrating')
+    } catch { /* already gone */ }
   }
 }
