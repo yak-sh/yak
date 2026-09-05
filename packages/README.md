@@ -73,6 +73,10 @@ In dependency order:
   server pushes back, and reconciles — or reverts — the optimistic write in
   between. A `persist` keyword says per component which state syncs, which stays
   in the browser, and which dies with the tab.
+- **[@yaks/client](./client)** — the frontend tier over all of that: one call
+  assembles the graph, the wire and the plugins; a query becomes a value that
+  changes as commits move it; and the components declared `local` are kept in
+  IndexedDB between page loads.
 
 ## How they compose
 
@@ -133,6 +137,10 @@ on its own:
   plus this plugin, is a client that writes locally at once and agrees with the
   `@yaks/api` at the other end afterwards. Both transports are injected, so the
   whole round trip runs in one process in a test.
+- `@yaks/client` is that loop with the page's half already wired: the assembly
+  in one call, subscriptions surfaced as values a renderer can hold (a signal
+  when you hand it a signal factory, `useSyncExternalStore` when you hand it to
+  React), and IndexedDB under the components the server never sees.
 
 ## Publishing requirements
 
