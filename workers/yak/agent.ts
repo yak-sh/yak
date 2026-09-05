@@ -86,6 +86,14 @@ export let inputOf = (
 }
 
 /**
+ * A tool's `output` the same way: the object it answers beside its words. A
+ * tool that says nothing about its answer declares nothing, which is what
+ * leaves the reply plain text.
+ */
+export let outputOf = (schema: unknown): z.ZodTypeAny | undefined =>
+  schema == undefined ? undefined : z.object(inputOf(schema))
+
+/**
  * A platform tool's answer: the sentence it always said, and the view's data
  * beside it where it draws one.
  *
@@ -124,6 +132,11 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
   name: t.name,
   description: t.description,
   input: inputOf(t.input),
+  ...(t.readOnly ? { readOnly: true } : {}),
+  // What it answers, where it says: the `Say`'s data rides as the reply's
+  // structuredContent unwrapped (@yaks/mcp `server`), so the schema describes
+  // that object itself rather than a value under a key.
+  ...(t.output ? { output: outputOf(t.output) } : {}),
   // The page a host renders this answer in (MCP Apps): the tool names it, the
   // transport hands it over verbatim, and a host without views ignores it.
   ...(t.view

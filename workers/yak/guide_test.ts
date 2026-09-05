@@ -58,6 +58,20 @@ Deno.test('every page description is its own, and says something', () => {
     assert(p.description.length > 80, `${p.slug} says too little to choose by`)
     assert(p.title.length > 3 && !p.title.endsWith('.'), p.slug)
   }
+  // The `guide` tool names all thirteen at once in its own description
+  // (tools.ts, T-34284), so a page's `brief` is a phrase — long enough to
+  // choose by, short enough that thirteen of them fit in a tool list.
+  let briefs = PAGES.map((p) => p.brief)
+  assertEquals(new Set(briefs).size, briefs.length, 'two pages read alike')
+  for (let p of PAGES) {
+    assert(
+      p.brief.length > 20 && p.brief.length < 50,
+      `${p.slug}'s brief is ${p.brief.length} characters`,
+    )
+    // It reads inside a sentence — `mail (an app's own email address)` — so
+    // it opens like one clause of one, not like a heading.
+    assert(/^[a-z]/.test(p.brief), `${p.slug}'s brief opens like a title`)
+  }
 })
 
 // The two rules that cost a user test each hold on every page, not just the

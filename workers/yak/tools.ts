@@ -100,7 +100,8 @@ import {
 } from './domains.ts'
 import type { Env } from './env.ts'
 import { mail, REPLY_TO } from './mail.ts'
-import { NO_ARGS, PUBLIC } from './preauth.ts'
+import { PAGES, uriOf, WHOLE } from './guide.ts'
+import { asset, NO_ARGS, PUBLIC } from './preauth.ts'
 import { foreign, SLUG } from './route.ts'
 import { globs } from './router.ts'
 import type { Reach } from './reach.ts'
@@ -139,20 +140,29 @@ type Args = Record<string, unknown>
 // structuredContent (mcp.ts, MCP Apps spec §Notifications).
 export type Out = { text: string; space?: Space; data?: unknown }
 
+type Shape = {
+  type: 'object'
+  properties: Record<string, unknown>
+  required?: string[]
+}
+
 export type Tool = {
   name: string
   description: string
   // The `ui://` resource that draws this tool's answer, if it has one.
   view?: string
+  // This one only READS, so a client may call it without asking first
+  // (@yaks/graph `Tool.readOnly`, the MCP `readOnlyHint`).
+  readOnly?: boolean
+  // What its `data` is shaped like, when it answers a value beside its words.
+  // JSON Schema, like `input` — agent.ts turns both into the Zod the MCP SDK
+  // wants, so nothing here depends on a validation library.
+  output?: Shape
   // Who may call it (MCP Apps §Tools, `_meta.ui.visibility`): the model
   // always; add 'app' for a tool a view's own button calls back through the
   // host, which the host refuses for any tool that does not say so.
   visibility?: ('model' | 'app')[]
-  input: {
-    type: 'object'
-    properties: Record<string, unknown>
-    required?: string[]
-  }
+  input: Shape
   run: (ctx: Ctx, args: Args) => Promise<Out>
 }
 
@@ -180,7 +190,8 @@ let APEX =
   "apex work), or use the registrar's own ALIAS/ANAME record type with the " +
   'same value (Porkbun has one; GoDaddy, Namecheap, Squarespace and Hover ' +
   'do not), or attach www.<domain> instead and redirect the apex to it. ' +
-  'https://yaks.app/guide/domains.md walks through each.\n\n'
+  'Call guide with page domains, which walks through each ' +
+  '(https://yaks.app/guide/domains.md).\n\n'
 
 // What an app lets someone who is not a member do with its data (T-32504).
 // The person's agent picks it from their ask, which is why the words are the
@@ -874,6 +885,12 @@ export let ERRORS_VIEW = 'ui://yaks/errors'
 // merely reads. An app's own view (declared.ts, T-32687) wears the same one.
 export let VIEW_MIME = 'text/html;profile=mcp-app'
 
+// The pages the `guide` tool offers, said two ways: the names alone for the
+// argument, and a name with its few words for the description, which is where
+// an agent chooses one (guide.ts `brief`).
+let SLUGS = PAGES.map((p) => p.slug).join(', ')
+let COVERING = PAGES.map((p) => `${p.slug} (${p.brief})`).join(', ')
+
 export let TOOLS: Tool[] = [
   {
     name: 'space_new',
@@ -1069,8 +1086,8 @@ export let TOOLS: Tool[] = [
       "'./api/client.js'`, which is served beside the app. Write every " +
       "address relative: the kernel gives each page a `<base>` at the app's " +
       'own address, so nothing in an app names the app, and a copy someone ' +
-      'installs at another address still works. The guide resource ' +
-      '(https://yaks.app/guide.md) has the whole of it, in a page.',
+      'installs at another address still works. Call guide for the whole of ' +
+      'it, in a page (https://yaks.app/guide.md).',
     input: {
       type: 'object',
       properties: {
@@ -2586,6 +2603,59 @@ export let TOOLS: Tool[] = [
             'could not go out just now, so it waits with them rather than ' +
             'being lost. No need to say it again.',
       }
+    },
+  },
+  // The guide, handed over rather than linked (T-34284). Every description
+  // here points at a page of it, and an agent that cannot fetch yaks.app —
+  // which is most of them, on their default allowlists — could not follow one.
+  // The bytes are the very files the web serves, read back off the assets
+  // binding (preauth.ts `asset`), so this door and that address can never
+  // disagree.
+  {
+    name: 'guide',
+    description: 'The guide, read here instead of fetched off the web. With ' +
+      'no page: the map — what an app is, how its pages read and write its ' +
+      'store, and a passage on every feature there is. Read that first. With ' +
+      'a page: the whole of one subject. The pages are ' + COVERING +
+      '. A name that is none of them answers the map, which lists them all. ' +
+      'The same words are served to a person at https://yaks.app/guide.md.',
+    readOnly: true,
+    input: {
+      type: 'object',
+      properties: {
+        page: str(
+          `the page to read — one of ${SLUGS}. Leave it out for the map, ` +
+            'which is what to read first',
+        ),
+      },
+    },
+    output: {
+      type: 'object',
+      properties: {
+        page: str('the page answered — a slug, or `guide` for the map'),
+        markdown: str('the page itself'),
+      },
+      required: ['page', 'markdown'],
+    },
+    run: async (ctx, args) => {
+      // A page asked for as `mail.md`, or `Mail`, is the mail page.
+      let asked = typeof args.page == 'string'
+        ? args.page.trim().toLowerCase().replace(/\.md$/, '')
+        : ''
+      let page = PAGES.find((p) => p.slug == asked)
+      let got = await asset(ctx.env, page ? uriOf(page.slug) : WHOLE)
+      if (!got.ok) {
+        await got.body?.cancel()
+        throw new Error(`the guide is not being served just now — ${WHOLE}`)
+      }
+      let markdown = await got.text()
+      // A page nobody has is a typo, not a refusal: the map is what they
+      // wanted anyway, and one line above it says what the names are.
+      if (asked && !page) {
+        markdown = `There is no guide page \`${asked}\`. The pages are ` +
+          `${SLUGS}. Here is the map.\n\n${markdown}`
+      }
+      return { text: markdown, data: { page: page?.slug ?? 'guide', markdown } }
     },
   },
   // And the tools anybody may call, signed in or not (preauth.ts, T-33030):

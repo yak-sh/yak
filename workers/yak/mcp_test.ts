@@ -118,6 +118,9 @@ slow(
         'member_add',
         'member_remove',
         'feedback',
+        // The guide itself, so nothing has to be fetched off the web
+        // (T-34284).
+        'guide',
         // The one anybody may call, signed in or not (preauth.ts, T-33030).
         'about',
         // And the post room's own two (letters.ts, T-34149), a plugin of
@@ -237,6 +240,44 @@ slow(
       let got = await k.at('yaks.app', '/guide/querying.md')
       assertEquals(got.status, 200)
       assertEquals(await got.text(), deep.contents[0].text)
+
+      // And the same words as a TOOL (T-34284), because an agent that cannot
+      // fetch yaks.app cannot follow a link and a resource is a thing only
+      // some clients read. No page is the map, which opens with its own
+      // heading; the description names every page, so the choice is made from
+      // the tool list.
+      let guide = tools.find((t: { name: string }) => t.name == 'guide')
+      assertEquals(guide.annotations.readOnlyHint, true)
+      assertEquals(
+        guide.outputSchema.required.sort(),
+        ['markdown', 'page'],
+      )
+      for (let p of PAGES) assertStringIncludes(guide.description, p.slug)
+      let map = await agent.tool('guide')
+      assertEquals(map, await (await k.at('yaks.app', '/guide.md')).text())
+      assertStringIncludes(map, '# ')
+      // A page, byte for byte what the web serves at its own address.
+      assertEquals(
+        await agent.tool('guide', { page: 'mail' }),
+        await (await k
+          .at('yaks.app', '/guide/mail.md')).text(),
+      )
+      // The structured answer says which page it is, beside the words.
+      let answered = await agent.call('tools/call', {
+        name: 'guide',
+        arguments: { page: 'mail' },
+      })
+      assertEquals(answered.structuredContent.page, 'mail')
+      assertEquals(
+        answered.structuredContent.markdown,
+        answered.content[0].text,
+      )
+      // A name that is no page is a typo, not a refusal: the map, with one
+      // line above it naming what there is.
+      let missed = await agent.tool('guide', { page: 'nope' })
+      assertStringIncludes(missed, 'There is no guide page `nope`')
+      assertStringIncludes(missed, 'querying')
+      assertStringIncludes(missed, map)
 
       // The first MCP App view: a ui:// resource the host renders, named by
       // the tool whose answer it draws (T-32492).

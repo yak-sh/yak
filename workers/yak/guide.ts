@@ -18,10 +18,23 @@
 // routes. What makes the split work is the DESCRIPTION — it is the only thing
 // an agent sees before deciding to read, so each names the words someone with
 // that question would be searching for.
+//
+// An agent never has to leave the connector to read any of it (T-34284). The
+// `guide` tool (tools.ts) hands over the same bytes, because a fetch of
+// yaks.app is a thing plenty of agents are not allowed to make — owner,
+// 2026-09-05: "claude often can't fetch https://yaks.app/guide.md maybe cause
+// of default allowlist restrictions. can't we just present that same guide via
+// the mcp server so they don't have to fetch?" The files stay the one source:
+// the tool and the resources both read them off the assets binding, at the
+// very addresses the web serves them from.
 export type Page = {
   slug: string
   title: string
   description: string
+  /** A few words, for the `guide` tool's own description (tools.ts), which
+   * names every page at once and has room for a phrase each where it has no
+   * room for thirteen descriptions. */
+  brief: string
 }
 
 // What a model reads before it has read anything else here (T-32481). It is
@@ -82,11 +95,12 @@ answer maps it to its eid), and a filter line reads them back. A row carries
 only the components its filter NAMES — presence filters end at ! and join
 with &, and '?' asks for one without filtering on it — so query('.recipe!')
 answers recipes with no titles and query('.recipe!&.doc?') answers both. Ask
-for what the page will draw. The guide resource is the map of all of this,
-and beside it is a page per subject — querying, components, files, tools of
-your own, code of your own — so read the one the work calls for rather than
-guessing; graph_apply, graph_query and search are the same store from here,
-for seeding and fixing.
+for what the page will draw. Call guide for the map of all of this, and guide
+with a page for one subject — querying, components, files, tools of your own,
+code of your own — so read the one the work calls for rather than guessing.
+It is a tool here, so nothing has to be fetched off the web; the same words
+are at https://yaks.app/guide.md for a person. graph_apply, graph_query and
+search are the same store from here, for seeding and fixing.
 
 Never guess at a component's columns: graph_apply's own input schema is the
 vocabulary you can reach — every component, every column, every type. And
@@ -112,15 +126,16 @@ A page reads a sibling app the same way, with store('/lending/api/') from
 An app can carry its OWN tools: a tools.json beside index.html declares them
 — a name, a sentence, an input, and an apply or query template over the app's
 store — and after app_deploy they are listed here as <app>__<tool>, for the
-person and for anyone else in the space. The guide has the shape.
+person and for anyone else in the space. Call guide with page tools for the
+shape.
 
 An app can carry its own CODE too: a worker.js beside index.html answers
 every request that is not /api/ before the files do, and whatever it answers
 404 falls through to them, so it owns the routes it names and nothing else.
 It reads the app's store as the person looking (env.STORE), its files
 (env.FILES), and any key you set with app_secret_set as env.NAME — which is
-what a page must not hold and nothing can read back. The guide has a whole
-one.
+what a page must not hold and nothing can read back. Call guide with page code
+for a whole one.
 
 Asked to save things from OTHER sites — a recipe, a listing, an article —
 give the app a /clip route on its worker.js: it fetches the address, reads
@@ -128,7 +143,8 @@ what the page says about itself (JSON-LD first, then og: meta tags, then the
 title), and applies one bundle with a source component of its own. The person
 starts it with a bookmarklet the app hands them, because an app's write doors
 take same-origin requests only, so a script on somebody else's page cannot
-write here. https://yaks.app/guide/clipping.md is the whole thing.
+write here. Call guide with page clipping for the whole thing
+(https://yaks.app/guide/clipping.md).
 
 One app in a space can be its FRONT PAGE — app_set(app, home: true) — and it is
 the space's router as well as its homepage: served AT <space>.yaks.app/, and
@@ -137,8 +153,8 @@ behind it. app_set(app, first: ['/recipes/*']) opts it into paths another app
 owns, before that app sees them; the platform keeps /login, /connect, /mcp and
 every /api/ door, so a glob naming one is refused. A front-page worker that
 throws or answers 404 is skipped and the request routes as if it were not there,
-and it acts as the visitor, never as the app it routes to.
-https://yaks.app/guide/home.md is the whole thing.
+and it acts as the visitor, never as the app it routes to. Call guide with
+page home for the whole thing (https://yaks.app/guide/home.md).
 
 Every app has a MAILBOX, at <space>.<app>@yaks.app — <space>@yaks.app for the
 space's front page. Both directions are the store. Sending is one batch: the
@@ -155,8 +171,8 @@ ways against the space's plan, and mail at the person's own domain is not
 offered. mail_list and mail_send are that mailbox said as two tools; mail asked
 about with NO app named — "check my email" — is the person's own mailbox, which
 whatever mail tool they have connected answers and this is not, and naming an
-app or its address is what makes it this.
-https://yaks.app/guide/mail.md is the whole thing.
+app or its address is what makes it this. Call guide with page mail for the
+whole thing (https://yaks.app/guide/mail.md).
 
 An app is a plugin. app_publish offers one to every other space here by
 name, and app_published lists what is on offer; app_install takes one into
@@ -190,6 +206,7 @@ export let PAGES: Page[] = [
       'and me — the shape of an entity bundle, patching and deleting, who ' +
       'may read and write, the byline on a row, and the HTTP doors ' +
       'underneath.',
+    brief: 'reading and writing from a page',
   },
   {
     slug: 'querying',
@@ -199,6 +216,7 @@ export let PAGES: Page[] = [
       'presence and absence, contains, comparisons, ranges, time phrases, ' +
       'walking a reference, counting, paging, full text — and why a row ' +
       'carries only the components its filter named.',
+    brief: 'the filter line, with examples',
   },
   {
     slug: 'components',
@@ -207,6 +225,7 @@ export let PAGES: Page[] = [
       'Every component an app already has, column by column, and vocab.json ' +
       'for words of your own: the column types, what a later deploy may ' +
       'change, the names already taken, and when a column beats doc.body.',
+    brief: "the platform's words, and your own",
   },
   {
     slug: 'entities',
@@ -215,6 +234,7 @@ export let PAGES: Page[] = [
       "Two of the person's apps writing about the same entity without " +
       'copying it: which app a component lives in, how a page reads a ' +
       'sibling app, and how graph_query composes one bundle out of several.',
+    brief: 'one entity across two apps',
   },
   {
     slug: 'files',
@@ -224,6 +244,7 @@ export let PAGES: Page[] = [
       'from, the attachment and image rows it writes, the 20 MB ceiling and ' +
       'the downscale under it, and a gallery that never shows one picture ' +
       'twice.',
+    brief: 'uploads, pictures, galleries',
   },
   {
     slug: 'tools',
@@ -233,6 +254,7 @@ export let PAGES: Page[] = [
       "open: an entry's description, its input types and {{arg}} holes, the " +
       'apply and query acts, what a deploy refuses, and the view an answer ' +
       'draws itself in.',
+    brief: 'tools of the app, for an agent',
   },
   {
     slug: 'code',
@@ -242,6 +264,7 @@ export let PAGES: Page[] = [
       'env holds (STORE, FILES, and the secrets you set), what a request ' +
       'says about who is asking, the CPU and subrequest limits, and whole ' +
       'workers to copy.',
+    brief: "worker.js in front of an app's files",
   },
   {
     slug: 'clipping',
@@ -251,6 +274,7 @@ export let PAGES: Page[] = [
       'route that fetches it and reads its JSON-LD, Open Graph and title, a ' +
       'bookmarklet that launches it, why a script on another site cannot ' +
       'write here, and what to say when a site refuses a robot.',
+    brief: 'saving a page from another site',
   },
   {
     slug: 'sharing',
@@ -260,6 +284,7 @@ export let PAGES: Page[] = [
       'app_install and app_update, what an installed copy shares (the code, ' +
       'and nothing else), what pinning means, and what an update does to ' +
       'what people saved.',
+    brief: 'publishing and installing an app',
   },
   {
     slug: 'home',
@@ -269,6 +294,7 @@ export let PAGES: Page[] = [
       'five rungs a request is answered in, app_set home, the first globs ' +
       "that send another app's paths to it, why a broken router fails open, " +
       "and where the space's own mail lands.",
+    brief: 'the front page, and routing a space',
   },
   {
     slug: 'mail',
@@ -278,6 +304,7 @@ export let PAGES: Page[] = [
       'app make, the bundle that sends a letter and who may ask for one, the ' +
       'delivered and bounced rows that come back, how an arrival lands with ' +
       'its attachments, and what mail here does not do.',
+    brief: "an app's own email address",
   },
   {
     slug: 'domains',
@@ -287,6 +314,7 @@ export let PAGES: Page[] = [
       'add and where to type it at GoDaddy, Namecheap, Squarespace and the ' +
       'rest, the apex problem and the three ways through it, what each ' +
       'pending state means, and why a domain stays stuck.',
+    brief: 'pointing a domain at an app',
   },
   {
     slug: 'errors',
@@ -296,6 +324,7 @@ export let PAGES: Page[] = [
       'is filed and how the agent hears about it once, app_errors, ' +
       'app_versions and app_rollback, and feedback for when the platform is ' +
       'what is wrong.',
+    brief: 'what broke, and rolling back',
   },
 ]
 

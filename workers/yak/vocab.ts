@@ -216,7 +216,8 @@ export let notifiedDoc: VocabDoc = {
 export let GUIDE = 'https://yaks.app/guide.md'
 export let TEACH = ' — a component of your own is declared in vocab.json ' +
   'and planted by app_deploy: ' +
-  `{"recipe": {"title": "text", "serves": "number"}} · ${GUIDE}`
+  '{"recipe": {"title": "text", "serves": "number"}} · call guide with page ' +
+  `components, or ${GUIDE}`
 
 /**
  * The words the platform gives every app to reach for rather than invent
