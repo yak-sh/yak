@@ -1,55 +1,63 @@
 /**
- * @yaks/effects — the mechanism by which a yaks graph DOES something about the
- * data it commits, without tangling that work into the write path.
+ * @yaks/effects — what a graph DOES about the data it commits, kept out of the
+ * write path.
  *
  * A write is settled by {@link https://jsr.io/@yaks/graph | @yaks/graph}'s
- * `apply()`. An EFFECT is the other half: a post-commit observer that reacts to
- * committed components — a new `order` row triggers a receipt, a deleted
- * `session` ends its process. This package ships the REGISTRY and the runner
- * only; it defines no concrete effect. A plugin registers its own effects
- * against the component names it cares about.
+ * `apply()`. An EFFECT is the other half: an observer that runs AFTER the
+ * transaction commits and acts on what changed. When a post is published,
+ * notify its subscribers. When an order is paid, print a receipt. When an
+ * account is deleted, close its sessions.
  *
- * Effects are at-most-once and reconciled on boot; an effect that throws is
- * telemetry, never a rolled-back write. They fire only after the transaction
- * commits, so they see settled data and can never veto it — that is the
- * precondition phase's job, upstream in `apply()`.
+ * This package is the MECHANISM only — a registry, a phase, and the rules for
+ * running a handler safely. It ships no effect of its own and knows no
+ * components; the components are your vocabulary's and the handlers are yours.
+ *
+ * ## Use
+ * ```ts
+ * import { graph } from '@yaks/graph'
+ * import { memory } from '@yaks/memory'
+ * import { effects } from '@yaks/effects'
+ *
+ * let fx = effects(vocab)
+ * let g = graph({ storage: memory(vocab), vocab, plugins: [fx] })
+ *
+ * fx.created('post', (e) => index(e.entity.eid, e.comp?.title))
+ * fx.changed('post', 'published', (e) => notify(e.entity.eid))
+ * fx.removed('post', (e) => unindex(e.entity.eid))
+ * ```
+ *
+ * Three things happen to a component, and they are three registrations:
+ * {@link Effects.created} when an entity gains it, {@link Effects.changed}
+ * when it is patched (for one column, or for any), {@link Effects.removed}
+ * when it goes — by its own deletion, or with an entity that died, including
+ * every casualty a cascade took.
+ *
+ * ## The promises
+ * - **Post-commit only.** A handler cannot veto a write; by the time it runs,
+ *   the write is durable. A batch that was refused fires nothing at all.
+ * - **Isolated.** A handler that throws is passed to `report` and the next
+ *   handler still runs. A broken observer never breaks the batch.
+ * - **At most once.** A crash between the commit and the handler loses the
+ *   run. Where that is not acceptable, the optional durability tier
+ *   ({@link ledger}, {@link effectDoc}) writes each run down and finishes what
+ *   an interrupted process left — once.
+ * - **Sync stays sync.** Synchronous handlers keep `apply()` synchronous; the
+ *   first handler that returns a promise makes that call's answer a promise.
+ *
+ * ## Writing back
+ * A handler receives a detached transaction — `tx.patch([...])` writes a
+ * bundle straight through storage, post-commit — and a handler registered
+ * after the graph exists can simply close over it and call `g.apply()` for the
+ * full pipeline. Either way the write is a new batch, so an effect that writes
+ * the component it watches will wake itself: watch a different component, or a
+ * different column, than you write.
+ *
+ * It imports no platform API, so the same registry runs on a server, in a
+ * worker, and in a browser tab.
  *
  * @module
  */
 
-import type { Comp, Eid } from '@yaks/graph'
-
-/** What happened to one component in a committed change. */
-export type Kind = 'created' | 'changed' | 'removed'
-
-/** A committed component change, handed to an effect after commit. */
-export type Event = {
-  /** what happened */
-  kind: Kind
-  /** the entity the component belongs to */
-  entity: Eid
-  /** the component's name */
-  name: string
-  /** the component's columns after the change (absent on `removed`) */
-  comp?: Comp
-}
-
-/** A post-commit observer for one component name. */
-export type Effect = {
-  /** the component name this effect watches */
-  on: string
-  /** run for each matching committed event */
-  run: (event: Event) => void | Promise<void>
-}
-
-/**
- * The effect registry: register effects, then dispatch a committed event to the
- * ones watching its component. The implementation lands with the package; this
- * is the shape it satisfies.
- */
-export type Registry = {
-  /** register an effect */
-  add: (effect: Effect) => void
-  /** dispatch a committed event to every effect watching its component */
-  emit: (event: Event) => Promise<void>
-}
+export * from './trace.ts'
+export * from './registry.ts'
+export * from './durable.ts'
