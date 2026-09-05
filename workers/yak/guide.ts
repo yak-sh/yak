@@ -173,12 +173,14 @@ write here. Call guide with page clipping for the whole thing
 One app in a space can be its FRONT PAGE — app_set(app, home: true) — and it is
 the space's router as well as its homepage: served AT <space>.yaks.app/, and
 asked for every path no other app's slug claims, its worker first and its files
-behind it. app_set(app, first: ['/recipes/*']) opts it into paths another app
-owns, before that app sees them; the platform keeps /login, /connect, /mcp and
-every /api/ door, so a glob naming one is refused. A front-page worker that
-throws or answers 404 is skipped and the request routes as if it were not there,
-and it acts as the visitor, never as the app it routes to. Call guide with
-page home for the whole thing (https://yaks.app/guide/home.md).
+behind it. app_set(app, home: true, first: ['/recipes/*']) opts it into paths
+another app owns, before that app sees them — only a front page routes, so an
+app that is not one is refused; the platform keeps /login, /connect, /mcp and
+every /api/ door, so a glob naming one is refused too. Deleting the front page
+puts the space back to its default page. A front-page worker that throws or
+answers 404 is skipped and the request routes as if it were not there, and it
+acts as the visitor, never as the app it routes to. Call guide with page home
+for the whole thing (https://yaks.app/guide/home.md).
 
 Every app has a MAILBOX, at <space>.<app>@yaks.app — <space>@yaks.app for the
 space's front page. Both directions are the store. Sending is one batch: the

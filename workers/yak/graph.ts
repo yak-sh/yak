@@ -130,6 +130,10 @@ import { PLATFORM } from './route.ts'
 import {
   type Bucket,
   carry,
+  HOMED,
+  homed,
+  homes,
+  housed,
   keyOf,
   lines,
   MARK,
@@ -344,6 +348,10 @@ export class Store {
   // the new schema over the old tables is exactly what must not happen — so the
   // first request runs the pass and everything is raised after it.
   #pending: boolean
+  // Whether this object is behind the LATEST migration (migrate.ts `MARKS`):
+  // one that never carried, or one that carried before a later pass existed.
+  // Decided ONCE, here, rather than read off the storage on every request.
+  #behind: boolean
   #passing: Promise<void> | null = null
   // Why the pass refused, when it did. The rows are the old ones, untouched.
   #refused: string | null = null
@@ -354,6 +362,10 @@ export class Store {
     ctx.storage.sql.exec(KV)
     this.#pending = !this.#get('migrated') && stale(ctx.storage)
     if (!this.#pending) this.#boot()
+    // The second pass reads and writes the NEW schema, so it is asked after
+    // the boot — and only of an object that is not already at the last marker.
+    this.#behind = this.#pending ||
+      (this.#get('migrated') != HOMED && housed(ctx.storage))
   }
 
   // Waking on whatever this object holds. Everything above the storage is
@@ -820,10 +832,10 @@ export class Store {
     this.#graph.storage.tx((tx) => tx.patch(bundles))
   }
 
-  // ---- the one pass (T-33809) ----------------------------------------------
+  // ---- the passes (T-33809, T-34227) ---------------------------------------
 
-  /** The migration, at most once per object however many requests arrive at
-   * once: the runtime's gate holds every other request while it runs, and the
+  /** The migrations, at most once per object however many requests arrive at
+   * once: the runtime's gate holds every other request while they run, and the
    * promise is kept so a second caller inside this incarnation waits on the
    * first rather than starting a second pass. */
   #pass(request: Request): Promise<void> {
@@ -840,8 +852,9 @@ export class Store {
     // request, which is a bill and a bucket full of identical dumps for a
     // refusal that is still going to refuse.
     let go = () =>
-      this.#carrying(request).catch((e) => {
+      this.#passes(request).catch((e) => {
         this.#pending = false
+        this.#behind = false
         this.#refused = `the migration could not start: ${
           e instanceof Error ? e.message : String(e)
         }`
@@ -849,6 +862,69 @@ export class Store {
     return this.#passing ??= this.#ctx.blockConcurrencyWhile
       ? this.#ctx.blockConcurrencyWhile(go)
       : go()
+  }
+
+  /** Every pass this object is behind, oldest first: the move off the
+   * fleet-shaped store, then each one after it. A refusal stops the line —
+   * a later pass reads what an earlier one wrote. */
+  async #passes(request: Request) {
+    if (this.#pending) await this.#carrying(request)
+    if (!this.#refused) await this.#homing(request)
+    this.#behind = false
+  }
+
+  /**
+   * The second pass (T-34227): `space.home` becomes `home{}` on the app it
+   * named. Same order as the first — the `space` rows reach R2 before one
+   * moves, the move is one transaction, the report is written beside them —
+   * and an object with nothing to move only writes the marker, so it is never
+   * asked again.
+   */
+  async #homing(request: Request) {
+    let ctx = this.#ctx
+    let name = request.headers.get('x-store') ?? this.#get('name') ?? ''
+    if (!housed(ctx.storage)) return void this.#put('migrated', HOMED)
+    let bucket = this.#bind.EXPORTS
+    if (!bucket) {
+      this.#refused = 'no export bucket is bound (EXPORTS): this store will ' +
+        'not move a row without a restore path'
+      return
+    }
+    let dump = homes(ctx.storage)
+    dump.store = name
+    let key = keyOf(name, dump.at)
+    let wrote = `${key}/rows.jsonl`
+    await bucket.put(wrote, lines(dump))
+    let report: Report
+    try {
+      report = ctx.storage.transactionSync(() =>
+        homed(ctx.storage, {
+          store: name,
+          app: request.headers.get('x-yak-app'),
+          export: wrote,
+        })
+      )
+    } catch (e) {
+      report = e instanceof Unreconciled ? e.report : {
+        store: name,
+        app: request.headers.get('x-yak-app'),
+        at: dump.at,
+        ok: false,
+        message: e instanceof Error ? e.message : String(e),
+        mark: HOMED,
+        moved: [],
+        dropped: [],
+        export: wrote,
+      }
+    }
+    try {
+      await bucket.put(`${key}/report.json`, JSON.stringify(report, null, 2))
+    } catch (e) {
+      console.warn('store: migration report', e)
+    }
+    if (report.ok) return void this.#put('migrated', HOMED)
+    this.#refused = `${report.message ?? 'the migration refused'} — the rows ` +
+      `are unchanged and exported to ${wrote}`
   }
 
   /**
@@ -964,7 +1040,7 @@ export class Store {
     // inside the runtime's own gate, so every other request waits on it rather
     // than racing it, and it runs from a REQUEST rather than the constructor
     // because the kernel's vouch is what names this object and the app it holds.
-    if (this.#pending) await this.#pass(request)
+    if (this.#behind) await this.#pass(request)
     if (this.#refused) return this.#stalled(request)
     this.#learn(request)
     this.#live.wake()

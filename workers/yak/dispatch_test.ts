@@ -46,7 +46,6 @@ let SECRET = 'a-probe-secret'
 let space: Space = {
   eid: 's1',
   slug: 'jeff',
-  home: null,
   title: 'jeff',
   tier: null,
   plan: null,
@@ -62,6 +61,7 @@ let app: App = {
   access: 'public',
   store: 'jeff/recipes',
   slugs: ['jeff/recipes'],
+  home: false,
   first: [],
   meter: null,
   published: null,

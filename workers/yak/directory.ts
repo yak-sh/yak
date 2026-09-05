@@ -24,7 +24,7 @@
 // written as bundles through the store's /apply, so the directory can describe
 // its own store.
 import type { Bundle } from '@yaks/graph'
-import type { Mutation } from '../../src/mutation.ts'
+import type { EntityLiteral, Mutation } from '../../src/mutation.ts'
 import { slugsOf } from '../../src/types.ts'
 import { type Door, type Fetcher, type Namespace, storeOf } from './door.ts'
 import { KERNEL, type Meta, meta as metaStore } from './meta.ts'
@@ -101,7 +101,6 @@ export type Plan = {
 export type Space = {
   eid: string
   slug: string
-  home: string | null
   title: string
   // What this space pays (D-32751). Null for a space the sweep has not
   // reached yet, which means free — the terms every space is on today.
@@ -134,9 +133,13 @@ export type App = {
   // then each one a rename left behind. They resolve like ids (types.ts
   // slugsOf), which is how an old link still finds the app it was made for.
   slugs: string[]
-  // The paths this app's worker answers BEFORE the app whose slug owns them,
-  // while it is the space's home app (D-34197, router.ts). Empty for every app
-  // that never opted in, which is almost all of them.
+  // Whether this app is the space's FRONT PAGE — the app wearing `home`
+  // (T-34227). At most one app in a space does; `homing` below is what keeps
+  // that true.
+  home: boolean
+  // The paths its worker answers BEFORE the app whose slug owns them, the
+  // columns of that same word (D-34197, router.ts). Empty for every app that
+  // never opted in, which is almost all of them.
   first: string[]
   // What this app's own store spent this month, as the hourly sweep last read
   // it (usage.ts). Null until it has been metered once.
@@ -183,7 +186,7 @@ let idOf = (v: Id): string => typeof v == 'string' ? v : v.eid
 
 type Row = {
   entity: { eid: string }
-  space?: { slug: string; home: Id | null }
+  space?: { slug: string }
   app?: {
     slug: string
     space: Id
@@ -208,7 +211,7 @@ type Row = {
   member?: { space: Id; person: Id; role: Role }
   email?: { address: string }
   alias?: { slug: string; slugs?: string | null }
-  router?: { first?: string | null }
+  home?: { first?: string | null }
   doc?: { title?: string }
   plan?: {
     tier?: Tier | null
@@ -399,7 +402,7 @@ export let stamp = async (
 // What every read of an APP asks for beside the app row itself, in one place
 // because `appOf` reads all of it and a filter that forgets one answers null
 // where there is a value.
-let ABOUT = '.doc?&.alias?&.router?&.meter?&.published?&.installed?'
+let ABOUT = '.doc?&.alias?&.home?&.meter?&.published?&.installed?'
 
 // The plan as a whole row, however little of it is written: a column nobody
 // has filled reads empty, the way `meterOf` does, so nothing downstream tests
@@ -420,7 +423,6 @@ let planOf = (r: Row): Plan | null =>
 let spaceOf = (r: Row): Space => ({
   eid: r.entity.eid,
   slug: r.space!.slug,
-  home: r.space!.home == null ? null : idOf(r.space!.home),
   title: r.doc?.title || r.space!.slug,
   tier: tierOf(r.space!.slug, r.plan?.tier ?? null),
   plan: planOf(r),
@@ -437,7 +439,8 @@ export let appOf = (r: Row): App => ({
   title: r.doc?.title || r.app!.slug,
   store: r.alias?.slug ?? null,
   slugs: slugsOf(r.alias),
-  first: firstOf(r.router),
+  home: r.home != null,
+  first: firstOf(r.home),
   meter: meterOf(r),
   published: r.published?.name
     ? {
@@ -509,19 +512,55 @@ export let appStore = (ns: Namespace, space: Space, app: App): Door =>
 // because the store is named at birth and knows neither the app's current slug
 // nor which app the space's front page is.
 export let mailbox = (space: Space, app: App) =>
-  mailFrom(space.slug, app.eid == space.home ? null : app.slug)
+  mailFrom(space.slug, app.home ? null : app.slug)
 
 // The address a person is handed for an app. A space's front page IS its
 // bare hostname (T-33040, apps.ts `fetch`) — its own `/<app>/` only forwards
 // there — so every answer that hands out a link hands out the one to hold.
-// `space.home` must be the value AFTER the caller's own write, or a tool that
-// just moved the front page reports the address it had before. It lives here
-// beside the store's name because it is the other name a (space, app) has,
-// and everything that says one out loud reads it from one place: the tools,
-// and the letter that names what deleting a space would destroy (erase.ts).
+// The app must be the one read back AFTER the caller's own write, or a tool
+// that just moved the front page reports the address it had before. It lives
+// here beside the store's name because it is the other name a (space, app)
+// has, and everything that says one out loud reads it from one place: the
+// tools, and the letter that names what deleting a space would destroy
+// (erase.ts).
 export let url = (space: Space, app: App) =>
-  `https://${space.slug}.yaks.app/` +
-  (app.eid == space.home ? '' : `${app.slug}/`)
+  `https://${space.slug}.yaks.app/` + (app.home ? '' : `${app.slug}/`)
+
+/**
+ * Moving the front page, as the bundles that do it (T-34227): the word comes
+ * OFF the app that had it and goes ON the one that gets it, in whatever batch
+ * the caller is already writing, so the space is never for one moment a space
+ * with two front pages or none it did not ask for.
+ *
+ * This is where "at most one home app per space" lives. The vocabulary would
+ * say it if it could — `unique` is over one component's own columns, and `home`
+ * has no space of its own to pair with (vocab.ts) — so the rule is the
+ * directory's, and it is one function rather than a paragraph in each caller.
+ *
+ * `was` is the app wearing `home` now (`dir.home`), `onto` the one that should
+ * wear it, or null to leave the space with no front page. `first` rides along
+ * when the same call also set the globs, since they are columns of this word.
+ */
+export let homing = (
+  was: App | null,
+  onto: App | null,
+  first?: string[] | null,
+): EntityLiteral[] => [
+  // `home: null` drops the whole component, globs and all: an app that is not
+  // the front page routes nothing first, so there is no column left to keep.
+  ...(was && was.eid != onto?.eid
+    ? [{ entity: { eid: was.eid }, home: null }]
+    : []),
+  ...(onto
+    ? [{
+      entity: { eid: onto.eid },
+      home: first == null
+        // A patch with no columns: an app already home keeps the globs it had.
+        ? {}
+        : { first: first.length ? JSON.stringify(first) : null },
+    }]
+    : []),
+]
 
 // The typed client over the handler, in-process or across a binding.
 export type Directory = ReturnType<typeof directory>
@@ -671,9 +710,11 @@ export let directory = (via: Fetcher, now = false) => {
     // always works in one space, and a person only ever sees their own.
     all: async (): Promise<Space[]> =>
       (await query('.space!&.doc?&.plan?&.meter?&.notified?')).map(spaceOf),
-    // The app that answers the space's bare hostname, if it has one.
+    // The app that answers the space's bare hostname, if it has one: the one
+    // in this space WEARING `home` (T-34227). At most one does — `homing`
+    // below is the rule — so the first row is the answer.
     home: async (space: Space) => {
-      let row = space.home ? await one(`.eid=${space.home}`) : undefined
+      let row = await one(`.app.space=${space.eid}&.home!&${ABOUT}`)
       return row?.app ? appOf(row) : null
     },
     // A person's membership row: the eid, so an invite can revise or remove

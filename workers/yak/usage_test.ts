@@ -115,7 +115,6 @@ let NOW = new Date('2026-09-15T12:00:00Z')
 let space = (meter: Partial<Meter> = {}, tier: Tier | null = null): Space => ({
   eid: 'e1',
   slug: 'jeff',
-  home: null,
   title: 'Jeff',
   tier,
   plan: null,

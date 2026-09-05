@@ -326,8 +326,9 @@ Deno.test('DELETE / empties the app store and bears it again', async () => {
 
 // The space, `cookbook` as its home app, `garden` beside it, and a home worker
 // where one is given: an app answering `.get` for no other script is an app
-// with no worker, which is the message the runtime knows one by. `first` is
-// the home app's `router` component, written the way `app_set` writes it.
+// with no worker, which is the message the runtime knows one by. `first` is a
+// column of the `home` component the front page wears, written the way
+// `app_set` writes it.
 let router = async (
   worker?: (req: Request) => Response | Promise<Response>,
   first?: string[],
@@ -343,13 +344,10 @@ let router = async (
         app: { slug: 'garden', space: space.eid, version: 1, access: 'public' },
         alias: { slug: 'ada/garden' },
       },
-      { entity: { eid: space.eid }, space: { home: app.eid } },
-      ...(first
-        ? [{
-          entity: { eid: app.eid },
-          router: { first: JSON.stringify(first) },
-        }]
-        : []),
+      {
+        entity: { eid: app.eid },
+        home: first ? { first: JSON.stringify(first) } : {},
+      },
     ],
   }, by)
   let script = scriptName(storeName(space, app))

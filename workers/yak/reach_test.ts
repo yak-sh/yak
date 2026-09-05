@@ -18,7 +18,6 @@ import { type Reach, read, written } from './reach.ts'
 let space = (slug: string): Space => ({
   eid: `space-${slug}`,
   slug,
-  home: null,
   title: slug,
   tier: null,
   plan: null,
@@ -35,6 +34,7 @@ let app = (slug: string, spaceEid: string): App => ({
   access: 'private',
   store: null,
   slugs: [slug],
+  home: false,
   first: [],
   meter: null,
   published: null,

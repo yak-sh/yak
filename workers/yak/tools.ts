@@ -56,6 +56,7 @@ import {
   appStore,
   bornAt,
   type Directory,
+  homing,
   mailbox,
   META,
   type Role,
@@ -1163,7 +1164,7 @@ export let TOOLS: Tool[] = [
       // visitor may open; which app opens there is a choice, and arrival
       // order is not a choice anyone made. Said in the answer, because
       // nothing else tells a person the front page is theirs to set.
-      let front = space.home ? await ctx.dir.home(space) : null
+      let front = await ctx.dir.home(space)
       await ctx.dir.apply({ entities }, vouched(who))
       let app = (await ctx.dir.app(space, s))!
       return {
@@ -1640,8 +1641,10 @@ export let TOOLS: Tool[] = [
           description:
             'the path globs the front page answers before the apps that own ' +
             'them, e.g. ["/recipes/*", "/*/print"]; [] to route nothing ' +
-            'first. The platform keeps /login, /connect, /mcp and every ' +
-            "app's /api/ door, so a glob naming one is refused",
+            'first. Only the front page routes, so pass home: true with it ' +
+            'unless this app is already one. The platform keeps /login, ' +
+            "/connect, /mcp and every app's /api/ door, so a glob naming one " +
+            'is refused',
         },
       },
       required: ['app'],
@@ -1695,7 +1698,7 @@ export let TOOLS: Tool[] = [
         await blobs.put(onto + key.slice(from.length), await blobs.get(key))
       }
       let entities: EntityLiteral[] = []
-      if (title != null || moving || open || keeping || first != null) {
+      if (title != null || moving || open || keeping) {
         entities.push({
           entity: { eid: app.eid },
           ...(title == null ? {} : { doc: { title } }),
@@ -1708,45 +1711,53 @@ export let TOOLS: Tool[] = [
             }
             : {}),
           ...(keeping ? { alias: { slugs: keeping } } : {}),
-          // An empty list is not an empty column: routing nothing first is
-          // what every app does, so the facet goes away rather than sitting
-          // there saying nothing (`router: null` drops the component).
-          ...(first == null ? {} : {
-            router: first.length ? { first: JSON.stringify(first) } : null,
-          }),
         })
       }
-      // The front page is a column on the space, so clearing it is the null
-      // every other column clears with, and the write empties the
-      // directory's cache — the hostname answers the new front page on the
-      // next request, not a TTL later (directory.ts).
-      if (home != null) {
-        entities.push({
-          entity: { eid: space.eid },
-          space: { home: home ? app.eid : null },
-        })
+      // The globs are COLUMNS of the word that says which app is home
+      // (vocab.ts), so an app that is not the front page has nowhere to put
+      // them — and routing another app's paths from a page nobody is served
+      // is a rule that would never fire. Said rather than silently kept.
+      if (first?.length && home == false) {
+        throw new Error('a front page routes first; home: false routes nothing')
+      }
+      if (first != null && home == null && !app.home) {
+        throw new Error(
+          `${space.slug}/${app.slug} is not the front page — ` +
+            'app_set(app, home: true) makes it one, and it routes from there',
+        )
+      }
+      // Moving the front page is one batch that takes the word off the app
+      // that had it and puts it on this one, which is what keeps a space to
+      // one (directory.ts `homing`). The write empties the directory's cache,
+      // so the hostname answers the new front page on the next request rather
+      // than a TTL later. `home: false` is about THIS app: a space whose front
+      // page is some other app keeps the one it has.
+      if (home == false) {
+        if (app.home) entities.push(...homing(app, null))
+      } else if (home || first != null) {
+        entities.push(
+          ...homing(await ctx.dir.home(space), app, first),
+        )
       }
       await ctx.dir.apply({ entities }, vouched(who))
       for (let key of keys) await blobs.delete(key)
       let now = (await ctx.dir.app(space, to ?? app.slug))!
-      let after = {
-        ...space,
-        home: home == null ? space.home : home ? now.eid : null,
-      }
       return {
         text: `app ${space.slug}/${now.slug}${
           title == null ? '' : ` "${title}"`
-        }: ${url(after, now)}${
+        }: ${url(space, now)}${
           moving ? ` (moved from /${app.slug}/, which now redirects here)` : ''
         }${open ? ` — ${told(open)}` : ''}${
-          home == null
+          // What the app IS now, off the row just read back: `home: false` on
+          // an app that was never the front page changes nothing, and saying
+          // it did would be a sentence the address disagrees with.
+          home == null || now.home == app.home
             ? ''
-            : home
+            : now.home
             ? ` — it is the front page now: https://${space.slug}.yaks.app/ ` +
               'opens it'
             : ` — no longer the front page: https://${space.slug}.yaks.app/ ` +
-              "lists the space's apps again until another one is set home"
-        }${
+              "lists the space's apps again until another one is set home"}${
           // Read off the row that was just written, never off what arrived:
           // the sentence says what the app IS now (directory.ts `appOf`).
           first == null
@@ -1994,7 +2005,7 @@ export let TOOLS: Tool[] = [
           let its = app.meter?.month == monthOf(new Date()) ? app.meter : null
           // The one the bare hostname opens, said where the person can see
           // it — the space line above is that address (T-32947).
-          let front = app.eid == space.home
+          let front = app.home
           listed.push({
             slug: app.slug,
             title: app.title,

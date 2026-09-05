@@ -50,6 +50,14 @@
 //                 DIRECTORY does NOT split — its vocabulary declares the three
 //                 seats itself (vocab.ts `platformDoc`), so its rows copy whole.
 //
+// ## The passes after it
+// A store that has carried can still hold a fact in a place the vocabulary no
+// longer names — SQLite's schema is additive, so a column a word lost is still
+// standing with its values in it. That is a second kind of migration and it is
+// numbered ({@link MARKS}): {@link homed} is version 2, `space.home` becoming
+// `home{}` on the app (T-34227). Same three steps, same order — export, one
+// transaction, reconcile — over the NEW schema rather than the old one.
+//
 // ## What cannot be carried
 // The fleet's other ~100 words (`card`, `pin`, `mail`, `session`, the journal…)
 // are not in any store's vocabulary now, so there is no table for their rows to
@@ -86,8 +94,20 @@ export let SLOTS = [
   'schema_version',
 ]
 
-/** The marker written when a pass reconciles, so it never runs twice. */
+/** The marker written when a pass reconciles, so it never runs twice. The
+ * number is the version an object stands at: {@link MARK} is the move off the
+ * fleet-shaped store, {@link HOMED} the one after it. An object is at the last
+ * marker it wrote, and a pass whose marker is already there does not run. */
 export let MARK = 'yak/store/packages/1'
+
+/** The second pass (T-34227): `space.home` — the column that said which app a
+ * space opens at — becomes `home{}` worn by that app. The directory's alone;
+ * no other object has a `space` table. */
+export let HOMED = 'yak/store/home/2'
+
+/** Every marker in order, so "is this object caught up" is one comparison and
+ * a new pass is one line here. */
+export let MARKS = [MARK, HOMED]
 
 /** The two tables the two layouts spell identically, and so never move. */
 let SPINE = ['entity', 'tombstone']
@@ -350,6 +370,132 @@ let idOf = (d: Drive, eid: string, minted: { n: number }): number => {
   return Number(d.query('select id from entity where eid = ?', [eid])[0].id)
 }
 
+// ---- `space.home` → `home{}` (T-34227) -------------------------------------
+//
+// The fact "this app is the space's front page" was a column on the space and
+// is now a word the app WEARS (vocab.ts). It moves in both passes, because a
+// store reaches it from either side: one carrying now finds the column in the
+// table renamed aside, one that carried before this word existed finds it
+// standing in `space` itself — SQLite never drops a column a vocabulary stopped
+// declaring. Same insert either way, so it is said once.
+
+/** The stamping: one `home` row per space that named an app. Answers how many
+ * spaces named one and how many apps came to wear it, which is what the
+ * reconciliation compares. */
+let homeward = (d: Drive, from: string): { named: number; stamped: number } => {
+  let named = Number(
+    d.query(
+      `select count(*) as n from ${q(from)} where home is not null`,
+      [],
+    )[0]
+      ?.n ?? 0,
+  )
+  let before = count(d, 'home')
+  d.exec(
+    `insert or ignore into ${q('home')} (entity) ` +
+      `select home from ${q(from)} where home is not null`,
+  )
+  return { named, stamped: count(d, 'home') - before }
+}
+
+/**
+ * Whether this object still says which app a space opens in the OLD place: a
+ * `space` table with a `home` column. False for every app store — no `space`
+ * table at all — and for a directory {@link homed} has already been over, since
+ * that pass drops the column.
+ *
+ * SQLite never drops a column a vocabulary stopped declaring (the schema is
+ * additive, graph.ts `#boot`), which is exactly why the values are still there
+ * to be read after the word is gone from vocab.ts.
+ */
+export let housed = (storage: DurableStorage): boolean => {
+  let d = driver(storage)
+  return stands(d, 'space') && stands(d, 'home') &&
+    columns(d, 'space').includes('home')
+}
+
+/** Which rows the pass is about, read out before one moves — the restore path,
+ * the way {@link taken} is for the first pass. */
+export let homes = (storage: DurableStorage): Taken => {
+  let d = driver(storage)
+  return {
+    store: '',
+    at: new Date().toISOString(),
+    slots: {},
+    tables: [{ name: 'space', rows: d.query('select * from space', []) }],
+  }
+}
+
+/**
+ * `space.home` → `home{}` on the app it named (T-34227), synchronously — run it
+ * inside `transactionSync` for the same reason {@link carry} is: a throw is how
+ * it refuses and the rollback is how it leaves nothing behind.
+ *
+ * THE RULE: one `home` row per space that named an app, and not one more. A
+ * count that does not match is two spaces naming one app, or a row the insert
+ * would not take, and neither is a directory to go on serving from — so it
+ * refuses, the column keeps the fact, and the rows are in the export.
+ */
+export let homed = (
+  storage: DurableStorage,
+  o: { store: string; app: string | null; export: string },
+): Report => {
+  let d = driver(storage)
+  let at = new Date().toISOString()
+  let moved: Moved[] = []
+  let report = (ok: boolean, message?: string): Report => ({
+    store: o.store,
+    app: o.app,
+    at,
+    ok,
+    message,
+    mark: HOMED,
+    moved,
+    dropped: [],
+    export: o.export,
+  })
+  let spaces = count(d, 'space')
+  let { named, stamped } = homeward(d, 'space')
+  moved.push({
+    table: 'home',
+    from: 0,
+    to: stamped,
+    note: `${named} spaces named a front page`,
+  })
+  if (stamped != named) {
+    throw new Refused(report(
+      false,
+      `${named} spaces named a front page and ${stamped} apps wear home: ` +
+        'two spaces cannot open the same app',
+    ))
+  }
+  // The old place, swept up. TIDYING, not the move: the fact is already on the
+  // apps, the vocabulary no longer declares this column, and nothing selects
+  // it — so a drop the engine will not do leaves a dead column and a working
+  // directory. Refusing over it would answer 503 to the whole platform for a
+  // column nobody reads, so it is noted in the report and the pass stands.
+  let swept = ''
+  try {
+    d.exec('alter table space drop column home')
+  } catch (e) {
+    swept = `the home column would not drop: ${
+      e instanceof Error ? e.message : String(e)
+    } — it is dead, nothing selects it`
+  }
+  let kept = count(d, 'space')
+  moved.push({
+    table: 'space',
+    from: spaces,
+    to: kept,
+    note: swept || 'the home column dropped',
+  })
+  // The rows themselves are the move, and losing one is not tidying.
+  if (kept != spaces) {
+    throw new Refused(report(false, `space ${spaces}→${kept}`))
+  }
+  return report(true)
+}
+
 /**
  * The whole pass, synchronously — run it inside `transactionSync`, because a
  * throw is how it refuses and the rollback is how it leaves nothing behind.
@@ -493,6 +639,27 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
     })
   }
 
+  // `space.home` → `home{}` on the app it named (T-34227). A store carrying now
+  // arrives at version 2 in the same breath, so {@link homed} has nothing left
+  // to do for it — and the column is not among the ones `space` copies across,
+  // since the new vocabulary does not declare it.
+  if (there('space') && words.includes('home') && !carried.has('home')) {
+    let { named, stamped } = homeward(d, aside('space'))
+    carried.add('home')
+    moved.push({
+      table: 'home',
+      from: 0,
+      to: stamped,
+      note: `${named} spaces named a front page in space.home`,
+    })
+    if (stamped != named) {
+      throw new Refused(report(
+        false,
+        `${named} spaces named a front page and ${stamped} apps wear home`,
+      ))
+    }
+  }
+
   // `references` → `referenced`, and the edge re-addressed with it: an edge's
   // eid is derived from `from|tag|to`, so the tag's new spelling is a new
   // address. The integer id does not move, so every row that points at this
@@ -611,10 +778,11 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // three exceptions are each a delta this pass can name:
   //   blob_text  was one row per body, is one row per DISTINCT body
   //   grant      had none, has one per non-owner seat the split moved
+  //   home       had none, has one per space that named a front page
   //   entity     gains one spine row per entity those grants named into being
   // Anything else that does not match is a copy that lost or gained a row, and
   // there is no version of that worth marking done.
-  let SAID = ['grant', 'blob_text', 'entity']
+  let SAID = ['grant', 'blob_text', 'home', 'entity']
   let off = moved.filter((m) => !SAID.includes(m.table) && m.from != m.to)
   let spine = moved.find((m) => m.table == 'entity')!
   if (spine.to != spine.from + minted.n) off.push(spine)

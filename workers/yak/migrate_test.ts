@@ -25,7 +25,9 @@ import { schema } from '@yaks/sqlite'
 import { Store } from './graph.ts'
 import {
   carry,
+  HOMED,
   keyOf,
+  MARK,
   Refused as Unreconciled,
   type Report,
 } from './migrate.ts'
@@ -406,6 +408,145 @@ slow('an app store splits the seat from the level', async () => {
   assert(report.ok, report.message)
   assertEquals(report.moved.find((m) => m.table == 'grant')?.to, 1)
 })
+
+// ---- `space.home` → `home{}` (T-34227) -------------------------------------
+
+// A directory reaches version 2 from either side, so both are held here: the
+// store that carries with the column still in the fleet-shaped tables, and the
+// one that carried BEFORE the word existed, which is where every deployed
+// directory is — its `space` table still standing with a `home` column in it,
+// because SQLite never drops a column a vocabulary stopped declaring.
+let seedHomes = async (ctx: State) => {
+  let old = older(ctx, PLATFORM_STORE)
+  await old.apply([
+    { eid: ADA, name: 'person', comp: {} },
+    { eid: SPACE, name: 'space', comp: { slug: 'ada', home: APP } },
+    { eid: SPACE, name: 'doc', comp: { title: 'Ada' } },
+    { eid: APP, name: 'app', comp: { slug: 'cookbook', space: SPACE } },
+    { eid: ONE, name: 'app', comp: { slug: 'garden', space: SPACE } },
+    { eid: TWO, name: 'space', comp: { slug: 'ben' } },
+  ])
+  return old
+}
+
+// Which apps wear `home`, by slug, read through the store's own door.
+let wearing = async (now: ReturnType<typeof newer>) =>
+  (await now.query('.home!&.app!'))
+    .map((r) => (r.app as { slug: string }).slug)
+
+// The version marker this object stands at (migrate.ts `MARKS`), out of its
+// own memory.
+let marker = (ctx: State): string | null =>
+  (ctx.storage.sql.exec("select v from yak_kv where k = 'migrated'")
+    .toArray()[0] as { v: string } | undefined)?.v ?? null
+
+/**
+ * A directory as a DEPLOYED one stands right now: carried to version 1 and no
+ * further, its `space` table still holding the `home` column with the front
+ * page named in it. Built over the NEW store, because that is what version 1
+ * leaves behind — the column outlives the word that declared it, which is the
+ * whole reason there is a second pass.
+ */
+let carriedOne = async (ctx: State) => {
+  let now = newer(ctx, PLATFORM_STORE)
+  await now.door('/apply', {
+    method: 'POST',
+    headers: { 'x-yak-kernel': '1' },
+    body: JSON.stringify([
+      { entity: { eid: SPACE }, space: { slug: 'ada' }, doc: { title: 'Ada' } },
+      { entity: { eid: APP }, app: { slug: 'cookbook', space: SPACE } },
+      { entity: { eid: ONE }, app: { slug: 'garden', space: SPACE } },
+      { entity: { eid: TWO }, space: { slug: 'ben' } },
+    ]),
+  })
+  let sql = ctx.storage.sql
+  sql.exec('alter table space add column home integer references entity(id)')
+  sql.exec(
+    'update space set home = (select id from entity where eid = ?) ' +
+      'where entity = (select id from entity where eid = ?)',
+    APP,
+    SPACE,
+  )
+  sql.exec(
+    "insert into yak_kv (k, v) values ('migrated', ?) " +
+      'on conflict(k) do update set v = excluded.v',
+    MARK,
+  )
+  return now
+}
+
+slow(
+  'a store carrying now arrives with the front page on the app',
+  async () => {
+    let ctx = state()
+    await seedHomes(ctx)
+    let files = bucket()
+    let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+    assertEquals(await wearing(now), ['cookbook'])
+    let report = reportIn(files.held)
+    assert(report.ok, report.message)
+    // One row per space that named one — `ben` named none and gets none.
+    assertEquals(
+      report.moved.find((m) => m.table == 'home'),
+      {
+        table: 'home',
+        from: 0,
+        to: 1,
+        note: '1 spaces named a front page in space.home',
+      },
+    )
+    // Version 2 in the same breath, so the second pass has nothing to do.
+    assertEquals(marker(ctx), HOMED)
+  },
+)
+
+slow(
+  'a directory that already carried moves the column on next touch',
+  async () => {
+    let ctx = state()
+    await carriedOne(ctx)
+
+    // A fresh incarnation over the same object — a deploy, in other words — and
+    // the first request carries it the rest of the way.
+    let files = bucket()
+    let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+    assertEquals(await wearing(now), ['cookbook'])
+    let report = reportIn(files.held)
+    assert(report.ok, report.message)
+    assertEquals(report.mark, HOMED)
+    assertEquals(report.moved.find((m) => m.table == 'home')?.to, 1)
+    // The old place is gone, so nothing can read the fact from two spellings.
+    assertEquals(
+      ctx.storage.sql.exec('pragma table_info(space)').toArray()
+        .some((c) => (c as { name: string }).name == 'home'),
+      false,
+    )
+    // And it does not run again: the marker is written, and a third incarnation
+    // exports nothing.
+    let third = bucket()
+    newer(ctx, PLATFORM_STORE, { EXPORTS: third.r2 })
+    assertEquals(third.held.size, 0)
+  },
+)
+
+slow(
+  'two spaces naming one app refuses, and the column keeps the fact',
+  async () => {
+    let ctx = state()
+    let old = await seedHomes(ctx)
+    await old.apply([{ eid: TWO, name: 'space', comp: { home: APP } }])
+    let files = bucket()
+    let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+    let read = await now.door('/query?q=.app!')
+    assertEquals(read.status, 503)
+    let report = reportIn(files.held)
+    assertEquals(report.ok, false)
+    assert(
+      report.message?.includes('2 spaces named a front page'),
+      report.message,
+    )
+  },
+)
 
 // ---- the refusals ----------------------------------------------------------
 

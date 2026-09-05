@@ -3767,12 +3767,66 @@ slow('the front page moves, and only the owner moves it', async () => {
   }
 })
 
+// Jeff, on T-34227: "and if i screw up my home app, can i reset it back to the
+// default in some way? maybe if you delete the home app, it just resets to the
+// default?" — it does, and it falls out of the word being ON the app rather
+// than beside it: the app dies and `home` dies with it, so there is nothing
+// left saying which app the bare hostname opens.
+slow('deleting the front page puts the space back to the default', async () => {
+  let k = await kernel()
+  try {
+    let them = await seed(k, [{ slug: 'reset', apps: ['site', 'garden'] }])
+    let agent = connector(k, them.cookie)
+    let bare = () => k.at('reset.yaks.app', '/', { redirect: 'manual' })
+    let front = async () => {
+      let r = await k.at('reset.yaks.app', '/api/graph')
+      return r.status == 200 ? (await r.json()).db : r.status
+    }
+    await agent.tool('app_set', {
+      space: 'reset',
+      app: 'site',
+      home: true,
+      first: ['/garden/*'],
+    })
+    assertEquals(await front(), 'do:reset/site')
+
+    // Thrown away, and the space is a space with no front page again — the
+    // ordinary state, and the state it was in before anybody said otherwise.
+    await agent.tool('app_delete', { space: 'reset', app: 'site' })
+    let back = await bare()
+    assertEquals(back.status, 200)
+    assertStringIncludes(await back.text(), 'href="/garden/"')
+    assertEquals(await front(), 404)
+    // Nothing is left carrying the word, so nothing is left carrying its
+    // globs: `/garden/x` is the garden app's again.
+    assertEquals(
+      (await agent.tool('app_list', { space: 'reset' })).includes('front page'),
+      false,
+    )
+    assertEquals(
+      (await meta(k, them.cookie).query('.home!')).length,
+      0,
+    )
+    // Its own address is nobody's now — not a redirect to a former slug, and
+    // not the front page's fall-through, because there is no front page.
+    assertEquals((await k.at('reset.yaks.app', '/site/')).status, 404)
+    // And `<space>@yaks.app` is a space with no front page again, which the
+    // mail door already refuses by name and tells the sender where to write
+    // instead (inbox.ts `opened`, inbox_test.ts).
+    // And the space takes another one whenever it is ready to.
+    await agent.tool('app_set', { space: 'reset', app: 'garden', home: true })
+    assertEquals(await front(), 'do:reset/garden')
+  } finally {
+    await k.stop()
+  }
+})
+
 // The front page is the space's ROUTER, and `first` is how it opts in
 // (D-34197): the paths its worker sees before the app whose slug owns them,
-// written as globs on the app's own `router` component. Routing itself is
-// T-34200/T-34201; what this proves is the vocabulary, the tool and the read
-// back — and that the platform's own paths are refused, whole, before anything
-// is written.
+// written as columns of the `home` component the front page wears (T-34227).
+// Routing itself is T-34200/T-34201; what this proves is the vocabulary, the
+// tool and the read back — that only a front page routes, and that the
+// platform's own paths are refused, whole, before anything is written.
 slow('the front page says which paths it answers first', async () => {
   let k = await kernel()
   try {
@@ -3782,8 +3836,19 @@ slow('the front page says which paths it answers first', async () => {
     let at = { space: 'route', app: 'site' }
     // The rows carrying the component, whatever else is in the store.
     let stored = async () =>
-      (await graph.query('.router!'))
-        .map((r) => (r.router as { first: string }).first)
+      (await graph.query('.home!'))
+        .map((r) => (r.home as { first: string | null }).first)
+
+    // The globs are columns of the word that says which app is home, so an
+    // app that is not the front page has nowhere to put them.
+    assertStringIncludes(
+      (await assertRejects(
+        () => agent.tool('app_set', { ...at, first: ['/recipes/*'] }),
+        Error,
+      )).message,
+      'route/site is not the front page',
+    )
+    assertEquals(await stored(), [])
 
     let said = await agent.tool('app_set', {
       ...at,
@@ -3800,13 +3865,13 @@ slow('the front page says which paths it answers first', async () => {
     // And the column itself: one text column holding the JSON list, in order.
     assertEquals(await stored(), ['["/recipes/*","/*/print"]'])
 
-    // An empty list is not an empty column — the facet goes away, so an app
-    // that routes nothing first looks like every other app.
+    // An empty list is an empty COLUMN now, not a component that goes away:
+    // the word is what says this app is the front page, and it still is.
     assertStringIncludes(
       await agent.tool('app_set', { ...at, first: [] }),
       'it answers no path before the app that owns it',
     )
-    assertEquals(await stored(), [])
+    assertEquals(await stored(), [null])
 
     // The platform's own paths are nobody's, and a refusal names the glob and
     // the rule. Nothing in the batch lands — not even the globs beside it.
@@ -3825,8 +3890,25 @@ slow('the front page says which paths it answers first', async () => {
         )).message,
         why,
       )
-      assertEquals(await stored(), [], `${glob} was written anyway`)
+      assertEquals(await stored(), [null], `${glob} was written anyway`)
     }
+
+    // AT MOST ONE per space, which the vocabulary cannot say and the
+    // directory therefore does (T-34227): moving the front page is one batch
+    // that takes the word off the app that had it, globs and all.
+    await agent.tool('app_set', { ...at, first: ['/recipes/*'] })
+    assertEquals(await stored(), ['["/recipes/*"]'])
+    await agent.tool('app_set', {
+      space: 'route',
+      app: 'recipes',
+      home: true,
+    })
+    assertEquals(await stored(), [null])
+    assertEquals(
+      (await graph.query('.home!&.app!'))
+        .map((r) => (r.app as { slug: string }).slug),
+      ['recipes'],
+    )
   } finally {
     await k.stop()
   }

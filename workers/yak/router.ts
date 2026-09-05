@@ -1,9 +1,9 @@
 // The home app as the space's ROUTER (D-34197): which paths its worker sees
-// FIRST, before the app whose slug owns them. `router{first}` is the app's own
-// facet — a list of path globs, the way Workers static assets' `run_worker_first`
-// takes globs — and this file is the whole rule that column is written and read
-// by: what a glob may say, what it may never name, and whether one answers a
-// given path.
+// FIRST, before the app whose slug owns them. `home{first}` is a column of the
+// word that says which app is home at all (vocab.ts) — a list of path globs,
+// the way Workers static assets' `run_worker_first` takes globs — and this file
+// is the whole rule that column is written and read by: what a glob may say,
+// what it may never name, and whether one answers a given path.
 //
 // Empty is the ordinary state and the default: a home app is plain files like
 // any other app, and `first` is the deliberate opt-in.
@@ -68,7 +68,7 @@ let SHAPE = 'a list of path globs, like ["/recipes/*"]'
 /// globs(['/*/api/*'], []) throws '/*/api/* names /*/api/*'
 /// globs(['/platform/*'], ['platform']) throws '/platform/* names /platform/*'
 /**
- * `router.first` as it arrives from an agent — a list of path globs — checked
+ * `home.first` as it arrives from an agent — a list of path globs — checked
  * and handed back. Every refusal names the glob and the rule, because the agent
  * reading it has no other source; `kernels` is the slugs the platform keeps for
  * itself (directory.ts `META`), which are nobody's to route.
@@ -106,13 +106,13 @@ export let globs = (first: unknown, kernels: string[]): string[] => {
 /// firstOf({first: 'not json'}) -> []
 /**
  * The column as the App row reads it (directory.ts `appOf`): the JSON array in
- * `router.first`, or nothing at all. Lenient where {@link globs} is strict — a
+ * `home.first`, or nothing at all. Lenient where {@link globs} is strict — a
  * read must answer whatever the row holds, since the graph tier writes this
  * column too, and a listing must not fall over on one somebody typed by hand.
  */
-export let firstOf = (router?: { first?: string | null } | null): string[] => {
+export let firstOf = (home?: { first?: string | null } | null): string[] => {
   try {
-    let held = JSON.parse(router?.first || '[]')
+    let held = JSON.parse(home?.first || '[]')
     return Array.isArray(held) ? held.filter((g) => typeof g == 'string') : []
   } catch {
     return []

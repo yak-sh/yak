@@ -378,7 +378,7 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       kind: true,
       before: ['doc'],
-      properties: { slug: unique(text), home: ref('detach') },
+      properties: { slug: unique(text) },
     },
     app: {
       type: 'object',
@@ -396,16 +396,22 @@ export let platformDoc: VocabDoc = {
     // what its Durable Object is named, so it may never move — and, in
     // `slugs`, each one a rename left behind.
     alias: { type: 'object', properties: { slug: unique(text), slugs: text } },
-    // The home app as the space's router (D-34197): the paths its worker sees
-    // FIRST, before the app whose slug owns them. It is the APP's facet and not
-    // the space's, because `space.home` already says which app is home and two
-    // spellings of one fact would drift.
+    // WHICH app is the space's front page, and the paths its worker sees FIRST
+    // before the app whose slug owns them (D-34197, T-34227). One fact, one
+    // spelling: the app WEARING `home` is the home app, and its globs are
+    // columns of the same word — a `space.home` beside it would be a second
+    // place to say the same thing, and two spellings of one fact drift.
+    //
+    // At most one app per space wears it. The vocabulary cannot say so —
+    // `unique` covers one component's own columns and `home` has no space of
+    // its own — so it is the directory's rule instead (directory.ts `homing`,
+    // where moving it is one batch that drops the old and adds the new).
     //
     // A column is a scalar (@yaks/vocab `storable`), so the list is JSON in one
     // text column — ordered, and read back by router.ts `firstOf`. `alias.slugs`
     // splits on whitespace instead, which is the older spelling of a list here;
     // JSON is the one that round-trips exactly what an agent passed.
-    router: { type: 'object', properties: { first: text } },
+    home: { type: 'object', properties: { first: text } },
     member: {
       type: 'object',
       kind: true,

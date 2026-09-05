@@ -21,14 +21,23 @@ a space has none, and its bare address lists the apps a visitor may open;
 `app_list` says which app it is, if any. Only the space owner may move it, since
 everyone handed the space itself lands there.
 
-It is one column on the space, `space.home`, naming the app. Moving it takes
-effect on the next request: nothing is copied, no file moves, no address is
-rewritten. What changes is which app answers the bare hostname — and the front
-page's own `/<app>/`, which becomes a redirect to it.
+It is a word the app WEARS, `home`, and at most one app in a space wears it.
+Moving it takes effect on the next request: nothing is copied, no file moves, no
+address is rewritten. What changes is which app answers the bare hostname — and
+the front page's own `/<app>/`, which becomes a redirect to it.
 
-That redirect is temporary, not permanent, because the column is a thing the
-owner moves. Hand out the bare address; a link somebody already holds to
-`/<app>/` still arrives.
+That redirect is temporary, not permanent, because the word is a thing the owner
+moves. Hand out the bare address; a link somebody already holds to `/<app>/`
+still arrives.
+
+**Getting back to the default.** `app_set(app, home: false)` puts the space back
+to its default page, and so does deleting the app: the word is on the app, so it
+dies with it and nothing is left saying which app is home. `app_rollback` puts
+an earlier version of a front page back where it went wrong, and setting
+`home: true` on another app moves the word there instead. With no front page,
+`/` is the platform's list of the space's apps again, a path no app claims is a
+404, and a letter to `<space>@yaks.app` is refused by name — the sender is told
+to write to `<space>.<app>@yaks.app`.
 
 ## The order a request is answered in
 
@@ -76,20 +85,23 @@ to the app that owns it, the same pass a worker speaks everywhere else here.
 spelling: `/recipes/*` is everything under `/recipes/`, `/*/print` is `/print`
 under anything.
 
-It is a facet of the APP, `router{first}` — a JSON list in one text column,
-since a column holds a scalar:
+The globs are columns of the same word that says which app is home,
+`home{first}` — a JSON list in one text column, since a column holds a scalar:
 
     { "entity": { "eid": "<the app>" },
-      "router": { "first": "[\"/recipes/*\", \"/*/print\"]" } }
+      "home": { "first": "[\"/recipes/*\", \"/*/print\"]" } }
 
-It is not called `home` because `space.home` already says which app is home, and
-two spellings of one fact drift. Only the front page's `router` is read: a list
-on any other app sits there doing nothing until that app is made home.
+One word, one spelling: an app is the front page BECAUSE it wears `home`, and
+what it routes first is written on the same row. So only a front page can carry
+globs at all — `app_set(app, first: [...])` on an app that is not one is
+refused, and pass `home: true` with it to make it the front page and route in
+one call.
 
-`app_set(app, first: [])` puts every path back where it was, and drops the facet
-rather than leaving an empty one. Empty is the ordinary state — a front page is
-plain files like any other app until somebody says otherwise — so reach for
-`first` when the front page is meant to route the whole space, and not before.
+`app_set(app, first: [])` puts every path back where it was, leaving the app the
+front page it was. Empty is the ordinary state — a front page is plain files
+like any other app until somebody says otherwise — so reach for `first` when the
+front page is meant to route the whole space, and not before. Setting
+`home: false` takes the word off altogether, globs with it.
 
 ## What is never routable
 

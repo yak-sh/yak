@@ -405,7 +405,7 @@ let patient = <T>(work: Promise<T>) => {
 
 /**
  * The HOME app's worker, run AHEAD of the app whose slug owns the path
- * (`router.first`, router.ts, D-34197). The same call `ran` makes, so the
+ * (`home.first`, router.ts, D-34197). The same call `ran` makes, so the
  * router acts as the CALLER — `handed` seals the visitor's own grant on the
  * home app's store, and there is no other store it may name — and its 404 is
  * the same pass verdict every app worker already speaks.

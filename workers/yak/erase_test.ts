@@ -21,7 +21,6 @@ import { client, connector, kernel, letters, meta, seed } from './probe.ts'
 let space = (over: Partial<Space> = {}): Space => ({
   eid: 'space-eid',
   slug: 'shoplab',
-  home: null,
   title: 'shoplab',
   tier: 'free',
   plan: null,
@@ -39,6 +38,7 @@ let app = (over: Partial<App> = {}): App => ({
   access: 'public',
   store: null,
   slugs: [],
+  home: false,
   first: [],
   meter: null,
   published: null,

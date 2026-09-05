@@ -986,7 +986,7 @@ let saved = async (
   return redirect(`https://${moved?.slug ?? space.slug}.${PLATFORM}/`, 303)
 }
 
-// Rung 1½ (D-34197): the home app is the space's ROUTER, and `router.first`
+// Rung 1½ (D-34197): the home app is the space's ROUTER, and `home.first`
 // names the paths its worker sees BEFORE the app whose slug owns them. Null is
 // "the order is unchanged" — no home app, no glob over this path, or a router
 // that passed, threw or hung (dispatch.ts `ahead`, which fails open).
@@ -1006,8 +1006,9 @@ let firstly = async (
 ) => {
   let path = new URL(req.url).pathname
   if (PLATFORM_PATHS.some((p) => covers(p, path))) return null
-  // No home app is no read past this: `dir.home` answers null off the column
-  // the space already carries, without asking the store.
+  // Which app wears `home`, and its globs with it — one read, cached like
+  // every other directory read, and null for the spaces that have no front
+  // page at all.
   let home = await c.time('home', () => dir.home(space))
   if (!home || !home.first.some((g) => covers(g, path))) return null
   return await c.time('first', () => ahead(env, space, home, req, who))
@@ -1052,7 +1053,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
 // `/`, and rung 5's 404 is what is left when there is no home app at all.
 //
 // And ONE rung is opted into, between 1 and 2: the paths the home app named
-// in `router.first` are its worker's before they are the owning app's
+// in `home.first` are its worker's before they are the owning app's
 // (`firstly` below). Empty for almost every space, and it can only ever move
 // a path from the app that owns it to the home app — never off the platform's
 // own (rung 1), and never onto a space that asked for nothing.
@@ -1116,7 +1117,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // resolve from that root.
   let mount = req.headers.get(MOUNT)
   let path = r.path
-  let front = !!app && app.eid == space.home
+  let front = !!app && app.home
   if (!app) {
     // Which app is home is a DIRECTORY READ, so it happens here, where env
     // is, and not in route.ts, which is pure (index.ts `aimed`, same reason).
@@ -1139,9 +1140,9 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   } else if (!mount && front && (path == '' || path == '/')) {
     // The home app's OWN `/<app>/` forwards to the bare hostname, so its
     // address is that and nothing else, and links anybody already holds still
-    // arrive. Temporary, not permanent — which app is home is a column on the
-    // space the owner moves (tools.ts `app_set`), and a 301 a browser cached
-    // would outlive the move.
+    // arrive. Temporary, not permanent — which app is home is a word the owner
+    // moves from one app to another (tools.ts `app_set`), and a 301 a browser
+    // cached would outlive the move.
     return redirect(`/${url.search}`)
   } else if (path == '') return redirect(`${url.pathname}/`)
   // The app's own worker, coming back through its service binding for its

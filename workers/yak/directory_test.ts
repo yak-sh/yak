@@ -13,7 +13,6 @@ import type { Env } from './env.ts'
 let space: Space = {
   eid: 's1',
   slug: 'jeff',
-  home: null,
   title: 'jeff',
   tier: null,
   plan: null,

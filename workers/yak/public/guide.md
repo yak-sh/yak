@@ -599,9 +599,11 @@ It can also answer paths another app owns, by asking for them:
 
     app_set(app: 'home', first: ['/recipes/*', '/*/print'])
 
-Those globs go in `router{first}` on the app, and only the front page's are
-read. `*` is any run of characters, slashes included. The platform's own paths
-are nobody's, so a glob naming one is refused before anything is written.
+Those globs go in `home{first}` — columns of the same word that says which app
+is the front page, so only a front page carries them and `app_set` refuses them
+on any other app. `*` is any run of characters, slashes included. The platform's
+own paths are nobody's, so a glob naming one is refused before anything is
+written.
 
 Two rules hold. It **fails open**: a worker that throws, times out or answers
 404 is skipped, the request lands on the app that owns it, and the break is an
