@@ -14,10 +14,10 @@
 // through `webSocketMessage`.
 import { assert, assertEquals } from '@std/assert'
 import type { Frame } from '@yaks/api'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, sha256 } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/harness.ts'
-import { Store } from './graph.ts'
+import { grantEid, Store } from './graph.ts'
 import { RELATIONS } from './vocab.ts'
 
 // A hibernatable socket, faked: what it was sent, and the attachment that is
@@ -305,5 +305,24 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
       // the app's own
       'recipe',
     ].sort(),
+  )
+})
+
+// The separator inside a grant id is a NUL BYTE, and it is load-bearing: it is
+// what keeps grantEid of ('a\x00b', 'c') from colliding with ('a', 'b\x00c').
+// It was once written as a raw 0x00 in the source, which made git call the
+// file binary and refuse to merge it (T-33946); the escape spells the same
+// byte. This pins the id both ways — against the bytes, built here without the
+// escape, and against a frozen hex — so the separator cannot quietly become a
+// space and silently move every grant.
+Deno.test('a grant id is the sha of app and person joined by a NUL', () => {
+  let nul = String.fromCharCode(0)
+  assertEquals(
+    grantEid('cookbook', 'P-1'),
+    sha256(`grant${nul}cookbook${nul}P-1`),
+  )
+  assertEquals(
+    grantEid('cookbook', 'P-1'),
+    '297f143239d7da3decf8ba2f25bb142403be985fb12d029d4e9f172127061df8',
   )
 })

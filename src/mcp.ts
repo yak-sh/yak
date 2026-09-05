@@ -2765,7 +2765,7 @@ let readGraph = async (): Promise<Snapshot> => {
     if (!eid) continue
     byEid.set(eid, rest)
     for (let d of hitDeps ?? []) {
-      deps.set(`${d.type} ${d.parent} ${d.child}`, d)
+      deps.set(`${d.type}\x00${d.parent}\x00${d.child}`, d)
     }
   }
   let changes: Change[] = []

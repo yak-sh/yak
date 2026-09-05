@@ -190,7 +190,7 @@ async (req) => {
 /** The id a mirrored grant is filed under: one per (app, person), derived, so
  * the same vouch lands on one row however often it is said. */
 export let grantEid = (app: string, person: string): string =>
-  sha256(`grant ${app} ${person}`)
+  sha256(`grant\x00${app}\x00${person}`)
 
 export class Store {
   #ctx: State
