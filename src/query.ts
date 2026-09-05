@@ -19,8 +19,9 @@
 //                    thing `.prop!` asks (never "every row contains ''")
 //   .prop<v <=v >v >=v   comparisons (numeric when both sides are numbers)
 //
-//   .limit=200       a WINDOW: the newest 200 matches, not the whole set
-//   .after=13882     continue that window below a spine num (the next page)
+//   .limit=200       a WINDOW: 200 matches, not the whole set
+//   .after=13882     continue that window past one entity, named by its spine
+//                    num — the next page, in whatever order was asked for
 //
 // Bare words are TEXT preds — FTS5 terms over the doc (title or body), with a
 // trailing `*` for token-prefix matching; "quoted words" stay one phrase pred.
@@ -142,8 +143,12 @@ export type Pred = {
 
 // A window: how many of the selection to answer with, and where to continue.
 // Both optional — `.limit=` alone is the first page, `.after=` alone continues
-// an unbounded read below a cursor. Newest-first by spine num is the order
-// every windowed door answers in, so `after` reads as "older than this num".
+// an unbounded read below a cursor. A window states a SIZE, never a sequence:
+// with no `.order` the sequence is spine num, so `after` reads as "older than
+// this num"; with one (`.order=hot`, `.order=similar`) the asked-for order
+// survives and `after` names the entity to continue past IN THAT ORDER
+// (graph_query.ts pageRanked). One cursor spelling — the entity's num — serves
+// every ordering, so a caller pages without learning the order key.
 export type Win = { limit?: number; after?: number }
 
 // One projected column: which component column a result row carries, and whether
@@ -1144,9 +1149,11 @@ export let preds = (token: string, vocab: Vocab = NONE): Pred[] | null => {
     return [{ comp: '', prop: '', op: PROJECT, value: '', fields }]
   }
   // `.limit=200` / `.after=13882` — the WINDOW, a bound on the answer rather
-  // than a filter on its members. `limit` is how many of the newest matches to
-  // answer with; `after` continues that window below a spine num, so paging a
-  // board is `.limit=200` then `.limit=200&.after=<the last num you got>`.
+  // than a filter on its members. `limit` is how many matches to answer with;
+  // `after` names the ENTITY to continue past, by its spine num, so paging a
+  // board is `.limit=200` then `.limit=200&.after=<the last num you got>`. The
+  // cursor is order-agnostic on purpose: it says which entity, never which
+  // place, so the same spelling pages a num order and a ranking alike.
   // Both take a non-negative integer and nothing else: a window whose bound is
   // a guess is worse than none, so a bad one is refused rather than dropped.
   // Guarded so a future `limit`/`after` column would win the spelling.

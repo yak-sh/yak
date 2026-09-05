@@ -97,7 +97,10 @@ many ('.status=open&.count!'), '.tally=status' each value's count,
 select what they reduce, and they answer from the index — a caller wanting a
 number asks for the number, never for the rows to count.
 A WINDOW bounds the ANSWER without changing what matches: '.limit=200' is
-the newest 200 by id, '.after=13882' continues below one you already have,
-so paging is '.limit=200' then the same line carrying your last id's number.
+200 of them, newest by id when the line names no order, '.after=13882'
+continues past one you already have, so paging is '.limit=200' then the same
+line carrying your last id's number. An '.order=' SURVIVES a window and the
+window pages inside it — the cursor names an ENTITY, never a place, so the
+one spelling pages a ranking ('.order=hot') as well as an id order.
 A reply that carries a window says so, and says the total it is a prefix of.
 Boards persist these same queries (board.query).`

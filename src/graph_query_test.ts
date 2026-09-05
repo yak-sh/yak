@@ -451,6 +451,36 @@ Deno.test('evalCapped answers a declining query newest-first, bounded', () => {
   assertEquals(titles, new Set(['zap 5', 'zap 4', 'zap 3']))
 })
 
+// An asked-for order survives a window, and the window pages inside it: the
+// cursor names an ENTITY, and its place in the RANKING is where the next page
+// starts. Before this, `.order=hot&.after=` cut down the spine instead — two
+// pages of one ranking that neither joined up nor covered it.
+Deno.test('a ranking window pages within the ranking, not down the spine', () => {
+  let db = freshDb()
+  for (let i = 0; i < 4; i++) {
+    let eid = uuid()
+    apply(db, [
+      { eid, name: 'doc', comp: { title: `zephyr ${i}` } },
+      { eid, name: 'task', comp: { priority: i } },
+    ])
+  }
+  let hot = (win = '') =>
+    evalGraph(db, `.title~=zephyr&.order=hot${win}`).hits.map((r) => r.eid)
+  let all = evalGraph(db, '.title~=zephyr&.order=hot').hits
+  assertEquals(all.length, 4)
+  assertEquals(hot('&.limit=2'), all.slice(0, 2).map((r) => r.eid))
+  assertEquals(
+    hot(`&.limit=2&.after=${all[1].num}`),
+    all.slice(2).map((r) => r.eid),
+  )
+  // an anchor no entity has is the first page again, never an empty one
+  assertEquals(
+    hot('&.limit=2&.after=999999'),
+    all.slice(0, 2).map((r) => r.eid),
+  )
+  db.close()
+})
+
 Deno.test('text query returns ordinary rows with an ephemeral rank component', () => {
   let db = freshDb()
   let eid = uuid()

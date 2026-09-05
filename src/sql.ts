@@ -921,9 +921,12 @@ export let select = (preds: Pred[], now = Date.now()): Rel | null => {
 
 // A statement bounded to a WINDOW: the newest `limit` rows by spine num, and —
 // with `after` — only those below a num cursor, so paging is `.limit=N` then
-// the same line carrying the last num it answered. The order is the window's
-// definition, not a presentation choice: "newest first" is what makes a prefix
-// mean something and a cursor able to continue it.
+// the same line carrying the last num it answered. Newest-first is what makes a
+// prefix mean something and a cursor able to continue it, and it is the
+// sequence a query that names NO order gets. An asked-for order survives a
+// window (`.order=hot`, `.order=similar`) and pages within itself — those are
+// rankings this compiler cannot spell, so they are cut downstream by
+// graph_query.ts pageRanked(), never by replacing them with this one.
 //
 // This may only ride a selection whose result needs no JS refinement — an EXACT
 // where(), over screened() preds — because a filter applied after the LIMIT

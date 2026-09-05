@@ -193,6 +193,12 @@ export let rowsFor = (
 // it by `after` (an entry.seq cursor).
 export let ENTRY_PAGE = 500
 
+// How far a similarity neighbourhood reaches when a cursor pages inside it. A
+// KNN answers "the nearest N", so paging past a cursor needs a ranking that
+// already holds the cursor — this is that N, and the edge past which a
+// neighbourhood stops being a neighbourhood.
+export let NEIGHBOURS = 200
+
 // The storage doors used to select a query's candidate partition. Kept as an
 // explicit seam so a test can prove partition selection happens BEFORE either
 // universe is enumerated; it also makes the invariant visible in the evaluator
@@ -1125,6 +1131,20 @@ export let evalWork = (
   return hits
 }
 
+// A window over a RANKING (`.order=hot`, `.order=similar`) rather than over the
+// spine. An explicit order SURVIVES a window — a window says how much of a
+// sequence to answer with, never which sequence — so the cursor is the anchor's
+// place in the RANKING, not a num to compare against. The cursor spelling never
+// changes: `.after=<num>` names an entity, and each evaluator derives where that
+// entity sits in the order it was asked for (the same rule @yaks/sql compiles as
+// a keyset and @yaks/match answers in memory). An anchor the ranking does not
+// hold restarts from the front, which is what a first page already is.
+export let pageRanked = (rows: Row[], win: Win): Row[] => {
+  let at = win.after == null ? -1 : rows.findIndex((r) => r.num == win.after)
+  let rest = rows.slice(at + 1)
+  return win.limit == null ? rest : rest.slice(0, win.limit)
+}
+
 // The authoritative filter-query answer. The index answers when it can (evalFast
 // over matching(), entries included); otherwise the JS matcher over the full
 // universe. Hot ranking and entry ordering/paging settle here, so every caller
@@ -1200,12 +1220,10 @@ export let evalGraph = (
   let { preds, ent, hits } = evalQuery(db, q, after, limit)
   let now = Date.now()
   if (orderOf(preds) == 'hot') {
-    hits = hits.sort((a, b) =>
-      warm(b.comps, now, ent) - warm(a.comps, now, ent)
+    hits = pageRanked(
+      hits.sort((a, b) => warm(b.comps, now, ent) - warm(a.comps, now, ent)),
+      win,
     )
-    // A hot ranking is its OWN order, so its window is a prefix of that
-    // ranking rather than of the spine — `after` names no cursor into it.
-    if (win.limit != null) hits = hits.slice(0, win.limit)
   } else if (namesLazy(preds)) hits = orderedEntries(hits, after, limit)
   else hits = cut(hits)
   return { preds, hits }
@@ -1372,7 +1390,17 @@ export let askRows = async (db: Sql, ask: Ask): Promise<Row[]> => {
     if (!ranker) {
       throw new Error('similarity rank requires the embedding query evaluator')
     }
-    return await ranker(db, asked, ask.limit)
+    // A similarity order is a RANKING, and the window is a page of it. The
+    // ranker's bound says how many NEIGHBOURS to rank; the window's `.limit`
+    // says how many of them to answer with. With no cursor those are one
+    // number. With one, the neighbourhood has to reach past the anchor's own
+    // place in it, so the ranking is taken to NEIGHBOURS and the page cut
+    // inside — a KNN neighbourhood is finite by nature, and this names its edge.
+    let win = merged(windowOf(asked), { after: ask.after, limit: ask.limit })
+    return pageRanked(
+      await ranker(db, asked, win.after == null ? win.limit : NEIGHBOURS),
+      win,
+    )
   }
   // A tombstoned entity still resolves by name but has left the graph, and its
   // spine row now survives the delete (D-18866) — exclude it so `id=` addresses

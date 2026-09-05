@@ -193,21 +193,42 @@ for (let q of CORPUS) {
   Deno.test(`parity: ${q}`, () => agree(q))
 }
 
-// The window is newest-first by spine num, a prefix — so its answer is an
-// ORDERED list, not a set. @yaks/sql applies `.limit`; the reference wraps
-// where() in windowed(). The two must page identically.
-Deno.test('parity: .limit window pages identically', () => {
-  let q = '.status=open&.limit=3'
-  let list = (db.prepare(
+// A window with no `.order` is newest-first by spine num, a prefix — so its
+// answer is an ORDERED list, not a set. @yaks/sql applies `.limit`/`.after`; the
+// reference wraps where() in windowed(). The two must page identically, and
+// `.after` must keep meaning the same entity-by-num cursor on both sides.
+let paged = (q: string): string[] =>
+  (db.prepare(
     compile(parse(q), V, { derived: fleetDerived, now: NOW }).sql,
   ).all(
     ...compile(parse(q), V, { derived: fleetDerived, now: NOW }).params,
-  ) as {
-    eid: string
-  }[]).map((r) => r.eid)
+  ) as { eid: string }[]).map((r) => r.eid)
+
+Deno.test('parity: .limit window pages identically', () => {
   let refRel = windowed(where(parseQuery('.status=open'), NOW)!, { limit: 3 })
-  let refList = run<{ eid: string }>(db, refRel).map((r) => r.eid)
-  assertEquals(list, refList)
+  assertEquals(
+    paged('.status=open&.limit=3'),
+    run<{ eid: string }>(db, refRel).map((r) => r.eid),
+  )
+})
+
+Deno.test('parity: an .after cursor continues the same window', () => {
+  // page one, then the same line carrying the last num it answered — the
+  // cursor names an ENTITY, so it reads the same on both sides
+  let first = paged('.status=open&.limit=3')
+  let cursor = (db.prepare('select num from entity where eid = ?')
+    .get(first[first.length - 1]) as { num: number }).num
+  let refRel = windowed(where(parseQuery('.status=open'), NOW)!, {
+    limit: 3,
+    after: cursor,
+  })
+  let next = paged(`.status=open&.limit=3&.after=${cursor}`)
+  assertEquals(next, run<{ eid: string }>(db, refRel).map((r) => r.eid))
+  assertEquals(
+    next.filter((e) => first.includes(e)),
+    [],
+    'pages do not overlap',
+  )
 })
 
 // The aggregates: `.count!` reduces the selection; `.distinct`/`.tally` reduce
