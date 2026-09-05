@@ -41,7 +41,7 @@ import { patch, remove } from './write.ts'
 export * from './driver.ts'
 export * from './bundle.ts'
 export { schema } from './ddl.ts'
-export { get, type Query, read, rows } from './read.ts'
+export { compSql, get, type Query, read, rows } from './read.ts'
 export { buried, patch, remove } from './write.ts'
 export type { Storage } from '@yaks/graph'
 

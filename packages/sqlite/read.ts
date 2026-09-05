@@ -54,7 +54,17 @@ let stored = (v: Vocab, comp: string): Column[] =>
 // So the component table is aliased by its OWN NAME here, exactly as the binder
 // joins it, and an override's `deps` are LEFT JOINed the same way: a registered
 // expression is written once and reads the same in both places.
-let readSql = (v: Vocab, comp: string, derived: Derived = {}): string => {
+/**
+ * The SELECT that reads one component of one entity — one `?`, the owner's
+ * eid. Exported because gathering a bundle is every SQLite-shaped adapter's
+ * job, and they must all read a column the same way: @yaks/d1 sends these
+ * statements as one batch instead of one at a time, and nothing else differs.
+ */
+export let compSql = (
+  v: Vocab,
+  comp: string,
+  derived: Derived = {},
+): string => {
   let self = `"${comp}"`
   let sel: string[] = []
   let joins: string[] = []
@@ -136,7 +146,7 @@ let bundleOf = (
   }
   for (let comp of vocab.all) {
     if (comp == 'entity') continue
-    let row = driver.query(readSql(vocab, comp, opts.derived), [eid])[0]
+    let row = driver.query(compSql(vocab, comp, opts.derived), [eid])[0]
     if (!row) continue
     delete (row as Record<string, unknown>).present
     out[comp] = row as Comp

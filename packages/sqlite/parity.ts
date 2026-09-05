@@ -16,9 +16,9 @@
 // the same thing in this model, so both sides are compared with the nulls
 // dropped and booleans as the number a column stores.
 
-import { assert, assertEquals } from '@std/assert'
+import { assertEquals } from '@std/assert'
 import type { Bundle, Change, Graph, Plugin, Storage } from '@yaks/graph'
-import { graph, isPromise, token } from '@yaks/graph'
+import { each, graph, then, token } from '@yaks/graph'
 import { shop } from './harness.ts'
 
 /** A bookmark is content-addressed: it IS the sentence "someone marked this",
@@ -213,33 +213,60 @@ let byNum = (bs: Bundle[]) =>
 // refusal it threw. Either is compared across the two stores.
 type Said = { ok?: Bundle[]; err?: string }
 
-let say = (g: Graph, batch: Change, now: string): Said => {
+// A refusal, however it arrived: a throw from a synchronous graph, a rejection
+// from an asynchronous one. Both are the same answer and compare the same way.
+let refused = (e: unknown): Said => ({
+  err: `${(e as Error).name}: ${(e as Error).message}`,
+})
+
+let say = (g: Graph, batch: Change, now: string): Said | Promise<Said> => {
   try {
     let out = g.apply(batch, { now })
-    assert(!isPromise(out), 'apply() went async')
-    return { ok: byNum(out) }
+    return out instanceof Promise
+      ? out.then((bs) => ({ ok: byNum(bs) }), refused)
+      : { ok: byNum(out) }
   } catch (e) {
-    return { err: `${(e as Error).name}: ${(e as Error).message}` }
+    return refused(e)
   }
 }
 
-let state = (g: Graph) => ({
-  reads: READS.map((q) => byNum(g.read(q) as Bundle[])),
-  named: byNum(g.storage.tx((tx) => tx.get(NAMED)) as Bundle[]),
-})
+let state = (g: Graph) =>
+  then(
+    each(READS, [] as Bundle[][], (acc, q) =>
+      then(g.read(q), (bs) => [...acc, byNum(bs)])),
+    (reads) =>
+      then(
+        g.storage.tx((tx) =>
+          tx.get(NAMED)
+        ),
+        (named) => ({
+          reads,
+          named: byNum(named as Bundle[]),
+        }),
+      ),
+  )
 
 /**
  * Run the script through both graphs and assert they never disagree — what
  * each batch returned, and what the store reads back after it. Build each one
  * with {@link rig} so they share vocabulary, plugins and alias counter.
+ *
+ * Threaded with @yaks/graph's own sync pass-through, so it returns `void` over
+ * two synchronous adapters and a promise as soon as either side is
+ * asynchronous. Asserting the return is NOT a promise is therefore how a
+ * synchronous adapter proves it stayed synchronous through the whole script.
  */
-export let parity = (a: Graph, b: Graph): void => {
-  for (let step of script) {
-    assertEquals(
-      say(a, step.batch, step.now ?? AT),
-      say(b, step.batch, step.now ?? AT),
-      `returned: ${step.name}`,
-    )
-    assertEquals(state(a), state(b), `read back: ${step.name}`)
-  }
-}
+export let parity = (a: Graph, b: Graph): void | Promise<void> =>
+  then(
+    each(script, null, (_, step) =>
+      then(say(a, step.batch, step.now ?? AT), (sa) =>
+        then(say(b, step.batch, step.now ?? AT), (sb) => {
+          assertEquals(sa, sb, `returned: ${step.name}`)
+          return then(state(a), (ra) =>
+            then(state(b), (rb) => {
+              assertEquals(ra, rb, `read back: ${step.name}`)
+              return null
+            }))
+        }))),
+    () => {},
+  )
