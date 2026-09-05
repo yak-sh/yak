@@ -68,15 +68,21 @@ export type Tx = {
  * promise — so it satisfies `Storage` wherever one is wanted, and a caller
  * holding a `Store` directly never has to await a row.
  */
+// A read here takes the compiler's whole options, not just @yaks/graph's
+// `ReadOpts`: a caller of this package may hand a query a derived-column
+// registry or an @yaks/sql EXTENSION — the seam @yaks/fts and @yaks/embedding
+// register through — and it would be unreachable if the door only took `now`.
+// `ReadOpts` is assignable to `BindOpts`, so the wider door still satisfies
+// `Storage` wherever the generic contract is what is wanted.
 export type Store = {
   /** the schema statements the bound vocabulary implies */
   ddl: () => string[]
   /** run them — create the tables and indexes the vocabulary needs */
   install: () => void
   /** a query → the matching entities as whole bundles */
-  read: (query: Query, opts?: ReadOpts) => Bundle[]
+  read: (query: Query, opts?: BindOpts) => Bundle[]
   /** a query → the compiled statement's raw rows (counts, tallies) */
-  rows: (query: Query, opts?: ReadOpts) => Row[]
+  rows: (query: Query, opts?: BindOpts) => Row[]
   /** run `body` in a transaction: commit on return, roll back on throw */
   tx: <R>(body: (tx: Tx) => R) => R
 }
