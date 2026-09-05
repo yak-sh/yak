@@ -1,0 +1,24 @@
+{
+  "name": "@yaks/client",
+  "version": "0.0.0",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "The frontend tier for a client @yaks/graph: one call assembles the graph, a query is a reactive value, and IndexedDB keeps what belongs to this browser.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "fake-indexeddb": "npm:fake-indexeddb@^6.2.2"
+  },
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "esnext"
+    ]
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "harness.ts",
+      "./browser.json"
+    ]
+  }
+}
