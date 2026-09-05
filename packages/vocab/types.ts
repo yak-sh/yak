@@ -103,7 +103,10 @@ export type PropSchema = {
   // string; the storable check is what refuses a word outside the four)
   ref?: string
   death?: string
-  persist?: boolean
+  // On a COLUMN, `false` marks it computed. On a COMPONENT the word is an
+  // extension vocabulary's (@yaks/sync reads it as a tier), so a string is a
+  // legal spelling too — the loader carries it, it never reads it.
+  persist?: boolean | string
   stamped?: boolean
   store?: string
   kind?: boolean

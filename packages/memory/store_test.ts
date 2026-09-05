@@ -139,6 +139,23 @@ Deno.test('an outer rollback undoes what an inner transaction committed', () => 
   assertEquals(at(s, 'p1'), undefined)
 })
 
+Deno.test('a mirror adopts the number it is told, and corrects the one it guessed', () => {
+  let s = memory(shop, { adopt: true })
+  put(s, { entity: { eid: 'p1' }, doc: { title: 'Mug' } })
+  assertEquals(at(s, 'p1').entity.num, 1) // its own guess, in the meantime
+  put(s, { entity: { eid: 'p1', num: 7 }, doc: { title: 'Mug' } })
+  assertEquals(at(s, 'p1').entity.num, 7)
+  // The next one it mints itself cannot collide with what it adopted.
+  put(s, { entity: { eid: 'p2' }, doc: { title: 'Cup' } })
+  assertEquals(at(s, 'p2').entity.num, 8)
+})
+
+Deno.test('a store nobody mirrors keeps its own numbering', () => {
+  let s = memory(shop)
+  put(s, { entity: { eid: 'p1', num: 7 }, doc: { title: 'Mug' } })
+  assertEquals(at(s, 'p1').entity.num, 1)
+})
+
 Deno.test('a map has no schema: ddl is empty and install does nothing', () => {
   // and a Store is a Storage — the seam @yaks/graph applies changes through
   let s: Storage = memory(shop)

@@ -105,7 +105,7 @@ returns a `Store` — @yaks/graph's `Storage`, answered synchronously:
   - `remove(entities): void` — drop their components and tombstone them.
 
 `base` (and a per-call `opts`) carries `now`, the moment a relative time phrase
-in a query resolves against.
+in a query resolves against, and `adopt`.
 
 ### Writes are patches
 
@@ -122,6 +122,14 @@ creates, in any order — and numbers each new one in first-touch order, startin
 at 1. `num` is therefore always present, which is what makes `.limit`/`.after`
 paging and `.order` mean the same thing here as against a database. A
 rolled-back batch gives its numbers back.
+
+`memory(vocab, { adopt: true })` turns that around: a patch whose identity
+already carries a `num` keeps it, and an entity this store numbered on its own
+takes the correction when one arrives. That is what a store MIRRORING another
+graph needs — a page holding [@yaks/sync](https://jsr.io/@yaks/sync) is being
+told the identity by the server, not asking for one — so a recipe has the same
+number in the browser as it has in the database. Off by default: a store nobody
+mirrors owns its own numbering.
 
 ### Rollback
 

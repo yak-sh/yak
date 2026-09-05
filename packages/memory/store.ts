@@ -30,6 +30,11 @@ export type { Query }
 export type MemoryOpts = {
   /** the reference moment for time phrases (default: the read's own `now`) */
   now?: number
+  /** adopt the `num` a patch's identity carries instead of minting one. What a
+   * store MIRRORING another graph needs — a client applying the batch a server
+   * answered with is being told the identity, not asking for one. Off by
+   * default: a store nobody mirrors owns its own numbering. */
+  adopt?: boolean
 }
 
 /**
@@ -112,20 +117,37 @@ export let memory = (vocab: Vocab, base: MemoryOpts = {}): Store => {
   let read = (query: Query, opts: ReadOpts = {}): Bundle[] =>
     matcher(query, vocab, { now: opts.now ?? base.now })(all())
 
+  // The number an identity gets: the one it arrived with when this store
+  // mirrors another graph, else the next one this store has to give.
+  let numberFor = (num?: number) => {
+    if (!base.adopt || num == null) return next++
+    if (num >= next) next = num + 1 // a locally minted one must not collide
+    return num
+  }
+
   let patch = (bundles: Bundle[]): Entity[] => {
     let born: Entity[] = []
     // Mint a record for every eid this batch touches or points at, so a
     // reference may name a target created in the same batch, in any order.
-    let birth = (eid: Eid) => {
-      if (rows.has(eid)) return
+    let birth = (eid: Eid, num?: number) => {
+      let rec = rows.get(eid)
+      if (rec) {
+        // A mirror adopts a correction: this store guessed a number for an
+        // entity it created optimistically, and is now being told the real one.
+        if (base.adopt && num != null && rec.entity.num != num) {
+          save(eid)
+          rows.set(eid, { ...rec, entity: { eid, num: numberFor(num) } })
+        }
+        return
+      }
       save(eid)
-      let entity = { eid, num: next++ }
+      let entity = { eid, num: numberFor(num) }
       rows.set(eid, { entity, comps: {} })
       born.push(entity)
     }
     for (let b of bundles) {
       if (rows.get(b.entity.eid)?.dead) continue
-      birth(b.entity.eid)
+      birth(b.entity.eid, b.entity.num)
       for (let [name, comp] of comps(b)) {
         for (let [prop, val] of Object.entries(comp ?? {})) {
           if (val != null && isRef(name, prop)) birth(String(val))
