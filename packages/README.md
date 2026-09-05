@@ -24,6 +24,9 @@ In dependency order:
 - **@yaks/sqlite** — the storage adapter: composes the three packages above to
   answer queries as result bundles and write bundles back to a SQLite database.
   (In development.)
+- **[@yaks/fts](./fts)** — full-text search over any text property: the FTS5
+  index a vocabulary implies, and the `@yaks/sql` extension that compiles a bare
+  word in a query line to a `match`.
 
 ## How they compose
 
@@ -39,6 +42,9 @@ on its own:
 - `@yaks/sqlite` is the batteries-included path: point it at a SQLite database
   and it handles reading and writing entities for you, built entirely from the
   three packages above.
+- `@yaks/fts` adds search on top: it indexes the text properties and registers a
+  clause compiler with `@yaks/sql`, which is the same seam the other search and
+  traversal packages use.
 
 ## Publishing requirements
 

@@ -5,11 +5,13 @@
   "license": "Apache-2.0",
   "description": "Full-text search over any text property of a yaks graph, backed by SQLite FTS5.",
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "@db/sqlite": "jsr:@db/sqlite@0.13.0"
   },
   "publish": {
     "exclude": [
-      "**/*_test.ts"
+      "**/*_test.ts",
+      "harness.ts"
     ]
   }
 }
