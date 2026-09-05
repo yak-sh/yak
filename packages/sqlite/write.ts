@@ -21,11 +21,13 @@
 // nothing can be gathered into one list and sent as a single all-or-nothing
 // unit, which is exactly what @yaks/d1 does with the ones built here.
 //
-// The two reads that remain are about IDENTITY, not about ids: which of the
-// named eids already exist (one statement for the whole batch) and what numbers
-// the new ones were given (one more). An adapter that cannot read mid-write —
-// @yaks/d1 — mints its numbers from a high-water mark instead and passes them
-// to `mintSql`; the statement is otherwise the same.
+// The one read that remains is about IDENTITY, not about ids: which of the
+// named eids are already in the grave, asked once for the whole batch. What
+// numbers the new ones were given is not asked at all — every mint statement
+// RETURNS its own row, so an insert that minted says so and an insert that
+// found the eid already there says nothing. That is why @yaks/d1 can mint
+// without knowing a number in advance: its batch comes back statement by
+// statement, and the numbers are in it.
 //
 // What is NOT here is which entities a delete takes with it. A reference's
 // death word (`cascade`, `detach`, `release`, `keep`) is a rule about MEANING,
@@ -40,7 +42,7 @@
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { comps } from '@yaks/graph'
-import type { Driver, Param } from './driver.ts'
+import type { Driver, Param, Row } from './driver.ts'
 
 /** One statement of a write: the SQL, and the parameters it binds. This file
  * builds them; an adapter runs them — one at a time over an embedded engine,
@@ -100,19 +102,24 @@ export let buried = (driver: Driver, eids: string[]): Set<string> =>
   )
 
 /**
- * The statement that mints an identity. `num` orders entities by first
- * appearance: an adapter that can read back what it wrote omits it and lets
- * SQLite take the next one at insert time (exact under any concurrent writer);
- * one that cannot — @yaks/d1, whose batch has not been sent — hands one in from
- * a high-water mark it read once. `do nothing` on a returning eid, so minting
- * twice is not an error.
+ * The statement that mints an identity, and reports what it minted. SQLite
+ * takes the next number at insert time — inside whatever transaction the
+ * statement runs in, so it is exact under a concurrent writer — and RETURNING
+ * hands it straight back. `do nothing` on an eid that already has an identity,
+ * so minting twice is not an error; RETURNING then emits NO row, which is also
+ * the answer to "was this one new".
  */
-export let mintSql = (eid: string, num?: number): Sql => ({
-  sql: `insert into entity (eid, num) values (?, ${
-    num == null ? '(select coalesce(max(num), 0) + 1 from entity)' : '?'
-  }) on conflict(eid) do nothing`,
-  params: num == null ? [eid] : [eid, num],
+export let mintSql = (eid: string): Sql => ({
+  sql: `insert into entity (eid, num)
+          values (?, (select coalesce(max(num), 0) + 1 from entity))
+          on conflict(eid) do nothing returning eid, num`,
+  params: [eid],
 })
+
+/** The identity a {@link mintSql} statement reported — the rows it returned —
+ * or `undefined` when the eid already wore one and nothing was minted. */
+export let minted = (rows: Row[]): Entity | undefined =>
+  rows[0] ? { eid: String(rows[0].eid), num: Number(rows[0].num) } : undefined
 
 /**
  * The statement that patches one component onto one entity: insert the sent
@@ -211,23 +218,10 @@ export let touched = (v: Vocab, bundles: Bundle[]): string[] =>
     ),
   ])
 
-// The numbers these eids were given, in the order asked — one statement for
-// however many were minted.
-let numbers = (driver: Driver, eids: string[]): Entity[] => {
-  let holes = eids.map(() => '?').join(', ')
-  let nums = new Map(
-    driver.query(
-      `select eid, num from entity where eid in (${holes})`,
-      eids,
-    ).map((r) => [String(r.eid), Number(r.num)]),
-  )
-  return eids.map((eid) => ({ eid, num: nums.get(eid)! }))
-}
-
 /**
  * Patch a batch of bundles in, in order, and return the entities this patch
- * MINTED — each with the `num` it was given. A bundle for a tombstoned entity
- * is skipped: death is final.
+ * MINTED — each with the `num` it was given, as the minting insert itself
+ * reported it. A bundle for a tombstoned entity is skipped: death is final.
  */
 export let patch = (
   driver: Driver,
@@ -238,19 +232,21 @@ export let patch = (
   let alive = bundles.filter((b) => !known.get(b.entity.eid)?.dead)
 
   // Mint a spine for every eid the live bundles touch or point at, so a
-  // reference can name a target created in the same batch, in any order.
-  let fresh: string[] = []
+  // reference can name a target created in the same batch, in any order. An
+  // eid the store already knows is skipped here and would be a no-op anyway.
+  let born: Entity[] = []
   let seen = new Set(known.keys())
   for (let eid of touched(vocab, alive)) {
     if (seen.has(eid)) continue
     seen.add(eid)
-    fresh.push(eid)
+    let s = mintSql(eid)
+    let e = minted(driver.query(s.sql, s.params))
+    if (e) born.push(e)
   }
-  for (let eid of fresh) run(driver, mintSql(eid))
 
   for (let b of alive) for (let s of patchSql(vocab, b)) run(driver, s)
 
-  return fresh.length ? numbers(driver, fresh) : []
+  return born
 }
 
 /**

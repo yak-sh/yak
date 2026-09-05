@@ -40,7 +40,10 @@ export type Tx = {
    * to a `read` when no gather took one. */
   about?: (eids: Eid[], comps?: string[]) => Bundle[] | Promise<Bundle[]>
   /** patch the bundles in → the entities this patch MINTED, with their `num`
-   * when the adapter mints one */
+   * when the adapter mints one. An adapter whose numbers are the database's to
+   * pick may not know them yet — it fills each `num` into the very entity it
+   * handed back, before its `tx()` settles. `apply()` reads them only when it
+   * builds its answer, which is after that. */
   patch: (bundles: Bundle[]) => Entity[] | Promise<Entity[]>
   /** remove these entities: their component rows go, their identity is
    * tombstoned so the id can never be reused */

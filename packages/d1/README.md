@@ -144,10 +144,11 @@ database does.
   commits inside that window is not detected. Over @yaks/sqlite the same guard
   is exact. If a lost update is unacceptable for a given column, D1 is the wrong
   store for it.
-- **Concurrent minting collides loudly.** `entity.num` is minted from a
-  high-water mark read once per transaction and carries a unique index, so two
-  writers minting at the same instant fail the batch rather than half-apply it.
-  Retry.
+- **A minted `num` is not known until the batch lands.** SQLite picks it when
+  the insert runs — inside the batch's own transaction, so it is exact under a
+  concurrent writer, and nothing has to read a high-water mark first. `patch`
+  reports each minted entity without a number and the flush fills it in from
+  that insert's `returning`, before `tx()` settles.
 - **A nested `tx()` is a separate batch.** D1 has no savepoints. Nothing in
   `apply()` nests one.
 

@@ -39,9 +39,15 @@
 // write batch, NOT serializable isolation. A guard that must not lose a race —
 // `$was` — is therefore best-effort against a concurrent writer here, where it
 // is exact over @yaks/sqlite. The failure it cannot prevent is a lost update
-// detected nowhere, not a half-written batch; atomicity holds regardless. Two
-// writers minting entities at the same instant collide on `entity.num`'s unique
-// index and the whole batch is refused rather than half-applied — retry.
+// detected nowhere, not a half-written batch; atomicity holds regardless.
+//
+// MINTING IS NOT A READ. An identity's `num` is SQLite's to pick, at the moment
+// the insert runs and so inside the batch's own transaction — exact under a
+// concurrent writer, and nothing has to ask for a high-water mark first. The
+// price is that a number is not known until the batch lands: `patch` reports
+// each minted entity without one and `flush` fills it in from that insert's own
+// RETURNING. Nothing can observe it in between, because nothing outside sees
+// the entity until `tx()` settles, which is after the flush.
 //
 // A nested `tx()` is a separate batch, since D1 has no savepoints. Nothing in
 // `apply()` nests one.
@@ -50,7 +56,14 @@ import type { Bundle, Comp, Eid, Entity, Tx } from '@yaks/graph'
 import { comps, tombstoned } from '@yaks/graph'
 import { matcher } from '@yaks/match'
 import type { BindOpts } from '@yaks/sql'
-import { mintSql, patchSql, removeSql, schema, touched } from '@yaks/sqlite'
+import {
+  minted,
+  mintSql,
+  patchSql,
+  removeSql,
+  schema,
+  touched,
+} from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import {
   bind,
@@ -185,7 +198,10 @@ export let storage = <S extends Stmt<S>>(
     // @yaks/match.
     let held = new Map<Eid, Bundle>()
     let known = new Map<Eid, Spine>()
-    let high: number | undefined
+    // The identities this transaction mints, each paired with the position of
+    // its insert in `pending` — that statement's RETURNING is where its number
+    // comes from once the batch lands.
+    let births: { at: number; entity: Entity }[] = []
 
     // Learn about these eids, asking the database only about the ones no
     // question has covered yet.
@@ -207,28 +223,30 @@ export let storage = <S extends Stmt<S>>(
 
     let buried = (eid: Eid): boolean => known.get(eid)?.dead == true
 
-    // The next number to hand out, read once per transaction. A batch that is
-    // refused never flushes, so the numbers it reserved are handed out again.
-    let next = async (): Promise<number> => {
-      if (high == null) {
-        let [row] = await one({
-          sql: 'select coalesce(max(num), 0) as n from entity',
-          params: [],
-        })
-        high = Number(row?.n ?? 0)
-      }
-      return ++high
+    // Mint an identity for an eid that has none, so a reference may name a
+    // target created in the same batch, in any order. NOTHING IS ASKED: the
+    // number is SQLite's to pick when the insert runs, inside the batch's own
+    // transaction, and the statement returns it. So the entity handed out here
+    // wears no `num` yet — `flush` fills it into this very object, before the
+    // transaction settles and before anything outside can read it.
+    let birth = (eid: Eid, born: Entity[]): void => {
+      if (known.get(eid)) return
+      let entity: Entity = { eid }
+      births.push({ at: pending.length, entity })
+      pending.push(mintSql(eid))
+      known.set(eid, { dead: false })
+      dirty.set(eid, { entity })
+      born.push(entity)
     }
 
-    // Mint an identity for an eid that has none, so a reference may name a
-    // target created in the same batch, in any order.
-    let birth = async (eid: Eid, born: Entity[]): Promise<void> => {
-      if (known.get(eid)) return
-      let num = await next()
-      pending.push(mintSql(eid, num))
-      known.set(eid, { num, dead: false })
-      dirty.set(eid, { entity: { eid, num } })
-      born.push({ eid, num })
+    // Send the gathered writes, then read each mint's own RETURNING back out of
+    // the batch and fill in the number it handed out.
+    let flush = async (): Promise<void> => {
+      let out = await send(pending)
+      for (let b of births) {
+        let e = minted(out[b.at] ?? [])
+        if (e) b.entity.num = e.num
+      }
     }
 
     let tx: Tx = {
@@ -256,7 +274,7 @@ export let storage = <S extends Stmt<S>>(
         // numbers land in the same first-touch order every adapter uses.
         for (let b of bs) {
           if (buried(b.entity.eid)) continue
-          for (let e of touched(vocab, [b])) await birth(e, born)
+          for (let e of touched(vocab, [b])) birth(e, born)
         }
         for (let b of bs) {
           let eid = b.entity.eid
@@ -282,7 +300,7 @@ export let storage = <S extends Stmt<S>>(
       },
     }
 
-    return { tx, flush: () => send(pending) }
+    return { tx, flush }
   }
 
   let run = async <R>(body: (tx: Tx) => R): Promise<Awaited<R>> => {

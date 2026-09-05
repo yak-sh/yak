@@ -150,10 +150,13 @@ Deno.test('a composite unique refuses only the whole pair', () => {
 })
 
 // The write path is shared with @yaks/d1, which cannot read mid-batch, so it
-// must not ask the database anything to build a write. What is left is two
-// questions about IDENTITY — which of the named eids exist, and what numbers the
-// new ones were given — and they do not multiply with the batch.
-Deno.test('a patch asks twice about identity, whatever the batch is', () => {
+// must not ask the database a BLOCKING question to build a write. A `select` is
+// such a question — its answer has to arrive before the next statement is
+// built — while a write's own RETURNING rides back with the batch, which is why
+// the numbers a mint hands out cost nothing here. What is left is one question
+// about IDENTITY: which of the named eids are already in the grave. It does not
+// multiply with the batch.
+Deno.test('a patch asks once about identity, whatever the batch is', () => {
   let seen: string[] = []
   let base = mem()
   let driver: Driver = {
@@ -173,16 +176,16 @@ Deno.test('a patch asks twice about identity, whatever the batch is', () => {
 
   asked() // forget what install() asked
   write(s, [{ entity: { eid: 'p1' }, product: { price: 12, maker: 'm1' } }])
-  assertEquals(asked(), 2)
+  assertEquals(asked(), 1)
 
   write(s, [
     { entity: { eid: 'p2' }, doc: { title: 'Mug' }, product: { price: 1 } },
     { entity: { eid: 'r1' }, review: { stars: 5, product: 'p2' } },
     { entity: { eid: 'p1' }, product: { price: 9 } },
   ])
-  assertEquals(asked(), 2)
+  assertEquals(asked(), 1)
 
-  // A batch that mints nothing asks once: there are no numbers to read back.
+  // A batch that mints nothing asks the same one question.
   write(s, [{ entity: { eid: 'p1' }, product: { price: 3 } }])
   assertEquals(asked(), 1)
 

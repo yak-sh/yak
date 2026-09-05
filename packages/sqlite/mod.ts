@@ -51,6 +51,7 @@ export { compSql, get, type Query, read, rows } from './read.ts'
 export {
   buried,
   dropSql,
+  minted,
   mintSql,
   patch,
   patchSql,

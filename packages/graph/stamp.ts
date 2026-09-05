@@ -70,7 +70,10 @@ export let stamp = (
     if (!born.has(eid) && !dead.has(eid)) add(eid, 'updated')
   }
   // The identities storage minted ride back too: a client that guessed an eid
-  // learns the `num` that came with it.
+  // learns the `num` that came with it. The entity is carried BY REFERENCE, not
+  // copied: an adapter whose numbers the database picks (@yaks/d1) fills the
+  // `num` in when its batch lands, which is after this phase and before the
+  // caller sees the answer.
   let births = st.born.filter((e) => !dead.has(e.eid))
     .map((e) => ({ entity: e }))
   if (!out.length) return [...bundles, ...births]
