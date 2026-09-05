@@ -3,7 +3,7 @@
 // by name — a slash command, a menu — and what comes back is one message in
 // THEIR voice, which is why each `say` below is written as the person talking
 // rather than as an instruction to the model. The agent already carries the
-// door's instructions (mcp.ts INSTRUCTIONS); a prompt's job is to start the
+// door's instructions (guide.ts INSTRUCTIONS); a prompt's job is to start the
 // work at the right place and carry the one or two judgements the agent
 // otherwise skips.
 //

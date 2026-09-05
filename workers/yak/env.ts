@@ -118,6 +118,27 @@ export type Env = {
   STRIPE_WEBHOOK_SECRET?: string
   STRIPE_PRICE?: string
   STRIPE_API?: string
+  // The builder (builder.ts, T-34239): the model that makes somebody their
+  // first app. Workers AI is the free build — `AI` is the binding
+  // (wrangler.toml `[ai]`), no key of ours, and absent under the workerd
+  // probes, where the loop says so rather than half-running. OpenAI is the
+  // paid one, reached through the AI Gateway: AI_GATEWAY names the gateway on
+  // the account above, and either key opens it — OPENAI_API_KEY as ours, or
+  // AI_GATEWAY_TOKEN as the gateway's own stored one (T-34238). Both secrets;
+  // unset, the paid build refuses in a sentence naming that ticket.
+  // OPENAI_API is a probe's door to somewhere other than the gateway.
+  // BUILDER_MODEL_FREE and BUILDER_MODEL_PAID are the model ids, so changing
+  // either is a `wrangler secret put` and no deploy of new code.
+  AI?: {
+    run(model: string, input: unknown, opts?: unknown): Promise<unknown>
+    gateway(id: string): { getUrl(provider?: string): Promise<string> }
+  }
+  AI_GATEWAY?: string
+  AI_GATEWAY_TOKEN?: string
+  OPENAI_API_KEY?: string
+  OPENAI_API?: string
+  BUILDER_MODEL_FREE?: string
+  BUILDER_MODEL_PAID?: string
   // The single static token OpenAI's apps directory fetches to verify the
   // domain (index.ts serves it at /.well-known/openai-apps-challenge). A
   // secret so the open-source repo carries no token; unset, that path 404s.

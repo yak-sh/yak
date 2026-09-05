@@ -192,7 +192,7 @@ export let answer = async (
       },
       serverInfo: { name: 'yaks.app', version: VERSION },
       // What a signed-in caller gets here is the whole recipe for building
-      // (mcp.ts INSTRUCTIONS). Before signing in, that would be instructions
+      // (guide.ts INSTRUCTIONS). Before signing in, that would be instructions
       // for tools this caller has not got, so the orientation is the one
       // thing that is true either way.
       instructions: ABOUT.text,

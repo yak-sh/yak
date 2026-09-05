@@ -107,6 +107,17 @@ export let answered = async (ctx: Ctx, out: Out): Promise<Say> => {
   )
 }
 
+/**
+ * One of the platform's own tools, CALLED: the tool, then what is unseen in
+ * the space it worked in.
+ *
+ * It is its own export because two doors run these tools — the connector
+ * ({@link sugared}) and the builder we run ourselves (builder.ts) — and a
+ * second spelling of these two lines is a second `app_new`.
+ */
+export let running = (ctx: Ctx, t: Sugar) => (args: Record<string, unknown>) =>
+  t.run(ctx, args).then((out) => answered(ctx, out))
+
 /** One of the platform's own tools, as a graph `Tool`. The answer is the same
  * sentence it always was, and the view's data beside it where it draws one. */
 export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
@@ -122,7 +133,7 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
       },
     }
     : {}),
-  run: (args) => t.run(ctx, args).then((out) => answered(ctx, out)),
+  run: (args) => running(ctx, t)(args),
 })
 
 /**

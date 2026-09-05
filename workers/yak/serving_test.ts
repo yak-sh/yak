@@ -19,9 +19,11 @@
 // path — an app, the home app, the platform's own index — is the same door
 // asked the same way, and the stand-in is where a home app with a worker can
 // be stood up at all (apps.ts `served`, D-34197).
+// The runtime this Worker is written against — the HTML rewriter, a Durable
+// Object's state, the bucket, the Store namespace — is harness.ts's, shared
+// with builder_test.ts.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { Wire } from '@yaks/durable-object'
-import { durable } from '../../packages/durable-object/harness.ts'
 import { slow } from '../../src/testing.ts'
 import { sign } from '../../src/token.ts'
 import * as apps from './apps.ts'
@@ -29,144 +31,15 @@ import { directory, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
-import { Store } from './graph.ts'
+import { platform as inMemory } from './harness.ts'
 import { emptied } from './erase.ts'
 import { openIn, serve } from './unseen.ts'
 import { PLATFORM_STORE } from './vocab.ts'
 
-// ---- the runtime this Worker is written against ----------------------------
-
-// The streaming HTML rewriter, in the one shape apps.ts asks for it (`reported`
-// weaves the reporter into every page): a tag prepended inside the first `head`
-// or `body`, else appended to the document. Deno has none, and what a page
-// carries out of this door is part of what the door does.
-type El = { prepend(s: string, o: { html: boolean }): void }
-class Rewriter {
-  #on: [string, (el: El) => void][] = []
-  #end: ((e: { append(s: string, o: { html: boolean }): void }) => void)[] = []
-  on(selector: string, h: { element(el: El): void }) {
-    this.#on.push([selector, h.element])
-    return this
-  }
-  onDocument(h: { end(e: { append(s: string, o: unknown): void }): void }) {
-    this.#end.push(h.end)
-    return this
-  }
-  transform(res: Response) {
-    let done = res.text().then((html) => {
-      for (let [selector, element] of this.#on) {
-        let at = new RegExp(`<${selector}[^>]*>`, 'i').exec(html)
-        if (!at) continue
-        element({
-          prepend: (s) => {
-            let cut = at.index + at[0].length
-            html = html.slice(0, cut) + s + html.slice(cut)
-          },
-        })
-      }
-      for (let end of this.#end) end({ append: (s) => void (html += s) })
-      return new TextEncoder().encode(html)
-    })
-    return new Response(
-      new ReadableStream({
-        async start(c) {
-          c.enqueue(await done)
-          c.close()
-        },
-      }),
-      res,
-    )
-  }
-}
-;(globalThis as { HTMLRewriter?: unknown }).HTMLRewriter ??= Rewriter
-
-// ---- the platform, in memory -----------------------------------------------
-
-let state = () => {
-  let live: Wire[] = []
-  return {
-    storage: durable(),
-    live,
-    acceptWebSocket: (ws: Wire) => void live.push(ws),
-    getWebSockets: () => live,
-  }
-}
-
-// The bucket, as the slice `r2Blobs` asks for.
-let bucket = () => {
-  let held = new Map<string, Uint8Array>()
-  return {
-    held,
-    r2: {
-      head: (k: string) => Promise.resolve(held.get(k) ?? null),
-      get: (k: string) =>
-        Promise.resolve(
-          held.has(k)
-            ? { arrayBuffer: () => Promise.resolve(held.get(k)!.buffer) }
-            : null,
-        ),
-      put: (k: string, v: ArrayBuffer | Uint8Array) =>
-        Promise.resolve(
-          void held.set(k, v instanceof Uint8Array ? v : new Uint8Array(v)),
-        ),
-      delete: (k: string) => Promise.resolve(void held.delete(k)),
-      list: ({ prefix }: { prefix: string }) =>
-        Promise.resolve({
-          objects: [...held.keys()].filter((k) => k.startsWith(prefix))
-            .map((key) => ({ key })),
-          truncated: false,
-        }),
-    },
-  }
-}
-
 let SECRET = 'a probe secret'
-let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 
-// One platform: a Store per name the kernel spells, the bucket the files are
-// in, and the platform's own assets off disk (the client an app imports).
-let platform = () => {
-  let objects = new Map<string, Store>()
-  let sockets = new Map<string, Wire[]>()
-  let object = (name: string) => {
-    let held = objects.get(name)
-    if (!held) {
-      let ctx = state()
-      sockets.set(name, ctx.live)
-      objects.set(name, held = new Store(ctx))
-    }
-    return held
-  }
-  let files = bucket()
-  let env = {
-    SESSION_SECRET: SECRET,
-    BLOBS: files.r2,
-    ASSETS: {
-      fetch: async (req: Request) =>
-        new Response(
-          await Deno.readFile(
-            new URL(`./public${new URL(req.url).pathname}`, import.meta.url),
-          ),
-          { headers: { 'content-type': 'text/javascript' } },
-        ),
-    },
-    STORE: {
-      idFromName: (n: string) => n,
-      get: (n: unknown) => ({
-        fetch: (r: Request) => Promise.resolve(object(String(n)).fetch(r)),
-      }),
-    },
-    // Nobody is listening: a break is still written, and telling its members
-    // about it is the half that may fail without taking the write with it.
-    WIRE: {
-      idFromName: (n: string) => n,
-      get: () => ({
-        fetch: () => Promise.resolve(new Response(null, { status: 204 })),
-      }),
-    },
-  } as unknown as Env
-  return { env, files, object, sockets }
-}
+let platform = () => inMemory(SECRET)
+let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 
 // A signed-in person, as the browser carries them.
 let as = async (person: string) =>

@@ -142,6 +142,13 @@ new_sqlite_classes = ["Wire"]
 [[send_email]]
 name = "MAIL"
 
+# Workers AI (builder.ts, T-34239): the free build's model runs on this
+# binding, which needs no key — the deploy is the authorization, the way the
+# mail binding is. Under `wrangler dev` it proxies to the account; in the
+# workerd probes there is no binding at all and the loop says so.
+[ai]
+binding = "AI"
+
 # An app's files. `wrangler dev` simulates the bucket.
 [[r2_buckets]]
 binding = "BLOBS"
@@ -234,6 +241,14 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # (billing.ts). Unset, those doors say the paid tier is not switched on here
 # rather than half-working, and a webhook that arrives unread is filed where
 # the owner sees it.
+# OPENAI_API_KEY is what the PAID build speaks to OpenAI with, through the AI
+# Gateway named by AI_GATEWAY — or AI_GATEWAY_TOKEN alone, where the gateway
+# holds the key itself (builder.ts, T-34238). All three are unset here on
+# purpose: the gateway does not exist on the account yet, and unset is what
+# makes the paid build refuse in a sentence naming that ticket instead of
+# 404ing at a gateway nobody made. The free build needs none of them — it runs
+# on the `[ai]` binding above. BUILDER_MODEL_FREE and BUILDER_MODEL_PAID are
+# the model ids, unset meaning builder.ts's own defaults.
 # CIMD is not a secret but rides the same door, because that door needs no
 # code deploy: `printf off | wrangler secret put CIMD` stops the well-known
 # claiming Client ID Metadata Document support, `printf on | ...` restores it,
