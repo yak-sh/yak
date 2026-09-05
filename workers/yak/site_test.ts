@@ -403,6 +403,26 @@ Deno.test('the plan pages quote the price the offer names', () => {
   }
 })
 
+// The terms are the document a reviewer opens to check what the pricing page
+// claims, so they must not carry a second copy of the number: it said the
+// place "costs nothing" for two days after checkout shipped (T-34355). No
+// figure at all on that page, and a link to the one that has it.
+Deno.test('the terms leave every price to the pricing page', () => {
+  let html = flat(read('terms.html'))
+  assert(!/\$\s?\d/.test(html), 'the terms quote a price of their own')
+  assertStringIncludes(html, '<a href="/pricing">pricing page</a>')
+  // And the section that would carry one says no number and no "free" of its
+  // own: what it costs is a question the pricing page answers.
+  let costs = flat(
+    read('terms.html').split('<h2>What it costs</h2>')[1].split(
+      '</section>',
+    )[0],
+  )
+  assert(!/\d/.test(costs.replace('20 MB', '')), `a figure in: ${costs}`)
+  assert(!/\bnothing\b/i.test(costs), 'the terms still say it costs nothing')
+  assertStringIncludes(costs, '/pricing')
+})
+
 // "This page is the whole list", so everything the code sends off this box is
 // named on it (T-34352). Each line below is one recipient in the code, and the
 // address is read out of mail.ts rather than typed here.
