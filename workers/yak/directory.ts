@@ -51,6 +51,13 @@ export type Meter = {
   rows_written: number
   bytes: number
   emails: number
+  // What the builder did and what it cost (T-34241): the builds it completed
+  // this month, the tokens they spent, and — the one figure here that is not
+  // the month's — every build in this space's life, because the free plan's
+  // build is for the life of the space rather than the month.
+  builds: number
+  tokens: number
+  built: number
   at: string
 }
 export type Tier = 'free' | 'plus'
@@ -222,6 +229,9 @@ let meterOf = (r: Row): Meter | null =>
       rows_written: r.meter.rows_written ?? 0,
       bytes: r.meter.bytes ?? 0,
       emails: r.meter.emails ?? 0,
+      builds: r.meter.builds ?? 0,
+      tokens: r.meter.tokens ?? 0,
+      built: r.meter.built ?? 0,
       at: r.meter.at ?? '',
     }
     : null

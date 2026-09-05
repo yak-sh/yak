@@ -161,7 +161,7 @@
   },
   {
     "kind": "exec",
-    "sql": "create table if not exists \"meter\" (\n    entity integer primary key references entity(id),\n    \"month\" text,\n    \"requests\" real,\n    \"rows_read\" real,\n    \"rows_written\" real,\n    \"bytes\" real,\n    \"emails\" real,\n    \"at\" text\n  );"
+    "sql": "create table if not exists \"meter\" (\n    entity integer primary key references entity(id),\n    \"month\" text,\n    \"requests\" real,\n    \"rows_read\" real,\n    \"rows_written\" real,\n    \"bytes\" real,\n    \"emails\" real,\n    \"builds\" real,\n    \"tokens\" real,\n    \"built\" real,\n    \"at\" text\n  );"
   },
   {
     "kind": "exec",
@@ -812,6 +812,24 @@
     "table": "meter",
     "col": "emails",
     "sql": "alter table meter add column \"emails\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "meter",
+    "col": "builds",
+    "sql": "alter table meter add column \"builds\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "meter",
+    "col": "tokens",
+    "sql": "alter table meter add column \"tokens\" real"
+  },
+  {
+    "kind": "addColumn",
+    "table": "meter",
+    "col": "built",
+    "sql": "alter table meter add column \"built\" real"
   },
   {
     "kind": "addColumn",

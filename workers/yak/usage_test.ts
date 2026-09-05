@@ -14,7 +14,19 @@ import {
 } from '@std/assert'
 import type { Meter, Space, Tier } from './directory.ts'
 import { read } from './usage.ts'
-import { atCeiling, FREE, level, size, standing } from './meter.ts'
+import type { Namespace } from './door.ts'
+import {
+  atCeiling,
+  BUILDS,
+  countedBuild,
+  FREE,
+  level,
+  refusedBuild,
+  size,
+  spent,
+  standing,
+  usedBuilds,
+} from './meter.ts'
 
 let ANSWER = {
   data: {
@@ -115,6 +127,9 @@ let space = (meter: Partial<Meter> = {}, tier: Tier | null = null): Space => ({
     rows_written: 0,
     bytes: 0,
     emails: 0,
+    builds: 0,
+    tokens: 0,
+    built: 0,
     at: NOW.toISOString(),
     ...meter,
   },
@@ -190,5 +205,108 @@ Deno.test('a refusal names the ceiling and where the plans are written', () => {
   assert(
     !/checkout|billing/i.test(standing(space(), 3)),
     'the standing line names no purchase either',
+  )
+})
+
+// The builder's ceiling (T-34241). A build is one app SHIPPED, so the count is
+// written once by the loop that finished one (`countedBuild`) and read before
+// it starts (`refusedBuild`).
+
+// The store that count is written to: what a Durable Object binding is to the
+// two lines of meta.ts that reach it, and no more.
+type Patch = { entity: { eid: string }; meter: Record<string, number | string> }
+let writes = () => {
+  let sent: Patch[] = []
+  let ns = {
+    idFromName: (name: string) => name,
+    get: () => ({
+      fetch: async (req: Request) => {
+        sent.push(...(await req.json() as Patch[]))
+        return new Response('[]')
+      },
+    }),
+  }
+  return { sent, env: { STORE: ns as unknown as Namespace } }
+}
+
+Deno.test('a free space is built for once, for the life of the space', async () => {
+  assertEquals(refusedBuild(space(), NOW), null)
+  let { sent, env } = writes()
+  await countedBuild(env, space(), { input: 900, output: 100 }, NOW)
+  assertEquals(sent[0].meter, {
+    month: '2026-09',
+    builds: 1,
+    tokens: 1_000,
+    built: 1,
+  })
+
+  // And that is the one: the sentence names the plan, the number, and the
+  // page — never a checkout (C-33033) — and leaves them the tools to keep
+  // going by hand.
+  let after = space({ builds: 1, tokens: 1_000, built: 1 })
+  let no = refusedBuild(after, NOW)!
+  assertStringIncludes(no, '1 app built for you for the life of the space')
+  assertStringIncludes(no, 'app_new and app_files')
+  assertStringIncludes(no, 'https://yaks.app/pricing')
+  assert(!/checkout|billing|subscribe/i.test(no), no)
+
+  // A refusal costs them nothing — not the build, and not the sentence: the
+  // count is written by the loop that FINISHED one, and this one never ran.
+  assertEquals(usedBuilds(after, NOW), 1)
+  assertEquals(sent.length, 1)
+
+  // The month is not what gave them the build, so the month does not give
+  // them another. The lifetime figure rides the month turn (`spent`).
+  let october = new Date('2026-10-02T00:00:00Z')
+  assertEquals(spent(after, october).built, 1)
+  assertEquals(usedBuilds(after, october), 1)
+  assert(refusedBuild(after, october), 'a new month is not a new free build')
+})
+
+Deno.test('a paid space counts its builds down, and the month gives them back', async () => {
+  let plus = (builds: number, month = '2026-09') =>
+    space({ month, builds, built: 40 }, 'plus')
+  assertEquals(refusedBuild(plus(BUILDS.plus - 1), NOW), null)
+  let no = refusedBuild(plus(BUILDS.plus), NOW)!
+  assertStringIncludes(no, '30 apps built for you a month')
+  assertStringIncludes(no, 'build again on the 1st')
+  assertStringIncludes(no, 'https://yaks.app/pricing')
+  // Last month's thirty are not this month's.
+  assertEquals(refusedBuild(plus(BUILDS.plus, '2026-08'), NOW), null)
+
+  // The tokens are the month's, summed both ways, because what they cost is
+  // one number or it is a number nobody can add up.
+  let { sent, env } = writes()
+  await countedBuild(
+    env,
+    space({ builds: 2, tokens: 5_000, built: 40 }, 'plus'),
+    { input: 1_200, output: 300 },
+    NOW,
+  )
+  assertEquals(sent[0].meter, {
+    month: '2026-09',
+    builds: 3,
+    tokens: 6_500,
+    built: 41,
+  })
+})
+
+Deno.test('the build line warns at 80%, and the line says both numbers', () => {
+  assertEquals(level(space({ builds: 23, built: 40 }, 'plus'), 1, NOW), 'ok')
+  assertEquals(level(space({ builds: 24, built: 40 }, 'plus'), 1, NOW), 'near')
+  assertEquals(level(space({ builds: 30, built: 40 }, 'plus'), 1, NOW), 'over')
+  // A free space has one build, so it has no 80%: it is at nothing, and then
+  // it is at the ceiling.
+  assertEquals(level(space({ builds: 1, built: 1 }), 1, NOW), 'over')
+
+  // The line says which SPAN each number is against: a free space's build is
+  // for its life, a paid space's thirty are the month's, and the tokens are
+  // the month's on either plan.
+  let said = standing(space({ builds: 1, tokens: 4_210, built: 1 }), 2, NOW)
+  assertStringIncludes(said, '1 of 1 builds ever (4,210 tokens this month)')
+  assertStringIncludes(said, 'a build past 1')
+  assertStringIncludes(
+    standing(space({ builds: 4, tokens: 900, built: 44 }, 'plus'), 9, NOW),
+    '4 of 30 builds a month (900 tokens this month)',
   )
 })

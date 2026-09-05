@@ -49,6 +49,7 @@ import {
   level,
   monthOf,
   none,
+  spent,
   thisMonth,
   WARN,
 } from './meter.ts'
@@ -194,14 +195,20 @@ export let sweep = async (env: Env, now = new Date()) => {
       total.rows_written += got.rows_written
       total.bytes += bytes
     }
-    // The space's own reading: its apps summed, and the letters it sent and
-    // received left alone — the mail doors count those as they happen (mail
-    // rides no store), and this sweep is only what starts them over when the
-    // month turns.
+    // The space's own reading: its apps summed, and the figures counted where
+    // they happen left alone — the mail doors count the letters and the
+    // builder counts its builds (mail and a build ride no store), and this
+    // sweep is only what starts them over when the month turns. `built` is the
+    // one it never starts over: the free plan's build is for the life of the
+    // space, so `spent` carries that figure across the month (meter.ts).
+    let was = spent(space, now)
     let meter = {
       month,
       ...total,
-      emails: thisMonth(space.meter, month)?.emails ?? 0,
+      emails: was.emails,
+      builds: was.builds,
+      tokens: was.tokens,
+      built: was.built,
       at,
     }
     // A space that has just crossed a line — or fallen back under one — has

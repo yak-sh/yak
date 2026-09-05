@@ -1,7 +1,7 @@
 // Public-page contracts: shared navigation, valid jumps, documented
 // components, and plan allowances that agree with the metering code.
 import { assert, assertEquals } from '@std/assert'
-import { LETTERS } from './meter.ts'
+import { BUILDS, LETTERS } from './meter.ts'
 
 let read = (name: string) =>
   Deno.readTextFileSync(new URL(`./public/${name}`, import.meta.url))
@@ -128,6 +128,22 @@ Deno.test('the plan pages carry the email allowance the code enforces', () => {
   // letter written to an app is never turned away at the door.
   assert(flat(read('technical.html')).includes('only SENDING stops'))
   assert(flat(read('pricing.html')).includes('Letters written to you always'))
+})
+
+// The builder's number, held to the same rule (T-34241): free is one build for
+// the LIFE of the space and Plus a number every month, so the pages say each
+// in those words and `BUILDS` is the one place either is written down.
+Deno.test('the plan pages carry the builds the code enforces', () => {
+  let free = `${BUILDS.free} app built for you`
+  let plus = `${BUILDS.plus} apps built for you a month`
+  for (let page of ['index.html', 'pricing.html', 'technical.html']) {
+    let html = flat(read(page))
+    assert(html.includes(free), `${page} does not say ${free}`)
+    assert(html.includes(plus), `${page} does not say ${plus}`)
+  }
+  // A build is one app shipped, not one message — the thing a person is most
+  // likely to fear when a chat is what spends it.
+  assert(flat(read('technical.html')).includes('not per message'))
 })
 
 Deno.test('every footer link names a page that is there', () => {

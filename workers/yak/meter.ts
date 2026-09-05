@@ -89,33 +89,68 @@ export let LETTERS: Record<Tier, number> = { free: 100, plus: 1_000 }
 
 export let letters = (tier: Tier | null): number => LETTERS[tier ?? 'free']
 
-let empty = (month: string): Meter => ({
+// The apps the BUILDER builds for a person (T-34241, T-34237). Free is one for
+// the LIFE of the space — the first app, made for somebody who has never made
+// one — and Plus is a number every month. The month is what starts a paid
+// space over; nothing starts a free space over, which is why `Meter` carries
+// `built` beside `builds`.
+//
+// Both are ceilings on what WE pay a model for, so both tiers have one, the
+// way the letters do. Making and changing apps by hand (app_new, app_files) is
+// not metered here at all — only a build the builder performed.
+export let BUILDS: Record<Tier, number> = { free: 1, plus: 30 }
+
+export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
+
+// What one build's model calls cost, as the builder's loop reports them
+// (T-34239 `build()` returns it). Input and output are summed into
+// `meter.tokens`, because the meter is read for COST and the two prices differ
+// per model — a split here would be a number nobody could add up.
+export type Usage = { input: number; output: number }
+
+let empty = (month: string, built = 0): Meter => ({
   month,
   ...none(),
   bytes: 0,
   emails: 0,
+  builds: 0,
+  tokens: 0,
+  built,
   at: '',
 })
 
 // This month's reading, whatever the row holds — a month behind is nothing
-// spent, and no row at all is the same.
+// spent, and no row at all is the same. `built` is the exception it carries
+// through: a lifetime figure is not started over by a new month.
 export let spent = (space: Space, now = new Date()) =>
-  thisMonth(space.meter, monthOf(now)) ?? empty(monthOf(now))
+  thisMonth(space.meter, monthOf(now)) ??
+    empty(monthOf(now), space.meter?.built ?? 0)
 
-// How full a space is, per ceiling, as a fraction: 1 is at it. The letters are
-// there on every plan; the other three only where the plan has them.
+// The builds counted against the plan's ceiling: the space's whole life on
+// free, this month on a paid plan.
+export let usedBuilds = (space: Space, now = new Date()) =>
+  (space.tier ?? 'free') == 'free'
+    ? spent(space, now).built
+    : spent(space, now).builds
+
+// How full a space is, per ceiling, as a fraction: 1 is at it. The letters and
+// the builds are there on every plan; the other three only where the plan has
+// them.
 export let fullness = (space: Space, apps: number, now = new Date()) => {
   let free = ceilings(space.tier)
   let m = spent(space, now)
-  let mail = { emails: m.emails / letters(space.tier) }
+  let both = {
+    emails: m.emails / letters(space.tier),
+    builds: usedBuilds(space, now) / builds(space.tier),
+  }
   return free
     ? {
       apps: apps / free.apps,
       requests: m.requests / free.requests,
       bytes: m.bytes / free.bytes,
-      ...mail,
+      ...both,
     }
-    : mail
+    : both
 }
 
 // Where a space stands: nothing to say, near a ceiling, or past one. The
@@ -145,26 +180,40 @@ export let standing = (space: Space, apps: number, now = new Date()) => {
   let free = ceilings(space.tier)
   let m = spent(space, now)
   let mail = `${count(m.emails)} of ${count(letters(space.tier))} emails`
-  if (!free) return `${space.slug}: no ceilings on this plan beyond ${mail}.`
+  // What the builder has done and what it cost, counted here and now like the
+  // letters. The builds say WHICH span they are against — a free space's are
+  // for its life and a paid space's for the month — because `1 of 1 builds`
+  // under a month heading would read as a number that comes back.
+  let made = `${count(usedBuilds(space, now))} of ${
+    count(builds(space.tier))
+  } builds ${(space.tier ?? 'free') == 'free' ? 'ever' : 'a month'}`
+  // The tokens those builds spent: the one place a person sees what a build
+  // costs us, and the month's, whatever span the builds are counted over.
+  let cost = `${count(m.tokens)} tokens this month`
+  if (!free) {
+    return `${space.slug}: no ceilings on this plan beyond ${mail} and ` +
+      `${made} (${cost}).`
+  }
   let refused =
-    `Requests are never refused; a sixth app, data past ${
-      size(free.bytes)
-    }, or the ${
+    `Requests are never refused; a sixth app, a build past ${
+      count(builds(space.tier))
+    }, data past ${size(free.bytes)}, or the ${
       count(letters(space.tier) + 1)
     }st letter SENT is — a letter that ` +
     `arrives always lands. What the plans hold: ${PRICING}`
   let head = `${space.slug} (free tier, ${m.month}): ${apps} of ${free.apps} ` +
     'apps'
   let read = asOf(m.at)
-  // The apps and the letters are counted here and now; the rest waits on the
-  // sweep. Before the first one this month there is no reading at all, and
-  // zero would be a claim rather than a number.
+  // The apps, the letters and the builds are counted here and now; the rest
+  // waits on the sweep. Before the first one this month there is no reading at
+  // all, and zero would be a claim rather than a number.
   if (!read) {
-    return `${head}, ${mail}. The month's requests and data have not been ` +
-      `read yet — the meter sweeps hourly. ${refused}`
+    return `${head}, ${mail}, ${made} (${cost}). The month's requests and ` +
+      `data have not been read yet — the meter sweeps hourly. ${refused}`
   }
   return `${head}, ${count(m.requests)} of ${count(free.requests)} requests, ` +
-    `${size(m.bytes)} of ${size(free.bytes)}, ${mail}${read}. ${refused}`
+    `${size(m.bytes)} of ${size(free.bytes)}, ${mail}${read}, ${made} ` +
+    `(${cost}). ${refused}`
 }
 
 // The refusal, one sentence: what the ceiling is, and where the plans are
@@ -175,12 +224,15 @@ export let standing = (space: Space, apps: number, now = new Date()) => {
 // explain that a feature needs a plan and may link to a page describing the
 // plans; it may not hand back anything that starts a purchase. Paying is the
 // signed-in web page's door (billing.ts).
-export let atCeiling = (space: Space, what: 'apps' | 'bytes' | 'emails') => {
+export let atCeiling = (
+  space: Space,
+  what: 'apps' | 'bytes' | 'emails' | 'builds',
+) => {
   let free = ceilings(space.tier)!
   let tier = space.tier ?? 'free'
-  // Said LAZILY: the letters are a refusal a paid space can hit too, and a
-  // paid space answers to none of the three above (`ceilings`), so only the
-  // branch taken may read them.
+  // Said LAZILY: the letters and the builds are refusals a paid space can hit
+  // too, and a paid space answers to none of the three above (`ceilings`), so
+  // only the branch taken may read them.
   let said = {
     apps: () =>
       `${space.slug} is on the free tier, which is ${free.apps} apps` +
@@ -198,6 +250,20 @@ export let atCeiling = (space: Space, what: 'apps' | 'bytes' | 'emails') => {
         count(letters(space.tier))
       } emails a month, and this month's are sent — it can send again on the ` +
       `1st, and letters written to it still arrive`,
+    // The builder's refusal, which it SAYS in the chat rather than bouncing
+    // (T-34242 renders it): a person asked for an app in words, and a person
+    // asked in words is owed an answer in words. What it leaves them is the
+    // app they already have and the tools to change it themselves.
+    builds: () =>
+      tier == 'free'
+        ? `${space.slug} is on the free tier, which is ${
+          count(builds(space.tier))
+        } app built for you for the life of the space, and it is built — ` +
+          `app_new and app_files still make and change apps here`
+        : `${space.slug} is on the plus tier, which is ${
+          count(builds(space.tier))
+        } apps built for you a month, and this month's are built — it can ` +
+          `build again on the 1st`,
   }[what]()
   return `${said}. ${
     tier == 'plus' ? `What the plans hold` : `Plus lifts it`
@@ -231,6 +297,57 @@ export let counted = async (
       meter: held
         ? { month, emails: held.emails + 1 }
         : { ...empty(month), emails: 1 },
+    }],
+  })
+}
+
+// ---- the builds (T-34241) ---------------------------------------------------
+//
+// A build is counted where it happens, like a letter and for the same reason:
+// nothing in the analytics knows what the builder did. One count per COMPLETED
+// build — an `app_deploy` the builder performed — and never per message, so a
+// long conversation that ships one app costs one build.
+//
+// The refusal is a SENTENCE the builder says, not a bounce: the person is
+// talking to it, and a door slamming mid-conversation is not an answer. The
+// builder asks before it starts and repeats what comes back.
+
+/** What stops the builder here, or null to go ahead. */
+export let refusedBuild = (space: Space, now = new Date()) =>
+  usedBuilds(space, now) >= builds(space.tier)
+    ? atCeiling(space, 'builds')
+    : null
+
+/**
+ * One completed build and what it cost: the month's builds and tokens, and the
+ * space's lifetime builds, each one higher.
+ *
+ * This is the call the builder's loop makes with the `usage` its `build()`
+ * returns (T-34239). A build that was REFUSED never reaches it, so a refusal
+ * costs a person nothing — not a build, and not the tokens of the sentence
+ * that turned it down.
+ */
+export let countedBuild = async (
+  env: { STORE: Namespace },
+  space: Space,
+  usage: Usage,
+  now = new Date(),
+) => {
+  let month = monthOf(now)
+  let held = thisMonth(space.meter, month)
+  let tokens = usage.input + usage.output
+  let built = (space.meter?.built ?? 0) + 1
+  await stamp(env, {
+    entities: [{
+      entity: { eid: space.eid },
+      meter: held
+        ? {
+          month,
+          builds: held.builds + 1,
+          tokens: held.tokens + tokens,
+          built,
+        }
+        : { ...empty(month), builds: 1, tokens, built },
     }],
   })
 }

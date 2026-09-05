@@ -138,6 +138,9 @@
         "rows_written": "number",
         "bytes": "number",
         "emails": "number",
+        "builds": "number",
+        "tokens": "number",
+        "built": "number",
         "at": "time"
       }
     },
