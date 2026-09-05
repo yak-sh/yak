@@ -60,6 +60,10 @@ In dependency order:
   roster (`member`), per-thing grants (`grant`), an access mode (`access`), the
   `precondition` hook that refuses a write the actor's role does not allow, and
   the `canRead` a door consults before it answers a query.
+- **[@yaks/session](./session)** — who is working and what they hold: a run
+  (`session`), its lock on any entity (`claim`), the `stop_request` lever, the
+  `brief` it leaves, and the `conflict` written down when two runs want one
+  thing — a `precondition` hook that refuses, an `audit` hook that remembers.
 - **[@yaks/api](./api)** — the transport: a plain `Request` → `Response` handler
   over a graph (`/apply`, `/query`, `/ws`), where the door authenticates the
   writer, and a subscription is a saved query whose answer is pushed again when
@@ -132,6 +136,10 @@ on its own:
   batch MEANS but who is allowed to say it, enforced as a `precondition` hook so
   a refusal rolls the batch back, and mirrored as a `canRead` the door asks for
   the reads that never reach `apply()` at all.
+- `@yaks/session` is the third kind: not who may write, but who is writing right
+  now and what they hold while they do it. A lock rides the entity it locks, a
+  take of somebody else's rolls the batch back, and the collision is written
+  down on the `audit` phase — after the rollback, where the record survives.
 - `@yaks/api` puts the whole stack behind three routes. It composes
   `@yaks/graph` (for writes) with a storage adapter (for reads) and
   `@yaks/match` (to decide cheaply which subscription a committed batch
