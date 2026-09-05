@@ -209,27 +209,24 @@ export let kilo = (n: number): string =>
     ? `${+(n / 1e3).toFixed(n < 10_000 ? 1 : 0)}k`
     : `${+(n / 1e6).toFixed(1)}M`
 
-// Precedence as a LOOKUP, keyed by kind. kindOf runs once per row on every
-// snapshot read, so it must cost the ENTITY's component count (a handful),
-// never the vocabulary's (~50 and growing) — a scan down kindOrder charges
-// every row for wherever its kind happens to sit, and kindOrder is derived
-// (alphabetical + `before`), so nothing keeps the hot kinds near the front.
+// Precedence as a LOOKUP, one rank per kind. kindOf runs once per row on
+// every snapshot read, so it must cost the ENTITY's component count (a
+// handful), never the vocabulary's (~50 and growing): a scan down kindOrder
+// charges every row for wherever its kind happens to sit, and kindOrder is
+// derived (alphabetical, refined by `before`), so nothing keeps the hot
+// kinds near the front of it.
+//
+// An APP's own components (store/vocab.ts) join the same table when a store
+// plants them (db.ts plantVocab) — the registry query.ts keeps for the
+// filter grammar, safe for the same reason: a row wears a word only if its
+// OWN store planted the table, so no store is ever told about another's
+// rows. They rank NEGATIVE in the order learned, so a store's word beats
+// every platform kind and an earlier-planted word beats a later one.
 let kindRank = new Map(kindOrder.map((k, i) => [k, i]))
-
-// An APP's own components (store/vocab.ts), learned when a store plants them
-// (db.ts plantVocab) — the same registry query.ts keeps for the filter
-// grammar, safe for the same reason: a row wears a word only if its OWN store
-// planted the table, so no store is ever told about another's rows. Ranked
-// NEGATIVE in the order learned, so a store's word beats every platform kind
-// and an earlier-planted word beats a later one.
-let ownKinds = new Map<string, number>()
+let planted = 0
 
 export let learnKinds = (names: Iterable<string>) => {
-  for (let name of names) {
-    if (!kindRank.has(name) && !ownKinds.has(name)) {
-      ownKinds.set(name, -1 - ownKinds.size)
-    }
-  }
+  for (let name of names) if (!kindRank.has(name)) kindRank.set(name, --planted)
 }
 
 // A store's own word is the most specific thing it says about a row, so it
@@ -240,7 +237,7 @@ export let kindOf = (has: Record<string, unknown>) => {
   let best = Infinity
   for (let k in has) {
     if (!has[k]) continue
-    let r = ownKinds.get(k) ?? kindRank.get(k) ?? Infinity
+    let r = kindRank.get(k) ?? Infinity
     if (r < best) [best, kind] = [r, k]
   }
   return kind
