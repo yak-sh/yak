@@ -4,24 +4,24 @@
   "controlFloorNs": 2986555,
   "ratios": {
     "apply: mint one task (2 comps)": 0.16830835017497242,
-    "apply: patch one column": 0.043183672868247154,
+    "apply: patch one column": 0.04295345112905928,
     "componentCounts: census over all tables": 0.03887976574534446,
-    "contextDigest: 2k graph, actor path": 0.7082601860672246,
+    "contextDigest: 2k graph, actor path": 0.700534608966753,
     "contextDigest: 2k-task graph": 0.4469939445280599,
-    "eager: one entity by eid (keyed read)": 0.21140277008124747,
+    "eager: one entity by eid (keyed read)": 0.20603035432575256,
     "freshDb: clone migrated image": 0.02766376637730718,
-    "journalOf: seek one entity's history": 0.024554043036207267,
+    "journalOf: seek one entity's history": 0.022342891655975382,
     "notices: comms bus over 2k graph": 0.5145185673794723,
-    "propAt: comp.prop -> Prop": 0.000005474820495221122,
-    "propOwners: prop -> owning comps": 0.0000032051963899018404,
+    "propAt: comp.prop -> Prop": 0.000005466192973778001,
+    "propOwners: prop -> owning comps": 0.000003200030440242,
     "query: filter 2k rows (a board render)": 0.17455998633877495,
-    "recallFrom: kind-aware selection over a small graph": 0.029651319534896477,
+    "recallFrom: kind-aware selection over a small graph": 0.02940620834075982,
     "render: native SessionDot (O(1) standing)": 0.025267909012223113,
     "render: task Meta row": 0.039060517794369774,
     "render: task Tile": 0.02288757447962619,
     "resolveId: num -> eid": 0.0004637841206256058,
-    "rows: 2k-task snapshot": 0.1428334653137143,
+    "rows: 2k-task snapshot": 0.14159738534432192,
     "scan: session mentions over a 60-row thread": 0.13145815161615976,
-    "similar: ANN KNN over 800 vectors": 0.03542999196551796
+    "similar: ANN KNN over 800 vectors": 0.03428165367949763
   }
 }
