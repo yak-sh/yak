@@ -148,8 +148,10 @@ export let core = (opts: CoreOpts): Tool[] => {
       name: 'graph_apply',
       title: 'Apply a batch',
       description:
-        `Write. A batch is an array of BUNDLES — {entity: {eid}, <component>: ` +
-        `{<columns>}} — applied atomically: an omitted column is untouched, a ` +
+        `Apply entity bundles to this store: create, patch or delete ` +
+        `entities and their components, atomically. A batch is an array of ` +
+        `BUNDLES — {entity: {eid}, <component>: {<columns>}}, the same shape ` +
+        `a client's apply() takes: an omitted column is untouched, a ` +
         `null column is cleared, a null component is dropped, and ` +
         `$delete: true kills the entity. Mint an id yourself, or write ` +
         `'$name' as the eid and read back what the graph named it. The answer ` +
@@ -180,8 +182,9 @@ export let core = (opts: CoreOpts): Tool[] => {
       readOnly: true,
       title: 'Read a query',
       description:
-        `Read. A query LINE selects entities and answers them as whole ` +
-        `bundles: '.status=shelved&.price<20' — dot-params joined with &, ` +
+        `Find entities in this store by filtering their components and ` +
+        `columns, answered as whole bundles. A query LINE selects them: ` +
+        `'.status=shelved&.price<20' — dot-params joined with &, ` +
         `with lists (a,b), ranges (1..9), !=, ~=, comparisons, '.prop!' for ` +
         `present and '.prop=' for absent. Directives ride the same line: ` +
         `.order=, .limit=, .refs=<id> for everything pointing at an entity. ` +
@@ -208,7 +211,8 @@ export let core = (opts: CoreOpts): Tool[] => {
       readOnly: true,
       title: 'Show entities whole',
       description:
-        `One entity (or several), whole: every component it carries, plus ` +
+        `Read entities out of this store by eid, whole: one or several, ` +
+        `every component each one carries, plus ` +
         `everything that points AT it, each as its own bundle, and the ` +
         `references between them as edges. This is identity, not search — ` +
         `pass eids. Set backrefs false when you only want the entities ` +
@@ -232,7 +236,8 @@ export let core = (opts: CoreOpts): Tool[] => {
       readOnly: true,
       title: 'The schema',
       description:
-        `The schema of this graph, in three sizes. Bare: the INDEX — every ` +
+        `Read this store's vocabulary — every component, its columns and ` +
+        `their types — in three sizes. Bare: the INDEX — every ` +
         `component, what it means in a line, and its column names. With ` +
         `component (one name or several): that component in full — each ` +
         `column's type and meaning, what is server-owned or unique, what ` +
@@ -283,7 +288,8 @@ export let core = (opts: CoreOpts): Tool[] => {
       readOnly: true,
       title: 'Search the text',
       description:
-        `Words, ranked: the entities whose text matches, best first, as whole ` +
+        `Search the text of this store's entities: the ones whose words ` +
+        `match, ranked best first, as whole ` +
         `bundles. Use graph_query when you know what you are filtering on and ` +
         `this when you only know what it says.`,
       input: {
