@@ -5,12 +5,13 @@
 //   omitted columns are untouched    a patch names only what changes
 //   a column set to null is cleared  null is a value, not an absence
 //   a component set to null is dropped   the row goes, the entity stays
-//   an entity set to null is deleted   it is tombstoned, and death cascades
+//   $delete: true deletes the entity   it is tombstoned, and death cascades
 //
-// A bundle is `{ eid, [component]: patch | null }` — the entity's string id
-// under `eid`, and each component it touches under that component's name. The
-// reserved name `entity` is the identity itself: `{ eid, entity: null }`
-// deletes the whole entity.
+// A bundle is `{ entity: { eid }, [component]: patch | null, $delete?, $was? }`
+// — the identity under `entity`, each component it touches under that
+// component's name, and `$`-prefixed sugar the storage layer reads (`$delete`)
+// or carries through untouched (`$was`, enforced upstream in @yaks/graph, not
+// here). `{ entity: { eid }, $delete: true }` deletes the whole entity.
 //
 // Deletion is never destructive of identity: a deleted entity keeps its spine
 // row so its integer id can never be reused, and gains a tombstone row that
@@ -53,10 +54,15 @@ let mint = (driver: Driver, eid: string): void =>
     [eid, eid],
   )
 
-// The component patches a bundle carries, in touch order — every key but the
-// reserved `eid` names a component.
+// The component patches a bundle carries, in touch order. The identity
+// (`entity`) and every `$`-prefixed sugar key (`$delete`, `$was`) are not
+// components, so they never reach the upsert/drop loop.
 let comps = (b: Bundle): [string, Comp | null][] =>
-  Object.entries(b).filter(([k]) => k != 'eid') as [string, Comp | null][]
+  Object.entries(b)
+    .filter(([k]) => k != 'entity' && !k.startsWith('$')) as [
+      string,
+      Comp | null,
+    ][]
 
 // Whether a column is a reference — asked of the vocabulary, which knows a
 // column's category.
@@ -165,12 +171,11 @@ export let write = (
   bundles: Bundle[],
 ): string[] => {
   // Mint a spine for every eid this batch touches or points at, so a reference
-  // can name a target created in the same batch, in any order.
+  // can name a target created in the same batch, in any order. A deleting
+  // bundle mints nothing — it is about to tombstone the eid, not create it.
   for (let b of bundles) {
-    let cs = comps(b)
-    let deleting = cs.some(([name, patch]) => name == 'entity' && patch == null)
-    if (!deleting) mint(driver, b.eid)
-    for (let [name, patch] of cs) {
+    if (!b.$delete) mint(driver, b.entity.eid)
+    for (let [name, patch] of comps(b)) {
       if (!patch) continue
       for (let [prop, val] of Object.entries(patch)) {
         if (val != null && isRef(vocab, name, prop)) mint(driver, String(val))
@@ -180,20 +185,23 @@ export let write = (
 
   let dead: string[] = []
   for (let b of bundles) {
+    let eid = b.entity.eid
+    // `$delete` tombstones the whole entity and spreads death; any components
+    // the bundle also carries are moot once the entity is gone.
+    if (b.$delete) {
+      dead.push(...kill(driver, vocab, eid))
+      continue
+    }
     for (let [name, patch] of comps(b)) {
-      if (name == 'entity') {
-        if (patch == null) dead.push(...kill(driver, vocab, b.eid))
-        continue // a spine touch is the mint above; its columns are server-owned
-      }
       if (patch == null) {
         run(
           driver,
           `delete from "${name}" where entity = (select id from entity where eid = ?)`,
-          [b.eid],
+          [eid],
         )
         continue
       }
-      let oid = idOf(driver, b.eid)
+      let oid = idOf(driver, eid)
       if (oid == null) continue // deleted earlier in the same batch
       upsert(driver, vocab, oid, name, patch)
     }

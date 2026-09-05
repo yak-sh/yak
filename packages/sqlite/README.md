@@ -22,13 +22,14 @@ adds one facet, and any component can be added to any entity, so two
 vocabularies compose by sharing ids.
 
 The adapter speaks **bundles**. A bundle gathers an entity's components under
-one roof:
+one roof — the identity is the `entity` component, never a bare root `eid`:
 
 ```ts
-{ eid: 'cake-01', doc: { title: 'Lemon cake' }, recipe: { serves: 8 } }
+{ entity: { eid: 'cake-01' }, doc: { title: 'Lemon cake' }, recipe: { serves: 8 } }
 ```
 
-A read hands bundles back; a write takes bundles and patches them in.
+A read hands bundles back; a write takes bundles and patches them in
+(`Change = Bundle[]`).
 
 ## Usage
 
@@ -81,9 +82,9 @@ mint the ids:
 
 ```ts
 store.write([
-  { eid: 'kate', doc: { title: 'Kate' } },
+  { entity: { eid: 'kate' }, doc: { title: 'Kate' } },
   {
-    eid: 'p1',
+    entity: { eid: 'p1' },
     doc: { title: 'Hello world', body: 'first post' },
     post: { published: true, author: 'kate' },
   },
@@ -95,13 +96,12 @@ Writes are **patches**:
 - **omitted columns are untouched** — a patch names only what changes,
 - **a column set to `null` is cleared**,
 - **a component set to `null` is dropped** — the row goes, the entity stays,
-- **the entity set to `null` is deleted** — `{ eid, entity: null }` tombstones
-  it.
+- **`$delete: true` deletes the entity** — it is tombstoned, and death cascades.
 
 ```ts
-store.write([{ eid: 'p1', post: { published: false } }]) // author untouched
-store.write([{ eid: 'p1', post: null }]) // drop the post component
-store.write([{ eid: 'p1', entity: null }]) // delete the whole entity
+store.write([{ entity: { eid: 'p1' }, post: { published: false } }]) // author untouched
+store.write([{ entity: { eid: 'p1' }, post: null }]) // drop the post component
+store.write([{ entity: { eid: 'p1' }, $delete: true }]) // delete the whole entity
 ```
 
 Deleting an entity spreads along its references, and each reference's declared

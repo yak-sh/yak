@@ -60,10 +60,11 @@ let readSql = (v: Vocab, comp: string): string => {
 }
 
 // Every component an entity wears, gathered into a bundle. Iterates the
-// vocabulary's components (the spine `entity` is identity, not a component to
-// surface) and keeps only those with a row for this eid.
+// vocabulary's components and keeps only those with a row for this eid. The
+// spine `entity` is the identity component: its eid keys the bundle under
+// `entity`, never at the root.
 let bundleOf = (driver: Driver, vocab: Vocab, eid: string): Bundle => {
-  let out: Bundle = { eid }
+  let out: Bundle = { entity: { eid } }
   for (let comp of vocab.all) {
     if (comp == 'entity') continue
     let row = driver.query(readSql(vocab, comp), [eid])[0]
