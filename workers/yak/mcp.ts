@@ -10,9 +10,10 @@
 // `Authenticate` it is handed, exactly as the Store's own agent door does
 // (graph.ts `door`). Two tiers list on that one server:
 //
-//   the generic tier   graph_apply, graph_query, graph_show, vocab and search
-//                      over the caller's whole reach, bundles in and out, with
-//                      an output schema derived from the loaded vocabulary
+//   the generic tier   graph_apply, graph_query, graph_show, graph_schema and
+//                      search over the caller's whole reach, bundles in and
+//                      out, with the schemas derived from the loaded
+//                      vocabulary
 //   the platform tier  space_new, the app_* family, domain_*, member_*,
 //                      feedback and about, contributed as a plugin's tools
 //                      (agent.ts `platform`) rather than a table this door
@@ -399,11 +400,11 @@ let door = async (ctx: Ctx) => {
     column,
     // What a READ answers is left at names here, while the write door is
     // typed whole (@yaks/mcp, T-34153). Measured over a space of three apps:
-    // 54 KB of tool list before, 63 KB with the typed write door, 97 KB with
-    // the four read schemas typed too. The types are what a WRITE needs — a
+    // the typed write door costs 9 KB of tool list, and typing the four read
+    // schemas as well costs 33 KB more. The types are what a WRITE needs — a
     // read hands over the values themselves — and this door's vocabulary is a
-    // union of every store in reach, so the extra 33 KB is the least exact
-    // part of it, paid on every connection.
+    // union of every store in reach, so those 33 KB are the least exact part
+    // of it, paid on every connection.
     schema: 'names',
     authenticate: () => ({ eid: ctx.person }),
     name: 'yaks.app',

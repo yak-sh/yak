@@ -3,7 +3,7 @@
 // `Plugin` on it.
 //
 // @yaks/mcp brings the generic tier — graph_apply, graph_query, graph_show,
-// vocab and search — derived from the loaded vocabulary, with an output schema
+// graph_schema and search — derived from the loaded vocabulary, with a schema
 // per tool, so nothing here spells a bundle by hand. What it cannot bring is
 // the platform: space_new, the app_* family, domain_*, member_*, feedback and
 // about are this place's own verbs, and a plugin is how a graph grows verbs.
