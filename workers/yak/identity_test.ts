@@ -16,7 +16,15 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { slow, until } from '../../src/testing.ts'
-import { type Kernel, kernel, letters, mailed, meta, signIn } from './probe.ts'
+import {
+  connector,
+  type Kernel,
+  kernel,
+  letters,
+  mailed,
+  meta,
+  signIn,
+} from './probe.ts'
 import { SENDS } from './signin.ts'
 
 let form = (
@@ -69,9 +77,12 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     // because the form is not what to do next.
     let inn = await form(k, '/login/code', { email, code, name: 'Dana' })
     assertEquals(inn.status, 303)
-    // Sent from nowhere, a fresh account lands where attaching an assistant
-    // is taught, since that is what is left to do (T-32972).
-    assertEquals(inn.headers.get('location'), '/connect')
+    // Sent from nowhere, they land on their own space — the signed-in home of
+    // the platform, where attaching an assistant is one link away (T-34233).
+    assertEquals(
+      inn.headers.get('location'),
+      `https://${email.split('@')[0]}.yaks.app/`,
+    )
     let set = inn.headers.get('set-cookie') ?? ''
     assertMatch(set, /^yak_session=/)
     assertMatch(set, /Domain=yaks\.app/)
@@ -166,11 +177,15 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
       })
       assertMatch(r.headers.get('set-cookie') ?? '', /^yak_session=/)
       assertEquals(r.status, 303)
-      return r.headers.get('location')
+      return {
+        to: r.headers.get('location'),
+        home: `https://${addr.split('@')[0]}.yaks.app/`,
+      }
     }
     let notes = 'https://someone.yaks.app/notes/'
-    assertEquals(await comeback(notes), notes)
-    assertEquals(await comeback('https://elsewhere.example/notes/'), '/connect')
+    assertEquals((await comeback(notes)).to, notes)
+    let off = await comeback('https://elsewhere.example/notes/')
+    assertEquals(off.to, off.home)
 
     // Spent: the same code opens nothing twice.
     assertEquals((await form(k, '/login/code', { email, code })).status, 400)
@@ -404,15 +419,20 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assertEquals(rpc.status, 200)
     assert((await rpc.json()).result, 'the connector answered the bearer')
 
-    // And with an assistant of theirs let in, signing in stops teaching how:
-    // the connector page is for someone who has none (T-32972).
+    // And with an assistant of theirs let in, signing in lands where it
+    // landed before it: their own space is the signed-in home either way, and
+    // attaching one is a link on it rather than a page in front of it
+    // (T-34233).
     await (await form(k, '/login', { email })).body?.cancel()
     let over = await form(k, '/login/code', {
       email,
       code: await mailed(k, email),
     })
     assertEquals(over.status, 303)
-    assertEquals(over.headers.get('location'), '/')
+    assertEquals(
+      over.headers.get('location'),
+      `https://${email.split('@')[0]}.yaks.app/`,
+    )
     await over.body?.cancel()
 
     // Nobody gets the challenge that tells them where to sign in. The
@@ -459,11 +479,12 @@ slow('/login never draws the box for a browser already signed in', async () => {
       return r.headers.get('location')
     }
     let aimed = (back: string) => `/login?return=${encodeURIComponent(back)}`
-    let { cookie } = await signIn(k)
+    let { cookie, email } = await signIn(k)
+    let home = `https://${email.split('@')[0]}.yaks.app/`
 
-    // Aimed nowhere: the page that teaches attaching an assistant, which is
-    // where a fresh sign-in with no return goes too.
-    assertEquals(await sent('/login', cookie), '/connect')
+    // Aimed nowhere: their own space, which is where a fresh sign-in with no
+    // return goes too.
+    assertEquals(await sent('/login', cookie), home)
 
     // Aimed at a page of ours, spelled either way it is ever spelled: the
     // platform's own returns are bare paths, a card's may be an address.
@@ -472,8 +493,21 @@ slow('/login never draws the box for a browser already signed in', async () => {
     assertEquals(await sent(aimed(notes), cookie), notes)
 
     // A stranger's address is nowhere we send anyone, however it is spelled.
-    assertEquals(await sent(aimed('https://evil.example/'), cookie), '/connect')
-    assertEquals(await sent(aimed('//evil.example/'), cookie), '/connect')
+    assertEquals(await sent(aimed('https://evil.example/'), cookie), home)
+    assertEquals(await sent(aimed('//evil.example/'), cookie), home)
+
+    // Several spaces, and the one they came in on wins: a space's own index
+    // sends them here carrying its address, which is on our zone and followed.
+    // Aimed at nothing, it is their first — the one their address spells —
+    // and never the newest (T-34233).
+    let other = `garden-${crypto.randomUUID().slice(0, 8)}`
+    await connector(k, cookie).tool('space_new', {
+      slug: other,
+      title: 'Garden',
+    })
+    let garden = `https://${other}.yaks.app/`
+    assertEquals(await sent(aimed(garden), cookie), garden)
+    assertEquals(await sent('/login', cookie), home)
 
     // Signed out, the card is what it always was.
     let card = await get('/login')
@@ -630,8 +664,8 @@ slow('the connector page, and the address chosen on it', async () => {
     ) assertMatch(page, said)
     assertEquals(/name="space"/.test(page), false)
 
-    // A first sign-in lands here, since an assistant is all there is left to
-    // attach.
+    // A first sign-in lands on their own space, and the owner block there is
+    // what carries them here (T-34233).
     let email = `probe-${uniq()}@yaks.app`
     await (await form(k, '/login', { email })).body?.cancel()
     let inn = await form(k, '/login/code', {
@@ -640,7 +674,10 @@ slow('the connector page, and the address chosen on it', async () => {
       name: 'Dana',
     })
     assertEquals(inn.status, 303)
-    assertEquals(inn.headers.get('location'), '/connect')
+    assertEquals(
+      inn.headers.get('location'),
+      `https://${email.split('@')[0]}.yaks.app/`,
+    )
     await inn.body?.cancel()
     let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
     let dir = meta(k, cookie)
@@ -802,9 +839,12 @@ slow('a cold sign-in stays well under the budget', async () => {
     let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
 
     // Where the 303 sends them: the flow is not over until that page is in
-    // front of them, and it reads the directory the sign-in just wrote.
-    let to = inn.headers.get('location') ?? '/'
-    let page = await span(() => k.at('yaks.app', to, { headers: { cookie } }))
+    // front of them, and it reads the directory the sign-in just wrote. That
+    // is their own space's hostname now, which the probe spells in a header.
+    let to = new URL(inn.headers.get('location') ?? '/', 'https://yaks.app')
+    let page = await span(() =>
+      k.at(to.hostname, to.pathname + to.search, { headers: { cookie } })
+    )
     assertEquals(page.status, 200)
     await page.body?.cancel()
 

@@ -105,7 +105,8 @@ export let nothingHere = () =>
 //   asking for the rest             only when something is actually held back
 //   signing in                      signed out
 //   what this place is              signed out; a stranger, not a neighbour
-//   this page is a choice           the space's owner, and nobody else
+//   this page is a choice, and      the space's owner, and nobody else
+//   where to attach an assistant
 //
 // The filtering is the part to get right: an app someone may not read is not
 // NAMED here (apps.ts asks `reads` per app), and the line about asking for
@@ -156,6 +157,7 @@ builds one here — a page of your own you can send to anyone.</p>
         : 'Ask your assistant to build something here — a list, a site, a ' +
           'game — and it lives at this address.'
     }</p>
+<p><a class="Away" href="https://yaks.app/connect">Connect your assistant</a></p>
 </div>`
     : ''
   let lead = at.apps.length

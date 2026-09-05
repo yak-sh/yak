@@ -149,20 +149,23 @@ let redirect = (to: string, set?: string, status = 302) =>
     headers: { location: to, ...(set ? { 'set-cookie': set } : {}) },
   })
 
-// Whether any agent has ever been let in as this person: one grant is
-// enough, and the provider already keeps the answer. It is what tells a
-// fresh account from a working one (T-32972).
-let connected = async (env: Env, person: string) =>
-  !!(await api(env).listUserGrants(person, { limit: 1 })).items.length
-
 // Where a signed-in person lands: the page they came from, when it is on our
 // own zone — an off-zone address is ignored and never followed, the field
 // being a stranger's to fill in (route.ts `onZone`). Sent nowhere in
-// particular, someone with no assistant attached lands on the page that
-// teaches attaching one, and everyone else on the apex as ever: an assistant
-// is the whole product, and nobody who has one is told about it twice.
-let backTo = async (env: Env, person: string, back: string) =>
-  (back && onZone(back)) || (await connected(env, person) ? '/' : '/connect')
+// particular, they land on their own space's root — the home app there, or the
+// space's index — because a person's space IS the signed-in home of this
+// platform (T-34233). `/connect` is still the page that teaches attaching an
+// assistant, and the space index's owner block links to it, so the nudge
+// arrives where they live instead of standing in front of it.
+//
+// Several spaces, and the one they came in on wins — but that is the return
+// address doing it, not a rule of its own: a space's index sends someone here
+// with `return=https://<space>.yaks.app/` (apps.ts `signInAt`), and that
+// address is on our zone, so it is followed. `mine` is what is left when
+// nobody was aiming them anywhere, and `own()` names it: the space their own
+// address spells, else the first they own.
+let backTo = (mine: string, back: string) =>
+  (back && onZone(back)) || `https://${mine}.${PLATFORM}/`
 
 // The cookie's Domain: the platform's own apex, so one sign-in serves every
 // space's hostname. On a dev host there is no domain to share — an IP takes
@@ -434,8 +437,9 @@ let landed = async (
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   // Signing in IS having a space (T-32482): theirs already, or minted here
   // from the address they chose at the card, or from their own address when
-  // they left it alone — so no agent ever has to ask them for a name.
-  await dir.own(person, want)
+  // they left it alone — so no agent ever has to ask them for a name. It is
+  // also where they land when nothing else aims them (`backTo`).
+  let mine = await dir.own(person, want)
   let space = await dir.space(META.space)
   if (space && await dir.memberless(space)) {
     await store.apply([{
@@ -454,7 +458,7 @@ let landed = async (
   // our own zone or the fallback, decided by `backTo`.
   if (q) return allow(req, env, q, person, set)
   let hand = back ? await handoffTo(secret(env), dir, person, back) : null
-  return redirect(hand ?? await backTo(env, person, back), set, 303)
+  return redirect(hand ?? backTo(mine.slug, back), set, 303)
 }
 
 // The authorize request as the provider reads it, re-parsed from the query
@@ -566,9 +570,9 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     // going, which is `landed`'s one landing rule — a return on a customer's
     // own hostname becomes a handoff, one on our zone is followed, a
     // stranger's is refused and aimed nowhere in particular they land where a
-    // fresh sign-in lands them (`backTo`: `/connect` until an assistant is
-    // attached). It matches the consent page, which hands an already-signed-in
-    // browser one Allow rather than a fresh sign-in.
+    // fresh sign-in lands them (`backTo`: their own space's root). It matches
+    // the consent page, which hands an already-signed-in browser one Allow
+    // rather than a fresh sign-in.
     let who = await withAuth(env, req)
     if (who) return landed(req, env, who.person, '', back ?? '')
     return askEmail(null, back)
