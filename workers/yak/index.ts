@@ -67,7 +67,7 @@ import * as billing from './billing.ts'
 import * as dirPart from './directory.ts'
 import { directory, META_STORE } from './directory.ts'
 import { customOf, reading, stageOf, type Step, steps } from './domains.ts'
-import { bound, type Env } from './env.ts'
+import { bound, type Env, type Inbound } from './env.ts'
 import * as identity from './identity.ts'
 import * as mcp from './mcp.ts'
 import { lost, oops, provisioning } from './pages.ts'
@@ -413,6 +413,23 @@ export default {
       )
       return oops()
     }
+  },
+
+  // The third entry point, and the one no URL names: a letter (T-33684).
+  // Email Routing's catch-all on the yaks.app zone points every address the
+  // specific rules did not claim at this Worker.
+  //
+  // There is no mailbox to deliver to yet — an app owns one from T-33687 —
+  // so every message is REFUSED at the door rather than accepted and
+  // dropped. A refusal is a bounce the sender reads; a drop is silence, and
+  // silence is the one answer that cannot be corrected later.
+  //
+  // The log carries the recipient's DOMAIN and nothing else: not the local
+  // part, not the sender, never the body. A letter is somebody's, and the
+  // question this line answers is only which of our names people write to.
+  email(message: Inbound): void {
+    console.log(`yak: mail refused for ${message.to.split('@').pop()}`)
+    message.setReject(`no mailbox for ${message.to}`)
   },
 
   // The hour striking (wrangler.toml `[triggers] crons`): the meter reads

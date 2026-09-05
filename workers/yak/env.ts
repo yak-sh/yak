@@ -16,6 +16,29 @@ import type { Namespace } from './store.ts'
 
 export type Fetcher = { fetch(req: Request): Promise<Response> }
 
+// The Cloudflare Email Sending binding (wrangler.toml `[[send_email]]`), the
+// slice one letter needs. `from` must be an address on a domain onboarded to
+// Email Sending, which is what makes `<name>@<space>.yaks.app` a sender only
+// once the zone says so.
+export type Sender = {
+  send(l: {
+    to: string
+    from: string
+    subject: string
+    text?: string
+    html?: string
+  }): Promise<unknown>
+}
+
+// One inbound message, as Email Routing hands it to `email()` (index.ts).
+// The slice we read: who the envelope said it was for, and the one way to
+// refuse it — a refusal bounces to the sender, where a drop is silence.
+export type Inbound = {
+  from: string
+  to: string
+  setReject(reason: string): void
+}
+
 export type Env = {
   STORE: Namespace
   // The person's own MCP stream (stream.ts): one object per signed-in
@@ -47,6 +70,13 @@ export type Env = {
   MAIL_TOKEN?: string
   MAIL_ACCOUNT?: string
   MAIL_API?: string
+  // The same product, reached the other way: Email Sending as a BINDING
+  // rather than the REST API (wrangler.toml `[[send_email]]`, T-33684). No
+  // token rides with it — the deploy is the authorization — so it is what an
+  // app's own address will send on (T-33686). Absent under `wrangler dev`
+  // without `remote = true` and in the workerd probes, so nothing may depend
+  // on it; mail.ts still speaks the REST API until that leaf lands.
+  MAIL?: Sender
   // The meter (usage.ts): a Cloudflare API token that may read the account's
   // analytics, and the account it reads. The token is a secret the owner sets
   // (T-32759) and unset the hourly sweep does nothing; the account tag is not
