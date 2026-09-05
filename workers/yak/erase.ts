@@ -34,13 +34,15 @@
 //
 // ORDER: everything OUTSIDE the directory first — the custom hostnames at
 // Cloudflare, the app scripts in the dispatch namespace, the stores, the
-// bytes — and the row that says the space exists last, because that row is
+// bytes, the builder's conversation and the workbench it ran commands in
+// (T-34371) — and the row that says the space exists last, because that row is
 // the only record we keep that any of it was ours. A delete that dies halfway
 // leaves a space still named but emptied, which asking again finishes; the
 // other order would leave a billable custom hostname and a bucket full of
 // bytes with nothing left pointing at them.
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { opened, seal } from '../../src/token.ts'
+import { wiped } from './build.ts'
 import { reachChanged } from './declared.ts'
 import {
   type App,
@@ -55,6 +57,7 @@ import { drop } from './dispatch.ts'
 import { reachable, release } from './domains.ts'
 import type { Env } from './env.ts'
 import { PLATFORM } from './route.ts'
+import { destroyed } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
 import { own } from './versions.ts'
@@ -249,6 +252,15 @@ export let erase = async (
   // halfway and is being finished now. The slug is about to be somebody
   // else's; nothing under it may outlive this.
   await swept(env, under(d.space))
+  // What the space kept outside the graph, and therefore outside the cascade
+  // below: the builder's conversation, in an object of its own keyed by the
+  // eid (build.ts), and the container that conversation compiled things in
+  // (sandbox.ts, same key). `/privacy` says both go with the space. Before the
+  // row, like everything else here — a wipe that throws leaves the space still
+  // named, and asking again finishes it, where the other order would leave a
+  // transcript nothing points at and nobody can ask about again.
+  await wiped(env, d.space.eid)
+  await destroyed(env, d.space)
   // The row that says the space exists. Its death cascades in the store to
   // every app, deploy, hostname and membership that named it (the platform
   // contract's `death = "cascade"`), so this one tombstone buries the

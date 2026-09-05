@@ -39,7 +39,9 @@
 // who has NO app yet, so there is no app store to write to, and a conversation
 // that shipped nothing is not somebody's data to keep, quota and bill. What a
 // build produces — the app, its files, the deploy — is already in the graph,
-// written by the tools as the person.
+// written by the tools as the person. Living outside the graph, it also dies
+// outside it: closing a space calls `wiped` below, because no tombstone in the
+// directory reaches an object keyed by eid (T-34371).
 //
 // THE WIRE is one JSON frame per event, and the KEY names the frame:
 //
@@ -81,7 +83,16 @@ import type { Who } from './session.ts'
  * is checked with no Deno anywhere in scope (door.ts). What is Cloudflare's
  * here is the socket slice above, which is checked where it is declared.
  */
-export type State = Hibernation & { storage: { sql: DurableSql } }
+export type State = Hibernation & {
+  storage: {
+    sql: DurableSql
+    // The one way to empty an object: dropping the tables leaves metadata
+    // behind, and an object whose storage is empty ceases to exist. It is what
+    // a deleted space's conversation goes through ({@link Builder.wipe}), the
+    // same call the Store makes for the same reason (graph.ts).
+    deleteAll(): Promise<void>
+  }
+}
 
 /** What a socket remembers about itself across a hibernation: who is on the
  * other end, and which space they opened it in. The attachment is the only
@@ -220,6 +231,28 @@ export class Builder {
     }
   }
 
+  /**
+   * The whole conversation, gone, and the object born again on the spot
+   * (T-34371). This is what a deleted space takes with it: the transcript
+   * lives in this object's own SQLite and nowhere else, so the directory
+   * tombstone that buries every app, deploy and membership of the space
+   * cannot reach it — `/privacy` says a closed space takes its things with it,
+   * and erase.ts calls this so the sentence is true.
+   *
+   * Idempotent, because a delete that died halfway is finished by asking
+   * again (erase.ts ORDER): emptying an empty object empties it again. The
+   * table is planted back so the next space at this name — the eid is fresh,
+   * but nothing here relies on that — wakes with a schema rather than none.
+   *
+   * The sockets are left where they are: a page still holding one is watching
+   * a space that no longer exists, and the next line it says is answered
+   * "that space is gone" by {@link Builder.say}, which reads the directory.
+   */
+  async wipe() {
+    await this.#ctx.storage.deleteAll()
+    this.#ctx.storage.sql.exec(SAID)
+  }
+
   // Everyone watching this space, including the socket the frame came in on: a
   // build is the space's, not one tab's, so a second tab sees it happen too.
   #tell(frames: Frame[]) {
@@ -309,12 +342,22 @@ export class Builder {
   }
 
   /**
-   * The object's door: the handshake, and the line a browser with no script
-   * posts. Who is asking is the kernel's word (apps.ts vouches it the way it
-   * vouches a store request) — this object is never reached from the internet.
+   * The object's door: the handshake, the line a browser with no script posts,
+   * and the wipe a space's death asks for. Who is asking is the kernel's word
+   * (apps.ts vouches it the way it vouches a store request) — this object is
+   * never reached from the internet.
    */
   async fetch(request: Request): Promise<Response> {
     let url = new URL(request.url)
+    if (url.pathname == '/wipe') {
+      // Nobody's but the kernel's, and no person's at all: the space is being
+      // deleted and there may be no membership left to read. The header cannot
+      // arrive from outside — `joining` strips it from the request it carries
+      // over, the way door.ts strips it at a store's door.
+      if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
+      await this.wipe()
+      return Response.json({ ok: true })
+    }
     if (url.pathname != '/ws' && url.pathname != '/say') {
       return no(404, 'no route')
     }
@@ -412,11 +455,34 @@ export let builderOf = (env: Env, space: string) =>
  */
 export let joining = (env: Env, space: string, req: Request, who: Who) => {
   let out = new Request('http://builder/ws', req)
-  for (let h of [SPACE, 'x-yak-person', 'x-yak-role']) out.headers.delete(h)
+  for (let h of [SPACE, 'x-yak-person', 'x-yak-role', 'x-yak-kernel']) {
+    out.headers.delete(h)
+  }
   out.headers.set(SPACE, space)
   if (who.person) out.headers.set('x-yak-person', who.person)
   if (who.role) out.headers.set('x-yak-role', who.role)
   return builderOf(env, space).fetch(out)
+}
+
+/**
+ * A space's conversation, buried (T-34371). erase.ts is the only caller, and
+ * it makes this call BEFORE the directory tombstone like everything else
+ * outside the directory: a wipe that fails leaves the space still named, and
+ * asking again finishes it, where a wipe after the row would leave a
+ * transcript nothing points at and nobody could ask about again.
+ *
+ * It THROWS on a refusal for that reason — a delete that says a space is gone
+ * has to have taken the conversation with it.
+ */
+export let wiped = async (env: Env, space: string) => {
+  let r = await builderOf(env, space).fetch(
+    new Request('http://builder/wipe', {
+      method: 'POST',
+      headers: { 'x-yak-kernel': '1' },
+    }),
+  )
+  if (!r.ok) throw new Error(await r.text())
+  await r.body?.cancel()
 }
 
 /**

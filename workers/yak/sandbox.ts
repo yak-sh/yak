@@ -166,6 +166,29 @@ export let boxOf = (
 }
 
 /**
+ * This space's container, destroyed. Answers whether there was a binding to
+ * destroy one through at all.
+ *
+ * A container that would not die is telemetry, never a failed caller: it
+ * sleeps on its own ({@link SLEEP}) and stops billing there. Both callers want
+ * that — a build that has ended ({@link released}) and a space that is being
+ * closed (erase.ts, T-34371), where the half-built tree inside it is part of
+ * what `/privacy` says goes with the space.
+ */
+export let destroyed = async (
+  env: { SANDBOX?: Sandboxes },
+  space: Space,
+) => {
+  if (!env.SANDBOX) return false
+  try {
+    await stub(env.SANDBOX, space).destroy()
+  } catch (e) {
+    console.error('yak: sandbox would not go', space.slug, e)
+  }
+  return true
+}
+
+/**
  * What has been spent so far, counted and the clock started over. The count
  * is meter.ts's `countedSandbox`, passed in rather than imported: this file is
  * about the container and that one is about the bill.
@@ -199,16 +222,9 @@ export let released = async (
   now = Date.now,
 ) => {
   let spent = seconds(spend, now())
-  if (spend.since != null && env.SANDBOX) {
-    try {
-      await stub(env.SANDBOX, space).destroy()
-    } catch (e) {
-      // A container that would not die is telemetry, never a failed build: it
-      // sleeps on its own ({@link SLEEP}) and the seconds are counted either
-      // way.
-      console.error('yak: sandbox would not go', space.slug, e)
-    }
-  }
+  // The seconds are counted whether or not it went; a build that never woke
+  // one has nothing to destroy.
+  if (spend.since != null) await destroyed(env, space)
   spend.since = null
   return spent
 }

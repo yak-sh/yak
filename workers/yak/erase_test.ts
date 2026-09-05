@@ -1,13 +1,19 @@
 // Closing a space (T-33166): the pure seams — what the ticket in the letter
 // is worth, what the page and the letter say a delete would destroy, and the
-// two spaces that may not be deleted at all — and then the whole act held in
-// workerd: an agent that deletes nothing, a letter that does, and a slug back
-// in circulation with none of the last space's bytes or rows behind it.
+// two spaces that may not be deleted at all — then what the act takes with it
+// outside the graph over harness.ts's stand-in (T-34371), and then the whole
+// act held in workerd: an agent that deletes nothing, a letter that does, and
+// a slug back in circulation with none of the last space's bytes or rows
+// behind it.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import type { Wire } from '@yaks/durable-object'
 import { slow, until } from '../../src/testing.ts'
+import type { Held } from './build.ts'
 import {
   type Doomed,
+  doomed as census,
   door,
+  erase,
   letter,
   LIFE,
   naming,
@@ -15,7 +21,13 @@ import {
   ticket,
   ticketed,
 } from './erase.ts'
+import { directory } from './directory.ts'
+import * as dirPart from './directory.ts'
 import type { App, Host, Space } from './directory.ts'
+import type { Env } from './env.ts'
+import { ai, platform, sandboxes } from './harness.ts'
+import { boxOf, spending } from './sandbox.ts'
+import type { Who } from './session.ts'
 import { client, connector, kernel, letters, meta, seed } from './probe.ts'
 
 let space = (over: Partial<Space> = {}): Space => ({
@@ -118,6 +130,75 @@ Deno.test('the platform and a paying space refuse to be deleted', () => {
     refused(space({ plan: { ...paying.plan!, status: 'canceled' } })),
     '',
   )
+})
+
+// A person signed in on the stand-in, and the space they own — written the
+// way `space_new` writes one (serving_test.ts seeds it the same way).
+let ADA = 'a0000000-0000-4000-8000-0000000000ad'
+
+let owned = async (env: Env) => {
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  await dir.apply({
+    entities: [
+      { entity: { eid: ADA }, person: {} },
+      {
+        entity: { eid: '$space' },
+        doc: { title: 'ada' },
+        space: { slug: 'ada' },
+      },
+      {
+        entity: { eid: '$seat' },
+        member: { space: '$space', person: ADA, role: 'owner' },
+      },
+    ],
+  }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
+  return { dir, space: (await dir.space('ada'))! }
+}
+
+// A page's socket, as far as a replay is concerned: what it was sent.
+let wire = () => {
+  let sent: unknown[] = []
+  return {
+    sent,
+    ws: {
+      send: (data: string) => void sent.push(JSON.parse(data)),
+      serializeAttachment: () => {},
+      deserializeAttachment: () => null,
+    } as unknown as Wire,
+  }
+}
+
+// The two things a space keeps OUTSIDE the graph, and therefore outside the
+// cascade the directory tombstone sets off (T-34371): the builder's
+// conversation, in an object of its own keyed by the eid (build.ts), and the
+// container that conversation compiled in (sandbox.ts, same key). `/privacy`
+// says a closed space takes its things with it; this is that sentence held to
+// the code.
+Deno.test('a deleted space takes its conversation and its workbench', async () => {
+  let box = sandboxes()
+  let { env, builder } = platform('a probe secret', {
+    AI: ai([{ text: 'Making it now.' }]) as Env['AI'],
+    SANDBOX: box.SANDBOX as Env['SANDBOX'],
+  })
+  let { dir, space } = await owned(env)
+  let who: Who = { person: ADA, role: 'owner' }
+  let held: Held = { person: ADA, role: 'owner', space: space.eid }
+
+  // Something said to the builder, and a workbench woken under the same key.
+  await builder(space.eid).say(held, 'a recipe box please')
+  assertEquals(builder(space.eid).said().length, 2)
+  await boxOf(env, space, spending()).exec('cargo build')
+  assertEquals([...box.alive], [`build-${space.eid}`])
+
+  await erase(env, dir, await census(dir, space), who)
+
+  // A page joining the object for that space hears what a first visit hears:
+  // nothing but the mark that the replay is over.
+  let page = wire()
+  builder(space.eid).joined(page.ws, held)
+  assertEquals(page.sent, [{ ready: true, building: false }])
+  // And the container is gone rather than left awake on a name nobody owns.
+  assertEquals([...box.alive], [])
 })
 
 slow('a space deleted: the letter, the act, and the name back', async () => {
