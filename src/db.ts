@@ -7439,8 +7439,16 @@ export let inverseBatch = (db: Sql, id: number): Change[] => {
       `${human(db, dead.eid)} was deleted in #${id} — deletions are permanent`,
     )
   }
+  // A content identity is storage, not intent: casBodies mints the blob a
+  // doc.body refers to, deduped by hash, so a batch is merely the FIRST writer
+  // of those bytes and any number of docs may already share them. Its lifetime
+  // belongs to the collector (collectBlobText), never to undo — deleting it
+  // strands blob_text's FK onto the blob row and every doc that adopted the
+  // same content. So the inverse leaves content alone, born or written.
+  let content = new Set(batch.filter((c) => c.name == 'blob').map((c) => c.eid))
   let born = new Set(
-    batch.filter((c) => c.name == 'entity' && c.comp).map((c) => c.eid),
+    batch.filter((c) => c.name == 'entity' && c.comp && !content.has(c.eid))
+      .map((c) => c.eid),
   )
   let touchedSince = prep(
     db,
@@ -7453,26 +7461,23 @@ export let inverseBatch = (db: Sql, id: number): Change[] => {
     return p
   }
 
-  let inverse: Change[] = []
-  // Content identities are synthesized before the docs/attachments that point
-  // at them. Undo those owners first so their physical FK cannot strand the
-  // content deletion; retain the batch order for every ordinary entity.
-  let content = new Set(
-    batch.filter((c) => c.name == 'blob').map((c) => c.eid),
-  )
-  let bornOrder = [...born].sort((a, b) =>
-    Number(content.has(a)) - Number(content.has(b))
-  )
-  for (let eid of bornOrder) {
+  // A born entity dies only once nothing points at it any more, so the
+  // deletions land AFTER the column restores: a death cascades, and a cascade
+  // that fires before the restore would clear the very column the restore
+  // guards, refusing the whole undo.
+  let deaths = [...born].map((eid) => {
     if (touchedSince.get(eid, id)) {
       throw new Error(
         `${human(db, eid)} was modified after #${id} — undo refused`,
       )
     }
-    inverse.push({ eid, name: 'entity', comp: null })
-  }
+    return { eid, name: 'entity', comp: null } as Change
+  })
+
+  let inverse: Change[] = []
   for (let c of batch) {
-    if (born.has(c.eid) || c.name == 'entity') continue // the delete covers it
+    // the delete covers a born entity; content is storage, left to the collector
+    if (born.has(c.eid) || c.name == 'entity' || content.has(c.eid)) continue
     // An UNLINK is a component removal, which the general inverse below cannot
     // reverse: there is no column to guard and nothing to merge. An edge can be
     // reversed, because its prior state IS the whole sentence — undoing says it
@@ -7499,7 +7504,7 @@ export let inverseBatch = (db: Sql, id: number): Change[] => {
       inverse.push({ eid: c.eid, name: c.name, comp, was })
     }
   }
-  return inverse
+  return [...inverse, ...deaths]
 }
 
 // The one database mutation capability. Named mutations live here only when

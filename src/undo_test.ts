@@ -356,6 +356,39 @@ Deno.test('undo by explicit batch id reverses that batch, not the latest', () =>
   assertEquals(statusAt(db, t), 'done') // status untouched
 })
 
+// A body edit mints the blob its bytes hash to (casBodies), so that content
+// entity is BORN in the batch — but it is storage the collector owns, deduped
+// by hash and pointed at by doc.body's physical FK. Undo restores the body and
+// leaves the content standing; deleting it failed the FK outright (T-33925).
+Deno.test('undo restores a doc body, by entity and by batch id', () => {
+  for (let byId of [false, true]) {
+    let db = freshDb(), d = uid()
+    apply(db, [
+      { eid: d, name: 'doc', comp: { title: 'D', body: 'ONE' } },
+      { eid: d, name: 'design', comp: {} },
+    ])
+    apply(db, [{ eid: d, name: 'doc', comp: { body: 'TWO' } }])
+    let batch = lastBatch(db, d)
+    if (byId) mutate(db, { mutation: 'undo', id: batch })
+    else mutate(db, { mutation: 'undo', eid: d })
+    assertEquals(compOf(db, d, 'doc')?.body, 'ONE')
+    assertEquals(compOf(db, d, 'doc')?.title, 'D')
+  }
+})
+
+// The same content two docs share is one blob entity: undoing the batch that
+// FIRST wrote those bytes must not pull the content out from under the second.
+Deno.test('undo of a body leaves content another doc still shares', () => {
+  let db = freshDb(), a = uid(), b = uid()
+  apply(db, [{ eid: a, name: 'doc', comp: { title: 'A', body: 'ONE' } }])
+  apply(db, [{ eid: a, name: 'doc', comp: { body: 'SHARED' } }])
+  let batch = lastBatch(db, a)
+  apply(db, [{ eid: b, name: 'doc', comp: { title: 'B', body: 'SHARED' } }])
+  apply(db, inverseBatch(db, batch))
+  assertEquals(compOf(db, a, 'doc')?.body, 'ONE')
+  assertEquals(compOf(db, b, 'doc')?.body, 'SHARED')
+})
+
 Deno.test('no journal batch #N — a clear refusal, not a silent no-op', () => {
   let db = freshDb()
   assertThrows(() => inverseBatch(db, 999999), Error, 'no journal batch')
