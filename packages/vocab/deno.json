@@ -1,6 +1,7 @@
 {
   "name": "@yaks/vocab",
   "version": "0.0.0",
+  "description": "Describe a component vocabulary as JSON Schema (2020-12) plus a small keyword vocabulary, and interrogate it at runtime: column types, path routing, display ordering, instance checks.",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "imports": {

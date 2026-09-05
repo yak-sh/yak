@@ -11,8 +11,8 @@
 // (statusOf) — the derived column itself is declared here as persist: false.
 
 import { assert, assertEquals } from '@std/assert'
-import { loadVocab } from './mod.ts'
-import type { Column, PropSchema, VocabDoc } from './mod.ts'
+import { loadVocab } from '@yaks/vocab'
+import type { Column, PropSchema, VocabDoc } from '@yaks/vocab'
 import {
   comps,
   deaths,
@@ -21,26 +21,26 @@ import {
   prefix,
   type PropType,
   stamped,
-} from '../../src/types.ts'
-import { route } from '../../src/query.ts'
-import canvas from '../../src/vocab/manifests/canvas.json' with { type: 'json' }
-import capture from '../../src/vocab/manifests/capture.json' with {
+} from '../types.ts'
+import { route } from '../query.ts'
+import canvas from './manifests/canvas.json' with { type: 'json' }
+import capture from './manifests/capture.json' with {
   type: 'json',
 }
-import comms from '../../src/vocab/manifests/comms.json' with { type: 'json' }
-import identity from '../../src/vocab/manifests/identity.json' with {
+import comms from './manifests/comms.json' with { type: 'json' }
+import identity from './manifests/identity.json' with {
   type: 'json',
 }
-import kernel from '../../src/vocab/manifests/kernel.json' with { type: 'json' }
-import mail from '../../src/vocab/manifests/mail.json' with { type: 'json' }
-import platform from '../../src/vocab/manifests/platform.json' with {
+import kernel from './manifests/kernel.json' with { type: 'json' }
+import mail from './manifests/mail.json' with { type: 'json' }
+import platform from './manifests/platform.json' with {
   type: 'json',
 }
-import roles from '../../src/vocab/manifests/roles.json' with { type: 'json' }
-import sessions from '../../src/vocab/manifests/sessions.json' with {
+import roles from './manifests/roles.json' with { type: 'json' }
+import sessions from './manifests/sessions.json' with {
   type: 'json',
 }
-import work from '../../src/vocab/manifests/work.json' with { type: 'json' }
+import work from './manifests/work.json' with { type: 'json' }
 
 // ---- the converter: one manifest comp spec → one $defs object schema -------
 

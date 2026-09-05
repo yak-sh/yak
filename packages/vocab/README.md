@@ -3,9 +3,9 @@
 The vocabulary **meta-model**: a way to _describe_ a component vocabulary as
 JSON Schema (2020-12) plus a small custom keyword vocabulary, and the runtime
 that loads and **interrogates** any such description. It ships **zero**
-components — the fleet's ~90 comps are an instance it loads, and a customer app
-is a smaller instance in the same format. One format for both; an app just
-composes fewer vocabularies.
+components — your components are an instance it loads. A large application and a
+small app are the same format at different sizes; an app just composes fewer
+vocabularies.
 
 ## The format
 
@@ -28,12 +28,16 @@ vocabulary (declared via JSON Schema's own `$vocabulary` mechanism,
 | `before`  | comp   | kinds this kind sorts before (feeds the derived kindOrder)        |
 | `wire`    | comp   | `false` = readable-not-writable component (the spine)             |
 
-A **fleet layer** (`meta/fleet.vocab.json`) declares `prefix` and `by_name` —
-carried and interrogable, their behavior (id-minting, name resolution) deferred
-to a later package. There is no `well` keyword: a text field's completions draw
-from native `examples` ∪ the column's own live distinct values. There is no rank
-of any kind: component and stamped order are alphabetical, and kindOrder is
-alphabetical refined topologically by `before` (a cycle refuses).
+A text field's completions draw from native `examples` ∪ the column's own live
+distinct values. Ordering is derived, never hand-ranked: component and stamped
+order are alphabetical, and kindOrder is alphabetical refined topologically by
+`before` (a cycle refuses).
+
+Two further comp-level keywords are **recognized and carried, not acted on**:
+`prefix` (an id prefix such as `T` or `P`) and `by_name` (the component's title
+is a name a caller can resolve). The loader records them on the component —
+`v.comp('task').prefix`, `v.comp('project').byName` — and leaves the behavior
+(id-minting, name resolution) to the package that consumes the vocabulary.
 
 ```json
 {
@@ -79,7 +83,5 @@ lower), **reserved** names a base vocabulary already owns, and **grow** — the
 additive-forever rule: a column never drops or retypes, because its rows were
 written under the old word.
 
-`fleet/slice.schema.json` (not published) is a hand-authored slice of the
-fleet's vocabulary in this format; the parity test converts the full fleet
-manifests and holds the runtime's answers equal to the fleet's generated
-`types.ts`.
+`fleet/slice.schema.json` (not published) is a hand-authored example vocabulary
+in this format; the package's tests load it to exercise the runtime end to end.
