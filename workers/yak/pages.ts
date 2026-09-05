@@ -68,6 +68,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .At { display: flex; align-items: center; justify-content: center; gap: .3rem }
 .At input { flex: 0 1 13rem; text-align: right }
 .At span { color: var(--soft-ink) }
+.Attach { margin: 0 0 1rem; text-align: left }
+.Attach > summary { font-weight: 800; font-size: 1.05rem; cursor: pointer; padding: .6rem 0; text-align: center }
+.Attach > p { margin: .75rem 0 1rem }
 .Say { min-height: 1.3rem; margin: 0; font-size: .95rem }
 .Say-no { color: var(--warn) }
 .Bill_Doors { display: flex; flex-wrap: wrap; gap: .625rem; margin: 1rem 0 .5rem }
@@ -217,15 +220,24 @@ ${dropping}`,
   )
 
 // The space's own address when no app is its front page (T-33040). A space
-// that EXISTS is not a 404: this is a door, not a failure. One page, of
-// blocks that appear when they are true of whoever is looking —
+// that EXISTS is not a 404: this is a door, not a failure — and for its owner
+// it is where a fresh sign-in lands (T-34233), so it is also the page that
+// gets them from an account to a working assistant. One page, of blocks that
+// appear when they are true of whoever is looking —
 //
+//   attaching an assistant          the owner; OPEN until one ever has
+//   what to call you, and where     the owner, and nobody else
 //   the apps this person may open   whenever there are any
 //   asking for the rest             only when something is actually held back
+//   this page is a choice, and      the owner, and nobody else
+//     a file to drop
 //   signing in                      signed out
 //   what this place is              signed out; a stranger, not a neighbour
-//   this page is a choice, and      the space's owner, and nobody else
-//   where to attach an assistant
+//
+// The owner's three come FIRST and in that order (T-34236): the instructions
+// are the whole of what is left to do on a space with nothing in it, and once
+// an agent has ever connected they collapse to their own one line rather than
+// disappearing — the second assistant is added the same way as the first.
 //
 // The filtering is the part to get right: an app someone may not read is not
 // NAMED here (apps.ts asks `reads` per app), and the line about asking for
@@ -243,6 +255,15 @@ export let spaceIndex = (at: {
   role: string | null
   person: boolean
   signIn: string
+  // The owner's own three facts: what they are called, whether any agent has
+  // ever been let in as them, and whether the address is still theirs to move
+  // (an app's URL is this slug, so a space with apps in it stays put, T-32576).
+  name?: string
+  connected?: boolean
+  fixed?: boolean
+  // What the last save said, when one was refused.
+  say?: string
+  no?: boolean
 }) => {
   let owner = at.role == 'owner'
   let mine = at.apps.length
@@ -276,7 +297,6 @@ builds one here — a page of your own you can send to anyone.</p>
         : 'Ask your assistant to build something here — a list, a site, a ' +
           'game — and it lives at this address.'
     }</p>
-<p><a class="Away" href="https://yaks.app/connect">Connect your assistant</a></p>
 </div>
 <div class="Card">
 <h2>Or deploy a file</h2>
@@ -284,6 +304,52 @@ builds one here — a page of your own you can send to anyone.</p>
 it becomes an app at this address — no assistant needed.</p>
 ${dropZone()}
 </div>`
+    : ''
+  // Attaching an assistant, in full, on the page they land on. Open while
+  // nobody has ever connected — there is nothing else to do here yet — and
+  // shut afterwards, because the instructions are still how a SECOND one is
+  // added. `<details>` and no script: the browser owns the toggle.
+  let attach = owner
+    ? `<details class="Attach"${at.connected ? '' : ' open'}>
+<summary>Connect your assistant</summary>
+<p>Add yaks.app in your assistant's settings using the steps below. Then ask
+it to build an app here.</p>
+<p class="Url"><code>${MCP}</code></p>
+${doors}
+<p class="Note">Menus move. If yours doesn't look like this, search its
+settings for "connector" or "MCP" — the link is the same wherever it goes.
+<a href="https://yaks.app/connect">The connect page</a> says the same thing,
+with your plan beside it.</p>
+</details>`
+    : ''
+  // The two things a sign-in no longer asks (T-34236), asked here instead,
+  // where a person can see what they are naming. One form, one POST to this
+  // page's own address, and no script: changing the address MOVES this
+  // hostname, so the answer is a redirect to wherever the space now lives —
+  // which a fetch could not do in place anyway.
+  let settings = owner
+    ? `<section class="Card"><h2>You and your address</h2>
+<form method="post" action="/">
+<p>What your apps call you. Leave it empty and the front of your email does.</p>
+<input name="name" maxlength="60" autocomplete="name" placeholder="Dana" aria-label="What should we call you?" value="${
+      esc(at.name ?? '')
+    }">
+${
+      at.fixed
+        ? `<p class="Note">Your apps live at <b>${
+          esc(at.space)
+        }.yaks.app</b>. That address stays put now that something is built
+there.</p>`
+        : `<p>Where your apps live. Yours to change while nothing is built
+there.</p>
+<span class="At"><input name="space" maxlength="63" autocomplete="off" spellcheck="false" aria-label="The name your apps live at" value="${
+          esc(at.space)
+        }"><span>.yaks.app</span></span>`
+    }
+<button type="submit">Save</button>
+<p class="Say${at.no ? ' Say-no' : ''}" role="status">${esc(at.say ?? '')}</p>
+</form>
+</section>`
     : ''
   let lead = at.apps.length
     ? 'Here is what you can open.'
@@ -293,10 +359,10 @@ ${dropZone()}
   return shell(
     esc(at.title || at.space),
     lead,
-    200,
-    `${mine}${ask}${yours}${inn}${pitch}${at.person ? home : ''}${
-      owner ? dropping : ''
-    }`,
+    at.no ? 400 : 200,
+    `${attach}${settings}${mine}${ask}${yours}${inn}${pitch}${
+      at.person ? home : ''
+    }${owner ? dropping : ''}`,
   )
 }
 
@@ -376,40 +442,16 @@ export let askEmail = (
 </form>${home}`,
   )
 
-// The one question the platform ever asks a person about themselves, and only
-// while nobody has answered it: what their apps should call them beside what
-// they write (T-32654). Optional — skipped, the front of their address does.
-// What a first sign-in asks about a person, and whatever they have already
-// typed: the name their apps call them by (T-32654) and the address those
-// apps live at (T-32967), beside the code, so a refusal hands the card back
-// with every word of theirs still in it.
-export type Asked = { name?: string; slug: string; code?: string }
-
-// The two questions the platform ever asks a person about themselves, and
-// only while nobody has answered them. Both optional: skipped, the front of
-// their address is the name, and `slug` — pre-filled with the address the
-// platform would have derived anyway — is the address. Choosing here is not a
-// step in front of anything: it rides the same POST as the code, and
-// `/connect` is still where an address moves afterwards.
-let asking = (said: Asked) =>
-  `<p>And what should we call you? Skip it and we'll use the front
-of your address.</p>
-<input name="name" maxlength="60" autocomplete="name" placeholder="Dana" aria-label="What should we call you?" value="${
-    esc(said.name ?? '')
-  }">
-<p>Your apps will live here. Change it now if you like — you can also change
-it later, while nothing is built there.</p>
-<span class="At"><input name="space" maxlength="63" autocomplete="off" spellcheck="false" aria-label="The name your apps live at" value="${
-    esc(said.slug)
-  }"><span>.yaks.app</span></span>`
-
-// Ask for the code just mailed. `ask` adds the first-sign-in questions, for
-// someone nobody has named yet. `why` is the soft refusal, when there was one.
+// Ask for the code just mailed, and nothing else (T-34236). Signing up is two
+// steps and both are the address: give it, then prove it. What a person is
+// called and where their apps live are theirs to set on their own space page,
+// once they are standing on it — a question in front of the door is a step
+// somebody has to get past to see anything at all. `why` is the soft refusal,
+// when there was one.
 export let askCode = (
   email: string,
   q: string | null,
   back: string | null,
-  ask: Asked | null = null,
   why?: string,
   status = 200,
 ) =>
@@ -419,10 +461,7 @@ export let askCode = (
     status,
     `<form method="post" action="/login/code">${carried(q, back)}
 <input type="hidden" name="email" value="${esc(email)}">
-<input class="Code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus autocomplete="one-time-code" aria-label="Your six-digit code" value="${
-      esc(ask?.code ?? '')
-    }">
-${ask ? asking(ask) : ''}
+<input class="Code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus autocomplete="one-time-code" aria-label="Your six-digit code">
 <button type="submit">Sign in</button>
 </form>${home}`,
   )

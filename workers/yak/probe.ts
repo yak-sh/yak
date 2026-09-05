@@ -361,7 +361,6 @@ export let rfc822 = (head: Record<string, string>, body: string) =>
 export let signIn = async (
   k: Kernel,
   email = `probe-${crypto.randomUUID().slice(0, 8)}@yaks.app`,
-  name = 'Probe',
 ) => {
   let form = (path: string, fields: Record<string, string>) =>
     k.at('yaks.app', path, {
@@ -374,13 +373,22 @@ export let signIn = async (
   if (asked.status != 200) throw new Error(`login: ${await asked.text()}`)
   await asked.body?.cancel()
   let code = await mailed(k, email)
-  let inn = await form('/login/code', { email, code, name })
+  let inn = await form('/login/code', { email, code })
   if (inn.status != 303) throw new Error(`code: ${await inn.text()}`)
   await inn.body?.cancel()
   let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
   let claims = await verify(cookie.slice(COOKIE.length + 1), k.secret)
   if (!claims) throw new Error('the sign-in set no session')
-  return { person: claims.person, cookie, email, code, name }
+  // Nobody has named them — the card asks nothing but the address and the code
+  // (T-34236) — so what they are called is the front of their address
+  // (signin.ts `nameOf`), which is what a byline says.
+  return {
+    person: claims.person,
+    cookie,
+    email,
+    code,
+    name: email.split('@')[0],
+  }
 }
 
 // The directory, as an owner of `yak` reads and writes it: the MCP graph

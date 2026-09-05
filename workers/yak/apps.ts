@@ -42,9 +42,10 @@ import { asking, listed, type Row } from './listing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
 import { batched, lined, lowered } from './wire.ts'
 import { nothingHere, spaceIndex } from './pages.ts'
-import { hostOf, MOUNT, PLATFORM, route } from './route.ts'
+import { hostOf, MOUNT, PLATFORM, route, sameOrigin } from './route.ts'
 import { covers, PLATFORM_PATHS } from './router.ts'
 import { titling, vouched, type Who, whoIs } from './session.ts'
+import { nameOf } from './signin.ts'
 import { type Reach, split, written } from './reach.ts'
 import type { Bundle } from '@yaks/graph'
 import { edits, mode, reads, writes } from '@yaks/member'
@@ -866,22 +867,40 @@ let api = async (
 let kernels = (space: Space, app: string | null) =>
   space.slug == META.space && app == META.app
 
+// The identity part, asked for at request time rather than imported at the
+// top: it carries the OAuth provider, whose `cloudflare:` modules exist only
+// inside workerd, and this part's own tests run outside it. The two are peers
+// in one Worker (index.ts binds each), so this is the in-process spelling of
+// the service binding a split would give them — a `bound` with no namespace to
+// call. Nothing above the owner block below asks for it, so nothing else pays.
+let identity = () => import('./identity.ts')
+
 // The space's own address, listed: every app this person may open, and how
 // many they may not. What a stranger must never learn is the NAME of a
 // private app, so the filter is per app and it is `reads` — the same question
 // the file door asks before it serves a page (T-33040).
+//
+// For its OWNER this is also where a fresh sign-in lands (T-34233), so it
+// carries the two things the sign-in card stopped asking — what to call them
+// and where their apps live — and the connect instructions, open until an
+// agent has ever been let in as them (T-34236).
 let index = async (
   req: Request,
   env: Env,
   dir: ReturnType<typeof directory>,
   space: Space,
-) => {
+  said?: { say: string; no: boolean },
+): Promise<Response> => {
   // The directory's own space is nobody's space: nothing answers at its
   // address, to anyone (T-32585), so it does not get a door either.
   if (space.slug == META.space) return nothingHere()
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
   let all = (await dir.apps(space)).filter((a) => !kernels(space, a.slug))
   let mine = all.filter((a) => reads(mode(a.access), who.role))
+  // The owner's own three facts, and nobody else's business — so nobody else
+  // is asked for. `connected` is the provider's answer (identity.ts), not a
+  // row of ours: one grant, ever, is what shuts the block.
+  let owner = who.role == 'owner' && who.person ? who.person : null
   return spaceIndex({
     space: space.slug,
     title: space.title,
@@ -890,7 +909,73 @@ let index = async (
     role: who.role,
     person: !!who.person,
     signIn: signInAt(req.url),
+    name: owner ? await dir.nameAt(owner) ?? '' : '',
+    connected: !!owner && await (await identity()).connected(env, owner),
+    fixed: !!all.length,
+    say: said?.say,
+    no: said?.no,
   })
+}
+
+// The space's bare address: the listing above, or the owner block's one form
+// coming back. Only the two, and only here — the form posts to the page it is
+// on, so the space's root is the whole of its surface.
+let root = (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  space: Space,
+) =>
+  req.method == 'POST'
+    ? saved(req, env, dir, space)
+    : index(req, env, dir, space)
+
+// The owner block's one form, saved. Two independent fields and one POST: the
+// name they go by, written on their own person row, and the address this space
+// answers at, which is `choose`'s rule and nobody else's (identity.ts) so the
+// sentence a refusal reads is the same one `/connect` reads.
+//
+// The answer is a REDIRECT, not a page: a changed address moves this very
+// hostname, so the only honest place to land is wherever the space now lives.
+// A refusal redraws the page around the sentence, the way every other card
+// here does, and needs no script for any of it.
+//
+// Nobody but the owner reaches this, and only from this space's own page.
+// `SameSite=Lax` is NOT the guard here: every space is a subdomain of one
+// registrable domain, so a sibling's page is SAME-SITE and the session cookie
+// rides a form it posts at this address (route.ts `sameOrigin`, and the same
+// reasoning `/deploy` is guarded by). The origin check is, and a stranger —
+// signed out, a member, or another space's page — is told exactly what a
+// wrong address is told.
+let saved = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  space: Space,
+): Promise<Response> => {
+  if (!sameOrigin(hostOf(req), req.headers.get('origin'))) return nothingHere()
+  let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
+  if (who.role != 'owner' || !who.person) return nothingHere()
+  let form = await req.formData().catch(() => new FormData())
+  let name = String(form.get('name') ?? '').trim().slice(0, 60)
+  let want = String(form.get('space') ?? '').trim().toLowerCase()
+  let moved = want && want != space.slug
+    ? await (await identity()).choose(env, who.person, want, space)
+    : null
+  if (moved?.error) {
+    return index(req, env, dir, space, { say: moved.error, no: true })
+  }
+  // Cleared, the front of their address comes back — a person always has a
+  // title, because a member row names them by it and a titleless one reads
+  // back as a bare eid (T-32733). `nameOf` is the same fallback signing in
+  // writes.
+  await dir.apply({
+    entities: [{
+      entity: { eid: who.person },
+      doc: { title: name || nameOf(null, await dir.emailAt(who.person) ?? '') },
+    }],
+  }, { 'x-yak-person': who.person, 'x-yak-role': 'owner' })
+  return redirect(`https://${moved?.slug ?? space.slug}.${PLATFORM}/`, 303)
 }
 
 // Rung 1½ (D-34197): the home app is the space's ROUTER, and `router.first`
@@ -1004,7 +1089,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     // fall-through, so a path under such a space names nothing and says so.
     if (!home || kernels(space, home.slug)) {
       if (url.pathname != '/') return nothingHere()
-      return await index(req, env, dir, space)
+      return await root(req, env, dir, space)
     }
     // `/<x>/api/…` named an app that is not here. That is a wrong address,
     // not one of the front page's own paths: a page asking a store there has
