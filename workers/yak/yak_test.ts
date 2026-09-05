@@ -221,8 +221,10 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
       (await owner.get('.created.at!')).every((r) => !r.blob),
       'a filter answers the graph, never the store rows behind it',
     )
-    // Naming the component is how a caller asks for them at all.
-    assert((await owner.get('.blob!')).length > 0, 'the bodies are stored')
+    // A body is content-addressed but it is not a ROW: the text is kept once
+    // beside the graph (@yaks/blob), not as a second entity wearing `blob`, so
+    // there is nothing here to leave out of a listing in the first place.
+    assertEquals(await owner.get('.blob!'), [])
     assertEquals(
       await client(k, 'jeff.yaks.app', 'garden').get(`id=${cake}`),
       [],

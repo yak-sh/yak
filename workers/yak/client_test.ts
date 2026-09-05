@@ -149,9 +149,11 @@ slow('the served client: a page saves, lists and watches', async () => {
       // eid inside a component. The live door used to stream the wire's raw
       // changes, so the first push wiped the words the first paint drew
       // (C-32624 item 2).
+      // `status` is READ, never written (the guide says so): wearing `task` at
+      // all is what makes a row open, so the write is the bare component.
       await store.apply({
         doc: { title: 'Fig tart', body: 'six figs, honey' },
-        task: { status: 'open' },
+        task: {},
       })
       await until(() => seen.length == 3, { timeout: 15_000 })
       assertEquals(seen[2], await store.query('.task.status=open&.doc?'))

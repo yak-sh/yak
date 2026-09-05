@@ -82,7 +82,12 @@ let cookbook = async (access?: string) => {
   return { store, head }
 }
 
-let by = (b: Bundle) => (b.created as { by?: string } | undefined)?.by ?? null
+// A reference, whichever way the door said it: the eid a write carries, or the
+// `{eid, name}` a READ speaks it as (graph.ts `#speak`).
+let idOf = (v: unknown): string | null =>
+  typeof v == 'string' ? v : (v as { eid?: string } | null)?.eid ?? null
+
+let by = (b: Bundle) => idOf((b.created as { by?: unknown } | undefined)?.by)
 
 Deno.test('the kernel vouched, so the batch is signed by that person', async () => {
   let { store, head } = await cookbook()
@@ -98,7 +103,7 @@ Deno.test('the kernel vouched, so the batch is signed by that person', async () 
   let [person] = await (await get(store, '/query?q=.person!', head)).json()
   assertEquals(person.entity.eid, ADA)
   let [grant] = await (await get(store, '/query?q=.grant!', head)).json()
-  assertEquals(grant.grant.person, ADA)
+  assertEquals(idOf(grant.grant.person), ADA)
   assertEquals(grant.grant.access, 'owner')
 })
 

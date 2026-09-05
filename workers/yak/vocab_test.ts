@@ -207,6 +207,14 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
       'blob',
       'image',
       'attachment',
+      // and the words the guide gives an app to reach for rather than invent
+      'task',
+      'completed',
+      'cancelled',
+      'project',
+      'comment',
+      'favorite',
+      'web',
       // the app's own
       'recipe',
       'cooked',
@@ -248,8 +256,13 @@ Deno.test('none of the fleet vocabulary comes with it', () => {
   )
   let mine = new Set(tablesOf(schema(appVocab())))
   assert(fleet.length > 50, `the fleet plants ${fleet.length} tables`)
-  assert(mine.size < 40, `an app plants ${mine.size}`)
-  for (let word of ['session', 'canvas', 'wake', 'persona', 'memory', 'task']) {
+  assert(mine.size < 45, `an app plants ${mine.size}`)
+  // The words an app SHARES with the fleet are the ones the guide gives it to
+  // reach for — `task` and its marks among them. What must not come with it is
+  // the fleet's own working life: its sessions, its canvas, its memories.
+  for (
+    let word of ['session', 'canvas', 'wake', 'persona', 'memory', 'claim']
+  ) {
     assert(fleet.includes(word), `the fleet no longer plants ${word}`)
     assert(!mine.has(word), `an app's store still plants ${word}`)
   }

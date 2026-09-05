@@ -78,13 +78,42 @@ export let lined = (search: string): string =>
     }`
   }).join('&')
 
+// One entry of a batch, in whichever spelling reached the door.
+//
+// A bundle that names NO entity is a page saving something new — the shape the
+// guide shows first, `apply({doc: {title}})` — and the Store takes an alias
+// wherever an eid goes, so it gets one. An alias rather than a fresh uuid,
+// because a content-addressed component names its own entity (@yaks/blob) and
+// only an alias leaves that decision to the graph.
+//
+// A FLAT change — `{eid, name, comp}` — is the older spelling of one component
+// on one entity, and pages and headless clients deployed against it before the
+// bundle was the wire. It says exactly what a bundle says, so it is lowered
+// here rather than refused: this is the door whose job is that both spellings
+// mean one thing at the store.
+let bundled = (one: unknown, n: number): Bundle => {
+  let held = one as Record<string, unknown>
+  if (typeof held?.name == 'string' && 'comp' in held) {
+    return {
+      entity: { eid: (held.eid as string) ?? `$flat${n}` },
+      [held.name]: held.comp,
+    } as Bundle
+  }
+  return (held?.entity
+    ? held
+    : { ...held, entity: { eid: `$new${n}` } }) as Bundle
+}
+
 /** A page's batch, either way it was sent: the documented `{entities: […]}`
  * envelope, or the bare array the Store itself takes. */
 export let batched = (body: unknown): Bundle[] => {
-  if (Array.isArray(body)) return body as Bundle[]
-  let held = (body as { entities?: unknown })?.entities
-  if (Array.isArray(held)) return held as Bundle[]
-  throw new Error('/apply takes {"entities": [ … ]} — a list of bundles')
+  let held = Array.isArray(body)
+    ? body
+    : (body as { entities?: unknown })?.entities
+  if (!Array.isArray(held)) {
+    throw new Error('/apply takes {"entities": [ … ]} — a list of bundles')
+  }
+  return held.map(bundled)
 }
 
 // The keys of a bundle that are not a component: its address, and the wire's
@@ -108,9 +137,14 @@ export let lowered = (applied: Bundle[]) => ({
       .filter(([name]) => !SPINE.includes(name))
       .map(([name, comp]) => ({ eid: b.entity.eid, name, comp }))
   ),
+  // The aliases the PAGE wrote. The ones this door invented for a bundle that
+  // named no entity (`bundled`) are its own bookkeeping, and a page that never
+  // spelled one has no use for the answer.
   aliases: Object.fromEntries(
     applied.flatMap((b) =>
-      typeof b.$alias == 'string' ? [[b.$alias, b.entity.eid]] : []
+      typeof b.$alias == 'string' && !/^\$(new|flat)\d+$/.test(b.$alias)
+        ? [[b.$alias, b.entity.eid]]
+        : []
     ),
   ),
 })

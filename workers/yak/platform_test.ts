@@ -329,8 +329,13 @@ Deno.test('a store that is not the directory is still an app', async () => {
       ),
     }),
   )
-  assertEquals(no.status, 200)
-  // `space` is not a word an app's store has, so admission dropped it.
+  // `space` is not a word an app's store has, and an app's store says where a
+  // word of its own would come from rather than dropping it (graph.ts
+  // `#teaching`).
+  assertEquals(no.status, 400)
+  let why = (await no.json()).message as string
+  assertEquals(why.startsWith('unknown component: space'), true)
+  assertEquals(why.includes('vocab.json'), true)
   let read = await (await store.fetch(
     new Request('http://store/query?q=.doc%3F', {
       headers: { 'x-store': 'ada/cookbook' },

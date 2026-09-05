@@ -9,7 +9,12 @@
 // holds one. Nothing here knows the code before the kernel mails it. The
 // directory itself is read back through the MCP graph tier as the owner of
 // `yak` — the one door into the meta store (probe.ts `meta`, T-32585).
-import { assert, assertEquals, assertMatch } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertStringIncludes,
+} from '@std/assert'
 import { slow, until } from '../../src/testing.ts'
 import { type Kernel, kernel, letters, mailed, meta } from './probe.ts'
 import { SENDS } from './signin.ts'
@@ -201,7 +206,16 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     let held = (row.signin as { code: string; email: string }).code
     assertMatch(held, /^[0-9a-f]{64}$/)
     assert(!held.includes(live), 'the digits are nowhere in the row')
-    assertEquals(await dir.query(`.mail.to_addr=${waiting}`), [])
+    // And there is nowhere for it to be written down: the directory's
+    // vocabulary has no `mail` at all (vocab.ts `platformDoc`), so the
+    // question itself has no answer.
+    assertStringIncludes(
+      await dir.query(`.mail.to_addr=${waiting}`).then(
+        () => '',
+        (e: Error) => e.message,
+      ),
+      'unknown prop: .mail',
+    )
 
     // The ceiling on letters (T-33020). Asking is unauthenticated, so an
     // address gets SENDS letters an hour and no more — and the ask over the

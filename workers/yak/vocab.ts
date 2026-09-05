@@ -194,6 +194,109 @@ export let kernelDoc: VocabDoc = {
   },
 }
 
+/** Where the whole of it is written, and what an app's store says when it is
+ * asked for a word nobody declared — the same sentence at the write door and
+ * the read door, because it is the same missing act. The fleet's own store
+ * says it too (src/store/vocab.ts `TEACH`); it is spelled again here because
+ * the Store carries the packages' vocabulary and never the fleet's. */
+export let GUIDE = 'https://yaks.app/guide.md'
+export let TEACH = ' — a component of your own is declared in vocab.json ' +
+  'and planted by app_deploy: ' +
+  `{"recipe": {"title": "text", "serves": "number"}} · ${GUIDE}`
+
+/**
+ * The words the platform gives every app to reach for rather than invent
+ * (public/guide/components.md §The platform's vocabulary): a state, the two
+ * marks that end one, a thing work belongs to, a note aimed at anything, a
+ * star, and an address out on the web. They mean the same thing in every store
+ * on the platform, which is the whole reason they are the platform's and not
+ * each app's own — a `task` in one app is the same word as a `task` in the
+ * next, so one filter reads both.
+ *
+ * Their columns are the fleet contract's own (src/types.ts), so a row written
+ * through the old store means what a row written through this one means.
+ */
+export let appsDoc: VocabDoc = {
+  $vocabulary: { [CORE_URI]: true },
+  title: 'apps',
+  $defs: {
+    task: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: {
+        priority: num,
+        project: ref('detach'),
+        assignee: ref('detach'),
+        domain: text,
+        // READ, never written: what the entity WEARS says its state, so a
+        // task is done because it wears `completed`, not because a column was
+        // set to a word. `persist: false` says there is no column at all;
+        // {@link appDerived} is the expression that reads it.
+        status: {
+          enum: ['open', 'wip', 'done', 'cancelled'],
+          persist: false,
+        },
+      },
+    },
+    // The two marks that end a task. Both are the store's to fill — the clock
+    // from the write, the writer from whoever is asking — so `completed: {}`
+    // is the whole write, and `completed: null` opens it again.
+    completed: { type: 'object', properties: stampCols },
+    cancelled: {
+      type: 'object',
+      properties: { ...stampCols, reason: text },
+    },
+    project: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: { color: text },
+    },
+    comment: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: { target: ref('cascade') },
+    },
+    favorite: { type: 'object', properties: { at: owned(time) } },
+    web: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', format: 'uri' },
+        frozen_at: owned(time),
+      },
+    },
+  },
+}
+
+/**
+ * The columns a store READS rather than stores, as the SQL that reads them
+ * (@yaks/sql `Derived`). One today: a task's `status`, which is what the entity
+ * wears. There is no `claim` in an app's store, so `wip` never happens here —
+ * the word is declared because the platform's status grammar is one grammar,
+ * and a filter that names it must still parse.
+ */
+export let appDerived = (): Record<
+  string,
+  { tag: 'text'; values: string[]; expr: (owner: string) => string }
+> => ({
+  'task.status': {
+    tag: 'text',
+    values: ['open', 'wip', 'done', 'cancelled'],
+    // The owner is NULL where the row wears no `task` at all — a filter joins
+    // the component table on the left so absence is askable — and a status is
+    // a fact about a task, so there it is null rather than `open`. Without that
+    // first arm every entity in the store answers `.task.status=open`.
+    expr: (owner) =>
+      `(case when ${owner} is null then null ` +
+      `when exists (select 1 from "cancelled" where ` +
+      `"cancelled"."entity" = ${owner}) then 'cancelled' ` +
+      `when exists (select 1 from "completed" where ` +
+      `"completed"."entity" = ${owner}) then 'done' else 'open' end)`,
+  },
+})
+
 /** The documents an app's vocabulary is built on, in load order. */
 export let coreDocs: VocabDoc[] = [
   coreDoc,
@@ -202,6 +305,7 @@ export let coreDocs: VocabDoc[] = [
   edgeDoc,
   relationDoc,
   kernelDoc,
+  appsDoc,
 ]
 
 // ---- the platform's own store (T-33814) -------------------------------------
@@ -323,22 +427,24 @@ export let platformDoc: VocabDoc = {
         at: owned(time),
       },
     },
+    // What the hourly sweep read off Cloudflare (usage.ts). Written by the
+    // sweep, through the kernel's door — and NOT stamped, because the fleet
+    // contract does not stamp it (src/types.ts `comps`) and the meta space's
+    // own graph tier is how a reading is planted or corrected by hand. Nobody
+    // but an owner of `yak` reaches that door at all (directory.ts), which is
+    // what keeps a customer from writing their own bill.
     meter: {
       type: 'object',
       properties: {
-        month: owned(text),
-        requests: owned(num),
-        rows_read: owned(num),
-        rows_written: owned(num),
-        bytes: owned(num),
-        emails: owned(num),
-        at: owned(time),
+        month: text,
+        requests: num,
+        rows_read: num,
+        rows_written: num,
+        bytes: num,
+        emails: num,
+        at: time,
       },
     },
-    // The mark a served line wears. Server-owned like the fleet's, and a bare
-    // presence in practice: the sweep writes it, and clears it (`notified:
-    // null`) when a space's standing moves.
-    notified: { type: 'object', properties: stampCols },
     signin: {
       type: 'object',
       kind: true,
@@ -362,27 +468,22 @@ export let platformDoc: VocabDoc = {
         at: time,
       },
     },
-    exception: {
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: {
-        at: owned(time),
-        request: owned(text),
-        version: owned(num),
-        message: owned(text),
-        stack: owned(text),
-      },
-    },
   },
 }
 
-/** The documents the directory's vocabulary is built on, in load order. */
+/** The documents the directory's vocabulary is built on, in load order.
+ *
+ * `kernelDoc` is among them for the same reason it is among an app's: the
+ * platform notes its own breaks where it notes an app's, `app_errors` and the
+ * unseen block read every store the caller can reach by the same words, and a
+ * mark spelled `archived` here and nowhere else would make the directory the
+ * one store those doors cannot answer for. */
 export let platformDocs: VocabDoc[] = [
   coreDoc,
   docDoc,
   edgeDoc,
   relationDoc,
+  kernelDoc,
   platformDoc,
 ]
 
@@ -461,6 +562,88 @@ let compOf = (name: string, cols: unknown): PropSchema => {
  * The result is the APP half of a load — its components sort before `doc`, so
  * it is loaded beside {@link coreDocs}, never alone.
  */
+// The short word a declared column is spelled with, for the inverse below and
+// for a refusal that says what a column already is. A column no short word
+// spells reads as `text`, which is what it stores as.
+let wordOf = (s: PropSchema): string =>
+  Object.entries(SHORT).find(([, one]) =>
+    one.type == s.type && one.format == s.format
+  )?.[0] ?? 'text'
+
+/**
+ * The inverse of {@link schemaOf}: a document as the five-scalar short form.
+ * That is the one spelling a store ANSWERS its own words in — the kernel reads
+ * an app's vocabulary as `{comp: {col: type}}` whichever way it was declared
+ * (tools.ts `vocabs`, reach.ts `spoken`) — while a POST takes either.
+ */
+export let shortOf = (doc: VocabDoc): Record<string, Record<string, string>> =>
+  Object.fromEntries(
+    Object.entries(doc.$defs ?? {}).map(([name, schema]) => [
+      name,
+      Object.fromEntries(
+        Object.entries(schema.properties ?? {}).map((
+          [col, s],
+        ) => [col, wordOf(s)]),
+      ),
+    ]),
+  )
+
+/**
+ * The manifest a store KEEPS after a deploy: columns only ever arrive. A column
+ * the new manifest stopped naming stays declared — its rows are still there —
+ * and one whose type changed is refused, because the values already stored were
+ * written under the old word.
+ *
+ * A whole COMPONENT the manifest stopped naming is the one thing that may
+ * leave, and only when it holds nothing: a name tried once and abandoned is a
+ * probe's leftover, not data (C-32624 item 1). `rows` counts what a component
+ * holds — the store's question, since only it has the tables.
+ *
+ * It also says WHAT MOVED, because additive growth is silent where it matters
+ * most: rename a column and the manifest reads as one word while the store
+ * holds two, the old one still under every row already written (C-32652 item
+ * 4). `added` is every column this manifest planted; `kept` is every column the
+ * store still declares that this manifest did not name.
+ */
+export let grew = (
+  was: VocabDoc,
+  next: VocabDoc,
+  rows: (name: string) => number = () => 1,
+): {
+  doc: VocabDoc
+  dropped: string[]
+  added: string[]
+  kept: string[]
+} => {
+  let mine = was.$defs ?? {}
+  let theirs = next.$defs ?? {}
+  let dropped = Object.keys(mine).filter((n) => !(n in theirs) && !rows(n))
+  let defs: Record<string, PropSchema> = { ...mine }
+  let added: string[] = []
+  for (let name of dropped) delete defs[name]
+  for (let [name, schema] of Object.entries(theirs)) {
+    let props: Record<string, PropSchema> = { ...mine[name]?.properties }
+    for (let [col, s] of Object.entries(schema.properties ?? {})) {
+      let had = props[col]
+      if (had && (had.type != s.type || had.format != s.format)) {
+        throw new Error(
+          `vocab.json: ${name}.${col} is already ${wordOf(had)} — a column ` +
+            'keeps the type its rows were written under',
+        )
+      }
+      if (!had) added.push(`${name}.${col}`)
+      props[col] = s
+    }
+    defs[name] = { ...schema, properties: props }
+  }
+  let kept = Object.entries(defs).flatMap(([name, s]) =>
+    Object.keys(s.properties ?? {})
+      .filter((col) => !(col in (theirs[name]?.properties ?? {})))
+      .map((col) => `${name}.${col}`)
+  )
+  return { doc: { ...next, $defs: defs }, dropped, added, kept }
+}
+
 export let schemaOf = (manifest: Record<string, unknown>): VocabDoc => ({
   $vocabulary: { [CORE_URI]: true },
   title: 'app',

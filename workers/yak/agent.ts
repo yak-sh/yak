@@ -38,6 +38,7 @@ import {
 } from './tools.ts'
 import { ceiling, serve, unseenBlock } from './unseen.ts'
 import { appVocab } from './vocab.ts'
+import { lined } from './wire.ts'
 
 // One JSON Schema property as Zod. The tool table spells plain shapes — a
 // string, a number, a flag, a list, an object — and the MCP SDK takes Zod, so
@@ -166,7 +167,11 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
   let rows = async (q: unknown) => {
     let { said, line } = scope(String(q))
     let where = said ? [await named(ctx, said)] : reach
-    return await read(ctx.env, where, line) as Row[]
+    // An agent's grammar is the PAGE's (guide.md): `id=`, `limit=` and `after=`
+    // where the store spells `.eid=`, `.limit=` and `.after=`, and a value
+    // written as it reads rather than as a store would parse it. One
+    // translation for every door a person's own line arrives at (wire.ts).
+    return await read(ctx.env, where, lined(line)) as Row[]
   }
   let tx: Tx = {
     read: (q) => rows(q) as Promise<Bundle[]>,
@@ -260,7 +265,7 @@ let aimed = async (ctx: Ctx, batch: Bundle[]) => {
 export let searching =
   (ctx: Ctx, reach: Reach[]): Search => async (words, opts) => {
     let q = `${encodeURIComponent(words)}&limit=${opts?.limit ?? 20}`
-    let hits = await read(ctx.env, reach, q)
+    let hits = await read(ctx.env, reach, lined(q))
     return Array.isArray(hits) ? hits as Bundle[] : []
   }
 

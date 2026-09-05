@@ -186,9 +186,9 @@ what you want when you are looking rather than drawing.
 
 A column of yours that nothing has ever written is on the row with the value
 `null`, not missing from it — so `row.entry.mood` is the test for "was this
-written", never `'mood' in row.entry`. The platform's `doc.title` has a default
-and answers `''` instead; `doc.body` is a content-addressed blob and answers
-null when there is none.
+written", never `'mood' in row.entry`. The platform's own columns are no
+exception: `doc.title` answers null too, and `doc.body` — a content-addressed
+blob — answers null when there is none.
 
 Three things a listing leaves out unless you name them: the platform's STAMPS
 (`created`, `updated`, `notified`, `opened`, `quarantined` — `.created!` asks

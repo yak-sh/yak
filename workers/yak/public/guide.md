@@ -723,10 +723,9 @@ A row comes back as the components you named, plus its address and its kind —
 `query('.recipe!')` answers recipes and no titles, and `query('.recipe!&.doc?')`
 answers both. Ask for what you will draw.
 
-Ask for the component you want, not for the absence of one: a `body` is kept as
-its own content-addressed entity beside the doc, so a filter that selects
-everything selects those too, and a page rendering `row.doc.title` would print
-`undefined`. `.doc!` never picks them up.
+Ask for the component you want, not for the absence of one: `*` selects every
+component of every row, and a page rendering `row.doc.title` over an answer that
+wide would print `undefined` for whatever wears no doc.
 
 ## When something breaks
 

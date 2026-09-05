@@ -663,7 +663,7 @@ export let acting = (env: Env, space: Space, app: App, who: Who) => {
       let rows = await metaOf((path, init, headers) =>
         door(path, init, { ...vouched(who), ...headers })
       ).query(asked)
-      return listed(rows as Row[], asked)
+      return Array.isArray(rows) ? listed(rows as Row[], asked) : rows
     },
   }
 }
@@ -757,8 +757,11 @@ let api = async (
         store(at, init, { ...headers, ...sent })
       ).query(asked)
       // The same rule the person's agent reads a listing by (listing.ts): one
-      // filter line, one answer, whichever door asked it.
-      return Response.json(listed(rows as Row[], asked))
+      // filter line, one answer, whichever door asked it. An AGGREGATE is not
+      // a listing — `.count!` answers one number — so it passes through whole.
+      return Response.json(
+        Array.isArray(rows) ? listed(rows as Row[], asked) : rows,
+      )
     } catch (e) {
       return json(400, 'refused', e instanceof Error ? e.message : String(e))
     }

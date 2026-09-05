@@ -1967,10 +1967,10 @@ export let TOOLS: Tool[] = [
       if (!app.published) {
         throw new Error(`${space.slug}/${app.slug} is not published`)
       }
-      // A component off an entity, which is the flat wire's own null — the
-      // app itself is untouched, and so is everyone who installed it.
+      // A component off an entity, which is a null beside its name — the app
+      // itself is untouched, and so is everyone who installed it.
       await ctx.dir.apply(
-        [{ eid: app.eid, name: 'published', comp: null }],
+        { entities: [{ entity: { eid: app.eid }, published: null }] },
         vouched(who),
       )
       return {

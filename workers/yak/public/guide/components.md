@@ -44,9 +44,10 @@ one: a row with no `doc` is invisible to search and has nothing to draw.
 
     await apply({ entity: { eid: '$c' }, doc: { title: 'Chana masala' } })
 
-A body is stored content-addressed: the text becomes an entity of its own
-wearing `blob`, and the `doc` row points at it. So `.doc!` answers your docs and
-never those rows, and a filter like `*` or `.blob!` will show them.
+A body is stored content-addressed: the row keeps the SHA-256 of the text and
+the text itself is kept once, however many rows quote it. None of that is a row
+of the graph — there is no second entity beside your doc — so `.doc!` answers
+your docs and a body reads back as the text you wrote.
 
 **`task`** — `priority` (number), `project` (eid), `assignee` (eid), `domain`
 (text). Anything with a state: a chore, a to-do, a suggestion waiting on
@@ -236,9 +237,9 @@ true either way and is the wrong test; the value is the right one.
     if (row.entry.mood) …          // right
     if ('mood' in row.entry) …     // always true
 
-The platform's own `doc.title` is the exception worth knowing: it has a default,
-so a doc nobody titled answers `''` rather than null. `doc.body` is kept as a
-content-addressed blob and answers null when there is none.
+That holds for the platform's own columns too, `doc.title` included: a doc
+nobody titled answers null, not `''`. `doc.body` is kept as a content-addressed
+blob and answers null when there is none.
 
 ## Components of your own
 

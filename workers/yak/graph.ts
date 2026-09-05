@@ -89,13 +89,17 @@ import {
   storage,
   type Wire,
 } from '@yaks/durable-object'
-import { edges } from '@yaks/edge'
 import { effects } from '@yaks/effects'
+import { edges } from '@yaks/edge'
+import { type Driver, fields, find } from '@yaks/fts'
 import {
   type Bundle,
+  comps,
+  detached,
   type Graph,
   graph,
   type Plugin,
+  Refused,
   sha256,
   then,
 } from '@yaks/graph'
@@ -111,8 +115,20 @@ import {
   policy,
   reads,
 } from '@yaks/member'
+import { parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
-import { appVocab, PLATFORM_STORE, platformVocab } from './vocab.ts'
+import { named, type Row } from './listing.ts'
+import {
+  appDerived,
+  appDoc,
+  appVocab,
+  grew,
+  GUIDE,
+  PLATFORM_STORE,
+  platformVocab,
+  shortOf,
+  TEACH,
+} from './vocab.ts'
 
 /**
  * The slice of a `DurableObjectState` this object needs: its storage, and its
@@ -199,6 +215,37 @@ async (req) => {
   throw new Denied(who.eid, held, 'viewer', 'read')
 }
 
+// The spine's own name, and the listing's word for "every component" — not the
+// grammar's, so it never reaches the parser as a bare full-text term.
+let SPINE = 'entity'
+let EVERY = '*'
+
+// The two pieces of the wider platform grammar an app's store refuses BY NAME
+// rather than answering some other way (public/guide/querying.md, where both
+// are written down as this store's own limits). A work lane is the fleet's
+// board, which nothing here has; semantic ranking needs a vector index, which
+// nothing here has either — and an empty answer to a question about neither
+// would read as "no rows" rather than "not that question".
+// The three directives that reshape an answer into ONE value rather than a set
+// of rows. A line naming one is not a listing at all.
+type Agg = 'count' | 'distinct' | 'tally'
+let AGGS: Agg[] = ['count', 'distinct', 'tally']
+let aggOf = (line: string): Agg | null =>
+  parse(line).clauses.map((c) => c.kind as Agg).find((k) => AGGS.includes(k)) ??
+    null
+
+let unserved = (line: string): string | null => {
+  for (let seg of line.split('&')) {
+    if (seg.startsWith('work=')) {
+      return 'work lanes are not served by this store'
+    }
+    if (/^\.order=-?similar$/.test(seg)) {
+      return 'semantic ranking is not served by this store'
+    }
+  }
+  return null
+}
+
 // A hibernatable socket the runtime will also close for us.
 type Closable = Wire & { close?(code: number, reason: string): void }
 
@@ -235,6 +282,7 @@ export class Store {
   #ctx: State
   #vocab!: Vocab
   #graph!: Graph
+  #drive!: Driver
   #live!: Sockets
   #route!: Handler
   #auth!: Authenticate
@@ -247,9 +295,10 @@ export class Store {
 
   // Waking on whatever this object holds. Everything above the storage is
   // rebuilt from the remembered vocabulary, which is why a deploy is a write
-  // and a reboot rather than a migration: the tables are additive
-  // (`create table if not exists`), and what changed is which words the graph
-  // admits. T-33809 owns moving rows that a changed COLUMN would need.
+  // and a reboot rather than a migration: the schema is additive — a table the
+  // store has never seen is created, a column a word grew is added — and what
+  // changed is which words the graph admits. Nothing is ever dropped or
+  // retyped; T-33809 owns moving rows that a changed COLUMN would need.
   #boot() {
     let ctx = this.#ctx
     // Which words this object speaks is a question of WHICH OBJECT it is. One
@@ -260,8 +309,11 @@ export class Store {
     let meta = this.#get('name') == PLATFORM_STORE
     let vocab = meta ? platformVocab() : appVocab(this.#get('vocab') ?? {})
     let drive = driver(ctx.storage)
+    this.#drive = drive
     let bytes = sqliteBlobs(drive)
-    let store = storage(ctx.storage, vocab, { derived: blobRead(vocab) })
+    let store = storage(ctx.storage, vocab, {
+      derived: { ...blobRead(vocab), ...(meta ? {} : appDerived()) },
+    })
     // Every index the vocabulary declares is already in `store.ddl()` — the
     // directory's uniques included, since they are words of `platformDoc`.
     let ddl = [...store.ddl(), ...blobSchema()]
@@ -278,6 +330,12 @@ export class Store {
     let stamp = sha256(ddl.join('\n'))
     if (named && this.#get('schema') != stamp) {
       for (let stmt of ddl) drive.exec(stmt)
+      // A word that GREW a column: `create table if not exists` says nothing
+      // about a table that is already there, so the new column has to be added
+      // to the live table or every read naming it fails at the engine
+      // (@yaks/sqlite `grown`). After the creates, so a table raised a moment
+      // ago is there to interrogate.
+      for (let stmt of store.grown()) drive.exec(stmt)
       this.#put('schema', stamp)
     }
     let app = this.#get('app')
@@ -289,6 +347,13 @@ export class Store {
       // store that cannot name its app has no access question to ask and the
       // kernel's own gate in front of it is the whole rule.
       plugins: [
+        // First, before anything reads a word that is not there. The DIRECTORY
+        // is left out: its words are the platform's own, its callers are the
+        // kernel's own, and `vocab.json` is not a sentence to say to any of
+        // them.
+        ...(meta ? [] : [this.#teaching]),
+        // Before every check, because it is about the SHAPE a value arrived in.
+        this.#lowering,
         edges(vocab),
         blobs(vocab, bytes),
         // The registry an app's own effects register on (T-33816). It ships
@@ -355,6 +420,15 @@ export class Store {
       this.#put('name', name)
       this.#boot()
     }
+    // Which app this object holds is an APP's question. The directory is not
+    // one — it speaks the platform's vocabulary, which has no `grant` and no
+    // `access`, and the kernel decides who may read and write it before the
+    // request arrives (vocab.ts, `platformDoc`). A caller that names an app on
+    // its way to the directory is naming an app whose ROW lives here, not the
+    // object it is talking to, so the word is ignored rather than believed:
+    // believing it installs @yaks/member's guard on a store with no seats and
+    // writes a grant into a table that does not exist.
+    if (this.#get('name') == PLATFORM_STORE) return
     let app = req.headers.get('x-yak-app')
     if (app && this.#get('app') != app) {
       this.#put('app', app)
@@ -401,6 +475,66 @@ export class Store {
    * A READ writes nothing at all: an app learns who its members are when one
    * of them writes to it, not when one of them looks at it.
    */
+  /**
+   * A word nobody declared, refused at the write door instead of dropped.
+   *
+   * @yaks/graph drops an unknown COMPONENT on purpose — forward compatibility,
+   * so a newer client's batch still lands (admit.ts). This platform has the
+   * opposite problem: an app's own words are its `vocab.json`, and a `recipe`
+   * silently dropped is a page that saved nothing and said it saved. So the
+   * store that HOLDS the vocabulary says where a word comes from, in the same
+   * sentence the read door says it in (`#taught`).
+   */
+  #teaching: Plugin = {
+    name: 'yak/teach',
+    hooks: {
+      normalize: (bundles) => {
+        for (let b of bundles) {
+          for (let [name] of comps(b)) {
+            if (!this.#vocab.all.includes(name)) {
+              throw new Refused(`unknown component: ${name}${TEACH}`)
+            }
+          }
+        }
+        return bundles
+      },
+    },
+  }
+
+  /**
+   * A row read back, handed straight back. A reference READS as `{eid, name}`
+   * (`#speak`) because outputs speak human, and the shape a door hands out must
+   * be a shape it takes: a page that read a byline and writes it into a column
+   * of its own is doing the ordinary thing, and refusing it would make every
+   * such page carry a `.eid` of its own. So the object is lowered to the eid it
+   * carries, on the way in, before anything checks a value.
+   */
+  #lowering: Plugin = {
+    name: 'yak/lower',
+    hooks: {
+      normalize: (bundles) =>
+        bundles.map((b) => {
+          let out: Record<string, unknown> | null = null
+          for (let [name, comp] of comps(b)) {
+            if (!comp) continue
+            for (let [col, v] of Object.entries(comp)) {
+              let eid = (v as { eid?: unknown } | null)?.eid
+              if (
+                typeof eid != 'string' ||
+                this.#vocab.column(name, col)?.category != 'ref'
+              ) continue
+              out ??= { ...b }
+              out[name] = {
+                ...(out[name] as Record<string, unknown>),
+                [col]: eid,
+              }
+            }
+          }
+          return (out ?? b) as Bundle
+        }),
+    },
+  }
+
   #vouching: Plugin = {
     name: 'yak/vouch',
     hooks: {
@@ -556,8 +690,36 @@ export class Store {
     if (path == '/apply' && request.method == 'POST' && kernel) {
       return this.#kernel(request)
     }
-    let answer = await this.#route(request)
-    return path == '/query' ? await this.#kinded(answer) : answer
+    if (path == '/query') {
+      let url = new URL(request.url)
+      let line = url.searchParams.get('q') ?? ''
+      let no = unserved(line)
+      if (no) return refuse(new Refused(no))
+      // An AGGREGATE is not a listing — `.count!` answers one number — and
+      // @yaks/api's read door answers bundles, which is the wrong half of the
+      // compiled statement. So it is answered here, off the raw rows, in the
+      // shape every door on this platform says it in (query.ts).
+      let agg = aggOf(line)
+      if (agg) {
+        try {
+          await this.#auth(request)
+          return await this.#counted(line, agg)
+        } catch (e) {
+          return refuse(e)
+        }
+      }
+      // `*` is the LISTING's word — "answer every component" — not the
+      // grammar's, so it never reaches the parser, where a bare word is a
+      // full-text term that matches nothing. It is read by `#wanted` off the
+      // line as the caller wrote it and cut out of the line the query runs.
+      let segs = line.split('&')
+      if (segs.includes(EVERY)) {
+        url.searchParams.set('q', segs.filter((s) => s != EVERY).join('&'))
+        request = new Request(url, request)
+      }
+      return await this.#kinded(await this.#route(request), line)
+    }
+    return await this.#route(request)
   }
 
   // The word a row is NAMED by. `kind` is not a column and no client can derive
@@ -571,10 +733,156 @@ export class Store {
     ...row,
   })
 
-  async #kinded(answer: Response): Promise<Response> {
-    if (!answer.ok) return answer
+  // Outputs speak HUMAN (db.ts `human()`): a column that references a person
+  // answers `{eid, name}` when this store knows who that is, and the bare eid
+  // when it does not. A view gets ONE query, and a byline it would need a second
+  // question for is no byline — the inline leaderboard drew "someone" on every
+  // row while `created.by` was a uuid (C-32730 item 5). Writes are unmoved: the
+  // value is the eid, and a read shape handed back is lowered to it.
+  //
+  // Which columns reference is the vocabulary's word (`refCols`), and who among
+  // them is a PERSON is this store's own rows — the writer it minted when they
+  // first wrote here, wearing what the kernel said to call them.
+  #speak = (rows: Bundle[]): Bundle[] | Promise<Bundle[]> => {
+    let refs = new Set(this.#vocab.refCols().map(([c, p]) => `${c}.${p}`))
+    let ref = (comp: string, col: string) => refs.has(`${comp}.${col}`)
+    let mentioned = new Set<string>()
+    for (let row of rows) {
+      for (let [comp, held] of Object.entries(row)) {
+        if (!held || typeof held != 'object' || Array.isArray(held)) continue
+        for (let [col, v] of Object.entries(held)) {
+          if (typeof v == 'string' && ref(comp, col)) mentioned.add(v)
+        }
+      }
+    }
+    if (!mentioned.size) return rows
+    return then(detached(this.#graph.storage).get([...mentioned]), (found) => {
+      let names = new Map<string, string>()
+      for (let b of found) {
+        let title = (b.doc as { title?: string } | undefined)?.title
+        if (b.person && title) names.set(b.entity.eid, title)
+      }
+      return named(rows as Row[], ref, () => names) as Bundle[]
+    })
+  }
+
+  // What a listing CARRIES, beside what it selects (Jeff, 2026-09-03): "we
+  // should query for the exact components we want: `.book!&.recipe?` = must be
+  // book, recipe is optional but requested. asking for all comps is i imagine
+  // most useful for debugging". So an answer carries the components the filter
+  // NAMES — by presence (`.book!`), by request (`.loan?`), or by a predicate of
+  // its own — and nothing else. A filter that names none (an `id=` fetch, a
+  // bare search term) left nothing out and answers the whole bundle, which is
+  // also the only useful answer to someone who does not yet know what they
+  // found; `*` is the debugging form that asks for everything by name.
+  //
+  // A component asserted ABSENT (`.archived=`) names no component the answer
+  // could carry, which is also what keeps the door's own platform screens
+  // (listing.ts `asking`) from reading as requests.
+  #wanted(line: string): Set<string> | null {
+    if (line.split('&').includes(EVERY)) return null
+    let want = new Set<string>()
+    for (let c of parse(line).clauses) {
+      if (c.kind != 'pred' || !c.path.length) continue
+      // Absence is not a request: `.archived=` names no component the answer
+      // could carry, which is also what keeps the door's own platform screens
+      // (listing.ts `asking`) from reading as one.
+      let absent = c.op == '=' &&
+        (c.value == null || (c.value.kind == 'scalar' && !c.value.raw))
+      if (absent) continue
+      try {
+        let comp = this.#vocab.aim(c.path.join('.'), c.op == '!')[0]?.comp
+        if (comp && comp != SPINE) want.add(comp)
+      } catch { /* a word this store never planted asks for nothing */ }
+    }
+    return want.size ? want : null
+  }
+
+  // The rows, cut to what was asked for. The spine and the `kind` NAME a row,
+  // and a text query's `rank` is the answer's own word about it, so those three
+  // ride whatever the filter said.
+  #only = (rows: Bundle[], want: Set<string> | null): Bundle[] =>
+    !want ? rows : rows.map((r) =>
+      Object.fromEntries(
+        Object.entries(r).filter(([k]) =>
+          k == SPINE || k == 'kind' || k == 'rank' || want.has(k)
+        ),
+      ) as Bundle
+    )
+
+  // The read door's half of `#teaching`: `unknown prop: .recipe` is true and
+  // useless on its own, so the store that holds the vocabulary adds where a
+  // word of your own comes from. The DIRECTORY says nothing of the kind — its
+  // callers are the kernel's own.
+  async #taught(answer: Response): Promise<Response> {
+    if (answer.ok || this.#get('name') == PLATFORM_STORE) return answer
+    let said = await answer.json() as { error?: string; message?: string }
+    return /^unknown (prop|component)/.test(said.message ?? '') &&
+        !said.message!.includes(GUIDE)
+      ? Response.json({ ...said, message: said.message + TEACH }, {
+        status: answer.status,
+      })
+      : Response.json(said, { status: answer.status })
+  }
+
+  // One aggregate, as every door on this platform says it: a count is a
+  // number, a distinct is the values, a tally is how many rows each.
+  // @yaks/sql answers all three as one value→n shape, so this is the reading.
+  async #counted(line: string, agg: Agg): Promise<Response> {
+    let rows = await this.#graph.rows(line) as { value: string; n: number }[]
+    if (agg == 'count') return Response.json({ count: rows[0]?.n ?? 0 })
+    let said = rows.map((r) => [String(r.value ?? ''), r.n] as const)
+    return Response.json(
+      agg == 'distinct'
+        ? { distinct: said.map(([v]) => v) }
+        : { tally: Object.fromEntries(said) },
+    )
+  }
+
+  // A text term RANKS as well as filters: a search answers closest first, and
+  // each row says how close (public/client.js `search`, and reach.ts reads the
+  // same word to merge two apps' hits into one order). @yaks/sql compiles a
+  // bare word as a predicate and stops there, so the ranking is read off the
+  // very index it matched through (@yaks/fts) and painted on the rows the
+  // filter already chose. `rank` is the answer's own word about a row, never a
+  // component: nothing stores it and no vocabulary declares it.
+  //
+  // bm25 counts DOWN — a closer match is a smaller number, and they are
+  // negative — so what a page reads is its negation, where bigger is better.
+  #ranked(rows: Bundle[], line: string): Bundle[] {
+    let text = parse(line).clauses
+      .flatMap((c) => c.kind == 'text' ? [c.value] : []).join(' ')
+    if (!text.trim() || !rows.length) return rows
+    // Only what @yaks/sqlite raised an index for, which is `doc` (ddl.ts).
+    let hits = find(
+      this.#drive,
+      fields(this.#vocab).filter((f) => f.comp == 'doc'),
+      text,
+      { limit: Math.max(rows.length, 20) },
+    )
+    let at = new Map(hits.map((h, i) => [h.entity, { i, h }]))
+    return rows
+      .map((b) => {
+        let hit = at.get(b.entity.eid)
+        return hit
+          ? { ...b, rank: { score: -hit.h.rank, snip: hit.h.snippet } }
+          : b
+      })
+      .sort((a, b) =>
+        (at.get(a.entity.eid)?.i ?? rows.length) -
+        (at.get(b.entity.eid)?.i ?? rows.length)
+      )
+  }
+
+  async #kinded(answer: Response, line: string): Promise<Response> {
+    if (!answer.ok) return this.#taught(answer)
     let rows = await answer.json()
-    return Response.json(Array.isArray(rows) ? rows.map(this.#kind) : rows)
+    if (!Array.isArray(rows)) return Response.json(rows)
+    let cut = this.#only(
+      this.#ranked(rows as Bundle[], line),
+      this.#wanted(line),
+    )
+    return Response.json(await this.#speak(cut.map(this.#kind)))
   }
 
   // The same word on a subscription's frames, because a subscription is that
@@ -584,21 +892,43 @@ export class Store {
   // was opened with.
   #naming(subs: Subs): Subs {
     let wrapped = new Map<Sink, Sink>()
+    // What each subscription on that sink asked for, by its id, so a frame is
+    // cut to the same components `/query` answers with.
+    let wants = new Map<Sink, Map<string, Set<string> | null>>()
     let by = (sink: Sink): Sink => {
       let held = wrapped.get(sink)
       if (!held) {
         wrapped.set(
           sink,
-          held = (f) =>
-            sink(f.bundles ? { ...f, bundles: f.bundles.map(this.#kind) } : f),
+          held = (f) => {
+            if (!f.bundles) return sink(f)
+            let want = wants.get(sink)?.get(String(f.id)) ?? null
+            then(
+              this.#speak(this.#only(f.bundles, want).map(this.#kind)),
+              (bundles) => sink({ ...f, bundles }),
+            )
+          },
         )
       }
       return held
     }
     return {
-      open: (sink, id, query) => subs.open(by(sink), id, query),
-      close: (sink, id) => subs.close(by(sink), id),
-      drop: (sink) => subs.drop(by(sink)),
+      open: (sink, id, query) => {
+        let mine = wants.get(sink) ?? new Map()
+        wants.set(sink, mine)
+        // `true` is a subscription to EVERYTHING, which names no component and
+        // so cuts nothing.
+        mine.set(String(id), query === true ? null : this.#wanted(query))
+        return subs.open(by(sink), id, query)
+      },
+      close: (sink, id) => {
+        wants.get(sink)?.delete(String(id))
+        return subs.close(by(sink), id)
+      },
+      drop: (sink) => {
+        wants.delete(sink)
+        return subs.drop(by(sink))
+      },
       commit: subs.commit,
     }
   }
@@ -689,6 +1019,12 @@ export class Store {
   // before a byte of it is written down, so a refusal leaves the store exactly
   // as it was. The kernel is the only caller; a client never spells a store's
   // path.
+  //
+  // The answer is what this app now says and what MOVED, which naming the
+  // components does not tell whoever deployed it (C-32652 item 4): a renamed
+  // column arrives BESIDE the old one, and `added` is how they see that. Nothing
+  // ever leaves — the DDL is additive and a column's rows are already written —
+  // so `dropped` is empty and stays that way.
   #vocabDoor(request: Request): Response | Promise<Response> {
     if (request.method == 'GET') {
       return Response.json(JSON.parse(this.#get('vocab') ?? '{}'))
@@ -701,10 +1037,31 @@ export class Store {
     }
     return request.text().then((body) => {
       try {
-        appVocab(body)
-        this.#put('vocab', body.trim() || '{}')
+        let { doc, dropped, added, kept } = grew(
+          appDoc(this.#get('vocab') ?? '{}'),
+          appDoc(body),
+          (name) => this.#rows(name),
+        )
+        appVocab(doc)
+        this.#put('vocab', JSON.stringify(shortOf(doc)))
+        // A word that left held nothing, so its table goes with it. Everything
+        // else about the schema is additive and `#boot` runs it.
+        for (let name of dropped) {
+          this.#ctx.storage.sql.exec(
+            `drop table if exists "${name.replaceAll('"', '""')}"`,
+          )
+        }
         this.#boot()
-        return Response.json({ ok: true, comps: this.#vocab.all })
+        return Response.json({
+          ok: true,
+          // The app's OWN words, not the whole vocabulary it speaks: a store's
+          // `/vocab` is what it HOMES, which is how a deploy across a space
+          // knows whose a component is (reach.ts, T-32700).
+          comps: Object.keys(doc.$defs ?? {}),
+          dropped,
+          added,
+          kept,
+        })
       } catch (e) {
         return Response.json({
           error: 'Refused',
@@ -712,6 +1069,20 @@ export class Store {
         }, { status: 400 })
       }
     })
+  }
+
+  // How many rows one component holds — the question only a store can answer,
+  // and what decides whether a word the manifest stopped naming may leave. A
+  // table that is not there holds nothing.
+  #rows(name: string): number {
+    try {
+      let [row] = [...this.#ctx.storage.sql.exec(
+        `select count(*) as n from "${name.replaceAll('"', '""')}"`,
+      )] as { n: number }[]
+      return Number(row?.n ?? 0)
+    } catch {
+      return 0
+    }
   }
 
   /** A frame from a client: a subscription opened or closed. */

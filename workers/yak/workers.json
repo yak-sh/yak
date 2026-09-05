@@ -12,6 +12,7 @@
     "@yaks/durable-object": "../../packages/durable-object/mod.ts",
     "@yaks/edge": "../../packages/edge/mod.ts",
     "@yaks/effects": "../../packages/effects/mod.ts",
+    "@yaks/fts": "../../packages/fts/mod.ts",
     "@yaks/graph": "../../packages/graph/mod.ts",
     "@yaks/id": "../../packages/id/mod.ts",
     "@yaks/match": "../../packages/match/mod.ts",

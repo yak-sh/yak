@@ -144,7 +144,13 @@ for (let [spelling, manifest] of SPELLINGS) {
     assert(applied.some((b) => (b.entity.num ?? 0) >= 1))
     assert(applied.some((b) => by(b) == ADA))
 
-    let read = await (await get(store, '/query?q=.recipe!', owner)).json()
+    // An answer carries the components the line NAMES and no more, so the doc
+    // is asked for beside the recipe (the `#wanted` projection).
+    let read = await (await get(
+      store,
+      `/query?q=${encodeURIComponent('.recipe!&.doc?')}`,
+      owner,
+    )).json()
     assertEquals(read.length, 1)
     assertEquals(read[0].recipe.serves, 8)
     assertEquals(read[0].doc.title, 'Lemon drizzle')
@@ -160,7 +166,11 @@ Deno.test('the writer the kernel vouched for is a person here, by name', async (
     entity: { eid: CAKE },
     recipe: { serves: 8 },
   }], owner)
-  let [ada] = await (await get(store, '/query?q=.person!', owner)).json()
+  let [ada] = await (await get(
+    store,
+    `/query?q=${encodeURIComponent('.person!&.doc?')}`,
+    owner,
+  )).json()
   assertEquals(ada.entity.eid, ADA)
   assertEquals(ada.doc.title, 'Ada')
 })
@@ -173,7 +183,12 @@ Deno.test('an edge is a sentence, and the relation is a word the store knows', a
     { entity: { eid: '$link' }, edge: { from: APP, to: CAKE }, contains: {} },
   ], owner)
   assertEquals(wrote.status, 200)
-  let links = await (await get(store, '/query?q=.contains!', owner)).json()
+  let links = await (await get(
+    store,
+    `/query?q=${encodeURIComponent('.contains!&.edge?')}`,
+    owner,
+  ))
+    .json()
   assertEquals(links.length, 1)
   assertEquals(links[0].edge.from, APP)
   assertEquals(links[0].edge.to, CAKE)
@@ -313,6 +328,14 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
       'blob',
       'image',
       'attachment',
+      // and the words the guide gives an app to reach for rather than invent
+      'task',
+      'completed',
+      'cancelled',
+      'project',
+      'comment',
+      'favorite',
+      'web',
       // the app's own
       'recipe',
     ].sort(),

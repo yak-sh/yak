@@ -3521,8 +3521,8 @@ slow('the answers four builders had to guess at', async () => {
     )
     assert('mood' in one.dayline!, 'an unwritten column is present, and null')
     assertEquals(one.doc, undefined) // not named by the filter
-    // `doc.title` is the one that reads EMPTY instead: the platform's own
-    // column has a default, so a doc nobody titled answers '' and not null.
+    // And the platform's own columns are no exception: a doc nobody titled
+    // answers null, the same as any column nobody wrote.
     await agent.tool('graph_apply', {
       app: 'diary',
       entities: [{
@@ -3532,7 +3532,7 @@ slow('the answers four builders had to guess at', async () => {
       }],
     })
     let [untitled] = await rows('.dayline.mood=grey&.doc?')
-    assertEquals(untitled.doc!.title, '')
+    assertEquals(untitled.doc!.title, null)
     assertEquals(untitled.dayline!.written, null)
 
     // A column that holds an eid is filtered by the eid, like any value —
