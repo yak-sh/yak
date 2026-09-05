@@ -30,6 +30,7 @@ import {
   delta,
   eager,
   eagerDeps,
+  eagerDepsCount,
   human,
   locate,
   referrersOf,
@@ -41,7 +42,7 @@ import {
   textMatches,
   vocabOf,
 } from './db.ts'
-import { edgeEid, moves, natureOf } from './edge.ts'
+import { edgeEid, moves, natureOf, typeOf } from './edge.ts'
 import { record } from './telemetry.ts'
 import { evalAgg, evalSub, walker, workingSet } from './graph_query.ts'
 import {
@@ -143,6 +144,14 @@ type Sub = {
   // client currently holds, so a delta says only what moved; `held` is the far
   // endpoints whose projected columns rode along, remembered so a later write to
   // one of them re-projects instead of going unnoticed.
+  //
+  // A rider is BOUNDED like the row set beside it (T-33752). `limit` is what
+  // this one may deliver — `.edges.limit=` when the client says, EDGE_CAP under
+  // one that says nothing — and `full` records that the answer HIT that bound,
+  // which is the only state in which a per-edge delta cannot keep the prefix
+  // honest: an edge leaving must pull the next one in, and that one is in no
+  // batch. A rider inside its bound holds its whole neighbourhood and keeps the
+  // cheap incremental maintenance it has always had.
   edges?: Rider
 }
 type Rider = {
@@ -150,6 +159,10 @@ type Rider = {
   select?: EdgeSelector
   keys: Map<string, Dep>
   held: Set<string>
+  limit: number
+  full: boolean
+  stated: boolean
+  total?: number
 }
 
 // What a subscription frame has to CARRY. A live subscription owns its
@@ -282,6 +295,39 @@ let peerPayload = (
   return out
 }
 
+// The server's floor under a rider that names no bound of its own — SUB_CAP's
+// counterpart for edges, and lower, because an edge costs a projected PEER ROW
+// apiece and a hub has thousands of them. One card on P-19 shipped 1,947 edges
+// and 1,935 peer rows: 902 KB and 942ms for a list no view can render (T-33752).
+export let EDGE_CAP = 200
+
+// The rider's own read, bounded to what it may deliver.
+let riderRead = (db: Sql, r: Rider, members: Set<string>): Dep[] =>
+  members.size
+    ? r.select
+      ? selectedDeps(db, [...members], r.select, r.limit)
+      : eagerDeps(db, [...members], r.limit)
+    : []
+
+// What a bounded delivery says it is a prefix OF. Only the plain rider can say:
+// a projected selector collapses several stored sentences into one, so counting
+// the store would overstate what it delivers, and its prefix states its bound
+// alone.
+let riderTotal = (db: Sql, r: Rider, members: Set<string>) =>
+  r.select?.via ? undefined : eagerDepsCount(db, [...members], r.select?.type)
+
+// The read, plus what it settles about itself. An answer SHORT of the bound saw
+// the whole neighbourhood and says nothing — which is every ordinary entity, and
+// why no count is paid for one. Only an answer that FILLS the bound might be a
+// prefix, and that is exactly when the total is worth a statement.
+let riderAnswer = (db: Sql, r: Rider, members: Set<string>): Dep[] => {
+  let deps = riderRead(db, r, members)
+  let count = deps.length < r.limit ? undefined : riderTotal(db, r, members)
+  r.full = count == null ? deps.length >= r.limit : count > r.limit
+  r.total = r.full ? count : undefined
+  return deps
+}
+
 // Open a rider over a fresh member set: its incident edges, the far endpoints
 // they name, and the state every later delta speaks from.
 let riderOpen = (
@@ -289,30 +335,50 @@ let riderOpen = (
   peers: Hop[],
   members: Set<string>,
   select?: EdgeSelector,
+  limit = EDGE_CAP,
 ) => {
-  let deps = members.size
-    ? select
-      ? selectedDeps(db, [...members], select)
-      : eagerDeps(db, [...members])
-    : []
-  let held = outside(deps, members)
   let state: Rider = {
     peers,
     ...(select ? { select } : {}),
-    keys: new Map(deps.map((d) => [depKey(d), d])),
-    held,
+    keys: new Map(),
+    held: new Set(),
+    limit,
+    full: false,
+    stated: false,
   }
+  let deps = riderAnswer(db, state, members)
+  state.stated = state.full
+  state.keys = new Map(deps.map((d) => [depKey(d), d]))
+  state.held = outside(deps, members)
   return {
     state,
-    frame: { edges: deps, peers: peerPayload(db, peers, [...held]) },
+    frame: {
+      edges: deps,
+      peers: peerPayload(db, peers, [...state.held]),
+      ...(state.full ? { edgeWindow: riderWindow(state) } : {}),
+    },
   }
 }
 
-// Several stored sentences may collapse to one projected sentence (many
-// entries in one Session can cite the same target). Re-answer the bounded,
-// indexed selector when its inputs move, then diff against the standing map:
-// removing one stored edge cannot withdraw a projection another still proves.
-let selectedRiderDelta = (
+// A bounded rider STATES its bound, the way a windowed row set does: what it
+// carried, and the total it is a prefix of when one was counted. Absent
+// entirely when the rider holds its whole neighbourhood.
+let riderWindow = (r: Rider) => ({
+  limit: r.limit,
+  ...(r.total == null ? {} : { total: r.total }),
+})
+
+// The two riders a per-edge delta cannot keep honest, both answered by
+// RE-ANSWERING the bounded read and diffing against the standing map:
+//
+//   - a PROJECTED one, where several stored sentences collapse to one projected
+//     sentence (many entries in one Session cite the same target), so removing
+//     one stored edge cannot withdraw a projection another still proves;
+//   - a FULL one, where an edge leaving must pull the next one in — and that
+//     one is in no batch, exactly as a windowed row set's replacement is not.
+//
+// A rider inside its bound is neither, and keeps the incremental path below.
+let riderReanswer = (
   db: Sql,
   r: Rider,
   members: Set<string>,
@@ -321,17 +387,17 @@ let selectedRiderDelta = (
   batch: Change[],
   touched: string[],
 ) => {
-  let select = r.select!
+  let select = r.select
   let dirty = !!joined.length || moved ||
     batch.some((c) =>
-      c.name == select.via?.comp || c.name == 'edge' ||
-      c.name == natureOf[select.type] ||
+      c.name == 'edge' || !!typeOf[c.name] ||
+      c.name == select?.via?.comp ||
       (c.name == 'entity' && c.comp == null)
     )
   let add: Dep[] = []
   let cut: Dep[] = []
   if (dirty) {
-    let deps = members.size ? selectedDeps(db, [...members], select) : []
+    let deps = riderAnswer(db, r, members)
     let next = new Map(deps.map((d) => [depKey(d), d]))
     add = deps.filter((d) => !r.keys.has(depKey(d)))
     cut = [...r.keys].filter(([k]) => !next.has(k)).map(([, d]) => d)
@@ -388,7 +454,8 @@ let resultDelta = (
 // Did a delta actually MOVE anything? A rider that says nothing must not put a
 // frame on the wire — every sub with edges would otherwise speak on every batch.
 let rider = (d: ReturnType<typeof riderDelta>) =>
-  !!(d.edges.length || d.unedges.length || d.peers.length || d.unpeers.length)
+  !!(d.edges.length || d.unedges.length || d.peers.length || d.unpeers.length ||
+    d.edgeWindow)
 
 // What ONE committed batch does to a rider — bounded by the delta, never by the
 // graph. A member that JOINED brings its whole incident set (one keyed read); an
@@ -399,7 +466,7 @@ let rider = (d: ReturnType<typeof riderDelta>) =>
 // far-endpoint projection is re-derived — only when something actually moved —
 // and a touched eid that IS a held peer re-projects, so a blocker's status
 // reaches the tree without a subscription per blocker.
-let riderDelta = (
+let riderStep = (
   db: Sql,
   r: Rider,
   members: Set<string>,
@@ -409,14 +476,18 @@ let riderDelta = (
   batch: Change[],
   touched: string[],
 ) => {
-  if (r.select) {
-    return selectedRiderDelta(db, r, members, joined, moved, batch, touched)
+  if (r.select || r.full) {
+    return riderReanswer(db, r, members, joined, moved, batch, touched)
   }
   let add: Dep[] = []
   let cut: Dep[] = []
   let take = (d: Dep) => {
     let k = depKey(d)
     if (r.keys.has(k)) return
+    // The bound holds on the delta too. Reaching it here marks the rider FULL,
+    // which is what routes every LATER batch through the re-answer above —
+    // where a prefix is picked by recency rather than by arrival order.
+    if (r.keys.size >= r.limit) return void (r.full = true)
     r.keys.set(k, d)
     add.push(d)
   }
@@ -426,7 +497,9 @@ let riderDelta = (
     r.keys.delete(k)
     cut.push(d)
   }
-  if (joined.length) { for (let d of eagerDeps(db, joined)) take(d) }
+  if (joined.length) {
+    for (let d of eagerDeps(db, joined, r.limit + 1)) take(d)
+  }
   // Whether an edge may be DELIVERED is one question with one answer — the eager
   // screen — so rather than re-deciding it here, ask the same reader about the
   // endpoints the batch named and believe what comes back. An unlink needs no
@@ -469,6 +542,35 @@ let riderDelta = (
   let again = touched.filter((e) => r.held.has(e) && !gone.has(e))
   if (again.length) peers = [...peers, ...peerPayload(db, r.peers, again)]
   return { edges: add, unedges: cut, peers, unpeers }
+}
+
+// The step, plus the BOUND restated whenever it moved. A rider that has once
+// spoken a window keeps speaking it — a total moves without any edge moving,
+// and a rider that grows back inside its bound must withdraw the window rather
+// than leave the client holding one nobody took back. Same rule the row window
+// keeps, for the same reason.
+let riderDelta = (
+  db: Sql,
+  r: Rider,
+  members: Set<string>,
+  joined: string[],
+  moved: boolean,
+  gone: Set<string>,
+  batch: Change[],
+  touched: string[],
+) => {
+  let said = r.stated ? JSON.stringify(riderWindow(r)) : ''
+  let d = riderStep(db, r, members, joined, moved, gone, batch, touched)
+  let now = r.full
+    ? riderWindow(r)
+    : r.stated
+    ? { limit: r.limit, total: r.keys.size }
+    : undefined
+  r.stated = r.full
+  return {
+    ...d,
+    ...(now && JSON.stringify(now) != said ? { edgeWindow: now } : {}),
+  }
 }
 
 // A path member can move when any row along its reference chain changes, not
@@ -663,7 +765,9 @@ export let subserve = (db: Sql, send: (frame: Frame) => void) => {
       // this query's edges and nothing else's — the scoped answer that replaces
       // the whole-graph dump a joining client used to be handed (T-22371).
       let ask = edgeRider(rides)
-      let ride = ask ? riderOpen(db, ask.peers, members, ask.select) : undefined
+      let ride = ask
+        ? riderOpen(db, ask.peers, members, ask.select, ask.limit)
+        : undefined
       map.set(f.sub, {
         preds,
         members,

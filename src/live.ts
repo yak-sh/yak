@@ -1426,6 +1426,12 @@ export type Sub = {
   unedges?: Dep[]
   peers?: Change[]
   unpeers?: string[]
+  // The rider's own stated BOUND (T-33752), the window's counterpart for edges:
+  // these are the newest `limit` of `total` incident sentences. Present exactly
+  // when the delivery is a PREFIX, so its absence says the sub holds the whole
+  // neighbourhood — which is what a card reads to say "and 1,747 more" rather
+  // than passing a page off as everything the entity is joined to.
+  edgeWindow?: Window
   // An addressed read refusal. `reference` is stable enough to correlate the
   // visible failure with server read telemetry without marking the entity.
   error?: string
@@ -1656,6 +1662,15 @@ export let subWindow = (sub: string): Window | undefined => {
   return subWindows.get(sub)
 }
 
+// The same statement about a sub's EDGES. Keyed by the routed entity rather
+// than by the sub, because that is how a view asks: `edgeWindow(eid)` is what
+// the card about that entity may say about the edges it is not showing.
+let routeWindows = new Map<string, Window>()
+export let edgeWindow = (eid: string): Window | undefined => {
+  subVersion.value
+  return routeWindows.get(eid)
+}
+
 // Bytes this socket has carried, whole and per sub (__probe.wire) — see the
 // onmessage counter.
 let carried = { total: 0, subs: {} as Record<string, number> }
@@ -1880,6 +1895,12 @@ export let landSub = (f: Sub) => {
   // query this frame replaced.
   if (f.window) subWindows.set(f.sub, f.window)
   else if (f.replace) subWindows.delete(f.sub)
+  // A route sub is one entity's edges, so its stated bound is that entity's.
+  if (f.sub.startsWith('route:')) {
+    let eid = f.sub.slice('route:'.length)
+    if (f.edgeWindow) routeWindows.set(eid, f.edgeWindow)
+    else if (f.replace) routeWindows.delete(eid)
+  }
   // The projection is recorded BEFORE the rows land, so the cache is never
   // briefly holding projected columns while `loaded` still calls the row full.
   // The server states it on every replace; a maintenance frame inherits what
@@ -2062,6 +2083,7 @@ let forget = (sub: string) => {
   shadows.delete(sub)
   subMembers.delete(sub)
   subWindows.delete(sub)
+  if (sub.startsWith('route:')) routeWindows.delete(sub.slice('route:'.length))
   subFields.delete(sub)
   agreement?.checked.delete(sub)
   if (sub.startsWith('entries:')) {
@@ -2341,7 +2363,13 @@ export let routeSub = (eid: string) => {
 // read of two columns, not a membership. Every consumer of `relations()` — Show's
 // requires/contains/reads lists, Relate, Debug, the Meta tally, the TUI's refs —
 // is fed from here now that the graph's whole edge table no longer rides the boot.
-let ROUTE_EDGES = '.edges.peers=task.status,doc.title'
+//
+// And it says HOW MANY (T-33752). A card renders a list of sentences, not a
+// hub's whole neighbourhood: P-19 is joined to 1,947 entities, and shipping
+// them cost 902 KB and 942ms to open one project — a peer row apiece for a list
+// nothing can read. The bound is what the view renders; the frame states the
+// total it is a prefix of, and Show says how many more there are.
+let ROUTE_EDGES = '.edges.peers=task.status,doc.title&.edges.limit=100'
 
 // Bring a lazy board's scoped-session entry subscriptions into line with its
 // query `q` (`''` closes them all). Reuses the ref-counted entrySub, so a board

@@ -41,6 +41,7 @@
     "search: the ranked FTS read alone": 0.08285170198093393,
     "similar: ANN KNN over 800 vectors": 0.002555862020298283,
     "subserve: a board sub answers its first frame": 0.36215630298677065,
+    "subserve: a route sub on a hub answers its bounded rider": 0.142296188929816,
     "subserve: a small sub first-frames while a large one is in flight": 0.030371447029061686,
     "subserve: a status tally sub answers without members": 0.024705510466615857,
     "subserve: age a moving-window sub on a tick": 0.000021290581037164886,

@@ -9026,6 +9026,40 @@ let notLazy = (endpoint: string) =>
     } lz where lz.entity = ${endpoint})`
   ).join('')
 
+// WHICH edges are incident to the staged hits, as a FROM clause — the one
+// place that decides it, shared by the read and the COUNT beside it, so a
+// bounded delivery and the total it says it is a prefix of can only agree.
+//
+// C-19763's landmine is binding an eid VALUE to a base int column, which
+// matches nothing in silence; the cure it prescribes is resolving eid→id
+// BEFORE binding, which is what `myIds` does here. Filtering the projected
+// p.eid/c.eid instead spans two joined copies of `entity`, so no single
+// index answers the disjunction and sqlite SCANS all of entity, seeking the
+// edge once per row. Naming the sentence's own endpoint columns keeps both
+// halves on one table, which sqlite answers as a MULTI-INDEX OR: each half
+// seeks its own index (`edge_from`, `edge_to`).
+//
+// The eager screen rides OUTSIDE the disjunction — an endpoint is lazy or it
+// isn't, whichever side of the OR selected the row — so the multi-index OR is
+// untouched and each NOT EXISTS is one more seek per candidate edge.
+let MINE = `in (select eid from hit)`
+let incidentFrom = (eagerOnly: boolean, type?: string) => {
+  let myIds = `in (select e.id from entity e where e.eid ${MINE})`
+  let live = eagerOnly ? notLazy('d.parent') + notLazy('d.child') : ''
+  return `(${
+    sentences(type, `g."from" ${myIds} or g."to" ${myIds}`)
+  }) d where 1${live}`
+}
+
+// The canonical reading order of an edge set: by parent, verb, listed order,
+// then child. A BOUNDED read picks its prefix by recency in SQL and is sorted
+// back into this here, so a bounded answer and a whole one differ in length
+// and never in shape.
+let cmp = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0
+let reading = (a: Dep, b: Dep) =>
+  cmp(a.parent, b.parent) || cmp(a.type, b.type) ||
+  (a.ord ?? 0) - (b.ord ?? 0) || cmp(a.child, b.child)
+
 // Every edge touching these entities, both directions — the narrow reading of
 // `snap.deps`, derived `reads` included. Losing those would make this door
 // disagree with the graph-out one about what an entity's edges ARE, so the
@@ -9033,45 +9067,57 @@ let notLazy = (endpoint: string) =>
 // and a hit that is itself a persona.
 //
 // `eagerOnly` screens the answer to the entities a CLIENT can hold — see
-// eagerDeps below.
+// eagerDeps below. `limit` bounds it to the NEWEST that many stored sentences,
+// and `type` to one verb.
 let incident = (
   db: Sql,
   eids: string[],
   eagerOnly: boolean,
+  limit?: number,
+  type?: string,
 ): Dep[] => {
   if (!eids.length) return []
   stage(db, eids)
-  let mine = `in (select eid from hit)`
-  // C-19763's landmine is binding an eid VALUE to a base int column, which
-  // matches nothing in silence; the cure it prescribes is resolving eid→id
-  // BEFORE binding, which is what `myIds` does here. Filtering the projected
-  // p.eid/c.eid instead spans two joined copies of `entity`, so no single
-  // index answers the disjunction and sqlite SCANS all of entity, seeking the
-  // edge once per row. Naming the sentence's own endpoint columns keeps both
-  // halves on one table, which sqlite answers as a MULTI-INDEX OR: each half
-  // seeks its own index (`edge_from`, `edge_to`).
-  let myIds = `in (select e.id from entity e where e.eid ${mine})`
-  // The screen rides OUTSIDE the disjunction — an endpoint is lazy or it isn't,
-  // whichever side of the OR selected the row — so the multi-index OR above is
-  // untouched and each NOT EXISTS is one more seek per candidate edge.
-  let live = eagerOnly ? notLazy('d.parent') + notLazy('d.child') : ''
   let deps = (prep(
     db,
     `select p.eid as parent, d.type as type, c.eid as child, d.ord as ord
-      from (${sentences(undefined, `g."from" ${myIds} or g."to" ${myIds}`)}) d
+      from (select d.parent, d.type, d.child, d.ord from ${
+      incidentFrom(eagerOnly, type)
+    }
+             order by d.edge desc${limit == null ? '' : ` limit ${limit}`}) d
       join entity p on p.id = d.parent
-      join entity c on c.id = d.child
-      where 1${live}
-      order by p.eid, d.type, d.ord, c.eid`,
-  ).all() as Dep[]).map(shedOrd)
+      join entity c on c.id = d.child`,
+  ).all() as Dep[]).map(shedOrd).sort(reading)
+  // Derived home reads are never bounded: there are twenty-odd of them in the
+  // whole graph, they are computed rather than stored, and dropping them would
+  // make this door disagree with the graph-out one about what an edge IS. So
+  // the REMAINDER a bounded delivery leaves — the total minus the stored
+  // sentences it carried — stays exact whether or not any of them ride.
   return [
     ...deps,
-    ...homeReads(homes(db, `where h.eid ${mine} or o.eid ${mine}`), deps),
+    ...homeReads(homes(db, `where h.eid ${MINE} or o.eid ${MINE}`), deps)
+      .filter((d) => type == null || d.type == type),
   ]
 }
 
 export let depsOf = (db: Sql, eids: string[]): Dep[] =>
   incident(db, eids, false)
+
+// How many stored edges a rider WOULD deliver unbounded — the same incidence
+// and the same eager screen, counted without projecting a row. The remainder a
+// bounded delivery leaves behind is this minus the stored sentences it carried.
+export let eagerDepsCount = (
+  db: Sql,
+  eids: string[],
+  type?: string,
+): number => {
+  if (!eids.length) return 0
+  stage(db, eids)
+  return Number(
+    (prep(db, `select count(*) as n from ${incidentFrom(true, type)}`)
+      .get() as { n: number }).n,
+  )
+}
 
 // The same edges, screened to the EAGER graph: the edges a CLIENT may hold.
 // A session-log entry's `referenced` edge points from an entity no cache will
@@ -9081,8 +9127,8 @@ export let depsOf = (db: Sql, eids: string[]): Dep[] =>
 // IS. Not a nicety: one card on a well-referenced task draws 522 incident edges,
 // 469 of them from entries, and the rider would have shipped every one along
 // with a projected peer row for each.
-export let eagerDeps = (db: Sql, eids: string[]): Dep[] =>
-  incident(db, eids, true)
+export let eagerDeps = (db: Sql, eids: string[], limit?: number): Dep[] =>
+  incident(db, eids, true, limit)
 
 // Stored edges incident to `eids` AFTER an optional endpoint
 // projection. The projection is one vocabulary `{eid}` column: an endpoint
@@ -9095,14 +9141,22 @@ export let selectedDeps = (
   db: Sql,
   eids: string[],
   select: EdgeSelector,
+  limit?: number,
 ): Dep[] => {
   if (!eids.length) return []
-  if (!select.via) {
-    return eagerDeps(db, eids).filter((d) => d.type == select.type)
-  }
+  if (!select.via) return incident(db, eids, true, limit, select.type)
   stage(db, eids)
   let table = sqlName(select.via.comp)
   let col = sqlName(select.via.prop)
+  // Several stored sentences collapse to ONE projected sentence, so the group
+  // — not `distinct` — is the projected edge, and its recency is the newest
+  // stored sentence proving it. A bound cuts by that and JS sorts the prefix
+  // back into the canonical reading.
+  //
+  // `picked` names its endpoints `from`/`to` rather than parent/child on
+  // purpose: sqlite resolves a GROUP BY name against the INPUT columns before
+  // the output aliases, so grouping by `parent` would silently group by the
+  // stored endpoint id and never collapse two entries citing one target.
   let rows = prep(
     db,
     `with endpoint(id) as (
@@ -9114,31 +9168,32 @@ export let selectedDeps = (
         where v.${col} in (
           select e.id from entity e where e.eid in (select eid from hit)
         )
-     ), picked(parent, type, child, ord) as (
-       select d.parent, d.type, d.child, d.ord from (${
+     ), picked("from", verb, "to", listed, edge) as (
+       select d.parent, d.type, d.child, d.ord, d.edge from (${
       sentences(select.type)
     }) d
         where d.parent in (select id from endpoint)
        union
-       select d.parent, d.type, d.child, d.ord from (${
+       select d.parent, d.type, d.child, d.ord, d.edge from (${
       sentences(select.type)
     }) d
         where d.child in (select id from endpoint)
      )
-     select distinct coalesce(pp.eid, p.eid) as parent,
-            d.type as type,
+     select coalesce(pp.eid, p.eid) as parent,
+            d.verb as type,
             coalesce(pc.eid, c.eid) as child,
-            d.ord as ord
+            d.listed as ord
        from picked d
-       join entity p on p.id = d.parent
-       join entity c on c.id = d.child
-       left join ${table} vp on vp.entity = d.parent
+       join entity p on p.id = d."from"
+       join entity c on c.id = d."to"
+       left join ${table} vp on vp.entity = d."from"
        left join entity pp on pp.id = vp.${col}
-       left join ${table} vc on vc.entity = d.child
+       left join ${table} vc on vc.entity = d."to"
        left join entity pc on pc.id = vc.${col}
-      order by parent, type, ord, child`,
+      group by parent, type, child, ord
+      order by max(d.edge) desc${limit == null ? '' : ` limit ${limit}`}`,
   ).all() as Dep[]
-  return rows.map(shedOrd)
+  return rows.map(shedOrd).sort(reading)
 }
 
 // The bounded transitive closure `.reaches[type,<=N]=id` selects: the eids that

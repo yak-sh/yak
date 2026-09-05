@@ -7,6 +7,7 @@ import {
   boardsOver,
   commentCount,
   crewed,
+  edgeWindow,
   ent,
   gated,
   parents,
@@ -53,6 +54,7 @@ let Frame = block('div', 'Show', {
   Project: 'a',
   Assignee: 'a',
   Meta: 'div',
+  More: 'div',
   Proposal: 'span',
   Deps: 'span',
   Done: 's',
@@ -364,25 +366,34 @@ export let up: Record<string, string> = {
 // — 'part of X', 'required by Y'), then what it holds — its contains
 // children (ent() splits those out of refs into kids, so they'd
 // otherwise only show as board tallies) and its requires/reads.
-export let Dependencies = ({ e }: { e: Ent }) => (
-  <>
-    {parents(e.eid).map((d) => (
-      <Entity
-        key={d.parent + d.type}
-        eid={d.parent}
-        view='Dependency'
-        type={d.type}
-        label={up[d.type] ?? d.type}
-      />
-    ))}
-    {e.kids.map((k) => (
-      <Entity key={k.eid} eid={k.eid} view='Dependency' type='contains' />
-    ))}
-    {e.refs.map((r) => (
-      <Entity key={r.child} eid={r.child} view='Dependency' type={r.type} />
-    ))}
-  </>
-)
+export let Dependencies = ({ e }: { e: Ent }) => {
+  // A hub's edges arrive BOUNDED (live.ts ROUTE_EDGES): the newest `limit` of
+  // `total` sentences. Say what is missing rather than letting a page read as
+  // the whole neighbourhood — the same statement a windowed list owes (M-16612).
+  let win = edgeWindow(e.eid)
+  let shown = parents(e.eid).length + e.kids.length + e.refs.length
+  let more = win?.total == null ? 0 : win.total - shown
+  return (
+    <>
+      {parents(e.eid).map((d) => (
+        <Entity
+          key={d.parent + d.type}
+          eid={d.parent}
+          view='Dependency'
+          type={d.type}
+          label={up[d.type] ?? d.type}
+        />
+      ))}
+      {e.kids.map((k) => (
+        <Entity key={k.eid} eid={k.eid} view='Dependency' type='contains' />
+      ))}
+      {e.refs.map((r) => (
+        <Entity key={r.child} eid={r.child} view='Dependency' type={r.type} />
+      ))}
+      {more > 0 && <Frame.More>and {more} more</Frame.More>}
+    </>
+  )
+}
 
 // A comment's target is its first relationship sentence. Compose the
 // ordinary edge rows too: comments remain entities and may carry edges of

@@ -20,6 +20,7 @@ let { db } = await import('./live_db.ts')
 let { subserve } = await import('./subserve.ts')
 let { subqueue } = await import('./subqueue.ts')
 let { cursorOf } = await import('./db.ts')
+import { link } from './edge.ts'
 import type { Change } from './types.ts'
 
 let uid = () => crypto.randomUUID()
@@ -38,6 +39,16 @@ eids.forEach((eid, i) =>
     ...(i % 4 == 0 ? [{ eid, name: 'completed', comp: {} }] : []),
   ])
 )
+
+// A HUB: one entity every task points at. The route sub below is what a card on
+// it opens, and before the rider was bounded that sub shipped a sentence and a
+// projected peer row for every one of them (T-33752: 1,947 edges, 902 KB and
+// 942ms to open P-19 on the live graph).
+let HUB = uid()
+apply(db, [
+  { eid: HUB, name: 'doc', comp: { title: 'Sub bench hub', body: '' } },
+])
+eids.forEach((eid) => apply(db, link(HUB, 'contains', eid)))
 
 let sink = () => {}
 
@@ -82,6 +93,25 @@ Deno.bench(
     await both.promise
   },
 )
+
+// A route sub on a HUB pays its BOUND, never its neighbourhood. This is the
+// clamp, not just the timing: the frame is inspected and the bench THROWS if
+// more than `.edges.limit=` sentences — or a peer row for anything but their far
+// endpoints — comes back, so an unbounded rider fails here rather than showing
+// up as a slow number somebody reads past.
+let ROUTE = `.edges.peers=task.status,doc.title&.edges.limit=100`
+let clamp = (frame: unknown) => {
+  let f = frame as { edges?: unknown[]; peers?: { eid: string }[] }
+  let edges = f.edges ?? []
+  let peers = new Set((f.peers ?? []).map((c) => c.eid))
+  if (edges.length > 100) throw new Error(`rider shipped ${edges.length} edges`)
+  if (peers.size > 100) throw new Error(`rider shipped ${peers.size} peers`)
+  if (!edges.length) throw new Error('rider shipped nothing — bench is inert')
+}
+Deno.bench('subserve: a route sub on a hub answers its bounded rider', () => {
+  let sv = subserve(db, clamp)
+  sv.frame({ sub: `route:${HUB}`, q: `id=${HUB}&${ROUTE}` })
+})
 
 // One committed batch folded across a socket holding a realistic set of subs —
 // a board window, its tally, a favorites set and a route. Only the touched eid

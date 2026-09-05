@@ -204,10 +204,13 @@ export let moves = (
 // The ends are the edge's own columns, so this is one indexed table.
 export let links = `select g."from" as parent, g."to" as child from edge g`
 
+// `edge` rides beside the sentence: the edge entity's own spine id, which is
+// its RECENCY — what a bounded incident read orders by so a prefix is the
+// newest sentences, the way a windowed row set is the newest rows.
 export let sentences = (type?: string, only = '') => {
   let head = (verb: string) =>
     `select g."from" as parent, ${verb} as type,` +
-    ` g."to" as child, g.ord as ord from edge g`
+    ` g."to" as child, g.ord as ord, g.entity as edge from edge g`
   let where = only ? ` where ${only}` : ''
   if (type) {
     return `${head(`'${type}'`)}` +
@@ -227,6 +230,6 @@ export let sentences = (type?: string, only = '') => {
       ` then '${typeOf[n]}'`
     ).join(' ')
   } end)`
-  return `select parent, type, child, ord from (${head(verb)}${where})` +
+  return `select parent, type, child, ord, edge from (${head(verb)}${where})` +
     ` where type is not null`
 }

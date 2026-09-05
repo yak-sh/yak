@@ -1715,6 +1715,13 @@ html {
 .Show_Field-num {
   width: 4.5rem; /* the spinners are the stepper — leave them room */
 }
+/* What a bounded edge rider did NOT ship — the tail of a hub's neighbourhood,
+   said quietly under the sentences it did. */
+.Show_More {
+  font-size: 11px;
+  color: var(--dim);
+  padding: 2px 0;
+}
 /* The card-context meta line — the board row's grammar on the full card:
    prio · domain · comments · claim, under the titlebar, above the body. */
 .Show_Meta {

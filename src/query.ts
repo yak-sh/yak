@@ -135,6 +135,12 @@ export type Pred = {
   // Empty for a bare `.edges!`. op is EDGES; edgeRider() reads the directive.
   peers?: Hop[]
   edge?: EdgeSelector
+  // The EDGES RIDER's BOUND — `.edges.limit=200`. A hub's incident set is not
+  // what a card renders, and each edge beyond the bound costs a projected peer
+  // row, so the rider windows like a row set does: a prefix, newest sentences
+  // first, and the reply states the total it is a prefix of. Its own field
+  // rather than `win`, which is the ROW window and spells itself `.limit=`.
+  limit?: number
   // A bounded TRAVERSAL rather than a column read: `.reaches[requires,<=3]=T-42`
   // selects the entities that reach `value` through at most `depth` edges of one
   // type. op is REACHES. The cap is part of the grammar — an unbounded closure
@@ -628,7 +634,7 @@ export let EDGES = 'edges'
 
 // The rider a query carries, or undefined for a plain membership query. Several
 // `.edges` tokens union their peer columns — one rider, one delivery.
-export type EdgeRider = { peers: Hop[]; select?: EdgeSelector }
+export type EdgeRider = { peers: Hop[]; select?: EdgeSelector; limit?: number }
 
 export let edgeRider = (preds: Pred[]): EdgeRider | undefined => {
   let asked = preds.filter((p) => p.op == EDGES)
@@ -647,7 +653,15 @@ export let edgeRider = (preds: Pred[]): EdgeRider | undefined => {
   let shapes = new Set(selected.map((s) => JSON.stringify(s)))
   if (shapes.size > 1) throw new Error('one edge rider cannot mix selectors')
   let select = selected[0]
-  return { peers, ...(select ? { select } : {}) }
+  // The TIGHTEST bound wins: two tokens asking for one delivery cannot each get
+  // their own length, and the smaller ask is the one that is satisfied by it.
+  let limits = asked.flatMap((p) => p.limit == null ? [] : [p.limit])
+  let limit = limits.length ? Math.min(...limits) : undefined
+  return {
+    peers,
+    ...(select ? { select } : {}),
+    ...(limit == null ? {} : { limit }),
+  }
 }
 
 // A BOUNDED TRAVERSAL pred — `.reaches[requires,<=3]=T-42` — is a real filter,
@@ -1177,6 +1191,25 @@ export let preds = (token: string, vocab: Vocab = NONE): Pred[] | null => {
     if (segs.length == 1 && op == '!' && !value) {
       return [{ comp: '', prop: '', op: EDGES, value: '', peers: [] }]
     }
+    // `.edges.limit=200` bounds the RIDER the way `.limit=` bounds the rows: a
+    // hub's incident set is not what a card renders, and shipping it costs the
+    // peer projection a row apiece. Same Win the row window speaks, so a reply
+    // that carries one states the total it is a prefix of.
+    if (segs.length == 2 && segs[1] == 'limit' && op == '=') {
+      if (!/^\d+$/.test(value)) {
+        throw new Error('.edges.limit takes a whole number: .edges.limit=200')
+      }
+      return [
+        {
+          comp: '',
+          prop: '',
+          op: EDGES,
+          value: '',
+          peers: [],
+          limit: Number(value),
+        },
+      ]
+    }
     if (segs.length == 2 && segs[1] == 'peers' && op == '=' && value) {
       let peers = value.split(',').map((seg): Hop => {
         let groups = groupsOf(seg.split('.'), vocab)
@@ -1191,8 +1224,8 @@ export let preds = (token: string, vocab: Vocab = NONE): Pred[] | null => {
       return [{ comp: '', prop: '', op: EDGES, value: '', peers }]
     }
     throw new Error(
-      '.edges rides a query (.edges!) and may project the far endpoint ' +
-        '(.edges.peers=status,title)',
+      '.edges rides a query (.edges!), may project the far endpoint ' +
+        '(.edges.peers=status,title) and may bound itself (.edges.limit=200)',
     )
   }
   // A SCOPE resolves a virtual prop to the Pred[] it splices into the AND-list.
