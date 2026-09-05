@@ -10,6 +10,7 @@ let read = (name: string) =>
 let pages = [
   'index.html',
   'help.html',
+  'technical.html',
   'pricing.html',
   'terms.html',
   'privacy.html',
@@ -59,16 +60,36 @@ Deno.test('the yak exports have their intended transparent sizes', () => {
 let links = (html: string) =>
   [...html.matchAll(/<a href="\/([a-z-]+)">/g)].map((m) => m[1])
 
-// The help page jumps to its own questions. A renamed section leaves a pill
-// that scrolls nowhere and says nothing about it, the same silent rot.
-Deno.test('every help jump names a section on that page', () => {
-  let html = read('help.html')
-  let ids = new Set(
-    [...html.matchAll(/<section id="([a-z]+)">/g)].map((m) => m[1]),
-  )
-  let jumps = [...html.matchAll(/href="#([a-z]+)"/g)].map((m) => m[1])
-  assert(jumps.length, 'help.html has no jumps')
-  for (let j of jumps) assert(ids.has(j), `#${j} names no section`)
+// The help and technical pages jump to their own sections. A renamed section
+// leaves a pill that scrolls nowhere and says nothing about it, the same
+// silent rot.
+Deno.test('every jump names a section on its own page', () => {
+  for (let page of ['help.html', 'technical.html']) {
+    let html = read(page)
+    let ids = new Set(
+      [...html.matchAll(/<section id="([a-z]+)">/g)].map((m) => m[1]),
+    )
+    let jumps = [...html.matchAll(/href="#([a-z]+)"/g)].map((m) => m[1])
+    assert(jumps.length, `${page} has no jumps`)
+    for (let j of jumps) assert(ids.has(j), `${page}: #${j} names no section`)
+  }
+})
+
+// The nav is the same four places on every page, or it is not a nav: a link
+// that appears on one page and not the next is how a visitor loses the thread
+// (T-33643). The current page marks itself with aria-current and nothing else,
+// so the set of destinations is identical everywhere.
+Deno.test('every page carries the same four nav links', () => {
+  let want = ['/#how', '/pricing', '/technical', '/login']
+  for (let page of branded) {
+    let nav = read(page).split('<nav class="Nav"')[1]?.split('</nav>')[0] ?? ''
+    assert(nav, `${page} has no nav`)
+    assertEquals(
+      [...nav.matchAll(/href="([^"]+)"/g)].map((m) => m[1]),
+      want,
+      page,
+    )
+  }
 })
 
 Deno.test('every footer link names a page that is there', () => {

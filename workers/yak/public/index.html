@@ -6,7 +6,7 @@
     <title>yaks.app</title>
     <meta
       name="description"
-      content="Ask your assistant, like Claude or ChatGPT, to make an app and get your own shareable website seconds later."
+      content="yaks.app is where Claude and ChatGPT put the things they build for you. Ask for a recipe box or a sign-up sheet, and a minute later it's a website of your own."
     />
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32" />
@@ -23,9 +23,16 @@
     <!-- The name alone: the hero yak is one line below, and one yak above the
          fold is enough (T-33063). Every other page wears the small mark. -->
     <header class="Top">
-      <a class="Top_Name" href="/" aria-label="yaks.app, home">
+      <a class="Top_Name" href="/" aria-current="page"
+        aria-label="yaks.app, home">
         <span>yaks.app</span>
       </a>
+      <nav class="Nav" aria-label="Site">
+        <a href="/#how">How it works</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/technical">Technical</a>
+        <a href="/login">Sign in</a>
+      </nav>
     </header>
 
     <main class="Page Home">
@@ -35,22 +42,33 @@
           src="yak.png"
           alt="A friendly young yak with a small smile"
         />
+        <!-- The heading names the trade — you ask for one thing, you get
+             another — because the thing strangers missed was WHAT they end up
+             holding (T-33643). "App" alone reads as an app store; "website"
+             is the word a person already owns. -->
         <h1
           id="hello"
           class="Title Title-hero"
-        >Your ideas, made into real apps.</h1>
+        >Ask for an app. Get a website.</h1>
+        <!-- And the lead names the SUBJECT. The old one said "your ideas,
+             made into apps" with nobody doing the making, so a reader could
+             not tell whether this site builds it, their assistant does, or
+             they do. One sentence settles it before anything else is read. -->
         <p class="Note Note-lead">
-          Ask your assistant, like Claude or ChatGPT, to make an app and get
-          your own shareable website seconds later.
+          yaks.app is where Claude and ChatGPT put the things they build for
+          you. Ask for a recipe box or a sign-up sheet for the potluck, and a
+          minute later it's a website of your own at
+          <b>yourname.yaks.app</b> — one link, and it opens on anyone's phone.
         </p>
         <!-- The one action, above the fold. A reader who is already sold does
              not have to scroll past six examples and a worked conversation to
              find the door; a reader who is not still meets all of it. It aims
              at /connect rather than /login because connecting is the thing
              they came to do, and that page signs them in on the way. -->
-        <p><a class="Button" href="/connect">Connect your assistant</a></p>
+        <p><a class="Button" href="/connect">Start — it's free</a></p>
         <p class="Note Note-small">
-          Works with Claude and ChatGPT. Free to start.
+          Works with the Claude or ChatGPT you already use. Free for five
+          apps; <a href="#cost">$4 a month</a> after that.
         </p>
       </section>
 
@@ -87,11 +105,47 @@
               chart that doesn't nag</a>
           </li>
         </ul>
+        <p class="Note Note-small">
+          Every one of those opens — they were each asked for in a sentence.
+        </p>
       </section>
 
       <section class="How" aria-labelledby="how">
-        <h2 id="how" class="Title">How it goes — say you wanted a recipe
-          box</h2>
+        <h2 id="how" class="Title">How it works</h2>
+
+        <!-- Three steps, before the worked example. This is the part the page
+             never had: strangers could see the middle of the story (a
+             conversation) and the end (a finished box), and had no idea what
+             the first move was or that it involves their own assistant's
+             settings rather than a signup form here. -->
+        <ol class="Steps">
+          <li>
+            <h3 class="Step_Name">Hand your assistant one link.</h3>
+            <p class="Note">
+              You paste <code class="Pill Pill-code">https://yaks.app/mcp</code>
+              into Claude or ChatGPT once, the way you'd add anything else to
+              it, and sign in with your email. That's the whole setup, and
+              <a href="/connect">this page has the exact clicks</a>.
+            </p>
+          </li>
+          <li>
+            <h3 class="Step_Name">Ask for what you want, in your own words.</h3>
+            <p class="Note">
+              No templates to choose from and nothing to install. Say
+              <q class="Said">could you make me a recipe box?</q> and keep
+              going from there — <q class="Said">put the newest ones first</q>,
+              <q class="Said">let my sister add notes</q>.
+            </p>
+          </li>
+          <li>
+            <h3 class="Step_Name">You get a link, and it's yours.</h3>
+            <p class="Note">
+              It's a website on the web at <b>yourname.yaks.app/recipes</b>,
+              live the moment it's built. Send it to anyone; change your mind
+              about it tomorrow.
+            </p>
+          </li>
+        </ol>
 
         <!-- The exchange sits in a conversation frame so a stranger skimming
              the page can see these words were said, by two people, as an
@@ -118,7 +172,7 @@
         <!-- What the conversation left behind, outside the frame: nobody said
              it, it is the thing itself. -->
         <div class="Step">
-          <h3 class="Step_Name">It's yours.</h3>
+          <h3 class="Step_Name">And this is what she got.</h3>
           <div class="Window"
             aria-label="A finished recipe box on its own website">
             <div class="Window_Bar">
@@ -147,7 +201,7 @@
             </div>
           </div>
           <p class="Note">
-            A website of your own, to keep or share.
+            That's the live one, running right there. Poke at it.
           </p>
         </div>
       </section>
@@ -195,6 +249,42 @@
         </dl>
       </section>
 
+      <!-- What it costs, on the page rather than one footer link away
+           (T-33643). Two plans, the shortest true version of each; the
+           pricing page is where the whole list and the fair-use promises
+           live, and every number here has to match it (D-32751). -->
+      <section class="Cost" aria-labelledby="cost">
+        <h2 id="cost" class="Title">What it costs</h2>
+        <div class="Plans">
+          <div class="Card Plan">
+            <h3 class="Plan_Price">Free</h3>
+            <p class="Note Note-small">For a few apps of your own.</p>
+            <ul class="Plan_List">
+              <li>5 apps</li>
+              <li>50,000 visits a month</li>
+              <li>1 GB of app data</li>
+              <li>Your own <b>yourname.yaks.app</b></li>
+            </ul>
+          </div>
+
+          <div class="Card Plan Plan-plus">
+            <h3 class="Plan_Price">$4<span class="Plan_Per"> a month</span></h3>
+            <p class="Note Note-small">For when five isn't enough.</p>
+            <ul class="Plan_List">
+              <li>As many apps as you like</li>
+              <li>500,000 visits a month</li>
+              <li>5 GB of app data, 25 GB of photos and files</li>
+              <li>A domain of your own, like <b>ourbookclub.com</b></li>
+            </ul>
+          </div>
+        </div>
+        <p class="Note Note-small">
+          Tax is included in the $4, wherever you are, and nothing you've made
+          is ever deleted for going over a limit.
+          <a href="/pricing">The whole list</a>.
+        </p>
+      </section>
+
       <section class="Join Card" aria-labelledby="join">
         <h2 id="join" class="Title">How to connect</h2>
         <p class="Note">
@@ -223,6 +313,7 @@
         coming by.</p>
       <ul class="Foot_Links">
         <li><a href="/help">Help</a></li>
+        <li><a href="/technical">Technical</a></li>
         <li><a href="/pricing">Pricing</a></li>
         <li><a href="/terms">Terms</a></li>
         <li><a href="/privacy">Privacy</a></li>

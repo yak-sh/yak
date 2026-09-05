@@ -496,12 +496,28 @@
 }
 
 @layer sections {
-  /* The header: the mark and the name. The home page wears the name alone —
-     its hero yak is one line below (T-33063). */
+  /* The header: the mark and the name, and the four places worth going
+     (T-33643). The name IS "home" — it carries the label — so the nav names
+     the other four and nothing else. Wider than the letter column on
+     purpose: the header spans the page, the reading does not.
+
+     Centred and stacked on a phone, and only spread apart once there is room
+     for both on one line. */
   .Top {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     justify-content: center;
-    padding: 1.25rem var(--gap);
+    gap: var(--half-gap) var(--gap);
+    width: min(100% - 2 * var(--gap), 52rem);
+    margin-inline: auto;
+    padding: 1.25rem 0;
+  }
+
+  @media (min-width: 40rem) {
+    .Top {
+      justify-content: space-between;
+    }
   }
 
   .Top_Name {
@@ -512,6 +528,28 @@
     font-weight: 800;
     font-size: var(--lead);
     text-decoration: none;
+  }
+
+  /* The nav itself: quiet words, not buttons — a row of links that wraps
+     rather than scrolls, since a phone is the first screen this is read on.
+     The page you are already on goes to full ink; nothing else marks it. */
+  .Nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--half-gap) var(--gap);
+    font-size: var(--small);
+    font-weight: 700;
+  }
+
+  .Nav a {
+    color: var(--soft-ink);
+    text-decoration: none;
+  }
+
+  .Nav a:hover,
+  .Nav a[aria-current='page'] {
+    color: var(--ink);
   }
 
   /* One column, a letter's width. The column says how WIDE, never how far
@@ -550,6 +588,48 @@
     color: var(--accent);
     font-size: var(--lead);
     font-weight: 700;
+  }
+
+  /* The three moves, before the worked example (T-33643): what strangers
+     could not find was the FIRST one — that this starts in their assistant's
+     own settings, not in a signup form here. Numbered because the order is
+     the information; the counter is drawn rather than written, so the markup
+     stays an ordinary <ol>. */
+  .Steps {
+    display: grid;
+    gap: var(--wide-gap);
+    margin: 0;
+    padding: 0;
+    counter-reset: step;
+  }
+
+  .Steps li {
+    display: grid;
+    grid-template-columns: 2rem 1fr;
+    gap: var(--quarter-gap) 0.875rem;
+    counter-increment: step;
+  }
+
+  .Steps li::before {
+    content: counter(step);
+    grid-row: span 2;
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--pill);
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: var(--small);
+    font-weight: 800;
+  }
+
+  /* Prices on the home page: the same two plans as /pricing, shortened. A
+     letter's width fits both at 15rem each, so `.Plans` stacks on a phone and
+     sits side by side on a laptop with no rule of its own here. */
+  .Cost {
+    display: grid;
+    gap: 1.25rem;
   }
 
   .Make {
