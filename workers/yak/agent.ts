@@ -7,7 +7,9 @@
 // per tool, so nothing here spells a bundle by hand. What it cannot bring is
 // the platform: space_new, the app_* family, domain_*, member_*, feedback and
 // about are this place's own verbs, and a plugin is how a graph grows verbs.
-// One server lists both tiers because both are `Tool`s.
+// mail_list and mail_send are a second such plugin (letters.ts) — an app's own
+// mailbox, said in the tool list so nobody confuses it with a person's.
+// One server lists every tier because all of them are `Tool`s.
 //
 // THE GRAPH IS A COMPOSITION, not a database. A person's data lives in one
 // Store object per app (graph.ts), an entity spans several, and reach.ts
@@ -26,6 +28,7 @@ import type { Bundle, Graph, Plugin, Row, Storage, Tool, Tx } from '@yaks/graph'
 import { Say, type Search } from '@yaks/mcp'
 import type { Vocab } from '@yaks/vocab'
 import { storeName } from './directory.ts'
+import { letters } from './letters.ts'
 import { composed, type Reach, read, written } from './reach.ts'
 import { titling } from './session.ts'
 import { storeOf } from './door.ts'
@@ -130,6 +133,18 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
 export let platform = (ctx: Ctx): Plugin => ({
   name: 'yak/platform',
   tools: TOOLS.map((t) => sugared(ctx, t)),
+})
+
+/**
+ * The post room's own verbs, as a second plugin (letters.ts): `mail_list` and
+ * `mail_send`. They are apart from the table above because they answer
+ * BUNDLES, so they are described in the vocabulary the caller's apps declare
+ * rather than in a sentence — which is a thing only this side of the door,
+ * holding the loaded vocabulary, can do.
+ */
+export let post = (ctx: Ctx, vocab: Vocab): Plugin => ({
+  name: 'yak/mail',
+  tools: letters(ctx, vocab),
 })
 
 /**
@@ -280,7 +295,7 @@ export let searching =
 export let reaching = async (ctx: Ctx, reach: Reach[]): Promise<Graph> => {
   let vocab = await spoken(ctx, reach)
   let storage = held(ctx, reach)
-  let plugins = [platform(ctx)]
+  let plugins = [platform(ctx), post(ctx, vocab)]
   let self: Graph = {
     vocab,
     storage,

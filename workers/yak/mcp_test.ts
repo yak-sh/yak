@@ -13,11 +13,13 @@ import {
 } from '@std/assert'
 import { slow, until } from '../../src/testing.ts'
 import {
+  arrives,
   client,
   connector,
   kernel,
   letter,
   meta,
+  rfc822,
   seed,
   signedIn,
   signIn,
@@ -115,11 +117,25 @@ slow(
         'feedback',
         // The one anybody may call, signed in or not (preauth.ts, T-33030).
         'about',
+        // And the post room's own two (letters.ts, T-34149), a plugin of
+        // their own because they answer bundles rather than a sentence.
+        'mail_list',
+        'mail_send',
       ])
       assert(tools.every((t: { inputSchema: unknown }) => t.inputSchema))
       // The generic tier promises the shape of its answer, so a caller reads a
       // described value instead of parsing prose (@yaks/mcp `outputSchema`).
-      for (let name of ['graph_apply', 'graph_query', 'graph_show', 'search']) {
+      // The mail tools answer bundles too, so they promise the same.
+      for (
+        let name of [
+          'graph_apply',
+          'graph_query',
+          'graph_show',
+          'search',
+          'mail_list',
+          'mail_send',
+        ]
+      ) {
         let one = tools.find((t: { name: string }) => t.name == name)
         assert(one.outputSchema, `${name} says what it answers`)
       }
@@ -164,6 +180,17 @@ slow(
       // whole bundles out, and a batch of bundles to write.
       assertStringIncludes(says('graph_query'), 'query LINE')
       assertStringIncludes(says('graph_apply'), 'BUNDLES')
+      // Both mail tools say WHICH mailbox they are, because the tool list is
+      // where a model with a mail connector beside this one decides what
+      // "check my email" meant (T-34149).
+      for (let name of ['mail_list', 'mail_send']) {
+        assertStringIncludes(says(name), '<space>.<app>@yaks.app')
+        assertStringIncludes(says(name), "not a person's own mailbox")
+      }
+      // And the instructions say the same thing once more, where an agent
+      // reads it before it has chosen any tool at all.
+      assertStringIncludes(init.instructions, 'mail_list and mail_send')
+      assertStringIncludes(init.instructions, 'check my email')
 
       // The guide the tool descriptions point at, offered as a resource and
       // read from the address that serves it — and the pages that go deep on
@@ -2255,6 +2282,18 @@ slow('app_list answers what the month cost', async () => {
     // same answer: nothing here is near a ceiling, so it is only the numbers.
     assertStringIncludes(said, 'metered (free tier')
     assertStringIncludes(said, '1 of 5 apps')
+
+    // And the other address every app has (T-34149), in the words and in the
+    // rows: nobody should have to derive a mailbox from a slug.
+    assertStringIncludes(said, 'metered.recipes@yaks.app')
+    let listing = await agent.call('tools/call', {
+      name: 'app_list',
+      arguments: { space: 'metered' },
+    })
+    assertEquals(
+      listing.structuredContent.spaces[0].apps[0].mail,
+      'metered.recipes@yaks.app',
+    )
   } finally {
     await k.stop()
   }
@@ -3257,10 +3296,12 @@ slow('the front page moves, and only the owner moves it', async () => {
       name: 'app_list',
       arguments: { space: 'front' },
     })
-    // Its address in the listing is the bare hostname: that is where it is.
+    // Its address in the listing is the bare hostname: that is where it is —
+    // and so is its mailbox, the bare space name for the same reason.
     assertStringIncludes(
       listing.content[0].text,
-      'second (second) v0: https://front.yaks.app/ — the front page',
+      'second (second) v0: https://front.yaks.app/ · front@yaks.app — ' +
+        'the front page',
     )
     assertEquals(
       listing.structuredContent.spaces[0].apps
@@ -3558,6 +3599,172 @@ slow('the answers four builders had to guess at', async () => {
     let [chore] = await rows('.task!')
     assertEquals(chore.task!.status, 'open')
     assertEquals((await rows('.task.status=open')).length, 1)
+  } finally {
+    await k.stop()
+  }
+})
+
+// An app's own mailbox at the agent door (T-34149). Mail already rode the
+// generic tier — a letter is `doc` + `mail` + `deliver` and `.mail!` reads one
+// back — so what is held here is the two things the tools add: the SCOPE, said
+// where a model chooses (the block above), and the two verbs answering bundles
+// through the doors graph_apply and graph_query already use, guard and all.
+type Letter = {
+  entity: { eid: string }
+  doc: { title: string; body: string }
+  mail: { from?: string; to?: string }
+  deliver?: { to: string }
+  delivered?: { at: string; via: string }
+  bounced?: { at: string; reason: string }
+}
+
+slow("an app's letters, listed and sent through the connector", async () => {
+  let k = await kernel()
+  try {
+    let them = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+    let agent = connector(k, them.cookie)
+    // Two letters arrive at the app's address, the way a stranger's does.
+    for (
+      let [subject, body] of [
+        ['Bring a dish', 'Potluck Friday.'],
+        ['And a pudding', 'If you have one.'],
+      ]
+    ) {
+      assertEquals(
+        (await arrives(k, {
+          from: 'ana@books.example',
+          to: 'jeff.recipes@yaks.app',
+          raw: rfc822({
+            From: 'Ana <ana@books.example>',
+            To: 'jeff.recipes@yaks.app',
+            Subject: subject,
+            'Content-Type': 'text/plain; charset="utf-8"',
+          }, body),
+        })).status,
+        200,
+      )
+    }
+
+    // And the app writes one of its own. The answer is the letter as applied,
+    // leaving from the app's own address whatever the tool was handed, and
+    // addressed to an ENTITY rather than to a string.
+    let sent = JSON.parse(
+      await agent.tool('mail_send', {
+        app: 'recipes',
+        to: 'ana@books.example',
+        title: 'Thanks for the pudding',
+        body: 'It went in **one** sitting.',
+      }),
+    ) as Letter
+    assertEquals(sent.mail.from, 'jeff.recipes@yaks.app')
+    assertEquals(sent.doc.title, 'Thanks for the pudding')
+    assert(sent.deliver!.to, 'the letter names a recipient entity')
+
+    // The mailbox, newest first: what it wrote, then the two that arrived.
+    let titles = async (args: Record<string, unknown> = {}) =>
+      (JSON.parse(
+        await agent.tool('mail_list', { app: 'recipes', ...args }),
+      ) as Letter[]).map((b) => b.doc.title)
+    assertEquals(await titles(), [
+      'Thanks for the pudding',
+      'And a pudding',
+      'Bring a dish',
+    ])
+    // Each side on its own: the ask to send is the whole distinction.
+    assertEquals(await titles({ direction: 'received' }), [
+      'And a pudding',
+      'Bring a dish',
+    ])
+    assertEquals(await titles({ direction: 'sent' }), [
+      'Thanks for the pudding',
+    ])
+    let inbox = JSON.parse(
+      await agent.tool('mail_list', { app: 'recipes', direction: 'received' }),
+    ) as Letter[]
+    assertEquals(inbox[0].mail.from, 'ana@books.example')
+    assertEquals(inbox[0].mail.to, 'jeff.recipes@yaks.app')
+    assert(!inbox[0].deliver, 'an arrival asked nobody to send it')
+
+    // What became of the one that went is a row on that same letter, written
+    // back a moment after the tool answered — which is what makes mail_list
+    // the way to read it, rather than the send's own reply. Either outcome is
+    // the point: this runtime's local mail binding cannot take the letter at
+    // all, so here it is always the bounce, and what is held is that the
+    // letter comes to REST rather than vanishing.
+    let settled = await until(async () => {
+      let [one] = JSON.parse(
+        await agent.tool('mail_list', { app: 'recipes', direction: 'sent' }),
+      ) as Letter[]
+      return one.delivered || one.bounced ? one : null
+    }, { timeout: 30_000, poll: 250, label: 'the letter to come to rest' })
+    assertEquals(settled!.entity.eid, sent.entity.eid)
+
+    // A DRAFT — a letter kept and never asked for — is neither side: it did
+    // not arrive and it has not gone. It is in the whole mailbox and in
+    // neither half, which is what the two words mean.
+    await agent.tool('graph_apply', {
+      app: 'recipes',
+      entities: [{
+        entity: { eid: '$draft' },
+        doc: { title: 'Next month', body: 'Not yet.' },
+        mail: {},
+      }],
+    })
+    assert((await titles()).includes('Next month'))
+    assert(!(await titles({ direction: 'received' })).includes('Next month'))
+    assert(!(await titles({ direction: 'sent' })).includes('Next month'))
+
+    // A second letter to the same address hangs off the recipient the app
+    // already has, rather than a second row for one person.
+    let again = JSON.parse(
+      await agent.tool('mail_send', {
+        app: 'recipes',
+        to: 'ana@books.example',
+        title: 'One more thing',
+        body: 'Bring the tin back.',
+      }),
+    ) as Letter
+    assertEquals(again.deliver!.to, sent.deliver!.to)
+
+    // Only a member sends: the platform tier is the space's, and an app that
+    // anyone with the link may WRITE is still not an open relay (the letter
+    // leaves DKIM-signed as ours). A stranger's own agent is refused, and so
+    // is an anonymous batch through the app's own page door — 403, whole, so
+    // the letter is not written either.
+    await agent.tool('app_set', { app: 'recipes', access: 'open' })
+    let stranger = connector(k, (await signIn(k)).cookie)
+    await assertRejects(
+      () =>
+        stranger.tool('mail_send', {
+          app: 'recipes',
+          space: 'jeff',
+          to: 'ana@books.example',
+          title: 'Not mine to send',
+          body: 'From nobody here.',
+        }),
+      Error,
+      'not a member of jeff',
+    )
+    let anybody = client(k, 'jeff.yaks.app', 'recipes')
+    let relay = await anybody.post({
+      entities: [
+        { entity: { eid: '$them' }, email: { address: 'ana@books.example' } },
+        {
+          entity: { eid: '$note' },
+          doc: { title: 'Open relay', body: 'Anyone at all.' },
+          mail: {},
+          deliver: { to: '$them' },
+        },
+      ],
+    })
+    // The store answers 403 `Denied`; the page door hands a visitor the
+    // refusal and its reason (apps.ts), which is what says the rule held.
+    assert(!relay.ok, 'an open app is not an open relay')
+    assertStringIncludes(await relay.text(), 'Denied')
+    assertEquals(await titles({ direction: 'sent' }), [
+      'One more thing',
+      'Thanks for the pudding',
+    ])
   } finally {
     await k.stop()
   }

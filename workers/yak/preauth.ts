@@ -86,6 +86,11 @@ a page for a trip. An app can be private, readable by anyone with the link,
 or open for anyone to write to. It can carry tools of its own, which an agent
 calls the way it calls these, and code of its own that runs on the server.
 
+Every app also has an address of its own, <space>.<app>@yaks.app — letters to
+it land in the app's store, and the app writes from it. That is the app's
+mailbox and never a person's own; mail asked about with no app named is their
+mail account, which is somewhere else entirely.
+
 Everything else here needs signing in: making a space or an app, writing its
 files, deploying it, reading or writing its data. Sign in at
 https://yaks.app — an email address and a six-digit code, no password — and

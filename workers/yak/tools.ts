@@ -56,6 +56,7 @@ import {
   appStore,
   bornAt,
   type Directory,
+  mailbox,
   META,
   type Role,
   type Space,
@@ -1574,10 +1575,11 @@ export let TOOLS: Tool[] = [
     name: 'app_list',
     description:
       'What the person already has here: every app in every space of theirs, ' +
-      'with its address, the version it is at, how many breaks are still ' +
-      "open in it, which one is the space's front page, and what the month " +
-      'has cost against what the space is allowed. Read it before making a ' +
-      'second app, and when they ask what they have or where something lives.',
+      'with its address, the mailbox it sends and receives at, the version ' +
+      'it is at, how many breaks are still open in it, which one is the ' +
+      "space's front page, and what the month has cost against what the " +
+      'space is allowed. Read it before making a second app, and when they ' +
+      'ask what they have or where something lives.',
     view: APPS_VIEW,
     input: {
       type: 'object',
@@ -1614,6 +1616,11 @@ export let TOOLS: Tool[] = [
             slug: app.slug,
             title: app.title,
             url: url(space, app),
+            // The other address it has (directory.ts `mailbox`): where its
+            // letters leave from and where a reader writes back. Said here
+            // because this is the listing a person is shown when they ask
+            // what they have, and an address nobody is told is no address.
+            mail: mailbox(space, app),
             version: app.version ?? 0,
             errors,
             usage: its,
@@ -1624,7 +1631,7 @@ export let TOOLS: Tool[] = [
               errors ? `, ${errors} open` : ''
             }${its ? `, ${its.requests} requests, ${size(its.bytes)}` : ''}: ${
               url(space, app)
-            }${front ? ' — the front page' : ''}`,
+            } · ${mailbox(space, app)}${front ? ' — the front page' : ''}`,
           )
         }
         if (!apps.length) lines.push('- no apps yet')
