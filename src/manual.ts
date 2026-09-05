@@ -1809,7 +1809,11 @@ let parsed = (
   let body: string | undefined
   if (manual.body == 'body') {
     let value = params.find((p) => p.prop == 'body')?.value
-    body = opts['--body'] ?? (value == null ? undefined : String(value))
+    // Only a literal is prose. A field operator ({"$edit": …}) rides in the
+    // params for apply() to resolve; stringified it would store the words
+    // '[object Object]' as somebody's body.
+    body = opts['--body'] ??
+      (typeof value == 'string' ? value : undefined)
   } else if (manual.body == 'text') {
     body = opts['--body']
     let text = many.text ?? []

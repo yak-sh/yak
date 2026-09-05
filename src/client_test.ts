@@ -367,6 +367,35 @@ Deno.test('param: a bare facet teaches instead of crashing (T-12981)', () => {
   assertThrows(() => param('.archived='), Error, 'server-stamped mark')
 })
 
+// A `$edit` block passed as a dot-param value used to be STORED as the body,
+// clobbering the doc it was meant to patch (T-33926). The `$` sigil is
+// reserved for operators at every door, so the update doors route the same
+// operator graph_apply takes, and apply() owns every refusal.
+Deno.test('param: a $-sigil JSON value routes as the field operator', () => {
+  let edit = { $edit: { old: 'teh', new: 'the' } }
+  assertEquals(param(`.body=${JSON.stringify(edit)}`), {
+    comp: 'doc',
+    prop: 'body',
+    value: edit,
+  })
+  // Multi-hunk, whitespace and all — JSON.parse reads it, not the eye.
+  assertEquals(
+    param('.body= {"$edit": [{"old": "a", "new": "b", "all": true}]}')?.value,
+    { $edit: [{ old: 'a', new: 'b', all: true }] },
+  )
+  // An operator on a reference column stays an operator: apply() refuses it
+  // by column, rather than deref failing on '[object Object]'.
+  assertEquals(param(`.project=${JSON.stringify(edit)}`)?.value, edit)
+  assertEquals(derefParams([], [param(`.project=${JSON.stringify(edit)}`)!]), [
+    { comp: 'task', prop: 'project', value: edit },
+  ])
+  // Only the sigil is reserved. Ordinary prose — JSON prose included — is a
+  // literal, so a body that happens to be an object still stores verbatim.
+  let plain = '{"old": "teh", "new": "the"}'
+  assertEquals(param(`.body=${plain}`)?.value, plain)
+  assertEquals(param('.body={not json')?.value, '{not json')
+})
+
 Deno.test('param: empty writable facets compile Boolean presence', () => {
   assertEquals(param('.verifier=true'), {
     comp: 'verifier',

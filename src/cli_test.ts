@@ -1267,6 +1267,41 @@ slow('task set --body patches the document body', async () => {
   }
 })
 
+// The $edit operator at the CLI's update door (T-33926): the JSON graph_apply
+// takes as a comp value rides through as the operator, in BOTH body spellings,
+// instead of being stored as the body it was meant to patch. The server
+// resolves it against the current value — what leaves here is the operator.
+slow('task set sends a $edit body as the operator, not as text', async () => {
+  let fake = graphServer()
+  let edit = '{"$edit":{"old":"teh","new":"the"}}'
+  let run = (arg: string) =>
+    new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'set',
+        'T-2',
+        arg,
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: fake.host },
+    }).output()
+  try {
+    for (let arg of [`.body=${edit}`, `--body=${edit}`]) {
+      let out = await run(arg)
+      assertEquals(out.code, 0, `${arg}: ${text(out.stderr)}`)
+    }
+    let op = { body: { $edit: { old: 'teh', new: 'the' } } }
+    assertEquals(fake.acked, [
+      { eid: T, name: 'doc', comp: op },
+      { eid: T, name: 'doc', comp: op },
+    ])
+  } finally {
+    await fake.server.shutdown()
+  }
+})
+
 slow('task set adds and removes empty writable facets', async () => {
   let session = 'cccccccc-0000-4000-8000-000000000012'
   let project = 'cccccccc-0000-4000-8000-000000000019'

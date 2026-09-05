@@ -275,9 +275,26 @@ let requiredRef = (
 // (`$edit`, …) rather than a literal column value. Detected by the `$` sigil so
 // the value language leaves it alone; a real scalar is never an object. Kept
 // here (not imported from edit.ts) to avoid a props↔edit cycle.
-let isFieldOp = (v: unknown): boolean =>
+export let isFieldOp = (v: unknown): boolean =>
   v != null && typeof v == 'object' && !Array.isArray(v) &&
   Object.keys(v as object).some((k) => k.startsWith('$'))
+
+// The same operator, said at a DOT-PARAM door, where every value arrives as
+// text: the JSON graph_apply takes as a comp value, spelled inline —
+// `.body={"$edit":{"old":"a","new":"b"}}`. Undefined for anything else, so
+// ordinary prose (JSON included) stays a literal; only the reserved `$` sigil
+// is read as an operator. Without this the JSON stored AS the body and
+// clobbered the doc it was meant to patch (T-33926).
+export let fieldOp = (raw: string): Record<string, unknown> | undefined => {
+  if (!raw.trimStart().startsWith('{')) return
+  let v: unknown
+  try {
+    v = JSON.parse(raw)
+  } catch {
+    return
+  }
+  return isFieldOp(v) ? v as Record<string, unknown> : undefined
+}
 
 // A batch gets one value language before any writer observes it. Unknown
 // components and server-owned columns stay untouched for the db allowlist;

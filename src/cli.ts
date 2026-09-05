@@ -861,7 +861,9 @@ let set = async (got: Got) => {
   // is last and therefore wins like a repeated dot-param does.
   let params = [...got.params]
   if (got.opts['--body'] != null) {
-    params.push({ comp: 'doc', prop: 'body', value: got.opts['--body'] })
+    // Through param(), not hand-built: the value language is the dot-param
+    // door's, so `--body` reads a $edit operator exactly as `.body=` does.
+    params.push(param(`.body=${got.opts['--body']}`)!)
   }
   if (!id || !params.length) {
     throw new Error('task set <id> .prop=value ...')

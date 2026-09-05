@@ -31,18 +31,22 @@ by their property names: '.assignee=jeff' routes to task.assignee, and any refer
 value may be an alias, a human id (T-3, P-19), or an eid. Numeric-looking
 text stays text; typed scalars parse by their grammar ('.pin.x=01',
 '.verified=yes', '.priority=p02'). Empty writable tags use Boolean presence
-('.verifier=true' adds it; '.verifier=false' removes it). Statuses: ${
-    statuses.join(', ')
-  }.`
+('.verifier=true' adds it; '.verifier=false' removes it). To change PART of a
+long text value, a dot-param value may be the $edit OPERATOR spelled as the
+same JSON graph_apply takes —
+'.body={"$edit":{"old":"teh","new":"the"}}' patches in place instead of
+replacing the whole value. Statuses: ${statuses.join(', ')}.`
 
-// The $edit operator: taught beside graph_apply (the wire door) and appended
-// to `task help grammar`, but deliberately NOT folded into GRAMMAR/FILTERS —
-// those inject into task_new/task_update, which take dot-params, not wire
-// operators. This is the one Claude-facing surgical edit surface; the codex V4A
+// The $edit operator, taught in full beside graph_apply (the wire door) and
+// appended to `task help grammar`; GRAMMAR carries the one-line dot-param
+// spelling, since the update doors (task_update, `task set`) route the same
+// operator. This is the one Claude-facing surgical edit surface; the codex V4A
 // equivalent is the graph_patch tool.
 export let EDIT_OP =
   `The $edit operator (surgical in-place edit): in a graph_apply CHANGE, a
 text/body comp value may carry {$edit: …} instead of a whole new literal.
+The dot-param doors take the same operator as its JSON text —
+task_update ".body={\\"$edit\\":{\\"old\\":\\"a\\",\\"new\\":\\"b\\"}}".
 apply() reads that column's CURRENT value under the write lock and replaces
 old→new in place — the comp-agnostic Edit primitive, working on ANY text or
 body column of ANY comp (doc.body, doc.title, a design/persona/memory body,
@@ -54,7 +58,7 @@ text, and a net-unchanged result is refused too. Because it merges into the
 current value under the lock (old must still match), a concurrent full-value
 rewrite is never clobbered — the batch refuses instead. Refused on
 enum/number/reference/bool columns with an addressed error. Prefer it over
-rewriting a whole large value with '.body=' — cheaper, and safe against a
+rewriting a whole large value literally — cheaper, and safe against a
 concurrent edit. Example change:
 {"eid":"T-3","name":"doc","comp":{"body":{"$edit":[{"old":"foo","new":"bar"}]}}}`
 

@@ -39,7 +39,14 @@ import type {
 export type { EntityLiteral, LiteralRef } from './mutation.ts'
 import { EID, idOf, SHORT, shortId, slugsOf } from './types.ts'
 import { link, moves, saidEid, typeOf } from './edge.ts'
-import { formatProp, parseProp, propAt, refOf } from './props.ts'
+import {
+  fieldOp,
+  formatProp,
+  isFieldOp,
+  parseProp,
+  propAt,
+  refOf,
+} from './props.ts'
 import { local } from './time.ts'
 import { nearest, offer } from './near.ts'
 import {
@@ -967,6 +974,13 @@ export let param = (arg: string): Param | null => {
     )
     return { ...p, value: !!present }
   }
+  // A `$`-sigil object value is a field OPERATOR, not a literal — the same
+  // value graph_apply takes as a comp value, so the update doors speak the one
+  // operator too. It rides through untouched (no scalar parse, no deref) for
+  // apply() to resolve against the CURRENT stored value; apply() also owns
+  // every refusal — an unknown `$op`, a non-text column, a hunk that misses.
+  let op = fieldOp(raw)
+  if (op) return { ...p, value: op }
   let declared = propAt(p.comp, p.prop)!
   if (!(typeof declared.type == 'object' && 'eid' in declared.type)) {
     p.value = parseProp(declared, raw)
@@ -1332,6 +1346,8 @@ export let checkedRefs = async (preds: Pred[], q: Querier = query) => {
 export let derefParams = (all: Row[], ps: Param[]) =>
   ps.map((p) => {
     if (!p.prop) return p
+    // An operator names no entity — apply() refuses it by column instead.
+    if (isFieldOp(p.value)) return p
     let declared = propAt(p.comp, p.prop)!
     let value = typeof declared.type == 'object' && 'eid' in declared.type
       ? parseProp(declared, p.value, {
@@ -1349,7 +1365,7 @@ export let derefedParams = async (ps: Param[], q: Querier = query) => {
   let refs = ps.filter((p) => {
     let t = propAt(p.comp, p.prop)?.type
     return typeof t == 'object' && 'eid' in t && p.value &&
-      !UUID.test(String(p.value))
+      !isFieldOp(p.value) && !UUID.test(String(p.value))
   })
   if (!refs.length) return derefParams([], ps)
   let all = await fetched(refs.map((p) => String(p.value)), [], q)

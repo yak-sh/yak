@@ -2569,6 +2569,59 @@ Deno.test('$edit through graph_apply: surgical replace, refusals, replace_all', 
   }
 })
 
+// The same operator at the DOT-PARAM door (T-33926). Passed to task_update as
+// a body it used to be stored verbatim, clobbering the doc it was meant to
+// patch; now the `$` sigil routes it to apply(), which owns the refusals too.
+Deno.test('$edit through task_update: patches in place, never stored raw', async () => {
+  let g = graph()
+  let E = '62000000-0000-4000-8000-000000000001'
+  let long = `heading\n\n${'context '.repeat(80)}fix teh plan\n`
+  let body = () => rows(snapshot(g.db)).find((r) => r.eid == E)?.comps.doc?.body
+  try {
+    await protocol(g.io, async (client) => {
+      apply(g.db, [
+        { eid: E, name: 'entity', comp: { eid: E, num: 43 } },
+        { eid: E, name: 'doc', comp: { title: 'Doc', body: long } },
+        { eid: E, name: 'task', comp: {} },
+      ])
+      let update = (...params: string[]) =>
+        client.callTool({
+          name: 'task_update',
+          arguments: { id: E, params },
+        })
+      let edit = (op: unknown) =>
+        update(`.body=${JSON.stringify({ $edit: op })}`)
+
+      let ok = await edit({ old: 'teh plan', new: 'the plan' })
+      assertEquals(ok.isError, undefined, said(ok))
+      assertEquals(body(), long.replace('teh plan', 'the plan'))
+      // A bare receipt: the whole-value nudge is for whole values, and a
+      // patch of a 700-char body never earns it.
+      assertMatch(said(ok), /^updated T-\d+$/)
+
+      // A hunk that misses refuses the batch; the 700-char body is untouched.
+      let patched = body()
+      let miss = await edit({ old: 'nope', new: 'x' })
+      assertEquals(miss.isError, true)
+      assertMatch(said(miss), /not found/)
+      assertEquals(body(), patched)
+
+      // A typo'd operator is named, not written — the sigil is reserved.
+      let typo = await update('.body={"$edt":{"old":"a","new":"b"}}')
+      assertEquals(typo.isError, true)
+      assertMatch(said(typo), /unknown operator "\$edt"/)
+      assertEquals(body(), patched)
+
+      // And an operator aimed at a non-text column is refused by address.
+      let enumd = await update('.status={"$edit":{"old":"a","new":"b"}}')
+      assertEquals(enumd.isError, true)
+      assertMatch(said(enumd), /status is one of/)
+    })
+  } finally {
+    g.db.close()
+  }
+})
+
 // graph_patch is Codex's V4A door onto the same shared patch core: multiple
 // prop-addressed sections in one call, resolved by human id, landed atomically
 // and refused (not clobbered) when a hunk doesn't match.

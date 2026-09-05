@@ -242,10 +242,10 @@ export let patchHint = (
         let who = name?.(c.eid) ?? c.eid
         return `\nhint: that was a ${v.length}-char full-value ${c.name}.${col} ` +
           `rewrite on ${who}. To change PART of a large value, patch it in ` +
-          `place — the $edit operator in graph_apply (Claude: ` +
-          `comp:{${col}:{$edit:{old,new}}}) or graph_patch (Codex: V4A) — ` +
-          `instead of rewriting the whole value (cheaper, and it won't ` +
-          `clobber a concurrent edit).`
+          `place — the $edit operator, as a dot-param value here ` +
+          `(.${col}={"$edit":{"old":…,"new":…}}), as a comp value in ` +
+          `graph_apply, or graph_patch (Codex: V4A) — instead of rewriting ` +
+          `the whole value (cheaper, and it won't clobber a concurrent edit).`
       }
     }
   }
