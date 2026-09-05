@@ -55,12 +55,19 @@
 // A page that reconnects hears the whole conversation again as those same
 // frames, in order, then `{ready}` — so a reload costs nothing and the page
 // has one renderer for a live build and a replayed one.
+//
+// AND THE SAME FRAMES WITH NO SOCKET AT ALL. A browser that ran no script
+// posts one line to `/api/build` and is answered a page (pages.ts `building`,
+// T-34242); what that page draws is `POST /say` below — the round waited for,
+// then the whole conversation as this same list. One wire, two ways to read
+// it.
 import type { DurableSql, Hibernation, Wire } from '@yaks/durable-object'
 import { type Level, level, writes } from '@yaks/member'
 import { type Beat, build, type Line } from './builder.ts'
 import { directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
+import { building } from './pages.ts'
 import type { Who } from './session.ts'
 
 /**
@@ -154,7 +161,11 @@ export let frames = (said: Line[]): Frame[] => {
 }
 
 // The Beat a build reports, as the frame the page draws. `done` carries the
-// last sentence, which is the refusal where there was one.
+// last sentence, which is the refusal where there was one — and a REFUSAL is
+// also said as a builder's line, because that is what the loop wrote into the
+// conversation (builder.ts `end`) and a replay would say it that way. So the
+// live stream and the replay are the same sequence, and `done` is only ever
+// the mark that the turn is over.
 let framed = (b: Beat): Frame[] =>
   b.beat == 'said'
     ? [{ said: 'builder', text: b.text }]
@@ -167,7 +178,10 @@ let framed = (b: Beat): Frame[] =>
         ? [{ built: addressed(b.text)! }]
         : []),
     ]
-    : [{ done: b.text, ...(b.refused ? { refused: b.refused } : {}) }]
+    : [
+      ...(b.refused ? [{ said: 'builder', text: b.text } as Frame] : []),
+      { done: b.text, ...(b.refused ? { refused: b.refused } : {}) },
+    ]
 
 // The conversation, one row per line, in the order it was said.
 let SAID = `create table if not exists said (
@@ -243,48 +257,71 @@ export class Builder {
   }
 
   /**
-   * One line from a person: the build it starts, and the frames it casts.
+   * One line from a person: the build it starts, and the frames it casts. What
+   * it ANSWERS is the turn's last frame — `{done}` or `{busy}` — for the door
+   * below, which waits for the round rather than listening to it. Everyone on
+   * a socket has already heard it.
    *
    * ONE AT A TIME, and the flag is raised before the first `await` on purpose:
    * two frames a moment apart are two handlers interleaving at every await, so
    * a check that yielded first would let both builds start.
    */
-  async say(held: Held, text: string) {
-    if (this.#building) return this.#tell([{ busy: WAIT }])
+  async say(held: Held, text: string): Promise<Frame> {
+    if (this.#building) return this.#say([{ busy: WAIT }])
     this.#building = true
     try {
       let space = await this.#space(held.space)
-      if (!space) return this.#tell([{ done: 'that space is gone' }])
+      if (!space) return this.#say([{ done: 'that space is gone' }])
       let who: Who = { person: held.person, role: held.role }
       let asked: Line = { said: 'person', text }
       let was = this.said()
       this.#keep([asked])
       this.#tell([{ said: 'person', text }])
+      let end: Frame = { done: '' }
       let out = await build(this.#env, who, space, [...was, asked], {
-        on: (b) => this.#tell(framed(b)),
+        on: (b) => {
+          let cast = framed(b)
+          if (b.beat == 'done') end = cast[cast.length - 1]
+          this.#tell(cast)
+        },
       })
       // What the loop added to what it was handed: the person's line is
       // already kept, so the transcript and the loop agree on one history.
       this.#keep(out.lines.slice(was.length + 1))
+      return end
     } catch (e) {
       // The loop answers its own refusals in sentences; anything that reaches
       // here is ours breaking, and the person is owed a sentence for that too.
       console.error('builder: the loop threw', e)
-      this.#tell([{ done: 'Something of ours broke. Nothing was built.' }])
+      return this.#say([{
+        done: 'Something of ours broke. Nothing was built.',
+      }])
     } finally {
       this.#building = false
     }
   }
 
+  // A frame told to everyone and handed back to the caller: the two endings
+  // that never reach the loop.
+  #say(frames: Frame[]): Frame {
+    this.#tell(frames)
+    return frames[0]
+  }
+
   /**
-   * The object's door: the handshake, and nothing else. Who is asking is the
-   * kernel's word (apps.ts vouches it the way it vouches a store request) —
-   * this object is never reached from the internet.
+   * The object's door: the handshake, and the line a browser with no script
+   * posts. Who is asking is the kernel's word (apps.ts vouches it the way it
+   * vouches a store request) — this object is never reached from the internet.
    */
-  fetch(request: Request): Response {
+  async fetch(request: Request): Promise<Response> {
     let url = new URL(request.url)
-    if (url.pathname != '/ws') return no(404, 'no route')
-    if ((request.headers.get('upgrade') ?? '').toLowerCase() != 'websocket') {
+    if (url.pathname != '/ws' && url.pathname != '/say') {
+      return no(404, 'no route')
+    }
+    if (
+      url.pathname == '/ws' &&
+      (request.headers.get('upgrade') ?? '').toLowerCase() != 'websocket'
+    ) {
       return no(426, 'this is a WebSocket endpoint')
     }
     let person = request.headers.get('x-yak-person')
@@ -296,7 +333,24 @@ export class Builder {
     // may do.
     let role = said ? level(said) : null
     if (!writes(role)) return no(403, NOT_A_WRITER)
-    return this.#accept({ person, role, space })
+    let held: Held = { person, role, space }
+    return url.pathname == '/say'
+      ? await this.#round(request, held)
+      : this.#accept(held)
+  }
+
+  /**
+   * A line from a browser with no socket: the round WAITED for, and the whole
+   * conversation answered as the frames a page draws — the replay a socket
+   * would have heard, plus the `{done}` or `{busy}` this line came to. The
+   * page is pages.ts's; this is the same wire, said once instead of streamed.
+   */
+  async #round(request: Request, held: Held): Promise<Response> {
+    let asked = await request.json() as { say?: unknown }
+    let text = typeof asked.say == 'string' ? asked.say.trim() : ''
+    if (!text) return no(400, 'say what you want built')
+    let end = await this.say(held, text)
+    return Response.json({ frames: [...frames(this.said()), end] })
   }
 
   // The 101, and the socket handed to the runtime so it outlives this object.
@@ -363,4 +417,42 @@ export let joining = (env: Env, space: string, req: Request, who: Who) => {
   if (who.person) out.headers.set('x-yak-person', who.person)
   if (who.role) out.headers.set('x-yak-role', who.role)
   return builderOf(env, space).fetch(out)
+}
+
+/**
+ * The other door on the same address (T-34242): a plain form POST, from a
+ * browser that ran no script. One line, the round waited for, and a PAGE back
+ * — the way a drop answers a page rather than a code (drop.ts, same reason).
+ *
+ * apps.ts is the only caller, and it has already said who is asking.
+ */
+export let posting = async (
+  env: Env,
+  space: Space,
+  req: Request,
+  who: Who,
+): Promise<Response> => {
+  let form = await req.formData()
+  let text = String(form.get('say') ?? '').trim()
+  if (!text) {
+    return building({ space: space.slug, why: 'Say what you want built.' })
+  }
+  let asked = await builderOf(env, space.eid).fetch(
+    new Request('http://builder/say', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        [SPACE]: space.eid,
+        'x-yak-person': who.person ?? '',
+        'x-yak-role': who.role ?? '',
+      },
+      body: JSON.stringify({ say: text }),
+    }),
+  )
+  if (!asked.ok) {
+    let said = await asked.json() as { message?: string }
+    return building({ space: space.slug, why: said.message ?? NOBODY })
+  }
+  let { frames } = await asked.json() as { frames: Frame[] }
+  return building({ space: space.slug, frames })
 }

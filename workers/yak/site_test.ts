@@ -165,6 +165,24 @@ Deno.test('the plan pages carry the builds the code enforces', () => {
   assert(flat(read('technical.html')).includes('not per message'))
 })
 
+// What the plan line MEANS, said in words beside it (T-34242). "1 app built
+// for you" is a number; the door it names is a person with no assistant at all
+// saying what they want on their own space page, and both pages that quote the
+// number say so.
+Deno.test('the plan pages say what a build for you is', () => {
+  for (let page of ['index.html', 'pricing.html']) {
+    let html = flat(read(page)).toLowerCase()
+    assert(
+      html.includes('your first app, built for you'),
+      `${page} does not offer the first build`,
+    )
+    assert(
+      html.includes('without an assistant') || html.includes('no assistant'),
+      `${page} does not say the builder needs no assistant`,
+    )
+  }
+})
+
 Deno.test('every footer link names a page that is there', () => {
   for (let page of branded) {
     let foot = read(page).split('<footer')[1] ?? ''

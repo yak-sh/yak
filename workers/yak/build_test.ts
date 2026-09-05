@@ -28,9 +28,19 @@ import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { ai, platform, state, type Turn } from './harness.ts'
 import { until } from '../../src/testing.ts'
+import { sign } from '../../src/token.ts'
 
 let SECRET = 'a probe secret'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
+
+// A signed-in person, as the browser carries them — what the form POST below
+// arrives with, since the door with no script reads the cookie like every
+// other page (serving_test.ts says it the same way).
+let as = async (person: string) =>
+  `yak_session=${await sign(
+    { person, space: null, exp: Date.now() + 60_000 },
+    SECRET,
+  )}`
 
 // The three turns that make somebody a recipe box, said the way the Workers AI
 // binding answers them.
@@ -228,7 +238,7 @@ Deno.test('a socket with nobody on it never opens', async () => {
   let { object } = await seeded()
   let upgrade = { upgrade: 'websocket', 'x-space-eid': 'a-space' }
   let refused = async (headers: Record<string, string>) => {
-    let r = object.fetch(
+    let r = await object.fetch(
       new Request('http://builder/ws', { headers: { ...upgrade, ...headers } }),
     )
     let said = await r.json() as { error: string; message: string }
@@ -246,10 +256,45 @@ Deno.test('a socket with nobody on it never opens', async () => {
     { status: 403, error: 'Refused', message: NOT_A_WRITER },
   )
   // And a request that is not an upgrade at all is not this door.
-  let plain = object.fetch(
+  let plain = await object.fetch(
     new Request('http://builder/ws', { headers: { 'x-yak-person': ADA } }),
   )
   assertEquals(plain.status, 426)
+})
+
+// The page with no script (T-34242): the same conversation, said once. A form
+// POST to the same address waits for the round and is answered a PAGE — the
+// transcript, each tool as a row, and the address the build ended at.
+Deno.test('a form posted with no script is answered the conversation', async () => {
+  let { env } = await seeded(MAKES_ONE)
+  let form = new FormData()
+  form.set('say', 'a recipe box please')
+  let out = await apps.fetch(
+    new Request('https://ada.yaks.app/api/build', {
+      method: 'POST',
+      body: form,
+      headers: { cookie: await as(ADA) },
+    }),
+    env,
+  )
+  assertEquals(out.status, 200)
+  let page = await out.text()
+  // The person's line, the builder's, the tools it ran, and the address —
+  // everything the socket would have streamed, drawn into the page.
+  assertStringIncludes(page, 'a recipe box please')
+  assertStringIncludes(page, 'It is ready.')
+  assertStringIncludes(page, 'app_deploy')
+  assertStringIncludes(page, 'https://ada.yaks.app/recipes/')
+  // And the form again, so the next line goes the same way.
+  assertStringIncludes(page, 'action="/api/build"')
+
+  // The app the posted line made is serving.
+  let live = await apps.fetch(
+    new Request('https://ada.yaks.app/recipes/'),
+    env,
+  )
+  assertEquals(live.status, 200)
+  assertStringIncludes(await live.text(), 'Lemon cake')
 })
 
 Deno.test('the door refuses a stranger before it reaches the object', async () => {

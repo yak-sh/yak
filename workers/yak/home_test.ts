@@ -107,6 +107,49 @@ slow('a space with no front page lists what you may open', async () => {
   }
 })
 
+// The owner block's order (T-34242). A space with nothing built opens with
+// the builder's question: it is the one door that needs no assistant of the
+// person's own, and somebody who has just signed in has nothing else to do
+// here. Once something IS built, connecting an assistant leads again and the
+// question moves under it.
+slow("the builder's chat leads a space with nothing in it", async () => {
+  let k = await kernel()
+  try {
+    let them = await seed(k, [
+      { slug: 'jeff', apps: ['recipes'] },
+      { slug: 'bare', apps: [] },
+    ])
+    let at = (host: string, cookie?: string) =>
+      k.at(host, '/', { headers: cookie ? { cookie } : {} })
+
+    let empty = await (await at('bare.yaks.app', them.cookie)).text()
+    assertStringIncludes(empty, 'action="/api/build"')
+    assert(
+      empty.indexOf('What do you want to build?') <
+        empty.indexOf('Connect your assistant'),
+      empty,
+    )
+    // Its live half is served on the space's own hostname, so the page needs
+    // no asset of the apex.
+    assertStringIncludes(empty, 'src="/api/build.js"')
+    assertEquals((await k.at('bare.yaks.app', '/api/build.js')).status, 200)
+
+    // With an app there, the instructions lead and the question follows.
+    let some = await (await at('jeff.yaks.app', them.cookie)).text()
+    assert(
+      some.indexOf('Connect your assistant') <
+        some.indexOf('Build something else'),
+      some,
+    )
+
+    // A stranger is offered no door that would only ever refuse them.
+    let cold = await (await at('bare.yaks.app')).text()
+    assert(!cold.includes('/api/build'), cold)
+  } finally {
+    await k.stop()
+  }
+})
+
 slow('the front page is served at the space root', async () => {
   let k = await kernel()
   try {

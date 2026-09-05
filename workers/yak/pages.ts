@@ -9,6 +9,8 @@
 // carries an email address a stranger typed, and web content never speaks
 // HTML (the repo's md.ts rule, one floor down).
 
+import type { Frame } from './build.ts'
+
 // The one escape: `&` first, so an escape is never escaped twice.
 export let esc = (s: string) =>
   s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
@@ -80,6 +82,21 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .Drop_File { border: 0; padding: 0; background: none; cursor: pointer }
 .Drop_Say { color: var(--soft-ink); font-size: .9rem }
 .Files { display: grid; gap: .3rem; margin: 0; padding-left: 1.2rem; color: var(--soft-ink); font-size: .95rem }
+.Chat_Said { display: grid; gap: .45rem; margin: 0 0 1rem }
+.Chat_Said:empty { display: none }
+.Chat_Bubble { max-width: 90%; margin: 0; padding: .55rem .9rem; border-radius: 1.1rem; background: var(--ground); color: var(--ink); white-space: pre-wrap }
+.Chat_Bubble-you { justify-self: end; background: var(--meadow); color: var(--ground) }
+.Chat_Bubble a { color: inherit }
+.Chat_Tool { display: flex; gap: .4rem; align-items: baseline; margin: 0; padding: 0 .3rem; color: var(--soft-ink); font-size: .9rem }
+.Chat_Tool-no { color: var(--warn) }
+.Chat_Name { font-weight: 700; flex: none }
+.Chat_Of { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.Chat_Built { margin: .4rem 0; padding: 1rem; border: 2px solid var(--meadow); border-radius: 1.25rem; background: var(--ground); text-align: center }
+.Chat_Built p { margin: 0 0 .6rem }
+.Chat_Note { margin: 0; color: var(--soft-ink); font-size: .9rem }
+.Chat_Ask { margin: 0 }
+.Chat_Ask textarea { min-width: 0; width: 100%; min-height: 4.5rem; font: inherit; padding: .7rem 1rem; border: 2px solid var(--soft-ink); border-radius: 1.25rem; background: var(--paper); color: var(--ink); resize: vertical }
+.Chat_Ask textarea:disabled { opacity: .6 }
 </style>
 </head>
 <body><main><h1>${title}</h1><p>${lead}</p>${inner}</main></body>
@@ -169,6 +186,132 @@ if (drop) {
 }
 </script>`
 
+// ---- the builder's chat (T-34242) -------------------------------------------
+//
+// The other door with no assistant in the room, beside the drop zone: a person
+// says what they want and the platform's own builder makes it (build.ts,
+// T-34240). One form, one textarea, and it POSTs to the builder's address the
+// way the drop zone POSTs to `/deploy` — so a browser that ran no script says
+// a line, waits for the round, and reads the whole conversation back as a
+// page. The script beside it (public/build.js) opens the socket instead and
+// draws the same frames as they happen; nothing it does is required.
+//
+// One RENDERER, drawn twice. The frames below are build.ts's wire, whole, and
+// the rules here are the rules the script keeps: a tool is one row that turns
+// into its own result, the address is a card, `busy` is a line, and `done`
+// draws nothing because the sentence it carries is already a line above it.
+
+// A https address inside a sentence the builder said — the app it just made,
+// the pricing page a refusal ends with — as a link. Refused by SHAPE, not by a
+// scheme list (the repo's md.ts rule): `https://`, then nothing that could
+// close the attribute or open a tag, and no trailing punctuation of the
+// sentence it sits in.
+let AT = /https:\/\/[^\s<>"'`]+/g
+let linked = (text: string) => {
+  let out = ''
+  let from = 0
+  for (let m of text.matchAll(AT)) {
+    let url = m[0].replace(/[.,;:!?)\]]+$/, '')
+    out += esc(text.slice(from, m.index)) +
+      `<a href="${esc(url)}">${esc(url)}</a>`
+    from = m.index + url.length
+  }
+  return out + esc(text.slice(from))
+}
+
+// One tool, as one row: its name, the line it said about itself, and where it
+// got to. `null` is a tool still running — the row a `ran` frame replaces.
+let toolRow = (name: string, line: string, ok: boolean | null) =>
+  `<p class="Chat_Tool${ok == false ? ' Chat_Tool-no' : ''}">` +
+  `<span class="Chat_Name">${ok == null ? '…' : ok ? '✓' : '✗'} ${
+    esc(name)
+  }</span><span class="Chat_Of">${esc(line)}</span></p>`
+
+/** The conversation, as the page draws it. */
+let transcript = (frames: Frame[]) => {
+  let rows: string[] = []
+  let at = new Map<string, number>()
+  for (let f of frames) {
+    if ('said' in f) {
+      if (!f.text) continue
+      rows.push(
+        `<p class="Chat_Bubble Chat_Bubble-${
+          f.said == 'person' ? 'you' : 'them'
+        }">${linked(f.text)}</p>`,
+      )
+    } else if ('tool' in f) {
+      at.set(f.call, rows.length)
+      rows.push(toolRow(f.tool, f.line, null))
+    } else if ('ran' in f) {
+      let was = at.get(f.call)
+      let row = toolRow(f.ran, f.line, f.ok)
+      if (was == null) rows.push(row)
+      else rows[was] = row
+    } else if ('built' in f) {
+      rows.push(
+        `<div class="Chat_Built"><p>It is live.</p>
+<p class="Url"><a href="${esc(f.built)}"><code>${esc(f.built)}</code></a></p>
+</div>`,
+      )
+    } else if ('busy' in f) {
+      rows.push(`<p class="Chat_Note">${esc(f.busy)}</p>`)
+    }
+  }
+  return `<div class="Chat_Said">${rows.join('')}</div>`
+}
+
+// The line a person types. `required` is the browser's own guard; the door
+// keeps the same one, for whoever posts without it.
+let chatAsk = () =>
+  `<form class="Chat_Ask" method="post" action="/api/build">
+<p><textarea name="say" rows="3" required placeholder="A recipe box I can share with my sister" aria-label="What do you want to build?"></textarea></p>
+<button type="submit">Build it</button>
+</form>`
+
+/**
+ * The builder's block on a space page. FIRST on a space with nothing in it
+ * (spaceIndex): the question is the whole of what there is to do here, and it
+ * is the one door that needs no assistant of the person's own.
+ */
+let chat = (built: boolean, frames?: Frame[]) =>
+  `<section class="Card Chat">
+<h2>${built ? 'Build something else' : 'What do you want to build?'}</h2>
+<p class="Note">${
+    built
+      ? 'Say what you want and it is made here, at this address.'
+      : 'Say it in your own words — a recipe box, a sign-up sheet, a page ' +
+        'for your business — and it is built here, at this address.'
+  }</p>
+${transcript(frames ?? [])}${chatAsk()}
+</section>`
+
+// The live half (public/build.js), at the builder's own address so a space's
+// hostname needs no asset of the apex (apps.ts serves it there). A module,
+// because it is one, and nothing on the page waits for it.
+let chatLive = '<script type="module" src="/api/build.js"></script>'
+
+/**
+ * What a posted line answers (T-34242), and it is a PAGE for the same reason a
+ * drop's is: whoever typed it ran no script, so the conversation has to come
+ * back as something to read. The round is over by the time this is written —
+ * the frames are the whole of it, ending in the address where one was built.
+ */
+export let building = (at: {
+  space: string
+  frames?: Frame[]
+  why?: string
+}) =>
+  shell(
+    at.why ? 'That did not go in' : `${esc(at.space)}.yaks.app`,
+    at.why ? esc(at.why) : 'Here is what happened. Say the next thing below.',
+    at.why ? 400 : 200,
+    `<section class="Card Chat">
+${transcript(at.frames ?? [])}${chatAsk()}
+</section>
+<p><a class="Away" href="/">Everything at ${esc(at.space)}.yaks.app</a></p>
+${chatLive}`,
+  )
+
 // What a drop answers, either way it went (T-34230), and it is a PAGE because
 // the form that sent it is a plain form: whoever dropped the file reads this,
 // script or no script. What is live and where, the files that went in, and the
@@ -225,6 +368,7 @@ ${dropping}`,
 // gets them from an account to a working assistant. One page, of blocks that
 // appear when they are true of whoever is looking —
 //
+//   what do you want to build?      the owner; FIRST while nothing is built
 //   attaching an assistant          the owner; OPEN until one ever has
 //   what to call you, and where     the owner, and nobody else
 //   the apps this person may open   whenever there are any
@@ -234,10 +378,15 @@ ${dropping}`,
 //   signing in                      signed out
 //   what this place is              signed out; a stranger, not a neighbour
 //
-// The owner's three come FIRST and in that order (T-34236): the instructions
-// are the whole of what is left to do on a space with nothing in it, and once
-// an agent has ever connected they collapse to their own one line rather than
-// disappearing — the second assistant is added the same way as the first.
+// The owner's four come FIRST (T-34236, T-34242), and which of the first two
+// leads depends on what is here. A space with NOTHING built opens with the
+// builder's question: it is the one door that needs no assistant at all, and a
+// person who has just signed in has nothing else to do. Once something is
+// built, connecting an assistant leads again — that is the way to keep
+// working on what is there — and the question moves under it. The connect
+// instructions collapse to their own one line once an agent has ever been let
+// in, rather than disappearing: the second assistant is added the same way as
+// the first.
 //
 // The filtering is the part to get right: an app someone may not read is not
 // NAMED here (apps.ts asks `reads` per app), and the line about asking for
@@ -351,6 +500,10 @@ there.</p>
 </form>
 </section>`
     : ''
+  // The builder's own block, and where it sits: ahead of everything on a
+  // space with nothing built, under the connect instructions once there is.
+  let asking = owner ? chat(!!at.apps.length) : ''
+  let first = at.apps.length ? `${attach}${asking}` : `${asking}${attach}`
   let lead = at.apps.length
     ? 'Here is what you can open.'
     : owner
@@ -360,9 +513,9 @@ there.</p>
     esc(at.title || at.space),
     lead,
     at.no ? 400 : 200,
-    `${attach}${settings}${mine}${ask}${yours}${inn}${pitch}${
+    `${first}${settings}${mine}${ask}${yours}${inn}${pitch}${
       at.person ? home : ''
-    }${owner ? dropping : ''}`,
+    }${owner ? dropping + chatLive : ''}`,
   )
 }
 
