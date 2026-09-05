@@ -252,9 +252,10 @@ export let storage = <S extends Stmt<S>>(
       patch: async (bs) => {
         await learn(named(bs))
         let born: Entity[] = []
+        // `named` puts the bundle's own eid first, then what it points at, so
+        // numbers land in the same first-touch order every adapter uses.
         for (let b of bs) {
           if (buried(b.entity.eid)) continue
-          await birth(b.entity.eid, born)
           for (let e of named([b])) await birth(e, born)
         }
         for (let b of bs) {
