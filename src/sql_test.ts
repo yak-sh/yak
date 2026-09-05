@@ -612,6 +612,35 @@ Deno.test('aggregate: a numeric column declines rather than mis-cast', () => {
   assertEquals(aggregateSql(parseQuery('.distinct=priority')), null)
 })
 
+// A DERIVED column has no table to read, but it has the expression readCol()
+// hands a filter — so its tally compiles too. The world carries the whole
+// status spectrum (open, wip via a claim, done via completed, cancelled, and a
+// non-task row that must read NULL), which is exactly where a CASE that fell
+// out of step with statusOf would show. Before this, a board's status tally
+// hydrated every row of its selection to count it in JS: 805ms over P-19's
+// 2184 tasks on the live graph, 7ms as one statement.
+for (let q of ['.tally=task.status', '.distinct=task.status']) {
+  Deno.test(`aggregate: derived ${q} SQL is the matcher's own answer`, () => {
+    let ps = parseQuery(q)
+    let at = aggOf(ps)!.at
+    let rel = aggregateSql(ps)
+    assertEquals(!!rel, true, `${q} should compile`)
+    let world_ = Object.values(world)
+    if (q.startsWith('.tally')) {
+      let sql = new Map(
+        run<{ value: string; n: number }>(db, rel!)
+          .map((r) => [r.value, r.n] as [string, number]),
+      )
+      assertEquals(sql, tally(world_, at))
+    } else {
+      assertEquals(
+        run<{ value: string }>(db, rel!).map((r) => r.value),
+        distinctValues(world_, at),
+      )
+    }
+  })
+}
+
 // A PROJECTED query answers rows (eid + named columns), not just eids, so it runs
 // its own two-sided parity: the eids it returns are EXACTLY the membership
 // `where()` returns over the same filter, and each row's projected values are

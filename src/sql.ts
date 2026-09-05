@@ -131,16 +131,12 @@ let readCol = (comp: string, prop: string): string =>
     ? STATUS
     : col(comp, prop)
 
-// Is this a column the graph actually has, STORED? A pred naming an unknown
-// column would compile to broken SQL rather than to `false`, so it is refused —
-// and so is a DERIVED column (D-24102: task.status has no table to read). Both
-// decline here: a filter is refined in JS (partial narrowing), a projection or
-// tally falls to the JS matcher that computes the value through query.ts read().
-let derived = (comp: string, prop: string) => comp == 'task' && prop == 'status'
-// task.status is derived, not stored, but it DOES compile: readCol() supplies
-// the CASE expression (STATUS), so a filter over it stays in SQL rather than
-// falling to a JS scan of every task (M-17862). Only a tally/projection of the
-// derived value still declines (see aggregate()/derived below).
+// Is this a column the graph actually has? A pred naming an unknown column
+// would compile to broken SQL rather than to `false`, so it is refused and
+// refined in JS instead (partial narrowing). A DERIVED column is known: it has
+// no table to read but it has an expression, and readCol() supplies it — so a
+// filter over `task.status` stays in SQL rather than falling to a JS scan of
+// every task (M-17862), and so does a tally of it (aggregateSql).
 let known = (comp: string, prop: string) =>
   !!comp && (!prop ? comp in comps : !!propAt(comp, prop)) &&
   (comp in comps || comp in stamped)
@@ -839,15 +835,16 @@ export let aggregateSql = (preds: Pred[], now = Date.now()): Rel | null => {
   // distinct — comes back as one value→count shape.
   if (agg.agg == 'count') return countSql(preds, now)
   if (!agg.comp || !agg.prop) return null
-  // A DERIVED column (D-24102: task.status) has no table to select — decline so
-  // the caller tallies/distincts it in JS through query.ts read(), exactly as a
-  // declining filter falls to the matcher.
-  if (derived(agg.comp, agg.prop)) return null
+  // A DERIVED column (D-24102: task.status) has no table to select, but it has
+  // an EXPRESSION — the same one readCol() hands a filter, so `.tally=
+  // task.status` groups in SQL rather than hydrating every row of the selection
+  // to count it in JS. Measured on the live graph: a board's status tally over
+  // P-19's 2184 tasks was 805ms through the JS fallback, 9ms as one statement.
   let tag = tagOf(agg.comp, agg.prop)
   if (!['text', 'enum', 'eid'].includes(String(tag))) return null
   let built = build(preds, 'entity', [], false, now)
   if (!built) return null
-  let c = col(agg.comp, agg.prop)
+  let c = readCol(agg.comp, agg.prop)
   let value = `${asText(c)} as value`
   return from(
     SPINE,
