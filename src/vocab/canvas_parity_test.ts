@@ -4,17 +4,26 @@
 // fleet vocabulary and nothing downstream moves — same tables, same columns,
 // same death worklists, same routing, same id prefixes.
 //
-// One deliberate divergence, asserted below rather than hidden: the fleet
-// manifest says `layout` sorts `before` `doc`, and the package does not.
-// `before` names ANOTHER kind and `kindOrder` refuses one no loaded document
-// declares, so a package that ordered itself against a kind it does not ship
-// could not load on its own. `doc` is the fleet's component, so the ordering
-// is the fleet's to state — and here it costs nothing, because the fleet's
-// other kinds already settle layout ahead of doc: kindOrder comes out
+// Two deliberate divergences, asserted below rather than hidden.
+//
+// One: the fleet manifest says `layout` sorts `before` `doc`, and the package
+// does not. `before` names ANOTHER kind and `kindOrder` refuses one no loaded
+// document declares, so a package that ordered itself against a kind it does
+// not ship could not load on its own. `doc` is the fleet's component, so the
+// ordering is the fleet's to state — and here it costs nothing, because the
+// fleet's other kinds already settle layout ahead of doc: kindOrder comes out
 // identical either way.
+//
+// Two: the package's hand-written vocab.json describes each column in prose
+// (@yaks/vocab `Column.description`, the sentence a schema door hands an agent),
+// and the fleet manifest carries none — the manifests project storage shape,
+// not documentation. Parity is storage shape and keywords; a description is
+// neither, so it is the one field a swapped column may add. The column check
+// compares everything else, to the last keyword, and a test below proves the
+// carve-out is grounded in a describing package facing an undescribed manifest.
 
 import { assert, assertEquals } from '@std/assert'
-import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { type Column, loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { prefixes } from '@yaks/id'
 import { syncKeywords, tierOf } from '@yaks/sync'
 import { schema } from '@yaks/sqlite'
@@ -51,13 +60,18 @@ Deno.test('parity: the same components, writable and stamped', () => {
   }
 })
 
+// A column, less its prose. `description` is documentation a package's
+// vocab.json may carry and a manifest never does (divergence Two above); it is
+// not storage or a keyword, so parity neutralizes it and compares all else.
+let stored = (c: Column | undefined) => c && { ...c, description: undefined }
+
 Deno.test('parity: every column, to the last keyword', () => {
   for (let name of ours) {
     assertEquals(swapped.columns(name), today.columns(name), name)
     for (let prop of today.columns(name)) {
       assertEquals(
-        swapped.column(name, prop),
-        today.column(name, prop),
+        stored(swapped.column(name, prop)),
+        stored(today.column(name, prop)),
         `${name}.${prop}`,
       )
     }
@@ -101,6 +115,22 @@ Deno.test('parity: the SQLite schema, statement for statement', () => {
 
 Deno.test('every canvas comp syncs — the per-window ones included', () => {
   for (let name of ours) assertEquals(tierOf(swapped, name), 'wire', name)
+})
+
+Deno.test('divergence: the package describes its columns, the manifest does not', () => {
+  // The whole of what the column check neutralizes: the package carries a prose
+  // description on `camera.client` and the fleet manifest carries none, yet the
+  // storage-and-keyword shape is identical. A description is documentation, so
+  // it is the fleet's manifest to add someday, not a parity break today.
+  assertEquals(
+    swapped.column('camera', 'client')!.description,
+    'the window doing the looking',
+  )
+  assertEquals(today.column('camera', 'client')!.description, undefined)
+  assertEquals(
+    stored(swapped.column('camera', 'client')),
+    stored(today.column('camera', 'client')),
+  )
 })
 
 Deno.test('divergence: layout drops `before`, and kindOrder does not move', () => {
