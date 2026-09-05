@@ -1329,6 +1329,7 @@
     "members": {
       "packages/api": {
         "dependencies": [
+          "jsr:@db/sqlite@0.13.0",
           "jsr:@std/assert@1"
         ]
       },
