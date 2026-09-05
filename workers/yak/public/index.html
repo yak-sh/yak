@@ -6,7 +6,7 @@
     <title>yaks.app</title>
     <meta
       name="description"
-      content="yaks.app is where Claude and ChatGPT put the things they build for you. Ask for a recipe box or a sign-up sheet, and a minute later it's a website of your own."
+      content="Build an app by asking Claude or ChatGPT. Your assistant builds it, and yaks.app keeps it online. Save things, invite friends, and open it on any phone."
     />
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32" />
@@ -20,9 +20,7 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <!-- The name alone: the hero yak is one line below, and one yak above the
-         fold is enough (T-33063). Every other page wears the small mark. -->
-    <header class="Top">
+    <header class="Top Top-home">
       <a class="Top_Name" href="/" aria-current="page"
         aria-label="yaks.app, home">
         <span>yaks.app</span>
@@ -37,232 +35,181 @@
 
     <main class="Page Home">
       <section class="Hello" aria-labelledby="hello">
-        <img
-          class="Yak Yak-big"
-          src="yak.png"
-          alt="A friendly young yak with a small smile"
-        />
-        <!-- The heading names the trade — you ask for one thing, you get
-             another — because the thing strangers missed was WHAT they end up
-             holding (T-33643). "App" alone reads as an app store; "website"
-             is the word a person already owns. -->
-        <h1
-          id="hello"
-          class="Title Title-hero"
-        >Ask for an app. Get a website.</h1>
-        <!-- And the lead names the SUBJECT. The old one said "your ideas,
-             made into apps" with nobody doing the making, so a reader could
-             not tell whether this site builds it, their assistant does, or
-             they do. One sentence settles it before anything else is read. -->
-        <p class="Note Note-lead">
-          yaks.app is where Claude and ChatGPT put the things they build for
-          you. Ask for a recipe box or a sign-up sheet for the potluck, and a
-          minute later it's a website of your own at
-          <b>yourname.yaks.app</b> — one link, and it opens on anyone's phone.
-        </p>
-        <!-- The one action, above the fold. A reader who is already sold does
-             not have to scroll past six examples and a worked conversation to
-             find the door; a reader who is not still meets all of it. It aims
-             at /connect rather than /login because connecting is the thing
-             they came to do, and that page signs them in on the way. -->
-        <p><a class="Button" href="/connect">Start — it's free</a></p>
-        <p class="Note Note-small">
-          Works with the Claude or ChatGPT you already use. Free for five
-          apps; <a href="#cost">$4 a month</a> after that.
-        </p>
-      </section>
-
-      <section class="Make" aria-labelledby="make">
-        <h2 id="make" class="Title">Things people ask for</h2>
-        <!-- Every one of these opens: they are apps in the `yourname` demo
-             space, public so a stranger reads them signed out and published
-             so anyone can install their own copy (T-33053). A list that only
-             asserts the range gets read as one thing — the drawn recipe box
-             below was mistaken for the whole product. -->
-        <ul class="Pills">
-          <li>
-            <a class="Pill" href="https://yourname.yaks.app/recipes/">a recipe
-              box</a>
-          </li>
-          <li>
-            <a class="Pill" href="https://yourname.yaks.app/garden/">a garden
-              diary</a>
-          </li>
-          <li>
-            <a class="Pill" href="https://yourname.yaks.app/bookclub/">a page
-              for the book club</a>
-          </li>
-          <li>
-            <a class="Pill" href="https://yourname.yaks.app/trip/">a place to
-              plan the trip</a>
-          </li>
-          <li>
-            <a class="Pill" href="https://yourname.yaks.app/guestbook/">a
-              birthday guestbook</a>
-          </li>
-          <li>
-            <a class="Pill" href="https://yourname.yaks.app/chores/">a chore
-              chart that doesn't nag</a>
-          </li>
-        </ul>
-        <p class="Note Note-small">
-          Every one of those opens — they were each asked for in a sentence.
-        </p>
-      </section>
-
-      <section class="How" aria-labelledby="how">
-        <h2 id="how" class="Title">How it works</h2>
-
-        <!-- Three steps, before the worked example. This is the part the page
-             never had: strangers could see the middle of the story (a
-             conversation) and the end (a finished box), and had no idea what
-             the first move was or that it involves their own assistant's
-             settings rather than a signup form here. -->
-        <ol class="Steps">
-          <li>
-            <h3 class="Step_Name">Set it up once. It takes a few minutes.</h3>
-            <p class="Note">
-              This is the fiddly part, and it's the only one: you click through
-              your assistant's settings and add
-              <code class="Pill Pill-code">https://yaks.app/mcp</code> as a
-              connector — in Claude that's Settings → Connectors → Add custom
-              connector; ChatGPT wants developer mode turned on first — then
-              you sign in with your email.
-              <a href="/connect">This page has the exact clicks</a> for both.
-              After that, asking for something is one sentence.
-            </p>
-          </li>
-          <li>
-            <h3 class="Step_Name">Ask for what you want, in your own words.</h3>
-            <p class="Note">
-              No templates to choose from and nothing to install. Say
-              <q class="Said">could you make me a recipe box?</q> and keep
-              going from there — <q class="Said">put the newest ones first</q>,
-              <q class="Said">let my sister add notes</q>.
-            </p>
-          </li>
-          <li>
-            <h3 class="Step_Name">You get a link, and it's yours.</h3>
-            <p class="Note">
-              It's a website on the web at <b>yourname.yaks.app/recipes</b>,
-              live the moment it's built. Send it to anyone; change your mind
-              about it tomorrow.
-            </p>
-          </li>
-        </ol>
-
-        <!-- The exchange sits in a conversation frame so a stranger skimming
-             the page can see these words were said, by two people, as an
-             example — the recipe box is not what we sell. -->
-        <div class="Chat">
-          <h3 class="Chat_Who Chat_Who-you">You ask.</h3>
-          <p class="Chat_Bubble Chat_Bubble-you">
-            Could you make me a recipe box? Something I can share with my
-            sister.
+        <div class="Hello_Copy">
+          <img
+            class="Yak Hello_Yak"
+            src="yak.png"
+            width="768"
+            height="743"
+            alt=""
+          />
+          <h1 id="hello" class="Title Title-hero">
+            Build an app by asking Claude or ChatGPT.
+          </h1>
+          <p class="Note Note-lead">
+            A recipe box, a trip planner, a sign-up sheet — your assistant
+            builds it, and yaks.app keeps it online. Your app saves your data
+            and works in a browser. Use it on your phone or share it with friends.
           </p>
-
-          <h3 class="Chat_Who">It gets built.</h3>
-          <p class="Chat_Bubble Chat_Bubble-them">
-            Sure, give me a minute. Would you like a place for her to leave
-            notes on each recipe?
-          </p>
-
+          <div class="Hello_Doors">
+            <a class="Button" href="/connect">Start free</a>
+            <a
+              href="#examples">See examples <span aria-hidden="true">↓</span></a>
+          </div>
           <p class="Note Note-small">
-            Your assistant does the making. You watch it take shape and change
-            your mind as often as you like.
+            Free for five apps. <a href="#cost">$4 a month</a> for more.
           </p>
         </div>
 
-        <!-- What the conversation left behind, outside the frame: nobody said
-             it, it is the thing itself. -->
-        <div class="Step">
-          <h3 class="Step_Name">And this is what she got.</h3>
+        <!-- Show the outcome beside the promise, before asking a visitor to
+             learn the setup. This is the same public app the examples open. -->
+        <div class="Demo" aria-labelledby="demo">
+          <h2 id="demo" class="Demo_Title">Try a recipe box</h2>
+          <p class="Chat_Bubble Chat_Bubble-you">
+            Could you make me a recipe box I can share with my sister?
+          </p>
           <div class="Window"
-            aria-label="A finished recipe box on its own website">
+            aria-label="A working recipe box on its own website">
             <div class="Window_Bar">
-              <!-- The address is the app, and so is what is under it: the box
-                   at that address is the very thing framed below, so the pill
-                   is that same app's front door — the way out to it full-size. -->
               <a class="Pill Pill-quiet"
-                href="https://yourname.yaks.app/recipes/"
-              >yourname.yaks.app/recipes</a>
+                href="https://yourname.yaks.app/recipes/">
+                yourname.yaks.app/recipes <span aria-hidden="true">↗</span>
+              </a>
             </div>
             <div class="Window_Body Window_Body-frame">
-              <!-- Not a drawing of the box: the box. A real iframe of the live
-                   app, so it looks exactly like the app for free — its own
-                   code, its own scripts, identical by definition, and it can
-                   carry nothing this site is privileged to see. It loads lazily
-                   so it costs no first paint (T-33176), and the frame's ground
-                   is the app's own dark green, so a slow load shows the app
-                   coming up rather than a blank flash. The homepage depends on
-                   the app staying framable by yaks.app (see T-33409). -->
               <iframe
                 class="Window_Frame"
                 src="https://yourname.yaks.app/recipes/"
-                title="A live recipe box, on its own website"
+                title="Try the recipe box built with yaks.app"
                 loading="lazy"
               ></iframe>
             </div>
           </div>
-          <p class="Note">
-            That's the live one, running right there. Poke at it.
+          <p class="Note Note-small">
+            Browse the recipes here, or
+            <a href="https://yourname.yaks.app/recipes/">open it full size</a>.
           </p>
         </div>
       </section>
 
       <section class="Yours" aria-labelledby="yours">
-        <h2 id="yours" class="Title">And then it's yours</h2>
+        <h2 id="yours" class="Title">Your app, ready to use</h2>
         <dl class="Yours_List">
-          <dt>It opens on your phone.</dt>
-          <dd>
-            Open the website, or tap the link somebody sent you. Nothing to
-            install, no app store, no waiting.
-          </dd>
-
-          <dt>It keeps what you put in it.</dt>
-          <dd>
-            Everything you write stays, and it's the same on your laptop as on
-            your phone. Change it on one and the other catches up.
-          </dd>
-
-          <dt>Share it, or don't.</dt>
-          <dd>
-            Send the link to one person, leave it open to whoever has it, or
-            keep the whole thing to yourself. You choose, and you can change
-            your mind.
-          </dd>
-
-          <dt>Friends can write in it too.</dt>
-          <dd>
-            Invite someone by email and they can add their own bit — a note on
-            a recipe, a name next to Saturday, a photo of the tomatoes.
-          </dd>
-
-          <dt>Upload photos or files.</dt>
-          <dd>
-            Add pictures or files straight from your phone and they live in
-            the app alongside everything else.
-          </dd>
-
-          <dt>Your assistant can use it, not just build it.</dt>
-          <dd>
-            An app can teach your assistant its own little jobs, so you can
-            say <q class="Said">add eight miles to the running board</q>
-            without opening the page at all.
-          </dd>
+          <div>
+            <dt>Save your data</dt>
+            <dd>
+              Add recipes, notes, photos, and files. They're stored online,
+              so you can open the same app on your laptop or phone.
+            </dd>
+          </div>
+          <div>
+            <dt>Use it together</dt>
+            <dd>
+              Keep your app private, share a link for others to view, or
+              invite people to add and edit things with you.
+            </dd>
+          </div>
+          <div>
+            <dt>Ask for updates</dt>
+            <dd>
+              Your assistant can use your app's data as well as change the
+              app. Ask it to add a recipe or make a shopping list.
+            </dd>
+          </div>
         </dl>
       </section>
 
-      <!-- What it costs, on the page rather than one footer link away
-           (T-33643). Two plans, the shortest true version of each; the
-           pricing page is where the whole list and the fair-use promises
-           live, and every number here has to match it (D-32751). -->
+      <section class="Make" aria-labelledby="examples">
+        <div class="Make_Intro">
+          <h2 id="examples" class="Title">Made with yaks.app</h2>
+          <p class="Note">Open an example to see what you could make.</p>
+        </div>
+        <ul class="Make_List">
+          <li>
+            <a class="Make_Link" href="https://yourname.yaks.app/recipes/">
+              <span
+                class="Make_Name">A recipe box <span aria-hidden="true">↗</span></span>
+              <span
+                class="Note Note-small">Save recipes and share them with family.</span>
+            </a>
+          </li>
+          <li>
+            <a class="Make_Link" href="https://yourname.yaks.app/garden/">
+              <span
+                class="Make_Name">A garden diary <span aria-hidden="true">↗</span></span>
+              <span class="Note Note-small">Remember what grew, and when.</span>
+            </a>
+          </li>
+          <li>
+            <a class="Make_Link" href="https://yourname.yaks.app/bookclub/">
+              <span
+                class="Make_Name">A book club page <span aria-hidden="true">↗</span></span>
+              <span
+                class="Note Note-small">Choose books and plan your next meeting.</span>
+            </a>
+          </li>
+          <li>
+            <a class="Make_Link" href="https://yourname.yaks.app/trip/">
+              <span
+                class="Make_Name">A trip planner <span aria-hidden="true">↗</span></span>
+              <span
+                class="Note Note-small">Put the plans in one shared place.</span>
+            </a>
+          </li>
+          <li>
+            <a class="Make_Link" href="https://yourname.yaks.app/guestbook/">
+              <span
+                class="Make_Name">A birthday guestbook <span aria-hidden="true">↗</span></span>
+              <span
+                class="Note Note-small">Collect birthday messages from friends.</span>
+            </a>
+          </li>
+          <li>
+            <a class="Make_Link" href="https://yourname.yaks.app/chores/">
+              <span
+                class="Make_Name">A chore chart <span aria-hidden="true">↗</span></span>
+              <span
+                class="Note Note-small">Make a plan for who does what.</span>
+            </a>
+          </li>
+        </ul>
+      </section>
+
+      <section class="How" aria-labelledby="how">
+        <h2 id="how" class="Title">How it works</h2>
+
+        <ol class="Steps">
+          <li>
+            <h3 class="Step_Name">Connect your assistant</h3>
+            <p class="Note">
+              Set up yaks.app in Claude or ChatGPT once. It takes a few
+              minutes. <a href="/connect">Follow the setup steps</a>.
+            </p>
+          </li>
+          <li>
+            <h3 class="Step_Name">Describe what you need</h3>
+            <p class="Note">
+              Ask for something in your own words. Your assistant builds it,
+              and you can ask for changes as you go.
+            </p>
+          </li>
+          <li>
+            <h3 class="Step_Name">Open it and use it</h3>
+            <p class="Note">
+              Your app gets a link like <b>yourname.yaks.app/recipes</b>. Open it in
+              your browser or send it to a friend. There's nothing to install.
+            </p>
+          </li>
+        </ol>
+      </section>
+
+      <!-- Keep these allowances in step with /pricing and meter.ts. -->
       <section class="Cost" aria-labelledby="cost">
         <h2 id="cost" class="Title">What it costs</h2>
         <div class="Plans">
           <div class="Card Plan">
             <h3 class="Plan_Price">Free</h3>
-            <p class="Note Note-small">For a few apps of your own.</p>
+            <p class="Note Note-small">Up to five apps.</p>
             <ul class="Plan_List">
               <li>5 apps</li>
               <li>50,000 visits a month</li>
@@ -274,7 +221,8 @@
 
           <div class="Card Plan Plan-plus">
             <h3 class="Plan_Price">$4<span class="Plan_Per"> a month</span></h3>
-            <p class="Note Note-small">For when five isn't enough.</p>
+            <p
+              class="Note Note-small">Plus: more apps, storage, and your own domain.</p>
             <ul class="Plan_List">
               <li>As many apps as you like</li>
               <li>500,000 visits a month</li>
@@ -285,38 +233,27 @@
           </div>
         </div>
         <p class="Note Note-small">
-          Tax is included in the $4, wherever you are, and nothing you've made
-          is ever deleted for going over a limit.
-          <a href="/pricing">The whole list</a>.
+          Tax is included. Going over a limit won't delete your existing
+          apps or data.
+          <a href="/pricing">Compare plans and limits</a>.
         </p>
       </section>
 
       <section class="Join Card" aria-labelledby="join">
-        <h2 id="join" class="Title">How to connect</h2>
+        <h2 id="join" class="Title">What would you like to make?</h2>
         <p class="Note">
-          Your assistant needs this link, once. Give it to Claude as a
-          connector, or to ChatGPT as a custom connector.
-        </p>
-        <p class="Join_Url">
-          <code class="Pill Pill-code">https://yaks.app/mcp</code>
-        </p>
-        <p class="Note">
-          It will ask you to sign in with your email — we send a six-digit code,
-          so there's no password to keep track of. After that, just talk to it
-          the way you already do.
-        </p>
-        <p class="Note">
-          <a href="/connect">Step by step, for each assistant</a>
+          Connect your assistant and describe your first app.
         </p>
         <p class="Join_Doors">
-          <a class="Button" href="/login">Sign in</a>
+          <a class="Button" href="/connect">Connect your assistant</a>
         </p>
+        <p
+          class="Note Note-small">Five apps for free. A few minutes to get set up.</p>
       </section>
     </main>
 
     <footer class="Foot">
-      <p>Made with care by a small herd. It's early days here — thanks for
-        coming by.</p>
+      <p>yaks.app · Yak Shaving LLC</p>
       <ul class="Foot_Links">
         <li><a href="/help">Help</a></li>
         <li><a href="/technical">Technical</a></li>

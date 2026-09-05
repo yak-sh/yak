@@ -193,7 +193,7 @@ let settled = (draw) => {
 // The home page's own colors (public/style.css): warm linen and warm brown,
 // cocoa in the dark, never black. Set through CSSOM rather than a <style>
 // element, so an app with its own strict CSP still shows it.
-let SORRY = 'Something went wrong. Your assistant has been told.'
+let SORRY = 'Something went wrong. Try reloading the page.'
 
 let dark = () =>
   globalThis.matchMedia &&

@@ -34,18 +34,21 @@ let shell = (
 <meta name="color-scheme" content="light dark">
 <title>${title} · yaks.app</title>
 <style>
-:root { color-scheme: light; --ground: #fdf5ee; --paper: #fffaf5; --ink: #4a3a30; --soft-ink: #6f5d50; --line: #efdfd2; --meadow: #5c8a4c; --warn: #a8503f }
-@media (prefers-color-scheme: dark) { :root { color-scheme: dark; --ground: #2a2320; --paper: #352c28; --ink: #f1e6d8; --soft-ink: #c2b2a3; --line: #4a3d37; --meadow: #a7c080; --warn: #e67e80 } }
+:root { color-scheme: light; --ground: #fdf7ee; --paper: #fffbf5; --ink: #523828; --soft-ink: #785b47; --line: #efe3d2; --meadow: #4c773e; --warn: #a8503f }
+@media (prefers-color-scheme: dark) { :root { color-scheme: dark; --ground: #2b231f; --paper: #372c26; --ink: #f1e6d8; --soft-ink: #c9b19c; --line: #4d3d34; --meadow: #a7c080; --warn: #e67e80 } }
+* { box-sizing: border-box }
 body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--ground); color: var(--ink); font: 400 1.05rem/1.6 'Nunito', system-ui, sans-serif }
-main { max-width: 30rem; padding: 2rem; text-align: center }
+main { width: 100%; max-width: 34rem; padding: 2rem 1rem; text-align: center; overflow-wrap: anywhere }
 h1 { font-size: 1.6rem; font-weight: 800; margin: 0 0 .5rem }
 p { color: var(--soft-ink); margin: 0 0 1rem }
-a { color: var(--meadow) }
+a { color: var(--meadow); text-underline-offset: .18em }
+:focus-visible { outline: 3px solid var(--meadow); outline-offset: 3px }
 form { display: grid; gap: .75rem; margin: 1.5rem 0 1rem }
 form p { margin: 0; font-size: .95rem }
-input { font: inherit; text-align: center; padding: .7rem 1rem; border: 2px solid var(--line); border-radius: 1.25rem; background: var(--paper); color: var(--ink) }
-input:focus-visible { outline: 3px solid var(--meadow); outline-offset: 2px }
-button { font: inherit; font-weight: 700; padding: .7rem 1rem; border: 0; border-radius: 1.25rem; background: var(--meadow); color: var(--ground); cursor: pointer }
+input { min-width: 0; max-width: 100%; font: inherit; text-align: center; padding: .7rem 1rem; border: 2px solid var(--soft-ink); border-radius: 1.25rem; background: var(--paper); color: var(--ink) }
+button { font: inherit; font-weight: 800; padding: .75rem 1.75rem; border: 0; border-radius: 999px; background: var(--meadow); color: var(--ground); cursor: pointer }
+button:hover, .Button:hover { text-decoration: underline; text-underline-offset: .2em }
+button:disabled, input:disabled { opacity: .6; cursor: not-allowed; text-decoration: none }
 .Code { letter-spacing: .5em; font-size: 1.4rem; font-weight: 700 }
 .Away { font-size: .95rem }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9rem; background: var(--ground); border-radius: .4rem; padding: .1rem .35rem; overflow-wrap: anywhere }
@@ -60,7 +63,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .Pills { display: flex; flex-wrap: wrap; justify-content: center; gap: .625rem; margin: 0 0 1.25rem }
 .Pill { display: inline-block; padding: .5rem 1rem; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--ink); font-weight: 700; text-decoration: none }
 .Pill:hover { border-color: var(--meadow) }
-.Button { display: inline-block; padding: .7rem 1.2rem; border-radius: 1.25rem; background: var(--meadow); color: var(--ground); font-weight: 700; text-decoration: none }
+.Button { display: inline-block; padding: .75rem 1.75rem; border-radius: 999px; background: var(--meadow); color: var(--ground); font-weight: 800; text-decoration: none }
 .Pick { display: block; margin: .4rem 0; padding: .5rem .6rem; user-select: all }
 .At { display: flex; align-items: center; justify-content: center; gap: .3rem }
 .At input { flex: 0 1 13rem; text-align: right }
@@ -81,16 +84,16 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 
 export let lost = () =>
   shell(
-    'That page wandered off.',
-    "There's nothing at this address. Head back home?",
+    'Page not found',
+    'Check the address, or return to yaks.app.',
     404,
   )
 
 export let nothingHere = () =>
   shell(
     'Nothing here yet.',
-    "This address is waiting for its first app. If it's yours, ask your " +
-      'assistant to make something.',
+    "There are no apps at this address yet. If it's yours, ask your " +
+      'assistant to build one.',
     404,
   )
 
@@ -145,7 +148,7 @@ builds one here — a page of your own you can send to anyone.</p>
 </div>`
   let yours = owner
     ? `<div class="Card">
-<h2>This page is yours to set</h2>
+<h2>Choose what appears here</h2>
 <p class="Note">${
       at.apps.length
         ? 'Ask your assistant to make one of these apps the front page, and ' +
@@ -171,8 +174,7 @@ builds one here — a page of your own you can send to anyone.</p>
 export let oops = () =>
   shell(
     'Something went wrong.',
-    'Your assistant has been told and will take a look. Try again in a ' +
-      'little while.',
+    'Try again shortly. If the problem continues, ask your assistant to check the app.',
     500,
   )
 
@@ -206,7 +208,11 @@ export let provisioning = (
 
 // A door a later leaf fills (the connector): plain, not a mystery.
 export let soon = (what: string) =>
-  shell(`${what} is on its way.`, "We're still setting the table.", 404)
+  shell(
+    `${what} is not available yet.`,
+    'This feature is still being built.',
+    404,
+  )
 
 // A hidden field, only when there is something to carry.
 let held = (name: string, value?: string | null) =>
@@ -231,9 +237,9 @@ export let askEmail = (
   shell(
     'Sign in to yaks.app',
     who
-      ? `${esc(who)} would like to use your apps. Pop in your email and ` +
+      ? `${esc(who)} would like to use your apps. Enter your email and ` +
         "we'll send a code."
-      : "Pop in your email and we'll send you a six-digit code.",
+      : "Enter your email and we'll send you a six-digit code.",
     status,
     `<form method="post" action="/login">${carried(q, back)}
 <input name="email" type="email" required autofocus autocomplete="email" placeholder="you@example.com" aria-label="Your email">
@@ -363,7 +369,7 @@ space whenever you want one.</p>${home}`,
 // whole consent.
 export let askAllow = (email: string, q: string, who: string) =>
   shell(
-    'Connect your apps',
+    'Allow access to your yaks.app apps',
     `${esc(who)} would like to use your yaks.app apps as ${esc(email)}.`,
     200,
     `<form method="post" action="/oauth/allow">${carried(q)}
@@ -412,7 +418,7 @@ let mine = (y: Yours) =>
   y.fixed
     ? `<section class="Card"><h2>Where your apps live</h2>
 <p>Your apps live at <b>${esc(y.slug)}.yaks.app</b>.</p>
-<p class="Note">You've built something here, so this one stays put for now.</p>
+<p class="Note">This address cannot be changed after you build your first app.</p>
 </section>`
     : `<section class="Card"><h2>Where your apps live</h2>
 <p class="Now">Your apps live at <b>${esc(y.slug)}.yaks.app</b>. It's yours to
@@ -450,7 +456,7 @@ let plan = (y: Yours) => {
       ends ? ` It runs until ${esc(ends)} and then stops renewing.` : ''
     }</p>`
     : `<p>${y.slug}.yaks.app is on the <b>free</b> plan — five apps, 50,000
-visits a month, 1 GB. <a href="https://yaks.app/pricing">What Plus holds</a>.</p>`
+visits a month, 1 GB. <a href="https://yaks.app/pricing">Compare plans</a>.</p>`
   // Someone Stripe has met can always reach their own billing, whatever plan
   // they are on today: an invoice from a month they paid for is theirs to
   // read after they cancel.
@@ -589,7 +595,7 @@ for (let b of document.querySelectorAll('.Bill_Go')) {
 export let connect = (yours: Yours | null, status = 200) =>
   shell(
     'Connect your assistant',
-    'Give Claude or ChatGPT this link, once. Then ask it for what you want.',
+    'Add yaks.app in your assistant’s settings using the steps below. Then ask it to build an app.',
     status,
     `<p class="Url"><code>${MCP}</code></p>
 ${yours ? mine(yours) + plan(yours) : ''}${doors}

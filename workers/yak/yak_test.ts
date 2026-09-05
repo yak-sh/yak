@@ -27,13 +27,13 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     // The apex: the home page, its assets, and a soft 404 in its voice.
     let home = await k.at('yaks.app', '/')
     assertEquals(home.status, 200)
-    assertMatch(await home.text(), /Ask for an app\. Get a website\./)
+    assertMatch(await home.text(), /Build an app by asking Claude or ChatGPT\./)
     let css = await k.at('yaks.app', '/style.css')
     assertMatch(css.headers.get('content-type') ?? '', /text\/css/)
     await css.body?.cancel()
     let lost = await k.at('yaks.app', '/no/such/page')
     assertEquals(lost.status, 404)
-    assertMatch(await lost.text(), /wandered off/)
+    assertMatch(await lost.text(), /Page not found/)
     // The OpenAI apps challenge 404s until the token is set (set-case below).
     let unset = await k.at('yaks.app', '/.well-known/openai-apps-challenge')
     assertEquals(unset.status, 404)

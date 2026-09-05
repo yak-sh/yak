@@ -6,7 +6,7 @@
     <title>Style guide · yaks.app</title>
     <meta
       name="description"
-      content="Every token and every component in the yaks.app stylesheet, drawn from the file the site itself loads."
+      content="Reference for the yaks.app design tokens, components, layout, and writing style."
     />
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32" />
@@ -37,57 +37,110 @@
       <div class="Prose_Head">
         <h1 class="Title Title-page">Style guide</h1>
         <p class="Note Note-lead">
-          Everything <code class="Pill Pill-code">style.css</code> defines,
-          drawn from that same file. If a swatch is the wrong colour or a
-          component looks wrong here, the site is wrong too.
+          This page renders the tokens and components from
+          <code class="Pill Pill-code">style.css</code>. Use it to check a
+          change against the rest of the site.
         </p>
+        <p>
+          <label class="Note Note-small" for="theme">Preview theme</label>
+          <select class="Field" id="theme" name="theme">
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </p>
+        <nav aria-label="On this page">
+          <ul class="Pills">
+            <li><a class="Pill" href="#how-to">Using the system</a></li>
+            <li><a class="Pill" href="#voice">Layout and voice</a></li>
+            <li><a class="Pill" href="#paints">Paints</a></li>
+            <li><a class="Pill" href="#roles">Roles</a></li>
+            <li><a class="Pill" href="#type">Type</a></li>
+            <li><a class="Pill" href="#space">Space and shape</a></li>
+            <li><a class="Pill" href="#components">Components</a></li>
+            <li><a class="Pill" href="#sections">Sections</a></li>
+          </ul>
+        </nav>
       </div>
 
       <section class="Guide_Part" aria-labelledby="how-to">
-        <h2 id="how-to" class="Title">Making something that belongs here</h2>
+        <h2 id="how-to" class="Title">Using the system</h2>
         <p class="Note">
           One stylesheet, no build step, four declared layers — tokens, base,
-          components, sections — and the later layer wins whatever the
-          specificity says. Four habits keep a new page looking like this one:
+          components, and sections. Later layers take precedence. Follow these
+          rules when adding a page or component:
         </p>
         <ul class="Guide_Rules">
           <li>
-            <b>Reach for a component before you write CSS.</b> Everything below
-            is already in the sheet: titles, notes, pills, buttons, fields,
-            bubbles, windows, cards, prose.
+            <b>Use an existing component before writing new CSS.</b> The
+            available titles, notes, pills, buttons, fields, bubbles, windows,
+            cards, and prose styles are shown below.
           </li>
           <li>
-            <b>Spend roles, not paints.</b> Write
+            <b>Use colour roles outside the tokens layer.</b> Write
             <code class="Pill Pill-code">var(--ink)</code>, never
-            <code class="Pill Pill-code">var(--coffee)</code>. The dark theme
-            re-points roles and leaves paints alone, so a paint used directly
-            is a colour that will not follow the theme.
+            <code class="Pill Pill-code">var(--coffee)</code>. Themes change
+            role values; a direct paint reference will not follow the theme.
           </li>
           <li>
-            <b>A variant re-points a custom property.</b>
+            <b>Implement variants with custom properties.</b>
             <code class="Pill Pill-code">.Pill-quiet</code> sets
-            <code class="Pill Pill-code">--pill-fill</code>; it does not
-            re-declare the padding, the radius and the border.
+            <code class="Pill Pill-code">--pill-fill</code> instead of
+            repeating the component's padding, radius, and border.
           </li>
           <li>
-            <b>Page layout is a section, not a component.</b> If it is used
-            once and named for where it sits, it belongs in the sections layer
-            and stays out of everyone's way.
+            <b>Keep page-specific layout in the sections layer.</b> Reusable
+            UI belongs in the components layer; layout used in one place does
+            not.
           </li>
         </ul>
         <p class="Note Note-small">
-          Adding a component means adding it to the components layer AND
-          demonstrating it here — <code class="Pill Pill-code">site_test.ts</code>
-          fails otherwise, which is what stops this page becoming fiction.
+          When adding a component, add a working example here so this guide
+          remains complete.
         </p>
+      </section>
+
+      <section class="Guide_Part" aria-labelledby="voice">
+        <h2 id="voice" class="Title">Layout and voice</h2>
+        <ul class="Guide_Rules">
+          <li>
+            <b>Keep prose narrow.</b> Articles, help, and legal pages use
+            <code class="Pill Pill-code">--measure</code>. Use
+            <code class="Pill Pill-code">--wide-measure</code> only when a
+            grid, preview, or comparison needs the extra width.
+          </li>
+          <li>
+            <b>Name the subject and the action.</b> Write “Claude builds the
+            app” or “yaks.app hosts it,” not “it gets built” or “the idea comes
+            to life.”
+          </li>
+          <li>
+            <b>Use specific nouns.</b> Name recipes, files, invitations, and
+            links instead of “things,” “bits,” or “what you need.”
+          </li>
+          <li>
+            <b>Remove filler.</b> Cut phrases such as “a little something”
+            and “brought to life.” State the feature, limit, or next step.
+            Contractions and questions are fine when they help the reader.
+          </li>
+          <li>
+            <b>Use concrete actions for links and buttons.</b> “Connect
+            Claude,” “View pricing,” and “Open the recipe box” tell people
+            what happens next.
+          </li>
+          <li>
+            <b>Make only claims the product can guarantee.</b> Distinguish an
+            app hosted by yaks.app from ownership of a domain, source code, or
+            exported data.
+          </li>
+        </ul>
       </section>
 
       <section class="Guide_Part" aria-labelledby="paints">
         <h2 id="paints" class="Title">Paints</h2>
         <p class="Note">
-          Every colour on the site, written down once. Nothing outside the
-          tokens layer names one of these. Values shown are for the theme you
-          are reading in.
+          Every colour value is declared here. Code outside the tokens layer
+          uses a role instead. Values reflect the selected theme.
         </p>
         <ul class="Guide_Swatches">
           <li class="Guide_Swatch" data-token="--cream">
@@ -140,6 +193,11 @@
             <code class="Guide_Name">--night</code>
             <span class="Guide_Value"></span>
           </li>
+          <li class="Guide_Swatch" data-token="--forest">
+            <span class="Guide_Chip" style="--swatch: var(--forest)"></span>
+            <code class="Guide_Name">--forest</code>
+            <span class="Guide_Value"></span>
+          </li>
           <li class="Guide_Swatch" data-token="--meadow">
             <span class="Guide_Chip" style="--swatch: var(--meadow)"></span>
             <code class="Guide_Name">--meadow</code>
@@ -176,10 +234,8 @@
       <section class="Guide_Part" aria-labelledby="roles">
         <h2 id="roles" class="Title">Roles</h2>
         <p class="Note">
-          What a paint is FOR. These are the only colour names anything below
-          the tokens layer may write, and they are what the dark theme
-          re-points — switch to a dark system theme and every value here
-          changes while the paints above stay put.
+          Components use these semantic colour names. The light and dark
+          themes assign different paints to them.
         </p>
         <ul class="Guide_Swatches">
           <li class="Guide_Swatch" data-token="--ground">
@@ -227,6 +283,11 @@
             <code class="Guide_Name">--theirs</code>
             <span class="Guide_Value"></span>
           </li>
+          <li class="Guide_Swatch" data-token="--preview">
+            <span class="Guide_Chip" style="--swatch: var(--preview)"></span>
+            <code class="Guide_Name">--preview</code>
+            <span class="Guide_Value"></span>
+          </li>
         </ul>
       </section>
 
@@ -243,15 +304,15 @@
           </p>
           <p data-token="--body" style="font-size: var(--body)">
             <span class="Guide_Name">--body</span>
-            <span class="Guide_Value"></span> — what a page is set in.
+            <span class="Guide_Value"></span> — body text.
           </p>
           <p data-token="--lead" style="font-size: var(--lead)">
             <span class="Guide_Name">--lead</span>
-            <span class="Guide_Value"></span> — the line under a title.
+            <span class="Guide_Value"></span> — introductory text.
           </p>
           <p data-token="--small" style="font-size: var(--small)">
             <span class="Guide_Name">--small</span>
-            <span class="Guide_Value"></span> — a caption, a footer, a date.
+            <span class="Guide_Value"></span> — captions, footers, and dates.
           </p>
         </div>
       </section>
@@ -259,8 +320,7 @@
       <section class="Guide_Part" aria-labelledby="space">
         <h2 id="space" class="Title">Space and shape</h2>
         <p class="Note">
-          The gaps all derive from <code class="Pill Pill-code">--gap</code>,
-          so the page's rhythm has one number behind it.
+          Spacing tokens derive from <code class="Pill Pill-code">--gap</code>.
         </p>
         <ul class="Guide_Sizes">
           <li class="Guide_Size" data-token="--quarter-gap">
@@ -285,10 +345,12 @@
           </li>
         </ul>
         <p class="Note Note-small" data-token="--measure">
-          <code class="Guide_Name">--measure</code> — a letter's width, and the
-          width of the column every page sits in. This one re-points it to
-          <span class="Guide_Value"></span> on itself to fit the swatches,
-          which is how a page asks for more room.
+          <code class="Guide_Name">--measure</code> — the maximum width for
+          prose: <span class="Guide_Value"></span> in this context.
+        </p>
+        <p class="Note Note-small" data-token="--wide-measure">
+          <code class="Guide_Name">--wide-measure</code> — the maximum width
+          for grids and previews: <span class="Guide_Value"></span>.
         </p>
         <ul class="Guide_Swatches">
           <li class="Guide_Swatch" data-token="--small-radius">
@@ -321,14 +383,13 @@
       <section class="Guide_Part" aria-labelledby="components">
         <h2 id="components" class="Title">Components</h2>
         <p class="Note">
-          Every reusable piece in the sheet, live, beside the class that draws
-          it. A dashed border marks the demonstration; it is not part of the
-          component.
+          Each reusable component appears beside its class name. Dashed borders
+          mark examples and are not part of the component.
         </p>
 
         <div class="Guide_Demo">
           <p class="Guide_Name">.Title · .Title-hero · .Title-page</p>
-          <p class="Title Title-hero">A page that opens with a sentence</p>
+          <p class="Title Title-hero">Build an app by asking Claude</p>
           <p class="Title Title-page">The title of a page</p>
           <p class="Title">The heading of one section</p>
         </div>
@@ -336,9 +397,9 @@
         <div class="Guide_Demo">
           <p class="Guide_Name">.Note · .Note-lead · .Note-small</p>
           <p class="Note Note-lead">
-            The lead: one line under the title, quieter than the words above.
+            Introductory copy below a page title.
           </p>
-          <p class="Note">A plain aside, set at the page's own size.</p>
+          <p class="Note">Supporting copy at the page's body size.</p>
           <p class="Note Note-small">A caption, a footnote, a date.</p>
         </div>
 
@@ -347,7 +408,7 @@
           <ul class="Pills">
             <li class="Pill">a recipe box</li>
             <li class="Pill">a garden diary</li>
-            <li class="Pill">a chore chart that doesn't nag</li>
+            <li class="Pill">a chore chart</li>
           </ul>
           <p><a class="Pill" href="#components">A pill that is a link</a></p>
           <p><span class="Pill Pill-quiet">yourname.yaks.app/recipes</span></p>
@@ -368,12 +429,21 @@
               />
               <button class="Button" type="submit">Send me a code</button>
             </p>
+            <p>
+              <input
+                class="Field"
+                type="text"
+                value="This field is unavailable"
+                aria-label="Disabled field example"
+                disabled
+              />
+            </p>
           </form>
           <p class="Note Note-small">
-            The sign-in pages carry their own copy of these two rules
+            The sign-in pages carry their own copy of these styles
             (<code class="Pill Pill-code">pages.ts</code>): they are served on a
-            space's hostname, where an asset of the apex cannot be loaded.
-            Change one, change the other.
+            space hostname, which cannot load assets from the main site. Keep
+            both copies in sync.
           </p>
         </div>
 
@@ -400,15 +470,11 @@
         <div class="Guide_Demo">
           <p class="Guide_Name">.Said</p>
           <p class="Note">
-            The same voice as a bubble, inside a running sentence: what a
-            person says out loud to their assistant. Written as a
-            <code class="Pill Pill-code">&lt;q&gt;</code>, so it stays a
-            quotation when the stylesheet is gone. It has to survive a line
-            break, which is the only hard part —
-            <q class="Said">invite ana@example.com to the recipe box, and say
-            it's for Saturday, and put the newest recipes at the top while
-            you're in there</q> — and it does, because every fragment keeps
-            the fill and the rounding.
+            Use <code class="Pill Pill-code">&lt;q&gt;</code> for words a person
+            says to an assistant. The element remains a quotation without CSS,
+            and the background continues across line breaks:
+            <q class="Said">invite ana@example.com to the recipe box, say it's
+            for Saturday, and put the newest recipes first</q>.
           </p>
           <p class="Note">
             Short ones sit in the line the same way:
@@ -419,7 +485,7 @@
         <div class="Guide_Demo">
           <p class="Guide_Name">
             .Window · .Window_Bar · .Window_Body · .Window_Heading ·
-            .Window_List · .Window_On
+            .Window_List · .Window_On · .Window_Body-frame · .Window_Frame
           </p>
           <div class="Window">
             <div class="Window_Bar">
@@ -437,13 +503,25 @@
               </p>
             </div>
           </div>
+          <div class="Window">
+            <div class="Window_Bar">
+              <span class="Pill Pill-quiet">yourname.yaks.app/preview</span>
+            </div>
+            <div class="Window_Body Window_Body-frame">
+              <iframe
+                class="Window_Frame"
+                title="Example app preview"
+                srcdoc="<!doctype html><html lang='en'><meta name='color-scheme' content='dark'><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#33493c;color:#f1e6d8;font:600 1rem/1.5 system-ui,sans-serif}p{padding:2rem;text-align:center}</style><body><p>A working app appears inside this frame.</p></body></html>"
+              ></iframe>
+            </div>
+          </div>
         </div>
 
         <div class="Guide_Demo">
           <p class="Guide_Name">.Card</p>
           <div class="Card">
             <p class="Title">How to connect</p>
-            <p class="Note">Paper under a block of the page.</p>
+            <p class="Note">Related content grouped in a card.</p>
           </div>
         </div>
 
@@ -473,12 +551,11 @@
               <p class="Prose_When">Last updated 3 September 2026</p>
             </div>
             <section>
-              <h2>What Prose dresses</h2>
+              <h2>What Prose styles</h2>
               <p>
-                The elements you did not name: a paragraph, a list, a link, a
-                bit of <code>code</code>, an address. A list that carries a
-                component class — a row of
-                <code>Pills</code>, say — keeps its component.
+                Prose styles unclassed paragraphs, lists, links,
+                <code>code</code>, and addresses. Elements with a component
+                class keep their component styles.
               </p>
               <ul>
                 <li>Plain paragraphs go quiet, in --soft-ink.</li>
@@ -491,50 +568,49 @@
       </section>
 
       <section class="Guide_Part" aria-labelledby="sections">
-        <h2 id="sections" class="Title">Sections, which are not components</h2>
+        <h2 id="sections" class="Title">Page-specific sections</h2>
         <p class="Note">
-          The rest of the sheet is layout for one place on one page. It is kept
-          in its own layer so nobody mistakes it for something to reuse: copy a
-          section and you have inherited a decision about the home page.
+          The sections layer contains layout used in one place. Do not reuse a
+          section class as a general component.
         </p>
         <ul class="Guide_Rules">
           <li>
-            <b>.Top</b>, <b>.Top_Name</b> — the header every page wears. The
-            home page drops the mark and keeps the name; its hero yak is one
-            line below.
+            <b>.Top</b>, <b>.Top_Name</b> — the shared site header. The home
+            page shows the yak in its hero instead of beside the site name.
           </li>
           <li>
-            <b>.Page</b> — the one column, a letter's width. It says how wide,
-            never how far apart: what fills it owns its own rhythm. A page that
-            needs more room re-points
-            <code class="Pill Pill-code">--measure</code> on itself, which is
-            what this page does.
+            <b>.Page</b> — the centred page column. Child sections control
+            their own vertical spacing. Pages that contain grids or previews
+            may use <code class="Pill Pill-code">--wide-measure</code>.
           </li>
           <li>
-            <b>.Home</b> — the home page's band rhythm, the one thing that
-            makes its column different from a page of prose.
+            <b>.Home</b> — spacing and width for the home page sections.
           </li>
           <li>
-            <b>.Hello</b>, <b>.Make</b>, <b>.How</b>, <b>.Step</b>,
-            <b>.Step_Name</b>, <b>.Yours</b>, <b>.Yours_List</b>, <b>.Join</b>,
-            <b>.Join_Url</b>, <b>.Join_Doors</b> — the home page's bands, in the
-            order it reads.
+            <b>.Hello</b>, <b>.Hello_Copy</b>, <b>.Hello_Yak</b>,
+            <b>.Hello_Doors</b>, <b>.Demo</b>, <b>.Demo_Title</b>,
+            <b>.Yours</b>, <b>.Yours_List</b>, <b>.Make</b>,
+            <b>.Make_Intro</b>, <b>.Make_List</b>, <b>.Make_Link</b>,
+            <b>.Make_Name</b>, <b>.How</b>, <b>.Steps</b>, <b>.Step_Name</b>,
+            <b>.Join</b>, <b>.Join_Doors</b> — home page sections and their
+            layout elements. Pricing also uses <b>.Hello</b>, <b>.Yours</b>,
+            and <b>.Join</b>; homepage-specific overrides stay under
+            <code class="Pill Pill-code">.Home</code>.
           </li>
-          <li><b>.Foot</b>, <b>.Foot_Links</b> — the footer every page wears.</li>
+          <li><b>.Foot</b>, <b>.Foot_Links</b> — the shared site footer.</li>
           <li>
-            <b>.Guide</b> and its elements — this page, which is a section like
-            any other.
+            <b>.Guide</b> and its elements — layout for this reference page.
           </li>
         </ul>
       </section>
     </main>
 
     <footer class="Foot">
-      <p>Made with care by a small herd. It's early days here — thanks for
-        coming by.</p>
+      <p>yaks.app · Yak Shaving LLC</p>
       <ul class="Foot_Links">
         <li><a href="/help">Help</a></li>
         <li><a href="/technical">Technical</a></li>
+        <li><a href="/pricing">Pricing</a></li>
         <li><a href="/terms">Terms</a></li>
         <li><a href="/privacy">Privacy</a></li>
         <li><a href="/acceptable-use">Acceptable use</a></li>
@@ -543,19 +619,32 @@
     </footer>
 
     <script>
-    // Each token says what it actually resolves to, in the theme you are
-    // reading in — read off the live stylesheet, so it cannot drift. A
-    // length is measured off the bar it drew, since a custom property
-    // computes to its own tokens and calc(1rem / 4) tells nobody anything.
-    let root = getComputedStyle(document.documentElement)
-    for (let el of document.querySelectorAll('[data-token]')) {
-      let slot = el.querySelector('.Guide_Value')
-      let bar = el.querySelector('.Guide_Bar')
-      if (!slot) continue
-      slot.textContent = bar
-        ? Math.round(bar.getBoundingClientRect().width) + 'px'
-        : root.getPropertyValue(el.dataset.token).trim()
+    let root = document.documentElement
+    let theme = document.querySelector('#theme')
+    let system = matchMedia('(prefers-color-scheme: dark)')
+
+    let values = () => {
+      for (let el of document.querySelectorAll('[data-token]')) {
+        let slot = el.querySelector('.Guide_Value')
+        let bar = el.querySelector('.Guide_Bar')
+        if (!slot) continue
+        slot.textContent = bar
+          ? Math.round(bar.getBoundingClientRect().width) + 'px'
+          : getComputedStyle(el).getPropertyValue(el.dataset.token).trim()
+      }
     }
+
+    let choose = () => {
+      if (theme.value == 'system') delete root.dataset.theme
+      else root.dataset.theme = theme.value
+      values()
+    }
+
+    theme.addEventListener('change', choose)
+    system.addEventListener('change', () => {
+      if (theme.value == 'system') values()
+    })
+    choose()
     </script>
   </body>
 </html>

@@ -303,7 +303,7 @@ slow('a page that dies on its first import says so', async () => {
       .text()
     assertStringIncludes(
       reporter,
-      'Something went wrong. Your assistant has been told.',
+      'Something went wrong. Try reloading the page.',
     )
     assertMatch(reporter, /addEventListener\('error'[\s\S]*\}, true\)/)
   } finally {

@@ -1,7 +1,5 @@
-// The apex's own pages (workers/yak/public): every page carries the same
-// footer, and a footer link is the one thing on a static site that rots
-// silently — a renamed file leaves a 404 nobody clicks until a stranger does.
-// So: each link names a file that exists, and each page carries the whole set.
+// Public-page contracts: shared navigation, valid jumps, documented
+// components, and plan allowances that agree with the metering code.
 import { assert, assertEquals } from '@std/assert'
 import { LETTERS } from './meter.ts'
 
@@ -61,18 +59,36 @@ Deno.test('the yak exports have their intended transparent sizes', () => {
 let links = (html: string) =>
   [...html.matchAll(/<a href="\/([a-z-]+)">/g)].map((m) => m[1])
 
-// The help and technical pages jump to their own sections. A renamed section
-// leaves a pill that scrolls nowhere and says nothing about it, the same
-// silent rot.
 Deno.test('every jump names a section on its own page', () => {
-  for (let page of ['help.html', 'technical.html']) {
+  for (let page of branded) {
     let html = read(page)
     let ids = new Set(
-      [...html.matchAll(/<section id="([a-z]+)">/g)].map((m) => m[1]),
+      [...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]),
     )
-    let jumps = [...html.matchAll(/href="#([a-z]+)"/g)].map((m) => m[1])
-    assert(jumps.length, `${page} has no jumps`)
+    let jumps = [...html.matchAll(/href="#([^"]+)"/g)].map((m) => m[1])
+    if (
+      ['index.html', 'help.html', 'technical.html', 'style-guide.html']
+        .includes(page)
+    ) {
+      assert(jumps.length, `${page} has no jump navigation`)
+    }
     for (let j of jumps) assert(ids.has(j), `${page}: #${j} names no section`)
+  }
+})
+
+Deno.test('the style guide demonstrates every shared component', () => {
+  let css = read('style.css').replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('@layer components {')[1].split('@layer sections {')[0]
+  let components = new Set(
+    [...css.matchAll(/\.([A-Z][\w-]*)/g)].map((m) => m[1]),
+  )
+  let examples = new Set(
+    [...read('style-guide.html').matchAll(/class="([^"]+)"/g)]
+      .flatMap((m) => m[1].split(/\s+/)),
+  )
+  assert(components.size > 0)
+  for (let name of components) {
+    assert(examples.has(name), `No example of .${name}`)
   }
 })
 
@@ -115,7 +131,7 @@ Deno.test('the plan pages carry the email allowance the code enforces', () => {
 })
 
 Deno.test('every footer link names a page that is there', () => {
-  for (let page of pages) {
+  for (let page of branded) {
     let foot = read(page).split('<footer')[1] ?? ''
     assert(foot, `${page} has no footer`)
     assertEquals(

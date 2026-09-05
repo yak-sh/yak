@@ -1,30 +1,6 @@
-/* yaks.app's one stylesheet. Hand-written, no build step: the browser loads
-   this file and nothing else, which is why it is ONE file organised into
-   declared layers rather than a file per component — with nothing bundling,
-   an @import per component is a loading waterfall.
-
-   Read it in layer order, because that is the system:
-
-     tokens      the vocabulary. Paints first — every colour in the site is
-                 written down exactly once, here — then the ROLES that point
-                 at them. A theme re-points roles; it never touches a paint.
-     base        the handful of element defaults.
-     components  the reusable pieces: Block, Block_Element, Block-modifier.
-                 A variant re-points a custom property; it does not
-                 re-declare rules.
-     sections    the page-specific layout blocks. Used once, named for the
-                 place they are, NOT components. Keeping them apart is the
-                 whole point: a component is something you can pick up.
-
-   Layers also settle who wins: a section beats a component beats an element
-   default, whatever the specificity.
-
-   /style-guide draws every token and every component from this file, and
-   site_test.ts holds the two in step — a component added here without a
-   demonstration there fails the suite.
-
-   Warm and soft on purpose: a page a friend could read over tea, not a
-   product sheet. Dark is cocoa, never black. */
+/* Shared styles for yaks.app. Layers separate colour and spacing tokens,
+   element defaults, reusable components, and page layouts. Later layers
+   take precedence. /style-guide demonstrates the same stylesheet. */
 
 @layer tokens, base, components, sections;
 
@@ -43,12 +19,13 @@
     --bark: #4d3d34; /* the hairline, on a dark ground */
     --cocoa: #372c26; /* cards and bubbles, on a dark ground */
     --night: #2b231f; /* the dark ground itself */
-    --meadow: #5c8a4c; /* the one accent */
+    --meadow: #4c773e; /* readable on both light backgrounds */
     --moss: #a7c080; /* the accent, lit for the dark */
     --blush: #f8e0c8; /* what you said */
     --ember: #4e3b32; /* what you said, in the dark */
     --sky: #e5eef5; /* what it answered */
     --dusk: #34404a; /* what it answered, in the dark */
+    --forest: #33493c; /* the recipe preview's background */
 
     /* The roles. Everything below uses these, never a paint. */
     --ground: var(--linen);
@@ -60,6 +37,7 @@
     --on-accent: var(--ground); /* words on an accent fill */
     --mine: var(--blush); /* the person's bubble */
     --theirs: var(--sky); /* the assistant's bubble */
+    --preview: var(--forest); /* matches the embedded app in either theme */
 
     /* Type. */
     --font: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -69,7 +47,8 @@
     --small: 0.9375rem;
 
     /* Space and shape. The gaps derive from one number. */
-    --measure: 34rem; /* a letter's width */
+    --measure: 34rem; /* reading width */
+    --wide-measure: 72rem; /* multi-column layouts */
     --gap: 1rem;
     --quarter-gap: calc(var(--gap) / 4);
     --half-gap: calc(var(--gap) / 2);
@@ -138,6 +117,12 @@
 
   a {
     color: var(--accent);
+    text-underline-offset: 0.18em;
+    text-decoration-thickness: 0.08em;
+  }
+
+  [id] {
+    scroll-margin-block-start: 1.5rem;
   }
 
   :focus-visible {
@@ -233,6 +218,10 @@
     text-decoration: none;
   }
 
+  a.Pill:hover {
+    text-decoration: underline;
+  }
+
   /* The address in a window bar: sunken rather than raised. */
   .Pill-quiet {
     --pill-fill: var(--ground);
@@ -266,16 +255,33 @@
     cursor: pointer;
   }
 
+  .Button:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .Button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    text-decoration: none;
+  }
+
   /* One text field. The sign-in pages (pages.ts) carry their own copy of
      this, because they are served on a space's hostname where an asset of
      the apex cannot be loaded — keep the two in step by hand. */
   .Field {
+    max-width: 100%;
     font: inherit;
     padding: 0.7rem 1rem;
-    border: 2px solid var(--line);
+    border: 2px solid var(--soft-ink);
     border-radius: var(--radius);
     background: var(--paper);
     color: var(--ink);
+  }
+
+  .Field:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 
   /* A conversation. The frame is the point: it says at a glance that these
@@ -413,16 +419,13 @@
     padding: 0;
   }
 
-  /* The live app itself, framed. The ground is the app's own dark green (its
-     `--bg`), painted here so a lazy-loaded frame shows the app coming up
-     instead of a blank flash; the width is 100% so the homepage never scrolls
-     sideways, and the app scrolls inside its fixed-height box. */
+  /* Match the embedded app's background while it loads. */
   .Window_Frame {
     display: block;
     width: 100%;
     height: 26rem;
     border: 0;
-    background: #33493c;
+    background: var(--preview);
   }
 
   /* Paper under a block of the page. */
@@ -562,9 +565,14 @@
     padding-block: var(--wide-gap) 3rem;
   }
 
-  /* The home page: bands, a good breath apart. */
+  /* Wider grids on the homepage; prose pages retain their reading width. */
+  .Top-home {
+    width: min(100% - 2 * var(--gap), var(--wide-measure));
+  }
+
   .Home {
-    gap: 4rem;
+    --measure: var(--wide-measure);
+    gap: clamp(3rem, 6vw, 5rem);
   }
 
   .Hello {
@@ -573,15 +581,71 @@
     text-align: center;
   }
 
-  /* How it goes: one conversation, then what it left behind. */
-  .How {
-    display: grid;
+  .Home .Hello {
     gap: 2.5rem;
+    align-items: center;
+    text-align: start;
   }
 
-  .Step {
+  .Hello_Copy {
     display: grid;
-    gap: 0.875rem;
+    gap: var(--gap);
+    max-width: 36rem;
+  }
+
+  .Hello_Yak {
+    width: 4rem;
+  }
+
+  .Home .Title-hero {
+    --title-size: clamp(2rem, 4vw + 1rem, 2.75rem);
+  }
+
+  .Hello_Doors {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 1.5rem;
+    font-weight: 700;
+  }
+
+  .Demo {
+    display: grid;
+    gap: var(--gap);
+    min-width: 0;
+  }
+
+  .Demo_Title {
+    font-size: var(--body);
+    font-weight: 700;
+  }
+
+  .Demo .Window_Frame {
+    height: 24rem;
+  }
+
+  @media (min-width: 60rem) {
+    .Home .Hello {
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: clamp(2rem, 5vw, 4rem);
+    }
+
+    .Hello_Copy {
+      gap: 1.25rem;
+    }
+
+    .Hello_Yak {
+      width: 6rem;
+    }
+
+    .Hello .Title-hero {
+      --title-size: 3rem;
+    }
+  }
+
+  .How {
+    display: grid;
+    gap: 1.5rem;
   }
 
   .Step_Name {
@@ -590,11 +654,7 @@
     font-weight: 700;
   }
 
-  /* The three moves, before the worked example (T-33643): what strangers
-     could not find was the FIRST one — that this starts in their assistant's
-     own settings, not in a signup form here. Numbered because the order is
-     the information; the counter is drawn rather than written, so the markup
-     stays an ordinary <ol>. */
+  /* Keep setup order in an ordered list, including without styles. */
   .Steps {
     display: grid;
     gap: var(--wide-gap);
@@ -624,12 +684,12 @@
     font-weight: 800;
   }
 
-  /* Prices on the home page: the same two plans as /pricing, shortened. A
-     letter's width fits both at 15rem each, so `.Plans` stacks on a phone and
-     sits side by side on a laptop with no rule of its own here. */
+  /* Pricing stays narrower than the examples: there are only two plans. */
   .Cost {
     display: grid;
     gap: 1.25rem;
+    width: min(100%, 52rem);
+    justify-self: center;
   }
 
   .Make {
@@ -637,12 +697,48 @@
     gap: 1.25rem;
   }
 
-  /* And then it's yours: a plain description list, not a grid of feature
-     cards. A term is a short sentence in the accent, its answer sits under
-     it, and nothing is boxed — it reads like a note, which is the point. */
+  .Make_Intro {
+    display: grid;
+    gap: var(--half-gap);
+  }
+
+  .Make_List {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+    gap: var(--gap);
+  }
+
+  .Make_Link {
+    display: grid;
+    gap: var(--half-gap);
+    height: 100%;
+    padding: 1.25rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--paper);
+    text-decoration: none;
+  }
+
+  .Make_Link:hover {
+    border-color: var(--accent);
+  }
+
+  .Make_Link:hover .Make_Name {
+    text-decoration: underline;
+  }
+
+  .Make_Name {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--gap);
+    font-weight: 800;
+  }
+
   .Yours {
     display: grid;
-    gap: 1.25rem;
+    gap: 1.5rem;
+    padding-block: 2rem;
+    border-block: 1px solid var(--line);
   }
 
   .Yours_List {
@@ -662,17 +758,25 @@
     text-wrap: pretty;
   }
 
-  /* How to connect: one address a person hands their assistant, and the door
-     they sign in at. The address wraps rather than pushing the page sideways
-     — a phone is the first screen this is read on. */
+  @media (min-width: 48rem) {
+    .Home .Yours_List,
+    .Steps {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 2rem;
+    }
+  }
+
   .Join {
     display: grid;
     gap: var(--gap);
     text-align: center;
+    width: min(100%, 52rem);
+    justify-self: center;
+    justify-items: center;
   }
 
-  .Join_Url {
-    overflow-wrap: anywhere;
+  .Join > .Note {
+    max-width: 40rem;
   }
 
   .Join_Doors {
@@ -690,7 +794,7 @@
 
   .Plans {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
     gap: var(--gap);
     align-items: start;
   }

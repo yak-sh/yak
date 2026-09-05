@@ -50,154 +50,131 @@
 
     <main class="Page Prose">
       <div class="Prose_Head">
-        <h1 class="Title Title-page">The technical bits</h1>
+        <h1 class="Title Title-page">Technical details</h1>
         <p>
-          You don't need any of this to use yaks.app — <a href="/help">the help
-          page</a> is the one written for everybody. This is for the person who
-          wants to know where their things actually sit before they put
-          anything in, and it's all here: what runs it, what it can do, and
-          what it can't do yet.
+          This page explains how yaks.app hosts apps, stores data, runs code,
+          controls access, and applies limits. For setup and everyday use, see
+          <a href="/help">Help</a>.
         </p>
         <ul class="Pills">
           <li><a class="Pill" href="#runs">Where it runs</a></li>
-          <li><a class="Pill" href="#kept">Where your things are kept</a></li>
-          <li><a class="Pill" href="#served">How a page reaches a
-            visitor</a></li>
-          <li><a class="Pill" href="#code">Apps can run code</a></li>
-          <li><a class="Pill" href="#talking">How your assistant talks to
-            it</a></li>
-          <li><a class="Pill" href="#who">Who can open what</a></li>
-          <li><a class="Pill" href="#domain">Your own domain</a></li>
-          <li><a class="Pill" href="#limits">The limits</a></li>
-          <li><a class="Pill" href="#missing">What it can't do yet</a></li>
-          <li><a class="Pill" href="#out">Getting your things out</a></li>
+          <li><a class="Pill" href="#kept">Data storage</a></li>
+          <li><a class="Pill" href="#served">Serving app files</a></li>
+          <li><a class="Pill" href="#code">Server-side code</a></li>
+          <li><a class="Pill" href="#talking">Connectors and MCP</a></li>
+          <li><a class="Pill" href="#who">Access levels</a></li>
+          <li><a class="Pill" href="#domain">Custom domains</a></li>
+          <li><a class="Pill" href="#limits">Limits</a></li>
+          <li><a class="Pill" href="#missing">Current limitations</a></li>
+          <li><a class="Pill" href="#out">Exporting data</a></li>
         </ul>
       </div>
 
       <section id="runs">
         <h2>Where it runs</h2>
         <p>
-          All of it is on Cloudflare, and none of it is on a machine we keep
-          in a room somewhere. The whole platform is one Cloudflare Worker,
-          which means your app's code runs in whichever of Cloudflare's data
-          centres is nearest the person opening it, not in one city that
-          everyone else has to reach.
+          yaks.app runs on Cloudflare. The platform uses one Cloudflare Worker,
+          and app code runs in a Cloudflare data centre near the visitor.
         </p>
         <p>
-          That's what "scales" means here in practice: there is no server to
-          fill up and no queue to join. Ten people or ten thousand, the same
-          page is being run in the same way — Cloudflare adds the capacity,
-          and nobody has to be woken up. A quiet app costs nothing to keep
-          running, which is the other half of why five apps can be free.
+          Cloudflare supplies capacity as traffic changes, without a dedicated
+          server for each app. An app with no traffic uses no compute.
         </p>
       </section>
 
       <section id="kept">
-        <h2>Where your things are kept</h2>
+        <h2>Data storage</h2>
         <!-- graph.ts:1 "one app's graph, and nothing of the fleet's"; the DO name is
              pinned at the app's birth (directory.ts storeName) so a rename
              never moves the data. -->
         <p>
-          Every app gets its own little database, entirely to itself — a
-          Cloudflare Durable Object with SQLite inside it. One app, one
-          database. The recipe box's recipes are not in a big shared table
-          somewhere with a column saying which of us they belong to; they are
-          in the recipe box.
+          Each app has its own SQLite database inside a Cloudflare Durable
+          Object. App databases are not shared.
         </p>
         <p>
-          That is the isolation people usually want to hear about. An app
-          reaches its own store and no other, and it is enforced where the
-          request is answered rather than by an app remembering to filter
-          something. Your assistant can read across your own apps because it
-          is signed in as you.
+          The platform restricts each app to its own database when it handles a
+          request. Your signed-in assistant can access your apps on your behalf.
         </p>
         <!-- apps.ts blobKey: `${space}/${app}/blobs/${sha}` in the BLOBS R2
              bucket, content-addressed, so the same photo twice is one object. -->
         <p>
-          Photos and files go in Cloudflare R2 instead, under that app's own
-          prefix, and are stored by the fingerprint of their contents — so
-          sending the same photo twice keeps one copy. The app's database holds
-          the note about the file; R2 holds the bytes.
+          Photos and files are stored in Cloudflare R2 under an app-specific
+          prefix. Files are addressed by a hash of their contents, so uploading
+          the same file twice stores one copy. The database stores file
+          metadata; R2 stores the bytes.
         </p>
         <p>
-          What an app remembers is a graph of entities carrying components,
-          the same shape the tools speak, and an app can declare components of
-          its own. <a href="/guide.md">The guide</a> has the whole model.
+          Structured app data uses a graph of entities and components. Apps
+          can declare their own components. See
+          <a href="/guide.md">the developer guide</a> for the data model.
         </p>
       </section>
 
       <section id="served">
-        <h2>How a page reaches a visitor</h2>
+        <h2>Serving app files</h2>
         <!-- files.ts + the Files entrypoint, cached per wrangler.toml
              [exports.Files.cache]; the default entrypoint is never cached
              because the cache key is not the hostname. -->
         <p>
-          An app is an <code>index.html</code> and whatever files sit beside
-          it — css, js, images. There is no build step and no framework to
-          learn: what your assistant writes is what runs.
+          An app consists of <code>index.html</code> and related CSS,
+          JavaScript, image, and other files. There is no required framework or
+          build step.
         </p>
         <p>
-          Those files are served out of R2 through Cloudflare's cache, so a
-          page that has already been asked for once comes back from the edge
-          without touching storage at all. A path with no file extension gets
-          <code>index.html</code>, so an app that does its own routing works
-          the way you'd expect when someone reloads a deep link.
+          Files are served from R2 through Cloudflare's cache. A cached file can
+          be returned from the edge without reading R2. Paths without a file
+          extension receive <code>index.html</code>, which supports client-side
+          routing and direct loads of nested URLs.
         </p>
         <!-- versions.ts KEEP = 20 -->
         <p>
-          Every deploy is a version, and the last twenty are kept. Rolling
-          back restores an old set of files as a new version, so nothing in
-          the history is lost — and it changes the pages, never the things
-          you've saved.
+          Each deployment creates a version, and the last twenty are kept. A
+          rollback restores an earlier set of files as a new version. Rollbacks
+          do not change saved app data.
         </p>
       </section>
 
       <section id="code">
-        <h2>Apps can run code, not just show pages</h2>
+        <h2>Server-side code</h2>
         <!-- dispatch.ts: a worker.js among an app's files is uploaded into
              the `yak-apps` Workers for Platforms dispatch namespace; the
              kernel forwards non-/api requests to it and falls back to the
              files on a 404. -->
         <p>
-          If an app needs a server — a webhook to receive, an API to call with
-          a key you'd rather not put in a page — it can have one. A
-          <code>worker.js</code> among its files becomes a Cloudflare Worker of
-          its own, in a Workers for Platforms namespace, and requests to the
-          app go to it first; anything it doesn't answer falls back to the
-          files.
+          Apps can receive webhooks or call APIs without exposing credentials
+          in browser code. A <code>worker.js</code> file runs as a Cloudflare
+          Worker in a Workers for Platforms namespace. App requests reach that
+          worker first; a 404 response falls back to the app's files.
         </p>
         <p>
-          It is sandboxed the careful way. Your platform sign-in never crosses
-          into app code. Instead the platform hands the app a sealed pass that
-          lasts sixty seconds, names one store and one visitor, and is taken
-          off the request before the app's own code sees it — so an app can
-          reach its own data as whoever is looking, and cannot reach anybody
-          else's. Secrets an app needs are set separately and never appear in
-          its files.
+          App code never receives your yaks.app sign-in session. The platform
+          uses a token valid for sixty seconds and scoped to one app database
+          and one visitor. It removes the token before app code receives the
+          request. App secrets are stored separately and do not appear in app
+          files.
         </p>
       </section>
 
       <section id="talking">
-        <h2>How your assistant talks to it</h2>
+        <h2>Connectors and MCP</h2>
         <!-- mcp.ts: POST /mcp is stateless streamable HTTP; GET /mcp is the
              per-person stream backed by the Wire DO, resumable by
              Last-Event-ID. Auth is OAuth via @cloudflare/workers-oauth-provider. -->
         <p>
-          Over MCP, at <code>https://yaks.app/mcp</code>, on streamable HTTP.
-          Anything that speaks MCP can use it — Claude as a connector, ChatGPT
-          as a custom connector, Claude Code, or a client you wrote yourself.
-          There is nothing yaks.app-specific to install.
+          The MCP endpoint is <code>https://yaks.app/mcp</code> and uses
+          Streamable HTTP. It supports Claude connectors, ChatGPT custom
+          connectors, Claude Code, and other MCP clients. No yaks.app-specific
+          client package is required.
         </p>
         <p>
-          Signing in is OAuth, with dynamic client registration, and your
-          account itself has no password: we mail a six-digit code and the
-          session is a signed cookie. The code is never stored — only a keyed
-          digest of it, so a copy of our database is not a way into your
-          account.
+          Authentication uses OAuth with dynamic client registration. Accounts
+          have no password; yaks.app emails a six-digit code and stores the
+          browser session in a signed cookie. Only a keyed digest of the code is
+          stored.
         </p>
         <p>
-          Your app's own pages don't go through MCP. They import a small
-          client from their own URL and talk to the app's store directly —
+          App pages do not use MCP. They import a client from their own URL and
+          access the app database through
           <code>query</code>, <code>apply</code>, <code>search</code>,
           <code>subscribe</code> over a WebSocket for live updates, and
           <code>upload</code> for files.
@@ -205,131 +182,117 @@
       </section>
 
       <section id="who">
-        <h2>Who can open what</h2>
-        <p>Each app is in one of three states, and you can change it any time:</p>
+        <h2>Access levels</h2>
+        <p>Each app has one of three access levels, which can be changed:</p>
         <!-- session.ts reads/writes: private hides the app entirely; open
              lets a stranger write; public is read-anyone, write-members. -->
         <ul>
           <li>
-            <b>Public.</b> Anyone with the link can read it; only you and the
-            people you've invited can change anything. This is how an app
-            starts.
+            <b>Public.</b> Anyone with the link can read it. Only you and
+            invited members can make changes. This is the default.
           </li>
           <li>
-            <b>Open.</b> Anyone with the link can write in it too, without
-            signing in — for a vote, a sign-up sheet, a guestbook.
+            <b>Open.</b> Anyone with the link can read and write without
+            signing in. This suits votes, signup sheets, and guestbooks.
           </li>
           <li>
-            <b>Private.</b> Only you and the people you invite can open it at
-            all. A stranger isn't told it exists.
+            <b>Private.</b> Only you and invited members can open it. Other
+            visitors are not told that it exists.
           </li>
         </ul>
         <p>
-          Invitations are by email address and are to your whole space rather
-          than one app; a member is an owner, an editor or a viewer. One thing
-          never widens: an app's <i>files</i> can only be changed by a member,
-          whatever the app's state — "open" opens the data, never the code.
+          Invitations use email addresses and apply to the whole space, not one
+          app. Members can be owners, editors, or viewers. Only members can
+          change app files; the Open level applies to app data, not code.
         </p>
       </section>
 
       <section id="domain">
-        <h2>Your own domain</h2>
+        <h2>Custom domains</h2>
         <!-- domains.ts: Cloudflare for SaaS custom hostnames on the yaks.app
              zone, HTTP DV, one CNAME to ORIGIN (route.ts). Apex is a hint,
              not a special case; the guide's answer is CNAME flattening. -->
         <p>
-          An app can answer at a domain you own, as well as at
+          An app can use a domain you own in addition to
           <code>yourname.yaks.app</code>. It's a Cloudflare for SaaS custom
-          hostname: you add one <code>CNAME</code> record at your registrar
-          pointing at <code>origin.saas.yaks.app</code>, and the certificate
-          is issued and renewed for you.
+          hostname. Add a <code>CNAME</code> record at your registrar pointing
+          to <code>origin.saas.yaks.app</code>. Cloudflare issues and renews the
+          TLS certificate.
         </p>
         <p>
-          Your assistant can read back exactly where that has got to — whether
-          the record has appeared, whether the hostname was accepted, whether
-          the certificate is issued — so "it isn't working" has an answer
-          rather than a shrug. A bare domain like
-          <code>ourbookclub.com</code> can't take a <code>CNAME</code>
-          according to DNS itself; the usual fix is to keep the domain's DNS
-          at Cloudflare, whose free plan flattens it for you.
+          Your assistant can report whether the DNS record is visible, the
+          hostname is accepted, and the certificate is issued. DNS standards
+          do not allow a <code>CNAME</code> on a bare domain such as
+          <code>ourbookclub.com</code>. Cloudflare's free DNS plan supports
+          CNAME flattening for this case.
         </p>
       </section>
 
       <section id="limits">
-        <h2>The limits</h2>
+        <h2>Limits</h2>
         <p>
-          The free plan is held to five apps, 1 GB of app data, and 100 emails
-          a month; Plus is held to 1,000 emails a month. Going past
-          one of those is refused — nothing that already
-          exists is ever deleted for it — and your assistant is told when you
-          reach four fifths of any of them, so you hear about it before you
-          run into it.
+          The free plan allows five apps, 1 GB of app data, and 100 emails a
+          month. Plus allows 1,000 emails a month. Operations that exceed a
+          limit are refused, but existing apps and data are not deleted. Your
+          assistant receives a notice when usage reaches 80% of a limit.
         </p>
         <p>
-          The email number counts both directions, and only SENDING stops at
-          it. A letter written to one of your apps lands however many you've
-          used: refusing it would lose the sender's words rather than limit
-          yours. The month starts over on the 1st.
+          The email limit counts incoming and outgoing messages, and only
+          SENDING stops when the limit is reached. Incoming messages are still
+          delivered. The count resets on the first day of each month.
         </p>
         <p>
-          Visits are counted and never refused. If more people turn up than
-          your plan counts, your apps keep working and we talk to you about it
-          rather than closing the door on your guests.
+          Visits are counted but not refused. Apps remain available after the
+          plan's monthly visit amount is exceeded.
           <a href="/pricing">The pricing page</a> has both plans in full.
         </p>
-        <p>Some fixed numbers, whatever plan you're on:</p>
+        <p>These limits apply to both plans:</p>
         <ul>
           <li><b>20 MB</b> is the largest single file or upload.</li>
           <li><b>20 versions</b> of an app are kept to roll back to.</li>
           <li>
             An app's own <code>worker.js</code> gets <b>50 ms of CPU</b> and
-            <b>50 outgoing requests</b> per request — Cloudflare's numbers, not
-            ours. Waiting on a slow API doesn't count against the CPU.
+            <b>50 outgoing requests</b> per request. Waiting for an external
+            API does not count toward CPU time.
           </li>
           <li>
             A sign-in code lasts <b>ten minutes</b>, allows <b>five guesses</b>,
-            and we'll send at most <b>three an hour</b> to one address.
+            and yaks.app sends at most <b>three an hour</b> to one address.
           </li>
         </ul>
       </section>
 
       <section id="missing">
-        <h2>What it can't do yet</h2>
-        <p>
-          It's early here, and this is the whole list rather than the
-          flattering half of it.
-        </p>
+        <h2>Current limitations</h2>
         <ul>
           <li>
-            <b>App email is only at yaks.app.</b> An app sends and receives at
+            <b>App email uses yaks.app addresses.</b> An app sends and receives at
             <code>&lt;space&gt;.&lt;app&gt;@yaks.app</code> — the space's front
             page at <code>&lt;space&gt;@yaks.app</code> — and a domain of your
-            own can't carry its mail yet, even when it serves the pages.
+            own cannot receive app mail, even when it serves the app pages.
           </li>
           <li>
-            <b>No image resizing on our side.</b> A page shrinks a photo in
-            the browser before it uploads it, and that's the whole of it. We
-            read a picture's dimensions out of the file, nothing more.
+            <b>No server-side image resizing.</b> An app can resize a photo in
+            the browser before uploading it. yaks.app reads image dimensions
+            but does not otherwise process the image.
           </li>
           <li>
-            <b>No package installs in app code.</b> There's no bundler and no
-            registry — what your assistant writes is what runs. That's what
-            keeps a change instant, and it does mean a big npm library isn't
-            an option.
+            <b>No package installation in app code.</b> There is no package
+            registry or bundler, so <code>worker.js</code> cannot install npm
+            packages.
           </li>
           <li>
             <b>Search matches whole words.</b> Looking for <i>lemon</i> won't
             find <i>lemons</i>.
           </li>
           <li>
-            <b>Live subscriptions have a small ceiling.</b> A page can watch
-            about 2 KB worth of queries on one connection; past that, the next
-            one is refused rather than quietly dropped.
+            <b>Live subscriptions have a 2 KB query limit.</b> A connection can
+            watch about 2 KB of queries. Additional queries are refused.
           </li>
           <li>
-            <b>Deleting a space is deliberately slow.</b> Your assistant can't
-            do it for you — we mail you a link that works for an hour, because
-            it can't be undone.
+            <b>Deleting a space requires email confirmation.</b> Your assistant
+            cannot complete the deletion. yaks.app emails a confirmation link
+            that is valid for one hour because deletion cannot be undone.
           </li>
           <li>
             <b>No wildcard domains.</b> One custom hostname serves one app.
@@ -338,13 +301,12 @@
       </section>
 
       <section id="out">
-        <h2>Getting your things out</h2>
+        <h2>Exporting data</h2>
         <p>
-          Ask for them: <q class="Said">give me everything in the recipe box
-          as a file.</q> Your assistant can read every last thing an app holds
-          — the data and the pages themselves — and hand it back in whatever
-          shape you want. There's no export request to file and no waiting on
-          us, because nothing here is in a format only we can read.
+          Ask your assistant to export an app:
+          <q class="Said">give me everything in the recipe box as a file.</q>
+          It can read the app's data and files and return them directly. No
+          separate export request is required.
         </p>
         <p>
           For a copy of what we hold about you, or to close your account,
@@ -355,23 +317,20 @@
       </section>
 
       <section id="more">
-        <h2>Where the rest is</h2>
+        <h2>More technical documentation</h2>
         <p>
-          <a href="/guide.md">The guide</a> is the full reference: the data
-          model, querying, files, sharing, app code, and what happens when
-          something breaks. It's written for an assistant to read, which makes
-          it the most precise thing here — and you can read it too.
+          <a href="/guide.md">The developer guide</a> documents the data model,
+          queries, files, sharing, server-side code, and error handling.
         </p>
         <p>
-          Something look wrong on this page? <a href="mailto:hello@yaks.app">hello@yaks.app</a>
-          reaches a person.
+          Report an error on this page to
+          <a href="mailto:hello@yaks.app">hello@yaks.app</a>.
         </p>
       </section>
     </main>
 
     <footer class="Foot">
-      <p>Made with care by a small herd. It's early days here — thanks for
-        coming by.</p>
+      <p>yaks.app · Yak Shaving LLC</p>
       <ul class="Foot_Links">
         <li><a href="/help">Help</a></li>
         <li><a href="/technical">Technical</a></li>

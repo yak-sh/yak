@@ -6,9 +6,6 @@
   they arrive with them in — so every heading is a question, and nothing on
   the page is explained twice. Anything technical points at the guide instead
   (M-14370: one source per fact, a pointer never rots).
-
-  Nothing here promises a thing we do not have, and nothing here mentions
-  plans or prices, because there is no paid tier yet.
 -->
 <html lang="en">
   <head>
@@ -17,7 +14,7 @@
     <title>Help · yaks.app</title>
     <meta
       name="description"
-      content="Answers to the questions people arrive with: what you can make, how to start, where your things live, who can see them, and how to reach a person."
+      content="Answers about building apps, connecting an assistant, sharing, access, exports, and support."
     />
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32" />
@@ -48,191 +45,174 @@
       <div class="Prose_Head">
         <h1 class="Title Title-page">Help</h1>
         <p>
-          You ask your assistant for an app, and you get a website of your
-          own. These are the questions people ask most. If yours isn't here,
-          write to <a href="mailto:hello@yaks.app">hello@yaks.app</a> and a
-          person will answer.
+          Build and host web apps by asking Claude or ChatGPT. This page covers
+          setup, sharing, exports, and support. For anything else, email
+          <a href="mailto:hello@yaks.app">hello@yaks.app</a>.
         </p>
         <ul class="Pills">
           <li><a class="Pill" href="#make">What can I make?</a></li>
           <li><a class="Pill" href="#start">How do I start?</a></li>
-          <li><a class="Pill" href="#ask">How do I ask for things?</a></li>
-          <li><a class="Pill" href="#where">Where do my things live?</a></li>
+          <li><a class="Pill" href="#ask">How do I request changes?</a></li>
+          <li><a class="Pill" href="#where">Where are my apps and data?</a></li>
           <li><a class="Pill" href="#who">Who can see them?</a></li>
-          <li><a class="Pill" href="#invite">Letting someone in</a></li>
+          <li><a class="Pill" href="#invite">Inviting people</a></li>
           <li><a class="Pill" href="#broken">Something's broken</a></li>
-          <li><a class="Pill" href="#out">Getting my things out</a></li>
-          <li><a class="Pill" href="#people">Reaching a person</a></li>
+          <li><a class="Pill" href="#out">Exporting and deleting</a></li>
+          <li><a class="Pill" href="#people">Contact support</a></li>
         </ul>
       </div>
 
       <section id="make">
         <h2>What can I make?</h2>
         <p>
-          All sorts of things, and they don't look alike. A recipe box you
-          share with your sister. A garden diary. A page for the book club with
-          the next three months on it. A signup sheet for the potluck. A
-          running board. A guestbook for a birthday.
+          yaks.app supports personal and shared web apps: a recipe box, garden
+          diary, book club schedule, potluck signup sheet, running log, or
+          birthday guestbook.
         </p>
         <p>
-          That list is just the small end: everything from personal toys to
-          large collaborative web apps. Anything your assistant can build or
-          design, you can ship here.
-        </p>
-        <p>
-          If you can say what you want in a sentence or two, that's enough to
-          start with. Ask for the plain version first — changing it later costs
-          you one more sentence.
+          Start with one or two sentences. Ask for a basic version first, then
+          request changes as you use it.
         </p>
         <p>
           You can also ask <q class="Said">has somebody already made one of
-          these?</q> People here publish apps for anyone to take. The copy is
-          yours: your own link, your own things in it, and nothing goes back to
-          whoever wrote it.
+          these?</q> If someone has published a suitable app, your assistant can
+          install a copy in your space. That copy has its own URL and data
+          store; installing it does not give the publisher access to your
+          space.
         </p>
       </section>
 
       <section id="start">
         <h2>How do I start?</h2>
         <p>
-          Give Claude or ChatGPT this link, once:
-          <code>https://yaks.app/mcp</code>. It'll ask you to sign in with your
-          email, and we send a six-digit code, so there's no password to keep
-          track of.
-        </p>
-        <p>
-          <a href="/connect">The connect page</a> has the exact clicks for each
-          assistant. After that you just talk to it the way you already do.
+          Open <a href="/connect">the connect page</a> and follow the steps for
+          Claude or ChatGPT. You will sign in by email with a six-digit code;
+          yaks.app does not use passwords. After connecting, ask your assistant
+          to build an app.
         </p>
       </section>
 
       <section id="ask">
-        <h2>How do I ask for things?</h2>
+        <h2>How do I request an app or a change?</h2>
         <p>
-          In your own words. <q class="Said">Could you make me a recipe box?
-          Something I can share with my sister.</q> It gets built while you
-          wait, and you get a link to open.
+          Describe what you want in your own words:
+          <q class="Said">Could you make me a recipe box? Something I can share
+          with my sister.</q> Your assistant builds the app and gives you its
+          link.
         </p>
         <p>
-          Then keep going. <q class="Said">Put the newest ones first.</q>
+          Request changes the same way. <q class="Said">Put the newest ones first.</q>
           <q class="Said">Let Ana leave a note on each one.</q>
-          <q class="Said">Make the photos bigger.</q> You never have to describe
-          the whole thing up front, and you're not picking from a menu —
-          anything you can describe, you can ask for.
+          <q class="Said">Make the photos bigger.</q> You do not need to specify
+          every detail before the first version is built.
         </p>
         <p>
-          Changed your mind about a change? <q class="Said">Put the recipe box
-          back the way it was yesterday.</q> Every version is kept — the last
-          twenty — and going back changes the pages, not the things you've
-          saved.
+          To undo a change, ask to restore an earlier version. The last twenty
+          versions are kept. Restoring one changes the app's files, not its
+          saved data.
         </p>
       </section>
 
       <section id="where">
-        <h2>Where do my things live?</h2>
+        <h2>Where are my apps and data?</h2>
         <p>
-          On the web, under a name you pick. Your apps live at
-          <code>yourname.yaks.app</code> — a recipe box at
-          <code>yourname.yaks.app/recipes</code> — and the first thing you make
-          also answers plain <code>yourname.yaks.app</code>. That's the link you
-          send people, and there's nothing for you or them to install.
+          Your apps are hosted under a name you choose. For example, a recipe
+          box can use <code>yourname.yaks.app/recipes</code>. Ask your assistant
+          to choose which app opens at <code>yourname.yaks.app</code>. Visitors
+          open the URL in a browser and do not need to install anything.
         </p>
         <p>
-          You choose that name on <a href="/connect">the connect page</a>, and
-          you can change it right up until you've built something — after that
-          it stays put, so links people already have keep working.
+          Choose the name on <a href="/connect">the connect page</a>. You can
+          change it until you build your first app. After that, the address is
+          fixed so existing links continue to work.
         </p>
         <p>
-          Everything an app remembers — every recipe, every note, every photo —
-          stays with that app. It's the same on your phone as on your laptop:
-          write on one and the other catches up. Ask your assistant
-          <q class="Said">what have I got here?</q> any time and it'll list what
-          you've made, with links.
+          Each app stores its own recipes, notes, photos, and other data.
+          Changes are available on any device. Ask your assistant
+          <q class="Said">what apps have I made?</q> to list your apps and their
+          links.
         </p>
       </section>
 
       <section id="who">
         <h2>Who can see them?</h2>
         <p>
-          You choose, one app at a time, and you can change your mind whenever
-          you like. There are three choices:
+          Set access separately for each app. You can change it later. There
+          are three options:
         </p>
         <ul>
           <li>
-            <b>Anyone with the link can read it.</b> This is how an app starts.
-            They can look; only you and the people you've invited can change
-            anything.
+            <b>Anyone with the link can read it.</b> This is the default. Only
+            you and invited members can make changes.
           </li>
           <li>
             <b>Anyone with the link can write in it too.</b> For a vote, a
-            signup sheet, a guestbook — somebody adds their line without signing
-            in or making an account.
+            signup sheet, or guestbook. Visitors can contribute without
+            signing in.
           </li>
           <li>
-            <b>Only you and the people you invite.</b> Nobody else can even open
-            the page.
+            <b>Only you and the people you invite.</b> Other visitors cannot
+            open the app.
           </li>
         </ul>
         <p>
-          Just ask for the one you want: <q class="Said">let anyone sign up on
+          Tell your assistant which option to use: <q class="Said">let anyone sign up on
           the potluck list</q>, <q class="Said">keep the diary private</q>.
         </p>
       </section>
 
       <section id="invite">
-        <h2>How do I let someone in? And how do I stop?</h2>
+        <h2>How do invitations work?</h2>
         <p>
           Tell your assistant who, and why: <q class="Said">invite
           ana@example.com to the recipe box, and say it's for Saturday.</q> Ana
-          gets an email with your note and the link, and signing in there with
-          that same email address is all it takes — no account to make first,
-          nothing to install.
+          receives an email with your note and the link. They sign in with the
+          same email address. No prior account or installation is required.
         </p>
         <p>
-          You can say what she may do: write things, only read them, or invite
-          other people too. And an invitation is to your whole corner of
-          yaks.app rather than to one app — everything under
-          <code>yourname.yaks.app</code> — so invite people you'd be happy to
-          show all of it to.
+          Choose whether the person can edit, only view, or invite other people.
+          Membership applies to every app under
+          <code>yourname.yaks.app</code>, not to a single app. Invite only
+          people who should have access to the whole space.
         </p>
         <p>
-          To undo it, say so: <q class="Said">take Ana out.</q> She keeps her
-          own sign-in and loses this. What she wrote while she was here stays
-          where it is.
+          To remove access, ask <q class="Said">remove Ana from my space.</q>
+          They can still sign in to yaks.app, but they lose access to your
+          space. Their previous contributions are not deleted.
         </p>
       </section>
 
       <section id="broken">
-        <h2>Something's broken. What do I do?</h2>
+        <h2>What should I do when an app breaks?</h2>
         <p>
-          Say so, in your own words: <q class="Said">the photo on the pancakes
-          won't load.</q> You don't have to work out what went wrong, and you'll
-          never be shown a wall of computer text.
+          Tell your assistant what you saw:
+          <q class="Said">the photo on the pancakes won't load.</q> You do not
+          need to diagnose the problem first.
         </p>
         <p>
-          When something breaks, the app writes down what happened by itself,
-          and your assistant hears about it the next time you talk to it. You
-          can also ask outright: <q class="Said">anything broken in the recipe
-          box?</q> It'll show you each one and fix them.
+          Apps record errors automatically. Your assistant receives those
+          errors the next time you use it. You can also ask
+          <q class="Said">are there any errors in the recipe box?</q> and ask it
+          to make a fix.
         </p>
         <p>
-          If a change is what broke it, ask for the old version back. Nothing
-          you've saved is lost in either direction.
+          If a recent change caused the problem, ask to restore an earlier
+          version. Restoring app files does not change saved data.
         </p>
       </section>
 
       <section id="out">
-        <h2>Can I get my things out?</h2>
+        <h2>How do I export or delete an app?</h2>
         <p>
-          Yes, and you don't need us to do it for you. Ask: <q class="Said">give
-          me everything in the recipe box as a file.</q> Your assistant can read
-          every last thing an app holds and hand it back in whatever shape you
-          want it — a list to read, a spreadsheet, the pages themselves.
+          Ask your assistant to export the app:
+          <q class="Said">give me everything in the recipe box as a file.</q>
+          It can return the app's data as a list or spreadsheet and provide the
+          app files.
         </p>
         <p>
-          Want one gone instead? <q class="Said">Delete the recipe box.</q>
-          That's the app, what it held and its link, for good — there's no undo,
-          so it only happens when you say so.
+          To delete it, ask <q class="Said">delete the recipe box.</q> This
+          permanently deletes the app, its saved data, and its URL. It cannot
+          be undone.
         </p>
         <p>
           To ask for a copy of everything we hold about you, or for your account
@@ -244,37 +224,33 @@
       </section>
 
       <section id="people">
-        <h2>How do I reach a person?</h2>
+        <h2>How do I contact support?</h2>
         <p>
-          <a href="mailto:hello@yaks.app">hello@yaks.app</a>. A person reads
-          everything that arrives there, and we write back.
+          Email <a href="mailto:hello@yaks.app">hello@yaks.app</a> for help from
+          a person.
         </p>
         <p>
-          You can also tell your assistant when something here is broken,
-          confusing or missing — <q class="Said">this is baffling, tell them</q>
-          — and it sends us your words along with what it tried. That reaches
-          the same inbox, and we can answer it.
+          You can also ask your assistant to report a problem. It sends your
+          message and information about what it tried to the same support inbox.
         </p>
       </section>
 
       <section id="under">
         <h2>Where are the technical details?</h2>
         <p>
-          On <a href="/technical">the technical page</a>: where it runs, where
-          your things are kept, what the limits are, and what it can't do yet.
+          The <a href="/technical">technical page</a> covers hosting, data
+          storage, limits, and current limitations.
         </p>
         <p>
-          Past that, in <a href="/guide.md">the guide</a>: everything an
-          assistant can do here — how an app keeps what you save, photos and
-          files, sharing and inviting, and what happens when something breaks.
-          It's written for the assistant, but you can read it too.
+          The <a href="/guide.md">developer guide</a> documents app data,
+          files, sharing, invitations, errors, and the tools available to an
+          assistant.
         </p>
       </section>
     </main>
 
     <footer class="Foot">
-      <p>Made with care by a small herd. It's early days here — thanks for
-        coming by.</p>
+      <p>yaks.app · Yak Shaving LLC</p>
       <ul class="Foot_Links">
         <li><a href="/help">Help</a></li>
         <li><a href="/technical">Technical</a></li>
