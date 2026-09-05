@@ -57,8 +57,11 @@ export type Storage = {
   read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
   /** a query → the compiled statement's raw rows (counts, tallies) */
   rows: (query: Query, opts?: ReadOpts) => Row[] | Promise<Row[]>
-  /** run `body` in a transaction: commit on return, roll back on throw */
-  tx: <R>(body: (tx: Tx) => R) => R
+  /** run `body` in a transaction: commit on return, roll back on throw. Like
+   * every other member it is async-OR-sync — an embedded adapter hands back
+   * whatever the body returned, an adapter over a network hands back a promise
+   * that settles once the transaction has committed. */
+  tx: <R>(body: (tx: Tx) => R) => R | Promise<Awaited<R>>
 }
 
 /**
