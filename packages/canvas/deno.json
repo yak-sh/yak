@@ -3,13 +3,14 @@
   "version": "0.0.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "A canvas component domain for a yaks graph: cards, pins, and cameras for a spatial UI.",
+  "description": "The spatial UI as data: canvases, cards, pins, cameras and cursors as graph components, plus the framework-free geometry a renderer needs.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },
   "publish": {
     "exclude": [
-      "**/*_test.ts"
+      "**/*_test.ts",
+      "./browser.json"
     ]
   }
 }
