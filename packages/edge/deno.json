@@ -3,13 +3,16 @@
   "version": "0.0.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "The edge component for a yaks graph: typed links between entities, and traversal over them.",
+  "description": "Links between entities as a component: the edge, the id it derives from its own sentence, and traversal over it.",
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "@db/sqlite": "jsr:@db/sqlite@0.13.0"
   },
   "publish": {
     "exclude": [
-      "**/*_test.ts"
+      "**/*_test.ts",
+      "./harness.ts",
+      "./browser.json"
     ]
   }
 }

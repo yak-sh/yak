@@ -1,0 +1,68 @@
+// The refusal: half a sentence is not an edge.
+//
+// A link is three things — an end, a relation, an end — and any two of them
+// mean nothing. A bundle that states an edge without its relation would land as
+// a row nothing can read; one missing an end would point at nowhere. Both are
+// caught here, at the `mint` phase, which runs after the graph has named every
+// `$alias` — so the refusal can say which entity it is talking about, and an
+// end written as an alias is already the id it resolved to.
+//
+// A bundle that names NEITHER end is a patch of a link that already exists
+// (setting `ord`, say) and is left alone: it states nothing, so it cannot state
+// half of something.
+//
+// The whole batch is read before any check, because one entity may arrive as
+// several bundles — the edge in one, its relation tag in another — and they are
+// one sentence.
+
+import type { Bundle, Comp, Eid, Hook } from '@yaks/graph'
+import { comps, Refused } from '@yaks/graph'
+import type { Vocab } from '@yaks/vocab'
+import { EDGE, names } from './relations.ts'
+import { tagOf } from './eid.ts'
+
+// Every bundle in the batch folded per entity, so a sentence spread over
+// several of them is checked as the one thing it is.
+let gathered = (bundles: Bundle[]): Map<Eid, Bundle> => {
+  let out = new Map<Eid, Bundle>()
+  for (let b of bundles) {
+    let at = out.get(b.entity.eid) ?? { entity: b.entity }
+    for (let [name, comp] of comps(b)) {
+      let had = at[name] as Comp | null | undefined
+      at[name] = comp == null ? null : { ...(had ?? {}), ...comp }
+    }
+    out.set(b.entity.eid, at)
+  }
+  return out
+}
+
+/**
+ * The `mint` hook that refuses an incomplete sentence, naming what is missing.
+ * Registered by the {@link plugin}; exported on its own for a graph that wants
+ * the check without the rest.
+ */
+export let stated = (vocab: Vocab): Hook => {
+  let tags = names(vocab)
+  let known = Object.values(tags).sort()
+  return (bundles) => {
+    for (let [eid, b] of gathered(bundles)) {
+      let edge = b[EDGE] as Record<string, unknown> | null | undefined
+      // nothing stated (a patch, or a bundle about something else entirely)
+      if (!edge || (edge.from == null && edge.to == null)) continue
+      for (let end of ['from', 'to']) {
+        if (edge[end] == null) {
+          throw new Refused(`edge ${eid} has no \`${end}\` end`)
+        }
+      }
+      if (!tagOf(b, tags)) {
+        throw new Refused(
+          `edge ${eid} states no relation — an edge wears a relation tag ` +
+            `beside edge{from, to}${
+              known.length ? ` (this vocabulary knows ${known.join(', ')})` : ''
+            }`,
+        )
+      }
+    }
+    return bundles
+  }
+}

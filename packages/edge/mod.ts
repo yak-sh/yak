@@ -1,56 +1,55 @@
 /**
  * @yaks/edge — links between entities, as a component.
  *
- * A relationship in a yaks graph is not a foreign-key column; it is an
- * {@link Edge} component: `{ from, to }`, optionally typed, carried by an
- * entity like any other component. Because an edge is a component it patches,
- * tombstones, and travels over the {@link https://jsr.io/@yaks/graph | @yaks/graph}
- * wire exactly like the rest of the model — no special table, no special
- * write.
+ * A relationship in a yaks graph is not a foreign-key column; it is an entity
+ * of its own carrying the `edge{from, to, ord}` component and a RELATION TAG
+ * that says what kind of link it is. A blog says `post cites post`; a bookstore
+ * says `book cites book`; the shape is the same, and the relations are yours to
+ * declare — this package ships the link, the mechanism, and not one relation.
  *
- * This package owns that component and the traversal built on it: follow an
- * entity's edges forward, gather what points back, and walk a typed path to a
- * bounded depth. It contributes the `edge` component as a plugin; it evaluates
- * nothing on its own — a {@link Storage} adapter answers the underlying reads.
+ * ```ts
+ * import { loadVocab } from '@yaks/vocab'
+ * import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
+ *
+ * let blog = {
+ *   $defs: {
+ *     post: { type: 'object', kind: true, properties: { title: {} } },
+ *     // one component, and `cites` is a relation
+ *     cites: { type: 'object', relation: true },
+ *   },
+ * }
+ * let vocab = loadVocab([edgeDoc, blog], [edgeKeywords])
+ * // g.apply([link('p1', 'cites', 'p2')])
+ * ```
+ *
+ * Four things follow from that:
+ *
+ * - **An edge is named by what it says.** {@link edgeEid} hashes the sentence,
+ *   so two writers who state the same link land on one entity and a writer who
+ *   takes a link back ({@link unlink}) names it without a lookup.
+ * - **A link lives only while both ends do.** Both ends are references with
+ *   `death: cascade`, so a deleted post takes its links with it.
+ * - **Half a sentence is refused**, by name: an edge with no relation, or with
+ *   an end missing, never reaches storage ({@link edges} registers the check).
+ * - **Walking is querying.** {@link walk} answers `out`, `in` and a bounded
+ *   `reach` through {@link https://jsr.io/@yaks/graph | @yaks/graph}'s Storage
+ *   seam, and {@link traverse} teaches
+ *   {@link https://jsr.io/@yaks/sql | @yaks/sql} the two clauses it declines on
+ *   its own — `.reaches[cites,<=3]=p1` as a recursive walk, `.edges[cites]!` as
+ *   the rider that carries a result's links back with it.
+ *
+ * It imports no platform API, so the same code runs on a server, in a worker,
+ * and in a browser tab.
  *
  * @module
  */
 
-import type { Eid, Plugin } from '@yaks/graph'
-
-/**
- * A link from one entity to another. `type` names the relationship (so an
- * entity may carry many edges of different kinds); an untyped edge is a plain
- * association.
- */
-export type Edge = {
-  /** the source entity */
-  from: Eid
-  /** the target entity */
-  to: Eid
-  /** the relationship's name, if the link is typed */
-  type?: string
-}
-
-/** One hop of a traversal: which direction, and an optional type filter. */
-export type Hop = {
-  /** follow `from → to` (out) or `to → from` (in) */
-  dir: 'out' | 'in'
-  /** restrict to edges of this type */
-  type?: string
-}
-
-/**
- * The traversal seam: an entity's neighbours one hop away, and the reachable
- * set within a bounded depth. The implementation lands with the package; this
- * is the shape it satisfies.
- */
-export type Traversal = {
-  /** the entities one hop from `entity` along `hop` */
-  neighbours: (entity: Eid, hop: Hop) => Promise<Eid[]>
-  /** every entity reachable from `entity` within `depth` hops */
-  reach: (entity: Eid, hop: Hop, depth: number) => Promise<Eid[]>
-}
-
-/** The plugin that contributes the `edge` component to a graph. */
-export type plugin = () => Plugin
+export * from './keywords.ts'
+export * from './relations.ts'
+export * from './comp.ts'
+export * from './eid.ts'
+export * from './say.ts'
+export * from './guard.ts'
+export * from './plugin.ts'
+export * from './sql.ts'
+export * from './walk.ts'
