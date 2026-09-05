@@ -7,7 +7,7 @@ import { schema } from '@yaks/sqlite'
 import { EXAMPLE as SHORT_EXAMPLE } from '../../src/store/vocab.ts'
 import ops from '../../src/store/schema.json' with { type: 'json' }
 import { PAGES } from './guide.ts'
-import { appDoc, appVocab, RESERVED, schemaOf } from './vocab.ts'
+import { appDoc, appVocab, RELATIONS, RESERVED, schemaOf } from './vocab.ts'
 
 let read = (path: string) =>
   Deno.readTextFileSync(new URL(path, import.meta.url))
@@ -186,8 +186,9 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
       'member',
       'grant',
       'access',
-      // @yaks/edge
+      // @yaks/edge — the link, and the twelve verbs it may wear
       'edge',
+      ...RELATIONS,
       // the app's own
       'recipe',
       'cooked',
@@ -205,7 +206,7 @@ Deno.test('none of the fleet vocabulary comes with it', () => {
   )
   let mine = new Set(tablesOf(schema(appVocab())))
   assert(fleet.length > 50, `the fleet plants ${fleet.length} tables`)
-  assert(mine.size < 15, `an app plants ${mine.size}`)
+  assert(mine.size < 25, `an app plants ${mine.size}`)
   for (let word of ['session', 'canvas', 'wake', 'persona', 'memory', 'task']) {
     assert(fleet.includes(word), `the fleet no longer plants ${word}`)
     assert(!mine.has(word), `an app's store still plants ${word}`)

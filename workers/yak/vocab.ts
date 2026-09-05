@@ -20,10 +20,15 @@
 //   person      the writer a store mints the first time it meets one
 //               (store.ts `knows`) — what `created.by` points at.
 //   memberDoc   @yaks/member: who belongs to a space, what they may touch.
-//   edgeDoc     @yaks/edge: the link itself. The relation TAGS an edge wears
-//               are an application's own vocabulary, so they are not here —
-//               whoever cuts a store over declares them beside `coreDocs`,
-//               which is what that list is exported for (T-33810).
+//   edgeDoc     @yaks/edge: the link itself, `edge{from, to, ord}`.
+//   relationDoc the twelve verbs an edge may WEAR. @yaks/edge ships the link
+//               and not one relation, because which relations exist is the
+//               application's word — so the platform says its twelve here,
+//               through that package's `relation` keyword. They are core and
+//               not an app's own: the guide teaches this list to every app,
+//               every store already holds rows under these names, and a word
+//               means the same thing in every store — so they are reserved
+//               like the rest of the core (T-33810).
 // @yaks/id's `prefix` keyword is registered rather than used: a component may
 // declare the letter its entities are numbered in, and the loader carries it.
 //
@@ -44,7 +49,7 @@ import {
   type VocabDoc,
 } from '@yaks/vocab'
 import { BLOB_URI, blobKeywords } from '@yaks/blob'
-import { edgeDoc, edgeKeywords } from '@yaks/edge'
+import { EDGE_URI, edgeDoc, edgeKeywords } from '@yaks/edge'
 import { idKeywords } from '@yaks/id'
 import { memberDoc } from '@yaks/member'
 
@@ -86,8 +91,42 @@ export let coreDoc: VocabDoc = {
   },
 }
 
+/**
+ * The verbs an edge may wear, in the wire's own spelling — the list the guide
+ * teaches, and the only types a store makes an edge for. Note `referenced`,
+ * never `references`.
+ */
+export let RELATIONS: string[] = [
+  'requires',
+  'contains',
+  'reads',
+  'about',
+  'supervises',
+  'delegates',
+  'recalled',
+  'supersedes',
+  'worked',
+  'referenced',
+  'wants',
+  'satisfies',
+]
+
+/** Those verbs as one vocabulary document: a bare tag component each, saying
+ * `relation` about itself so @yaks/edge reads it off the loaded vocabulary. */
+export let relationDoc: VocabDoc = {
+  $vocabulary: { [CORE_URI]: true, [EDGE_URI]: true },
+  title: 'relations',
+  $defs: Object.fromEntries(
+    RELATIONS.map((name) => [name, {
+      type: 'object',
+      relation: true,
+      properties: {},
+    }]),
+  ),
+}
+
 /** The documents an app's vocabulary is built on, in load order. */
-export let coreDocs: VocabDoc[] = [coreDoc, memberDoc, edgeDoc]
+export let coreDocs: VocabDoc[] = [coreDoc, memberDoc, edgeDoc, relationDoc]
 
 /** The keyword vocabularies those documents and an app's own may use. Each is
  * owned by the package that reads it — @yaks/id `prefix`, @yaks/blob `store`,
