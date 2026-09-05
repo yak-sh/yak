@@ -15,6 +15,7 @@ import type { Column, Vocab } from '@yaks/vocab'
 import { type BindOpts, compile } from '@yaks/sql'
 import type { Driver, Row } from './driver.ts'
 import type { Bundle, Comp } from './bundle.ts'
+import { tombstoned } from '@yaks/graph'
 
 // A query, as text or as an already-built AST. Text is parsed; an AST passes
 // through, so a caller may hand-build one with @yaks/query's builders.
@@ -59,15 +60,51 @@ let readSql = (v: Vocab, comp: string): string => {
     `${joins.join(' ')} where o.eid = ?`
 }
 
+// The identity of an eid, as stored: its `num`, and whether it is buried.
+let spineOf = (
+  driver: Driver,
+  eid: string,
+): { num?: number; dead: boolean } | undefined => {
+  let row = driver.query(
+    `select e.num as num, t.entity as dead from entity e
+       left join tombstone t on t.entity = e.id where e.eid = ?`,
+    [eid],
+  )[0]
+  if (!row) return undefined
+  return {
+    num: row.num == null ? undefined : Number(row.num),
+    dead: row.dead != null,
+  }
+}
+
+/**
+ * Identity, not search: these entities as they stand, whole. A tombstoned one
+ * comes back wearing `tombstone` (it is still an identity, just a dead one);
+ * an eid no entity wears is simply absent. This is the read `apply()` uses for
+ * its precondition guard, where a query would be the wrong question.
+ */
+export let get = (
+  driver: Driver,
+  vocab: Vocab,
+  eids: string[],
+): Bundle[] =>
+  eids.flatMap((eid) => {
+    let spine = spineOf(driver, eid)
+    if (!spine) return []
+    let entity = { eid, ...(spine.num == null ? {} : { num: spine.num }) }
+    return [spine.dead ? tombstoned(entity) : bundleOf(driver, vocab, eid)]
+  })
+
 // Every component an entity wears, gathered into a bundle. Iterates the
 // vocabulary's components and keeps only those with a row for this eid. The
 // spine `entity` is the identity component: its eid keys the bundle under
 // `entity`, never at the root, and its server-minted `num` rides beside the eid
 // — a caller ordering or paging a set it holds reads the window from there.
 let bundleOf = (driver: Driver, vocab: Vocab, eid: string): Bundle => {
-  let spine = driver.query('select num from entity where eid = ?', [eid])[0]
-  let num = spine?.num == null ? {} : { num: Number(spine.num) }
-  let out: Bundle = { entity: { eid, ...num } }
+  let spine = spineOf(driver, eid)
+  let out: Bundle = {
+    entity: { eid, ...(spine?.num == null ? {} : { num: spine.num }) },
+  }
   for (let comp of vocab.all) {
     if (comp == 'entity') continue
     let row = driver.query(readSql(vocab, comp), [eid])[0]

@@ -1,0 +1,225 @@
+// A graph: a vocabulary, a storage, and the plugins that extend what `apply()`
+// does. This file is the assembly — the phase list, the core's own work at
+// each phase, and the transaction the middle of the list runs inside.
+//
+// Everything here is per INSTANCE. There is no module-global registry of
+// plugins, effects or hooks: two graphs in one process (a page's local graph
+// and its mirror of the server's, a test's fixture beside a live store) have
+// nothing to say to each other, and a plugin registered on one is invisible to
+// the other.
+//
+// The shape of a run, once:
+//
+//   normalize   hooks    pure, before the transaction opens
+//   admit       core     drop the unknown, refuse the wrong, check the values
+//   ───────────────────  the transaction opens
+//   precondition core    the `$was` guard   (a lease check is a hook here)
+//   mutate      core     the patches go in
+//   cascade     core     death spreads; casualties join the batch
+//   stamp       core     created / updated
+//   journal     hooks    the record of what happened
+//   commit      hooks    the last word inside the transaction
+//   ───────────────────  the transaction commits (or rolls back on a throw)
+//   effect      hooks    post-commit observers, each isolated
+//   audit       hooks    after a rollback, with the refusal
+//
+// `apply()` returns the batch AS APPLIED plus everything it synthesized —
+// casualties, births with their number, stamps — so a client that applies the
+// return to its cache lands exactly where the graph is.
+
+import type { Vocab } from '@yaks/vocab'
+import type { Bundle, Change } from './bundle.ts'
+import type { Row, Storage, Tx } from './storage.ts'
+import { detached, type Query, type ReadOpts } from './storage.ts'
+import type { Hook, Phase, Plugin } from './plugin.ts'
+import { admit } from './admit.ts'
+import { guard } from './guard.ts'
+import { mutate } from './mutate.ts'
+import { cascade } from './cascade.ts'
+import { stamp } from './stamp.ts'
+import { state } from './state.ts'
+import { each, isPromise, then } from './pipe.ts'
+
+/** What one `apply()` call may say about itself. */
+export type ApplyOpts = {
+  /** the caller is trusted server code: server-owned columns are admitted */
+  trusted?: boolean
+  /** the instant every stamp in this batch reads, ISO-8601 (default: now) */
+  now?: string
+}
+
+/** How a graph is built: what it knows, where it keeps it, what extends it. */
+export type Options = {
+  /** where the bytes live */
+  storage: Storage
+  /** the loaded component vocabulary — the same one the storage is bound to */
+  vocab: Vocab
+  /** the plugins whose hooks run in `apply()` */
+  plugins?: Plugin[]
+  /** where a failing effect is reported (default: `console.warn`) */
+  report?: (err: unknown, at: { phase: Phase; plugin: string }) => void
+}
+
+/** A live graph: what it knows, and the four things you can do with it. */
+export type Graph = {
+  /** the component vocabulary this graph speaks */
+  vocab: Vocab
+  /** the adapter that owns the bytes */
+  storage: Storage
+  /** the plugins registered on this graph, in order */
+  plugins: Plugin[]
+  /** register another plugin (its hooks join the ones already there) */
+  use: (plugin: Plugin) => Graph
+  /** the schema statements this graph's vocabulary implies */
+  ddl: () => string[]
+  /** create the tables and indexes it needs */
+  install: () => void | Promise<void>
+  /** a query → the matching entities as whole bundles */
+  read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
+  /** a query → the compiled statement's raw rows */
+  rows: (query: Query, opts?: ReadOpts) => Row[] | Promise<Row[]>
+  /** apply a batch atomically → the batch as applied, plus what it
+   * synthesized */
+  apply: (change: Change, opts?: ApplyOpts) => Bundle[] | Promise<Bundle[]>
+}
+
+// One step of the pipeline: the batch in, the batch the next step sees out.
+type Step = (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
+
+let warn = (err: unknown, at: { phase: Phase; plugin: string }) =>
+  console.warn(`${at.plugin} failed at ${at.phase} —`, err)
+
+/**
+ * Build a graph over a storage and a vocabulary. The vocabulary must be the
+ * one the storage is bound to (load every plugin's documents, bind the
+ * storage, then hand the same plugins here — see `vocabOf` in ./plugin.ts).
+ */
+export let graph = (opts: Options): Graph => {
+  let { storage, vocab } = opts
+  let plugins = [...(opts.plugins ?? [])]
+  let report = opts.report ?? warn
+
+  // The hooks registered on a phase, in plugin registration order.
+  let hooks = (phase: Phase): [string, Hook][] =>
+    plugins.flatMap((p) => {
+      let h = p.hooks?.[phase]
+      return h ? [[p.name, h] as [string, Hook]] : []
+    })
+
+  // A phase: the core's own work first (it is what the hooks are extending),
+  // then each hook, each seeing what the one before it returned.
+  let phase = (name: Phase, tx: Tx, core?: Step): Step => (bundles) => {
+    let steps: Step[] = core ? [core] : []
+    for (let [, h] of hooks(name)) steps.push((b) => h(b, tx))
+    return each(steps, bundles, (b, step) => step(b))
+  }
+
+  let apply = (change: Change, o: ApplyOpts = {}):
+    | Bundle[]
+    | Promise<
+      Bundle[]
+    > => {
+    let st = state()
+    let now = o.now ?? new Date().toISOString()
+    let outside = detached(storage)
+
+    // After the transaction: every effect hook, isolated. A failing effect is
+    // telemetry — the batch is already committed and a broken observer must
+    // not turn a good write into an error.
+    let effects = (applied: Bundle[]) =>
+      then(
+        each(hooks('effect'), applied, (b, [plugin, hook]) => {
+          try {
+            let out = hook(b, outside)
+            return isPromise(out)
+              ? out.catch((e) => {
+                report(e, { phase: 'effect', plugin })
+                return b
+              })
+              : out
+          } catch (e) {
+            report(e, { phase: 'effect', plugin })
+            return b
+          }
+        }),
+        () => applied,
+      )
+
+    // After a rollback: the audit hooks, with the refusal that caused it. They
+    // run OUTSIDE the dead transaction (an audit row cannot ride the batch it
+    // condemns), and then the refusal is rethrown — auditing never swallows.
+    let audited = (bundles: Bundle[], err: unknown): never | Promise<never> => {
+      let done = each(hooks('audit'), bundles, (b, [plugin, hook]) => {
+        try {
+          let out = hook(b, outside, err)
+          return isPromise(out)
+            ? out.catch((e) => {
+              report(e, { phase: 'audit', plugin })
+              return b
+            })
+            : out
+        } catch (e) {
+          report(e, { phase: 'audit', plugin })
+          return b
+        }
+      })
+      let raise = (): never => {
+        throw err
+      }
+      return isPromise(done) ? done.then(raise) : raise()
+    }
+
+    let inside = (bundles: Bundle[]) => {
+      let run = (tx: Tx) =>
+        each(
+          [
+            phase('precondition', tx, (b) => guard(b, tx, vocab)),
+            phase('mutate', tx, (b) => mutate(b, tx, st)),
+            phase('cascade', tx, (b) => cascade(b, tx, vocab, st)),
+            phase('stamp', tx, (b) => stamp(b, tx, vocab, st, now)),
+            phase('journal', tx),
+            phase('commit', tx),
+          ],
+          bundles,
+          (b, step) => step(b),
+        )
+      let committed: Bundle[] | Promise<Bundle[]>
+      try {
+        committed = storage.tx(run)
+      } catch (e) {
+        return audited(bundles, e)
+      }
+      return isPromise(committed)
+        ? committed.then(effects, (e) => audited(bundles, e))
+        : effects(committed)
+    }
+
+    return then(
+      each(
+        [
+          phase('normalize', outside),
+          phase('admit', outside, (b) => admit(b, vocab, o.trusted)),
+        ],
+        change,
+        (b, step) => step(b),
+      ),
+      inside,
+    )
+  }
+
+  let g: Graph = {
+    vocab,
+    storage,
+    plugins,
+    use: (plugin) => {
+      plugins.push(plugin)
+      return g
+    },
+    ddl: () => storage.ddl(),
+    install: () => storage.install(),
+    read: (query, readOpts) => storage.read(query, readOpts),
+    rows: (query, readOpts) => storage.rows(query, readOpts),
+    apply,
+  }
+  return g
+}

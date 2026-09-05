@@ -4,14 +4,14 @@
 
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp } from './bundle.ts'
-import { store } from './harness.ts'
+import { seed, store } from './harness.ts'
 
 let c = (b: Bundle, name: string): Comp => b[name] as Comp
 let eids = (bs: Bundle[]): string[] => bs.map((b) => b.entity.eid).sort()
 
 Deno.test('a scalar filter selects the matching entities', () => {
   let s = store()
-  s.write([
+  seed(s, [
     { entity: { eid: 'p1' }, product: { price: 10 } },
     { entity: { eid: 'p2' }, product: { price: 20 } },
   ])
@@ -21,7 +21,7 @@ Deno.test('a scalar filter selects the matching entities', () => {
 
 Deno.test('a reference reads back as the target eid', () => {
   let s = store()
-  s.write([
+  seed(s, [
     { entity: { eid: 'm1' }, doc: { title: 'Acme' } },
     { entity: { eid: 'p1' }, product: { price: 5, maker: 'm1' } },
   ])
@@ -30,7 +30,7 @@ Deno.test('a reference reads back as the target eid', () => {
 
 Deno.test('a reference-deref path filters through the target', () => {
   let s = store()
-  s.write([
+  seed(s, [
     { entity: { eid: 'm1' }, doc: { title: 'Acme' } },
     { entity: { eid: 'p1' }, product: { price: 5, maker: 'm1' } },
     { entity: { eid: 'm2' }, doc: { title: 'Other' } },
@@ -41,7 +41,7 @@ Deno.test('a reference-deref path filters through the target', () => {
 
 Deno.test('a bare-word query matches document title and body', () => {
   let s = store()
-  s.write([
+  seed(s, [
     {
       entity: { eid: 'a' },
       doc: { title: 'Blue mug', body: 'ceramic and glazed' },
@@ -55,7 +55,7 @@ Deno.test('a bare-word query matches document title and body', () => {
 
 Deno.test('the kind scope selects the most specific kind', () => {
   let s = store()
-  s.write([
+  seed(s, [
     { entity: { eid: 'p1' }, doc: { title: 'Mug' }, product: { price: 1 } },
     { entity: { eid: 'd1' }, doc: { title: 'About' } },
   ])
@@ -65,7 +65,7 @@ Deno.test('the kind scope selects the most specific kind', () => {
 
 Deno.test('rows() hands back an aggregate shape verbatim', () => {
   let s = store()
-  s.write([
+  seed(s, [
     { entity: { eid: 'p1' }, product: { status: 'live' } },
     { entity: { eid: 'p2' }, product: { status: 'live' } },
     { entity: { eid: 'p3' }, product: { status: 'draft' } },
@@ -75,7 +75,7 @@ Deno.test('rows() hands back an aggregate shape verbatim', () => {
 
 Deno.test('the newest-first window pages a prefix', () => {
   let s = store()
-  s.write([
+  seed(s, [
     { entity: { eid: 'p1' }, product: { price: 1 } },
     { entity: { eid: 'p2' }, product: { price: 2 } },
     { entity: { eid: 'p3' }, product: { price: 3 } },
@@ -89,7 +89,7 @@ Deno.test('the newest-first window pages a prefix', () => {
 
 Deno.test('a gathered bundle carries the entity number storage minted', () => {
   let s = store()
-  s.write([
+  seed(s, [
     { entity: { eid: 'p1' }, product: { price: 1 } },
     { entity: { eid: 'p2' }, product: { price: 2 } },
   ])

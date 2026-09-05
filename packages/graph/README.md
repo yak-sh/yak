@@ -13,15 +13,15 @@ deno add jsr:@yaks/graph
 
 ## The model
 
-Everything is an **entity**, identified by an `eid` (client-minted) plus a
-server-minted `num`. An entity carries **components**: a named bag of columns,
-one per component it wears. An entity has no type of its own; it _is_ whatever
-components it carries. The identity rides _inside_ the bundle, under the
-`entity` key.
+Everything is an **entity**, identified by an `eid` (client-minted) plus the
+`num` storage mints on first touch. An entity carries **components**: a named
+bag of columns, one per component it wears. An entity has no type of its own; it
+_is_ whatever components it carries. The identity rides _inside_ the bundle,
+under the `entity` key.
 
 ```ts
-// a blog post is a `doc` plus a `post`
-{ entity: { eid: 'p1' }, doc: { title: 'Hello' }, post: { published: true } }
+// a book is a `doc` plus a `book`
+{ entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { pages: 412 } }
 ```
 
 ## The wire
@@ -31,35 +31,107 @@ omitted column is untouched, a `null` column is cleared, and a `null` component
 is dropped. A `Change` is a flat array of bundles, applied atomically.
 
 ```ts
-import type { Bundle, Change } from '@yaks/graph'
+import { graph } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
+import { storage } from '@yaks/sqlite'
 
-let change: Change = [
-  { entity: { eid: 'p1' }, post: { published: false } }, // patch one column
-  { entity: { eid: 'p2' }, $delete: true }, // delete an entity
-]
+let vocab = loadVocab(bookstore) // your components, as JSON Schema
+let g = graph({ storage: storage(driver, vocab), vocab })
+g.install()
+
+let out = g.apply([
+  { entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { pages: 412 } },
+  { entity: { eid: 'b2' }, book: { pages: 500 } }, // patch one column
+  { entity: { eid: 'b3' }, $delete: true }, // delete an entity
+])
 ```
 
-Deletes and preconditions ride as **sugar** on the bundle: `$delete: true`
-removes the whole entity (it is tombstoned; a delete may also be spelled as a
-`tombstone` component), and `$was` carries a per-column precondition that must
-still hold for the change to apply.
+`apply()` returns the batch **as applied**, plus everything it synthesized — the
+entities a delete took with it, the identities storage minted, the provenance
+stamps — so a client that applies the return to its cache lands exactly where
+the graph is.
+
+Reserved keys ride beside the components. They are components in every sense
+that matters (data about an entity); they just live on the wire and inside
+`apply()` rather than in a table:
+
+- `$delete: true` — delete the whole entity (it is tombstoned, and death
+  spreads; a delete may also be spelled as a `tombstone` component);
+- `$was` — a per-column precondition: the SHA-256 of the value you read, per
+  column. If it has moved since, the whole batch is refused and the committed
+  value is reported back. It is the graph's `--ff-only`.
+- `$actor` — who is writing. The door that received the batch decides whether to
+  trust what a client sent; `apply()` stamps what reached it.
+
+## Apply is pluggable, in fixed phases
+
+A change flows through an ordered list of phases. The order is load-bearing — a
+precondition must read before the batch writes, an effect must not fire until
+the transaction commits — so a plugin registers a hook against a **named**
+phase, never an arbitrary point.
+
+| phase          | the core's own work                                  |
+| -------------- | ---------------------------------------------------- |
+| `normalize`    | (hooks only) — pure, before the transaction          |
+| `admit`        | drop the unknown, refuse the wrong, check the values |
+| `precondition` | the `$was` guard — a lease check is a hook here      |
+| `mutate`       | the patches go in                                    |
+| `cascade`      | death spreads; casualties join the batch             |
+| `stamp`        | `created` at birth, `updated` on a touch             |
+| `journal`      | (hooks only) — the journal is a plugin               |
+| `commit`       | the transaction returns and commits                  |
+| `effect`       | (hooks only) post-commit observers, each isolated    |
+| `audit`        | (hooks only) after a rollback, with the refusal      |
+
+A hook takes the batch and returns the batch the next phase sees, which is how
+one signature covers rewriting a bundle, adding one, and refusing the whole
+batch (by throwing):
+
+```ts
+let shelver = {
+  name: 'shelver',
+  hooks: {
+    normalize: (bundles) =>
+      bundles.map((b) =>
+        b.book ? { ...b, book: { ...b.book, shelved: true } } : b
+      ),
+  },
+}
+g.use(shelver)
+```
+
+Every registry — plugins, hooks, effects — is per graph instance, so two graphs
+in one process (a page's local one and its mirror of the server's) share
+nothing.
 
 ## What this package owns
 
 - **`Bundle` / `Change`** — the universal comp-carrying wire shape.
-- **`Storage`** — the adapter seam that owns the bytes: turn a vocabulary into
-  schema, answer a query as bundles, patch a change into rows. Implemented by
+- **`Storage` / `Tx`** — the adapter seam that owns the bytes: schema, queries
+  answered as bundles, and a transaction whose `read`, `get`, `patch` and
+  `remove` the phases run against. Implemented by
   [@yaks/sqlite](https://jsr.io/@yaks/sqlite), `@yaks/durable-object`, and
-  `@yaks/d1`. It is async-or-sync, so one seam serves an embedded database and a
-  remote one alike.
-- **`Phase` / `Plugin`** — the pluggable `apply()`: a change flows through
-  fixed, ordered phases (normalize → admit → precondition → mutate → cascade →
-  journal → commit → effect → audit), and a plugin registers hooks against a
-  _named_ phase. A plugin also contributes a component vocabulary, the same way
-  a downstream app adds its own domain.
+  `@yaks/d1`. Identity belongs to storage: `patch` mints spines and reports the
+  entities it created, with their `num`.
+- **`Phase` / `Plugin` / `Hook`** — the pluggable `apply()` above. A plugin also
+  contributes a component vocabulary, the same way a downstream app adds its own
+  domain.
 
 There is deliberately **no `snapshot()`**: reads are queries answered by a
 `Storage` adapter, never a whole-graph dump.
+
+Every seam is **async-or-sync**. A step that answers immediately is not awaited,
+so `apply()` over an embedded database returns a value, and the same code over a
+network-backed one returns a promise. Nothing in between has to know which.
+
+## Compatibility
+
+**Deno, Node, Bun, Cloudflare Workers, and the Browser.** This package imports
+no platform API — no `Deno`, no `node:`, no DOM — and its only dependencies are
+`@yaks/query` and `@yaks/vocab`. It type-checks against the browser libraries
+alone (`deno task check:browser` in the monorepo), which is what makes it usable
+as a client-side state library: a graph in the page, over an in-memory or
+IndexedDB storage, running the same `apply()` the server runs.
 
 ## The family
 

@@ -1,6 +1,7 @@
 {
   "tasks": {
-    "check": "deno fmt --check && deno lint && deno check && deno task codegen --check && deno task test:packages",
+    "check": "deno fmt --check && deno lint && deno check && deno task check:browser && deno task codegen --check && deno task test:packages",
+    "check:browser": "deno check --config packages/graph/browser.json packages/graph/mod.ts",
     "codegen": "deno run --allow-read --allow-write --allow-run=deno src/vocab/gen.ts",
     "test:packages": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno test -A packages/",
     "gate": "deno task check && deno task test && deno task bench:gate && deno task bench:gate:web && deno run -A src/cli.ts sync --check",

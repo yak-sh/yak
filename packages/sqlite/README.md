@@ -77,18 +77,20 @@ store.install() // create the tables, the doc view, the search index
 
 ### Write
 
-A write is a batch of bundles, patched in atomically at the SQL level. Clients
-mint the ids:
+A write is a batch of bundles, patched in inside a transaction. Clients mint the
+ids; the store mints the identity rows and their numbers:
 
 ```ts
-store.write([
-  { entity: { eid: 'kate' }, doc: { title: 'Kate' } },
-  {
-    entity: { eid: 'p1' },
-    doc: { title: 'Hello world', body: 'first post' },
-    post: { published: true, author: 'kate' },
-  },
-])
+store.tx((tx) =>
+  tx.patch([
+    { entity: { eid: 'kate' }, doc: { title: 'Kate' } },
+    {
+      entity: { eid: 'p1' },
+      doc: { title: 'Hello world', body: 'first post' },
+      post: { published: true, author: 'kate' },
+    },
+  ])
+)
 ```
 
 Writes are **patches**:
@@ -96,19 +98,30 @@ Writes are **patches**:
 - **omitted columns are untouched** — a patch names only what changes,
 - **a column set to `null` is cleared**,
 - **a component set to `null` is dropped** — the row goes, the entity stays,
-- **`$delete: true` deletes the entity** — it is tombstoned, and death cascades.
+- **a tombstoned entity takes no patch** — death is final; ids never recycle.
+
+Usually you do not call `tx` yourself: point
+[@yaks/graph](https://jsr.io/@yaks/graph) at the store and `apply()` a batch.
+The graph owns the DECISIONS — admission, preconditions, which entities a delete
+takes with it, provenance — and this package owns the BYTES:
 
 ```ts
-store.write([{ entity: { eid: 'p1' }, post: { published: false } }]) // author untouched
-store.write([{ entity: { eid: 'p1' }, post: null }]) // drop the post component
-store.write([{ entity: { eid: 'p1' }, $delete: true }]) // delete the whole entity
+import { graph } from '@yaks/graph'
+
+let g = graph({ storage: store, vocab })
+g.apply([
+  { entity: { eid: 'p1' }, post: { published: false } }, // author untouched
+  { entity: { eid: 'p2' }, post: null }, // drop the post component
+  { entity: { eid: 'p3' }, $delete: true }, // delete the whole entity
+])
 ```
 
 Deleting an entity spreads along its references, and each reference's declared
 death word says how: a `cascade` reference pulls its owner into the grave, a
 `release` reference's row is dropped (its owner lives), a `detach` reference is
-nulled, a `keep` reference stands as history. `write()` returns the ids of every
-entity a delete tombstoned.
+nulled, a `keep` reference stands as history. Which entities that adds up to is
+@yaks/graph's decision, read off the vocabulary; `tx.remove()` here removes
+exactly the entities it is handed.
 
 ### Read
 
@@ -135,14 +148,24 @@ aggregates — is `@yaks/query`'s; see that package for the full format.
 storage(driver, vocab, base?) // bind a store to a driver + vocabulary
 ```
 
-returns a `Storage`:
+returns a `Store` — @yaks/graph's `Storage`, answered synchronously:
 
 - `ddl(): string[]` — the schema statements the vocabulary implies.
 - `install(): void` — run them (create-if-not-exists, so it is idempotent).
 - `read(query, opts?): Bundle[]` — a query → matching entities as bundles.
 - `rows(query, opts?): Row[]` — a query → the compiled statement's raw rows (for
   counts, tallies, and field projections).
-- `write(bundles): string[]` — patch a batch in → the ids any delete tombstoned.
+- `tx(body): R` — run `body` against a transaction, committing when it returns
+  and rolling back if it throws. Transactions nest (they are SAVEPOINTs), so a
+  store used inside a transaction the host already opened still gets its own
+  all-or-nothing unit. The transaction offers:
+  - `read(query, opts?): Bundle[]` — as above, through the transaction.
+  - `get(eids): Bundle[]` — identity, not search: these entities, whole. A
+    tombstoned one comes back wearing `tombstone`.
+  - `patch(bundles): Entity[]` — patch a batch in → the entities it MINTED, each
+    with the `num` it was given.
+  - `remove(entities): void` — drop their component rows and tombstone their
+    identities.
 
 `base` and per-call `opts` are `@yaks/sql` bind options — a derived-column
 registry, and a fixed `now` for resolving time phrases.

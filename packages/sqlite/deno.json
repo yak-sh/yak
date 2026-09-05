@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
+  "description": "A SQLite storage adapter for @yaks/graph: a vocabulary's schema, queries answered as bundles, and transactional writes.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@db/sqlite": "jsr:@db/sqlite@0.13.0"

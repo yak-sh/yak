@@ -8,8 +8,9 @@
 
 import { Database } from '@db/sqlite'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { type Bundle, type Graph, graph } from '@yaks/graph'
 import type { Driver } from './driver.ts'
-import { type Storage, storage } from './mod.ts'
+import { storage, type Store } from './mod.ts'
 
 // A Driver over a fresh in-memory database, foreign keys enforced so a dangling
 // reference is refused the way it would be in production.
@@ -70,14 +71,39 @@ let doc: VocabDoc = {
         of: { type: 'string', ref: 'entity', death: 'release' },
       },
     },
+    // Provenance: server-owned, so the graph's stamp phase is their only
+    // writer.
+    created: {
+      type: 'object',
+      properties: {
+        at: { type: 'string', format: 'date-time', stamped: true },
+        by: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
+      },
+    },
+    updated: {
+      type: 'object',
+      properties: {
+        at: { type: 'string', format: 'date-time', stamped: true },
+        by: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
+      },
+    },
   },
 }
 
 export let shop: Vocab = loadVocab(doc)
 
 // A ready store over a fresh in-memory database with the schema installed.
-export let store = (): Storage => {
+export let store = (): Store => {
   let s = storage(mem(), shop)
   s.install()
   return s
 }
+
+// Bundles written straight in, for a test that just needs data to read back.
+export let seed = (s: Store, bundles: Bundle[]): void => {
+  s.tx((tx) => tx.patch(bundles))
+}
+
+// A @yaks/graph over that store: the whole stack, which is how an application
+// uses this package (the adapter owns the bytes, the graph owns the rules).
+export let shopGraph = (): Graph => graph({ storage: store(), vocab: shop })
