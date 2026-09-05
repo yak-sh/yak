@@ -68,6 +68,11 @@ In dependency order:
   projects, boards that are saved queries rather than stored membership, and a
   status nobody writes — read off the `completed` and `cancelled` marks a task
   wears, by one rule both `@yaks/sql` and `@yaks/match` are given.
+- **[@yaks/wake](./wake)** — coming back to something later, as data: a
+  `wake{at, every, target, note}` on any entity, the wakes due at an instant,
+  and the recurrence — a duration or a cron line — that moves one on. It fires
+  nothing itself; a server tick, a Durable Object `alarm()` and a browser tab
+  all run the same `due()`.
 - **[@yaks/api](./api)** — the transport: a plain `Request` → `Response` handler
   over a graph (`/apply`, `/query`, `/ws`), where the door authenticates the
   writer, and a subscription is a saved query whose answer is pushed again when
