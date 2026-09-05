@@ -39,8 +39,13 @@
 // them lands on a letter. Both are stamped: they are the sender's account of
 // what happened, written by the effect, never by a client claiming its own mail
 // arrived.
+//
+// The document itself is `./vocab.json` — plain JSON Schema, readable by
+// anything that reads JSON. This file re-exports it under the name callers
+// say and keeps the prose about why it is shaped the way it is.
 
 import type { VocabDoc } from '@yaks/vocab'
+import doc from './vocab.json' with { type: 'json' }
 
 /** The component naming one letter. */
 export let MAIL = 'mail'
@@ -70,141 +75,9 @@ export let NOTIFIED = 'notified'
  * The `prefix` keywords are {@link https://jsr.io/@yaks/id | @yaks/id}'s: load
  * that package's keywords and a letter reads back as `E-7`, an address as
  * `A-3`. A loader that never registers them simply carries neither.
+ *
+ * `mail` says `before: ['doc']` — a letter that wears both is a letter, not
+ * the `doc` it also wears, so `mail` sorts first. The word it sorts against is
+ * @yaks/doc's, which is why this document is never loaded without it.
  */
-export let mailDoc: VocabDoc = {
-  title: 'mail',
-  $defs: {
-    mail: {
-      type: 'object',
-      kind: true,
-      // A letter that wears both is a letter, not the `doc` it also wears — so
-      // `mail` sorts first. The word is @yaks/doc's, which is why this document
-      // is never loaded without it.
-      before: ['doc'],
-      prefix: 'E',
-      description: "one letter's envelope, sent or received",
-      properties: {
-        from: {
-          type: 'string',
-          description: 'the address it came from',
-        },
-        to: {
-          type: 'string',
-          bare: false,
-          description:
-            'the address it is written to — absent when `deliver.to` names the recipient as an entity instead',
-        },
-        at: {
-          type: 'string',
-          format: 'date-time',
-          bare: false,
-          description: 'when it was written, or when it arrived',
-        },
-        target: {
-          type: 'string',
-          ref: 'entity',
-          death: 'keep',
-          description:
-            'the entity this letter is about — any entity at all, so correspondence hangs off the thing it concerns',
-        },
-        reply_to: {
-          type: 'string',
-          ref: 'mail',
-          death: 'keep',
-          description: 'the letter this one answers',
-        },
-        message_id: {
-          type: 'string',
-          description:
-            'the Message-ID the world knows this letter by — written from what arrived, and what a reply threads on',
-        },
-      },
-    },
-    email: {
-      type: 'object',
-      kind: true,
-      prefix: 'A',
-      description: 'an address, as an entity — what a person is reachable at',
-      properties: {
-        address: {
-          type: 'string',
-          description: 'the address itself, canonical (see canon)',
-        },
-      },
-    },
-    deliver: {
-      type: 'object',
-      description: 'who a letter is for, as an entity in your graph',
-      properties: {
-        to: {
-          type: 'string',
-          ref: 'entity',
-          death: 'keep',
-          description:
-            'the recipient — their address is looked up when the letter goes out',
-        },
-      },
-    },
-    delivered: {
-      type: 'object',
-      description: 'the letter left: half of the outcome pair',
-      properties: {
-        at: {
-          type: 'string',
-          format: 'date-time',
-          stamped: true,
-          description: 'when it went',
-        },
-        via: {
-          type: 'string',
-          stamped: true,
-          description:
-            'how it went — the id the sender gave it back, or the address it went to',
-        },
-      },
-    },
-    bounced: {
-      type: 'object',
-      description: 'the letter did not leave: the other half',
-      properties: {
-        at: {
-          type: 'string',
-          format: 'date-time',
-          stamped: true,
-          description: 'when the attempt failed',
-        },
-        reason: {
-          type: 'string',
-          stamped: true,
-          description: 'what went wrong, as the sender said it',
-        },
-      },
-    },
-    notified: {
-      type: 'object',
-      description: 'a recipient was told about something',
-      properties: {
-        at: {
-          type: 'string',
-          format: 'date-time',
-          stamped: true,
-          description: 'when they were told',
-        },
-        by: {
-          type: 'string',
-          ref: 'entity',
-          death: 'keep',
-          stamped: true,
-          description: 'who told them',
-        },
-        via: {
-          type: 'string',
-          ref: 'entity',
-          death: 'keep',
-          stamped: true,
-          description: 'what carried it',
-        },
-      },
-    },
-  },
-}
+export let mailDoc: VocabDoc = doc

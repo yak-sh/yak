@@ -1,0 +1,43 @@
+{
+  "title": "wake",
+  "$defs": {
+    "wake": {
+      "type": "object",
+      "kind": true,
+      "prefix": "W",
+      "description": "a promise to come back to something at a time",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when it is next due; absent once a one-shot has fired and a recurrence has ended"
+        },
+        "target": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "description": "what the wake is about — the entity carrying it when absent"
+        },
+        "note": {
+          "type": "string",
+          "description": "a line for whoever is woken: why you asked to be"
+        },
+        "every": {
+          "type": "string",
+          "description": "how it recurs: a duration (30m, 2h, 1d), a cron line (0 9 * * 1-5), or @daily"
+        }
+      }
+    },
+    "fired": {
+      "type": "object",
+      "description": "when a wake last went off",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "the instant it fired"
+        }
+      }
+    }
+  }
+}

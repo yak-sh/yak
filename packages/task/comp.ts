@@ -9,7 +9,7 @@
 //   blocked{on}                       something outside is in the way
 //   requires / contains               the two relations tasks state
 //
-// Four things are worth saying about the shapes, because each is a decision
+// Five things are worth saying about the shapes, because each is a decision
 // somebody would otherwise make differently.
 //
 // STATUS IS NOT STORED. `task.status` is declared `persist: false`: it is
@@ -17,7 +17,13 @@
 // `completed` and `cancelled` marks (./status.ts), which is why finishing a task
 // is writing a fact with a time and an author rather than overwriting a word.
 // Both evaluators get that rule from one list, so `.status=done` selects the
-// same tasks in a database and in a page.
+// same tasks in a database and in a page. Its `enum` in the document is the
+// DEFAULT ladder's words; an application that adds a rung widens them where it
+// declares its own document.
+//
+// THE TWO RELATIONS are `requires` and `contains`, as @yaks/edge reads them: a
+// component an edge entity wears beside `edge{from, to}`. Neither carries
+// columns — the sentence is the whole of what they say.
 //
 // A BOARD IS ITS QUERY. `board{query}` holds a filter, and membership is never
 // stored — there is no row saying this task is on that board. So a board is
@@ -37,11 +43,13 @@
 // stands as history. `task.project` is `death: detach`: deleting a project frees
 // its tasks rather than deleting them, because they are not ABOUT the project,
 // they were only filed under it.
+//
+// The document itself is `./vocab.json` — plain JSON Schema, readable by
+// anything that reads JSON. This file re-exports it under the name callers
+// say and keeps the prose about why it is shaped the way it is.
 
 import type { VocabDoc } from '@yaks/vocab'
-import { CORE_URI } from '@yaks/vocab'
-import { EDGE_URI } from '@yaks/edge'
-import { OPEN } from './words.ts'
+import doc from './vocab.json' with { type: 'json' }
 
 /** The component that makes an entity a task. */
 export let TASK = 'task'
@@ -79,112 +87,4 @@ export let CONTAINS = 'contains'
  * edge entity wearing one states that link. Register `edgeKeywords` when you
  * load, or the loader carries the declaration without anybody reading it.
  */
-export let taskDoc: VocabDoc = {
-  $vocabulary: { [CORE_URI]: true, [EDGE_URI]: true },
-  title: 'task',
-  $defs: {
-    task: {
-      type: 'object',
-      kind: true,
-      description: 'a thing to do',
-      properties: {
-        status: {
-          // Computed, never stored: read off the marks (./status.ts). The
-          // members are the default ladder's; an application that adds a rung
-          // widens them where it declares its own document.
-          type: 'string',
-          enum: ['cancelled', 'done', OPEN],
-          persist: false,
-          description:
-            'where the task stands — read off the completed and cancelled marks, never written',
-        },
-        priority: {
-          type: 'number',
-          format: 'priority',
-          description: 'queue order — lower is more urgent',
-        },
-        project: {
-          type: 'string',
-          ref: 'project',
-          death: 'detach',
-          description:
-            'what it is filed under; deleting the project frees the task rather than taking it along',
-        },
-      },
-    },
-    project: {
-      type: 'object',
-      kind: true,
-      description: 'something tasks are grouped under',
-      properties: {},
-    },
-    board: {
-      type: 'object',
-      kind: true,
-      description: 'a saved filter over the tasks — membership is never stored',
-      properties: {
-        query: {
-          type: 'string',
-          format: 'query',
-          description:
-            'the filter that IS the board; the empty query selects nothing',
-        },
-      },
-    },
-    completed: {
-      type: 'object',
-      description: 'the mark a finished task wears',
-      properties: {
-        at: { type: 'string', format: 'date-time', description: 'when' },
-        by: {
-          type: 'string',
-          ref: 'entity',
-          death: 'keep',
-          description:
-            'who finished it — kept as history when that entity is deleted',
-        },
-      },
-    },
-    cancelled: {
-      type: 'object',
-      description: 'the mark a called-off task wears',
-      properties: {
-        at: { type: 'string', format: 'date-time', description: 'when' },
-        by: {
-          type: 'string',
-          ref: 'entity',
-          death: 'keep',
-          description:
-            'who called it off — kept as history when that entity is deleted',
-        },
-        reason: { type: 'string', description: 'why it was called off' },
-      },
-    },
-    blocked: {
-      type: 'object',
-      description:
-        'something outside the graph is in the way. A facet, never a status: a blocked task is still open work.',
-      properties: {
-        on: {
-          type: 'string',
-          description: 'what it is waiting on, said in words',
-        },
-      },
-    },
-    // The two relations, as @yaks/edge reads them: a component an edge entity
-    // wears beside `edge{from, to}`. Neither carries columns — the sentence is
-    // the whole of what they say.
-    requires: {
-      type: 'object',
-      relation: true,
-      description: 'this task waits for that one',
-      properties: {},
-    },
-    contains: {
-      type: 'object',
-      relation: true,
-      description: 'that task is part of this one',
-      properties: {},
-    },
-  },
-}
+export let taskDoc: VocabDoc = doc

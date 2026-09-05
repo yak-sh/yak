@@ -4,6 +4,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { relations } from '@yaks/edge'
 import { CONTAINS, REQUIRES } from './comp.ts'
+import { statuses } from './words.ts'
 import { team } from './harness.ts'
 
 Deno.test('the components this package ships', () => {
@@ -25,6 +26,9 @@ Deno.test('status is readable and routable, and nobody can write it', () => {
   let status = team.column('task', 'status')!
   assertEquals(status.persist, false)
   assertEquals(status.values, ['cancelled', 'done', 'open'])
+  // The vocabulary is a file now, so the ladder and the enum are two
+  // spellings of one list — this is what keeps them the same list.
+  assertEquals(status.values, statuses())
   assert(!team.comp('task')!.writable.includes('status'))
   // still routable, so a board can filter on it
   assertEquals(team.route('status'), { comp: 'task', prop: 'status' })

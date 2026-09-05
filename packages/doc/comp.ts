@@ -3,6 +3,10 @@
 //
 //   doc{title, body}   the words a person reads
 //
+// The document itself is `./vocab.json` — plain JSON Schema, readable by
+// anything that reads JSON. This file re-exports it under the name callers say
+// and keeps the prose about why it is shaped the way it is.
+//
 // It is a FACET, not a record. A task, a letter, a recipe and a comment are all
 // different things, and every one of them has something a person reads — so the
 // title and the body live in one component every kind wears, instead of a
@@ -23,9 +27,9 @@
 // until somebody composes @yaks/blob in: load without `blobKeywords` and `body`
 // is an ordinary text column; load with them and the text is swapped for its
 // address on the way into the row and back on the way out, and neither `doc`
-// nor the application is told. The `$vocabulary` URI below is spelled out for
-// the same reason — it NAMES the keyword's namespace without depending on the
-// package that reads it.
+// nor the application is told. The `$vocabulary` URI in the file is spelled
+// out for the same reason — it NAMES the keyword's namespace without depending
+// on the package that reads it.
 //
 // NO `before`. The fleet's own `doc` sorts before its `alias` kind, and a
 // `before` may only name a kind the loaded vocabulary declares — so a package
@@ -35,7 +39,7 @@
 // entity IS, the way @yaks/task's `task` and a yaks.app manifest both do.
 
 import type { VocabDoc } from '@yaks/vocab'
-import { CORE_URI } from '@yaks/vocab'
+import doc from './vocab.json' with { type: 'json' }
 
 /** The component carrying the words a person reads. */
 export let DOC = 'doc'
@@ -45,11 +49,6 @@ export let TITLE = 'title'
 
 /** The column carrying the prose. */
 export let BODY = 'body'
-
-// @yaks/blob's `store` keyword vocabulary, named rather than imported: this
-// package declares the word and takes no dependency on the package that reads
-// it (see the note above).
-let BLOB_VOCAB = 'https://yaks.sh/vocab/blob'
 
 /**
  * The document vocabulary, to load beside your own:
@@ -69,26 +68,4 @@ let BLOB_VOCAB = 'https://yaks.sh/vocab/blob'
  * you load and `body` becomes content-addressed; register nothing and it is a
  * text column. The document is the same either way.
  */
-export let docDoc: VocabDoc = {
-  $vocabulary: { [CORE_URI]: true, [BLOB_VOCAB]: true },
-  title: 'doc',
-  $defs: {
-    doc: {
-      type: 'object',
-      kind: true,
-      description: 'the words a person reads: a title and a body',
-      properties: {
-        title: {
-          type: 'string',
-          description: 'the one line an entity is known by',
-        },
-        body: {
-          type: 'string',
-          store: 'blob',
-          description:
-            'the prose, as markdown — content-addressed where @yaks/blob is composed in, plain text everywhere else',
-        },
-      },
-    },
-  },
-}
+export let docDoc: VocabDoc = doc

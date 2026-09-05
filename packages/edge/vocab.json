@@ -1,0 +1,33 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/edge": true
+  },
+  "title": "edge",
+  "$defs": {
+    "edge": {
+      "type": "object",
+      "kind": true,
+      "properties": {
+        "from": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "bare": false,
+          "description": "the entity the link leads away from"
+        },
+        "to": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "bare": false,
+          "description": "the entity the link arrives at"
+        },
+        "ord": {
+          "type": "number",
+          "description": "the link's place among its siblings, where order means"
+        }
+      }
+    }
+  }
+}

@@ -15,13 +15,22 @@
 // (`death: cascade`), because a reminder about a deleted thing is not a
 // reminder about anything — cancel the entry and the alarm goes with it.
 //
+// `every` is declared LAST in the document on purpose, so this table is a
+// graph's existing `wake` table plus one appended column — which is what an
+// additive migration does.
+//
 // `fired` records the last firing, not every one: it is overwritten each time,
 // so a recurring wake carries its most recent and a one-shot carries its only.
 // What HAPPENED at that instant is the host's to record; this package says
 // only that it happened, which is what makes a re-run safe to detect.
+//
+// The document itself is `./vocab.json` — plain JSON Schema, readable by
+// anything that reads JSON. This file re-exports it under the name callers
+// say and keeps the prose about why it is shaped the way it is.
 
 import type { Eid, Entity } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
+import doc from './vocab.json' with { type: 'json' }
 
 /** The component naming when to come back. */
 export let WAKE = 'wake'
@@ -58,51 +67,4 @@ export type Waking = { entity: Entity } & { wake: Wake; fired?: Fired }
  * `loadVocab([wakeDoc, ...mine])`. It declares nothing about what is being
  * woken — that is an ordinary entity in your own vocabulary — only when.
  */
-export let wakeDoc: VocabDoc = {
-  title: 'wake',
-  $defs: {
-    wake: {
-      type: 'object',
-      kind: true,
-      prefix: 'W',
-      description: 'a promise to come back to something at a time',
-      properties: {
-        at: {
-          type: 'string',
-          format: 'date-time',
-          description:
-            'when it is next due; absent once a one-shot has fired and a recurrence has ended',
-        },
-        target: {
-          type: 'string',
-          ref: 'entity',
-          death: 'cascade',
-          description:
-            'what the wake is about — the entity carrying it when absent',
-        },
-        note: {
-          type: 'string',
-          description: 'a line for whoever is woken: why you asked to be',
-        },
-        // Declared last so this table is a graph's existing `wake` table plus
-        // one appended column — which is what an additive migration does.
-        every: {
-          type: 'string',
-          description:
-            'how it recurs: a duration (30m, 2h, 1d), a cron line (0 9 * * 1-5), or @daily',
-        },
-      },
-    },
-    fired: {
-      type: 'object',
-      description: 'when a wake last went off',
-      properties: {
-        at: {
-          type: 'string',
-          format: 'date-time',
-          description: 'the instant it fired',
-        },
-      },
-    },
-  },
-}
+export let wakeDoc: VocabDoc = doc

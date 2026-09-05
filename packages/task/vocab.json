@@ -1,0 +1,115 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/edge": true
+  },
+  "title": "task",
+  "$defs": {
+    "task": {
+      "type": "object",
+      "kind": true,
+      "description": "a thing to do",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "cancelled",
+            "done",
+            "open"
+          ],
+          "persist": false,
+          "description": "where the task stands — read off the completed and cancelled marks, never written"
+        },
+        "priority": {
+          "type": "number",
+          "format": "priority",
+          "description": "queue order — lower is more urgent"
+        },
+        "project": {
+          "type": "string",
+          "ref": "project",
+          "death": "detach",
+          "description": "what it is filed under; deleting the project frees the task rather than taking it along"
+        }
+      }
+    },
+    "project": {
+      "type": "object",
+      "kind": true,
+      "description": "something tasks are grouped under",
+      "properties": {}
+    },
+    "board": {
+      "type": "object",
+      "kind": true,
+      "description": "a saved filter over the tasks — membership is never stored",
+      "properties": {
+        "query": {
+          "type": "string",
+          "format": "query",
+          "description": "the filter that IS the board; the empty query selects nothing"
+        }
+      }
+    },
+    "completed": {
+      "type": "object",
+      "description": "the mark a finished task wears",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "who finished it — kept as history when that entity is deleted"
+        }
+      }
+    },
+    "cancelled": {
+      "type": "object",
+      "description": "the mark a called-off task wears",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "who called it off — kept as history when that entity is deleted"
+        },
+        "reason": {
+          "type": "string",
+          "description": "why it was called off"
+        }
+      }
+    },
+    "blocked": {
+      "type": "object",
+      "description": "something outside the graph is in the way. A facet, never a status: a blocked task is still open work.",
+      "properties": {
+        "on": {
+          "type": "string",
+          "description": "what it is waiting on, said in words"
+        }
+      }
+    },
+    "requires": {
+      "type": "object",
+      "relation": true,
+      "description": "this task waits for that one",
+      "properties": {}
+    },
+    "contains": {
+      "type": "object",
+      "relation": true,
+      "description": "that task is part of this one",
+      "properties": {}
+    }
+  }
+}

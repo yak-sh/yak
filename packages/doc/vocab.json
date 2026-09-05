@@ -1,0 +1,25 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/blob": true
+  },
+  "title": "doc",
+  "$defs": {
+    "doc": {
+      "type": "object",
+      "kind": true,
+      "description": "the words a person reads: a title and a body",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "the one line an entity is known by"
+        },
+        "body": {
+          "type": "string",
+          "store": "blob",
+          "description": "the prose, as markdown — content-addressed where @yaks/blob is composed in, plain text everywhere else"
+        }
+      }
+    }
+  }
+}

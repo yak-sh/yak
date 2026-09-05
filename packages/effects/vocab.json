@@ -1,0 +1,75 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true
+  },
+  "title": "effect",
+  "$defs": {
+    "effect": {
+      "type": "object",
+      "properties": {
+        "handler": {
+          "type": "string",
+          "stamped": true,
+          "description": "the registration that ran, by its slot id"
+        },
+        "target": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the entity the committed change was about"
+        },
+        "comp": {
+          "type": "string",
+          "stamped": true,
+          "description": "the component that changed"
+        },
+        "kind": {
+          "enum": [
+            "created",
+            "changed",
+            "removed"
+          ],
+          "stamped": true,
+          "description": "what happened to it"
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "done",
+            "failed"
+          ],
+          "stamped": true,
+          "description": "where the run got to"
+        },
+        "attempts": {
+          "type": "number",
+          "stamped": true,
+          "description": "how many times the handler has been started"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when the run was recorded"
+        },
+        "lease_owner": {
+          "type": "string",
+          "stamped": true,
+          "description": "the process currently reconciling this row"
+        },
+        "lease_token": {
+          "type": "string",
+          "stamped": true,
+          "description": "that claim's token, fresh on every claim"
+        },
+        "lease_expiry": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when the claim lapses and another process may take it"
+        }
+      }
+    }
+  }
+}

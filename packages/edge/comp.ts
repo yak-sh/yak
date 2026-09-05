@@ -13,43 +13,17 @@
 // The ends yield their bare words (`bare: false`): `from` and `to` are far too
 // ordinary to be claimed vocabulary-wide by this component, so they are said in
 // full — `.edge.from=<id>`.
+//
+// The document itself is `./vocab.json` — plain JSON Schema, readable by
+// anything that reads JSON. This file re-exports it under the name callers
+// say and keeps the prose about why it is shaped the way it is.
 
 import type { VocabDoc } from '@yaks/vocab'
-import { CORE_URI } from '@yaks/vocab'
-import { EDGE_URI } from './keywords.ts'
+import doc from './vocab.json' with { type: 'json' }
 
 /**
  * The `edge` component as a vocabulary document, to load beside your own:
  * `loadVocab([edgeDoc, ...mine], [edgeKeywords])`. The relation tags are yours
  * to declare — this document is only the link itself.
  */
-export let edgeDoc: VocabDoc = {
-  $vocabulary: { [CORE_URI]: true, [EDGE_URI]: true },
-  title: 'edge',
-  $defs: {
-    edge: {
-      type: 'object',
-      kind: true,
-      properties: {
-        from: {
-          type: 'string',
-          ref: 'entity',
-          death: 'cascade',
-          bare: false,
-          description: 'the entity the link leads away from',
-        },
-        to: {
-          type: 'string',
-          ref: 'entity',
-          death: 'cascade',
-          bare: false,
-          description: 'the entity the link arrives at',
-        },
-        ord: {
-          type: 'number',
-          description: "the link's place among its siblings, where order means",
-        },
-      },
-    },
-  },
-}
+export let edgeDoc: VocabDoc = doc

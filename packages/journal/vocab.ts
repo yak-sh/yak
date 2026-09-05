@@ -16,8 +16,13 @@
 // `target` keeps its reference past the target's death — the point of a
 // journal is that it outlives what it is about — so it carries no foreign key
 // and a tombstoned entity keeps every delta ever written about it.
+//
+// The document itself is `./vocab.json` — plain JSON Schema, readable by
+// anything that reads JSON. This file re-exports it under the name callers
+// say and keeps the prose about why it is shaped the way it is.
 
-import { CORE_URI, type VocabDoc } from '@yaks/vocab'
+import type { VocabDoc } from '@yaks/vocab'
+import doc from './vocab.json' with { type: 'json' }
 
 /** The component name a committed batch wears. */
 export let BATCH = 'batch'
@@ -30,82 +35,4 @@ export let DELTA = 'delta'
  * `loadVocab([journalDoc, ...mine])`. Two components — a `batch` per committed
  * write and a `delta` per column (or component) that moved — and nothing else.
  */
-export let journalDoc: VocabDoc = {
-  $vocabulary: { [CORE_URI]: true },
-  title: 'journal',
-  $defs: {
-    batch: {
-      type: 'object',
-      properties: {
-        seq: {
-          type: 'number',
-          stamped: true,
-          description: "the batch's place in the total order — the cursor",
-        },
-        at: {
-          type: 'string',
-          format: 'date-time',
-          stamped: true,
-          description: 'when it committed',
-        },
-        by: {
-          type: 'string',
-          ref: 'entity',
-          death: 'keep',
-          stamped: true,
-          description: "the actor that wrote it, from the batch's $actor",
-        },
-        via: {
-          type: 'string',
-          ref: 'entity',
-          death: 'keep',
-          stamped: true,
-          description: 'the instrument it was written through',
-        },
-      },
-    },
-    delta: {
-      type: 'object',
-      properties: {
-        seq: {
-          type: 'number',
-          stamped: true,
-          description: 'the batch this delta belongs to, by its seq',
-        },
-        ord: {
-          type: 'number',
-          stamped: true,
-          description: 'its place within that batch — the order it happened',
-        },
-        target: {
-          type: 'string',
-          ref: 'entity',
-          death: 'keep',
-          stamped: true,
-          description: 'the entity that changed — kept past its own death',
-        },
-        comp: {
-          type: 'string',
-          stamped: true,
-          description: 'the component that changed',
-        },
-        column: {
-          type: 'string',
-          stamped: true,
-          description:
-            'the column that moved, or absent when the whole component did',
-        },
-        before: {
-          type: 'string',
-          stamped: true,
-          description: 'the value it held, JSON — absent when it held none',
-        },
-        after: {
-          type: 'string',
-          stamped: true,
-          description: 'the value it holds now, JSON — absent when cleared',
-        },
-      },
-    },
-  },
-}
+export let journalDoc: VocabDoc = doc

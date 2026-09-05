@@ -1,0 +1,80 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true
+  },
+  "title": "journal",
+  "$defs": {
+    "batch": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "number",
+          "stamped": true,
+          "description": "the batch's place in the total order — the cursor"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it committed"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the actor that wrote it, from the batch's $actor"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the instrument it was written through"
+        }
+      }
+    },
+    "delta": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "number",
+          "stamped": true,
+          "description": "the batch this delta belongs to, by its seq"
+        },
+        "ord": {
+          "type": "number",
+          "stamped": true,
+          "description": "its place within that batch — the order it happened"
+        },
+        "target": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the entity that changed — kept past its own death"
+        },
+        "comp": {
+          "type": "string",
+          "stamped": true,
+          "description": "the component that changed"
+        },
+        "column": {
+          "type": "string",
+          "stamped": true,
+          "description": "the column that moved, or absent when the whole component did"
+        },
+        "before": {
+          "type": "string",
+          "stamped": true,
+          "description": "the value it held, JSON — absent when it held none"
+        },
+        "after": {
+          "type": "string",
+          "stamped": true,
+          "description": "the value it holds now, JSON — absent when cleared"
+        }
+      }
+    }
+  }
+}

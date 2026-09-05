@@ -22,11 +22,16 @@
 //
 // Loading the component is the application's choice — an app with no durable
 // effects loads no `effect` component and stores nothing.
+//
+// The document itself is `./vocab.json` — plain JSON Schema, readable by
+// anything that reads JSON. This file re-exports it under the name callers
+// say and keeps the prose about why it is shaped the way it is.
 
 import type { Comp, Eid, Tx } from '@yaks/graph'
 import { each, isPromise, then } from '@yaks/graph'
 import { and, eq } from '@yaks/query'
-import { CORE_URI, type VocabDoc } from '@yaks/vocab'
+import type { VocabDoc } from '@yaks/vocab'
+import doc from './vocab.json' with { type: 'json' }
 import type { Around, Effects } from './registry.ts'
 import type { Kind } from './trace.ts'
 
@@ -35,71 +40,7 @@ import type { Kind } from './trace.ts'
  * when you want durable effects: `loadVocab([effectDoc, ...mine])`. Every
  * column is server-owned — a client never writes a run's bookkeeping.
  */
-export let effectDoc: VocabDoc = {
-  $vocabulary: { [CORE_URI]: true },
-  title: 'effect',
-  $defs: {
-    effect: {
-      type: 'object',
-      properties: {
-        handler: {
-          type: 'string',
-          stamped: true,
-          description: 'the registration that ran, by its slot id',
-        },
-        target: {
-          type: 'string',
-          ref: 'entity',
-          death: 'keep',
-          stamped: true,
-          description: 'the entity the committed change was about',
-        },
-        comp: {
-          type: 'string',
-          stamped: true,
-          description: 'the component that changed',
-        },
-        kind: {
-          enum: ['created', 'changed', 'removed'],
-          stamped: true,
-          description: 'what happened to it',
-        },
-        state: {
-          enum: ['pending', 'done', 'failed'],
-          stamped: true,
-          description: 'where the run got to',
-        },
-        attempts: {
-          type: 'number',
-          stamped: true,
-          description: 'how many times the handler has been started',
-        },
-        at: {
-          type: 'string',
-          format: 'date-time',
-          stamped: true,
-          description: 'when the run was recorded',
-        },
-        lease_owner: {
-          type: 'string',
-          stamped: true,
-          description: 'the process currently reconciling this row',
-        },
-        lease_token: {
-          type: 'string',
-          stamped: true,
-          description: "that claim's token, fresh on every claim",
-        },
-        lease_expiry: {
-          type: 'string',
-          format: 'date-time',
-          stamped: true,
-          description: 'when the claim lapses and another process may take it',
-        },
-      },
-    },
-  },
-}
+export let effectDoc: VocabDoc = doc
 
 /** How a ledger is built. */
 export type LedgerOpts = {

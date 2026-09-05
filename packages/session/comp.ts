@@ -22,9 +22,13 @@
 // `conflict` is entirely stamped: every column is server-owned, because the
 // audit is written by the graph after a refusal, never sent by a client. A
 // forged conflict record would be worse than none.
+//
+// The document itself is `./vocab.json` — plain JSON Schema, readable by
+// anything that reads JSON. This file re-exports it under the name callers
+// say and keeps the prose about why it is shaped the way it is.
 
 import type { VocabDoc } from '@yaks/vocab'
-import { ACTIVE, STATUSES } from './words.ts'
+import doc from './vocab.json' with { type: 'json' }
 
 /** The component naming one run of a worker over the graph. */
 export let SESSION = 'session'
@@ -48,151 +52,4 @@ export let CONFLICT = 'conflict'
  * vocabulary — only who is working, what they hold, and what happened when two
  * of them wanted the same thing.
  */
-export let sessionDoc: VocabDoc = {
-  title: 'session',
-  $defs: {
-    session: {
-      type: 'object',
-      kind: true,
-      description: 'one run of a worker — a person’s editor, an agent’s turn',
-      properties: {
-        id: {
-          type: 'string',
-          description:
-            'the runner’s own name for this run, stable across reconnects',
-        },
-        actor: {
-          type: 'string',
-          ref: 'entity',
-          death: 'detach',
-          description: 'who the run works as — the person or agent behind it',
-        },
-        parent: {
-          type: 'string',
-          ref: 'session',
-          death: 'detach',
-          bare: false,
-          description: 'the run that started this one',
-        },
-        provider: {
-          type: 'string',
-          description: 'which service is running it',
-        },
-        model: { type: 'string', description: 'which model it is thinking in' },
-        effort: {
-          type: 'string',
-          description: 'how hard it was asked to think',
-        },
-        turn: {
-          enum: ['idle', 'busy'],
-          description:
-            'mid-thought, or waiting for the next instruction — an idle run is still alive',
-        },
-        status: {
-          enum: STATUSES,
-          stamped: true,
-          description: `reported by the runner: ${
-            ACTIVE.join(', ')
-          } mean it is still there`,
-        },
-        started_at: {
-          type: 'string',
-          format: 'date-time',
-          stamped: true,
-          description: 'when it began',
-        },
-        finished_at: {
-          type: 'string',
-          format: 'date-time',
-          stamped: true,
-          description: 'when it ended — absent while it is still going',
-        },
-        exit_code: {
-          type: 'number',
-          stamped: true,
-          description: 'how it ended: 0 for cleanly',
-        },
-      },
-    },
-    claim: {
-      type: 'object',
-      kind: true,
-      description: 'a run’s lock on the entity carrying it',
-      properties: {
-        session: {
-          type: 'string',
-          ref: 'session',
-          death: 'release',
-          bare: false,
-          description:
-            'the run holding it — when that run’s entity dies the lock goes and the entity lives',
-        },
-        claimed_at: {
-          type: 'string',
-          format: 'date-time',
-          stamped: true,
-          description: 'when it was taken — stamped when the lock is new',
-        },
-      },
-    },
-    stop_request: {
-      type: 'object',
-      kind: true,
-      description: 'ask a run to wind down',
-      properties: {
-        target: {
-          type: 'string',
-          ref: 'session',
-          death: 'cascade',
-          description:
-            'the run to stop — the request dies with the run it is about',
-        },
-      },
-    },
-    brief: {
-      type: 'object',
-      description: 'what a run says it did, in its own words',
-      properties: {
-        text: { type: 'string', description: 'the note it leaves behind' },
-      },
-    },
-    conflict: {
-      type: 'object',
-      kind: true,
-      description:
-        'two runs wanted one thing: written after the refusal, never by a client',
-      properties: {
-        target: {
-          type: 'string',
-          ref: 'entity',
-          death: 'keep',
-          bare: false,
-          stamped: true,
-          description: 'the contested entity',
-        },
-        loser: {
-          type: 'string',
-          ref: 'session',
-          death: 'keep',
-          bare: false,
-          stamped: true,
-          description: 'the run whose write was refused',
-        },
-        holder: {
-          type: 'string',
-          ref: 'session',
-          death: 'keep',
-          bare: false,
-          stamped: true,
-          description: 'the run that already held the lock',
-        },
-        at: {
-          type: 'string',
-          format: 'date-time',
-          stamped: true,
-          description: 'when they collided',
-        },
-      },
-    },
-  },
-}
+export let sessionDoc: VocabDoc = doc
