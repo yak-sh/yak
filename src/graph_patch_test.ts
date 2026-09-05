@@ -64,6 +64,82 @@ Deno.test('$edit on doc.body: single, multi-hunk, and replace-all', () => {
   assertEquals(value(E, 'doc', 'body'), 'bb bb bb')
 })
 
+// Two patches to one column in one batch (T-33556): each lands on what the
+// previous produced, and neither is refused for a value its own batch moved.
+Deno.test('$edit twice in one batch: both apply, in order', () => {
+  let E = uid()
+  apply(db, [{
+    eid: E,
+    name: 'doc',
+    comp: { title: 'D', body: 'one two three' },
+  }])
+  apply(db, [
+    {
+      eid: E,
+      name: 'doc',
+      comp: { body: { $edit: { old: 'one', new: '1' } } },
+    },
+    {
+      eid: E,
+      name: 'doc',
+      comp: { body: { $edit: { old: 'three', new: '3' } } },
+    },
+  ])
+  assertEquals(value(E, 'doc', 'body'), '1 two 3')
+
+  // The second patch sees the first one's result, so it may edit text the
+  // first one wrote.
+  apply(db, [
+    {
+      eid: E,
+      name: 'doc',
+      comp: { body: { $edit: { old: '1', new: 'ONE' } } },
+    },
+    {
+      eid: E,
+      name: 'doc',
+      comp: { body: { $edit: { old: 'ONE two', new: 'x' } } },
+    },
+  ])
+  assertEquals(value(E, 'doc', 'body'), 'x 3')
+
+  // A literal write earlier in the batch is the value the patch lands on.
+  apply(db, [
+    { eid: E, name: 'doc', comp: { body: 'fresh body' } },
+    {
+      eid: E,
+      name: 'doc',
+      comp: { body: { $edit: { old: 'fresh', new: 'new' } } },
+    },
+  ])
+  assertEquals(value(E, 'doc', 'body'), 'new body')
+})
+
+// A refusal is merged into and retried, so the value it prints must be the one
+// the caller finds after the rollback — never an intermediate this batch wrote
+// and then threw away.
+Deno.test('a stale precondition reports the COMMITTED value', () => {
+  let E = uid()
+  apply(db, [{ eid: E, name: 'doc', comp: { title: 'D', body: 'committed' } }])
+  let e = assertThrows(
+    () =>
+      apply(db, [
+        { eid: E, name: 'doc', comp: { body: 'in-transaction' } },
+        {
+          eid: E,
+          name: 'doc',
+          comp: { title: 'D2' },
+          was: { body: 'a hash of a value nobody ever stored' },
+        },
+      ]),
+    Error,
+  )
+  assertStringIncludes(e.message, 'committed')
+  assertEquals(e.message.includes('in-transaction'), false)
+  // And the batch rolled back whole.
+  assertEquals(value(E, 'doc', 'body'), 'committed')
+})
+
 Deno.test('$edit refuses: non-unique, unchanged, and non-text', () => {
   let E = uid()
   apply(db, [{ eid: E, name: 'doc', comp: { title: 'D', body: 'aa aa' } }])

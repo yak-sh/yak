@@ -5587,12 +5587,34 @@ export class Stale extends Error {
 // than replacing, and `old` must still match (or the whole batch refuses).
 // Any OTHER `$`-keyed operator is a typo/unknown op — refused legibly here at
 // the operator layer, before it reaches storage as a non-scalar (bound()).
-let editOps = (db: Sql, changes: Change[]): Change[] =>
-  changes.map((change) => {
-    if (!change.comp) return change
+//
+// "Current" means current IN THIS BATCH: a patch lands on the value it would
+// land on when written, so two patches to one column apply in order, the
+// second onto the first one's result (T-33556). The `was` guard still names
+// the COMMITTED value — what the batch found — since that is what apply()
+// checks it against, and a batch never has to be guarded from itself.
+let editOps = (db: Sql, changes: Change[]): Change[] => {
+  let pending = new Map<string, unknown>()
+  let key = (c: Change, col: string) => `${c.eid}\0${c.name}\0${col}`
+  return changes.map((change) => {
+    // A component (or entity) removed mid-batch takes its pending values with
+    // it: a later patch falls back to the stored row rather than to text this
+    // batch already deleted.
+    if (!change.comp) {
+      for (let k of pending.keys()) {
+        if (k.startsWith(`${change.eid}\0`)) pending.delete(k)
+      }
+      return change
+    }
+    // Every literal this batch writes is what a later patch on that column
+    // lands on — a `$edit` after a whole-value write patches the new value.
+    let noted = (c: Change) => {
+      for (let [col, v] of Object.entries(c.comp!)) pending.set(key(c, col), v)
+      return c
+    }
     let ops = Object.entries(change.comp).filter(([, v]) => isFieldOp(v))
-    if (!ops.length) return change
-    if (!readOf(db, change.name)) return change
+    if (!ops.length) return noted(change)
+    if (!readOf(db, change.name)) return noted(change)
     let row = prep(db, `${select(db, change.name)} where eid = ?`).get(
       change.eid,
     ) as Record<string, unknown> | undefined
@@ -5616,15 +5638,18 @@ let editOps = (db: Sql, changes: Change[]): Change[] =>
       if (type != 'text' && type != 'body') {
         throw new Error(`$edit: ${where} is not a wire-writable text column`)
       }
-      let cur = row?.[col]
+      let k = key(change, col)
+      let stored = row?.[col]
+      let cur = pending.has(k) ? pending.get(k) : stored
       if (typeof cur != 'string') {
         throw new Error(`$edit: ${where} has no text value to edit`)
       }
       comp[col] = patchText(cur, editHunks(op.$edit), where)
-      was[col] = sha(cur)
+      was[col] = stored == null ? null : sha(stored)
     }
-    return { ...change, comp, was }
+    return noted({ ...change, comp, was })
   })
+}
 
 // An actor has one cadence clock: minting its next untargeted wake removes
 // every pending predecessor in the same transaction. A target makes a wake a
@@ -6039,6 +6064,23 @@ export let apply = (
         if (spine(db, t).changes) minted.add(t)
       }
     }
+    // What a precondition is checked against: the state this batch FOUND,
+    // read once here, before the first write. A guard read inside the write
+    // loop sees whatever an earlier change in the same batch just wrote —
+    // which refuses a batch for a value it moved itself, and prints an
+    // intermediate the rollback then throws away, so the caller merges into a
+    // value nobody will ever find (T-33556). The batch is atomic: no one
+    // observes between its changes, and it never needs guarding from itself.
+    let found = new Map<string, Record<string, unknown> | undefined>()
+    for (let { eid, name, was } of changes) {
+      if (!was || !readOf(db, name) || found.has(`${name}\0${eid}`)) continue
+      found.set(
+        `${name}\0${eid}`,
+        prep(db, `${select(db, name)} where eid = ?`).get(eid) as
+          | Record<string, unknown>
+          | undefined,
+      )
+    }
     for (let change of changes) {
       let { eid, name, was } = change
       let comp = change.comp
@@ -6116,11 +6158,8 @@ export let apply = (
         // Read through the PROJECTION (select()), so a reference column reads
         // back as the eid the caller named in `was` — not the int id it is
         // stored as. The guard columns are readable names (`eid`, refs, scalars).
-        let row = prep(db, `${select(db, name)} where eid = ?`).get(
-          eid,
-        ) as
-          | Record<string, unknown>
-          | undefined
+        // Taken from `found` above: the state as the batch found it.
+        let row = found.get(`${name}\0${eid}`)
         let real = new Set(readOf(db, name))
         for (let [col, want] of Object.entries(was)) {
           // A guard on a column that doesn't exist would read undefined,
