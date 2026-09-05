@@ -3,34 +3,22 @@
 // on the reply (MCP 2025-06-18) — so a caller parses a described value instead
 // of guessing at a text blob.
 //
-// The bundle schema is not hand-written: it IS the vocabulary. `bundleSchema()`
-// reads the loaded @yaks/vocab — the same one src/vocab/fleet_vocab.ts projects
-// from the Rust contract — and emits the entity spine plus one object per
-// declared component, each carrying its readable columns at their declared
-// types. Add a component to the contract and it appears here with nobody
-// editing this file. Everything else in this module is a small explicit schema
-// for a tool whose reply has its own shape (an apply result, the canvas view,
-// the work lane).
+// The bundle schema is not hand-written: it IS the vocabulary. @yaks/mcp's
+// `bundleSchema()` reads a loaded @yaks/vocab — here the one
+// src/vocab/fleet_vocab.ts projects from the Rust contract — and emits the
+// entity spine plus one object per declared component, each carrying its
+// readable columns. Add a component to the contract and it appears here with
+// nobody editing this file. Everything else in this module is a small explicit
+// schema for a tool whose reply has its own shape (an apply result, the canvas
+// view, the work lane).
 //
-// @yaks/mcp inherits the pattern rather than a copy: `bundleSchema(vocab)` takes
-// any Vocab, so the package can serve an app's own vocabulary the same way.
+// The derivation lives in the package, not here, so the fleet's server and any
+// app's server describe a bundle the same way. What is fleet-specific is the
+// `via` reading below, passed in as a column of our own.
 
 import { z } from 'zod'
-import type { Column, Vocab } from '@yaks/vocab'
+import { bundleSchema } from '@yaks/mcp'
 import { fleetVocab } from './vocab/fleet_vocab.ts'
-
-// A column's value as it reads back. Every column is nullable (a cleared column
-// reads null) and optional (a patch touches what it names), and an enum reads
-// as its members. `.catch` is deliberately absent: this schema DESCRIBES the
-// reply, and a reply that doesn't match is a bug to see, not to coerce.
-let columnSchema = (col: Column): z.ZodTypeAny =>
-  col.category == 'enum' && col.values?.length
-    ? z.enum(col.values as [string, ...string[]])
-    : col.scalar == 'bool'
-    ? z.boolean()
-    : col.scalar == 'number' || col.scalar == 'priority'
-    ? z.number()
-    : z.string()
 
 // The four stamp components carry `via` — the instrument that made the write.
 // On the wire it is either the raw eid or, once client.ts `jsonAuthored()` has
@@ -53,53 +41,22 @@ let via = z.union([
   }).passthrough(),
 ])
 
-// One component as it appears in a bundle: a flat bag of its readable columns
-// (writable ∪ stamped). Passthrough, never strict — a reader must not break on
-// a column the server learned to send after this client was written. The
-// component itself is optional but never nullable: a read OMITS what an entity
-// doesn't carry, and `comp: null` is a WRITE ("delete this component") that
-// lives in applySchema, not here.
-let compSchema = (vocab: Vocab, name: string) =>
-  z.object(
-    Object.fromEntries(
-      vocab.columns(name).map((prop) => [
-        prop,
-        (prop == 'via' ? via : columnSchema(vocab.column(name, prop)!))
-          .nullable().optional(),
-      ]),
-    ),
-  ).passthrough()
-
 // An edge as the read faces spell it: the relation plus the entity at the far
 // end, in human id form (client.ts edgesOf).
 let refSchema = z.object({ type: z.string(), child: z.string() }).passthrough()
 let backrefSchema = z.object({ type: z.string(), parent: z.string() })
   .passthrough()
 
-// THE bundle: `{kind, entity: {eid, num}, <comp>: {<columns>}}` — the shape
-// every read door answers in, derived whole from the vocabulary.
-export let bundleSchema = (vocab: Vocab) =>
-  z.object({
-    ...Object.fromEntries(
-      vocab.all.map((name) => [name, compSchema(vocab, name).optional()]),
-    ),
-    // `entity` and `kind` are stated AFTER the vocabulary and win over it: the
-    // spine is a declared component too, but its `eid` is the row key rather
-    // than a column, and a read speaks the derived display kind beside it.
-    kind: z.string().optional().describe(
-      'the derived display kind — what the components make this entity',
-    ),
-    entity: z.object({
-      eid: z.string(),
-      num: z.number().nullable().optional(),
-    }).passthrough(),
-  }).passthrough()
-
 // The fleet's own bundle, built once: mcpServer() may be constructed twice in
 // one process (the /mcp mount and the stdio door) and the vocabulary is the
-// same both times.
+// same both times. `full` is deliberate — these tools are read by agents that
+// write bundles all day, and the types are worth the bytes here.
 let fleetBundle: z.ZodTypeAny | undefined
-export let bundle = () => fleetBundle ??= bundleSchema(fleetVocab())
+export let bundle = (): z.ZodTypeAny =>
+  fleetBundle ??= bundleSchema(fleetVocab(), {
+    depth: 'full',
+    column: (col) => col.prop == 'via' ? via : undefined,
+  })
 
 // task_show answers one bundle plus the edges and comments around it.
 export let showSchema = () =>
