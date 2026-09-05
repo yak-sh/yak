@@ -131,7 +131,7 @@ export let storage = (
 ): Store => {
   let tx: Tx = {
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
-    get: (eids) => get(driver, vocab, eids),
+    get: (eids) => get(driver, vocab, eids, base),
     patch: (bundles) => patch(driver, vocab, bundles),
     remove: (entities) => remove(driver, vocab, entities),
   }

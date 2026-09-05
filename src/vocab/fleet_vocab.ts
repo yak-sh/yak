@@ -19,6 +19,7 @@ import type { Keywords, PropSchema, Vocab, VocabDoc } from '@yaks/vocab'
 import { ID_URI, idKeywords } from '@yaks/id'
 import { nameKeywords, NAMES_URI } from '@yaks/names'
 import { EDGE_URI, edgeKeywords } from '@yaks/edge'
+import { BLOB_URI, blobKeywords } from '@yaks/blob'
 import { derivedProps, type PropType } from '../types.ts'
 import { natureOf } from '../edge.ts'
 
@@ -145,9 +146,14 @@ let compOf = (name: string, spec: ManifestComp): PropSchema => ({
 
 // The keyword vocabularies the fleet's own components use beyond the core
 // meta-model. Each is owned by the package that interprets it (@yaks/id reads
-// `prefix`, @yaks/names reads `by_name`, @yaks/edge reads `relation`), and
-// registered here so the loader carries it.
-export let fleetKeywords: Keywords[] = [idKeywords, nameKeywords, edgeKeywords]
+// `prefix`, @yaks/names reads `by_name`, @yaks/edge reads `relation`,
+// @yaks/blob reads `store`), and registered here so the loader carries it.
+export let fleetKeywords: Keywords[] = [
+  idKeywords,
+  nameKeywords,
+  edgeKeywords,
+  blobKeywords,
+]
 
 let docOf = (m: Manifest): VocabDoc => ({
   $vocabulary: {
@@ -155,6 +161,7 @@ let docOf = (m: Manifest): VocabDoc => ({
     [ID_URI]: true,
     [NAMES_URI]: true,
     [EDGE_URI]: true,
+    [BLOB_URI]: true,
   },
   title: m.name,
   $defs: Object.fromEntries(

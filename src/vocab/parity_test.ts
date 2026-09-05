@@ -45,11 +45,16 @@ let canonType = (t: PropType): string =>
     ? `ref:${t.eid}:${t.death}`
     : 'text' // a well is a text column whose pool name dissolved
 
+// The fleet's `body` is a text column kept in content-addressed storage, which
+// the meta-model spells as a plain text column wearing @yaks/blob's `store`
+// keyword — so the keyword is what reads back as `body` here.
 let canonCol = (c: Column): string =>
   c.category == 'enum'
     ? `enum:${c.values!.join('|')}`
     : c.category == 'ref'
     ? `ref:${c.ref}:${c.death}`
+    : c.keywords.store == 'blob'
+    ? 'body'
     : c.scalar!
 
 // ---- parity ----------------------------------------------------------------

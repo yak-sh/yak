@@ -12,7 +12,7 @@
 
 import { type And, parse } from '@yaks/query'
 import type { Column, Vocab } from '@yaks/vocab'
-import { type BindOpts, compile } from '@yaks/sql'
+import { type BindOpts, compile, type Derived } from '@yaks/sql'
 import type { Driver, Row } from './driver.ts'
 import type { Bundle, Comp } from './bundle.ts'
 import { tombstoned } from '@yaks/graph'
@@ -42,21 +42,42 @@ let stored = (v: Vocab, comp: string): Column[] =>
 // The projected read for one component: each scalar straight off the row, each
 // reference joined back to its target's eid, keyed by the owner eid. A
 // component with no columns reads a bare presence flag.
-let readSql = (v: Vocab, comp: string): string => {
-  let cols = stored(v, comp)
+//
+// A column whose READ differs from its storage is read through its registered
+// expression instead — the same `derived` registry @yaks/sql consults when it
+// compiles a query (see @yaks/sql/derived.ts). That is what keeps the two
+// readers agreeing: a value the filter resolves one way cannot come back
+// gathered another. It is also the seam a content-addressed column lands on —
+// @yaks/blob registers one override per body column, and the gather returns the
+// text rather than the address the row holds.
+//
+// So the component table is aliased by its OWN NAME here, exactly as the binder
+// joins it, and an override's `deps` are LEFT JOINed the same way: a registered
+// expression is written once and reads the same in both places.
+let readSql = (v: Vocab, comp: string, derived: Derived = {}): string => {
+  let self = `"${comp}"`
   let sel: string[] = []
   let joins: string[] = []
-  for (let c of cols) {
-    if (c.category == 'ref') {
+  let deps = new Set<string>()
+  for (let c of stored(v, comp)) {
+    let own = derived[`${comp}.${c.prop}`]
+    if (own) {
+      for (let d of own.deps ?? []) deps.add(d)
+      sel.push(`${own.expr(`${self}."entity"`)} as "${c.prop}"`)
+    } else if (c.category == 'ref') {
       let a = `r_${c.prop.replaceAll(/[^A-Za-z0-9]/g, '_')}`
-      joins.push(`left join entity "${a}" on "${a}".id = t."${c.prop}"`)
+      joins.push(`left join entity "${a}" on "${a}".id = ${self}."${c.prop}"`)
       sel.push(`"${a}".eid as "${c.prop}"`)
     } else {
-      sel.push(`t."${c.prop}" as "${c.prop}"`)
+      sel.push(`${self}."${c.prop}" as "${c.prop}"`)
     }
   }
+  for (let d of deps) {
+    if (d == comp) continue
+    joins.push(`left join "${d}" on "${d}"."entity" = ${self}."entity"`)
+  }
   return `select ${sel.length ? sel.join(', ') : '1 as present'} ` +
-    `from "${comp}" t join entity o on o.id = t.entity ` +
+    `from ${self} join entity o on o.id = ${self}."entity" ` +
     `${joins.join(' ')} where o.eid = ?`
 }
 
@@ -87,12 +108,15 @@ export let get = (
   driver: Driver,
   vocab: Vocab,
   eids: string[],
+  opts: BindOpts = {},
 ): Bundle[] =>
   eids.flatMap((eid) => {
     let spine = spineOf(driver, eid)
     if (!spine) return []
     let entity = { eid, ...(spine.num == null ? {} : { num: spine.num }) }
-    return [spine.dead ? tombstoned(entity) : bundleOf(driver, vocab, eid)]
+    return [
+      spine.dead ? tombstoned(entity) : bundleOf(driver, vocab, eid, opts),
+    ]
   })
 
 // Every component an entity wears, gathered into a bundle. Iterates the
@@ -100,14 +124,19 @@ export let get = (
 // spine `entity` is the identity component: its eid keys the bundle under
 // `entity`, never at the root, and its server-minted `num` rides beside the eid
 // — a caller ordering or paging a set it holds reads the window from there.
-let bundleOf = (driver: Driver, vocab: Vocab, eid: string): Bundle => {
+let bundleOf = (
+  driver: Driver,
+  vocab: Vocab,
+  eid: string,
+  opts: BindOpts = {},
+): Bundle => {
   let spine = spineOf(driver, eid)
   let out: Bundle = {
     entity: { eid, ...(spine?.num == null ? {} : { num: spine.num }) },
   }
   for (let comp of vocab.all) {
     if (comp == 'entity') continue
-    let row = driver.query(readSql(vocab, comp), [eid])[0]
+    let row = driver.query(readSql(vocab, comp, opts.derived), [eid])[0]
     if (!row) continue
     delete (row as Record<string, unknown>).present
     out[comp] = row as Comp
@@ -125,4 +154,4 @@ export let read = (
 ): Bundle[] =>
   rows(driver, vocab, query, opts)
     .filter((r) => r.eid != null)
-    .map((r) => bundleOf(driver, vocab, r.eid as string))
+    .map((r) => bundleOf(driver, vocab, r.eid as string, opts))

@@ -6,14 +6,14 @@
 // `apply()` — then holds @yaks/sqlite's membership answers against what the app's
 // own reader (query.ts → sql.ts → relation.run) returns for the same query. Two
 // independent readers, one real graph, the same question: if they disagree the
-// spike says so.
+// spike says so. Every executable gap it opened with is now closed.
 //
 // This is NOT the same as sql_parity_test. That test proves @yaks/sql's compiled
 // SQL equals src/sql.ts's over a hand-built fixture, calling compile() directly.
 // This proves the whole @yaks/sqlite ADAPTER — storage()/rows()/read() — answers
-// the app's real db, seeded the real way. It is the honest evidence that the
-// read path works on real data, and it pins the exact coverage boundary — now
-// one gap wide: doc.body is gathered off the wrong layout (documented below).
+// the app's live db, seeded the way the app seeds it. It is the evidence that
+// the read path works on the graph's own data, and it pins the coverage
+// boundary — which now has nothing outside it.
 //
 // Findings, in one place (see the bottom tests for the executable form):
 //   - Membership over the covered query subset is EXACT against the real graph.
@@ -24,15 +24,16 @@
 //     compiles and agrees with the app (T-33540).
 //   - The traversal grammar (`.edges!`, `.reaches[requires,<=N]=<eid>`) compiles
 //     through @yaks/edge's @yaks/sql extension and agrees with the app (T-33539).
-//   - `read()` gathers doc.body straight off the `doc` table, but the app stores
-//     body as a blob_text FK behind the `doc_value` view, so a gathered bundle's
-//     doc.body is the blob's integer id, not the text (filed).
+//   - `read()` gathers doc.body as TEXT off the app's blob layout, through
+//     @yaks/blob's read override — the transparent-CAS seam, resolved in the
+//     statement rather than after it (T-33541).
 
 import { assert, assertEquals } from '@std/assert'
 import { storage } from '@yaks/sqlite'
 import { fields, hashEmbedder, semantic, sweep } from '@yaks/embedding'
 import type { Driver } from '@yaks/sqlite'
 import { traverse } from '@yaks/edge'
+import { blobRead } from '@yaks/blob'
 
 import { fleetVocab } from '../vocab/fleet_vocab.ts'
 import { link } from '../edge.ts'
@@ -105,8 +106,16 @@ let driver: Driver = {
   exec: (sql) => db.exec(sql),
 }
 // @yaks/edge registers the traversal clauses (`.edges`, `.reaches`) the way
-// @yaks/fts registers search: an extension over the same compiler.
-let opts = { derived: fleetDerived, now: NOW, extend: [traverse(V)] }
+// @yaks/fts registers search: an extension over the same compiler. @yaks/blob
+// registers the other half of the app's layout: doc.body is an id into
+// `blob_text`, and `blobRead` is the read override that resolves it — the app's
+// table named column for column, so the existing rows are read where they lie.
+let bodies = blobRead(V, { table: 'blob_text', key: 'entity', value: 'value' })
+let opts = {
+  derived: { ...fleetDerived, ...bodies },
+  now: NOW,
+  extend: [traverse(V)],
+}
 let store = storage(driver, V, opts)
 
 // The adapter's membership answer for a query, as a sorted eid set.
@@ -279,15 +288,22 @@ Deno.test('spike: .near ranks the real graph through the adapter', async () => {
   assert((ranked[0].rank as { score: number }).score > 0)
 })
 
-Deno.test('gap: read() gathers doc.body off the wrong layout', () => {
-  // The app stores doc.body as an integer FK into blob_text, surfaced as text
-  // only through the `doc_value` view; @yaks/sqlite's bundleOf reads `doc.body`
-  // straight off the `doc` table, so it gathers the blob's integer id, not the
-  // text. Membership (which routes doc through doc_value) is unaffected; only the
-  // whole-entity gather diverges. Documented as a landed gap, not worked around.
+Deno.test('spike: read() gathers doc.body as text off the app layout', () => {
+  // Was the last gap (T-33541). The app keeps doc.body as an id into blob_text,
+  // so the row holds an address and not the prose; @yaks/blob's read override
+  // resolves it in the statement, and the whole-entity gather hands back the
+  // text a writer sent. Held against the app's own reader, which resolves the
+  // same column through its `doc_value` view.
   let [t1] = store.read(`.project=${P}&.priority=1`)
   assertEquals(t1.entity.eid, T1)
-  let body = (t1.doc as Record<string, unknown>).body
-  assertEquals(typeof body, 'number') // the blob entity id, not 'the first one'
-  assert(body !== 'the first one', 'doc.body is the blob id, not the text')
+  assertEquals((t1.doc as Record<string, unknown>).body, 'the first one')
+  assertEquals((t1.doc as Record<string, unknown>).title, 'alpha widget')
+  let app = db.prepare(
+    `select d.body as body from doc_value d join entity o on o.id = d.entity
+       where o.eid = ?`,
+  ).get(T1) as { body: string }
+  assertEquals((t1.doc as Record<string, unknown>).body, app.body)
+  // an empty body is text too, not a missing one
+  let [t4] = store.read(`.priority=3`)
+  assertEquals((t4.doc as Record<string, unknown>).body, '')
 })
