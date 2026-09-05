@@ -23,5 +23,5 @@ Deno.test('the table is derived: drop it and the sweep rebuilds it', async () =>
   for (let stmt of schema()) db.exec(stmt)
   assertEquals(vectorOf(db, 'book-1', embedder.model), null)
   assertEquals(await sweep(db, fields(shop), embedder), { fresh: 4, left: 0 })
-  assertEquals(vectorOf(db, 'book-1', embedder.model)?.length, 32)
+  assertEquals(vectorOf(db, 'book-1', embedder.model)?.length, 64)
 })

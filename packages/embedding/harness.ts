@@ -55,7 +55,7 @@ let doc: VocabDoc = {
 export let shop: Vocab = loadVocab(doc)
 
 /** The deterministic embedder every test here uses. */
-export let embedder = hashEmbedder(32)
+export let embedder = hashEmbedder()
 
 // The spine and the two component tables, hand-written: this package stores
 // vectors beside tables, it does not create them (that is a storage adapter's

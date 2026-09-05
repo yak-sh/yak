@@ -17,9 +17,12 @@
 //
 // Findings, in one place (see the bottom tests for the executable form):
 //   - Membership over the covered query subset is EXACT against the real graph.
-//   - `.near` / `.edges` / `.reaches` throw Unsupported through the adapter — the
-//     app compiles these (sql.ts), @yaks/sql does not, so a no-fallback read-path
-//     swap is blocked on them (filed under V-33493).
+//   - `.edges` / `.reaches` throw Unsupported through the adapter — the app
+//     answers these, @yaks/sql does not, so a no-fallback read-path swap is
+//     still blocked on them (filed under V-33493).
+//   - `.near=<eid>&.order=similar` compiles and ranks, through @yaks/embedding
+//     registered as a @yaks/sql extension, against the app's OWN `embedding`
+//     table — the layouts are column-for-column the same (T-33538).
 //   - The reverse-hop grammar (`.comments!`, `.comments>=5`, `.comments.<path>`)
 //     compiles and agrees with the app (T-33540).
 //   - `read()` gathers doc.body straight off the `doc` table, but the app stores
@@ -30,6 +33,7 @@ import { assert, assertEquals } from '@std/assert'
 import { parse } from '@yaks/query'
 import { storage } from '@yaks/sqlite'
 import { compile, Unsupported } from '@yaks/sql'
+import { fields, hashEmbedder, semantic, sweep } from '@yaks/embedding'
 import type { Driver } from '@yaks/sqlite'
 
 import { fleetVocab } from '../vocab/fleet_vocab.ts'
@@ -191,7 +195,6 @@ Deno.test('gap: advanced directives decline through the adapter', () => {
   // Unsupported, naming the feature, rather than answering almost-right.
   for (
     let q of [
-      '.near=' + T1 + '&.order=similar',
       '.edges!',
       '.reaches[requires,<=3]=' + T1,
     ]
@@ -225,6 +228,47 @@ Deno.test('spike: the reverse-hop grammar agrees with the app', () => {
   // and the agreement is not vacuous: the seeded comment puts T1 in the set
   assertEquals(mine('.comments!'), [T1])
   assertEquals(mine('.comments.doc.title~=alpha'), [T1])
+})
+
+Deno.test('spike: .near ranks the real graph through the adapter', async () => {
+  // The gap this closes (T-33538): `.near=<eid>&.order=similar` used to throw
+  // Unsupported here. @yaks/embedding answers it as a @yaks/sql extension, and
+  // it writes to the app's OWN `embedding` table — db.ts already migrated one
+  // whose columns are exactly the package's, so this test installs no schema.
+  //
+  // The app's own reader is not the reference for this one: it answers `.near`
+  // with a JS ranker over a native vector extension (server_runtime.ts's
+  // setRanker → embed.ts), not with compiled SQL, and neither the extension nor
+  // the embedding model is reachable from a test. What is held here instead is
+  // that the compiled statement selects and orders EXACTLY the neighbourhood the
+  // ranking produced, over the real graph, with a deterministic embedder.
+  let text = fields(V, (c) => c.prop == 'title')
+  let embedder = hashEmbedder()
+  await sweep(driver, text, embedder)
+
+  let near = semantic(driver, embedder, { limit: 3 })
+  let got = store.rows(`.near=${T1}&.order=similar`, { extend: [near] })
+    .map((r) => r.eid as string)
+
+  assert(got.length > 0, 'the neighbourhood is not empty')
+  assert(!got.includes(T1), 'an entity is not its own neighbour')
+  assertEquals(got, near.neighbours().map((n) => n.entity))
+  // 'alpha widget' and 'beta widget' share a word; 'gamma' does not.
+  assertEquals(got[0], T2)
+  // and the rest of the line still filters
+  assertEquals(
+    store.rows(`.near=${T1}&.domain=Eng`, {
+      extend: [semantic(driver, embedder)],
+    })
+      .map((r) => r.eid),
+    [T3],
+  )
+  // the similarity rides back as a query-only comp, on no table at all
+  let ranked = near.rank(store.read(`.near=${T1}&.order=similar`, {
+    extend: [near],
+  }))
+  assertEquals(ranked[0].entity.eid, T2)
+  assert((ranked[0].rank as { score: number }).score > 0)
 })
 
 Deno.test('gap: read() gathers doc.body off the wrong layout', () => {

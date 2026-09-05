@@ -65,12 +65,11 @@ export let hashEmbedder = (dim = 64): Embedder => ({
   model: `hash-${dim}`,
   embed: (text) => {
     let v = new Float32Array(dim)
-    for (let w of words(text)) {
-      let h = fnv(w)
-      // The top bit picks a sign, so two different words landing in one bucket
-      // cancel as often as they reinforce instead of always adding up.
-      v[h % dim] += h & 0x80000000 ? -1 : 1
-    }
+    // Counts, never signed: two words sharing a bucket then make two texts look
+    // MORE alike, which is the harmless direction to be wrong in. A signed
+    // sketch cancels instead, and a cancelled word is one the embedder stops
+    // being able to see at all.
+    for (let w of words(text)) v[fnv(w) % dim] += 1
     return unit(v)
   },
 })

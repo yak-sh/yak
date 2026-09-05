@@ -30,6 +30,9 @@ In dependency order:
 - **[@yaks/fts](./fts)** — full-text search over any text property: the FTS5
   index a vocabulary implies, and the `@yaks/sql` extension that compiles a bare
   word in a query line to a `match`.
+- **[@yaks/embedding](./embedding)** — the other kind of search: a vector per
+  entity, kept current by a sweep, and the `@yaks/sql` extension that compiles
+  `.near=<entity>` and `.order=similar` into a nearest-neighbour ranking.
 - **[@yaks/match](./match)** — the other evaluator of the same grammar: a
   `@yaks/query` AST run as a predicate over bundles held in memory, with no
   database. Tested query by query for parity with `@yaks/sql`.
@@ -51,6 +54,9 @@ on its own:
 - `@yaks/fts` adds search on top: it indexes the text properties and registers a
   clause compiler with `@yaks/sql`, which is the same seam the other search and
   traversal packages use.
+- `@yaks/embedding` adds the other half of search through that same seam —
+  keyword recall from `@yaks/fts`, meaning-nearest from here — with the embedder
+  injected, so nothing commits you to a model.
 - `@yaks/match` is the path with no storage at all: hand it the same AST and
   vocabulary and it filters the bundles you already hold, so a saved filter
   means one thing in the database and in the page.

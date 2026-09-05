@@ -58,7 +58,7 @@ Deno.test('a grave stops being a neighbour before the sweep prunes it', async ()
 Deno.test('another model is another space, and it is empty', async () => {
   let db = await stocked()
   assertEquals(vectorOf(db, 'book-1', 'other'), null)
-  assertEquals(nearest(db, new Float32Array(32), { model: 'other' }), [])
+  assertEquals(nearest(db, new Float32Array(64), { model: 'other' }), [])
 })
 
 Deno.test('an entity with no vector has none to anchor on', async () => {
