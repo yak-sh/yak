@@ -62,8 +62,20 @@ export type Bundle =
     $was?: Was
     /** who is writing this batch */
     $actor?: Actor
+    /** the alias this bundle was named by, when the graph picked its id */
+    $alias?: Eid
   }
-  & { [comp: string]: Comp | null | Entity | Was | Actor | boolean | undefined }
+  & {
+    [comp: string]:
+      | Comp
+      | null
+      | Entity
+      | Was
+      | Actor
+      | boolean
+      | string
+      | undefined
+  }
 
 /** A flat batch of bundles, applied atomically: `Change = Bundle[]`. */
 export type Change = Bundle[]

@@ -14,6 +14,7 @@
 
 import type { Bundle } from './bundle.ts'
 import type { Tx } from './storage.ts'
+import type { Derive } from './alias.ts'
 import type { VocabDoc } from '@yaks/vocab'
 
 /**
@@ -22,6 +23,8 @@ import type { VocabDoc } from '@yaks/vocab'
  * - `normalize` — canonicalize what arrived. Pure, before the transaction.
  * - `admit` — drop unknown components and server-owned columns, refuse an
  *   unknown column, check each value against the vocabulary.
+ * - `mint` — give every `$alias` in the batch a real id (a fresh one, or one
+ *   derived from the content) and rewrite the references to it.
  * - `precondition` — the `$was` guard, and any other "may this batch land"
  *   check that has to read (a lease, a quota). The transaction is open.
  * - `mutate` — the patches go in.
@@ -37,6 +40,7 @@ import type { VocabDoc } from '@yaks/vocab'
 export type Phase =
   | 'normalize'
   | 'admit'
+  | 'mint'
   | 'precondition'
   | 'mutate'
   | 'cascade'
@@ -50,6 +54,7 @@ export type Phase =
 export let PHASES: Phase[] = [
   'normalize',
   'admit',
+  'mint',
   'precondition',
   'mutate',
   'cascade',
@@ -96,6 +101,10 @@ export type Plugin = {
   vocab?: VocabDoc[]
   /** the phases it hooks, at most one hook each */
   hooks?: Partial<Record<Phase, Hook>>
+  /** the components of its that are CONTENT-ADDRESSED, and how each names its
+   * entity — consulted in the `mint` phase when such a component arrives under
+   * an alias (see {@link Derive}) */
+  derive?: Record<string, Derive>
 }
 
 /** Every vocabulary document a set of plugins contributes, in plugin order —

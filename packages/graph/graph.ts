@@ -12,6 +12,7 @@
 //
 //   normalize   hooks    pure, before the transaction opens
 //   admit       core     drop the unknown, refuse the wrong, check the values
+//   mint        core     name every $alias, and rewrite what points at it
 //   ───────────────────  the transaction opens
 //   precondition core    the `$was` guard   (a lease check is a hook here)
 //   mutate      core     the patches go in
@@ -28,10 +29,11 @@
 // return to its cache lands exactly where the graph is.
 
 import type { Vocab } from '@yaks/vocab'
-import type { Bundle, Change } from './bundle.ts'
+import type { Bundle, Change, Eid } from './bundle.ts'
 import type { Row, Storage, Tx } from './storage.ts'
 import { detached, type Query, type ReadOpts } from './storage.ts'
 import type { Hook, Phase, Plugin } from './plugin.ts'
+import { type Derive, resolve } from './alias.ts'
 import { admit } from './admit.ts'
 import { guard } from './guard.ts'
 import { mutate } from './mutate.ts'
@@ -58,6 +60,9 @@ export type Options = {
   plugins?: Plugin[]
   /** where a failing effect is reported (default: `console.warn`) */
   report?: (err: unknown, at: { phase: Phase; plugin: string }) => void
+  /** what names an entity a batch minted under an alias, when no component
+   * derives its own id (default: `crypto.randomUUID()`) */
+  mint?: () => Eid
 }
 
 /** A live graph: what it knows, and the four things you can do with it. */
@@ -98,6 +103,12 @@ export let graph = (opts: Options): Graph => {
   let { storage, vocab } = opts
   let plugins = [...(opts.plugins ?? [])]
   let report = opts.report ?? warn
+  let mint = opts.mint ?? (() => crypto.randomUUID() as Eid)
+
+  // Every content-addressed component's naming function, by component name.
+  // Read per apply, so a plugin registered later is in.
+  let derives = (): Record<string, Derive> =>
+    Object.assign({}, ...plugins.map((p) => p.derive ?? {}))
 
   // The hooks registered on a phase, in plugin registration order.
   let hooks = (phase: Phase): [string, Hook][] =>
@@ -199,6 +210,7 @@ export let graph = (opts: Options): Graph => {
         [
           phase('normalize', outside),
           phase('admit', outside, (b) => admit(b, vocab, o.trusted)),
+          phase('mint', outside, (b) => resolve(b, vocab, derives(), mint)),
         ],
         change,
         (b, step) => step(b),

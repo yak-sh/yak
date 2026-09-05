@@ -63,6 +63,33 @@ that matters (data about an entity); they just live on the wire and inside
 - `$actor` — who is writing. The door that received the batch decides whether to
   trust what a client sent; `apply()` stamps what reached it.
 
+## Aliases: let the graph name it
+
+A bundle's `entity.eid` may be an **alias** — any id starting with `$`. Every
+reference to it in the same batch means the same entity, and the graph picks the
+id:
+
+```ts
+let out = g.apply([
+  { entity: { eid: '$dune' }, doc: { title: 'Dune' } },
+  { entity: { eid: 'r1' }, review: { stars: 5, book: '$dune' } },
+])
+out.find((b) => b.$alias == '$dune').entity.eid // the id it was given
+```
+
+An ordinary entity gets a fresh id. A **content-addressed** one names itself: a
+plugin brings a `derive` for the component it owns — a blob by the hash of its
+bytes, an edge by the sentence it states — so two writers stating the same fact
+land on one entity instead of two, and no caller has to compute an id whose rule
+belongs to the graph.
+
+```ts
+let blobs = {
+  name: 'blobs',
+  derive: { blob: (comp) => sha256(String(comp.bytes)) },
+}
+```
+
 ## Apply is pluggable, in fixed phases
 
 A change flows through an ordered list of phases. The order is load-bearing — a
@@ -74,6 +101,7 @@ phase, never an arbitrary point.
 | -------------- | ---------------------------------------------------- |
 | `normalize`    | (hooks only) — pure, before the transaction          |
 | `admit`        | drop the unknown, refuse the wrong, check the values |
+| `mint`         | name every `$alias`, and rewrite what points at it   |
 | `precondition` | the `$was` guard — a lease check is a hook here      |
 | `mutate`       | the patches go in                                    |
 | `cascade`      | death spreads; casualties join the batch             |
