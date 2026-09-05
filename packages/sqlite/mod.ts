@@ -47,7 +47,7 @@ import { patch, remove } from './write.ts'
 export * from './driver.ts'
 export * from './bundle.ts'
 export { grown, indexed, schema, tabled, type Text } from './ddl.ts'
-export { compSql, get, type Query, read, rows } from './read.ts'
+export { compSql, get, OWNER, type Query, read, rows, setSql } from './read.ts'
 export {
   buried,
   dropSql,

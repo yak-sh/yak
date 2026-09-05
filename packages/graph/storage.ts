@@ -30,6 +30,15 @@ export type ReadOpts = { now?: number }
 export type Tx = {
   /** a query → the matching entities as whole bundles */
   read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
+  /** the same answer as `read`, in ONE round trip: an adapter over a network
+   * names the hit set as a SUBQUERY in each statement of its gather, so the
+   * whole answer is one batch instead of a trip to learn the eids and a trip
+   * to fetch them. Only for a query that names a SET — a window would be
+   * re-evaluated per statement and could break a tie differently in each — so
+   * the backwards reads (./gather.ts `pointing`) go through it and nothing
+   * else does. An adapter with nothing to gain leaves it out and `read`
+   * answers, which is why every read here is written as one or the other. */
+  whole?: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
   /** identity, not search: these entities as they stand, whole. A dead one
    * comes back wearing `tombstone`; an unknown one is simply absent. */
   get: (eids: Eid[]) => Bundle[] | Promise<Bundle[]>

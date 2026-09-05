@@ -17,21 +17,26 @@
 //   tx.get    one `batch()` — the gather: a spine plus a statement per
 //             component, for every eid at once. `learn` caches per
 //             transaction, so an eid already asked about is free.
+//   tx.whole  one `batch()` — the compiled query, the spine of what it hits
+//             and every component of it, each statement naming the hit set as
+//             a subquery so nothing has to be fetched before it can be bound.
+//             The backwards reads go through it (@yaks/graph `pointing`).
 //   tx.read   ONE `all()` for the compiled query, plus one `batch()` for the
 //             gather of what it hit — so two, or one when it hits nothing.
 //   minting   nothing. A number is SQLite's to pick when the insert runs, and
 //             that insert's own RETURNING hands it back with the batch.
 //   flush     one `batch()`: every write of the whole batch, atomic.
 //
-// Measured 2026-09-05, with the gather in (T-34032) and the write path speaking
-// RETURNING (T-34033) — in brackets, what the same case cost before the two:
+// Measured 2026-09-05, with the gather in (T-34032), the write path speaking
+// RETURNING (T-34033) and the backwards read down to one trip (T-34077) — in
+// brackets, what the same case cost before the three:
 //
 //   case                     trips  batch  all  prepare
 //   ──────────────────────────────────────────────────
 //   a plain write              2 (3)   2     0     11
 //   a write with $was          2 (2)   2     0     10
-//   a $delete with a cascade   7 (12)  5     2     59
-//   a member-guarded write     4 (9)   3     1     54
+//   a $delete with a cascade   6 (12)  6     0     59
+//   a member-guarded write     3 (9)   3     0     44
 //   a batch of 50 bundles      2 (3)   2     0    550
 //
 // Where they come from, phase by phase:
@@ -41,13 +46,14 @@
 //                             asks what number the new entity will get.
 //   a write with $was         the gather and the flush — the entity exists, so
 //                             nothing is minted at all.
-//   a $delete with a cascade  the gather, then the cascade phase, which has to
-//                             read AFTER the patches and so takes a gather of
-//                             its own: one backwards read for the batch's own
-//                             casualties, one for the frontier that turned up,
-//                             one `learn` for identities the batch never named,
-//                             and the flush.
-//   a member-guarded write    the gather — the entities the ladder names, and
+//   a $delete with a cascade  the gather (two: the entities named, then what
+//                             points at them), then the cascade phase, which
+//                             has to read AFTER the patches and so takes a
+//                             gather of its own: one backwards read for the
+//                             frontier that turned up, one `learn` for the
+//                             survivor whose reference is let go, one for the
+//                             identities the batch never named, and the flush.
+//   a member-guarded write    the gather — the entities the ladder names, then
 //                             everything filed about the actor, which is the
 //                             roster and the grants in one — then the flush.
 //                             The four rungs cost nothing of their own.
@@ -65,8 +71,8 @@ import { counted, type Hops, shop } from './harness.ts'
 let PINS: Record<string, number> = {
   'a plain write': 2,
   'a write with $was': 2,
-  'a $delete with a cascade': 7,
-  'a member-guarded write': 4,
+  'a $delete with a cascade': 6,
+  'a member-guarded write': 3,
   'a batch of 50 bundles': 2,
 }
 

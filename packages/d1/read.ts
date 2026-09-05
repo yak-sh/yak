@@ -11,11 +11,21 @@
 // every entity's spine, every entity's components — is built as one list of
 // statements and sent as a single `batch()`. A read of any size is two round
 // trips: the compiled query, then the gather.
+//
+// TWO, because the second list has to BIND the eids the first found. When the
+// hits do not need binding — when the query that found them can be named again
+// as a subquery — the two collapse into one: `wholeSql` puts the query, the
+// spine of what it hits and every component of it in a SINGLE batch, each
+// statement saying `where o.eid in (<the query>)`. That is what @yaks/graph's
+// `Tx.whole` asks for, and it is why an `about` read costs one trip and not
+// two. The price is the filter evaluated once per component instead of once,
+// which is why it is offered for a query naming a SET and not for `read`, where
+// a `.limit` re-evaluated per statement could break a tie differently in each.
 
 import { type And, parse } from '@yaks/query'
 import type { BindOpts } from '@yaks/sql'
 import { compile } from '@yaks/sql'
-import { compSql } from '@yaks/sqlite'
+import { compSql, OWNER, setSql } from '@yaks/sqlite'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { tombstoned } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
@@ -92,6 +102,59 @@ export let bundles = (v: Vocab, eids: string[], answers: Row[][]): Bundle[] => {
   let width = comps(v).length + 1
   return eids.flatMap((eid, i) => {
     let b = bundleOf(v, eid, answers.slice(i * width, (i + 1) * width))
+    return b ? [b] : []
+  })
+}
+
+/**
+ * What a WHOLE read asks, as one batch: the compiled query first — it names the
+ * hits and fixes their order — then the spine of everything it hits, then one
+ * statement per component over that same set. Nothing binds an eid: each
+ * statement says the query again as a subquery, which is what lets the answer
+ * come back in a single round trip. {@link whole} reads it back.
+ */
+export let wholeSql = (v: Vocab, q: Sql, opts: BindOpts = {}): Sql[] => {
+  let sub = `select "eid" from (${q.sql})`
+  return [
+    q,
+    {
+      sql: `select e.eid as eid, e.num as num, t.entity as dead from entity e
+              left join tombstone t on t.entity = e.id
+              where e.eid in (${sub})`,
+      params: q.params,
+    },
+    ...comps(v).map((comp) => ({
+      sql: setSql(v, comp, sub, opts.derived),
+      params: q.params,
+    })),
+  ]
+}
+
+/**
+ * Turn those answers back into bundles: the hits in the order the query named
+ * them, each whole. Same shape as {@link bundles}, keyed by the owner column
+ * each set-shaped statement carries rather than by position.
+ */
+export let whole = (v: Vocab, answers: Row[][]): Bundle[] => {
+  let [hits, spines, ...parts] = answers
+  let out = new Map<string, Bundle>()
+  for (let r of spines) {
+    let entity: Entity = {
+      eid: String(r.eid),
+      ...(r.num == null ? {} : { num: Number(r.num) }),
+    }
+    out.set(entity.eid, r.dead == null ? { entity } : tombstoned(entity))
+  }
+  comps(v).forEach((comp, i) => {
+    for (let row of parts[i] ?? []) {
+      let b = out.get(String(row[OWNER]))
+      delete row[OWNER]
+      delete row.present
+      if (b && b.tombstone == null) b[comp] = row as Comp
+    }
+  })
+  return hits.flatMap((r) => {
+    let b = r.eid == null ? undefined : out.get(String(r.eid))
     return b ? [b] : []
   })
 }

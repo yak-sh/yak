@@ -27,9 +27,14 @@
 // production and passes in the test.
 //
 // The gather is also where an asynchronous storage becomes a single await: one
-// `tx.get`, and one `tx.read` when something asked `about`. Everything the
-// hooks then ask is answered from memory, synchronously, so the phases between
-// them stay a plain loop (./pipe.ts).
+// `tx.get`, and one backwards read when something asked `about`. That second
+// one is a ROUND TRIP, not just a query: an `about` finds its hits with one
+// statement and then has to read them whole, which over a network is two waits
+// unless the gather of the hits can name them by the query that found them.
+// `Tx.whole` (./storage.ts) is that door and `seek` below is where it is
+// asked, so an `about` costs one trip wherever an adapter offers it. Everything
+// the hooks then ask is answered from memory, synchronously, so the phases
+// between them stay a plain loop (./pipe.ts).
 
 import { and, eq, or, type Query as Ast } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
@@ -93,6 +98,13 @@ let want = (
  */
 export let pointing = (pairs: [string, string, Eid][]): Ast | null =>
   pairs.length ? and(or(...pairs.map(([c, p, e]) => eq(`${c}.${p}`, e)))) : null
+
+// A pointing query, asked. It names a SET — a disjunction of equalities, never
+// a window — which is exactly what `Tx.whole` promises to answer in a single
+// round trip, so every backwards read goes through here rather than `read`. An
+// adapter without the door falls back to `read` and reads the same answer.
+let seek = (tx: Tx, q: Ast): Bundle[] | Promise<Bundle[]> =>
+  (tx.whole ?? tx.read)(q)
 
 // The value of one reference column, as an eid or nothing.
 let at = (b: Bundle, comp: string, prop: string): Eid | undefined => {
@@ -178,7 +190,7 @@ export let gather = (
     for (let b of found) snap.got.set(b.entity.eid, b)
     let q = pointing(back)
     if (!q) return snap
-    return then(tx.read(q), (rows) => {
+    return then(seek(tx, q), (rows) => {
       file(snap, back, rows)
       return snap
     })
@@ -238,7 +250,7 @@ export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => ({
     let miss = asked.filter(([c, p, e]) => !snap.near.has(key(c, p, e)))
     let q = pointing(miss)
     if (!q) return mine()
-    return then(tx.read(q), (rows) => {
+    return then(seek(tx, q), (rows) => {
       file(snap, miss, rows)
       return mine()
     })
@@ -258,5 +270,5 @@ export let about = (
 ): Bundle[] | Promise<Bundle[]> => {
   if (tx.about) return tx.about(eids, names)
   let q = pointing(want(vocab, eids, names))
-  return q ? tx.read(q) : []
+  return q ? seek(tx, q) : []
 }

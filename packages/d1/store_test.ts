@@ -7,7 +7,7 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { graph } from '@yaks/graph'
 import type { Bundle } from '@yaks/graph'
-import { d1, shop, store } from './harness.ts'
+import { counted, d1, shop, store } from './harness.ts'
 import { storage } from './store.ts'
 
 let titles = (bs: Bundle[]) =>
@@ -53,6 +53,39 @@ Deno.test('a pending write that no longer matches drops out of a read', async ()
     return await tx.read('.status=live')
   })
   assertEquals(seen as Bundle[], [])
+})
+
+Deno.test('a whole read is one round trip, and the same answer', async () => {
+  let { store: s, hops, reset } = await counted()
+  let g = graph({ storage: s, vocab: shop })
+  await g.apply([
+    { entity: { eid: 'm1' }, doc: { title: 'Acme' } },
+    { entity: { eid: 'p1' }, product: { sku: 'MUG', price: 12, maker: 'm1' } },
+    { entity: { eid: 'p2' }, product: { sku: 'CUP', price: 9, maker: 'm1' } },
+    { entity: { eid: 'p3' }, product: { sku: 'JUG', price: 4 } },
+  ])
+  let [slow, fast, trips] = await s.tx(async (tx) => {
+    let slow = await tx.read('.product.maker=m1')
+    reset()
+    let fast = await tx.whole!('.product.maker=m1')
+    return [slow, fast, hops().trips]
+  })
+  // Same entities, whole, in the same order — the door differs, not the answer.
+  assertEquals(fast, slow)
+  assertEquals(titles(slow as Bundle[]).length, 2)
+  assertEquals(trips, 1)
+})
+
+Deno.test('a whole read sees pending writes too', async () => {
+  let s = await store()
+  await s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'm1' }, doc: { title: 'Acme' } }])
+  )
+  let seen = await s.tx(async (tx) => {
+    await tx.patch([{ entity: { eid: 'p1' }, product: { maker: 'm1' } }])
+    return await tx.whole!('.product.maker=m1')
+  })
+  assertEquals((seen as Bundle[]).map((b) => b.entity.eid), ['p1'])
 })
 
 Deno.test('the whole write goes as one batch', async () => {

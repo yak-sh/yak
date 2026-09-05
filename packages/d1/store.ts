@@ -73,7 +73,7 @@ import {
   type Stmt,
   unbind,
 } from './d1.ts'
-import { bundles, gatherSql, type Query, sql } from './read.ts'
+import { bundles, gatherSql, type Query, sql, whole, wholeSql } from './read.ts'
 
 export type { Query }
 
@@ -187,6 +187,16 @@ export let storage = <S extends Stmt<S>>(
     )
   }
 
+  // The same answer as `read` in ONE trip, for a query that names a set: the
+  // query and the gather of what it hits go as one batch, each statement
+  // naming the hit set as a subquery rather than binding eids a first trip
+  // went and found. What @yaks/graph's backwards reads ask for — see
+  // ./read.ts `wholeSql` for why it is not what `read` does.
+  let seek = async (query: Query, opts: BindOpts = {}): Promise<Bundle[]> => {
+    let o = { ...base, ...opts }
+    return whole(vocab, await send(wholeSql(vocab, sql(vocab, query, o), o)))
+  }
+
   // One transaction: the deferred write log, the read cache, and the overlay of
   // what this transaction has written. See the header for what that buys.
   let open = () => {
@@ -249,17 +259,29 @@ export let storage = <S extends Stmt<S>>(
       }
     }
 
+    // The committed answer with this transaction's own entities taken out,
+    // then those re-judged against the same query in their pending state.
+    let overlaid = (query: Query, now: number | undefined, all: Bundle[]) => {
+      if (!dirty.size) return all
+      let mine = matcher(query, vocab, { now: now ?? base.now })(
+        [...dirty.values()].filter((b) => b.tombstone == null),
+      )
+      return [...all.filter((b) => !dirty.has(b.entity.eid)), ...mine]
+    }
+
     let tx: Tx = {
-      read: async (query, opts) => {
-        let all = await read(query as Query, { ...base, ...opts })
-        if (!dirty.size) return all
-        // The committed answer with this transaction's own entities taken out,
-        // then those re-judged against the same query in their pending state.
-        let mine = matcher(query as Query, vocab, {
-          now: opts?.now ?? base.now,
-        })([...dirty.values()].filter((b) => b.tombstone == null))
-        return [...all.filter((b) => !dirty.has(b.entity.eid)), ...mine]
-      },
+      read: async (query, opts) =>
+        overlaid(
+          query as Query,
+          opts?.now,
+          await read(query as Query, { ...base, ...opts }),
+        ),
+      whole: async (query, opts) =>
+        overlaid(
+          query as Query,
+          opts?.now,
+          await seek(query as Query, { ...base, ...opts }),
+        ),
       get: async (eids) => {
         await learn(eids)
         return eids.flatMap((e) => {

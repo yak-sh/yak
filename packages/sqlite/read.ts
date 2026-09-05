@@ -60,17 +60,11 @@ let read1 = (v: Vocab, comp: string, derived: Derived): Column[] =>
 // So the component table is aliased by its OWN NAME here, exactly as the binder
 // joins it, and an override's `deps` are LEFT JOINed the same way: a registered
 // expression is written once and reads the same in both places.
-/**
- * The SELECT that reads one component of one entity — one `?`, the owner's
- * eid. Exported because gathering a bundle is every SQLite-shaped adapter's
- * job, and they must all read a column the same way: @yaks/d1 sends these
- * statements as one batch instead of one at a time, and nothing else differs.
- */
-export let compSql = (
+let project = (
   v: Vocab,
   comp: string,
-  derived: Derived = {},
-): string => {
+  derived: Derived,
+): { sel: string[]; joins: string[] } => {
   let self = `"${comp}"`
   let sel: string[] = []
   let joins: string[] = []
@@ -92,10 +86,59 @@ export let compSql = (
     if (d == comp) continue
     joins.push(`left join "${d}" on "${d}"."entity" = ${self}."entity"`)
   }
-  return `select ${sel.length ? sel.join(', ') : '1 as present'} ` +
-    `from ${self} join entity o on o.id = ${self}."entity" ` +
-    `${joins.join(' ')} where o.eid = ?`
+  return { sel, joins }
 }
+
+// One component's read, whatever names its owners: `lead` is what is selected
+// before the component's own columns, `owner` the predicate over `o.eid`.
+let selectComp = (
+  v: Vocab,
+  comp: string,
+  derived: Derived,
+  lead: string[],
+  owner: string,
+): string => {
+  let { sel, joins } = project(v, comp, derived)
+  let cols = [...lead, ...(sel.length ? sel : ['1 as present'])]
+  return `select ${cols.join(', ')} ` +
+    `from "${comp}" join entity o on o.id = "${comp}"."entity" ` +
+    `${joins.join(' ')} where ${owner}`
+}
+
+/**
+ * The SELECT that reads one component of one entity — one `?`, the owner's
+ * eid. Exported because gathering a bundle is every SQLite-shaped adapter's
+ * job, and they must all read a column the same way: @yaks/d1 sends these
+ * statements as one batch instead of one at a time, and nothing else differs.
+ */
+export let compSql = (
+  v: Vocab,
+  comp: string,
+  derived: Derived = {},
+): string => selectComp(v, comp, derived, [], 'o.eid = ?')
+
+/**
+ * The column a set-shaped read keys its rows by. Not a component prop — a prop
+ * is an identifier, so nothing in a vocabulary can collide with it.
+ */
+export let OWNER = '@eid'
+
+/**
+ * The same read widened from ONE entity to a SET: every entity `sub` names,
+ * each row carrying its owner's eid under {@link OWNER}. `sub` is a subquery
+ * selecting one `eid` column, and its params bind first.
+ *
+ * This is what makes a whole read one round trip over a remote database
+ * (@yaks/d1 `wholeSql`): the hits are named by the query that found them
+ * instead of by eids a first trip had to go and fetch.
+ */
+export let setSql = (
+  v: Vocab,
+  comp: string,
+  sub: string,
+  derived: Derived = {},
+): string =>
+  selectComp(v, comp, derived, [`o.eid as "${OWNER}"`], `o.eid in (${sub})`)
 
 // The identity of an eid, as stored: its `num`, and whether it is buried.
 let spineOf = (
