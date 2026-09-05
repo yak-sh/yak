@@ -39,6 +39,11 @@
  * sees, which is how a hook rewrites, adds, or (by throwing) refuses. Every
  * registry is per graph instance.
  *
+ * A plugin also declares what its hooks are going to READ — `wants(bundles)`,
+ * as {@link Ask}s — and `apply()` answers every plugin's asks and its own in
+ * ONE gather when the transaction opens, so the phases before the patches read
+ * from memory rather than a round trip each (see ./gather.ts).
+ *
  * This package ships ZERO components — a vocabulary is described with
  * {@link https://jsr.io/@yaks/vocab | @yaks/vocab} and contributed by plugins
  * — and has no `snapshot()`: reads are queries answered by a {@link Storage}
@@ -56,6 +61,7 @@ export * from './sha256.ts'
 export * from './state.ts'
 export * from './alias.ts'
 export * from './admit.ts'
+export * from './gather.ts'
 export * from './guard.ts'
 export * from './mutate.ts'
 export * from './cascade.ts'

@@ -20,7 +20,7 @@
 
 import type { Plugin } from '@yaks/graph'
 import { memberDoc } from './comp.ts'
-import { type Guard, guarding } from './guard.ts'
+import { type Guard, guarding, wanting } from './guard.ts'
 
 /**
  * The membership plugin: the `member`, `grant` and `access` components, and a
@@ -52,4 +52,5 @@ export let members = (where: Guard): Plugin => ({
   name: '@yaks/member',
   vocab: [memberDoc],
   hooks: { precondition: guarding(where) },
+  wants: wanting(where),
 })

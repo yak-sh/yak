@@ -31,7 +31,14 @@
 import type { Bundle, Hook, Plugin, Tx } from '@yaks/graph'
 import { isPromise, over, then } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { before, type Event, events, type Kind, strip } from './trace.ts'
+import {
+  before,
+  type Event,
+  events,
+  type Kind,
+  strip,
+  wanting,
+} from './trace.ts'
 import { generation, marked, unmark, type Write } from './write.ts'
 
 /** A post-commit observer: what happened, a detached transaction to read
@@ -220,6 +227,8 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
         slots.length ? before(vocab)(bundles, tx) : bundles,
       effect: dispatch,
     },
+    // Nothing is read while no handler is registered, so nothing is asked for.
+    wants: (bundles) => slots.length ? wanting(vocab)(bundles) : [],
     created: (comp, run) => add(comp, 'created', run),
     changed: (comp, column, run) =>
       typeof column == 'string'

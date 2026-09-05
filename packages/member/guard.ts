@@ -22,9 +22,9 @@
 // with no actor is nobody — permitted on an `open` app, refused everywhere
 // else — which is exactly what an anonymous visitor is.
 
-import type { Bundle, Eid, Hook } from '@yaks/graph'
+import type { Ask, Bundle, Eid, Hook } from '@yaks/graph'
 import { comps, then } from '@yaks/graph'
-import { GOVERNED } from './comp.ts'
+import { GOVERNED, GRANT, MEMBER } from './comp.ts'
 import { levelOn, type Viewer, type Where, writesOn } from './policy.ts'
 import { Denied } from './deny.ts'
 
@@ -48,6 +48,24 @@ export let actorOf = (bundles: Bundle[]): Viewer => {
 /** Does this batch touch the roster, a grant, or an app's mode? */
 export let governs = (bundles: Bundle[]): boolean =>
   bundles.some((b) => comps(b).some(([name]) => GOVERNED.includes(name)))
+
+/**
+ * What the ladder is going to read, said before it climbs: the app (its mode is
+ * the last word on an actor with no level), the actor itself (a share link's
+ * bearer IS a grant), and everything filed about the actor — their seat, their
+ * grants. @yaks/graph answers all of it in one gather, so the four rungs cost
+ * no round trip of their own.
+ */
+export let wanting = (where: Guard) => (bundles: Bundle[]): Ask[] => {
+  if (!bundles.length) return []
+  let who = actorOf(bundles)
+  return who
+    ? [
+      { eids: [where.app, who] },
+      { about: [who], comps: [GRANT, MEMBER] },
+    ]
+    : [{ eids: [where.app] }]
+}
 
 /**
  * The `precondition` hook: refuse a batch this actor may not write. Registered

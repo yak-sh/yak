@@ -23,32 +23,34 @@
 //             batch mints something.
 //   flush     one `batch()`: every write of the whole batch, atomic.
 //
-// Measured 2026-09-05, before any of the round-trip work (T-34032/33/34):
+// Measured 2026-09-05, with the gather in (T-34032) — and, in brackets, what
+// the same case cost before it:
 //
 //   case                     trips  batch  all  prepare
 //   ──────────────────────────────────────────────────
-//   a plain write              3      2     1     12
-//   a write with $was          2      2     0     10
-//   a $delete with a cascade  12      6     6     63
-//   a member-guarded write     9      6     3     56
-//   a batch of 50 bundles      3      2     1    551
+//   a plain write              3 (3)   2     1     12
+//   a write with $was          2 (2)   2     0     10
+//   a $delete with a cascade   7 (12)  5     2     59
+//   a member-guarded write     5 (9)   3     2     55
+//   a batch of 50 bundles      3 (3)   2     1    551
 //
 // Where they come from, phase by phase:
 //
-//   a plain write             mutate's `learn`, `next()`, the flush.
-//   a write with $was         the guard's `tx.get` and the flush — the entity
-//                             exists, so nothing is minted and `next()` never
-//                             runs.
-//   a $delete with a cascade  SIX reads, all in the cascade phase: `doomed`
-//                             walks the one cascade column per casualty, and
-//                             `loosen` walks the release and the detach
-//                             columns once per casualty. Two of them hit
-//                             something and pay a gather; the other four are
-//                             a round trip for an empty answer.
-//   a member-guarded write    the ladder, one hop per rung — @yaks/member's
-//                             `modeOn` (the app), then `levelOn` (the actor,
-//                             the roster, the grants) — then the write's own
-//                             three.
+//   a plain write             the gather (which `mutate` and the storage's own
+//                             minting then read from), `next()`, the flush.
+//   a write with $was         the gather and the flush — the entity exists, so
+//                             nothing is minted and `next()` never runs.
+//   a $delete with a cascade  the gather, then the cascade phase, which has to
+//                             read AFTER the patches and so takes a gather of
+//                             its own: one backwards read for the batch's own
+//                             casualties, one for the frontier that turned up,
+//                             one `learn` for identities the batch never named,
+//                             and the flush.
+//   a member-guarded write    the gather — the entities the ladder names, and
+//                             everything filed about the actor, which is the
+//                             roster and the grants in one — then `next()` and
+//                             the flush. The four rungs cost nothing of their
+//                             own.
 //   a batch of 50 bundles     the same three as one write: the gather and the
 //                             flush are one round trip however wide the batch
 //                             is, which is what `prepare` at 551 says.
@@ -63,8 +65,8 @@ import { counted, type Hops, shop } from './harness.ts'
 let PINS: Record<string, number> = {
   'a plain write': 3,
   'a write with $was': 2,
-  'a $delete with a cascade': 12,
-  'a member-guarded write': 9,
+  'a $delete with a cascade': 7,
+  'a member-guarded write': 5,
   'a batch of 50 bundles': 3,
 }
 
@@ -126,8 +128,9 @@ Deno.test('a write with $was', async () => {
 Deno.test('a $delete with a cascade', async () => {
   let name = 'a $delete with a cascade'
   // A review cascades with its product, a bookmark of it is released, and a
-  // maker would be detached. Each walk is a read per casualty per column,
-  // which is why a delete costs four times what a write does.
+  // maker would be detached. One backwards read per rung of the walk, and the
+  // casualties the batch never named still have to be identified before they
+  // can be removed — which is why a delete costs more than a write.
   holds(
     name,
     await shopHops([
@@ -168,7 +171,8 @@ Deno.test('a member-guarded write', async () => {
   })
   reset()
   // Raj holds an editor grant, so the guard climbs the whole ladder — the
-  // app's mode, then Raj himself, then the roster, then the grants.
+  // app's mode, then Raj himself, then the roster, then the grants — and every
+  // rung is answered out of the one gather the plugin's `wants` declared.
   await g.apply([{
     entity: { eid: 'pick1' },
     pick: { title: 'Dune' },

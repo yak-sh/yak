@@ -14,6 +14,7 @@
 
 import type { Bundle, Change, Entity } from './bundle.ts'
 import type { Query, ReadOpts, Tx } from './storage.ts'
+import type { Ask } from './gather.ts'
 import type { Derive } from './alias.ts'
 import type { Graph } from './graph.ts'
 import type { VocabDoc } from '@yaks/vocab'
@@ -160,6 +161,13 @@ export type Plugin = {
   vocab?: VocabDoc[]
   /** the phases it hooks, at most one hook each */
   hooks?: Partial<Record<Phase, Hook>>
+  /** what its hooks are going to READ, given the batch. `apply()` unions every
+   * plugin's asks with its own and answers them all in one gather before a hook
+   * runs (see {@link Ask} and ./gather.ts), so a hook's `tx.get` and `about()`
+   * are answered from memory instead of costing a round trip each. Declaring
+   * nothing is safe — the reads still work, they just cost what they used
+   * to. */
+  wants?: (bundles: Bundle[]) => Ask[]
   /** the tools it contributes to a transport that serves them */
   tools?: Tool[]
   /** the components of its that are CONTENT-ADDRESSED, and how each names its

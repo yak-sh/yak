@@ -31,6 +31,7 @@
 
 import type { Bundle, Comp, Eid, Storage, Tx } from '@yaks/graph'
 import { detached, then } from '@yaks/graph'
+import { and, eq, or } from '@yaks/query'
 import { ACCESS, GRANT, MEMBER } from './comp.ts'
 import { edits, type Level, level, type Mode, mode, reads } from './words.ts'
 
@@ -68,6 +69,23 @@ export let modeOn = (tx: Tx, app: Eid): Mode | Promise<Mode> =>
   then(tx.get([app]), ([b]) => mode(of(b, ACCESS)?.mode))
 
 /**
+ * Everything filed ABOUT this person: their seat on a roster, their grants —
+ * both are entities whose columns point at them, so the two rungs of the ladder
+ * that used to be a read each are one backwards read (@yaks/graph `about`), and
+ * none at all when a gather already took it (@yaks/graph `wants`, declared by
+ * {@link https://jsr.io/@yaks/member/doc/~/members | members}).
+ *
+ * It reads a person's WHOLE file rather than the one row the rung is about, and
+ * the rungs then pick out what they need. That is the trade the gather makes
+ * everywhere: a person holds as many of these as they have seats and grants,
+ * which is a handful, and a handful in one answer beats two round trips.
+ */
+let filed = (tx: Tx, who: Eid): Bundle[] | Promise<Bundle[]> =>
+  tx.about ? tx.about([who], [GRANT, MEMBER]) : tx.read(
+    and(or(eq(`${GRANT}.person`, who), eq(`${MEMBER}.person`, who))),
+  )
+
+/**
  * What `who` holds on `app`, read through a transaction: the ladder above, in
  * order. Returns `null` when they hold nothing — which is not a refusal, only
  * the answer that the app's mode has the last word.
@@ -83,31 +101,20 @@ export let levelOn = (
     // A share link's bearer IS the grant they opened.
     let own = of(self, GRANT)
     if (own && own.app == app) return level(own.access)
-    return then(owns(tx, who, where.space), (owner) => {
+    return then(filed(tx, who), (found) => {
+      // The space's owner, before any grant. Never stored per app — a space
+      // owner owns everything in it, and storing that would be a row to forget
+      // to write.
+      let owner = where.space && found.some((b) => {
+        let m = of(b, MEMBER)
+        return m?.space == where.space && m?.person == who && m?.role == 'owner'
+      })
       if (owner) return 'owner' as Level
-      return then(
-        tx.read(`.${GRANT}.app=${app}&.${GRANT}.person=${who}`),
-        (found) => {
-          let g = of(found[0], GRANT)
-          return g ? level(g.access) : null
-        },
-      )
+      let g = found.map((b) => of(b, GRANT))
+        .find((c) => c?.app == app && c.person == who)
+      return g ? level(g.access) : null
     })
   })
-}
-
-// Is this person the space's owner? Never stored per app — a space owner owns
-// everything in it, and storing that would be a row to forget to write.
-let owns = (
-  tx: Tx,
-  who: Eid,
-  space?: Eid,
-): boolean | Promise<boolean> => {
-  if (!space) return false
-  return then(
-    tx.read(`.${MEMBER}.space=${space}&.${MEMBER}.person=${who}`),
-    (rows) => rows.some((b) => of(b, MEMBER)?.role == 'owner'),
-  )
 }
 
 /** May they read it? The mode is not `private`, or they hold something. */

@@ -3,13 +3,13 @@
 // asynchronous. The tests use all three.
 //
 // The Map adapter is the smallest thing that can be a {@link Storage}: it
-// answers only the one query shape `apply()` itself asks (`.comp.prop=<eid>`,
-// which is how the cascade finds what points at a dying entity), which is
-// exactly the point — the core must not need a SQL compiler to work, or it
-// could never run in a browser tab over a map of bundles.
+// answers only the query shape `apply()` itself asks (`.comp.prop=<eid>`, and
+// a disjunction of those, which is how the gather finds what points at a dying
+// entity), which is exactly the point — the core must not need a SQL compiler
+// to work, or it could never run in a browser tab over a map of bundles.
 
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import type { Query as Ast } from '@yaks/query'
+import type { Clause, Query as Ast } from '@yaks/query'
 import type { Bundle, Comp, Eid, Entity } from './bundle.ts'
 import { comps, TOMBSTONE, tombstoned } from './bundle.ts'
 import type { Query, Row, Storage, Tx } from './storage.ts'
@@ -80,12 +80,12 @@ export let books: Vocab = loadVocab(doc)
 
 type Rec = { num: number; dead: boolean; comps: Record<string, Comp> }
 
-// The one query shape this adapter answers: `and(eq('comp.prop', value))`.
-let onlyPred = (query: Query) => {
-  if (typeof query == 'string') throw new Error('memory(): AST queries only')
-  let ast = query as Ast
-  let [clause, ...rest] = ast.clauses
-  if (rest.length || !clause || clause.kind != 'pred' || clause.op != '=') {
+// One `comp.prop = value` equality, as the two query shapes this adapter
+// answers spell it.
+type Eq = { comp: string; prop: string; value: string }
+
+let equality = (clause: Clause): Eq => {
+  if (clause.kind != 'pred' || clause.op != '=') {
     throw new Error('memory(): only `comp.prop = value` is answered')
   }
   let [comp, prop] = clause.path
@@ -96,6 +96,18 @@ let onlyPred = (query: Query) => {
     throw new Error('memory(): only `comp.prop = value` is answered')
   }
   return { comp, prop, value }
+}
+
+// The query shapes this adapter answers: one `comp.prop = value`, or a
+// disjunction of them — which is what the gather's backwards read is
+// (@yaks/graph's `pointing`).
+let equalities = (query: Query): Eq[] => {
+  if (typeof query == 'string') throw new Error('memory(): AST queries only')
+  let [clause, ...rest] = (query as Ast).clauses
+  if (rest.length || !clause) {
+    throw new Error('memory(): only `comp.prop = value` is answered')
+  }
+  return clause.kind == 'or' ? clause.clauses.map(equality) : [equality(clause)]
 }
 
 /**
@@ -117,9 +129,11 @@ export let memory = (): Storage => {
   let tx: Tx = {
     get: (eids) => eids.flatMap((e) => bundleOf(e) ?? []),
     read: (query) => {
-      let { comp, prop, value } = onlyPred(query)
+      let any = equalities(query)
       return [...rows]
-        .filter(([, r]) => !r.dead && r.comps[comp]?.[prop] === value)
+        .filter(([, r]) =>
+          !r.dead && any.some((e) => r.comps[e.comp]?.[e.prop] === e.value)
+        )
         .flatMap(([eid]) => bundleOf(eid) ?? [])
     },
     patch: (bundles) => {

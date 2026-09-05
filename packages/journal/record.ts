@@ -21,7 +21,7 @@
 // takes a lighter reading of its own under `$before` (component names, no
 // values), which a journal cannot use and does not disturb.
 
-import type { Bundle, Comp, Eid, Plugin, Tx } from '@yaks/graph'
+import type { Ask, Bundle, Comp, Eid, Plugin, Tx } from '@yaks/graph'
 import { actorOf, comps, dead, doomed, then, TOMBSTONE } from '@yaks/graph'
 import { and, gt, limit, order } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
@@ -57,6 +57,25 @@ export let capture = (vocab: Vocab) =>
         return bundles.map((b) => ({ ...b, [PRIOR]: prior }))
       },
     ))
+}
+
+/**
+ * What {@link capture} is about to read, said before it reads it: every entity
+ * the batch is about, and — for a delete — everything pointing at what is
+ * dying, which is the `doomed()` walk's own question. Declared as a plugin's
+ * `wants` so @yaks/graph takes both in one gather.
+ */
+export let wanting = (vocab: Vocab) => (bundles: Bundle[]): Ask[] => {
+  let killed = bundles.filter(dead).map((b) => b.entity.eid)
+  return [
+    { eids: bundles.map((b) => b.entity.eid) },
+    ...(killed.length
+      ? [{
+        about: killed,
+        comps: [...new Set(vocab.deaths('cascade').map(([c]) => c))],
+      }]
+      : []),
+  ]
 }
 
 // One movement, before it is written down.
@@ -262,5 +281,6 @@ export let journal = (vocab: Vocab, opts: JournalOpts = {}): Plugin => {
     name: opts.name ?? '@yaks/journal',
     vocab: [journalDoc],
     hooks: { precondition: capture(vocab), journal: write },
+    wants: wanting(vocab),
   }
 }

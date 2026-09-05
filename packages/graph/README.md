@@ -102,6 +102,7 @@ phase, never an arbitrary point.
 | `normalize`    | (hooks only) — pure, before the transaction          |
 | `admit`        | drop the unknown, refuse the wrong, check the values |
 | `mint`         | name every `$alias`, and rewrite what points at it   |
+| —              | the transaction opens, and the gather reads once     |
 | `precondition` | the `$was` guard — a lease check is a hook here      |
 | `mutate`       | the patches go in                                    |
 | `cascade`      | death spreads; casualties join the batch             |
@@ -131,6 +132,36 @@ g.use(shelver)
 Every registry — plugins, hooks, effects — is per graph instance, so two graphs
 in one process (a page's local one and its mirror of the server's) share
 nothing.
+
+## A plugin says what it will read
+
+Over a database on the far side of a network, each question a hook asks is a
+round trip — and the questions are all knowable before a row moves. So a plugin
+declares them, and `apply()` takes every declared read, plus its own, in one
+gather at the top of the transaction. The phases before the patches then read
+that snapshot instead of the storage.
+
+```ts
+let watchful = {
+  name: 'watchful',
+  // these entities, whole — and everything whose `review.book` points at them
+  wants: (bundles) => [
+    { eids: bundles.map((b) => b.entity.eid) },
+    { about: bundles.map((b) => b.entity.eid), comps: ['review'] },
+  ],
+  hooks: {
+    precondition: (bundles, tx) => {
+      tx.get(bundles.map((b) => b.entity.eid)) // answered from the gather
+      return bundles
+    },
+  },
+}
+```
+
+`about` is the backwards direction, and it is what makes an access ladder or a
+death cascade one read instead of one per column: a grant is an entity pointing
+at an app and a person, so a person's whole file comes back at once. Declaring
+nothing is safe — the reads still work, they just cost what they used to.
 
 ## What this package owns
 

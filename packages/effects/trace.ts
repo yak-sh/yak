@@ -18,7 +18,7 @@
 // which is how one phase of `apply()` tells a later one what it learned
 // without a global anywhere. The effect phase strips it back off.
 
-import type { Bundle, Comp, Eid, Entity, Tx } from '@yaks/graph'
+import type { Ask, Bundle, Comp, Eid, Entity, Tx } from '@yaks/graph'
 import { comps, dead, doomed, then } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 
@@ -78,6 +78,25 @@ export let before = (
         },
       ),
   )
+}
+
+/**
+ * What {@link before} is about to read, said before it reads it: every entity
+ * the batch is about, and — for a delete — everything pointing at what is
+ * dying, which is the `doomed()` walk's own question. Declared as the plugin's
+ * `wants` so @yaks/graph takes both in one gather.
+ */
+export let wanting = (vocab: Vocab) => (bundles: Bundle[]): Ask[] => {
+  let killed = killing(bundles)
+  return [
+    { eids: bundles.map((b) => b.entity.eid) },
+    ...(killed.length
+      ? [{
+        about: killed,
+        comps: [...new Set(vocab.deaths('cascade').map(([c]) => c))],
+      }]
+      : []),
+  ]
 }
 
 /**

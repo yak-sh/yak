@@ -654,6 +654,16 @@ export class Store {
 
   #vouching: Plugin = {
     name: 'yak/vouch',
+    // The two rows the hook below writes — a person and their grant. Naming
+    // them here puts them in the batch's own gather, so the store learns their
+    // identities in the read every batch already takes rather than in one of
+    // its own (T-34032).
+    wants: (bundles) => {
+      let who = actorOf(bundles)
+      if (!who) return []
+      let app = this.#get('app')
+      return [{ eids: app ? [who, app, grantEid(app, who)] : [who] }]
+    },
     hooks: {
       precondition: (bundles, tx) => {
         let who = actorOf(bundles)

@@ -33,6 +33,12 @@ export type Tx = {
   /** identity, not search: these entities as they stand, whole. A dead one
    * comes back wearing `tombstone`; an unknown one is simply absent. */
   get: (eids: Eid[]) => Bundle[] | Promise<Bundle[]>
+  /** the other direction: the entities whose reference columns point AT one of
+   * these, narrowed to the components named. Present only on the transaction
+   * `apply()` hands its hooks, where the gather has already read it (./gather.ts
+   * `holding`); read it through `about()` rather than by hand, which falls back
+   * to a `read` when no gather took one. */
+  about?: (eids: Eid[], comps?: string[]) => Bundle[] | Promise<Bundle[]>
   /** patch the bundles in → the entities this patch MINTED, with their `num`
    * when the adapter mints one */
   patch: (bundles: Bundle[]) => Entity[] | Promise<Entity[]>

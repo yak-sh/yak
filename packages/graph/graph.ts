@@ -14,6 +14,7 @@
 //   admit       core     drop the unknown, refuse the wrong, check the values
 //   mint        core     name every $alias, and rewrite what points at it
 //   ───────────────────  the transaction opens
+//   gather      core     every read the batch is going to need, in one call
 //   precondition core    the `$was` guard   (a lease check is a hook here)
 //   mutate      core     the patches go in
 //   cascade     core     death spreads; casualties join the batch
@@ -41,6 +42,7 @@ import { detached, type Query, type ReadOpts } from './storage.ts'
 import type { Hook, Phase, Plugin } from './plugin.ts'
 import { type Derive, resolve } from './alias.ts'
 import { admit } from './admit.ts'
+import { type Ask, gather, holding, reached } from './gather.ts'
 import { guard } from './guard.ts'
 import { mutate } from './mutate.ts'
 import { cascade } from './cascade.ts'
@@ -144,6 +146,14 @@ export let graph = (opts: Options): Graph => {
   let derives = (): Record<string, Derive> =>
     Object.assign({}, ...plugins.map((p) => p.derive ?? {}))
 
+  // Every read this batch is going to need: the core's own — every entity the
+  // batch names or points at, which is what the `$was` guard, `mutate` and the
+  // storage's own minting all ask about — plus whatever each plugin declares.
+  let asking = (bundles: Bundle[]): Ask[] => [
+    { eids: reached(bundles, vocab) },
+    ...plugins.flatMap((p) => p.wants?.(bundles) ?? []),
+  ]
+
   // The hooks registered on a phase, in plugin registration order.
   let hooks = (phase: Phase): [string, Hook][] =>
     plugins.flatMap((p) => {
@@ -222,24 +232,34 @@ export let graph = (opts: Options): Graph => {
 
     let inside = (bundles: Bundle[]) => {
       let run = (tx: Tx) =>
-        then(
-          each(
-            [
-              phase('precondition', tx, (b) => guard(b, tx, vocab)),
-              phase('mutate', tx, (b) => mutate(b, tx, st)),
-              phase('cascade', tx, (b) => cascade(b, tx, vocab, st)),
-              phase('stamp', tx, (b) => stamp(b, tx, vocab, st, now)),
-              phase('journal', tx),
-              phase('commit', tx),
-            ],
-            bundles,
-            (b, step) => step(b),
-          ),
-          (b) => {
-            if (o.check) throw new Checked(b)
-            return b
-          },
-        )
+        // Every read the phases before the patches will make, taken as one
+        // call. It is handed to THOSE phases alone — a snapshot of the graph as
+        // the batch found it is exactly what a precondition wants, and exactly
+        // what a phase reading after the patches must not have. `mutate` is one
+        // of them: it reads which entities are already dead before it writes a
+        // thing, and a patch through the gathered transaction is folded back
+        // into the snapshot, so the phases still read each other.
+        then(gather(tx, vocab, asking(bundles)), (snap) => {
+          let held = holding(tx, vocab, snap)
+          return then(
+            each(
+              [
+                phase('precondition', held, (b) => guard(b, held, vocab)),
+                phase('mutate', held, (b) => mutate(b, held, st)),
+                phase('cascade', tx, (b) => cascade(b, tx, vocab, st)),
+                phase('stamp', tx, (b) => stamp(b, tx, vocab, st, now)),
+                phase('journal', tx),
+                phase('commit', tx),
+              ],
+              bundles,
+              (b, step) => step(b),
+            ),
+            (b) => {
+              if (o.check) throw new Checked(b)
+              return b
+            },
+          )
+        })
       // A rolled-back check is not a refusal: it is audited like any other
       // rollback, then answers with what the phases made, and skips the
       // effects, which observe committed data only.
