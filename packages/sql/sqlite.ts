@@ -1,5 +1,6 @@
-// The SQLite dialect: the one place that knows how the fleet graph is LAID OUT
-// in SQLite and how a value LOWERS to a comparison there. Everything above it
+// The SQLite dialect: the one place that knows how the storage layout this
+// dialect targets is LAID OUT in SQLite and how a value LOWERS to a comparison
+// there. Everything above it
 // (the binder, the IR) speaks logical (comp, prop) and an algebraic condition
 // tree; this module turns those into the table names, join keys and column
 // expressions the store actually has, and into the `cast`/`instr`/`between`
@@ -21,7 +22,7 @@ import { type Span as QSpan, timeSpan } from '@yaks/query'
 import type { Frag } from './ir.ts'
 
 // The tag a value coerces against — the vocab column category flattened to the
-// word the lowering switches on, mirroring the fleet's tagOf().
+// word the lowering switches on.
 export type Tag =
   | 'text'
   | 'body'
@@ -180,8 +181,8 @@ let contains = (c: string, value: string): Frag | null =>
     }
 
 // ---- time spans (a phrase names a range; the op picks its edge) ----
-// The band, and the edges, ported from the fleet compiler: a span whose end is
-// its start is an INSTANT, where the `= start` arm carries the whole answer.
+// The band, and the edges: a span whose end is its start is an INSTANT, where
+// the `= start` arm carries the whole answer.
 type Span = { start: number; end: number }
 // The span recognizer is @yaks/query's, narrowed to the {start,end} this file
 // reads; the binder passes `now` so a phrase is placed at one fixed moment.
@@ -190,8 +191,7 @@ let spanFn = (s: string, now: number): Span | null => {
   return sp ? { start: sp.start, end: sp.end } : null
 }
 // The safe FTS MATCH spelling: user text is a quoted phrase, never operator
-// syntax; only a trailing `*` prefix-matches the final token. Reproduced from
-// the fleet's ftsTerm so the package needs no src import.
+// syntax; only a trailing `*` prefix-matches the final token.
 let ftsTerm = (value: string): string => {
   let prefix = /\*+$/.test(value)
   let phrase = value.replace(/\*+$/, '').replaceAll('"', '').trim()
@@ -245,11 +245,11 @@ export let sqlite: Dialect = {
   cmp,
   contains,
   time: (c, op, value, now) => {
-    // Mirrors the fleet's timeSql branch for branch. A comma list of phrases is
+    // A comma list of phrases is
     // any-of under `=` (none-of under `!`); anything else re-reads the whole
     // value as one phrase; a value that is no phrase declines (the scalar road
-    // takes it). `op` is the fleet spelling: '' equals, '!' not-equals, else a
-    // comparison. The span recognizer is @yaks/query's, placed at `now`.
+    // takes it). `op` is the operator spelling: '' equals, '!' not-equals, else
+    // a comparison. The span recognizer is @yaks/query's, placed at `now`.
     let phrase = (s: string): Span | null => spanFn(s, now)
     let spans = value.split(',').map(phrase)
     if (spans.every((s) => s) && (op == '' || op == '!')) {

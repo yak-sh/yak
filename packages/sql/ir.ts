@@ -1,8 +1,8 @@
 // The relational IR: a SELECT as a VALUE, sitting between the binder (which
 // routes an @yaks/query AST through an @yaks/vocab schema) and the SQL text a
-// dialect renders. It is Arel-shaped and deliberately borrows Arel's words
-// (M-12915) — project, join, where, group, order, take, distinct — because
-// anyone who has used Arel or ActiveRecord already knows what they do.
+// dialect renders. It is Arel-shaped and deliberately borrows Arel's words —
+// project, join, where, group, order, take, distinct — because anyone who has
+// used Arel or ActiveRecord already knows what they do.
 //
 // The IR is DIALECT-AGNOSTIC by design: a relation carries its projection,
 // joins, a boolean CONDITION TREE, grouping, ordering and bound as plain data,
@@ -12,7 +12,7 @@
 // expressions (a dialect's Layout, see ./sqlite.ts) and, for a non-`?`
 // placeholder dialect, a renumber of the params it emits.
 //
-// The SHAPE is functional, not Arel's mutable manager (M-4454): a relation is a
+// The SHAPE is functional, not Arel's mutable manager: a relation is a
 // plain object built up field by field, and a condition is a small algebraic
 // tree — and/or/not/raw/lit — whose leaves (raw) are Frags a dialect already
 // lowered. Keeping AND/OR/NOT explicit rather than pre-joined text lets a

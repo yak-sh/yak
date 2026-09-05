@@ -19,8 +19,8 @@
 //
 // What is NOT here declines LOUDLY (an `Unsupported` throw, never a silent
 // wrong answer): the `.near` KNN, the `.edges`/`.reaches` graph walks and the
-// lazy entry partition they read (their edge-nature normalization is fleet
-// logic the vocab does not carry), and the reverse-hop grammar (`.comments`,
+// lazy entry partition they read (their edge-nature normalization is
+// application logic the vocab does not carry), and the reverse-hop grammar (`.comments`,
 // `.comments>=5`), which @yaks/vocab's forward `aim` does not resolve.
 
 import type {
@@ -56,7 +56,7 @@ import { type Dialect, sqlite, type Tag, tagOf } from './sqlite.ts'
 import type { Derived } from './derived.ts'
 
 // Thrown for a clause the binder cannot express EXACTLY. A caller catches it to
-// fall back to a JS matcher (as the fleet does), or to report the gap.
+// fall back to a JS matcher, or to report the gap.
 export class Unsupported extends Error {
   feature: string
   constructor(feature: string, detail = '') {
@@ -83,7 +83,7 @@ type Ctx = {
   tables: Set<string>
 }
 
-// A structured @yaks/query value flattened back to the one string the fleet's
+// A structured @yaks/query value flattened back to the one string the dialect's
 // lowering re-parses — a list to `a,b`, a range to `lo..hi` (inclusive) or
 // `lo...hi` (exclusive end). The dialect's `eq` splits it again exactly as the
 // JS matcher does, so a round trip through the string form is faithful.
@@ -95,7 +95,7 @@ let flat = (val: Value | null): string => {
   return `${flat(r.lo)}..${r.exclusiveEnd ? '.' : ''}${flat(r.hi)}`
 }
 
-// The fleet operator spelling a lowering switches on: '' equals (and, with an
+// The operator spelling a lowering switches on: '' equals (and, with an
 // empty operand, absence — the dialect's eq() reads them as one road), '!'
 // not-equals, '~' contains, the comparisons literal, 'exists' presence, 'want'
 // the value-less projection request. This is the one translation from the
@@ -137,9 +137,9 @@ let readCol = (ctx: Ctx, comp: string, prop: string, owner: string): Read => {
   }
 }
 
-// A scalar predicate over a resolved column expression, lowered branch for
-// branch as the fleet's scalar() does. Returns a Frag or null when it cannot be
-// expressed with the matcher's exact semantics.
+// A scalar predicate over a resolved column expression, lowered branch by
+// branch. Returns a Frag or null when it cannot be expressed with the matcher's
+// exact semantics.
 let lowerScalar = (
   ctx: Ctx,
   c: string,
@@ -165,8 +165,7 @@ let lowerScalar = (
 }
 
 // A single-hop predicate: a direct column, or a component facet (an empty leaf
-// prop — presence grammar). `.task!`/`.task~=` present, everything else absent,
-// mirroring the fleet's one().
+// prop — presence grammar). `.task!`/`.task~=` present, everything else absent.
 let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   let op = opOf(p)
   if (op == 'want') return TRUE // a projection request; the door hydrates it
@@ -192,9 +191,9 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
 }
 
 // A reference-deref path: a chain of one-to-one lookups through reference
-// columns, ending in a leaf column tested against op/value. Ported from the
-// fleet's pathSql — nested correlated scalar subqueries walk the chain without
-// widening the candidate set. Every non-final hop must be a reference.
+// columns, ending in a leaf column tested against op/value. Nested correlated
+// scalar subqueries walk the chain without widening the candidate set. Every
+// non-final hop must be a reference.
 let source = (comp: string) => comp == 'doc' ? '"doc_value"' : `"${comp}"`
 let isRef = (v: Vocab, comp: string, prop: string) =>
   v.column(comp, prop)?.category == 'ref'
@@ -414,7 +413,7 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
   }
   // `.distinct`/`.tally`: the non-empty values of a column (a text/enum/eid
   // column only — a numeric or time cast would disagree with the matcher), or a
-  // per-value count. Empties dropped to match the fleet's tally().
+  // per-value count. Empties dropped.
   if (distinct || tally) {
     let agg = (distinct ?? tally)!
     let { expr } = resolveField(ctx, agg.path.join('.'))
@@ -483,8 +482,8 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
 }
 
 // An order value to an ORDER BY expression. A leading '-' is descending; the
-// rest routes to a column. (The fleet sorts most orderings in JS; compiling
-// them into the statement is a capability this IR adds.)
+// rest routes to a column. (An in-memory matcher would sort these in JS;
+// compiling them into the statement is a capability this IR adds.)
 let orderExpr = (ctx: Ctx, value: string): string => {
   let desc = value.startsWith('-')
   let field = desc ? value.slice(1) : value

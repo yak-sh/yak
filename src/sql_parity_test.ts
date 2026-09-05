@@ -20,42 +20,37 @@ import { assert, assertEquals } from '@std/assert'
 import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
-import { compile, fleetDerived, Unsupported } from './mod.ts'
+import { compile, Unsupported } from '@yaks/sql'
+import { derived as fleetDerived } from './sql_derived.ts'
 
-import { parseQuery } from '../../src/query.ts'
-import {
-  aggregateSql,
-  countSql,
-  select,
-  where,
-  windowed,
-} from '../../src/sql.ts'
-import { run } from '../../src/relation.ts'
-import { textBlob } from '../../src/db.ts'
-import { isRef } from '../../src/props.ts'
-import { derivedProps } from '../../src/types.ts'
-import { open } from '../../src/store/sqlite.ts'
+import { parseQuery } from './query.ts'
+import { aggregateSql, countSql, select, where, windowed } from './sql.ts'
+import { run } from './relation.ts'
+import { textBlob } from './db.ts'
+import { isRef } from './props.ts'
+import { derivedProps } from './types.ts'
+import { open } from './store/sqlite.ts'
 
-import canvas from '../../src/vocab/manifests/canvas.json' with { type: 'json' }
-import capture from '../../src/vocab/manifests/capture.json' with {
+import canvas from './vocab/manifests/canvas.json' with { type: 'json' }
+import capture from './vocab/manifests/capture.json' with {
   type: 'json',
 }
-import comms from '../../src/vocab/manifests/comms.json' with { type: 'json' }
-import identity from '../../src/vocab/manifests/identity.json' with {
+import comms from './vocab/manifests/comms.json' with { type: 'json' }
+import identity from './vocab/manifests/identity.json' with {
   type: 'json',
 }
-import kernel from '../../src/vocab/manifests/kernel.json' with { type: 'json' }
-import mail from '../../src/vocab/manifests/mail.json' with { type: 'json' }
-import platform from '../../src/vocab/manifests/platform.json' with {
+import kernel from './vocab/manifests/kernel.json' with { type: 'json' }
+import mail from './vocab/manifests/mail.json' with { type: 'json' }
+import platform from './vocab/manifests/platform.json' with {
   type: 'json',
 }
-import roles from '../../src/vocab/manifests/roles.json' with { type: 'json' }
-import sessions from '../../src/vocab/manifests/sessions.json' with {
+import roles from './vocab/manifests/roles.json' with { type: 'json' }
+import sessions from './vocab/manifests/sessions.json' with {
   type: 'json',
 }
-import work from '../../src/vocab/manifests/work.json' with { type: 'json' }
+import work from './vocab/manifests/work.json' with { type: 'json' }
 
-// ---- the converter (copied from vocab/parity_test.ts: fleet glue) ----------
+// ---- the converter (copied from src/vocab/parity_test.ts: fleet glue) ------
 
 type ManifestType =
   | string

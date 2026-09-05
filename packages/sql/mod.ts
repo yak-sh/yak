@@ -12,12 +12,12 @@
 // The IR (./ir.ts) is Arel-shaped and carries the statement as data, so a new
 // backend (D1, Postgres) is another renderer over the same value. The storage
 // layout and value lowerings that ARE dialect-specific live behind a `Dialect`
-// (./sqlite.ts); the fleet's SQLite layout is the one shipped.
+// (./sqlite.ts); a SQLite layout is the one shipped.
 //
 // Computed columns — a vocab marks them `persist: false`, their value derived
 // downstream — are supplied by the caller through a DERIVED hook (./derived.ts).
-// The fleet registers `task.status` there, which is what lets `.status=open`,
-// the most common board filter, compile through the index.
+// A registered expression is what lets a computed column (a status rolled up
+// from other rows, say) compile through the index instead of a JS scan.
 //
 // Coverage is honest. The common query path is exact; the advanced directives
 // it cannot yet reach throw `Unsupported` rather than answer almost-right — see
