@@ -3573,6 +3573,71 @@ slow('the front page moves, and only the owner moves it', async () => {
   }
 })
 
+// The front page is the space's ROUTER, and `first` is how it opts in
+// (D-34197): the paths its worker sees before the app whose slug owns them,
+// written as globs on the app's own `router` component. Routing itself is
+// T-34200/T-34201; what this proves is the vocabulary, the tool and the read
+// back — and that the platform's own paths are refused, whole, before anything
+// is written.
+slow('the front page says which paths it answers first', async () => {
+  let k = await kernel()
+  try {
+    let them = await seed(k, [{ slug: 'route', apps: ['site', 'recipes'] }])
+    let agent = connector(k, them.cookie)
+    let graph = meta(k, them.cookie)
+    let at = { space: 'route', app: 'site' }
+    // The rows carrying the component, whatever else is in the store.
+    let stored = async () =>
+      (await graph.query('.router!'))
+        .map((r) => (r.router as { first: string }).first)
+
+    let said = await agent.tool('app_set', {
+      ...at,
+      home: true,
+      first: ['/recipes/*', '/*/print'],
+    })
+    // Said back off the row as it now stands, not off what arrived: the tool
+    // re-reads the app after the write and the sentence is built from the App
+    // row (directory.ts `appOf` → router.ts `firstOf`).
+    assertStringIncludes(
+      said,
+      'it answers /recipes/*, /*/print before the apps that own them',
+    )
+    // And the column itself: one text column holding the JSON list, in order.
+    assertEquals(await stored(), ['["/recipes/*","/*/print"]'])
+
+    // An empty list is not an empty column — the facet goes away, so an app
+    // that routes nothing first looks like every other app.
+    assertStringIncludes(
+      await agent.tool('app_set', { ...at, first: [] }),
+      'it answers no path before the app that owns it',
+    )
+    assertEquals(await stored(), [])
+
+    // The platform's own paths are nobody's, and a refusal names the glob and
+    // the rule. Nothing in the batch lands — not even the globs beside it.
+    for (
+      let [glob, why] of [
+        ['/mcp', '/mcp names /mcp, which the platform answers itself'],
+        ['/*/api/query', '/*/api/query names /*/api/*'],
+        ['/*', '/* names /login'],
+        ['recipes', 'recipes does not start with / — a glob is a path'],
+      ]
+    ) {
+      assertStringIncludes(
+        (await assertRejects(
+          () => agent.tool('app_set', { ...at, first: ['/recipes/*', glob] }),
+          Error,
+        )).message,
+        why,
+      )
+      assertEquals(await stored(), [], `${glob} was written anyway`)
+    }
+  } finally {
+    await k.stop()
+  }
+})
+
 // The other direction (T-32950): an app's breaks reach the person's agent,
 // and this is how the person reaches US. The tool writes a `report` row in
 // the meta store, attributed to whoever's agent called it, and mails the same

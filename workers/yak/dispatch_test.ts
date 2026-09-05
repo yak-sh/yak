@@ -54,6 +54,7 @@ let app: App = {
   access: 'public',
   store: 'jeff/recipes',
   slugs: ['jeff/recipes'],
+  first: [],
   meter: null,
   published: null,
   installed: null,

@@ -30,6 +30,7 @@ import { type Door, type Fetcher, type Namespace, storeOf } from './door.ts'
 import { KERNEL, type Meta, meta as metaStore } from './meta.ts'
 import { mailFrom } from './post.ts'
 import { SLUG } from './route.ts'
+import { firstOf } from './router.ts'
 import { nameOf } from './signin.ts'
 import { PLATFORM_STORE } from './vocab.ts'
 
@@ -121,6 +122,10 @@ export type App = {
   // then each one a rename left behind. They resolve like ids (types.ts
   // slugsOf), which is how an old link still finds the app it was made for.
   slugs: string[]
+  // The paths this app's worker answers BEFORE the app whose slug owns them,
+  // while it is the space's home app (D-34197, router.ts). Empty for every app
+  // that never opted in, which is almost all of them.
+  first: string[]
   // What this app's own store spent this month, as the hourly sweep last read
   // it (usage.ts). Null until it has been metered once.
   meter: Meter | null
@@ -191,6 +196,7 @@ type Row = {
   member?: { space: Id; person: Id; role: Role }
   email?: { address: string }
   alias?: { slug: string; slugs?: string | null }
+  router?: { first?: string | null }
   doc?: { title?: string }
   plan?: {
     tier?: Tier | null
@@ -377,7 +383,7 @@ export let stamp = async (
 // What every read of an APP asks for beside the app row itself, in one place
 // because `appOf` reads all of it and a filter that forgets one answers null
 // where there is a value.
-let ABOUT = '.doc?&.alias?&.meter?&.published?&.installed?'
+let ABOUT = '.doc?&.alias?&.router?&.meter?&.published?&.installed?'
 
 // The plan as a whole row, however little of it is written: a column nobody
 // has filled reads empty, the way `meterOf` does, so nothing downstream tests
@@ -415,6 +421,7 @@ export let appOf = (r: Row): App => ({
   title: r.doc?.title || r.app!.slug,
   store: r.alias?.slug ?? null,
   slugs: slugsOf(r.alias),
+  first: firstOf(r.router),
   meter: meterOf(r),
   published: r.published?.name
     ? {

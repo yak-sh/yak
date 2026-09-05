@@ -39,6 +39,7 @@ let app = (over: Partial<App> = {}): App => ({
   access: 'public',
   store: null,
   slugs: [],
+  first: [],
   meter: null,
   published: null,
   installed: null,

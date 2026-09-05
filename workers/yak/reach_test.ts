@@ -35,6 +35,7 @@ let app = (slug: string, spaceEid: string): App => ({
   access: 'private',
   store: null,
   slugs: [slug],
+  first: [],
   meter: null,
   published: null,
   installed: null,

@@ -100,6 +100,7 @@ import type { Env } from './env.ts'
 import { mail, REPLY_TO } from './mail.ts'
 import { NO_ARGS, PUBLIC } from './preauth.ts'
 import { foreign, SLUG } from './route.ts'
+import { globs } from './router.ts'
 import type { Reach } from './reach.ts'
 import { titling, vouched, type Who } from './session.ts'
 import { mode, reads, writes } from '@yaks/member'
@@ -1270,7 +1271,12 @@ export let TOOLS: Tool[] = [
       'app someone lands on when they are given the space itself. The first ' +
       'app made in a space is it until someone says otherwise, so set it ' +
       'when the app they care about was not the first one; home false leaves ' +
-      'the space with no front page. Only the space owner may move it.',
+      'the space with no front page. Only the space owner may move it. first ' +
+      "is the front page's own routing: the paths its worker.js answers " +
+      'BEFORE the app whose name owns them, as globs — ["/recipes/*"] sends ' +
+      'every address under /recipes/ to the front page instead of the recipes ' +
+      'app. Leave it alone unless the front page is meant to route the whole ' +
+      'space; an empty list puts every path back where it was.',
     input: {
       type: 'object',
       properties: {
@@ -1287,6 +1293,15 @@ export let TOOLS: Tool[] = [
             'false to leave the space with no front page, where that ' +
             'address lists the apps a visitor may open',
         },
+        first: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'the path globs the front page answers before the apps that own ' +
+            'them, e.g. ["/recipes/*", "/*/print"]; [] to route nothing ' +
+            'first. The platform keeps /login, /connect, /mcp and every ' +
+            "app's /api/ door, so a glob naming one is refused",
+        },
       },
       required: ['app'],
     },
@@ -1296,9 +1311,15 @@ export let TOOLS: Tool[] = [
       let to = args.slug == null ? null : slug(args.slug, 'slug')
       let open = args.access == null ? null : access(args.access)
       let home = args.home == null ? null : flag(args.home, 'home')
-      if (title == null && to == null && open == null && home == null) {
+      // The globs are checked BEFORE anything is written or any file moves:
+      // a refusal here has to leave the app exactly as it was (router.ts).
+      let first = args.first == null ? null : globs(args.first, [META.app])
+      if (
+        title == null && to == null && open == null && home == null &&
+        first == null
+      ) {
         throw new Error(
-          'nothing to change: pass title, slug, access, home, or all',
+          'nothing to change: pass title, slug, access, home, first, or all',
         )
       }
       // Which app the bare hostname opens is the SPACE's, not this app's:
@@ -1333,7 +1354,7 @@ export let TOOLS: Tool[] = [
         await blobs.put(onto + key.slice(from.length), await blobs.get(key))
       }
       let entities: EntityLiteral[] = []
-      if (title != null || moving || open || keeping) {
+      if (title != null || moving || open || keeping || first != null) {
         entities.push({
           entity: { eid: app.eid },
           ...(title == null ? {} : { doc: { title } }),
@@ -1346,6 +1367,12 @@ export let TOOLS: Tool[] = [
             }
             : {}),
           ...(keeping ? { alias: { slugs: keeping } } : {}),
+          // An empty list is not an empty column: routing nothing first is
+          // what every app does, so the facet goes away rather than sitting
+          // there saying nothing (`router: null` drops the component).
+          ...(first == null ? {} : {
+            router: first.length ? { first: JSON.stringify(first) } : null,
+          }),
         })
       }
       // The front page is a column on the space, so clearing it is the null
@@ -1378,7 +1405,16 @@ export let TOOLS: Tool[] = [
               'opens it'
             : ` — no longer the front page: https://${space.slug}.yaks.app/ ` +
               "lists the space's apps again until another one is set home"
-        }`,
+        }${
+          // Read off the row that was just written, never off what arrived:
+          // the sentence says what the app IS now (directory.ts `appOf`).
+          first == null
+            ? ''
+            : now.first.length
+            ? ` — it answers ${
+              now.first.join(', ')
+            } before the apps that own them`
+            : ' — it answers no path before the app that owns it'}`,
         space,
       }
     },

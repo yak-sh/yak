@@ -392,6 +392,16 @@ export let platformDoc: VocabDoc = {
     // what its Durable Object is named, so it may never move — and, in
     // `slugs`, each one a rename left behind.
     alias: { type: 'object', properties: { slug: unique(text), slugs: text } },
+    // The home app as the space's router (D-34197): the paths its worker sees
+    // FIRST, before the app whose slug owns them. It is the APP's facet and not
+    // the space's, because `space.home` already says which app is home and two
+    // spellings of one fact would drift.
+    //
+    // A column is a scalar (@yaks/vocab `storable`), so the list is JSON in one
+    // text column — ordered, and read back by router.ts `firstOf`. `alias.slugs`
+    // splits on whitespace instead, which is the older spelling of a list here;
+    // JSON is the one that round-trips exactly what an agent passed.
+    router: { type: 'object', properties: { first: text } },
     member: {
       type: 'object',
       kind: true,
