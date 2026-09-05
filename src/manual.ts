@@ -644,11 +644,12 @@ export let manuals = declare({
     args: [arg('id', id)],
   },
   claim: {
-    about: 'claim ready, approved work (default: your own session id)',
-    detail: 'Readiness and the lease are checked atomically. `--approve` ' +
-      'approves an undecided task and claims it in the same transaction; it ' +
-      'never reverses a declined decision. Raw graph mutation remains the ' +
-      'administrative claim door.',
+    about: 'claim ready work (default: your own session id)',
+    detail: 'Ready is open, unclaimed, unblocked, prerequisites settled — a ' +
+      'filed task needs no approval. Readiness and the lease are checked ' +
+      'atomically. `--approve` approves an undecided task and claims it in ' +
+      'the same transaction; it never reverses a declined decision. Raw ' +
+      'graph mutation remains the administrative claim door.',
     examples: [
       'task claim T-3 --session S-9',
       'task claim T-3 --approve',

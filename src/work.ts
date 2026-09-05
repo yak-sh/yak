@@ -148,10 +148,11 @@ export let authorizations = (all: Row[], deps: Dep[]) => {
 export let authorized = (all: Row[], deps: Dep[]) =>
   new Set(authorizations(all, deps).keys())
 
-// The SQL half of buildReady(). Query selection and the writer's guarded
-// claim both compose these fragments, so discovering work and taking it cannot
-// drift. The candidate CTE always has (origin, entity); recursive callers add
-// lineage + approved_root, while a direct-only caller needs neither.
+// The SQL half of buildReady(). Query selection and the writer's guarded claim
+// both compose these fragments, so discovering work and taking it cannot drift
+// on anything but authorization, which only discovery asks for. The candidate
+// CTE always has (origin, entity); recursive callers add lineage +
+// approved_root, while a direct-only caller needs neither.
 export let workLineageSql = (seed: string) =>
   `lineage(origin, entity) as (
      select origin, entity from ${seed}
@@ -214,7 +215,10 @@ export let workReadyJoinsSql = `
          left join quarantined on quarantined.entity = entity.id
          left join tombstone dead on dead.entity = entity.id`
 
-export let workReadyWhereSql = (authorization: string) => `
+// Authorization is optional. Discovery still ranks approved work, but taking a
+// task no longer waits on a decision (M-31946 suspended the approval pipeline),
+// so the writer's guarded claim composes this same readiness without it.
+export let workReadyWhereSql = (authorization?: string) => `
           completed.entity is null
           and cancelled.entity is null
           and claim.entity is null
@@ -243,8 +247,7 @@ export let workReadyWhereSql = (authorization: string) => `
                    and endpoint_cancelled.entity is null
                  )
                )
-          )
-          and (${authorization})`
+          )${authorization ? `\n          and (${authorization})` : ''}`
 
 let unresolved = (eid: string, by: Map<string, Row>, deps: Dep[]) =>
   deps.filter((d) =>

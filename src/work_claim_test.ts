@@ -1,7 +1,8 @@
 // The guarded worker take: unlike raw graph mutation, claim_work resolves,
 // optionally approves, validates readiness, and claims under one writer lock.
-// These cases hold the named mutation to the same boundaries as the build lane
-// and prove a refusal rolls back session reification and approval with it.
+// These cases hold the named mutation to the readiness boundary — approval is
+// not part of it (M-31946) — and prove a refusal rolls back session
+// reification and approval with it.
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { link } from './edge.ts'
 import type { Sql } from './store/sql.ts'
@@ -38,7 +39,6 @@ let take = (
   target: string,
   session: string,
   mode: 'ready' | 'approve' = 'ready',
-  recursive = true,
 ) =>
   mutate(
     db,
@@ -47,7 +47,6 @@ let take = (
       target,
       session,
       mode,
-      recursive,
       cwd: '/work',
     } satisfies WorkClaimMutation,
   )
@@ -75,35 +74,24 @@ let holder = (db: Sql, target: string) =>
     target,
   )?.eid as string | undefined
 
-Deno.test('claim_work takes direct and inherited approved work', () => {
+// Approval is not a claim gate: a decided task, a descendant of one, and a
+// lone task nobody decided are all equally takeable.
+Deno.test('claim_work takes filed work, decided or not', () => {
   let { db, project } = world()
-  let direct = uuid(), root = uuid(), child = uuid()
+  let decided = uuid(), root = uuid(), child = uuid(), lone = uuid()
   apply(db, [
-    ...task(direct, project, [{ eid: direct, name: 'decided', comp: {} }]),
+    ...task(decided, project, [{ eid: decided, name: 'decided', comp: {} }]),
     ...task(root, project, [{ eid: root, name: 'decided', comp: {} }]),
     ...task(child, project),
+    ...task(lone, project),
     ...link(root, 'requires', child),
   ])
-  take(db, direct, 'direct-worker')
-  take(db, child, 'inherited-worker')
-  assertEquals(holder(db, direct), sessionEid(db, 'direct-worker'))
-  assertEquals(holder(db, child), sessionEid(db, 'inherited-worker'))
-})
-
-Deno.test('claim_work direct policy refuses inherited authorization', () => {
-  let { db, project } = world()
-  let root = uuid(), child = uuid()
-  apply(db, [
-    ...task(root, project, [{ eid: root, name: 'decided', comp: {} }]),
-    ...task(child, project),
-    ...link(root, 'requires', child),
-  ])
-  assertThrows(
-    () => take(db, child, 'worker', 'ready', false),
-    Error,
-    `${human(db, child)} is not approved directly`,
-  )
-  assertEquals(sessionEid(db, 'worker'), undefined)
+  take(db, decided, 'decided-worker')
+  take(db, child, 'descendant-worker')
+  take(db, lone, 'lone-worker')
+  assertEquals(holder(db, decided), sessionEid(db, 'decided-worker'))
+  assertEquals(holder(db, child), sessionEid(db, 'descendant-worker'))
+  assertEquals(holder(db, lone), sessionEid(db, 'lone-worker'))
 })
 
 Deno.test('claim_work approve and claim is atomic and never reverses decline', () => {
@@ -171,7 +159,6 @@ Deno.test('claim_work refuses every non-build state and rolls back identity', ()
       [{ eid: '', name: 'proposed', comp: {} }],
       'proposed but not decided',
     ],
-    ['unapproved', [], 'not approved directly'],
     ['completed', [{ eid: '', name: 'completed', comp: {} }], 'is completed'],
     ['cancelled', [{ eid: '', name: 'cancelled', comp: {} }], 'is cancelled'],
     [
@@ -453,24 +440,14 @@ Deno.test('claim_work rejects malformed requests before writing', () => {
         target: 'T-1',
         session: 'worker',
         mode: 'ready',
-        recursive: 'yes',
-      } as unknown as WorkClaimMutation),
-    Error,
-    'recursive must be a boolean',
-  )
-  assertThrows(
-    () =>
-      mutate(db, {
-        mutation: 'claim_work',
-        target: 'T-1',
-        session: 'worker',
-        mode: 'ready',
         entities: [{ comps: { project: {} } }],
       } as unknown as WorkClaimMutation),
     Error,
     'claim_work unknown field: entities',
   )
-  for (let key of ['changes', 'constructor', '__proto__']) {
+  // `recursive` selected how far approval inherited; the claim no longer asks
+  // about approval at all, so the field is gone rather than ignored.
+  for (let key of ['changes', 'constructor', '__proto__', 'recursive']) {
     let request = JSON.parse(
       `{"mutation":"claim_work","target":"T-1","session":"worker",` +
         `"mode":"ready","${key}":{"eid":"smuggled"}}`,

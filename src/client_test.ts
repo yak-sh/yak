@@ -1469,17 +1469,12 @@ Deno.test('claimChanges points at the session entity', () => {
 
 Deno.test('workClaimMutation exposes only the guarded writer intent', () => {
   assertEquals(
-    workClaimMutation('T-3', 'worker', {
-      approve: true,
-      recursive: false,
-      cwd: '/work',
-    }),
+    workClaimMutation('T-3', 'worker', { approve: true, cwd: '/work' }),
     {
       mutation: 'claim_work',
       target: 'T-3',
       session: 'worker',
       mode: 'approve',
-      recursive: false,
       cwd: '/work',
     },
   )

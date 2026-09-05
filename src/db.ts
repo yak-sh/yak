@@ -100,13 +100,7 @@ import {
   sourceList,
   sourceResolve,
 } from './source.ts'
-import {
-  workAuthorizationSql,
-  workLineageSql,
-  workReadyJoinsSql,
-  workReadyWhereSql,
-  workRootsSql,
-} from './work.ts'
+import { workReadyJoinsSql, workReadyWhereSql } from './work.ts'
 
 // Prepared-statement cache, per db handle. SQLite recompiles the SQL on
 // every prepare(); apply() alone recompiles ~35 statements per call (~318µs
@@ -5520,15 +5514,15 @@ let casBodies = (db: Sql, changes: Change[]): Change[] => {
   return [...blobs, ...changes]
 }
 
-let guardedWorkSql = (recursive: boolean) =>
-  `with recursive candidate(origin, entity) as (
-  select id, id from entity where eid = ?
-)${recursive ? `, ${workLineageSql('candidate')}, ${workRootsSql}` : ''}
+// The writer's readiness guard: the predicate discovery uses, minus
+// authorization. The approval pipeline is suspended (M-31946), so a filed task
+// is claimable; an explicit proposal awaiting judgment or a declined verdict
+// still refuses, and so does the lease.
+let guardedWorkSql = `
 select 1
-  from candidate
-  join entity on entity.id = candidate.entity
+  from entity
   ${workReadyJoinsSql}
- where ${workReadyWhereSql(workAuthorizationSql(recursive))}`
+ where entity.eid = ? and ${workReadyWhereSql()}`
 
 let workClaimRefusal = (db: Sql, eid: string) => {
   let id = human(db, eid)
@@ -5608,7 +5602,9 @@ let workClaimRefusal = (db: Sql, eid: string) => {
       ? `${id} requires missing ${child} — restore it or drop the edge`
       : `${id} requires unresolved ${child} — complete or cancel it first`
   }
-  return `${id} is not approved directly or through an approved open ancestor`
+  // Every named refusal above covers a state the guard rejects; this is the
+  // floor a tombstoned target lands on.
+  return `${id} is not ready to claim`
 }
 
 export let apply = (
@@ -5626,7 +5622,7 @@ export let apply = (
   // A named worker-claim mutation supplies the one claim whose readiness must
   // be validated under this transaction's writer lock. Raw Change[] leaves it
   // absent and retains the administrative graph capability.
-  workClaim?: { target: string; recursive: boolean; source?: Change[] },
+  workClaim?: { target: string; source?: Change[] },
   // The server-writer mode: the caller is trusted server code (a hosted
   // kernel reporting what a route threw), so server-owned components and
   // stamped columns are admitted and written. Every wire door passes
@@ -5904,7 +5900,7 @@ export let apply = (
         // decision in the same batch has landed.
         if (
           workClaim?.target == eid && !cur &&
-          !prep(db, guardedWorkSql(workClaim.recursive)).get(eid)
+          !prep(db, guardedWorkSql).get(eid)
         ) {
           throw new Error(workClaimRefusal(db, eid))
         }
@@ -7516,14 +7512,7 @@ let claimWork = (
   trace?: Trace,
   via?: string | null,
 ) => {
-  let allowed = new Set([
-    'mutation',
-    'target',
-    'session',
-    'mode',
-    'recursive',
-    'cwd',
-  ])
+  let allowed = new Set(['mutation', 'target', 'session', 'mode', 'cwd'])
   let unknown = Object.keys(ask).filter((key) => !allowed.has(key)).sort()[0]
   if (unknown) throw new Error(`claim_work unknown field: ${unknown}`)
   if (typeof ask.target != 'string' || !ask.target.trim()) {
@@ -7534,9 +7523,6 @@ let claimWork = (
   }
   if (ask.mode != 'ready' && ask.mode != 'approve') {
     throw new Error('claim_work mode must be ready or approve')
-  }
-  if (ask.recursive !== undefined && typeof ask.recursive != 'boolean') {
-    throw new Error('claim_work recursive must be a boolean')
   }
   if (ask.cwd !== undefined && typeof ask.cwd != 'string') {
     throw new Error('claim_work cwd must be a string')
@@ -7651,11 +7637,7 @@ let claimWork = (
           : []),
         { eid: target, name: 'claim', comp: { session: seid } },
       ]
-      return apply(db, changes, trace, via, undefined, {
-        target,
-        recursive: ask.recursive !== false,
-        source,
-      })
+      return apply(db, changes, trace, via, undefined, { target, source })
     }, true)
   } catch (e) {
     auditBounce(db, e)

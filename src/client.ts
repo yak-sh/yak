@@ -2422,22 +2422,21 @@ export let claimChanges = (
   ]
 }
 
-// A worker claim is not raw graph mutation: the writer validates the same
-// readiness predicate discovery used, after taking its transaction lock. A
-// bare decided touch approves an undecided task without overwriting a prior
-// explicit verdict; if the task was declined, the writer still sees declined
-// and rolls the whole operation back.
+// A worker claim is not raw graph mutation: the writer validates readiness —
+// open, unblocked, unclaimed, prerequisites settled — after taking its
+// transaction lock. A bare decided touch approves an undecided task without
+// overwriting a prior explicit verdict; if the task was declined, the writer
+// still sees declined and rolls the whole operation back.
 export let workClaimMutation = (
   target: string,
   session: string,
-  opts: { cwd?: string; approve?: boolean; recursive?: boolean } = {},
+  opts: { cwd?: string; approve?: boolean } = {},
 ): WorkClaimMutation => ({
   mutation: 'claim_work',
   target,
   session,
   mode: opts.approve ? 'approve' : 'ready',
   ...(opts.cwd ? { cwd: opts.cwd } : {}),
-  ...(opts.recursive === false ? { recursive: false } : {}),
 })
 
 // One launch spec, however it is spelled: the four fields a spawn carries,

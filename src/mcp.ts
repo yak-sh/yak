@@ -1116,10 +1116,11 @@ with the same stable session identifier you claim with.`,
 
   tool(
     'task_claim',
-    `Atomically claim ready, approved work for your session. Readiness is the
-same predicate as work_list lane=build: open, unblocked, prerequisite-ready,
-not quarantined, and directly or recursively approved. Pass a STABLE
-identifier for yourself and reuse it for the whole session. Set approve only
+    `Atomically claim ready work for your session. Ready is open, unclaimed,
+unblocked, prerequisite-ready, and not quarantined — a filed task needs no
+approval, though a proposal still awaiting judgment and a declined verdict both
+refuse. Pass a STABLE identifier for yourself and reuse it for the whole
+session. Set approve only
 when you evaluated the task and are also its best builder; approval and claim
 then land together, but an explicit decline is never reversed. Raw graph_apply
 remains the administrative claim door. task_release drops the lease when you

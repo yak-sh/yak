@@ -45,7 +45,6 @@ export type WorkClaimMutation = {
   target: string
   session: string
   mode: 'ready' | 'approve'
-  recursive?: boolean
   cwd?: string
 }
 export type FlatMutation = Change[] | UndoMutation | WorkClaimMutation
