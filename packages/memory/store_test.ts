@@ -64,8 +64,13 @@ Deno.test('a removed entity is tombstoned, and takes no patch after', () => {
   put(s, { entity: { eid: 'p1' }, doc: { title: 'Mug' } })
   s.tx((tx) => tx.remove([{ eid: 'p1' }]))
   assertEquals(at(s, 'p1'), { entity: { eid: 'p1', num: 1 }, tombstone: {} })
-  put(s, { entity: { eid: 'p1' }, doc: { title: 'back from the dead' } })
+  put(s, {
+    entity: { eid: 'p1' },
+    product: { price: 1, maker: 'm9' },
+    doc: { title: 'back from the dead' },
+  })
   assertEquals(at(s, 'p1').doc, undefined)
+  assertEquals(at(s, 'm9'), undefined) // nor does it mint what it names
   assertEquals(s.read('.kind=doc'), [])
 })
 
