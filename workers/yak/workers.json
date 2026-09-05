@@ -1,0 +1,23 @@
+{
+  "_": "The Cloudflare gate for the Store Durable Object (graph.ts): the shipped source, type-checked with the RUNTIME's own types in scope — `ctx` is the `DurableObjectState` wrangler constructs the object with, and a hibernatable socket is the runtime's. `deno check --config workers/yak/workers.json workers/yak/conform.ts` is the check; it is part of `deno task check`. It stands alone because those types are GLOBAL: in scope, every other file in the repo would be checked against a Worker it does not run in.",
+  "compilerOptions": {
+    "lib": ["esnext", "dom"],
+    "strict": true
+  },
+  "imports": {
+    "@cloudflare/workers-types": "npm:@cloudflare/workers-types@^4.20260702.1",
+    "@yaks/api": "../../packages/api/mod.ts",
+    "@yaks/blob": "../../packages/blob/mod.ts",
+    "@yaks/durable-object": "../../packages/durable-object/mod.ts",
+    "@yaks/edge": "../../packages/edge/mod.ts",
+    "@yaks/effects": "../../packages/effects/mod.ts",
+    "@yaks/graph": "../../packages/graph/mod.ts",
+    "@yaks/id": "../../packages/id/mod.ts",
+    "@yaks/match": "../../packages/match/mod.ts",
+    "@yaks/member": "../../packages/member/mod.ts",
+    "@yaks/query": "../../packages/query/mod.ts",
+    "@yaks/sql": "../../packages/sql/mod.ts",
+    "@yaks/sqlite": "../../packages/sqlite/mod.ts",
+    "@yaks/vocab": "../../packages/vocab/mod.ts"
+  }
+}
