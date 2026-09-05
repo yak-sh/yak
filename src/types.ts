@@ -1103,6 +1103,16 @@ export let derivedProps: Record<string, Record<string, PropType>> = {
   task: { status: { enum: statuses } },
 }
 
+// The spine's own identity column. The contract declares what a store STAMPS on
+// `entity` (num); the `eid` beside it is the identity itself — readable on every
+// row (db.ts `readable` has always projected it), never writable, and derived
+// from nothing, so it belongs to neither map above. Declared here so both
+// routing tables carry it and `.eid=<id>` NAMES entities at this door exactly as
+// @yaks/sql and @yaks/match answer the same predicate.
+export let spineProps: Record<string, Record<string, PropType>> = {
+  entity: { eid: 'text' },
+}
+
 // Task status is DERIVED, not stored (D-24102): `cancelled` comp → cancelled;
 // else `completed` comp → done; else an active `claim` → wip; else open. `has`
 // is a component bag (a live row's `.comps`, a Row's comps). wip can't get

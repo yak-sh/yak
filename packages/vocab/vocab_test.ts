@@ -84,6 +84,17 @@ Deno.test('dotted paths aim to hops', () => {
   )
 })
 
+Deno.test('the spine routes its own identity, declared or not', () => {
+  // no document declares `entity.eid`; the loader routes it because every
+  // entity has one — so `.eid=` and `.entity.eid=` name entities
+  assertEquals(v.route('eid'), { comp: 'entity', prop: 'eid' })
+  assertEquals(v.aim('entity.eid'), [{ comp: 'entity', prop: 'eid' }])
+  // it stays out of the column set: identity is not prose, so it reaches no
+  // text index, no embedding, and no component's DDL
+  assertEquals(v.columns('entity').includes('eid'), false)
+  assertEquals(v.column('entity', 'eid'), undefined)
+})
+
 Deno.test('reverse associations derive from the reference columns', () => {
   // one reference column: the component's plural names it
   assertEquals(v.assoc('comments'), { comp: 'comment', prop: 'target' })

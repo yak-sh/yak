@@ -100,6 +100,7 @@ v.column('task', 'project')
 // { category: 'ref', ref: 'project', death: 'detach',
 //   affinity: 'integer', fk: true, stamped: false, persist: true, … }
 v.route('title') // { comp: 'doc', prop: 'title' }   bare prop → its home
+v.route('eid') // { comp: 'entity', prop: 'eid' }  the spine's own identity
 v.aim('comment.target.doc.title') // [{comment,target}, {doc,title}]  path → hops
 v.assoc('reviews') // { comp: 'review', prop: 'book' }  a plural → its reverse
 v.kindOf({ task: 1, doc: 1 }) // 'task' — most specific kind wins

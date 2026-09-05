@@ -11,7 +11,7 @@
 
 import type { Bundle } from '@yaks/graph'
 import type { Clause, Pred, Range, Refs, Value } from '@yaks/query'
-import { Unsupported } from '@yaks/sql'
+import { identity, Unsupported } from '@yaks/sql'
 import type { Assoc, Hop, Vocab } from '@yaks/vocab'
 import { column, comp, type Index, wears } from './read.ts'
 import { check, EXISTS } from './value.ts'
@@ -90,6 +90,18 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Test => {
   if (!hop.prop) {
     let present = op == '~' || op == EXISTS
     return (b) => wears(b, hop.comp) == present
+  }
+  // On the spine, `=` NAMES entities instead of comparing a column, so it is a
+  // set lookup — the same operand list @yaks/sql lowers to `in (?, …)`.
+  if (hop.comp == 'entity' && op == '') {
+    let set = identity(hop.prop, flat(p.value))
+    if (set) {
+      let eids = new Set(set.eids)
+      let nums = new Set(set.nums)
+      return (b) =>
+        eids.has(b.entity.eid) ||
+        (b.entity.num != null && nums.has(b.entity.num))
+    }
   }
   let hit = scalar(ctx, hop, p)
   return (b) => hit(b)

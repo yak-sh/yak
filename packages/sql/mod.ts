@@ -40,6 +40,7 @@ export * from './ir.ts'
 export * from './sqlite.ts'
 export * from './derived.ts'
 export * from './extend.ts'
+export * from './ident.ts'
 export { bind, type BindOpts, Unsupported } from './bind.ts'
 
 // The compiled statement: a SQL string and the params it binds, in order.

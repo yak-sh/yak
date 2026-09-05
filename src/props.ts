@@ -6,6 +6,7 @@ import {
   derivedProps,
   EID,
   type PropType,
+  spineProps,
   stamped,
 } from './types.ts'
 import { instant, local } from './time.ts'
@@ -38,7 +39,12 @@ let typeCache = new Map<string, Record<string, PropType>>()
 let types = (comp: string): Record<string, PropType> => {
   let hit = typeCache.get(comp)
   if (hit) return hit
-  let t = { ...comps[comp], ...stamped[comp], ...derivedProps[comp] }
+  let t = {
+    ...comps[comp],
+    ...stamped[comp],
+    ...derivedProps[comp],
+    ...spineProps[comp],
+  }
   typeCache.set(comp, t)
   return t
 }

@@ -138,13 +138,31 @@ The common query path is exact: predicates (every operator), any-of lists,
 ranges, time phrases, boolean composition, reference-deref paths, reverse hops,
 full-text terms, the `.kind` scope, presence/absence, ordering,
 `.limit`/`.after` windows, `.count`/`.distinct`/`.tally` aggregates, `.fields`
-projections, and the `.refs=` backlink union.
+projections, the `.refs=` backlink union, and the `.eid=`/`.num=` identity
+predicate.
 
 Advanced directives it cannot yet reach throw **`Unsupported`** rather than
 answer almost-right — a caller catches it to fall back to a JS matcher or to
 report the gap. The current gaps are the `.edges`/`.reaches` graph walks, and
 the `.near` KNN unless a vector package claims it — `@yaks/embedding` does,
 ordering included (`bind.ts` has the exact list).
+
+## Naming entities
+
+`.eid=` and `.num=` NAME entities rather than filter them, so their operand list
+is a set and compiles to one lookup on the spine. A human id is an operand too —
+`@yaks/id` reads `B-7` as the entity numbered 7, the letter being display and
+the number identity — so one grammar fetches a named set and filters it.
+
+```
+.eid=a3f1               "entity"."eid" in (?)
+.eid=a3f1,b7c2          "entity"."eid" in (?, ?)
+.num=3,4                "entity"."num" in (?, ?)
+.eid=B-7                "entity"."num" in (?)
+```
+
+`@yaks/match` answers the same predicate as a set lookup, so a client can fetch
+named entities from a database or from bundles it already holds.
 
 ## Reverse hops
 
@@ -167,5 +185,6 @@ outer row.
 
 ## Compatibility
 
-Pure TypeScript with no runtime dependency beyond a `@yaks/query` AST and a
-`@yaks/vocab` schema. Runs on **Deno** and **Node** (via JSR / npm).
+Pure TypeScript with no runtime dependency beyond a `@yaks/query` AST, a
+`@yaks/vocab` schema, and `@yaks/id` for reading a human id. Runs on **Deno**
+and **Node** (via JSR / npm).

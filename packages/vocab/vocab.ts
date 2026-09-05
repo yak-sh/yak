@@ -121,6 +121,15 @@ export type Vocab = {
   ) => string[]
 }
 
+// The spine, and the identity column no vocabulary authors. A document declares
+// what `entity` STORES beside it (the number a store mints); the `eid` is the
+// model's — every entity has one — so the loader ROUTES it (`.eid=`,
+// `.entity.eid=`) rather than making each vocabulary re-declare it. It stays
+// out of `columns()` on purpose: identity is not prose and has no row of its
+// own, so it never reaches a text index, an embedding, or a component's DDL.
+let SPINE = 'entity'
+let EID = 'eid'
+
 // A component's whole shape in one line, for a refusal that teaches: `doc has
 // title (text), body (body)`. A refusal naming only what it failed to parse
 // teaches nothing.
@@ -270,6 +279,7 @@ export let loadVocab = (
         )
       }
       if (routes.has(prop)) return { comp: prop, prop: '' }
+      if (prop == EID && routes.has(SPINE)) return { comp: SPINE, prop: EID }
       throw new Error(`unknown prop: .${prop}`)
     },
     // A dotted path → the hops it names, one rule per step: a segment naming a
@@ -283,7 +293,7 @@ export let loadVocab = (
         let own = routes.get(segs[i])
         if (own && i + 1 < segs.length) {
           let [a, b] = [segs[i], segs[i + 1]]
-          if (!own.includes(b)) {
+          if (!own.includes(b) && !(a == SPINE && b == EID)) {
             throw new Error(`no such prop: .${a}.${b} — ${shapeOf(v, a)}`)
           }
           out.push({ comp: a, prop: b })

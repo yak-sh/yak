@@ -90,6 +90,20 @@ let QUERIES = [
   '.book.author.doc.title=Ursula Vale',
   '.book.author.member!',
   '.book.author.member=',
+  // identity: naming entities instead of filtering them — an eid, a list of
+  // them, a spine number, a human id (`B-3` is the entity numbered 3), a mixed
+  // list, and a name nothing wears
+  '.eid=b1',
+  '.eid=b1,b2',
+  '.eid=',
+  '.entity.eid=b1',
+  '.num=3',
+  '.num=3,4',
+  '.eid=B-3',
+  '.eid=b1,B-4',
+  '.eid=nosuchentity',
+  // the deleted entity is named but still dead
+  '.eid=r9',
   // backlinks and reverse hops
   '.refs=a1',
   '.refs=b1',

@@ -185,6 +185,42 @@ Deno.test('.after over a derived order reads the anchor through the hook', () =>
   )
 })
 
+Deno.test('.eid names entities as one set lookup on the spine', () => {
+  let one = compile(parse('.eid=a3f1'), v)
+  assert(one.sql.includes('"entity"."eid" in (?)'), one.sql)
+  assertEquals(one.params, ['a3f1'])
+  let many = compile(parse('.eid=a3f1,b7c2'), v)
+  assert(many.sql.includes('"entity"."eid" in (?, ?)'), many.sql)
+  assertEquals(many.params, ['a3f1', 'b7c2'])
+  // the explicit spelling routes to the same place
+  assert(compile(parse('.entity.eid=a3f1'), v).sql.includes(one.sql.slice(-40)))
+})
+
+Deno.test('.num and a human id name entities by their spine number', () => {
+  let nums = compile(parse('.num=3,4'), v)
+  assert(nums.sql.includes('"entity"."num" in (?, ?)'), nums.sql)
+  assertEquals(nums.params, [3, 4])
+  // `T-7` is the entity numbered 7 — the letter is display, the number is
+  // identity — so a human id lands on the num arm
+  let human = compile(parse('.eid=T-7'), v)
+  assert(human.sql.includes('"entity"."num" in (?)'), human.sql)
+  assertEquals(human.params, [7])
+  // a mixed list asks both arms
+  let both = compile(parse('.eid=a3f1,T-7'), v)
+  assert(
+    both.sql.includes('("entity"."eid" in (?) or "entity"."num" in (?))'),
+    both.sql,
+  )
+  assertEquals(both.params, ['a3f1', 7])
+})
+
+Deno.test('a spine value that is no operand list keeps the column road', () => {
+  // an empty value is still absence grammar, and a range is a comparison the
+  // spine's untyped column declines exactly as it did before
+  assert(compile(parse('.eid='), v).sql.includes('is null'), 'absence')
+  assertThrows(() => compile(parse('.num=3..5'), v), Unsupported)
+})
+
 Deno.test('the membership statement excludes graves and answers one eid', () => {
   let { sql } = compile(parse('.priority>=1'), v)
   assert(sql.startsWith('select "entity"."eid" as eid from "entity"'), sql)

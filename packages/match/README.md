@@ -83,6 +83,9 @@ Everything on @yaks/sql's common path:
 - **Reverse hops**: `.reviews!` has one, `.reviews=` has none, `.reviews>=5` a
   count, `.reviews.stars=5` an existential over a filtered child.
 - **Backlinks**: `.refs=<id>` — every entity holding a reference to that one.
+- **Identity**: `.eid=a1`, `.eid=a1,b2`, `.num=3` — naming entities rather than
+  filtering them, answered as a set lookup. A human id names one too (`B-7` is
+  the entity numbered 7).
 - **Bare words**: a full-text term over every stored text or body column, by
   whole word (so `cat` does not find "catalogue"); a trailing `*`
   prefix-matches, and quoting glues a phrase.

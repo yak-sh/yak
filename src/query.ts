@@ -68,6 +68,7 @@ import {
   sessionComps,
   sessionFacetNames,
   shapeOf,
+  spineProps,
   stamped,
   statusOf,
 } from './types.ts'
@@ -200,6 +201,7 @@ let routes: Record<string, readonly string[]> = Object.fromEntries(
       ...Object.keys(stamped),
       ...Object.keys(resultComps),
       ...Object.keys(derivedProps),
+      ...Object.keys(spineProps),
     ]),
   ].map((name) => [
     name,
@@ -208,6 +210,7 @@ let routes: Record<string, readonly string[]> = Object.fromEntries(
       ...stamped[name],
       ...resultComps[name as ResultComp],
       ...derivedProps[name],
+      ...spineProps[name],
     }),
   ]),
 )
@@ -472,13 +475,10 @@ export let route = (
   // preserving `.project=P-3`; a component with no namesake column gets the
   // presence grammar (`=` absent, `~=` present) without a second vocabulary.
   if (routed(prop, vocab)) return { comp: prop, prop: '' }
-  // The rejection is the teaching moment: agents keep reaching for eid as a
-  // filter prop — name what the asker meant. (.kind is a SCOPE handled before
-  // route() and .id routes through session.id, so neither reaches here.)
+  // (.kind is a SCOPE handled before route(), .id routes through session.id,
+  // and .eid routes to the spine through spineProps, so none reaches here.)
   throw new Error(
-    prop == 'eid'
-      ? 'address entities by id directly (T-3, E-9) — filters match component props'
-      : `unknown prop: .${prop} — ${edgeish.test(prop) ? EDGE_DOOR : taught}`,
+    `unknown prop: .${prop} — ${edgeish.test(prop) ? EDGE_DOOR : taught}`,
   )
 }
 
@@ -1493,9 +1493,14 @@ export let resolveRefs = (
         : { ...p, rev: { ...p.rev, preds: inner } }
     }
     let { comp, prop: target } = leafOf(p)
-    if (!isRef(comp, target) || (p.op != '' && p.op != '!')) return p
+    // The spine's `.eid=` names entities, so its operands are ids like a
+    // reference's — resolved at the door the same way, so `.eid=T-3` lands.
+    let spine = comp == 'entity' && target == 'eid'
+    if ((!spine && !isRef(comp, target)) || (p.op != '' && p.op != '!')) {
+      return p
+    }
     if (!p.value || /\.\./.test(p.value)) return p
-    let type = typed(comp, target)
+    let type = spine ? REFS_PROP : typed(comp, target)
     if (!type) return p
     let value = p.value.split(',')
       .map((part) => {

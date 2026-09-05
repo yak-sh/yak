@@ -66,6 +66,7 @@ import {
 import { type Dialect, sqlite, type Tag, tagOf } from './sqlite.ts'
 import type { Derived } from './derived.ts'
 import type { Extension, Site } from './extend.ts'
+import { type Identity, identity } from './ident.ts'
 
 // Thrown for a clause the binder cannot express EXACTLY. A caller catches it to
 // fall back to another evaluator, or to report the gap. `by` names the package
@@ -214,6 +215,27 @@ let lowerScalar = (
   return null
 }
 
+// The spine's identity columns as one set lookup: `"entity"."eid" in (?, ?)`,
+// with a second arm for the numbers a `.num=` or a human id named. An operand
+// list naming nothing at all is a constant false.
+let inSet = (ctx: Ctx, set: Identity): Frag => {
+  let arm = (prop: string, vals: Bind[]): Frag => ({
+    sql: `${ctx.d.col('entity', prop, ctx.v)} in (${
+      vals.map(() => '?').join(', ')
+    })`,
+    params: vals,
+  })
+  let arms = [
+    ...set.eids.length ? [arm('eid', set.eids)] : [],
+    ...set.nums.length ? [arm('num', set.nums)] : [],
+  ]
+  if (!arms.length) return { sql: '0', params: [] }
+  return arms.length == 1 ? arms[0] : {
+    sql: `(${arms.map((a) => a.sql).join(' or ')})`,
+    params: arms.flatMap((a) => a.params),
+  }
+}
+
 // A single-hop predicate: a direct column, or a component facet (an empty leaf
 // prop — presence grammar). `.task!`/`.task~=` present, everything else absent.
 let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
@@ -226,6 +248,11 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     return raw({ sql: `${eid} is ${present ? 'not ' : ''}null`, params: [] })
   }
   if (hop.comp != 'entity') ctx.tables.add(hop.comp)
+  // On the spine, `=` NAMES entities instead of comparing a column.
+  if (hop.comp == 'entity' && op == '') {
+    let set = identity(hop.prop, flat(p.value))
+    if (set) return raw(inSet(ctx, set))
+  }
   let read = readCol(ctx, hop.comp, hop.prop, `"${hop.comp}"."entity"`)
   if (!read) {
     throw new Unsupported(

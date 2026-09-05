@@ -1025,9 +1025,9 @@ Deno.test('noFilter teaches the door a stray predicate belongs to', () => {
   // `.kind=` is a SCOPE now — it parses to kindPreds, never reaching route(),
   // so the dotted spelling is a real filter rather than a rejection.
   assertEquals(parseQuery('.kind=session').length > 0, true)
-  // eid stays a near-miss the door names; route('kind') no longer special-cases
-  // (the scope intercepts before route), so a direct route() is a plain miss.
-  assertThrows(() => route('eid'), Error, '(T-3, E-9)')
+  // `.eid` is no longer a near-miss: it NAMES entities on the spine (T-33761),
+  // the same identity predicate @yaks/sql and @yaks/match answer.
+  assertEquals(route('eid'), { comp: 'entity', prop: 'eid' })
   assertEquals(route('id'), { comp: 'session', prop: 'id' }) // no near-miss
   assertThrows(
     () => parseQuery('.hovercraft=eels'),

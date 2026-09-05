@@ -163,6 +163,12 @@ let CORPUS = [
   '.task.project!',
   '.task.project=',
   '.project=p1',
+  // identity: `.eid=` names entities instead of filtering them, one or many,
+  // and a name nothing wears selects nothing on both sides
+  '.eid=e1',
+  '.eid=e1,e2',
+  '.eid=nosuchentity',
+  '.entity.eid=e1',
   // reference-deref path (task.project → doc.title)
   '.task.project.doc.title~=project',
   '.task.project.doc.title~=nothing',
@@ -192,6 +198,18 @@ let CORPUS = [
 for (let q of CORPUS) {
   Deno.test(`parity: ${q}`, () => agree(q))
 }
+
+// The identity lines above would pass while selecting nothing on both sides, so
+// pin what `.eid=` answers with — and that `.num=` names the same entity by the
+// spine number the store minted for it.
+Deno.test('identity names the entity it says', () => {
+  assertEquals(mine('.eid=e1'), ['e1'])
+  assertEquals(mine('.eid=e1,e2'), ['e1', 'e2'])
+  let num = (db.prepare('select num from entity where eid = ?')
+    .get('e1') as { num: number }).num
+  assertEquals(mine(`.num=${num}`), ['e1'])
+  agree(`.num=${num}`)
+})
 
 // A window with no `.order` is newest-first by spine num, a prefix — so its
 // answer is an ORDERED list, not a set. @yaks/sql applies `.limit`/`.after`; the
