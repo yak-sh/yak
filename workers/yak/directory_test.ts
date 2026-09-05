@@ -198,12 +198,16 @@ let held = () => {
     }
     return Response.json(out)
   }
+  // Every call that would be a round trip to the Durable Object deployed
+  // (door.ts `storeOf`), counted — which is what `hops` below clamps.
+  let hops: string[] = []
   let env = {
     STORE: {
       idFromName: (n: string) => n,
       get: () => ({
         fetch: async (r: Request) => {
           let url = new URL(r.url)
+          hops.push(`${r.method} ${url.pathname}${url.search}`)
           if (url.pathname == '/apply') return apply(await r.text())
           return Response.json(answer(url.search))
         },
@@ -212,6 +216,7 @@ let held = () => {
   } as unknown as Env
   return {
     put,
+    hops,
     dir: directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true),
   }
 }
@@ -236,4 +241,49 @@ Deno.test("a person's own space is one they own, not one they were invited to", 
   assertEquals(await m.dir.role(mine, guest), 'owner')
   // Asking again is that same space, not a second one.
   assertEquals((await m.dir.own(guest)).eid, mine.eid)
+})
+
+// The clamp on how many round trips a sign-in costs (T-34138). Every question
+// the kernel asks the directory is one fetch to the platform's Durable Object,
+// and the sign-in flow asks them one after another — measured on the workerd
+// stand-in, a first sign-in is 22 of them and a new person's `/login/code`
+// alone is 11. On the deploy each one is a network hop, so the flow's wall
+// time is very nearly the hop count times the round trip: adding latency per
+// hop on the stand-in moved the whole flow by 21ms for every 1ms added.
+//
+// `own()` is the heaviest stretch of it and the likeliest to grow — a new
+// question asked inside it is invisible to a test that only checks the answer
+// — so the questions are counted. Reads here are FRESH (`held` builds the
+// client with the cache off), which is the honest worst case: what the deploy
+// pays is this or less.
+//
+// A number that moves is not automatically wrong. It is a number somebody
+// should have looked at, with the reason written down beside it.
+Deno.test('signing in asks the directory a bounded number of questions', async () => {
+  let m = held()
+  // The first person pays for the seed — the meta space and the platform app,
+  // minted on the directory's first write. That happens once ever and is not
+  // what signing in costs.
+  let first = crypto.randomUUID()
+  m.put(first, { person: {}, email: { address: 'first@yaks.app' } })
+  await m.dir.own(first)
+
+  // What a later person's first sign-in costs: who they are (asked twice —
+  // once by `spaces()` to know the person exists at all, once here for the
+  // address their slug is spelled from; the read cache answers the second on
+  // the deploy), what they own, whether that slug is free, the write, and the
+  // space read back afterwards.
+  let them = crypto.randomUUID()
+  m.put(them, { person: {}, email: { address: 'dana@yaks.app' } })
+  m.hops.length = 0
+  let mine = await m.dir.own(them)
+  assertEquals(mine.slug, 'dana')
+  assertEquals(m.hops.length, 6, m.hops.join('\n'))
+
+  // And what it costs once they have one: the ordinary sign-in, which is
+  // every sign-in after the first. Their memberships resolve to a space each,
+  // so this one grows with the number of spaces they own.
+  m.hops.length = 0
+  assertEquals((await m.dir.own(them)).eid, mine.eid)
+  assertEquals(m.hops.length, 4, m.hops.join('\n'))
 })

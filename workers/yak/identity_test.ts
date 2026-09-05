@@ -707,3 +707,67 @@ slow(
     }
   },
 )
+
+// The clamp on how long signing in may take (T-34138). A first sign-in on
+// 2026-09-04 took 32.4 seconds of wall time against 28.7ms of CPU — an
+// unbounded wait on something, not work — and the person who was doing it
+// thought the platform had broken. Nothing about the flow's shape stops that
+// from happening again quietly, so this times it and fails rather than
+// letting a regression arrive as somebody's spinner.
+//
+// The budget is deliberately loose. The measured cold flow on this stand-in
+// is ~320ms — the whole of it, on a store that does not exist yet: the
+// Durable Object is created, its schema and search index are planted, the
+// directory is seeded, the person and their space are minted. Ten times that
+// is not a microbenchmark anyone has to keep green, and it still catches both
+// a hang and an order-of-magnitude regression. The kernel's own boot is
+// outside the span: wrangler starting workerd is the test harness, not the
+// product.
+//
+// The letter is not timed either — `mailed` polls the log at 100ms, so its
+// span would measure the poll and not the platform. What is timed is exactly
+// the four requests a browser makes.
+let BUDGET = 3_000
+
+slow('a cold sign-in stays well under the budget', async () => {
+  let k = await kernel()
+  try {
+    let email = 'cold@yaks.app'
+    let took = 0
+    let span = async <T>(go: () => Promise<T>): Promise<T> => {
+      let at = performance.now()
+      let out = await go()
+      took += performance.now() - at
+      return out
+    }
+    let card = await span(() => k.at('yaks.app', '/login'))
+    assertEquals(card.status, 200)
+    await card.body?.cancel()
+
+    let asked = await span(() => form(k, '/login', { email }))
+    assertEquals(asked.status, 200)
+    await asked.body?.cancel()
+
+    let code = await mailed(k, email)
+    let inn = await span(() =>
+      form(k, '/login/code', { email, code, name: 'Cold' })
+    )
+    assertEquals(inn.status, 303)
+    await inn.body?.cancel()
+    let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
+
+    // Where the 303 sends them: the flow is not over until that page is in
+    // front of them, and it reads the directory the sign-in just wrote.
+    let to = inn.headers.get('location') ?? '/'
+    let page = await span(() => k.at('yaks.app', to, { headers: { cookie } }))
+    assertEquals(page.status, 200)
+    await page.body?.cancel()
+
+    assert(
+      took < BUDGET,
+      `signing in cold took ${took.toFixed(0)}ms, over the ${BUDGET}ms budget`,
+    )
+  } finally {
+    await k.stop()
+  }
+})
